@@ -1,0 +1,36 @@
+# Read-only CI for the L5 research branch (issue #167).
+#
+# Exists so the test suite is INDEPENDENTLY run by GitHub Actions on this
+# branch, not only locally. No secrets, no deploys, no writes; push-scoped
+# to the canonical research and active L5 implementation branches; this
+# runs tests only, with read-only token permissions and no Railway access.
+
+name: l5-canonical-ci
+
+on:
+  push:
+    branches: [feature/l5-canonical, claude/gemini-btc-economic-viability-h3u7zl]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install --quiet -r requirements.txt
+      - name: Verify L5 loss-limit and provenance regressions
+        run: python3 -m pytest tests/test_l5_daily_loss_provenance.py -q
+      - name: Run test suite
+        run: python3 -m pytest tests/ -q
+      - name: Ops-layer smoke (offline pieces)
+        run: |
+          python3 -m src.polymarket_l5.ops status
+          python3 -m src.polymarket_l5.ops regression

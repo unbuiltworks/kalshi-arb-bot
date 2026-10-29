@@ -1,339 +1,209 @@
-# Kalshi Arb Bot
+# L5 Prediction-Market Trading System — Claude Instructions
 
-## What This Is
+**Branch scope:** `feature/l5-transfer-backtest` and related L5 work.
 
-A single-platform arbitrage bot for Kalshi prediction markets. It buys YES + NO on the same market when YES_ask + NO_ask + total_fees < $1.00, locking a guaranteed profit since settlement always pays $1.00 on one side and $0.00 on the other.
+This file intentionally supersedes the legacy Kalshi-arbitrage-first instructions on this L5 branch. The durable behavioral source of truth is `L5_OPERATING_MODEL.md`; current coordination/evidence lives in GitHub issue #167 and `L5_STATUS.md`.
 
-This is NOT a directional/prediction bot. It has no opinion on outcomes. It captures mechanical mispricings.
+## Primary objective
 
-## Architecture
+Reverse-engineer Polymarket trader `l5zn1bwom8etsk` ("L5"), reproduce the underlying sequential decision process as faithfully as public data allows, validate it historically and in realtime shadow mode, and deploy adapted versions only where executable conditions support positive realized expectancy.
 
-```
-kalshi-arb-bot/
-├── CLAUDE.md              # You are here
-├── .env                   # API credentials (never commit)
-├── .env.example           # Template for credentials
-├── requirements.txt       # Python dependencies
-├── src/
-│   ├── __init__.py
-│   ├── main.py            # Entry point, orchestrates everything
-│   ├── auth.py            # RSA-PSS signing, header generation
-│   ├── ws_client.py       # WebSocket connection, subscriptions, reconnect
-│   ├── orderbook.py       # Local orderbook state from snapshots + deltas
-│   ├── fee_calc.py        # Kalshi fee math (taker + maker)
-│   ├── spread_scanner.py  # Computes edge on every book update
-│   ├── order_manager.py   # Paired order execution (maker leg → taker leg)
-│   ├── risk.py            # Filters, position limits, cooldowns
-│   └── logger.py          # Structured logging to file + stdout
-├── config/
-│   ├── settings.py        # All tunable parameters in one place
-│   └── markets.py         # Market discovery and filtering
-└── tests/
-    ├── test_fee_calc.py
-    ├── test_spread_scanner.py
-    └── test_orderbook.py
-```
+Historical target: **$480/day realized net profit**. This is a target to measure against, never an assumption.
 
-## Environment
+## Strategy priority
 
-- **Language**: Python 3.11+
-- **Key dependencies**: `websockets`, `httpx` (async HTTP), `cryptography` (RSA-PSS signing), `python-dotenv`
-- **No frameworks** — this is a lightweight async bot, not a web app
+L5 replication is the main research and engineering program.
 
-## Kalshi API Details
+Do **not** redefine the strategy as generic arbitrage, market making, rebate farming, or directional forecasting. Arbitrage/pair economics, spread capture, and rebates can contribute to profitability, but they are components of the economics around the L5 behavioral policy rather than the policy itself.
 
-### Base URLs
-- **Demo REST**: `https://demo-api.kalshi.co/trade-api/v2`
-- **Demo WebSocket**: `wss://demo-api.kalshi.co/trade-api/ws/v2`
-- **Prod REST**: `https://api.elections.kalshi.com/trade-api/v2`
-- **Prod WebSocket**: `wss://api.elections.kalshi.com/trade-api/ws/v2`
+The canonical question at every state is:
 
-### Authentication
-RSA-PSS signing with SHA-256. Every request (REST and WS handshake) requires:
-```
-KALSHI-ACCESS-KEY: <api_key_id>
-KALSHI-ACCESS-SIGNATURE: <base64_rsa_pss_signature>
-KALSHI-ACCESS-TIMESTAMP: <unix_ms>
-```
+> **Given the current market state and inventory, what causes L5 to choose the next side, price, size, and timing?**
 
-Signature message format: `{timestamp_ms}{METHOD}{path}` (e.g. `1234567890GET/trade-api/ws/v2`)
+## Current L5 behavioral thesis
 
-### WebSocket Channels Needed
-1. **`orderbook_delta`** (requires auth) — gives initial snapshot then incremental updates per market_ticker
-2. **`fill`** (requires auth) — notifies when our orders fill
+The best-supported model is a **persistent incremental inventory trader / paid-liquidity-provider**.
 
-Subscribe format:
-```json
-{
-  "id": 1,
-  "cmd": "subscribe",
-  "params": {
-    "channels": ["orderbook_delta", "fill"],
-    "market_tickers": ["TICKER-1", "TICKER-2"]
-  }
-}
-```
+Typical sequence:
 
-Message types to handle:
-- `orderbook_snapshot` — full book state, rebuild local book
-- `orderbook_delta` — incremental update, apply to local book
-- `fill` — our order was filled, trigger second leg or log
-- `error` — handle gracefully
+**OPEN → EXTEND → EXTEND / WAIT → COMPLETE or SWITCH → continue working inventory**
 
-### Order Creation (REST)
-```
-POST /trade-api/v2/portfolio/orders
-```
-```json
-{
-  "ticker": "MARKET-TICKER",
-  "action": "buy",
-  "side": "yes",
-  "type": "limit",
-  "yes_price": 65,
-  "count": 10,
-  "client_order_id": "uuid",
-  "post_only": true
-}
-```
+Implementation implications:
 
-Key fields:
-- `side`: "yes" or "no"
-- `action`: "buy" (always buy for arb — buy YES and buy NO)
-- `yes_price`: price in CENTS (integer). If buying NO, you still specify `yes_price` — the NO price is `100 - yes_price`
-- `post_only`: true for maker leg (rejected if would cross), false/omit for taker leg
-- `client_order_id`: UUID for tracking, required
+- Enter incrementally when the state resembles L5's historical operating regime.
+- Same-side `EXTEND` is a first-class action, not an error to flatten immediately.
+- Temporary imbalance is tolerated within explicit risk bounds.
+- Opposite-side `COMPLETE` is often delayed until pricing improves.
+- Rebalancing must be patient and evidence-driven rather than forced on an arbitrary timer.
+- Do not assume residual directional exposure has predictive skill; historical evidence does not support that.
+- Favor increasing **frequency before size**.
+- Initial live replication remains **one market at a time**.
 
-### Order Cancellation (REST)
-```
-DELETE /trade-api/v2/portfolio/orders/{order_id}
-```
+Spring promotion order:
 
-### Fee Structure (effective Feb 5, 2026)
-**Taker fee**: `ceil(0.07 × C × P × (1 - P))` — rounds UP to next cent
-**Maker fee**: `ceil(0.0175 × C × P × (1 - P))` — rounds UP to next cent
+**PATIENCE → FREQUENCY → SIZE → CONCURRENCY**
 
-Where:
-- P = price of contract in dollars (50 cents = 0.50)
-- C = number of contracts
+## Pair economics / arbitrage
 
-Special lower fees for S&P500 (INX*) and NASDAQ-100 markets: 0.035 taker rate.
+Matched inventory is economically important, but do not simplify L5 into "buy YES + NO below $1."
 
-**No settlement fee. No membership fee.**
+For each sequence, account separately for:
 
-Fee examples for 100 contracts:
-| Price | Taker Fee | Maker Fee |
-|-------|-----------|-----------|
-| $0.10 | $0.63     | ~$0.16    |
-| $0.25 | $1.32     | ~$0.33    |
-| $0.50 | $1.75     | ~$0.44    |
-| $0.75 | $1.32     | ~$0.33    |
-| $0.90 | $0.63     | ~$0.16    |
+1. matched-pair economics;
+2. directional residual P&L;
+3. spread capture;
+4. maker rebates;
+5. liquidity rewards;
+6. fees;
+7. settlement/redemption cashflows.
 
-Fees are CONVEX — maximized at P=0.50. Lopsided markets (one side near 0 or 1) have lower fees.
+When incremental actions create a fee-safe combined pair cost materially below $1, that produces locked pair economics. This is an arb-like benefit of the sequence, not the sole trigger for the strategy.
 
-## Core Logic: The Spread Scanner
+Spring-discipline currently prefers materially cheaper pair completion (roughly `<= 0.96` where the venue implementation uses that target). Near-$1 pair tolerance belongs to later incentive-era L5 behavior and stays locked unless equivalent economics are source-confirmed for our account.
 
-On every orderbook update for a tracked market:
+## Rebates and rewards
 
-```python
-yes_ask = best_ask_price_yes  # cheapest YES available
-no_ask = best_ask_price_no    # cheapest NO available (= 100 - best_yes_bid... BUT read from the book directly)
+Rebates/rewards are additive economics, never permission to make an otherwise bad trade look profitable.
 
-# For arb, we need to BUY both sides
-# Kalshi's book is quoted in YES terms:
-#   - YES ask = cheapest price to buy YES
-#   - NO ask = 100 - best YES bid (because selling YES = buying NO)
-# WAIT — that's wrong for arb. We need the actual NO ask.
-# On Kalshi, to BUY NO contracts, we look at the NO side of the book.
-# The orderbook_delta gives us yes_bids and yes_asks (or no_bids and no_asks).
-# A NO ask IS the complement: if someone is bidding YES at 60, then NO is available at 40.
-# 
-# CRITICAL UNDERSTANDING:
-# YES ask = lowest price someone is selling YES at
-# To buy NO, we can either:
-#   (a) Buy NO directly at the NO ask, OR
-#   (b) Sell YES at the YES bid — which is economically equivalent
-#
-# For arb: total_cost = yes_ask + (100 - yes_bid)  [in cents]
-# Edge = 100 - yes_ask - (100 - yes_bid) = yes_bid - yes_ask... wait that's negative normally
-#
-# CORRECT FORMULATION:
-# To lock arb: buy YES at yes_ask AND buy NO at no_ask
-# On Kalshi's unified book: no_ask = 100 - yes_bid
-# Total cost per contract (cents) = yes_ask + (100 - yes_bid)
-# Total cost per contract (cents) = yes_ask - yes_bid + 100
-# This equals 100 + spread, so it's >100 when spread is positive (normal market)
-# ARB EXISTS when: yes_ask + (100 - yes_bid) + fees < 100
-# Equivalently: yes_ask < yes_bid - fees  (crossed book after fees)
-# This is a NEGATIVE spread situation — very rare but possible during fast moves
+- Do not assume a rebate or liquidity reward until it is actually credited and source-accounted.
+- Keep maker rebates, taker rebates, and rewards separate from trading P&L.
+- Do not unlock mature incentive-era behavior merely because L5 used it later.
 
-# ALTERNATIVE ARB (more common):
-# Some Kalshi events have MULTIPLE markets (e.g., "above X" and "below X")
-# Or the YES/NO on the SAME market can misprice transiently
-# The scanner should check: yes_best_ask + no_best_ask + total_fees < 100
+## Canonical research/deployment pipeline
 
-quantity = min(depth_at_yes_ask, depth_at_no_ask, max_position_size)
-yes_fee = calc_taker_fee(quantity, yes_ask / 100)  # or maker fee if posting
-no_fee = calc_taker_fee(quantity, no_ask / 100)     # or maker fee if posting
-total_cost_cents = (yes_ask * quantity) + (no_ask * quantity) + yes_fee + no_fee
-guaranteed_payout = 100 * quantity  # $1 per contract
+Maintain one pipeline:
 
-edge_cents = guaranteed_payout - total_cost_cents
+**L5 public activity → normalized history → sequential replay → behavioral model → realtime shadow → action-by-action comparison → bounded live probe → settlement audit → controlled scaling**
 
-if edge_cents > min_edge_threshold:
-    # SIGNAL: execute paired trade
-```
+Reconcile duplicate implementations instead of starting over.
 
-### Maker-First Execution Strategy
+Before new implementation work, inspect existing L5 branches and issue #167. Preserve existing evidence and provenance.
 
-To minimize fees, we want one leg as maker (post_only) and one as taker:
+## Validation standard
 
-1. **Post maker leg** — the side with more depth (more likely to fill). Use `post_only: true`.
-2. **Watch for fill** via WebSocket `fill` channel.
-3. **On fill → immediately fire taker leg** on the other side. No `post_only`.
-4. **Timeout** — if maker leg doesn't fill within `MAX_FILL_WAIT_MS`, cancel it.
-5. **Legging risk** — if maker fills but taker fails/slips, we hold directional exposure. Must have a flatten rule.
+The key test is:
 
-### Flatten Rule (Critical Safety)
-If we're legged (one side filled, other didn't):
-- Immediately attempt to exit the filled leg at breakeven or small loss
-- Log the incident
-- Increment cooldown counter
-- If cooldown threshold hit, pause bot for `COOLDOWN_PERIOD_MS`
+> **At this exact market state, what did L5 do next, and what would our clone have done?**
 
-## Config Parameters (config/settings.py)
+Compare:
 
-```python
-# Environment
-ENV = "demo"  # "demo" or "prod"
+- side;
+- timing;
+- size;
+- price;
+- inventory state;
+- aggressiveness;
+- pair economics;
+- residual behavior;
+- eventual fill/settlement outcome.
 
-# API
-API_KEY_ID = ""      # from .env
-PRIVATE_KEY_PATH = "" # from .env
+Positive aggregate replay P&L with materially different behavior is not sufficient evidence of replication.
 
-# Scanning
-MARKETS_TO_TRACK = []           # populated by market discovery
-MAX_MARKETS = 50                # don't subscribe to too many
-SCAN_INTERVAL_MS = 0            # 0 = scan on every book update (event-driven)
+## Live progression
 
-# Execution  
-MIN_EDGE_CENTS = 3              # minimum profit per contract after ALL fees
-MIN_DEPTH = 10                  # minimum contracts available on both sides
-MAX_POSITION_PER_MARKET = 100   # max contracts per market
-MAX_TOTAL_POSITION = 500        # across all markets
-ORDER_SIZE = 10                 # contracts per trade
-MAKER_FIRST = True              # post maker leg first
+Advance only through:
 
-# Risk
-MAX_FILL_WAIT_MS = 5000         # cancel maker leg if not filled
-MAX_LEGS_OPEN = 1               # only one pending arb at a time
-COOLDOWN_AFTER_LEG_FAIL = 30000 # ms to pause after legging incident
-MAX_LEG_FAILS_BEFORE_HALT = 3   # halt bot after this many legging incidents
-SPREAD_FLARE_THRESHOLD = 0.10   # skip if spread > 10% of price
-MAX_DAILY_LOSS_CENTS = 5000     # $50 daily loss limit, halt bot
+1. historical replay;
+2. out-of-sample replay;
+3. realtime shadow;
+4. action-by-action comparison;
+5. bounded live probe;
+6. repeated clean probes;
+7. controlled scaling.
 
-# Logging
-LOG_FILE = "arb_bot.log"
-LOG_LEVEL = "INFO"
-LOG_EVERY_SCAN = False          # True = log every book update (verbose)
-LOG_OPPORTUNITIES = True        # always log when edge is detected
-```
+Never increase risk merely to make results look better.
 
-## Market Discovery (config/markets.py)
+## Current bounded spring probe discipline
 
-On startup, the bot should:
-1. `GET /trade-api/v2/markets?status=open&limit=200` — fetch all open markets
-2. Filter for markets with reasonable volume/liquidity
-3. Subscribe to `orderbook_delta` for filtered markets
-4. Re-scan periodically (every 5 min) to pick up new markets
+Initial live sequence should resemble:
 
-Good arb candidates:
-- Recently opened markets (prices haven't settled)
-- Markets with multiple market makers
-- Events with many related markets (bracket-style)
-- NOT long-dated markets with no activity
+**maker OPEN small → reassess → optional same-side EXTEND small → reassess → patient fee-safe COMPLETE when price improves → settle/audit**
 
-## Build Order (for Claude Code)
+Current restrictions include:
 
-Build in this order. Each step should be testable independently.
+- one market;
+- one outstanding order;
+- maker-first;
+- no unsupported rebate assumptions;
+- no automatic late taker behavior copied from mature August L5;
+- no new first leg while unrelated residual exposure exists;
+- cumulative first-leg/extend notional tightly bounded for the learning stage;
+- no automatic repeat after a completed/crashed live probe;
+- settlement-only realized P&L labeling.
 
-### Step 1: Auth + REST client
-- `src/auth.py` — RSA-PSS signing, header generation
-- Basic REST client in `src/main.py` that can hit `GET /exchange/status`
-- Test: run and confirm authenticated response from demo API
+Read-only collectors/recorders should self-recover and run 24/7. Money-moving bounded sessions should fail closed and should **not** automatically relaunch themselves after a crash or completion.
 
-### Step 2: Fee calculator
-- `src/fee_calc.py` — implement taker_fee() and maker_fee() 
-- Must handle the round-up (ceil) behavior
-- Must handle special INX/NASDAQ100 rates
-- `tests/test_fee_calc.py` — validate against the known fee table values
+## Market/category scope
 
-### Step 3: WebSocket client
-- `src/ws_client.py` — connect, auth, subscribe, reconnect with backoff
-- Handle: orderbook_snapshot, orderbook_delta, fill, error messages
-- Test: connect to demo, subscribe to one market, print updates
+The engine must remain market-agnostic. Do not assume L5 transfer is crypto-only.
 
-### Step 4: Local orderbook
-- `src/orderbook.py` — maintain bid/ask state per market from snapshots + deltas
-- Methods: `best_yes_ask()`, `best_yes_bid()`, `best_no_ask()`, `depth_at_price()`
-- `tests/test_orderbook.py`
+Discovery should allow crypto, esports, baseball, basketball, football, hockey, soccer, tennis, props, economics, politics, commodities, weather, culture, and other lawful prediction-market categories when executable evidence supports them.
 
-### Step 5: Spread scanner
-- `src/spread_scanner.py` — on every book update, compute edge
-- Wire to orderbook updates
-- Log every opportunity found
-- Test: feed synthetic book data, verify edge calculation
+Current PMUS architecture:
 
-### Step 6: Order manager
-- `src/order_manager.py` — paired execution logic
-- Post maker leg → wait for fill → fire taker leg
-- Cancel on timeout
-- Track open orders, fills, positions
-- Flatten rule for legging
+**full live-slate discovery → cheap screening → HOT/WARM/COLD observation queue → expensive L5 state on top candidates → single-market execution selector**
 
-### Step 7: Risk layer
-- `src/risk.py` — all filters and circuit breakers
-- Position limits, daily loss, cooldowns, spread flare check
-- Wire into order manager as pre-trade checks
+Hundreds of markets competing for a few observation/execution slots is desirable. Do not manually narrow the system to one event type unless evidence supports that exclusion.
 
-### Step 8: Main loop
-- `src/main.py` — orchestrate everything
-- Startup: auth → discover markets → connect WS → subscribe → scan loop
-- Graceful shutdown on SIGINT
+## Profit accounting lifecycle
 
-## Testing Strategy
+Always use strict labels:
 
-- **Unit tests**: fee_calc, orderbook, spread_scanner (with synthetic data)
-- **Integration test**: connect to demo WS, subscribe, verify book updates arrive
-- **Paper trading**: run full bot on demo with real market data, log all signals and what trades WOULD have executed
-- **Only after paper trading looks clean**: switch ENV to "prod"
+**historical replay → shadow → live probe → submitted → filled → settled → realized**
 
-## Important Gotchas
+Never call any of the following realized profit:
 
-1. **Kalshi prices are in CENTS (integers)**. yes_price=65 means $0.65. Don't mix dollars and cents.
-2. **Orderbook is quoted in YES terms**. A NO ask = 100 - YES bid. Make sure the spread scanner handles this correctly.
-3. **post_only orders are rejected if they would immediately match**. This is what we want for maker legs — guarantees maker fee, not taker.
-4. **client_order_id is required** and must be unique (use UUID4).
-5. **Rate limits exist** — don't spam order creation. The bot should be event-driven (react to book updates), not polling.
-6. **WebSocket can disconnect** — implement reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s).
-7. **Fee rounding is UP (ceil), not nearest**. This matters — a $0.001 theoretical fee rounds to $0.01. Every cent counts in arb.
-8. **Legacy integer fields being removed March 12, 2026** — use the `_fp` (fixed-point string) and `_dollars` fields instead of integer cents fields where available.
-9. **Batched orders endpoint is now GA** — `POST /portfolio/orders/batched` could be useful for placing both legs simultaneously, reducing legging risk. Investigate this.
+- theoretical fills;
+- stale/public BBO opportunities;
+- modeled pair profit without fills;
+- shadow inventory;
+- mark-to-market gains;
+- estimated rebates/rewards;
+- unconfirmed fills;
+- balance changes without sufficient source identity.
 
-## Logging Requirements
+## Risk and infrastructure
 
-Every log line should include: timestamp, market_ticker, event type.
+Always bound:
 
-Log these events at INFO level:
-- Opportunity detected (edge, quantity, yes_ask, no_ask, fees)
-- Order placed (side, price, quantity, client_order_id)
-- Order filled (side, price, quantity, fill_id)
-- Order cancelled (reason)
-- Legging incident (which side filled, which didn't)
-- Bot halt (reason)
+- dollars per market;
+- residual directional exposure;
+- inventory imbalance;
+- daily realized loss;
+- concurrent markets;
+- total strategy exposure.
 
-Log at DEBUG:
-- Every book update (if LOG_EVERY_SCAN=True)
-- Fee calculations
-- Filter rejections (why an opportunity was skipped)
+Use cancellation/deadman protections where appropriate.
+
+For infrastructure work:
+
+- establish current GitHub/deployment state first;
+- identify active branch/commit;
+- preserve unrelated services;
+- keep unrelated SOL infrastructure separate;
+- never expose credentials;
+- do not make infrastructure the workstream when research/execution evidence is the real bottleneck.
+
+## Anti-drift rule
+
+Before starting a new strategy workstream ask:
+
+> **How does this help reproduce, validate, deploy, or improve the L5-style engine?**
+
+If it does not, it is probably not the priority.
+
+Do not repeatedly rerun failed Gemini experiments without a materially new hypothesis. Do not redirect toward generic arbitrage simply because the repository name contains `arb`.
+
+## Durable references
+
+**Gemini BTC5m/BTC15m current-state source of truth:
+`analysis/gemini/GEMINI_L5_CURRENT.md`**
+
+Read these before redefining strategy or live progression:
+
+- `L5_OPERATING_MODEL.md` — current behavioral thesis and operating rules; primary durable source of truth.
+- `L5_STATUS.md` — current implementation/evidence status.
+- `L5_STRATEGY_FINDINGS.md` — research findings.
+- GitHub issue **#167** — current coordination, deployment, and acceptance evidence.
+
+If conversation context, this file, and current deployment evidence disagree, re-establish current GitHub/deployment state and update the durable files from source-backed evidence. Do not silently revive superseded hypotheses.

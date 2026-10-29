@@ -1,0 +1,51 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_spring_l5/Dockerfile",
+    "watchPatterns": [
+      "deploy/pmus_spring_l5/**",
+      "src/pmus_l5_continuous_session.py",
+      "src/pmus_residual_quarantine.py",
+      "src/pmus_risk_set_audit.py",
+      "src/pmus_transition_stop.py",
+      "src/pmus_migration_close.py",
+      "src/pmus_migration_close_live.py",
+      "src/pmus_settlement_auditor.py",
+      "src/pmus_r5ft_ledger_repair.py",
+      "src/pmus_settlement_sweep.py",
+      "src/pmus_incentive_audit.py",
+      "src/l5_realized_bridge.py",
+      "src/pmus_cross_shadow_live.py",
+      "src/l5_decision_observability.py",
+      "src/pmus_spring_l5_probe_entry.py",
+      "src/pmus_spring_l5_session.py",
+      "src/pmus_spring_evidence_transfer.py",
+      "src/pmus_spring_shadow_replay.py",
+      "src/pmus_micro_executor.py",
+      "src/pmus_fill_ledger.py",
+      "src/pmus_q1_executor.py",
+      "src/pmus_fees.py",
+      "src/pmus_q1_executor_v4.py",
+      "src/pmus_status_report.py",
+      "src/pmus_sports_l5_decision.py",
+      "src/pmus_event_progress.py",
+      "src/pmus_l5_persistence_v2.py",
+      "src/pmus_l5_fidelity_live.py",
+      "src/pmus_l5_ramp_ladder.py",
+      "src/polymarket_l5/**",
+      "analysis/l5/l5_action_model_v2.json",
+      "analysis/l5/l5_fidelity_pass.json",
+      "src/l5_fidelity_gate.py",
+      "src/pmus_live_mandate.py",
+      "analysis/l5/l5_fidelity_gate.json",
+      "analysis/l5/venue_maintenance_windows.json",
+      "analysis/l5/l5_cadence_behavioral_unit.json",
+      "analysis/l5/l5_campaign_approvals.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.pmus_l5_continuous_session",
+    "restartPolicyType": "NEVER"
+  }
+}

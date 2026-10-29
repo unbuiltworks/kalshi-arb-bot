@@ -1,0 +1,2 @@
+recorder redeploy marker: 2026-09-05T19:20Z PMUS_WS_L5_ALLOC floor 0 (OWNER 5554106892)
+recorder redeploy marker: 2026-09-06T14:05Z shadow INDEPENDENCE_RULE 2 (unchanged-state de-dup + restore replay); watch patterns now include the shadow modules

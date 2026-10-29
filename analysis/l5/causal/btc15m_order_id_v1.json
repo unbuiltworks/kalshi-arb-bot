@@ -1,0 +1,964 @@
+{
+  "label": "L5_ORDER_ID_FORENSICS_V1",
+  "api_layer_verdict": {
+    "public_data_api_carries_order_ids": false,
+    "clob_trades_public": false,
+    "clob_trades_status_without_auth": 401,
+    "conclusion": "NO at the API layer for arbitrary traders. The CLOB trades endpoint is authenticated and scoped to the calling key's own account."
+  },
+  "chain_layer_verdict": {
+    "order_ids_retrievable_for_arbitrary_traders": true,
+    "route": "transactionHash -> eth_getTransactionReceipt -> OrderFilled(orderHash, maker, taker, amounts, fee)",
+    "also_recovers": [
+      "maker address",
+      "counterparty order hashes",
+      "matched amounts",
+      "PER-FILL FEE"
+    ]
+  },
+  "sample_spec": {
+    "seed": 20260917,
+    "clusters_ge2": 40,
+    "singleton_controls": 20,
+    "cluster_key": "(timestamp, outcome, price) within one market",
+    "rule": "uniform random over all qualifying clusters in the BTC15m tape, drawn with the fixed seed before any chain call",
+    "why": "choosing clusters after seeing which resolve is not a sample; the unresolvable fraction is itself a result and must not be selected away"
+  },
+  "clusters_total_ge2": 85754,
+  "singletons_total": 487929,
+  "sampled_ge2": 30,
+  "sampled_singletons": 10,
+  "tally": {
+    "UNRESOLVABLE": 15,
+    "MULTIPLE_PARENT_ORDERS": 6,
+    "SAME_PARENT_ORDER": 9
+  },
+  "share_resolved": 0.5,
+  "of_resolved_share_same_parent": 0.6,
+  "of_resolved_FILLS_collapsing_into_one_parent": 0.5806,
+  "clusters": [
+    {
+      "key": [
+        "0xaaea0e1f787a9ee4772a0dcf52a4f8f76d52b9209a2750f628fea3554c9130a4",
+        1777909006,
+        "Up",
+        0.33
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x611c7acafa4702f7876f53175d2b47a6887081c2ccb03bd69c1653abb49f77da",
+        "0xf72b990c363342ff3b64a4afda9f1fbd3a1fd656e75c60c8728b47082b7357d4"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0xfc580faecefd487c4a08ee202a7ed3c145da0f9d468ecf8d17e69f3dd7bf7725",
+        1787349903,
+        "Up",
+        0.32
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x9f8780421d04136ccd53baee6dd4f06e2f9f612558c20f26189bb60231f73ef2",
+        "0xfae700b677a3946f9e23dd7a12b7d7e5f1b5628a2f99e8dc36fde69b41862fb1"
+      ],
+      "l5_order_fills_found": 3,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0x627884230f13a3a8dad607cc3bcc5abb782c2a41f3e7958d6ca4504f678595ef",
+        "0x783f9f06d18db8c65162b73f6fa07b86f35f114497283a3beae1212a1f0ebdc0"
+      ],
+      "roles": {
+        "maker": 3
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x4d65e79f09d8f0eac66336e1ac7d8d6dcb03a5f18bc5b09c4687797fc87121c3",
+        1786404457,
+        "Down",
+        0.88
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x2f2942b7d6cb99654e207635402b9f0d45e6dc3024df17de00ba361252527ece",
+        "0x8f667a4e6efa3d8723b28f8165324c3dde0743c04a4ab608fe60bff60f10809c"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0xd262fe8ee5c46acb348390a3d950d0687767046c0fdee1069112a0c5212efc47"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xded7f06c074b82a0a651f31440e7d2c81c14c43dccbceabc5fceda7b60e325a5",
+        1786695471,
+        "Up",
+        0.64
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0xbdadbf4de0d8cb04620098ff463528b5f2bc5d61e39c3f90c711ce93610da149",
+        "0xe5343ba4690aefe7fa0490aba826e2a85644717a8dcc60f1953d2bc4f5a234e3"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x19b0bebddd73d673175a6a587eaab89c2a13507ffc1ba111c9287ea6347514eb"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xecb9416979e2e0b56defd23e8249cc05c015b834a662fac02aa5350f587f250f",
+        1779716676,
+        "Down",
+        0.78
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x395902ca8e7abf8f16f6fc220d5cd1f0fa2233c5df78f9e04c72a0b064202975",
+        "0x8d35ae31f50ca2881fe7f07865968360e7032c89fe6e71830ce15fade564036b"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x52ad252967d0d0776c43d7a39c56ea048b91c4bcf8a1389404831f2ae06918d4",
+        1786818993,
+        "Down",
+        0.4
+      ],
+      "n_fills": 3,
+      "n_tx": 3,
+      "tx": [
+        "0x58b9b9ede0053789a8a31295c01a1f6950031fcf1229464636621cdc77a33d22",
+        "0x5d6d17deb30b8fe6bc688b9a715feb666140c000cee9e925c24b101a39933057",
+        "0x80e3588459cc90250bff0f60cd1a5b52165b3435990d160d78c9eeda524dc295"
+      ],
+      "l5_order_fills_found": 4,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0x2b211342fea2e14e740ca6eb5c8a9bd2f4b1ac740d869c5c65486e2b106828d5",
+        "0x7dc53e5edbfbe77a77e96d6c4124475cd4e6d097b4f01a23946512421ba46fef"
+      ],
+      "roles": {
+        "maker": 4
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x4d18e6877960e11b2b905ed0aa3e7a7bc9002cc67cae85a733ff84ad9e6d0505",
+        1788098422,
+        "Down",
+        0.74
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x5e5b471f1080b4b9b8e65bab61e9926e46b4f1a18a13c7ae77d5ded0cf266fe6",
+        "0xc1f2ad35f3952bfeb25e71099322b405bafc43dca0c6af073e491d6bbff71c36"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0xdd4ce5e6a95b82d47c57dff97731dc19ea473a8b354b52e9f8fb54c1173130fb"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0x29bd6df7b5f17300c2291ccfa8f3d083f830f5fa470a126753e008418b103428",
+        1787298307,
+        "Down",
+        0.58
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x5ed6b777182e8189b78e22e1f306dbde66e339a7b18563830932c75d434ff6aa",
+        "0xca6cec23711c4cb0218a9fd478b009c3157fc89928b1bf916cf2e8be2c3afd49"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x16e6495ac0e61d7aed0a3ccd670e77a21b3b2cbdd2bf9c9a5b4a11819d9726cc"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0x11d986117d831a95c4bbd022843cd0cf714ea5ce06c30d7c67672a67ceea952b",
+        1785256112,
+        "Down",
+        0.09
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x43c88bcc91cf4abcfefac133c6662b6dd118bf2cdb0190edbe3a64e1b97c9984",
+        "0xe6b39492f8f2e9aac088802ab84ffc155d72cceaee84488ab0f2758add38c83a"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x5d61c30fcf40e642d645921e7ba17585d7d92fe86548ab4aa165505416e13c31",
+        1779809022,
+        "Down",
+        0.95
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0xc31d889a49aa3fab27ada231104f202d02a02ed3b7648d6f6eeb12d24f478ccf",
+        "0xe72d6e4e984a96d4ee0b7d990190956fdea62282138e4ae11b227cc3a0edf8cb"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x6227143a4ed0bbc3593961770d3fdc52445cfe3479cc557cb1e691dc6a5457fe",
+        1786116303,
+        "Down",
+        0.1
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x00fc3f59a51d7dc87246df270ac222f14fcea40807747e316f63c0337a1a2880",
+        "0x054233b469f8ff976d252d1121ab08c753628646d1df66e09f2c44e747cc9651"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x484c891b9dd723d0e4e271b903715f8a9beabe390c684c3aad12da74769d077e",
+        1779957816,
+        "Up",
+        0.25
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x094a77263ae9e15edcc2db14dad6b2d888744f8059fe31bb8cc55aee04bbe1d9",
+        "0x8250fc90d30407a50b75b11d94b64a9d8054e9ed54fb03c171c4deecc2c0c4dd"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x3fd3a5256b1648c5e90100bdad1ccfa7d3c5abf4b364c84a0fdf9d9f65c36505",
+        1780574601,
+        "Down",
+        0.39
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x0dbea1ebdb4d94e5582dbeb14c9e88c9d83a6e0f45b6d55cd745eaae1c11be44",
+        "0x1866c46f3a8f333b08c8d085e1c2d05712bae880674bc03981e492c73bc7e0b8"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x925345b8a00b3cfaff4e8eeaf27ca87e527f5fd17e146a7a07d23c91d1095c7c",
+        1787029989,
+        "Up",
+        0.65
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x64212dbeecddf1f8c033b7f2ccb1f850b0422282cd4c5dc908834eb0070e6671",
+        "0x9de92e40881a65bfbc1de81c26eeb7e98f609f5378e95067ae98ff3f04a26053"
+      ],
+      "l5_order_fills_found": 3,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0xb7c88e4686cf8ef81785d8d66f7ebdac16fea839b2fe266abc52b4e7b1bb5115",
+        "0xd607a566d02107b7b3f86725ed627aa766a532a3bc46695d9307fece07401047"
+      ],
+      "roles": {
+        "maker": 3
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x3761d3c484c6b8c231f2f628d31e52aa99f9b1db2f261767dfad25bbd769a28c",
+        1776951470,
+        "Up",
+        0.35
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x2913ea064b7ad0c0e9f048ea154d64d14c049a5e3f5e2d4fad64b49bd8c0c176",
+        "0xcddec0ac9915a73b76c8f1f3664ddfa6496bb79a2c08557301aaa8b0f71c8bfe"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x38b0f5161cbb19bce351f51bbfcd39261418e7bace2b7b756b3c626f47654e4b",
+        1787014986,
+        "Up",
+        0.3
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x4adbf4410ac1d08876395f8d7ff197a38c041122346c92f4f0c8654b8bdc7a7b",
+        "0x8013d1c05f56f6566dcb5d8615da37ed2a35939ad922218d8fdb5826444098ab"
+      ],
+      "l5_order_fills_found": 3,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0x8856cc0add062f1c50d8c48c6adc4e7397665314919b09d3ea6359f3dc6bef6a",
+        "0xbb3d3115943ee655a7cc5226dd8082939699a54ee379bdd7d893184397833782"
+      ],
+      "roles": {
+        "maker": 3
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x0cdf5fbb2ccaa60bec551858765bd45ede84fcde8ffc923d3885d2f08c17c73e",
+        1782400301,
+        "Up",
+        0.01
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x148858cef39be808cb582e7da57e5e6a9f2703f71cc69e0ddee6cb03a9c34c35",
+        "0xcd7b861524c5dc5bec76d1cacbb53e537fd894fc3fab49913f6e05ca12dd9f90"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x5cf7f3179e652d0f216be12a2028a4df054ece1ab5f3195def77865c7c0712f1",
+        1784786980,
+        "Down",
+        0.76
+      ],
+      "n_fills": 3,
+      "n_tx": 3,
+      "tx": [
+        "0x15f3a9f34ff5ffcd6514c837cff2d8a7eeaadc3e2134d4221199016f060b2ccf",
+        "0x50c7581b84e30220b746d0a8332d2a9d173d46e49ea4379e89c9b7feb1a005b5",
+        "0xf09540074cfb92d65eb4d9a09633d13b4f78ff8c00f797488de3a23d44ca1d87"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 3,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x9011d2d81619700a8777bfa4d0b0a500c29da839d999eb3ab8199886e95254f1",
+        1787993557,
+        "Down",
+        0.14
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0xbd5198015243176f8e0b7d9e64b3741a11e9b8d40ab9aef42da81e560e654240",
+        "0xc6822b2c9bfadc259f3ba0407237bb7b5a6b0eb625e831379aeb9081ddc68ff9"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x182653341a530bd047180c8c905312e5dbe7ad24803ada7ab6e5edabe2a587cc"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xb70373355700feb99fa0c5b87b3b54feeebd6a05419817fe6ab0b1005f3a5ce7",
+        1785247888,
+        "Down",
+        0.02
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0xa20c33de111d668839e1ebc114db12539dcc1f8b1dd4c0c595eba99c785fe955",
+        "0xb7d7319450c43dfd71cc263ead1de8a5b58e5bc1106bb9329738b1992da5da47"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0xc1f9f97e7767bddd43ed9943eb8c02b6781d65bb2252b6fe71971e3b749934cb",
+        1788180619,
+        "Down",
+        0.58
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x7301dd1a8f2318a4c4fb0996f38731ebf7d9dc5c16493ce94d2ab0b9a93d8700",
+        "0xaabc1ff0240bcb7f3543beac5d055783811b1e3e28eba72be6870aecb58b9ad2"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0x619402a6b4feca1da5ea017f4ff37ccd8468b48e28c6074e4ee56c743488d88b",
+        "0xfc9cc1c21bcf1fadd37318ea0294843db976ff134491858f5d9d26764e4ec90f"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0xae18b55fe89d97dc3cfc3a3ced65c12afa428f361d82d6e04720b1fb1a330379",
+        1787271541,
+        "Up",
+        0.83
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x38eca7696bf35c11272b02fee0e420422acafc773280b0dd391868857580ae31",
+        "0xeecdcc2865fe3ced91e6db069ba2fdb48b881699761ae1ad8b240059931a036a"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x2a810705d1dff4cdc417ecaa1d41ecd8cd2ad5db28d727d0c11731d7e2e5db87"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0x141523cd6b8b5b5b3dd6e0449aac3e364cfde920577c083d8b1848a2f56c82fc",
+        1779118647,
+        "Down",
+        0.06
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x7a9a6d9e2a24880ea117cf5dd8def7e83566a4be7044394e4566853bfbc3a2a1",
+        "0xec5b9d3234ba6830a339d74ce956ac049b1317be311af79f83cdd4f7f834edcd"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0xeb96584c6199120e42998643f61579bb218eb0df1766251d97c42fe41804338a",
+        1787375721,
+        "Down",
+        0.41
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x3740f4c32f407e128badfe2bc1ae7e5f979f93131455398738c15f31a5c491d6",
+        "0xcfa736b65816a6773bfec13fd0761cc50e1c4bc39f7acdab4b24ab5e8ee88da4"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x72c3b86f543647a3bebb28d7b329ca95eb308ff84adb1e11d93f914fe025e6ca"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xef6b2011eda9d6a4d597badf53f2a419cbd7a0bc312a1502b11619cc49bdadd0",
+        1786530805,
+        "Down",
+        0.17
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x124519805dca5df286fbffff61bc707dcf8ddcf616ca58b727d75018b605e7b4",
+        "0x3f810adcffdabf4e091788d39b019e2e17f972e7957ab79edb6fc4af5c5f1c34"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0xaae899a43265943191a145d7b99bebf12e5cb705408387cb5acb8ca66fe2dddd"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xe1b00231c136d84adaeb1b8854b44d4c974462ee71def504943f252257b5a10b",
+        1787971374,
+        "Up",
+        0.48
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x697fdd7d4dd64bec950b82a073954934e2ae4df339d46a23944233ca28f116cb",
+        "0x81fc1aeb19ed9f8076bc52698d75981ef5e619ccc161dde394a11434aca234e2"
+      ],
+      "l5_order_fills_found": 3,
+      "distinct_order_hashes": 3,
+      "order_hashes": [
+        "0x2fe181da667920704085dfa02d8986245c7d430c59e316f865a83414d31f802e",
+        "0x4387bbc2bb7c081fbaaa1a3e0b8cb342152110a19a32326719b7dccb220413fc",
+        "0xf4bc8e5733a41512cc33e3b90fb19c4d94c7634651472b8472a5ac5325afc166"
+      ],
+      "roles": {
+        "maker": 3
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x0c39b006141d170a39fc114526d5ca99028bdc3b91866ee379e75b3f7e254b57",
+        1781612937,
+        "Down",
+        0.06
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0xa6cd30e740cb6d58e4a951801b70a00ebe2ba90cf465c3cf73888a66278cba51",
+        "0xde5ff983f3fc7fa436711d4b8bc9b9d81a04a4c8cd54e87fee603ce2b0305950"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x32b8960a3682845d037f76603c0e3db87edddfbbd5040e517da706a145e6fcb0",
+        1788123220,
+        "Up",
+        0.91
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x7469de74375b4f1d960464f378e8cf8a3083e7b8ed0e52852477333c44efaae1",
+        "0xfb92026fe4346a0f7eff258c90634844750f24e97d8f178d34abb4a31a9c9330"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x12570a6fff905598e5428056edca568f6d2a298ceb45d0ebd44ad9cb7db326b4"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0x760e7e24b49255529fea630818d7efaefc5a335e401bac36e5dd4145b2ff8d1b",
+        1781629172,
+        "Up",
+        0.02
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x7bbba0fb0e0529171f6873e13fc7e37e5ecc71b3f41330b0ed80d6304df450b6",
+        "0xcfa7f53f6d1268103b756c60444a3e39a9e3cf7acca5855957e195f205a18c6c"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x9528e9ccaed643065e75f69ea8f86ed5552ffec2f0b549fd01aace059fa424fb",
+        1777799104,
+        "Down",
+        0.43
+      ],
+      "n_fills": 2,
+      "n_tx": 2,
+      "tx": [
+        "0x7d9ec3e06e5dfeb637cb73ffdf35b0d5c7c4dde43cee50b6726959713882eea3",
+        "0xe27bc3da427132ba029fd61ea94416f51e592287fa2849274c80b1b2810e6842"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 2,
+      "classification": "UNRESOLVABLE"
+    }
+  ],
+  "singleton_controls": [
+    {
+      "key": [
+        "0x149de2cb1654309be96c6cf9f88335c9145933495bb984189ec72288c5be6f5c",
+        1785353648,
+        "Up",
+        0.24
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xc1caddc653948524352f179b46c836fd93158ec7c6f8dac6e1ffa33858d84577"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 1,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x0302249e2bbb2335601494f4e92c3c28572a1610ce51b3c86b06947751cb0ef6",
+        1787642425,
+        "Up",
+        0.21
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xaf49b23e514487b19f613dfaac52d8afe863c1ccba08ea9c4d62c16e66f49a07"
+      ],
+      "l5_order_fills_found": 1,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x0ff19e11228c230c6e6e02f24d5fccafedb7ac8df80b90656017f3668a96edbf"
+      ],
+      "roles": {
+        "maker": 1
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xaf8b0ef74105624cb3665e0e1687ed856456acca015e6bbc6446a83d142905e3",
+        1779704295,
+        "Down",
+        0.3
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0x7ec0e919a3950d50e2cba29fe0d24de97f6b22604dc0d78ffe67f2c91b029a61"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 1,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x0cac6756a075506d267c3059a918a8eaa6b6c6bdc35e73f2a8bda803d86b9e30",
+        1779440309,
+        "Down",
+        0.86
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xf984d4ef1d73305bd44ae691dd024c81885165d30d7f697538ab8e808e68c00b"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 1,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x424799c9e087c8b166f8e219ce6f9483880c3ba98d84edb7f685e13f9b1c8cdb",
+        1780316743,
+        "Down",
+        0.0300000052
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0x8c8d0c5fc079d0a7b157033cce4624714c67a001f5d6fefc53d188882a7bbc3c"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 1,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x665c991271e7c3483ab3f67e87d10881b504519ef2065f890b152bd9570cbaf6",
+        1784277465,
+        "Down",
+        0.91
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xce9611594ca9d25f302332031c7f7dd40cebd2feb967398dfac5df7ee7e9c7b8"
+      ],
+      "l5_order_fills_found": 0,
+      "distinct_order_hashes": 0,
+      "order_hashes": [],
+      "roles": {},
+      "fee_units_sum": 0,
+      "receipts_missing": 1,
+      "classification": "UNRESOLVABLE"
+    },
+    {
+      "key": [
+        "0x84c6d1ebf08c272cb192047abd326bfd2f05ba947a691ff9175ef99dd662e791",
+        1786798089,
+        "Up",
+        0.36
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xd0bb69992396b8abee72de710b67c8c04017d3f284eef896f9869bcc39324253"
+      ],
+      "l5_order_fills_found": 2,
+      "distinct_order_hashes": 2,
+      "order_hashes": [
+        "0x30bff3f7d36f489a6f745fabf3254e12b6b2850681fdf366436687468b9872a7",
+        "0x45f2427f38736a8be68618d4c293cad6beecad0753c9fd8514a17ab59323f325"
+      ],
+      "roles": {
+        "maker": 2
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "MULTIPLE_PARENT_ORDERS"
+    },
+    {
+      "key": [
+        "0x8e2989a6d983184999c7a51cee08cecb60dcd1b69e0faaebd944b7cea2fa179f",
+        1787169000,
+        "Up",
+        0.4800000112
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0xea249c7de28011ce99de6d4f540762418ffe98141c067d3ba3333197faf4dd55"
+      ],
+      "l5_order_fills_found": 1,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x34a9aa90f7ac90c362bea9971e4b8da2c844934cd11ddf67836344dec683e054"
+      ],
+      "roles": {
+        "maker": 1
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0x50f4df463d79a8794019d1c8bb456087bb6accf92f93766fe8c41b8356fa3374",
+        1787284614,
+        "Up",
+        0.57
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0x0f74ddbb94cd61c115b6a5c4bfdc75bf53cf4c8789bf56c2500e8a93b1a971d2"
+      ],
+      "l5_order_fills_found": 1,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0x95b3a0c782d980316e25744d42d9de5d55afdf6bea4a8e8e57256239139c54c7"
+      ],
+      "roles": {
+        "taker": 1
+      },
+      "fee_units_sum": 171220,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    },
+    {
+      "key": [
+        "0xe9978f1e60624fb707c42d23b4b3d7aaa8b9bcc360cb981ee809480fb3c6523d",
+        1787342260,
+        "Down",
+        0.87
+      ],
+      "n_fills": 1,
+      "n_tx": 1,
+      "tx": [
+        "0x9c284d42084a0d9b6e62c052c48968c271e0d2896f0e92df612bc42f5ee5a34b"
+      ],
+      "l5_order_fills_found": 1,
+      "distinct_order_hashes": 1,
+      "order_hashes": [
+        "0xcb5c57e3320682849d9dcb7c882b2b74f74b9c0107ee94a2e09bd91c8ed33980"
+      ],
+      "roles": {
+        "maker": 1
+      },
+      "fee_units_sum": 0,
+      "receipts_missing": 0,
+      "classification": "SAME_PARENT_ORDER"
+    }
+  ],
+  "labels": "A cluster is UNRESOLVABLE when no OrderFilled naming L5 as maker could be read for it. That is reported, never dropped: the unresolvable fraction is a result."
+}

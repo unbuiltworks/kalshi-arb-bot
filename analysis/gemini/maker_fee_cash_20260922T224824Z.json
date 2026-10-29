@@ -1,0 +1,633 @@
+{
+  "ep016": {
+    "delta_vs_schedule": "-0.18",
+    "fee_amount_total": "0",
+    "implied_by_schedule_usd": "0.18",
+    "note": "18 fills are expected. Fewer means /v1/mytrades did not return them all in this page, which is a coverage fact and not a statement about fees.",
+    "rows": [
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.32",
+        "symbol": "GEMI-BTC15M2609220315-UP",
+        "tid": 1893456011896533,
+        "timestampms": 1790046103468,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.39",
+        "symbol": "GEMI-BTC15M2609220315-UP",
+        "tid": 1893456011896529,
+        "timestampms": 1790046083470,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.52",
+        "symbol": "GEMI-BTC15M2609220315-UP",
+        "tid": 1893456011896519,
+        "timestampms": 1790046041714,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.25",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896373,
+        "timestampms": 1790045512568,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.36",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896345,
+        "timestampms": 1790045449260,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.4",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896280,
+        "timestampms": 1790045314711,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.54",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896274,
+        "timestampms": 1790045284722,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.43",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896225,
+        "timestampms": 1790045191268,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.42",
+        "symbol": "GEMI-BTC15M2609220300-UP",
+        "tid": 1893456011896192,
+        "timestampms": 1790045154701,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.34",
+        "symbol": "GEMI-BTC15M2609220245-UP",
+        "tid": 1893456011896011,
+        "timestampms": 1790044340907,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.37",
+        "symbol": "GEMI-BTC15M2609220245-UP",
+        "tid": 1893456011895971,
+        "timestampms": 1790044290397,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.19",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895852,
+        "timestampms": 1790043935712,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.33",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895836,
+        "timestampms": 1790043858783,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.33",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895721,
+        "timestampms": 1790043676181,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.37",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895617,
+        "timestampms": 1790043507127,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.45",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895605,
+        "timestampms": 1790043478760,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.4",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895597,
+        "timestampms": 1790043448297,
+        "type": "Buy"
+      },
+      {
+        "aggressor": false,
+        "amount": "1",
+        "fee_amount": "0",
+        "fee_currency": "USD",
+        "maker_side": null,
+        "price": "0.45",
+        "symbol": "GEMI-BTC15M2609220230-UP",
+        "tid": 1893456011895544,
+        "timestampms": 1790043353069,
+        "type": "Buy"
+      }
+    ],
+    "rows_found": 18,
+    "symbols": [
+      "GEMI-BTC15M2609220230-UP",
+      "GEMI-BTC15M2609220245-UP",
+      "GEMI-BTC15M2609220300-UP",
+      "GEMI-BTC15M2609220315-UP"
+    ]
+  },
+  "fee_formula": {
+    "maker_formula_rows": [
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.5",
+        "symbol": "GEMI-BTC05M2609020225-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788315601223
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.23",
+        "symbol": "GEMI-XRP05M2609011340-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788269808036
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.6",
+        "symbol": "GEMI-BTC05M2609011315-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788268386282
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.49",
+        "symbol": "GEMI-ETH05M2609011220-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788264903893
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.76",
+        "symbol": "GEMI-ETH05M2609011145-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788262902354
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.21",
+        "symbol": "GEMI-ETH05M2609011145-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788262876642
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.48",
+        "symbol": "GEMI-ETH05M2609011105-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788260403163
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.47",
+        "symbol": "GEMI-ETH05M2609011050-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788259502620
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.4",
+        "symbol": "GEMI-BTC05M2609010305-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788231686842
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.46",
+        "symbol": "GEMI-BTC05M2609010305-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788231654214
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.23",
+        "symbol": "GEMI-ETH05M2609010300-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788231362704
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.5",
+        "symbol": "GEMI-ETH05M2609010250-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788230702936
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.49",
+        "symbol": "GEMI-ETH05M2609010250-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788230702936
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.48",
+        "symbol": "GEMI-ETH05M2609010240-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788230101499
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.47",
+        "symbol": "GEMI-ETH05M2609010240-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788230101499
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.46",
+        "symbol": "GEMI-ETH05M2609010240-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788230101499
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.5",
+        "symbol": "GEMI-ETH05M2609010230-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788229502298
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.49",
+        "symbol": "GEMI-ETH05M2609010230-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788229502298
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.48",
+        "symbol": "GEMI-ETH05M2609010230-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788229502298
+      },
+      {
+        "amount": "1",
+        "fee": "0.01",
+        "label": "MAKER_FORMULA",
+        "maker_expected": "0.01",
+        "price": "0.5",
+        "symbol": "GEMI-ETH05M2609010215-UP",
+        "taker_expected": "0.02",
+        "timestampms": 1788228658081
+      }
+    ],
+    "n_maker_formula": 60,
+    "neither": [
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.05",
+        "price": "0.53",
+        "symbol": "GEMI-BTC05M2609011310-UP",
+        "taker_expected": "0.18",
+        "timestampms": 1788267904408
+      },
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.05",
+        "price": "0.44",
+        "symbol": "GEMI-BTC05M2608302105-UP",
+        "taker_expected": "0.18",
+        "timestampms": 1788123608699
+      },
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.05",
+        "price": "0.48",
+        "symbol": "GEMI-BTC05M2608301245-UP",
+        "taker_expected": "0.18",
+        "timestampms": 1788093678533
+      },
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.05",
+        "price": "0.62",
+        "symbol": "GEMI-BTC05M2608300230-UP",
+        "taker_expected": "0.17",
+        "timestampms": 1788056931692
+      },
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.04",
+        "price": "0.32",
+        "symbol": "GEMI-BTC05M2608300230-UP",
+        "taker_expected": "0.16",
+        "timestampms": 1788056756389
+      },
+      {
+        "amount": "10",
+        "fee": "0.03",
+        "label": "NEITHER",
+        "maker_expected": "0.05",
+        "price": "0.48",
+        "symbol": "GEMI-BTC05M2608291955-UP",
+        "taker_expected": "0.18",
+        "timestampms": 1788033047730
+      }
+    ],
+    "note": "published: Fee = rate x C x P x (1-P), rounded UP to the next cent; maker rate 0.0175, taker rate 0.07. 'Fees exist' and 'MAKER fees exist' are different claims and only the second bears on a maker strategy.",
+    "tally": {
+      "EITHER (the two agree here)": 23,
+      "MAKER_FORMULA": 60,
+      "NEITHER": 6,
+      "TAKER_FORMULA": 13,
+      "ZERO": 97
+    }
+  },
+  "implied_by_schedule_usd": "0.18",
+  "label": "GEMINI_MAKER_FEE_CASH_PROBE_V1",
+  "labels": "UNRESOLVED either way until a cash movement is matched to a window. The fee line is not changed by this probe.",
+  "mytrades": {
+    "examples": [
+      {
+        "amount": "5.87",
+        "fee_amount": "0.06",
+        "fee_currency": "USD",
+        "price": "0.16",
+        "symbol": "GEMI-BTC2609221700-HI86300",
+        "tid": 1893456011904867,
+        "timestampms": 1790096352354
+      },
+      {
+        "amount": "4.66",
+        "fee_amount": "0.05",
+        "fee_currency": "USD",
+        "price": "0.15",
+        "symbol": "GEMI-NFL-2609220015-NYG-LAR-S-NYG6",
+        "tid": 1893456011880299,
+        "timestampms": 1790007834419
+      },
+      {
+        "amount": "1.81",
+        "fee_amount": "0.04",
+        "fee_currency": "USD",
+        "price": "0.53",
+        "symbol": "GEMI-NFL-2609220015-NYG-LAR-S-LAR6",
+        "tid": 1893456011880281,
+        "timestampms": 1790007806648
+      },
+      {
+        "amount": "2.43",
+        "fee_amount": "0.04",
+        "fee_currency": "USD",
+        "price": "0.34",
+        "symbol": "GEMI-BTC05M2609202115-UP",
+        "tid": 1893456011852045,
+        "timestampms": 1789938632425
+      },
+      {
+        "amount": "1",
+        "fee_amount": "0.01",
+        "fee_currency": "USD",
+        "price": "0.5",
+        "symbol": "GEMI-BTC05M2609020225-UP",
+        "tid": 1893456011364005,
+        "timestampms": 1788315601223
+      },
+      {
+        "amount": "1",
+        "fee_amount": "0.01",
+        "fee_currency": "USD",
+        "price": "0.23",
+        "symbol": "GEMI-XRP05M2609011340-UP",
+        "tid": 1893456011350128,
+        "timestampms": 1788269808036
+      },
+      {
+        "amount": "1",
+        "fee_amount": "0.01",
+        "fee_currency": "USD",
+        "price": "0.6",
+        "symbol": "GEMI-BTC05M2609011315-UP",
+        "tid": 1893456011349639,
+        "timestampms": 1788268386282
+      },
+      {
+        "amount": "10",
+        "fee_amount": "0.03",
+        "fee_currency": "USD",
+        "price": "0.53",
+        "symbol": "GEMI-BTC05M2609011310-UP",
+        "tid": 1893456011349459,
+        "timestampms": 1788267904408
+      },
+      {
+        "amount": "1",
+        "fee_amount": "0.01",
+        "fee_currency": "USD",
+        "price": "0.49",
+        "symbol": "GEMI-ETH05M2609011220-UP",
+        "tid": 1893456011348964,
+        "timestampms": 1788264903893
+      },
+      {
+        "amount": "1",
+        "fee_amount": "0.01",
+        "fee_currency": "USD",
+        "price": "0.76",
+        "symbol": "GEMI-ETH05M2609011145-UP",
+        "tid": 1893456011348784,
+        "timestampms": 1788262902354
+      }
+    ],
+    "fee_amount_total": "1.82",
+    "n_rows": 199,
+    "note": "fee_amount is the account's own record of what it paid. A total of 0 across every row is a cash statement, not a field default -- but only for the rows this endpoint returns, which is why n_rows is reported beside it.",
+    "readable": true,
+    "rows_with_a_nonzero_fee": 102,
+    "status": 200
+  },
+  "question": "the venue reported n=0.0000 on every EP016 fill; did any maker fee leave the account later?",
+  "settled_cashouts": {
+    "fee_named_fields": [],
+    "n_rows": null,
+    "readable": true,
+    "status": 200
+  },
+  "transfers": {
+    "debit_like_rows": [],
+    "fee_named_fields": [],
+    "n_debit_like": 0,
+    "n_rows": 10,
+    "note": "/v1/transfers carries no order id, so a debit here can never be attributed to a fill. Its value is existential: a maker fee that was charged has to appear as SOMETHING.",
+    "readable": true,
+    "status": 200
+  },
+  "utc": "2026-09-22T22:48:24.934266+00:00",
+  "verdict": "FEE_EVIDENCE_FOUND",
+  "window": {
+    "from": "2026-09-20",
+    "to": "2026-09-23"
+  }
+}

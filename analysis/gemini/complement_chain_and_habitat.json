@@ -1,0 +1,154 @@
+{
+  "study": "A+B complement chain, and the Gemini spread/flow habitat",
+  "asked": "Does A put the COMPLEMENT at the front, and does B keep it there long enough to receive ordinary flow?",
+  "corpus": {
+    "contracts": 59,
+    "first_fills_followed": 28,
+    "queue_accounting": "CORRECTED symmetric",
+    "model_a": "FROZEN",
+    "arm": "A+B maker/maker; taker completion NOT used anywhere here"
+  },
+  "chain": {
+    "first_legs_that_rested_at_the_front": 28,
+    "episodes_with_a_complement_rung": 26,
+    "complement_rungs_that_reached_the_front": 26,
+    "episodes_at_front_WITH_reaching_flow": 1,
+    "median_queue_ahead_of_the_complement_rung": 0.0,
+    "median_spread_while_carrying_residual": 0.285,
+    "break_reasons": {
+      "AT_FRONT_BUT_NO_REACHING_FLOW": 25,
+      "NO_COMPLEMENT_RUNG_EVER_DESIRED": 2,
+      "REACHING_FLOW_BUT_QUEUE_NOT_CLEARED": 1
+    },
+    "verdict": "A solves queue acquisition on BOTH legs and B holds it. The chain does not break at queue position. It breaks because no counterparty arrives."
+  },
+  "flow_at_the_front": {
+    "cycles_with_our_complement_rung_at_the_front": 211,
+    "prints_of_any_kind_in_those_spans": 18,
+    "prints_reaching_our_rung": 0,
+    "episodes_with_zero_prints_at_all_while_at_front": 15,
+    "episodes_with_prints_but_none_reaching": 6,
+    "median_seconds_spent_at_the_front": 88.5
+  },
+  "spread_segmentation": {
+    "question": "are there Gemini states/windows with an L5-like 1-3c spread?",
+    "state_level": {
+      "n": 1096,
+      "<=0.01": 2,
+      "<=0.02": 6,
+      "<=0.03": 11,
+      "<=0.05": 22,
+      "<=0.10": 95,
+      "median": 0.28,
+      "share_at_or_below_3c": "1.0%"
+    },
+    "contract_level": {
+      "n": 59,
+      "median_spread_<=0.03": 0,
+      "median_spread_<=0.05": 0,
+      "narrowest_bucket": "0.05-0.10, a single contract"
+    },
+    "answer": "NO. Not one of 59 contracts ran at an L5-like spread. The 1% of individual states at <=3c are transient, not a regime."
+  },
+  "recycling_by_spread": {
+    "0.05-0.10": {
+      "n": 1,
+      "fills": 0,
+      "first": 0,
+      "COMPLETE": 0,
+      "matched": "0"
+    },
+    "0.10-0.20": {
+      "n": 11,
+      "fills": 7,
+      "first": 4,
+      "COMPLETE": 0,
+      "matched": "0.02"
+    },
+    "0.20-0.30": {
+      "n": 30,
+      "fills": 21,
+      "first": 15,
+      "COMPLETE": 0,
+      "matched": "0.02"
+    },
+    ">0.30": {
+      "n": 17,
+      "fills": 12,
+      "first": 9,
+      "COMPLETE": 0,
+      "matched": "0.02"
+    },
+    "answer": "A+B recycling is NOT materially better at narrower spreads. COMPLETE fills are ZERO in every spread bucket."
+  },
+  "recycling_by_flow": {
+    "0-2 prints": {
+      "n": 15,
+      "fills": 4,
+      "first": 3,
+      "matched": "0.01",
+      "med_spread": 0.285
+    },
+    "3-5": {
+      "n": 24,
+      "fills": 13,
+      "first": 11,
+      "matched": "0.01",
+      "med_spread": 0.28
+    },
+    "6-9": {
+      "n": 11,
+      "fills": 7,
+      "first": 6,
+      "matched": "0.01",
+      "med_spread": 0.25
+    },
+    "10+": {
+      "n": 9,
+      "fills": 16,
+      "first": 8,
+      "matched": "0.03",
+      "med_spread": 0.29
+    },
+    "reading": "Flow, not spread, moves first fills (0.27 -> 1.8 fills per contract). Median spread is flat across flow buckets, so the two are independent: Gemini offers no state that is both narrow AND liquid."
+  },
+  "cross_venue_flow": {
+    "l5_polymarket": {
+      "fills": 53926,
+      "windows": 1671,
+      "per_window": 32.3,
+      "note": "ONE participant's own fills"
+    },
+    "gemini_btc5m_15m": {
+      "public_prints": 291,
+      "contracts": 59,
+      "per_contract": 4.9,
+      "note": "EVERY participant combined"
+    },
+    "ratio": "6.6x",
+    "caveat": "fill-record granularity may differ between the venues' public feeds; the comparison is directional, not a like-for-like tick.",
+    "spread_at_fill_states": {
+      "l5_polymarket_median": 0.01,
+      "gemini_median": 0.28,
+      "ratio": "28x"
+    }
+  },
+  "verdict": {
+    "queue_acquisition": "SOLVED on both legs. 28/28 first legs and 26/26 complements rested at the front.",
+    "binding_constraint": "COUNTERPARTY ARRIVAL. The median Gemini contract trades 4 times in its whole life -- about one print every 75 seconds -- and in 211 front-of-queue cycles not one print reached us.",
+    "habitat": "Gemini BTC5m/15m provides neither an L5-like spread (0 of 59 contracts) nor sufficient two-sided flow, and never both at once. No execution change can manufacture a counterparty.",
+    "recommendation": "The bottleneck is no longer execution. It is venue selection. Search for a habitat with L5-like spread AND flow before spending further effort on Gemini microstructure."
+  },
+  "labels": "HYPOTHETICAL/OFFLINE. No order existed; nothing was submitted, filled, settled or realized.",
+  "prospective_status": {
+    "arm": "EXEC_A_PLUS_B on gemini-maker-shadow, a44de245, errors 0, mutations_sent 0",
+    "windows_so_far": [
+      "BTC05M0105-UP rested=10 fills=1 first=1 COMPLETE=0 residual=-0.01",
+      "BTC05M0110-UP rested=4 fills=1 first=1 COMPLETE=0 residual=+0.01",
+      "BTC05M0115-UP rested=10 fills=0",
+      "BTC15M0115-UP V2 rested=97 fills=0; A+B rested=3 fills=0"
+    ],
+    "reads": "2 prospective first fills, 0 COMPLETEs, both left residual -- consistent with the offline chain, but n=2.",
+    "gap": "The lane logs window-level aggregates only. A per-cycle prospective chain trace needs a CHAIN log line, which needs a deploy. Bundle it with the ab_arms.py watchPattern fix at the next intentional deployment rather than interrupting current windows."
+  }
+}

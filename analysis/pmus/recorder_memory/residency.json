@@ -1,0 +1,60 @@
+{
+ "arms": [
+  {
+   "covers_full_trades_1h_window": false,
+   "fraction_of_trades_1h_window": 0.504,
+   "max_markets": 1500,
+   "mean_residency_min": 30.3,
+   "mean_residency_s": 1815.3,
+   "non_protected_slots": 1340,
+   "seats_protected": 160
+  },
+  {
+   "covers_full_trades_1h_window": false,
+   "fraction_of_trades_1h_window": 0.316,
+   "max_markets": 1000,
+   "mean_residency_min": 19.0,
+   "mean_residency_s": 1137.9,
+   "non_protected_slots": 840,
+   "seats_protected": 160
+  },
+  {
+   "covers_full_trades_1h_window": false,
+   "fraction_of_trades_1h_window": 0.222,
+   "max_markets": 750,
+   "mean_residency_min": 13.3,
+   "mean_residency_s": 799.3,
+   "non_protected_slots": 590,
+   "seats_protected": 160
+  },
+  {
+   "covers_full_trades_1h_window": false,
+   "fraction_of_trades_1h_window": 0.128,
+   "max_markets": 500,
+   "mean_residency_min": 7.7,
+   "mean_residency_s": 460.6,
+   "non_protected_slots": 340,
+   "seats_protected": 160
+  }
+ ],
+ "assumption": "the eviction rate is set by ARRIVALS (COLD rotation admitting newly-observed markets) and is therefore cap-invariant at steady state; residency then scales linearly with the non-protected slot count",
+ "finding": "evicted_idle is 0 in every sample: NOTHING reaches the 2 h idle rule, so eviction is driven entirely by the cap and the dict is saturated and thrashing",
+ "headline": "at the CURRENT cap of 1500 the mean unseated market already survives less than the 3600 s that trades_1h needs; every lower cap makes that strictly worse",
+ "method": "Little's law on steady-state eviction: a dict held at its cap with arrivals equal to evictions gives mean residency = non_protected_slots / eviction_rate",
+ "observed": {
+  "deployment": "32ac7295-67d3-4ba0-9270-de4a3e0c6529",
+  "evicted_idle_every_sample": 0,
+  "evicted_over_cap_per_cycle": {
+   "max": 82,
+   "mean": 52.17,
+   "min": 24
+  },
+  "eviction_rate_per_h": 2657.4,
+  "eviction_rate_per_s": 0.7382,
+  "kept_every_sample": 1500,
+  "mean_cycle_s": 70.67,
+  "protected_every_sample": 160,
+  "samples": 13,
+  "span_s": 848.04
+ }
+}

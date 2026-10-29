@@ -1,0 +1,273 @@
+{
+  "study": "Polymarket International vs Gemini: habitat, chain, and L5-conditioned control",
+  "hypothesis": {
+    "H0": "comparable reaching-flow conditions; the problem is implementation",
+    "H1": "International gives materially more frequent reaching two-sided flow at tight spreads, letting the same passive mechanism recycle",
+    "verdict": "H1 SUPPORTED, on the discriminating observation and not on volume"
+  },
+  "data_provenance": {
+    "polymarket_L2": "Zenodo record 22084977 updown_15m.parquet, 1-second full L2 ladders, 2026-08-21..24, 239,310 snapshots, 265 markets; 33 are BTC 15m",
+    "polymarket_fills": "L5 on-chain fill corpus, 763,966 fills; 13,592 BTC 5m/15m windows. CONFIRMED EXECUTIONS.",
+    "gemini": "corrected symmetric-queue corpus, 59 contracts, 1,096 book states, ~8s controller cycles, real public tape",
+    "granularity": "Polymarket L2 is 1s, Gemini is ~8s. Every rate metric is reported for Polymarket BOTH natively AND downsampled to 8s; only the 8s column is compared with Gemini.",
+    "scope_mismatch": "The Zenodo L2 covers 15m only. The Gemini corpus is 58 BTC5m + 1 BTC15m. Both are short-duration crypto up/down binaries but the durations are not matched, and this is not corrected for.",
+    "NOT_OBSERVABLE": [
+      "L5's own queue position -- the book is anonymous and his resting orders are not identifiable. Not synthesized.",
+      "A market-wide Polymarket trade tape. `logs_seen` in the backfill is L5-address-filtered, not market-wide, so prints/minute for all participants is NOT measured and no figure is given for it."
+    ]
+  },
+  "habitat": {
+    "POLYMARKET_btc15m_1s": {
+      "label": "Polymarket International BTC15m, native 1s",
+      "n_series": 33,
+      "n_states": 16314,
+      "spread": {
+        "p10": 0.009999999999999898,
+        "p25": 0.010000000000000009,
+        "median": 0.010000000000000009,
+        "p75": 0.010000000000000009,
+        "p90": 0.010000000000000009,
+        "mean": 0.010211781292141718
+      },
+      "share_at_or_below": {
+        "0.01": 96.1,
+        "0.02": 98.82,
+        "0.03": 99.63,
+        "0.05": 99.9,
+        "0.1": 99.99
+      },
+      "touch_changes_per_min": {
+        "median": 11.69603524229075,
+        "mean": 12.855778837990416
+      },
+      "touch_depth_bid": {
+        "median": 66.0
+      },
+      "touch_depth_ask": {
+        "median": 62.0
+      },
+      "mid_oscillation_per_min": {
+        "median": 0.2998656215005592
+      },
+      "observed_span_s": {
+        "median": 960.0,
+        "max": 960.0
+      }
+    },
+    "POLYMARKET_btc15m_8s": {
+      "label": "Polymarket International BTC15m, downsampled to 8s",
+      "n_series": 33,
+      "n_states": 3030,
+      "spread": {
+        "p10": 0.009999999999999953,
+        "p25": 0.010000000000000009,
+        "median": 0.010000000000000009,
+        "p75": 0.010000000000000009,
+        "p90": 0.010000000000000009,
+        "mean": 0.01033927392739274
+      },
+      "share_at_or_below": {
+        "0.01": 96.27,
+        "0.02": 98.68,
+        "0.03": 99.54,
+        "0.05": 99.8,
+        "0.1": 99.93
+      },
+      "touch_changes_per_min": {
+        "median": 4.8791208791208796,
+        "mean": 4.890002359976436
+      },
+      "touch_depth_bid": {
+        "median": 80.0
+      },
+      "touch_depth_ask": {
+        "median": 79.0
+      },
+      "mid_oscillation_per_min": {
+        "median": 0.17617924528301887
+      },
+      "observed_span_s": {
+        "median": 960.0,
+        "max": 960.0
+      }
+    },
+    "GEMINI_btc5m_15m_8s": {
+      "label": "Gemini BTC5m/15m corrected corpus, ~8s cycles",
+      "n_series": 59,
+      "n_states": 1096,
+      "spread": {
+        "p10": 0.10999999999999999,
+        "p25": 0.19,
+        "median": 0.27999999999999997,
+        "p75": 0.32,
+        "p90": 0.35000000000000003,
+        "mean": 0.2652189781021898
+      },
+      "share_at_or_below": {
+        "0.01": 0.18,
+        "0.02": 0.55,
+        "0.03": 1.0,
+        "0.05": 2.01,
+        "0.1": 8.67
+      },
+      "touch_changes_per_min": {
+        "median": 5.183571897555964,
+        "mean": 4.960029836875541
+      },
+      "touch_depth_bid": {
+        "median": 217.0
+      },
+      "touch_depth_ask": {
+        "median": 214.0
+      },
+      "mid_oscillation_per_min": {
+        "median": 0.22548537754368445
+      },
+      "observed_span_s": {
+        "median": 268.9754829406738,
+        "max": 867.8676815032959
+      }
+    }
+  },
+  "spread_headline": {
+    "polymarket_btc15m": {
+      "median": 0.01,
+      "share_at_or_below_1c": "96.1%",
+      "share_at_or_below_3c": "99.6%"
+    },
+    "gemini_btc5m_15m": {
+      "median": 0.28,
+      "share_at_or_below_1c": "0.18%",
+      "share_at_or_below_3c": "1.00%"
+    },
+    "note": "At matched 8s sampling the two books move at almost the SAME rate (touch changes/min 4.88 vs 5.18) and Gemini has MORE depth at the touch (217 vs 80). Gemini is not a quiet or thin book. It is a WIDE one."
+  },
+  "the_discriminator": {
+    "definition": "A resting BUY at p can only fill if the market offers at or below p. From BOOK ONLY, on the same field on both venues: does best_ask later come down to <= the bid touch of this state? No tape and no queue assumption is used.",
+    "within_120s": {
+      "polymarket_8s": "76.0% reached, median wait 16s",
+      "gemini_8s": "16.8% reached, median wait 59s",
+      "polymarket_1s_for_reference": "82.9%, median 7s"
+    },
+    "to_contract_end": {
+      "polymarket_8s": "82.4%",
+      "gemini_8s": "19.9%"
+    },
+    "reading": "4.5x more likely to be reached, and 3.7x faster when it is."
+  },
+  "mirror_image": {
+    "arm_A_feasible": {
+      "polymarket": "5.1% of states leave room to improve by a tick without crossing",
+      "gemini": "99.0%"
+    },
+    "touch_depth_median": {
+      "polymarket": 65,
+      "gemini": 217
+    },
+    "reading": "The venues fail in opposite ways. On Gemini the front of the queue is FREE (a 28c spread means you step in front for a penny, every time) and nobody ever comes. On Polymarket the front is UNOBTAINABLE (a 1c spread means joining the touch behind ~65 contracts) and the flow arrives anyway, so the queue drains. L5 is not winning a queue race; he is standing in a queue that moves."
+  },
+  "l5_conditioned": {
+    "windows": 13592,
+    "reached_an_opposite_side_fill": 10962,
+    "share": "80.7%",
+    "by_duration": {
+      "btc15m": {
+        "n": 5503,
+        "completed": "99.2%",
+        "median_s": 26
+      },
+      "btc5m": {
+        "n": 8089,
+        "completed": "68.0%",
+        "median_s": 66
+      }
+    },
+    "time_to_complement_s": {
+      "p10": 6,
+      "p25": 17,
+      "median": 44,
+      "p75": 92,
+      "p90": 154,
+      "max": 666
+    },
+    "within": {
+      "10s": "16.0%",
+      "30s": "39.8%",
+      "60s": "60.9%",
+      "120s": "83.2%"
+    },
+    "extends_before_completing": {
+      "none": "33.2%",
+      "one_or_more": "66.8%",
+      "median": 1,
+      "max": 44,
+      "reading": "a one-pair lifecycle would be the wrong model; two thirds of the time he adds to the same side first"
+    },
+    "l5_fills_per_window": {
+      "p25": 4,
+      "median": 10,
+      "p75": 91,
+      "p90": 164,
+      "max": 756,
+      "mean": 54.8,
+      "per_minute": {
+        "btc5m": 1.3,
+        "btc15m": 8.4
+      }
+    },
+    "second_fill_mechanism": "26.4% of L5's maker fills in the L2 overlap price at or above the prevailing best ask, which a resting bid cannot do. Prior work identified these as complete-set MINTS: two buyers of opposite outcomes matched by minting $1, needing no offer on his own book, only a counterparty bidding the complement at >= 1-p. Gemini has no such mechanism. (analysis/l5/historical_l2/ZENODO_OVERLAP_FINDINGS.md)"
+  },
+  "funnel_per_100_first_fills": {
+    "gemini_A+B_hypothetical": {
+      "first_fill": 100.0,
+      "complement_desired": 92.9,
+      "complement_at_front": 92.9,
+      "reaching_flow_arrived": 21.4,
+      "complement_filled": 17.9,
+      "matched_inventory": 17.9,
+      "n": 28
+    },
+    "polymarket_L5_confirmed": {
+      "first_fill": 100.0,
+      "complement_desired": "100 (assumed)",
+      "complement_at_front": "NOT OBSERVABLE",
+      "reaching_flow_arrived": 80.7,
+      "complement_filled": 80.7,
+      "matched_inventory": 80.7,
+      "n": 13592,
+      "btc15m_only": 99.2
+    },
+    "median_time_first_fill_to_matched": {
+      "gemini": "n=5, too few to quote a median",
+      "polymarket": "44s (26s on BTC15m)"
+    }
+  },
+  "corrections_to_earlier_reporting": [
+    {
+      "claim": "COMPLETE fills are zero in every Gemini spread bucket",
+      "status": "MISLEADING",
+      "why": "that counter keys on the rung's LABEL at placement. A rung placed as OPEN that fills after inventory has moved creates matched inventory while never being labelled COMPLETE.",
+      "correct": "5 of 28 A+B first fills (17.9%) reached matched inventory."
+    },
+    {
+      "claim": "1 of 28 episodes saw reaching flow",
+      "status": "UNDERCOUNT",
+      "why": "the tracer observed `live` at the END of each cycle, and a rung that FILLS is removed from `live` before the hook sees it, so the counter systematically missed exactly the successful cases.",
+      "correct": "6 of 28 (21.4%) saw reaching flow: 5 filled, 1 did not clear the queue."
+    },
+    {
+      "claim": "the chain classifier reported 0 COMPLETED",
+      "status": "BUG, now fixed",
+      "why": "the segment loop never appended a zero-residual step, so the COMPLETED branch was unreachable."
+    }
+  ],
+  "target_profile_for_the_PMUS_sports_search": {
+    "derived_from": "measured Polymarket International characteristics",
+    "spread": "median <= 2c; >= 95% of states at or below 2c",
+    "reach": ">= 70% of resting-bid states reached by the ask within 120s at 8s sampling; median wait <= 30s",
+    "touch_depth": "small enough to drain within the window -- Polymarket's median 65 contracts drains in ~26s on BTC15m",
+    "flow": "two-sided; a participant can record 8+ fills per minute",
+    "anti_criterion": "do NOT select on spread alone. Gemini has comparable touch-change rate and MORE depth, and still cannot recycle. Reach is the binding metric."
+  },
+  "labels": "OFFLINE OBSERVATION ONLY. No International execution was attempted, no order was sent, and no Gemini, Model A or shadow execution code was modified. Gemini rows are HYPOTHETICAL rungs; Polymarket rows are L5's confirmed on-chain fills. Nothing here is realized P&L."
+}

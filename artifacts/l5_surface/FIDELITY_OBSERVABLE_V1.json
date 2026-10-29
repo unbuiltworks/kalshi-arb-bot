@@ -1,0 +1,139 @@
+{
+  "label": "FIDELITY_OBSERVABLE_V1",
+  "kind": "FIDELITY",
+  "notes": "populated from L5_PASSIVE_SURFACE_PROSPECTIVE_V1 by the rules frozen in analysis/l5/window_forensics/spec.py",
+  "spec_sha256": "d583fa4005d1b815223f40235d368a347208b942633603aa31d90f6dde58cb95",
+  "params": {
+    "rung_count": {
+      "name": "rung_count",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": 1,
+      "evidence": "the established offset set has 1 rungs",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "tick_offsets": {
+      "name": "tick_offsets",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": [
+        0
+      ],
+      "evidence": "73 of 108 parents (0.68) rested at offsets [0]",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "base_parent_qty": {
+      "name": "base_parent_qty",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "exact-100 share 0.2605 over n=238; the rule needs >= 0.50 and n >= 30",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "secondary_rung_qty": {
+      "name": "secondary_rung_qty",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": "33.121208",
+      "evidence": "median of 176 non-100 parents",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "both_sides_policy": {
+      "name": "both_sides_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "outcomes": [
+          "Up",
+          "Down"
+        ]
+      },
+      "evidence": "both-outcome share 0.7278 over 2788 readable snapshots",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "inventory_price_skew": {
+      "name": "inventory_price_skew",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "this study scores whether a LEVEL was resting, not whether the level SHIFTED with inventory; it cannot establish a price skew",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "inventory_size_skew": {
+      "name": "inventory_size_skew",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "per-window corr(|residual|, qty) = [0.179, -0.127, -0.1241] over n=238",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "refresh_policy": {
+      "name": "refresh_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "mode": "STANDING"
+      },
+      "evidence": "opposite-already-present share 0.9208 over 101 resolved reversals",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "replenishment_policy": {
+      "name": "replenishment_policy",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "+5s present share 0.4946236559139785 over 186 readable; the rule needs >= 0.70 or <= 0.30 with n >= 30",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "minimum_rest_time": {
+      "name": "minimum_rest_time",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "a risk choice, not a finding; see ADAPTED",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "withdrawal_policy": {
+      "name": "withdrawal_policy",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "PERMANENTLY UNOBSERVABLE from public data: cancellations and unfilled orders appear in no feed we have, so no sample of fills establishes it, however large",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    },
+    "TTE_policy": {
+      "name": "TTE_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "quote_between_tte_s": [
+          0,
+          900
+        ]
+      },
+      "evidence": "parents observed in every TTE bucket: {'tte120-300': 57, 'tte300-600': 48, 'tte<=120': 94, 'tte>600': 39}",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "max_residual": {
+      "name": "max_residual",
+      "status": "UNRESOLVED",
+      "value": null,
+      "evidence": null,
+      "prior_evidence": "a risk bound, not a finding; see ADAPTED",
+      "pending_source": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1"
+    }
+  },
+  "frozen_from": {
+    "study": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1",
+    "eligible_windows": [
+      1789670700,
+      1789672500,
+      1789674300
+    ],
+    "chain_proven_parents": 208,
+    "units_scored": 238,
+    "mechanism_verdict": "UNRESOLVED",
+    "frozen_module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "labels": "the mechanism verdict is UNRESOLVED; individual fields are frozen on their own preregistered rules and a global UNRESOLVED does not erase them"
+  }
+}

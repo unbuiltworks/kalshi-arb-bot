@@ -1,0 +1,239 @@
+{
+ "legs": 23,
+ "trade_ids": [
+  "D47CGX1GCZRM",
+  "D4A1BT20EZRN",
+  "D4A7Y49G0ZRN",
+  "D4A80E3G2ZRN",
+  "D4A828DG4ZRN",
+  "D4A83MFG2ZRN",
+  "D4A83MFG4ZRM",
+  "D4AG973G2ZRM",
+  "D4AGHN302ZRQ",
+  "D4B3WRR00ZRN",
+  "D4B4CH7GAZRN",
+  "D4B4E2W02ZRQ",
+  "D4B4MZF04ZRN",
+  "D4B92NF04ZRN",
+  "D4BH7870EZRM",
+  "D4CC1R900ZRP",
+  "D4CC1R902ZRN",
+  "D4CC5BG0CZRP",
+  "D4CZM25GJZRP",
+  "D4CZM25GMZRN",
+  "D4CZNJE0JZRM",
+  "D4D5D7006ZRM",
+  "D4D5EBC08ZRM",
+  "D4D5EBC08ZRQ",
+  "D4D5HKN00ZRN",
+  "D4DFYRZ08ZRP",
+  "D4DG2CY04ZRQ",
+  "D4DG2CY06ZRP",
+  "D4DG428G6ZRQ",
+  "D4EFZNW02ZRM",
+  "D4EFZNW02ZRQ",
+  "D4EFZNW04ZRP",
+  "D4EH1QYG0ZRN",
+  "D4EH6TTG4ZRQ"
+ ],
+ "realized_delta_usd": "67.72680000",
+ "keys": [
+  "cpc-btc-updown-15m-2026-10-15-1915z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2215z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2230z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2245z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2330z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0000z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0200z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0215z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-15-2230z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-15-2330z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-15-2345z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-16-0145z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-16-0200z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-15-2230z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-16-0100z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-16-0215z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-15-2230z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-15-2330z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0100z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0145z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0200z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP"
+ ],
+ "per_leg": {
+  "cpc-btc-updown-15m-2026-10-15-1915z|DOWN": {
+   "cost_before_usd": "0.88000000",
+   "cost_after_usd": "0.12000000",
+   "trade_ids": [
+    "D47CGX1GCZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2215z|DOWN": {
+   "cost_before_usd": "0.91000000",
+   "cost_after_usd": "0.09000000",
+   "trade_ids": [
+    "D4A1BT20EZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_before_usd": "0.29210000",
+   "cost_after_usd": "0.97790000",
+   "trade_ids": [
+    "D4A7Y49G0ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2245z|DOWN": {
+   "cost_before_usd": "0.91720000",
+   "cost_after_usd": "2.94280000",
+   "trade_ids": [
+    "D4AGHN302ZRQ",
+    "D4AG973G2ZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_before_usd": "0.27720000",
+   "cost_after_usd": "0.98280000",
+   "trade_ids": [
+    "D4B3WRR00ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0000z|DOWN": {
+   "cost_before_usd": "30.39010000",
+   "cost_after_usd": "0.93990000",
+   "trade_ids": [
+    "D4BH7870EZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_before_usd": "1.16600000",
+   "cost_after_usd": "0.95400000",
+   "trade_ids": [
+    "D4D5HKN00ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_before_usd": "0.61920000",
+   "cost_after_usd": "1.96080000",
+   "trade_ids": [
+    "D4DG428G6ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_before_usd": "0.56610000",
+   "cost_after_usd": "0.96390000",
+   "trade_ids": [
+    "D4A828DG4ZRN"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_before_usd": "0.64400000",
+   "cost_after_usd": "0.96600000",
+   "trade_ids": [
+    "D4B4E2W02ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2345z|DOWN": {
+   "cost_before_usd": "14.72040000",
+   "cost_after_usd": "0.93960000",
+   "trade_ids": [
+    "D4B92NF04ZRN"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0145z|DOWN": {
+   "cost_before_usd": "1.17150000",
+   "cost_after_usd": "0.95850000",
+   "trade_ids": [
+    "D4CZNJE0JZRM"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_before_usd": "1.55620000",
+   "cost_after_usd": "0.95380000",
+   "trade_ids": [
+    "D4D5EBC08ZRQ",
+    "D4D5EBC08ZRM"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_before_usd": "0.57350000",
+   "cost_after_usd": "0.97650000",
+   "trade_ids": [
+    "D4A80E3G2ZRN"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0100z|DOWN": {
+   "cost_before_usd": "0.76120000",
+   "cost_after_usd": "0.96880000",
+   "trade_ids": [
+    "D4CC5BG0CZRP"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_before_usd": "0.33000000",
+   "cost_after_usd": "2.97000000",
+   "trade_ids": [
+    "D4DG2CY06ZRP",
+    "D4DG2CY04ZRQ"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_before_usd": "0.26250000",
+   "cost_after_usd": "0.98750000",
+   "trade_ids": [
+    "D4A83MFG4ZRM",
+    "D4A83MFG2ZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_before_usd": "0.87450000",
+   "cost_after_usd": "1.93550000",
+   "trade_ids": [
+    "D4B4MZF04ZRN",
+    "D4B4CH7GAZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0100z|DOWN": {
+   "cost_before_usd": "0.34320000",
+   "cost_after_usd": "0.97680000",
+   "trade_ids": [
+    "D4CC1R902ZRN",
+    "D4CC1R900ZRP"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0145z|DOWN": {
+   "cost_before_usd": "1.35360000",
+   "cost_after_usd": "0.95640000",
+   "trade_ids": [
+    "D4CZM25GMZRN",
+    "D4CZM25GJZRP"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_before_usd": "1.26540000",
+   "cost_after_usd": "0.95460000",
+   "trade_ids": [
+    "D4D5D7006ZRM"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_before_usd": "0.31680000",
+   "cost_after_usd": "4.96320000",
+   "trade_ids": [
+    "D4DFYRZ08ZRP"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP": {
+   "cost_before_usd": "37.975400",
+   "cost_after_usd": "1.00000000",
+   "trade_ids": [
+    "D4EH6TTG4ZRQ",
+    "D4EH1QYG0ZRN",
+    "D4EFZNW04ZRP",
+    "D4EFZNW02ZRQ",
+    "D4EFZNW02ZRM"
+   ]
+  }
+ }
+}

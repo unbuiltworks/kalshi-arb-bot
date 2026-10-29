@@ -32,6 +32,70 @@ on:
         description: "Comma-separated GEMI symbols; blank = recent BTC5m expiries"
         required: false
         default: ""
+      armed_continuous:
+        description: "Set to true to ARM the ONE authorized continuous window. Default false."
+        required: false
+        default: "false"
+      rebate_surface_probe:
+        description: "Set to true to survey which authenticated endpoint exposes Maker Rebate Reward credits (read-only)."
+        required: false
+        default: "false"
+      rebate_et_day:
+        description: "EASTERN calendar day (YYYY-MM-DD) whose maker-rebate payout row to reconcile. Payouts are per ET day, so a UTC date is the wrong question."
+        required: false
+        default: "2026-09-21"
+      continuous_shadow_soak:
+        description: "Set to true to run the CONTINUOUS V1 SHADOW soak (read-only, no order path). Default false."
+        required: false
+        default: "false"
+      soak_windows:
+        description: "How many SHADOW windows the soak runs. Each is ~5 min, and the step's own 45-minute cap bounds this whatever is typed. Default 4."
+        required: false
+        default: "4"
+      spec_id:
+        description: "Declared LiveProbeSpec id consumed by BOTH readiness and the armed window. Default btc15m_q1_cap4."
+        required: false
+        default: "btc15m_q1_cap4"
+      spec_sha:
+        description: "The spec hash LIVE_READINESS_GATE proved. The armed step refuses before the latch if the resolved spec hashes differently."
+        required: false
+        default: ""
+      readiness_gate:
+        description: "Set to true to run LIVE_READINESS_GATE on the credentialed runner (read-only; mutation boundary blocked)."
+        required: false
+        default: "false"
+      cohort_run:
+        description: "PROBE A. Set to true to run the BTC15m cohort: exactly 2 contracts, CAP-4, $4/market. ARMED."
+        required: false
+        default: "false"
+      cohort_run_b:
+        description: "PROBE B. Set to true to run the BTC5m maker_improve cohort: exactly 4 contracts, CAP-2, $2.50/market. ARMED. Run AFTER A, never beside it."
+        required: false
+        default: "false"
+      static_readiness:
+        description: "Set to true to run the TTE-INDEPENDENT readiness check (read-only; binds no contract, waits for no entry band)."
+        required: false
+        default: "false"
+      cohort_auth_id:
+        description: "Authorization id the static readiness check measures the tree against. Blank = the sentinel."
+        required: false
+        default: ""
+      fill_forensics:
+        description: "Set to true to capture RAW historical prediction order rows (read-only; submits nothing)."
+        required: false
+        default: "false"
+      forensics_since:
+        description: "Forensic window start, ISO8601. Default 2026-08-26T00:00:00Z."
+        required: false
+        default: "2026-08-26T00:00:00Z"
+      forensics_until:
+        description: "Forensic window end, ISO8601. Default 2026-09-03T00:00:00Z."
+        required: false
+        default: "2026-09-03T00:00:00Z"
+      unarmed_entry_band:
+        description: "Entry band LO:HI for the UNARMED production-path proof. Default 90:300 (the standing rule) so routine runs do not wait. Set 240:280 to prove the armed window's own band read-only."
+        required: false
+        default: "90:300"
 
 # One at a time. A second run could commit evidence over the first.
 concurrency:
@@ -44,11 +108,38 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # MUST EXCEED EVERY STEP'S OWN TIMEOUT. It was 15 while the armed step
+    # was 12, which was fine for a window that started immediately. C8 WAITS
+    # up to 420s for its entry band and then runs ~250s, so a 15-minute job
+    # would have killed the runner mid-window -- and a hard kill is worse
+    # than a stop, because the terminal withdrawal never runs and the orders
+    # stay live. That is CONTINUOUS-5's failure mode with no way to recover.
+    #
+    # Then the SHADOW SOAK arrived at 45 minutes against a 30-minute job --
+    # the same defect in reverse, caught before it ran. The soak sends
+    # nothing so a kill could not strand an order, but it would have thrown
+    # away the evidence and looked like a failure. A test now pins
+    # job > every step.
+    #
+    # 630 FOR COHORT-2. Twenty consecutive BTC15m contracts is ~5 hours of
+    # wall clock plus discovery; the step is capped at 600 and the job has to
+    # outlive it, because a hard kill is the one exit where the terminal
+    # withdrawal never runs and an order can be left resting.
+    timeout-minutes: 630
     steps:
+      # THE RUNNER MUST EXECUTE THE REVIEWED TREE.
+      #
+      # This pinned claude/l5-execution-instrumentation-io6nzi, so run
+      # 35553352750 dispatched from the q=1 branch took its WORKFLOW from that
+      # branch and its SOURCE from this one. The armed step therefore carried
+      # the right flags at a driver that had never heard of them, and died on
+      # `unrecognized arguments: --envelope live_q1`. Its
+      # driver_executable_sha was 50996ee0..., not the authorized c1ada77a...,
+      # and REQUIRED_AUTH_ID read None: the authorization was never even in
+      # scope. ZERO ORDERS -- execution plumbing, not a strategy result.
       - uses: actions/checkout@v4
         with:
-          ref: claude/l5-execution-instrumentation-io6nzi
+          ref: claude/gemini-btc-economic-viability-h3u7zl
 
       - uses: actions/setup-python@v5
         with:
@@ -94,23 +185,806 @@ jobs:
             exit 1
           fi
 
+      - name: Canary preflight (read-only; places NOTHING)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # Prints what WOULD be submitted and stops. The module has no order
+          # transport and imports none; the guard above proved that before any
+          # secret entered scope. Balance is reported as a SUFFICIENCY BOOLEAN
+          # and the amount never leaves the process.
+          #
+          # A preflight that finds no eligible window is a RESULT (a BTC5m
+          # window is only eligible for part of each cycle), so this step does
+          # not fail the job.
+          python -m src.gemini_canary_preflight || true
+
+      - name: Execution readiness (read-only; VENUE_WRITE_PATH gate)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # DISARMED: no GEMINI_CANARY_LIVE and no GEMINI_CANARY_AUTH are set
+          # here, so the execution package is structurally unable to mutate.
+          # This reports the gates only.
+          #
+          # The report is kept as an ARTIFACT rather than left in a job log:
+          # it carries the authoritative contract metadata, the terms gate and
+          # the request-transport verdict, and a log expires. A run that finds
+          # no eligible window still writes what it could read.
+          # SAME DEAD ZONE AS THE DRY RUN. Run 35336015691 reported
+          # preflight_ok/contract_tradeable/quantity_valid/price_valid all
+          # FALSE at 10:43:25Z and the dry run 21 seconds later succeeded --
+          # the gates were false for TIMING, not for substance, which is the
+          # most misleading way for a gate report to be wrong. It retries on
+          # the same bounded schedule so the gates describe a real window.
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          OUT="analysis/gemini/execution_readiness_${TS}.json"
+          for attempt in 1 2 3 4 5; do
+            python -m src.gemini_execution.readiness > "$OUT" || true
+            if python3 -c "import json,sys; d=json.load(open('$OUT')); sys.exit(0 if (d.get('gates') or {}).get('preflight_ok') else 1)" 2>/dev/null; then
+              echo "gates evaluated against a live window on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt: no eligible BTC5m window; waiting 45s"
+            [ "$attempt" = "5" ] || sleep 45
+          done
+          if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
+
+      - name: L5 WS canary DRY RUN (renders the frame; opens no socket)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # DISARMED, and structurally unable to send: dry_run never
+          # constructs a session, and the session refuses mutation methods
+          # without an arm. It prints what the L5 adapter WOULD put on the
+          # wire, over the transport this account has actually used.
+          # A BTC5m window is only ELIGIBLE for part of each 5-minute cycle:
+          # the band is TTE 60..300s, so the last 60 seconds before an expiry
+          # has no eligible window at all and the next one is not open yet.
+          # Run 35335282701 landed in exactly that gap at 10:34:25Z and
+          # reported NO_ELIGIBLE_WINDOW -- a scheduling miss, not a defect,
+          # and one that would recur on roughly one dispatch in five.
+          #
+          # So it retries into the next window instead of reporting a dead
+          # zone as a result. Bounded at 5 attempts, and it still writes the
+          # last attempt when none succeeds, because "no window" IS the
+          # honest answer when it is really true.
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          OUT="analysis/gemini/ws_dry_run_${TS}.json"
+          for attempt in 1 2 3 4 5; do
+            python -m src.gemini_execution.ws_canary > "$OUT" || true
+            if python3 -c "import json,sys; sys.exit(0 if json.load(open('$OUT')).get('ok') else 1)" 2>/dev/null; then
+              echo "eligible window found on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt: no eligible BTC5m window; waiting 45s"
+            [ "$attempt" = "5" ] || sleep 45
+          done
+          if [ ! -s "$OUT" ]; then rm -f "$OUT"; fi
+
+      # ==================================================================
+      # UNARMED PRODUCTION-PATH PROOF. Real credentials, real readers, real
+      # awaited async terms read, real account and open-order reads, real
+      # symbol selection, real TTE, real recovery, real controller, real
+      # working-order diff -- and NO ARM. GEMINI_CANARY_LIVE is deliberately
+      # absent here, which is what makes the mutation impossible.
+      #
+      # It asks to mutate at the end and must be REFUSED by the authorization
+      # gate. Proving the block by ASKING and being refused is evidence;
+      # reading the code and asserting it would refuse is what was done twice
+      # before, and it was wrong twice.
+      #
+      # Exit 1 when the path does NOT reach the boundary, so a regression that
+      # makes the driver permanently incapable again fails this job.
+      # ==================================================================
+      - name: Unarmed production-path proof (sends nothing; must be refused)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          for attempt in 1 2 3 4 5; do
+            if python -m src.gemini_execution.premutation_probe \
+                 --out analysis/gemini/premutation_proof_$(date -u +%Y%m%dT%H%M%SZ).json \
+                 2>&1 | tee /tmp/premutation.txt; then
+              exit 0
+            fi
+            # the eligible entry band is TTE 90..300s, so part of every 5-minute
+            # cycle has no eligible window. That is timing, not a defect.
+            if ! grep -q "no BTC5m contract is inside the entry band" /tmp/premutation.txt; then
+              echo "::error::the production path did not reach the boundary"
+              exit 1
+            fi
+            echo "no eligible window (attempt $attempt); waiting"
+            sleep 45
+          done
+          echo "::error::no eligible window after 5 attempts"
+          exit 1
+
+      # Reconcile the ONE historical ledger slot that blocks every window.
+      # READ-ONLY: no arm, no order path. CONTINUOUS-3 reached the mutation
+      # boundary with every gate open and then refused because slot 2 of
+      # CONTINUOUS-2 -- a CANCEL the venue rejected 400/-1013 -- was still
+      # recorded UNKNOWN. This gathers the venue evidence; it does NOT
+      # write the ledger. Applying is a separate, reviewed step.
+      - name: Reconcile historical ledger slot (read-only; writes nothing)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.reconcile_slot \
+            --ledger analysis/gemini/continuous_ledger.jsonl \
+            --slot 2 --order-id 145828836242288478 \
+            --out analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/reconcile.txt
+
+          # EVERY ORDER EVERY COHORT CREATED, reconciled READ-ONLY.
+          #
+          # C5 taught this the hard way: its cancel was rejected -1013, the
+          # window stopped, and one of the orders it left resting FILLED 57
+          # seconds later. A window that has stopped is not a window that is
+          # flat, so the disposition of each order -- FILLED, OPEN, CANCELLED
+          # or EXPIRED -- has to be read from the venue rather than inferred
+          # from the fact that the controller ended.
+          #
+          # Derived from each cohort ledger's own PLACE slots, so it needs no
+          # editing per window. NOTHING is mutated: no --apply-from, so the
+          # ledgers are not written, and there is no order path here at all.
+          for led in analysis/gemini/cohorts/*/ledger.jsonl; do
+            coh=$(basename "$(dirname "$led")")
+            python3 - "$led" > /tmp/slots.txt <<'PYEOF'
+          import json, sys
+          rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+          ids = {r["slot"]: r.get("orderId") for r in rows
+                 if r.get("kind") == "RESOLVE" and r.get("orderId")}
+          for r in rows:
+              if r.get("kind") == "PLACE" and ids.get(r["slot"]):
+                  print(r["slot"], ids[r["slot"]])
+          PYEOF
+            while read -r slot oid; do
+              [ -n "$oid" ] || continue
+              python -m src.gemini_execution.reconcile_slot \
+                --ledger "$led" --slot "$slot" --order-id "$oid" \
+                --out "analysis/gemini/reconcile_slot_$(date -u +%Y%m%dT%H%M%SZ)_${coh##*-}s${slot}.json" \
+                2>&1 | tee -a /tmp/reconcile_cohorts.txt || true
+            done < /tmp/slots.txt
+          done
+
+      # THE UNARMED PRODUCTION-PATH VERIFICATION. This is run_continuous
+      # ITSELF -- the same entry point the armed step calls -- with real
+      # credentials, the real metadata readers, the real authoritative
+      # account reads and the real recovery, and with NO arm and NO
+      # authorization installed. It must walk the whole read-only path and
+      # then be refused by the authorization gate alone, having consumed no
+      # latch and sent no frame. A mocked preflight would prove nothing.
+      - name: Unarmed production path (real readers; refused, sends nothing)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          # THE SCHEDULING PATH RUNS HERE TOO. The default 90:300 is the rule
+          # that already applies, so the wait loop, the scan and the handoff
+          # into the rest of _build are exercised production-shaped at ~zero
+          # cost on every routine run. Dispatch with unarmed_entry_band
+          # 240:280 to prove the ARMED window's own band read-only: it then
+          # waits for the real band and refuses at the authorization gate
+          # with the latch untouched and no frame sent. A band can only
+          # NARROW the standing rule, never widen it.
+          python -m src.gemini_execution.run_continuous \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --cohort "COHORT-2026-09-18-C8B" \
+            --entry-tte-band "${{ github.event.inputs.unarmed_entry_band || '90:300' }}" \
+            --ledger analysis/gemini/continuous_ledger.jsonl \
+            --out    analysis/gemini/continuous_unarmed_$(date -u +%Y%m%dT%H%M%SZ).json \
+            --wire   /tmp/unarmed_wire.json \
+            2>&1 | tee /tmp/unarmed.txt
+          # the latch directory must be untouched by a refused run
+          git diff --quiet -- analysis/gemini/canary_latch/ \
+            || { echo 'FAIL: a refused run touched the latch store'; exit 1; }
+
+      # ==================================================================
+      # THE ONE AUTHORIZED CONTINUOUS WINDOW. Runs only when
+      # armed_continuous=true is passed on dispatch.
+      #
+      # DISARMED. CONTINUOUS-7 RAN AND IS SPENT: 12 cycles, all 6 slots,
+      # every cancel accepted, and the first window to terminate with ZERO
+      # orders live. It FILLED NOTHING, so the target chain is still
+      # unproven. C7 is 6 of 6, C6 6 of 6, C5 frozen 3 of 6 with its UNKNOWN.
+      # The auth id below is the sentinel and the driver constants are None,
+      # so this step cannot arm.
+      #
+      # CONTINUOUS-8 IS STAGED AND UNAUTHORIZED. Two changes only, and
+      # NEITHER is a strategy change:
+      #   P0  the book each decision was made against is now RECORDED --
+      #       `decide` returns the state it used, and a PUBLIC size read is
+      #       taken beside it. C7's "why did nothing fill" had to be inferred
+      #       backwards from our own prices; it no longer does.
+      #   P1  --entry-tte-band 240:280 chooses WHEN the experiment begins.
+      #       C7 got 136s by accident of the dispatch clock. This is
+      #       experimental scheduling: the controller, prices, sizing,
+      #       pair-cost behaviour and every bound are unchanged and know
+      #       nothing about it. The band can only NARROW the standing entry
+      #       rule, never widen it.
+      #
+      # NOTE FOR WHOEVER READS THIS NEXT: STOP stops the CONTROLLER. C5's
+      # NO leg filled 57 seconds AFTER its window terminated, because a
+      # fail-closed stop does not withdraw orders the venue already
+      # accepted. Do not read "stopped" as "flat" -- and note that C7's own
+      # FLAT ORDERS still says nothing about fills already taken. C7's
+      # terminal withdrawal needed no cleanup mutation (cleanup_consumed 0)
+      # because the controller's own end-of-window cancels had already
+      # cleared the book. That is the good case, not proof the cleanup path
+      # works under one that has orders left.
+      #
+      # THE 6-SLOT BUDGET IS EXPECTED TO BIND. Projected from C4-C7's own
+      # mutation rates onto a ~250s window, every observed rate needs MORE
+      # than 6 slots; C6 already stopped on budget after 65s. The budget is
+      # UNCHANGED at 6 by owner instruction, and that is reported rather
+      # than quietly fixed.
+      #
+      # ONE window. The latch makes that durable across runners, the cohort
+      # bounds it to 6 mutations, and neither is reusable.
+      #
+      # --cohort IS LOAD-BEARING. Without it the window binds the HISTORICAL
+      # ledger, which is 12/12 permanently spent, and an authorized run would
+      # die on budget rather than trade.
+      #
+      # COHORT-2026-09-18-C7 is FRESH. C6 is spent at 6 of 6 and C5 at
+      # 3 of 6 with an UNKNOWN; neither is recycled. C7 records C6's LEDGER
+      # as its predecessor, so a rewrite anywhere down that chain makes this
+      # cohort refuse before the latch.
+      # A cohort may only TIGHTEN the envelope, never extend it.
+      #
+      # EVERY bound -- 12 mutation slots (tightened to the cohort's 6), $0.15
+      # exposure, 0.04 residual and imbalance, 0.10 per leg, the end-of-window
+      # floors, the terminal one-window binding -- is enforced inside
+      # ws_continuous.Driver and is covered by that executable_sha. The
+      # invoker only picks the contract, supplies the authoritative re-read
+      # and hands the driver venue state.
+      #
+      # NO PAIR-COST CEILING EXISTS HERE, BY OWNER DECISION 2026-09-18. A
+      # COMPLETE above $1.00 is permitted when the controller chooses it and
+      # the absolute bounds pass; `<= 0.96` is a RISK OVERLAY, not L5
+      # fidelity. See L5_OPERATING_MODEL.md section 2d.
+      #
+      # The driver refuses unless AUTHORIZED_SHA equals its own running
+      # executable_sha, so any change to the driver after this authorization
+      # disarms it automatically. The dual key is still required and its live
+      # half is NOT in the repository.
+      # ==================================================================
+      # ==================================================================
+      # STATIC READINESS -- THE CHECK THAT HAS NO CLOCK.
+      #
+      # LIVE_READINESS_GATE below runs the whole production path, which means
+      # it first WAITS for a contract to reach the 840:880 entry band. That
+      # makes it a good end-to-end proof and a bad answer to "is the tree
+      # ready": a perfectly ready tree failed readiness for being dispatched
+      # at the wrong minute, and market timing and software correctness were
+      # the same check.
+      #
+      # This one asks only about the TREE and the ACCOUNT -- hashes, declared
+      # spec, budget ledger, terms, and whether the venue will state our
+      # position. It binds no contract, waits for no band, and sends nothing.
+      # Neither GEMINI_CANARY_LIVE nor an auth id is set here.
+      # ==================================================================
+      - name: Static readiness (credentialed; TTE-independent, sends nothing)
+        if: ${{ github.event.inputs.static_readiness == 'true' }}
+        timeout-minutes: 5
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
+          AUTH_ID: ${{ github.event.inputs.cohort_auth_id || 'NO-AUTHORIZATION-IN-FORCE' }}
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id "${AUTH_ID}" \
+            --spec    "${SPEC_ID}" \
+            --static-readiness \
+            --out analysis/gemini/static_readiness_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/static_readiness.txt
+
+      - name: LIVE_READINESS_GATE (credentialed; mutation boundary BLOCKED)
+        if: ${{ github.event.inputs.readiness_gate == 'true' }}
+        timeout-minutes: 25
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
+          BRANCH: claude/gemini-btc-economic-viability-h3u7zl
+        run: |
+          # NO ARM IS SET HERE. GEMINI_CANARY_LIVE is absent, so the transport
+          # cannot arm at all -- and --readiness additionally replaces the
+          # mutation boundary with a recorder that REFUSES. Two independent
+          # reasons nothing can be sent.
+          #
+          # THE INVOCATION COMES FROM THE SPEC, exactly as the armed step's
+          # does. That is the point: they can no longer be assembled
+          # differently.
+          set -o pipefail
+          mkdir -p analysis/gemini
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          REPORT=analysis/gemini/readiness_run_${STAMP}.json
+          python -m src.gemini_execution.run_continuous \
+            --spec "${SPEC_ID}" \
+            --readiness \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --out   "${REPORT}" \
+            --wire  /tmp/readiness_wire.json \
+            2>&1 | tee /tmp/readiness.txt
+
+          # AND THE GATE ITSELF, IN THIS STEP, ON THIS RUN'S OWN REPORT.
+          # Having live_readiness.py in the repository proves nothing if the
+          # Actions path never calls it -- that is the same "believed, not
+          # proven" class the gate exists to close, one level up. It exits
+          # nonzero on FAIL and `set -o pipefail` is already in force, so the
+          # step cannot record green over a failed gate.
+          python -m src.gemini_execution.live_readiness \
+            --spec    "${SPEC_ID}" \
+            --report  "${REPORT}" \
+            --branch  "${BRANCH}" \
+            --auth-id "NO-AUTHORIZATION-IN-FORCE" \
+            --out     analysis/gemini/readiness_manifest_${STAMP}.json \
+            2>&1 | tee /tmp/readiness_gate.txt
+
+      - name: ONE authorized Gemini continuous window
+        if: ${{ github.event.inputs.armed_continuous == 'true' }}
+        # 12 was sized for a window that started immediately. C8 WAITS for
+        # its entry band -- bounded at 420s -- and then runs ~250s, so the
+        # step needs room for both plus the venue reads between them. The
+        # wait is bounded in the code; this is the outer backstop.
+        #
+        # 18 -> 28 FOR BTC15m, AND THIS IS NOT A RISK BOUND. The spec's band
+        # tops out at 880s where BTC5m's topped out at 280, so the worst-case
+        # wait alone is 420 + 880 = 1300s and an 18-minute step would have
+        # been KILLED mid-window. A killed runner never reaches the terminal
+        # withdrawal, so its orders stay live on the venue with nothing left
+        # to cancel them. Money bounds are untouched; only the backstop moves.
+        timeout-minutes: 28
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          # DISARMED. OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-3 IS SPENT:
+          # run 35664464001 bound GEMI-BTC15M2609212315-UP at tte 878.4,
+          # placed YES 0.90 and NO 0.02, took ONE maker fill (NO 1 @ 0.02,
+          # fee 0.0000), released that order's durable reservation on the
+          # very next authoritative read, and stopped on the bounded
+          # UNREADABLE hold after six consecutive crossed books. 3 of 12
+          # slots consumed, 0 orders live after stop. A spent authorization
+          # never arms again.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
+          # requires an expiry that has not passed, and an ABSENT one is not
+          # "never expires". This was still 2026-09-19T00:00:00Z from the
+          # 09-18 windows when CONTINUOUS-8 was armed, so the first two
+          # dispatches refused -- correctly, before the latch, spending
+          # nothing. Bounded to a few hours past this authorization, never
+          # open-ended.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-22T02:00:00Z"
+          SPEC_ID: ${{ github.event.inputs.spec_id || 'btc15m_q1_cap4' }}
+          #: the hash readiness proved. Live refuses before the latch if the
+          #: spec it resolves hashes to anything else.
+          SPEC_SHA: ${{ github.event.inputs.spec_sha }}
+        run: |
+          # THE ARMED STEP MUST BE ABLE TO FAIL.
+          #
+          # A pipeline's exit status is its LAST command's, so `python ... |
+          # tee` reports tee's success whatever the driver did. Run
+          # 35553352750's armed step died on an argparse error in 0.09s and
+          # was recorded as SUCCESS. A step that cannot fail is worse than
+          # the branch mismatch that exposed it: a driver that crashed
+          # mid-window would report the same green.
+          set -o pipefail
+          mkdir -p analysis/gemini
+          # THE SPEC IS THE SOURCE. Family, envelope, entry band, cohort and
+          # action size all come from the SAME declared object readiness
+          # proved. Hand-built --family/--envelope/--entry-tte-band literals
+          # are what let run 35601903823's two steps resolve different
+          # experiments, so they are gone from both steps and a test forbids
+          # their return.
+          python -m src.gemini_execution.run_continuous \
+            --spec "${SPEC_ID}" \
+            --expect-spec-sha "${SPEC_SHA}" \
+            --auth-id "${GEMINI_CANARY_AUTH}" \
+            --out     analysis/gemini/continuous_run_$(date -u +%Y%m%dT%H%M%SZ).json \
+            --wire    analysis/gemini/continuous_wire_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/continuous.txt
+
+      # ==================================================================
+      # THE PERSISTENT BTC15m COHORT. ARMED.
+      #
+      # ONE PROCESS, up to TWENTY consecutive contracts, no workflow restart
+      # between them. This is the step the single-window launcher could never
+      # be: CAP4-LIVE-2 met one crossed tick, withdrew, and the process ENDED
+      # with another contract fifteen minutes later and nothing alive to take
+      # it.
+      #
+      # THE BOUNDS ARE NOT HERE. Every per-market bound is enforced inside
+      # ws_continuous.Driver and the twenty 12-slot ledgers: q=1, CAP-4,
+      # $4.00 committed/residual per market, 2 working orders, 1 rung per
+      # outcome, maker/post-only, the 30s floor, TTE [60, 880] and the
+      # bounded UNREADABLE hold. The runner adds only what a GRANT adds: a
+      # window count, and two cohort-level economic stops.
+      #
+      # BOTH STOPS ARE SETTLEMENT-INCLUSIVE AND NEITHER MEASURES TURNOVER.
+      # COHORT-1 was halted at 4 of its 8 remaining windows by a cap that
+      # summed gross BUY outflow -- a turnover cap wearing a loss cap's name
+      # -- while the four windows it had records for were +$1.14. Economic
+      # loss is now payout + credited rebates - fill spend - confirmed fees,
+      # over SETTLED windows only; an unresolved market contributes nothing
+      # and its risk stays in the per-market gates.
+      #
+      # 600 MINUTES IS A BACKSTOP, NOT A RISK BOUND. Twenty BTC15m contracts
+      # is ~5 hours of wall clock plus discovery. A killed runner never
+      # reaches its terminal withdrawal, so the step must outlive the work;
+      # the job's own timeout outlives the step.
+      #
+      # WATCH IT WHILE IT RUNS: analysis/gemini/cohort_live_status.json is
+      # rewritten atomically after every decision and every mutation, with
+      # the history beside it in cohort_live_status.json.jsonl.
+      # ==================================================================
+      - name: PROBE A - BTC15m cohort (ARMED, exactly 2 contracts)
+        if: ${{ github.event.inputs.cohort_run == 'true' }}
+        timeout-minutes: 600
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          # ARMED 2026-09-22 under the OWNER'S GRANT FOR COHORT-2: twenty
+          # consecutive BTC15m contracts, q=1, CAP-4, one whole 12-action
+          # ledger per market, an $8.00 cumulative economic-loss stop and a
+          # $5.00 settlement-implied drawdown stop, both SETTLED-only.
+          #
+          # OWNER-2026-09-21-...-COHORT-1 is SPENT and is NOT reused: run
+          # 35677907781 bound four contracts, took 18 maker fills and stopped
+          # on a cap that measured turnover. A spent authorization never arms
+          # again; the twenty-window envelope is its own grant.
+          # DISARMED 2026-09-22. OWNER-2026-09-22-...-COHORT-2 is SPENT: run
+          # 35721894867 bound eleven BTC15m contracts and stopped on the
+          # AUTHORIZED peak-to-trough drawdown bound (5.29 of a 5.00 cap,
+          # peak +1.47) with 11 of 20 windows observed. A spent
+          # authorization never arms again.
+          # PROBE A RAN AND IS SPENT. DISARMED 2026-09-23.
+          # OWNER-2026-09-23-GEMINI-Q1-AB-1 was consumed at 04:17:08Z
+          # (analysis/gemini/canary_latch/latch_OWNER-2026-09-23-GEMINI-Q1-AB-1
+          # .json, committed at c4c10fc) and both authorized windows ran:
+          # 16 orders, 5 fills, STOPPED_WINDOWS_EXHAUSTED.
+          #
+          # THE LATCH KEYS ON THE ID ALONE, so re-dispatching this step could
+          # only return STOPPED_NO_LATCH. It is disarmed to the sentinel
+          # rather than left naming a spent grant -- and the latch file is NOT
+          # cleared, because that file IS the record that the grant was spent.
+          #
+          # ONE ARMED STEP AT A TIME. test_the_tree_is_armed_for_exactly_one
+          # _named_authorization asserts at most one step may name a real
+          # authorization, and it was FAILING while A and B both named AB-1 --
+          # which is precisely the collision that made B unreachable.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # THE ARM'S OWN CLOCK, and the second half of the dual key: armed()
+          # requires an expiry that has NOT passed, and an absent one is not
+          # "never expires". Two BTC15m contracts plus entry waits is well
+          # under an hour; this bounds the grant to tonight and no further.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T08:00:00Z"
+          COHORT_SPEC: btc15m_q1_cap4_w60_880_c2
+          COHORT_SPEC_SHA: "ba64b54c8711166b9515007e6835e8190dc8bfddfbae2a1ba72c4e7798cefcb4"
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id           "${GEMINI_CANARY_AUTH}" \
+            --spec              "${COHORT_SPEC}" \
+            --expect-spec-sha   "${COHORT_SPEC_SHA}" \
+            --max-windows       2 \
+            --max-loss-usd      10.00 \
+            --max-drawdown-usd  5.00 \
+            --out analysis/gemini/cohort_run_A_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/cohort_a.txt
+
+      # ==================================================================
+      # PROBE B. BTC5m, maker_improve placement. ARMED.
+      #
+      # THE PATH THAT DID NOT EXIST. Until now the only armed cohort step
+      # hardcoded the BTC15m spec, so Probe B had no way to run except four
+      # separate single-window dispatches -- a hand-built sequence, which is
+      # the class of drift the LiveProbeSpec exists to prevent. This step
+      # selects the frozen BTC5m spec DIRECTLY.
+      #
+      # EXACTLY FOUR LEDGERS ARE GRANTED. The chain is four markets because
+      # four ledgers exist; a fifth cannot be bound whatever --max-windows
+      # says, because ledger_for raises rather than handing back a spent or
+      # partially spent ledger. --max-windows 4 agrees with the grant and is
+      # the belt, not the braces.
+      #
+      # 4 x $2.50 committed = $10.00 structural gross-cash-out ceiling for
+      # this arm. Its stops, ledgers and results are its own: nothing is
+      # shared with Probe A.
+      # ==================================================================
+      - name: PROBE B - BTC5m maker_improve cohort (ARMED, exactly 4 contracts)
+        if: ${{ github.event.inputs.cohort_run_b == 'true' }}
+        timeout-minutes: 90
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+          GEMINI_CANARY_LIVE: "YES"
+          # PROBE B's OWN AUTHORIZATION, distinct from A's by necessity and
+          # not by preference. The latch is ONE AUTHORIZATION, ONE COHORT and
+          # keys on the id alone, so B -- a different cohort, different spec,
+          # different chain -- can never run under the id A spent. Sharing
+          # AB-1 is what made B unreachable; AB-2 is what makes it reachable.
+          # NOT YET AUTHORIZED at the time of writing: static readiness now
+          # evaluates the latch counterfactual, so this is PROVEN unconsumed
+          # rather than assumed.
+          # SPENT 2026-09-23. Probe B consumed AB-2 at 11:35Z and ran all
+          # four authorized windows. The latch keys on the id alone, so
+          # this step could now only return STOPPED_NO_LATCH. Disarmed to
+          # the sentinel; the latch stays on disk as the record.
+          GEMINI_CANARY_AUTH: "NO-AUTHORIZATION-IN-FORCE"
+          # FRESH BOUND, not an extension of the 08:00Z grant A ran under: a
+          # spent authorization's clock is not reused. Four BTC5m contracts
+          # plus entry waits is well under an hour; this leaves room for the
+          # owner to authorize without the bound expiring underneath them.
+          GEMINI_CANARY_AUTH_EXPIRES: "2026-09-23T14:00:00Z"
+          COHORT_SPEC: btc5m_q1_improve
+          COHORT_SPEC_SHA: "bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650"
+        run: |
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.cohort_runner \
+            --auth-id           "${GEMINI_CANARY_AUTH}" \
+            --spec              "${COHORT_SPEC}" \
+            --expect-spec-sha   "${COHORT_SPEC_SHA}" \
+            --max-windows       4 \
+            --max-loss-usd      10.00 \
+            --max-drawdown-usd  5.00 \
+            --out analysis/gemini/cohort_run_B_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/cohort_b.txt
+
+      # WHERE DO THE REBATE CREDITS LIVE? A read-only SURVEY of candidate
+      # authenticated surfaces, run before any reader is written, because
+      # the instruction is to find the endpoint rather than scrape the app.
+      # It reports SHAPES, not balances: a probe report is committed as
+      # evidence and must not carry account figures around.
+      - name: Rebate surface probe (read-only; locates, reads nothing)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.rebate_probe \
+            --out analysis/gemini/rebate_surface_probe_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/rebate_probe.txt
+
+      # THE VENUE'S OWN PAYOUT RECORDS. The 2026-09-19 survey concluded that
+      # every prediction-market rebate path 404s; it had probed
+      # /v1/prediction-markets/rebates and missed
+      # /v1/prediction-markets/maker-rebate/... by one path segment. This step
+      # reads the real surface and reconciles ONE Eastern calendar day's payout
+      # row against the accrual committed in advance at d28f289 -- three deltas
+      # (dollars, fill count, qualifying volume), not one. A rebate becomes
+      # economics only on status PAID; an accrual matching a PENDING row is
+      # still an accrual, and nothing here may enter model selection.
+      - name: Maker-rebate payout reconciliation (read-only; three deltas)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.maker_rebate_reconcile \
+            --day "${{ github.event.inputs.rebate_et_day || '2026-09-21' }}" \
+            --out analysis/gemini/maker_rebate_reconcile_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/maker_rebate_reconcile.txt
+
+      # DID ANY MAKER FEE LEAVE THE ACCOUNT? The venue reported n=0.0000 on
+      # every EP016 fill, and the published schedule implies $0.18 on the same
+      # eighteen. A field can only say what the venue said at fill time; this
+      # asks the account's own cash records whether money later moved.
+      - name: Maker-fee cash probe (read-only; three enumerated reads)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.maker_fee_cash_probe \
+            --from 2026-09-20 --to 2026-09-23 \
+            --out analysis/gemini/maker_fee_cash_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/maker_fee_cash.txt
+
+      # READ THE ACTUAL CREDITS on /v1/transfers, the surface that carries the
+      # AdminCredit rows. Kept beside the maker-rebate endpoints above rather
+      # than replaced by them: one is the venue's payout ledger and the other
+      # is the cash movement, and a credit is only established when both agree.
+      - name: Rebate reconciliation (read-only; confirmed credits only)
+        if: ${{ github.event.inputs.rebate_surface_probe == 'true' }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini
+          python -m src.gemini_execution.rebates \
+            --out analysis/gemini/rebate_reconciliation_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/rebates.txt
+
+      # ==================================================================
+      # CONTINUOUS V1 SHADOW SOAK. The production lifecycle -- discover,
+      # wait for the band, establish authoritative state, run the FROZEN
+      # policy, check the rollover gate -- with NO order path: it never
+      # constructs a session and never calls place or cancel, which is a
+      # property of what it calls rather than a flag it sets.
+      #
+      # It needs the read-only credentials for the authoritative ACCOUNT
+      # half; without them the rollover gate correctly refuses, because an
+      # unreadable open-order list is not an empty one.
+      - name: Continuous V1 SHADOW soak (read-only; sends nothing)
+        if: ${{ github.event.inputs.continuous_shadow_soak == 'true' }}
+        timeout-minutes: 45
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          mkdir -p analysis/gemini/continuous_v1
+          # THE WINDOW COUNT IS AN INPUT, and the step's 45-minute cap is
+          # the real bound on it: a window is ~5 minutes, so a typo of 400
+          # costs a timed-out step, never a longer run than the cap allows.
+          # The soak sends nothing, so a kill cannot strand an order.
+          W="${{ github.event.inputs.soak_windows }}"
+          case "$W" in ''|*[!0-9]*) W=4 ;; esac
+          python -m src.gemini_execution.shadow_soak \
+            --windows "$W" --cycles 22 --interval 8 \
+            --band-lo 240 --band-hi 280 \
+            --evidence-dir analysis/gemini/continuous_v1 \
+            --out analysis/gemini/continuous_shadow_soak_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/soak.txt
+
+      - name: Fill forensics (read-only; RAW order rows, submits nothing)
+        if: ${{ github.event.inputs.fill_forensics == 'true' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          # NO ARM IS SET HERE. This reads the order-history surface
+          # (metadata.ORDER_HISTORY_PATH) and the position surface; it has
+          # reach one. It exists because the repository holds NO raw per-fill
+          # record for the Aug/Sep activity -- only daily/symbol aggregates,
+          # which cannot separate a YES fill from a YES+NO pair on the SAME
+          # contract, because the symbol IS the contract.
+          set -o pipefail
+          mkdir -p analysis/gemini
+          python -m scripts.gemini_fill_forensics \
+            --since "${{ github.event.inputs.forensics_since || '2026-08-26T00:00:00Z' }}" \
+            --until "${{ github.event.inputs.forensics_until || '2026-09-03T00:00:00Z' }}" \
+            --out   analysis/gemini/fill_forensics_$(date -u +%Y%m%dT%H%M%SZ).json \
+            2>&1 | tee /tmp/forensics.txt
+
       - name: Report the gate, without deciding anything
         run: python3 scripts/gemini_settlement_gate_report.py /tmp/gate.json
 
       - name: Commit ONLY the evidence artifact
+        # ALWAYS. COHORT-1's first dispatch stopped on an AUTHORIZED condition
+        # (the action budget), the runner exited 1, this step was skipped
+        # because the default is `success()`, and twelve really-spent mutation
+        # slots plus two really-traded windows lost their append-only record.
+        # Evidence must never depend on the trading step having succeeded --
+        # a failed run is the run whose evidence matters most. The step is
+        # still analysis/gemini/ ONLY, so a failure cannot widen what it may
+        # write.
+        if: ${{ always() }}
         run: |
           git config user.name  "gemini-settlement-gate[bot]"
           git config user.email "gemini-settlement-gate@users.noreply.github.com"
           # analysis/gemini/ ONLY. No source, config or live-service change
           # may originate from this runtime job.
-          git add -- 'analysis/gemini/settlement_gate_*.json'
+          # A pathspec that matches nothing is NORMAL, not an error: a
+          # window that attempted no mutation writes no ledger, and a run that
+          # refused before the driver writes no run artifact. `git add` on a
+          # missing pathspec exits 128, which killed the job and threw away
+          # the evidence it HAD gathered -- losing the record of a refusal,
+          # which is exactly the record worth keeping.
+          for f in analysis/gemini/settlement_gate_*.json \
+                   analysis/gemini/canary_preflight_*.json \
+                   analysis/gemini/execution_readiness_*.json \
+                   analysis/gemini/ws_dry_run_*.json \
+                   analysis/gemini/continuous_run_*.json \
+                   analysis/gemini/continuous_wire_*.json \
+                   analysis/gemini/reconcile_slot_*.json \
+                   analysis/gemini/continuous_unarmed_*.json \
+                   analysis/gemini/premutation_proof_*.json \
+                   analysis/gemini/readiness_run_*.json \
+                   analysis/gemini/readiness_manifest_*.json \
+                   analysis/gemini/fill_forensics_*.json \
+                   analysis/gemini/rebate_surface_probe_*.json \
+                   analysis/gemini/rebate_reconciliation_*.json \
+                   analysis/gemini/maker_rebate_reconcile_*.json \
+                   analysis/gemini/maker_fee_cash_*.json \
+                   analysis/gemini/continuous_shadow_soak_*.json \
+                   analysis/gemini/continuous_v1/continuous_v1.jsonl \
+                   analysis/gemini/continuous_ledger.jsonl \
+                   analysis/gemini/cohorts/*/ledger.jsonl \
+                   analysis/gemini/cohorts/*/cohort.json \
+                   analysis/gemini/cohorts/*/cohort_state.json \
+                   analysis/gemini/cohort_run_*.json \
+                   analysis/gemini/cohort_window_*.json \
+                   analysis/gemini/cohort_wire_*.json \
+                   analysis/gemini/static_readiness_*.json \
+                   analysis/gemini/cohort_live_status.json \
+                   analysis/gemini/cohort_live_status.json.jsonl \
+                   analysis/gemini/canary_latch/*.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "no new evidence artifact"; exit 0
           fi
-          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/settlement_gate_[0-9TZ]+\.json$'; then
+          # The ALLOW-LIST and the add-list above must name the SAME files.
+          # They drifted: premutation_proof_/continuous_run_ were added to one
+          # and not the other, so a job that gathered its evidence correctly
+          # then refused to commit it as "outside analysis/gemini/" -- which it
+          # was not. A test now asserts the two lists agree.
+          #
+          # THE COHORT LEDGER DRIFTED THE SAME WAY, and it matters more. A
+          # cohort supplies its OWN ledger, and that file is where the slots a
+          # window spends are durably recorded. Neither list knew about it, so
+          # an armed window would have spent its budget on a runner and then
+          # thrown the record away -- and the NEXT window would have read a
+          # cohort with 0 consumed. That is a budget reset by accident, which
+          # is the one thing the cohort mechanism exists to make impossible.
+          #
+          # AND THEY DRIFTED A THIRD TIME, which cost Probe A its artifact.
+          # The add-list globs cohort_run_*.json, but the allowlist demanded
+          # cohort_run_<timestamp>.json -- so cohort_run_A_20260923T041705Z
+          # .json staged fine and then failed the filter, the WHOLE commit was
+          # refused, and the runner was reclaimed carrying the only copy of
+          # the per-order report, the ledger and the live status. The optional
+          # arm tag below is what the two lists disagreed about; the test
+          # pins the exact A and B filename shapes so it cannot recur.
+          #
+          # THE COHORT RUNNER'S OWN OUTPUTS DRIFTED TOO, and run 35671834127
+          # paid for it: cohort_run_/cohort_window_/cohort_state were in
+          # NEITHER list, so even a green job would have committed the ledger
+          # and thrown the report and the per-window counters away. Both
+          # lists now name them, and a test asserts the two agree.
+          #
+          # THE LIVE STATUS IS COMMITTED TOO, snapshot and history. It is the
+          # only artifact that exists WHILE a cohort runs, so it is also the
+          # only one that survives a runner killed between windows -- which
+          # is precisely the case where the per-window report never gets
+          # written at all.
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/((settlement_gate|canary_preflight|execution_readiness|ws_dry_run|continuous_run|continuous_wire|continuous_unarmed|premutation_proof|fill_forensics|readiness_run|readiness_manifest)_[0-9TZ]+\.json|reconcile_slot_[0-9TZ]+(_[A-Za-z0-9]+s[0-9]+)?\.json|continuous_shadow_soak_[0-9TZ]+\.json|rebate_surface_probe_[0-9TZ]+\.json|rebate_reconciliation_[0-9TZ]+\.json|maker_rebate_reconcile_[0-9TZ]+\.json|maker_fee_cash_[0-9TZ]+\.json|continuous_v1/continuous_v1\.jsonl|canary_latch/latch_[A-Za-z0-9_-]+\.json|cohorts/[A-Za-z0-9_-]+/(ledger\.jsonl|cohort\.json|cohort_state\.json)|(cohort_run|cohort_window|cohort_wire|static_readiness)_([A-Za-z0-9]+_)?[0-9TZ]+\.json|cohort_live_status\.json(\.jsonl)?|continuous_ledger\.jsonl)$'; then
             # [skip ci] so the evidence commit cannot re-trigger anything
             git commit -m "evidence(gemini): read-only settlement gate [skip ci]"
-            git push origin HEAD:claude/l5-execution-instrumentation-io6nzi
+            # An evidence job must not lose its evidence to a race. Any other
+            # push to this branch while the job runs makes the push a
+            # non-fast-forward; rebase onto the remote and retry rather than
+            # discard a reading that cannot be reproduced (the venue has
+            # moved on by the next run).
+            # THE PUSH TARGET FOLLOWS THE CHECKOUT, NECESSARILY. With the
+            # checkout moved above and this left alone, HEAD is the q=1
+            # branch and this line would push it onto the instrumentation
+            # branch -- merging the reviewed tree into it by a side effect of
+            # an evidence commit. Evidence goes back where it came from.
+            for attempt in 1 2 3; do
+              if git push origin HEAD:claude/gemini-btc-economic-viability-h3u7zl; then
+                exit 0
+              fi
+              echo "push rejected (attempt $attempt); rebasing onto remote"
+              git fetch origin claude/gemini-btc-economic-viability-h3u7zl
+              git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+              sleep $((attempt * 3))
+            done
+            echo "::error::could not push evidence after 3 attempts"
+            exit 1
           else
             echo "::error::refusing to commit files outside analysis/gemini/"
             git diff --cached --name-only; exit 1

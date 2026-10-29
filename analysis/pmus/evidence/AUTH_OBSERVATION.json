@@ -1,0 +1,30 @@
+{
+  "source": "raw authenticated tape replayed through the recorder's own apply_events",
+  "deployment": "87c22c3a-14ae-4195-9cce-a7b75f5ab4de",
+  "commit": "7f394bb",
+  "utc": "2026-09-23T23:02:18Z",
+  "frames_applied": 9458525,
+  "frames_skipped": 0,
+  "btc15m_markets_in_tape": 127,
+  "per_window": [
+    {"market": "cpc-btc-updown-15m-2026-09-23-2230z",
+     "first_book_latency_s": 429.4, "first_trade_latency_s": null,
+     "usable_book_states": 9, "authenticated_trades": 0,
+     "coverage_pct_of_window": 8.3, "max_book_gap_s": 429.4,
+     "verdict": "PARTIAL"},
+    {"market": "cpc-btc-updown-15m-2026-09-23-2245z",
+     "first_book_latency_s": 513.5, "first_trade_latency_s": 314.1,
+     "book_observed_before_first_trade": false,
+     "usable_book_states": 2, "authenticated_trades": 73,
+     "coverage_pct_of_window": 3.3, "max_book_gap_s": 513.5,
+     "verdict": "BLIND_AT_OPEN"}
+  ],
+  "blindness": {"live_windows": 2, "blind_at_open": 1,
+                "book_before_first_trade": 0, "gate": "FAIL"},
+  "findings": [
+    "TRADES ARE FLOWING: 73 authenticated trades in the 22:45z window. The earlier trades_1h 0 / two_sided_trades false reading is superseded and was not a trade-tape failure.",
+    "THE REMAINING BLINDNESS IS ON THE AUTHENTICATED PATH, NOT THE PUBLIC ONE. The authenticated two-sided book first appears 429-514s into a 900s window, with 2-9 book states and 3-8% coverage, while the venue trades 73 times. We are not subscribed to the window at its open.",
+    "127 BTC15m markets appear in the tape against PMUS_WS_MAX_MARKETS 64, so the live window is competing for a shared subscription budget rather than being held."
+  ],
+  "labels": "OBSERVED only. Nothing interpolated, backfilled or derived from a trade. No orders, nothing armed."
+}

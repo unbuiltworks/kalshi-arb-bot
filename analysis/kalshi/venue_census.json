@@ -1,0 +1,3907 @@
+{
+ "observed_utc": "2026-09-09T00:50:26Z",
+ "total_programs": 183329,
+ "active_now": 2790,
+ "series": [
+  {
+   "series": "KXNATGAS15M",
+   "active_markets": 1,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.26666666666666666,
+   "pool_per_hour": 80.0
+  },
+  {
+   "series": "KXCOPPER15M",
+   "active_markets": 1,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.26666666666666666,
+   "pool_per_hour": 80.0
+  },
+  {
+   "series": "KXSILVER15M",
+   "active_markets": 1,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.26666666666666666,
+   "pool_per_hour": 80.0
+  },
+  {
+   "series": "KXWTI15M",
+   "active_markets": 1,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.26666666666666666,
+   "pool_per_hour": 80.0
+  },
+  {
+   "series": "KXGOLD15M",
+   "active_markets": 1,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.26666666666666666,
+   "pool_per_hour": 80.0
+  },
+  {
+   "series": "KXCRYPTOLEAD15M",
+   "active_markets": 5,
+   "reward_usd": 20.0,
+   "target_size": 1000.0,
+   "period_minutes": 15.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.02,
+   "density_per_capital_dollar_per_hour": 0.08,
+   "pool_per_hour": 400.0
+  },
+  {
+   "series": "KXTTELITEMATCH",
+   "active_markets": 21,
+   "reward_usd": 20.0,
+   "target_size": 300.0,
+   "period_minutes": 90.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.06666666666666667,
+   "density_per_capital_dollar_per_hour": 0.04444444444444444,
+   "pool_per_hour": 280.0
+  },
+  {
+   "series": "KXAAAGASDFL",
+   "active_markets": 47,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 279.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.021505376344086023,
+   "pool_per_hour": 1010.752688172043
+  },
+  {
+   "series": "KXAAAGASDIL",
+   "active_markets": 37,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 296.77470203333337,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.020217356664470974,
+   "pool_per_hour": 748.042196585426
+  },
+  {
+   "series": "KXMAMDANIEO",
+   "active_markets": 1,
+   "reward_usd": 1000.0,
+   "target_size": 300.0,
+   "period_minutes": 9956.646768283334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 3.3333333333333335,
+   "density_per_capital_dollar_per_hour": 0.020087084000719534,
+   "pool_per_hour": 6.026125200215859
+  },
+  {
+   "series": "KXAAAGASDOH",
+   "active_markets": 47,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 339.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.017699115044247787,
+   "pool_per_hour": 831.858407079646
+  },
+  {
+   "series": "KXAAAGASD",
+   "active_markets": 29,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 354.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.01694915254237288,
+   "pool_per_hour": 491.52542372881356
+  },
+  {
+   "series": "KXAAAGASDNC",
+   "active_markets": 27,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 356.8067693333333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.016815824462104657,
+   "pool_per_hour": 454.0272604768257
+  },
+  {
+   "series": "KXAAAGASDTX",
+   "active_markets": 27,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 402.2990878666667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.014914276917248618,
+   "pool_per_hour": 402.6854767657127
+  },
+  {
+   "series": "KXEARNINGSMENTIONCHWY",
+   "active_markets": 13,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 754.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.007957559681697613,
+   "pool_per_hour": 103.44827586206897
+  },
+  {
+   "series": "KXAAAGASDWA",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXAAAGASDPA",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXAAAGASDGA",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXAAAGASDNY",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXAAAGASDNJ",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXAAAGASDCA",
+   "active_markets": 17,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 959.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.006256517205422316,
+   "pool_per_hour": 106.36079249217937
+  },
+  {
+   "series": "KXDIESELD",
+   "active_markets": 21,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1076.76302625,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.005572256711763184,
+   "pool_per_hour": 117.01739094702687
+  },
+  {
+   "series": "KXTRUMPAPPROVE",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1422.3711892666665,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00421830816405486,
+   "pool_per_hour": 37.96477347649374
+  },
+  {
+   "series": "KXHORMUZMAX",
+   "active_markets": 7,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 29.166666666666664
+  },
+  {
+   "series": "KXHORMUZWEEKLY",
+   "active_markets": 11,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 45.83333333333333
+  },
+  {
+   "series": "KXSUEZWEEKLY",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 20.833333333333332
+  },
+  {
+   "series": "KXTRUMPNOMNUM",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 16.666666666666664
+  },
+  {
+   "series": "KXGENERICBALLOTVOTEHUB",
+   "active_markets": 1,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXHORMUZPEAK",
+   "active_markets": 6,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 25.0
+  },
+  {
+   "series": "KXBABELMANDEBWEEKLY",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 20.833333333333332
+  },
+  {
+   "series": "KXTRUMPVH",
+   "active_markets": 1,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.004166666666666667,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXTRUMPPHOTO",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 300.0,
+   "period_minutes": 10678.226631916668,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.6666666666666666,
+   "density_per_capital_dollar_per_hour": 0.0037459403493499623,
+   "pool_per_hour": 5.618910524024944
+  },
+  {
+   "series": "KXTRUEV",
+   "active_markets": 15,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1616.8232891500002,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0037109806867974627,
+   "pool_per_hour": 55.66471030196194
+  },
+  {
+   "series": "KXTRUMPENDORSEMENTS",
+   "active_markets": 7,
+   "reward_usd": 142.8571,
+   "target_size": 300.0,
+   "period_minutes": 8517.64177695,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.4761903333333333,
+   "density_per_capital_dollar_per_hour": 0.0033543814999732074,
+   "pool_per_hour": 7.044201149943737
+  },
+  {
+   "series": "KXTRUMPMENTION",
+   "active_markets": 103,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 1940.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0030927835051546395,
+   "pool_per_hour": 318.55670103092785
+  },
+  {
+   "series": "KXYTDAILYTOPVIDEOG",
+   "active_markets": 30,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 2009.9455550333332,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0029851554859158837,
+   "pool_per_hour": 89.55466457747652
+  },
+  {
+   "series": "KXYTTOPVIDEO2D",
+   "active_markets": 30,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 2009.9455563666668,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.002985155483935627,
+   "pool_per_hour": 89.5546645180688
+  },
+  {
+   "series": "KXYTTOPVIDEOG2D",
+   "active_markets": 30,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 2009.9455577833332,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.002985155481831605,
+   "pool_per_hour": 89.55466445494815
+  },
+  {
+   "series": "KXAPRPOTUS",
+   "active_markets": 8,
+   "reward_usd": 125.0,
+   "target_size": 300.0,
+   "period_minutes": 10017.898975883332,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.4166666666666667,
+   "density_per_capital_dollar_per_hour": 0.0024955332510523363,
+   "pool_per_hour": 5.989279802525607
+  },
+  {
+   "series": "KXNOTLMAYOR",
+   "active_markets": 3,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590794549999,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0022781334144286918,
+   "pool_per_hour": 6.834400243286074
+  },
+  {
+   "series": "KXSAANICHMAYOR",
+   "active_markets": 3,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590796266667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.002278133413783089,
+   "pool_per_hour": 6.8344002413492655
+  },
+  {
+   "series": "KXUKBUDGETTAX",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.5739682,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0022557961819071283,
+   "pool_per_hour": 2.255796181907128
+  },
+  {
+   "series": "KXBUCKMASTERSUE",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573968333334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0022557961818579627,
+   "pool_per_hour": 2.2557961818579626
+  },
+  {
+   "series": "KXMOSD30",
+   "active_markets": 2,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573968466666,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.002255796181808798,
+   "pool_per_hour": 4.511592363617596
+  },
+  {
+   "series": "KXBUBECKLEAVE",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.5739687000005,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0022557961817227584,
+   "pool_per_hour": 2.2557961817227583
+  },
+  {
+   "series": "KXEUSETTLEMENTBAN",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573969683333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.002255796181360164,
+   "pool_per_hour": 2.2557961813601635
+  },
+  {
+   "series": "KXNAVITASCHARGE",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573969833334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0022557961813048522,
+   "pool_per_hour": 2.255796181304852
+  },
+  {
+   "series": "KXOPENAIANOTHERMILLENNIUM",
+   "active_markets": 2,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573971083333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.002255796180843927,
+   "pool_per_hour": 4.511592361687854
+  },
+  {
+   "series": "KXUSOST",
+   "active_markets": 1,
+   "reward_usd": 285.0,
+   "target_size": 1000.0,
+   "period_minutes": 7617.805200600001,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.285,
+   "density_per_capital_dollar_per_hour": 0.0022447410441334406,
+   "pool_per_hour": 2.2447410441334408
+  },
+  {
+   "series": "KXAMAZONADS",
+   "active_markets": 1,
+   "reward_usd": 285.0,
+   "target_size": 1000.0,
+   "period_minutes": 7617.8052012,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.285,
+   "density_per_capital_dollar_per_hour": 0.0022447410439566384,
+   "pool_per_hour": 2.2447410439566386
+  },
+  {
+   "series": "KXRAIN",
+   "active_markets": 44,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 2683.3750770499996,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0022359900601730907,
+   "pool_per_hour": 98.38356264761599
+  },
+  {
+   "series": "KXEOWEEK",
+   "active_markets": 8,
+   "reward_usd": 333.3333,
+   "target_size": 300.0,
+   "period_minutes": 30118.07264061667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 1.111111,
+   "density_per_capital_dollar_per_hour": 0.0022135101669850743,
+   "pool_per_hour": 5.312424400764178
+  },
+  {
+   "series": "KXEARNINGSMENTIONADBE",
+   "active_markets": 13,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 2803.51510345,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0021401703856049905,
+   "pool_per_hour": 27.822215012864874
+  },
+  {
+   "series": "KXINDUS",
+   "active_markets": 1,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6477.618362633333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.0021304126343111565,
+   "pool_per_hour": 2.1304126343111567
+  },
+  {
+   "series": "KXTRILATERAL",
+   "active_markets": 3,
+   "reward_usd": 230.0,
+   "target_size": 1000.0,
+   "period_minutes": 6477.618362866667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.23,
+   "density_per_capital_dollar_per_hour": 0.002130412634234416,
+   "pool_per_hour": 6.3912379027032475
+  },
+  {
+   "series": "KXTXERCOTPEAKD",
+   "active_markets": 12,
+   "reward_usd": 50.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.05,
+   "density_per_capital_dollar_per_hour": 0.0020833333333333333,
+   "pool_per_hour": 25.0
+  },
+  {
+   "series": "KXTRUTHSOCIAL",
+   "active_markets": 10,
+   "reward_usd": 100.0,
+   "target_size": 300.0,
+   "period_minutes": 9956.739654183333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.3333333333333333,
+   "density_per_capital_dollar_per_hour": 0.00200868966093705,
+   "pool_per_hour": 6.02606898281115
+  },
+  {
+   "series": "KXGOETTINGENMAYOR",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590793083334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0019809855782437166,
+   "pool_per_hour": 7.923942312974866
+  },
+  {
+   "series": "KXKAMLOOPSMAYOR",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590794116667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0019809855779057903,
+   "pool_per_hour": 7.923942311623161
+  },
+  {
+   "series": "KXWARATAHWYNYARD",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590796616667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.001980985577088227,
+   "pool_per_hour": 7.923942308352908
+  },
+  {
+   "series": "KXCANADAUSTARIFFLOWER",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573968833333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0019615618971074718,
+   "pool_per_hour": 7.846247588429887
+  },
+  {
+   "series": "KXCANUSRAISE",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.57396925,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0019615618969738703,
+   "pool_per_hour": 7.846247587895482
+  },
+  {
+   "series": "KXUSCANADATARIFFDOWN",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573969983334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0019615618967387316,
+   "pool_per_hour": 7.8462475869549255
+  },
+  {
+   "series": "KXUSCANADATARIFFUP",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573970433334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.001961561896594442,
+   "pool_per_hour": 7.846247586377768
+  },
+  {
+   "series": "KXEARNINGSMENTIONM",
+   "active_markets": 12,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 3120.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0019230769230769232,
+   "pool_per_hour": 23.076923076923077
+  },
+  {
+   "series": "KXTRUMPACT",
+   "active_markets": 11,
+   "reward_usd": 90.909,
+   "target_size": 300.0,
+   "period_minutes": 9957.694133533334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.30303,
+   "density_per_capital_dollar_per_hour": 0.0018259046478211589,
+   "pool_per_hour": 6.025485337809823
+  },
+  {
+   "series": "KXFEAR",
+   "active_markets": 5,
+   "reward_usd": 240.0,
+   "target_size": 1000.0,
+   "period_minutes": 7977.910549733334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.24,
+   "density_per_capital_dollar_per_hour": 0.0018049838877275113,
+   "pool_per_hour": 9.024919438637557
+  },
+  {
+   "series": "KXTRUMPMENTIONB",
+   "active_markets": 19,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 3391.6674429166665,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0017690413641616633,
+   "pool_per_hour": 33.6117859190716
+  },
+  {
+   "series": "KXEARNINGSMENTIONKR",
+   "active_markets": 13,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 3673.557225533333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.001633294278988375,
+   "pool_per_hour": 21.23282562684887
+  },
+  {
+   "series": "KXCBDPOLAND",
+   "active_markets": 5,
+   "reward_usd": 160.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590792566667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.16,
+   "density_per_capital_dollar_per_hour": 0.0015847884627301434,
+   "pool_per_hour": 7.923942313650717
+  },
+  {
+   "series": "KXCBDINDONESIA",
+   "active_markets": 5,
+   "reward_usd": 160.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.5739661,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.16,
+   "density_per_capital_dollar_per_hour": 0.0015692495183871186,
+   "pool_per_hour": 7.846247591935593
+  },
+  {
+   "series": "KXCBDSWEDEN",
+   "active_markets": 5,
+   "reward_usd": 160.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573966616666,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.16,
+   "density_per_capital_dollar_per_hour": 0.001569249518254586,
+   "pool_per_hour": 7.84624759127293
+  },
+  {
+   "series": "KXCBDSWISS",
+   "active_markets": 5,
+   "reward_usd": 160.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573967116667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.16,
+   "density_per_capital_dollar_per_hour": 0.0015692495181263283,
+   "pool_per_hour": 7.846247590631641
+  },
+  {
+   "series": "KXCBDNORWAY",
+   "active_markets": 5,
+   "reward_usd": 160.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573967633333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.16,
+   "density_per_capital_dollar_per_hour": 0.0015692495179937956,
+   "pool_per_hour": 7.8462475899689785
+  },
+  {
+   "series": "KXPRIMARYMOVD",
+   "active_markets": 10,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 7797.888938916667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0015388780340422645,
+   "pool_per_hour": 15.388780340422644
+  },
+  {
+   "series": "KXWAAEROEMP",
+   "active_markets": 13,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 19.345238095238095
+  },
+  {
+   "series": "KXBWAYATTENDANCE",
+   "active_markets": 8,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 11.904761904761903
+  },
+  {
+   "series": "KXILNUCLEAR",
+   "active_markets": 7,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 10.416666666666666
+  },
+  {
+   "series": "KXFLVISITORCOUNT",
+   "active_markets": 7,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 10.416666666666666
+  },
+  {
+   "series": "KXNYCSUBWAY",
+   "active_markets": 5,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 7.44047619047619
+  },
+  {
+   "series": "KXORDPAX",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXNYCASKRENT",
+   "active_markets": 8,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 11.904761904761903
+  },
+  {
+   "series": "KXCAFAIRPLAN",
+   "active_markets": 7,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 10.416666666666666
+  },
+  {
+   "series": "KXCABUILDPERMITS",
+   "active_markets": 6,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 8.928571428571429
+  },
+  {
+   "series": "KXTXERCOTPEAK",
+   "active_markets": 7,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 10.416666666666666
+  },
+  {
+   "series": "KXNYNJPORTTEU",
+   "active_markets": 9,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 13.392857142857142
+  },
+  {
+   "series": "KXWATECHEMP",
+   "active_markets": 10,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 14.88095238095238
+  },
+  {
+   "series": "KXPAGAS",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXWALLSTBONUS",
+   "active_markets": 7,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 10.416666666666666
+  },
+  {
+   "series": "KXTXOIL",
+   "active_markets": 4,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 5.952380952380952
+  },
+  {
+   "series": "KXCAHSR",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXMANOFFVAC",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXPADATACENTERS",
+   "active_markets": 6,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 8.928571428571429
+  },
+  {
+   "series": "KXNYSECEEMP",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXPJMEMERGENCY",
+   "active_markets": 5,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 7.44047619047619
+  },
+  {
+   "series": "KXPAMFGEMP",
+   "active_markets": 6,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 8.928571428571429
+  },
+  {
+   "series": "KXILHPIYOY",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXNJONTIME",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXNETFLIXSTUDIO",
+   "active_markets": 2,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXCAHPIYOY",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXFLVISITORS",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXORLHOTELDEMAND",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXNJPHARMAEMP",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXNFLSTADIUM",
+   "active_markets": 2,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXMLBTEAMSALE",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXMLBPLAYOFFS",
+   "active_markets": 30,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 44.64285714285714
+  },
+  {
+   "series": "KXCITYCHAMPS",
+   "active_markets": 8,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 11.904761904761903
+  },
+  {
+   "series": "KXNFLPLAYOFFC",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXBAA",
+   "active_markets": 8,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 11.904761904761903
+  },
+  {
+   "series": "KXNFLSELLOUT",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.001488095238095238,
+   "pool_per_hour": 1.488095238095238
+  },
+  {
+   "series": "KXDEEPSHARE",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 8099.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0014816644030127175,
+   "pool_per_hour": 13.334979627114459
+  },
+  {
+   "series": "KXGOOGSHARE",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 8099.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0014816644030127175,
+   "pool_per_hour": 13.334979627114459
+  },
+  {
+   "series": "KXANTHSHARE",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 8099.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0014816644030127175,
+   "pool_per_hour": 13.334979627114459
+  },
+  {
+   "series": "KXOPENSHARE",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 8099.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0014816644030127175,
+   "pool_per_hour": 13.334979627114459
+  },
+  {
+   "series": "KXTENCENTSHARE",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 8099.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0014816644030127175,
+   "pool_per_hour": 13.334979627114459
+  },
+  {
+   "series": "KXATPRETIRE",
+   "active_markets": 1,
+   "reward_usd": 500.0,
+   "target_size": 1000.0,
+   "period_minutes": 21534.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.5,
+   "density_per_capital_dollar_per_hour": 0.0013931457230426303,
+   "pool_per_hour": 1.3931457230426303
+  },
+  {
+   "series": "KXVICTORIA3RD",
+   "active_markets": 6,
+   "reward_usd": 135.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.5907935,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.135,
+   "density_per_capital_dollar_per_hour": 0.001337165265222533,
+   "pool_per_hour": 8.022991591335197
+  },
+  {
+   "series": "KXPRESOVMAYOR",
+   "active_markets": 6,
+   "reward_usd": 135.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590794866667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.135,
+   "density_per_capital_dollar_per_hour": 0.001337165264920852,
+   "pool_per_hour": 8.02299158952511
+  },
+  {
+   "series": "KXTOPUSAGEAI",
+   "active_markets": 7,
+   "reward_usd": 145.0,
+   "target_size": 1000.0,
+   "period_minutes": 6537.171901766666,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.145,
+   "density_per_capital_dollar_per_hour": 0.0013308507303668778,
+   "pool_per_hour": 9.315955112568146
+  },
+  {
+   "series": "KXOPENADOPT",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0011904761904761906,
+   "pool_per_hour": 8.333333333333332
+  },
+  {
+   "series": "KXEURUSDAW",
+   "active_markets": 20,
+   "reward_usd": 120.0,
+   "target_size": 1000.0,
+   "period_minutes": 6177.7785022,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.12,
+   "density_per_capital_dollar_per_hour": 0.0011654674892335442,
+   "pool_per_hour": 23.309349784670886
+  },
+  {
+   "series": "KXVOTEMV",
+   "active_markets": 39,
+   "reward_usd": 115.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590788666666,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.115,
+   "density_per_capital_dollar_per_hour": 0.0011390667083206452,
+   "pool_per_hour": 44.42360162450516
+  },
+  {
+   "series": "KXPRINCEGEORGEMAYOR",
+   "active_markets": 7,
+   "reward_usd": 115.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590795516667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.115,
+   "density_per_capital_dollar_per_hour": 0.001139066707032574,
+   "pool_per_hour": 7.973466949228018
+  },
+  {
+   "series": "KXGOVBAL",
+   "active_markets": 49,
+   "reward_usd": 145.0,
+   "target_size": 1000.0,
+   "period_minutes": 7737.5397389166665,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.145,
+   "density_per_capital_dollar_per_hour": 0.001124388409437505,
+   "pool_per_hour": 55.09503206243775
+  },
+  {
+   "series": "KXVOTEGENERAL",
+   "active_markets": 35,
+   "reward_usd": 115.0,
+   "target_size": 1000.0,
+   "period_minutes": 6297.612743116667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.115,
+   "density_per_capital_dollar_per_hour": 0.0010956532707638695,
+   "pool_per_hour": 38.34786447673543
+  },
+  {
+   "series": "KXEURUSD",
+   "active_markets": 15,
+   "reward_usd": 25.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.025,
+   "density_per_capital_dollar_per_hour": 0.0010416666666666667,
+   "pool_per_hour": 15.625
+  },
+  {
+   "series": "KXUSDJPY",
+   "active_markets": 15,
+   "reward_usd": 25.0,
+   "target_size": 1000.0,
+   "period_minutes": 1440.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.025,
+   "density_per_capital_dollar_per_hour": 0.0010416666666666667,
+   "pool_per_hour": 15.625
+  },
+  {
+   "series": "KXCHINAAI",
+   "active_markets": 9,
+   "reward_usd": 135.0,
+   "target_size": 1000.0,
+   "period_minutes": 7977.910548683333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.135,
+   "density_per_capital_dollar_per_hour": 0.0010153034369803527,
+   "pool_per_hour": 9.137730932823175
+  },
+  {
+   "series": "KXTOKENUSE",
+   "active_markets": 9,
+   "reward_usd": 110.0,
+   "target_size": 1000.0,
+   "period_minutes": 6597.779899300001,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.11,
+   "density_per_capital_dollar_per_hour": 0.001000336492082774,
+   "pool_per_hour": 9.003028428744965
+  },
+  {
+   "series": "KXSAGDPQOQ",
+   "active_markets": 9,
+   "reward_usd": 110.0,
+   "target_size": 1000.0,
+   "period_minutes": 6597.779900333333,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.11,
+   "density_per_capital_dollar_per_hour": 0.001000336491926103,
+   "pool_per_hour": 9.003028427334927
+  },
+  {
+   "series": "KXBABASHARE",
+   "active_markets": 9,
+   "reward_usd": 110.0,
+   "target_size": 1000.0,
+   "period_minutes": 6657.4548776500005,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.11,
+   "density_per_capital_dollar_per_hour": 0.000991369843475337,
+   "pool_per_hour": 8.922328591278033
+  },
+  {
+   "series": "KXPRIMARYTURNOUT",
+   "active_markets": 8,
+   "reward_usd": 125.0,
+   "target_size": 1000.0,
+   "period_minutes": 7737.539744216667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.125,
+   "density_per_capital_dollar_per_hour": 0.0009693003522994227,
+   "pool_per_hour": 7.7544028183953815
+  },
+  {
+   "series": "KXPRAGUEMAYOR",
+   "active_markets": 9,
+   "reward_usd": 90.0,
+   "target_size": 1000.0,
+   "period_minutes": 6057.590797133334,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.09,
+   "density_per_capital_dollar_per_hour": 0.0008914435096136687,
+   "pool_per_hour": 8.022991586523018
+  },
+  {
+   "series": "KXDIESELW",
+   "active_markets": 21,
+   "reward_usd": 120.0,
+   "target_size": 1000.0,
+   "period_minutes": 8157.7576324833335,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.12,
+   "density_per_capital_dollar_per_hour": 0.0008825954783616464,
+   "pool_per_hour": 18.534505045594575
+  },
+  {
+   "series": "KXSOFRD",
+   "active_markets": 7,
+   "reward_usd": 20.0,
+   "target_size": 1000.0,
+   "period_minutes": 1379.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.02,
+   "density_per_capital_dollar_per_hour": 0.0008701957940536622,
+   "pool_per_hour": 6.091370558375635
+  },
+  {
+   "series": "KXNFLCPOTY",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 14799.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0008108655990269613,
+   "pool_per_hour": 0.8108655990269612
+  },
+  {
+   "series": "KXNETFLIXTOPVIEWSMOVIE",
+   "active_markets": 11,
+   "reward_usd": 80.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573963966667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.08,
+   "density_per_capital_dollar_per_hour": 0.0007846247594671753,
+   "pool_per_hour": 8.630872354138928
+  },
+  {
+   "series": "KXNETFLIXTOPVIEWSTV",
+   "active_markets": 11,
+   "reward_usd": 80.0,
+   "target_size": 1000.0,
+   "period_minutes": 6117.573965016667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.08,
+   "density_per_capital_dollar_per_hour": 0.000784624759332505,
+   "pool_per_hour": 8.630872352657555
+  },
+  {
+   "series": "KXU3EOY",
+   "active_markets": 15,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 7857.910943366666,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0007635617205696331,
+   "pool_per_hour": 11.453425808544496
+  },
+  {
+   "series": "KXSTEAMTOPSELLER",
+   "active_markets": 20,
+   "reward_usd": 80.0,
+   "target_size": 1000.0,
+   "period_minutes": 6477.618360516667,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.08,
+   "density_per_capital_dollar_per_hour": 0.0007410130904373229,
+   "pool_per_hour": 14.820261808746457
+  },
+  {
+   "series": "KXATPNATWINNER",
+   "active_markets": 3,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 18881.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0006355595572268419,
+   "pool_per_hour": 1.9066786716805253
+  },
+  {
+   "series": "KXAAAGASW",
+   "active_markets": 21,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 9476.960251499999,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0006331143996357196,
+   "pool_per_hour": 13.295402392350113
+  },
+  {
+   "series": "KXTRUMPSAY",
+   "active_markets": 34,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 9480.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0006329113924050633,
+   "pool_per_hour": 21.518987341772153
+  },
+  {
+   "series": "KXACTBLUETOP",
+   "active_markets": 7,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 9927.167675616665,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0006044020002540439,
+   "pool_per_hour": 4.230814001778307
+  },
+  {
+   "series": "KXAAAGASMAXM",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXAAAGASMINM",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXMONSTERPOS",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXSBUXCC",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXAMZNCC",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXCOCACOLAPOS",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXPEPSIPOS",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXDRPEPPERPOS",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXDIESELMAXY",
+   "active_markets": 12,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 7.142857142857142
+  },
+  {
+   "series": "KXDIESELMINY",
+   "active_markets": 12,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 7.142857142857142
+  },
+  {
+   "series": "KXDIESELYE",
+   "active_markets": 19,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 11.309523809523808
+  },
+  {
+   "series": "KXDIESELELECT",
+   "active_markets": 15,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10080.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 8.928571428571429
+  },
+  {
+   "series": "KXNHMAPLE",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXNECORNYIELD",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXMIAUTOEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMOBILETEU",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXVTPERMITS",
+   "active_markets": 11,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 6.5476190476190474
+  },
+  {
+   "series": "KXIDGROUNDWATER",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXKYBOURBONBARRELS",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXCTMFPERMITS",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXKYCOAL",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXHEADLINE",
+   "active_markets": 95,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 56.547619047619044
+  },
+  {
+   "series": "KXGAFILMSPEND",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.380952380952381
+  },
+  {
+   "series": "KXAKPFD",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXVAPORTTEU",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXRDUVISITS",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXOHMFGEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWICORNYIELD",
+   "active_markets": 9,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 5.357142857142857
+  },
+  {
+   "series": "KXGA4GW",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXLOCALLAW",
+   "active_markets": 13,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 7.738095238095237
+  },
+  {
+   "series": "KXVTMILK",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXSAVTEU",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.380952380952381
+  },
+  {
+   "series": "KXVADOMNEX",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXARCRYPTO",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNERIVISITS",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXHIVISITORS",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXROCKHOF",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXVTMAPLE",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXNCPHARMAEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMELOBSTER",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXNVVISIT",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXRIQUAHOG",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXNHASKIVISITS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXSDCORNYIELD",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXNHHOMEPRICE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMILEAD",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXCTMINWAGE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXRIRESPOWER",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXIAETHANOL",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXWYCOAL",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXCOBUILDPERMITS",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXIAFARMLAND",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.380952380952381
+  },
+  {
+   "series": "KXYELLVISITS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMOMFGEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXARBROILER",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXMEWIND",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXKSWHEAT",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXSKYLINEDELAY",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWIMILK",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXALVEHICLEPROD",
+   "active_markets": 4,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.380952380952381
+  },
+  {
+   "series": "KXBOZPERMITS",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXIACORN",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXINTRANSEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXCTINSURANCEJOBS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXCAMDENYARDS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXSCPORTTEU",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXMSCOTTON",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXWVCOAL",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXDEFRANCHISETAX",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXSDCATTLE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXORSEMICONEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXRIHOMEPRICE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXDECREDITJOBS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXGLACIERVISITS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXIDPOTATO",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMTCATTLE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXORBOFHARVEST",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXCOSKIVISITS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXSCTRANSEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMSCATFISH",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWIMFGEMP",
+   "active_markets": 7,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.166666666666666
+  },
+  {
+   "series": "KXNUBONDS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMASCIENRDEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMTSB542",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXBOIPASSENGERS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNDKOIL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWYUNEMPLOW",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMNTACONITE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMARCELLUSGAS",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 3.571428571428571
+  },
+  {
+   "series": "KXAKCRUDEOIL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXKYDISTEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXHIVISITORSPEND",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXKEYCONTRACT",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNECOF",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXBALTPORTTEU",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNMCOIL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNVHOMEPRICE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXAZSEMIJOBS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXUTHOMEPRICE",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXTNTRANSEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXLAOILGASEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXOKOIL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXCOHPIYOY",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXMNMEDDEVEMP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXUTSKIVISITS",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWVPOP",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXINCORNYIELD",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXWNBAPLAYOFFHOST",
+   "active_markets": 5,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 2.976190476190476
+  },
+  {
+   "series": "KXVENUEPERFORM",
+   "active_markets": 35,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 20.833333333333332
+  },
+  {
+   "series": "KXNCAAFTFUT",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXNCAAFPAC12",
+   "active_markets": 8,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 4.761904761904762
+  },
+  {
+   "series": "KXNCAAFSTADIUM",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNCAAWBCONFSTREAK",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNCAAMBBOTHQUAL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXNCAAMBTEAMSQUAL",
+   "active_markets": 1,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005952380952380953,
+   "pool_per_hour": 0.5952380952380952
+  },
+  {
+   "series": "KXYUM",
+   "active_markets": 14,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10456.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005738332058148432,
+   "pool_per_hour": 8.033664881407805
+  },
+  {
+   "series": "KXF",
+   "active_markets": 13,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10477.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005726830199484586,
+   "pool_per_hour": 7.444879259329961
+  },
+  {
+   "series": "KXFA",
+   "active_markets": 11,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10477.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005726830199484586,
+   "pool_per_hour": 6.299513219433044
+  },
+  {
+   "series": "KXKR",
+   "active_markets": 7,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10539.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000569313976658127,
+   "pool_per_hour": 3.985197836606889
+  },
+  {
+   "series": "KXTTAN",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10539.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000569313976658127,
+   "pool_per_hour": 2.277255906632508
+  },
+  {
+   "series": "KXCCL",
+   "active_markets": 7,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10539.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000569313976658127,
+   "pool_per_hour": 3.985197836606889
+  },
+  {
+   "series": "KXCHWY",
+   "active_markets": 9,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10539.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000569313976658127,
+   "pool_per_hour": 5.123825789923143
+  },
+  {
+   "series": "KXDOL",
+   "active_markets": 6,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 10539.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000569313976658127,
+   "pool_per_hour": 3.415883859948762
+  },
+  {
+   "series": "KXCPL",
+   "active_markets": 6,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 21379.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.000561298470461668,
+   "pool_per_hour": 3.367790822770008
+  },
+  {
+   "series": "KXATP1RANK",
+   "active_markets": 3,
+   "reward_usd": 200.0,
+   "target_size": 1000.0,
+   "period_minutes": 21522.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.2,
+   "density_per_capital_dollar_per_hour": 0.0005575689991636465,
+   "pool_per_hour": 1.6727069974909394
+  },
+  {
+   "series": "KXDANCINGWITHTHESTARS",
+   "active_markets": 16,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 11299.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000531020444287105,
+   "pool_per_hour": 8.49632710859368
+  },
+  {
+   "series": "KXYTVIEWSW",
+   "active_markets": 179,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 11400.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005263157894736842,
+   "pool_per_hour": 94.21052631578947
+  },
+  {
+   "series": "KXLEADERMLBHR",
+   "active_markets": 6,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 11487.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0005223295899712719,
+   "pool_per_hour": 3.1339775398276313
+  },
+  {
+   "series": "KXAGTELIMINATION",
+   "active_markets": 11,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 15839.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00037881179367384307,
+   "pool_per_hour": 4.166929730412273
+  },
+  {
+   "series": "KXNFLWEEKCOMPETE",
+   "active_markets": 23,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 18719.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.0003205299428388269,
+   "pool_per_hour": 7.372188685293017
+  },
+  {
+   "series": "KXYTVIEWSHIGH",
+   "active_markets": 112,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00029761904761904765,
+   "pool_per_hour": 33.33333333333333
+  },
+  {
+   "series": "KXTRUMPSAYMONTH",
+   "active_markets": 22,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00029761904761904765,
+   "pool_per_hour": 6.5476190476190474
+  },
+  {
+   "series": "KXTRUMPSAYCOMPANY",
+   "active_markets": 50,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00029761904761904765,
+   "pool_per_hour": 14.88095238095238
+  },
+  {
+   "series": "KXANTHROPICLEADLEFT",
+   "active_markets": 6,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 20538.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.000292141396435875,
+   "pool_per_hour": 1.75284837861525
+  },
+  {
+   "series": "KXFEDMENTION",
+   "active_markets": 46,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 24834.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00024160425223483935,
+   "pool_per_hour": 11.11379560280261
+  },
+  {
+   "series": "KXEMMYCACTR",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYLIMITEDACTO",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYCSACTO",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.8573388203017832
+  },
+  {
+   "series": "KXEMMYCSERIES",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYLIMITEDACTR",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYCACTO",
+   "active_markets": 2,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.3429355281207133
+  },
+  {
+   "series": "KXEMMYLSACTR",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYCSACTR",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.8573388203017832
+  },
+  {
+   "series": "KXEMMYDACTR",
+   "active_markets": 3,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.51440329218107
+  },
+  {
+   "series": "KXEMMYDSERIES",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.8573388203017832
+  },
+  {
+   "series": "KXEMMYLSERIES",
+   "active_markets": 3,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.51440329218107
+  },
+  {
+   "series": "KXEMMYDACTO",
+   "active_markets": 3,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.51440329218107
+  },
+  {
+   "series": "KXEMMYDSACTR",
+   "active_markets": 5,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.8573388203017832
+  },
+  {
+   "series": "KXEMMYDSACTO",
+   "active_markets": 4,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.6858710562414266
+  },
+  {
+   "series": "KXEMMYLSACTO",
+   "active_markets": 1,
+   "reward_usd": 100.0,
+   "target_size": 1000.0,
+   "period_minutes": 34992.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.1,
+   "density_per_capital_dollar_per_hour": 0.00017146776406035667,
+   "pool_per_hour": 0.17146776406035666
+  },
+  {
+   "series": "KXTTMATCH",
+   "active_markets": 3,
+   "reward_usd": 20.0,
+   "target_size": 1000.0,
+   "period_minutes": 19860.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.02,
+   "density_per_capital_dollar_per_hour": 6.042296072507553e-05,
+   "pool_per_hour": 0.18126888217522658
+  },
+  {
+   "series": "KXB200MAX",
+   "active_markets": 23,
+   "reward_usd": 15.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.015,
+   "density_per_capital_dollar_per_hour": 4.4642857142857136e-05,
+   "pool_per_hour": 1.0267857142857142
+  },
+  {
+   "series": "KXA100MAX",
+   "active_markets": 9,
+   "reward_usd": 15.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.015,
+   "density_per_capital_dollar_per_hour": 4.4642857142857136e-05,
+   "pool_per_hour": 0.40178571428571425
+  },
+  {
+   "series": "KXRTX5090MAX",
+   "active_markets": 6,
+   "reward_usd": 15.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.015,
+   "density_per_capital_dollar_per_hour": 4.4642857142857136e-05,
+   "pool_per_hour": 0.26785714285714285
+  },
+  {
+   "series": "KXH200MAX",
+   "active_markets": 4,
+   "reward_usd": 15.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.015,
+   "density_per_capital_dollar_per_hour": 4.4642857142857136e-05,
+   "pool_per_hour": 0.17857142857142855
+  },
+  {
+   "series": "KXH100MAX",
+   "active_markets": 6,
+   "reward_usd": 15.0,
+   "target_size": 1000.0,
+   "period_minutes": 20160.0,
+   "types": [
+    "liquidity"
+   ],
+   "density_per_capital_dollar": 0.015,
+   "density_per_capital_dollar_per_hour": 4.4642857142857136e-05,
+   "pool_per_hour": 0.26785714285714285
+  }
+ ]
+}

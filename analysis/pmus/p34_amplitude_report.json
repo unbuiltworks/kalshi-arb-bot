@@ -1,0 +1,946 @@
+{
+ "label": "L5_AMPLITUDE_DECOMPOSITION_REPORT_V1",
+ "phase": "PHASE_1_MEASUREMENT_ONLY",
+ "actions_with_authenticated_class": 284,
+ "windows": {
+  "15:15": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 64,
+    "pmus_permitted": 31,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": false,
+   "actions_without_authenticated_evidence": 31,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 16,
+     "longest_same_side_run": 20,
+     "max_abs_imbalance": 16,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "REQUIRES_CROSSING": 33
+    },
+    "actions_unattributable": 31,
+    "l5_units_by_cause": {
+     "REQUIRES_CROSSING": 1059.8373
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 33,
+     "pct_of_l5_actions": 51.6
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 25.8,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 25.8,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "15:30": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 61,
+    "pmus_permitted": 19,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": false,
+   "actions_without_authenticated_evidence": 19,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 1,
+     "longest_same_side_run": 11,
+     "max_abs_imbalance": 15,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 22,
+     "REQUIRES_CROSSING": 20
+    },
+    "actions_unattributable": 19,
+    "l5_units_by_cause": {
+     "NO_BOOK": 504.5462,
+     "REQUIRES_CROSSING": 751.2769
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 42,
+     "pct_of_l5_actions": 68.9
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 21.07,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 21.07,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "15:45": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 41,
+    "pmus_permitted": 17,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": false,
+   "actions_without_authenticated_evidence": 17,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 8,
+     "longest_same_side_run": 11,
+     "max_abs_imbalance": 8,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 8,
+     "REQUIRES_CROSSING": 16
+    },
+    "actions_unattributable": 17,
+    "l5_units_by_cause": {
+     "NO_BOOK": 385.8235,
+     "REQUIRES_CROSSING": 326.4533
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 24,
+     "pct_of_l5_actions": 58.5
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 20.9,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 20.9,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "16:00": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 100,
+    "pmus_permitted": 49,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": false,
+   "actions_without_authenticated_evidence": 49,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 47,
+     "longest_same_side_run": 31,
+     "max_abs_imbalance": 47,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 33,
+     "REQUIRES_CROSSING": 18
+    },
+    "actions_unattributable": 49,
+    "l5_units_by_cause": {
+     "NO_BOOK": 1190.7489,
+     "REQUIRES_CROSSING": 549.976
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 51,
+     "pct_of_l5_actions": 51.0
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 24.16,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 24.16,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "16:15": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 49,
+    "pmus_permitted": 31,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 14,
+     "max_abs_imbalance": 25,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 6,
+     "REQUIRES_CROSSING": 12,
+     "NO_SUBSEQUENT_INTERACTION": 28,
+     "QUEUE_AMBIGUOUS": 3
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 176.4285,
+     "REQUIRES_CROSSING": 392.2091,
+     "NO_SUBSEQUENT_INTERACTION": 1189.317,
+     "QUEUE_AMBIGUOUS": 240.6443
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 18,
+     "pct_of_l5_actions": 36.7
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 24.91,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 24.91,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 31,
+     "queue_ambiguous": 3,
+     "no_subsequent_interaction": 28,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 3,
+      "max_abs_imbalance": 3,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "16:30": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 91,
+    "pmus_permitted": 29,
+    "acquired_under_accept": 4
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 35,
+     "max_abs_imbalance": 56,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 4,
+     "max_abs_imbalance": 4,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 17,
+     "REQUIRES_CROSSING": 45,
+     "NO_SUBSEQUENT_INTERACTION": 25
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 737.524,
+     "REQUIRES_CROSSING": 1247.5484,
+     "NO_SUBSEQUENT_INTERACTION": 1378.9598,
+     "SIZE_TRANSLATION": 15.8541
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 62,
+     "pct_of_l5_actions": 68.1
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 15.8541,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 4,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 20.5,
+     "latency_s_p50_reached": 4.16,
+     "latency_s_p50_lost": 23.36,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 25,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 25,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 4,
+      "max_abs_imbalance": 4,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "16:45": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 49,
+    "pmus_permitted": 22,
+    "acquired_under_accept": 3
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 12,
+     "max_abs_imbalance": 17,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 1,
+     "longest_same_side_run": 2,
+     "max_abs_imbalance": 1,
+     "inventory_crossed_zero": true
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 4,
+     "REQUIRES_CROSSING": 23,
+     "NO_SUBSEQUENT_INTERACTION": 9,
+     "QUEUE_AMBIGUOUS": 10
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 148.1858,
+     "REQUIRES_CROSSING": 838.6547,
+     "NO_SUBSEQUENT_INTERACTION": 369.6899,
+     "QUEUE_AMBIGUOUS": 647.0725,
+     "SIZE_TRANSLATION": 117.9532
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 27,
+     "pct_of_l5_actions": 55.1
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 117.9532,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 79.413166,
+      "longest_same_side_run": 2,
+      "inventory_crossed_zero": true,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 26.0,
+     "latency_s_p50_reached": 30.93,
+     "latency_s_p50_lost": 26.0,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 19,
+     "queue_ambiguous": 10,
+     "no_subsequent_interaction": 9,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 5,
+      "max_abs_imbalance": 7,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "17:30": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 68,
+    "pmus_permitted": 38,
+    "acquired_under_accept": 4
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 21,
+     "max_abs_imbalance": 28,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 3,
+     "max_abs_imbalance": 3,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 5,
+     "REQUIRES_CROSSING": 25,
+     "NO_SUBSEQUENT_INTERACTION": 27,
+     "QUEUE_AMBIGUOUS": 7
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 218.7857,
+     "REQUIRES_CROSSING": 781.5711,
+     "NO_SUBSEQUENT_INTERACTION": 819.1432,
+     "QUEUE_AMBIGUOUS": 175.3117,
+     "SIZE_TRANSLATION": 292.0
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 30,
+     "pct_of_l5_actions": 44.1
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 292.0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 3,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 18.54,
+     "latency_s_p50_reached": 35.54,
+     "latency_s_p50_lost": 18.54,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 34,
+     "queue_ambiguous": 7,
+     "no_subsequent_interaction": 27,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 1,
+      "longest_same_side_run": 4,
+      "max_abs_imbalance": 3,
+      "inventory_crossed_zero": true
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "17:45": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 120,
+    "pmus_permitted": 53,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": false,
+   "actions_without_authenticated_evidence": 53,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 47,
+     "longest_same_side_run": 37,
+     "max_abs_imbalance": 47,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 23,
+     "REQUIRES_CROSSING": 44
+    },
+    "actions_unattributable": 53,
+    "l5_units_by_cause": {
+     "NO_BOOK": 513.9551,
+     "REQUIRES_CROSSING": 653.1194
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 67,
+     "pct_of_l5_actions": 55.8
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 19.88,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 19.88,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "18:00": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 3,
+    "pmus_permitted": 0,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 2,
+     "max_abs_imbalance": 2,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 3
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 200.1
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 3,
+     "pct_of_l5_actions": 100.0
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 21.07,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 21.07,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "19:30": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 27,
+    "pmus_permitted": 9,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 1,
+     "longest_same_side_run": 11,
+     "max_abs_imbalance": 10,
+     "inventory_crossed_zero": true
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 3,
+     "REQUIRES_CROSSING": 15,
+     "NO_SUBSEQUENT_INTERACTION": 9
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 200.0,
+     "REQUIRES_CROSSING": 709.0225,
+     "NO_SUBSEQUENT_INTERACTION": 502.98
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 18,
+     "pct_of_l5_actions": 66.7
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 26.17,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 26.17,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 9,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 9,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  },
+  "19:45": {
+   "label": "L5_AMPLITUDE_DECOMPOSITION_V1",
+   "phase": "PHASE_1_MEASUREMENT_ONLY",
+   "accept_classes": [
+    "TRADE_THROUGH_PRICE"
+   ],
+   "chain": {
+    "l5_actions": 3,
+    "pmus_permitted": 0,
+    "acquired_under_accept": 0
+   },
+   "strict_evaluable": true,
+   "actions_without_authenticated_evidence": 0,
+   "evaluability_note": "the STRICT stage needs AUTHENTICATED interaction evidence. Public-book rows cannot reach TRADE_THROUGH_PRICE at all, so scoring them would make hypothesis D true by construction; those actions are reported here instead of attributed.",
+   "amplitude": {
+    "L5_NATIVE": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 3,
+     "max_abs_imbalance": 3,
+     "inventory_crossed_zero": false
+    },
+    "MIRROR_RAW": {
+     "overshoot_past_zero": 0,
+     "longest_same_side_run": 0,
+     "max_abs_imbalance": 0,
+     "inventory_crossed_zero": false
+    }
+   },
+   "attribution": {
+    "actions_by_cause": {
+     "NO_BOOK": 3
+    },
+    "actions_unattributable": 0,
+    "l5_units_by_cause": {
+     "NO_BOOK": 76.7212
+    },
+    "note": "each action is attributed to the FIRST stage it failed at, so causes partition the loss without double counting"
+   },
+   "hypotheses": {
+    "A_pmus_cannot_reproduce": {
+     "actions": 3,
+     "pct_of_l5_actions": 100.0
+    },
+    "B_q1_translation_destroys_dynamics": {
+     "size_units_lost_to_q1": 0,
+     "counterfactual_relative_size": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "inventory_crossed_zero": false,
+      "note": "the SAME acquired actions replayed with L5's relative sizes. A MEASUREMENT of what the amplitude would have been, not a proposal to size differently."
+     }
+    },
+    "C_latency_misses_the_overshoot_actions": {
+     "backlog_actions": 0,
+     "latency_s_p50_all": 19.8,
+     "latency_s_p50_reached": null,
+     "latency_s_p50_lost": 19.8,
+     "note": "if latency were the cause, the actions we lose would arrive materially later than the ones we keep"
+    },
+    "D_strict_undercounts_real_fills": {
+     "actions": 0,
+     "queue_ambiguous": 0,
+     "no_subsequent_interaction": 0,
+     "note": "run decompose(..., accept=PLAUSIBLE_CLASSES) to see the amplitude PLAUSIBLE recovers. PLAUSIBLE assumes queue position and is never the primary measure.",
+     "plausible_amplitude": {
+      "overshoot_past_zero": 0,
+      "longest_same_side_run": 0,
+      "max_abs_imbalance": 0,
+      "inventory_crossed_zero": false
+     }
+    }
+   },
+   "labels": "SHADOW/READ-ONLY measurement. No order exists. Nothing here is submitted, filled, settled or realized, and nothing here changes the frozen strategy."
+  }
+ },
+ "aggregate_actions_by_cause": {
+  "REQUIRES_CROSSING": 251,
+  "STRICT_NOT_EVALUABLE": 169,
+  "NO_BOOK": 127,
+  "NO_SUBSEQUENT_INTERACTION": 98,
+  "QUEUE_AMBIGUOUS": 20
+ },
+ "aggregate_l5_units_by_cause": {
+  "REQUIRES_CROSSING": 7309.67,
+  "NO_BOOK": 4352.82,
+  "NO_SUBSEQUENT_INTERACTION": 4260.09,
+  "QUEUE_AMBIGUOUS": 1063.03,
+  "SIZE_TRANSLATION": 425.81
+ }
+}

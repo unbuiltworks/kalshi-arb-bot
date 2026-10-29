@@ -1,0 +1,20 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_position_read/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_position_read/**",
+      "src/gemini_position_semantics_probe.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.gemini_position_semantics_probe",
+    "restartPolicyType": "NEVER"
+  },
+  "_status": "ONE-SHOT READ. No volume, no state, no order path in the image. Deleted once it has answered.",
+  "_reads_only": "/v1/prediction-markets/positions/settled, /v1/prediction-markets/positions, /v1/mytrades, /v1/transfers. Gemini authenticates a read with POST; the verb is not a mutation.",
+  "_not_read": "order history is deliberately NOT read: its path has the placement path as a prefix and the repo-wide write-path guard matches on substring. The two orders are already captured verbatim in analysis/gemini/continuous_run_20260918T172750Z.json.",
+  "_secrets": "credentials are referenced, never read into a transcript, and the probe redacts accountId out of every response it prints.",
+  "_does_not_touch": "gemini-l5-faithful is frozen at f689e6b and is not modified, redeployed or read from by this service."
+}

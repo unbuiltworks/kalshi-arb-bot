@@ -1,0 +1,1911 @@
+{
+  "utc": "2026-09-19T20:50:06.105917+00:00",
+  "census": {
+    "label": "LATE_15M_CONTROL",
+    "band_tte_s": [
+      0.0,
+      300.0
+    ],
+    "contracts": 96,
+    "computable": 58,
+    "first_fill_states": 58,
+    "opposite_flow": 28,
+    "price_observable_complements": 28,
+    "maker_reachable_complements": "UNOBSERVABLE",
+    "pairs_at_or_below_1": 14,
+    "fee_positive_pairs": 12,
+    "par_rate": 0.5,
+    "fee_positive_rate": 0.4286,
+    "median_actual_pair_basis": 1.005,
+    "median_seconds_to_complement": 87.95,
+    "basis_min": 0.6,
+    "basis_max": 1.83,
+    "distinct_bases": 22,
+    "terminal_residual_states": 30,
+    "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized."
+  },
+  "rows": [
+    {
+      "symbol": "GEMI-BTC15M2609192045-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.16",
+      "first_fill_tte_s": 16.5,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.46",
+      "opposite_tte_s": 12.2,
+      "seconds_to_complement": 4.3,
+      "pair_basis": "0.62",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00669900",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609192030-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609192015-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.93",
+      "first_fill_tte_s": 177.3,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609192000-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.71",
+      "first_fill_tte_s": 236.8,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.54",
+      "opposite_tte_s": 87.1,
+      "seconds_to_complement": 149.6,
+      "pair_basis": "1.25",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00795025",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191945-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.12",
+      "first_fill_tte_s": 272.7,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191930-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191915-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191900-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.92",
+      "first_fill_tte_s": 238.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191845-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191830-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191815-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.43",
+      "first_fill_tte_s": 270.5,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.84",
+      "opposite_tte_s": 180.3,
+      "seconds_to_complement": 90.2,
+      "pair_basis": "1.27",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00664125",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191800-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.82",
+      "first_fill_tte_s": 298.5,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.45",
+      "opposite_tte_s": 156.1,
+      "seconds_to_complement": 142.4,
+      "pair_basis": "1.27",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00691425",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191745-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.19",
+      "first_fill_tte_s": 84.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191730-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191715-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.13",
+      "first_fill_tte_s": 235.7,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191700-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.65",
+      "first_fill_tte_s": 178.1,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191645-UP",
+      "prints_in_early_window": 12,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.47",
+      "first_fill_tte_s": 299.1,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.34",
+      "opposite_tte_s": 175.6,
+      "seconds_to_complement": 123.5,
+      "pair_basis": "0.81",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00828625",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191630-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.01",
+      "first_fill_tte_s": 298.3,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.99",
+      "opposite_tte_s": 295.8,
+      "seconds_to_complement": 2.5,
+      "pair_basis": "1.00",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00034650",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191615-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.72",
+      "first_fill_tte_s": 278.2,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.21",
+      "opposite_tte_s": 273.0,
+      "seconds_to_complement": 5.2,
+      "pair_basis": "0.93",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00643125",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191600-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191545-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.95",
+      "first_fill_tte_s": 229.5,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191530-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.8",
+      "first_fill_tte_s": 220.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191515-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.94",
+      "first_fill_tte_s": 211.3,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191500-UP",
+      "prints_in_early_window": 5,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.61",
+      "first_fill_tte_s": 281.4,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.43",
+      "opposite_tte_s": 276.4,
+      "seconds_to_complement": 5.0,
+      "pair_basis": "1.04",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00845250",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191445-UP",
+      "prints_in_early_window": 7,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.63",
+      "first_fill_tte_s": 125.3,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.25",
+      "opposite_tte_s": 39.6,
+      "seconds_to_complement": 85.7,
+      "pair_basis": "0.88",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00736050",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191430-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191415-UP",
+      "prints_in_early_window": 6,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.02",
+      "first_fill_tte_s": 230.3,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191400-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.1",
+      "first_fill_tte_s": 250.7,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191345-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.9",
+      "first_fill_tte_s": 222.1,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.01",
+      "opposite_tte_s": 6.2,
+      "seconds_to_complement": 215.8,
+      "pair_basis": "0.91",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00174825",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191330-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.52",
+      "first_fill_tte_s": 59.1,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191315-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191300-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.95",
+      "first_fill_tte_s": 197.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191245-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.95",
+      "first_fill_tte_s": 110.5,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.01",
+      "opposite_tte_s": 93.8,
+      "seconds_to_complement": 16.7,
+      "pair_basis": "0.96",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00100450",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191230-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191215-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.92",
+      "first_fill_tte_s": 213.0,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191200-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.77",
+      "first_fill_tte_s": 203.8,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191145-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.34",
+      "first_fill_tte_s": 125.5,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.86",
+      "opposite_tte_s": 107.3,
+      "seconds_to_complement": 18.2,
+      "pair_basis": "1.20",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00603400",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191130-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191115-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.95",
+      "first_fill_tte_s": 281.8,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191100-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.9",
+      "first_fill_tte_s": 257.0,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191045-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.93",
+      "first_fill_tte_s": 231.9,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.16",
+      "opposite_tte_s": 224.4,
+      "seconds_to_complement": 7.6,
+      "pair_basis": "1.09",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00349125",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191030-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.81",
+      "first_fill_tte_s": 195.1,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.1",
+      "opposite_tte_s": 25.2,
+      "seconds_to_complement": 169.9,
+      "pair_basis": "0.91",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00426825",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191015-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.78",
+      "first_fill_tte_s": 127.1,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.23",
+      "opposite_tte_s": 87.5,
+      "seconds_to_complement": 39.6,
+      "pair_basis": "1.01",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00610225",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609191000-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190945-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190930-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.76",
+      "first_fill_tte_s": 109.3,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190915-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190900-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.56",
+      "first_fill_tte_s": 293.3,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.04",
+      "opposite_tte_s": 94.8,
+      "seconds_to_complement": 198.5,
+      "pair_basis": "0.60",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00498400",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190845-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190830-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.75",
+      "first_fill_tte_s": 137.0,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190815-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190800-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190745-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.21",
+      "first_fill_tte_s": 238.9,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190730-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.36",
+      "first_fill_tte_s": 263.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190715-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190700-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.21",
+      "first_fill_tte_s": 132.7,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190645-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190630-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.25",
+      "first_fill_tte_s": 73.9,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "YES",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190615-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.69",
+      "first_fill_tte_s": 174.5,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190600-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.88",
+      "first_fill_tte_s": 239.1,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.95",
+      "opposite_tte_s": 28.4,
+      "seconds_to_complement": 210.7,
+      "pair_basis": "1.83",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00267925",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190545-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190530-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.16",
+      "first_fill_tte_s": 283.9,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190515-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190500-UP",
+      "prints_in_early_window": 8,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.34",
+      "first_fill_tte_s": 283.6,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190445-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190430-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190415-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190400-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.7",
+      "first_fill_tte_s": 207.7,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.27",
+      "opposite_tte_s": 189.2,
+      "seconds_to_complement": 18.5,
+      "pair_basis": "0.97",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00712425",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190345-UP",
+      "prints_in_early_window": 5,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.64",
+      "first_fill_tte_s": 140.5,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.95",
+      "opposite_tte_s": 67.6,
+      "seconds_to_complement": 72.9,
+      "pair_basis": "1.59",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00486325",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190330-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190315-UP",
+      "prints_in_early_window": 15,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.5",
+      "first_fill_tte_s": 193.7,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.25",
+      "opposite_tte_s": 25.5,
+      "seconds_to_complement": 168.3,
+      "pair_basis": "0.75",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00765625",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190300-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.67",
+      "first_fill_tte_s": 251.0,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190245-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.79",
+      "first_fill_tte_s": 233.2,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.25",
+      "opposite_tte_s": 61.3,
+      "seconds_to_complement": 171.9,
+      "pair_basis": "1.04",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00618450",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190230-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.38",
+      "first_fill_tte_s": 170.6,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190215-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.06",
+      "first_fill_tte_s": 282.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190200-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190145-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190130-UP",
+      "prints_in_early_window": 4,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.44",
+      "first_fill_tte_s": 281.8,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.36",
+      "opposite_tte_s": 63.4,
+      "seconds_to_complement": 218.4,
+      "pair_basis": "0.80",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00834400",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190115-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190100-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190045-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190030-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190015-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609190000-UP",
+      "prints_in_early_window": 5,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.49",
+      "first_fill_tte_s": 242.4,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.94",
+      "opposite_tte_s": 128.3,
+      "seconds_to_complement": 114.1,
+      "pair_basis": "1.43",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00536025",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182345-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182330-UP",
+      "prints_in_early_window": 1,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.93",
+      "first_fill_tte_s": 182.4,
+      "opposite_flow": false,
+      "opposite_price": "UNOBSERVABLE",
+      "pair_basis": "UNOBSERVABLE",
+      "terminal_residual": "0.01",
+      "terminal_residual_leg": "NO",
+      "why_no_pair": "no opposite-direction print followed"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182315-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.86",
+      "first_fill_tte_s": 213.5,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.54",
+      "opposite_tte_s": 63.9,
+      "seconds_to_complement": 149.6,
+      "pair_basis": "1.40",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00645400",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182300-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182245-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182230-UP",
+      "prints_in_early_window": 2,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.27",
+      "first_fill_tte_s": 280.2,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.54",
+      "opposite_tte_s": 180.9,
+      "seconds_to_complement": 99.3,
+      "pair_basis": "0.81",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00779625",
+      "fee_positive": true,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182215-UP",
+      "prints_in_early_window": 6,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "YES",
+      "held_price": "0.93",
+      "first_fill_tte_s": 277.4,
+      "opposite_flow": true,
+      "opposite_leg": "NO",
+      "opposite_price": "0.08",
+      "opposite_tte_s": 265.7,
+      "seconds_to_complement": 11.7,
+      "pair_basis": "1.01",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00242725",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182200-UP",
+      "prints_in_early_window": 3,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.01",
+      "first_fill_tte_s": 70.1,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.99",
+      "opposite_tte_s": 70.1,
+      "seconds_to_complement": 0.1,
+      "pair_basis": "1.00",
+      "at_or_below_par": true,
+      "fees_per_pair": "0.00034650",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182145-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182130-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182115-UP",
+      "prints_in_early_window": 9,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": true,
+      "first_fill": true,
+      "held_leg": "NO",
+      "held_price": "0.2",
+      "first_fill_tte_s": 287.7,
+      "opposite_flow": true,
+      "opposite_leg": "YES",
+      "opposite_price": "0.85",
+      "opposite_tte_s": 268.4,
+      "seconds_to_complement": 19.3,
+      "pair_basis": "1.05",
+      "at_or_below_par": false,
+      "fees_per_pair": "0.00503125",
+      "fee_positive": false,
+      "terminal_residual": "0"
+    },
+    {
+      "symbol": "GEMI-BTC15M2609182100-UP",
+      "prints_in_early_window": 0,
+      "band_tte_s": [
+        0.0,
+        300.0
+      ],
+      "maker_reachable": "UNOBSERVABLE",
+      "why_unreachable_unknown": "Gemini serves no book history, so queue position at the moment of the print cannot be recovered.",
+      "labels": "Both legs priced from prices that ACTUALLY TRADED on the public tape. Queue position is UNOBSERVABLE -- Gemini serves no book history -- so every pair here is conditional on having been filled and is an UPPER BOUND. Nothing is submitted, filled, settled or realized.",
+      "computable": false,
+      "why": "no prints in 0-300s"
+    }
+  ]
+}

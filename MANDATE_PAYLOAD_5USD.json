@@ -1,0 +1,37 @@
+{
+  "schema": "l5.mandate.v1",
+  "kind": "standing",
+  "mandate_id": "l5-twosided-5usd-001",
+  "seq": 1,
+  "venue": "PMUS",
+  "strategy": "l5-two-sided-btc15m",
+  "environment": "production",
+  "service_role": "l5-pmus-live",
+  "series": "cpc-btc-updown-15m-",
+  "not_before": "<YOUR START, e.g. 2026-10-24T22:00:00+00:00>",
+  "not_after": "<START + 4h, e.g. 2026-10-25T02:00:00+00:00>",
+  "allowed_actions": [
+    "OPEN",
+    "COMPLETE",
+    "CANCEL"
+  ],
+  "execution_mode": "MAKER_ONLY",
+  "max_windows_per_day": 8,
+  "max_submissions_per_day": 56,
+  "capital": {
+    "max_cash_deployed_usd": "5",
+    "max_total_exposure_usd": "5",
+    "campaign_budget_usd": "5"
+  },
+  "loss_limits": {
+    "daily_realized_loss_halt_usd": "5",
+    "max_cumulative_loss_usd": "20"
+  },
+  "residual_cap_contracts": 3,
+  "promotion": {
+    "min_settled_windows": 300,
+    "min_expectancy_usd": "0.05",
+    "oos_evidence_id": "btc15m-oos-20261023",
+    "requires_bounded_live_validation": true
+  }
+}

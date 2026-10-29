@@ -1,0 +1,3044 @@
+{
+ "label": "PMUS_BTC15M_L5_SHADOW_V1",
+ "windows": [
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1330z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790171100.0,
+   "decisions": [],
+   "blockers": [],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 0,
+    "quotes": 0,
+    "holds": 0,
+    "relations": {},
+    "hold_reasons": {},
+    "terminal_inventory": {
+     "up": 0,
+     "dn": 0,
+     "residual": 0,
+     "matched": 0
+    },
+    "terminal_pair_cost": null,
+    "interaction": null,
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
+  },
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1345z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790172000.0,
+   "decisions": [
+    {
+     "t_utc_epoch": 1790171184.43,
+     "tte_s": 815.6,
+     "book": {
+      "yes_bid": 0.24,
+      "yes_ask": 0.28,
+      "no_bid": 0.72,
+      "no_ask": 0.76,
+      "bid_shares": 290.0,
+      "ask_shares": 6200.0,
+      "age_s": 1.9,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.24"
+     },
+     "action": "QUOTE",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.24",
+     "size": 1,
+     "native_l5_action": "open",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0127",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0023",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends open at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 1025.05,
+      "shares_traded_after": 1584.58,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.24",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 1,
+      "dn": 0,
+      "residual": 1,
+      "matched": 0
+     }
+    },
+    {
+     "t_utc_epoch": 1790171214.43,
+     "tte_s": 785.6,
+     "book": {
+      "yes_bid": 0.23,
+      "yes_ask": 0.25,
+      "no_bid": 0.75,
+      "no_ask": 0.77,
+      "bid_shares": 2300.0,
+      "ask_shares": 9400.0,
+      "age_s": 2.8,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 1,
+      "dn": 0
+     },
+     "imbalance": 1,
+     "matched_inventory": 0,
+     "residual": 1,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.75"
+     },
+     "action": "QUOTE",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.75",
+     "size": 1,
+     "native_l5_action": "complete",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0130",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0023",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends complete at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 1584.58,
+      "shares_traded_after": 1837.81,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.75",
+      "side": "DOWN",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 1,
+      "dn": 1,
+      "residual": 0,
+      "matched": 1
+     }
+    },
+    {
+     "t_utc_epoch": 1790171244.43,
+     "tte_s": 755.6,
+     "book": {
+      "yes_bid": 0.28,
+      "yes_ask": 0.3,
+      "no_bid": 0.7,
+      "no_ask": 0.72,
+      "bid_shares": 2300.0,
+      "ask_shares": 11000.0,
+      "age_s": 1.9,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 1,
+      "dn": 1
+     },
+     "imbalance": 0,
+     "matched_inventory": 1,
+     "residual": 0,
+     "effective_pair_cost": "0.99",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p25-45c|tte>10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.28"
+     },
+     "action": "QUOTE",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.28",
+     "size": 1,
+     "native_l5_action": "open",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0140",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0025",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends open at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 1837.81,
+      "shares_traded_after": 2670.36,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.28",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 2,
+      "dn": 1,
+      "residual": 1,
+      "matched": 1
+     }
+    },
+    {
+     "t_utc_epoch": 1790171274.43,
+     "tte_s": 725.6,
+     "book": {
+      "yes_bid": 0.22,
+      "yes_ask": 0.25,
+      "no_bid": 0.75,
+      "no_ask": 0.78,
+      "bid_shares": 1300.0,
+      "ask_shares": 12000.0,
+      "age_s": 0.8,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 1
+     },
+     "imbalance": 1,
+     "matched_inventory": 1,
+     "residual": 1,
+     "effective_pair_cost": "1.01",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.75"
+     },
+     "action": "QUOTE",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.75",
+     "size": 1,
+     "native_l5_action": "complete",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0130",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0023",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends complete at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 2670.36,
+      "shares_traded_after": 3644.3,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.75",
+      "side": "DOWN",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 2,
+      "dn": 2,
+      "residual": 0,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171304.43,
+     "tte_s": 695.6,
+     "book": {
+      "yes_bid": 0.24,
+      "yes_ask": 0.28,
+      "no_bid": 0.72,
+      "no_ask": 0.76,
+      "bid_shares": 1300.0,
+      "ask_shares": 11000.0,
+      "age_s": 0.3,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 2
+     },
+     "imbalance": 0,
+     "matched_inventory": 2,
+     "residual": 0,
+     "effective_pair_cost": "1.01",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.24"
+     },
+     "action": "QUOTE",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.24",
+     "size": 1,
+     "native_l5_action": "open",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0127",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0023",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends open at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 3644.3,
+      "shares_traded_after": 3787.06,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.24",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 3,
+      "dn": 2,
+      "residual": 1,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171334.43,
+     "tte_s": 665.6,
+     "book": {
+      "yes_bid": 0.28,
+      "yes_ask": 0.3,
+      "no_bid": 0.7,
+      "no_ask": 0.72,
+      "bid_shares": 1400.0,
+      "ask_shares": 12000.0,
+      "age_s": 1.2,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 3,
+      "dn": 2
+     },
+     "imbalance": 1,
+     "matched_inventory": 2,
+     "residual": 1,
+     "effective_pair_cost": "1.003333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p25-45c|tte>10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.28"
+     },
+     "action": "QUOTE",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.28",
+     "size": 1,
+     "native_l5_action": "extend",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0140",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0025",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends extend at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 3787.06,
+      "shares_traded_after": 5727.37,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.28",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 4,
+      "dn": 2,
+      "residual": 2,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171364.43,
+     "tte_s": 635.6,
+     "book": {
+      "yes_bid": 0.15,
+      "yes_ask": 0.17,
+      "no_bid": 0.83,
+      "no_ask": 0.85,
+      "bid_shares": 3600.0,
+      "ask_shares": 11000.0,
+      "age_s": 3.0,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 4,
+      "dn": 2
+     },
+     "imbalance": 2,
+     "matched_inventory": 2,
+     "residual": 2,
+     "effective_pair_cost": "1.01",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.83"
+     },
+     "action": "HOLD",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.83",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171394.43,
+     "tte_s": 605.6,
+     "book": {
+      "yes_bid": 0.16,
+      "yes_ask": 0.18,
+      "no_bid": 0.8200000000000001,
+      "no_ask": 0.84,
+      "bid_shares": 2600.0,
+      "ask_shares": 11000.0,
+      "age_s": 3.1,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 4,
+      "dn": 2
+     },
+     "imbalance": 2,
+     "matched_inventory": 2,
+     "residual": 2,
+     "effective_pair_cost": "1.01",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte>10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.82"
+     },
+     "action": "HOLD",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.82",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171424.43,
+     "tte_s": 575.6,
+     "book": {
+      "yes_bid": 0.21,
+      "yes_ask": 0.23,
+      "no_bid": 0.77,
+      "no_ask": 0.79,
+      "bid_shares": 2600.0,
+      "ask_shares": 6200.0,
+      "age_s": 1.0,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 4,
+      "dn": 2
+     },
+     "imbalance": 2,
+     "matched_inventory": 2,
+     "residual": 2,
+     "effective_pair_cost": "1.01",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.21"
+     },
+     "action": "QUOTE",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.21",
+     "size": 1,
+     "native_l5_action": "extend",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0115",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0021",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends extend at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 6137.84,
+      "shares_traded_after": 7239.81,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.21",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 5,
+      "dn": 2,
+      "residual": 3,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171454.43,
+     "tte_s": 545.6,
+     "book": {
+      "yes_bid": 0.21,
+      "yes_ask": 0.24,
+      "no_bid": 0.76,
+      "no_ask": 0.79,
+      "bid_shares": 2600.0,
+      "ask_shares": 10000.0,
+      "age_s": 1.8,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 5,
+      "dn": 2
+     },
+     "imbalance": 3,
+     "matched_inventory": 2,
+     "residual": 3,
+     "effective_pair_cost": "1.00",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.21"
+     },
+     "action": "QUOTE",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.21",
+     "size": 1,
+     "native_l5_action": "extend",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0115",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0021",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends extend at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 7239.81,
+      "shares_traded_after": 7927.75,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.21",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 6,
+      "dn": 2,
+      "residual": 4,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171484.43,
+     "tte_s": 515.6,
+     "book": {
+      "yes_bid": 0.14,
+      "yes_ask": 0.17,
+      "no_bid": 0.83,
+      "no_ask": 0.86,
+      "bid_shares": 2900.0,
+      "ask_shares": 10000.0,
+      "age_s": 0.8,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 6,
+      "dn": 2
+     },
+     "imbalance": 4,
+     "matched_inventory": 2,
+     "residual": 4,
+     "effective_pair_cost": "0.9933333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.14"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.14",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171514.43,
+     "tte_s": 485.6,
+     "book": {
+      "yes_bid": 0.11,
+      "yes_ask": 0.14,
+      "no_bid": 0.86,
+      "no_ask": 0.89,
+      "bid_shares": 3000.0,
+      "ask_shares": 7600.0,
+      "age_s": 1.6,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 6,
+      "dn": 2
+     },
+     "imbalance": 4,
+     "matched_inventory": 2,
+     "residual": 4,
+     "effective_pair_cost": "0.9933333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.11"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.11",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171544.43,
+     "tte_s": 455.6,
+     "book": {
+      "yes_bid": 0.09,
+      "yes_ask": 0.13,
+      "no_bid": 0.87,
+      "no_ask": 0.91,
+      "bid_shares": 4200.0,
+      "ask_shares": 10000.0,
+      "age_s": 1.8,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 6,
+      "dn": 2
+     },
+     "imbalance": 4,
+     "matched_inventory": 2,
+     "residual": 4,
+     "effective_pair_cost": "0.9933333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.09"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.09",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171574.43,
+     "tte_s": 425.6,
+     "book": {
+      "yes_bid": 0.12,
+      "yes_ask": 0.13,
+      "no_bid": 0.87,
+      "no_ask": 0.88,
+      "bid_shares": 5000.0,
+      "ask_shares": 8600.0,
+      "age_s": 1.0,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 6,
+      "dn": 2
+     },
+     "imbalance": 4,
+     "matched_inventory": 2,
+     "residual": 4,
+     "effective_pair_cost": "0.9933333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.12"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.12",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171604.43,
+     "tte_s": 395.6,
+     "book": {
+      "yes_bid": 0.2,
+      "yes_ask": 0.22,
+      "no_bid": 0.78,
+      "no_ask": 0.8,
+      "bid_shares": 3600.0,
+      "ask_shares": 10000.0,
+      "age_s": 0.2,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 6,
+      "dn": 2
+     },
+     "imbalance": 4,
+     "matched_inventory": 2,
+     "residual": 4,
+     "effective_pair_cost": "0.9933333333333333333333333333",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.20"
+     },
+     "action": "QUOTE",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.20",
+     "size": 1,
+     "native_l5_action": "extend",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0111",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0020",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends extend at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 12902.3,
+      "shares_traded_after": 13059.94,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.20",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 7,
+      "dn": 2,
+      "residual": 5,
+      "matched": 2
+     }
+    },
+    {
+     "t_utc_epoch": 1790171634.43,
+     "tte_s": 365.6,
+     "book": {
+      "yes_bid": 0.18,
+      "yes_ask": 0.2,
+      "no_bid": 0.8,
+      "no_ask": 0.8200000000000001,
+      "bid_shares": 1300.0,
+      "ask_shares": 2300.0,
+      "age_s": 1.2,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.18"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.18",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171664.43,
+     "tte_s": 335.6,
+     "book": {
+      "yes_bid": 0.14,
+      "yes_ask": 0.15,
+      "no_bid": 0.85,
+      "no_ask": 0.86,
+      "bid_shares": 3600.0,
+      "ask_shares": 17000.0,
+      "age_s": 0.5,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.14"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.14",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171694.43,
+     "tte_s": 305.6,
+     "book": {
+      "yes_bid": 0.06,
+      "yes_ask": 0.08,
+      "no_bid": 0.92,
+      "no_ask": 0.94,
+      "bid_shares": 4600.0,
+      "ask_shares": 7200.0,
+      "age_s": 0.1,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.06"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.06",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171724.43,
+     "tte_s": 275.6,
+     "book": {
+      "yes_bid": 0.15,
+      "yes_ask": 0.16,
+      "no_bid": 0.84,
+      "no_ask": 0.85,
+      "bid_shares": 3800.0,
+      "ask_shares": 17000.0,
+      "age_s": 1.7,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.15"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.15",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171754.43,
+     "tte_s": 245.6,
+     "book": {
+      "yes_bid": 0.09,
+      "yes_ask": 0.1,
+      "no_bid": 0.9,
+      "no_ask": 0.91,
+      "bid_shares": 4600.0,
+      "ask_shares": 15000.0,
+      "age_s": 1.8,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.09"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.09",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171784.43,
+     "tte_s": 215.6,
+     "book": {
+      "yes_bid": 0.09,
+      "yes_ask": 0.1,
+      "no_bid": 0.9,
+      "no_ask": 0.91,
+      "bid_shares": 4700.0,
+      "ask_shares": 19000.0,
+      "age_s": 1.2,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.09"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.09",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171814.43,
+     "tte_s": 185.6,
+     "book": {
+      "yes_bid": 0.05,
+      "yes_ask": 0.06,
+      "no_bid": 0.94,
+      "no_ask": 0.95,
+      "bid_shares": 1300.0,
+      "ask_shares": 14000.0,
+      "age_s": 1.0,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.05"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.05",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171844.43,
+     "tte_s": 155.6,
+     "book": {
+      "yes_bid": 0.09,
+      "yes_ask": 0.11,
+      "no_bid": 0.89,
+      "no_ask": 0.91,
+      "bid_shares": 5400.0,
+      "ask_shares": 13000.0,
+      "age_s": 1.2,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.09"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.09",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171874.43,
+     "tte_s": 125.6,
+     "book": {
+      "yes_bid": 0.16,
+      "yes_ask": 0.18,
+      "no_bid": 0.8200000000000001,
+      "no_ask": 0.84,
+      "bid_shares": 5600.0,
+      "ask_shares": 6900.0,
+      "age_s": 0.7,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.16"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.16",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790171904.43,
+     "tte_s": 95.6,
+     "book": {
+      "yes_bid": 0.25,
+      "yes_ask": 0.27,
+      "no_bid": 0.73,
+      "no_ask": 0.75,
+      "bid_shares": 6500.0,
+      "ask_shares": 4700.0,
+      "age_s": 0.8,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 2
+     },
+     "imbalance": 5,
+     "matched_inventory": 2,
+     "residual": 5,
+     "effective_pair_cost": "0.9871428571428571428571428571",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p25-45c|tte30-120s|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.73"
+     },
+     "action": "QUOTE",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.73",
+     "size": 1,
+     "native_l5_action": "complete",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0137",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0025",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends complete at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 19716.03,
+      "shares_traded_after": 20710.93,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.73",
+      "side": "DOWN",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 7,
+      "dn": 3,
+      "residual": 4,
+      "matched": 3
+     }
+    },
+    {
+     "t_utc_epoch": 1790171934.43,
+     "tte_s": 65.6,
+     "book": {
+      "yes_bid": 0.11,
+      "yes_ask": 0.13,
+      "no_bid": 0.87,
+      "no_ask": 0.89,
+      "bid_shares": 6500.0,
+      "ask_shares": 9700.0,
+      "age_s": 2.3,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 7,
+      "dn": 3
+     },
+     "imbalance": 4,
+     "matched_inventory": 3,
+     "residual": 4,
+     "effective_pair_cost": "0.9804761904761904761904761904",
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte30-120s|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.87"
+     },
+     "action": "HOLD",
+     "relation": "complete",
+     "side": "DOWN",
+     "desired_price": "0.87",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    }
+   ],
+   "blockers": [],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 26,
+    "quotes": 10,
+    "holds": 16,
+    "relations": {
+     "open": 3,
+     "complete": 3,
+     "extend": 4
+    },
+    "hold_reasons": {
+     "entry_band": 16
+    },
+    "terminal_inventory": {
+     "up": 7,
+     "dn": 3,
+     "residual": 4,
+     "matched": 3
+    },
+    "terminal_pair_cost": "0.9804761904761904761904761904",
+    "interaction": {
+     "n": 10,
+     "counts": {
+      "NO_INTERACTION": 0,
+      "TRADE_AT_PRICE": 0,
+      "TRADE_THROUGH_PRICE": 0,
+      "QUEUE_AMBIGUOUS": 10,
+      "OBSERVABLE_FILL_PLAUSIBLE": 0
+     },
+     "fraction": {
+      "NO_INTERACTION": 0.0,
+      "TRADE_AT_PRICE": 0.0,
+      "TRADE_THROUGH_PRICE": 0.0,
+      "QUEUE_AMBIGUOUS": 1.0,
+      "OBSERVABLE_FILL_PLAUSIBLE": 0.0
+     },
+     "evidence_sources": [
+      "public_gateway_volume_counter_only"
+     ],
+     "any_actual_fill": false,
+     "note": "no class here is a fill. With a public-only source the three tape-dependent classes are structurally unreachable, so their zeros mean 'not observable', not 'did not happen'."
+    },
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
+  },
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1400z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790172900.0,
+   "decisions": [
+    {
+     "t_utc_epoch": 1790172416.38,
+     "tte_s": 483.6,
+     "book": {
+      "yes_bid": 0.32,
+      "yes_ask": 0.35,
+      "no_bid": 0.65,
+      "no_ask": 0.6799999999999999,
+      "bid_shares": 7700.0,
+      "ask_shares": 4100.0,
+      "age_s": 1.2,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p25-45c|tte5-10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.32"
+     },
+     "action": "QUOTE",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.32",
+     "size": 1,
+     "native_l5_action": "open",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0151",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0027",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends open at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 10502.2,
+      "shares_traded_after": 11969.66,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.32",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 1,
+      "dn": 0,
+      "residual": 1,
+      "matched": 0
+     }
+    },
+    {
+     "t_utc_epoch": 1790172446.38,
+     "tte_s": 453.6,
+     "book": {
+      "yes_bid": 0.24,
+      "yes_ask": 0.27,
+      "no_bid": 0.73,
+      "no_ask": 0.76,
+      "bid_shares": 5600.0,
+      "ask_shares": 3600.0,
+      "age_s": 0.6,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 1,
+      "dn": 0
+     },
+     "imbalance": 1,
+     "matched_inventory": 0,
+     "residual": 1,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": true,
+      "price": "0.24"
+     },
+     "action": "QUOTE",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.24",
+     "size": 1,
+     "native_l5_action": "extend",
+     "near_touch": true,
+     "tick": "0.01",
+     "fee_economics": {
+      "maker_fee_charged": "0",
+      "taker_fee_if_taken": "0.0127",
+      "note": "maker pays nothing; the taker figure is what a cross would have cost, for comparison only"
+     },
+     "maker_economics": {
+      "rebate_if_filled": "0.0023",
+      "status": "ACCRUAL_ONLY -- credited at the point of trade by the venue, but no trade exists here. Excluded from pre-rebate P&L and from strategy selection."
+     },
+     "reason": "frozen model recommends extend at this state",
+     "fill_class": "ASSUMED_FILL_SHADOW",
+     "fill_evidence": "none -- the public gateway serves no trade tape",
+     "assumed_fill_basis": {
+      "shares_traded_before": 11969.66,
+      "shares_traded_after": 12751.55,
+      "grew": true
+     },
+     "interaction": {
+      "desired_price": "0.24",
+      "side": "UP",
+      "is_fill": false,
+      "fill_evidence_source": null,
+      "labels": "a classification of OBSERVED interaction; never a fill",
+      "evidence_source": "public_gateway_volume_counter_only",
+      "classes_unreachable_here": [
+       "TRADE_AT_PRICE",
+       "TRADE_THROUGH_PRICE",
+       "OBSERVABLE_FILL_PLAUSIBLE"
+      ],
+      "klass": "QUEUE_AMBIGUOUS",
+      "why": "no trade tape: volume moved, and nothing says whether it reached our price or our queue position"
+     },
+     "assumed_filled": true,
+     "inventory_after": {
+      "up": 2,
+      "dn": 0,
+      "residual": 2,
+      "matched": 0
+     }
+    },
+    {
+     "t_utc_epoch": 1790172476.38,
+     "tte_s": 423.6,
+     "book": {
+      "yes_bid": 0.16,
+      "yes_ask": 0.19,
+      "no_bid": 0.81,
+      "no_ask": 0.84,
+      "bid_shares": 12000.0,
+      "ask_shares": 3600.0,
+      "age_s": 1.3,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.16"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.16",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172506.38,
+     "tte_s": 393.6,
+     "book": {
+      "yes_bid": 0.09,
+      "yes_ask": 0.11,
+      "no_bid": 0.89,
+      "no_ask": 0.91,
+      "bid_shares": 14000.0,
+      "ask_shares": 3600.0,
+      "age_s": 0.7,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.09"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.09",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172536.38,
+     "tte_s": 363.6,
+     "book": {
+      "yes_bid": 0.04,
+      "yes_ask": 0.07,
+      "no_bid": 0.9299999999999999,
+      "no_ask": 0.96,
+      "bid_shares": 1400.0,
+      "ask_shares": 3100.0,
+      "age_s": 0.1,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.04"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.04",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172566.38,
+     "tte_s": 333.6,
+     "book": {
+      "yes_bid": 0.02,
+      "yes_ask": 0.06,
+      "no_bid": 0.94,
+      "no_ask": 0.98,
+      "bid_shares": 1200.0,
+      "ask_shares": 3400.0,
+      "age_s": 1.1,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.02"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.02",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172596.38,
+     "tte_s": 303.6,
+     "book": {
+      "yes_bid": 0.02,
+      "yes_ask": 0.05,
+      "no_bid": 0.95,
+      "no_ask": 0.98,
+      "bid_shares": 1200.0,
+      "ask_shares": 22000.0,
+      "age_s": 0.4,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.02"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.02",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172626.38,
+     "tte_s": 273.6,
+     "book": {
+      "yes_bid": 0.02,
+      "yes_ask": 0.04,
+      "no_bid": 0.96,
+      "no_ask": 0.98,
+      "bid_shares": 1200.0,
+      "ask_shares": 22000.0,
+      "age_s": 2.2,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.02"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.02",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172656.38,
+     "tte_s": 243.6,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.04,
+      "no_bid": 0.96,
+      "no_ask": 0.99,
+      "bid_shares": 220.0,
+      "ask_shares": 22000.0,
+      "age_s": 0.6,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|imb1-10",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.01"
+     },
+     "action": "HOLD",
+     "relation": "extend",
+     "side": "UP",
+     "desired_price": "0.01",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790172686.38,
+     "tte_s": 213.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 22000.0,
+      "age_s": 2.2,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790172716.38,
+     "tte_s": 183.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 22000.0,
+      "age_s": 1.1,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790172746.38,
+     "tte_s": 153.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 23000.0,
+      "age_s": 2.5,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790172776.38,
+     "tte_s": 123.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.01,
+      "no_bid": 0.99,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 24000.0,
+      "age_s": 1.4,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790172806.38,
+     "tte_s": 93.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.01,
+      "no_bid": 0.99,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 24000.0,
+      "age_s": 1.0,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790172836.38,
+     "tte_s": 63.6,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.01,
+      "no_bid": 0.99,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 26000.0,
+      "age_s": 2.3,
+      "spread": null
+     },
+     "inventory": {
+      "up": 2,
+      "dn": 0
+     },
+     "imbalance": 2,
+     "matched_inventory": 0,
+     "residual": 2,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    }
+   ],
+   "blockers": [
+    "one_sided_book@1790172686",
+    "one_sided_book@1790172716",
+    "one_sided_book@1790172746",
+    "one_sided_book@1790172776",
+    "one_sided_book@1790172806",
+    "one_sided_book@1790172836"
+   ],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 15,
+    "quotes": 2,
+    "holds": 13,
+    "relations": {
+     "open": 1,
+     "extend": 1
+    },
+    "hold_reasons": {
+     "entry_band": 7,
+     "one_sided_book": 6
+    },
+    "terminal_inventory": {
+     "up": 2,
+     "dn": 0,
+     "residual": 2,
+     "matched": 0
+    },
+    "terminal_pair_cost": null,
+    "interaction": {
+     "n": 2,
+     "counts": {
+      "NO_INTERACTION": 0,
+      "TRADE_AT_PRICE": 0,
+      "TRADE_THROUGH_PRICE": 0,
+      "QUEUE_AMBIGUOUS": 2,
+      "OBSERVABLE_FILL_PLAUSIBLE": 0
+     },
+     "fraction": {
+      "NO_INTERACTION": 0.0,
+      "TRADE_AT_PRICE": 0.0,
+      "TRADE_THROUGH_PRICE": 0.0,
+      "QUEUE_AMBIGUOUS": 1.0,
+      "OBSERVABLE_FILL_PLAUSIBLE": 0.0
+     },
+     "evidence_sources": [
+      "public_gateway_volume_counter_only"
+     ],
+     "any_actual_fill": false,
+     "note": "no class here is a fill. With a public-only source the three tape-dependent classes are structurally unreachable, so their zeros mean 'not observable', not 'did not happen'."
+    },
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
+  },
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1415z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790173800.0,
+   "decisions": [
+    {
+     "t_utc_epoch": 1790173197.528,
+     "tte_s": 602.5,
+     "book": {
+      "yes_bid": 0.06,
+      "yes_ask": 0.1,
+      "no_bid": 0.9,
+      "no_ask": 0.94,
+      "bid_shares": 21000.0,
+      "ask_shares": 3200.0,
+      "age_s": 0.4,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte>10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173227.528,
+     "tte_s": 572.5,
+     "book": {
+      "yes_bid": 0.06,
+      "yes_ask": 0.1,
+      "no_bid": 0.9,
+      "no_ask": 0.94,
+      "bid_shares": 21000.0,
+      "ask_shares": 3200.0,
+      "age_s": 1.7,
+      "spread": 0.04
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173257.528,
+     "tte_s": 542.5,
+     "book": {
+      "yes_bid": 0.05,
+      "yes_ask": 0.08,
+      "no_bid": 0.92,
+      "no_ask": 0.95,
+      "bid_shares": 13000.0,
+      "ask_shares": 2700.0,
+      "age_s": 2.4,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173287.528,
+     "tte_s": 512.5,
+     "book": {
+      "yes_bid": 0.11,
+      "yes_ask": 0.14,
+      "no_bid": 0.86,
+      "no_ask": 0.89,
+      "bid_shares": 15000.0,
+      "ask_shares": 2300.0,
+      "age_s": 1.9,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.11"
+     },
+     "action": "HOLD",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.11",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790173317.528,
+     "tte_s": 482.5,
+     "book": {
+      "yes_bid": 0.1,
+      "yes_ask": 0.13,
+      "no_bid": 0.87,
+      "no_ask": 0.9,
+      "bid_shares": 1700.0,
+      "ask_shares": 12000.0,
+      "age_s": 1.9,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p10-25c|tte5-10m|flat",
+     "eligibility": {
+      "band": [
+       "0.20",
+       "0.80"
+      ],
+      "is_inherited_sports_band": true,
+      "eligible": false,
+      "price": "0.10"
+     },
+     "action": "HOLD",
+     "relation": "open",
+     "side": "UP",
+     "desired_price": "0.10",
+     "reason": "entry_band",
+     "detail": "price outside the eligibility band 0.20-0.80. The 0.20-0.80 default is a SPORTS PARAMETER and is never widened in the executor; a wider band here is a measurement of what it suppresses."
+    },
+    {
+     "t_utc_epoch": 1790173347.528,
+     "tte_s": 452.5,
+     "book": {
+      "yes_bid": 0.06,
+      "yes_ask": 0.07,
+      "no_bid": 0.9299999999999999,
+      "no_ask": 0.94,
+      "bid_shares": 1500.0,
+      "ask_shares": 11000.0,
+      "age_s": 2.5,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173377.528,
+     "tte_s": 422.5,
+     "book": {
+      "yes_bid": 0.05,
+      "yes_ask": 0.06,
+      "no_bid": 0.94,
+      "no_ask": 0.95,
+      "bid_shares": 1300.0,
+      "ask_shares": 21000.0,
+      "age_s": 1.7,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173407.528,
+     "tte_s": 392.5,
+     "book": {
+      "yes_bid": 0.02,
+      "yes_ask": 0.04,
+      "no_bid": 0.96,
+      "no_ask": 0.98,
+      "bid_shares": 1200.0,
+      "ask_shares": 21000.0,
+      "age_s": 0.9,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173437.528,
+     "tte_s": 362.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": 0.99,
+      "bid_shares": 1100.0,
+      "ask_shares": 21000.0,
+      "age_s": 1.4,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173467.528,
+     "tte_s": 332.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": 0.99,
+      "bid_shares": 960.0,
+      "ask_shares": 21000.0,
+      "age_s": 0.2,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173497.528,
+     "tte_s": 302.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.04,
+      "no_bid": 0.96,
+      "no_ask": 0.99,
+      "bid_shares": 860.0,
+      "ask_shares": 21000.0,
+      "age_s": 1.4,
+      "spread": 0.03
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173527.528,
+     "tte_s": 272.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.03,
+      "no_bid": 0.97,
+      "no_ask": 0.99,
+      "bid_shares": 960.0,
+      "ask_shares": 22000.0,
+      "age_s": 2.1,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173557.528,
+     "tte_s": 242.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": 0.99,
+      "bid_shares": 930.0,
+      "ask_shares": 21000.0,
+      "age_s": 1.1,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173587.528,
+     "tte_s": 212.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.03,
+      "no_bid": 0.97,
+      "no_ask": 0.99,
+      "bid_shares": 670.0,
+      "ask_shares": 21000.0,
+      "age_s": 1.8,
+      "spread": 0.02
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173617.528,
+     "tte_s": 182.5,
+     "book": {
+      "yes_bid": 0.01,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": 0.99,
+      "bid_shares": 570.0,
+      "ask_shares": 22000.0,
+      "age_s": 0.9,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p<10c|tte2-5m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790173647.528,
+     "tte_s": 152.5,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 23000.0,
+      "age_s": 0.1,
+      "spread": null
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790173677.528,
+     "tte_s": 122.5,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.02,
+      "no_bid": 0.98,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 24000.0,
+      "age_s": 0.8,
+      "spread": null
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790173707.528,
+     "tte_s": 92.5,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.01,
+      "no_bid": 0.99,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 24000.0,
+      "age_s": 2.4,
+      "spread": null
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    },
+    {
+     "t_utc_epoch": 1790173737.528,
+     "tte_s": 62.5,
+     "book": {
+      "yes_bid": null,
+      "yes_ask": 0.01,
+      "no_bid": 0.99,
+      "no_ask": null,
+      "bid_shares": 0.0,
+      "ask_shares": 25000.0,
+      "age_s": 1.6,
+      "spread": null
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "action": "HOLD",
+     "reason": "one_sided_book"
+    }
+   ],
+   "blockers": [
+    "off_distribution@1790173198",
+    "off_distribution@1790173228",
+    "off_distribution@1790173258",
+    "off_distribution@1790173348",
+    "off_distribution@1790173378",
+    "off_distribution@1790173408",
+    "off_distribution@1790173438",
+    "off_distribution@1790173468",
+    "off_distribution@1790173498",
+    "off_distribution@1790173528",
+    "off_distribution@1790173558",
+    "off_distribution@1790173588",
+    "off_distribution@1790173618",
+    "one_sided_book@1790173648",
+    "one_sided_book@1790173678",
+    "one_sided_book@1790173708",
+    "one_sided_book@1790173738"
+   ],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 19,
+    "quotes": 0,
+    "holds": 19,
+    "relations": {},
+    "hold_reasons": {
+     "model_off_distribution": 13,
+     "entry_band": 2,
+     "one_sided_book": 4
+    },
+    "terminal_inventory": {
+     "up": 0,
+     "dn": 0,
+     "residual": 0,
+     "matched": 0
+    },
+    "terminal_pair_cost": null,
+    "interaction": null,
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
+  },
+  {
+   "market": "cpc-btc-updown-15m-2026-09-23-1430z",
+   "venue": "PMUS",
+   "product": "btc-updown-15m",
+   "model_sha": "bbb55bf90638d2bd",
+   "track": "B_ASSUMED_FILL",
+   "fill_assumption": "ASSUMPTION_VOLUME_AT_TOUCH: a quote at the touch is assumed filled for one unit when sharesTraded strictly increased while it was live. AN ASSUMPTION, NOT EVIDENCE.",
+   "settlement": {
+    "authority": "venue POSITION_RESOLUTION activity / afterPosition.realized",
+    "clock": "LITERAL. The market serves startTime and endDate exactly 15 minutes apart, so seconds-to-expiry is a fact and the sports event-progress translation must NOT be applied",
+    "index": "CF Benchmarks BRTI",
+    "rule": "settles Up iff the BRTI value at T_end is greater than or equal to the value at T_start; each value is the simple average of the 60 BRTI prices in the last minute before that time, rounded to 2 dp",
+    "payout": "1.00 to the winning outcome",
+    "source": "market description served by GET /v1/events?series_id=375"
+   },
+   "provenance": {
+    "book": "/v1/markets/{slug}/bbo and /book -- PUBLIC BOOK IS ~30s CACHED (9 distinct ladder states across 88 polls); a fresher book requires the authenticated WS",
+    "prints": "sharesTraded delta only -- /trades is 404 on the public gateway, so trade COUNT is not observable and bursts are a LOWER BOUND, never a count",
+    "fees": "taker 0.0695*C*p*(1-p); maker rebate 0.0125*C*p*(1-p) credited at the point of trade and NOT counted toward edge (https://docs.polymarket.us/fees)",
+    "incentive": "liquidity program crypto_up_down_20260922, pool $30 per daily_event shared across the program's markets; counted at $0 until eligibility and allocation are established"
+   },
+   "fee_schedule": {
+    "source": "https://docs.polymarket.us/fees",
+    "formula": "fee = theta * C * p * (1 - p)",
+    "taker_theta": "0.0695",
+    "maker_rebate_theta": "0.0125",
+    "maker_rebate_timing": "applied at the point of trade",
+    "rounding": "banker's rounding to the cent, as published",
+    "effective_change_utc": "2026-09-17T04:00:00+00:00",
+    "effective_change_label": "12 AM ET, Thursday September 17, 2026",
+    "taker_rebate_available_to_this_account": false,
+    "taker_rebate_reason": "tiers start at $250,000 of prior-calendar-month taker notional; this account is below the first tier, so it is counted at zero",
+    "verified_against": "all 99 published price rows reproduce exactly; see tests/test_pmus_fees.py"
+   },
+   "close_utc_epoch": 1790174700.0,
+   "decisions": [
+    {
+     "t_utc_epoch": 1790174123.625,
+     "tte_s": 576.4,
+     "book": {
+      "yes_bid": 0.89,
+      "yes_ask": 0.9,
+      "no_bid": 0.09999999999999998,
+      "no_ask": 0.10999999999999999,
+      "bid_shares": 16000.0,
+      "ask_shares": 1500.0,
+      "age_s": 1.5,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p75-90c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    },
+    {
+     "t_utc_epoch": 1790174153.625,
+     "tte_s": 546.4,
+     "book": {
+      "yes_bid": 0.92,
+      "yes_ask": 0.93,
+      "no_bid": 0.06999999999999995,
+      "no_ask": 0.07999999999999996,
+      "bid_shares": 21000.0,
+      "ask_shares": 2000.0,
+      "age_s": 2.4,
+      "spread": 0.01
+     },
+     "inventory": {
+      "up": 0,
+      "dn": 0
+     },
+     "imbalance": 0,
+     "matched_inventory": 0,
+     "residual": 0,
+     "effective_pair_cost": null,
+     "shadow_only": true,
+     "order_entry": false,
+     "state": "p>90c|tte5-10m|flat",
+     "action": "HOLD",
+     "reason": "model_off_distribution",
+     "detail": "state not in the frozen model's support"
+    }
+   ],
+   "blockers": [
+    "off_distribution@1790174124",
+    "off_distribution@1790174154"
+   ],
+   "shadow_only": true,
+   "order_entry": false,
+   "realized_pnl": null,
+   "labels": "SHADOW/THEORETICAL frozen-L5 observer over the PMUS public book tape. No print, queue position or taker side is observable here, so nothing is FILLED and nothing is REALIZED. order_entry=False structurally.",
+   "summary": {
+    "decision_points": 2,
+    "quotes": 0,
+    "holds": 2,
+    "relations": {},
+    "hold_reasons": {
+     "model_off_distribution": 2
+    },
+    "terminal_inventory": {
+     "up": 0,
+     "dn": 0,
+     "residual": 0,
+     "matched": 0
+    },
+    "terminal_pair_cost": null,
+    "interaction": null,
+    "realized_pnl": null,
+    "labels": "every count above is SHADOW; no order existed"
+   }
+  }
+ ]
+}

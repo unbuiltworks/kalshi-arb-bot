@@ -1,0 +1,147 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-18T22:21:53.004764+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "bundle_sha": "3bd2872fdb462ea48aa28dc04b299232c9df6da45f88030af96faca5f993497d",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609182225-UP",
+      "tte_s": 186.99325799942017,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609182225-UP",
+        "tte_s": 186.99325799942017,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "cohort": {
+    "label": "GEMINI_MUTATION_COHORT_V1",
+    "cohort_id": "COHORT-2026-09-18-C6",
+    "created_utc": "2026-09-18T21:33:49.810908+00:00",
+    "budget": 6,
+    "consumed": 6,
+    "remaining": 0,
+    "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-18-C6/ledger.jsonl",
+    "envelope_max_actions": 12,
+    "predecessor": {
+      "intact": true,
+      "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C5/ledger.jsonl",
+      "recorded_sha256": "b24040350fda1891f084097762cef35facf84a51f8f8cf238d8198b0fead5578",
+      "current_sha256": "b24040350fda1891f084097762cef35facf84a51f8f8cf238d8198b0fead5578",
+      "recorded_consumed": 3,
+      "current_consumed": 3,
+      "why": null
+    },
+    "note": "CONTINUOUS-6: same research purpose as C5 -- real fill -> authoritative refresh -> changed inventory -> changed L5 action. Chained to C5's ledger, NOT the historical one, so C5's 3 spent slots and its UNKNOWN cancel cannot be rewritten or recycled without this cohort refusing before the latch.",
+    "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor."
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 6,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 6,
+    "budget_note": "max(ledger 6, venue 0): a disagreement is always read upward",
+    "budget_left": 0
+  },
+  "authorization": {
+    "authorized": false,
+    "required_auth_id": null,
+    "authorized_sha": null,
+    "executable_sha": "7dc3daaefcbc39488611fbb94efdb3830c84f760aa866d53dcfaeb99b2aa01ff",
+    "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "arming": {
+      "armed": false,
+      "live_flag": false,
+      "auth_id_present": false,
+      "auth_id_matches": false,
+      "expiry_supplied": false,
+      "expired": null,
+      "expected_auth_id": "NO-AUTHORIZATION-IN-FORCE",
+      "why_not": "GEMINI_CANARY_LIVE is not YES"
+    },
+    "why_not": [
+      "REQUIRED_AUTH_ID is None: no owner authorization has been issued for this driver. No environment variable can supply one.",
+      "AUTHORIZED_SHA is None: no reviewed executable has been named.",
+      "transport arm: GEMINI_CANARY_LIVE is not YES"
+    ],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "state": "READY_TO_MUTATE_BUT_UNAUTHORIZED",
+  "why": "not authorized: REQUIRED_AUTH_ID is None: no owner authorization has been issued for this driver. No environment variable can supply one.; AUTHORIZED_SHA is None: no reviewed executable has been named.; transport arm: GEMINI_CANARY_LIVE is not YES",
+  "latch": {
+    "consumed": false,
+    "why": "authorization was refused BEFORE the latch was spent; the authorization is untouched"
+  },
+  "finished_utc": "2026-09-18T22:21:55.676242+00:00"
+}

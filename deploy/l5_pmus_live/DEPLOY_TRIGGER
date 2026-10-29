@@ -1,0 +1,2492 @@
+# The explicit deployment trigger for l5-pmus-live.
+#
+# `watchPatterns` on this service is exactly ["deploy/l5_pmus_live/DEPLOY_TRIGGER"],
+# so pushing code to the branch does NOT deploy it. Changing this file does.
+# That is the whole point: the money-capable service is isolated from ordinary
+# branch pushes and deploys only when someone deliberately says so here.
+#
+# 2026-10-14 — owner-authorized SHADOW-ONLY deployment of the three ported
+# safety fixes (aggregate account-wide cash cap with BOOK_UNCERTAIN,
+# independent halt -> exact-order cancellation, immutable halt latch under an
+# unreadable read), the seven-label action outcomes, the executor image-closure
+# test, and the authorization-ledger durability diagnostic.
+#
+# BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY is set and the owner arm token
+# does not match the session id. This deployment adds refusals and no
+# capability. Nothing is armed and no order can be submitted.
+deploy: 2026-10-14T17:40Z shadow-only
+deploy: 2026-10-14T19:05Z shadow-only — L5_MAX_LIVE_ORDERS, pilot default 1
+venue-bounded window expiry + mandate scope/holder, shadow-only 2026-10-14T20:16:08Z
+stage B mandate, shadow-only 2026-10-14T20:35:02Z
+unarmed orphan cancellation, shadow-only 2026-10-14T20:57:45Z
+disarmed cancellation fix, shadow-locked 2026-10-14T23:09:10Z
+2026-10-14T23:43:15Z
+
+2026-10-14T23:55:58Z
+2026-10-15T01:03:56Z
+2026-10-15T01:17:15Z
+2026-10-15T02:10:09Z
+2026-10-15T02:17:05Z
+2026-10-15T02:44:10Z
+
+measurement-readiness telemetry (P0-P3), shadow-locked 2026-10-15T12:12:39Z
+
+# PREPARED, NOT APPROVED. Promotes eda16d74 (durable one-submission claim).
+# DISARMED promotion: L5_SHADOW_ONLY stays set and the watchdog HALT stays
+# latched, so the new code path -- which sits behind `if transport.armed` --
+# cannot execute. Two runtime files change and both are already COPYed into
+# this image: src/l5_live_authorization.py, src/l5_live_execution.py.
+# PREREQUISITE: set L5_EXPERIMENT_ID on this service at or before this
+# deploy, or a future armed submit refuses SUBMISSION_CLAIM_NO_EXPERIMENT.
+durable one-submission claim, shadow-locked PENDING-OWNER-APPROVAL
+
+# OWNER-APPROVED DISARMED promotion of cb4db66c: the queue-measurement order
+# is now actually constructed by l5_queue_measurement.build_order() on the
+# production submission path, and an acknowledgment without a venue order id
+# fails closed instead of leaving an untracked resting order.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY is set and the watchdog HALT is
+# latched. L5_EXPERIMENT_ID and L5_QM_MARKET are deliberately NOT set on this
+# service, so QM.active() is false and the entire measurement branch -- the
+# order construction, the ack persistence and the cancellation deadline -- is
+# unreachable. This deployment adds refusals and no capability.
+#
+# Three runtime files change and all three are COPYed into this image:
+#   src/l5_live_execution.py      -- measurement intent replacement, ack
+#                                    fail-closed, deadline persistence
+#   src/l5_pmus_live_runner.py    -- maybe_qm_deadline sweep (returns at once
+#                                    unless the experiment is active)
+#   src/l5_queue_measurement.py   -- NEW; COPY added at Dockerfile line 57
+#
+# Rollback: Railway rollback to deployment 9b9a690b, the verified safe build
+# of 49f8d34e. A rollback restores the container, not the volume.
+queue measurement wired, shadow-locked 2026-10-15T16:32:46Z
+
+# OWNER-APPROVED DISARMED promotion of 4e009e82: the two-sided probe wired
+# into the canonical executor, and the maker-aware fee floor.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY is set, the watchdog HALT is
+# latched, and L5_TS_EXPERIMENT_ID and L5_TS_MARKET are deliberately NOT set
+# on this service -- so TS.active() is false and the entire probe branch (the
+# plan, the pair pre-check, the per-leg claims, both intents) is unreachable.
+# This deployment adds refusals and no capability.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_live_execution.py        -- the probe replaces the order UPSTREAM
+#                                      of every gate; the pair is gated
+#                                      before either leg is claimed
+#   src/l5_live_authorization.py    -- per-leg one-shot claims, claim_held
+#   src/l5_two_sided_probe.py       -- maker-aware fee floor from the actual
+#                                      quote prices; net_if_taker always
+#                                      reported
+#   src/l5_two_sided_shadow.py      -- additive read-only trade-through
+#                                      observer; existing collector untouched
+#   src/l5_live_validation_gates.py -- worst-case deficit gate, default
+#                                      DISABLED (bound unset)
+#   src/l5_pmus_live_runner.py      -- fail-closed parse of the deficit bound
+#
+# Money-path gate 1152 passed. Full suite 26 failed / 14 errors: the
+# established baseline exactly.
+#
+# Rollback: Railway rollback to deployment d17928bc, the verified safe build.
+two-sided probe wired + maker-aware fee floor, shadow-locked 2026-10-15T20:00:50Z
+
+# OWNER-APPROVED DISARMED promotion of fee9dac2 (owner independently
+# verified the SHA and its four changed files).
+#
+# SUPERSEDES THE PENDING 4e009e82/895c953c LINE. 895c953c carried a real
+# defect found by independent review: Runner.maybe_ts_deadline passed the
+# window START to cancel_cutoff, which takes the window END, giving a
+# deadline of start-180 -- already expired on the first tick, so the sweep
+# would have cancelled the probe's legs the moment they rested. fee9dac2
+# fixes it via cancel_cutoff_from_start() and pins the whole class with a
+# caller audit test. DO NOT deploy 895c953c.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY set, watchdog HALT latched, and
+# L5_TS_EXPERIMENT_ID / L5_TS_MARKET / L5_MAX_WORST_CASE_DEFICIT_USD all
+# deliberately UNSET -- so TS.active() is false, QM.active() is false, the
+# deficit gate is inert, and every experiment branch is unreachable. This
+# deployment adds refusals and no capability.
+#
+# Money-path gate 1182 passed. Full suite 26 failed / 14 errors: baseline.
+#
+# Rollback: Railway rollback to deployment 8bf8062d (the running build of
+# 5dd24f3e), or d17928bc before it.
+probe deadline corrected, shadow-locked 2026-10-15T20:50:55Z
+
+Promote 9f1dabf8: package src/l5_cost_basis_audit.py into this image.
+READ-ONLY audit behind L5_COST_BASIS_AUDIT=YES. SHADOW_ONLY stays set, no
+limit changed, no order. The previous boot raised ImportError because the
+module was absent from this COPY set; a lazy-import closure test now fails
+until any such module is packaged.
+
+Promote the audit read-verb and retired-quantity fixes 2026-10-16T02:0xZ.
+
+Promote the L5 baseline epoch and scoped ceilings. SHADOW_ONLY stays on.
+
+Promote the gated baseline establishment. SHADOW_ONLY stays on.
+
+Promote the L5-only baseline. SHADOW_ONLY stays on.
+
+Promote the baseline cash-read fix and retry T once. SHADOW_ONLY stays on.
+
+Promote account-wide exposure aggregation + book-read retry. SHADOW_ONLY on.
+
+Promote heartbeat exposure reporting + wedge verification. SHADOW_ONLY on.
+
+# OWNER-DIRECTED SHADOW promotion of 29374022: continuous pair accumulation.
+#
+# The one-shot restriction is gone. The durable claim slot is keyed on
+# (market, round, leg) instead of on the leg alone, the plan freeze is per
+# round, and L5_TS_MARKET accepts an instrument-family pattern so
+# accumulation carries across successive fifteen-minute windows.
+#
+# DUPLICATE PROTECTION UNCHANGED: derived client_order_id, already_submitted
+# suppression, the claim fsynced before the wire and never auto-reset,
+# max_live_orders bounding concurrency. No limit value changes and no gate is
+# weakened. L5_SHADOW_ONLY STAYS SET and the arm token still does not match
+# the session id, so submit() raises NotArmed; the claim is taken only behind
+# `if transport.armed`, so SHADOW OBSERVATION SPENDS NO CLAIM SLOT.
+#
+# This deploy ALSO sets, for the first time on this service:
+#   L5_TS_EXPERIMENT_ID / L5_TS_MARKET  -- so the accumulation branch
+#       EVALUATES and logs its proposed pairs instead of being unreachable.
+#       Under the shadow lock this adds observation, not capability.
+#   L5_ACC_MAX_ROUNDS=8                 -- the per-market pair ceiling
+#   L5_MAX_WORST_CASE_DEFICIT_USD=3.60  -- previously UNSET, which left the
+#       deficit gate inert and sized the plan against the $20 cumulative
+#       ceiling. Setting it ADDS a refusal and tightens the proposed sizes
+#       to the ones a live run would actually use.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_live_execution.py      -- rounds, per-round plan freeze
+#   src/l5_live_authorization.py  -- claim_accumulation_leg, accumulation_sid
+#   src/l5_two_sided_probe.py     -- market-pattern authorization
+#
+# Money-path gate 1197 passed, against 1183 on the parent, same selection.
+#
+# Rollback: Railway rollback to the running build of 2e8b4772.
+continuous pair accumulation, shadow-locked 2026-10-16T04:00Z
+
+# OWNER-APPROVED SHADOW promotion of 78e091ea: patient opposite-side
+# completion, plus the read-only depth comparison.
+#
+# CROSSING IS NOT ENABLED. L5_TS_COMPLETION_CROSS is deliberately UNSET and
+# L5_SHADOW_ONLY stays set, so the completion decision is computed, logged
+# with its full economics, and places nothing. The owner's approval covers
+# implementing and shadow-deploying the decision; live taker execution is a
+# separate explicit authorization he has not given.
+#
+# The terminal cancellation is unchanged. A refusal to cross leaves
+# maybe_ts_deadline cancelling by venue id with proof by re-read, which is
+# the only thing that stops a leg resting into expiry.
+#
+# L5_TS_DEPTH_TICKS STAYS AT 1. Flipping it to 2 on the strength of the
+# larger quoted edge is precisely the assumption the comparison exists to
+# refuse; there are no 2-tick records yet and the module reports
+# NOT_COMPARABLE rather than a verdict.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_two_sided_probe.py     -- completion_phase, completion_decision
+#   src/l5_pmus_live_runner.py    -- ts_completion_inputs,
+#                                    maybe_ts_completion, the gated
+#                                    L5_DEPTH_COMPARISON hook
+#   src/l5_depth_comparison.py    -- NEW; COPY added beside the cost-basis
+#                                    audit, so the image-closure test passes
+#
+# Money-path gate 1273 passed (two new sections added), 1197 on the prior
+# selection unchanged.
+#
+# Rollback: Railway rollback to deployment 223ce402, the running build of
+# b0f9916b.
+patient completion + depth comparison, shadow-locked 2026-10-16T12:00Z
+
+# Fix CASH_HEADROOM_UNREADABLE, found in production on 4b8f3162.
+#
+# The completion path ran on the 1130z window and refused on every tick with
+# reason CASH_HEADROOM_UNREADABLE / InvalidOperation. Cause: it read a
+# `capacity_usd` key off account_wide_risk_by_market, which returns
+# {ok, risk_by_market, markets, total_usd} and carries no such key. The
+# None became D("None") and raised. Capacity is now DERIVED from the
+# account-wide ceiling minus the aggregate, the same arithmetic
+# account_exposure_lines already uses, and each numeric field refuses by its
+# own name instead of surfacing as an opaque InvalidOperation.
+#
+# The test fake had invented the missing key, so the suite passed against a
+# fiction. It now mirrors the real return shape, and a regression pins the
+# real method as carrying no capacity key.
+#
+# Also enables L5_DEPTH_COMPARISON=YES: read-only, reads the decision tape
+# on the volume, writes nothing.
+#
+# SHADOW_ONLY stays set, L5_TS_COMPLETION_CROSS stays unset, no limit
+# changed. Money-path gate 1280 passed.
+completion cash-headroom fix + depth comparison enabled, shadow-locked 2026-10-16T12:20Z
+
+# Fix the depth comparison's two blind spots, found by running it on the
+# real tape: 7,310 order records, ALL of them UNKNOWN_DEPTH.
+#
+# Half one: the reader looked for row["bid"], but the BBO lives at
+# row.pmus.bbo, so the touch at placement was None for every record.
+# Half two: nothing wrote down the depth at all, so even a correct touch
+# left it to be re-derived. build_orders now records depth_ticks and
+# touch_at_placement on each leg, which is the only unambiguous source.
+#
+# Still read-only, still no verdict without a sample. SHADOW_ONLY set,
+# L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS still 1, no limit changed.
+# Money-path gate 1283 passed.
+depth recording + tape path fix, shadow-locked 2026-10-16T12:35Z
+
+# Count ONLY a recorded depth. Found by running the comparison on the real
+# volume after the previous fix: unknown_depth fell from 7,310 to 82, but it
+# produced buckets from depth 0 to depth 96 -- 1,134 orders at depth 0, 757
+# at depth 2 -- and NONE were probe orders, because nothing has been placed.
+# They were ordinary L5-mirroring records, so (touch - price)/tick was
+# measuring how far L5 quoted from the touch and reporting it as our resting
+# depth, with orders_filled 0 on every row because a shadow record never
+# fills. No wrong verdict escaped (the realized-edge requirement still gave
+# NOT_COMPARABLE) but the rows read as measurements. A manufactured sample is
+# worse than no sample.
+#
+# Derived depths are now reported as derived_depth_NOT_counted and feed no
+# rate and no verdict. Read-only. SHADOW_ONLY set, crossing unset, depth
+# still 1, no limit changed. Money-path gate 1284 passed.
+recorded-depth-only attribution, shadow-locked 2026-10-16T12:45Z
+
+# Resolve the accounting discrepancy and separate the four realized
+# populations. Prepares the bounded live maker run; AUTHORIZES NOTHING.
+#
+# THE DISCREPANCY, diagnosed from the production audit rather than guessed.
+# The cost-basis audit could not establish a single basis for two reasons it
+# reported itself: activity_walk {pages 40, ended max_pages, complete false}
+# -- the bound was set below the history it had to cover -- and
+# our_client_order_ids 0, which is unrecoverable and stays UNKNOWN. It also
+# reported placeholder_cost_total_usd "0" while 33 legs carried non-zero
+# placeholders, because the total was summed only over established legs.
+# Pagination is now bounded at 600 (L5_COST_BASIS_MAX_PAGES) with `complete`
+# still reported honestly, and the placeholder total is always reported,
+# separately from the established subset the overstatement is computed over.
+#
+# FOUR BUCKETS, published in the heartbeat: account_wide = verified_l5 +
+# manual + unknown_unattributed, unknown absorbing everything unattributable
+# so no bucket is guessed. manual is a RESIDUAL and reads None while anything
+# is unattributable. gate_input(bucket) returns None, never zero, for an
+# unknown.
+#
+# NO POLICY CHANGE. The three protected call sites still read
+# realized_today(); a test asserts it. SHADOW_ONLY stays set,
+# L5_TS_COMPLETION_CROSS stays unset, L5_TS_DEPTH_TICKS stays 1,
+# L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD are UNCHANGED at 1 and 1.
+#
+# Money-path gate 1302 passed.
+four-bucket accounting + audit pagination fix, shadow-locked 2026-10-16T13:10Z
+
+# Diagnose NO_FILLS_FOUND. The audit now walks the feed COMPLETELY -- 107
+# pages, 2,126 rows, ended eof -- and reported placeholder_cost_total_usd
+# 279.0900, the figure that previously read "0". But all 46 unknown-basis
+# legs now fail with NO_FILLS_FOUND rather than ACTIVITY_WALK_INCOMPLETE:
+# a complete walk matched no fill for any of them, which across all 46 is far
+# more likely a systematic shape mismatch in classify_fills than 46 legs with
+# no history.
+#
+# classify_fills requires market, fill-kind and side to hold TOGETHER, so the
+# new feed_shape() counts each predicate INDEPENDENTLY and names the one that
+# is wrong instead of guessing. It reports field NAMES, kind VALUES and
+# counts only -- no price, quantity, identifier or credential -- and is
+# computed only when nothing could be established.
+#
+# Read-only throughout. SHADOW_ONLY set, L5_TS_COMPLETION_CROSS unset,
+# L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD
+# UNCHANGED. Money-path gate 1302 passed.
+feed-shape diagnostic, shadow-locked 2026-10-16T13:30Z
+
+# Fix the activity-feed parser. The diagnostic named all three predicates at
+# once, and the feed's own vocabulary explains it:
+#   distinct_kinds: activity_type_trade 1911, position_resolution 205, ...
+#   field name sets: "trade,type" 1911
+# The kind is activity_type_trade, not "trade", and each row has exactly TWO
+# top-level fields -- type and one payload key -- so market, side, price,
+# quantity and commission are ONE LEVEL DOWN. The parser read the envelope,
+# so all 49 legs reported NO_FILLS_FOUND while 1,911 trade rows sat in the
+# feed. FILL_KINDS now covers the real vocabulary and every field is read
+# from the payload, with flat rows still handled.
+#
+# Ownership is UNCHANGED and still comes only from OUR coids: an unrecognised
+# clientOrderId is OWNER_MANUAL and an absent one is UNKNOWN_OWNER. A
+# position_resolution is still not counted as a fill.
+#
+# Read-only. SHADOW_ONLY set, HALT latched, L5_TS_DEPTH_TICKS 1,
+# L5_TS_COMPLETION_CROSS unset, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED. Money-path gate 1302 passed.
+activity-feed parser fix, shadow-locked 2026-10-16T13:55Z
+
+# The independent account-wide backstop + the emergency-cancellation proof.
+# AUTHORIZES NOTHING and raises no limit.
+#
+# max_unresolved_unknown_usd (L5_MAX_UNRESOLVED_UNKNOWN_USD, UNSET here so it
+# changes nothing yet) refuses when the unattributable magnitude exceeds its
+# bound, either sign, and refuses when the figure is absent or non-finite --
+# an unreadable unknown is the MAXIMUM possible unknown. It is placed AFTER
+# the account-wide and L5 checks, so it can only ever ADD a refusal. The three
+# protected call sites still read realized_today(); a test asserts it.
+#
+# Money-path gate 1327 passed. SHADOW_ONLY set, HALT latched,
+# L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+backstop + cancellation proof, shadow-locked 2026-10-16T14:30Z
+
+# Run the full read-only reconciliation (OWNER-AUTHORIZED 2026-10-16). Adds
+# the two things the codebase was assuming, both answered from executed
+# trades rather than from hope:
+#   rebates_ever_credited  -- a credited maker rebate is a NEGATIVE
+#     commission; a zero commission is NOT a rebate. False means no pair
+#     whose profitability depends on the rebate is proven on this account.
+#   smallest_executed_notional_usd -- no minimum order VALUE is read anywhere
+#     in this codebase, only orderMinQuantity, so the smallest notional the
+#     venue has actually executed is the evidence bounding the 0.01-contract
+#     configuration from below.
+# Aggregates only; no identifier reported.
+#
+# READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
+# changed. Money-path gate 1327 passed.
+full cost-basis reconciliation + fee/notional evidence, shadow-locked 2026-10-16T14:50Z
+
+# Second diagnostic pass. The envelope fix moved two predicates but not the
+# third: market 0 -> 125, fill-kind 0 -> 1911, side STILL 0. The first
+# diagnostic reported only TOP-LEVEL field names ("trade,type"), which found
+# the envelope but says nothing about what is inside it -- so it could not
+# name the field or vocabulary responsible for the remaining failure.
+#
+# feed_shape now also reports the PAYLOAD's field-name sets, every value
+# seen under eight candidate side keys, and the vocabulary currently
+# recognised, so the next read names the culprit instead of guessing again.
+# Still aggregates and field NAMES only.
+#
+# READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
+# changed.
+payload-side diagnostic, shadow-locked 2026-10-16T15:10Z
+
+# OWNER-AUTHORIZED trade-field mapping correction. READ-ONLY.
+#
+# The feed's trade payload is aggressor/aggressorExecution/cost/isAggressor/
+# market/marketSlug/passive/passiveExecution/price/qty/qtyDecimal/... -- it
+# carries NO top-level side and NO commission, which is why all 1,911 rows
+# read as None. Corrected: qty from qty/qtyDecimal, the AUTHORITATIVE cost
+# from `cost`, side and commission from the nested execution objects, and
+# realizedPnl/costBasis carried where present.
+#
+# OUR SIDE, NOT THE COUNTERPARTY'S. A trade has two sides and the two
+# execution objects hold OPPOSITE ones, so `isAggressor` selects ours.
+# Absent, the side stays UNKNOWN -- never a coin flip. A census of both
+# objects is reported separately, and our_side_selectable_via_isAggressor
+# bounds how much of the history is attributable at all.
+#
+# Money-path gate 1327 passed. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit or threshold changed.
+trade-field mapping correction, shadow-locked 2026-10-16T16:10Z
+
+# Final field mapping, from the execution key census. The execution objects
+# carry aggressor/commissionNotionalCollected/commissionSpreadPx/id/lastPx/
+# lastShares/legPrices/order/... -- so the commission key is
+# commissionNotionalCollected (not ...TotalCollected, one word out) and the
+# SIDE is inside the nested `order`. Our executed shares and price come from
+# lastShares/lastPx, which describe OUR fill rather than the whole trade.
+#
+# The deep search is safe ONLY because isAggressor has already narrowed to
+# our own execution, so it cannot reach the counterparty's side; a test
+# asserts the two rows resolve to opposite sides.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+final field mapping, shadow-locked 2026-10-16T16:40Z
+
+# TWO DEFECTS the key census identified, both mine, both read-only fixes.
+#
+# 1. KEY PRECEDENCE. The execution's nested `order` carries
+#    side = ORDER_SIDE_BUY / ORDER_SIDE_SELL -- 1,911 of each -- which is a
+#    DIRECTION, not a market outcome. SIDE_KEYS probed `side` first, so every
+#    trade row resolved to None and nothing could be attributed. The outcome
+#    is `outcomeSide` (YES 1591, NO 1480, UNSPECIFIED 751), which now comes
+#    first. BUY/SELL and UNSPECIFIED are explicitly refused rather than
+#    coerced into a side.
+# 2. FEE SOURCE. fee_and_notional_evidence read the trade body, which carries
+#    no commission at all, so all 1,911 rows reported `unreadable` and
+#    rebates_ever_credited read false FOR THE WRONG REASON. It now reads OUR
+#    execution via the same accessor the attribution uses.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+side precedence + fee source, shadow-locked 2026-10-16T17:10Z
+
+# Read-only SHAPE diagnostic for price / cost / commissionNotionalCollected,
+# authorized after the attribution was proven correct (79 rows matched all
+# three predicates; fill quantities reconcile EXACTLY to ledger quantities on
+# every leg checked). The remaining refusal is FILL_WITHOUT_PRICE: those three
+# fields are PRESENT and NOT parseable as a decimal, so they are structured
+# rather than scalar. This reports WHICH structure -- Python type names,
+# whether _d() parses, and for a mapping its KEY NAMES -- and never a value.
+# No extraction change is made until the shape is confirmed from this output.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+money-field shape diagnostic, shadow-locked 2026-10-16T18:00Z
+
+# OWNER-AUTHORIZED promotion of the verified structured-money extraction
+# (cherry-pick of 4e5859f7; two files, no unrelated strategy change).
+#
+# The shape diagnostic answered unambiguously on 1,911 production fill rows:
+# price, cost, lastPx and commissionNotionalCollected are every one of them a
+# dict carrying exactly {currency, value}; qty, qtyDecimal and lastShares are
+# plain strings that already parse. That is the whole of FILL_WITHOUT_PRICE.
+#
+# ONE READER CHANGES, nothing else:
+#   src/l5_cost_basis_audit.py  -- _d() unwraps {currency, value}
+#
+# UNKNOWN STAYS UNKNOWN. A mapping with no value key, an empty or non-finite
+# value, or a currency that cannot be booked in dollars returns None, never
+# zero. A credited rebate keeps its negative sign, and an unrecognised
+# currency is not silently treated as USD.
+#
+# THIS DOES NOT CLEAR THE ACCOUNT-WIDE LOSS GATE, and the $294.09 total stays
+# labelled a placeholder until this audit reports established legs from real
+# venue prices.
+#
+# READ-ONLY. L5_SHADOW_ONLY stays set, the watchdog HALT stays latched,
+# L5_TS_COMPLETION_CROSS stays unset, L5_TS_DEPTH_TICKS stays 1,
+# L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+# No limit, threshold, baseline, gate or execution behaviour is touched.
+#
+# 77 passed across both files importing the module (8 new cases, section 19).
+# No full-suite rerun: the diff is two files and the baseline is unchanged.
+structured-money extraction, shadow-locked 2026-10-16T20:10Z
+
+# OWNER-AUTHORIZED promotion of the protected cost-basis APPLIER, to run its
+# DRY RUN. Cherry-pick of the applier and its tests only -- the ladder
+# recorder and the backstop proofs are deliberately NOT in this set.
+#
+# L5_COST_BASIS_APPLY IS UNSET, which is INSPECT: the applier reports what it
+# WOULD correct and calls nothing. apply_mode() reads an unset, empty or
+# "INSPECT" value as the dry run, so the write cannot happen by omission --
+# only a deliberate batch id authorizes it.
+#
+# Runtime files changing, all already COPYed into this image:
+#   src/l5_live_execution.py      -- correct_cost_basis, 10 guards, plus
+#                                    finite_decimal; correct_settled_market is
+#                                    UNTOUCHED and its delta > 0 refusal is
+#                                    neither relaxed, inherited nor shared
+#   src/l5_cost_basis_audit.py    -- correction_request, apply_mode and
+#                                    apply_cost_basis_corrections, which adds
+#                                    NO authority: every guard lives in the
+#                                    store's verb and runs on every call
+#   src/l5_pmus_live_runner.py    -- boot-only hook, so it cannot run twice in
+#                                    a session; batch_id is None unless the
+#                                    env names one
+#
+# THE EVIDENCE IS THE WALK THAT JUST RAN. Nothing is hardcoded, so a leg whose
+# venue fills have changed fails its own reconciliation rather than being
+# corrected against a stale figure.
+#
+# BOTH LOCKS STAY ON. L5_SHADOW_ONLY is set, the watchdog HALT stays latched,
+# L5_TS_COMPLETION_CROSS stays unset, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1. No limit, threshold, gate or
+# baseline is touched, and the correction is NOT applied.
+#
+# 244 passed across every money-path suite on this branch.
+cost-basis applier, INSPECT dry run, shadow-locked 2026-10-16T16:55Z
+
+# OWNER-AUTHORIZED: apply the 47-leg cost-basis correction.
+#
+# THE PRECONDITION THE OWNER SET. check_batch revalidates, immediately before
+# any write and across the whole batch: the 47 leg keys, the 69 distinct venue
+# trade ids, the $209.66380000 aggregate, AND now each leg's own
+# cost_before/cost_after and its own trade ids. A mismatch returns
+# BATCH_MISMATCH and writes NOTHING -- a fresh walk yielding 45 legs is not a
+# smaller correction to apply, it is a changed world. An apply with no
+# manifest is BATCH_MANIFEST_MISSING, so the write cannot happen by omission.
+#
+# The per-leg comparison closes a gap this change's security review named:
+# aggregate-plus-sets is satisfied by two offsetting per-leg edits.
+#
+# NEVER TWICE, by two independent mechanisms: the corrected legs stop being
+# unknown-basis so the batch no longer matches the manifest, AND each
+# correction_id is spent.
+#
+# TO APPLY, set on this service:
+#   L5_COST_BASIS_BATCH_MANIFEST=/app/config/cost_basis_batch_manifest_20261016.json
+#   L5_COST_BASIS_APPLY=<batch-id>
+# Unset or INSPECT remains a dry run. The manifest ships in config/ because
+# the Dockerfile COPYs only src/ and config/.
+#
+# ALSO IN THIS IMAGE, INERT: the account-wide delta-loss policy.
+# max_account_wide_delta_loss_usd defaults to None and
+# L5_MAX_ACCOUNT_WIDE_DELTA_LOSS_USD is NOT set, so the check does nothing.
+# It is additive and runs AFTER the lifetime CUMULATIVE_LOSS_LIMIT, which
+# stays configured and still gates realized_today(). Activating it is a
+# separate owner decision and is not taken here.
+#
+# Security review of the diff: NO findings at confidence >= 8.
+# 285 passed across every money-path suite on this branch.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS stays
+# unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+# No limit, threshold or gate is touched and no order can be submitted.
+47-leg cost-basis correction, apply-ready, shadow-locked 2026-10-16T17:25Z
+
+# CORRECTION to the entry above, and the reason this deploy exists.
+#
+# That entry said "the manifest ships in config/ because the Dockerfile COPYs
+# only src/ and config/." That is true of the ROOT Dockerfile and FALSE of
+# this one. RAILWAY_DOCKERFILE_PATH on this service is
+# deploy/l5_pmus_live/Dockerfile, which COPYs file by file and named no
+# config/ path -- so /app/config/cost_basis_batch_manifest_20261016.json did
+# not exist in the image, and the apply aborted BATCH_MANIFEST_MISSING on
+# deploy 95e713d0 both at boot and after the restart.
+#
+# THE GUARD BEHAVED CORRECTLY AND NOTHING WAS WRITTEN: realized_before and
+# realized_after both read legacy_realized_today "-233.98540000", applied 0,
+# refused 0, both UNKNOWN legs preserved. This is therefore NOT a retry of a
+# write that may have partly happened -- no write has happened at all.
+#
+# ONE LINE CHANGES IN THE IMAGE: the manifest is now named in this
+# Dockerfile's COPY set. No src file changes. The shipping test now checks
+# EVERY Dockerfile that runs the live runner and requires the money-capable
+# one to be among them, so this class of failure cannot recur silently; it
+# reproduces the exact failure when the line is removed.
+#
+# L5_COST_BASIS_APPLY and L5_COST_BASIS_BATCH_MANIFEST are ALREADY SET on
+# this service, so this boot runs the authorized apply.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS stays
+# unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and
+# 1. No limit, threshold, gate or baseline is touched and no order can be
+# submitted.
+#
+# 200 passed across the money-path suites.
+manifest in the live image's COPY set, shadow-locked 2026-10-16T17:40Z
+
+# OWNER-AUTHORIZED promotion of the restatement verb + manifest 20261016c.
+# THIS BOOT IS A DRY RUN. L5_COST_BASIS_APPLY is set to INSPECT, which
+# apply_mode() reads as the dry run, so the applier reports what it WOULD
+# correct against the EXACT CURRENT PRODUCTION STATE and calls the verb
+# zero times. The owner's approval is conditional on that fresh INSPECT
+# passing; the apply is a second, separate step with a real batch id.
+#
+# WHY THE VERB CHANGED. correct_cost_basis re-derived cost as q x price on
+# BOTH sides -- the same defect establish_basis had. PMUS quotes one price
+# per market and it is always UP/YES, so a DOWN leg costs q x (1 - price).
+# The old arithmetic over-corrected 13 DOWN legs by 15.79500000 (realized
+# flattered) and under-corrected 9 by 46.54640000.
+#
+# WHAT IS NEW, AND IT IS ONE FLAG:
+#   restate=True   -- allowed ONLY on a leg already carrying
+#                     cost_superseded (else NOTHING_TO_RESTATE). It lets a
+#                     cost RISE, which the 13 legs need. A FIRST correction
+#                     is still one-directional. A restatement still cannot
+#                     assert a cost: guard 6 re-derives it from the named
+#                     venue trade ids, and it may re-read its OWN fills but
+#                     not another leg's.
+#   per-side costs -- the side's own up_cost/dn_cost is corrected and
+#                     cost_total is RECOMPUTED, so 1945z keeps its real
+#                     up_cost of 0.4600 instead of having it erased.
+#                     ROW_COSTS_DO_NOT_RECONCILE and
+#                     OTHER_SIDE_COST_UNREADABLE refuse the rest.
+#   cost_superseded is NEVER overwritten; later states append to
+#   cost_restatements.
+#
+# Runtime files changing, both already COPYed into this image:
+#   src/l5_live_execution.py    -- the side rule, restate, per-side write
+#   src/l5_cost_basis_audit.py  -- side-aware establish_basis with a venue
+#                                  cross-check; the plan's pre-state comes
+#                                  from the ROW, not the $1/share figure
+#
+# Manifests 20261016b and 20261016c are added to the COPY set. Shipping a
+# manifest authorizes nothing: only a deliberate batch id can write.
+#
+# 247 passed. Applying ONCE moves realized -76.12160000 -> -7.88480000;
+# applying twice, under a fresh batch id, or with any leg moved, aborts
+# BATCH_MISMATCH and writes nothing.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS
+# stays unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at
+# 1 and 1, L5_MAX_CUMULATIVE_LOSS_USD UNCHANGED at 20. No limit, threshold,
+# gate or baseline is touched and no order can be submitted.
+#
+# The BTC1d 2100z position stays REAL exposure: no settlement evidence
+# exists, and this change does not touch it.
+restatement verb + manifest c, INSPECT dry run, shadow-locked 2026-10-16T18:45Z
+
+# OWNER-AUTHORIZED APPLY of manifest 20261016d. 23 legs, 34 trade ids,
+# expected realized delta +67.72680000, expected resulting realized
+# -8.39480000.
+#
+# THE PRECONDITION RUNS IMMEDIATELY BEFORE THE WRITE, IN THIS BOOT. The
+# applier walks the activity feed fresh, rebuilds the plan from the CURRENT
+# production rows, and check_batch compares the whole batch -- the 23 leg
+# keys, the 34 distinct trade ids, the 67.72680000 aggregate, AND each
+# leg's own cost_before/cost_after and trade ids -- before any write. A
+# mismatch returns BATCH_MISMATCH and writes NOTHING.
+#
+# WHY THIS MANIFEST AND NOT 20261016c. The 24-leg batch was refused by the
+# fresh INSPECT on deployment efb70ed5 at 18:43:33Z:
+#   LEG_COUNT:23!=24, DELTA_DIFFERS:67.72680000!=68.23680000
+# because cpc-btc-updown-15m-2026-10-15-1945z|DOWN is
+# MARKET_TWO_SIDED_COST_UNREADABLE: _retire stores up_qty/dn_qty/cost_total
+# and NO per-side costs, so that market's 1.4600 pair cost cannot be split
+# and writing 0.4900 over it would have erased the UP leg's real 0.4600.
+# The leg STAYS UNKNOWN and separately tracked. It is not investigated
+# further here.
+#
+# 26 LEGS ARE EXCLUDED AND MUST NOT CHANGE: 23 NOTHING_TO_CORRECT (every UP
+# leg is already right, plus the Stage A 2230z leg at 0.590000), the 2
+# QUANTITY_MISMATCH legs (1930z|UP and the BTC1d 2100z|DOWN), and 1945z.
+#
+# THE BTC1d 2100z POSITION REMAINS REAL EXPOSURE, $2.0400 worst case. It
+# expires 2026-10-16T21:00Z and no settlement evidence exists. This change
+# does not touch it.
+#
+# No runtime file changes in this deploy; manifest 20261016d is added to the
+# COPY set. 248 passed.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_MAX_CUMULATIVE_LOSS_USD
+# UNCHANGED at 20, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED
+# at 1 and 1, L5_TS_COMPLETION_CROSS unset. No limit, threshold, gate or
+# baseline is touched and no order can be submitted. The correction moves
+# realized from -76.12160000 to -8.39480000, which is still a REFUSAL at
+# the unchanged $20 ceiling... no: 8.3948 < 20, so the cumulative-loss gate
+# will PASS on realized alone. HALT and the shadow lock still block every
+# order, and clearing them is a separate decision the owner has not taken.
+apply manifest 20261016d, 23 legs, shadow-locked 2026-10-16T18:55Z
+
+# 2026-10-17: deploy the daily-loss-halt boundary fix ONLY (owner-authorised).
+# The production change set inside this image is exactly ONE source file,
+# src/l5_live_execution.py: InventoryStore.realized_current_utc_day() plus the
+# fail-closed guard that feeds it to daily_realized_loss_halt_usd. No trading
+# logic changed; no limit value changed; both $20 cumulative gates still read
+# the all-time account-wide total. HALT and L5_SHADOW_ONLY remain ACTIVE and
+# are NOT part of this deployment -- no order can reach the venue, and the
+# five staged experimental variables stay staged and uncommitted.
+deploy daily-halt boundary fix, shadow-locked and HALTed 2026-10-17T20:00Z
+
+# 2026-10-17: deploy the disarmed-cancel repair ONLY (owner-authorised after
+# an independent security review returned APPROVE WITH CHANGES, all five of
+# its merge conditions applied). The change set inside this image is exactly
+# ONE source file, src/l5_pmus_transport.py: _CancelOnlyHTTP plus the cancel
+# wiring. src/l5_watchdog.py changed by one regex anchor but is NOT in this
+# image and the watchdog service is trigger-gated, so it is not redeployed
+# and keeps its credential-free image and HALT authority. No submission path
+# is added; this widens only what can WITHDRAW an order we own. HALT and
+# L5_SHADOW_ONLY remain ACTIVE and are not part of this deployment, and the
+# five staged experimental variables stay staged and uncommitted.
+deploy disarmed-cancel repair, shadow-locked and HALTed 2026-10-17T20:30Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  THE PLACE-THEN-CANCEL LEG, SHIPPED OFF
+# ---------------------------------------------------------------------------
+# Owner-authorized implementation of the executor's missing mechanism leg:
+# ONE post-only order at the venue minimum, left to rest so the INDEPENDENT
+# watchdog cancels it, proven by a venue terminal-status re-read.
+#
+# WHY THIS DEPLOYMENT IS NEEDED AT ALL, since the mode is off: the runner
+# imports src/l5_cancel_mechanism.py EAGERLY. That module was missing from the
+# image's COPY list, which would have crashlooped this service on boot -- and
+# the closure test that exists to catch exactly that is already red on
+# unrelated config/cost_basis_batch_manifest_*.json entries, so it offered no
+# protection. The COPY line is added here and verified by assembling the COPY
+# list into a tree and importing the entrypoint out of it.
+#
+# NOTHING IS ARMED BY THIS. L5_CANCEL_MECHANISM is UNSET, so selected mode is
+# the ordinary trading tick exactly as before. L5_SHADOW_ONLY stays set, so
+# submit() still raises NotArmed structurally. L5_MAX_LIVE_ORDERS=2 and
+# L5_MAX_CASH_DEPLOYED_USD=5 UNCHANGED from the owner-authorized values set
+# at 16:45Z. No limit, gate, threshold or baseline is touched.
+#
+# The new path is claim-gated: AUTH.claim_submission before the wire, because
+# the one-submission-path test correctly failed on an ungated second route.
+# That test is strengthened, not relaxed -- it now requires the claim in the
+# same module as each submit AND ordered before it.
+#
+# 81 focused tests green (47 mechanism + 12 wiring + 22 claim). Full suite
+# 33 failed / 11307 passed / 14 errors: failure set BYTE-IDENTICAL to the
+# established baseline, +95 passing.
+#
+# NOT RUN: no order has been placed and independent cancellation stays
+# UNPROVEN until PMUS confirms a terminal status.
+place-then-cancel leg shipped OFF, shadow-locked 2026-10-18T17:15Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  MECHANISM WAIT/TERMINAL SPLIT (the 1800z repair)
+# ---------------------------------------------------------------------------
+# The authorized one-shot stopped at 18:03:28Z on transport_armed=false with
+# the other 13 checks green. That flag is false for the first seconds of every
+# window -- the transport arms only after preflight passes, and preflight was
+# on retry 2 of its 3/6/12/24s backoff after the venue's intermittent
+# book_readable 404. No order was placed and the one-shot was NOT consumed,
+# but the window was lost.
+#
+# transport_armed and the five book/price checks are now WAITS: state stays
+# INIT and EVERY gate is re-evaluated on the pass that submits, so nothing is
+# placed against a stale verdict. The wait is bounded with no timer, because
+# window_has_room_for_the_watchdog stays TERMINAL at 450s.
+#
+# Two gates ADDED, since a wait holds the shadow lock lifted:
+# authorization_window_open (EXPIRED/UNREADABLE refuses) and halt_not_engaged
+# (injected read-only predicate; this module still cannot assert or clear a
+# latch, and unreadable counts as halted).
+#
+# NOTHING IS ARMED BY THIS DEPLOYMENT. L5_SHADOW_ONLY=1 and
+# L5_CANCEL_MECHANISM=NO were restored at 18:05Z. Limits unchanged:
+# L5_MAX_LIVE_ORDERS=1, L5_MAX_CASH_DEPLOYED_USD=4.65. Preflight untouched.
+#
+# 115 focused tests green. Full suite 33 failed / 11339 passed / 14 errors:
+# failure set BYTE-IDENTICAL to the established baseline.
+mechanism wait/terminal split, shadow-locked 2026-10-18T18:20Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  mechanism_tick RAN THE STRATEGY IT CLAIMED TO REPLACE
+# ---------------------------------------------------------------------------
+# Found live during the authorized 18:30z activation, shadow lock LIFTED. At
+# 18:34:36Z: ORDER:NOT_ARMED UP 0.06 @ 0.31 and DOWN 0.9 @ 0.6 -- the L5
+# strategy, running under the mode that replaces it. mechanism_tick called
+# self.poll(now), and poll -> handle IS the strategy. Only the pending arming
+# kept those orders off the venue.
+#
+# poll removed from both paths. The mechanism needs no action feed; its order
+# is predetermined and the authenticated book is a separate thread.
+# Reconciliation unchanged. The wiring test now pins poll AND handle absent in
+# the ordinary, cool-off and halted paths, with a positive control that tick
+# still calls poll.
+#
+# NOTHING IS ARMED. L5_SHADOW_ONLY=1 and L5_CANCEL_MECHANISM=NO since 18:35Z.
+# Limits unchanged: max_live_orders 1, cap 4.65. Preflight untouched. Zero
+# outflow, one-shot unspent, HALT never latched.
+#
+# 119 focused green. Full suite 33 failed / 11343 passed / 14 errors: failure
+# set BYTE-IDENTICAL to baseline.
+strategy removed from mechanism mode, shadow-locked 2026-10-18T18:47Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19: THE CANCELLATION REPAIR. The empty cancel body is why the
+# 2026-10-18 2315z proof failed. Order D68KZ0SG10JR rested 530s while the
+# watchdog and then the executor both posted `{}` to the correct route with a
+# correct signature and were both refused HTTP 400 Bad Request. The order left
+# only when the market expired -- nothing of ours withdrew it.
+#
+# pmus_q1_executor.cancel_exact -- the only cancel in this repository ever used
+# against a live PMUS order -- has always sent {"marketSlug": slug} to the same
+# route, with the same method, the same identifier and the same signer. The
+# field was the whole difference. Signing is untouched: PMUS signs
+# ts+method+path and does NOT sign the body, so carrying a field changes
+# nothing about authentication.
+#
+# All four cancel call sites now send the ORDER's market, not the process's:
+# an orphan sweep runs after roll has moved on, so the transport's current slug
+# can name a different window. An absent slug REFUSES rather than posting `{}`.
+# _CancelOnlyHTTP's body pin MOVED, it did not loosen: {"marketSlug": <slug>}
+# is the only body admitted, and `{}`, {"cancelAll": true}, an extra key, a
+# blank slug and a non-mapping are all still refused inside the object.
+#
+# SANITIZED ERROR CAPTURE, the other half. str(HTTPError) is only "HTTP Error
+# 400: Bad Request", which is how this 400 survived a whole authorized window
+# recorded as nothing but `cancel_error: "HTTPError"`. http_error_detail reads
+# the body once, redacts it, truncates it, and records status and reason, every
+# step guarded so a diagnostic can never replace the error it describes.
+#
+# A PRE-EXISTING CREDENTIAL LEAK, found by the new tests. Both redactors
+# matched a value with \S+, which stops at the first space, so
+# "Authorization: Bearer abc123" redacted only "Bearer" and left abc123 in the
+# log. Fixed in the transport and in scripts/pmus_readonly_recovery, kept in
+# lockstep by the parity test. This ran on EVERY error path, not only cancels.
+#
+# NOTHING IS ARMED BY THIS DEPLOYMENT. L5_SHADOW_ONLY stays 1,
+# L5_CANCEL_MECHANISM stays NO, the HALT latch is untouched and still held, no
+# session id is minted, no order is submitted and no capital limit moves.
+# Deploying a cancel that works only ever reduces exposure.
+cancellation repair: send marketSlug, capture the 400 2026-10-19T00:17Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19T01:41Z: READ-ONLY additions needed BEFORE the owner-authorized
+# HALT reset can run. Nothing here arms anything, lifts a lock, clears a halt
+# or changes a capital limit; L5_SHADOW_ONLY stays 1 and PMUS_Q1_LIVE stays NO.
+#
+# (1) submission_disabled IN THE REGISTRY REPORT. The reset refuses
+# SUBMISSION_NOT_PROVEN_DISABLED unless this executor positively publishes
+# that its submit() is structurally blocked. It is read from the same
+# L5_SHADOW_ONLY that authorize_arming step 1 refuses on, so the published
+# answer cannot drift from the real one, and an ABSENT field refuses too --
+# which is exactly why this deployment has to happen first rather than the
+# gate being softened.
+#
+# (2) HALT DIGEST TELEMETRY. submission_gate.halt_latch_telemetry now carries
+# the sha256 of the latch bytes this process ALREADY reads on every tick,
+# plus kind/halt/reason/record_t. Never the raw contents and never the
+# `evidence` block, which can name venue order ids. This is how the owner
+# obtains the digest that the reset's gate 2 demands without stopping the
+# watchdog -- the failure of 2026-10-19 that cost 5m53s of independent
+# cancellation and produced no digest at all.
+#
+# The watchdog is NOT touched by this deployment: its watch pattern is its own
+# DEPLOY_TRIGGER and this file is not it.
+read-only halt digest telemetry + published submission lock 2026-10-19T01:41Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19T02:40Z: SCOPE the one-shot mechanism marker to (experiment,
+# market), and turn the diagnostic mode back OFF in the same deployment.
+# L5_CANCEL_MECHANISM=NO, L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO. No order.
+#
+# WHAT THE SHADOW-LOCKED DIAGNOSTIC FOUND, read off this service at
+# 02:34:45Z on window 0230z:
+#   already_ran TRUE, marker coid
+#   mech-cpc-btc-updown-15m-2026-10-18-2315z-1792365652, venue order
+#   D68KZ0SG10JR, cancelled_by SELF_FALLBACK,
+#   independent_cancellation_proven false
+# already_ran was TRUE on a market the marker has nothing to do with, so the
+# 2026-10-18 attempt had spent the mechanism PERMANENTLY on this ledger. No
+# later authorized window could ever have run, and nothing in the repository
+# cleared it. Submission was impossible throughout the diagnostic: the shadow
+# lock leaves the transport disarmed so transport_armed fails, and
+# PMUS_Q1_LIVE was NO.
+#
+# NOT A WEAKENING. One authorization still buys exactly one order, and that
+# guarantee lives in claim_submission: an O_CREAT|O_EXCL lock, fsynced before
+# it returns, bound to (experiment, market), never reset automatically. The
+# marker is the SECONDARY crash-safety guard, and its own stated job -- a
+# process that crashed mid-test must not place a second order -- is a
+# statement about ONE experiment and ONE market. It now uses the same
+# identity the atomic claim already uses. A new market authorizes NOTHING by
+# itself: arming still needs PMUS_Q1_LIVE, a matching session id and arm
+# token, L5_LIVE_PROBE_MARKET bound to the slug, an unexpired deadline and
+# the shadow lock lifted.
+#
+# FAIL CLOSED ON AMBIGUITY. The slot is now versioned
+# {"v": 2, "runs": {"<experiment>|<market>": doc}} so history is preserved
+# instead of overwritten. A pre-v2 doc is migrated on READ with its
+# experiment UNKNOWN, which fails ITS OWN market closed. The real production
+# marker is the COMPLETION doc and carries neither `market` nor `plan`, so the
+# market is recovered from `coid`, which is built "mech-<market>-<epoch>" and
+# names it verbatim; anything that does not match that shape fails closed for
+# EVERY market, as does unreadable state and an unparseable runs map.
+#
+# 32 tests in tests/test_l5_mechanism_marker_scope.py, including the real
+# production marker. 1535 focused regressions green. Two existing tests were
+# updated to read through the accessor rather than the storage shape; every
+# behavioural assertion in them is unchanged.
+scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z
+
+# ---------------------------------------------------------------------------
+# PLACEMENT-TIME GATE (commit 10cbbf6b). Submission is now permitted only
+# between T+5:00 and T+7:30, measured from the VENUE's own confirmed window
+# open (runner.venue_window_bounds -> verify_alignment, source VENUE), never
+# from our 900-second slug grid and never from process start.
+#
+# WHY. On 2026-10-19 the 0330z attempt reached the submit at 03:33:50Z, which
+# is T+3:50 -- seventy seconds BEFORE the authorized 03:35:00-03:37:30 band.
+# Nothing reached the venue only because the submission claim was spent. Every
+# gate was about the ORDER and none about the CLOCK, so the mechanism
+# submitted the instant arming completed.
+#
+# placement_band_reached is a WAIT (early cures itself, so a boot at T+1:00
+# now waits and places inside the band). placement_band_not_expired is
+# TERMINAL (late never cures). The upper edge is DERIVED as
+# span - MIN_WINDOW_REMAINING_S, so the band can never permit a placement
+# that window_has_room_for_the_watchdog would refuse.
+#
+# Also: AUTH.submission_claim_state, a read-only probe of the one-submission
+# lock, with a terminal submission_claim_not_already_spent gate. SPENT refuses
+# in preflight before an order is even reserved; UNKNOWN is REPORTED and does
+# not refuse, because the atomic O_EXCL claim at the wire is still the
+# guarantee and a failed stat() must not cost an authorized window. Both the
+# band and the claim state are announced in L5_MECH_MODE at boot.
+#
+# 51 + 18 new tests; 1666 green across all 59 files touching the three changed
+# modules. THIS DEPLOYMENT CHANGES NO VARIABLE: SHADOW_ONLY stays enabled, the
+# cancellation mechanism stays OFF, PMUS_Q1_LIVE stays NO, and no order is
+# authorized. Code only.
+deploy the placement-time gate, shadow-locked, mechanism OFF 2026-10-19T12:20Z
+live 1315z cancellation verification, owner FINAL GO 2026-10-19T13:15Z
+RESTORE: shadow lock back on, mechanism OFF after the 1315z fill 2026-10-19T13:23Z
+
+# ===================================================================
+# PHASE A: the independent inventory-driven shadow decision source.
+#
+# Promotes 3ae69693. Adds one module (src/l5_shadow_controller.py), its
+# wiring in tick(), and the frozen v2 action-model artifact the controller
+# loads. ADDS NO CAPABILITY: the controller holds no transport, no
+# credentials and no executor, and defines no method that could place,
+# cancel or amend an order. Verified four ways -- on the class, on the
+# instance with every arming variable set to its live value and the shadow
+# lock lifted, on the AST's imports, and on the whole transitive import
+# closure in a clean interpreter (no transport, no HTTP client, no auth
+# module is loaded by importing it).
+#
+# NO VARIABLE CHANGES WITH THIS DEPLOYMENT. L5_SHADOW_ONLY stays enabled,
+# L5_CANCEL_MECHANISM stays OFF, PMUS_Q1_LIVE stays NO, every risk limit
+# is unchanged, and no order is authorized. Code and one data file only.
+#
+# WHY THE DATA FILE IS LISTED IN THE IMAGE. analysis/l5/l5_action_model_v2
+# .json is a DATA dependency no ast closure can see. Without it load_v2
+# raises, the controller self-disables with L5_SHADOW_DISABLED, and the
+# service would look perfectly healthy while emitting nothing at all --
+# the entire deliverable, absent and quiet. The image-closure test now
+# names it directly; that test had been red on the cost-basis manifests
+# since they shipped and so could not have caught a missing module, which
+# is the one thing it exists for.
+#
+# TESTS. 11,469 passed, 24 failed, 14 errors on the deployed tree. Every
+# one of those 38 is PRE-EXISTING: the failing-ID set was diffed against a
+# full-suite run at b838a78e and is a strict subset of it -- zero new
+# failures. They sit in legacy Kalshi arb (orderbook, spread_scanner),
+# pmus_auth signature parity, r1/lane-a lineage, chain validation, window
+# forensics and the status live-handoff collection errors. None is in the
+# PMUS executor path. 109 green across the four files covering this change.
+#
+# EMISSION. L5_SHADOW_READY at boot, L5_SHADOW_DECISION continuously (one
+# line per changed decision and at least one a minute; every tick is still
+# evaluated and repetition is counted), L5_SHADOW_COMPARE on each of L5's
+# observed BTC15m actions, L5_SHADOW_WINDOW_CLOSE on each roll,
+# L5_SHADOW_SETTLED when the venue states a binary settlement price.
+deploy Phase A shadow decision source, shadow-locked, mechanism OFF 2026-10-19T15:33Z
+
+# ===================================================================
+# FIX the production TypeError found by the Phase A deployment itself.
+#
+# Promotes 5ca45150. `AuthBook.snapshot` returns bid/ask as STRINGS (the
+# recorder's `_px` ends in str(value)) and `plan_action` does Decimal
+# arithmetic on them, so the raw snapshot raised TypeError on every tick of
+# 1545z -- the first window whose price band the frozen model covers. 1530z
+# sat at 3-4c where the model has no flat|open state, so every decision
+# returned before plan_action and the records looked correct for eleven
+# minutes. Prices are now coerced at the controller's own edge, not in
+# plan_action, which is shared with the sports path whose callers already
+# pass Decimals.
+#
+# The fixtures were the defect: both test files built Decimal books and the
+# wiring mock returned Decimals, so 82 tests were green against a contract
+# kinder than the real one. They now use strings, and two tests build the
+# snapshot from AuthBook.snapshot and _px themselves so that contract
+# breaking fails the suite instead of production.
+#
+# Also: a one-sided book is refused by name (no_two_sided_book) instead of
+# quoted on whichever side is priceable. This module's decisions are all
+# PAIR economics and a quote whose complement has no price has no pair to
+# evaluate; `snapshot` already returns None unless both sides are present,
+# so this refuses a state that cannot arrive through the runner.
+#
+# CONTAINMENT HELD THROUGHOUT: no raise reached the tick, the money path was
+# untouched, the shadow lock stayed engaged, and the records said
+# controller_error:TypeError on their face rather than reporting decisions
+# that were never made.
+#
+# TESTS: 11,480 passed, 24 failed, 14 errors. The failing-ID set is BYTE
+# IDENTICAL to the previous deployment's and a strict subset of the
+# b838a78e baseline: zero new failures, none in the PMUS executor path.
+# 306 green across the ten files covering this area.
+#
+# NO VARIABLE CHANGES. SHADOW_ONLY stays enabled, mechanism stays OFF,
+# PMUS_Q1_LIVE stays NO, every risk limit unchanged, no order authorized.
+deploy the string-price fix, shadow-locked, mechanism OFF 2026-10-19T16:05Z
+
+# ===================================================================
+# P1: three decision policies in continuous shadow, baseline preserved.
+#
+# Promotes the policy selector. ARGMAX (the deployed baseline),
+# RESIDUAL_URGENCY and PAIR_AVAILABLE each run every tick over their OWN
+# simulated inventory in their OWN state file, fed ONE book snapshot per
+# tick. Each record names its policy and carries the model's argmax beside
+# the policy's choice, so a departure from the baseline is visible rather
+# than inferred.
+#
+# WHY: replayed over L5's own 5,546 BTC15m windows the argmax baseline
+# refuses 56.3%/73.5% (older/newer half) of all decision opportunities and
+# EVERY refusal is residual_cap:3>=3. It walks inventory to the cap and
+# parks. Production showed exactly that through 1600z.
+#
+# ADDS NO CAPABILITY. Still no transport, no credentials, no executor, no
+# order path; three controllers instead of one, all equally unable to
+# submit. One public settlement read still settles every policy's copy of
+# a window at the same venue price.
+#
+# NO VARIABLE CHANGES. SHADOW_ONLY enabled, mechanism OFF, PMUS_Q1_LIVE NO,
+# every risk limit unchanged, no order authorized.
+#
+# TESTS: 11,492 passed; 24 failed / 14 errors, an ID set byte-identical to
+# the previous deployment and a strict subset of the b838a78e baseline.
+deploy three-policy shadow, shadow-locked, mechanism OFF 2026-10-19T16:27Z
+
+# ===================================================================
+# QUEUE-AWARE SHADOW FILLS. Replaces the touch-through upper bound with
+# l5_maker_fill_model's CONSERVATIVE/BASE/OPTIMISTIC scenarios, fed the
+# authenticated ladder through a new observer fan-out.
+#
+# THE MONEY PATH'S OBSERVER IS UNCHANGED. FrameFanout holds it as its
+# PRIMARY, calls it FIRST and UNWRAPPED, and its exceptions reach AuthBook
+# exactly as before. The shadow's one extra observer is isolated from it.
+# model_close detaches only its own observer now rather than nulling the
+# slot. No new service, no new variable, no money-path refactor.
+#
+# Each policy now runs three scenarios with THEIR OWN inventories, so a
+# fill only the optimistic case earns cannot create matched inventory in
+# the conservative one. Promotion is judged on CONSERVATIVE.
+#
+# STATE DISCONTINUITY, DELIBERATE AND REPORTED: the v2 single-inventory
+# state is discarded rather than carried into the per-scenario v3, because
+# it was credited by the touch-through rule and would overstate the
+# conservative column. The prior state is preserved as a summary and
+# `state_discontinuity` ships in every heartbeat.
+#
+# ADDS NO CAPABILITY: still no transport, no credentials, no executor, no
+# order path; the transitive import closure is clean of all of them and of
+# every HTTP client. SHADOW_ONLY stays enabled, mechanism OFF,
+# PMUS_Q1_LIVE NO, every risk limit unchanged.
+#
+# TESTS: 11,504 passed; 24 failed / 14 errors, an ID set byte-identical to
+# the previous deployment and a strict subset of the b838a78e baseline.
+deploy queue-aware shadow fills, shadow-locked, mechanism OFF 2026-10-19T17:05Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes d1d4a079:
+# the settlement-read fix, the corrected Phase B intent gate, and the restart
+# boot report. Authorization was conditional on six verifications; all six
+# were performed and all six pass.
+#
+# V1 NO NEW FAILURES OR ERRORS. Baseline run at the deployed commit 23c45806
+# in THIS directory with identical flags (-p no:randomly) and environment:
+# 31 failed, 14 errors, 45 IDs. This tree: 26 failed, 14 errors, 40 IDs.
+# NEW: none. GONE: five test_gemini_* tests, which fail at BOTH baselines,
+# pass in isolation, and have no dependency path from this diff -- so they
+# are pre-existing cross-test pollution in the favourable direction, not a
+# claim about this change. An earlier stored baseline list was incomplete and
+# is what let the section-0 regression through; it is not used again.
+#
+# V2 BOTH SUBMISSION-PATH INVARIANTS PASS. 30 tests across
+# test_l5_one_submission_claim.py and test_l5_mechanism_strategy_isolation.py.
+# They FAILED on the first Phase B tree, which is how the defect below was
+# found.
+#
+# V3 NO CONTROLLER-GENERATED INTENT CAN REACH THE WIRE OR BYPASS THE CLAIM.
+# An earlier draft of the adapter ended in a transport send of its own and was
+# a second UNCLAIMED route to the wire. It is removed, not registered.
+# SUBMIT_SITES stays at its two entries. Proven four ways:
+#   - exactly two transport send sites in all of src/, at
+#     l5_live_execution.py:4706 and l5_cancel_mechanism.py:927;
+#   - claim_submission precedes each, in the same module (4657 < 4706,
+#     167 < 927);
+#   - l5_intent_gate.py has none, asserted by a test that scans the module;
+#   - nothing in src/ calls the adapter or constructs an authorization, and
+#     the runner builds only L5_FOLLOWED intents.
+# submit_controller_intent runs every precondition and then refuses:
+# CONTROLLER_SUBMISSION_HAS_NO_CLAIM_GATED_ROUTE. There is no route, rather
+# than a withheld permission.
+#
+# V4 EXISTING L5 SUBMISSION BEHAVIOUR AND SAFETY GATES UNCHANGED.
+# src/l5_live_execution.py, src/l5_cancel_mechanism.py,
+# src/l5_live_validation_gates.py and src/l5_pmus_transport.py are
+# BYTE-IDENTICAL to 23c45806. The runner's only substantive change is that
+# its three refusals are decided in the gate, in the same order, with the
+# same layer and reason strings, and the executor call is unchanged:
+# ex.handle(row, {}, market=slug, window=str(ws), open_markets=...).
+#
+# V5 THE SETTLEMENT FIX PROCESSES REAL EXPIRED-MARKET RESPONSES.
+# shadow_settle read OBS.pmus_bbo, a BOOK reader: an expired market answers
+# /bbo with settlementPx present and bestBid/bestAsk BOTH NULL, which it
+# treats as empty and falls back to /book, a route carrying no settlementPx
+# at all. 760 polls, 0 settlements, six stranded windows, against a venue
+# that had already published every number. Now OBS.pmus_settlement, no book
+# fallback. Verified live 2026-10-19T18:15Z:
+#   1700z EXPIRED 0.0000 -> SETTLES      1745z EXPIRED 0.0000 -> SETTLES
+#   1715z EXPIRED 1.0000 -> SETTLES      1800z CLOSED  0.9900 -> REFUSED
+#   1730z EXPIRED 0.0000 -> SETTLES      missing slug  -> None, stays stranded
+# The 1800z case is the one that matters: a NON-BINARY price on a
+# NON-TERMINAL state, the exact defect class this venue has produced here
+# before, and both guards refuse it instead of booking $0.99 as a payout.
+#
+# V6 NO HIDDEN INVENTORY OR ACCOUNTING DISCONTINUITY. STATE_VERSION stays 3,
+# so the state on the volume loads as a same-version load: nothing migrated,
+# nothing discarded, inventory carried. One real defect was found and fixed:
+# the per-scenario `resting` record outlived the order object a restart
+# cannot reconstruct, so the next window_close would have published a
+# restart-dropped quote as `dropped_resting`, blaming expiry. _load now
+# clears it and publishes a `boot` report in every heartbeat. I also expected
+# a frozen scenario slot and was wrong -- already_resting keys on _orders,
+# not the record, so the next tick quotes afresh, now asserted by test.
+#
+# ADDS NO CAPABILITY: SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, owner arm token unset, every risk limit unchanged ($5/market, $5 total,
+# 1 market, 1 live order, $5 daily realized loss halt). No live controller
+# submissions and no new claim-gated route are authorized by this.
+#
+# FALSIFIABLE POST-DEPLOY CHECK: four windows have authoritative settlement
+# prices and identical inventory across all three policies, so the deployed
+# process must report, over 1700z/1715z/1730z/1745z, exactly
+#   ARGMAX +$0.67   RESIDUAL_URGENCY +$0.37   PAIR_AVAILABLE -$0.75
+# derived independently from the production fill records. Anything else means
+# the settlement path is wrong.
+deploy the settlement fix + corrected intent gate, shadow-locked 2026-10-19T18:42Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes 19cd3a24:
+# continuous economic reporting for the nine simulations. Authorization was
+# conditional on the existing safety AND ACCOUNTING invariants remaining
+# intact; both were checked by name.
+#
+# EXACTLY ONE FILE IN THE IMAGE CHANGES: src/l5_shadow_controller.py, the
+# shadow decision source. It holds no transport, no credentials and no
+# executor, and defines no order path. The other three changed files
+# (analysis/l5/*) are offline and are NOT copied into the image -- the
+# Dockerfile takes only analysis/l5/l5_action_model_v2.json.
+#
+# NO POLICY CHANGED. The three deployed policies decide exactly as before;
+# every number added is derived from decisions the controller was already
+# making. No strategy added, no architecture touched, no limit altered.
+#
+# REGRESSION: baseline at 23c45806 in the same directory with identical
+# flags and environment: 31 failed, 14 errors, 45 IDs. This tree: 26
+# failed, 14 errors, 40 IDs. NEW: NONE. The 5 GONE are the test_gemini_*
+# group that fails at the baseline too, passes in isolation, and has no
+# dependency path from this diff.
+#
+# SAFETY AND ACCOUNTING INVARIANTS, 559 tests, named rather than implied:
+#   test_l5_one_submission_claim          test_l5_four_bucket_accounting
+#   test_l5_mechanism_strategy_isolation  test_l5_own_terms_accounting
+#   test_l5_account_wide_exposure         test_l5_potential_exposure
+#   test_l5_account_wide_delta_policy     test_l5_outside_claim_adjudication
+#   test_l5_binary_settlement             test_l5_shadow_controller(_wiring)
+#   test_l5_correct_cost_basis            test_l5_intent_gate
+#   test_l5_cost_basis_audit              test_l5_live_runner_graft
+# All pass. The settled line keeps cost_total, redemption_total and
+# modelled_net unchanged and ADDS the pair/residual split beside them; the
+# split is on the AVERAGE-COST basis, which is what complement_target
+# already prices completion against, and the total does not depend on the
+# convention either way.
+#
+# THE TALLY CANNOT COST A DECISION. It is taken in `_out`, the single funnel
+# every decision record already passes through, inside a bare except, so a
+# counter fault can never reach the tick.
+#
+# VALIDATED AGAINST PRODUCTION, NOT FIXTURES: replaying the recorded fills
+# through this code reproduces all six settled windows exactly, including
+# the pair/residual split derived independently by hand.
+#
+# WHAT IT REPORTS: per-window net for EVERY settled window (with
+# windows_folded_into_carry, so the list can never be a flattering sample),
+# zero-trade windows, matched-pair net against directional residual net,
+# capital deployed / efficiency / max drawdown, quotes placed / filled /
+# unfilled at expiry with the fill rate between them, adverse selection,
+# opportunities split into justified refusals versus possible misses with a
+# reason histogram, and fills with known versus unknown queue.
+#
+# ADDS NO CAPABILITY: SHADOW_ONLY enabled, mechanism OFF, PMUS_Q1_LIVE NO,
+# arm token unset, limits unchanged ($5/market, $5 total, 1 market, 1 live
+# order, $5 daily realized loss halt). No live orders are authorized.
+deploy continuous economic reporting, shadow-locked 2026-10-19T19:05Z
+
+# ----------------------------------------------------------------------------
+# CORRECTION TO THE PREVIOUS ENTRY: its last line reads 19:05Z. The actual
+# push was 2026-10-19T18:56:46Z. Recorded here rather than by rewriting
+# pushed history.
+#
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes 21915c87:
+# three measurement defects, every one of them found by READING the first
+# production economic report rather than by reading the code. Each was a
+# number that looked like a measurement and was not one.
+#
+# ONE. A MISSING SPLIT RENDERED AS A CONFIDENT ZERO. Seven of eight settled
+# windows reported pair_net 0.0000, because they were settled before the
+# split existed and `ln.get("pair_net") or 0` turned absence into zero.
+# Read literally it said pair economics contributed nothing -- the exact
+# opposite of the truth, since the pair line is the only positive one in
+# the report. Legacy windows now read NOT_RECORDED, are excluded from the
+# split totals, and split_covers_windows / windows_without_split name the
+# gap.
+#
+# TWO. THE RISK LIMIT WAS COUNTED AS A MISSED OPPORTUNITY.
+# `residual_cap:3>=3` fell through to POSSIBLE_MISS: 103 of ARGMAX's 178
+# refusals, a reported possible-miss rate of 0.5787 where the true rate is
+# 0.0000. Every one was the residual cap or the one-order rule working.
+# The taxonomy now carries plan_action's protective reasons, read from its
+# source rather than guessed, plus prefix matching for residual_cap and
+# pair_cap. An unrecognised reason still lands in the miss bucket.
+#
+# THREE. _SAVE WROTE THE TALLY AND _LOAD DROPPED IT. Every deploy silently
+# reset the execution counters while windows_settled kept persisting, so a
+# fill_rate over three quotes sat beside eight settled windows in the same
+# block. `tally` and `counters_since` are now restored, and the execution
+# block reports counters_since and counters_cover_all_settled_windows.
+#
+# REGRESSION: baseline at 23c45806 in the same directory with identical
+# flags and environment: 31 failed, 14 errors, 45 IDs. This tree: 26
+# failed, 14 errors, 40 IDs. NEW: NONE. The 5 GONE are the test_gemini_*
+# group that fails at the baseline too, passes in isolation, and has no
+# dependency path from this diff.
+#
+# SAFETY AND ACCOUNTING INVARIANTS: 563 tests across the fifteen named
+# suites (one_submission_claim, mechanism_strategy_isolation,
+# account_wide_exposure, account_wide_delta_policy, binary_settlement,
+# correct_cost_basis, cost_basis_audit, four_bucket_accounting,
+# own_terms_accounting, potential_exposure, outside_claim_adjudication,
+# shadow_controller, shadow_controller_wiring, intent_gate,
+# live_runner_graft). All pass.
+#
+# ONE IMAGE FILE CHANGES: src/l5_shadow_controller.py. No policy changed,
+# no limit altered, no capability added. SHADOW_ONLY enabled, mechanism
+# OFF, PMUS_Q1_LIVE NO, arm token unset.
+#
+# POST-DEPLOY CHECKS, FALSIFIABLE: counters_since must survive the restart
+# with quotes_placed carried rather than reset; the windows settled before
+# this code must read pair_net NOT_RECORDED and not 0.0000; and
+# possible_misses must read 0 with residual_cap counted under
+# justified_refusals.
+deploy the measurement-defect fixes, shadow-locked 2026-10-19T19:33Z
+
+# ----------------------------------------------------------------------------
+# CORRECTION TO THE PREVIOUS ENTRY: its last line reads 19:33Z. The actual
+# push was 2026-10-19T19:28:16Z. I typed the timestamp ahead of running the
+# clock twice in a row; this entry's timestamp is generated by $(date -u),
+# so the class of error is gone rather than apologised for again.
+#
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT. Promotes 7c4e6dcd: the tally
+# taxonomy version, and the pre-registered ONE_TICK_BEHIND shadow variant.
+#
+# THE VARIANT is pre-registered in analysis/l5/TICK_DEPTH_PREREGISTRATION.md
+# (committed 3971d929, before the code existed). A placement dimension on
+# the BASELINE policy only: ARGMAX at the touch, and ARGMAX one tick worse
+# in our own outcome. Four variants times three fill scenarios -- TWELVE
+# simulations. It is a separate controller with its own durable state, not
+# a new axis inside the other three, so the nine existing simulations keep
+# their exact state layout and behaviour and the variant is removable by
+# deleting one entry from SHADOW_VARIANTS.
+#
+# The offset applies AFTER plan_action, so side, relation and cap
+# arithmetic are identical to the touch variant's and only the resting
+# price differs. A cheaper price can only LOWER pair cost, so the 0.96 cap
+# stays satisfied; it rests further from crossing, so restable cannot be
+# made worse. A depth it cannot price refuses as offset_not_priceable and
+# is NEVER rounded back to the touch.
+#
+# THE TAXONOMY VERSION, WHICH PRODUCTION FOUND IN SIX MINUTES. The report
+# deployed as 3b26594d still showed 202 residual_cap:3>=3 in
+# possible_misses AFTER the fix that moved it to justified. The classifier
+# was right; the counts were restored from a state file written by the OLD
+# taxonomy and then summed with counts bucketed by the new one and
+# presented as one measurement, with counters_since stamped AFTER the
+# restart so the block claimed a period it did not cover. 202 refusals in
+# five minutes against an earlier rate of ~7/min was the tell.
+#
+# A stored tally whose TALLY_TAXONOMY does not match is now DISCARDED
+# rather than merged, with tally_reset naming the old version, the new one,
+# the dropped scenarios and the reason, and counters_since restamped. A
+# tally from the CURRENT taxonomy still survives a restart, asserted by its
+# own test, because keying the discard on every restart would quietly
+# reinstate the bug it replaced. Settled-window economics are unaffected:
+# they are priced from inventory, not from these counters.
+#
+# NOT CALLED `arm` IN CODE: FORBIDDEN_ATTRS reserves any attribute
+# containing "arm" on the controller, because here arm means arming the
+# transport and that guard exists so an order path cannot hide behind the
+# word. The test caught the collision and the test is right, so the
+# attribute is `variant`.
+#
+# REGRESSION: baseline at 23c45806 in the same directory with identical
+# flags and environment: 31 failed, 14 errors, 45 IDs. This tree: see the
+# line below, written from the actual run. NEW: NONE.
+#
+# ADDS NO CAPABILITY: one image file changes, src/l5_shadow_controller.py,
+# plus the runner's variant list. No policy changed, no limit altered.
+# SHADOW_ONLY enabled, mechanism OFF, PMUS_Q1_LIVE NO, arm token unset,
+# limits unchanged. No live orders.
+#
+# POST-DEPLOY CHECKS, FALSIFIABLE: twelve simulations with zero controller
+# errors; the nine existing variants keep their inventories; the new
+# variant has a distinct state file and a distinct record identity; the
+# taxonomy reset is reported with the old counters excluded; FRESH
+# residual_cap refusals count as justified; settlement accounting
+# unchanged; zero live orders, zero exposure, limits unchanged.
+# TESTS: 26 failed, 11,610 passed, 14 errors -- 40 IDs, NEW: none, against the
+# 45-ID baseline. Invariants: 571 tests across the fifteen named suites.
+deploy the taxonomy version + ONE_TICK_BEHIND variant, shadow-locked 2026-10-19T19:50:59Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT. Promotes e3c7a574: order-ID-linked
+# fill-calibration capture. RECORDER ONLY.
+#
+# THE COMMIT IS PURELY ADDITIVE: 1,150 insertions, ZERO deletions across all
+# five files. The executor gains exactly three None-defaulted attribute
+# declarations and one contained pre-submission capture call sited inside a
+# try/except and BEFORE the wire (both proved by AST test). No gate, limit,
+# arming path, claim_submission or SUBMIT_SITES line is touched. The
+# Dockerfile adds one COPY.
+#
+# WHY IT EXISTS. record_submit persists price and quantity but not the queue
+# our order met, so no past order of ours can be used to check the fill
+# model. This records, keyed by client order id and durable by append:
+# pre-submission book and ladder with timestamp; aggregate depth at our exact
+# limit price with provenance, frame age and a staleness flag; book and
+# AT-OUR-LEVEL prints through the resting life; submission, ack, partial
+# fills, cancellation, terminal state and settlement; and fees as TWO columns
+# -- schedule estimate beside a venue_actual that starts PENDING and is only
+# ever filled from a venue statement.
+#
+# QUEUE POSITION IS A BOUND, NOT A MEASUREMENT. The venue publishes no
+# per-order queue, so every record carries our_position_within_level =
+# UNKNOWN alongside the aggregate.
+#
+# IT CANNOT INTERFERE AND CANNOT FLATTER. Every entry point swallows
+# BaseException, returns None, and mutates nothing the executor reads, so a
+# recorder fault cannot reach the order path. It is also NOT a gate: it never
+# refuses a submission whose pre-capture failed, because letting a recorder
+# veto the money path is the more dangerous coupling -- a test asserts the
+# submission path never calls precapture_ok. And completeness is accounted
+# rather than assumed: every required category reads PRESENT or
+# MISSING:<reason>, and usable_for_calibration is true only when all five are
+# PRESENT, so a truncated record cannot read as complete.
+#
+# EXPECTED IN SHADOW, AND NOT A FAULT: every shadow record will report
+# usable_for_calibration FALSE with terminal_state MISSING, because no venue
+# confirms a modelled quote. That is the anti-false-completeness guarantee
+# visible in production. The ack, partial-fill and venue-confirmed-terminal
+# categories stay UNEXERCISED until a real order exists.
+#
+# REGRESSION: baseline at 23c45806, same directory, identical flags: 31
+# failed, 14 errors, 45 IDs. This tree: 26 failed, 14 errors, 40 IDs. NEW:
+# NONE. Invariants: 602 tests across the sixteen named suites.
+#
+# ADDS NO CAPABILITY. SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, arm token unset, every risk limit unchanged. No live orders authorized
+# by this, and no exposure limit changed.
+deploy order-ID-linked fill-calibration capture, shadow-locked 2026-10-19T20:53:22Z
+
+# ---------------------------------------------------------------------------
+# c11c55d0 -- the three capture defects the PRODUCTION RECORDS exposed on
+# c6e5aa9a, which the tests did not: the money path's first intents captured
+# book: null / queue: no_ladder (shadow_tick runs last, the hook fires
+# earlier); frame_age_s -75.496 and -0.058 reported as stale: false (age
+# measured against the caller's now, no negative branch); and no timestamp on
+# the book block at all, so book staleness was unmeasurable.
+#
+# RECORDER-ONLY, plus two runner wiring lines. No gate, limit, arming,
+# claim_submission or SUBMIT_SITES line touched; src/l5_live_execution.py
+# unchanged. Regression: 26 failed / 11,649 passed / 14 errors = the SAME 40
+# IDs as the clean baseline, zero NEW, zero GONE, +8 passed = the 8 new tests.
+#
+# ADDS NO CAPABILITY. SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, arm token unset, every risk limit unchanged. No live orders authorized
+# by this, and no exposure limit changed.
+deploy book-at-the-wire capture and honest frame freshness, shadow-locked 2026-10-19T21:26:51Z
+
+# ---------------------------------------------------------------------------
+# a4d7c234 -- pre-live work for the bounded TWO-LEG BTC15m test.
+#
+# 1. Ladder.cross_price_bracket: splits the conflated queue number that made
+#    CONSERVATIVE/BASE reject the venue-confirmed 2026-10-19 fill. Pure
+#    diagnostic. Changes NO fill decision; the Oct 19 fill stays
+#    OPTIMISTIC-only and UNCONFIRMED.
+# 2. L5_TS_CANCEL_MARGIN_S: the two-leg terminal margin, WIDEN-ONLY (cancel
+#    earlier, never later). Needed because the probe could otherwise rest a
+#    leg 600s against the watchdog's 300s max order age.
+#
+# Regression: 26 failed / 11,655 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW; +6 passed are the 6 added tests.
+#
+# ADDS NO CAPABILITY AND AUTHORIZES NO ORDER. SHADOW_ONLY stays enabled,
+# mechanism OFF, two-leg probe INERT (L5_TS_EXPERIMENT_ID / L5_TS_MARKET
+# unset), arm token not reissued, authorization EXPIRED, every risk limit
+# unchanged. No pair-cap change: 0.96 is reached by resting one tick behind.
+deploy two-leg pre-live: queue bracket + widen-only terminal margin, shadow-locked 2026-10-20T00:13:56Z
+
+# ---------------------------------------------------------------------------
+# e7cbdc10 -- L5_TS_PLACE_FLOOR_S, the one real blocker to a mandate campaign.
+#
+# may_place allowed placement from T+0 while the terminal deadline is fixed to
+# the window CLOSE, so a leg's rest was bounded only by when the shadow lock
+# came off. Fine for one hand-timed window; fatal for consecutive windows,
+# where a leg placed at T+0:05 and held to T+10:00 rests 595s against the
+# watchdog's 300s and the watchdog ASSERTS HALT BEFORE it cancels.
+#
+# The floor is RAISE-ONLY (a later floor is a shorter rest) and defaults to
+# 0.0, so deployed behaviour is byte-for-byte unchanged until it is set. With
+# floor 360 + margin 300 every window is bounded at exactly 240s.
+#
+# Regression: 26 failed / 11,658 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW, zero GONE; +3 passed are the 3 floor tests.
+#
+# ADDS NO CAPABILITY AND AUTHORIZES NO ORDER. SHADOW_ONLY stays enabled, the
+# two-leg probe stays INERT, mandate mode is OFF (L5_LIVE_AUTH_MAX_WINDOWS
+# unset), the authorization remains EXPIRED and every risk limit is unchanged.
+deploy raise-only placement floor for mandate campaigns, shadow-locked 2026-10-20T00:34:08Z
+
+# ---------------------------------------------------------------------------
+# c302bd79 -- the four full-window fixes. SHADOW ONLY.
+#
+# 1. DECOUPLED. The call site picks its gate from the legs claimed ON DISK for
+#    the current round, so a restart mid-round completes rather than
+#    re-entering. With the default floor of zero, entry runs from the window's
+#    own open: the T+6-to-T+8 band is gone.
+# 2. PER-ORDER AGE DEADLINE. ORDER_TTL_S 120s, shortens only, measured from
+#    SUBMIT (at or before the ack, so it fires sooner). maybe_acc_deadline
+#    cancels via deadman(only=[coid]) -- one cancellation route, so it keeps
+#    cancel-by-venue-id, proof by re-read, fill-booking and the UNCERTAIN
+#    marking, without sweeping a complement placed seconds ago. An order whose
+#    submit time will not parse is marked UNCERTAIN and disarms.
+# 3. BOUNDED REPLACEMENT. accumulation_sid gains an attempt axis; attempt zero
+#    keeps its historical key so claims already on the volume are not handed
+#    back as unspent. A later attempt needs BOTH zero filled quantity on the
+#    leg AND no live order, so a filled leg can never be re-placed and an
+#    unverified cancel cannot buy a retry. Budget 4, hard cap 16.
+# 4. TWO ECONOMIC CUTOFFS. may_enter (600s) and may_complete (720s), both
+#    earlier-only, both bounded by the terminal. Completing stays available
+#    after entering stops, because completing REMOVES risk.
+#
+# Regression: 26 failed / 11,708 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW, zero GONE; +50 passed are the new tests.
+#
+# AUTHORIZES NO ORDER. SHADOW_ONLY enabled, two-leg engine INERT (L5_TS_*
+# unset), mandate off, authorization EXPIRED, every risk limit unchanged.
+deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
+
+# 2026-10-20T02:37:50Z DEPLOY f7a2b81f: the two-leg planner gets the authenticated book (additive).
+# Regression on this tree: 26 failed / 11,721 passed / 14 errors = the same 40
+# IDs as the baseline, zero NEW, zero GONE, no crash. Authorizes no order:
+# SHADOW_ONLY stays enabled, authorization expired, limits unchanged.
+
+# 2026-10-20T03:25:14Z DEPLOY: emit the two-sided PAIR and the ladder at both leg
+# prices. Log-only and additive. Regression = the same 40 baseline IDs, zero
+# NEW. SHADOW_ONLY stays enabled; authorizes no order.
+
+# 2026-10-20T04:50:06Z DEPLOY the two-sided execution lifecycle, shadow-locked.
+# Round retirement, the complement derived from the current book, the 0.96
+# pair cap, the reconciled side/price transformation, and the end-to-end
+# window test. Gate: the same 40 baseline IDs, zero NEW. Authorizes no order.
+
+# 2026-10-20T05:17:10Z DEPLOY the lifecycle observability I left out: emit
+# two_sided_round and two_sided_complement. Log-only and additive; the
+# release gate cannot be met without it. Same 40 baseline IDs, zero NEW.
+
+# 2026-10-20T06:02:34Z DEPLOY B5 completion ceiling + the requested E2E coverage.
+# Gate: the same 40 baseline IDs, zero NEW, 11,817 passed. Authorizes no
+# order and enables no crossing; L5_TS_COMPLETION_CROSS stays unset.
+
+# 2026-10-20T12:48:37Z DEPLOY the pair-cost ceiling at the common submission boundary,
+# strategy exclusivity per authorized window, and the durable campaign
+# authorization (INERT: no approval document exists). Live execution OFF:
+# L5_SHADOW_ONLY=1 and PMUS_Q1_LIVE=NO. Same 40 baseline IDs, zero NEW.
+
+# 2026-10-20T13:14:13Z DEPLOY the correction: explicit L5_WINDOW_STRATEGY exclusivity
+# (unset enforces nothing), pair ceiling in OWN terms. 1215z was +$0.0984,
+# not a loss. Live execution stays OFF. Same 40 baseline IDs, zero NEW.
+
+# 2026-10-20T13:41:52Z DEPLOY the submission budget + the 1215z regression. Live
+# trading stays OFF (L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO). Same 40 baseline
+# IDs, zero NEW. 1215z resolved: two legitimate per-leg claims, +$0.0984.
+
+# 2026-10-20 — SHADOW-ONLY deployment of the bounded-campaign wiring and the
+# three durable class budgets. BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY=1
+# and PMUS_Q1_LIVE=NO. No campaign approval document is set, so the campaign
+# layer reads "absent" and the pre-existing single-window handshake is
+# untouched. This deployment adds REFUSALS and TELEMETRY and no capability.
+#
+# What it carries:
+#   * the campaign gate finally has a caller -- authorize_arming(campaign=...)
+#     existed and nothing passed it, so an approval document bounded nothing
+#   * src/l5_campaign_approval.py added to the image (the closure test caught
+#     that the runner would fail to import without it)
+#   * three durable class budgets (OPEN / COMPLETE / REPLACE) replacing one
+#     flat total, with the flat backstop no longer binding a risk-reducing
+#     order and a completion reserve that refuses an OPEN the completion
+#     budget could not close
+#   * BALANCING_DOES_NOT_REDUCE and BALANCING_WOULD_OVERSHOOT at the common
+#     submission boundary, ahead of every claim and ticket
+#   * day_realized on the heartbeat: the figure the DAILY halt actually
+#     reads, plus why it may be unknown (unattributed_usd,
+#     undated_settlements), because the heartbeat previously carried only
+#     the all-time total, which is a different ceiling
+#   * campaign telemetry: per-class spent/remaining, the completion-reserve
+#     verdict, and whether a stale exact-market pin blocks advancement
+#
+# Release gate: 26 failed, 11955 passed, 14 errors -- the same 40 baseline
+# ids, zero NEW, zero GONE.
+shadow-only campaign wiring + class budgets 2026-10-20T15:20Z
+
+# 2026-10-20 — SHADOW-ONLY. Adds the budget ENFORCEMENT self-check, which
+# runs the real class-budget, backstop-exemption, completion-reserve and
+# balancing functions IN THIS CONTAINER at startup, under a throwaway
+# experiment id in a directory it then deletes. No real claim or ticket is
+# consumed and nothing reaches a venue.
+#
+# WHY. The heartbeat REPORTED the budgets from the real volume, which is not
+# the same as enforcing them: with the shadow lock on, the arming boundary
+# refuses at SHADOW_ONLY_LOCK and `handle` never reaches a claim, so the
+# enforcement path had never executed in production. A failure now shows up
+# before a live authorization instead of as an order that should have been
+# refused.
+#
+# BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, no campaign
+# approval document.
+#
+# Release gate: 26 failed, 11960 passed, 14 errors -- the same 40 baseline
+# ids, zero NEW, zero GONE.
+budget enforcement self-check, shadow-only 2026-10-20T15:25Z
+
+# 2026-10-20 — SHADOW-ONLY. Repairs the self-check that passed by not running.
+# The first production run reported all_passed TRUE with the two balancing
+# checks ABSENT: Runner.__init__ sets executor=None and the real
+# FaithfulExecutor is built in roll(), so at startup there was no instance and
+# the guard skipped. The safeguard is now exercised against the deployed
+# CLASS, so it does not depend on construction order, and a MISSING check
+# fails the verdict instead of being absent from it.
+# BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11964 passed, 14 errors --
+# the same 40 baseline ids, zero NEW, zero GONE.
+selfcheck completeness repair, shadow-only 2026-10-20T15:45Z
+
+# 2026-10-20 — SHADOW-ONLY. A window that cannot trade must not spend the
+# owner's budget. Applying Patch A installed the campaign with the shadow
+# lock deliberately ON so it could be verified first, and the verification
+# RESERVED the 1600z window: four approved windows became three, and the one
+# it spent was already past its entry cutoff. The reservation exists so a
+# crash between deciding to arm and recording it costs a window rather than
+# granting one, and that risk does not exist while submit() is structurally
+# blocked. The runner now reserves only when the lock is OFF and takes a
+# read-only verdict otherwise.
+# BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11969 passed, 14 errors --
+# the same 40 baseline ids, zero NEW, zero GONE.
+no reservation under the shadow lock, shadow-only 2026-10-20T16:25Z
+
+# 2026-10-20 — SHADOW-ONLY. The campaign approval is now the AUTHORIZATION
+# for campaign trading, not merely a bound on one, so one owner approval
+# covers its windows without a PMUS_Q1 rotation per campaign. The legacy
+# handshake is untouched for one-window probes. The window is reserved only
+# after authorize_arming RETURNS, and only for a window that can still
+# trade. Under a campaign the mandate holder binds per window instead of
+# across the mandate, because a redeploy otherwise refused every remaining
+# window. BOTH TRADING LOCKS STAY ON.
+# Gate: 26 failed, 11989 passed, 14 errors -- the same 40 baseline ids,
+# zero NEW, zero GONE.
+campaign-scoped authorization, shadow-only 2026-10-20T17:20Z
+
+# 2026-10-21 — observation-only defensive evaluation. L5_DEFENSIVE_COMPLETION
+# is UNSET (off), so DEF.decide() returns DEFENSIVE_DISABLED and no branch
+# reads it. MAX_WINDOWS is 8 in code but unused until a campaign document
+# asks for it; the campaign is closed and NOT_ARMED. No new capability.
+deploy: 2026-10-21T01:20Z observation-only, defensive flag OFF
+
+# 2026-10-21 — LIVE_SEQUENTIAL shadow arm + SIMULATED defensive evaluation
+# in the [T+660, T+720) guard. Read-only: the live submission path is
+# byte-identical, defensive live submission is unwritten, the flag is OFF,
+# and the campaign stays closed. No financial limit changes.
+deploy: 2026-10-21T01:52Z shadow measurement, no new capability
+
+# 2026-10-21 — OWNER-AUTHORIZED DEPLOYMENT-ONLY promotion of ab098648 for
+# the eight-window live TWO_SIDED campaign. Authorization is to DEPLOY AND
+# VERIFY ONLY: not to arm, not to enable defensive execution, not to change
+# a risk limit, not to submit an order.
+#
+# WHY THIS FILE IS BEING TOUCHED AT ALL, which is the mechanism and not a
+# workaround. `watchPatterns` on this service is exactly
+# ["deploy/l5_pmus_live/DEPLOY_TRIGGER"], so every push since 962e7a5d was
+# correctly SKIPPED -- none of them changed this file. That is why the
+# running SHA did not move while the branch did. No GitHub Action deploys
+# this service: deploy.yml fires on `main`, l5-research-deploy.yml on
+# feature/l5-canonical, pmus-recorder-deploy.yml on
+# feature/l5-transfer-backtest and a different service. This file is the
+# only mechanism, and no new one is being created.
+#
+# THE DEPLOYED SHA WILL NOT READ ab098648, AND THAT IS INHERENT. Appending
+# here makes a new commit, so Railway builds that commit. The IMAGE is
+# unaffected: this file is not COPYed into it (verified -- no COPY under
+# deploy/ in this Dockerfile), so the built image is byte-identical to one
+# built from ab098648. The tree differs by these comment lines alone.
+#
+# WHAT SHIPS: defensive completion wired to the live path but DISABLED
+# (L5_DEFENSIVE_COMPLETION is absent from this service; absence is OFF);
+# the [T+540, T+600) guard derived from the binding cutoff with a 15s
+# execution floor; both unmatched directions; the venue-position
+# cross-check; the budget-exhaustion entry block; and
+# src/l5_runtime_config_verify.py, which does NOT exist in the running
+# 962e7a5d image and so can only be run after this deployment.
+#
+# WHAT DOES NOT SHIP: any new capability that can trade. L5_SHADOW_ONLY
+# stays set, the campaign approval is stale, and the arm token is the
+# owner's. Risk limits are untouched by this deployment: $5 aggregate
+# exposure, $5 daily realized-loss halt, one outstanding order, the
+# watchdog's independent HALT authority and its inability to submit.
+#
+# GATE: 26 failed, 12129 passed, 27 skipped, 1 xfailed, 14 errors -- the
+# same 40 pre-existing ids as BOTH measured baselines (f6b67aa2, the
+# previously deployed SHA, and f8d4a45c, the branch head before this work),
+# zero NEW and zero GONE in each direction. Image/Dockerfile-aware suites
+# 1467 passed. Watchdog 145, HALT 166, reconciliation 129, cancellation
+# 236, defensive both-directions 84, runtime verifier 29.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 22, failed: [].
+deploy: 2026-10-21T13:09Z ab098648 — deployment-only, defensive flag OFF, NOT_ARMED
+
+# 2026-10-21T15:28Z — RE-TRIGGER. Same authorization as the 13:09Z entry:
+# DEPLOYMENT-ONLY. Not arming, not enabling defensive execution, not
+# changing a risk limit, not submitting an order. No new service, no source
+# reconnection, no strategy change.
+#
+# WHY A SECOND TRIGGER ENTRY EXISTS, AND IT IS MY ERROR AND NOT THE
+# PLATFORM'S. The 13:09Z entry made 61e4b9b1, which DID change this file and
+# should have deployed; that push produced no deployment record at all,
+# because it landed inside the Railway outage window and was lost. I then
+# pushed the GO/NO-GO audit commit e5fe6132 on top of it. Railway evaluates
+# watchPatterns PER PUSH, and that push carried only
+# analysis/l5/GO_NOGO_EIGHT_WINDOW_20261021.md -- so it was correctly
+# SKIPPED at 14:46Z.
+#
+# THE SKIPPED RECORD IS THEREFORE GOOD NEWS, TWICE OVER: the webhook is
+# working (it fired and returned a correct verdict), and the watch pattern is
+# doing its job (a docs-only push cannot deploy the money-capable service).
+# My earlier "the push webhook is not firing" diagnosis was wrong -- it was
+# drawn from the one push made during the outage. Recorded here because the
+# next person to see a SKIPPED record should read it as the filter working,
+# not as a fault.
+#
+# THE LESSON, for whoever appends here next: the trigger change must be in
+# the push that is MEANT to deploy, and nothing may be pushed after it until
+# the build is seen. Nothing will be pushed after this commit.
+#
+# WHAT SHIPS is unchanged from the 13:09Z entry -- the application code is
+# identical to ab098648 and to 61e4b9b1 across every path in this
+# Dockerfile's COPY set (verified: 0 files differ). The delta since 61e4b9b1
+# is one analysis document, which is not in the image.
+#
+# STILL NOT SHIPPING ANY CAPABILITY THAT CAN TRADE: L5_SHADOW_ONLY stays
+# set, the campaign approval is stale, L5_DEFENSIVE_COMPLETION is absent
+# (absence is OFF), and the arm token is the owner's. $5 aggregate exposure,
+# $5 daily realized-loss halt, 0.96 maker pair ceiling, one outstanding
+# order, and the watchdog's independent HALT authority are all untouched.
+#
+# KNOWN PRE-ACTIVATION BLOCKER, not addressed by this deployment: every
+# claim namespace is keyed on L5_EXPERIMENT_ID rather than the campaign
+# nonce, so L5_EXPERIMENT_ID and L5_TS_EXPERIMENT_ID must be rotated before
+# the eight-window campaign, or it starts with the four-window campaign's
+# five tickets already spent. See analysis/l5/GO_NOGO_EIGHT_WINDOW_20261021.md.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 22, failed: [].
+deploy: 2026-10-21T15:28Z re-trigger after a lost webhook — deployment-only, flag OFF, NOT_ARMED
+#
+# ---------------------------------------------------------------------------
+# DEPLOYING THE MERGE OF PR #191 (6d3eb8b2). Railway SKIPPED the merge's own
+# deployment (bee85d05, 20:17:14Z) because this service's watchPatterns are
+# ["deploy/l5_pmus_live/DEPLOY_TRIGGER"] -- the guard that stops an unrelated
+# merge redeploying a money-path service. `redeploy` cannot be used instead:
+# it reuses the PRIOR deployment's build, which is dd613e7b and does not
+# contain these fixes. Touching this file is the designed path and leaves the
+# intent on the record, which is the point of the file.
+#
+# WHAT ENTERS THE IMAGE, all three verified present in the merge's file
+# content rather than inferred from commit ancestry:
+#   * durable campaign-budget OWNERSHIP -- l5_live_authorization now calls
+#     open_or_resume, so the lock is claimed at arming instead of being inert;
+#   * the RETIRED-MARKET DOUBLE COUNT correction -- cash_legs_for_gates marks
+#     a leg settled when its market is in retired_markets, so ~$4.17 of
+#     residue belonging to markets the venue reports EXPIRED (positions {},
+#     assetNotional 0, unsettledFunds 0) stops being charged a second time on
+#     top of the realized loss it is already inside;
+#   * verifier ROLLBACK SAFETY -- defensive_execution_enabled moved from the
+#     graded rows to the reported ones, so defensive-ON and defensive-OFF are
+#     both deployable and a safety rollback can no longer fail the verifier.
+#
+# THE POST-DEPLOY GATE LINE ABOVE IS NOW WRONG AND IS CORRECTED BELOW.
+# Moving defensive_execution_enabled out of the graded set takes `checked`
+# from 22 to 21. A precondition nobody can satisfy is a precondition that
+# gets ignored, so it is fixed here rather than left to trip the next reader.
+#
+# STILL SHIPS NOTHING THAT CAN TRADE BY ITSELF. L5_DEFENSIVE_COMPLETION is
+# absent (absence is OFF), the campaign approval in production is the stale
+# $5 document so authorize_arming still refuses CAMPAIGN_LIMITS_WIDER_THAN_
+# APPROVED, and the owner's arm token governs as before. $4.65 max deployed
+# cash, $11.10 campaign budget, 5 max unmatched contracts, one market, one
+# outstanding order and the watchdog's independent HALT authority are all
+# untouched by this deployment.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T20:20Z deploy PR #191 merge 6d3eb8b2 -- ownership + double-count + verifier rollback; flag OFF, approval stale, NOT_ARMED
+#
+# ---------------------------------------------------------------------------
+# CORRECTION TO THE RECORD, and it corrects THIS FILE's own entry above.
+#
+# The preceding entry, and commit 9105c386, attributed the production refusal
+#     CAMPAIGN_WORST_CASE_BUDGET:13.54880000>11.10
+# to "~$4.17 of residue belonging to markets the venue reports EXPIRED".
+# THAT ATTRIBUTION IS WRONG and is withdrawn.
+#
+# What the figure actually was, from the planner's own emitted plan in
+# cpc-btc-updown-15m-2026-10-22-2045z:
+#     cash_gate_obligation_usd  4.636800
+#     cash_basis  "a resting DOWN leg is a BUY_SHORT and the cash gate
+#                  charges it a dollar a share"
+# Obligation per contract is UP price 0.38 + DOWN at $1.00 = 1.38; at the
+# planner's 3.36 contracts that is 4.6368, and 8.8988 + 4.6368 = 13.5356 --
+# inside the exact 13.5348-13.5488 range observed, the variation being the
+# planner re-sizing against the $4.65 cap tick by tick.
+#
+# `cash_committed` was ZERO throughout, which the authenticated venue read
+# independently confirms: positions {}, openOrders 0, assetNotional 0,
+# unsettledFunds 0. NO retired-market residue was ever being charged.
+#
+# The retired_markets asymmetry fixed in 9105c386 is REAL -- markets_with_
+# exposure subtracts retired_markets and cash_legs_for_gates did not, and
+# the 10 tests in tests/test_l5_retired_market_cash_release.py pin genuine
+# behaviour. It was simply not this refusal, and it freed no headroom.
+# The $4.17 figure appears nowhere in any venue or ledger reading; I inferred
+# it by subtraction before checking what the planner was charging.
+#
+# THE ACTUAL CAUSE was that build_orders sized against the cash envelope and
+# loss ceiling only and never consulted campaign-budget headroom, so it
+# emitted plans gate 3b was then obliged to reject. Fixed by passing
+# budget_headroom into the planner on the gate's own obligation basis.
+#
+# WHY THIS WINDOW IS STILL NOT TRADED, on measured parameters rather than
+# on caution. At the budget-feasible size of 1.59 contracts, using this
+# repo's own BASELINE in src/l5_complete_requote_gate.py:
+#     pair_profit_per_matched_pair_usd   0.057230
+#     residual_loss_per_unit_usd        -0.331449
+#     observed_leg_completion_rate       0.834196
+#     breakeven_leg_completion_rate      0.845161  (derived: 0.852758)
+# EV per unit = 0.834196*0.057230 + 0.165804*(-0.331449) = -0.007215, so
+# 1.59 contracts is -0.0115 USD EXPECTED. It fits every gate and is still
+# a negative-expectancy trade. Not shipped as a trade.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T20:57Z budget-aware planner sizing + record correction; SHADOW_ONLY_LOCK stays ON, no order authorized
+#
+# RETRY of 7fcff843. Deployment 13ff032c FAILED at 21:03:42Z on
+# `fetching snapshot`: ~76 MB in 271 s (~280 KB/s) against a hard ~305 s
+# deadline, before the builder reads this Dockerfile, with zero build steps
+# executed and failureStage/failureError both null at the time of reading.
+#
+# JUSTIFIED RECOVERY, not a blind retry. Same-hour evidence on this service:
+# 6a3b2984 SUCCEEDED in 82 s and d7696e01 SUCCEEDED, both from this branch,
+# while bf533e5c, 3ee39fd0 and now 13ff032c died in the same fetch stage.
+# pmus-readonly-recovery showed the identical pattern earlier -- FAILED
+# 16:03:33, then the SAME commit 3080f3b1 SUCCEEDED on retry at 16:12:24.
+# The fetch stage is intermittently degraded; the input is unchanged and has
+# already built successfully twice today.
+#
+# NOT ATTEMPTED, and why: `redeploy` reuses the PRIOR build (167331a1) and
+# would ship none of this. `.railwayignore` is CLI-only per Railway's docs
+# and has no effect on a GitHub-sourced snapshot. Untracking data/ (979 MB of
+# the ~1.23 GB snapshot, COPYd by no Dockerfile) would cut the fetch, but 48
+# files under tests/, src/ and scripts/ read it, so it breaks the suite and
+# destroys research evidence -- declined.
+#
+# THE DEPLOY IS LOAD-BEARING. The live build lacks budget-aware planner
+# sizing, so build_orders emits 3.36 contracts whose 4.6368 obligation gate
+# 3b must refuse at 13.5356 > 11.10. Without 7fcff843 the authorized window
+# cannot place an order at all.
+#
+# UNCHANGED BY THIS RETRY: SHADOW_ONLY_LOCK on, approval document stale,
+# $4.65 cash, $11.10 budget, $20 exposure, $20 cumulative, $5 daily halt,
+# 5 unmatched, one market, one live order, watchdog HALT authority.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T21:07Z retry 7fcff843 after snapshot-fetch timeout; no code change
+#
+# ---------------------------------------------------------------------------
+# DEPLOYING ee8509cd: never claim a window with too little entry runway.
+#
+# The live build (7ca036cc, deployment 081236d6) still contains the defect
+# that wasted the 0000z campaign: campaign_window_is_usable asked
+# `may_enter(now) is None`, which is true at ANY instant before the cutoff,
+# so a deployment finishing at T+441s claimed a window with 159s of runway
+# and produced zero submissions. window_eligible now measures the runway by
+# asking may_enter where it STOPS, against the venue's own t_end.
+#
+# Verified, no inventory held: T+0 runway 600 CLAIM, T+300 runway 300 CLAIM,
+# T+441 runway 159 REFUSE, T+565 runway 35 REFUSE, T+700 runway 0 REFUSE.
+# With residual held, T+441 and T+700 stay usable as INVENTORY_STILL_TO_
+# COMPLETE -- runway bounds OPENING only; completion reduces risk.
+#
+# NOT A LIVE ACTIVATION. SHADOW_ONLY_LOCK stays ON, the campaign stays
+# EXHAUSTED (windows_spent 1/1), both authorization documents expire
+# 01:20:57Z and are NOT renewed. No limit moves. This deployment can place
+# no order; it only stops a future authorization being wasted.
+#
+# AND THE ECONOMICS GATE IS NOT MET, measured rather than asserted. The
+# owner's precondition is positive expected net economics under realistic
+# fill assumptions. It fails structurally, not marginally:
+#   * MAKER_COMPLETE_CEILING is 0.96. pair_cost(depth d, spread s) =
+#     (1 - s) - 2*d*tick, so at the 1-tick spread depth=1 prices the pair at
+#     0.97 and is REFUSED by the cap; only depth>=2 fits.
+#   * complete_no_fill_forensics (n=868): FILLED completes rest a median of
+#     1 tick from the opposite ask, UNFILLED a median of 2. Fill outcomes
+#     are 125 filled (14.4%), 581 no-fill-cancelled, 162 rejected.
+#   * so the cap forces us to rest exactly where completes do not fill.
+#   * depth=1 is only legal at spread >= 0.02, and the spread is 0.0100 in
+#     667 of 671 observed shadow ticks (99.40%); >= 0.02 occurs 0.60%. Ten
+#     direct book reads this session were 1 tick, 10 of 10.
+#   * EV/unit = 0.834196*0.057230 + 0.165804*(-0.331449) = -0.007215, and
+#     breakeven completion is 0.852758 against 0.834196 observed.
+# Escaping this needs the 0.96 ceiling raised or depth forced to 1 at 0.97.
+# Both are risk-control changes the owner forbade, so neither is attempted
+# and no live campaign is proposed.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-23T00:50Z ee8509cd entry-runway guard; SHADOW_ONLY_LOCK ON, campaign exhausted, no order authorized
+#
+# ---------------------------------------------------------------------------
+# CAMPAIGN BUDGET RELEASE LIFECYCLE. Owner-authorized 2026-10-23.
+#
+# At 02:08:08Z the 0153 campaign could not arm:
+#   CAMPAIGN_BUDGET_REFUSED CAMPAIGN_BUDGET_LOCKED:camp1.l5live-20261022-2122
+# `close` was the right gate and NOTHING EVER CALLED IT, so a budget stayed
+# OPEN for ever once its windows were spent and every later campaign was
+# locked out. The anti-reset property was working; the lifecycle was missing.
+#
+# `release_stale` closes a FINISHED campaign on the same evidence `close`
+# demands -- nothing outstanding, nothing unsettled -- supplied by the store,
+# never assumed. It REFUSES a campaign releasing itself (that would reset
+# peak_usd mid-run), and an unreadable store yields a sentinel outstanding
+# entry so it fails CLOSED.
+#
+# NO LOSS ERASED, NO HEADROOM MINTED. The ledger holds only
+# {campaign_id, closed, opened_utc, peak_usd}; realized losses live in the
+# executor's store and re-enter every gate evaluation via
+# worst_case_usd(realized_usd=...). After release the headroom is still
+# 11.10 - 8.8988 = 2.2012. Tests pin that a loss cannot be erased, that no
+# realized/loss field is ever written to the ledger, and that the boundary
+# passes at exactly 2.2012 and refuses one cent more.
+#
+# Reconciliation gating this release: positions {}, availablePositions [],
+# open_orders [], assetNotional 0, unsettledFunds 0, watchdog open_orders 0.
+#
+# Limits unchanged: $20 exposure, $5 daily, 1 market, 1 live order, $4.65
+# cash, $11.10 budget, 0.96 pair ceiling, maker-only, post-only.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-23T02:23Z campaign budget release lifecycle; four-window campaign already authorized to 05:55:27Z
+
+# ---------------------------------------------------------------------------
+# 81b931f1 -- wire the dwell gate's ANCHOR and fix the retirement deadline.
+#
+# WHAT RUNS DIFFERENTLY IN LIVE DECISION-MAKING: nothing. `L5_DEFENSIVE_DWELL`
+# is ABSENT from this environment, so `l5_live_execution` passes
+# `stranded_since_t=None` and `decide` uses the arm window exactly as before.
+# The only behavioural change outside that flag is `maybe_ts_deadline`, which
+# now retires a resting leg at terminal - DEFENSIVE_MIN_EXECUTION_S (T+705
+# instead of T+720 at the default margin). That is a TIGHTENING: legs rest 15s
+# less, so the defensive sequence always has runway to cancel, confirm and
+# submit. It is the 0300z fix.
+#
+# WHAT THIS DEPLOY IS FOR: the READ-ONLY shadow. `l5_two_sided_shadow` now
+# carries a per-band stranding clock and passes it to `decide`, so the dwell
+# verdicts become observable in production (`timing_gate: DWELL`,
+# `stranded_for_s`) alongside the arm-window verdicts on the same ticks.
+# Timing-only refusals are counted in `defensive_timing_skips`, not stored, so
+# the payload does not grow by ~200 rows a window.
+#
+# THE POLICY IS NOT ENABLED, AND SHOULD NOT BE ON THIS EVIDENCE. Out of sample
+# DWELL - ARM is +0.01572/unit with a 95% CI of [-0.030, +0.062] over 167
+# eligible 15-minute windows; detecting that effect at 80% power needs ~2,900.
+# It forfeits 0.1422/unit of opportunity to net 0.0157, and 88.4% of its exits
+# land in windows where the profitable completion became reachable later. On
+# 5-minute windows it is significantly HARMFUL. See
+# analysis/l5/DWELL_GATE_IMPLEMENTATION.md.
+#
+# Shadow lock: L5_SHADOW_ONLY stays set. No capital change, no limit moved, no
+# new service, no live submission authorized.
+#
+# POST-DEPLOY, REQUIRED:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, failed: [].
+deploy: 2026-10-23T13:20Z dwell anchor + coordinated retirement deadline; shadow-only, dwell flag OFF
+deploy: 2026-10-23T21:06Z residual ceiling intersected with the approved absolute 3; consolidated authorization preflight. No limit, strategy or authorization change.
+deploy: 2026-10-23T21:40Z usability before the claim; authenticated-socket book for a fresh-market 404; residual ceiling in the authorization preflight. Refuse-only and read-only; no limit or authorization change.
+deploy: 2026-10-24T00:00Z consolidated: stale first-leg recovery (cap 1/market), 0.20 own-side opening floor, residual-ceiling telemetry. Campaign exhausted, account flat, nothing resting.
+deploy: 2026-10-24T00:58Z a gate that cannot be built now REFUSES instead of vanishing; the campaign-budget release outcome rides the window claim. Refuse-only and telemetry; no limit, strategy or authorization change.
+deploy: 2026-10-24T03:10Z campaign-budget handover journal (observable failures), lifecycle emitter clock, reporting-only incremental_room_usd. Owner-approved d786df3a scope. No trading policy, concurrency, capital, loss-limit, authorization or risk-gate change; the 8-window campaign stays exhausted and expired.
+deploy: 2026-10-24T13:10Z per-window fill/inventory/incentive accounting (L5_WINDOW_ACCOUNTING provisional+confirmed, L5_CAMPAIGN_ROLLING) and the labelled 32.48 fills/window reference. Reporting-only; no trading policy, sizing, authorization or risk-limit change. Stage 1 remains unauthorized and the campaign stays exhausted and expired.
+deploy: 2026-10-24T14:05Z RISK CORRECTION: explicit 3-contract opening-leg cap, because the executor's residual cap exempts a flat book and the $5 envelope opened 4.09 contracts live. Cash envelope also reduced to $3.70. No other limit changed; campaign nonce and expiry unchanged.
+deploy: 2026-10-24T17:05Z book-evidence telemetry (l5_book_evidence: bounded full-depth ring, event-time vs processing-time fill records, unmatched-inventory sampling driven by inventory rather than by a resting order, no-fallback venue event time). REPORTING ONLY: no trading policy, sizing, pricing, cancellation, authorization, capital or risk-limit change. Owner-approved commits 514588c0 + 962ac37d. Deployed only after the Stage 1 campaign reached its authorized end: 8 of 8 windows spent, armed=false, open_orders_at_venue 0, pending_terminal_total 0, quarantined [], all five fill-bearing windows venue-settled. Campaign realized net -3.7194. No new live trading authorization; nonce and the 17:24:27Z expiry are unchanged and the window budget stays exhausted.
+deploy: 2026-10-24T17:08Z observability OF the observability: L5_LIVE_WINDOW now carries book_evidence{attached, ring.report(), sampler.report(), attach_errors}. Needed because a fill record requires a fill and a residual sample requires unmatched inventory, so on an exhausted flat campaign both are silent and their silence was indistinguishable from the module being absent from the image. Reporting-only, wrapped, fires every window regardless of arming. No trading policy, sizing, authorization, capital or risk-limit change.
+deploy: 2026-10-24T17:20Z HONESTY CORRECTION to a label, caught before any fill was described by it: SYNC_AT_EVENT was named VENUE_EVENT_TIME_SYNCHRONIZED, which overclaims. Ring frame boundaries are OUR receipt clock (LadderModel stamps cur["t"]=now and discards the frame's transactTime), so locating a venue event between frames crosses two clocks whose offset is unmeasured. Renamed FRAME_IN_EFFECT_BY_LOCAL_RECEIPT_CLOCK and every as_of answer now carries clock_domains{offset_measured:false}. Reporting-only labelling; no trading policy, sizing, authorization, capital or risk-limit change.
+deploy: 2026-10-24T18:00Z SHADOW VALIDATION of the book-evidence fill and unmatched-inventory paths: L5_SHADOW_FILL_BOOK_EVIDENCE and L5_SHADOW_RESIDUAL_BOOK_SAMPLE, driven by the shadow controller's modelled fills and modelled inventory on its own sampler instance. A modelled fill passes venue_event_t=None deliberately so its event-time book reads NO_VENUE_EVENT_TIME_SUPPLIED rather than borrowing our clock. Read-only/shadow: no trading policy, sizing, pricing, cadence, depth, concurrency, authorization, capital or risk-limit change. L5_TS_DEPTH_TICKS is UNCHANGED at 2; the recommended change to 4 is proposed, not applied, and awaits separate authorization.
+deploy: 2026-10-24T20:10Z SHADOW ONLY: two-sided resting arm (ARGMAX@TWO_SIDED) at the same one-tick offset as ARGMAX@ONE_TICK_BEHIND, so the pair differs in two-sidedness alone; per-side order state; already_resting split into OPPOSITE_SIDE/SAME_SIDE/SIDE_UNKNOWN counters to answer how many of the 66,044 refusals were genuine opposite-side opportunities; emit throttle keyed per VARIANT not per policy (two ARGMAX arms at the same depth were muting each other). LIVE EXECUTOR UNCHANGED, campaign stays expired and disarmed, no limit/capital/authorization change.
+deploy: 2026-10-24T20:25Z SHADOW REPORTING ONLY: emit the two-sided comparison as its own short L5_SHADOW_TWO_SIDED line. The arm reports already ride in the heartbeat but that document reached 265,823 chars in production and the log transport split it into four fragments, so the numbers answering requirements 1 and 3-6 were present and unreadable. compare_two_sided() lives in l5_shadow_controller and analysis/l5/two_sided_comparison.py is a thin wrapper over the same function, so production and offline cannot disagree. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T20:32Z SHADOW REPORTING FIX: the requirement-1 split counters were counted on every tick and never reported -- they live at the tally's top level (because the refusal reason string is unchanged by design) and economics() did not lift them, so the comparison read refusal_reasons and would have printed three zeros forever. economics() now exposes already_resting_split/_total and both_sides_filled_same_tick; the comparison reads them from there; an end-to-end test drives a real controller through the branch. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T20:36Z SHADOW REPORTING: keep the two requirement-1 denominators apart. The already_resting bucket is lifetime (66,918 on the tape) while the split only counts since the deploy that added it, so the opposite-side share is taken over CLASSIFIED refusals and split_covers_whole_bucket reports the mismatch instead of hiding it. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T20:40Z SHADOW DOCS+TEST: pin what ARGMAX@TWO_SIDED actually tests. Measured: from flat with no fill the arm rests ONE side and reports SAME_SIDE for seven following ticks, because the policy decides from inventory and wants the same side while flat. It PERMITS a second resting side; it does not seek one. Simultaneous quoting from flat would need a counterfactual price for inventory we do not hold -- a new policy, not a placement -- so a positive result here is NOT evidence for the simultaneity hypothesis. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T20:50Z SHADOW REPORTING: count opposite-side EPISODES and WINDOWS, not just ticks. Three production readings a minute apart had OPPOSITE_SIDE frozen at 17 while SAME_SIDE ran 60->76->95, so the reported share fell 0.2208->0.1828->0.1518 with nothing changing: a tick count measures order dwell, not opportunity. New denominators: opposite_side_episodes (transition-counted) and windows_with_opposite_side_want over windows_observed. Tick counts kept and renamed ..._TICKS so they cannot be read as an opportunity rate. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T21:05Z SHADOW ONLY: a THIRD placement arm, ARGMAX@TWO_SIDED_LADDER, which QUOTES the free side while flat instead of merely permitting it. Second leg priced from its OWN touch (complement_target cannot price it -- it needs an average already paid), set back by the depth the pair bound requires: with both legs d ticks behind their own touch and spread s ticks the planned pair is exactly 1-s*t-2*d*t, so at the median one-tick spread d=1 plans 0.97 ABOVE the 0.96 cap and the arm deepens to d=2 (0.95) of its own accord. Pair checked explicitly against the cap and refused by name when it breaches. New outstanding() reports cash_if_all_fill over BOTH legs plus worst_residual if one side fills alone. compare_all emits both pairings against the one control with a requirement-8 mechanics verdict on top. Existing control and permission arms preserved untouched. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T21:10Z SHADOW REPORTING: record the ladder second leg's applied DEPTH as a histogram. The pair bound usually puts it deeper than the control's single leg (d=2 vs d=1 at a one-tick spread) and a deeper leg fills less often by arithmetic, so without this a lower fill rate on the second leg would read as a property of two-sidedness. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T21:15Z SHADOW REPORTING COST: the heartbeat now carries COMPACT arm reports. Measured: per_window is 96% of a full report (204,795 of 212,565 chars at 369 settled windows), so six arms once a minute was 1.28 MB/heartbeat, about 1.8 GB of logs a day, for rows already durable in the state files and already aggregated into L5_SHADOW_TWO_SIDED. Compact is ~67 MB/day. The omitted COUNT is reported so a compact document can never read as an arm that settled nothing; the comparison still gets the FULL reports in-process. LIVE EXECUTOR UNCHANGED, campaign expired and disarmed.
+deploy: 2026-10-24T21:30Z CAMPAIGN PREPARATION, NO ARMING. (1) Emit L5_EFFECTIVE_RUNTIME_CONFIG once at boot: l5_runtime_config_verify was written to run inside the container and nothing ever ran it there, so effective limits could only be established by reading secret-bearing variables. (2) COPY src/l5_mandate_signature.py -- the verifier imports it lazily and without it the boot check reports its own ImportError instead of the configuration; image-closure test caught it. Verification only, MANDATE_PUBKEYS ships EMPTY. (3) Campaign budget 11.10 -> 5.00: the 11.10 was the unspent part of the $20 account-wide gate at all-time realized -8.8988, but the 20:54Z reconcile reports -11.6213, leaving $8.3787, so 11.10 exceeded headroom by $2.7213 and had become decoration. NOTHING IS ARMED. Campaign approval remains stale by design and no variable was written.
+deploy: 2026-10-24T21:20Z MANDATE PREP, NO ARMING: add the two-sided probe's own scope to the in-container config verifier as OBSERVED rows -- two_order_pair_enabled, active, named_market, opening_leg_max_contracts, round_allocations, min_first_leg_own_price, order_ttl_s, entry/complete cutoffs, min_entry_runway_s. These are mandate parameters (order size, and whether BOTH legs may rest at once) and none was readable in-container, so a campaign's stated size could only be asserted from module defaults instead of read from the running process. Observed, not graded. NOTHING ARMED.
+deploy: 2026-10-24T22:30Z EXECUTOR REPORTING ONLY: L5_MANDATE_STORE_PROBE at boot. Fetches the watchdog's mandate_floor.json and mandate_revocations.json over the REAL GET-only clients the arming gate uses, and reports whether they exist, parse, carry a usable asof_utc and sit inside the 900s staleness bound. It exists because those documents are on private networking and the watchdog has no public domain, so the executor is the only client that can reach them -- without it "the endpoints work" could only be inferred from the watchdog's own log. Authorizes nothing, submits nothing, writes nothing; pinned by a test on the code object. Also: the $2.00 worst-case deficit bound now has B7-specific tests (2-contract dear clip allowed, 3-contract dear strand refused, same 3 cheap allowed, simultaneous fills not refused, pending cancellation charged, unestablished bound refused). NO LIMIT IS SET BY THIS DEPLOY and nothing is armed.
+deploy: 2026-10-24T22:35Z EXECUTOR REPORTING ONLY: make max_worst_case_deficit_usd an OBSERVED row in the in-container config verifier. It graded 23 limits and the one NEW risk control of this campaign was not among them, so its value could only be asserted rather than read. Reported through the money path's own parser, so a value that would be fatal at boot shows up as the refusal it is. No limit is set by this deploy and nothing is armed.
+
+# 2026-10-25 — owner-authorized SHADOW-ONLY deployment of the wrong-side residual
+# lifecycle fix, ahead of a three-window maker-only BTC15m live validation.
+#
+# CODE: src/l5_live_execution.py only, +68/-1, exactly the tested fix in
+# 0febc315. `git diff --stat 0febc315..HEAD -- src/ tests/ deploy/` is EMPTY,
+# so nothing else in the engine moved. probe_leg_order derives the complement
+# side from the PROSPECTIVE signed residual (realized + outstanding, so filled,
+# partial, pending and resting all count); probe_leg_qty_cap caps a reducing leg
+# at abs(residual) so it cannot overshoot into a reversal. Cheapest-first is
+# preserved byte-for-byte when flat and on any read error.
+#
+# 22 new tests reproduce the 1245z and 0130z wrong-side states and pin 0145z
+# unchanged. Full regression 58 failed / 13,351 passed / 23 errors -- exactly
+# the established baseline, zero new failures.
+#
+# NO new capability: maker-only, no taker path exists, no budget or limit moved.
+# Round retirement deliberately NOT loosened.
+#
+# BOTH TRADING LOCKS ON FOR THIS DEPLOY: L5_SHADOW_ONLY=1 (set before this
+# push, deploy skipped) and the campaign approval is spent and expired
+# (windows 8/8, not_after 2026-10-25T15:15:00Z). Arming is a separate, later
+# act requiring a fresh approval payload.
+deploy: 2026-10-25T15:20Z shadow-only — wrong-side residual lifecycle fix
+
+# 2026-10-25 — SHADOW-ONLY deploy of the boot-time residual-side self-check,
+# the evidence that makes the three-window step-2 prerequisite satisfiable.
+#
+# WHY. The wrong-side fix is inert while flat by design, and a shadow-locked
+# executor can never hold a residual (shadow blocks submission -> no fill -> no
+# inventory), so NO shadow window can distinguish the fixed code from the old
+# code. This asks the running process what its own code does, the same way
+# l5_runtime_config_verify does for configuration.
+#
+# WHAT IT ADDS: one boot emission, L5_RESIDUAL_SIDE_SELFCHECK. It calls
+# FaithfulExecutor.probe_leg_order / .probe_leg_qty_cap themselves through an
+# unbound call on a stub carrying only a two-reader store. No executor is built,
+# no socket opened, no real store read, nothing submitted, no lock lifted -- the
+# stub has no transport. An unreadable case FAILS rather than passing silently.
+#
+# REGRESSION, measured on the same machine at both commits today:
+#   base 717f1eed : 58 failed, 13,351 passed, 26 errors
+#   this d8ae3932 : 58 failed, 13,358 passed, 26 errors   (+7 = the new tests)
+# Zero new failures, zero new errors. The "23 errors" baseline carried in
+# earlier notes was stale; 26 is the true current figure at both commits.
+#
+# Two of the seven new tests are NEGATIVE CONTROLS -- the superseded
+# cheapest-first rule and a removed quantity cap must both make the self-check
+# report PASS false -- because a self-check that cannot fail is decoration.
+#
+# BOTH TRADING LOCKS STAY ON FOR THIS DEPLOY: L5_SHADOW_ONLY is already 1, and
+# the campaign approval is spent and expired. Arming is a separate later act
+# requiring a fresh payload.
+deploy: 2026-10-25 shadow-only — residual-side boot self-check
+
+# ---------------------------------------------------------------------------
+# DEPLOY: the fill-horizon probe, SHIPPED UNARMED AND FAIL-CLOSED.
+#
+# WHAT IS ADDED. src/pmus_fill_horizon_probe.py (stdlib only, no transport, no
+# order path) plus ONE additive emission in the entrypoint's boot block, beside
+# the existing self-checks:
+#     emit("PMUS_FILL_HORIZON_PREFLIGHT", FHP.preflight())
+# It reads three environment flags, recomputes the probe's own worst-case bound
+# from module constants, and reports why it is not armed. It echoes no secret:
+# the flags are an arm flag and an authorization label, not credentials.
+#
+# WHY IT IS EMITTED AT BOOT rather than read from outside. The same reason
+# L5_EFFECTIVE_RUNTIME_CONFIG exists: the only arming state that matters is the
+# one the running process actually has, and those variables cannot be read
+# externally without handling secrets. The process reports its own verdict.
+#
+# NOTHING IS ARMED BY THIS DEPLOY, and nothing can be. The probe requires
+# PMUS_FILL_HORIZON_LIVE=YES, PMUS_FILL_HORIZON_AUTH matching
+# EXPECTED_AUTH_ID -- a constant in this build -- and a non-absent expiry.
+# None of the three is set. The identifier lives in the build precisely so that
+# neither half of the control can be supplied by the same party: this change
+# installs the code half only. L5_SHADOW_ONLY and the existing L5_LIVE_AUTH_*
+# envelope are untouched, as is every other executor.
+#
+# A BUG THIS DEPLOY ALMOST SHIPPED, caught by the existing tests. The new
+# import put the module inside the entrypoint's reachable closure, which
+# test_the_image_copies_every_module_the_entrypoint_can_reach and the three
+# image-closure tests immediately failed on -- without the matching
+# `COPY src/pmus_fill_horizon_probe.py`, the container would have died at boot
+# with ImportError. The Dockerfile closure is updated in the same commit.
+#
+# REGRESSION, measured on the same machine at both commits, on the live-runner
+# and continuous selection (1,100 tests):
+#   base cabd2621 : 0 failed, 1,058 passed, 14 errors
+#   this commit   : 0 failed, 1,088 passed, 14 errors   (+30 = the new tests)
+# Zero new failures, zero new errors. The 14 errors are
+# tests/test_pmus_status_live_handoff.py, pre-existing and identical at base.
+#
+# THE 20-WINDOW / $90-WORST-CASE PROBE REMAINS UNAUTHORIZED. Arming it is a
+# separate owner act. This deploy only makes the preflight observable.
+deploy: 2026-10-25 shadow-only — fill-horizon probe, UNARMED
+
+# ============================================================================
+# 2026-10-26 — OWNER-AUTHORIZED **DISARMED** DEPLOYMENT OF THE NARROW RELEASE
+#
+# Promotes the narrow correction cut from the DEPLOYED commit 497b1152:
+#   * wallet ingestion reliability  -- durable IngestCursor (a restart RESUMES
+#     instead of re-seeding and discarding up to 200 of L5's newest actions),
+#     per-stage counters with timestamps, three diagnostic clocks, collector
+#     degrades instead of raising on a full volume, bounded retention.
+#   * daily/cumulative loss accounting -- the L5-SCOPED daily ceiling now
+#     reads a UTC-day figure; the cumulative ceiling keeps reading the
+#     post-baseline total and is never reset by the day boundary.
+#   * early evaluation of the EXISTING residual-completion decision -- the
+#     MAKER-phase bail yields only when `still_fillable_order_count()` is 0,
+#     i.e. only when no quote of ours can still fill and there is therefore no
+#     maker edge to protect. Evaluate-only.
+#   * preflight exposure correction -- the worst case now reads the ENFORCED
+#     L5_MAX_CASH_DEPLOYED_USD instead of a hardcoded $5, and maximises the
+#     taker fee at the CHEAPEST admissible price. Under a fixed principal
+#     contracts = cap/p, so fee = Theta*cap*(1-p) is monotone DECREASING in p;
+#     the old p=0.5 assumption understated the bound by 90%.
+#
+# NO may_complete CHANGE. The owner approved one; the evidence says it is not
+# the cause (may_complete permits to 720s and the defensive arm window
+# [660,720) sits inside it), so no money-path edit was made. The 1945z strand
+# is a DWELL-FLAG matter -- L5_DEFENSIVE_DWELL -- on an existing mechanism.
+#
+# THIS DEPLOYMENT IS DISARMED AND ADDS NO CAPABILITY.
+# No variable is changed by it. The campaign document is spent (windows 3/3),
+# the executor starts disarmed, L5_TS_COMPLETION_CROSS stays unset, and the
+# submission gate reads NOT_ARMED. Nothing here can submit an order.
+#
+# Regression: 13,595 passed, 34 total failures -- the SAME set as deployed
+# 497b1152, zero new failures.
+deploy: 2026-10-26 narrow release, DISARMED, owner-authorized
+
+# =============================================================== 2026-10-26
+# OWNER-AUTHORIZED PROMOTION OF THE MARKER-RESET FIX. Two commits only,
+# cherry-picked onto the deployed 728d3bb2 so the production delta is exactly
+# the fix and its tests -- 2 files, +408, -0. The divergent development branch
+# (claude/l5-wallet-ingestion-fix-kqcqoa) is NOT promoted: it carries 67 files
+# and +91,719 lines of research material the owner excluded from this release,
+# and it deletes tests/test_l5_completion_cross_cannot_bleed.py.
+#
+# THE DEFECT. `_probe_leg_pending` / `_probe_round_pending` are set by the
+# two-sided path inside `handle` and cleared immediately before the wire, with
+# nineteen refusal exits in between that reset nothing. One refused two-sided
+# plan latched them for the life of the process, and the strategy-ownership
+# gate then refused every subsequent L5-FOLLOWING order as though it belonged
+# to the other engine. The latch was self-sustaining: only a successful
+# submission cleared it, and it is what prevented one.
+#
+# MEASURED IN camp1.87265e609a92b5a2889e5392, window 1445z, 27 decisions on
+# authenticated books: 15 refused STRATEGY_EXCLUSIVE_L5_FOLLOWING with l5f-
+# coids, `safety` null on every one (so the maker-only overlay was never
+# reached), zero orders to the venue.
+#
+# ALSO A RISK DEFECT: the second-maker-slot evidence reads
+# `_probe_round_pending` to decide whether an order is a pair leg, so a stale
+# marker could grant an L5-following order a slot reserved for a two-sided
+# complement. The reset is risk-REDUCING.
+#
+# THE FIX IS TWO LINES: reset both markers on entry to `handle`. They are
+# per-call scratch, set and consumed within one call. No limit, price, size,
+# mode, ownership rule or crossing permission is touched. L5_WINDOW_STRATEGY
+# stays L5_FOLLOWING, maker-only stays in force, L5_DEFENSIVE_COMPLETION stays
+# 0, L5_TS_COMPLETION_CROSS stays unset.
+#
+# WHAT IT DOES NOT DO. It creates no executable maker opportunity. Zero of the
+# 27 candidates produced a valid maker translation, so none would have
+# submitted even without the latch. L5 pays THROUGH the touch: across 71
+# faithful taker translations the median |slippage vs L5| was two ticks and the
+# pair cost was 1.0100 if both legs are taken, exactly 1.0000 with the second
+# leg rested at the touch, and 0 of 71 reached the 0.96 fee-safe target. After
+# this deploy a taker-only translation is refused BY NAME at the maker-only
+# overlay instead of being misattributed to strategy ownership, which is the
+# point: the logs start telling the truth about why nothing trades.
+#
+# REGRESSION, name-level and both directions, same machine:
+#   baseline 61df0e88 : 20 failed, 13,641 passed, 27 skipped, 1 xfailed, 14 errors
+#   fix      2025f875 : 20 failed, 13,659 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   collection 13,703 -> 13,723 = +20, exactly the new tests
+# 240 tests pass on this release lineage. The 14 errors are
+# tests/test_pmus_status_live_handoff.py, pre-existing and identical at base.
+#
+# THE CAMPAIGN IS NOT RENEWED, RESET OR EXTENDED. Nonce
+# camp1.87265e609a92b5a2889e5392 and deadline 2026-10-26T17:42:45+00:00 are
+# untouched, the durable window ledger keeps its 3 spent / 1 remaining, and the
+# executor was DISARMED between windows when this shipped.
+deploy: 2026-10-26 marker-reset fix — campaign untouched, maker-only, DISARMED at ship
+
+# =============================================================== 2026-10-26
+# THE CALIBRATION LIFECYCLE, COMPLETED. Two commits cherry-picked onto the
+# deployed 271d79dc: production delta 3 files, +353, -0, of which 235 lines
+# are tests. The broad development branch is NOT promoted -- the frozen-rule
+# document and the offline sequential replay stay out of the image, because
+# neither is money-path code.
+#
+# WHAT WAS BROKEN. `pre_submit` was the ONLY recorder call the money path
+# ever made. `on_ack`, `on_fill`, `on_settlement` and `on_fees_actual` were
+# implemented and called from nowhere, so `terminal_state` could never be
+# PRESENT and all 10,741 recorded rows read `venue_actual_status: PENDING`.
+# A genuine resting order would have produced an unusable record even after
+# it filled -- and that record is the only route to the maker fill rate the
+# whole maker-only question depends on.
+#
+# WHERE THE HOOKS NOW FIRE. `InventoryStore.apply_order_progress`, which is
+# the ONE idempotent choke point for a venue fill. Four call sites reach it:
+# the runner's reconcile, the executor's terminal self-call, and the deadman
+# cancel verifier. Wiring only the executor would have left a fill booked by
+# the deadman path invisible, and that is the fill most worth seeing -- it is
+# the one that happened while we were trying to cancel. on_ack stays
+# immediately after transport.submit.
+#
+# IDEMPOTENCY IS INHERITED, NOT REIMPLEMENTED. The hooks sit inside
+# `delta > 0`: a repeated poll of the same cumQuantity records nothing
+# exactly as it books nothing, partial fills arrive as successive deltas, and
+# a cum_qty that goes BACKWARDS still refuses and records nothing.
+#
+# FEES ARE THE VENUE'S OR THEY ARE UNKNOWN. `commission` fills the ACTUAL
+# column. Unstated -> None, never zero. Zero -> zero, because this venue
+# credits rebates separately and a zero commission is not a rebate.
+#
+# A MODELLED OBSERVATION IS STILL NEVER A VENUE-CONFIRMED FILL. on_terminal
+# fires here only on `prog["terminal"]` with venue_confirmed=True. The shadow
+# path keeps passing False and its records stay unusable by design.
+#
+# RECORDER FAULTS CANNOT MATTER. `_calib_safe` swallows everything, treats an
+# absent recorder and one missing the hooks as normal, and returns None
+# always. Parametrised tests raise from each hook in turn and assert the fill
+# is still booked, the position is still correct and nothing is refused.
+# Losing an order's identity over telemetry is far worse than losing the
+# telemetry.
+#
+# REGRESSION, name-level, both directions, same machine:
+#   baseline 61df0e88 : 20 failed, 13,641 passed, 27 skipped, 1 xfailed, 14 errors
+#   this tree         : 20 failed, 13,691 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   +50 passed = exactly the new tests (20 marker-leak, 15 replay, 15 lifecycle)
+# 218 money-path tests pass on this release lineage.
+#
+# NOTHING ELSE CHANGES. No limit, price, size, mode, strategy ownership or
+# crossing permission is touched. The campaign nonce
+# camp1.87265e609a92b5a2889e5392, its deadline 2026-10-26T17:42:45+00:00 and
+# its durable window ledger are untouched. No capital change, no taker mode.
+deploy: 2026-10-26 calibration lifecycle — observational only, campaign untouched
+
+# ============================================================================
+# 2026-10-26 — NOT_ARMED claim accounting. Owner-authorized.
+#
+# WHAT IT FIXES. The submission claim is consumed before the wire and is
+# never returned. That rule is correct and is UNCHANGED here: a claim
+# released on a crash could buy a second order into a venue that already
+# holds the first. But a DISARMED transport raises NotArmed out of submit()
+# without attempting a POST, so nothing reached the venue and nothing could
+# have.
+#
+# Campaign camp1.87265e609a92b5a2889e5392 closed having spent 1 of 21
+# submissions and 1 of 6 OPENs on a well-formed MAKER intent -- 1715z DOWN
+# 0.4500 x 1.54 -- refused NOT_ARMED after its claim was already durable.
+# submitted:false, venue_order_id:null, and the budget counted a submission
+# the venue never saw.
+#
+# THE FIX IS ORDERING, NOT RELEASING. FaithfulExecutor.disarmed_refusal()
+# declines to TAKE a claim when the transport is provably disarmed. Nothing
+# releases a claim; the never-reset rule is untouched.
+#
+# AN EFFICIENCY GUARD, NOT A SAFETY GATE -- the same class as
+# presend_cross_refusal, which exists for the same reason and which this
+# runs immediately after, at the last point before a claim becomes durable.
+# It acts ONLY on a positive `armed is False`; an absent attribute, a
+# raising attribute, 0, "", None or no transport all FAIL OPEN into the
+# existing path, because a telemetry read must never be able to halt
+# trading. Refusing early on a definite False is free: submit() would
+# refuse the same order on the next line. It cannot authorize anything --
+# a structural AST scan pins that its only calls are getattr, str and type.
+#
+# REGRESSION, name-level, both directions, same machine, same worktree:
+#   deployed cc98f7b5 : 20 failed, 13,637 passed, 27 skipped, 1 xfailed, 14 errors
+#   this tree 91845f8f: 20 failed, 13,656 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   +19 passed = exactly the new tests (test_l5_disarmed_claim_accounting)
+#
+# NOTHING ELSE CHANGES. No limit, price, size, mode, strategy ownership or
+# crossing permission is touched. L5_TS_MIN_FIRST_LEG_PRICE stays as
+# deployed, the 0.96 pair ceiling stays, L5_MAX_LIVE_ORDERS stays 1,
+# L5_DEFENSIVE_COMPLETION stays 0, L5_MAKER_PAIR_GATE is not set and its
+# code is NOT in this lineage. No capital change, no taker mode.
+#
+# THE EXPIRED CAMPAIGN IS NOT RESTARTED OR EXTENDED. Nonce
+# camp1.87265e609a92b5a2889e5392, deadline 2026-10-26T17:42:45+00:00 and
+# its durable window ledger (4 of 4 spent) are untouched. The executor
+# stays DISARMED.
+deploy: 2026-10-26 NOT_ARMED claim accounting — ordering fix, campaign untouched
+
+# ----------------------------------------------------------------------------
+# 2026-10-26 retry — the promotion above could not be FETCHED, twice.
+#
+# d1447ee0 and 067f0b23 both FAILED at "failed to fetch snapshot", stalling
+# at 71.1 MB and 65.6 MB of a 221,279,882-byte snapshot after ~275s. Two
+# identical failures rule out a blip, and the same 221 MB fetched fine for
+# cc98f7b5 at 16:14Z, so the builder's throughput moved rather than this
+# repo. The code being promoted is UNCHANGED from 1c9b3b52.
+#
+# data/ (935 MB of working tree) and tests/ (42 MB) are now excluded from the
+# build snapshot. This CANNOT change the image: all 58 COPY/ADD sources in
+# this Dockerfile resolve under src/ (53), config/ (4) and analysis/ (1), and
+# tests/test_dockerignore_cannot_drop_a_copied_path.py asserts that, so a
+# later COPY from an ignored path fails a test instead of silently shipping
+# an image missing a file. analysis/ is deliberately NOT excluded.
+#
+# Still no limit, gate, price, size, mode or strategy ownership change. The
+# campaign stays expired and is neither restarted nor extended; the executor
+# stays disarmed.
+deploy: 2026-10-26 NOT_ARMED accounting fix, retry with a fetchable snapshot
+
+# =====================================================================
+# 2026-10-26 — owner-authorized promotion of four narrow verified fixes,
+# for the R=4 bounded frequency experiment. DISARMED promotion: nothing
+# here arms anything, and the arming handshake is deliberately NOT part
+# of this deployment.
+#
+# Approved commits (owner named all four):
+#   cb22bb47  first-leg floor keyed on the unmatched imbalance
+#   c16ee7ec  decision-role reporting field + its Dockerfile COPY
+#   471b10d0  fail closed on an unreadable order quantity
+#   d48f22e3  final parity record
+#
+# Applied here as:
+#   83a47688  cherry-pick -x cb22bb47
+#   7708bd92  cherry-pick -x c16ee7ec
+#   33358b1e  471b10d0 with d48f22e3 folded in, applied BY CONTENT
+#
+# WHY THE THIRD IS NOT A CHERRY-PICK. 471b10d0 modifies two files that
+# were created in c4e5bae5, which the owner did not approve, so the
+# approved four are not self-contained. The three affected paths were
+# taken at their verified state from d48f22e3 instead, after confirming
+# that the diff to src/l5_live_execution.py against this branch is
+# exactly the 29-insertion/2-deletion fail-closed change and nothing
+# else. No unapproved commit is included.
+#
+# WHAT CHANGES AT RUNTIME.
+#   - a post-pair opening now faces the same 0.20 first-leg floor as the
+#     first leg, because `up == dn` means there is no imbalance to manage
+#   - an unreadable order `remaining` now contributes its worst case to
+#     the residual and notional bounds instead of zero
+#   - every L5_LIVE_DECISION carries decision_role (reporting only; an
+#     AST test asserts it drives no control flow)
+#
+# WHAT DOES NOT CHANGE. No limit is raised. Aggregate exposure stays $20,
+# unmatched inventory stays bounded at 3 contracts, the pair ceiling stays
+# 0.96, execution stays MAKER_ONLY, and the daily, cumulative, campaign,
+# deficit and watchdog limits are untouched. L5_CAMPAIGN_BUDGET_USD is NOT
+# raised and the exhausted campaign is NOT reset.
+#
+# VERIFIED BEFORE THIS LINE WAS WRITTEN.
+#   image closure + the four fixes: 61 passed
+#   all four modules import, including src.l5_pmus_live_runner
+#   deployment-branch parity: see the figures in the promotion report
+R=4 frequency experiment, DISARMED promotion 2026-10-26T23:24:34Z
+
+LOGGING-ONLY promotion of fa682b80, 2026-10-27T03:30Z.
+Records L5_ACC_RECOVER_REFUSED when a resting leg qualified for a
+stale-by-distance recovery on every test and was refused by the
+per-market cap alone. No execution decision, cancellation, price, size,
+risk gate or durable order state changes; the recovery list is never
+written. Deployment-branch parity exact: 20 failed / 14 errors, passes
+13,690 -> 13,705 (the 15 new tests). DISARMED: the campaign approval
+expired 02:46:48Z and its windows are 8/8 spent, so this cannot arm.
+
+TELEMETRY-ONLY promotion of eb332879, 2026-10-27T21:30Z, SHADOW-LOCKED.
+Records L5_LIVE_PREFLIGHT_ATTEMPT for EVERY preflight attempt, including
+the failures maybe_preflight suppresses when the blockers have not
+changed -- which is why 80-107s of every window roll has no record. One
+method and its getattr call site; additions only, 2 files / +313 / zero
+deletions against f6ad0f55. No gate, limit, order path, settlement path,
+watchdog behaviour, round_allocations or capital figure changes.
+Deployment-branch parity exact against f6ad0f55: 20 failed / 14 errors,
+identical 34-name failure/error sets, passes 13,705 -> 13,724 (the 19 new
+tests). L5_SHADOW_ONLY=1, so submit() raises NotArmed structurally; the
+campaign approval is expired and its windows are 8/8 spent.
+
+--- 2026-10-27T22:3x UTC: settlement-sweep cap ---------------------------
+Promotes ea3bece5 on top of caf790a5: ONLY the sweep cap and its 19 tests.
+Two files, four hunks, all in the new env reader and sweep_settlements.
+The lim.tick_begin() lines from 0c692074's limiter accounting were found
+riding along and REMOVED -- they are unrelated to this fix.
+
+Parity against caf790a5: 34-name failure/error set IDENTICAL, passes
+13,724 -> 13,743 (the 19 new tests). 20 failed / 14 errors both sides.
+
+WHY. Four telemetry boundaries on 4fc4e25b show preflight PASSING on
+attempt 1 every time -- 1.5-4.0s, first_blocking null, socket book
+56-183ms old -- while the executor does not REACH it until +92.4s,
++103.6s, +102.5s and +110.9s. sweep_settlements reads one bbo per market
+in markets_with_exposure(), and the heartbeat names 86 of them back to
+2026-10-12, none retirable. 86 reads at the shared 1.5 rps is 57s of
+synchronous sleep ahead of preflight AND the decision path.
+
+PMUS_SETTLEMENT_SWEEP_CAP=4 is set. Deferred, never dropped: oldest read
+first, a market never read sorts first, and committed cash is released
+ONLY in retire_settled_market -- so a deferred read leaves cash reserved,
+which tightens the gates rather than loosening them.
+
+L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally. No gate,
+risk limit, order route, retirement rule or settlement accounting moves.
+
+--- 2026-10-27T23:01 UTC: per-stage tick timing ---------------------------
+Diagnostic only, additions only, parity against be4e5dea IDENTICAL by
+exact test name (34 each side), passes 13,743 -> 13,753.
+
+Times the thirteen calls between tick() entry and maybe_preflight() and
+emits L5_LIVE_TICK_STAGES, slowest first, only when the pass exceeds 5s.
+It wraps no call: marks sit BETWEEN the existing statements so every call
+expression stays byte-identical, which the call-recorder stubs in
+test_l5_uncertainty_recovery and test_l5_mechanism_tick_wiring require.
+
+Deployed deliberately AFTER the 23:00 boundary: a restart inside the
+LEAD_S=120s pre-open subscribe window is what left 2230z with no book
+until +454.1s, subscribed_before_open false and a single resubscribe at
++454.0s -- resub_due iterates self.subscribed only, so a slug that misses
+its pre-open subscribe has no retry path at all. Service up well before
+2315z subscribes at 23:13; 2315z is the first clean measurement.
+
+L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally.
+deploy trigger 2026-10-28T06:00:30Z: round-retirement correction, shadow-locked
+
+P0 completion-cutoff correction, shadow-locked 2026-10-28T13:25Z
+  Completion eligibility is a MARKET fact, not a ROUND fact. Live 1215z
+  stranded 2.29 UP because the probe advanced to a fresh round after a
+  cancelled completion, so `_entering` read True and the gate asked
+  may_enter (T+600) instead of may_complete (T+720); 120s of authorized
+  completion runway went unused and the window settled -$0.3835. All four
+  campaign windows stranded UP for -$2.9034 against +$0.8571 of matched
+  pair profit.
+  Narrow: 3 files. Adds a refusal (PAST_ENTRY_CUTOFF_NOT_A_COMPLETION) and
+  the later deadline for RISK-REDUCING completions only. No capital, loss,
+  deficit, deadline, watchdog or submission limit changes. The requote
+  mechanism stays absent. Parity against ea67b2c5: identical failure sets,
+  34 pre-existing ids, 13860 -> 13881 passes (+21 new tests).
+  L5_SHADOW_ONLY is re-engaged and the campaign authorization is exhausted
+  (4 of 4 windows spent), so nothing can be armed or submitted.
+
+Campaign 6: completion repricing, shadow-locked 2026-10-28T15:30Z
+  Owner-authorized four-window BTC15m validation. Three corrections to
+  completion EXECUTION, which is where the whole -$2.0463 of 2026-10-28
+  lived: matched surplus +$0.8571 against stranded losses -$2.9034.
+
+  P0  completion eligibility is a MARKET fact, not a ROUND fact, so a
+      risk-reducing completion stays eligible to T+720 while no new
+      directional opening is permitted after T+600.
+  P1  a refused completion gets a fee-aware beats-stranding second question,
+      bounded by the owner's approved residual deficit.
+  P2  completion_requote cancels a quote the market has walked away from, by
+      exact venue id with proof by re-read, so the ordinary complement path
+      re-places it against the current book, charged to REPLACE.
+  P3  pair_cost_refusal now separates OPENING exposure, which keeps the 0.96
+      ceiling, from COMPLETING confirmed residual, which answers to the
+      completion economics. This is the gate that actually refused 1245z at
+      a realised 0.9699, and without it the repricing could not reach the
+      wire. A rescue requires all of: reduces an unmatched position, does
+      not cross zero, effective pair <= $1.00 (a pair redeems exactly that),
+      and price within the completion ceiling.
+
+  Plus three same-subsystem prerequisites the deploy branch lacked
+  (cb22bb47, fa682b80, e51f17ff) and l5_capital_block, which prices every
+  refusal by the cash envelope, exposure cap, residual limit or order-count
+  limit. Reporting only.
+
+  ISOLATED PARITY against ea67b2c5: 34 failing node ids on both, IDENTICAL
+  sets, 13860 -> 14039 passes. The promoted src/ and tests/ are byte-
+  identical to the tree that parity ran on.
+
+  BOTH LOCKS STAY ON at deploy time: L5_SHADOW_ONLY=1 and no live
+  authorization installed. L5_COMPLETION_REQUOTE is the only behavioural
+  change and is enabled explicitly. No capital limit is changed: cash
+  headroom ran $9.35-$16.70 against the $12 envelope and peak exposure
+  ~$3.03 against $20, so dollars are not the binding constraint.
+
+Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
+  Owner-approved deployment preparation for Campaign 7. Accounting and
+  reporting only. No execution path, gate, pricing or cancellation logic
+  changes, and no opening threshold or defensive completion behaviour is
+  touched.
+
+  THE 12TH FILL. A fill that lands between a cancel being sent and the
+  venue answering it leaves no positive ORDER_PROGRESS delta. Campaign 6's
+  1630z DOWN leg filled 2.15 at wire 0.4900 that way: its only lifecycle
+  row read cum 0, the venue reported it on the cancel re-read, the book
+  took it with its cost basis and the cash moved -- but fill_events counts
+  positive lifecycle deltas, so the campaign reported 11 fills and 21.67
+  contracts where the venue had settled 12 and 23.82. Cash and residual
+  were always right; the counters a campaign is judged repeatable by were
+  not.
+
+  merge_fill_sources() folds the venue's fill-record stream in as a second
+  source, deduplicated on cumulative quantity, so it can only ever add a
+  fill the lifecycle never carried. Idempotent, and omitting the argument
+  reproduces the old counts exactly. _window_fills() reads the same
+  FillCalibration.orders fold _window_submits already uses, so the two
+  cannot disagree about window membership, and never raises into reporting.
+
+  DEFENSIVE LOSSES ON THEIR OWN LINE. pair_economics() separates pairs
+  completed above $1.00 from pair edge. Campaign 6 was $1.6878 of edge and
+  $0.0970 of defence, still summing to the +$1.5908 the cash confirms,
+  where the venue's matched line reports the two as one number. Per owner
+  ruling NO hard $1.00 completion ceiling is imposed: a risk-reducing
+  completion above $1 stays available where it reduces expected loss, and
+  is now accounted separately rather than read as thin edge.
+  realized_net_usd stays venue-settlement-only and excludes both.
+
+  The runner diff is 40 insertions and ZERO deletions, all inside
+  emit_window_accounting. l5_two_sided_probe.py, l5_live_execution.py,
+  l5_live_validation_gates.py, l5_intent_gate.py and the cancel mechanism
+  are untouched, and the _StageClock tick instrumentation this branch
+  carries is preserved with its test passing.
+
+  ISOLATED PARITY against d096ef7d on the promoted tree: 34 failing node
+  ids on both, IDENTICAL sets, all pre-existing and in unrelated modules.
+  Both changed source files were byte-identical on this branch and on the
+  verified fb18aaa2 parity base before the change, so the deployed content
+  is the content parity ran on.
+
+  NOT ARMED. No Campaign 7 authorization is installed and the Campaign 6
+  approval's window budget is exhausted (4 of 4 spent), which is what
+  refused a fifth window at 1645z. Arming remains a separate owner act and
+  is NOT requested by this deploy. Deployed deliberately well ahead of any
+  proposed window so the process spans a window boundary before arming:
+  Campaign 6 armed in 174.1s in the window its deploy restarted into,
+  against 0.8-3.3s in the three windows the process already spanned.
+
+# 2026-10-29 -- ROUTE B PORTED ALONE ONTO THE DEPLOYED BASELINE. INERT.
+#
+# Promotes the book-driven completion hook and NOTHING else. Branched from
+# 202456d3, the commit this service is already running and the one that
+# produced the +$3.8861 settled result across campaigns 6, 7 and 8. The 37
+# trading-path commits on claude/l5-wallet-ingestion-fix-kqcqoa -- P0-P3
+# completion, requote, basis, budget isolation -- are deliberately NOT here,
+# and PR #193 is not merged.
+#
+# WHOLE DIFF vs 202456d3: three files, 189 insertions, TWO deletions, and
+# both deletions are the same `rec = ex.handle(row, {}, ...)` call
+# re-indented into a try block. No other line that already executed changed,
+# so entry, completion pricing, requoting, inventory accounting, the risk
+# gates and settlement are untouched BY CONSTRUCTION.
+#
+# SHIPS INERT. L5_BOOK_COMPLETION stays UNSET. A Runner carrying only
+# `stats` returns None from the hook, touches no attribute and emits no
+# counter -- if the flag check were not the first statement that raises
+# AttributeError, and both the behaviour and the source ordering are pinned
+# by tests.
+#
+# REGRESSION: full suite against 202456d3 itself -- 20 failed / 14 errors on
+# both sides, failure sets identical, +55 passed from the new tests.
+#
+# LIMITS UNCHANGED, verified from L5_LIVE_GATES at 17:00:06Z:
+#   max_cash_deployed_usd 12.00, max_unmatched_contracts 5,
+#   max_worst_case_deficit_usd 3.00, max_l5_daily_loss_usd 5,
+#   max_l5_cumulative_loss_usd 20, max_cumulative_loss_usd 18.6325
+#   (account-wide, stricter), cash_policy NO_RECYCLING,
+#   halt_gate_configured true, journal_errors 0.
+#
+# NOT ARMED. No campaign approval is installed; arming still refuses
+# NOT_ARMED until the owner signs and installs a fresh eight-window
+# document.

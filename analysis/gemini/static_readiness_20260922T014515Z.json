@@ -1,0 +1,241 @@
+{
+  "label": "GEMINI_COHORT_STATIC_READINESS_V1",
+  "utc": "2026-09-22T01:45:16.012676+00:00",
+  "tte_independent": true,
+  "mutations_sent": 0,
+  "checks": {
+    "spec": {
+      "spec_id": "btc15m_q1_cap4_w60_880",
+      "spec_sha": "223b81edd6932bce48afbc35b1be88d9898af2849ddd38cf309e2d25e07bd65f",
+      "family": "btc15m",
+      "envelope": "live_q1_btc15m_cap4",
+      "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1",
+      "envelope_sha": "3aed2098fe0290b7ad8a16cdc053eae7cfcc07b02cbae6b8299eae28da3f6c6b",
+      "entry_tte_band": "840:880",
+      "action_size": "1",
+      "quote_band": [
+        60.0,
+        880.0
+      ],
+      "bounds": {
+        "action_size": "1",
+        "max_working_orders": "2",
+        "max_committed_usd": "4.00",
+        "max_residual_usd": "4.00",
+        "max_same_side_run": "4",
+        "max_yes": "4",
+        "max_no": "4",
+        "max_actions": "12",
+        "max_concurrent_markets": "1",
+        "cohort_prefix": "GEMI-BTC15M"
+      },
+      "ok": true
+    },
+    "authorization": {
+      "authorized": false,
+      "required_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
+      "authorized_sha": "f90b84c91d2e171e6805503e71dd523ecb7380b4d0d6067b0325a76fd73e0903",
+      "executable_sha": "f90b84c91d2e171e6805503e71dd523ecb7380b4d0d6067b0325a76fd73e0903",
+      "authorized_envelope": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+      "envelope_sha": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+      "arming": {
+        "armed": false,
+        "live_flag": false,
+        "auth_id_present": false,
+        "auth_id_matches": false,
+        "expiry_supplied": false,
+        "expired": null,
+        "expected_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1",
+        "why_not": "GEMINI_CANARY_LIVE is not YES"
+      },
+      "why_not": [
+        "transport arm: GEMINI_CANARY_LIVE is not YES"
+      ],
+      "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name.",
+      "tree_authorized": true,
+      "tree_why_not": [],
+      "transport_armed": false,
+      "transport_note": "the arm is a property of the STEP that trades, not of the tree. This check never sets it and never asserts it; the driver requires it on every mutation.",
+      "ok": true
+    },
+    "bundle": {
+      "authorized": true,
+      "bundle_sha": "5a642dd29d6b710ba0dd58aaa5058f02646addcbfb821025da3b6f82f01d2087",
+      "authorized_bundle": "5a642dd29d6b710ba0dd58aaa5058f02646addcbfb821025da3b6f82f01d2087",
+      "members": [
+        "ws_continuous.py",
+        "run_continuous.py",
+        "continuous_probe.py",
+        "cohort.py",
+        "continuous_preflight.py",
+        "metadata.py",
+        "executions.py",
+        "arming.py",
+        "live_envelope.py",
+        "outstanding_ledger.py",
+        "position_ledger.py",
+        "live_probe_spec.py",
+        "bundle.py"
+      ],
+      "member_shas": {
+        "ws_continuous.py": "ecd95b1d16ac8e29a21828458b0ad3c267c64895b36a13965d90c5245cbce285",
+        "run_continuous.py": "a5c07ea824fa17cdb26936fc090b43c2dd56d13b041e95b2da73f60d98e2ce78",
+        "continuous_probe.py": "dff31f8f20d0ea2f58deb2833e26d850be22b3bb91bbffd13678dc55559c494f",
+        "cohort.py": "e4a5845a5a9c22dc49cd192a1a73fd61f30ecac485ac73a9d42aacecb34be0e8",
+        "continuous_preflight.py": "48f108eb96135fb5df36f4b43c0a94f26cbce1515fece2e58c1bf5ecc61647d5",
+        "metadata.py": "8f1f17566095ad128cc9e4ea9306a76a9633c3db47343d2d933aef1d88c4c91d",
+        "executions.py": "76cff5081843ceffc61cf625b0905e29bd75c8b8486d0c7186cc9bf765937aa6",
+        "arming.py": "686fcfd0c05c341d1cd8b194e090d9637765b77251b545359b5025dca51e9946",
+        "live_envelope.py": "2f9ba082ff6dbeaded8b4b0661848b675e6b83cc00d55ddc9612b8c595fefbd3",
+        "outstanding_ledger.py": "cc54abec4e1968a42722c296c8d73b53659eb685528589dbc238a8e5a7e03106",
+        "position_ledger.py": "ee162936ca2309b89a86a678ff0a83528acdc36970e53171678e4235bb944fd2",
+        "live_probe_spec.py": "0edf9a80160437c6bc3a33e041bd4806ea1f97c1ff2a07622c9091dd9180f2ec",
+        "bundle.py": "96c0225bedb8445845f761d5234c4865971d83cd167addef6d9c55da6b01ea1f"
+      },
+      "why_not": [],
+      "labels": "executable_sha covers the driver's BOUNDS; bundle_sha covers the ORDERING too. Both are named by an authorization, because undoing either has cost a live authorization before.",
+      "ok": true
+    },
+    "family_agrees": {
+      "envelope_family": "GEMI-BTC15M",
+      "spec_family": "GEMI-BTC15M",
+      "ok": true
+    },
+    "cohort_chain": {
+      "ledgers": [
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+          "budget": 12,
+          "consumed": 12,
+          "remaining": 0,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W02",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W03",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W04",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W05",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W06",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W07",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W08",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W09",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W10",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        }
+      ],
+      "n": 10,
+      "actions_per_window": 12,
+      "total_budget": 120,
+      "total_remaining": 108,
+      "ok": true
+    },
+    "cohort": {
+      "label": "GEMINI_MUTATION_COHORT_V1",
+      "cohort_id": "COHORT-2026-09-21-BTC15M-COHORT1-W01",
+      "created_utc": "2026-09-21T23:53:49.113358+00:00",
+      "budget": 12,
+      "consumed": 12,
+      "remaining": 0,
+      "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-COHORT1-W01/ledger.jsonl",
+      "envelope_max_actions": 12,
+      "predecessor": {
+        "intact": true,
+        "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-CAP4-3/ledger.jsonl",
+        "recorded_sha256": "6afd89b90beef036d55f3e7cdeb566f990f09033b30a08e9537f641d2aa813e2",
+        "current_sha256": "6afd89b90beef036d55f3e7cdeb566f990f09033b30a08e9537f641d2aa813e2",
+        "recorded_consumed": 3,
+        "current_consumed": 3,
+        "why": null
+      },
+      "note": "Window 01 of 10 under OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-COHORT-1. Spec btc15m_q1_cap4_w60_880, spec_sha 223b81ed..., quote interval TTE [60,880]; envelope GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1 UNCHANGED (q=1, cap 4, $4.00 committed, $4.00 residual, 2 working orders, 1 rung per outcome). EXACTLY 12 action attempts for THIS window; the cohort's ten ledgers are 120 and no more can be minted. Each records the pre-cohort state (CAP4-3's ledger) rather than the window before it, because a linked list would read a previous window SPENDING ITS BUDGET as tampering and stop a cohort the owner authorized. No reset, no replenishment, no rollover between windows, no eleventh window.",
+      "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor.",
+      "ok": false
+    },
+    "terms": {
+      "readable": true,
+      "verdict": "ACCEPTED",
+      "method": "GET",
+      "status": 200,
+      "hasAcceptedLatest": true,
+      "acceptedVersion": 1,
+      "latestVersion": 1,
+      "blocks_orders": false,
+      "attempts": [
+        {
+          "method": "GET",
+          "status": 200,
+          "body_keys": [
+            "acceptedVersion",
+            "hasAcceptedLatest",
+            "latestVersion"
+          ]
+        }
+      ],
+      "why": null,
+      "ok": true
+    },
+    "positions_readable": {
+      "ok": true,
+      "status": 200,
+      "why": null,
+      "n_rows_on_account": 2,
+      "note": "readability only. Which rows belong to which contract is a per-window question and is asked again, per window, by the position gate inside run_one_window."
+    }
+  },
+  "why_not": [
+    "cohort COHORT-2026-09-21-BTC15M-COHORT1-W01 has no mutation slots left (12/12)"
+  ],
+  "verdict": "FAIL",
+  "ok": false
+}

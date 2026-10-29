@@ -1,0 +1,30 @@
+{
+  "label": "pmus_decision_states_20260927",
+  "captured_utc": "2026-09-27T17:36:35.657590Z",
+  "source": "Railway deploy logs, service l5-pmus-live (87f1834e-530e-4fc4-a310-91c8d3add196), deployment 32de67c7-944d-427a-966f-f59aba70dac2, commit 4c28c3f",
+  "venue": "PMUS (Polymarket US) BTC15m",
+  "record": "L5_LIVE_DECISION -- one per engine decision, carrying the authenticated-WS BBO, stream_age_s, and the executable translation with available depth at that instant",
+  "file": "data/pmus_decision_tape/pmus_decision_states_20260927.jsonl",
+  "sha256": "04b9e07f49845580990290e52345897b863f914a937df57d2dfbcc16188cafbc",
+  "rows": 315,
+  "markets": {
+    "cpc-btc-updown-15m-2026-09-27-1615z": {
+      "rows": 236,
+      "first": "2026-09-27T16:15:52.693915791Z",
+      "last": "2026-09-27T16:17:20.139534862Z"
+    },
+    "cpc-btc-updown-15m-2026-09-27-1630z": {
+      "rows": 79,
+      "first": "2026-09-27T16:30:40.506448807Z",
+      "last": "2026-09-27T16:40:35.364100153Z"
+    }
+  },
+  "completeness": {
+    "status": "PARTIAL -- known gaps",
+    "1615z": "covers 16:15:52Z-16:17:20Z of a 16:15:00-16:30:00 window; the remainder was not retrievable within a practical number of API calls (decisions arrive in dense bursts)",
+    "1630z": "covers 16:30:40Z-16:40:35Z of a 16:30:00-16:45:00 window; decisions cease after 16:40:35 as the book collapsed to 0.02/0.03",
+    "1515z_1530z": "LOST. Deployment a5738478 was reclaimed by Railway before extraction; its decision-level book data no longer exists anywhere.",
+    "implication": "sufficient to characterise spread and depth; NOT sufficient to reconstruct residual episodes end-to-end. This is why the collector exists."
+  },
+  "labels": "raw as emitted; no field derived, inferred, or backfilled. No OHLC and no settlement price appears in any record."
+}

@@ -1,0 +1,1 @@
+timestamp,datetime_utc,condition_id,market_slug,event_slug,title,asset,window_minutes,window_source,exclusion_reason,market_flags,side,outcome,price,shares,dollars

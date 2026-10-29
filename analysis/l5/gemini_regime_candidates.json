@@ -1,0 +1,100 @@
+{
+ "_sha256_16": "df99f3aadb13b775",
+ "features": "entry spread; min(bid,ask) depth at entry; |mid move| over the 60s/120s before entry; two-sided prints in the 120s before entry; TTE at entry -- all from data strictly at/before the entry quote",
+ "frozen_before_validation_numbers_were_read": true,
+ "frozen_utc": "2026-09-05T22:30:33+00:00",
+ "rules": [
+  {
+   "all": [
+    {
+     "feature": "spread",
+     "op": "<=",
+     "value": 0.05
+    }
+   ],
+   "name": "tight_spread_5c"
+  },
+  {
+   "all": [
+    {
+     "feature": "spread",
+     "op": "<=",
+     "value": 0.03
+    }
+   ],
+   "name": "tight_spread_3c"
+  },
+  {
+   "all": [
+    {
+     "feature": "depth_min",
+     "op": ">=",
+     "value": 200
+    }
+   ],
+   "name": "deep_200"
+  },
+  {
+   "all": [
+    {
+     "feature": "move_60s",
+     "op": "<=",
+     "value": 0.02
+    }
+   ],
+   "name": "calm_60s_2c"
+  },
+  {
+   "all": [
+    {
+     "feature": "trailing_two_sided_120s",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "name": "two_sided_flow_120s"
+  },
+  {
+   "all": [
+    {
+     "feature": "tte_s",
+     "op": "<=",
+     "value": 240
+    }
+   ],
+   "name": "late_entry_tte_le_240"
+  },
+  {
+   "all": [
+    {
+     "feature": "tte_s",
+     "op": ">=",
+     "value": 240
+    }
+   ],
+   "name": "early_entry_tte_ge_240"
+  },
+  {
+   "all": [
+    {
+     "feature": "spread",
+     "op": "<=",
+     "value": 0.05
+    },
+    {
+     "feature": "move_60s",
+     "op": "<=",
+     "value": 0.02
+    },
+    {
+     "feature": "trailing_two_sided_120s",
+     "op": "==",
+     "value": true
+    }
+   ],
+   "name": "tight_calm_flow"
+  }
+ ],
+ "selection_rule": "per shell: the candidate with the best strict net on TRAIN days with >= 10 admitted windows; reported on VALIDATION days; never re-selected after seeing validation",
+ "workstream": "OWNER 5555118026 -- ex-ante regime candidates for the Gemini rest/cancel blocker"
+}

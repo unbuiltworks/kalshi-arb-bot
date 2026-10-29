@@ -1,0 +1,43 @@
+# Promotion trigger for the l5-exec-shadow service.
+#
+# READ-ONLY dual-venue executable shadow. Appending a line here (and pushing)
+# is the ONLY thing that builds it. Editing src/l5_shadow/** does not.
+#
+# The service does not exist yet: it is prepared, not promoted. Creating it is
+# a deliberate, cost-incurring act and belongs to the owner.
+promote ba7957f0: create the l5-exec-shadow research supervisor service
+promote fef17b6b: chain validator survives transient RPC failures (crashed in prod 15:28:42Z)
+promote 5214a32d: downtime measured from our own heartbeat, not from a stream's events
+promote 107cc0ba: EPOCH-stamped rows, grouped attribution, chain_only classification, reorg retraction
+promote 4256t: P2 economic ledger reported from the service alongside the gate
+promote dualclock: P1 dual-clock comparison reported from the service
+promote paircount: the pair-completion rate is reported rather than inferred from a zero
+promote vouched: silence over a continuously-observed interval is an evidenced no-fill
+promote armb: the join-price key fix and the rest-side re-reads (batched)
+promote forensics: why the quotes do not fill, decomposed into NO_FLOW / QUEUE_BOUND / PARTIAL
+promote paircore: P0 pair-formation forensics + the reactive vs state-driven arms
+promote pairfix: the paired-detection and cross-clock defects the service caught
+promote contin: the continuous BTC15m desired-inventory candidate, arms R/S/D
+promote frontier: queue realism (4 fill criteria) + the depth frontier, R/S/D frozen
+promote adapted: the frozen ADAPTED arms cap5/cap8/cap13, additive to R/S/D
+promote adapted2: ship the ADAPTED modules that the narrow COPY list omitted
+promote adapted3: settle the ADAPTED windows, or A-2/A-3/A-6 can never pass
+promote failure: decompose the FAILED cap5/8/13 experiment on the frozen sample
+promote failure2: correct the TTE clock, the loss ratio, and the control/re-roll split
+promote watchdog: own the two prospective recorders here, where the process outlives the session
+promote window study: run the frozen preregistered capture where the process outlives the session
+promote scorer: audit the durable tapes in-container, after W3 reached window_end+300s
+promote chain recovery: the CA pin emptied every receipt; recover from the recorded tx and collapse fills to parents
+promote surface shadow: run the frozen L5_ADAPTED_V1 surface, non-money-moving
+promote shadow reporter: surface the stage distribution from the volume
+promote surface discovery fix: the shadow was emitting empty surfaces
+promote gemini surface report: split the evidenced fills by side to answer the P0
+promote gemini placement split: which of the two BUY_ONLY_FILLS means, plus queue-ahead both sides
+promote gemini queue diagnosis: why a quote that is traded through still does not fill
+promote pmus_surface: the L5 evidence ladder against the authenticated trade tape (TRADES_HTTP)
+promote pmus_surface heartbeat: the tape-coverage facts have to reach the log, not only the volume
+promote retention: the volume hit 100% and killed the recorder; compress closed segments, warn at 70/85/95
+promote retention fix: the image did not COPY l5_state_retention and the ImportError killed the recorder
+promote retention bounded: the boot sweep blocked the recorder for minutes; budget it and gate it on pressure
+promote retention guard: a fresh archive was stealing "newest" from the segment the recorder still holds open
+promote dual cohort: BTC05M and BTC15M concurrently in one process, isolated, with per-cohort heartbeats

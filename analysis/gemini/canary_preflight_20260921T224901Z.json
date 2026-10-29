@@ -1,0 +1,29 @@
+{
+  "label": "GEMINI_CANARY_PREFLIGHT_V1",
+  "ok": false,
+  "verdict": "NO_ELIGIBLE_WINDOW",
+  "rejected": [
+    {
+      "symbol": "GEMI-BTC05M2609212250-UP",
+      "tte_s": 58.3,
+      "why": "TTE outside [60.0, 300.0]"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609212255-UP",
+      "tte_s": 358.3,
+      "why": "TTE outside [60.0, 300.0]"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609212300-UP",
+      "tte_s": 658.3,
+      "why": "TTE outside [60.0, 300.0]"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609212305-UP",
+      "tte_s": 958.3,
+      "why": "TTE outside [60.0, 300.0]"
+    }
+  ],
+  "why": "no live window met the envelope",
+  "authorization": "NOT GRANTED. Nothing is submitted."
+}

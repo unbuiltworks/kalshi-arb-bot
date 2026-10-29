@@ -1,0 +1,77 @@
+name: PMUS recorder force-deploy
+
+# The recorder is READ-ONLY: it observes the authenticated stream and
+# writes evidence. It holds no order path and cannot arm anything, so
+# deploying it risks no money.
+#
+# Why this exists: `railway up` builds unconditionally from the working
+# tree, which is the only lever that clears a SKIPPED record shadowing a
+# good deployment (deploy/PROBE_MANIFESTS.md). Railway's own
+# source-triggered deploys skip when a push misses the image's watch
+# paths, and a SKIPPED record then blocks `redeploy`.
+#
+# Scoped deliberately: ONE service, this branch, and only when the
+# recorder's own files change. It never touches the collector, the
+# spring probe, or any other service.
+
+on:
+  push:
+    branches:
+      - feature/l5-transfer-backtest
+    paths:
+      - 'deploy/pmus_ws_recorder/**'
+      - 'src/pmus_ws_evidence_recorder*.py'
+      - 'src/pmus_spring_shadow_replay.py'
+      - 'src/pmus_sports_l5_decision.py'
+      - 'src/pmus_l5_persistence_v2.py'
+      - 'src/pmus_l5_compute_allocator.py'
+      - 'src/pmus_priority_queue.py'
+      - 'src/pmus_l5_action_shadow.py'
+      - 'src/pmus_status_report.py'
+      - 'src/pmus_sports_collector.py'
+      - '.github/workflows/pmus-recorder-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pmus-recorder-deploy
+  cancel-in-progress: false
+
+jobs:
+  force-deploy-recorder:
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      SERVICE_ID: 71b6ea99-ea6a-4b20-9602-fa873721ed35
+      RAILWAY_DOCKERFILE_PATH: deploy/pmus_ws_recorder/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to deploy an image that could trade
+        shell: bash
+        run: |
+          set -euo pipefail
+          DF=deploy/pmus_ws_recorder/Dockerfile
+          test -f "$DF"
+          if grep -Eq 'pmus_q1_executor|pmus_micro_executor|pmus_spring_l5_session|_ARM|_LIVE=YES' "$DF"; then
+            echo 'STOP: order path or arming reference in the recorder image'
+            exit 1
+          fi
+          grep -q 'pmus_ws_evidence_recorder' "$DF"
+
+      - name: Assert the OPEN evidence fields are wired
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=src/pmus_ws_evidence_recorder_enriched.py
+          for field in both_sides_served bid_touch_qty collector_gaps market_state probe_entry_action; do
+            grep -q "\"$field\"" "$F" || { echo "MISSING: $field"; exit 1; }
+          done
+          grep -q 'pmus_sports_l5_decision' deploy/pmus_ws_recorder/Dockerfile
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Force build from source (bypasses watch-path evaluation)
+        run: railway up --service "$SERVICE_ID" --detach

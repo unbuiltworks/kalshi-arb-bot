@@ -1,0 +1,83 @@
+{
+  "label": "L5_COMPLETE_CHOICE_V1",
+  "source": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "held_avg_band": [
+    0.08,
+    0.22
+  ],
+  "limit": "trade feed only: 'L5 waited' cannot be distinguished from 'L5 quoted and was not filled'. The split below is over ACTIONS TAKEN.",
+  "choice_given_cheap_held_leg": {
+    "ALL": {
+      "extend": 2113,
+      "complete": 1540,
+      "complete_pct": 42.16
+    },
+    "BTC-15m": {
+      "extend": 1878,
+      "complete": 1264,
+      "complete_pct": 40.23
+    },
+    "BTC-5m": {
+      "extend": 189,
+      "complete": 240,
+      "complete_pct": 55.94
+    },
+    "ETH-5m": {
+      "extend": 46,
+      "complete": 36,
+      "complete_pct": 43.9
+    }
+  },
+  "complete_pair_in_band": {
+    "n": 1540,
+    "p10": 0.9243,
+    "p25": 1.0211,
+    "p50": 1.0809,
+    "p75": 1.1291,
+    "p90": 1.1553,
+    "min": 0.1765,
+    "pct_at_or_below_1_00": 20.13,
+    "pct_at_or_below_our_1_05": 34.55
+  },
+  "extend_price_in_band": {
+    "n": 2113,
+    "p50": 0.06,
+    "p90": 0.1594
+  },
+  "fills_in_band_that_ended_the_window": 227,
+  "realized_matched_pair_by_window": {
+    "windows_with_a_complete_above_1_05": {
+      "windows": 182,
+      "final_matched_pair_unit_cost": {
+        "n": 182,
+        "p25": 0.939,
+        "p50": 0.9659,
+        "p75": 1.0207,
+        "p90": 1.0708,
+        "mean": 0.972,
+        "pct_at_or_below_1_00": 69.78
+      },
+      "abs_residual_qty_at_settlement": {
+        "p50": 106.8096,
+        "p90": 506.2858
+      }
+    },
+    "windows_without_one": {
+      "windows": 1428,
+      "final_matched_pair_unit_cost": {
+        "n": 1428,
+        "p25": 0.8887,
+        "p50": 0.9714,
+        "p75": 1.08,
+        "p90": 1.2575,
+        "mean": 0.994,
+        "pct_at_or_below_1_00": 60.08
+      },
+      "abs_residual_qty_at_settlement": {
+        "p50": 62.955,
+        "p90": 245.4153
+      }
+    },
+    "labels": "matched-pair economics ONLY. Directional residual is reported as quantity and is NEVER summed with the pair cost. Neither is REALIZED: settlement cashflow is a separate fact."
+  }
+}

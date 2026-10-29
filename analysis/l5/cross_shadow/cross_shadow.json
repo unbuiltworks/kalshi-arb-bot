@@ -1,0 +1,865 @@
+{
+ "breakeven_no_depth_required": [
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.00",
+   "cost_per_contract": "0.0100",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9900",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.00",
+   "cost_per_contract": "0.0100",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9900",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.00",
+   "cost_per_contract": "0.0200",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9800",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.00",
+   "cost_per_contract": "0.0100",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9900",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.00",
+   "cost_per_contract": "0.0100",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9900",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.15",
+   "cost_per_contract": "0.0087",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9913",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.15",
+   "cost_per_contract": "0.0174",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9826",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.15",
+   "cost_per_contract": "0.0174",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9826",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.15",
+   "cost_per_contract": "0.0174",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9826",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98",
+    "0.99"
+   ],
+   "confirmed_fee": "0.01",
+   "contracts": "1.15",
+   "cost_per_contract": "0.0087",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9913",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.72",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.72",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97"
+   ],
+   "confirmed_fee": "0.03",
+   "contracts": "1.72",
+   "cost_per_contract": "0.0233",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9767",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.72",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.72",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.92",
+   "cost_per_contract": "0.0104",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9896",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97"
+   ],
+   "confirmed_fee": "0.03",
+   "contracts": "1.92",
+   "cost_per_contract": "0.0208",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9792",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97"
+   ],
+   "confirmed_fee": "0.03",
+   "contracts": "1.92",
+   "cost_per_contract": "0.0208",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9792",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97"
+   ],
+   "confirmed_fee": "0.03",
+   "contracts": "1.92",
+   "cost_per_contract": "0.0208",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9792",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.02",
+   "contracts": "1.92",
+   "cost_per_contract": "0.0104",
+   "maker_rebate_forgone": "0.00",
+   "max_pair_cost_for_a_net_positive_cross": "0.9896",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.05",
+   "contracts": "5",
+   "cost_per_contract": "0.0120",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9880",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.07",
+   "contracts": "5",
+   "cost_per_contract": "0.0160",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9840",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.08",
+   "contracts": "5",
+   "cost_per_contract": "0.0200",
+   "maker_rebate_forgone": "0.02",
+   "max_pair_cost_for_a_net_positive_cross": "0.9800",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.07",
+   "contracts": "5",
+   "cost_per_contract": "0.0160",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9840",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.05",
+   "contracts": "5",
+   "cost_per_contract": "0.0120",
+   "maker_rebate_forgone": "0.01",
+   "max_pair_cost_for_a_net_positive_cross": "0.9880",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.10",
+   "contracts": "10",
+   "cost_per_contract": "0.0120",
+   "maker_rebate_forgone": "0.02",
+   "max_pair_cost_for_a_net_positive_cross": "0.9880",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.14",
+   "contracts": "10",
+   "cost_per_contract": "0.0170",
+   "maker_rebate_forgone": "0.03",
+   "max_pair_cost_for_a_net_positive_cross": "0.9830",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.15",
+   "contracts": "10",
+   "cost_per_contract": "0.0180",
+   "maker_rebate_forgone": "0.03",
+   "max_pair_cost_for_a_net_positive_cross": "0.9820",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.14",
+   "contracts": "10",
+   "cost_per_contract": "0.0170",
+   "maker_rebate_forgone": "0.03",
+   "max_pair_cost_for_a_net_positive_cross": "0.9830",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.10",
+   "contracts": "10",
+   "cost_per_contract": "0.0120",
+   "maker_rebate_forgone": "0.02",
+   "max_pair_cost_for_a_net_positive_cross": "0.9880",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.24",
+   "contracts": "25",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.05",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.34",
+   "contracts": "25",
+   "cost_per_contract": "0.0164",
+   "maker_rebate_forgone": "0.07",
+   "max_pair_cost_for_a_net_positive_cross": "0.9836",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.38",
+   "contracts": "25",
+   "cost_per_contract": "0.0184",
+   "maker_rebate_forgone": "0.08",
+   "max_pair_cost_for_a_net_positive_cross": "0.9816",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.34",
+   "contracts": "25",
+   "cost_per_contract": "0.0164",
+   "maker_rebate_forgone": "0.07",
+   "max_pair_cost_for_a_net_positive_cross": "0.9836",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.24",
+   "contracts": "25",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.05",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.80"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.96",
+   "contracts": "100",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.20",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.20"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "1.36",
+   "contracts": "100",
+   "cost_per_contract": "0.0164",
+   "maker_rebate_forgone": "0.28",
+   "max_pair_cost_for_a_net_positive_cross": "0.9836",
+   "taker_price": "0.35"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "1.50",
+   "contracts": "100",
+   "cost_per_contract": "0.0181",
+   "maker_rebate_forgone": "0.31",
+   "max_pair_cost_for_a_net_positive_cross": "0.9819",
+   "taker_price": "0.50"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "1.36",
+   "contracts": "100",
+   "cost_per_contract": "0.0164",
+   "maker_rebate_forgone": "0.28",
+   "max_pair_cost_for_a_net_positive_cross": "0.9836",
+   "taker_price": "0.65"
+  },
+  {
+   "arms_that_can_ever_be_net_positive": [
+    "0.97",
+    "0.98"
+   ],
+   "confirmed_fee": "0.96",
+   "contracts": "100",
+   "cost_per_contract": "0.0116",
+   "maker_rebate_forgone": "0.20",
+   "max_pair_cost_for_a_net_positive_cross": "0.9884",
+   "taker_price": "0.80"
+  }
+ ],
+ "corpus": {
+  "complete_decisions": 260,
+  "markets": 8
+ },
+ "depth_evidence": {
+  "depth_observations_recovered_from_recorder_logs": 0,
+  "note": "the probe's recorder_book capture persists yes_bid, yes_ask, opp_ask_authenticated, authenticated_age_s and both_sides_served -- and DROPS the bid_qty/ask_qty the recorder already computes and serves. Depth existed at decision time and was not written down.",
+  "orders_in_corpus_carrying_observed_ask_depth": 0
+ },
+ "fee_source": "docs.polymarket.us/fees fetched 2026-09-13; effective 12 AM ET 2026-07-01; exchange-wide",
+ "fee_status": "CONFIRMED",
+ "labels": "SHADOW ONLY; no order placed; production untouched",
+ "matrix": {
+  "thr=0.97|T0": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "malformed_or_missing_required_evidence": 1,
+    "no_authenticated_quote_age": 146,
+    "observed_ask_depth_not_recorded": 48,
+    "quote_age_110.9s_over_5.0s": 2,
+    "quote_age_121.1s_over_5.0s": 1,
+    "quote_age_134.5s_over_5.0s": 2,
+    "quote_age_145.9s_over_5.0s": 2,
+    "quote_age_16.3s_over_5.0s": 2,
+    "quote_age_258.8s_over_5.0s": 2,
+    "quote_age_30.7s_over_5.0s": 3,
+    "quote_age_31.4s_over_5.0s": 1,
+    "quote_age_31.8s_over_5.0s": 2,
+    "quote_age_313.5s_over_5.0s": 2,
+    "quote_age_32.1s_over_5.0s": 2,
+    "quote_age_33.4s_over_5.0s": 2,
+    "quote_age_402.7s_over_5.0s": 4,
+    "quote_age_41.8s_over_5.0s": 2,
+    "quote_age_5.1s_over_5.0s": 3,
+    "quote_age_5.2s_over_5.0s": 2,
+    "quote_age_5.3s_over_5.0s": 4,
+    "quote_age_5.6s_over_5.0s": 4,
+    "quote_age_5.7s_over_5.0s": 2,
+    "quote_age_5.8s_over_5.0s": 1,
+    "quote_age_58.3s_over_5.0s": 1,
+    "quote_age_587.1s_over_5.0s": 1,
+    "quote_age_59.0s_over_5.0s": 2,
+    "quote_age_6.3s_over_5.0s": 1,
+    "quote_age_6.8s_over_5.0s": 1,
+    "quote_age_6.9s_over_5.0s": 1,
+    "quote_age_612.8s_over_5.0s": 4,
+    "quote_age_62.2s_over_5.0s": 1,
+    "quote_age_7.1s_over_5.0s": 2,
+    "quote_age_7.7s_over_5.0s": 2,
+    "quote_age_792.7s_over_5.0s": 3,
+    "quote_age_826.1s_over_5.0s": 1
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "REFUSED_BY_A_GATE": 65,
+    "UNKNOWN_EXECUTABILITY": 195
+   },
+   "supported_fills": 0
+  },
+  "thr=0.97|T10": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T10": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.97|T30": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T30": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.97|T60": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T60": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.98|T0": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "malformed_or_missing_required_evidence": 1,
+    "no_authenticated_quote_age": 146,
+    "observed_ask_depth_not_recorded": 48,
+    "quote_age_110.9s_over_5.0s": 2,
+    "quote_age_121.1s_over_5.0s": 1,
+    "quote_age_134.5s_over_5.0s": 2,
+    "quote_age_145.9s_over_5.0s": 2,
+    "quote_age_16.3s_over_5.0s": 2,
+    "quote_age_258.8s_over_5.0s": 2,
+    "quote_age_30.7s_over_5.0s": 3,
+    "quote_age_31.4s_over_5.0s": 1,
+    "quote_age_31.8s_over_5.0s": 2,
+    "quote_age_313.5s_over_5.0s": 2,
+    "quote_age_32.1s_over_5.0s": 2,
+    "quote_age_33.4s_over_5.0s": 2,
+    "quote_age_402.7s_over_5.0s": 4,
+    "quote_age_41.8s_over_5.0s": 2,
+    "quote_age_5.1s_over_5.0s": 3,
+    "quote_age_5.2s_over_5.0s": 2,
+    "quote_age_5.3s_over_5.0s": 4,
+    "quote_age_5.6s_over_5.0s": 4,
+    "quote_age_5.7s_over_5.0s": 2,
+    "quote_age_5.8s_over_5.0s": 1,
+    "quote_age_58.3s_over_5.0s": 1,
+    "quote_age_587.1s_over_5.0s": 1,
+    "quote_age_59.0s_over_5.0s": 2,
+    "quote_age_6.3s_over_5.0s": 1,
+    "quote_age_6.8s_over_5.0s": 1,
+    "quote_age_6.9s_over_5.0s": 1,
+    "quote_age_612.8s_over_5.0s": 4,
+    "quote_age_62.2s_over_5.0s": 1,
+    "quote_age_7.1s_over_5.0s": 2,
+    "quote_age_7.7s_over_5.0s": 2,
+    "quote_age_792.7s_over_5.0s": 3,
+    "quote_age_826.1s_over_5.0s": 1
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "REFUSED_BY_A_GATE": 65,
+    "UNKNOWN_EXECUTABILITY": 195
+   },
+   "supported_fills": 0
+  },
+  "thr=0.98|T10": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T10": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.98|T30": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T30": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.98|T60": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T60": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.99|T0": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "malformed_or_missing_required_evidence": 1,
+    "no_authenticated_quote_age": 146,
+    "observed_ask_depth_not_recorded": 48,
+    "quote_age_110.9s_over_5.0s": 2,
+    "quote_age_121.1s_over_5.0s": 1,
+    "quote_age_134.5s_over_5.0s": 2,
+    "quote_age_145.9s_over_5.0s": 2,
+    "quote_age_16.3s_over_5.0s": 2,
+    "quote_age_258.8s_over_5.0s": 2,
+    "quote_age_30.7s_over_5.0s": 3,
+    "quote_age_31.4s_over_5.0s": 1,
+    "quote_age_31.8s_over_5.0s": 2,
+    "quote_age_313.5s_over_5.0s": 2,
+    "quote_age_32.1s_over_5.0s": 2,
+    "quote_age_33.4s_over_5.0s": 2,
+    "quote_age_402.7s_over_5.0s": 4,
+    "quote_age_41.8s_over_5.0s": 2,
+    "quote_age_5.1s_over_5.0s": 3,
+    "quote_age_5.2s_over_5.0s": 2,
+    "quote_age_5.3s_over_5.0s": 4,
+    "quote_age_5.6s_over_5.0s": 4,
+    "quote_age_5.7s_over_5.0s": 2,
+    "quote_age_5.8s_over_5.0s": 1,
+    "quote_age_58.3s_over_5.0s": 1,
+    "quote_age_587.1s_over_5.0s": 1,
+    "quote_age_59.0s_over_5.0s": 2,
+    "quote_age_6.3s_over_5.0s": 1,
+    "quote_age_6.8s_over_5.0s": 1,
+    "quote_age_6.9s_over_5.0s": 1,
+    "quote_age_612.8s_over_5.0s": 4,
+    "quote_age_62.2s_over_5.0s": 1,
+    "quote_age_7.1s_over_5.0s": 2,
+    "quote_age_7.7s_over_5.0s": 2,
+    "quote_age_792.7s_over_5.0s": 3,
+    "quote_age_826.1s_over_5.0s": 1
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "REFUSED_BY_A_GATE": 65,
+    "UNKNOWN_EXECUTABILITY": 195
+   },
+   "supported_fills": 0
+  },
+  "thr=0.99|T10": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T10": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.99|T30": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T30": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=0.99|T60": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T60": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=1.00|T0": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "malformed_or_missing_required_evidence": 1,
+    "no_authenticated_quote_age": 146,
+    "observed_ask_depth_not_recorded": 48,
+    "quote_age_110.9s_over_5.0s": 2,
+    "quote_age_121.1s_over_5.0s": 1,
+    "quote_age_134.5s_over_5.0s": 2,
+    "quote_age_145.9s_over_5.0s": 2,
+    "quote_age_16.3s_over_5.0s": 2,
+    "quote_age_258.8s_over_5.0s": 2,
+    "quote_age_30.7s_over_5.0s": 3,
+    "quote_age_31.4s_over_5.0s": 1,
+    "quote_age_31.8s_over_5.0s": 2,
+    "quote_age_313.5s_over_5.0s": 2,
+    "quote_age_32.1s_over_5.0s": 2,
+    "quote_age_33.4s_over_5.0s": 2,
+    "quote_age_402.7s_over_5.0s": 4,
+    "quote_age_41.8s_over_5.0s": 2,
+    "quote_age_5.1s_over_5.0s": 3,
+    "quote_age_5.2s_over_5.0s": 2,
+    "quote_age_5.3s_over_5.0s": 4,
+    "quote_age_5.6s_over_5.0s": 4,
+    "quote_age_5.7s_over_5.0s": 2,
+    "quote_age_5.8s_over_5.0s": 1,
+    "quote_age_58.3s_over_5.0s": 1,
+    "quote_age_587.1s_over_5.0s": 1,
+    "quote_age_59.0s_over_5.0s": 2,
+    "quote_age_6.3s_over_5.0s": 1,
+    "quote_age_6.8s_over_5.0s": 1,
+    "quote_age_6.9s_over_5.0s": 1,
+    "quote_age_612.8s_over_5.0s": 4,
+    "quote_age_62.2s_over_5.0s": 1,
+    "quote_age_7.1s_over_5.0s": 2,
+    "quote_age_7.7s_over_5.0s": 2,
+    "quote_age_792.7s_over_5.0s": 3,
+    "quote_age_826.1s_over_5.0s": 1
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "REFUSED_BY_A_GATE": 65,
+    "UNKNOWN_EXECUTABILITY": 195
+   },
+   "supported_fills": 0
+  },
+  "thr=1.00|T10": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T10": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=1.00|T30": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T30": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  },
+  "thr=1.00|T60": {
+   "confirmed_fees": "0",
+   "fee_status": "CONFIRMED",
+   "first_stop_reasons": {
+    "no_book_observation_at_T60": 260
+   },
+   "markets_with_a_supported_fill": 0,
+   "net_locked_pair_pnl": "0",
+   "opportunities": 260,
+   "outcomes": {
+    "UNKNOWN_EXECUTABILITY": 260
+   },
+   "supported_fills": 0
+  }
+ },
+ "preregistration_sha256": "7e31c447eaa1028c546787b23bdc16a7925478d9d9e0e7d11635ebb7caea3dd0"
+}

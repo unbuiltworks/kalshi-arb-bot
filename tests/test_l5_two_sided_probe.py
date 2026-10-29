@@ -1,0 +1,913 @@
+"""The one-window two-sided BTC15m probe: inert by default, no fallback."""
+import os
+from decimal import Decimal as D
+
+import pytest
+
+from src import l5_faithful_translation as FT
+from src import l5_order_body as OB
+from src import l5_two_sided_probe as TS
+
+MKT = "cpc-btc-updown-15m-2026-10-15-1730z"
+
+
+@pytest.fixture
+def armed(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "ts1.probe")
+    monkeypatch.setenv(TS.MARKET_ENV, MKT)
+
+
+def book(**over):
+    b = {"market": MKT, "bid": D("0.45"), "ask": D("0.46"),
+         "bid_depth": D("800"), "ask_depth": D("5000"),
+         "tick": D("0.01"), "min_qty": D("0.01"),
+         "depth_ticks": 2, "cash_envelope": D("26"),
+         "max_worst_case_loss": D("10"), "book_age_s": D("0.1")}
+    b.update(over)
+    return b
+
+
+# ------------------------------------------------------------ inertness
+
+def test_inert_with_nothing_configured(monkeypatch):
+    monkeypatch.delenv(TS.EXPERIMENT_ENV, raising=False)
+    monkeypatch.delenv(TS.MARKET_ENV, raising=False)
+    assert TS.active(MKT) is False
+    assert TS.build_orders(**book())["reason"] == "NOT_THE_AUTHORIZED_MARKET"
+
+
+@pytest.mark.parametrize("which", [TS.EXPERIMENT_ENV, TS.MARKET_ENV])
+def test_a_half_configuration_cannot_half_arm_it(monkeypatch, which):
+    monkeypatch.delenv(TS.EXPERIMENT_ENV, raising=False)
+    monkeypatch.delenv(TS.MARKET_ENV, raising=False)
+    monkeypatch.setenv(which, "something")
+    assert TS.active(MKT) is False
+
+
+def test_another_market_is_untouched(armed):
+    other = "cpc-btc-updown-15m-2026-10-15-1745z"
+    assert TS.active(other) is False
+    assert TS.build_orders(**book(market=other))["reason"] == \
+        "NOT_THE_AUTHORIZED_MARKET"
+
+
+# -------------------------------------------- the structural refusal
+
+def test_resting_AT_the_touch_is_REFUSED_on_the_pair_cost_CAP(armed):
+    """SUPERSEDES `resting AT the touch is now ACCEPTED as a post-only pair`.
+
+    The fee verdict that test asserted is unchanged and still asserted below:
+    a 0.99 pair IS positive under maker execution and negative under taker,
+    and `fee_floor` says so. What changed is that `build_orders` no longer
+    QUOTES such a pair.
+
+    WHY, AND IT IS NOT A STYLE CHOICE. `L5_OPERATING_MODEL` puts spring
+    discipline at a materially cheaper pair, roughly <= 0.96, and states that
+    near-$1 pair tolerance belongs to later incentive-era L5 behaviour and
+    "stays locked unless equivalent economics are source-confirmed for our
+    account". It also forbids treating a rebate as permission: on this pair
+    the entire margin is one cent of gross edge plus a maker credit, and
+    `both_positive_if_taker` is False -- so if either leg ends up crossing,
+    the pair loses. Accepting it also made the whole discipline depend on one
+    environment variable, `L5_TS_DEPTH_TICKS`, rather than on a gate.
+    """
+    ff = TS.fee_floor(D("0.50"), D("0.49"))          # the same 0.99 pair
+    assert D(ff["net_if_maker"]) > 0
+    assert D(ff["net_if_taker"]) < 0        # the honest worst case, reported
+    assert ff["requires_post_only"] is True
+
+    r = TS.build_orders(**book(depth_ticks=0))
+    assert r["ok"] is False
+    assert r["reason"] == "PAIR_COST_ABOVE_CAP"
+    assert r["pair_cost"] == "0.99"
+    assert D(r["max_pair_cost"]) == TS.MAX_PAIR_COST == D("0.96")
+
+
+def test_a_pair_at_or_above_a_dollar_is_still_refused(armed):
+    """No fee schedule makes a par pair worth placing."""
+    r = TS.build_orders(**book(bid=D("0.50"), ask=D("0.50"), depth_ticks=0))
+    assert r["ok"] is False
+    assert r["reason"] in ("BOOK_CROSSED_OR_LOCKED", "EDGE_BELOW_FEE_FLOOR")
+    r2 = TS.fee_floor(D("0.50"), D("0.50"))
+    assert r2["edge"] == 0 and r2["ok"] is False
+
+
+def test_the_floor_uses_the_ACTUAL_quote_prices_not_a_constant(armed):
+    """The fee is Theta*p*(1-p), so the requirement at the extremes is less
+    than half what it is at 50/50. A constant floor cannot express that."""
+    mid = TS.fee_floor(D("0.50"), D("0.49"))
+    ext = TS.fee_floor(D("0.88"), D("0.11"))
+    assert mid["edge"] == ext["edge"] == D("0.01")
+    assert ext["taker_fee_per_contract"] < mid["taker_fee_per_contract"] / 2
+    # both are placeable as post-only pairs; neither is as a taker pair
+    assert mid["ok"] and ext["ok"]
+    assert mid["net_if_taker"] < 0 and ext["net_if_taker"] < 0
+
+
+def test_the_floor_verdict_is_explicitly_post_only_only(armed):
+    f = TS.fee_floor(D("0.60"), D("0.39"))
+    assert f["requires_post_only"] is True
+    assert "POST-ONLY" in f["labels"]
+    # and the orders the module emits really are post-only. At the DEPLOYED
+    # offset, because a pair quoted at the touch is now refused on the cap.
+    r = TS.build_orders(**book(depth_ticks=2))
+    for leg in r["legs"]:
+        assert leg["post_only"] is True
+        assert leg["mode"] == TS.MODE == FT.MAKER
+
+
+def test_two_ticks_behind_clears_the_fee_floor_and_pays_on_both(armed):
+    r = TS.build_orders(**book(depth_ticks=2))
+    assert r["ok"] is True, r
+    assert r["pair_cost"] == "0.95"
+    assert D(r["up_pnl"]) > 0 and D(r["dn_pnl"]) > 0
+    legs = {l["side"]: l for l in r["legs"]}
+    assert legs["UP"]["price"] == "0.43"
+    assert legs["DOWN"]["price"] == "0.52"
+    for l in r["legs"]:
+        assert l["post_only"] is True
+        assert l["mode"] == FT.MAKER
+        # and the wire body really is post-only
+        assert OB.from_intent(dict(l, market=MKT), MKT)[
+            "participateDontInitiate"] is True
+
+
+# ------------------------------------------------------------- sizing
+
+def test_the_worst_single_leg_fill_stays_inside_the_loss_ceiling(armed):
+    r = TS.build_orders(**book(max_worst_case_loss=D("10")))
+    assert abs(D(r["worst_single_leg_loss_usd"])) <= D("10")
+
+
+def test_the_minimal_four_dollar_probe_sizes_down_not_out(armed):
+    r = TS.build_orders(**book(cash_envelope=D("4"),
+                               max_worst_case_loss=D("2")))
+    assert r["ok"] is True
+    assert D(r["gross_cash_usd"]) <= D("4")
+    assert abs(D(r["worst_single_leg_loss_usd"])) <= D("2")
+    assert D(r["qty_per_leg"]) < D("5")
+
+
+def test_an_envelope_too_small_for_the_grid_refuses(armed):
+    r = TS.build_orders(**book(cash_envelope=D("0.001"),
+                               max_worst_case_loss=D("0.001")))
+    assert r["ok"] is False and r["reason"] == "NO_LEGAL_QUANTITY"
+
+
+# ------------------------------------------------- fail closed inputs
+
+@pytest.mark.parametrize("over,reason", [
+    ({"bid": None}, "BOOK_NOT_TWO_SIDED"),
+    ({"ask": None}, "BOOK_NOT_TWO_SIDED"),
+    ({"bid": D("0.46"), "ask": D("0.45")}, "BOOK_CROSSED_OR_LOCKED"),
+    ({"tick": None}, "TICK_UNKNOWN"),
+    ({"min_qty": None}, "MIN_QTY_UNKNOWN"),
+    ({"book_age_s": None}, "BOOK_STALE"),
+    ({"book_age_s": D("9")}, "BOOK_STALE"),
+    ({"gap_suspected": True}, "GAP_SUSPECTED"),
+    ({"cash_envelope": None}, "CASH_ENVELOPE_UNKNOWN"),
+    ({"max_worst_case_loss": None}, "LOSS_CEILING_UNKNOWN"),
+    ({"bid_depth": None}, "NO_DISPLAYED_DEPTH"),
+    ({"depth_ticks": -1}, "DEPTH_TICKS_UNKNOWN"),
+])
+def test_every_unreadable_input_refuses_and_returns_no_legs(armed, over,
+                                                            reason):
+    r = TS.build_orders(**book(**over))
+    assert r["ok"] is False
+    assert r["reason"] == reason
+    assert "legs" not in r              # never a partial order set
+
+
+def test_a_price_below_the_band_refuses(armed):
+    r = TS.build_orders(**book(bid=D("0.07"), ask=D("0.08"), depth_ticks=3))
+    assert r["ok"] is False
+    assert r["reason"] in ("PRICE_OUT_OF_BAND", "EDGE_BELOW_FEE_FLOOR")
+
+
+# ---------------------------------------------------------- economics
+
+def test_both_outcome_pnl_for_the_owners_asymmetric_shape():
+    """20 UP @0.70 + 25 DOWN @0.20, fees off: cost 19, +1 and +6."""
+    e = TS.net_settlement(up_qty=D(20), dn_qty=D(25), up_price=D("0.70"),
+                          dn_price=D("0.20"), theta=D(0))
+    assert e["cost"] == D(19)
+    assert e["up_pnl"] == D(1) and e["dn_pnl"] == D(6)
+    assert e["both_positive"] is True
+
+
+def test_conservative_fees_can_flip_a_thin_shape_negative():
+    thin = dict(up_qty=D(10), dn_qty=D(10), up_price=D("0.45"),
+                dn_price=D("0.54"))
+    assert TS.net_settlement(theta=D(0), **thin)["both_positive"] is True
+    assert TS.net_settlement(**thin)["both_positive"] is False
+
+
+def test_excess_on_the_expensive_side_is_rejected_as_a_top_up():
+    r = TS.top_up(up_qty=D(10), dn_qty=D(10), up_price=D("0.43"),
+                  dn_price=D("0.52"), extra_side="UP", extra_qty=D(5),
+                  extra_price=D("0.43"))
+    assert r["ok"] is False
+    assert r["reason"] == "TOP_UP_WORSENS_WORST_OUTCOME"
+    assert r["worst_after"] < r["worst_before"]
+
+
+def test_cheap_excess_on_the_lagging_side_is_accepted_as_a_top_up():
+    """UP 18 filled, DOWN only 9: cheap DOWN lifts min(a,b) and the worst
+    outcome with it."""
+    r = TS.top_up(up_qty=D(18), dn_qty=D(9), up_price=D("0.43"),
+                  dn_price=D("0.52"), extra_side="DOWN", extra_qty=D(9),
+                  extra_price=D("0.20"))
+    assert r["ok"] is True
+    assert r["worst_after"] > r["worst_before"]
+    assert r["both_positive_after"] is True
+
+
+def test_a_top_up_of_unknown_side_or_size_refuses():
+    assert TS.top_up(up_qty=D(1), dn_qty=D(1), up_price=D("0.4"),
+                     dn_price=D("0.5"), extra_side="SIDEWAYS",
+                     extra_qty=D(1), extra_price=D("0.1"))["ok"] is False
+    assert TS.top_up(up_qty=D(1), dn_qty=D(1), up_price=D("0.4"),
+                     dn_price=D("0.5"), extra_side="DOWN",
+                     extra_qty=D(0), extra_price=D("0.1"))["ok"] is False
+
+
+# -------------------------------------------------------- fill models
+
+def test_expected_value_charges_the_single_leg_outcomes():
+    ev = TS.expected_value(matched_edge=D("0.0156"),
+                           residual_alpha=D("0.126"),
+                           p_first=D("0.5"), p_complete=D("0.5"))
+    assert ev["p_both"] == D("0.25")
+    assert ev["p_one_leg"] == D("0.50")
+    assert ev["ev"] < 0                   # residual dominates at coin flips
+
+
+def test_the_minimum_completion_probability_is_high_and_computed():
+    """e = 0.0156 (taker fees), alpha = 0.126 measured from L5's own
+    unmatched inventory -> break-even needs ~94% on both legs."""
+    p = TS.min_completion_probability(matched_edge=D("0.0156"),
+                                      residual_alpha=D("0.126"))
+    assert p is not None
+    assert D("0.93") < p < D("0.95")
+    # the rebate upside lowers the bar but nowhere near a coin flip
+    p2 = TS.min_completion_probability(matched_edge=D("0.0562"),
+                                       residual_alpha=D("0.126"))
+    assert D("0.80") < p2 < D("0.83")
+
+
+def test_a_free_residual_needs_no_completion_probability():
+    assert TS.min_completion_probability(matched_edge=D("0.05"),
+                                         residual_alpha=D(0)) == D(0)
+
+
+def test_displayed_depth_is_never_treated_as_a_fill(armed):
+    """The success record must say so in terms, because this is the single
+    assumption that has produced every false positive so far."""
+    r = TS.build_orders(**book())
+    assert "displayed prices are NOT fills" in r["labels"]
+
+
+# ------------------------------------------------------------- timing
+
+def test_the_terminal_deadline_and_place_cutoff_are_ordered():
+    t0 = 1_792_000_000.0
+    t1 = t0 + TS.WINDOW_S
+    assert TS.cancel_cutoff(t1) == t1 - 180.0
+    assert TS.place_cutoff(t0, t1) <= TS.cancel_cutoff(t1) - TS.MIN_REST_S
+    assert TS.may_place(t0 + 10, t0, t1) is None
+    assert TS.may_place(t0 - 1, t0, t1) == "WINDOW_NOT_OPEN"
+    assert TS.may_place(TS.place_cutoff(t0, t1), t0, t1) == "PAST_PLACE_CUTOFF"
+
+
+def test_a_short_window_clamps_the_place_cutoff_not_the_deadline():
+    t0 = 1_792_000_000.0
+    t1 = t0 + 300                        # 5 minutes only
+    assert TS.place_cutoff(t0, t1) < TS.cancel_cutoff(t1)
+
+
+# ------------------------------------------------- module owns nothing
+
+def test_the_module_cannot_submit_cancel_or_settle():
+    import inspect
+    src = inspect.getsource(TS)
+    # the prose explains what it does NOT own, so scan the CODE only
+    if TS.__doc__:
+        src = src.replace(TS.__doc__, "")
+    code = "\n".join(ln for ln in src.splitlines()
+                     if not ln.lstrip().startswith("#"))
+    for forbidden in ("transport", "submit(", ".cancel(", "requests",
+                      "urllib", "http", "open("):
+        assert forbidden not in code, forbidden
+
+
+def test_fees_round_a_cost_up_and_a_credit_down_in_magnitude():
+    cost = TS.fee(TS.TAKER_THETA, D("0.22"), D("0.5"))
+    cred = TS.fee(TS.MAKER_THETA, D("0.22"), D("0.5"))
+    assert cost == D("0.01")             # 0.00382 -> a whole cent of cost
+    assert cred == D("0.00")             # -0.00069 -> no credit assumed
+    assert TS.fee(TS.MAKER_THETA, D(10), D("0.5")) == D("-0.03")
+
+
+# ------------------------------------------- continuous market authorization
+
+def test_an_exact_slug_is_still_exact(monkeypatch):
+    """Nothing already configured widens. A pattern is opt-in."""
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, MKT)
+    assert TS.active(MKT) is True
+    assert TS.active(MKT + "x") is False
+    assert TS.active("cpc-btc-updown-15m-2026-10-15-1745z") is False
+
+
+def test_a_family_pattern_carries_across_successive_windows(monkeypatch):
+    """The runner builds a NEW slug every fifteen minutes, so an exact-slug
+    authorization goes inert on the roll. A family pattern is what lets
+    accumulation continue into the next market without a human edit."""
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
+    assert TS.active("cpc-btc-updown-15m-2026-10-16-2100z") is True
+    assert TS.active("cpc-btc-updown-15m-2026-10-16-2115z") is True
+    # and it is NOT "any market": a different instrument is not covered
+    assert TS.active("cpc-btc-updown-1d-2026-10-16-2100z") is False
+    assert TS.active("cpceth-eth-updown-15m-2026-10-16-2100z") is False
+
+
+def test_several_patterns_may_be_authorized(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV,
+                       "cpc-btc-updown-15m-*, cpceth-eth-updown-15m-*")
+    assert TS.active("cpceth-eth-updown-15m-2026-10-16-2100z") is True
+    assert TS.active("cpcsol-sol-updown-15m-2026-10-16-2100z") is False
+
+
+def test_an_empty_or_comma_only_market_is_inert(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    for raw in ("", "   ", ",", " , , "):
+        monkeypatch.setenv(TS.MARKET_ENV, raw)
+        assert TS.active(MKT) is False
+        assert TS.market_patterns() == ()
+
+
+def test_matching_is_case_sensitive(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
+    assert TS.active("CPC-BTC-UPDOWN-15M-2026-10-16-2100z") is False
+
+
+# --------------------------------------------------- the 2026-10-19 bracket
+
+def test_the_cross_price_bracket_separates_queue_from_price_distance():
+    """THE OCT 19 FILL. A bid at 0.89 under a 0.93 book filled for real.
+    `ahead_of_us` said 12959.03; the same-rung queue was 604.00. The bracket
+    must report both and must not turn either into a fill."""
+    from decimal import Decimal as D
+    from src import l5_maker_fill_model as FM
+    lad = FM.Ladder()
+    lad.ingest({"market_events": [{
+        "marketSlug": "S",
+        "bids": [{"px": "0.93", "qty": "100"}, {"px": "0.92", "qty": "4000"},
+                 {"px": "0.91", "qty": "4000"}, {"px": "0.90", "qty": "4255.03"},
+                 {"px": "0.89", "qty": "604"}],
+        "asks": [{"px": "0.94", "qty": "7768.28"}]}]}, 1000.0)
+    br = lad.cross_price_bracket("S", FM.BID, D("0.89"), D("0.31"))
+    assert br["same_rung_fifo"] == "604"
+    assert D(br["cross_price_depth"]) == D("12355.03")
+    assert D(br["legacy_ahead_of_us"]) == D("12959.03")
+    # the material correction: 604.31 of same-rung volume, not 12959.34
+    assert D(br["conservative_required_volume"]) == D("604.31")
+    assert D(br["legacy_required_volume"]) == D("12959.34")
+    assert br["requires_price_to_reach_us"] is True
+    assert "withdrawal" in br["labels"]
+
+
+def test_the_bracket_changes_no_fill_decision():
+    """It is a diagnostic. An unknown or deep queue still does not fill."""
+    from decimal import Decimal as D
+    from src import l5_maker_fill_model as FM
+    lad = FM.Ladder()
+    lad.ingest({"market_events": [{"marketSlug": "S",
+                                   "bids": [{"px": "0.50", "qty": "10"}],
+                                   "asks": [{"px": "0.51", "qty": "10"}]}]},
+               1000.0)
+    before = lad.ahead_of_us("S", FM.BID, D("0.50"))
+    lad.cross_price_bracket("S", FM.BID, D("0.50"), D("1"))
+    assert lad.ahead_of_us("S", FM.BID, D("0.50")) == before
+    # and at a price the venue never published, the bracket refuses to guess
+    br = lad.cross_price_bracket("S", FM.BID, D("0.01"), D("1"))
+    assert br["same_rung_fifo"] is None
+    assert br["why"] == "no_published_depth_at_our_price"
+
+
+def test_an_expired_authorization_leaves_the_two_leg_path_inert(monkeypatch):
+    """The two-leg path must not place when the owner's deadline has lapsed.
+    Oct 19 proved the live refusal; this pins it as a test."""
+    import datetime as dt
+    from src import l5_live_authorization as AUTH
+    monkeypatch.setenv(AUTH.NOT_AFTER_ENV, "2026-10-19T13:29:00Z")
+    st = AUTH.not_after_status(now=dt.datetime(2026, 10, 20, 1, 0,
+                                               tzinfo=dt.timezone.utc))
+    assert st["set"] is True
+    assert st["state"] == "EXPIRED"
+    assert st["expires_in_s"] < 0
+    # the configured value is never emitted
+    assert "2026-10-19T13:29:00Z" not in repr(st)
+
+
+def test_both_legs_plus_fees_stay_inside_the_five_dollar_obligation(monkeypatch):
+    """The cash gate charges a resting DOWN leg a dollar a share, so the
+    binding number is the obligation, not the gross cash."""
+    from decimal import Decimal as D
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "bound-check")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    from src import l5_two_sided_probe as TSP
+    r = TSP.build_orders(market="cpc-btc-updown-15m-2026-10-20-0100z",
+                         bid="0.49", ask="0.51",
+                         bid_depth="800", ask_depth="800",
+                         tick="0.01", min_qty="0.01", depth_ticks=1,
+                         cash_envelope="5", max_worst_case_loss="5",
+                         book_age_s="0.1")
+    assert r["ok"] is True
+    assert D(r["cash_gate_obligation_usd"]) <= D("5")
+    assert D(r["gross_cash_usd"]) <= D("5")
+    assert abs(D(r["worst_single_leg_loss_usd"])) <= D("5")
+    # THE REAL GATE IS THE POST-ONLY FEE FLOOR, and it still passes. This
+    # probe quotes post-only on both legs, which is what `fee_floor` scores.
+    assert r["fee_floor"]["ok"] is True
+    assert r["fee_floor"]["requires_post_only"] is True
+    assert D(r["fee_floor"]["net_if_maker"]) > 0
+    # `both_positive_if_taker` is a DIAGNOSTIC, never a refusal -- nothing in
+    # src reads it -- and it is SIZE-DEPENDENT, because the fee model charges
+    # a flat cent per ORDER on top of the per-contract theta. At the minimum
+    # 0.04 edge the 3-contract opening cap amortises that flat cent over
+    # fewer contracts, so the taker-stress margin falls from +$0.0148 at 3.37
+    # contracts to about zero at 3. That is a smaller cushion in a scenario
+    # this probe never executes, not a loss in the one it does.
+    assert r["sized_by"] == "OPENING_LEG_CONTRACT_CAP"
+    assert D(r["qty_per_leg"]) == D("3")
+    assert D(r["fee_floor"]["net_if_taker"]) > 0
+    # the venue grid is respected
+    assert D(r["qty_per_leg"]) % D("0.01") == 0
+
+
+def test_the_cancel_margin_widens_but_never_narrows(monkeypatch):
+    """The watchdog calls an order older than 300s overdue and HALTS before
+    cancelling, so the terminal margin must be able to cancel EARLIER."""
+    from src import l5_two_sided_probe as TSP
+    end = 1792000900.0
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    assert TSP.cancel_margin_s() == 300.0
+    assert TSP.cancel_cutoff(end) == end - 300.0
+    # narrowing is refused: a smaller value cannot push the deadline later
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "10")
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+    # and an unreadable value is not permission
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "not-a-number")
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+
+
+def test_the_widened_margin_keeps_a_leg_inside_the_watchdog_limit(monkeypatch):
+    """With the margin at 300 and the lock lifted at T+6:00, a leg placed by
+    the T+8:00 cutoff rests at most 240s -- 60s inside the watchdog's 300s."""
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    terminal = TSP.cancel_cutoff_from_start(start)
+    place_last = TSP.place_cutoff(start, end)
+    earliest_place = start + 360.0            # lock lifted at T+6:00
+    assert terminal - earliest_place <= 300.0
+    assert terminal - place_last >= TSP.MIN_REST_S
+    assert place_last < terminal
+
+
+def test_the_placement_floor_raises_but_never_lowers(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    assert TSP.place_floor_s() == TSP.PLACE_FLOOR_S == 0.0
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "360")
+    assert TSP.place_floor_s() == 360.0
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "-120")
+    assert TSP.place_floor_s() == 0.0, "a floor cannot be lowered below zero"
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "not-a-number")
+    assert TSP.place_floor_s() == 0.0, "unreadable is not permission"
+
+
+def test_a_mandate_window_cannot_rest_a_leg_past_the_watchdog(monkeypatch):
+    """THE MANDATE BLOCKER. With the lock open across consecutive windows
+    nothing bounded the earliest placement, so a leg could rest ~595s against
+    the watchdog's 300s. Floor 360 + margin 300 bounds every window at 240s."""
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "360")
+    WATCHDOG_MAX_AGE = 300.0
+    for start in (1792000000.0, 1792000900.0, 1792001800.0, 1792002700.0):
+        end = TSP.window_end(start)
+        terminal = TSP.cancel_cutoff_from_start(start)
+        earliest = start + TSP.place_floor_s()
+        latest = TSP.place_cutoff(start, end)
+        assert TSP.may_place(start + 5.0, start, end) == "BEFORE_PLACE_FLOOR"
+        assert TSP.may_place(earliest, start, end) is None
+        assert TSP.may_place(latest, start, end) == "PAST_PLACE_CUTOFF"
+        # the property that matters, in EVERY window, without hand timing
+        assert terminal - earliest == 240.0
+        assert terminal - earliest < WATCHDOG_MAX_AGE
+
+
+def test_a_floor_past_the_cutoff_says_so_rather_than_going_quiet(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "880")
+    start = 1792000000.0
+    assert TSP.may_place(start + 885.0, start, TSP.window_end(start)) == \
+        "PLACE_FLOOR_LEAVES_NO_BAND"
+
+
+# ------------------------------- entry vs completion: two economic cutoffs
+
+def test_completing_stays_permitted_later_than_entering(monkeypatch):
+    """The whole point: the engine must not stop REDUCING risk at the same
+    instant it stops taking it."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    assert TSP.ENTRY_CUTOFF_S < TSP.COMPLETE_CUTOFF_S
+    mid = start + (TSP.ENTRY_CUTOFF_S + TSP.COMPLETE_CUTOFF_S) / 2.0
+    assert TSP.may_enter(mid, start, end) == "PAST_ENTRY_CUTOFF"
+    assert TSP.may_complete(mid, start, end) is None
+
+
+def test_both_cutoffs_are_bounded_by_the_terminal(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    terminal = TSP.cancel_cutoff(end)
+    assert TSP.may_complete(terminal, start, end) == "PAST_COMPLETE_CUTOFF"
+    # with the complete cutoff pushed to the terminal, the terminal still binds
+    monkeypatch.setenv(TSP.COMPLETE_CUTOFF_ENV, "999")
+    assert TSP.complete_cutoff_s() == TSP.COMPLETE_CUTOFF_S, "raise refused"
+
+
+def test_an_entry_that_could_not_be_withdrawn_is_refused():
+    """A leg the terminal could not cancel in time is never opened."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    late = TSP.cancel_cutoff(end) - TSP.MIN_REST_S + 1.0
+    # inside the entry cutoff only if the entry cutoff were later; force that
+    assert TSP.may_enter(late, start, end) in ("PAST_ENTRY_CUTOFF",
+                                               "TOO_LATE_TO_WITHDRAW")
+
+
+def test_the_cutoffs_move_earlier_only(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "300")
+    assert TSP.entry_cutoff_s() == 300.0, "earlier is accepted"
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "900")
+    assert TSP.entry_cutoff_s() == TSP.ENTRY_CUTOFF_S, "later is refused"
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "junk")
+    assert TSP.entry_cutoff_s() == TSP.ENTRY_CUTOFF_S, "unreadable is refused"
+
+
+def test_entry_runs_from_window_open_by_default():
+    """The two-minute band was an artifact. With the default floor of zero,
+    entry is permitted from the window's own open."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    assert TSP.place_floor_s() == 0.0
+    assert TSP.may_enter(start + 1.0, start, end) is None
+    assert TSP.may_enter(start - 1.0, start, end) == "WINDOW_NOT_OPEN"
+
+
+# ----------------------------------- fix 3: bounded replacement attempts
+
+def test_attempt_zero_keeps_its_historical_claim_key(monkeypatch):
+    """Claims already on the durable volume were written without an attempt
+    axis. A key change would hand every one of them back as unspent."""
+    from src import l5_live_authorization as AUTH
+    base = AUTH.accumulation_sid("exp", "mkt", 0, "UP")
+    assert base == "acc1.exp.mkt.0.UP"
+    assert AUTH.accumulation_sid("exp", "mkt", 0, "UP", 0) == base
+    assert AUTH.accumulation_sid("exp", "mkt", 0, "UP", 1) == base + ".a1"
+
+
+def test_attempts_are_distinct_on_every_axis():
+    from src import l5_live_authorization as AUTH
+    seen = set()
+    for m in ("m1", "m2"):
+        for r in (0, 1):
+            for leg in AUTH.PROBE_LEGS:
+                for a in (0, 1, 2):
+                    seen.add(AUTH.accumulation_sid("e", m, r, leg, a))
+    assert len(seen) == 2 * 2 * 2 * 3
+
+
+def test_the_attempt_budget_is_bounded_and_fails_safe(monkeypatch):
+    from src import l5_live_authorization as AUTH
+    assert AUTH.acc_max_attempts() == AUTH.ACC_MAX_ATTEMPTS_DEFAULT
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "3")
+    assert AUTH.acc_max_attempts() == 3
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "9999")
+    assert AUTH.acc_max_attempts() == AUTH.ACC_MAX_ATTEMPTS_HARD_CAP
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "junk")
+    assert AUTH.acc_max_attempts() == 1, "unparseable is the safe reading"
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "0")
+    assert AUTH.acc_max_attempts() == 1
+
+
+def test_a_negative_attempt_is_refused():
+    from src import l5_live_authorization as AUTH
+    with pytest.raises(AUTH.Refused):
+        AUTH.accumulation_sid("e", "m", 0, "UP", -1)
+
+
+def test_a_claim_past_the_attempt_budget_is_refused(tmp_path, monkeypatch):
+    from src import l5_live_authorization as AUTH
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-attempts")
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "2")
+    led = str(tmp_path / "ledger.jsonl")
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=1)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=2)
+    assert "ATTEMPTS_EXHAUSTED" in str(e.value.reason)
+
+
+def test_a_replacement_is_refused_over_a_leg_that_holds_inventory(tmp_path,
+                                                                  monkeypatch):
+    """THE RULE THAT MATTERS: a filled leg is never re-placed."""
+    from decimal import Decimal as _D
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-hold")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    # attempt 0 taken, and the leg FILLED
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    ex.store.state["positions"]["m|UP"] = "1"
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+def test_a_replacement_is_granted_over_a_leg_that_holds_nothing(tmp_path,
+                                                                monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-empty")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv2.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    assert ex.acc_leg_attempt("m", 0, "UP") == 0
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    # cancelled unfilled: nothing held, nothing live -> a reprice is allowed
+    assert ex.acc_leg_attempt("m", 0, "UP") == 1
+
+
+def test_a_replacement_is_refused_while_an_order_is_still_live(tmp_path,
+                                                               monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-live")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv3.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    ex.store.state["live_orders"] = {"coid-1": {"market": "m"}}
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+def test_the_attempt_budget_exhausts_rather_than_wrapping(tmp_path,
+                                                          monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-exh")
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "2")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv4.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=1)
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+# ------------------------------- fix 2: the per-order age deadline
+
+def test_the_order_ttl_shortens_only(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    assert TSP.order_ttl_s() == TSP.ORDER_TTL_S
+    monkeypatch.setenv(TSP.ORDER_TTL_ENV, "60")
+    assert TSP.order_ttl_s() == 60.0
+    monkeypatch.setenv(TSP.ORDER_TTL_ENV, "600")
+    assert TSP.order_ttl_s() == TSP.ORDER_TTL_S, "longer is refused"
+    for bad in ("junk", "0", "-5"):
+        monkeypatch.setenv(TSP.ORDER_TTL_ENV, bad)
+        assert TSP.order_ttl_s() == TSP.ORDER_TTL_S, bad
+
+
+def test_an_order_is_due_at_its_own_age_not_the_windows(monkeypatch):
+    """The property that unblocks a full-window strategy: an order's life is
+    its own, so quoting early does not mean resting until the terminal."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    submitted = start + 10.0            # quoted ten seconds into the window
+    assert TSP.order_due(submitted + 1.0, submitted, start, end) is False
+    assert TSP.order_due(submitted + TSP.ORDER_TTL_S, submitted,
+                         start, end) is True
+    # and the terminal still binds an order submitted late
+    late = TSP.cancel_cutoff(end) - 5.0
+    assert TSP.order_due(TSP.cancel_cutoff(end), late, start, end) is True
+
+
+def test_the_per_order_deadline_keeps_every_order_inside_the_watchdog():
+    """With a 120s TTL, an order quoted at ANY point in the window rests far
+    inside the watchdog's 300s -- which is the whole point of fix 2."""
+    from src import l5_two_sided_probe as TSP
+    WATCHDOG_MAX_AGE = 300.0
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    for offset in (0.0, 1.0, 120.0, 300.0, 500.0, 600.0):
+        sub = start + offset
+        age = 0.0
+        while not TSP.order_due(sub + age, sub, start, end) and age < 1000:
+            age += 1.0
+        assert age <= WATCHDOG_MAX_AGE, (offset, age)
+        assert age <= TSP.ORDER_TTL_S
+
+
+def test_deadman_can_be_scoped_to_named_orders(tmp_path):
+    """A per-order deadline must withdraw the overdue leg WITHOUT killing a
+    complement placed seconds ago."""
+    from src import l5_live_execution as LX
+    store = LX.InventoryStore(str(tmp_path / "inv.json"))
+    store.state["live_orders"] = {
+        "old": {"market": "m", "side": "UP", "venue_order_id": None},
+        "new": {"market": "m", "side": "DOWN", "venue_order_id": None},
+    }
+
+    class _T:
+        market_slug = "m"
+        armed = False
+
+        def cancel(self, vid):
+            raise AssertionError("no venue id, so no cancel is attempted")
+
+    rec = LX.deadman(store, _T(), reason="scoped", only=["old"])
+    assert rec["scoped_to"] == ["old"]
+    # only the named order was handled; the other was left entirely alone
+    touched = [r["client_order_id"] for r in rec["no_venue_id"]]
+    assert touched == ["old"]
+
+
+def test_deadman_unscoped_still_sweeps_everything(tmp_path):
+    from src import l5_live_execution as LX
+    store = LX.InventoryStore(str(tmp_path / "inv2.json"))
+    store.state["live_orders"] = {
+        "a": {"market": "m", "side": "UP", "venue_order_id": None},
+        "b": {"market": "m", "side": "DOWN", "venue_order_id": None},
+    }
+
+    class _T:
+        market_slug = "m"
+        armed = False
+
+    rec = LX.deadman(store, _T(), reason="all")
+    assert rec["scoped_to"] is None
+    assert sorted(r["client_order_id"] for r in rec["no_venue_id"]) == ["a", "b"]
+
+
+# ------------------- the authenticated book reaches the two-leg planner
+
+class _Mirror:
+    """AuthBook's shape: snapshot(slug), None unless connected and 2-sided."""
+
+    def __init__(self, snap=None, raises=False):
+        self._snap, self._raises, self.calls = snap, raises, []
+
+    def snapshot(self, slug):
+        self.calls.append(slug)
+        if self._raises:
+            raise RuntimeError("feed down")
+        return self._snap
+
+
+def _fresh(age="0.05"):
+    return {"bid": "0.49", "ask": "0.51", "bid_shares": "800",
+            "ask_shares": "800", "stream_age_s": age,
+            "source": "authenticated_ws"}
+
+
+def _ex(tmp_path, mirror=None):
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "i.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    ex.ts_book = mirror
+    return ex
+
+
+def test_a_fresh_authenticated_book_reaches_the_two_leg_planner(tmp_path,
+                                                                monkeypatch):
+    """THE BLOCKER. handle() passes {} on purpose, and probe_plan priced both
+    legs from it, so every decision refused BOOK_STALE against a 9ms book."""
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "fix")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    m = _Mirror(_fresh())
+    ex = _ex(tmp_path, m)
+    got = ex.ts_authenticated_book("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert got["stream_age_s"] == "0.05"
+    assert m.calls == ["cpc-btc-updown-15m-2026-10-20-0200z"]
+
+
+def test_the_mirror_is_snapshotted_per_call_and_never_cached(tmp_path):
+    """A stored snapshot could be reused across a restart or a reconnect."""
+    m = _Mirror(_fresh())
+    ex = _ex(tmp_path, m)
+    for _ in range(3):
+        ex.ts_authenticated_book("m", {})
+    assert len(m.calls) == 3, "each decision takes its own snapshot"
+    assert not hasattr(ex, "_ts_book_cache")
+
+
+@pytest.mark.parametrize("snap,expect", [
+    (None, "BOOK_STALE"),                 # disconnected: snapshot() is None
+    ({}, "BOOK_STALE"),                   # no age
+    ({"bid": "0.49", "ask": "0.51"}, "BOOK_STALE"),       # no age
+    ("not-a-mapping", "BOOK_STALE"),      # not a book at all
+    # a one-sided dict keeps its age, so the AGE gate passes and the
+    # TWO-SIDED gate refuses instead. AuthBook.snapshot cannot actually
+    # produce this -- it returns None unless connected AND two-sided -- but
+    # the planner must refuse it even if something else ever did.
+    ({"bid": "0.49", "stream_age_s": "0.05"}, "BOOK_NOT_TWO_SIDED"),
+])
+def test_an_unusable_book_still_fails_closed(tmp_path, monkeypatch, snap,
+                                             expect):
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "closed")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(snap))
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["ok"] is False
+    assert r["reason"] == expect, r
+
+
+def test_a_mirror_that_raises_fails_closed(tmp_path):
+    ex = _ex(tmp_path, _Mirror(raises=True))
+    assert ex.ts_authenticated_book("m", {}) == {}
+
+
+def test_no_mirror_at_all_leaves_the_supplied_book_alone(tmp_path):
+    ex = _ex(tmp_path, None)
+    assert ex.ts_authenticated_book("m", {}) == {}
+    supplied = _fresh()
+    assert ex.ts_authenticated_book("m", supplied) is supplied
+
+
+def test_a_stale_mirror_book_is_refused_by_the_planner(tmp_path, monkeypatch):
+    """Freshness is still decided by build_orders, not by this resolver."""
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "stale")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(_fresh(age="9.0")))
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["ok"] is False and r["reason"] == "BOOK_STALE"
+
+
+def test_a_fresh_mirror_book_lets_the_planner_price_both_legs(tmp_path,
+                                                              monkeypatch):
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "ok")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(_fresh()))
+    ex.validation_gates = None
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["reason"] != "BOOK_STALE", r
+
+
+def test_a_supplied_book_wins_over_the_mirror(tmp_path):
+    """A caller that HAS a complete book is still authoritative."""
+    m = _Mirror(_fresh(age="0.01"))
+    ex = _ex(tmp_path, m)
+    supplied = _fresh(age="0.40")
+    got = ex.ts_authenticated_book("m", supplied)
+    assert got["stream_age_s"] == "0.40"
+    assert m.calls == [], "the mirror is not consulted when not needed"
+
+
+def test_the_l5_following_translation_path_is_untouched():
+    """pmus_translate must still receive whatever the caller passed, so
+    L5-following pricing and sizing cannot change."""
+    import inspect
+    from src import l5_live_execution as E
+    body = inspect.getsource(E.FaithfulExecutor.handle)
+    i = body.index("FT.pmus_translate(")
+    call = body[i:i + 120]
+    assert "authenticated" in call
+    assert "ts_authenticated_book" not in call
+    # the resolver is reached only through probe_plan
+    plan = inspect.getsource(E.FaithfulExecutor.probe_plan)
+    assert "ts_authenticated_book" in plan

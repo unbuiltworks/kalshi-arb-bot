@@ -1,0 +1,10 @@
+R0: eng=18 pairs=60.0 rescues=10 (per15=2.5) unwinds=0 flat=4 realizedAll=3.65 netSep2=2.83 maxLoss=-3.1 rebates=0.42 depthCov=1.0 perCapMin=0.0301
+R1: eng=18 pairs=25.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=-0.9 netSep2=-0.9 maxLoss=-3.5 rebates=0.39 depthCov=None perCapMin=-0.0104
+R2: eng=18 pairs=25.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=-0.9 netSep2=-0.9 maxLoss=-3.5 rebates=0.39 depthCov=None perCapMin=-0.0104
+R3: eng=1 pairs=5.0 rescues=0 (per15=0.0) unwinds=0 flat=0 realizedAll=-3.5 netSep2=-3.5 maxLoss=-3.5 rebates=0.04 depthCov=None perCapMin=-10.2941
+R4: eng=1 pairs=5.0 rescues=0 (per15=0.0) unwinds=0 flat=0 realizedAll=-3.5 netSep2=-3.5 maxLoss=-3.5 rebates=0.04 depthCov=None perCapMin=-10.2941
+S1: eng=14 pairs=10.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=7.1 netSep2=7.1 maxLoss=-3.1 rebates=0.23 depthCov=None perCapMin=0.1335
+S2: eng=14 pairs=10.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=7.05 netSep2=7.05 maxLoss=-3.1 rebates=0.23 depthCov=None perCapMin=0.1326
+C5: eng=14 pairs=10.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=7.15 netSep2=7.15 maxLoss=-3.0 rebates=0.23 depthCov=None perCapMin=0.1345
+C10: eng=14 pairs=20.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=14.2 netSep2=14.2 maxLoss=-6.1 rebates=0.52 depthCov=None perCapMin=0.1335
+C25: eng=14 pairs=50.0 rescues=0 (per15=0.0) unwinds=0 flat=1 realizedAll=26.52 netSep2=26.52 maxLoss=-15.25 rebates=1.26 depthCov=None perCapMin=0.1467

@@ -1,0 +1,86 @@
+{
+ "name": "bonereaper",
+ "fills_in_scope": 51781,
+ "fills_out_of_scope": 1847,
+ "windows": 1560,
+ "coverage": {
+  "first_ts": 1774422711.0,
+  "last_ts": 1788140854.0
+ },
+ "by_asset_window": [
+  [
+   [
+    "BTC",
+    "5"
+   ],
+   18715
+  ],
+  [
+   [
+    "ETH",
+    "5"
+   ],
+   10708
+  ],
+  [
+   [
+    "BTC",
+    "15"
+   ],
+   8307
+  ],
+  [
+   [
+    "ETH",
+    "15"
+   ],
+   4611
+  ],
+  [
+   [
+    "BTC",
+    "60"
+   ],
+   4481
+  ],
+  [
+   [
+    "SOL",
+    "15"
+   ],
+   1058
+  ],
+  [
+   [
+    "SOL",
+    "5"
+   ],
+   1027
+  ],
+  [
+   [
+    "ETH",
+    "60"
+   ],
+   955
+  ]
+ ],
+ "sides": [
+  [
+   "BUY",
+   51781
+  ]
+ ],
+ "dollars_in_scope": 743848.78,
+ "taker_share_dollars": 0.4967,
+ "median_pair_cost": 1.0611,
+ "pair_cost_below_1_share": 0.294,
+ "derived_trading_pnl": -14562.84,
+ "incentives_usdc": {
+  "REWARD": 143.83,
+  "TAKER_REBATE": 6466.66,
+  "MAKER_REBATE": 1087.8
+ },
+ "merge_events": 35,
+ "merge_usdc": 39613.33
+}

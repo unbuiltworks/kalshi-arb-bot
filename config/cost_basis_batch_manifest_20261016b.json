@@ -1,0 +1,27 @@
+{
+ "legs": 1,
+ "trade_ids": [
+  "D4EFZNW02ZRM",
+  "D4EFZNW02ZRQ",
+  "D4EFZNW04ZRP",
+  "D4EH1QYG0ZRN",
+  "D4EH6TTG4ZRQ"
+ ],
+ "realized_delta_usd": "36.97540000",
+ "keys": [
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP"
+ ],
+ "per_leg": {
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP": {
+   "cost_before_usd": "37.975400",
+   "cost_after_usd": "1.00000000",
+   "trade_ids": [
+    "D4EH6TTG4ZRQ",
+    "D4EH1QYG0ZRN",
+    "D4EFZNW04ZRP",
+    "D4EFZNW02ZRQ",
+    "D4EFZNW02ZRM"
+   ]
+  }
+ }
+}
