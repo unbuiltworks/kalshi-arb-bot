@@ -102,17 +102,49 @@ def _ctx() -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
-def _get(url: str, timeout: float = 20.0) -> Any:
-    req = urllib.request.Request(url, headers=UA)
+#: REVALIDATION HEADERS FOR THE ACTIVITY FEED ONLY.
+#:
+#: WHY. The activity request was byte-identical on every poll and carried
+#: nothing but a User-Agent, so any intermediary -- a CDN, a reverse proxy,
+#: the API's own edge -- could serve one cached body indefinitely and
+#: `urlopen` would report a clean HTTP 200 every time. That is exactly the
+#: observed failure: on 2026-10-29 the collector made 3,166 successful polls
+#: over 4h54m with `feed_errors 0`, received exactly 200 rows each time, and
+#: `newest_row_event_utc` never moved off 17:54:50Z while `ingest:dup`
+#: reached 633,200 of 633,200 and the cursor key count stayed at 5,556.
+#:
+#: WHAT IT IS NOT. This is not a claim that a cache WAS the cause -- a wallet
+#: that genuinely stopped trading produces an identical signature, and that
+#: cannot be separated from inside this process. It removes the one
+#: explanation we can remove cheaply, and it is inert if the cause is
+#: elsewhere: no retry, no new endpoint, no second request.
+NO_CACHE = {"Cache-Control": "no-cache, no-store, max-age=0",
+            "Pragma": "no-cache"}
+
+
+def _get(url: str, timeout: float = 20.0, *,
+         no_cache: bool = False) -> Any:
+    headers = dict(UA)
+    if no_cache:
+        headers.update(NO_CACHE)
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as fh:
         return json.loads(fh.read().decode())
 
 
 def l5_activity(limit: int = 200) -> Optional[List[dict]]:
-    """L5's published trades, newest first. None means the feed failed."""
+    """L5's published trades, newest first. None means the feed failed.
+
+    REVALIDATED ON EVERY POLL, and the URL carries a cache-buster, because
+    a frozen body behind a clean 200 is indistinguishable from a quiet
+    wallet from in here. See NO_CACHE. The parameter is additive and the
+    endpoint ignores unknown query keys, so a server that was never caching
+    behaves exactly as before.
+    """
     try:
-        rows = _get("%s/activity?user=%s&limit=%d&type=TRADE"
-                    % (L5_DATA, L5_ADDR, limit))
+        rows = _get("%s/activity?user=%s&limit=%d&type=TRADE&_cb=%d"
+                    % (L5_DATA, L5_ADDR, limit, int(time.time())),
+                    no_cache=True)
     except Exception:                                          # noqa: BLE001
         return None
     return rows if isinstance(rows, list) else None

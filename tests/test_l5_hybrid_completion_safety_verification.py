@@ -239,3 +239,54 @@ class TestTheCeilingMustNotBeTheDefault:
             fee=D("0.0173"))}
         u = rows["DEFENSIVE_UNWIND"]
         assert D(str(u["best_usd"])) < 0        # 0.62 + 0.48 = 1.10 all-in
+
+
+class TestReq5TheMandateCannotGrantCrossing:
+    """A correction to my own earlier claim that crossing was 'config only'.
+
+    It is not. `EXECUTION_MODE` is a CODE CONSTANT and the mandate has no
+    field that can change it, which is deliberate: no copied variable and no
+    pasted document can turn our maker-only engine into a crosser.
+    """
+
+    def test_execution_scope_is_not_a_validated_approval_field(self):
+        """So `execution_scope: DEFENSIVE_COMPLETION_ONLY` in a mandate is
+        decorative -- the gate never reads it."""
+        from src import l5_campaign_approval as CA
+        assert CA.REQUIRED_FIELDS == (
+            "approved", "nonce", "series", "issued_utc", "expires_utc",
+            "max_windows", "max_total_exposure_usd", "max_daily_loss_usd")
+        assert "execution_scope" not in CA.REQUIRED_FIELDS
+        assert "defensive_pair_ceiling" not in CA.REQUIRED_FIELDS
+
+    def test_the_execution_mode_is_a_code_constant(self):
+        from src import l5_live_authorization as AUTH
+        assert AUTH.EXECUTION_MODE == "MAKER_ONLY"
+
+    def test_enabling_defensive_while_maker_only_FAILS_the_graded_row(self,
+                                                                      monkeypatch):
+        """The whole point: turning the flag on alone does not enable
+        crossing, it breaks the service's own config verification."""
+        from src import l5_runtime_config_verify as V
+        monkeypatch.setenv(DEF.DEFENSIVE_ENABLED_ENV, "1")
+        assert DEF.enabled() is True
+        out = V.verify()
+        row = [r for r in out["rows"]
+               if r["name"] == "maker_only_forbids_defensive_crossing"]
+        assert row and row[0]["ok"] is False
+        assert out["PASS"] is False
+
+    def test_switching_defensive_off_satisfies_it_unconditionally(self):
+        """A safety rollback can never be obstructed by this row."""
+        from src import l5_runtime_config_verify as V
+        assert DEF.enabled() is False
+        row = [r for r in V.verify()["rows"]
+               if r["name"] == "maker_only_forbids_defensive_crossing"]
+        assert row and row[0]["ok"] is True
+
+    def test_an_unreadable_mode_is_not_consent(self):
+        src = inspect.getsource(V_SRC := __import__(
+            "src.l5_runtime_config_verify", fromlist=["x"]))
+        assert "A mode we cannot read is not consent" in src
+        assert '_CROSSING_MODES = ("TAKER_PERMITTED", "DEFENSIVE_PERMITTED")' \
+            in src
