@@ -48,6 +48,7 @@ residual ceiling 3 contracts · `journal_errors > 0` · 8 windows spent ·
 |---|---|---|---|---|---|---|---|---|
 | 1 | 1845z | 18:45:09Z, spent 1/8 | **0** | 0 | 0 | 0 | n/a (Route B inert) | n/a |
 | 2 | 1900z | 19:00:09Z, spent 2/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×374 | n/a |
+| 3 | 1915z | 19:15:08Z, spent 3/8 | 0 (in flight) | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×619 | pending |
 
 ### Window 1 — 1845z — ZERO ORDERS, genuine constraint
 
@@ -195,3 +196,41 @@ same thing in its own label:
 0 completed pairs · 0 unmatched inventory · 0 Route B action triggers (hook
 ran, `NO_ACTION_YET` ×374) · settled net **n/a — nothing to settle**.
 Campaign ledger `peak_usd` still **0**; no limit has been approached.
+
+
+---
+
+### Window 3 — 1915z — armed 19:15:08Z, `windows_spent 3/8`
+
+Claim `…w.dc0d23fbf72748c9`, expires 19:29:00Z, window 19:15–19:30Z, scope
+digest `9beae198…` unchanged, `MAKER_ONLY`, preflight PASSED.
+`halt_latch CLEAR`, `halt_why null`.
+
+**L5 still idle — the decisive counter.** At 19:22:28Z:
+
+| counter | 19:08:51Z | 19:22:28Z |
+|---|---:|---:|
+| `ingest:polls_ok` | 374 | 619 |
+| `ingest:rows` | 74800 | 123800 |
+| `ingest:dup` | 74800 | **123800** |
+| `ingest:new` | 0 | **0** |
+| cursor `keys` | 5556 | **5556** |
+| `feed_errors` | 0 | 0 |
+| newest `top_slugs_seen` | 17:45z | **17:45z** |
+
+123800 / 619 = exactly **200.0** rows per poll, all duplicates. The cursor's
+`keys` count is **unchanged at 5556** across 245 further polls — the cleanest
+available proof that zero new L5 action keys were admitted in those 14
+minutes. The newest slug in the feed page is still `btc-updown-15m-1793295900`
+= **17:45z**, now ~95 minutes stale against a 900 s `max_action_age_s`.
+
+Route B's hook continues to run (`book_completion:NO_ACTION_YET` 374 → 619).
+`ts_completion:NO_INVENTORY_TO_COMPLETE` 76 → 116. `campaign_window:RESERVED`
+= 2 in this container (1900z, 1915z).
+
+### Burn status
+
+**3 of 8 windows spent, 0 submissions.** Five remain (1930z, 1945z, 2000z,
+2015z, 2030z), which the clock will consume by roughly 20:45z. The
+authorization itself does not expire until 22:20:15Z, so the window budget —
+not the deadline — is the binding constraint.
