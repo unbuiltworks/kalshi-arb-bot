@@ -2535,3 +2535,35 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 # fail ["owner_arm_token"]. L5_DEFENSIVE_COMPLETION stays OFF and the
 # unsafe 1.20 defensive default is NOT enabled; the 1.00 all-in ceiling
 # stands. The withdrawn three-window draft is not installed.
+
+# =====================================================================
+# 2026-10-29 23:35Z -- READ-ONLY FEED-SOURCE AUDIT, one shot at boot
+# =====================================================================
+#
+# WHY. The cache-bypass shipped at 23:21Z did NOT move the feed: 18 polls,
+# ingest:dup 3,600 of 3,600, ingest:new 0, cursor keys still 5,556,
+# newest_row_event_utc still 17:54:50Z. A per-request cache-buster makes
+# every URL one never requested before, so a cache cannot explain it -- the
+# body is what the LEGACY /activity endpoint genuinely serves. The owner
+# independently confirms the public profile is this same wallet, so the open
+# question is WHICH ENDPOINT, not which wallet.
+#
+# THE CHANGE. `feed_source_audit()` asks four activity shapes and two
+# identity APIs the same question once per boot and logs the answers side by
+# side as L5_FEED_SOURCE_AUDIT: legacy /activity, the documented
+# /v2/activity, both with and without type=TRADE, plus gamma /profiles and
+# data /profile. Per source it reports HTTP status or error, row count, the
+# newest timestamp in UTC, and each newest row's slug, transactionHash,
+# side, type and any proxyWallet/user field.
+#
+# WHAT IT IS NOT. It is NOT a change of source. The collector still polls
+# the legacy path; nothing here ingests, writes a cursor, feeds a decision
+# or submits. One call per boot, every failure captured per source so one
+# dead host cannot hide the others, and wrapped so a diagnostic can never
+# stop the process it diagnoses.
+#
+# LIMITS UNCHANGED and STILL DISARMED. PMUS_Q1_LIVE=NO; preflight fails on
+# three independent counts -- owner_arm_token, absolute_deadline EXPIRED,
+# campaign_approval stale. L5_DEFENSIVE_COMPLETION stays OFF, the unsafe
+# 1.20 defensive default is NOT enabled, the 1.00 all-in ceiling stands,
+# and no mandate is installed.

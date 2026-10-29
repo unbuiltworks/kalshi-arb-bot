@@ -1123,6 +1123,26 @@ class Runner:
                     "page as history. Emitted at construction so a restart "
                     "that silently re-seeded is visible in the log that "
                     "starts the run.")))
+        # ONE-SHOT, READ-ONLY FEED-SOURCE AUDIT, at construction only.
+        #
+        # The legacy `/activity` poll answered 200 with a byte-identical
+        # body for five hours and a cache-bypass did not move it, so the
+        # body is what that endpoint serves. The owner confirms the profile
+        # is this same wallet, which leaves WHICH ENDPOINT open. This asks
+        # the documented `/v2/activity` and the identity APIs the same
+        # question and logs both answers.
+        #
+        # It ingests nothing, writes no cursor, feeds no decision and does
+        # NOT change which source the collector polls. Bounded to one call
+        # per boot, and a failure is counted rather than raised: a
+        # diagnostic must never be able to stop the process it diagnoses.
+        try:
+            emit("L5_FEED_SOURCE_AUDIT", OBS.feed_source_audit())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["feed_source_audit_error:%s"
+                       % type(exc).__name__] += 1
         self.ws: Optional[int] = None
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None

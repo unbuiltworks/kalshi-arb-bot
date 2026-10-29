@@ -150,6 +150,111 @@ def l5_activity(limit: int = 200) -> Optional[List[dict]]:
     return rows if isinstance(rows, list) else None
 
 
+#: Gamma, for profile identity. Separate host from the activity API.
+L5_GAMMA = "https://gamma-api.polymarket.com"
+
+#: The candidate sources for L5's activity, in the order they are audited.
+#: The LEGACY path is what the collector has always polled; `/v2/activity`
+#: is the documented one. A deprecated endpoint that still answers 200 with
+#: a frozen snapshot is exactly the observed failure, so the audit asks both
+#: the same question and prints the two answers side by side.
+FEED_SOURCES = (
+    ("legacy_activity", "%s/activity?user=%s&limit=5&type=TRADE"),
+    ("v2_activity", "%s/v2/activity?user=%s&limit=5&type=TRADE"),
+    ("v2_activity_notype", "%s/v2/activity?user=%s&limit=5"),
+    ("legacy_activity_notype", "%s/activity?user=%s&limit=5"),
+)
+
+#: Profile-identity probes. Shapes differ between deployments, so each is
+#: tried and whatever comes back is reported verbatim rather than guessed.
+IDENTITY_SOURCES = (
+    ("gamma_profile_address", "%s/profiles?address=%s"),
+    ("data_profile_address", "%s/profile?address=%s"),
+)
+
+
+def _row_digest(rows: Any, n: int = 3) -> Any:
+    """The identifying fields of the newest rows, and nothing else.
+
+    No price or size arithmetic and no inference: this is for deciding WHICH
+    SOURCE is fresh, so it reports each row's own identity -- the venue's
+    timestamp, slug, transaction hash and whatever wallet field it carries.
+    """
+    if not isinstance(rows, list):
+        return {"not_a_list": type(rows).__name__}
+    out = {"count": len(rows), "newest": []}
+    try:
+        ts = [r.get("timestamp") for r in rows
+              if isinstance(r, Mapping) and r.get("timestamp") is not None]
+        if ts:
+            newest = max(float(t) for t in ts)
+            out["newest_timestamp"] = newest
+            out["newest_utc"] = dt.datetime.fromtimestamp(
+                newest, dt.timezone.utc).isoformat()
+    except Exception:                                          # noqa: BLE001
+        out["newest_utc"] = "UNREADABLE"
+    for r in (rows[:n] if isinstance(rows, list) else []):
+        if not isinstance(r, Mapping):
+            continue
+        out["newest"].append({
+            "timestamp": r.get("timestamp"),
+            "slug": r.get("slug"),
+            "transactionHash": r.get("transactionHash"),
+            "side": r.get("side"), "type": r.get("type"),
+            "proxyWallet": r.get("proxyWallet"),
+            "user": r.get("user"),
+        })
+    return out
+
+
+def feed_source_audit(addr: str = None) -> dict:
+    """Ask every candidate source the same question, ONCE, and report.
+
+    WHY THIS EXISTS. The collector's legacy `/activity` poll returned a
+    clean HTTP 200 with a byte-identical 200-row body for five hours
+    (3,166 polls, ingest:dup 633,200 of 633,200, newest event frozen at
+    17:54:50Z), and a cache-bypass with per-request cache-busting did not
+    move it -- so the body is what that endpoint genuinely serves. The
+    owner independently confirms the profile is this same wallet, which
+    leaves WHICH ENDPOINT as the open question rather than which wallet.
+
+    STRICTLY READ-ONLY AND ONE-SHOT. It submits nothing, ingests nothing,
+    writes no cursor and feeds no decision. It does not change which source
+    the collector polls -- that stays the legacy path until this evidence
+    says otherwise. Every failure is captured per source so one dead host
+    cannot hide the others.
+    """
+    addr = addr or L5_ADDR
+    out = {"label": "L5_FEED_SOURCE_AUDIT", "wallet": addr,
+           "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+           "activity": {}, "identity": {},
+           "labels": ("READ-ONLY diagnostic. Nothing was ingested, "
+                      "submitted or realized, and the collector's own "
+                      "source is unchanged by this call.")}
+    for name, tmpl in FEED_SOURCES:
+        try:
+            rows = _get(tmpl % (L5_DATA, addr) + "&_cb=%d" % int(time.time()),
+                        no_cache=True)
+            out["activity"][name] = _row_digest(rows)
+        except urllib.error.HTTPError as exc:                  # noqa: PERF203
+            out["activity"][name] = {"http_error": int(exc.code)}
+        except Exception as exc:                               # noqa: BLE001
+            out["activity"][name] = {"error": type(exc).__name__,
+                                     "detail": str(exc)[:160]}
+    for name, tmpl in IDENTITY_SOURCES:
+        base = L5_GAMMA if name.startswith("gamma") else L5_DATA
+        try:
+            doc = _get(tmpl % (base, addr), no_cache=True)
+            out["identity"][name] = (doc if isinstance(doc, (dict, list))
+                                     else {"unexpected": str(doc)[:200]})
+        except urllib.error.HTTPError as exc:
+            out["identity"][name] = {"http_error": int(exc.code)}
+        except Exception as exc:                               # noqa: BLE001
+            out["identity"][name] = {"error": type(exc).__name__,
+                                     "detail": str(exc)[:160]}
+    return out
+
+
 def _top_from_levels(md: Mapping[str, Any]) -> Optional[dict]:
     """Best bid/ask from the ACTUAL book levels of /book.
 
