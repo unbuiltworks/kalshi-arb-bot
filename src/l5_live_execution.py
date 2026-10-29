@@ -4180,6 +4180,13 @@ class FaithfulExecutor:
         self.store = store
         self.limits = limits
         self.transport = transport or NullTransport()
+        #: PER-CALL SCRATCH FOR THE TWO-SIDED LEG, declared rather than
+        #: created on first use inside `handle`. They were implicit runtime
+        #: attributes, so a fresh executor genuinely lacked them and the
+        #: runner's `finally` referenced attributes that need not exist.
+        #: None is exactly what "no leg pending" already meant.
+        self._probe_leg_pending: Optional[str] = None
+        self._probe_round_pending: Optional[int] = None
         self.lam = lam
         #: DISARMED-SHADOW HOOKS, declared here rather than attached from
         #: outside. The graft test is right to insist: an attribute the

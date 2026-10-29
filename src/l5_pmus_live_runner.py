@@ -587,6 +587,31 @@ class FrameFanout:
                            "each other")}
 
 
+def _resting_rows(store: Any, market: str) -> tuple:
+    """Live orders in this market as {side, price, market}, or empty.
+
+    An unreadable ledger returns empty and the caller's own `resting` count,
+    read separately from `still_fillable_order_count`, is what refuses. The
+    two disagreeing is why both are consulted.
+    """
+    try:
+        live = store.live_orders() or {}
+    except BaseException:                                      # noqa: BLE001
+        return ()
+    out = []
+    for _oid, row in (live.items() if hasattr(live, "items")
+                      else enumerate(live)):
+        try:
+            r = dict(row or {})
+        except BaseException:                                  # noqa: BLE001
+            continue
+        if str(r.get("market") or market) != str(market):
+            continue
+        out.append({"side": str(r.get("side") or ""),
+                    "price": r.get("price"), "market": market})
+    return tuple(out)
+
+
 def _evidence_depth_ticks() -> Optional[int]:
     """How far behind the touch the probe rests, from the same env var it
     reads (`L5_TS_DEPTH_TICKS`, default 2). Reporting only: this feeds the
@@ -1076,6 +1101,12 @@ class Runner:
         self.max_action_age_s = _max_action_age_s()
         #: every slug the feed has served this process, admitted or not
         self.ingest_slugs: "collections.Counter[str]" = collections.Counter()
+        #: the most recent ADMITTED L5 action per market, for the
+        #: book-driven completion re-evaluation. Bounded by the number of
+        #: markets this process trades, which is one.
+        self._last_action_row: Dict[str, Dict[str, Any]] = {}
+        #: when the book-driven completion last decided, for its cadence
+        self._book_completion_t: Optional[float] = None
         #: the three clocks `ingest_report` publishes. None means NEVER.
         self.last_row_t: Optional[float] = None
         self.last_btc15m_t: Optional[float] = None
@@ -2504,6 +2535,16 @@ class Runner:
                     int(age), int(self.stats.get("ingest:stale_max_age_s", 0)))
                 continue
             self.stats["ingest:admitted"] += 1
+            # KEPT FOR THE BOOK-DRIVEN RE-EVALUATION, and it is a REAL
+            # admitted action. Route B re-runs the existing completion path
+            # against the CURRENT book using this row; it invents no L5
+            # action, and the trigger record says the book asked.
+            try:
+                _ws_k = OBS.l5_window_start(r.get("slug", ""))
+                if _ws_k:
+                    self._last_action_row[OBS.pmus_slug_for(_ws_k)] = dict(r)
+            except BaseException:                              # noqa: BLE001
+                pass
             self.last_admitted_t = now
             self.handle(r, now)
             # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
@@ -2566,8 +2607,27 @@ class Runner:
             # chasing under another name, and it has never been tested
             # with money. The 8-live-order cap and the $5 exposure bound
             # are what keep unfilled orders from accumulating.
-            rec = ex.handle(row, {}, market=slug, window=str(ws),
-                            open_markets=self.open_markets())
+            # THE TWO-SIDED LEG MARKERS MUST NOT OUTLIVE THIS CALL.
+            # `FaithfulExecutor.handle` clears them on ENTRY, which closes
+            # every REFUSAL path. AN EXCEPTION IS NOT A REFUSAL: a raise
+            # between the two-sided adoption and the consume leaves them set
+            # until the next call, and `fresh_book_requote` reads
+            # `_probe_leg_pending` outside that method -- so in the gap it
+            # sees a leg that is not pending. Entry-clearing cannot close it:
+            # the gap precedes the entry it would clear at, and Route B
+            # re-enters far more often than one L5 action at a time.
+            #
+            # AT THE CALL SITE, NOT AS A METHOD SPLIT. Splitting either
+            # `handle` moved the body out from under source-introspection
+            # review guards -- fourteen of them across two attempts, one
+            # reporting ZERO refusal sites against an inventory of 44. A
+            # `finally` here costs none of them.
+            try:
+                rec = ex.handle(row, {}, market=slug, window=str(ws),
+                                open_markets=self.open_markets())
+            finally:
+                ex._probe_leg_pending = None
+                ex._probe_round_pending = None
         layer = rec.get("refused_by_layer")
         order = rec.get("ORDER") or {}
         key = ("ORDER:%s" % (order.get("reason") or
@@ -4986,6 +5046,118 @@ class Runner:
                     book_age_s=snap.get("stream_age_s"),
                     gap_suspected=bool(snap.get("gap_suspected")))
 
+    def maybe_book_completion(self, now: float) -> Optional[Dict[str, Any]]:
+        """ROUTE B. Let the BOOK ask for a completion we already own.
+
+        THE DEFECT. `TS.complement_order` is reached only through
+        `l5_live_execution.handle(row, ...)`, whose only hot-path caller is
+        the ingest loop -- one call per admitted L5 action, a measured median
+        18.11 s after L5 acted. A completion refused at that instant is not
+        reconsidered until the next action.
+
+        WHAT THIS DOES, AND WHAT IT DOES NOT. It re-runs the EXISTING path
+        against the CURRENT book, reusing the last REAL admitted action for
+        this market. It does not synthesise an L5 action, build a second
+        order path, or construct an authorization. Every gate, claim,
+        overlay, limit check and reconciliation the L5-driven call passes is
+        the same object here, because it is the same call.
+
+        PROVENANCE IS NOT MISREPRESENTED. `L5_BOOK_COMPLETION_TRIGGER` is
+        emitted BEFORE the re-entry, naming the decision, the reused
+        `action_key` and the fact that the BOOK asked. The tape therefore
+        shows a book-triggered re-evaluation, never a fresh L5 action.
+
+        INERT BY DEFAULT. Without `L5_BOOK_COMPLETION` this returns
+        immediately and the engine is byte-identical.
+        """
+        from src import l5_book_completion as BC
+        if not BC.enabled():
+            return None
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug:
+            return None
+        row = self._last_action_row.get(slug)
+        if row is None:
+            # NOTHING TO REUSE. A book-driven completion still rides a real
+            # L5 action, so before the first admitted action of this market
+            # there is nothing to re-evaluate and nothing is invented.
+            self.stats["book_completion:NO_ACTION_YET"] += 1
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            return None
+        # INVENTORY AND RESTING STATE FROM THE LEDGER, never from our own
+        # memory of what we did: the ledger is what reconciliation certifies.
+        try:
+            up = self.store.position(slug, "UP")
+            dn = self.store.position(slug, "DOWN")
+            resting = int(self.store.still_fillable_order_count())
+            legs = self.store.leg_cost(slug)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # FAIL CLOSED: an unreadable book is not an empty one.
+            self.stats["book_completion:LEDGER_UNREADABLE:%s"
+                       % type(exc).__name__] += 1
+            return None
+        if up is None or dn is None:
+            return None
+        held, other = ("UP", "DOWN") if up > dn else ("DOWN", "UP")
+        held_qty, def_qty = (up, dn) if held == "UP" else (dn, up)
+        book = self.book.snapshot(slug) or {}
+        gates = getattr(self.executor, "validation_gates", None)
+        rec = BC.decide(
+            market=slug, held_side=held,
+            held_qty=held_qty, held_cost_usd=legs.get(held),
+            deficient_qty=def_qty, deficient_cost_usd=legs.get(other),
+            book=book, now_t=now, window_start=float(ws),
+            # EVERY RESTING ORDER, so idempotence is judged against the
+            # venue's book and not against this method's own history.
+            # EVERY LIVE ORDER THIS LEDGER OWNS, so idempotence is judged
+            # against the recorded book rather than against this method's
+            # own memory of what it did.
+            resting=_resting_rows(self.store, slug),
+            tick=getattr(t, "tick_size", None) or "0.01",
+            min_qty=getattr(t, "quantity_increment", None) or "0.01",
+            # the SAME env the engine's own quote reads, not a second copy
+            depth_ticks=(_evidence_depth_ticks() or 2),
+            residual_budget_usd=getattr(
+                gates, "max_worst_case_deficit_usd", None),
+            # the deployed backstop, which is per-campaign and already
+            # enforced; passing it lets `decide` decline instead of
+            # producing an order the claim path would refuse.
+            submissions_left=AUTH.max_submissions(),
+            last_decide_t=self._book_completion_t)
+        # THE CADENCE IS STAMPED EVEN ON A REFUSAL, so a refused decision
+        # cannot be retried every tick.
+        if rec.get("reason") != "DECIDE_COOLDOWN":
+            self._book_completion_t = now
+        self.stats["book_completion:%s" % rec.get("reason")] += 1
+        if not rec.get("ok"):
+            return rec
+        # ONE RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE. The
+        # executor's own MAX_LIVE_ORDERS gate refuses a second order anyway;
+        # declining before the re-entry keeps the record honest about why.
+        if resting:
+            self.stats["book_completion:ORDER_ALREADY_RESTING"] += 1
+            return dict(rec, ok=False, reason="ORDER_ALREADY_RESTING")
+        emit("L5_BOOK_COMPLETION_TRIGGER", {
+            "triggered_by": "BOOK_NOT_L5_ACTION",
+            "reused_action_key": str(row.get("transactionHash")
+                                     or row.get("slug") or "")[:80],
+            "decision": {k: v for k, v in rec.items() if k != "leg"},
+            "labels": ("the BOOK asked for this re-evaluation; the reused "
+                       "action is a real admitted L5 action and no L5 "
+                       "action is synthesised. The order, if any, is placed "
+                       "by the existing path through every existing gate."),
+        })
+        self.stats["book_completion:REENTERED"] += 1
+        self.handle(row, now)
+        return rec
+
     def maybe_ts_completion(self, now: float) -> Optional[Dict[str, Any]]:
         """Decide, on ECONOMICS, whether to cross to complete the pair.
 
@@ -5545,6 +5717,10 @@ class Runner:
         # after the cutoff there is nothing left to complete against.
         _sc.mark("sample_residual_book")
         self.maybe_ts_completion(now)
+        # ROUTE B: THE BOOK ASKS, THE EXISTING PATH ANSWERS. Inert unless
+        # L5_BOOK_COMPLETION is set. Placed where the L5-driven completion
+        # already sits, so nothing downstream is reordered.
+        self.maybe_book_completion(now)
         _sc.mark("maybe_ts_completion")
         # AFTER the completion decision and BEFORE the terminal sweep. After,
         # because a completion that can act on the book as it stands should

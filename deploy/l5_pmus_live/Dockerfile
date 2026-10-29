@@ -51,6 +51,10 @@ COPY src/__init__.py src/__init__.py
 # module scope, so it has to be in the image -- without this line the
 # entrypoint raises ImportError at boot, which is precisely what the
 # image-closure tests caught.
+# Lazily imported by Runner.maybe_book_completion; absent from the
+# image it raises ModuleNotFoundError on the first tick with
+# L5_BOOK_COMPLETION set.
+COPY src/l5_book_completion.py src/l5_book_completion.py
 COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
