@@ -2849,3 +2849,39 @@ venue exit probe, disarmed 2026-10-30T17:10Z
 # STILL DISARMED. PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared, approval expired, no
 # limit or flag changed, L5_TS_TWO_ORDER_PAIR still false.
 venue exit probe persists until conclusive, disarmed 2026-10-30T17:30Z
+
+# ============================================================================
+# 2026-10-30, STAGE A CANDIDATE, DEPLOYED DISARMED. Commit 72da62ec.
+#
+# Carries the atomic pair reservation on top of the completion repair:
+#   * a stored plan is RE-PRECHECKED before any further leg is placed, so the
+#     second leg no longer goes out on a decision taken before the first one
+#     rested;
+#   * every obligation is charged exactly ONCE. A leg already placed is
+#     counted as outstanding (resting) or as inventory (filled) and is not
+#     charged again as a planned leg. The caller states which sides it placed,
+#     from the claim state. placed_sides defaults to empty, so every
+#     pre-existing caller keeps the original plan-time PAIR gate
+#     byte-for-byte.
+#
+# MEASURED, not asserted. At cash ceilings $8 / $1.50 / $0.80 / $0.30 the plan
+# shrinks and BOTH legs rest, committing $4.74 / $1.4852 / $0.7900 / $0.2844,
+# each within budget, re-check clean. At $0.01 NEITHER leg is placed
+# (NO_LEGAL_QUANTITY on both ticks). Tightened mid-flight, leg two is refused
+# PAIR_UP:CASH_COMMITMENT:4.74>0.60 -- the resting DOWN once plus this UP once.
+#
+# WATCHDOG with two of our orders resting: both cancelled by exact venue id
+# with registry AND venue corroboration, halt latched once for the pair, an
+# unownable second leg reported NOT_IN_OWNERSHIP_REGISTRY rather than
+# cancelled blindly on a shared account, a MANUAL leg never cancelled however
+# claimed, a failed cancel on one leg not abandoning the other.
+#
+# PARITY: baseline 54 failed / 14452 passed, this tree 54 failed / 14593
+# passed, failure sets BYTE-IDENTICAL. 141 net new tests.
+#
+# THIS DEPLOY DOES NOT ARM AND DOES NOT ENABLE TWO-SIDED RESTING.
+# PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared, approval expired, and
+# L5_TS_TWO_ORDER_PAIR remains FALSE -- so the second maker slot stays
+# refused as TWO_ORDER_PAIR_DISABLED until the owner authorizes it. No limit,
+# cap or threshold is changed by this deploy.
+stage A candidate, disarmed 2026-10-30T19:10Z
