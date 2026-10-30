@@ -795,6 +795,89 @@ VENUE_POSITION_SOLD_KEYS = ("qtySoldDecimal", "qtySold")
 #: disagrees with that difference fails closed.
 VENUE_POSITION_NET_KEYS = ("netPositionDecimal", "netPosition")
 
+#: Where a venue row may state when the order was created. Read in this
+#: order and parsed STRICTLY: an authoritative timestamp is usable evidence,
+#: a guess is not. Nothing here invents a time -- an unreadable row returns
+#: None and the deadline check keeps failing closed.
+VENUE_ORDER_CREATED_KEYS = ("createTime", "createdAt", "created_at",
+                            "submitTime", "submittedAt", "orderTime",
+                            "transactTime", "creationTime")
+
+
+def venue_order_created_utc(row: Mapping[str, Any]) -> Optional[str]:
+    """An ISO-8601 UTC submit time from the venue's own row, or None.
+
+    STRICT ON PURPOSE. `maybe_acc_deadline` requires a tz-aware ISO string
+    and treats anything else as unusable, so a value this cannot parse into
+    one must come back as None rather than as a plausible-looking string. A
+    naive timestamp is refused too: assuming UTC for a venue that did not
+    say so is exactly the fabrication the deadline rule exists to prevent.
+    """
+    for k in VENUE_ORDER_CREATED_KEYS:
+        raw = row.get(k)
+        if raw is None:
+            continue
+        try:
+            t = dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except BaseException:                                  # noqa: BLE001
+            continue
+        if t.tzinfo is None:
+            continue
+        return t.astimezone(dt.timezone.utc).isoformat()
+    return None
+
+
+def recover_submit_time(venue_row: Mapping[str, Any], *,
+                        mine: Mapping[str, Any],
+                        live_orders: Mapping[str, Any],
+                        submitted: Mapping[str, Any],
+                        venue_order_id: str) -> Optional[str]:
+    """When did WE send this order? None when it cannot be established.
+
+    WHAT THIS FIXES, measured live on 2026-10-30 in window 0200z. We
+    submitted under our own `l5f-...` id; the venue's ack carried NO
+    `venue_order_id`, so when the reconciliation read the open order back it
+    could not match our id and adopted the row keyed by the VENUE id
+    instead. That adopted row had no `t`, because nothing was ever submitted
+    under that key. `maybe_acc_deadline` then read the missing `t` as
+    unusable, marked the store UNCERTAIN and disarmed -- five seconds after
+    the order reached the book. The order was cancelled at cum 0 and the
+    window was spent.
+
+    THE TIME IS RECOVERED, NEVER INVENTED, in descending order of
+    authority:
+
+      1. our own record under this key, if we have one;
+      2. a DURABLE CLIENT-ORDER RECORD whose `venue_order_id` matches this
+         row -- `link_venue_order_id` writes that link as soon as the venue
+         discloses the id, so the order we sent is identifiable even when
+         the ack did not name it;
+      3. the venue's own creation timestamp, parsed strictly.
+
+    None means not established, and the caller must leave `t` absent so the
+    deadline rule keeps failing closed. That is the whole point: this makes
+    a recoverable case recoverable and changes nothing about the
+    unrecoverable one.
+    """
+    t = mine.get("t")
+    if t:
+        return str(t)
+    vid = str(venue_order_id or "").strip()
+    if vid:
+        for book in (live_orders, submitted):
+            if not isinstance(book, Mapping):
+                continue
+            for other_coid, row in book.items():
+                if not isinstance(row, Mapping):
+                    continue
+                if str(row.get("venue_order_id") or "").strip() != vid:
+                    continue
+                got = row.get("t")
+                if got:
+                    return str(got)
+    return venue_order_created_utc(venue_row)
+
+
 class UnrecognizedVenueShape(RuntimeError):
     """A venue row we cannot read. Carries the structure, never a guess.
 
@@ -3995,6 +4078,23 @@ class InventoryStore:
                 "qty": str(o.get("qty", mine.get("qty", rem))),
                 "remaining": str(rem), "state": "LIVE_AT_VENUE",
             }
+            # WHEN WE SENT IT, recovered rather than invented. An adopted
+            # row had no `t` at all, and `maybe_acc_deadline` reads a
+            # missing `t` as unusable -- which marks the store UNCERTAIN and
+            # disarms. See `recover_submit_time`: 0200z lost its window and
+            # its order to exactly that. Absent stays absent, so the
+            # unrecoverable case still fails closed.
+            _t = recover_submit_time(
+                o, mine=mine,
+                live_orders=(self.state.get("live_orders") or {}),
+                submitted=(self.state.get("submitted") or {}),
+                venue_order_id=rebuilt[coid]["venue_order_id"])
+            if _t:
+                rebuilt[coid]["t"] = _t
+                rebuilt[coid]["submit_time_source"] = (
+                    "OURS" if mine.get("t") else "RECOVERED")
+            else:
+                rebuilt[coid]["submit_time_unrecoverable"] = True
         # AN ORDER THAT VANISHED IS NOT AN ORDER THAT DID NOTHING.
         #
         # This used to release every live order the venue no longer lists,

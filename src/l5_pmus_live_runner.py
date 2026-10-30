@@ -2242,6 +2242,20 @@ class Runner:
                 # capital envelope at all, and the boundary must refuse that
                 # with CAPITAL_SCOPE_UNKNOWN rather than raise out of the
                 # arming path.
+                # NOT WIRED, PENDING AN OWNER DECISION. `transport_armable`
+                # exists on the boundary and would stop a window being spent
+                # on an arm the transport will refuse -- which is how 0145z
+                # was lost. Passing `Q1.armed()` here contradicts an
+                # invariant this repository pins deliberately
+                # (test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign: a valid
+                # campaign authorizes windows ON ITS OWN), so wiring it
+                # would change the authorization scope rather than fix a
+                # defect. See L5_CAMPAIGN10_DEFECT_FIXES.md for the two
+                # coherent resolutions and why neither is mine to choose.
+                # Operationally the waste is avoidable without this: the
+                # path only triggers when a valid campaign is installed
+                # while the Q1 handshake is absent, so keeping the handshake
+                # set whenever an approval is live keeps it unreachable.
                 limits=getattr(getattr(self, "executor", None),
                                "limits", None),
                 # the venue's own window, passed in as a FACT. None here is

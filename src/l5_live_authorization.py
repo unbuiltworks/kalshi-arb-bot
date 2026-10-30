@@ -1979,6 +1979,7 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      auth: Optional["Authorization"] = None,
                      path: Optional[str] = None,
                      require_durable: bool = True,
+                     transport_armable: Optional[bool] = None,
                      now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     """THE ONLY PLACE ARMING IS DECIDED. Returns the claim, or raises.
 
@@ -2608,6 +2609,40 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                 bad = holder_refusal(recorded.get("holder") or {}, holder)
                 if bad:
                     raise ArmingRefusal(bad["reason"], bad["detail"])
+        # A WINDOW IS NOT SPENT ON AN ARM THAT CANNOT HAPPEN.
+        #
+        # WHAT THIS FIXES, measured live on 2026-10-30. Step 2 accepts
+        # EITHER a valid campaign approval OR the Q1 handshake, deliberately
+        # -- the campaign document is an owner-held authorization in its own
+        # right and requiring the handshake on top of it "bought nothing".
+        # But `PMUSTransport.arm()` calls `_require_armed()`, which requires
+        # `Q1.armed()` ALWAYS. So a process holding a valid campaign and no
+        # handshake passes this boundary, SPENDS a window at the claim
+        # below, and is then refused by the transport.
+        #
+        # 0145z went that way: the claim was written at 01:45:01.572 and
+        # `t.arm()` raised NotArmed at 01:45:18 for the absent handshake.
+        # One of three authorized windows, consumed with no order and no
+        # possibility of one. It is the same shape as the defect already
+        # fixed for `reserve_window` on 2026-10-20, one layer down.
+        #
+        # PASSED IN AS A FACT, exactly as `halted` and `reconciled` are, so
+        # a caller that cannot establish it says so rather than omitting it.
+        # None means "not stated" and behaves exactly as before, which keeps
+        # every existing caller and test unchanged; only False refuses.
+        #
+        # THIS WIDENS NOTHING. A campaign-only process could never arm --
+        # the transport refused it one call later -- so refusing it here
+        # changes no reachable outcome except that the window survives. The
+        # authorization scope is untouched: what may arm is still decided by
+        # step 2 and by the transport, not here.
+        if transport_armable is False:
+            raise ArmingRefusal(
+                "TRANSPORT_CANNOT_ARM",
+                {"note": "the transport's own arm check would refuse this "
+                         "process, so no window is spent on it",
+                 "needs": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV],
+                 "window_preserved": True})
         # THE BUDGET, counted from the locks on the volume rather than from
         # memory, so a restart cannot buy another window.
         wkey = window_key(sid, market)
