@@ -1066,6 +1066,11 @@ class Runner:
         # refuses any delta that would move realized toward zero. Every boot
         # after the first therefore logs a refusal and changes nothing.
         apply_settlement_corrections(self.store)
+        # ONE MARKET, ONCE, and a DIFFERENT verb: this replaces a $1/share
+        # placeholder cost with a measured one, which necessarily moves
+        # realized TOWARD zero and so cannot go through the call above.
+        # See COST_BASIS_RESTATEMENTS for why the two are separate.
+        apply_cost_basis_restatements(self.store)
         # OWNERSHIP, PUBLISHED READ-ONLY. The watchdog cannot cancel one of
         # our orders without a durable record that it is ours -- account-wide
         # open orders say what is resting, not whose it is, and this account
@@ -2242,20 +2247,21 @@ class Runner:
                 # capital envelope at all, and the boundary must refuse that
                 # with CAPITAL_SCOPE_UNKNOWN rather than raise out of the
                 # arming path.
-                # NOT WIRED, PENDING AN OWNER DECISION. `transport_armable`
-                # exists on the boundary and would stop a window being spent
-                # on an arm the transport will refuse -- which is how 0145z
-                # was lost. Passing `Q1.armed()` here contradicts an
-                # invariant this repository pins deliberately
-                # (test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign: a valid
-                # campaign authorizes windows ON ITS OWN), so wiring it
-                # would change the authorization scope rather than fix a
-                # defect. See L5_CAMPAIGN10_DEFECT_FIXES.md for the two
-                # coherent resolutions and why neither is mine to choose.
-                # Operationally the waste is avoidable without this: the
-                # path only triggers when a valid campaign is installed
-                # while the Q1 handshake is absent, so keeping the handshake
-                # set whenever an approval is live keeps it unreachable.
+                # OPTION B, owner-approved 2026-10-30. The Q1 handshake is
+                # REQUIRED alongside the campaign approval, and a process
+                # lacking it is refused BEFORE the window claim is spent --
+                # which is how 0145z was lost: `authorize_arming` accepted
+                # the campaign alone, spent a claim, and `PMUSTransport.arm()`
+                # then refused the same process one call later.
+                #
+                # This narrows the authorization scope deliberately: two
+                # owner-held objects are now necessary to arm, not one. It
+                # supersedes the previous invariant that a campaign
+                # authorizes windows on its own
+                # (test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign, restated).
+                # It cannot restore a claim already spent and does not try:
+                # the budget is counted from the locks on the volume.
+                transport_armable=Q1.armed(),
                 limits=getattr(getattr(self, "executor", None),
                                "limits", None),
                 # the venue's own window, passed in as a FACT. None here is
@@ -6756,6 +6762,132 @@ def apply_ledger_adjustments(store) -> Optional[Dict[str, Any]]:
                "retired_entry_untouched": True,
                "orders": a["evidence"]["orders"]}
         emit("L5_LIVE_ADJUSTED", rec)
+        applied.append(rec)
+    return {"applied": applied} if applied else None
+
+
+#: COST-BASIS RESTATEMENTS -- for a RETIRED market whose recognised
+#: settlement is wrong because its cost basis was a $1/share PLACEHOLDER
+#: rather than a measured cost.
+#:
+#: SEPARATE FROM LEDGER_ADJUSTMENTS AND FROM apply_settlement_corrections, and
+#: necessarily so. An adjustment adds a labelled delta and leaves the row
+#: alone; `correct_settled_market` restates a settlement OUTCOME and refuses
+#: anything that moves realized toward zero (CORRECTION_WOULD_RELAX_LOSS_HALT)
+#: -- which this does, by $1.1842. That guard is correct for an outcome
+#: restatement and is NOT relaxed, shared or bypassed here: this drives
+#: `InventoryStore.correct_cost_basis`, a different verb with its own ten
+#: guards, whose whole purpose is replacing an upper bound with a measurement.
+#:
+#: ONE MARKET, ONCE. The list holds exactly one entry. The verb is idempotent
+#: by `correction_id` in `cost_basis_corrections`, refuses unless the stored
+#: row still matches `expect` field for field, RE-DERIVES the cost from the
+#: named venue fills rather than trusting `measured_cost`, requires the venue
+#: quantity to equal the ledger quantity, preserves the original row verbatim
+#: in `cost_superseded`, and cannot clear a halt or move a limit. Every boot
+#: after the first logs ALREADY_APPLIED and changes nothing.
+COST_BASIS_RESTATEMENTS = [
+    {
+        "id": "0230z-double-booked-cost-basis-2026-10-30",
+        "market": "cpc-btc-updown-15m-2026-10-30-0230z",
+        "side": "DOWN",
+        # the stored row as settlement wrote it, field for field
+        "expect": {
+            "yes_value": "1.0000",
+            "up_qty": "0",
+            "dn_qty": "1.9100",
+            "cost_total": "1.9100",
+            "redemption_total": "0E-8",
+            "settlement_pnl": "-1.91000000",
+            "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND",
+        },
+        "measured_cost": D("0.7258"),
+        "measured_fees": D("0.0000"),
+        "evidence": {
+            "source": "/v1/order via the live transport, plus "
+                      "/v1/account/balances, both recorded in this service's "
+                      "own deploy log (deployment 8db131c5)",
+            # The venue ORDER id. This order filled in ONE execution --
+            # quantity 1.91, cumQuantity 1.91, leavesQuantity 0 -- so the
+            # order identifies the fill exactly, and it is the identifier the
+            # venue's own authoritative row is keyed by.
+            "per_fill": [{"trade_id": "DDDXP54G12TT", "qty": "1.91",
+                          "price": "0.6200", "fee": "0.0000"}],
+            # NOT an activity-feed walk: this is a single order read directly
+            # from the venue, which is complete evidence for one fill by
+            # construction. `complete` states that nothing is missing, which
+            # is the condition guard 5 exists to enforce.
+            "activity_walk": {"complete": True, "pages": 0,
+                              "ended": "SINGLE_ORDER_READ",
+                              "basis": "one full execution of one order"},
+            "detail": ("DDDXP54G12TT ORDER_STATE_FILLED avgPx 0.6200 "
+                       "cumQuantity 1.91 commission 0.0000, side DOWN. PMUS "
+                       "quotes the YES price, so a DOWN share cost "
+                       "1 - 0.6200 = 0.3800 and 1.91 shares cost 0.7258"),
+            "cash": ("available_cash_usd 343.21615 at 02:29:43 and "
+                     "342.49035 at 02:30:41, a delta of exactly 0.7258, and "
+                     "unchanged at 02:46:57 and 02:49:00 after settlement -- "
+                     "so the venue charged this fill ONCE and credited "
+                     "nothing at settlement"),
+            "what_went_wrong": (
+                "the venue's open-orders row carried no client order id, so "
+                "reconcile keyed it by the venue id and adopted it while "
+                "parking our own coid as vanished. One venue order under two "
+                "coids booked 1.91 twice -- ORDER_PROGRESS at 02:30:27.385 "
+                "and PENDING_TERMINAL_RESOLVED at 02:30:27.763, both naming "
+                "venue_order_id DDDXP54G12TT, both reading already: 0. The "
+                "book went to 3.82 against the venue's 1.91, so "
+                "adopt_venue_position correctly replaced a basis it could no "
+                "longer decompose with the $1/share bound, and settlement "
+                "priced that placeholder"),
+            "before": ("retired_markets cost_total 1.9100, settlement_pnl "
+                       "-1.91000000; utc_day 2026-10-30 realized -1.91; "
+                       "all-time realized -11.50120000"),
+            "after": ("cost_total 0.7258, settlement_pnl -0.72580000; "
+                      "utc_day 2026-10-30 realized -0.7258; all-time "
+                      "realized -10.31700000. The original row is preserved "
+                      "verbatim in cost_superseded; `t` is NOT rewritten, so "
+                      "the loss stays on the day it was incurred; "
+                      "realized_unattributed and every limit are untouched"),
+            "fix": ("tracked_coid_for_venue_order and "
+                    "duplicate_venue_order_coid, shipped with this "
+                    "restatement, make the double-book unreachable"),
+        },
+    },
+]
+
+
+def apply_cost_basis_restatements(store) -> Optional[Dict[str, Any]]:
+    """Replace a retired market's $1/share placeholder with a measured cost.
+
+    Adds no authority: `InventoryStore.correct_cost_basis` is the only thing
+    that writes, every one of its guards runs, and a refusal is reported
+    rather than worked around. Idempotent by the verb's own correction-id
+    guard, so a restart cannot apply one twice.
+    """
+    applied: List[Dict[str, Any]] = []
+    for c in COST_BASIS_RESTATEMENTS:
+        before = store.realized_lines()
+        out = store.correct_cost_basis(
+            c["market"], c["side"],
+            correction_id=c["id"],
+            expect=c["expect"],
+            measured_cost=c["measured_cost"],
+            measured_fees=c["measured_fees"],
+            evidence=c["evidence"])
+        if not out.get("corrected"):
+            emit("L5_LIVE_COST_RESTATE_REFUSED", dict(
+                out, id=c["id"],
+                why=("the stored row is not the one this restatement was "
+                     "written for, or it has already been applied. Nothing "
+                     "was written."),
+                realized_unchanged=before))
+            continue
+        rec = dict(out, id=c["id"], market=c["market"], side=c["side"],
+                   evidence=c["evidence"],
+                   original_row_preserved_in="cost_superseded",
+                   limits_untouched=True)
+        emit("L5_LIVE_COST_RESTATED", rec)
         applied.append(rec)
     return {"applied": applied} if applied else None
 

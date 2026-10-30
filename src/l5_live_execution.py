@@ -878,6 +878,128 @@ def recover_submit_time(venue_row: Mapping[str, Any], *,
     return venue_order_created_utc(venue_row)
 
 
+#: Books a venue order id of ours may be recorded in, for the purpose of
+#: RE-KEYING an open-orders row onto the coid we sent it with. `quarantine`
+#: is deliberately absent: a quarantined order is ours, but it was parked
+#: because it could not be identified, and silently lifting it back onto the
+#: live map is not this function's business. It is adopted instead, and
+#: `duplicate_venue_order_coid` is what then protects the money.
+COID_BOOKS = ("live_orders", "pending_terminal", "submitted")
+
+#: Every book an id of ours can sit in -- the same four `owns_venue_order_id`
+#: consults, and for the same reason. Used when ANSWERING "which venue order
+#: is this coid", where missing a bucket would weaken a fail-closed guard.
+OWNED_COID_BOOKS = ("live_orders", "pending_terminal", "quarantine",
+                    "submitted")
+
+
+#: A DURABLE coid -> venue order id link, written at booking time.
+#:
+#: WHY IT IS NEEDED. `apply_order_progress` pops a terminal order out of
+#: `live_orders`, so by the time a SECOND coid tries to book the same venue
+#: order the first one's record is gone from every row-book and the
+#: duplicate guard has nothing to compare. This map outlives the order.
+VENUE_ORDER_LINK = "venue_order_ids"
+
+
+def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
+                            books: Sequence[str] = OWNED_COID_BOOKS
+                            ) -> Optional[str]:
+    """The venue order id WE recorded for one of our client order ids."""
+    link = state.get(VENUE_ORDER_LINK) if isinstance(state, Mapping) else None
+    if isinstance(link, Mapping):
+        vid = str(link.get(coid) or "").strip()
+        if vid:
+            return vid
+    for book in books:
+        rows = state.get(book) if isinstance(state, Mapping) else None
+        if not isinstance(rows, Mapping):
+            continue
+        row = rows.get(coid)
+        if not isinstance(row, Mapping):
+            continue
+        vid = str(row.get("venue_order_id") or "").strip()
+        if vid:
+            return vid
+    return None
+
+
+def tracked_coid_for_venue_order(venue_order_id: Optional[str],
+                                 state: Mapping[str, Any]) -> Optional[str]:
+    """Which of OUR client order ids already owns this venue order, or None.
+
+    WHY THIS EXISTS. 0230z, 2026-10-30. The venue's open-orders row for an
+    order WE sent carried no client order id, so `reconcile_from_venue` keyed
+    it by the venue's own id -- `DDDXP54G12TT` -- and marked it `adopted`,
+    while our own `l5f-b420c940...` was absent from that rebuilt map and
+    parked as vanished. ONE venue order, two tracking records, two
+    idempotency keys: `ORDER_PROGRESS` booked 1.91 under the venue id at
+    02:30:27.385 and `PENDING_TERMINAL_RESOLVED` booked the same 1.91 under
+    our coid 0.45 seconds later, each reading `already: 0`. The book went to
+    3.82 against the venue's 1.91, `adopt_venue_position` then replaced a
+    cost basis that was individually correct ($0.38/share) with the
+    $1-a-share bound it must use for a net it cannot decompose, and
+    settlement priced that placeholder: -$1.9100 realized against $0.7258
+    actually spent.
+
+    The evidence that identifies the order was already in the record -- both
+    entries carried `venue_order_id: DDDXP54G12TT`. This reads it.
+
+    DELIBERATELY NARROW. It answers only "do we already track this venue
+    order", so an order we genuinely never sent still has no match and is
+    still adopted. On the impossible case of two of our coids claiming one
+    venue order -- itself the defect state -- the lowest id wins, which is
+    deterministic and creates no THIRD record; the duplicate-booking guard
+    is what stops the money moving twice.
+    """
+    vid = str(venue_order_id or "").strip()
+    if not vid:
+        return None
+    hits = set()
+    for book in COID_BOOKS:        # NOT quarantine; see the note on COID_BOOKS
+        rows = state.get(book) if isinstance(state, Mapping) else None
+        if not isinstance(rows, Mapping):
+            continue
+        for coid, row in rows.items():
+            if not isinstance(row, Mapping):
+                continue
+            if str(row.get("venue_order_id") or "").strip() == vid:
+                hits.add(str(coid))
+    return min(hits) if hits else None
+
+
+def duplicate_venue_order_coid(state: Mapping[str, Any],
+                               coid: str) -> Optional[str]:
+    """Another client order id that has ALREADY booked this venue order.
+
+    THE FAIL-CLOSED HALF of the 0230z repair. `tracked_coid_for_venue_order`
+    removes the known way one venue order acquires two coids; this makes the
+    consequence unreachable however identity goes wrong next time, because
+    `applied_fill_qty` is keyed on the CLIENT id and so cannot see it.
+
+    Only a DIFFERENT coid counts. Successive partial fills arrive under the
+    same coid and are the ordinary case this must not disturb.
+    """
+    vid = venue_order_id_for_coid(state, coid)
+    if not vid:
+        return None
+    booked = state.get("filled_qty") if isinstance(state, Mapping) else None
+    if not isinstance(booked, Mapping):
+        return None
+    others = set()
+    for other, qty in booked.items():
+        if str(other) == str(coid):
+            continue
+        try:
+            if D(str(qty)) <= 0:
+                continue
+        except (TypeError, ValueError, ArithmeticError):
+            pass            # unreadable is not evidence of nothing booked
+        if venue_order_id_for_coid(state, str(other)) == vid:
+            others.add(str(other))
+    return min(others) if others else None
+
+
 class UnrecognizedVenueShape(RuntimeError):
     """A venue row we cannot read. Carries the structure, never a guess.
 
@@ -3084,6 +3206,12 @@ class InventoryStore:
         """
         # refuse before anything is recorded, not after
         market = canonical_market(market, doing="booking order progress")
+        # PERSIST THE LINK FIRST. A terminal order is popped out of
+        # `live_orders` below, so this is the last moment its venue id is
+        # readable -- and the duplicate guard needs it to outlive the order.
+        _vid_now = venue_order_id_for_coid(self.state, coid)
+        if _vid_now:
+            self.state.setdefault(VENUE_ORDER_LINK, {})[coid] = _vid_now
         was_live = coid in (self.state.get("live_orders") or {})
         already = self.applied_fill_qty(coid)
         cum = D(str(prog.get("cum_qty") or 0))
@@ -3092,6 +3220,24 @@ class InventoryStore:
                "delta": str(delta), "terminal": bool(prog.get("terminal")),
                "state": prog.get("state")}
         if delta > 0:
+            # THE SAME VENUE ORDER, TWICE. `already` above is keyed on the
+            # CLIENT order id, so it reads 0 for a second coid pointing at an
+            # order whose fills are already booked -- which is exactly how
+            # 0230z booked 1.91 contracts twice. Refuse, book nothing, and
+            # mark the store uncertain so submissions fail closed until the
+            # duplicate identity is resolved.
+            _dup = duplicate_venue_order_coid(self.state, coid)
+            if _dup:
+                self.mark_uncertain(
+                    "venue order %s is already booked under %s; refusing to "
+                    "book it again under %s"
+                    % (venue_order_id_for_coid(self.state, coid), _dup, coid))
+                out["refused"] = "DUPLICATE_VENUE_ORDER"
+                out["already_booked_under"] = _dup
+                out["venue_order_id"] = venue_order_id_for_coid(
+                    self.state, coid)
+                self.save()
+                return out
             # avgPx is the VENUE's number, so it is WIRE and gets converted
             self.apply_fill(market, side, delta,
                             D(str(prog.get("avg_px") or 0)), coid=coid,
@@ -4007,6 +4153,16 @@ class InventoryStore:
                        or o.get("order_id") or o.get("id") or "")
             if not coid:
                 continue
+            # OUR ORDER, UNDER OUR OWN KEY. A venue row that states no client
+            # order id falls through to the venue's id above, and keying it
+            # there is what made one order into two records at 0230z. If we
+            # already track this venue order, it is not an adoption: it is
+            # ours, and it keeps the coid we sent it with. See
+            # `tracked_coid_for_venue_order`.
+            _known = tracked_coid_for_venue_order(
+                o.get("id") or o.get("order_id"), self.state)
+            if _known and coid not in ours:
+                coid = _known
             mine = ours.get(coid, {})
             rem = o.get("remaining_qty", o.get("remainingQuantity"))
             if rem is None:

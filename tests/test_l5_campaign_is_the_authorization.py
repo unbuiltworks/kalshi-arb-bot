@@ -74,7 +74,19 @@ class _Transport:
         self.arms = 0
 
     def arm(self):
+        """MIRRORS `PMUSTransport.arm()`, deliberately.
+
+        The real one raises `NotArmed` when `Q1.armed()` is false. This fake
+        used to arm unconditionally, which is precisely why the boundary and
+        the transport could disagree unnoticed: the boundary accepted a
+        campaign on its own, spent a window claim, and the real transport
+        refused the same process one call later. 0145z was lost to that gap.
+        Keeping the two in step here is what stops it reopening.
+        """
         self.arms += 1
+        if not Q1.armed():
+            raise LX.NotArmed("owner arm token absent or does not match "
+                              "the session id")
         self.armed = True
         return {"armed": True, "market": self.market_slug}
 
@@ -118,6 +130,17 @@ class _Runner:
         pass
 
 
+def handshake(monkeypatch, sid="campaign-handshake"):
+    """OPTION B, owner-approved 2026-10-30: the Q1 handshake is required
+    ALONGSIDE the campaign. Two owner-held objects are necessary to arm.
+    What the campaign still removes is the per-WINDOW edit, not the
+    handshake: this is set once and every window of the campaign runs on
+    it."""
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, sid)
+    monkeypatch.setenv(Q1.ARM_ENV, sid)
+
+
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """Everything the boundary needs EXCEPT an authorization, which is what
@@ -148,7 +171,22 @@ def env(monkeypatch, tmp_path):
 # ============== the campaign authorizes, with NO PMUS_Q1 anything
 
 
-def test_a_valid_campaign_ARMS_without_the_legacy_handshake(env):
+def test_a_valid_campaign_ALONE_no_longer_arms(env):
+    """SUPERSEDED BY OPTION B. This asserted that a campaign authorizes a
+    window on its own. It no longer does, and the point of the change is
+    the second assertion: no window is spent on an arm that cannot happen.
+    """
+    r = _Runner(env, market=W1)
+    r.try_arm()
+    assert r.transport.armed is False
+    assert r.win["arm_refused_transport_cannot_arm"] == 1
+    assert r.transport.arms == 0, "the transport was never even reached"
+    led = CA.WindowLedger(str(env)).read(CA.nonce_sid(NONCE))
+    assert led["windows"] == [], "THE WINDOW IS PRESERVED"
+
+
+def test_a_valid_campaign_WITH_the_handshake_arms(env, monkeypatch):
+    handshake(monkeypatch)
     r = _Runner(env, market=W1)
     r.try_arm()
     assert r.transport.armed is True, dict(r.win)
@@ -156,7 +194,11 @@ def test_a_valid_campaign_ARMS_without_the_legacy_handshake(env):
 
 
 def test_FOUR_WINDOWS_arm_in_a_row_without_touching_PMUS_Q1(env, monkeypatch):
-    """The property the owner asked for: approve once, four windows run."""
+    """The property the owner asked for, restated under Option B: approve
+    once, set the handshake ONCE, and four windows run without touching
+    either again. The per-window edit is what the campaign abolished; the
+    handshake itself remains required."""
+    handshake(monkeypatch)
     for i, w in enumerate((W1, W2, W3, W4), start=1):
         r = _Runner(env, market=w)          # a fresh process each window
         r.try_arm()
@@ -168,7 +210,7 @@ def test_FOUR_WINDOWS_arm_in_a_row_without_touching_PMUS_Q1(env, monkeypatch):
     r.try_arm()
     assert r.transport.armed is False
     assert r.win["arm_refused_campaign_windows_exhausted"] == 1
-    assert Q1.armed() is False, "no owner handshake was ever involved"
+    assert Q1.armed() is True, "the handshake was set once and never touched"
 
 
 def test_with_NEITHER_authorization_arming_refuses_and_names_both(env,
@@ -333,7 +375,8 @@ def test_UNREADABLE_window_bounds_are_NOT_usable(env):
     assert worth["reason"] == "WINDOW_BOUNDS_UNREADABLE"
 
 
-def test_a_RESTART_inside_a_reserved_window_does_not_spend_a_second(env):
+def test_a_RESTART_inside_a_reserved_window_does_not_spend_a_second(
+        env, monkeypatch):
     """Idempotent per slug, so neither a redeploy nor a crash-restart can
     buy another window.
 
@@ -344,6 +387,7 @@ def test_a_RESTART_inside_a_reserved_window_does_not_spend_a_second(env):
     refusal costs nothing -- the campaign moves on to the next window on its
     own, and the owner is not asked for anything.
     """
+    handshake(monkeypatch)
     first = _Runner(env, market=W1)
     first.try_arm()
     assert first.transport.armed is True
@@ -356,9 +400,10 @@ def test_a_RESTART_inside_a_reserved_window_does_not_spend_a_second(env):
     assert led["windows"] == [W1], "no second window was spent"
 
 
-def test_the_NEXT_window_arms_normally_after_a_restart(env):
+def test_the_NEXT_window_arms_normally_after_a_restart(env, monkeypatch):
     """So a redeploy costs the window it landed in and nothing more: the
     campaign carries on unattended."""
+    handshake(monkeypatch)
     _Runner(env, market=W1).try_arm()
     crashed = _Runner(env, market=W1)
     crashed.try_arm()
@@ -370,7 +415,8 @@ def test_the_NEXT_window_arms_normally_after_a_restart(env):
         CA.nonce_sid(NONCE))["windows"] == [W1, W2]
 
 
-def test_consumption_SURVIVES_a_restart(env):
+def test_consumption_SURVIVES_a_restart(env, monkeypatch):
+    handshake(monkeypatch)
     r = _Runner(env, market=W1)
     r.try_arm()
     assert r.transport.armed is True
@@ -383,36 +429,66 @@ def test_consumption_SURVIVES_a_restart(env):
         CA.nonce_sid(NONCE))["windows"] == [W1, W2]
 
 
-# ===== the legacy PMUS_Q1 variables cannot interfere with a campaign
+# ===== the legacy PMUS_Q1 variables under Option B
 #
-# They are still present in production and they must now be INERT for
-# campaign windows: neither able to block one, nor able to change the
-# identity a campaign's durable claims are keyed on. The second is what
-# caused the original failure -- the mandate was keyed on
-# PMUS_Q1_SESSION_ID, so the owner had to rotate it by hand.
+# RESTATED 2026-10-30. These tests used to pin the legacy handshake as
+# INERT for campaign windows -- unable to block one. Option B makes it
+# REQUIRED, so a missing or mismatched handshake now refuses, and refuses
+# EARLY: before the window claim, which is the whole point.
+#
+# The half that survives unchanged is the one that caused the original
+# failure: the claim's IDENTITY still comes from the campaign, never from
+# PMUS_Q1_SESSION_ID, so rotating that variable mid-campaign cannot orphan
+# the mandate or refuse the remaining windows.
 
 
-def test_a_MISMATCHED_legacy_handshake_cannot_BLOCK_a_campaign(env,
-                                                               monkeypatch):
+def test_a_MISMATCHED_legacy_handshake_REFUSES_without_spending_a_window(
+        env, monkeypatch):
     """Q1.armed() is False when the arm token does not equal the session id.
-    Under a campaign that must not matter at all."""
+    SUPERSEDED: that used to be irrelevant under a campaign. Now it refuses
+    -- and the window survives, which is the fix."""
     monkeypatch.setenv(Q1.LIVE_ENV, "YES")
     monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
     monkeypatch.setenv(Q1.ARM_ENV, "session-bbb")       # deliberately wrong
     assert Q1.armed() is False
     r = _Runner(env, market=W1)
     r.try_arm()
-    assert r.transport.armed is True, dict(r.win)
+    assert r.transport.armed is False
+    assert r.win["arm_refused_transport_cannot_arm"] == 1
+    assert CA.WindowLedger(str(env)).read(
+        CA.nonce_sid(NONCE))["windows"] == [], "THE WINDOW IS PRESERVED"
 
 
-def test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign(env, monkeypatch):
+def test_PMUS_Q1_LIVE_NO_REFUSES_without_spending_a_window(env, monkeypatch):
+    """The 0145z case exactly: a valid campaign, the handshake switched off,
+    and -- before this fix -- a claim spent on an arm the transport would
+    refuse one call later."""
     monkeypatch.setenv(Q1.LIVE_ENV, "NO")
     monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
     monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
     assert Q1.armed() is False
     r = _Runner(env, market=W1)
     r.try_arm()
-    assert r.transport.armed is True, dict(r.win)
+    assert r.transport.armed is False
+    assert r.win["arm_refused_transport_cannot_arm"] == 1
+    assert r.transport.arms == 0
+    assert CA.WindowLedger(str(env)).read(
+        CA.nonce_sid(NONCE))["windows"] == [], "THE WINDOW IS PRESERVED"
+
+
+def test_a_SPENT_claim_is_not_restored_by_the_new_refusal(env, monkeypatch):
+    """The guard prevents waste; it never gives a window back. A claim taken
+    while the handshake was present stays taken after it is removed."""
+    handshake(monkeypatch)
+    _Runner(env, market=W1).try_arm()
+    assert CA.WindowLedger(str(env)).read(
+        CA.nonce_sid(NONCE))["windows"] == [W1]
+    monkeypatch.setenv(Q1.LIVE_ENV, "NO")
+    r = _Runner(env, market=W2)
+    r.try_arm()
+    assert r.transport.armed is False
+    assert CA.WindowLedger(str(env)).read(
+        CA.nonce_sid(NONCE))["windows"] == [W1], "W1 stays spent"
 
 
 def test_an_ARMED_legacy_handshake_does_not_change_the_claim_IDENTITY(

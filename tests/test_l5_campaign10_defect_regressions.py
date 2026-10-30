@@ -175,26 +175,35 @@ class TestAWindowIsNotSpentOnAnArmThatCannotHappen:
         assert d.get("window_preserved") is True
         assert d.get("needs")
 
-    def test_the_boundary_offers_the_guard_but_the_runner_does_not_use_it(
-            self):
-        """DELIBERATELY UNWIRED, and this pins that.
+    def test_the_runner_now_wires_the_guard(self):
+        """OPTION B, owner-approved 2026-10-30. This test previously pinned
+        the guard as deliberately UNWIRED, because choosing a side changed
+        the authorization scope and that was the owner's call. It has been
+        made: the Q1 handshake is required alongside the campaign, and the
+        refusal happens before the claim.
 
-        Passing `Q1.armed()` from the runner would contradict
-        `test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign`, which asserts that a
-        valid campaign authorizes a window on its own. That invariant is
-        pinned against a FAKE transport whose `arm()` does not call
-        `_require_armed()`, while the real `PMUSTransport.arm()` does -- which
-        is why the contradiction went unnoticed and why 0145z was lost.
-        Choosing a side changes the authorization scope, so it is the
-        owner's call, not this commit's.
+        The contradiction that hid this is closed on both sides -- the
+        superseded invariant is restated in
+        `test_l5_campaign_is_the_authorization.py`, and that file's FAKE
+        transport now raises `NotArmed` exactly as the real
+        `PMUSTransport.arm()` does, so the two layers cannot silently
+        disagree again.
         """
         import inspect
         from src import l5_pmus_live_runner as R
         assert "transport_armable" in inspect.signature(
             AUTH.authorize_arming).parameters
         src = inspect.getsource(R.Runner.try_arm)
-        assert "transport_armable=Q1.armed()" not in src
-        assert "PENDING AN OWNER DECISION" in src
+        assert "transport_armable=Q1.armed()" in src
+        assert "PENDING AN OWNER DECISION" not in src
+
+    def test_the_fake_transport_mirrors_the_real_arm_gate(self):
+        """The mechanism that let the layers disagree, pinned shut."""
+        import inspect
+        import tests.test_l5_campaign_is_the_authorization as T
+        src = inspect.getsource(T._Transport.arm)
+        assert "Q1.armed()" in src
+        assert "NotArmed" in src
 
     def test_the_guard_is_inert_unless_explicitly_told_false(self, boundary):
         """So its presence cannot change any existing caller."""

@@ -299,15 +299,69 @@ def test_correct_settled_market_is_untouched_and_still_refuses_upward():
     assert "if delta > 0:" in src
 
 
-def test_the_only_caller_is_the_gated_applier():
-    """One call site, and it cannot write without an owner batch id."""
+#: The ONLY modules allowed to call the protected verb.
+#:
+#: WIDENED ONCE, 2026-10-30, owner-approved, from `l5_cost_basis_audit`
+#: alone. The audit applier's gate is a BATCH gate: an owner batch id plus a
+#: manifest that must still match a fresh venue walk, which is what a bulk
+#: correction over dozens of legs needs. It cannot express a single
+#: historical fill read straight from `/v1/order`, because there is no
+#: activity walk to re-match and no batch to inspect.
+#:
+#: So `l5_pmus_live_runner` may call it too -- but only from a DECLARATIVE
+#: list, and `test_the_runner_caller_is_declarative_not_dynamic` below pins
+#: every property that makes that safe. Neither call site adds authority:
+#: all ten guards in the verb run either way.
+SANCTIONED_CALLERS = ["l5_pmus_live_runner.py", "l5_cost_basis_audit.py"]
+
+
+def test_the_only_callers_are_the_two_gated_appliers():
     import pathlib
     hits = []
     for path in pathlib.Path("src").glob("*.py"):
         for i, line in enumerate(path.read_text().splitlines(), 1):
             if "correct_cost_basis" in line and "def correct_cost_basis" not in line:
                 hits.append("%s:%d" % (path.name, i))
-    assert [h.split(":")[0] for h in hits] == ["l5_cost_basis_audit.py"], hits
+    assert sorted({h.split(":")[0] for h in hits}) == sorted(
+        SANCTIONED_CALLERS), hits
+
+
+def test_the_runner_caller_is_declarative_not_dynamic():
+    """What replaces the batch gate for the one-market path.
+
+    The risk a batch id guards against is a write driven by evidence the
+    caller computed. This caller computes nothing: every field comes from a
+    reviewed literal, there is exactly one of them, and the verb refuses
+    unless the stored row still matches it field for field.
+    """
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+
+    # exactly one entry, naming one market and one side
+    assert len(RUN.COST_BASIS_RESTATEMENTS) == 1
+    entry = RUN.COST_BASIS_RESTATEMENTS[0]
+    assert entry["market"] == "cpc-btc-updown-15m-2026-10-30-0230z"
+    assert entry["side"] == "DOWN"
+
+    # a precondition on the stored row, and named venue fills
+    assert entry["expect"]["cost_total"] == "1.9100"
+    assert entry["expect"]["settlement_pnl"] == "-1.91000000"
+    assert entry["evidence"]["per_fill"]
+    assert entry["evidence"]["activity_walk"]["complete"] is True
+
+    # the applier passes the entry straight through and derives nothing
+    src = inspect.getsource(RUN.apply_cost_basis_restatements)
+    for field in ('c["market"]', 'c["side"]', 'correction_id=c["id"]',
+                  'expect=c["expect"]', 'measured_cost=c["measured_cost"]',
+                  'measured_fees=c["measured_fees"]',
+                  'evidence=c["evidence"]'):
+        assert field in src, field
+    # it never passes `restate`, so the verb takes its FIRST-correction
+    # path, which may only ever move a cost DOWN
+    assert "restate=" not in src
+    # and it reports a refusal rather than retrying or working around it
+    assert "L5_LIVE_COST_RESTATE_REFUSED" in src
+    assert 'if not out.get("corrected")' in src
 
 
 def test_the_runner_defaults_to_inspect_so_a_boot_cannot_write():

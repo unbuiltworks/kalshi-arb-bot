@@ -128,11 +128,10 @@ class TestWhatTheVenueActuallyDid:
 
     def test_up_won_so_the_down_shares_redeemed_nothing(self):
         """yes_value 1.0000: a DOWN share pays 1 - 1 = 0."""
-        redeem = QTY * (D(1) - D("1.0000"))
-        assert redeem == 0
+        assert QTY * (D(1) - D("1.0000")) == 0
 
     def test_the_venue_confirmed_result_is_the_purchase_cost(self):
-        assert D(0) - ONE_FILL_COST == -ONE_FILL_COST == D("-0.7258")
+        assert D(0) - ONE_FILL_COST == D("-0.7258")
 
     def test_the_balance_never_moved_again_so_nothing_was_redeemed(self):
         """Settlement at 02:46:23; cash read 342.49035 at 02:46:57 and
@@ -140,204 +139,248 @@ class TestWhatTheVenueActuallyDid:
         assert CASH_AFTER == D("342.49035")
 
 
-class TestTheVenueRowCannotBeMatchedToOurOrder:
-    """Step one: why one order became two records."""
+class TestTheHistoricalFiguresThatMustBeRestated:
+    """Arithmetic only -- what the defect produced, for the correction."""
 
-    def test_the_row_carries_no_client_order_id(self):
+    def test_the_double_book_was_two_correct_bookings(self):
+        assert DOUBLE_COST == 2 * ONE_FILL_COST
+
+    def test_the_placeholder_is_the_quantity_at_a_dollar_a_share(self):
+        assert UNKNOWN_BOUND == QTY * LX.UNKNOWN_PRICE_WORST_CASE
+
+    def test_the_booked_loss_was_the_whole_notional(self):
+        assert D(0) - UNKNOWN_BOUND == D("-1.9100")
+
+    def test_the_overstatement_is_one_dollar_eighteen_forty_two(self):
+        assert (UNKNOWN_BOUND - ONE_FILL_COST).quantize(D("0.0001")) \
+            == D("1.1842")
+
+
+class TestTheVenueRowIsResolvedToOurOwnOrder:
+    """The first half of the fix: identity."""
+
+    def test_the_row_still_carries_no_client_order_id(self):
+        """The venue has not changed; our reading of it has."""
         for k in ("client_order_id", "clientOrderId"):
             assert k not in VENUE_OPEN_ROW
 
-    def test_so_reconcile_keys_it_by_the_venue_id(self, store):
+    def test_the_helper_finds_the_coid_we_sent_it_with(self, store):
+        assert LX.tracked_coid_for_venue_order(
+            VENUE_ID, store.state) == OUR_COID
+
+    def test_reconcile_keys_the_row_under_our_coid(self, store):
         store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        assert VENUE_ID in store.state["live_orders"]
-        assert OUR_COID not in store.state["live_orders"]
+        assert OUR_COID in store.state["live_orders"]
+        assert VENUE_ID not in store.state["live_orders"]
 
-    def test_and_calls_it_adopted_although_it_is_ours(self, store):
+    def test_nothing_is_adopted(self, store):
         store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        assert store.state["live_orders"][VENUE_ID]["adopted"] is True
+        assert store.state["live_orders"][OUR_COID]["adopted"] is False
 
-    def test_the_adopted_record_names_the_order_we_already_track(self, store):
-        """The evidence that would have prevented this is IN the record."""
+    def test_our_order_is_not_parked_as_vanished(self, store):
         store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        adopted = store.state["live_orders"][VENUE_ID]
-        assert adopted["venue_order_id"] == VENUE_ID == VENUE_OPEN_ROW["id"]
+        assert not (store.state.get("pending_terminal") or {})
 
-    def test_our_own_order_is_parked_as_vanished(self, store):
-        """It did not vanish. It is the row directly above."""
+    def test_the_venue_order_id_is_preserved_for_cancellation(self, store):
+        """`owns_venue_order_id` and the deadman cancel both key on this."""
         store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        pend = store.state["pending_terminal"]
-        assert OUR_COID in pend
-        assert pend[OUR_COID]["venue_order_id"] == VENUE_ID
-        assert pend[OUR_COID]["reason"] == "ABSENT_FROM_VENUE_OPEN_ORDERS"
+        assert store.state["live_orders"][OUR_COID]["venue_order_id"] \
+            == VENUE_ID
+        assert store.owns_venue_order_id(VENUE_ID) is True
 
-    def test_both_records_point_at_one_venue_order(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        ids = {store.state["live_orders"][VENUE_ID]["venue_order_id"],
-               store.state["pending_terminal"][OUR_COID]["venue_order_id"]}
-        assert ids == {VENUE_ID}
+    def test_a_row_that_does_name_our_client_id_is_unaffected(self, store):
+        row = dict(VENUE_OPEN_ROW, client_order_id=OUR_COID)
+        store.reconcile_from_venue([], [row])
+        assert OUR_COID in store.state["live_orders"]
 
 
-class TestTheIdempotencyKeyIsTheClientIdNotTheVenueOrder:
-
-    def test_each_coid_starts_from_zero_applied(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        assert store.applied_fill_qty(VENUE_ID) == 0
-        assert store.applied_fill_qty(OUR_COID) == 0
-
-    def test_booking_one_coid_does_not_mark_the_other_booked(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        store.apply_order_progress(VENUE_ID, _progress(QTY),
-                                   market=MARKET, side="DOWN")
-        assert store.applied_fill_qty(VENUE_ID) == QTY
-        assert store.applied_fill_qty(OUR_COID) == 0      # <-- books again
-
-
-class TestTheDoubleBookReproduces:
-    """Step two: 1.91 + 1.91 = 3.82, at the correct price, twice."""
+class TestOneVenueOrderBooksOnce:
+    """The invariant that was xfail before the fix."""
 
     @pytest.fixture()
     def booked(self, store):
         store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        a = store.apply_order_progress(VENUE_ID, _progress(QTY),
-                                       market=MARKET, side="DOWN")
-        b = store.resolve_pending_terminal(OUR_COID, _progress(QTY))
-        return store, a, b
+        out = store.apply_order_progress(OUR_COID, _progress(QTY),
+                                         market=MARKET, side="DOWN")
+        return store, out
 
-    def test_both_bookings_report_a_full_delta(self, booked):
-        _s, a, b = booked
-        assert D(a["delta"]) == QTY
-        assert D(b["delta"]) == QTY
-        assert D(a["already"]) == D(b["already"]) == 0
+    def test_one_venue_order_books_one_quantity(self, booked):
+        s, _o = booked
+        assert s.position(MARKET, "DOWN") == QTY
 
-    def test_the_position_is_double_the_venues(self, booked):
-        s, _a, _b = booked
-        assert s.position(MARKET, "DOWN") == D("3.82")
+    def test_and_one_cost(self, booked):
+        s, _o = booked
+        assert s.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
 
-    def test_the_cost_basis_is_double_and_otherwise_correct(self, booked):
-        s, _a, _b = booked
-        assert s.leg_cost(MARKET)["DOWN"] == DOUBLE_COST
-        assert DOUBLE_COST == 2 * ONE_FILL_COST
+    def test_and_one_fill(self, booked):
+        s, _o = booked
+        assert s.fill_count(MARKET, "DOWN") == 1
 
-    def test_each_individual_booking_used_the_right_own_price(self, booked):
-        s, _a, _b = booked
-        per_share = s.leg_cost(MARKET)["DOWN"] / s.position(MARKET, "DOWN")
-        assert per_share.quantize(D("0.01")) == OWN_PX
-
-    def test_the_fill_count_records_two(self, booked):
-        s, _a, _b = booked
-        assert s.fill_count(MARKET, "DOWN") == 2
-
-
-class TestAdoptionReplacesTheRuinedBasisWithTheWorstCase:
-    """Step three, and this part is the safety machinery working."""
-
-    @pytest.fixture()
-    def adopted(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        store.apply_order_progress(VENUE_ID, _progress(QTY),
-                                   market=MARKET, side="DOWN")
-        store.resolve_pending_terminal(OUR_COID, _progress(QTY))
-        # the venue now reports its net: 1.91 sold, i.e. -1.91
-        store.reconcile_from_venue(
+    def test_the_gross_book_now_agrees_with_the_venue_net(self, booked):
+        """Which is what stops adoption firing and destroying the basis."""
+        s, _o = booked
+        s.reconcile_from_venue(
             [{"marketSlug": MARKET, "qtyBoughtDecimal": "0",
               "qtySoldDecimal": "1.9100", "netPositionDecimal": "-1.9100"}],
             [])
-        return store
+        assert s.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
+        assert MARKET not in (s.state.get("gross_quarantine") or {})
+        assert "%s|DOWN" % MARKET not in (
+            s.state.get("leg_cost_basis_unknown") or [])
 
-    def test_the_venue_net_becomes_the_position_of_record(self, adopted):
-        assert adopted.position(MARKET, "DOWN") == QTY
-
-    def test_the_gross_book_is_quarantined_not_deleted(self, adopted):
-        q = adopted.state["gross_quarantine"][MARKET]
-        assert q["positions"]["%s|DOWN" % MARKET] == "3.82"
-        assert D(q["leg_cost"]["%s|DOWN" % MARKET]) == DOUBLE_COST
-        assert q["fill_count"]["%s|DOWN" % MARKET] == 2
-
-    def test_the_basis_is_rebooked_at_one_dollar_a_share(self, adopted):
-        assert adopted.leg_cost(MARKET)["DOWN"] == UNKNOWN_BOUND
-        assert UNKNOWN_BOUND == QTY * LX.UNKNOWN_PRICE_WORST_CASE
-
-    def test_the_placeholder_basis_is_declared_not_hidden(self, adopted):
-        assert "%s|DOWN" % MARKET in adopted.state["leg_cost_basis_unknown"]
-
-    def test_a_risk_floor_is_pinned_at_the_worst_case(self, adopted):
-        assert D(adopted.state["risk_floor_usd"][MARKET]) == UNKNOWN_BOUND
-
-
-class TestSettlementThenProducesTheBookedMinusOneNinetyOne:
-    """Step four: the number the owner was shown."""
-
-    @pytest.fixture()
-    def settled(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        store.apply_order_progress(VENUE_ID, _progress(QTY),
-                                   market=MARKET, side="DOWN")
-        store.resolve_pending_terminal(OUR_COID, _progress(QTY))
-        store.reconcile_from_venue(
+    def test_so_the_basis_survives_and_settlement_is_the_truth(self, booked):
+        s, _o = booked
+        s.reconcile_from_venue(
             [{"marketSlug": MARKET, "qtyBoughtDecimal": "0",
               "qtySoldDecimal": "1.9100", "netPositionDecimal": "-1.9100"}],
             [])
-        return store, store.retire_settled_market(
-            MARKET, yes_value=D("1.0000"), resolution=RESOLUTION)
-
-    def test_it_retires(self, settled):
-        _s, out = settled
+        out = s.retire_settled_market(MARKET, yes_value=D("1.0000"),
+                                      resolution=RESOLUTION)
         assert out["retired"] is True
-
-    def test_the_quantities_match_the_live_record(self, settled):
-        _s, out = settled
-        assert D(out["dn_qty"]) == QTY
-        assert D(out["up_qty"]) == 0
-
-    def test_the_redemption_is_zero_because_up_won(self, settled):
-        _s, out = settled
+        assert D(out["dn_cost"]) == ONE_FILL_COST
         assert D(out["redemption_total"]) == 0
+        assert D(out["settlement_pnl"]) == -ONE_FILL_COST
 
-    def test_the_cost_is_the_placeholder_not_the_cash(self, settled):
-        _s, out = settled
-        assert D(out["dn_cost"]) == UNKNOWN_BOUND
-        assert D(out["cost_total"]) == UNKNOWN_BOUND
-
-    def test_the_settlement_pnl_is_the_figure_that_was_reported(self, settled):
-        _s, out = settled
-        assert D(out["settlement_pnl"]) == D("-1.91000000")
-
-    def test_it_is_labelled_an_unknown_cost_upper_bound(self, settled):
-        s, _out = settled
+    def test_the_settled_pnl_is_no_longer_an_upper_bound(self, booked):
+        s, _o = booked
+        s.retire_settled_market(MARKET, yes_value=D("1.0000"),
+                                resolution=RESOLUTION)
         row = s.state["retired_markets"][MARKET]
-        assert row["pnl_provenance"] == "UNKNOWN_COST_UPPER_BOUND"
-        assert row["unverified_cost_basis_keys"] == ["%s|DOWN" % MARKET]
-        assert row["l5_owner_attribution_verified"] is False
-
-    def test_the_overstatement_against_the_venue_is_one_dollar_eighteen(
-            self, settled):
-        _s, out = settled
-        booked = D(out["settlement_pnl"])
-        true = -ONE_FILL_COST
-        assert (true - booked).quantize(D("0.0001")) == D("1.1842")
+        assert row["unverified_cost_basis_keys"] == []
+        assert row["pnl_provenance"] != "UNKNOWN_COST_UPPER_BOUND"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "THE DEFECT. One venue order must be booked once, whatever client id "
-    "each record carries. Remove this marker with the fix -- strict=True "
-    "makes an unexpected pass fail the suite, so it cannot rot."))
-class TestTheInvariantTheFixMustEstablish:
+class TestTheDuplicateGuardFailsClosed:
+    """The second half: the consequence is unreachable however identity
+    goes wrong next time. The defect state is forced directly here, because
+    the identity fix means reconcile can no longer produce it."""
 
     @pytest.fixture()
-    def fixed(self, store):
-        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
-        store.apply_order_progress(VENUE_ID, _progress(QTY),
-                                   market=MARKET, side="DOWN")
-        store.resolve_pending_terminal(OUR_COID, _progress(QTY))
+    def two_records(self, store):
+        """The ledger exactly as it stood at 02:30:27 on 2026-10-30."""
+        store.state["live_orders"][VENUE_ID] = {
+            "t": 1793327390.0, "venue_order_id": VENUE_ID,
+            "client_order_id": VENUE_ID, "adopted": True,
+            "market": MARKET, "side": "DOWN", "price": str(OWN_PX),
+            "qty": "1.91", "remaining": "1.91", "state": "LIVE_AT_VENUE"}
         return store
 
-    def test_one_venue_order_books_one_quantity(self, fixed):
-        assert fixed.position(MARKET, "DOWN") == QTY
+    def test_the_first_booking_is_allowed(self, two_records):
+        out = two_records.apply_order_progress(
+            VENUE_ID, _progress(QTY), market=MARKET, side="DOWN")
+        assert "refused" not in out
+        assert two_records.position(MARKET, "DOWN") == QTY
 
-    def test_and_one_cost(self, fixed):
-        assert fixed.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
+    def test_the_guard_names_the_coid_that_already_booked(self, two_records):
+        two_records.apply_order_progress(VENUE_ID, _progress(QTY),
+                                         market=MARKET, side="DOWN")
+        assert LX.duplicate_venue_order_coid(
+            two_records.state, OUR_COID) == VENUE_ID
 
-    def test_so_the_basis_survives_and_settlement_is_the_truth(self, fixed):
-        out = fixed.retire_settled_market(
-            MARKET, yes_value=D("1.0000"), resolution=RESOLUTION)
-        assert D(out["settlement_pnl"]) == -ONE_FILL_COST
+    def test_the_second_booking_is_refused(self, two_records):
+        two_records.apply_order_progress(VENUE_ID, _progress(QTY),
+                                         market=MARKET, side="DOWN")
+        out = two_records.apply_order_progress(
+            OUR_COID, _progress(QTY), market=MARKET, side="DOWN")
+        assert out["refused"] == "DUPLICATE_VENUE_ORDER"
+        assert out["already_booked_under"] == VENUE_ID
+        assert out["venue_order_id"] == VENUE_ID
+
+    def test_and_books_nothing(self, two_records):
+        two_records.apply_order_progress(VENUE_ID, _progress(QTY),
+                                        market=MARKET, side="DOWN")
+        two_records.apply_order_progress(OUR_COID, _progress(QTY),
+                                        market=MARKET, side="DOWN")
+        assert two_records.position(MARKET, "DOWN") == QTY
+        assert two_records.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
+        assert two_records.fill_count(MARKET, "DOWN") == 1
+
+    def test_and_fails_closed(self, two_records):
+        """Uncertain refuses submissions until a human resolves it."""
+        two_records.apply_order_progress(VENUE_ID, _progress(QTY),
+                                        market=MARKET, side="DOWN")
+        two_records.apply_order_progress(OUR_COID, _progress(QTY),
+                                        market=MARKET, side="DOWN")
+        assert two_records.state.get("orders_uncertain")
+
+    def test_the_pending_terminal_route_is_guarded_too(self, two_records):
+        """The second 0230z booking came through this path, not the first."""
+        two_records.apply_order_progress(VENUE_ID, _progress(QTY),
+                                        market=MARKET, side="DOWN")
+        two_records.state.setdefault("pending_terminal", {})[OUR_COID] = {
+            "coid": OUR_COID, "venue_order_id": VENUE_ID, "market": MARKET,
+            "side": "DOWN", "applied": "0", "resolvable": True}
+        two_records.resolve_pending_terminal(OUR_COID, _progress(QTY))
+        assert two_records.position(MARKET, "DOWN") == QTY
+        assert two_records.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
+
+
+class TestWhatTheFixMustNotDisturb:
+    """Explicitly preserved: partial fills, genuinely unknown orders, and
+    the per-coid idempotency the ordinary path relies on."""
+
+    def test_successive_partials_under_one_coid_still_book_deltas(self, store):
+        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
+        a = store.apply_order_progress(
+            OUR_COID, dict(_progress(D("0.91")), terminal=False,
+                           leaves_qty="1.00",
+                           state="ORDER_STATE_PARTIALLY_FILLED"),
+            market=MARKET, side="DOWN")
+        b = store.apply_order_progress(OUR_COID, _progress(QTY),
+                                       market=MARKET, side="DOWN")
+        assert D(a["delta"]) == D("0.91")
+        assert D(b["delta"]) == D("1.00")
+        assert store.position(MARKET, "DOWN") == QTY
+        assert store.leg_cost(MARKET)["DOWN"] == ONE_FILL_COST
+
+    def test_a_repolled_cumulative_still_books_nothing(self, store):
+        store.reconcile_from_venue([], [VENUE_OPEN_ROW])
+        store.apply_order_progress(OUR_COID, _progress(QTY),
+                                   market=MARKET, side="DOWN")
+        again = store.apply_order_progress(OUR_COID, _progress(QTY),
+                                           market=MARKET, side="DOWN")
+        assert D(again["delta"]) == 0
+        assert "refused" not in again
+        assert store.position(MARKET, "DOWN") == QTY
+
+    def test_an_order_we_never_sent_is_still_adopted(self, store):
+        stranger = dict(VENUE_OPEN_ROW, id="ZZZSTRANGER999")
+        store.reconcile_from_venue([], [stranger])
+        assert "ZZZSTRANGER999" in store.state["live_orders"]
+        assert store.state["live_orders"]["ZZZSTRANGER999"]["adopted"] is True
+
+    def test_an_adopted_stranger_can_still_book_its_fill(self, store):
+        stranger = dict(VENUE_OPEN_ROW, id="ZZZSTRANGER999")
+        store.reconcile_from_venue([], [stranger])
+        out = store.apply_order_progress("ZZZSTRANGER999", _progress(QTY),
+                                         market=MARKET, side="DOWN")
+        assert "refused" not in out
+        assert store.position(MARKET, "DOWN") == QTY
+
+    def test_an_order_that_truly_vanished_is_still_parked(self, store):
+        """No venue row at all: the 2045z protection must survive."""
+        store.reconcile_from_venue([], [])
+        pend = store.state["pending_terminal"]
+        assert OUR_COID in pend
+        assert pend[OUR_COID]["reason"] == "ABSENT_FROM_VENUE_OPEN_ORDERS"
+
+    def test_a_coid_we_do_not_track_has_no_venue_order_id(self, store):
+        assert LX.venue_order_id_for_coid(store.state, "unknown-coid") is None
+
+    def test_an_unknown_venue_order_matches_no_coid(self, store):
+        assert LX.tracked_coid_for_venue_order("NOSUCHID", store.state) is None
+
+    def test_an_empty_venue_order_id_matches_nothing(self, store):
+        for empty in (None, "", "   "):
+            assert LX.tracked_coid_for_venue_order(empty, store.state) is None
+
+    def test_requoting_is_unaffected_because_each_order_has_its_own_id(
+            self, store):
+        """A REPLACE cancels and re-sends: a new coid with a new venue id,
+        which must never look like a duplicate of the order it replaced."""
+        store.state["filled_qty"] = {OUR_COID: "1.91"}
+        store.state["live_orders"]["l5f-replacement"] = {
+            "venue_order_id": "DIFFERENTID123", "market": MARKET,
+            "side": "DOWN", "price": str(OWN_PX), "remaining": "1.00"}
+        assert LX.duplicate_venue_order_coid(
+            store.state, "l5f-replacement") is None
