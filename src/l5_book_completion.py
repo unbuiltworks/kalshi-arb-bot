@@ -64,7 +64,10 @@ DECIDE_EVERY_S = 5.0
 #: 0.9532 against an achieved quantity-weighted 0.9530, with the
 #: counterfactual at -$0.0877 at 0.96 and -$0.6005 at 1.00. It is a
 #: DEFAULT, overridable by the caller, never a second copy of a gate.
-BREAKEVEN_PAIR = D("0.9532")
+#: ONE SOURCE, in `l5_two_sided_probe`, so the two completion routes
+#: cannot drift apart. See the note there for why it is a TARGET and
+#: not a ceiling, and for the BTC15m cohort behind it.
+BREAKEVEN_PAIR = TS.BREAKEVEN_PAIR
 
 ACTIONS = ("COMPLETE", "REPRICE", "HOLD")
 

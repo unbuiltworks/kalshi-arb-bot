@@ -2137,6 +2137,30 @@ def resting_depth(side: str, *, bid_shares: Any, ask_shares: Any) -> Optional[D]
 # exactly $1.00. `within_budget` keeps the completed worst case inside the
 # residual risk the owner actually approved, so the pair of them is bounded
 # by an owner number rather than by this module's opinion.
+#: THE SETTLED BREAK-EVEN COMPLETION PAIR COST, defined here so the two
+#: completion routes read ONE number instead of two copies. Route B
+#: (`l5_book_completion`) uses it as its default pair-cost target.
+#:
+#: IT IS A TARGET, NOT A CEILING, and the distinction is load-bearing.
+#: Measured 2026-10-30 against the windows the completion separation exists
+#: to rescue: 1245z held 2.27 UP for $0.7264 and could complete DOWN at an
+#: effective pair of 0.9699, which LOCKS +$0.0683. Stranding it realised
+#: -$0.7264. Imposing 0.9532 as a hard ceiling would have refused that
+#: completion -- a $0.7947 swing the wrong way -- so it is NOT put into
+#: `COMPLETION_CEILINGS_IN_FORCE` and the hard economic limit stays where
+#: `pair_cost_refusal` puts it: a pair below $1.00 is a locked gain.
+#:
+#: SOURCE, and it is now our own. 106 BTC15m markets settled by this ledger,
+#: 89 usable after excluding 17 priced at the $1/share placeholder. Average
+#: cost attribution; the authoritative figure is the TOTAL. Matched +$13.4089
+#: over 145.42 pairs = +0.0922/pair, implying an ACHIEVED average pair cost
+#: near 0.908 -- inside both numbers, so neither binds on the pairs we
+#: actually form. Residual -$15.0963 over 81.40 units = -0.1855/unit.
+#: Chronologically: TRAIN paired 68.69% against a 68.96% break-even
+#: completion rate, net -$4.5982; OOS paired 82.73% against 61.74%, net
+#: +$2.9108.
+BREAKEVEN_PAIR = D("0.9532")
+
 COMPLETION_CEILINGS_IN_FORCE = ("improves", "within_budget")
 
 

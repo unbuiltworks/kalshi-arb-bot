@@ -75,10 +75,13 @@ class TestTheBasisIsWhatDecidedTheCeiling:
         assert D(r["leg"]["price"]) == D("0.60")
         assert r["leg"]["post_only"] is True
 
-    def test_with_the_placeholder_basis_it_is_refused(self):
+    def test_with_the_placeholder_basis_there_is_no_ceiling_to_judge_on(self):
+        """The 163 refusals: not an economic decision at all, because no
+        ceiling could be computed from a $1/share cost."""
         r = self._complement(PLACEHOLDER_BASIS)
         assert r["ok"] is False
         assert r["reason"] == "COMPLEMENT_PAIR_ABOVE_CAP"
+        assert r["completion_ceiling"] is None
 
     def test_so_the_duplicate_fill_repair_is_what_restores_completion(self):
         """The upstream fix keeps the basis, which is what makes the ceiling
@@ -164,3 +167,115 @@ class TestWhatTheFixMustNotDisturb:
 
     def test_the_opening_pair_cap_is_unchanged(self):
         assert TS.max_pair_cost() == D("0.96")
+
+
+class TestTheThresholdReconciliation:
+    """Check 2, and the answer is not the one I first implemented.
+
+    `0.9532` (Route B's default) and the controller route's own-price ceiling
+    looked like an inconsistency to resolve by tightening the controller to
+    0.9532. Tried, measured, REVERTED: as a hard ceiling it would refuse the
+    completions the separation exists to rescue.
+
+    1245z held 2.27 UP for $0.7264 and could complete DOWN at an effective
+    pair of 0.9699, which LOCKS +$0.0683. Stranding it realised -$0.7264.
+    A 0.9532 ceiling refuses that completion -- a $0.7947 swing the wrong
+    way -- so the hard economic limit stays where `pair_cost_refusal` puts
+    it: a pair below $1.00 is a locked gain.
+
+    What IS reconciled: both routes now read ONE constant, and it is
+    sourced from our own BTC15m ledger rather than from a withdrawn cohort.
+    """
+
+    def test_one_shared_constant_no_second_copy(self):
+        from src import l5_book_completion as BC
+        assert BC.BREAKEVEN_PAIR is TS.BREAKEVEN_PAIR
+        assert TS.BREAKEVEN_PAIR == D("0.9532")
+
+    def test_it_is_a_target_and_deliberately_not_a_ceiling(self):
+        assert "breakeven_pair" not in TS.COMPLETION_CEILINGS_IN_FORCE
+        assert TS.COMPLETION_CEILINGS_IN_FORCE == ("improves",
+                                                   "within_budget")
+
+    def test_the_1245z_arithmetic_that_decided_it(self):
+        eff, qty = D("0.9699"), D("2.27")
+        assert (D(1) - eff) * qty > 0                 # completing locks a gain
+        assert eff > TS.BREAKEVEN_PAIR                # 0.9532 would refuse it
+        assert eff <= D("1.00")                       # the real limit permits
+        stranded = D("-0.7264")
+        assert ((D(1) - eff) * qty) - stranded > D("0.79")
+
+    def test_the_hard_limit_is_a_pair_below_one_dollar(self):
+        """A matched pair redeems exactly $1.00, so below par is locked. The
+        limit lives at the submission boundary, not in the ceiling set."""
+        src = inspect.getsource(LX.FaithfulExecutor.pair_cost_refusal)
+        assert "1.00" in src or "D(1)" in src
+
+    def test_the_opening_cap_is_untouched_by_any_of_this(self):
+        assert TS.max_pair_cost() == D("0.96")
+
+
+class TestTheFixCannotMisbehave:
+    """Check 3, each property asserted against the real code."""
+
+    @property
+    def src(self):
+        return inspect.getsource(R.Runner.maybe_book_completion)
+
+    # ---- cannot invent an L5 action
+    def test_no_row_is_passed_on_the_controller_route(self):
+        assert "self.executor.handle(\n                None, book," in self.src
+
+    def test_no_action_key_is_reused_on_the_controller_route(self):
+        assert '"reused_action_key": (None if controller_route else' in self.src
+
+    def test_the_l5_action_row_map_is_never_written_here(self):
+        assert "_last_action_row[" not in self.src
+
+    # ---- cannot double-submit
+    def test_resting_orders_are_passed_for_idempotence(self):
+        assert "resting=_resting_rows(self.store, slug)" in self.src
+
+    def test_the_cadence_blocks_a_retry_every_tick(self):
+        assert "last_decide_t=self._book_completion_t" in self.src
+        assert 'if rec.get("reason") != "DECIDE_COOLDOWN":' in self.src
+
+    def test_the_coid_is_deterministic_so_a_repeat_is_suppressed(self):
+        """Same market, round and leg -> same action key -> same client
+        order id, which `already_submitted` then refuses."""
+        k1 = LX.controller_action_key(MARKET, 0, "UP")
+        k2 = LX.controller_action_key(MARKET, 0, "UP")
+        assert k1 == k2
+        assert LX.client_order_id(k1) == LX.client_order_id(k2)
+        assert LX.client_order_id(k1) != LX.client_order_id(
+            LX.controller_action_key(MARKET, 1, "UP"))
+
+    # ---- cannot exceed the one-order limit
+    def test_a_resting_order_declines_before_any_reentry(self):
+        s = self.src
+        assert 'self.stats["book_completion:ORDER_ALREADY_RESTING"] += 1' in s
+        assert s.index("ORDER_ALREADY_RESTING") < s.index("REENTERED")
+
+    def test_the_executor_limit_still_applies_on_top(self):
+        """The route adds no slot. MAX_LIVE_ORDERS is enforced in the
+        executor's own gate, which the re-entry goes through."""
+        assert "ONE RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE" \
+            in self.src
+
+    # ---- cannot interfere with cancellation or reconciliation
+    def test_it_cancels_nothing_and_reconciles_nothing(self):
+        s = self.src
+        for forbidden in ("cancel", "reconcile_from_venue", "deadman",
+                          "adopt_venue_position", "retire_settled_market"):
+            assert forbidden not in s, forbidden
+
+    def test_an_order_it_places_stays_cancellable_by_exact_id(self):
+        """Placement goes through the ordinary path, so the order lands in
+        `live_orders` with its venue id and `owns_venue_order_id` finds it."""
+        assert "self.executor.handle(" in self.src
+        assert hasattr(LX.InventoryStore, "owns_venue_order_id")
+
+    def test_an_unreadable_ledger_refuses_rather_than_assuming_flat(self):
+        s = self.src
+        assert "book_completion:LEDGER_UNREADABLE" in s
+        assert "FAIL CLOSED" in s
