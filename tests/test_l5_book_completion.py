@@ -149,12 +149,18 @@ def test_no_accepted_decision_ever_crosses():
 
 
 # ------------------------------------------------------- the economics
-def test_a_pair_above_breakeven_is_refused_even_when_pricing_says_ok():
+def test_a_pair_above_redemption_is_refused_even_when_pricing_says_ok():
     """Held DOWN at 0.90 leaves no room: any complement puts the pair over
-    0.9532, and completing dearer than break-even is a measured loss."""
+    $1.00, and a pair above redemption is a CERTAIN loss.
+
+    RESTATED, 1445z. This asserted `PAIR_ABOVE_BREAKEVEN` when 0.9532 was
+    the refusal. It is now a preferred target and the hard line is $1.00,
+    which is what the submission boundary enforces anyway. The invariant the
+    test was written for -- a basis this dear leaves nothing to complete into
+    -- is unchanged, and at 0.90 the pair clears $1.00 on any complement."""
     r = call(held_qty="2", held_cost_usd="1.80")
     assert r["action"] == "HOLD"
-    assert r["reason"] in ("PAIR_ABOVE_BREAKEVEN",) or \
+    assert r["reason"] in ("PAIR_ABOVE_REDEMPTION",) or \
         r["reason"].startswith("ECONOMICS:")
 
 
@@ -170,8 +176,20 @@ def test_the_breakeven_default_is_the_settled_measurement():
 
 
 def test_a_caller_may_tighten_breakeven_but_it_is_not_a_second_gate():
+    """RESTATED, 1445z, and the name was always right: a tightened target
+    must NOT become a gate. It moves the recorded preference and the reason;
+    the refusal stays with the $1.00 hard line and the owner's budget.
+
+    Reinstating a refusal here would put the 1445z defect back through a
+    parameter -- a caller-supplied number stranding inventory that a
+    non-negative pair could have matched."""
     r = call(held_qty="2", held_cost_usd="0.40", breakeven_pair="0.10")
-    assert r["action"] == "HOLD"
+    assert r["reason"] != "PAIR_ABOVE_REDEMPTION"
+    if r.get("ok"):
+        assert r["action"] in ("COMPLETE", "REPRICE")
+        assert r["within_preferred_target"] is False
+        assert D(r["pair_own_cost"]) <= BC.REDEMPTION_PAIR
+        assert D(r["breakeven_pair"]) == D("0.10")
 
 
 def test_an_unknown_first_leg_price_holds():

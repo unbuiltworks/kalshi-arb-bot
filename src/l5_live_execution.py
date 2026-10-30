@@ -1000,6 +1000,162 @@ def duplicate_venue_order_coid(state: Mapping[str, Any],
     return min(others) if others else None
 
 
+# ====================== WHO OPENED THE INVENTORY WE HOLD ======================
+#
+# 1445z/1415z/1430z, 2026-10-30. `Runner.maybe_book_completion` chose its
+# completion route on `self._last_action_row.get(slug) is None` -- "is there an
+# L5 action row for this market" -- which answers a question about the INGEST
+# FEED, not about the position. L5 rows arrive continuously, so on every tick
+# the route ran there was a row, the L5 branch always won, and inventory the
+# autonomous controller had opened was completed and recorded as
+# `L5_FOLLOWED` with a reused L5 action key. Across the three-window campaign
+# `book_completion:REENTERED:CONTROLLER` never incremented once while 12 of
+# the 15 orders were controller-keyed.
+#
+# The route must follow the ORIGIN OF THE HELD INVENTORY instead, and that
+# origin is recoverable exactly, because `client_order_id` is a pure function
+# of the action key and an L5 action key cannot take the controller's form
+# (see `controller_action_key`). Two sources, in order:
+#
+#   1. THE STAMP, written by `record_submit` at submission time. Authoritative
+#      and needs no bounds.
+#   2. THE DETERMINISTIC NAMESPACE, by enumerating the controller's own coids.
+#      This is what makes the attribution correct for inventory ALREADY in the
+#      ledger, with no migration and no rewrite of a historical record.
+#
+# ATTRIBUTION ONLY. Nothing here is a limit, a gate or a price. It changes
+# which provenance the tape records and which vehicle re-enters `handle`; the
+# economics on both routes are the same `TS.complement_order` call against the
+# same ceilings, and every submission still passes every existing gate.
+ORIGIN_CONTROLLER = "CONTROLLER"
+ORIGIN_L5 = "L5"
+ORIGIN_MIXED = "MIXED"
+ORIGIN_UNKNOWN = "UNKNOWN"
+
+#: How far to enumerate the controller's deterministic coid namespace. Rounds
+#: observed in a live 15-minute window reached r7; attempts reached 0. These
+#: are generous bounds on both, and overrunning them cannot do harm: an
+#: unrecognised coid reads UNKNOWN, which leaves the pre-existing route in
+#: force -- the same behaviour as before this attribution existed.
+CONTROLLER_ROUND_SCAN = 64
+CONTROLLER_ATTEMPT_SCAN = 8
+
+
+def controller_coid_namespace(market: str, *,
+                              rounds: int = CONTROLLER_ROUND_SCAN,
+                              attempts: int = CONTROLLER_ATTEMPT_SCAN
+                              ) -> Dict[str, str]:
+    """Every client order id the controller could have produced for `market`.
+
+    Pure and deterministic: the same market always yields the same set, so an
+    attribution taken twice cannot disagree with itself.
+    """
+    out: Dict[str, str] = {}
+    keys = [controller_action_key(market, rnd, leg)
+            for rnd in range(int(rounds)) for leg in ("UP", "DOWN")]
+    # the unresolved-decision form the controller also emits
+    keys.append("%s|OPEN|%s|UNRESOLVED" % (CONTROLLER_KEY_PREFIX, str(market)))
+    for key in keys:
+        for att in range(int(attempts)):
+            out[client_order_id(key, att)] = key
+    return out
+
+
+def coid_origin(state: Mapping[str, Any], coid: str, market: str,
+                namespace: Optional[Mapping[str, str]] = None) -> str:
+    """Who placed one order: CONTROLLER, L5, or UNKNOWN.
+
+    UNKNOWN is a real answer and the safe one. An L5 coid is a hash that
+    cannot be inverted, so NOT being in the controller's namespace is evidence
+    of an L5 origin rather than proof of one, and this declines to upgrade
+    evidence into proof.
+
+    `namespace` lets a caller with many coids build the controller namespace
+    ONCE instead of per coid -- it is ~1k hashes, and a market accumulates
+    fills all window. Omitted, it is built here.
+    """
+    sub = (state.get("submitted") or {}).get(coid) if isinstance(
+        state, Mapping) else None
+    if isinstance(sub, Mapping):
+        prov = str(sub.get("provenance") or "").strip()
+        if prov == CONTROLLER_GENERATED:
+            return ORIGIN_CONTROLLER
+        if prov == L5_FOLLOWED:
+            return ORIGIN_L5
+        key = str(sub.get("action_key") or "").strip()
+        if key.startswith(CONTROLLER_KEY_PREFIX + "|"):
+            return ORIGIN_CONTROLLER
+        if key:
+            return ORIGIN_L5
+        # `mode` ALREADY CARRIES IT on the controller route: `l5_intent_gate`
+        # has always recorded `mode=CONTROLLER_GENERATED`, so this attributes
+        # every controller order ALREADY ON DISK without a new field and
+        # without a migration. The executor's own route puts MAKER/TAKER
+        # here, which says nothing about who decided -- hence only this one
+        # value is read as evidence.
+        if str(sub.get("mode") or "").strip() == CONTROLLER_GENERATED:
+            return ORIGIN_CONTROLLER
+    try:
+        ns = (namespace if namespace is not None
+              else controller_coid_namespace(str(market)))
+        if str(coid) in ns:
+            return ORIGIN_CONTROLLER
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return ORIGIN_UNKNOWN
+    return ORIGIN_UNKNOWN
+
+
+def inventory_origin(state: Mapping[str, Any], market: str,
+                     side: Optional[str] = None) -> str:
+    """Who opened the inventory this ledger holds for `market`.
+
+    Reads `fill_provenance`, which `apply_fill` writes per booked fill, so
+    this is attribution from CONFIRMED FILLS and never from an intention.
+
+    MIXED when both origins definitely contributed -- the honest answer, and
+    the one that keeps the pre-existing route in force rather than crediting
+    either side with the other's inventory. Fails to UNKNOWN on anything it
+    cannot read, which does the same.
+    """
+    try:
+        proof = ((state.get("fill_provenance") or {}).get(str(market))
+                 or {}) if isinstance(state, Mapping) else {}
+        entries = proof.get("entries") or ()
+        want = str(side).upper() if side is not None else None
+        # ONCE per call, not once per fill: the namespace is deterministic,
+        # so building it per entry only repeats the same ~1k hashes.
+        ns = controller_coid_namespace(str(market))
+        seen = set()
+        for e in entries:
+            if not isinstance(e, Mapping):
+                continue
+            if want is not None and str(e.get("side") or "").upper() != want:
+                continue
+            try:
+                if D(str(e.get("qty") or 0)) <= 0:
+                    continue
+            except (TypeError, ValueError, ArithmeticError):
+                pass        # an unreadable quantity is not evidence of none
+            c = e.get("coid")
+            seen.add(coid_origin(state, str(c), str(market), ns) if c
+                     else ORIGIN_UNKNOWN)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return ORIGIN_UNKNOWN
+    if not seen:
+        return ORIGIN_UNKNOWN
+    if ORIGIN_CONTROLLER in seen and ORIGIN_L5 in seen:
+        return ORIGIN_MIXED
+    if seen == {ORIGIN_L5}:
+        return ORIGIN_L5
+    if ORIGIN_CONTROLLER in seen:
+        return ORIGIN_CONTROLLER
+    return ORIGIN_UNKNOWN
+
+
 class UnrecognizedVenueShape(RuntimeError):
     """A venue row we cannot read. Carries the structure, never a guess.
 
@@ -2827,7 +2983,9 @@ class InventoryStore:
 
     def record_submit(self, coid: str, intent: Mapping[str, Any],
                       *, session_id: Optional[str] = None,
-                      mode: Optional[str] = None) -> None:
+                      mode: Optional[str] = None,
+                      provenance: Optional[str] = None,
+                      action_key: Optional[str] = None) -> None:
         rec = {
             "t": self._now().isoformat(),
             "market": intent.get("market"), "side": intent.get("side"),
@@ -2837,6 +2995,12 @@ class InventoryStore:
             # reconciliation cannot tell this run's orders from Probe 04's.
             "session_id": session_id,
             "mode": mode,
+            # WHO DECIDED THIS ORDER, stamped at the only moment it is known
+            # for certain. `inventory_origin` prefers this over enumerating
+            # the controller's coid namespace; absent, it falls back to that
+            # enumeration, so an older ledger still attributes correctly.
+            "provenance": provenance,
+            "action_key": action_key,
         }
         self.state.setdefault("submitted", {})[coid] = rec
         # live from this instant: the envelope must already count it.
@@ -7456,7 +7620,13 @@ class FaithfulExecutor:
         self.store.record_submit(
             coid, intent,
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
-            mode=str(tr.get("mode") or ""))
+            mode=str(tr.get("mode") or ""),
+            # WHOSE DECISION THIS WAS, from the chain record that already
+            # carries it rather than from a second judgement here. This is
+            # what lets `inventory_origin` attribute a completion to the
+            # engine that actually opened the position.
+            provenance=str(prov.rec.get("provenance") or "") or None,
+            action_key=str(prov.rec.get("action_key") or "") or None)
         try:
             # BYTE-FOR-BYTE ON THE MONEY FIELDS. The queue-measurement
             # override runs after the gates, so without this an unvalidated

@@ -59,15 +59,55 @@ _TRUE = ("1", "yes", "true", "on")
 #: blind interval, so the cadence and the evidence for it agree.
 DECIDE_EVERY_S = 5.0
 
-#: the settled break-even completion pair cost. ABOVE THIS, COMPLETING IS
-#: WORSE THAN CARRYING THE RESIDUAL TO SETTLEMENT -- measured, not chosen:
-#: 0.9532 against an achieved quantity-weighted 0.9530, with the
-#: counterfactual at -$0.0877 at 0.96 and -$0.6005 at 1.00. It is a
+#: the settled break-even completion pair cost: the pair at which a
+#: completion stops being PROFITABLE -- measured, not chosen: 0.9532 against
+#: an achieved quantity-weighted 0.9530. It is a PREFERRED TARGET and never
+#: a ceiling. A pair between this and $1.00 is still a non-negative matched
+#: outcome and is still worth taking over a stranded leg, which is what
+#: 1445z cost us when this number was used as a gate (see step 7). It is a
 #: DEFAULT, overridable by the caller, never a second copy of a gate.
 #: ONE SOURCE, in `l5_two_sided_probe`, so the two completion routes
 #: cannot drift apart. See the note there for why it is a TARGET and
 #: not a ceiling, and for the BTC15m cohort behind it.
 BREAKEVEN_PAIR = TS.BREAKEVEN_PAIR
+
+#: A MATCHED PAIR REDEEMS EXACTLY $1.00 A SHARE. This is arithmetic, not
+#: policy, which is why it is the one hard line this module draws: above it
+#: the matched book is a certain loss that no residual argument can justify.
+#: It is deliberately the SAME number the submission boundary enforces in
+#: `l5_live_execution.completion_pair_rescue` (`eff > D(1)` refuses), so this
+#: path cannot approve a pair that the gate downstream would reject.
+REDEMPTION_PAIR = D("1.00")
+
+#: HOW FAR BEHIND THE TOUCH A COMPLETION RESTS, which is NOT the opening
+#: probe's depth. An opening quote rests behind the touch to earn the spread;
+#: a completion is removing risk from inventory already held, and queue
+#: position is the whole of its fill probability. 1445z posted its complement
+#: at own 0.6000 into a 0.6200 bid -- two ticks behind the entire visible
+#: queue, unfillable by construction -- because the opening depth
+#: (`L5_TS_DEPTH_TICKS`, default 2) was reused here. Default 0 rests AT the
+#: touch, which `_would_cross` still proves is post-only. Resting at the bid
+#: is a FILLABLE price and nothing more: it is not an assumption of a fill,
+#: and nothing in this module treats a resting completion as a hedge.
+COMPLETION_DEPTH_TICKS_ENV = "L5_COMPLETION_DEPTH_TICKS"
+COMPLETION_DEPTH_TICKS = 0
+
+
+def completion_depth_ticks() -> int:
+    """The completion depth, from its OWN env and never the opening probe's.
+
+    Unreadable or negative falls back to the default rather than to the
+    opening depth, because inheriting the opening depth is the defect.
+    """
+    raw = (os.getenv(COMPLETION_DEPTH_TICKS_ENV) or "").strip()
+    if not raw:
+        return COMPLETION_DEPTH_TICKS
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        return COMPLETION_DEPTH_TICKS
+    return v if v >= 0 else COMPLETION_DEPTH_TICKS
+
 
 ACTIONS = ("COMPLETE", "REPRICE", "HOLD")
 
@@ -212,17 +252,53 @@ def decide(*, market: str, held_side: str,
         return _no("WOULD_CROSS", price=str(px), bid=str(bid), ask=str(ask),
                    **rec)
 
-    # ---- 7. THE PAIR MUST BEAT CARRYING THE RESIDUAL. Completing dearer
-    #         than break-even is a measured loss at every price, so this is
-    #         the last word even when `complement_order` said ok.
+    # ---- 7. THE PAIR MUST NOT BUY A CERTAIN LOSS. A matched pair redeems
+    #         exactly $1.00 a share, so `pair <= 1.00` is the line between a
+    #         dear completion and a guaranteed loss. That is the SAME test
+    #         the submission boundary already applies -- `eff > D(1)` in
+    #         `completion_pair_rescue` -- and this module's contract is to
+    #         hold no limit of its own, so it is the only hard line here.
+    #
+    #         1445z, 2026-10-30, IS WHY THIS CHANGED. The previous form
+    #         refused whenever `pair > BREAKEVEN_PAIR`, treating the 0.9532
+    #         target as a ceiling. Held 1.91 DOWN at a 0.37 basis on a book
+    #         1 tick wide (bid 0.6200 / ask 0.6300), EVERY maker completion
+    #         price yields a pair >= 0.97, so this gate refused on every tick
+    #         for the final 12 minutes while `complement_order` -- which owns
+    #         completion economics and had already cleared the leg at 0.6200
+    #         against `completion_ceiling` -- said ok. The leg settled
+    #         unmatched for -$0.7067 where completing at 0.99 would have
+    #         redeemed +$0.0191 on 1.91 contracts. A pair at or below $1.00
+    #         is never a loss, so refusing one to protect a preference for a
+    #         cheaper pair strands the very inventory most in need of
+    #         completion.
+    #
+    #         0.9532 SURVIVES AS A PREFERENCE, NOT A PROHIBITION. It is
+    #         recorded on every decision so the tape still distinguishes a
+    #         preferred completion from a dearer risk-reducing one, and
+    #         `l5_two_sided_probe` remains its one source. The opening cap
+    #         (0.96) is untouched and still governs opening a new pair: this
+    #         path only ever completes inventory the ledger already holds.
+    #
+    #         CARRY NEEDS NO PROBABILITY ESTIMATE. The operating model holds
+    #         that residual directional exposure has no demonstrated
+    #         predictive skill, so carrying an unmatched leg is not a
+    #         positive-expectancy alternative to a certain non-negative
+    #         pair. Completing at <= $1.00 removes directional risk at
+    #         non-negative locked P&L, which is why no mark-implied
+    #         probability is read here.
     be = _d(breakeven_pair) or BREAKEVEN_PAIR
     pair = None if avg is None else (avg + own)
     rec["pair_own_cost"] = None if pair is None else str(pair)
     rec["breakeven_pair"] = str(be)
     if pair is None:
         return _no("NO_FIRST_LEG_PRICE", **rec)
-    if pair > be:
-        return _no("PAIR_ABOVE_BREAKEVEN", **rec)
+    # The preference, recorded either way and never a refusal on its own.
+    rec["within_preferred_target"] = bool(pair <= be)
+    rec["locked_pnl_usd"] = str((D(1) - pair) * need)
+    if pair > REDEMPTION_PAIR:
+        return _no("PAIR_ABOVE_REDEMPTION",
+                   redemption=str(REDEMPTION_PAIR), **rec)
 
     # ---- 8. IDEMPOTENCE AND REPRICING, against what is ALREADY RESTING.
     #         The same decision taken twice must not place two orders, and a
@@ -244,7 +320,9 @@ def decide(*, market: str, held_side: str,
             return dict(rec, action="REPRICE", ok=True,
                         reason="CHEAPER_THAN_RESTING", leg=leg,
                         key=decision_key(market, want, need, px))
-    return dict(rec, action="COMPLETE", ok=True, reason="PAIR_BEATS_CARRY",
+    return dict(rec, action="COMPLETE", ok=True,
+                reason=("PAIR_BEATS_CARRY" if rec["within_preferred_target"]
+                        else "RISK_REDUCING_COMPLETION"),
                 leg=leg, key=decision_key(market, want, need, px))
 
 

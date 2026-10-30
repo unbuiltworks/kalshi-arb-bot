@@ -5223,6 +5223,32 @@ class Runner:
             return None
         row = self._last_action_row.get(slug)
         controller_route = False
+        # ---------- WHO OPENED WHAT WE HOLD DECIDES THE ROUTE ----------
+        #
+        # The selector below used to be `row is None` ALONE, which asks about
+        # the INGEST FEED and not about the position. L5 rows arrive
+        # continuously, so a controller-opened position was completed under
+        # `L5_FOLLOWED` with a reused L5 action key on every tick a row
+        # existed, and the controller re-entry counter never incremented once
+        # across the three-window campaign while 12 of 15 orders were
+        # controller-keyed. Origin comes from CONFIRMED FILLS via
+        # `fill_provenance`, so it is stable for a given inventory state --
+        # strictly more stable than the feed-dependent test it replaces, which
+        # is why this cannot flap a route mid-window.
+        #
+        # ATTRIBUTION ONLY. Both routes price the complement with the same
+        # `TS.complement_order` call against the same ceilings and pass the
+        # same gates; MIXED and UNKNOWN deliberately leave the previous route
+        # in force rather than credit either engine with the other's stock.
+        try:
+            origin = LX.inventory_origin(self.store.state, slug)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            origin = LX.ORIGIN_UNKNOWN
+        self.stats["book_completion:ORIGIN:%s" % origin] += 1
+        if origin == LX.ORIGIN_CONTROLLER:
+            controller_route = True
         if row is None:
             # ---------- CONTROLLER-OPENED INVENTORY HAS NO L5 ROW ----------
             #
@@ -5262,6 +5288,12 @@ class Runner:
                 self.stats["book_completion:NO_ACTION_YET"] += 1
                 return None
             controller_route = True
+        elif controller_route:
+            # AN L5 ROW EXISTS BUT THE INVENTORY IS OURS. This is the case
+            # the old selector could not see. Nothing is invented: the
+            # controller re-entry declares its own decision and fabricates no
+            # action key, exactly as it does when no row exists at all.
+            self.stats["book_completion:CONTROLLER_INVENTORY_WITH_L5_ROW"] += 1
         ws = AB.slug_start(slug)
         if ws is None:
             return None
@@ -5298,8 +5330,13 @@ class Runner:
             resting=_resting_rows(self.store, slug),
             tick=getattr(t, "tick_size", None) or "0.01",
             min_qty=getattr(t, "quantity_increment", None) or "0.01",
-            # the SAME env the engine's own quote reads, not a second copy
-            depth_ticks=(_evidence_depth_ticks() or 2),
+            # COMPLETION DEPTH, from its own env and NOT the opening
+            # probe's. Reusing `L5_TS_DEPTH_TICKS` (default 2) is what posted
+            # 1445z's complement at own 0.6000 into a 0.6200 bid -- behind the
+            # whole visible queue. Resting at the touch is a FILLABLE price,
+            # not a fill: `_would_cross` still proves it post-only, and a
+            # resting completion is never counted as a hedge.
+            depth_ticks=BC.completion_depth_ticks(),
             residual_budget_usd=getattr(
                 gates, "max_worst_case_deficit_usd", None),
             # the deployed backstop, which is per-campaign and already
@@ -5329,6 +5366,10 @@ class Runner:
             "reused_action_key": (None if controller_route else
                                   str(row.get("transactionHash")
                                       or row.get("slug") or "")[:80]),
+            # WHAT THE ROUTE WAS DECIDED ON, recorded beside the route so a
+            # reader can audit the attribution instead of inferring it.
+            "inventory_origin": origin,
+            "l5_row_present": bool(row is not None),
             "decision": {k: v for k, v in rec.items() if k != "leg"},
             "labels": ("the BOOK asked for this re-evaluation. On the L5 "
                        "route the reused action is a real admitted L5 action "
