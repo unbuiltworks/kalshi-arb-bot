@@ -2627,3 +2627,34 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 # scope are all untouched. Full suite: 54 failed / 26 errors, identical to
 # the pristine baseline bar three pre-existing httpx collection errors.
 # ============================================================================
+
+# 2026-10-30 — owner-approved MONEY-PATH REPAIRS, deployed DISARMED.
+#
+# Promotes 051517fb. Three narrow repairs and no new capability:
+#   1. tracked_coid_for_venue_order / duplicate_venue_order_coid — one venue
+#      order books ONCE. 0230z booked 1.91 contracts twice under two coids
+#      (DDDXP54G12TT and l5f-b420c940..., both naming the same
+#      venue_order_id) because applied_fill_qty is keyed on the CLIENT id.
+#      The second guard fails closed via mark_uncertain.
+#   2. transport_armable=Q1.armed() wired (Defect 1, Option B) — the Q1
+#      handshake is now REQUIRED alongside the campaign approval and a
+#      process lacking it is refused BEFORE the window claim. This is a
+#      NARROWING: two owner-held objects are needed to arm, not one.
+#   3. COST_BASIS_RESTATEMENTS — one entry, applied at boot through the
+#      existing protected correct_cost_basis verb, restating 0230z from the
+#      $1/share placeholder (1.9100) to the measured 0.7258.
+#
+# STAYS DISARMED AND HALTED: no variable was changed, so L5_LIVE_HALT stays
+# set and PMUS_Q1_LIVE stays NO. With Option B wired the stale campaign
+# could not arm even if the halt were lifted. Verified before deploying:
+# armed false, live_orders 0, pending_terminal [], quarantined [], campaign
+# approval_stale with every class budget at 0 remaining.
+#
+# The restatement is the only state change this boot makes. Its effects were
+# verified first by replaying the production ledger slice
+# (tests/test_l5_0230z_cost_restatement.py, 31 passed):
+#   utc_day 2026-10-30  -1.91000000 -> -0.72580000
+#   all-time realized  -11.50120000 -> -10.31700000
+#   $5 halt room         3.09000000 ->   4.27420000  (would_halt false)
+#   realized_unattributed 0 -> 0; other unknown-basis legs untouched
+money-path repairs + 0230z restatement, disarmed 2026-10-30T11:58Z
