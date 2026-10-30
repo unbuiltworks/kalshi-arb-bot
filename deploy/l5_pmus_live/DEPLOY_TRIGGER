@@ -2685,3 +2685,39 @@ money-path repairs + 0230z restatement, disarmed 2026-10-30T11:58Z
 # only, within the standing authority over these three variables -- adding a
 # third independent lock and making the resting state match the intent.
 PMUS_Q1_LIVE=NO restored as the resting state 2026-10-30T12:05Z
+
+# 2026-10-30 — owner-approved MAKER-COMPLETION COUPLING FIX, deployed DISARMED.
+#
+# Promotes 3708c1c9 (tested successor to 5fa66775). One behavioural change:
+# `maybe_book_completion` -- the only maker-completion route -- no longer
+# requires a prior admitted L5 action row. A controller-opened position had
+# none, so the route returned NO_ACTION_YET 263 times during 0230z while
+# 1.91 contracts sat unmatched: the engine could open autonomously and could
+# not complete what it had opened. With no row but held inventory it now
+# re-enters through the existing row-free controller interface, declaring
+# CONTROLLER_GENERATED and fabricating no action key. With no row and a flat
+# book it still reports NO_ACTION_YET; an unreadable ledger fails closed.
+#
+# INERT WITHOUT L5_BOOK_COMPLETION. That flag is the only switch and NO
+# VARIABLE IS CHANGED BY THIS DEPLOY, so if it is unset the engine is
+# byte-identical. See L5_MAKER_COMPLETION_ENABLE.md for the exact config.
+#
+# Also: BREAKEVEN_PAIR moves to l5_two_sided_probe with l5_book_completion
+# aliasing it -- one constant, no second copy, no behaviour change.
+#
+# PRE-DEPLOY CHECKS, all four passed:
+#   1. BTC15m-native breakeven run on OUR ledger, read-only (106 settled
+#      BTC15m markets, 89 usable): OOS paired 82.73% vs a 61.74% breakeven,
+#      net +$2.9108; TRAIN 68.69% vs 68.96%, net -$4.5982.
+#   2. Threshold reconciliation -- the tightening to 0.9532 was implemented,
+#      measured and REVERTED: as a hard ceiling it refuses 1245z's 0.9699
+#      completion, which locks +$0.0683 against -$0.7264 stranded. The hard
+#      limit stays eff pair <= 1.00; 0.9532 is a target, now shared.
+#   3. 13 tests: cannot invent an L5 action, double-submit, exceed the
+#      one-order limit, or disturb cancellation or reconciliation.
+#   4. Baseline parity: 14452 passed vs 14344, failure set unchanged at
+#      54 failed / 23 errors in the same modules.
+#
+# STAYS DISARMED: PMUS_Q1_LIVE=NO, authorization expired, campaign approval
+# stale -- three independent refusals. No rearming without authorization.
+maker-completion coupling fix, disarmed 2026-10-30T13:10Z
