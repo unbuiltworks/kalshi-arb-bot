@@ -55,6 +55,11 @@ COPY src/__init__.py src/__init__.py
 # image it raises ModuleNotFoundError on the first tick with
 # L5_BOOK_COMPLETION set.
 COPY src/l5_book_completion.py src/l5_book_completion.py
+# The bounded taker-completion authorization. The runner imports it
+# UNCONDITIONALLY -- the policy is evaluated on every completion tick so the
+# tape records what it would have authorized -- so its absence is an import
+# error at boot, not a feature quietly missing.
+COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
 COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py

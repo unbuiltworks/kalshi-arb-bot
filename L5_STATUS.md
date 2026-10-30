@@ -12,6 +12,67 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## Stage A campaign closed, and the bounded taker policy (2026-10-30)
+
+**The executor is DISARMED.** `PMUS_Q1_LIVE=NO`, `PMUS_Q1_ARM` cleared,
+`L5_SHADOW_ONLY=1`; heartbeat confirms `armed false` and
+`owner_arm_token false`, flat, refusing `CAMPAIGN_IDENTITY_UNAVAILABLE`.
+
+The four-window Stage A campaign (`stageA2-40fa42ffe6daa339`) is RECONCILED.
+Its four windows were **2115z/2130z/2145z/2200z**, not the authorized
+21:30/21:45/22:00/22:15: arming at 21:06 took the window already live, so the
+grant was spent one window early and 2215z never traded. Window count (4) and
+every dollar limit held.
+
+| window | submitted | filled | pairs | residual | realized |
+|---|---|---|---|---|---|
+| 2115z | 9 | 5 | 2 | DOWN 1.74 | -$0.275600 |
+| 2130z | 7 | 1 | 0 | UP 2.05 | -$0.943000 |
+| 2145z | 2 | 1 | 0 | DOWN 2.00 | +$1.100000 |
+| 2200z | 2 | 1 | 0 | DOWN 1.85 | -$0.610500 |
+| total | 20 | 8 | 2 | — | **-$0.729100** |
+
+REALIZED, venue-confirmed. `all_time_realized_usd` moved -10.85950000 ->
+-11.58860000, a delta of **-0.72910000** matching the four CONFIRMED windows
+exactly, `unattributed_usd 0`. 20 maker orders, **0 taker**, $0 fees. Rebates
+estimated $0.1059, **credited $0** (`UNVERIFIED_NO_VENUE_CREDIT_RECORD`) and
+excluded from every figure above.
+
+2115z completed both of the campaign's pairs (+$0.1246 of pair edge) and
+still LOST -$0.2756, because a 1.74-contract stranded leg cost more than the
+matched book earned. **Pair edge is not P&L.** 2145z's +$1.10 is directional
+luck on an unhedged leg; the identical position was -$0.94 the other way,
+which is what 2130z and 2200z were.
+
+**Opening policy is systematically adversely selected.** At all 8 first-leg
+fills the complement pair at the engine's own quoting depth was >= the 0.96
+cap (7 strictly above, the 8th exactly 0.9600). `pair = P_first +
+P_complement` is anchored near `1 - spread` (0.01 in 7 of 8), so resting
+deeper improves the pair by exactly `2*d*tick` and cannot fix a one-sided
+fill. Evidence: `analysis/l5/stage_a/FIRST_LEG_TO_COMPLEMENT.md`.
+
+**The priced, refused exit.** In 2145z the engine found BUY 2 UP @ 0.10 for
+$0.22 all-in, turning `worst_before -0.9400` into `worst_after +0.8400` with
+`both_positive_after true`, available ~6.5 minutes. Refused because
+`authorized_to_cross false`. Run-wide the gate approved 112 completions and
+41 were refused `WOULD_CROSS`.
+
+**Implemented, DEFAULT-OFF:** `src/l5_taker_completion_policy.py`, a bounded
+maker-first taker-completion authorization (flag `L5_TAKER_COMPLETION_POLICY`,
+opt-in `YES`; `L5_TS_COMPLETION_CROSS` still separately required). Gates on
+strictly positive worst case after walked-VWAP slippage and a 0.25 depth
+haircut, a +$0.25 margin floor, 90s maker-first measured from the submit
+ledger, never beyond the deficit, $1.50 per-cross and $3.00 per-window outlay
+caps. Deduplicated, 2 of 4 stranded legs had a real exit; modelled campaign
+effect **+$0.39**, which is a mitigation and NOT a path to $100/window.
+
+**Scheduling defect FIXED:** the approval scope takes an optional
+`starts_utc` and `authorize_window` refuses `WINDOW_BEFORE_AUTHORIZED_START`
+for any window whose own start precedes it. Absent, previous behaviour.
+
+Shadow validation out of sample is **NOT yet done** and crossing is **NOT
+authorized**. Proposal: `analysis/l5/stage_a/STAGE_B_TAKER_COMPLETION_PROPOSAL.md`.
+
 ## Current Live Transfer / Handoff (2026-09-18, for fresh sessions)
 
 Labels are strict: HISTORICAL (source data), SHADOW/MODELED (never realized),

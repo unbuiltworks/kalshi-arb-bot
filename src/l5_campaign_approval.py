@@ -99,6 +99,27 @@ def _ts(v: Any) -> Optional[dt.datetime]:
     return t if t.tzinfo is not None else None      # naive is a refusal
 
 
+def _slug_start_utc(market: Any) -> Optional[dt.datetime]:
+    """When does THIS window open? None if the slug does not say.
+
+    The authoritative parser is `l5_pmus_auth_book.slug_start`, imported
+    lazily so this module -- which every arming decision reads -- gains no
+    import-time dependency on the book stack, and so an import failure
+    degrades to None (a refusal at the call site) rather than breaking
+    approval reads entirely.
+    """
+    try:
+        from src import l5_pmus_auth_book as _AB
+        ws = _AB.slug_start(str(market))
+    except BaseException as exc:                              # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    if ws is None:
+        return None
+    return dt.datetime.fromtimestamp(int(ws), dt.timezone.utc)
+
+
 def digest_of(raw: Optional[bytes]) -> Optional[str]:
     return None if raw is None else hashlib.sha256(raw).hexdigest()
 
@@ -212,6 +233,26 @@ class ApprovalGate:
         if want_exp <= 0 or want_loss <= 0:
             return no("approval_limits_not_positive")
 
+        # THE AUTHORIZED START, OPTIONAL AND ABSENT IS ABSENT.
+        #
+        # WHY THIS FIELD EXISTS. The 2026-10-30 Stage A campaign was approved
+        # for windows at 21:30, 21:45, 22:00 and 22:15 and it traded 21:15,
+        # 21:30, 21:45 and 22:00: arming at 21:06 made the engine work the
+        # window that was ALREADY LIVE, so the four-window grant was spent one
+        # window early and the 22:15 window it was approved for never traded.
+        # The scope bounded the expiry and nothing bounded the start, so
+        # "four windows from 21:30" was enforced only as "four windows".
+        #
+        # A missing value keeps the previous behaviour rather than inventing a
+        # start, because an invented one would retroactively refuse windows a
+        # standing approval already permits. When the owner DOES name a start,
+        # `authorize_window` refuses every window that opens before it.
+        starts = _ts(doc.get("starts_utc"))
+        if doc.get("starts_utc") is not None and starts is None:
+            return no("approval_start_time_unusable")
+        if starts is not None and starts >= expires:
+            return no("approval_start_after_expiry")
+
         eff_w = min(want_w, MAX_WINDOWS)
         eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD)
         eff_loss = min(want_loss, MAX_DAILY_LOSS_USD)
@@ -250,6 +291,8 @@ class ApprovalGate:
                               if doc.get(k) is not None},
                           "expires_utc": eff_expires.isoformat(),
                           "issued_utc": issued.isoformat(),
+                          "starts_utc": (None if starts is None
+                                         else starts.isoformat()),
                           "clamped": {
                               "max_windows": want_w != eff_w,
                               "max_total_exposure_usd": want_exp != eff_exp,
@@ -455,6 +498,37 @@ def authorize_window(gate: "ApprovalGate", market: str, *,
         return {"present": True, "ok": False, "reason": "CAMPAIGN_EXPIRED",
                 "detail": {"expires_utc": scope.get("expires_utc")},
                 "scope": scope}
+    # A WINDOW EARLIER THAN THE AUTHORIZED START IS NOT ONE OF THE APPROVED
+    # WINDOWS, even when the count still has room. Stage A proved the
+    # difference matters: approved for 21:30/21:45/22:00/22:15, it spent its
+    # four windows on 21:15/21:30/21:45/22:00 because arming happened at
+    # 21:06 and the engine took whatever was live. The grant is a set of
+    # windows, not merely a quantity of them.
+    #
+    # The window's own START decides, not `now`: a window that OPENED before
+    # the authorized start is refused even if we reach it late, because
+    # trading it is trading an unapproved window.
+    starts = _ts(scope.get("starts_utc"))
+    if starts is not None:
+        ws = _slug_start_utc(market)
+        if ws is None:
+            # FAIL CLOSED. With a start bound in force, a slug whose window
+            # we cannot locate cannot be shown to be inside the grant.
+            return {"present": True, "ok": False,
+                    "reason": "WINDOW_START_UNREADABLE",
+                    "detail": {"market": str(market)[:80],
+                               "starts_utc": scope.get("starts_utc")},
+                    "scope": scope}
+        if ws < starts:
+            return {"present": True, "ok": False,
+                    "reason": "WINDOW_BEFORE_AUTHORIZED_START",
+                    "detail": {"market": str(market)[:80],
+                               "window_start_utc": ws.isoformat(),
+                               "starts_utc": starts.isoformat(),
+                               "early_by_s": round(
+                                   (starts - ws).total_seconds(), 1)},
+                    "scope": scope}
+
     led = ledger or WindowLedger()
     try:
         # RESERVE, OR MERELY ASK.

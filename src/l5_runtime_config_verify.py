@@ -663,6 +663,50 @@ def verify() -> Dict[str, Any]:
             ("book_completion_depth_ticks", "BC.completion_depth_ticks()",
              lambda: __import__("src.l5_book_completion", fromlist=["x"]
                                 ).completion_depth_ticks()),
+            # THE BOUNDED TAKER POLICY. Default-off, and the verifier must
+            # say so out loud: a crossing policy whose enablement is only
+            # visible by reading an env var is exactly the configuration an
+            # operator should never have to infer.
+            ("taker_policy_enabled", "TCP enabled",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).POLICY_ENV, "")
+             ).strip().upper() == "YES"),
+            ("taker_policy_margin_floor_usd", "TCP margin floor",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).MARGIN_FLOOR_ENV, "")
+                 or __import__("src.l5_taker_completion_policy",
+                               fromlist=["x"]).DEFAULT_MARGIN_FLOOR_USD)),
+            ("taker_policy_max_outlay_usd", "TCP per-cross cap",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).MAX_OUTLAY_ENV, "")
+                 or __import__("src.l5_taker_completion_policy",
+                               fromlist=["x"]).DEFAULT_MAX_OUTLAY_USD)),
+            ("taker_policy_window_outlay_usd", "TCP window cap",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).WINDOW_OUTLAY_ENV, "")
+                 or __import__("src.l5_taker_completion_policy",
+                               fromlist=["x"]).DEFAULT_WINDOW_OUTLAY_USD)),
+            ("taker_policy_maker_patience_s", "TCP maker-first wait",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).MAKER_PATIENCE_ENV, "")
+                 or __import__("src.l5_taker_completion_policy",
+                               fromlist=["x"]).DEFAULT_MAKER_PATIENCE_S)),
+            ("taker_policy_depth_haircut", "TCP depth haircut",
+             lambda: str(os.getenv(
+                 __import__("src.l5_taker_completion_policy",
+                            fromlist=["x"]).DEPTH_HAIRCUT_ENV, "")
+                 or __import__("src.l5_taker_completion_policy",
+                               fromlist=["x"]).DEFAULT_DEPTH_HAIRCUT)),
+            ("campaign_authorized_start", "approval scope starts_utc",
+             lambda: str((__import__(
+                 "src.l5_campaign_approval", fromlist=["x"]
+             ).approval_gate().state().get("scope") or {}
+             ).get("starts_utc"))),
             ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
             ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
              TS.entry_cutoff_s),

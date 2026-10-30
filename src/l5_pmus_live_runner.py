@@ -56,6 +56,7 @@ from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
 from src import l5_runtime_config_verify as CFGV
+from src import l5_taker_completion_policy as TCP
 from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
@@ -5341,6 +5342,194 @@ class Runner:
         return str(os.getenv(self.TS_COMPLETION_CROSS_ENV, "")
                    ).strip().upper() == "YES"
 
+    def taker_policy_enabled(self) -> bool:
+        """Default OFF, and opt-in by an explicit YES.
+
+        Spelled as a string comparison rather than a truthy env read so a
+        stray "0" or "false" cannot enable live crossing.
+        """
+        return str(os.getenv(TCP.POLICY_ENV, "")).strip().upper() == "YES"
+
+    def _taker_policy_number(self, env: str, default: Any) -> Any:
+        raw = str(os.getenv(env, "")).strip()
+        if not raw:
+            return default
+        try:
+            return D(raw)
+        except BaseException:                                  # noqa: BLE001
+            # AN UNREADABLE BOUND IS NOT THE DEFAULT BOUND. Returning the
+            # default here would silently restore a cap the owner was trying
+            # to change; None reaches the policy, which refuses on it.
+            self.stats["taker_policy_unreadable:%s" % env] += 1
+            return None
+
+    def ts_taker_policy(self, dec: Dict[str, Any], src: Dict[str, Any],
+                        now: float) -> Dict[str, Any]:
+        """Gather the bounded policy's inputs and ask it. Never raises.
+
+        MAKER-FIRST IS MEASURED, NOT ASSUMED. `maker_rested_s` is how long a
+        maker completion has actually been resting unfilled, taken from the
+        probe's own first-leg-complete clock, and `maker_attempted` is
+        whether one was ever posted. Both are None when unknown, and the
+        policy fails closed on either.
+        """
+        try:
+            held = {"UP": src.get("up_qty"), "DOWN": src.get("dn_qty")}
+            attempted = None
+            rested = None
+            try:
+                mk = self.maker_completion_history(
+                    str(getattr(self.transport, "market_slug", "") or ""),
+                    side=dec.get("side"), now=now)
+                attempted = mk.get("attempted")
+                rested = mk.get("rested_s")
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["taker_policy_maker_history:%s"
+                           % type(exc).__name__] += 1
+            return TCP.authorize(
+                decision=dec,
+                enabled=self.taker_policy_enabled(),
+                owner_authorized=self.ts_completion_cross_authorized(),
+                held_up_qty=held["UP"], held_dn_qty=held["DOWN"],
+                held_up_px=src.get("up_cost_px"),
+                held_dn_px=src.get("dn_cost_px"),
+                maker_attempted=attempted,
+                maker_rested_s=rested,
+                maker_patience_s=self._taker_policy_number(
+                    TCP.MAKER_PATIENCE_ENV, TCP.DEFAULT_MAKER_PATIENCE_S),
+                margin_floor_usd=self._taker_policy_number(
+                    TCP.MARGIN_FLOOR_ENV, TCP.DEFAULT_MARGIN_FLOOR_USD),
+                max_outlay_usd=self._taker_policy_number(
+                    TCP.MAX_OUTLAY_ENV, TCP.DEFAULT_MAX_OUTLAY_USD),
+                window_outlay_spent_usd=self.taker_outlay_spent(),
+                window_outlay_cap_usd=self._taker_policy_number(
+                    TCP.WINDOW_OUTLAY_ENV, TCP.DEFAULT_WINDOW_OUTLAY_USD),
+                book_rungs=src.get("book_rungs"),
+                depth_haircut=self._taker_policy_number(
+                    TCP.DEPTH_HAIRCUT_ENV, TCP.DEFAULT_DEPTH_HAIRCUT),
+                halted=self.taker_policy_halted(),
+            )
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["taker_policy_failed:%s" % type(exc).__name__] += 1
+            # FAIL CLOSED. A policy that cannot evaluate has not authorized.
+            return {"ok": False, "authorized": False,
+                    "reason": "POLICY_EVALUATION_FAILED:%s"
+                              % type(exc).__name__}
+
+    def taker_policy_halted(self) -> Optional[bool]:
+        """Is any halt in force? None when that cannot be established.
+
+        Reads the SAME halt the money path reads rather than a second
+        opinion, so the policy cannot act through a halt the executor is
+        already honouring.
+        """
+        try:
+            if self.halted():
+                return True
+            day = self.day_realized_line()
+            wh = day.get("would_halt")
+            if wh is None:
+                # THE DAY COULD NOT BE COMPUTED, which is exactly what
+                # refuses at the submission gate. It refuses here too.
+                return None
+            return bool(wh)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["taker_policy_halt_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return None
+
+    def taker_outlay_spent(self) -> Any:
+        """Additional cash this window's crosses have already committed.
+
+        Nothing crosses yet, so this is 0 by construction and is wired as a
+        real accessor rather than a literal so that enabling submission does
+        not also have to invent the accounting the cap reads.
+        """
+        try:
+            return D(str(getattr(self, "_taker_outlay_usd", 0) or 0))
+        except BaseException:                                  # noqa: BLE001
+            return None
+
+    def maker_completion_history(self, slug: str,
+                                 side: Optional[str] = None,
+                                 now: Optional[float] = None
+                                 ) -> Dict[str, Any]:
+        """Was a MAKER quote posted on the COMPLETING side, and how long ago?
+
+        READ FROM THE SUBMIT LEDGER, NOT FROM A STAMP. The obvious
+        implementation -- stamp a flag where the completion is triggered --
+        records an INTENTION: `maybe_book_completion` re-enters
+        `executor.handle`, which still has every gate to pass, and on
+        2026-10-30 the completion route was refused WOULD_CROSS 41 times
+        after being approved. A flag set at the trigger would have claimed
+        the maker route was tried on windows where nothing was ever posted,
+        which is the one lie maker-first cannot survive.
+        So this reads `state["submitted"]`, where a row exists only because
+        an order was actually sent.
+
+        THE COMPLETING SIDE IS THE SIDE WE STILL NEED. A posted quote on
+        that side which has not filled IS the maker route tried and waiting,
+        whether it was posted by the completion path or as the second leg of
+        a two-sided open -- the policy's question is whether a cheaper maker
+        route has already had its chance, and both answer it.
+
+        Unknown is None, never a comfortable default: the policy fails closed
+        on an unreadable history rather than crossing on an assumption.
+        """
+        out: Dict[str, Any] = {"attempted": None, "rested_s": None,
+                               "slug": str(slug),
+                               "side": None if side is None
+                               else str(side).strip().upper()}
+        if not slug or not out["side"]:
+            return out
+        t_now = float(now if now is not None else time.time())
+        try:
+            rows = (self.store.state.get("submitted") or {})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["maker_history_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return out
+        earliest: Optional[float] = None
+        seen = 0
+        for rec in rows.values():
+            try:
+                if str(rec.get("market") or "") != str(slug):
+                    continue
+                if str(rec.get("side") or "").strip().upper() != out["side"]:
+                    continue
+                ts = dt.datetime.fromisoformat(str(rec.get("t")))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=dt.timezone.utc)
+                seen += 1
+                e = ts.timestamp()
+                earliest = e if earliest is None else min(earliest, e)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # ONE UNPARSEABLE ROW MUST NOT READ AS "NEVER POSTED".
+                self.stats["maker_history_row_unreadable:%s"
+                           % type(exc).__name__] += 1
+                return out
+        out["orders_on_side"] = seen
+        out["attempted"] = bool(seen)
+        if not seen:
+            # NOT ATTEMPTED IS A FACT, and a zero wait is the honest figure
+            # for it. The policy refuses on `attempted` before reading this.
+            out["rested_s"] = 0.0
+            return out
+        out["rested_s"] = max(0.0, t_now - float(earliest))
+        out["first_posted_utc"] = dt.datetime.fromtimestamp(
+            float(earliest), dt.timezone.utc).isoformat()
+        return out
+
     def ts_completion_inputs(self, slug: str) -> Dict[str, Any]:
         """Gather the completion economics inputs, or say what is missing.
 
@@ -5450,7 +5639,66 @@ class Runner:
                                     None),
                     cash_headroom=cash_h, worst_case_ceiling=ceiling,
                     book_age_s=snap.get("stream_age_s"),
-                    gap_suspected=bool(snap.get("gap_suspected")))
+                    gap_suspected=bool(snap.get("gap_suspected")),
+                    # REPORTING-ONLY ENRICHMENT, AND NEVER A NEW REQUIREMENT
+                    # ON THE CALLER. The rungs exist so the bounded taker
+                    # policy can walk a VWAP instead of trusting the touch;
+                    # a caller that does not carry the book ring must still
+                    # get its completion economics, so this degrades to None
+                    # (the policy then falls back to displayed depth) rather
+                    # than making every caller grow a new attribute.
+                    book_rungs=(
+                        self.completion_rungs(slug, side)
+                        if callable(getattr(self, "completion_rungs", None))
+                        else None))
+
+    def completion_rungs(self, slug: str, side: str
+                         ) -> Optional[List[List[str]]]:
+        """The book we would WALK to buy `side`, in OWN-price terms.
+
+        `ts_completion_inputs` prices the cross at ONE level against ONE
+        `available_depth` figure, which is correct for the touch and silently
+        optimistic for any size that would eat through it. The bounded taker
+        policy judges a cross on the VWAP its size would really pay, so it
+        needs rungs rather than a touch -- and the snapshot carries only
+        `bid`/`ask`/`bid_shares`/`ask_shares`.
+
+        OWN PRICE, NOT WIRE. Buying UP walks the UP asks at their own price.
+        Buying DOWN walks the UP BIDS, where own cost is `1 - wire`, so the
+        cheapest DOWN is the HIGHEST bid and the list is already in the right
+        order. Returning wire prices for a DOWN completion is the arithmetic
+        error this exists to avoid.
+
+        None means "no rungs", not "no depth": the policy then falls back to
+        the single displayed figure instead of treating a parse failure as an
+        empty book.
+        """
+        ring = getattr(self, "book_ring", None)
+        if ring is None:
+            return None
+        try:
+            row = ring.latest(str(slug)) or {}
+            want = "asks" if str(side).strip().upper() == "UP" else "bids"
+            if not row.get("%s_served" % want[:-1] + "s", True):
+                return None
+            raw = row.get(want)
+            if not raw:
+                return None
+            out: List[List[str]] = []
+            for rung in raw:
+                wire = D(str(rung[0]))
+                size = D(str(rung[1]))
+                own = wire if want == "asks" else (D(1) - wire)
+                if own <= 0 or own >= D(1) or size < 0:
+                    continue
+                out.append([str(own), str(size)])
+            return out or None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["completion_rungs_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return None
 
     def maybe_book_completion(self, now: float) -> Optional[Dict[str, Any]]:
         """ROUTE B. Let the BOOK ask for a completion we already own.
@@ -5916,12 +6164,37 @@ class Runner:
                            "L5_TS_COMPLETION_CROSS is YES and the "
                            "transport is armed. Nothing here is a fill and "
                            "nothing here is realized."))
-        if dec.get("ok") and authorized and t.armed:
+        # THE BOUNDED POLICY, EVALUATED ALWAYS AND ACTED ON ONLY WHEN ARMED.
+        #
+        # `completion_decision` asks whether a cross improves the worst
+        # outcome and pays for its own fee. It deliberately leaves STRICT
+        # positivity to its caller, and on 2026-10-30 that gap is exactly
+        # what separated the two stranded legs worth completing (2130z, 2145z)
+        # from the two that were not (2115z best worst_after -0.0400; 2200z
+        # never positive at all). This is that caller.
+        #
+        # It is evaluated even with the flag off so the tape records what the
+        # policy WOULD have authorized, which is how the next proposal gets
+        # its numbers from evidence instead of from argument.
+        # GUARDED FOR THE SAME REASON `book_rungs` IS: callers bind this
+        # method set onto minimal objects, and a reporting addition must not
+        # become a new requirement on them. Absent, it reads NOT AUTHORIZED,
+        # which is the fail-closed direction.
+        _pol_fn = getattr(self, "ts_taker_policy", None)
+        pol = (_pol_fn(dec, src, now) if callable(_pol_fn)
+               else {"ok": False, "authorized": False,
+                     "reason": "POLICY_NOT_WIRED"})
+        rec["taker_policy"] = pol
+        if dec.get("ok") and authorized and t.armed and pol.get("authorized"):
             rec["crossed"] = "WOULD_SUBMIT"
             rec["submission_route"] = ("deliberately not wired: crossing "
                                        "requires the owner's separate "
                                        "explicit authorization for live "
                                        "taker execution")
+        elif dec.get("ok") and authorized and t.armed:
+            rec["crossed"] = False
+            rec["withheld_by"] = "TAKER_POLICY:%s" % str(
+                pol.get("reason"))[:60]
         emit("L5_TS_COMPLETION", rec)
         self.stats["ts_completion:%s" % (dec.get("reason") or "OK")] += 1
         return rec
