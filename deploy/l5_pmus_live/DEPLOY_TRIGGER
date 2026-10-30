@@ -2721,3 +2721,25 @@ PMUS_Q1_LIVE=NO restored as the resting state 2026-10-30T12:05Z
 # STAYS DISARMED: PMUS_Q1_LIVE=NO, authorization expired, campaign approval
 # stale -- three independent refusals. No rearming without authorization.
 maker-completion coupling fix, disarmed 2026-10-30T13:10Z
+
+# 2026-10-30 — owner-approved 3-WINDOW VALIDATION CAMPAIGN, code first.
+#
+# Promotes b703237d/a5d920cb on top of 3708c1c9. Carries:
+#   * book_completion_enabled and book_completion_breakeven_pair as OBSERVED
+#     rows in L5_EFFECTIVE_RUNTIME_CONFIG, so the switch that decides whether
+#     held inventory can be completed is read from BC.enabled() rather than
+#     inferred from whether book_completion:* counters appear;
+#   * the maker-completion coupling fix (3708c1c9), already deployed;
+#   * L5_VALIDATION_3WINDOW.md, the scope and the failure taxonomy.
+#
+# APPROVED SCOPE, and these are ceilings not targets: PMUS, BTC15m only,
+# 3 windows, one market at a time, $20 exposure, $3.00 per-market worst-case
+# deficit, $5 daily settled-loss halt, 1 resting order, maker-only post-only,
+# taker and defensive crossing DISABLED, opening pair cap 0.96 unchanged,
+# Route B break-even target 0.9532 unchanged, controller opening and book
+# completion enabled.
+#
+# THIS DEPLOY DOES NOT ARM. No variable is changed by it. The campaign
+# approval, expiry and Q1 handshake are set afterwards, and only once the
+# effective runtime configuration has been verified against the scope above.
+validation campaign code, still disarmed 2026-10-30T13:25Z
