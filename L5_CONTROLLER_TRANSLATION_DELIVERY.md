@@ -4,10 +4,24 @@ Autonomous maker openings are now **technically executable** through the
 existing PMUS infrastructure. Nothing is armed, nothing is deployed, and
 nothing here says the strategy is profitable.
 
-Service `l5-pmus-live` remains **disarmed** (`PMUS_Q1_LIVE=NO`), preflight
-`ok: false` on three counts, approval `ac855ce3…` expired and unused,
-`EXECUTION_MODE = MAKER_ONLY`, defensive crossing off, 1.00 pair ceiling
-intact, 1.20 default not enabled.
+### Production state, and what of it I actually re-read
+
+Verified this turn, by listing `l5-pmus-live`'s variables in
+`arb-ev-wallet-shadow/production`: **`L5_CONTROLLER_OPEN` is not set on the
+service**, so the path this commit adds is off in production and cannot
+make a decision. `L5_DEFENSIVE_COMPLETION` and `L5_BOOK_COMPLETION` exist
+as before; no variable was added, changed or removed, and nothing was
+deployed.
+
+Not re-read this turn: the token returns variable **names only**, values
+redacted, so `PMUS_Q1_LIVE`, the arm token and the approval could not be
+read back. Those were last established as disarmed with preflight
+`ok: false` on three counts (`owner_arm_token` FAIL,
+`absolute_deadline` EXPIRED, `campaign_approval` stale) and approval
+`ac855ce3…` expired and unused. I am reporting that as prior state, not as
+a fresh observation. `EXECUTION_MODE = MAKER_ONLY`, defensive crossing off
+and the 1.00 pair ceiling are properties of the code in this commit and are
+asserted by its tests.
 
 ## What was actually blocking it
 
