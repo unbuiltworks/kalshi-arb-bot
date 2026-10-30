@@ -833,7 +833,9 @@ def test_an_UNVERIFIABLE_cancellation_stops_the_engine_rather_than_guessing(
     why = w.reason(rec)
     # the refusal NAMES the order and why it could not be verified, which is
     # stronger than a bare ORDER_STATE_UNCERTAIN
-    assert why.startswith("BOOK_UNCERTAIN:"), why
+    # `PAIR_<SIDE>:` prefix when the pair reservation is what refused -- the
+    # same refusal, raised before the leg is placed and attributed to it.
+    assert "BOOK_UNCERTAIN:" in why, why
     assert "v1" in why and "OSError" in why, why
     assert len(w.venue.sent) == 1
 
@@ -865,7 +867,11 @@ def test_a_cancel_the_venue_says_is_STILL_OPEN_is_not_treated_as_done(
     # the slot is NOT released: the order may still take money
     assert w.store.still_fillable_order_count() >= 1
     why = w.reason(w.tick(170.0))
-    assert why.startswith("BOOK_UNCERTAIN:") or why == "MAX_LIVE_ORDERS", why
+    # The pair reservation now re-checks a stored plan before its SECOND leg,
+    # so this same uncertainty is caught there -- earlier, and attributed to
+    # the leg -- hence the optional `PAIR_<SIDE>:` prefix. What must not
+    # change, and does not, is that it REFUSES and nothing further is sent.
+    assert ("BOOK_UNCERTAIN:" in why) or why == "MAX_LIVE_ORDERS", why
     assert "still reports it live" in why or why == "MAX_LIVE_ORDERS", why
     assert len(w.venue.sent) == 1
 

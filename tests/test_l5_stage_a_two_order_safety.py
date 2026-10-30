@@ -123,8 +123,11 @@ class TestBothRestingOrdersCountTowardTheLimits:
         assert "NEITHER is placed" in flat
         # each leg is gated with the OTHER counted as outstanding, and a
         # refusal names which leg breached
-        assert "other = [both[1 - i]]" in raw
-        assert "outstanding=self.outstanding_for_gates() + other" in raw
+        assert "outstanding=_outstanding + other," in raw
+        # at plan time nothing is placed, so each leg is charged with the
+        # other -- which is what makes this a PAIR gate
+        assert "_placed = {str(x).strip().upper()" in raw
+        assert "other = [] if _sib_side in _placed else [both[1 - i]]" in raw
         assert 'return "PAIR_%s:%s" % (leg["side"], reason)' in raw
 
     def test_the_pair_cannot_breach_the_cash_ceiling(self, probe, tmp_path):
@@ -405,3 +408,169 @@ class TestTheCombinedPairCapAndFees:
         s = inspect.getsource(TS.second_leg_slot_refusal)
         assert "grants no other allowance" in s
         assert "MAX_LIVE_ORDERS ceiling may be one higher" in s
+
+
+# ================ 7. the reservation is ATOMIC, and charged exactly once
+
+class TestThePairReservationIsAtomic:
+    """If the combined capital, collateral or exposure requirement for BOTH
+    legs cannot be satisfied, neither leg is submitted.
+
+    And the corollary that nearly broke it: an obligation must be charged
+    exactly once. Re-gating a leg the venue is ALREADY holding charges it
+    twice, and a phantom charge refuses the COMPLEMENT of a resting leg --
+    stranding it, which is the failure this whole program is repairing.
+    """
+
+    def _run(self, H, E, tmp_path, cash, tighten=None):
+        ex, t = mk(H, E, tmp_path, g=gates(cash=cash))
+        r1 = tick(ex, E)
+        if tighten is not None:
+            ex.validation_gates = gates(cash=tighten)
+        r2 = tick(ex, E)
+        committed = D(0)
+        for o in t.sent:
+            q, px = D(str(o["qty"])), D(str(o["price"]))
+            committed += q if o["side"] == "DOWN" else q * px
+        return ex, t, r1, r2, committed
+
+    def test_a_pair_that_cannot_fit_places_NEITHER_leg(self, probe, tmp_path):
+        """THE GUARANTEE. At a ceiling no legal pair fits under, nothing
+        rests -- not one leg, not a shrunken one."""
+        H, E = probe
+        ex, t, r1, r2, _ = self._run(H, E, tmp_path, "0.01")
+        assert t.sent == [], t.sent
+        assert r1.get("refused_reason") == "NO_LEGAL_QUANTITY"
+        assert r2.get("refused_reason") == "NO_LEGAL_QUANTITY"
+
+    @pytest.mark.parametrize("cash,expected_committed", [
+        ("8", D("4.74")),
+        ("1.50", D("1.4852")),
+        ("0.80", D("0.7900")),
+        ("0.30", D("0.2844")),
+    ])
+    def test_the_plan_shrinks_so_the_WHOLE_pair_fits(
+            self, probe, tmp_path, cash, expected_committed):
+        """THE $1.50 REGRESSION CASE, and its neighbours. The pair is sized
+        down until both legs fit, and then BOTH rest -- the earlier reading
+        that one rested while its complement was refused for cash was a
+        misreading of an out-of-band diagnostic, not the engine's path."""
+        H, E = probe
+        ex, t, _, _, committed = self._run(H, E, tmp_path, cash)
+        assert len(t.sent) == 2, t.sent
+        assert committed == expected_committed, (committed, t.sent)
+        assert committed <= D(cash)
+
+    def test_no_phantom_charge_once_both_legs_rest(self, probe, tmp_path):
+        """Re-checking a fully-placed plan the way the ENGINE does -- naming
+        the sides already placed -- must come back CLEAN. Charging those legs
+        again reported CASH_COMMITMENT:2.4252 against a true $1.4852 pair,
+        and WORST_CASE_DEFICIT:3.66>3 at an $8 ceiling."""
+        H, E = probe
+        for cash in ("8", "1.50", "0.80"):
+            ex, t, _, _, _ = self._run(H, E, tmp_path / cash, cash)
+            plan = ex.probe_stored_plan(MKT, 0)
+            assert plan is not None
+            placed = [sd for sd, done
+                      in ex.probe_legs_claimed(MKT, 0).items() if done]
+            assert sorted(placed) == ["DOWN", "UP"], placed
+            assert ex.probe_precheck(
+                MKT, plan, placed_sides=placed) is None, cash
+
+    def test_a_placed_leg_is_not_re_gated_as_a_new_order(self):
+        import inspect
+        s = inspect.getsource(LX.FaithfulExecutor.probe_precheck)
+        assert 'if str(leg["side"]).strip().upper() in _placed:' in s
+        assert "continue" in s
+        assert "EVERY OBLIGATION COUNTED EXACTLY ONCE" in s
+
+    def test_plan_time_behaviour_is_unchanged_by_default(self, probe,
+                                                         tmp_path):
+        """`placed_sides` defaults to empty -- every pre-existing caller --
+        and that path must stay the original PAIR gate. An earlier attempt
+        matched placed legs by their obligation instead of taking the
+        caller's word, which caught only RESTING legs, double-charged a
+        FILLED one, and broke sixteen end-to-end tests."""
+        import inspect
+        s = inspect.getsource(LX.FaithfulExecutor.probe_precheck)
+        assert "placed_sides: Optional[Sequence[str]] = None" in s
+        H, E = probe
+        ex, t = mk(H, E, tmp_path)
+        tick(ex, E)
+        plan = ex.probe_stored_plan(MKT, 0)
+        assert ex.probe_precheck(MKT, plan, placed_sides=()) == \
+            ex.probe_precheck(MKT, plan)
+
+    def test_a_stored_plan_is_re_reserved_before_its_second_leg(self):
+        """The gap this closes: the second leg used to go out on the strength
+        of a decision taken before the first one rested."""
+        import inspect
+        s = inspect.getsource(LX.FaithfulExecutor.handle)
+        # anchor on THIS site: `handle` calls probe_stored_plan twice, and
+        # the sizing branch is the one that ends with `bad = None`
+        anchor = ("plan = self.probe_stored_plan(market, rnd)\n"
+                  "            bad = None\n")
+        assert s.count(anchor) == 1
+        after = s[s.index(anchor):][:2600]
+        assert "if plan is not None:" in after
+        assert "bad = self.probe_precheck(market, plan)" in after
+        assert "ATOMIC AT THE RESERVATION" in after
+
+    def test_a_mid_flight_tightening_refuses_the_second_leg(
+            self, probe, tmp_path):
+        """It cannot un-rest leg one -- nothing can -- so it refuses leg two
+        and the completion route takes the single leg from there."""
+        H, E = probe
+        ex, t, r1, r2, _ = self._run(H, E, tmp_path, "8", tighten="0.60")
+        assert len(t.sent) == 1, t.sent
+        assert r1.get("refused_reason") is None
+        assert "CASH_COMMITMENT" in str(r2.get("refused_reason"))
+        # charged ONCE: the resting DOWN at 3 plus this UP at 1.74
+        assert "4.74" in str(r2.get("refused_reason"))
+
+    def test_a_partially_filled_leg_is_counted_through_both_books(
+            self, probe, tmp_path):
+        """A claimed leg that half-filled is counted as inventory for the
+        filled part and as outstanding for the remainder -- never as a
+        planned leg on top of those."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, fill_qty="1")
+        tick(ex, E)
+        side = t.sent[0]["side"]
+        assert ex.store.position(MKT, side) > 0
+        assert ex.cash_legs_for_gates()
+        placed = [sd for sd, done
+                  in ex.probe_legs_claimed(MKT, 0).items() if done]
+        assert side in placed
+        plan = ex.probe_stored_plan(MKT, 0)
+        assert ex.probe_precheck(MKT, plan, placed_sides=placed) is None
+
+    def test_concurrent_fills_leave_the_pair_accounted(self, probe, tmp_path):
+        """Both legs filling at once: positions equal, residual zero, and the
+        ledger's committed cash equals the pair it actually bought."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, fill_qty="3")
+        tick(ex, E)
+        tick(ex, E)
+        assert len(t.sent) == 2, t.sent
+        up, dn = ex.store.position(MKT, "UP"), ex.store.position(MKT, "DOWN")
+        assert up == dn and up > 0, (up, dn)
+        assert ex.store.residual(MKT) == D(0)
+        legs = ex.store.leg_cost(MKT)
+        pair = (legs["UP"] + legs["DOWN"]) / up
+        assert pair <= TS.max_pair_cost(), pair
+
+    def test_pending_orders_still_count_while_one_leg_is_filled(
+            self, probe, tmp_path):
+        """A filled leg plus a still-resting leg must both be accounted."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, fill_qty="3")
+        tick(ex, E)                              # leg one fills whole
+        held = "UP" if ex.store.position(MKT, "UP") > 0 else "DOWN"
+        assert ex.store.position(MKT, held) > 0
+        outstanding = ex.store.outstanding_residual(MKT)
+        assert outstanding is not None
+        # the gates see the filled leg as inventory and the resting one as
+        # outstanding, never one as both and never neither
+        assert ex.cash_legs_for_gates()
+        assert isinstance(ex.outstanding_for_gates(), list)

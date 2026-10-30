@@ -5974,7 +5974,8 @@ class FaithfulExecutor:
                 "note": ("a matched pair pays exactly $1.00 a share, so a "
                          "pair cost above the ceiling buys a certain loss")}
 
-    def probe_precheck(self, market: str, plan: Mapping[str, Any]
+    def probe_precheck(self, market: str, plan: Mapping[str, Any],
+                       placed_sides: Optional[Sequence[str]] = None
                        ) -> Optional[str]:
         """Gate the WHOLE PAIR before either leg is claimed.
 
@@ -5997,14 +5998,45 @@ class FaithfulExecutor:
                 for l in legs]
         inv = self.inventory_for_gates(market)
         unreal = self.unrealized_loss_for_gates()
+        # EVERY OBLIGATION COUNTED EXACTLY ONCE.
+        #
+        # AT PLAN TIME -- `placed_sides` empty, which is the default and every
+        # pre-existing caller -- neither leg exists yet, so each is gated with
+        # the other counted as if it were already resting. That is what makes
+        # this a PAIR gate rather than two independent orders, and it is
+        # byte-for-byte the original behaviour.
+        #
+        # RE-CHECKED LATER, a leg that has ALREADY BEEN PLACED must not be
+        # charged again. It is already counted: resting, through
+        # `outstanding_for_gates()`; filled, through `cash_legs_for_gates()`
+        # and the inventory. Charging it a second time as a planned leg
+        # produced phantom refusals -- measured on a stored plan of
+        # UP 0.94@0.58 + DOWN 0.94@0.37 whose true pair commitment is $1.4852,
+        # a re-check reported CASH_COMMITMENT:2.4252, and at an $8 ceiling
+        # with both legs resting, WORST_CASE_DEFICIT:3.66>3.
+        #
+        # THE DIRECTION OF THAT ERROR IS WHAT MATTERS: a phantom charge
+        # REFUSES THE COMPLEMENT OF A LEG ALREADY WORKING, which strands it --
+        # the exact failure this program has been repairing. An earlier
+        # attempt here matched placed legs by their obligation, which caught
+        # only RESTING ones and so still double-charged a FILLED leg; it broke
+        # sixteen end-to-end tests. The caller states what it placed instead,
+        # because the claim state is the authoritative record of that.
+        _placed = {str(x).strip().upper() for x in (placed_sides or ())}
+        _outstanding = self.outstanding_for_gates()
+
         for i, leg in enumerate(legs):
-            # each leg evaluated with the OTHER already outstanding
-            other = [both[1 - i]]
+            # a leg already placed is not a new order and is already counted
+            if str(leg["side"]).strip().upper() in _placed:
+                continue
+            # the other leg counts only while IT is still unplaced
+            _sib_side = str(legs[1 - i]["side"]).strip().upper()
+            other = [] if _sib_side in _placed else [both[1 - i]]
             reason = vg.refuse(
                 order_qty=D(leg["qty"]), order_price=D(leg["price"]),
                 order_intent=both[i]["intent"],
                 filled_legs=self.cash_legs_for_gates(),
-                outstanding=self.outstanding_for_gates() + other,
+                outstanding=_outstanding + other,
                 book_uncertain=self.store.orders_uncertain(),
                 unmatched_after=self.store.residual(market),
                 cumulative_realized=self.store.realized_today(),
@@ -6615,6 +6647,31 @@ class FaithfulExecutor:
 
             plan = self.probe_stored_plan(market, rnd)
             bad = None
+            if plan is not None:
+                # ATOMIC AT THE RESERVATION, NOT ONLY AT THE PLAN.
+                #
+                # The pair was gated as a whole when it was sized, and the
+                # plan was then stored -- but the SECOND leg used to go out on
+                # the strength of that stored decision without the pair being
+                # re-checked. Between the two legs the world can move: another
+                # market's order, a settlement, a cash change. So the pair is
+                # re-reserved here, and a leg is placed only while the WHOLE
+                # pair still fits.
+                #
+                # WHAT THIS CAN AND CANNOT DO. Checked before EITHER leg is
+                # submitted it refuses both, which is the guarantee asked for.
+                # Re-checked when leg one is already resting it cannot un-rest
+                # it -- nothing can -- so it refuses leg two and the
+                # completion route takes the single leg from there under the
+                # 1.00 ceiling. It is sound only because the sibling is now
+                # charged once; with the double charge above it would have
+                # refused the complement of every resting leg.
+                bad = self.probe_precheck(
+                    market, plan,
+                    placed_sides=[sd for sd, done
+                                  in self.probe_legs_claimed(market,
+                                                             rnd).items()
+                                  if done])
             if plan is None:
                 bad = "PROBE_NOT_SIZED"
                 ceiling = self.probe_loss_ceiling()
