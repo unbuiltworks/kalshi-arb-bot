@@ -2644,9 +2644,10 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 #      existing protected correct_cost_basis verb, restating 0230z from the
 #      $1/share placeholder (1.9100) to the measured 0.7258.
 #
-# STAYS DISARMED AND HALTED: no variable was changed, so L5_LIVE_HALT stays
-# set and PMUS_Q1_LIVE stays NO. With Option B wired the stale campaign
-# could not arm even if the halt were lifted. Verified before deploying:
+# STAYS DISARMED: no variable was changed by this deploy. See the CORRECTION
+# at the end of this file -- the resting state was NOT what this paragraph
+# originally claimed, and the record is kept rather than rewritten.
+# Verified before deploying:
 # armed false, live_orders 0, pending_terminal [], quarantined [], campaign
 # approval_stale with every class budget at 0 remaining.
 #
@@ -2658,3 +2659,29 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 #   $5 halt room         3.09000000 ->   4.27420000  (would_halt false)
 #   realized_unattributed 0 -> 0; other unknown-basis legs untouched
 money-path repairs + 0230z restatement, disarmed 2026-10-30T11:58Z
+
+# CORRECTION, 2026-10-30T12:05Z, to the entry above.
+#
+# That entry said "L5_LIVE_HALT stays set and PMUS_Q1_LIVE stays NO",
+# carried over from the 2026-10-30T02:28Z entry. The boot's own preflight
+# showed both claims were false:
+#
+#   halt_gate      verdict PASS, permitted true   -> the halt was NOT latched
+#   owner_arm_token verdict PASS                  -> Q1.armed() was TRUE,
+#                                                    so PMUS_Q1_LIVE was YES
+#                                                    with a matching arm token
+#
+# The service was nevertheless disarmed, and could not arm, on two
+# independent owner-held expiries:
+#
+#   absolute_deadline  FAIL  EXPIRED, expires_in_s -30001.5
+#                            -> AUTHORIZATION_EXPIRED (step 26)
+#   campaign_approval  FAIL  approval_stale
+#
+# transport armed: false throughout. But a live arm token resting beside an
+# expired approval is the loose end that would let a future approval arm
+# with no human action at that moment, which is the property Option B exists
+# to protect. So PMUS_Q1_LIVE was set to NO -- a capability-REDUCING change
+# only, within the standing authority over these three variables -- adding a
+# third independent lock and making the resting state match the intent.
+PMUS_Q1_LIVE=NO restored as the resting state 2026-10-30T12:05Z

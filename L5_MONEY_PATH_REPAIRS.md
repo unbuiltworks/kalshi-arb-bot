@@ -222,8 +222,36 @@ campaign approval_state "approval_stale"
 class budgets OPEN 0 / COMPLETE 0 / REPLACE 0 remaining · may_open false
 ```
 
-No orders outstanding, campaign exhausted, service disarmed. `L5_LIVE_HALT`
-and `PMUS_Q1_LIVE=NO` were left exactly as they were — no variable was
-changed — so the service comes back **disarmed and halted**, and with Option
-B now wired it could not arm on the stale campaign even if the halt were
-lifted.
+No orders outstanding, campaign exhausted, service disarmed.
+
+### Post-deploy, and a correction
+
+The deploy itself changed no variable. I had stated that `L5_LIVE_HALT` was
+set and `PMUS_Q1_LIVE` was `NO`, carried over from the 02:28Z deploy. **Both
+were false.** The boot's own `L5_AUTHORIZATION_PREFLIGHT` showed:
+
+| check | verdict | |
+|---|---|---|
+| `shadow_lock` | PASS | not engaged |
+| `owner_arm_token` | **PASS** | `Q1.armed()` was **true** — `PMUS_Q1_LIVE` was `YES` |
+| `halt_gate` | **PASS**, `permitted: true` | the halt was **not** latched |
+| `absolute_deadline` | **FAIL** | `EXPIRED`, `expires_in_s -30001.5` → AUTHORIZATION_EXPIRED (step 26) |
+| `campaign_approval` | **FAIL** | `approval_stale` |
+
+`ok: false` on two counts, and the transport reports `armed: false`. So the
+service was genuinely disarmed and could not arm — but on two **expiries**,
+not on the two locks I named.
+
+A live arm token resting beside an expired approval is exactly the loose end
+that would let a future approval arm with no human action at that moment —
+the property Option B exists to protect. So **`PMUS_Q1_LIVE` was set to
+`NO`**: a capability-reducing change only, within the standing authority over
+those three variables, adding a third independent lock and making the resting
+state match the documented intent.
+
+Also confirmed at boot: `max_live_orders: 1`, `max_concurrent_markets: 1`,
+`max_worst_case_deficit_usd: 3.00`, `daily_realized_loss_halt_usd: 5`,
+`frozen_rule: 030d8bf` intact, `halt_gate_configured: true`, and
+`L5_CONTROLLER_OPEN` off. `L5_LIVE_REPAIR_REFUSED` and
+`L5_LIVE_SETTLEMENT_CORRECTION_REFUSED` both fired as expected — the earlier
+one-shots correctly declining to reapply.
