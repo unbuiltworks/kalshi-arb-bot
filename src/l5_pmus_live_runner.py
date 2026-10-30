@@ -5222,12 +5222,46 @@ class Runner:
         if not slug:
             return None
         row = self._last_action_row.get(slug)
+        controller_route = False
         if row is None:
-            # NOTHING TO REUSE. A book-driven completion still rides a real
-            # L5 action, so before the first admitted action of this market
-            # there is nothing to re-evaluate and nothing is invented.
-            self.stats["book_completion:NO_ACTION_YET"] += 1
-            return None
+            # ---------- CONTROLLER-OPENED INVENTORY HAS NO L5 ROW ----------
+            #
+            # 0230z, 2026-10-30. The autonomous controller opened 1.91 DOWN,
+            # so `_last_action_row` -- written ONLY from admitted L5 ingest
+            # rows -- held nothing for the slug, and this route returned
+            # NO_ACTION_YET 263 times while the position sat unmatched. The
+            # engine could open autonomously and could not complete what it
+            # had opened, by construction.
+            #
+            # `BC.decide` never needed the row: it prices the complement from
+            # the market, the book and the ledger's own inventory. The row was
+            # only ever the VEHICLE for re-entering `handle`, and there is
+            # already a row-free vehicle for exactly this -- the controller
+            # interface, which carries CONTROLLER_GENERATED provenance and
+            # whose provisional side and price are re-derived by the
+            # two-sided branch, so it selects the complement itself.
+            #
+            # NOTHING IS INVENTED. No L5 action is synthesised and no action
+            # key is fabricated: the re-entry declares itself as the
+            # controller's own decision, which is what it is.
+            #
+            # STILL NOTHING TO DO ON A FLAT BOOK. Without held inventory this
+            # is the pre-first-action case the original guard was written for,
+            # and it still returns NO_ACTION_YET.
+            try:
+                _u = self.store.position(slug, "UP")
+                _d = self.store.position(slug, "DOWN")
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # FAIL CLOSED: an unreadable ledger is not a flat one.
+                self.stats["book_completion:LEDGER_UNREADABLE:%s"
+                           % type(exc).__name__] += 1
+                return None
+            if (_u or 0) == 0 and (_d or 0) == 0:
+                self.stats["book_completion:NO_ACTION_YET"] += 1
+                return None
+            controller_route = True
         ws = AB.slug_start(slug)
         if ws is None:
             return None
@@ -5288,16 +5322,41 @@ class Runner:
             return dict(rec, ok=False, reason="ORDER_ALREADY_RESTING")
         emit("L5_BOOK_COMPLETION_TRIGGER", {
             "triggered_by": "BOOK_NOT_L5_ACTION",
-            "reused_action_key": str(row.get("transactionHash")
-                                     or row.get("slug") or "")[:80],
+            "provenance": (LX.CONTROLLER_GENERATED if controller_route
+                           else LX.L5_FOLLOWED),
+            "route": ("CONTROLLER_REENTRY" if controller_route
+                      else "L5_ROW_REENTRY"),
+            "reused_action_key": (None if controller_route else
+                                  str(row.get("transactionHash")
+                                      or row.get("slug") or "")[:80]),
             "decision": {k: v for k, v in rec.items() if k != "leg"},
-            "labels": ("the BOOK asked for this re-evaluation; the reused "
-                       "action is a real admitted L5 action and no L5 "
-                       "action is synthesised. The order, if any, is placed "
-                       "by the existing path through every existing gate."),
+            "labels": ("the BOOK asked for this re-evaluation. On the L5 "
+                       "route the reused action is a real admitted L5 action "
+                       "and no L5 action is synthesised; on the controller "
+                       "route the inventory was opened by us and there is no "
+                       "L5 action to reuse, so the re-entry declares itself "
+                       "CONTROLLER_GENERATED and fabricates no action key. "
+                       "The order, if any, is placed by the existing path "
+                       "through every existing gate."),
         })
         self.stats["book_completion:REENTERED"] += 1
-        self.handle(row, now)
+        if controller_route:
+            # THE SAME ROW-FREE INTERFACE `maybe_controller_open` USES. The
+            # provisional side and price are re-derived by the two-sided
+            # branch, which picks the complement from the held inventory, so
+            # what is seeded here cannot choose the leg.
+            _leg = dict(rec.get("leg") or {})
+            self.stats["book_completion:REENTERED:CONTROLLER"] += 1
+            self.executor.handle(
+                None, book, market=str(slug), window=str(ws),
+                controller={"provenance": LX.CONTROLLER_GENERATED,
+                            "decision": {"side": _leg.get("side"),
+                                         "price": _leg.get("price"),
+                                         "l5_size": _leg.get("qty"),
+                                         "relation": "complete"},
+                            "maker_class": None})
+        else:
+            self.handle(row, now)
         return rec
 
     def controller_open_enabled(self) -> bool:

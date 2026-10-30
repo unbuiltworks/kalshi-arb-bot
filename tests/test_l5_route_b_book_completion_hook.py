@@ -75,7 +75,17 @@ def _runner(monkeypatch, *, store=None, snap=None, ws=None):
     # OPENING cap, which is the stricter path. A fixture without it was
     # testing the opening cap and calling it a completion.
     _vg = type("VG", (), {"max_worst_case_deficit_usd": D("3")})()
-    r.executor = type("E", (), {"validation_gates": _vg})()
+    # THE ROW-FREE RE-ENTRY IS A REAL ROUTE NOW, so the fake executor has to
+    # offer the same `handle` the controller interface uses. It records
+    # instead of submitting; `controller_calls` is how a test tells the two
+    # routes apart.
+    controller_calls = []
+    r.executor = type("E", (), {
+        "validation_gates": _vg,
+        "handle": lambda self, row, book, **kw: controller_calls.append(
+            (row, dict(kw))),
+    })()
+    r.controller_calls = controller_calls
     r.stats = __import__("collections").Counter()
     r._book_completion_t = None
     r._last_action_row = {_T.market_slug: {"slug": "x",
@@ -110,13 +120,39 @@ def test_with_the_flag_on_it_can_re_enter(monkeypatch):
 
 # ------------------------------------------------- no synthesised action
 def test_it_never_invents_an_l5_action(monkeypatch):
-    """Before any admitted action there is nothing to reuse, and nothing
-    is fabricated to stand in for one."""
+    """RESTATED 2026-10-30. This asserted that NO ROW means no route at all.
+    That was the defect: 0230z held 1.91 contracts the controller had opened,
+    had no L5 row, and this route declined 263 times while they went
+    unmatched.
+
+    The invariant it exists to protect is intact and is what is asserted
+    here: no L5 action is invented. The row re-entry is NOT used, no action
+    key is reused, and the re-entry declares itself CONTROLLER_GENERATED.
+    """
     monkeypatch.setenv(BC.ENABLED_ENV, "1")
-    r, calls = _runner(monkeypatch)
+    r, calls = _runner(monkeypatch)        # default store holds 2 UP
+    r._last_action_row = {}
+    rec = r.maybe_book_completion(1_793_000_120.0)
+    assert rec is not None and rec.get("ok") is True
+    assert calls == [], "the L5 row route must not be used"
+    assert r.stats["book_completion:NO_ACTION_YET"] == 0
+    assert r.stats["book_completion:REENTERED:CONTROLLER"] == 1
+    assert len(r.controller_calls) == 1
+    row, kw = r.controller_calls[0]
+    assert row is None, "no L5 row is synthesised"
+    ctl = kw["controller"]
+    assert ctl["provenance"] == R.LX.CONTROLLER_GENERATED
+    assert ctl["decision"]["relation"] == "complete"
+
+
+def test_with_no_row_and_a_flat_book_there_is_still_nothing_to_do(monkeypatch):
+    """The case the original guard was written for survives untouched."""
+    monkeypatch.setenv(BC.ENABLED_ENV, "1")
+    r, calls = _runner(monkeypatch, store=_Store(up="0", dn="0"))
     r._last_action_row = {}
     assert r.maybe_book_completion(1_793_000_120.0) is None
     assert calls == []
+    assert r.controller_calls == []
     assert r.stats["book_completion:NO_ACTION_YET"] == 1
 
 
