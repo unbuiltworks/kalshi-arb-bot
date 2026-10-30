@@ -612,6 +612,15 @@ def _resting_rows(store: Any, market: str) -> tuple:
     return tuple(out)
 
 
+#: BOUNDS ON THE VENUE EXIT PROBE. It is a diagnostic, so it may not become a
+#: poller: at most this many reads per process, and never more often than the
+#: cadence. It stops for good as soon as one read is CONCLUSIVE -- that is,
+#: returns at least one position row, which is the only way an empty-portfolio
+#: read can be told apart from a venue that advertises nothing.
+VENUE_EXIT_PROBE_MAX = 40
+VENUE_EXIT_PROBE_EVERY_S = 300.0
+
+
 def _evidence_depth_ticks() -> Optional[int]:
     """How far behind the touch the probe rests, from the same env var it
     reads (`L5_TS_DEPTH_TICKS`, default 2). Reporting only: this feeds the
@@ -1764,7 +1773,13 @@ class Runner:
         about field names. Recording values would put account figures in the
         log for no gain.
         """
-        if getattr(self, "_venue_exit_probed", False):
+        # DONE ONLY WHEN IT LEARNED SOMETHING. The first version of this was
+        # one-shot after the first preflight pass, and that made it useless
+        # for the question it exists to answer: we deploy DISARMED and flat,
+        # so the first read returned `rows: 0` and an empty response carries
+        # no field names. A capability question about position rows can only
+        # be answered while a position is HELD.
+        if getattr(self, "_venue_exit_conclusive", False):
             return
         # ONLY AFTER PREFLIGHT PASSES. Before that the account, the market or
         # the credentials may not be readable at all, and a read_error here
@@ -1773,7 +1788,18 @@ class Runner:
             return
         if t is None:
             return
-        self._venue_exit_probed = True
+        # BOUNDED IN BOTH DIRECTIONS, because this is a diagnostic and not a
+        # feed: no more often than the cadence, and never more than the cap,
+        # so a permanently flat account cannot turn it into a poller.
+        n = int(getattr(self, "_venue_exit_probes", 0))
+        if n >= VENUE_EXIT_PROBE_MAX:
+            return
+        last = getattr(self, "_venue_exit_probe_t", None)
+        now_t = time.time()
+        if last is not None and (now_t - last) < VENUE_EXIT_PROBE_EVERY_S:
+            return
+        self._venue_exit_probe_t = now_t
+        self._venue_exit_probes = n + 1
         out: Dict[str, Any] = {
             "basis": ("READ-ONLY. Two GETs on /v1/portfolio/positions via "
                       "the existing transport. No order, no mutation, no "
@@ -1810,6 +1836,27 @@ class Runner:
                            ("sell", "close", "reduce", "exit", "redeem",
                             "liquidat", "available"))),
             }
+        # CONCLUSIVE ONLY WITH ROWS. An empty portfolio answers nothing about
+        # what a position row advertises, so it is recorded and the probe
+        # stays armed for the next one.
+        rows = sum(int((out.get(k) or {}).get("rows") or 0)
+                   for k in ("positions", "available_positions"))
+        conclusive = rows > 0
+        if conclusive:
+            self._venue_exit_conclusive = True
+        out["probe"] = {
+            "attempt": self._venue_exit_probes,
+            "max_attempts": VENUE_EXIT_PROBE_MAX,
+            "conclusive": conclusive,
+            "note": ("CONCLUSIVE: a held position row was read, so the field "
+                     "names above are what this venue actually advertises"
+                     if conclusive else
+                     "INCONCLUSIVE: the account is flat, so there are no "
+                     "position rows and no field names to read. This says "
+                     "NOTHING about whether the venue supports closing a "
+                     "position; the probe stays armed for a window that "
+                     "holds inventory."),
+        }
         emit("L5_VENUE_EXIT_CAPABILITY", out)
 
     def maybe_preflight(self, now: float) -> None:

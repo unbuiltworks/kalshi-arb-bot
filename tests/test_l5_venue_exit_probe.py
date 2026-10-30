@@ -70,10 +70,66 @@ def test_it_records_no_values_only_names(monkeypatch):
         assert value not in blob, value
 
 
-def test_it_runs_exactly_once_per_process(monkeypatch):
+def test_a_conclusive_read_stops_it_for_good(monkeypatch):
+    """One held position row answers the question; nothing more is needed."""
     r = _Bare()
-    assert len(_records(monkeypatch, _T(), r)) == 1
+    seen = _records(monkeypatch, _T(), r)
+    assert len(seen) == 1
+    assert seen[0][1]["probe"]["conclusive"] is True
     assert _records(monkeypatch, _T(), r) == []
+
+
+class _Flat:
+    """What a DISARMED, flat account actually returns -- which is what the
+    first version of this probe read, and why it learned nothing."""
+
+    def positions(self):
+        return []
+
+    def available_positions(self):
+        return []
+
+
+def test_a_flat_account_is_recorded_as_INCONCLUSIVE(monkeypatch):
+    r = _Bare()
+    _, doc = _records(monkeypatch, _Flat(), r)[0]
+    assert doc["positions"]["rows"] == 0
+    assert doc["probe"]["conclusive"] is False
+    assert "NOTHING about whether the venue supports closing" in \
+        doc["probe"]["note"]
+
+
+def test_a_flat_read_leaves_the_probe_armed(monkeypatch):
+    """The bug this fixes: one-shot at boot always fired while flat, so the
+    capability question could never be answered."""
+    r = _Bare()
+    assert len(_records(monkeypatch, _Flat(), r)) == 1
+    r._venue_exit_probe_t = None          # past the cadence
+    assert len(_records(monkeypatch, _Flat(), r)) == 1
+    r._venue_exit_probe_t = None
+    # ...and when inventory finally exists, it answers and then stops
+    seen = _records(monkeypatch, _T(), r)
+    assert len(seen) == 1
+    assert seen[0][1]["probe"]["conclusive"] is True
+    r._venue_exit_probe_t = None
+    assert _records(monkeypatch, _Flat(), r) == []
+
+
+def test_the_cadence_stops_it_becoming_a_poller(monkeypatch):
+    r = _Bare()
+    assert len(_records(monkeypatch, _Flat(), r)) == 1
+    # immediately again, inside the cadence: no read
+    assert _records(monkeypatch, _Flat(), r) == []
+
+
+def test_the_attempt_cap_bounds_a_permanently_flat_account(monkeypatch):
+    r = _Bare()
+    for _ in range(R.VENUE_EXIT_PROBE_MAX + 5):
+        r._venue_exit_probe_t = None
+        _records(monkeypatch, _Flat(), r)
+    assert r._venue_exit_probes == R.VENUE_EXIT_PROBE_MAX
+    r._venue_exit_probe_t = None
+    assert _records(monkeypatch, _Flat(), r) == []
 
 
 def test_a_venue_failure_is_recorded_and_never_raised(monkeypatch):

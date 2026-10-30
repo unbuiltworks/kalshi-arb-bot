@@ -2821,3 +2821,31 @@ completion repair, disarmed 2026-10-30T15:50Z
 # No limit, cap, threshold or flag is changed. L5_TS_TWO_ORDER_PAIR stays
 # false, so two-sided resting is NOT enabled.
 venue exit probe, disarmed 2026-10-30T17:10Z
+
+# ----------------------------------------------------------------------------
+# 2026-10-30, third disarmed deploy. Fixes the venue exit probe, which the
+# PREVIOUS deploy proved useless for its own question.
+#
+# WHAT THE LAST DEPLOY ACTUALLY RETURNED, 17:13:27Z:
+#   positions           rows 0, field_names [], exit_affordance_fields []
+#   available_positions rows 0, field_names [], exit_affordance_fields []
+#
+# The read SUCCEEDED. It simply learned nothing: the probe was one-shot after
+# the first preflight pass, and we deploy DISARMED and flat, so it will always
+# fire while the account holds nothing -- and an empty portfolio carries no
+# field names. A capability question about what a POSITION ROW advertises can
+# only be answered while a position is HELD.
+#
+# So the probe now stays armed until a read is CONCLUSIVE (at least one
+# position row), records every inconclusive read as such with a note saying
+# plainly that it establishes NOTHING about closing a position, and is bounded
+# in both directions so it cannot become a poller: at most 40 reads per
+# process, no more often than every 300s, and it stops for good on the first
+# conclusive one.
+#
+# PARITY: baseline 54 failed / 14452 passed, patched 54 failed / 14544 passed,
+# failure sets BYTE-IDENTICAL.
+#
+# STILL DISARMED. PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared, approval expired, no
+# limit or flag changed, L5_TS_TWO_ORDER_PAIR still false.
+venue exit probe persists until conclusive, disarmed 2026-10-30T17:30Z
