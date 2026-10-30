@@ -249,3 +249,131 @@ def test_the_coid_and_the_claim_use_the_same_attempt():
     # the claim site takes the same index from the same function
     assert "attempt=att" in src
     assert "self.acc_leg_attempt(market, rnd_pending" in src
+
+
+# ======================= the retry identity cannot buy anything but an id
+#
+# The attempt axis changes ONE thing: the client order id. It must not become
+# a way around the per-leg budget, an outstanding order, a claim, an exposure
+# ceiling or the daily-loss halt. Each is checked here rather than argued.
+
+class TestTheRetryIdentityBypassesNothing:
+
+    @property
+    def src(self):
+        import inspect
+        return inspect.getsource(LX.FaithfulExecutor.handle)
+
+    def test_every_gate_runs_before_the_submission_boundary(self):
+        """The structural reason no gate can be bypassed. The id is only a
+        NAME: it is chosen mid-path, and every gate -- those before it and
+        those after -- still runs before `record_submit`, which is the
+        boundary the wire sits behind. So a different id changes which
+        order this is, never whether it is allowed."""
+        s = self.src
+        i_rec = s.index("self.store.record_submit(")
+        for gate in ("validation_gates", "limits.check", "probe_precheck",
+                     "realized_current_utc_day", "DAY_REALIZED_UNAVAILABLE",
+                     "balancing_refusal", "pair_cost_refusal"):
+            pos = s.find(gate)
+            assert 0 <= pos < i_rec, (gate, pos, i_rec)
+
+    def test_the_gates_after_the_id_still_precede_the_wire(self):
+        """`balancing_refusal` and `pair_cost_refusal` are chosen after the
+        id exists. Pinned so a future reader does not mistake that for them
+        being skippable."""
+        s = self.src
+        i_coid = s.index("coid = client_order_id(")
+        i_rec = s.index("self.store.record_submit(")
+        for gate in ("balancing_refusal", "pair_cost_refusal"):
+            pos = s.find(gate)
+            assert i_coid < pos < i_rec, gate
+
+    def test_the_claim_is_taken_after_the_id_and_under_the_same_attempt(self):
+        s = self.src
+        i = s.index("coid = client_order_id(")
+        after = s[i:]
+        assert "claim_accumulation_leg" in after
+        assert "attempt=att" in after
+
+    def test_an_outstanding_order_cannot_be_duplicated(self, probe, tmp_path):
+        """A live order's own id is still refused as a duplicate, which is
+        what stops a retry becoming a second copy of a resting order."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path)
+        tick(ex, E)
+        coid = t.sent[0]["client_order_id"]
+        assert ex.store.already_submitted(coid) is True
+        # and the venue double would reject it too, so neither layer alone
+        # is carrying this
+        import pytest as _p
+        with _p.raises(RuntimeError):
+            t.submit({"client_order_id": coid, "market": "m", "side": "UP",
+                      "price": D("0.40"), "qty": D("1")})
+
+    def test_a_retry_cannot_exceed_the_per_leg_attempt_budget(self, probe,
+                                                              tmp_path,
+                                                              monkeypatch):
+        """With a budget of ONE placement per leg, BOTH legs spent and both
+        cancelled unfilled, no retry may go out -- and the round is then
+        genuinely exhausted rather than silently re-placed."""
+        H, E = probe
+        monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "1")
+        ex, t = mk(H, E, tmp_path)
+        tick(ex, E)
+        tick(ex, E)
+        assert len(t.sent) == 2, t.sent
+        _cancel_everything_unfilled(ex)
+        for leg in ("UP", "DOWN"):
+            assert ex.acc_leg_attempt("m", 0, leg) is None, leg
+        # anything placed now must be a NEW ROUND at attempt 0, never a
+        # second placement of a spent round-0 leg. Accumulation opening its
+        # next round is the engine working, not a retry past the budget.
+        tick(ex, E)
+        forbidden = {LX.client_order_id(
+            E.controller_action_key("m", 0, leg), 1)
+            for leg in ("UP", "DOWN")}
+        placed = {x["client_order_id"] for x in t.sent}
+        assert not (placed & forbidden), (
+            "a round-0 leg was re-placed past its attempt budget")
+        if len(t.sent) > 2:
+            third = t.sent[2]
+            assert third["client_order_id"] == LX.client_order_id(
+                E.controller_action_key("m", 1, str(third["side"])), 0)
+
+    def test_a_retry_is_still_refused_by_the_cash_gate(self, probe, tmp_path):
+        """The exposure ceiling is not a function of the id."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path)
+        tick(ex, E)
+        _cancel_everything_unfilled(ex)
+        assert ex.acc_leg_attempt("m", 0, t.sent[0]["side"]) == 1
+        # now make the cash gate unsatisfiable and retry
+        from src.l5_live_validation_gates import ValidationGates
+        ex.validation_gates = ValidationGates(
+            max_cash_deployed_usd=D("0.01"),
+            max_unmatched_contracts=D("5"),
+            max_cumulative_loss_usd=D("10"),
+            max_worst_case_deficit_usd=D("3"))
+        n = len(t.sent)
+        rec = tick(ex, E)
+        assert len(t.sent) == n, rec.get("refused_reason")
+        assert rec.get("refused_reason") is not None
+
+    def test_a_retry_is_still_refused_when_the_day_figure_is_unreadable(self):
+        """DAY_REALIZED_UNAVAILABLE refuses rather than reading as zero, and
+        it sits before the id is built."""
+        s = self.src
+        i = s.index("coid = client_order_id(")
+        assert "DAY_REALIZED_UNAVAILABLE" in s[:i]
+
+    def test_the_attempt_comes_from_the_axis_and_is_never_computed_here(self):
+        """The safety rule lives in one place. If this counted attempts
+        itself it could disagree with the claim that bounds them."""
+        s = self.src
+        i = s.index("coid = client_order_id(")
+        window = s[max(0, i - 1200):i]
+        assert "self.acc_leg_attempt(market, _rp, _lp)" in window
+        for forbidden in ("_att += ", "_att = _att", "range("):
+            assert forbidden not in window, forbidden
+
