@@ -776,3 +776,146 @@ class TestInventoryAndReconciliation:
         up = ex.store.position("m", "UP")
         dn = ex.store.position("m", "DOWN")
         assert abs(up - dn) > 0, (up, dn)
+
+
+# ------------------- observable without submitting: the disarmed rehearsal
+
+class TestADisarmedEngineDecidesButCannotSubmit:
+    """Requirement: autonomous decisions must be OBSERVABLE without any
+    order reaching the venue. A disarmed service gives exactly that.
+
+    WHERE THE GUARANTEE ACTUALLY LIVES, measured rather than assumed. Two
+    separate things hold:
+
+    1. `PMUSTransport.submit()` calls `_require_armed()` as its first act
+       and raises `NotArmed` without attempting a POST, and `arm()` demands
+       BOTH an in-process preflight PASS and the owner's arm token. That is
+       the enforced gate.
+    2. The block that consumes the submission claim is wrapped in
+       `if getattr(self.transport, "armed", False)`, so a disarmed run never
+       spends one. The rehearsal costs nothing from the campaign budget.
+
+    A NOTE ON A GUARD THAT CANNOT FIRE, recorded because this file is where
+    someone would look for it. `disarmed_refusal()` is checked inside that
+    same `if ... armed` block, so within it `armed` is always truthy and the
+    call always returns None -- the check is unreachable. It is harmless,
+    because the enclosing condition is strictly stronger and achieves the
+    same end, and it is NOT relied on here. Asserted below so the fact
+    stays visible instead of being rediscovered as a safety claim.
+    """
+
+    def _disarmed(self, H, E, tmp_path):
+        """A transport that refuses the way the real one refuses."""
+
+        class Disarmed(H.FakeTransport):
+            def submit(self, intent):
+                raise E.NotArmed("transport is DISARMED")
+
+        t = Disarmed(fill_all=False)
+        t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+        t.armed = False
+        assert getattr(t, "armed", None) is False
+        return mk(H, E, tmp_path, t=t, orders=16)
+
+    def test_nothing_reaches_the_venue(self, probe, tmp_path):
+        """Recorded as a NON-SUBMISSION, not as a refusal, and that is the
+        right shape: no gate declined this order -- the venue was simply
+        unreachable. `refused_reason` stays None and the ORDER stage says
+        why nothing was sent."""
+        H, E = probe
+        ex, t = self._disarmed(H, E, tmp_path)
+        rec = tick(ex, E)
+        assert not t.sent, t.sent
+        o = rec["ORDER"]
+        assert o["submitted"] is False
+        assert o["reason"] == "NOT_ARMED"
+        assert "DISARMED" in str(o["detail"])
+
+    def test_the_order_that_would_have_gone_out_is_recorded_in_full(
+            self, probe, tmp_path):
+        """What makes the rehearsal worth running: the exact intent."""
+        H, E = probe
+        ex, _t = self._disarmed(H, E, tmp_path)
+        i = tick(ex, E)["ORDER"]["intent"]
+        assert i["side"] in ("UP", "DOWN")
+        assert i["mode"] == FT.MAKER
+        assert D(i["price"]) > 0 and D(i["qty"]) > 0
+        assert i["action_key"].startswith(E.CONTROLLER_KEY_PREFIX)
+        assert i["market"] == "m"
+
+    def test_the_whole_autonomous_decision_is_still_in_the_record(
+            self, probe, tmp_path):
+        """This is what makes it observable: the decision, the book it was
+        made against and the leg that was priced are all recorded even
+        though no order was sent."""
+        H, E = probe
+        ex, _t = self._disarmed(H, E, tmp_path)
+        rec = tick(ex, E)
+        assert rec["provenance"] == E.CONTROLLER_GENERATED
+        assert rec["action_key"].startswith(E.CONTROLLER_KEY_PREFIX)
+        assert rec["CONTROLLER_BOOK"]["source"] is not None
+        ts = rec["TWO_SIDED_PROBE"]
+        assert ts["leg_to_place"] in ("UP", "DOWN")
+        assert ts["accumulation_round"] == 0
+        assert ts["pair_cost"] is not None
+
+    def test_no_claim_is_consumed_so_the_campaign_budget_is_untouched(
+            self, probe, tmp_path):
+        """The property the 1715z campaign lost a submission to: a claim
+        spent on an order the venue never saw."""
+        H, E = probe
+        ex, _t = self._disarmed(H, E, tmp_path)
+        rec = tick(ex, E)
+        leg = rec["TWO_SIDED_PROBE"]["leg_to_place"]
+        assert not ex.probe_legs_claimed("m", 0).get(leg)
+        # still claimable, which is the proof it was never spent
+        AUTH.claim_accumulation_leg("m", 0, leg, {"rehearsal": False})
+
+    def test_repeated_disarmed_ticks_place_and_cost_nothing(self, probe,
+                                                             tmp_path):
+        H, E = probe
+        ex, t = self._disarmed(H, E, tmp_path)
+        for _ in range(6):
+            tick(ex, E)
+        assert not t.sent
+        assert ex.store.position("m", "UP") == 0
+        assert ex.store.position("m", "DOWN") == 0
+        assert not any(ex.probe_legs_claimed("m", 0).values())
+
+    def test_the_claim_block_is_gated_on_armed_which_is_the_real_protection(
+            self):
+        import ast
+        import inspect
+        from src import l5_live_execution as E
+        src = inspect.getsource(E.FaithfulExecutor.handle)
+        tree = ast.parse(src.lstrip()).body[0]
+        guards = [ast.unparse(n.test) for n in ast.walk(tree)
+                  if isinstance(n, ast.If)
+                  and "claim_accumulation_leg" in ast.unparse(n)]
+        assert any("armed" in g for g in guards), guards
+
+    def test_the_disarmed_refusal_guard_is_unreachable_and_not_relied_on(
+            self):
+        """Recorded, not fixed. Inside `if ... armed`, `disarmed_refusal()`
+        returns None by construction, so the branch cannot be taken."""
+        import ast
+        import inspect
+        from src import l5_live_execution as E
+        src = inspect.getsource(E.FaithfulExecutor.handle)
+        tree = ast.parse(src.lstrip()).body[0]
+        for n in ast.walk(tree):
+            if not (isinstance(n, ast.If) and "armed" in ast.unparse(n.test)):
+                continue
+            if "disarmed_refusal" in "".join(ast.unparse(c) for c in n.body):
+                return      # it is nested inside an `armed` test, as stated
+        raise AssertionError(
+            "disarmed_refusal is no longer inside an `armed` guard -- it may "
+            "now be reachable, so re-read whether it is load-bearing")
+
+    def test_the_trigger_is_inert_while_the_switch_is_off(self, monkeypatch):
+        """Requirement 2 and requirement 5 are both satisfiable, but not at
+        the same instant: with the switch OFF the trigger returns before it
+        reads a book, so there is nothing to observe in production."""
+        from src import l5_pmus_live_runner as R
+        monkeypatch.delenv("L5_CONTROLLER_OPEN", raising=False)
+        assert R.Runner.controller_open_enabled(object()) is False

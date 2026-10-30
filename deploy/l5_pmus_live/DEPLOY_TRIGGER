@@ -2567,3 +2567,33 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 # campaign_approval stale. L5_DEFENSIVE_COMPLETION stays OFF, the unsafe
 # 1.20 defensive default is NOT enabled, the 1.00 all-in ceiling stands,
 # and no mandate is installed.
+
+# ============================================================================
+# deploy trigger 2026-10-30: the autonomous maker-opening path, DISARMED and
+# with the controller switch OFF.
+#
+# Promotes 421872f5's production content: the row-free controller translation
+# (`_translate_core` + `controller_translate`), `handle(controller=...)`,
+# `Runner.maybe_controller_open`, autonomous provenance, the 45th refusal
+# site in the reviewed inventory, and the new boot-time config row. Five
+# production-bound files; the import closure walked from the entrypoint is
+# 51 modules and every one is already in this Dockerfile's COPY list, so
+# there is no Dockerfile change and no new src module.
+#
+# THE SWITCH IS OFF. L5_CONTROLLER_OPEN is not set on this service, so
+# `maybe_controller_open` returns before it reads a book and the engine's
+# behaviour is unchanged from 35109a3a. PMUS_Q1_LIVE stays disarmed,
+# L5_DEFENSIVE_COMPLETION stays off, EXECUTION_MODE stays MAKER_ONLY, and
+# no campaign approval is installed -- L5_EFFECTIVE_RUNTIME_CONFIG will
+# still report PASS false on its eight NO_APPROVAL_IN_FORCE rows, which is
+# the expected and unchanged state.
+#
+# No variable is changed by this deployment. No other service is touched.
+# The freeze re-pin ships in the same commit as the translation change, so
+# the two services that carry both the frozen file and the runtime
+# FROZEN_RULE_CHANGED check would see them atomically; neither tracks this
+# branch and neither is being deployed.
+#
+# Nothing arms. The activation settings are proposed separately in
+# L5_CAMPAIGN10_LIVE_VALIDATION_PROPOSAL.md and need explicit approval.
+# ============================================================================
