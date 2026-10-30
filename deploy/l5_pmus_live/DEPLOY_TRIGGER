@@ -2597,3 +2597,33 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 # Nothing arms. The activation settings are proposed separately in
 # L5_CAMPAIGN10_LIVE_VALIDATION_PROPOSAL.md and need explicit approval.
 # ============================================================================
+
+# ============================================================================
+# deploy trigger 2026-10-30 02:24z: the two campaign-10 defect fixes.
+#
+# FIX SHIPPED -- adopted-order submit time. recover_submit_time() establishes
+# an adopted order's `t` from our own record, then from a durable
+# client-order record whose venue_order_id matches the row, then from the
+# venue's own creation timestamp parsed strictly. Nothing is fabricated: a
+# naive or unparseable value returns None and `t` stays absent, so
+# maybe_acc_deadline keeps marking the store uncertain and disarming on a row
+# it cannot time. This is what cost 0200z its order and its window.
+#
+# FIX PRESENT BUT NOT WIRED -- the window-claim guard.
+# authorize_arming gained transport_armable, inert unless a caller passes
+# False. It is NOT passed, because wiring it would make PMUS_Q1_LIVE=NO block
+# a campaign window and contradict test_PMUS_Q1_LIVE_NO_cannot_block_a_
+# campaign -- a change to the authorization scope, which is the owner's call.
+# See L5_CAMPAIGN10_DEFECT_FIXES.md for options A and B.
+#
+# STILL HALTED AND DISARMED by this deployment. L5_LIVE_HALT is set, which
+# refuses at authorize_arming step 3 BEFORE the step-11 claim, so no window
+# is spent; PMUS_Q1_LIVE is NO. The remaining third claim of the three-window
+# budget is intact. Resuming is a separate change that sets the handshake and
+# clears the halt together, so no interval exists in which the approval is
+# live and the handshake is absent.
+#
+# Entry strategy, pairing logic, risk limits, maker-only and authorization
+# scope are all untouched. Full suite: 54 failed / 26 errors, identical to
+# the pristine baseline bar three pre-existing httpx collection errors.
+# ============================================================================
