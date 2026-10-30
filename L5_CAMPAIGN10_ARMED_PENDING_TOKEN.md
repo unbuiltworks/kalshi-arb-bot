@@ -170,3 +170,91 @@ I report the precise blocker.
 A note on expectation, unchanged: ARGMAX is −$3.14 over 38 windows. Expect a
 small loss. The result being bought is whether an autonomous maker opening
 reaches PMUS, fills, pairs and settles at all.
+
+---
+
+## Addendum 01:39Z — approval validity and the window-claim question
+
+### The approval is still valid. No fresh one is needed.
+
+```
+now                 2026-10-30T01:38:58Z
+NOT_AFTER  03:40:00Z   +121.0 min
+expires    03:45:00Z   +126.0 min
+approval age  9.0 min  (staleness bound 240 min)
+VALID: True
+```
+
+**Six eligible future windows** for a budget of three — a window is eligible
+when its entry is still reachable (300 s runway before the T+600 s entry
+cutoff) and it closes before `NOT_AFTER`:
+
+```
+0145z  entry open until 01:50:00Z
+0200z  entry open until 02:05:00Z
+0215z  entry open until 02:20:00Z
+0230z  entry open until 02:35:00Z
+0245z  entry open until 02:50:00Z
+0300z  entry open until 03:05:00Z
+```
+
+`0130z` is no longer eligible — its entry floor passed at 01:35Z.
+
+### "Armed indefinitely" is structurally impossible
+
+Three independent per-tick disarm paths, all verified in code:
+
+1. **`close_window`** — at every window end: a final order-progress read,
+   then `deadman(reason="window_end")` cancelling every resting order by
+   venue id, then `t.disarm("window_end")`. Arming is strictly per-window.
+2. **`maybe_expire_authorization`** — every tick: if the claim is no longer
+   valid, `deadman(reason="authorization_expired:…")` then
+   `t.disarm("authorization_expired")`. "A CLAIM THAT HAS EXPIRED MUST ALSO
+   CANCEL, not merely stop arming." The claim's expiry is the **earlier** of
+   its TTL and the venue close less the margin.
+3. **`maybe_halt_deadman`** — the independent halt latch, written by a
+   process we do not control and surviving our restart.
+
+### Expired windows are skipped without cost
+
+`campaign_window_is_usable` is checked **twice** — once before
+`authorize_arming` and again after it returns a claim. Both refusals spend
+no window: *"refused BEFORE the single-use claim was taken: no campaign
+window is spent and the authorization is still available to a later
+window"*, and post-claim, *"the window crossed the entry floor between the
+pre-claim check and the claim. No campaign window is spent."* So the budget
+rolls forward to the next eligible window rather than being burned.
+
+### But the budget counts ARMED windows, not TRADED ones
+
+Worth stating plainly before arming. In `try_arm` the order is:
+
+```
+pre-claim usability  ->  authorize_arming  ->  post-claim usability
+  ->  reserve_window  (THE WINDOW IS SPENT HERE)
+  ->  arm  ->  capture baseline  ->  L5_LIVE_ARMED
+```
+
+`reserve_window` is deliberately last — the commit record shows two windows
+lost on 2026-10-20 to reserving too early, one to a shadow-locked
+verification run and one to an arm that `MANDATE_SCOPE_CHANGED` then
+refused, "neither of which could ever have traded". Moving the spend after
+the claim is as far as it can go.
+
+So a window with adequate runway that arms and then simply never sees an
+admissible pair — the first-leg band is 0.20–0.60 and the pair ceiling 0.96
+— **is consumed with zero orders**. It is idempotent per slug, so a restart
+inside an already-reserved window resumes it rather than spending another.
+
+Consequence for this campaign: three armed windows are guaranteed, three
+*traded* windows are not. With six eligible and a budget of three there is
+no way to widen that without raising the budget, which is not authorized and
+I am not proposing it. If the three windows arm and produce no order, the
+honest result is zero fills and the campaign ends having spent its budget —
+and that is itself a finding about the opening policy, not a failure of the
+machinery.
+
+### No strategy logic changed, and none will be
+
+Per the owner's recommendation: complete the authorized experiment,
+reconcile every fill and settlement, then decide.
