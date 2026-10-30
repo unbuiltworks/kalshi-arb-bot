@@ -1740,6 +1740,71 @@ class Runner:
             self.stats["preflight_attempt_emit_error:%s"
                        % type(exc).__name__] += 1
 
+    def maybe_venue_exit_probe(self, t: Any) -> None:
+        """ONCE per process, record what exits the venue actually offers.
+
+        WHY THIS EXISTS. The stranded-inventory question "could we have SOLD
+        the leg instead of completing it?" was answered from a source grep:
+        `l5_order_body.build` hardcodes ORDER_ACTION_BUY, the only intents the
+        venue has ever shown us are ORDER_INTENT_BUY_LONG and
+        ORDER_INTENT_BUY_SHORT, and `VENUE_SIDE_WORDS` records that this
+        venue spells "buy NO" as "sell YES". That is strong evidence and it is
+        not proof: we have never issued a close request, so we have never
+        seen one refused. This reads the venue's own portfolio resource and
+        records its SHAPE, so the answer rests on the venue rather than on
+        our vocabulary.
+
+        STRICTLY READ-ONLY AND FAIL-SOFT. Two GETs through the existing
+        transport, no mutation of any kind, and every failure is recorded
+        rather than raised: a probe that could break the boot is not worth
+        having. It places no order and changes no state.
+
+        KEY NAMES ONLY, NEVER VALUES. What matters is whether the venue
+        advertises a close/reduce/sellable affordance, which is a question
+        about field names. Recording values would put account figures in the
+        log for no gain.
+        """
+        if getattr(self, "_venue_exit_probed", False):
+            return
+        self._venue_exit_probed = True
+        out: Dict[str, Any] = {
+            "basis": ("READ-ONLY. Two GETs on /v1/portfolio/positions via "
+                      "the existing transport. No order, no mutation, no "
+                      "state change. Field NAMES only, never values."),
+            "vocabulary_from_source": {
+                "order_actions_in_src": ["ORDER_ACTION_BUY"],
+                "order_intents_in_src": ["ORDER_INTENT_BUY_LONG",
+                                         "ORDER_INTENT_BUY_SHORT"],
+                "note": ("both intents are BUYs; the venue's `side` word "
+                         "describes the YES token, so ORDER_SIDE_SELL is how "
+                         "it spells buying NO"),
+            },
+        }
+        for name, call in (("positions", "positions"),
+                           ("available_positions", "available_positions")):
+            try:
+                rows = getattr(t, call)()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                out[name] = {"read_error": type(exc).__name__}
+                continue
+            rows = list(rows or ())
+            keys: set = set()
+            for r in rows:
+                if isinstance(r, Mapping):
+                    keys |= {str(k) for k in r.keys()}
+            out[name] = {
+                "rows": len(rows),
+                "field_names": sorted(keys),
+                "exit_affordance_fields": sorted(
+                    k for k in keys
+                    if any(w in k.lower() for w in
+                           ("sell", "close", "reduce", "exit", "redeem",
+                            "liquidat", "available"))),
+            }
+        emit("L5_VENUE_EXIT_CAPABILITY", out)
+
     def maybe_preflight(self, now: float) -> None:
         t = self.transport
         if t is None:
@@ -1792,6 +1857,7 @@ class Runner:
         # log every PASS, and a FAIL only when what blocks it changes
         if self.preflight_status == "PASSED" or blockers != self.last_blockers:
             emit("L5_LIVE_PREFLIGHT", rep)
+            self.maybe_venue_exit_probe(t)
         self.last_blockers = blockers
         # EVERY ATTEMPT, INCLUDING THE SILENT FAILURES. The line above is the
         # reason eighty seconds of this engine's most expensive interval has

@@ -652,6 +652,17 @@ def verify() -> Dict[str, Any]:
             ("book_completion_breakeven_pair", "BC.BREAKEVEN_PAIR",
              lambda: str(__import__("src.l5_book_completion", fromlist=["x"]
                                     ).BREAKEVEN_PAIR)),
+            # THE HARD LINE, and the DEPTH -- both new, and both decide money.
+            # The ceiling is what the gate actually refuses on now that 0.9532
+            # is a preference; the depth is how far behind the touch a
+            # completion rests, which is NOT the opening probe's depth and is
+            # why 19 of the campaign's 21 orders sat two ticks back.
+            ("book_completion_redemption_pair", "BC.REDEMPTION_PAIR",
+             lambda: str(__import__("src.l5_book_completion", fromlist=["x"]
+                                    ).REDEMPTION_PAIR)),
+            ("book_completion_depth_ticks", "BC.completion_depth_ticks()",
+             lambda: __import__("src.l5_book_completion", fromlist=["x"]
+                                ).completion_depth_ticks()),
             ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
             ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
              TS.entry_cutoff_s),
