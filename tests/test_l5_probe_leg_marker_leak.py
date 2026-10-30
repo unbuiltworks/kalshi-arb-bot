@@ -186,12 +186,21 @@ def test_the_fix_adds_no_concurrency_and_claims_nothing():
 
 def test_the_accumulation_slot_still_requires_both_markers():
     """The named (market, round, leg) slot must not be claimable with a
-    half-set pair -- which an entry reset guarantees by construction."""
+    half-set pair -- which an entry reset guarantees by construction.
+
+    STRENGTHENED: this checked only the FIRST `acc_leg_attempt` call, so a
+    second, unguarded call site would have passed. Every call site must be
+    guarded by BOTH markers, whatever its local names.
+    """
     body = _body()
-    i_slot = body.index("self.acc_leg_attempt(")
-    cond = body[:i_slot]
-    assert "leg_pending = getattr(self, \"_probe_leg_pending\", None)" in cond
-    assert "rnd_pending is not None" in cond
+    sites = [i for i in range(len(body))
+             if body.startswith("self.acc_leg_attempt(", i)]
+    assert len(sites) >= 2, "expected the coid site and the claim site"
+    for i in sites:
+        guard = body[max(0, i - 2500):i]
+        assert "_probe_leg_pending" in guard, body[i - 200:i + 80]
+        assert "_probe_round_pending" in guard, body[i - 200:i + 80]
+        assert " is not None" in guard, body[i - 200:i + 80]
 
 
 # =================================================== settlement accounting

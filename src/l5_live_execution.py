@@ -7315,7 +7315,41 @@ class FaithfulExecutor:
             key = controller_action_key(market, _crd, _clg)
             prov.rec["action_key"] = key
 
-        coid = client_order_id(key)
+        # WHICH PLACEMENT OF THIS LEG THIS IS, and it must be the SAME index
+        # the claim is taken under below.
+        #
+        # 1445z, 2026-10-30. `acc_leg_attempt` already grants a later attempt
+        # over a leg that holds nothing with nothing live, and
+        # `probe_legs_claimed` already reports such a leg unspent so the
+        # chooser re-offers it -- but the coid was built here at attempt ZERO
+        # regardless. A permitted re-placement therefore landed on the FIRST
+        # placement's id and was suppressed as a duplicate two lines below,
+        # before the claim was ever reached. That made `L5_ACC_MAX_ATTEMPTS`
+        # unreachable in practice and left a cancelled-unfilled complement
+        # unattended for the rest of the window: 1.91 DOWN sat with nothing
+        # resting for 12 minutes and settled for -$0.7067.
+        #
+        # IDEMPOTENCE IS UNCHANGED, because the id is still DERIVED: the same
+        # (leg, attempt) always yields the same coid, so a replay of THIS
+        # placement is still suppressed. Only a placement the attempt axis
+        # has actually granted gets a new id. Attempt zero keeps its old id
+        # byte-for-byte, exactly as `accumulation_sid` does, so first
+        # placements and every claim already on the volume are unaffected.
+        #
+        # THE SAFETY RULE STILL LIVES IN ONE PLACE. This reads
+        # `acc_leg_attempt` rather than counting anything itself, so a FILLED
+        # leg still can never be re-placed, an unverified cancellation still
+        # cannot buy a retry, and the budget still bounds the total.
+        _att = 0
+        _lp = getattr(self, "_probe_leg_pending", None)
+        _rp = getattr(self, "_probe_round_pending", None)
+        if TS.active(market) and _lp and _rp is not None:
+            _granted = self.acc_leg_attempt(market, _rp, _lp)
+            if _granted is not None:
+                _att = int(_granted)
+        if _att:
+            prov.rec["placement_attempt"] = _att
+        coid = client_order_id(key, _att)
         if self.store.already_submitted(coid):
             prov.stage("ORDER", {"client_order_id": coid,
                                  "submitted": False,
