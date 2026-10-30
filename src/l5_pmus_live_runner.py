@@ -620,6 +620,12 @@ def _resting_rows(store: Any, market: str) -> tuple:
 VENUE_EXIT_PROBE_MAX = 40
 VENUE_EXIT_PROBE_EVERY_S = 300.0
 
+#: BOUNDS ON THE CAMPAIGN-CLOSE ATTEMPT. A claim that legitimately cannot
+#: close must be REPORTED, not retried for ever: each attempt reads the store
+#: and writes nothing unless `close()` accepts the evidence.
+CAMPAIGN_CLOSE_MAX_TRIES = 12
+CAMPAIGN_CLOSE_EVERY_S = 60.0
+
 
 def _evidence_depth_ticks() -> Optional[int]:
     """How far behind the touch the probe rests, from the same env var it
@@ -1748,6 +1754,145 @@ class Runner:
                 raise
             self.stats["preflight_attempt_emit_error:%s"
                        % type(exc).__name__] += 1
+
+    def maybe_close_finished_campaign(self) -> Optional[Dict[str, Any]]:
+        """Close a FINISHED campaign's budget claim through the ledger's own
+        `close()`, on evidence, and record it.
+
+        WHY THIS EXISTS. `l5_campaign_budget.close()` is the sanctioned end
+        of a campaign's budget claim and NOTHING CALLED IT. A claim therefore
+        stayed open for ever and the next campaign was refused
+        CAMPAIGN_BUDGET_LOCKED -- observed on 2026-10-23 and again on
+        2026-10-30, when camp11 still owned the ledger after its windows were
+        spent and settled. `release_stale` covers the next campaign TAKING
+        OVER at arming time; this covers a campaign RELINQUISHING its own
+        claim, which is what `close` is for and what was missing.
+
+        IT CANNOT BE USED TO RESET ANYTHING.
+          * It calls `close()`. It never writes the ledger file, never
+            deletes it, and never rotates a campaign id.
+          * `close()` refuses unless the id it is given is the OPEN one, so
+            this cannot close somebody else's claim.
+          * Evidence is supplied from the store, not asserted: nothing
+            outstanding and nothing unsettled, exactly what `close` demands.
+            An unreadable store yields a SENTINEL outstanding entry so the
+            close fails CLOSED rather than freeing a claim we cannot vouch
+            for.
+          * NO LOSS IS ERASED. The ledger holds only
+            {campaign_id, closed, opened_utc, peak_usd}. Realized losses live
+            in the executor's store and re-enter the gate through
+            `worst_case_usd(realized_usd=...)` on EVERY evaluation, so after
+            a close the headroom is still
+            budget - (realized + unsettled + outstanding).
+
+        WHEN IT CLOSES, and both are end-of-life conditions:
+          * the open claim is NOT the in-force campaign -- it is finished and
+            its approval is gone; or
+          * the open claim IS the in-force campaign AND its windows are all
+            spent, so no further window can open under it.
+        A campaign with windows REMAINING is never closed by this.
+
+        BOUNDED. Attempts are capped and spaced, and it stops for good once
+        the ledger reports closed, so a claim that legitimately cannot close
+        is reported rather than retried for ever.
+        """
+        if getattr(self, "_campaign_closed_done", False):
+            return None
+        n = int(getattr(self, "_campaign_close_tries", 0))
+        if n >= CAMPAIGN_CLOSE_MAX_TRIES:
+            return None
+        last = getattr(self, "_campaign_close_t", None)
+        now_t = time.time()
+        if last is not None and (now_t - last) < CAMPAIGN_CLOSE_EVERY_S:
+            return None
+        try:
+            led = AUTH.campaign_budget_ledger(self.root)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            led = None
+        if led is None:
+            self._campaign_closed_done = True      # no ledger configured
+            return None
+        self._campaign_close_t = now_t
+        self._campaign_close_tries = n + 1
+        try:
+            doc = led.read()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out = {"ok": False, "reason": "CAMPAIGN_BUDGET_UNREADABLE:%s"
+                                          % type(exc).__name__}
+            emit("L5_CAMPAIGN_BUDGET_CLOSE", dict(out, attempt=n + 1))
+            return out
+        open_id = str(doc.get("campaign_id") or "").strip()
+        if not open_id or bool(doc.get("closed")):
+            self._campaign_closed_done = True
+            return {"ok": True, "already_closed": True}
+
+        # IS THE OPEN CLAIM FINISHED? Only two readings qualify.
+        try:
+            camp = self.campaign_telemetry()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            camp = {}
+        cur = str(_campaign_nonce_sid() or "").strip()
+        remaining = camp.get("windows_remaining")
+        if open_id == cur:
+            # the live campaign may relinquish its claim only once no window
+            # can still open under it
+            if remaining is None or int(remaining) > 0:
+                return {"ok": False, "reason": "CAMPAIGN_STILL_HAS_WINDOWS",
+                        "campaign_id": open_id,
+                        "windows_remaining": remaining}
+            finished_because = "WINDOWS_SPENT"
+        else:
+            finished_because = "NOT_THE_IN_FORCE_CAMPAIGN"
+
+        # EVIDENCE FROM THE STORE, never asserted. Same shape the release
+        # path uses, so the two cannot disagree about what "settled" means.
+        try:
+            live = self.store.live_orders() or {}
+            outstanding = [
+                dict(o, coid=k) for k, o in live.items()
+                if LX.venue_decimal(o.get("remaining")) is None
+                or (LX.venue_decimal(o.get("remaining")) or D(0)) > 0]
+            retired = (getattr(self.store, "state", {}) or {}).get(
+                "retired_markets") or {}
+            committed = self.store.committed() or {}
+            legs = [{"market": m, "settled": m in retired}
+                    for m in committed]
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            outstanding = [{"UNREADABLE": type(exc).__name__}]
+            legs = [{"market": "UNREADABLE", "settled": False}]
+
+        unsettled = [l["market"] for l in legs if not l.get("settled")]
+        evidence = {
+            "finished_because": finished_because,
+            "outstanding_orders": len(outstanding),
+            "committed_markets": len(legs),
+            "unsettled_markets": unsettled,
+            "windows_remaining": remaining,
+        }
+        res = led.close(open_id, legs=legs, outstanding=outstanding,
+                        now_iso=now_utc().isoformat())
+        rec = {"campaign_id": open_id, "attempt": n + 1,
+               "evidence": evidence, "result": dict(res),
+               "labels": ("closed through the ledger's own close(); nothing "
+                          "was written, deleted or rotated here, and no "
+                          "realized loss is erased -- the ledger holds only "
+                          "ownership and a high-water mark, and realized "
+                          "figures re-enter every gate evaluation from the "
+                          "executor's store.")}
+        if res.get("ok"):
+            self._campaign_closed_done = True
+        else:
+            rec["blocker"] = str(res.get("reason"))
+        emit("L5_CAMPAIGN_BUDGET_CLOSE", rec)
+        return rec
 
     def maybe_venue_exit_probe(self, t: Any) -> None:
         """ONCE per process, record what exits the venue actually offers.
@@ -6265,6 +6410,7 @@ class Runner:
                 self.stats["tick_stage_emit_error"] += 1
         self.maybe_preflight(now)
         self.maybe_venue_exit_probe(self.transport)
+        self.maybe_close_finished_campaign()
         if self.store.live_order_count():
             self.poll_orders()
         # ORDER MATTERS, and it is the opposite of what it looks like.
@@ -6368,6 +6514,7 @@ class Runner:
             return
         self.maybe_preflight(now)
         self.maybe_venue_exit_probe(self.transport)
+        self.maybe_close_finished_campaign()
         # RECONCILIATION, unchanged. A fill while it rests must be booked.
         if self.store.live_order_count():
             self.poll_orders()

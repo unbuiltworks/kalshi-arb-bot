@@ -2885,3 +2885,43 @@ venue exit probe persists until conclusive, disarmed 2026-10-30T17:30Z
 # refused as TWO_ORDER_PAIR_DISABLED until the owner authorizes it. No limit,
 # cap or threshold is changed by this deploy.
 stage A candidate, disarmed 2026-10-30T19:10Z
+
+# ============================================================================
+# 2026-10-30, CAMPAIGN-CLOSE LIFECYCLE, DEPLOYED DISARMED.
+#
+# WHY. `l5_campaign_budget.close()` is the sanctioned end of a campaign's
+# budget claim and NOTHING CALLED IT. The claim stayed open for ever and the
+# next campaign was refused CAMPAIGN_BUDGET_LOCKED -- seen 2026-10-23, and
+# again today when camp11-a1179c160cbf8a44 still owned the ledger after its
+# windows were spent and settled. `release_stale` already covered the NEXT
+# campaign taking over at arming; what was missing is a campaign
+# RELINQUISHING its own claim, which is what `close` is for.
+#
+# `Runner.maybe_close_finished_campaign` closes through `close()` and nothing
+# else: it never writes, deletes or rotates the ledger. Evidence is READ from
+# the store -- no outstanding orders, no unsettled legs -- and an unreadable
+# store yields a sentinel so the close fails CLOSED. It closes only a claim
+# that is finished: either not the in-force campaign, or the in-force one
+# with its windows all spent. A campaign with windows remaining is never
+# closed, and an unknown window count reads as still live.
+#
+# NO LOSS IS ERASED. The ledger holds {campaign_id, closed, opened_utc,
+# peak_usd}. Realized losses live in the executor's store and re-enter the
+# gate on EVERY evaluation, so headroom after a close is still
+# budget - (realized + unsettled + outstanding). Tests pin that a spent
+# budget still refuses after a close and that no realized figure is written.
+#
+# THE PRE-ARM BUDGET CHECK ALREADY EXISTED and is now pinned:
+# `refuse_arming` raises CAMPAIGN_BUDGET_REFUSED before the claim is taken,
+# which is the earliest point the lock is enforced.
+#
+# BOUNDED: at most 12 attempts, 60s apart, stopping for good once closed, so
+# a claim that legitimately cannot close is REPORTED rather than retried.
+#
+# PARITY: baseline 54 failed / 14452 passed, this tree 54 failed / 14612
+# passed, failure sets BYTE-IDENTICAL. 160 net new tests.
+#
+# STILL DISARMED: PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared. No limit, cap or
+# threshold changes. L5_TS_TWO_ORDER_PAIR stays 1 and the deficit stays 1.50
+# from the Option A configuration, neither of which can act while disarmed.
+campaign close lifecycle, disarmed 2026-10-30T20:55Z

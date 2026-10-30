@@ -36,8 +36,12 @@ STRATEGY = ("poll", "handle")
 #: so it cannot read an unreadable account. It is listed here because the tick
 #: is where preflight status is known -- and because this file's whole purpose
 #: is that a step added to the tick must be declared rather than appear.
+#: `maybe_close_finished_campaign` relinquishes a FINISHED campaign's budget
+#: claim through the ledger's own `close()`, on evidence read from the store,
+#: and fails closed on anything it cannot vouch for. It is listed here for
+#: the same reason as the probe: a step added to the tick must be DECLARED.
 PRESERVED = ("roll", "maybe_expire_authorization", "maybe_preflight",
-             "maybe_venue_exit_probe",
+             "maybe_venue_exit_probe", "maybe_close_finished_campaign",
              "sweep_settlements", "reconcile_if_needed")
 
 
