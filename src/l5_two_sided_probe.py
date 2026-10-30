@@ -442,8 +442,8 @@ def second_leg_slot_refusal(*, market: Any, side: str,
         to use this slot;
       * it belongs to the SAME round. `live_orders` rows carry no round --
         `record_submit` stores t, market, side, price, qty, session_id, mode,
-        remaining and state and nothing else -- so the round is established
-        from `legs_claimed`, which the caller reads per round with
+        provenance, action_key, remaining and state, but no round -- so the
+        round is established from `legs_claimed`, which the caller reads with
         `probe_legs_claimed(market, rnd)`. The resting side must be CLAIMED
         in this round, which is what makes it this plan's first leg rather
         than an older order;
