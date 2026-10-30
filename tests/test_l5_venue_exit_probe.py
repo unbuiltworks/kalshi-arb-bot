@@ -14,10 +14,15 @@ from src import l5_pmus_live_runner as R
 
 
 class _Bare(R.Runner):
-    """A Runner without its constructor: the probe must not need one."""
+    """A Runner without its constructor: the probe must not need one.
+
+    `preflight_status` is set because the probe refuses to read a venue whose
+    preflight has not passed -- before that, a read_error would be recorded
+    as though the venue had answered.
+    """
 
     def __init__(self):
-        pass
+        self.preflight_status = "PASSED"
 
 
 class _T:
@@ -129,9 +134,28 @@ def test_the_recorded_vocabulary_matches_the_source(monkeypatch):
         "ORDER_ACTION_BUY"]
 
 
-def test_the_probe_is_called_from_the_preflight_pass_path():
+def test_it_refuses_to_read_a_venue_whose_preflight_has_not_passed(
+        monkeypatch):
+    """A read_error from an unreadable account is not the venue answering."""
+    r = _Bare()
+    r.preflight_status = "FAILED"
+    assert _records(monkeypatch, _T(), r) == []
+    r.preflight_status = "PASSED"
+    assert len(_records(monkeypatch, _T(), r)) == 1
+
+
+def test_a_missing_transport_is_not_a_venue_answer(monkeypatch):
+    assert _records(monkeypatch, None) == []
+
+
+def test_it_is_driven_from_the_tick_path_not_from_inside_preflight():
+    """`maybe_preflight` keeps its single job -- preflight and its logging --
+    and its test double borrows exactly that one method. Hanging the probe
+    inside it broke that isolation, so the probe is called beside it."""
     import inspect
-    s = inspect.getsource(R.Runner.maybe_preflight)
-    assert "self.maybe_venue_exit_probe(t)" in s
-    i_pass = s.index('emit("L5_LIVE_PREFLIGHT", rep)')
-    assert s.index("self.maybe_venue_exit_probe(t)") > i_pass
+    assert "self.maybe_venue_exit_probe" not in inspect.getsource(
+        R.Runner.maybe_preflight)
+    src = inspect.getsource(R.Runner)
+    assert src.count(
+        "self.maybe_preflight(now)\n        "
+        "self.maybe_venue_exit_probe(self.transport)") == 2

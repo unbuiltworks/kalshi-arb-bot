@@ -2797,3 +2797,27 @@ validation campaign code, still disarmed 2026-10-30T13:25Z
 # stays disabled, exposure stays $20, per-market deficit $3, daily halt $5,
 # one resting order. NO NEW LIVE AUTHORIZATION IS IMPLIED OR REQUESTED HERE.
 completion repair, disarmed 2026-10-30T15:50Z
+
+# ----------------------------------------------------------------------------
+# 2026-10-30, second disarmed deploy. Adds the READ-ONLY venue exit probe
+# (L5_VENUE_EXIT_CAPABILITY) and two runtime-config rows:
+# book_completion_redemption_pair and book_completion_depth_ticks.
+#
+# The probe answers item 4 from the venue instead of from our own vocabulary:
+# two GETs on /v1/portfolio/positions, once per process, after preflight
+# passes, recording FIELD NAMES only and surfacing anything matching
+# sell/close/reduce/exit/redeem/liquidate/available. No order, no mutation.
+#
+# PARITY RE-RUN, and it caught two real regressions before this shipped.
+# Hanging the probe inside maybe_preflight broke 8 tests whose double borrows
+# exactly that one method; putting it in the tick broke 11 more that pin the
+# tick's call graph. Both were design signals: the probe now self-guards on
+# preflight status and transport, is called beside maybe_preflight, and is
+# DECLARED in that file's PRESERVED tuple so a step added to the tick cannot
+# merely appear. Final: baseline 54 failed / 14452 passed, patched 54 failed /
+# 14540 passed, failure sets BYTE-IDENTICAL.
+#
+# STILL DISARMED. PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared, approval expired.
+# No limit, cap, threshold or flag is changed. L5_TS_TWO_ORDER_PAIR stays
+# false, so two-sided resting is NOT enabled.
+venue exit probe, disarmed 2026-10-30T17:10Z

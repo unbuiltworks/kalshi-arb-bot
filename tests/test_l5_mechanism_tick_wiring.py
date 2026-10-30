@@ -30,8 +30,14 @@ CANCELLERS = ("maybe_cancel_orphans", "maybe_ts_deadline",
 #: L5_LIVE_DECISION records (UP 0.06 @ 0.31, DOWN 0.9 @ 0.6) that only the
 #: pending arming kept off the venue.
 STRATEGY = ("poll", "handle")
-#: reconciliation and safety that must still run
+#: reconciliation and safety that must still run.
+#: `maybe_venue_exit_probe` is READ-ONLY and ONE-SHOT: it records which exits
+#: the venue advertises, once, after preflight passes, and self-guards on both
+#: so it cannot read an unreadable account. It is listed here because the tick
+#: is where preflight status is known -- and because this file's whole purpose
+#: is that a step added to the tick must be declared rather than appear.
 PRESERVED = ("roll", "maybe_expire_authorization", "maybe_preflight",
+             "maybe_venue_exit_probe",
              "sweep_settlements", "reconcile_if_needed")
 
 

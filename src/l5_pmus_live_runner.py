@@ -1766,6 +1766,13 @@ class Runner:
         """
         if getattr(self, "_venue_exit_probed", False):
             return
+        # ONLY AFTER PREFLIGHT PASSES. Before that the account, the market or
+        # the credentials may not be readable at all, and a read_error here
+        # would be recorded as if the venue had answered.
+        if getattr(self, "preflight_status", None) != "PASSED":
+            return
+        if t is None:
+            return
         self._venue_exit_probed = True
         out: Dict[str, Any] = {
             "basis": ("READ-ONLY. Two GETs on /v1/portfolio/positions via "
@@ -1857,7 +1864,6 @@ class Runner:
         # log every PASS, and a FAIL only when what blocks it changes
         if self.preflight_status == "PASSED" or blockers != self.last_blockers:
             emit("L5_LIVE_PREFLIGHT", rep)
-            self.maybe_venue_exit_probe(t)
         self.last_blockers = blockers
         # EVERY ATTEMPT, INCLUDING THE SILENT FAILURES. The line above is the
         # reason eighty seconds of this engine's most expensive interval has
@@ -6211,6 +6217,7 @@ class Runner:
                     raise
                 self.stats["tick_stage_emit_error"] += 1
         self.maybe_preflight(now)
+        self.maybe_venue_exit_probe(self.transport)
         if self.store.live_order_count():
             self.poll_orders()
         # ORDER MATTERS, and it is the opposite of what it looks like.
@@ -6313,6 +6320,7 @@ class Runner:
             self.stats["ticks_skipped_in_cooloff"] += 1
             return
         self.maybe_preflight(now)
+        self.maybe_venue_exit_probe(self.transport)
         # RECONCILIATION, unchanged. A fill while it rests must be booked.
         if self.store.live_order_count():
             self.poll_orders()
