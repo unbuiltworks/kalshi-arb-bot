@@ -640,6 +640,18 @@ def verify() -> Dict[str, Any]:
             ("controller_open_enabled", "env L5_CONTROLLER_OPEN",
              lambda: str(os.getenv("L5_CONTROLLER_OPEN", "")).strip().upper()
              in ("1", "YES", "TRUE", "ON")),
+            # THE FLAG THAT GATES THE MAKER-COMPLETION ROUTE, read through
+            # the module's own accessor rather than from the variable text.
+            # It was absent here, so the only way to tell whether the route
+            # was live was to watch for `book_completion:*` counters to
+            # appear -- an inference, on the switch that decides whether
+            # held inventory can be completed at all.
+            ("book_completion_enabled", "BC.enabled()",
+             lambda: __import__("src.l5_book_completion", fromlist=["x"]
+                                ).enabled()),
+            ("book_completion_breakeven_pair", "BC.BREAKEVEN_PAIR",
+             lambda: str(__import__("src.l5_book_completion", fromlist=["x"]
+                                    ).BREAKEVEN_PAIR)),
             ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
             ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
              TS.entry_cutoff_s),

@@ -4,8 +4,26 @@ Commit `5fa66775` + successor. **Deployed disarmed. No live rearming.**
 
 ## Exact configuration required
 
-The route is **inert** unless `L5_BOOK_COMPLETION` is set. Nothing else
-changes.
+The route is inert unless `L5_BOOK_COMPLETION` is set — **and on the
+deployed service it is already set.** Confirmed from the live heartbeat at
+13:15:53Z on deployment `ac6e6da5`: `book_completion:DECIDE_COOLDOWN`,
+`book_completion:NO_ACTION_YET` and `book_completion:NO_INVENTORY` are all
+incrementing, and those counters are only reached after `BC.enabled()`
+passes.
+
+So the corrected route is **live and deciding right now**, disarmed, which
+is the intended pre-live state: it evaluates and records, and the transport
+refuses every submission. An earlier draft of this file said the route was
+inert; that was wrong about the deployed configuration, though right about
+the code.
+
+**Observability gap found and closed.** `L5_EFFECTIVE_RUNTIME_CONFIG` did
+not report `BC.enabled()`, so the switch deciding whether held inventory can
+be completed at all could only be INFERRED from whether counters appeared.
+`book_completion_enabled` and `book_completion_breakeven_pair` are now
+observed rows. They take effect on the next deploy, so they should ride the
+deploy that accompanies the authorized validation rather than justify one of
+their own.
 
 | variable | value | why |
 |---|---|---|
