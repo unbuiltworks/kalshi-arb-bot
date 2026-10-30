@@ -90,3 +90,79 @@ would rather state the looser number and be wrong in the safe direction.
 None of these is applied. The proposed table keeps the owner's stated
 numbers, and this document exists so the number attached to them is the
 right one.
+
+---
+
+## Option A, adopted: $1.50 deficit, four windows, $6.00
+
+The owner asked for $2.00 on the understanding it gave $6. It does not: a
+SMALLER deficit lets MORE windows open before the settled-loss halt latches,
+which partly cancels the smaller per-window loss.
+
+Window *j* opens seeing only windows 1..j-2 booked, from the measured ~30s
+lead (orders at +11.6s / +14.9s / +15.2s against confirmations at +46.8s):
+
+| deficit | windows that open | max loss |
+|---|---|---|
+| $3.00 | 3 of 4 | $9.00 |
+| $2.00 | 4 of 4 | $8.00 |
+| **$1.50** | **4 of 4** | **$6.00** |
+| $1.00 | 4 of 4 | $4.00 |
+
+$2.00 also does not BIND at the campaign's own book: measured, the worst
+single leg was $1.7400, so a $2.00 cap buys nothing over $3.00 there while
+still permitting a fourth window.
+
+### What binds the $6, and it is not the halt
+
+At $1.50 the chain is: w1 opens at 0, w2 at 0, w3 at -1.50, w4 at -3.00 --
+all four clear the -5 halt. The fourth window settles to -6.00 and the halt
+latches only afterwards.
+
+**So the binding constraint is `max_windows = 4`, not the daily halt.** The
+halt is a backstop here, not the limit. A fifth window would open at -4.50,
+still clearing -5, and take the total to -$7.50. The $6 figure therefore
+depends on the approval's window count being enforced -- which it is, durably
+and demonstrated: the previous campaign stopped itself at 3 of 3 with
+`permits_this_window false` and then read `approval_expired`.
+
+### Sizing cost, measured
+
+| deficit | pair size | worst single leg | pair cost |
+|---|---|---|---|
+| $3.00 / $2.00 | 3.00 | $1.7400 | 0.95 |
+| **$1.50** | **2.12** | **$1.2296** | 0.95 |
+
+A 29% smaller clip. Queue position is set by PRICE, not size, so fill
+realism is essentially unaffected and the pair cost is unchanged at 0.95.
+
+### The four stress cases
+
+* **delayed settlement** -- this IS the mechanism, and it is priced in above.
+* **overlapping windows** -- demonstrated three times in the real campaign:
+  consecutive windows opened while the prior was unsettled.
+* **simultaneous fills** -- a matched pair at cost <= $1.00 redeems $1.00 and
+  cannot lose. All loss is unmatched inventory, bounded by the deficit cap,
+  and `probe_precheck` prices BOTH legs as if both filled before either
+  rests.
+* **restart recovery** -- claims are on the volume, `acc_leg_attempt` refuses
+  re-placement while a leg holds inventory or an order is live, and the day
+  figure is re-read from the durable store. A restart adds no window and
+  cannot re-place a resting leg.
+
+### The October 12/14 drift cannot reach any of this
+
+`retired_markets` is written only by `retire_settled_market`, on a
+venue-terminal state WITH a final settlement price, which books the P&L and
+pops `committed`; `markets_with_exposure` then subtracts retired markets --
+"never swept, never re-settled".
+
+* **new orders** -- both markets are expired and the engine trades only the
+  live window slug. Because they are retired they also do NOT consume the
+  `max_concurrent_markets = 1` slot, so they cannot block new trading either.
+* **capital accounting** -- observed WITH the drift present:
+  `markets_counted []`, `account_total_worst_case_usd "0"`,
+  `capacity_usd "20"`.
+* **watchdog ownership** -- the watchdog sweeps OPEN ORDERS (`open_orders 0`),
+  not positions, and ownership is keyed on `venue_order_id`, which position
+  residue does not have.
