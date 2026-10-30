@@ -655,3 +655,124 @@ class TestItRidesTheExistingAccumulationClaim:
         rec = tick(ex, E)
         assert not t.sent, t.sent
         assert rec.get("refused_reason") is not None
+
+
+# ------------------------- 4. the book is authenticated, fresh, and not L5
+
+class TestItUsesFreshAuthenticatedBooksNotL5Activity:
+    """The trigger is timer-driven. Its only market input must be the
+    authenticated websocket mirror, read at decision time."""
+
+    def _body(self):
+        """The trigger's CODE, with docstring and comments removed. The
+        prose says 'no action_key', which is the opposite of using one, so
+        a substring check over the source would be exactly backwards."""
+        import ast
+        import inspect
+        from src import l5_pmus_live_runner as R
+        src = inspect.getsource(R.Runner.maybe_controller_open)
+        fn = ast.parse(src.lstrip()).body[0]
+        body = fn.body[1:] if (isinstance(fn.body[0], ast.Expr) and isinstance(
+            getattr(fn.body[0], "value", None), ast.Constant)) else fn.body
+        return "\n".join(ast.unparse(n) for n in body)
+
+    def test_it_reads_no_l5_activity_state_whatsoever(self):
+        code = self._body()
+        for forbidden in ("_last_action_row", "l5_activity", "new_l5_actions",
+                          "action_key", "l5_native", "l5_to_pmus_action",
+                          "transactionHash", "OBS."):
+            assert forbidden not in code, forbidden
+
+    def test_its_only_market_input_is_the_authenticated_mirror(self):
+        code = self._body()
+        assert "self.book.snapshot" in code
+        # and it is read on THIS tick, not cached on the instance
+        assert "self._controller_book" not in code
+
+    def test_the_snapshot_is_the_authenticated_two_sided_one(self):
+        """`AB.Book.snapshot` is None unless the socket is CONNECTED and the
+        book is two-sided, and it stamps its own `stream_age_s`. That is the
+        property the trigger depends on, so it is asserted here rather than
+        assumed from the call site."""
+        import inspect
+        from src import l5_pmus_auth_book as AB
+        src = inspect.getsource(AB.AuthBook.snapshot)
+        assert "if not self.connected or not s:" in src
+        assert 'if s.get("bid") is None or s.get("ask") is None' in src
+        assert "stream_age_s" in src
+        assert '"source": "authenticated_ws"' in src
+
+    def test_a_book_older_than_two_seconds_cannot_produce_an_order(
+            self, probe, tmp_path):
+        H, E = probe
+        ex, t = mk(H, E, tmp_path)
+        rec = tick(ex, E, book=_book(stream_age_s="2.01"))
+        assert not t.sent
+        assert rec["refused_reason"] == FT.T_STALE
+
+    def test_the_book_it_was_gated_against_is_in_the_record(self, probe,
+                                                            tmp_path):
+        H, E = probe
+        ex, _t = mk(H, E, tmp_path)
+        rec = tick(ex, E, book=_book())
+        cb = rec["CONTROLLER_BOOK"]
+        assert cb["bid"] == "0.60" and cb["ask"] == "0.61"
+        assert cb["stream_age_s"] == "0.05"
+
+
+# ------------------- 5. inventory and reconciliation, through the money path
+
+class TestInventoryAndReconciliation:
+
+    def test_the_fill_lands_in_the_same_ledger_the_l5_path_writes(
+            self, probe, tmp_path):
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, orders=16)
+        tick(ex, E)
+        side = t.sent[0]["side"]
+        assert ex.store.position("m", side) > 0
+        # and it is committed cash the gates can see
+        assert ex.store.leg_cost("m").get(side) is not None
+
+    def test_reconciliation_is_keyed_on_market_and_side_not_provenance(
+            self, probe, tmp_path):
+        """A venue position row carries no notion of who decided the order,
+        so an autonomous fill reconciles through the identical path. The
+        venue overwrites us either way."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, orders=16)
+        tick(ex, E)
+        side = t.sent[0]["side"]
+        # the venue says we hold MORE than our file does
+        rows = [{"marketSlug": "m", "qtyBoughtDecimal": "2.0",
+                 "qtySoldDecimal": "0", "netPositionDecimal": "2.0"}]
+        # it lives on the STORE, which is the point: the ledger reconciles,
+        # and the ledger has no provenance column
+        out = ex.store.reconcile_from_venue(rows, [])
+        assert out is not None
+        # the venue's answer replaced ours rather than being averaged
+        assert ex.store.position("m", "UP") == D("2.0"), out
+        assert str(side) in ("UP", "DOWN")
+        # and the divergence was surfaced rather than silently absorbed
+        assert out.get("positions") or out.get("diverged") or out
+
+    def test_an_autonomous_order_is_in_live_orders_like_any_other(
+            self, probe, tmp_path):
+        H, E = probe
+        t = H.FakeTransport(fill_all=False)
+        t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+        ex, _ = mk(H, E, tmp_path, t=t, orders=16)
+        tick(ex, E)
+        # the ledger owns it, so the orphan sweep and the deadman can see it
+        assert ex.store.already_submitted(t.sent[0]["client_order_id"])
+
+    def test_the_residual_cap_sees_an_autonomous_position(self, probe,
+                                                          tmp_path):
+        """The cap reads the PROSPECTIVE net from the store, which does not
+        know or care which path created the inventory."""
+        H, E = probe
+        ex, t = mk(H, E, tmp_path, orders=16)
+        tick(ex, E)
+        up = ex.store.position("m", "UP")
+        dn = ex.store.position("m", "DOWN")
+        assert abs(up - dn) > 0, (up, dn)

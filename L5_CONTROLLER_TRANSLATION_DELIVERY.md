@@ -13,13 +13,16 @@ make a decision. `L5_DEFENSIVE_COMPLETION` and `L5_BOOK_COMPLETION` exist
 as before; no variable was added, changed or removed, and nothing was
 deployed.
 
-Not re-read this turn: the token returns variable **names only**, values
-redacted, so `PMUS_Q1_LIVE`, the arm token and the approval could not be
-read back. Those were last established as disarmed with preflight
-`ok: false` on three counts (`owner_arm_token` FAIL,
-`absolute_deadline` EXPIRED, `campaign_approval` stale) and approval
-`ac855ce3…` expired and unused. I am reporting that as prior state, not as
-a fresh observation. `EXECUTION_MODE = MAKER_ONLY`, defensive crossing off
+**CORRECTED 2026-10-30 from the service's own logs.** The claim above that
+preflight was `ok: false` on three counts was stale. The running service
+reports `L5_LIVE_PREFLIGHT: PASSED` with `armed_after_preflight: false`,
+`executor_starts_disarmed` passed and `no_unexpected_open_orders: 0`; the
+only failed check is `owner_arm_token_present`, which is explicitly
+non-blocking ("arming is a separate owner act"). The authorization blocker
+is a single one: `L5_EFFECTIVE_RUNTIME_CONFIG` fails eight rows, every one
+reading `required: NO_APPROVAL_IN_FORCE` — there is no campaign approval in
+force. The deployed figures are already the authorized ones. See
+`L5_CAMPAIGN10_LIVE_VALIDATION_PROPOSAL.md`. `EXECUTION_MODE = MAKER_ONLY`, defensive crossing off
 and the 1.00 pair ceiling are properties of the code in this commit and are
 asserted by its tests.
 
