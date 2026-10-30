@@ -2743,3 +2743,57 @@ maker-completion coupling fix, disarmed 2026-10-30T13:10Z
 # approval, expiry and Q1 handshake are set afterwards, and only once the
 # effective runtime configuration has been verified against the scope above.
 validation campaign code, still disarmed 2026-10-30T13:25Z
+
+# ============================================================================
+# 2026-10-30, AFTER the three-window campaign settled at -$0.542500.
+#
+# COMPLETION REPAIR, DEPLOYED DISARMED. Carries 0ee8d319, dd8f2f75, 02681983,
+# 9d70cc23, 38030888:
+#
+#   * the completion gate no longer refuses a NON-NEGATIVE pair. Step 7 of
+#     l5_book_completion refused whenever the pair exceeded BREAKEVEN_PAIR,
+#     using the 0.9532 settled TARGET as a ceiling. On 1445z -- 1.91 DOWN at a
+#     0.37 basis, book one tick wide at 0.6200/0.6300 -- every maker price
+#     yields a pair >= 0.97, so it refused on every 5s tick for the final 12
+#     minutes while complement_order had already cleared the leg at 0.6200.
+#     The leg stranded for -$0.706700 settled. The hard line is now $1.00, the
+#     same eff > D(1) the submission boundary already enforced. 0.9532 survives
+#     as a RECORDED PREFERENCE, never a refusal.
+#
+#   * COMPLETION DEPTH is separated from the opening probe's depth.
+#     L5_TS_DEPTH_TICKS=2 priced completions as well as openings, which put
+#     19 of this campaign's 21 live orders two ticks BEHIND the touch --
+#     1445z's complement at own 0.6000 into a 0.6200 bid, behind the whole
+#     visible queue. L5_COMPLETION_DEPTH_TICKS defaults to 0. An unfilled
+#     OPENING costs nothing; an unfilled COMPLETION cost -$0.37/unit here
+#     against a 2-tick concession of -$0.02/unit, 18x in favour of queue
+#     position. Resting at the touch is a FILLABLE price and nothing more.
+#
+#   * the GRANTED ATTEMPT now reaches the client order id. acc_leg_attempt
+#     already permitted re-placing a cancelled-unfilled leg and
+#     probe_legs_claimed already re-offered it, but the coid was built at
+#     attempt ZERO, so the permitted re-placement landed on the first
+#     placement's id and was suppressed as a duplicate BEFORE the claim.
+#     L5_ACC_MAX_ATTEMPTS was unreachable in practice, which is why nothing
+#     rested for 1445z's last 12 minutes. Attempt zero keeps its id
+#     byte-for-byte; a FILLED leg still can never be re-placed; an unverified
+#     cancel still buys no retry; max_live_orders still bounds concurrency.
+#
+#   * route attribution follows INVENTORY ORIGIN, not the ingest feed. The
+#     controller re-entry counter never incremented once across the campaign
+#     while 12 of 15 orders were controller-keyed.
+#
+# PARITY GATE PASSED. Against the pre-change tree at 7af97bbf, run in a
+# separate worktree: baseline 54 failed / 14452 passed / 23 errors, patched
+# 54 failed / 14521 passed / 23 errors, and the two failure sets are
+# BYTE-IDENTICAL (cmp -s). All 77 are pre-existing and in unrelated modules;
+# none is in the L5 completion path. 69 net new tests pass.
+#
+# THIS DEPLOY IS DISARMED, AND DELIBERATELY SO. PMUS_Q1_LIVE=NO and
+# PMUS_Q1_ARM is cleared, so pmus_auth.armed() -- which requires LIVE=YES, a
+# non-empty session id AND an exactly matching token -- is false on all three
+# counts. The campaign approval is spent (3 of 3 windows). No limit, cap or
+# threshold is changed by this deploy: opening pair cap stays 0.96, crossing
+# stays disabled, exposure stays $20, per-market deficit $3, daily halt $5,
+# one resting order. NO NEW LIVE AUTHORIZATION IS IMPLIED OR REQUESTED HERE.
+completion repair, disarmed 2026-10-30T15:50Z
