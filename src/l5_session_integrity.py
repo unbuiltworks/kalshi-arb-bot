@@ -29,9 +29,25 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-#: sha256 prefixes at the freeze commit 030d8bf
+#: sha256 prefixes at the freeze commit 030d8bf, except where a re-pin is
+#: recorded below.
+#:
+#: RE-PIN 2026-10-30, l5_faithful_translation.py: e2f786e00c800dbf -> dda950a57331cba8.
+#: REASON: the body of `pmus_translate` was extracted verbatim into
+#: `_translate_core` so a row-free `controller_translate` could reuse THE
+#: SAME staleness bound, book check and maker-class check rather than carry
+#: a second copy. Gates, order and returned fields are untouched; only where
+#: the row is unpacked moved. `tests/test_l5_controller_translate_parity.py`
+#: loads the pre-refactor module from git and asserts field-for-field
+#: equality on 21 inputs, then asserts the row-free path agrees on all 21.
+#: Authorised by the owner on 2026-10-30 as a deliberate, reviewed change.
+#:
+#: THIS ONE IS A RUNTIME HALT, not a test: `check()` stops a live session
+#: with FROZEN_RULE_CHANGED when a hash here does not match the file on
+#: disk. Leaving it stale would have halted the deployed service on its
+#: first integrity check rather than merely failing a test.
 FROZEN: Dict[str, str] = {
-    "src/l5_faithful_translation.py": "e2f786e00c800dbf",
+    "src/l5_faithful_translation.py": "dda950a57331cba8",
     "src/l5_fidelity_report.py": "c10f7884bb328dc7",
     "src/l5_execution_translations.py": "b043893ba983ec56",
 }

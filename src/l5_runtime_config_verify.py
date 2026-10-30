@@ -628,6 +628,18 @@ def verify() -> Dict[str, Any]:
             # what makes a variable edit that did not take effect visible.
             ("ts_max_first_leg_own_price", "TS.max_first_leg_own_price()",
              TS.max_first_leg_own_price),
+            # WHETHER THE ENGINE OPENS INVENTORY ON ITS OWN. Until this
+            # existed, every opening rode an observed L5 action, so "is the
+            # engine capable of opening a position without L5" needed no
+            # reporting -- the answer was no. It now depends on a variable,
+            # and a variable that changes what the engine may do and is
+            # invisible at boot is exactly the gap that let the submission
+            # budgets drift to 40/40/64. OBSERVED, not graded: it is an
+            # activation switch, and grading it would fail the service at
+            # the moment activation succeeds.
+            ("controller_open_enabled", "env L5_CONTROLLER_OPEN",
+             lambda: str(os.getenv("L5_CONTROLLER_OPEN", "")).strip().upper()
+             in ("1", "YES", "TRUE", "ON")),
             ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
             ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
              TS.entry_cutoff_s),

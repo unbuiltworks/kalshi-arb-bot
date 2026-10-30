@@ -86,6 +86,12 @@ GATE_ORDER: Tuple[str, ...] = (
 EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "HALT_GATE:HALT",                 # durable latch, read FIRST in handle
     "L5_NATIVE:UNREADABLE_ROW",
+    # the autonomous path's own fail-closed gate: entered with a controller
+    # intent, `handle` refuses unless the two-sided branch actually chose a
+    # (round, leg), because that is what the order's claim and its
+    # client_order_id are keyed on. Without it there is nothing legitimate
+    # to submit.
+    "CONTROLLER_INTENT:CONTROLLER_NO_PROBE_LEG",
     "PMUS_TRANSLATION:STALE_ACTION",
     "SAFETY_OVERLAY:TICK_SIZE_UNKNOWN",
     "PMUS_TRANSLATION:PRICE_BELOW_MIN_TICK",

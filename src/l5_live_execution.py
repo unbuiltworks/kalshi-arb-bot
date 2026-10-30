@@ -57,6 +57,7 @@ from src import l5_faithful_translation as FT
 from src import l5_queue_measurement as QM
 from src import l5_defensive_completion as DEF
 from src import l5_two_sided_probe as TS
+from src import l5_execution_translations as X
 
 #: the pipeline, in order. A record names the furthest stage it reached.
 STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
@@ -409,6 +410,63 @@ def client_order_id(action_key: str, attempt: int = 0) -> str:
     return "l5f-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
+#: The prefix that marks a key as OURS. An L5 `action_key` is
+#: "txhash|asset|side|price|size|timestamp" -- six fields opening with a
+#: transaction hash -- so nothing L5 produces can begin with this word and
+#: the two namespaces cannot collide. That matters because the key becomes
+#: the `client_order_id`, which is the idempotency guarantee: a controller
+#: order must never be able to claim an L5 action's id, or suppress one.
+CONTROLLER_KEY_PREFIX = "CONTROLLER"
+
+
+def controller_action_key(market: str, rnd: int, leg: str) -> str:
+    """The idempotency key for ONE autonomous leg. Deterministic.
+
+    Keyed on (market, round, leg) and NOT on the clock, so the timer firing
+    ten times while one order rests produces the same key, hence the same
+    `client_order_id`, hence DUPLICATE_SUPPRESSED on every tick after the
+    first. That is what stops a repeating trigger from stacking orders --
+    and it is also what stops the timer path and the L5 path from both
+    placing an order for the same opportunity, because an L5 action's key
+    cannot take this form.
+
+    The round and the leg are IN the key because a pair needs two orders
+    and a window may work several rounds: a key fixed per market would
+    suppress the complement as a duplicate of the opening leg.
+    """
+    return "%s|OPEN|%s|r%d|%s" % (CONTROLLER_KEY_PREFIX, str(market),
+                                  int(rnd), str(leg).upper())
+
+
+def controller_provisional_price(side: str, book: Mapping[str, Any],
+                                 tick: Any) -> Optional[D]:
+    """A restable maker price one tick inside our own touch, or None.
+
+    PROVISIONAL, AND THAT IS NOT A HEDGE. The order that actually reaches
+    the venue is built by `TS.build_orders` from this same authenticated
+    book inside the two-sided branch, which supersedes the incoming
+    decision exactly as it already supersedes L5's. What this price is for
+    is the TRANSLATION GATE: the gate needs a side and a price to decide
+    staleness, book availability and -- on the restable branch -- maker
+    class, and `our_touch - tick` is restable by construction, so the gate
+    judges a maker order rather than a crossing one. Returning None when
+    the book or the tick is unreadable makes the caller refuse instead of
+    inventing a price.
+    """
+    bid, ask = X._d(book.get("bid")), X._d(book.get("ask"))
+    if bid is None or ask is None:
+        return None
+    try:
+        t = D(str(tick))
+    except BaseException:                                      # noqa: BLE001
+        return None
+    if t <= 0:
+        return None
+    touch = ask if str(side).upper() == UP else (D(1) - bid)
+    px = touch - t
+    return px if px > 0 else None
+
+
 #: THE APPROVED ABSOLUTE RESIDUAL CEILING, in contracts.
 #:
 #: WHY THIS EXISTS. The owner approved "residual cap 3". The implemented
@@ -637,13 +695,41 @@ def _ack_epoch(ack: Mapping[str, Any]) -> float:
             continue
     return dt.datetime.now(dt.timezone.utc).timestamp()
 
+#: The two things that can originate a decision, named the same way
+#: `l5_intent_gate` names them so one vocabulary covers the shadow
+#: controller, the boundary and the tape.
+L5_FOLLOWED = "L5_FOLLOWED"
+CONTROLLER_GENERATED = "CONTROLLER_GENERATED"
+
+
 class Provenance:
-    """One record per L5 action, carrying the whole chain."""
+    """One record per decision, carrying the whole chain.
+
+    `provenance` SAYS WHOSE DECISION THIS WAS, and it is recorded rather
+    than inferred. Until autonomous openings existed, every record here
+    came from an observed L5 action and the `L5_NATIVE` slot could be read
+    as "what L5 did". It can no longer: a CONTROLLER_GENERATED record puts
+    OUR OWN decision in that slot, because the slot is the chain's
+    first stage and the downstream readers need its `side`. So the field
+    below is the only thing that distinguishes them, and anything
+    attributing a record to L5 must read it rather than assume.
+    """
 
     def __init__(self, action_key: str, l5: Mapping[str, Any],
-                 market: str, window: str) -> None:
+                 market: str, window: str,
+                 provenance: str = L5_FOLLOWED) -> None:
+        if provenance not in (L5_FOLLOWED, CONTROLLER_GENERATED):
+            raise ValueError("unknown provenance: %r" % (provenance,))
         self.rec: Dict[str, Any] = {
             "action_key": action_key, "market": market, "window": window,
+            "provenance": provenance,
+            "decision_source": (
+                "an observed L5 action, translated for PMUS"
+                if provenance == L5_FOLLOWED else
+                "OUR OWN CONTROLLER, from the authenticated PMUS book. No "
+                "L5 action underlies this record and none was fabricated; "
+                "the L5_NATIVE slot holds the CONTROLLER's decision because "
+                "that slot is the chain's first stage."),
             "L5_NATIVE": dict(l5), "stage_reached": "L5_NATIVE",
             "PMUS_TRANSLATION": None, "SAFETY_OVERLAY": None,
             "ORDER": None, "FILL": None, "INVENTORY": None,
@@ -5610,13 +5696,56 @@ class FaithfulExecutor:
                                    else "ORDER_INTENT_BUY_SHORT")})
         return out
 
-    def handle(self, row: Mapping[str, Any],
+    def handle(self, row: Optional[Mapping[str, Any]],
                authenticated: Mapping[str, Any],
                *, market: str, window: str,
-               open_markets: Sequence[str] = ()) -> Dict[str, Any]:
-        key = str(row.get("action_key"))
-        dec = FT.l5_native(row)
-        prov = Provenance(key, dec or {"unreadable": True}, market, window)
+               open_markets: Sequence[str] = (),
+               controller: Optional[Mapping[str, Any]] = None
+               ) -> Dict[str, Any]:
+        """One decision, from the top of the chain to the wire or a refusal.
+
+        TWO WAYS IN, ONE PATH THROUGH. Called with a `row`, this follows an
+        observed L5 action, exactly as it always has. Called with
+        `controller=` and `row=None`, it follows OUR OWN decision -- and
+        then runs the identical remainder: the same halt gate, the same
+        two-sided branch, the same validation gates, the same maker-only
+        overlay, the same residual cap, the same cash check, the same
+        claim, the same reconciliation. The autonomous path is NOT a second
+        executor; it is this one, entered without a row.
+
+        WHY A ROW COULD NOT SIMPLY BE SYNTHESISED. Four things here read
+        the row: the key, the native decision, the action age and the
+        translation. Handing it a fabricated row would make our own order
+        indistinguishable from L5's in the tape, the ledger and the
+        provenance chain, which is the one confusion this programme has
+        guarded against throughout. So each of the four is sourced from the
+        controller instead, and `provenance` records which happened.
+        """
+        if controller is not None:
+            if row is not None:
+                raise ValueError(
+                    "handle() takes a row OR a controller intent, never "
+                    "both: two decisions cannot share one provenance chain")
+            if str(controller.get("provenance")) != CONTROLLER_GENERATED:
+                raise ValueError(
+                    "a controller intent must declare provenance "
+                    "CONTROLLER_GENERATED; got %r"
+                    % (controller.get("provenance"),))
+            dec = controller.get("decision")
+            dec = dict(dec) if isinstance(dec, Mapping) else None
+            # PROVISIONAL, and refined to the real (round, leg) once the
+            # two-sided branch has chosen them -- see THE CONTROLLER'S KEY
+            # below. It is never the key an order is submitted under.
+            key = "%s|OPEN|%s|UNRESOLVED" % (CONTROLLER_KEY_PREFIX,
+                                             str(market))
+            prov = Provenance(key, dec or {"unreadable": True},
+                              market, window,
+                              provenance=CONTROLLER_GENERATED)
+        else:
+            key = str(row.get("action_key"))
+            dec = FT.l5_native(row)
+            prov = Provenance(key, dec or {"unreadable": True},
+                              market, window)
 
         # THE TWO-SIDED LEG MARKERS ARE PER-CALL SCRATCH, AND THEY LEAKED.
         #
@@ -5686,13 +5815,44 @@ class FaithfulExecutor:
         if dec is None:
             return prov.refuse("L5_NATIVE", "UNREADABLE_ROW")
 
-        age = self._age_s(row)
-        if age is not None and age > STALE_ACTION_MAX_S:
-            return prov.refuse("PMUS_TRANSLATION",
-                               "STALE_ACTION:%0.1fs" % age)
+        if controller is None:
+            age = self._age_s(row)
+            if age is not None and age > STALE_ACTION_MAX_S:
+                return prov.refuse("PMUS_TRANSLATION",
+                                   "STALE_ACTION:%0.1fs" % age)
 
-        want = dec["l5_size"] * self.lam
-        tr = FT.pmus_translate(dec, row, authenticated, want)
+            want = dec["l5_size"] * self.lam
+            tr = FT.pmus_translate(dec, row, authenticated, want)
+        else:
+            # NO ACTION AGE, BECAUSE THERE IS NO ACTION. STALE_ACTION_MAX_S
+            # bounds how old an OBSERVED L5 ACTION may be when we act on it;
+            # a decision we just made has no such age and giving it a
+            # fabricated one would be meaningless. Nothing is weakened by
+            # its absence: the gate that matters for an autonomous order is
+            # the BOOK's age, and `controller_translate` applies
+            # STALE_MAX_S = 2.0s to it -- fifteen times tighter than the
+            # action bound skipped here.
+            age = None
+            want = dec["l5_size"] * self.lam
+            # THE SAME BOOK THE TWO-SIDED BRANCH PRICES FROM, through the
+            # same fail-closed resolver, so the gate and the order cannot
+            # be judging different books. An empty mapping has
+            # `stream_age_s` None and `bid`/`ask` None, which the core
+            # refuses as T_NO_BOOK.
+            cbook = self.ts_authenticated_book(market, authenticated)
+            cbook = cbook if isinstance(cbook, Mapping) else {}
+            tr = FT.controller_translate(
+                dec, bbo=cbook,
+                snapshot_age_s=cbook.get("stream_age_s"),
+                maker_class=controller.get("maker_class"), want=want)
+            prov.note("CONTROLLER_BOOK", {
+                "bid": str(cbook.get("bid")), "ask": str(cbook.get("ask")),
+                "stream_age_s": str(cbook.get("stream_age_s")),
+                "source": str(cbook.get("source")),
+                "labels": ("the authenticated book this decision was gated "
+                           "against, recorded so the refusal or the order "
+                           "can be checked against what we could see"),
+            })
 
         # The venue can only create orders on its own quantity grid. Probe 03
         # asked for 0.4066877541798463 against an increment of 0.01, the
@@ -5758,9 +5918,28 @@ class FaithfulExecutor:
                       "fee": D(0), "rebate": D(0),
                       "treatment": "MAKER_TREATMENT_V1"}
                 desired = want
-                prov.stage("MAKER_TREATMENT", {
-                    "rested_at_l5_price": str(px),
-                    "l5_price_raw": str(raw_px),
+                # WHOSE PRICE THIS IS, AND THE KEY SAYS SO.
+                #
+                # `rested_at_l5_price` is read by
+                # `Runner.observable_despite_refusal` and by the unresolved
+                # accounting, and `l5_shadow_controller` states as an
+                # invariant that a controller record is "never labelled
+                # `rested_at_l5_price`". An autonomous decision has NO L5
+                # price -- there is no L5 action behind it -- so writing
+                # that key for one would be a false attribution in the very
+                # record that exists to prevent false attribution. The L5
+                # path therefore keeps its keys byte-identical, and the
+                # controller path carries its own.
+                _mt = ({"rested_at_l5_price": str(px),
+                        "l5_price_raw": str(raw_px)}
+                       if controller is None else
+                       {"rested_at_own_price": str(px),
+                        "own_price_raw": str(raw_px),
+                        "provenance": CONTROLLER_GENERATED,
+                        "no_l5_price": ("this decision is ours; no L5 "
+                                        "action underlies it, so there is "
+                                        "no L5 price to have rested at")})
+                prov.stage("MAKER_TREATMENT", dict(_mt, **{
                     "tick_size": (None if tick is None else str(tick)),
                     "price_quantization_delta": str(raw_px - px),
                     "rounding": "FLOOR_NEVER_MORE_AGGRESSIVE",
@@ -5769,7 +5948,7 @@ class FaithfulExecutor:
                     "why": ("the frozen rule called this restable and could "
                             "not prove the fill in replay. Live, the venue "
                             "answers that question instead."),
-                })
+                }))
             else:
                 return prov.refuse("PMUS_TRANSLATION", tr["reason"])
 
@@ -6690,6 +6869,31 @@ class FaithfulExecutor:
             })
             if (not exempt_open) and increases and a_abs > cap:
                 return prov.refuse("SAFETY_OVERLAY", "RESIDUAL_ABOVE_CAP")
+
+        # THE CONTROLLER'S KEY, RESOLVED HERE AND NOWHERE EARLIER.
+        #
+        # The key becomes the `client_order_id` immediately below, and for
+        # an autonomous order it must name the (round, leg) actually being
+        # placed -- a key fixed per market would make the complement look
+        # like a duplicate of the opening leg and suppress it. Those two
+        # facts are chosen by the two-sided branch above, which publishes
+        # them on `self`, so this is the first point at which the key CAN
+        # be correct. Every gate between there and here has already run on
+        # the order itself, so moving the key does not move a gate.
+        #
+        # FAIL CLOSED IF THE BRANCH DID NOT RUN. The autonomous path exists
+        # only to place two-sided legs, each under its own
+        # `claim_accumulation_leg`. If no leg is pending, there is nothing
+        # legitimate to submit, and submitting under the UNRESOLVED
+        # placeholder would be an order with no claimable identity.
+        if controller is not None:
+            _clg = getattr(self, "_probe_leg_pending", None)
+            _crd = getattr(self, "_probe_round_pending", None)
+            if not _clg or _crd is None:
+                return prov.refuse("CONTROLLER_INTENT",
+                                   "CONTROLLER_NO_PROBE_LEG")
+            key = controller_action_key(market, _crd, _clg)
+            prov.rec["action_key"] = key
 
         coid = client_order_id(key)
         if self.store.already_submitted(coid):

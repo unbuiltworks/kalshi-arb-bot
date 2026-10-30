@@ -5280,6 +5280,136 @@ class Runner:
         self.handle(row, now)
         return rec
 
+    def controller_open_enabled(self) -> bool:
+        """Inert unless the owner set it. There is no default-on path.
+
+        Separate from `PMUS_Q1_LIVE`, the arm token and the campaign
+        approval, none of which this relaxes: with this set and the service
+        disarmed, the trigger still runs and the transport still refuses
+        the wire. It decides only whether the autonomous OPENING DECISION
+        is made at all.
+        """
+        return str(os.getenv("L5_CONTROLLER_OPEN", "")).strip().upper() \
+            in ("1", "YES", "TRUE", "ON")
+
+    def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
+        """OUR OWN maker opening, on the timer, with no L5 action at all.
+
+        WHY IT EXISTS. Every other way inventory gets opened runs through
+        `handle(row, ...)`, so it needs an admitted L5 action to exist --
+        and Route B, which re-evaluates on the book, still reuses a real
+        one and declines when there is none. From 2026-10-29 L5 stopped
+        acting, and with it the only trigger the engine had. This is the
+        path that does not need him: the decision is ours, the book is the
+        authenticated mirror, and the order is placed by the SAME executor
+        through the SAME gates.
+
+        NOTHING IS FABRICATED. No row, no `action_key`, no synthetic L5
+        activity. The record carries `provenance: CONTROLLER_GENERATED`
+        and a key in our own namespace, so the tape can never read an
+        autonomous order as something L5 did.
+
+        WHAT IT DOES NOT DO. It does not price the order, size it, choose
+        the leg, or authorize it. `TS.build_orders` inside the two-sided
+        branch does all of that, exactly as it already does for an L5
+        action whose intent it supersedes; the side named here is
+        provisional and only exists so the translation gate has a side to
+        judge -- and the gate's verdict for a restable maker is the same
+        for either side, which `tests/test_l5_controller_open_trigger.py`
+        asserts rather than assumes.
+        """
+        from src import l5_two_sided_probe as TSP
+        if not self.controller_open_enabled():
+            return None
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug:
+            return None
+        # THE PROBE ENGINE MUST BE AUTHORIZED FOR THIS MARKET. This trigger
+        # places two-sided legs and nothing else, so without an experiment
+        # id and a matching market pattern there is nothing it may do. The
+        # branch would refuse anyway; declining here keeps the reason
+        # legible and spends no book read.
+        if not TSP.active(slug):
+            self.stats["controller_open:NOT_AUTHORIZED_MARKET"] += 1
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            self.stats["controller_open:WINDOW_START_UNKNOWN"] += 1
+            return None
+        # ONE OUTSTANDING ORDER, read from the ledger rather than from this
+        # method's memory of what it did. Checked here as well as in the
+        # executor's own MAX_LIVE_ORDERS gate so a repeating timer does not
+        # re-derive a decision that is certain to be refused.
+        try:
+            resting = int(self.store.still_fillable_order_count())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # FAIL CLOSED: an unreadable ledger is not an empty one.
+            self.stats["controller_open:LEDGER_UNREADABLE:%s"
+                       % type(exc).__name__] += 1
+            return None
+        if resting:
+            self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
+            return None
+        book = self.book.snapshot(slug) if self.book is not None else None
+        if not isinstance(book, Mapping) or not book:
+            # `snapshot` returns None unless the socket is connected AND the
+            # book is two-sided, so this is the no-book case and it refuses.
+            self.stats["controller_open:NO_AUTHENTICATED_BOOK"] += 1
+            return None
+        tick = getattr(t, "tick_size", None)
+        # THE PROVISIONAL SIDE: the cheaper own-price, which is the order
+        # the branch itself prefers ("the CHEAPER leg first, because a cheap
+        # leg filling alone is the smaller worst case"). Derived from the
+        # same book so the two agree, and superseded by the branch either
+        # way.
+        px_up = LX.controller_provisional_price("UP", book, tick)
+        px_dn = LX.controller_provisional_price("DOWN", book, tick)
+        if px_up is None or px_dn is None:
+            self.stats["controller_open:PROVISIONAL_PRICE_UNREADABLE"] += 1
+            return None
+        side, px = ("UP", px_up) if px_up <= px_dn else ("DOWN", px_dn)
+        size = TSP.opening_leg_max_contracts()
+        if size is None or size <= 0:
+            self.stats["controller_open:OPENING_CAP_UNREADABLE"] += 1
+            return None
+        dec = {"side": side, "price": px, "l5_size": size,
+               "relation": "open"}
+        emit("L5_CONTROLLER_OPEN_TRIGGER", {
+            "triggered_by": "TIMER_NOT_L5_ACTION",
+            "provenance": LX.CONTROLLER_GENERATED,
+            "market": str(slug), "window_start": float(ws),
+            "provisional": {"side": side, "price": str(px),
+                            "l5_size": str(size)},
+            "book": {"bid": str(book.get("bid")), "ask": str(book.get("ask")),
+                     "stream_age_s": str(book.get("stream_age_s")),
+                     "source": str(book.get("source"))},
+            "labels": ("OUR OWN decision, from the authenticated book. No "
+                       "L5 action underlies it and none was synthesised. "
+                       "The side and price here are provisional: the "
+                       "two-sided branch prices, sizes and chooses the leg "
+                       "that is actually placed, and every existing gate, "
+                       "claim and limit applies unchanged."),
+        })
+        self.stats["controller_open:ENTERED"] += 1
+        rec = self.executor.handle(
+            None, book, market=str(slug), window=str(ws),
+            controller={"provenance": LX.CONTROLLER_GENERATED,
+                        "decision": dec,
+                        # NO REPLAY CLASSIFICATION EXISTS FOR AN ORDER THAT
+                        # HAS NOT BEEN PLACED. The L5 path is handed `{}`
+                        # here too and lands on the same T_UNEVALUABLE,
+                        # which MAKER_TREATMENT answers; passing a class we
+                        # do not have would be inventing evidence.
+                        "maker_class": None})
+        self.stats["controller_open:%s" % str(
+            (rec or {}).get("refused_reason") or "NOT_REFUSED")] += 1
+        return rec
+
     def maybe_ts_completion(self, now: float) -> Optional[Dict[str, Any]]:
         """Decide, on ECONOMICS, whether to cross to complete the pair.
 
@@ -5843,6 +5973,13 @@ class Runner:
         # L5_BOOK_COMPLETION is set. Placed where the L5-driven completion
         # already sits, so nothing downstream is reordered.
         self.maybe_book_completion(now)
+        # OUR OWN OPENING, on the timer. Inert unless L5_CONTROLLER_OPEN is
+        # set. Placed AFTER both completion paths deliberately: completing
+        # a pair we already hold removes exposure and must never queue
+        # behind a decision to take on more, and the one-outstanding-order
+        # rule means an opening decision made first could occupy the single
+        # slot a completion needed.
+        self.maybe_controller_open(now)
         _sc.mark("maybe_ts_completion")
         # AFTER the completion decision and BEFORE the terminal sweep. After,
         # because a completion that can act on the book as it stands should

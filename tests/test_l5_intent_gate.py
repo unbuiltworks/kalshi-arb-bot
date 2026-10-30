@@ -509,8 +509,12 @@ def test_the_executor_refusal_inventory_is_still_complete():
     import re
     root = pathlib.Path(__file__).resolve().parents[1]
     src = (root / "src" / "l5_live_execution.py").read_text().splitlines()
+    # the signature took an Optional row when the autonomous path was
+    # added -- `handle(None, ..., controller=...)` -- so the anchor matches
+    # the NAME rather than the annotation, which is what it was always
+    # about.
     start = next(i for i, l in enumerate(src)
-                 if l.startswith("    def handle(self, row: Mapping"))
+                 if l.startswith("    def handle(self, row"))
     end = len(src)
     for i in range(start + 1, len(src)):
         if re.match(r"^    def |^class ", src[i]):

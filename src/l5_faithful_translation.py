@@ -134,13 +134,32 @@ def l5_native(row: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             "relation": l5.get("relation_actual")}
 
 
-def pmus_translate(decision: Mapping[str, Any], row: Mapping[str, Any],
-                   authenticated: Mapping[str, Any], want: D
-                   ) -> Dict[str, Any]:
-    """The closest executable PMUS translation at our receipt instant."""
-    bbo = ((row.get("pmus") or {}).get("bbo")) or {}
+def _translate_core(decision: Mapping[str, Any], *,
+                    bbo: Mapping[str, Any],
+                    snapshot_age_s: Any,
+                    maker_class: Any,
+                    want: D) -> Dict[str, Any]:
+    """THE ONE implementation of the translation. Both callers share it.
+
+    WHY IT EXISTS. `pmus_translate` read the book, the staleness age and the
+    maker-class key out of an L5 ACTIVITY ROW, so an autonomous decision --
+    which has no row and must never be given a fabricated one -- could not
+    reach the three gates below. Extracting the body is what lets the
+    row-free caller use the SAME gates instead of a second copy of them:
+    a duplicated staleness bound is a bound that can drift from the one
+    actually enforced.
+
+    THE GATES ARE UNCHANGED AND IN THE SAME ORDER: staleness before book,
+    book before mode, and the maker-class check only on the restable
+    branch. `tests/test_l5_controller_translate_parity.py` runs this against
+    the pre-refactor implementation on identical inputs and asserts the
+    outputs are equal, field for field.
+
+    The only difference between the two callers is WHERE the three inputs
+    come from -- a row, or an authenticated book handed in directly.
+    """
     bid, ask = X._d(bbo.get("bid")), X._d(bbo.get("ask"))
-    age = row.get("pmus_snapshot_age_s")
+    age = snapshot_age_s
     side, l5px = decision["side"], decision["price"]
 
     if age is not None and float(age) > STALE_MAX_S:
@@ -152,8 +171,7 @@ def pmus_translate(decision: Mapping[str, Any], row: Mapping[str, Any],
     restable = l5px < our_touch                # strictly inside: a true maker
 
     if restable:
-        got = authenticated.get(row.get("action_key"))
-        klass = (got or {}).get("klass") if isinstance(got, Mapping) else got
+        klass = maker_class
         if klass is None:
             return {"ok": False, "reason": T_UNEVALUABLE, "mode": MAKER}
         if klass not in X.STRICT_CLASSES:
@@ -175,6 +193,52 @@ def pmus_translate(decision: Mapping[str, Any], row: Mapping[str, Any],
             "slippage": our_touch - l5px, "depth": depth,
             "depth_capped": qty < want,
             "fee": fees.taker_fee(our_touch, qty), "rebate": D(0)}
+
+
+def pmus_translate(decision: Mapping[str, Any], row: Mapping[str, Any],
+                   authenticated: Mapping[str, Any], want: D
+                   ) -> Dict[str, Any]:
+    """The closest executable PMUS translation at our receipt instant.
+
+    UNCHANGED BEHAVIOUR. This now resolves the three inputs out of the L5
+    row exactly as it always did and hands them to `_translate_core`; the
+    gates, their order and every returned field are the same. The
+    maker-class lookup is resolved here rather than inside the restable
+    branch, which cannot change an output because `Mapping.get` is pure.
+    """
+    bbo = ((row.get("pmus") or {}).get("bbo")) or {}
+    got = authenticated.get(row.get("action_key"))
+    klass = (got or {}).get("klass") if isinstance(got, Mapping) else got
+    return _translate_core(decision, bbo=bbo,
+                           snapshot_age_s=row.get("pmus_snapshot_age_s"),
+                           maker_class=klass, want=want)
+
+
+def controller_translate(decision: Mapping[str, Any], *,
+                         bbo: Mapping[str, Any],
+                         snapshot_age_s: Any,
+                         maker_class: Any,
+                         want: D) -> Dict[str, Any]:
+    """The row-free sibling, for an AUTONOMOUS CONTROLLER decision.
+
+    NO ROW, AND NONE IS INVENTED. The caller hands in the authenticated
+    book, that book's own age, and the maker-class verdict for the rung it
+    intends to rest on. Nothing here reads or needs an `action_key`, a
+    `pmus` block or an L5 activity record, so an autonomous order can never
+    be filed under L5's identity in the tape, the ledger or the provenance
+    chain.
+
+    IT IS NOT A SECOND SET OF RULES. It shares `_translate_core` with
+    `pmus_translate`, so the 2.0 s staleness bound, the book-availability
+    check, the strict maker-class set and both execution modes are the
+    SAME code for both provenances. A parity test pins that.
+
+    The caller is responsible for supplying a maker class it actually
+    observed; `None` lands on `T_UNEVALUABLE` exactly as it does for an L5
+    decision whose rung was never evaluated.
+    """
+    return _translate_core(decision, bbo=bbo, snapshot_age_s=snapshot_age_s,
+                           maker_class=maker_class, want=want)
 
 
 def run_window(rows: Sequence[Mapping[str, Any]],

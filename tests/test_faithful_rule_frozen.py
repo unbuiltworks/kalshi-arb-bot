@@ -22,9 +22,25 @@ from src import l5_faithful_translation as F
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-#: sha256 prefixes at the freeze commit 030d8bf
+#: sha256 prefixes at the freeze commit 030d8bf, except where a re-pin is
+#: recorded below.
+#:
+#: RE-PIN 2026-10-30, l5_faithful_translation.py: e2f786e00c800dbf -> dda950a57331cba8.
+#: REASON: the body of `pmus_translate` was extracted verbatim into
+#: `_translate_core` so that a row-free `controller_translate` could reuse
+#: THE SAME staleness bound, book-availability check and maker-class check
+#: instead of carrying a second copy of them. The gates, their order and
+#: every returned field are untouched; only where the row is unpacked moved.
+#: This is a refactor of the rule's PLUMBING, not of the rule, so it does not
+#: turn prospective validation back into fitting -- and that claim is not
+#: taken on trust: `tests/test_l5_controller_translate_parity.py` loads the
+#: pre-refactor module from git and asserts field-for-field output equality
+#: across 21 inputs (missing books, stale snapshots, every maker-class
+#: outcome, valid MAKER, valid depth-capped TAKER, both sides), then asserts
+#: the row-free path agrees with the row path on all 21. Authorised by the
+#: owner on 2026-10-30 as a deliberate, reviewed change with that evidence.
 FROZEN = {
-    "src/l5_faithful_translation.py": "e2f786e00c800dbf",
+    "src/l5_faithful_translation.py": "dda950a57331cba8",
     "src/l5_fidelity_report.py": "c10f7884bb328dc7",
     "src/l5_execution_translations.py": "b043893ba983ec56",
 }

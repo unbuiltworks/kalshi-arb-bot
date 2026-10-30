@@ -397,11 +397,53 @@ def test_disarm_is_idempotent_and_never_raises():
 
 # ------------------------------------------------------------ frozen L5_NATIVE
 
-@pytest.mark.parametrize("rel", ["src/l5_faithful_translation.py",
-                                 "src/l5_execution_translations.py"])
+#: Files still byte-identical to the freeze commit. `l5_faithful_translation`
+#: left this set on 2026-10-30; see below.
+BYTE_FROZEN = ["src/l5_execution_translations.py"]
+
+
+@pytest.mark.parametrize("rel", BYTE_FROZEN)
 def test_l5_native_is_byte_identical_to_030d8bf(rel):
     frozen = subprocess.run(["git", "show", "030d8bf:%s" % rel], cwd=ROOT,
                             capture_output=True)
     assert frozen.returncode == 0
     with open(os.path.join(ROOT, rel), "rb") as fh:
         assert fh.read() == frozen.stdout
+
+
+def test_the_translation_is_pinned_to_its_recorded_repin():
+    """`l5_faithful_translation.py` is no longer byte-identical to 030d8bf,
+    and that is a recorded decision rather than drift.
+
+    WHAT CHANGED. The body of `pmus_translate` was extracted verbatim into
+    `_translate_core` so the row-free `controller_translate` could reuse the
+    SAME staleness bound, book-availability check and maker-class check
+    instead of carrying a second copy that could drift from the enforced
+    one. `tests/test_l5_controller_translate_parity.py` holds the evidence:
+    it loads the pre-refactor module from git and asserts field-for-field
+    output equality on 21 inputs.
+
+    WHY THIS TEST STILL BINDS. Byte identity is replaced by identity to ONE
+    recorded hash, not by nothing. `tests/test_faithful_rule_frozen.FROZEN`
+    is that single authority and carries the reason; this asserts the file
+    on disk matches it, so a later silent edit fails here exactly as it
+    used to.
+    """
+    import hashlib
+    import tests.test_faithful_rule_frozen as FZ
+    rel = "src/l5_faithful_translation.py"
+    want = FZ.FROZEN[rel]
+    assert want != "e2f786e00c800dbf", (
+        "the re-pin is missing from the authority; restore it or revert "
+        "the extraction")
+    with open(os.path.join(ROOT, rel), "rb") as fh:
+        got = hashlib.sha256(fh.read()).hexdigest()[:16]
+    assert got == want
+
+
+def test_the_other_frozen_files_did_not_move_with_it():
+    """The re-pin covers ONE file. Nothing else was allowed to ride along."""
+    import tests.test_faithful_rule_frozen as FZ
+    assert FZ.FROZEN["src/l5_execution_translations.py"] \
+        == "b043893ba983ec56"
+    assert FZ.FROZEN["src/l5_fidelity_report.py"] == "c10f7884bb328dc7"
