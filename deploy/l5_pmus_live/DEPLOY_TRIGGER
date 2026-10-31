@@ -2925,3 +2925,34 @@ stage A candidate, disarmed 2026-10-30T19:10Z
 # threshold changes. L5_TS_TWO_ORDER_PAIR stays 1 and the deficit stays 1.50
 # from the Option A configuration, neither of which can act while disarmed.
 campaign close lifecycle, disarmed 2026-10-30T20:55Z
+
+# ---------------------------------------------------------------------------
+# DOWN-COMPLETION UNIT FIX, commit 69b196258bc9bea675432a47ceb0e57c0fd15112.
+#
+# `leg["price"]` out of `complement_order` is ALREADY the own price (own 0.09
+# against wire_price 0.91 on a 0.90/0.91 book, summing to 1.00), and
+# `l5_book_completion.decide` converted it a second time:
+#   own = px if want == "UP" else (D(1) - px)
+# That value fed BOTH `_would_cross` -- which converts internally, so DOWN
+# tested own <= bid instead of wire <= bid and refused a YES offer resting AT
+# the ask, a maker order that cannot cross -- AND `pair = avg + own`, making a
+# DOWN complement's pair `avg + (1 - px)`: 1.37 instead of 0.55 on the 2130z
+# state, tripping PAIR_ABOVE_REDEMPTION independently. Every DOWN completion
+# on Route B had two spurious refusals in front of it. UP is the identity,
+# which is why every window that completed was an UP completion.
+#
+# Stage A 2130z held UP 2.05 at a 0.46 basis, needed DOWN, and settled
+# -$0.9430 stranded. After the fix it still refuses at the fill book
+# (0.44/0.45, pair 1.01, a certain loss) and COMPLETES at 0.55/0.56, 0.69/0.70
+# and 0.80/0.81 for pair 0.90/0.76/0.65.
+#
+# The suite had encoded the bug: the Route B fixture used 0.20/0.21 and called
+# it "own 0.23, pair 0.63", which is the double-converted value. Corrected.
+#
+# POSTURE UNCHANGED AND PRESERVED: PMUS_Q1_LIVE=NO, PMUS_Q1_ARM cleared,
+# L5_SHADOW_ONLY=1, L5_TS_COMPLETION_CROSS=NO, every L5_MAX_* limit, the HALT
+# and the independent watchdog all as they were. No authorization, capital
+# limit, cap, cutoff or deployment mode is altered by this deploy. 18 focused
+# regression tests added; baseline 54 failed / 14,716 passed / 26 errors,
+# failure set BYTE-IDENTICAL.
+down completion unit fix, shadow-only 2026-10-31T01:05Z
