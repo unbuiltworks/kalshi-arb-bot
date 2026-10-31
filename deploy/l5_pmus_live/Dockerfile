@@ -60,6 +60,11 @@ COPY src/l5_book_completion.py src/l5_book_completion.py
 # tape records what it would have authorized -- so its absence is an import
 # error at boot, not a feature quietly missing.
 COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
+# Evaluates that policy against the MODELLED two-sided shadow inventory, which
+# is the only way to observe a completion policy while submission is
+# structurally blocked: the live path reads real fills and there are none.
+# Read-only, imported unconditionally by the runner.
+COPY src/l5_shadow_completion.py src/l5_shadow_completion.py
 COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py

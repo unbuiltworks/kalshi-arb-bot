@@ -57,6 +57,7 @@ from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
 from src import l5_runtime_config_verify as CFGV
 from src import l5_taker_completion_policy as TCP
+from src import l5_shadow_completion as SC
 from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
@@ -3187,8 +3188,14 @@ class Runner:
         ev = self.two_sided
         if ev is None:
             return
+        # ONE BOOK READ, SHARED. Every policy on this tick must decide on the
+        # same book and the same instant or their outputs are not comparable,
+        # and the shadow completion is one of those policies: a second
+        # `snapshot()` could hand it a different book than the arm whose
+        # inventory it is completing.
         try:
-            ev.step(self.book.snapshot(ev.slug), self.book.trades(ev.slug), now)
+            snap = self.book.snapshot(ev.slug)
+            ev.step(snap, self.book.trades(ev.slug), now)
         except Exception as exc:                               # noqa: BLE001
             self.stats["two_sided_errors"] += 1
             emit("L5_TWO_SIDED_ERROR", {"where": "step", "error": T.redact(
@@ -3197,6 +3204,125 @@ class Runner:
         if now - self.last_two_sided_report_t >= self.TWO_SIDED_REPORT_S:
             self.last_two_sided_report_t = now
             emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=True))
+        self.shadow_completion_step(ev, now, snap)
+
+    #: how often the shadow completion policy is evaluated, per window.
+    SHADOW_COMPLETION_EVERY_S = 10.0
+
+    def shadow_completion_step(self, ev: Any, now: float,
+                               snapshot: Optional[Mapping[str, Any]] = None
+                               ) -> None:
+        """Ask the bounded taker policy about the MODELLED inventory.
+
+        WHY THIS IS NOT THE LIVE COMPLETION PATH. `maybe_ts_completion` reads
+        `store.gross_inventory`, which only real fills populate, so under the
+        structural shadow lock it answers NO_INVENTORY_TO_COMPLETE on every
+        tick and twenty-four windows of it would say nothing about the policy.
+        This asks the same policy the same question against the inventory the
+        maker-only arm actually modelled, priced on the authenticated book.
+
+        READ-ONLY AND UNARMED BY CONSTRUCTION: there is no transport in this
+        path at all. It records the BEST authorized cross per arm per window,
+        which `two_sided_close` scores against the venue's own resolution.
+        """
+        if now - getattr(self, "_last_shadow_completion_t", 0.0) \
+                < self.SHADOW_COMPLETION_EVERY_S:
+            return
+        self._last_shadow_completion_t = now
+        try:
+            snap = dict(snapshot or {})
+            if not snap:
+                return
+            best = getattr(self, "_shadow_completion_best", None)
+            if best is None:
+                best = {}
+                self._shadow_completion_best = best
+            spent = getattr(self, "_shadow_completion_spent", None)
+            if spent is None:
+                spent = {}
+                self._shadow_completion_spent = spent
+            from src import l5_two_sided_probe as TSP
+            rows: List[Dict[str, Any]] = []
+            for cfg in getattr(ev, "configs", ()) or ():
+                # ONLY THE ARMS THAT MIRROR THE DEPLOYED ENGINE. The shadow
+                # carries dozens of historical at-touch cells whose basis the
+                # live engine does not use, and grading the policy on those
+                # would measure a configuration we do not run.
+                if not SC.is_live_arm(cfg):
+                    continue
+                aid = SC.arm_id(cfg)
+                # THE RUNGS MUST BE THE SIDE BEING BOUGHT, so the deficient
+                # side is derived here before pricing. Passing the wrong
+                # side's book would walk a VWAP for a leg we are not buying.
+                try:
+                    _up = TSP._d(cfg.qty[FM.UP]) or D(0)
+                    _dn = TSP._d(cfg.qty[FM.DOWN]) or D(0)
+                except BaseException:                          # noqa: BLE001
+                    _up = _dn = D(0)
+                _need = FM.DOWN if _up > _dn else FM.UP
+                rec = SC.evaluate(
+                    cfg=cfg, snapshot=snap,
+                    rungs=(None if _up == _dn
+                           else self.completion_rungs(ev.slug, _need)),
+                    tick=getattr(self.transport, "tick_size", None)
+                    or D("0.01"),
+                    min_qty=getattr(self.transport, "quantity_increment",
+                                    None) or D("0.01"),
+                    maker_attempted=True,
+                    maker_rested_s=max(
+                        0.0, now - float(getattr(ev, "window_start", now)
+                                         or now)),
+                    window_outlay_spent_usd=D(str(spent.get(aid, 0))),
+                    margin_floor_usd=self._taker_policy_number(
+                        TCP.MARGIN_FLOOR_ENV, TCP.DEFAULT_MARGIN_FLOOR_USD),
+                    max_outlay_usd=self._taker_policy_number(
+                        TCP.MAX_OUTLAY_ENV, TCP.DEFAULT_MAX_OUTLAY_USD),
+                    window_outlay_cap_usd=self._taker_policy_number(
+                        TCP.WINDOW_OUTLAY_ENV,
+                        TCP.DEFAULT_WINDOW_OUTLAY_USD),
+                    maker_patience_s=self._taker_policy_number(
+                        TCP.MAKER_PATIENCE_ENV,
+                        TCP.DEFAULT_MAKER_PATIENCE_S),
+                    depth_haircut=self._taker_policy_number(
+                        TCP.DEPTH_HAIRCUT_ENV, TCP.DEFAULT_DEPTH_HAIRCUT))
+                rows.append(rec)
+                self.stats["shadow_completion:%s"
+                           % str(rec.get("reason"))[:48]] += 1
+                if not rec.get("ok"):
+                    continue
+                # ONE OPPORTUNITY PER STRANDED LEG, not per tick. Keep the
+                # best worst-case outcome seen, which is what a patient
+                # policy with a margin floor would wait for.
+                pol = dict(rec.get("taker_policy") or {})
+                w = TSP._d(pol.get("conservative_worst_after"))
+                prev = best.get(aid)
+                pw = TSP._d((prev or {}).get("worst_after"))
+                if w is not None and (pw is None or w > pw):
+                    best[aid] = {
+                        "side": rec.get("side"), "qty": pol.get("qty"),
+                        "price": pol.get("price"),
+                        "worst_after": str(w),
+                        "outlay_usd": pol.get("additional_outlay_usd"),
+                        "t_in_window_s": round(
+                            now - float(getattr(ev, "window_start", now)
+                                        or now), 1),
+                        "clears_in_full": pol.get("clears_in_full"),
+                        "displayed_depth": rec.get("displayed_depth"),
+                    }
+            if rows:
+                emit("L5_SHADOW_COMPLETION", {
+                    "market": ev.slug, "arms": rows,
+                    "best_so_far": dict(best),
+                    "labels": ("MODELLED INVENTORY, REAL BOOK, read-only. No "
+                               "transport is reachable from this path. "
+                               "Nothing here is submitted, filled or "
+                               "realized."),
+                })
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_completion_failed:%s"
+                       % type(exc).__name__] += 1
 
     def two_sided_close(self) -> None:
         """Window roll: emit the window's unscored report and hold it.
@@ -3211,6 +3337,29 @@ class Runner:
         self.two_sided = None
         if ev is None:
             return
+        # PARK THE SHADOW COMPLETION BESIDE THE WINDOW IT BELONGS TO.
+        # Settlement can land minutes after the roll, and the per-window best
+        # lives in memory, so it has to be keyed by slug before it is cleared
+        # or the cross cannot be scored against the venue's resolution.
+        try:
+            parked = getattr(self, "_shadow_completion_parked", None)
+            if parked is None:
+                parked = {}
+                self._shadow_completion_parked = parked
+            best = dict(getattr(self, "_shadow_completion_best", None) or {})
+            if best:
+                parked[str(ev.slug)] = best
+            # bounded: a slug that never settles must not grow this for ever
+            if len(parked) > 64:
+                for k in list(parked)[:-64]:
+                    parked.pop(k, None)
+            self._shadow_completion_best = {}
+            self._shadow_completion_spent = {}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_completion_park_failed:%s"
+                       % type(exc).__name__] += 1
         emit("L5_TWO_SIDED_SHADOW",
              dict(self.two_sided_ledger.park(ev.report(None), now=self.now_t),
                   interim=False))
@@ -3284,6 +3433,52 @@ class Runner:
             if scored is not None:
                 emit("L5_TWO_SIDED_SHADOW", dict(scored, yes_value=str(px),
                                                  venue_state=rep.get("state")))
+                self.shadow_completion_settle(slug, scored, px == D(1),
+                                              rep.get("state"))
+
+    def shadow_completion_settle(self, slug: str, scored: Dict[str, Any],
+                                 settle_up: bool,
+                                 venue_state: Any = None) -> None:
+        """Score the parked shadow cross against the VENUE'S resolution.
+
+        The comparison the owner asked for: the SAME arm, with and without
+        completion, on the same window and the same outcome. When the policy
+        never authorized a cross the two outcomes are identical by
+        construction, and that is reported rather than omitted -- a window
+        where the policy correctly did nothing is evidence too.
+        """
+        try:
+            parked = dict(getattr(self, "_shadow_completion_parked", None)
+                          or {})
+            best = dict(parked.get(str(slug)) or {})
+            cells = SC.live_arm_cells(scored)
+            if not cells:
+                return
+            out = []
+            for cell in cells:
+                aid = SC.arm_id_from_cell(cell)
+                res = SC.score_window(arm_report=cell,
+                                      cross=best.get(aid),
+                                      settle_up=settle_up)
+                out.append(dict(res, arm=aid))
+                self.stats["shadow_completion_settled:%s"
+                           % str(res.get("reason"))[:40]] += 1
+            emit("L5_SHADOW_COMPLETION_SETTLED", {
+                "market": slug, "settled_up": bool(settle_up),
+                "venue_state": venue_state, "arms": out,
+                "labels": ("MODELLED inventory scored on the VENUE'S own "
+                           "binary resolution. maker_only is the shadow "
+                           "arm's own figure and completed adds the "
+                           "authorized cross to the same inventory. Neither "
+                           "is realized, and no order was ever submitted."),
+            })
+            if getattr(self, "_shadow_completion_parked", None):
+                self._shadow_completion_parked.pop(str(slug), None)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_completion_settle_failed:%s"
+                       % type(exc).__name__] += 1
 
     def model_close(self) -> None:
         """Window close: settle the MODELLED book and report it.
