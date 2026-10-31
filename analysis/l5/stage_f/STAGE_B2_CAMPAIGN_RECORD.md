@@ -115,3 +115,94 @@ OPEN and COMPLETE cannot both max out, while bounding only OPEN + REPLACE
 | $20 aggregate exposure / $1.50 per-market deficit | risk gate |
 | stale or overdue orders | independent `l5-halt-watchdog`, exact-owned-ID cancellation |
 | crash or completion | fails closed; no automatic relaunch |
+
+## Deployment verification (12:30:19Z heartbeat, after the variable write)
+
+The running process recognizes the authorization exactly:
+
+| field | running value | expected | |
+|---|---|---|---|
+| `approval_state` | `approved` | approved | ✅ |
+| `document_sha256` | `f721aefc749cb8f101514d895fde45864f48812c6c41d9181cd63f51f5dc417c` | same | ✅ |
+| `max_windows` | 8 | 8 | ✅ |
+| `windows_spent` / `remaining` | 0 / 8 | 0 / 8 | ✅ |
+| `max_submissions` | 56 | 56 | ✅ |
+| OPEN | max 32, spent 0, remaining 32 | 32 | ✅ |
+| COMPLETE | max 32, spent 0, remaining 32 | 32 | ✅ |
+| REPLACE | max 8, spent 0, remaining 8 | 8 | ✅ |
+| `completion_reserve.may_open` | true | true | ✅ |
+| `blocks_advancement` | false | false | ✅ |
+| `exact_market_binding` | null | null | ✅ |
+| `armed` / `owner_arm_token` | false / false | disarmed | ✅ |
+
+The fresh class budget is confirmed: Stage B1's 104/81/23 did not carry over,
+because a new nonce gets its own `cls1.<base>.camp.<digest>.…` tickets.
+
+## The 15:00Z boundary — the owner's check found a real hole
+
+**`permits_this_window: true` was reported for the 1230z window**, which is
+before `starts_utc` 13:00:00Z. That turned out to be a reporting artifact, not
+an enforcement failure — but chasing it exposed a genuine gap.
+
+`permits_this_window` is **budget-only**:
+
+```python
+out["permits_this_window"] = bool(slug in spent_w or out["windows_remaining"] > 0)
+```
+
+It never calls `authorize_window`, so it applies neither `starts_utc` nor
+anything else; and the heartbeat's scope report copies only `max_windows`,
+`series`, `expires_utc` and `clamped` — **never `starts_utc`**. The comment
+above it calls itself "THE CANONICAL GATE … the verdict try_arm actually
+enforces", and for this field that claim is false.
+
+Running the **deployed** gate code against the **deployed** document:
+
+```
+1215z  WINDOW_BEFORE_AUTHORIZED_START      1300z  ok
+1230z  WINDOW_BEFORE_AUTHORIZED_START      1315z  ok
+1245z  WINDOW_BEFORE_AUTHORIZED_START      1430z  ok
+                                           1445z  ok
+                                           1500z  ok   <-- THE HOLE
+                                           1515z  ok   <-- and beyond
+```
+
+and at 15:00:20, when a 1500z window would arm, `1500z ok=True`.
+
+**So the authorization document bounds the early side and not the late side.**
+`expires_utc` is compared against `now`, not against the window's start, so at
+15:00:20 an expiry of 15:15:01Z is still in the future and
+`CAMPAIGN_EXPIRED` does not fire. The only thing that would have stopped the
+1500z window is the 8-window budget — which has room the moment **any** one of
+the eight authorized windows fails to arm. That is precisely the silent
+schedule shift the owner forbade, and it could not be proven safe.
+
+### The fix, applied before submissions were enabled
+
+`L5_LIVE_AUTH_NOT_AFTER = 2026-10-31T14:58:00+00:00` — the owner's absolute
+deadline, which `authorize_arming` evaluates at step 8 and which bounds *when
+a window may arm at all*, independently of the campaign budget:
+
+```
+1445z arms        14:45:20   permitted
+1445z last submit 14:57:00   permitted
+1500z arms        15:00:20   AUTHORIZATION_EXPIRED  (refused)
+```
+
+14:58:00Z is chosen because it is strictly after every legitimate submission
+of the eighth window — entry cutoff 600s → 14:55:00, complete cutoff 720s →
+14:57:00, cancels from 14:55:00 — and strictly before 15:00:00, so the 1500z
+window is excluded with two minutes of margin rather than by a ~20-second
+race against arm latency. It is a variable, not a code change, and it only
+ever refuses more. Cancellation is never gated by it, and `expires_utc` stays
+at 15:15:01Z so settlement and reconciliation of the 1445z window still have
+slack after the last submission deadline.
+
+Four independent bounds now hold the schedule:
+
+| bound | mechanism | stops |
+|---|---|---|
+| `starts_utc` 13:00:00Z | `WINDOW_BEFORE_AUTHORIZED_START` | any window before the first |
+| `max_windows` 8 | window ledger | a ninth window |
+| **`NOT_AFTER` 14:58:00Z** | **`AUTHORIZATION_EXPIRED` at arming** | **any window after the eighth, budget or no budget** |
+| `expires_utc` 15:15:01Z | `CAMPAIGN_EXPIRED` | the campaign outliving its settlement slack |
