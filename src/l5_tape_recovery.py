@@ -129,9 +129,32 @@ def recover(path: str, coid: str, *, max_lines: int = MAX_LINES,
     }
 
 
+#: WHICH COIDS THIS PROCESS HAS ALREADY RECOVERED. The latch that makes
+#: "one-shot" true rather than merely intended.
+_RAN: Dict[str, bool] = {}
+
+
+def reset_for_tests() -> None:
+    """Clear the one-shot latch. Tests only."""
+    _RAN.clear()
+
+
 def from_env(root: str) -> Optional[Dict[str, Any]]:
-    """The caller's one line. None when the diagnostic is off."""
+    """The caller's one line. None when off OR already run this process.
+
+    THE LATCH IS HERE AND NOT IN THE CALLER, and it is here because the
+    first version did not have one. The call site is `Runner.roll`, which
+    fires on every window roll -- so with the variable set, the diagnostic
+    re-read 143,829 lines at 17:26, 18:00, 18:15 and 18:30. It was
+    read-only and inside its bounds every time, and it was still a
+    continuous scan of the whole tape, which is exactly what a one-shot
+    diagnostic must not be. Latching on the coid means the answer is
+    emitted once per process and the file is not opened again.
+    """
     coid = configured()
     if coid is None:
         return None
+    if _RAN.get(coid):
+        return None
+    _RAN[coid] = True
     return recover(os.path.join(str(root), "decisions.jsonl"), coid)

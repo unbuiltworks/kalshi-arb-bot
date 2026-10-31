@@ -1518,7 +1518,12 @@ class Runner:
                                "changes nothing and never alters the "
                                "ledger")})
         # ONE-SHOT TAPE RECOVERY. Off unless L5_TAPE_RECOVERY_COID names a
-        # client order id, and then it runs exactly once, here, at startup.
+        # client order id, and then it runs EXACTLY ONCE PER PROCESS.
+        #
+        # `roll` fires on every window roll, NOT at startup -- I first
+        # described this as a startup call and it is not one. The module
+        # latches on the coid so the tape is read once and not reopened;
+        # without that latch it re-read 143,829 lines every fifteen minutes.
         #
         # It exists because the 1415z residual-cap decision was written to
         # the tape and omitted from the emitted line, so the one record that

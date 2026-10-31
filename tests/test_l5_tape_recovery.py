@@ -210,3 +210,45 @@ def test_unparseable_lines_are_counted_not_swallowed(tmp_path):
     r = TR.recover(path, COID)
     assert r["unparseable_lines"] == 1
     assert r["hits"] == 1
+
+
+# ------------------------------------------------------- it is ONE-SHOT
+#
+# The first version had no latch. Its call site is `Runner.roll`, which fires
+# on every window roll, so with the variable set it re-read the whole tape at
+# 17:26, 18:00, 18:15 and 18:30 on 2026-10-31 -- read-only and within bounds
+# each time, and still a continuous scan, which is what "one-shot" forbids.
+
+def test_from_env_runs_once_per_process(tmp_path, monkeypatch):
+    TR.reset_for_tests()
+    root = tmp_path
+    (root / "decisions.jsonl").write_text(_line())
+    monkeypatch.setenv(TR.COID_ENV, COID)
+    first = TR.from_env(str(root))
+    assert first is not None and first["hits"] == 1
+    for _ in range(5):
+        assert TR.from_env(str(root)) is None, "the latch must hold"
+
+
+def test_the_latch_is_per_coid(tmp_path, monkeypatch):
+    TR.reset_for_tests()
+    root = tmp_path
+    (root / "decisions.jsonl").write_text(_line() + _line("l5f-second"))
+    monkeypatch.setenv(TR.COID_ENV, COID)
+    assert TR.from_env(str(root)) is not None
+    assert TR.from_env(str(root)) is None
+    monkeypatch.setenv(TR.COID_ENV, "l5f-second")
+    assert TR.from_env(str(root)) is not None, (
+        "a different coid is a different question and may run once too")
+
+
+def test_the_latch_does_not_open_the_file_again(tmp_path, monkeypatch):
+    """After the first run the tape is not reopened at all."""
+    TR.reset_for_tests()
+    root = tmp_path
+    tape = root / "decisions.jsonl"
+    tape.write_text(_line())
+    monkeypatch.setenv(TR.COID_ENV, COID)
+    assert TR.from_env(str(root)) is not None
+    tape.unlink()                      # gone: a second read would error
+    assert TR.from_env(str(root)) is None
