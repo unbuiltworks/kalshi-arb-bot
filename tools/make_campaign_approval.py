@@ -56,6 +56,13 @@ ASK_DURATION_S = int(os.getenv("ASK_DURATION_S", str(4 * 3600)))
 #: with the deployed variables, so a value left over from a previous
 #: campaign fails instead of passing quietly. The defaults are the figures
 #: this script hardcoded before, so a run with no overrides is unchanged.
+#: THE AUTHORIZED FIRST WINDOW, as an exact UTC instant. Absent is inert and
+#: the document behaves exactly as it always did. Present, the gate refuses
+#: any window whose OWN start precedes it (`WINDOW_BEFORE_AUTHORIZED_START`),
+#: which is what stops a campaign silently consuming an earlier window than
+#: the one the owner named. The gate has read this field since the 0145z
+#: refusal; the ASK was never wired, so no document could set it.
+ASK_STARTS_UTC = (os.getenv("ASK_STARTS_UTC") or "").strip() or None
 ASK_OPEN = int(os.getenv("ASK_OPEN", "8"))
 ASK_COMPLETE = int(os.getenv("ASK_COMPLETE", "12"))
 ASK_REPLACE = int(os.getenv("ASK_REPLACE", "16"))
@@ -74,6 +81,8 @@ def build(now: dt.datetime | None = None) -> dict:
         "expires_utc": (now + dt.timedelta(seconds=ASK_DURATION_S)
                         ).isoformat(),
         "max_windows": ASK_WINDOWS,
+        **({"starts_utc": ASK_STARTS_UTC}
+           if ASK_STARTS_UTC is not None else {}),
         "max_total_exposure_usd": ASK_EXPOSURE_USD,
         "max_daily_loss_usd": ASK_DAILY_LOSS_USD,
         # carried for the audit trail. The ARMING gate still ignores every

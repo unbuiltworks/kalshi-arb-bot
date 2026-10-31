@@ -72,10 +72,22 @@ sized to 8 windows:
 | OPEN | 12 | 4.00 (6, 4, 2) | **32** |
 | COMPLETE | 12 | 3.33 (3, 4, 3) | **32** |
 | REPLACE | 6 | 0.33 (0, 0, 1) | **8** |
-| flat backstop `MAX_SUBMISSIONS` | 27 | 7.67 | **72** |
+| flat backstop `MAX_SUBMISSIONS` | 27 | OPEN+REPLACE 4.33/win | **56** (see note) |
 
 COMPLETE is held at ≥ OPEN deliberately, so the 2-per-obligation completion
 reserve cannot lock out opening the way it did in 0300z.
+
+**Note on the flat backstop.** `max_total_submissions` is set to **56** —
+below the sum of the three classes (72), keeping the generator's convention
+that OPEN 32 + COMPLETE 32 cannot both run to their ceiling.
+
+It is safe at that value because the backstop **does not bind a risk-reducing
+order**: the call site guards it with `total_backstop_binds(reducing)`, which
+returns `not reducing`, so a COMPLETE can never be refused by it and cannot
+strand unmatched inventory. The backstop therefore bounds only OPEN + REPLACE
+= at most 40, against ~35 expected across 8 windows (observed OPEN+REPLACE was
+13 over 3 windows). It cannot silence a window the way the exhausted OPEN
+class silenced 0300z.
 
 **Why this is not a risk increase.** Submission counts are activity budgets,
 not money. Worst-case loss is bounded by the **$5 daily settled-loss halt**,
@@ -89,9 +101,10 @@ exposure cap, same one live order, same opening size.
 
 | control | setting |
 |---|---|
-| windows | exactly 8 consecutive BTC15m windows, **identified by exact UTC start times before arming** |
+| windows | exactly 8 consecutive BTC15m windows: **1300z 1315z 1330z 1345z 1400z 1415z 1430z 1445z** (2026-10-31 UTC) |
 | `starts_utc` | set, so `WINDOW_BEFORE_AUTHORIZED_START` refuses any earlier window (proven on 0145z) |
-| `expires_utc` | first window start + **2h15m** (8 windows + one window of settlement slack) |
+| `expires_utc` | **2026-10-31T15:15:00Z** — first window + 2h15m (8 windows + one window of settlement slack); span 2.25h vs the 4h ceiling |
+| `starts_utc` value | **2026-10-31T13:00:00Z** |
 | campaign age bound | `MAX_CAMPAIGN_S = 4h` — unchanged, not approached |
 | automatic expiry | `approval_gate()` refuses past `expires_utc` (proven: 03:15:10 `APPROVAL_NOT_VALID / approval_expired` refused 0315z) |
 | automatic disarm | `window_budget` 8; the 9th window cannot arm |
@@ -118,10 +131,15 @@ fact.** On settled pairs only, one-sided α = 0.05:
   windows. Report it as inconclusive at ~65% power. Do not re-run the same
   campaign hoping for a different draw; pool with Stage B1 and state the
   pooled n and power.
-- **STOP EARLY AND REPORT** if cumulative matched P&L is **negative after 5
-  settled windows**. Matched P&L is outcome-independent, so a negative run
-  there is a pricing defect, not bad luck, and the campaign should not spend
-  the remaining windows.
+- **INVESTIGATE, DO NOT AUTO-STOP, on a negative run.** *(Owner decision,
+  2026-10-31: the proposed five-window negative-P&L automatic stop is
+  replaced.)* If cumulative matched P&L is negative mid-campaign, that is a
+  signal to investigate while the campaign continues — matched P&L being
+  outcome-independent makes a negative run worth diagnosing, but a negative
+  draw is not by itself a defect, and halting on one would discard the sample
+  the campaign exists to collect. **Halt only on a confirmed defect or an
+  existing risk trigger** (the four automatic rules above). A suspected but
+  unconfirmed defect is reported, not acted on by halting.
 - **Robustness condition, reported alongside:** the verdict must survive
   dropping the single best pair. Stage B1 fails this (80% of its edge was one
   pair of eight), and a Stage B2 verdict that depends on one pair is not
