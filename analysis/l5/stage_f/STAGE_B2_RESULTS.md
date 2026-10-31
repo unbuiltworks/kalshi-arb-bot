@@ -15,8 +15,10 @@ our own fills and is never summed into realized. Only `L5_LIVE_SETTLED` /
 |---|---|---|---|
 | 1 | 1300z | **NO** | `WINDOW_BOUNDS_UNREADABLE` — venue did not confirm `startTime` at T+10.8s; failed closed, `claim_taken: false`, **no window spent**, zero orders |
 | 2 | 1315z | 13:15:10 | **SETTLED +$1.212100** |
-| 3 | 1330z | 13:30:11 | armed, running |
-| 4–8 | 1345z–1445z | pending | |
+| 3 | 1330z | 13:30:11 | **SETTLED +$1.025100** — 0 pairs, pure strand |
+| 4 | 1345z | 13:45:11 | **SETTLED +$0.059100** — 1 pair, **zero residual** |
+| 5 | 1400z | 14:00 | armed, running (worst case $0.9246) |
+| 6–8 | 1415z–1445z | pending | |
 
 Window 1 was lost, not substituted. Seven authorized windows remain and the
 eighth budget slot will go unused. `L5_LIVE_AUTH_NOT_AFTER = 14:58:00Z` is
@@ -96,3 +98,64 @@ Stage B1's **16.14 across four**. Two of three pairs completed at exactly the
 eight pairs at exactly 1.0000 for zero edge. That is the submission-budget
 resize doing what it was meant to do — more rounds per window — and it is an
 observation about acquisition cost, not yet about profitability.
+
+
+## Windows 3 and 4 — confirmed
+
+**Window 3 (1330z): +$1.025100, and it is 100% luck.**
+
+5 submitted, 5 acked, **1 filled, 4 cancelled**, 0 rejected. 5 maker, 0 taker,
+fees $0. First leg 2.01 UP filled; complement **never** filled. `pairs: []`,
+`pairs_completed 0`, `matched_qty 0`. Settled: matched_pnl **$0.0000**,
+residual 2.01 UP → **+$1.025100**. Had UP lost it would have been
+**−$0.9849**. A window can earn a dollar and contribute *nothing* to the
+decision statistic; this one did.
+
+**Window 4 (1345z): +$0.059100, and it is 0% luck.**
+
+| line | value |
+|---|---|
+| up_qty / dn_qty | 1.97 / 1.97 |
+| matched_qty | 1.97 |
+| matched_cost | 1.910900 → **pair cost 0.9700** (edge +$0.03/contract) |
+| **matched_pnl** | **+$0.059100** |
+| residual | **0.00, side `null`** |
+| residual_pnl | 0.000000 |
+| settlement_pnl | **+$0.059100** |
+
+The first Stage B2 window with **zero residual** — the whole result is
+outcome-independent. It is also the smallest result, which is the point:
+clean windows are small, lucky windows are large.
+
+## Campaign position after 4 windows (1 lost, 3 traded)
+
+| window | matched | residual | realized |
+|---|---|---|---|
+| 1315z | +0.143617 | +1.068483 | +1.212100 |
+| 1330z | +0.000000 | +1.025100 | +1.025100 |
+| 1345z | +0.059100 | +0.000000 | +0.059100 |
+| **total** | **+0.202717** | **+2.093583** | **+2.296300** |
+
+**91.2% of the headline is directional.** The outcome-independent component is
+**$0.2027** of **$2.2963**. Three of three traded windows had a favourable or
+neutral settlement; none has yet had a strand lose.
+
+## Interim statistic — threshold crossed, verdict WITHHELD
+
+| set | n | mean edge/contract |
+|---|---|---|
+| Stage B1 | 8 | +0.01250 |
+| Stage B2 | 4 | +0.02000 |
+| **pooled** | **12** | **+0.01500** (stdev 0.02876) |
+
+t = 1.807, one-sided p ≈ **0.0354**. GO threshold at n=12 is +0.01366 —
+**nominally met**, and robustness now survives dropping the best pair
+(+0.00909).
+
+**I am not declaring GO, and the nominal p-value is not trustworthy as it
+stands.** The pre-registration set the decision at the campaign's END
+(n ≈ 21 pairs), not at every window. Evaluating after each window and stopping
+when the statistic first crosses 0.05 is **optional stopping**, which inflates
+the true false-positive rate far above the nominal 5%. A threshold crossed at
+an interim look is an observation, not a verdict. The decision stands at the
+pre-registered endpoint, on all pairs the campaign produces.
