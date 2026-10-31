@@ -56,6 +56,7 @@ from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
 from src import l5_runtime_config_verify as CFGV
+from src import l5_tape_recovery as TR
 from src import l5_taker_completion_policy as TCP
 from src import l5_shadow_completion as SC
 from src import pmus_fill_horizon_probe as FHP
@@ -1516,6 +1517,23 @@ class Runner:
                     "labels": ("the comparison is read-only; a failure "
                                "changes nothing and never alters the "
                                "ledger")})
+        # ONE-SHOT TAPE RECOVERY. Off unless L5_TAPE_RECOVERY_COID names a
+        # client order id, and then it runs exactly once, here, at startup.
+        #
+        # It exists because the 1415z residual-cap decision was written to
+        # the tape and omitted from the emitted line, so the one record that
+        # says whether the cap bound could not be read from the logs. This
+        # lifts that record out and nothing else: read-only, bounded, and
+        # reduced to an allowlist before it is emitted. See
+        # analysis/l5/stage_f/STAGE_B2_TAPE_RECOVERY.md.
+        if TR.configured() is not None:
+            try:
+                emit("L5_TAPE_RECOVERY", TR.from_env(self.root))
+            except BaseException as exc:                       # noqa: BLE001
+                emit("L5_TAPE_RECOVERY_FAILED", {
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+                    "labels": ("read-only; a failure changes nothing, writes "
+                               "nothing and never touches the ledger")})
         if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
             try:
                 from src import l5_cost_basis_audit as CBA
