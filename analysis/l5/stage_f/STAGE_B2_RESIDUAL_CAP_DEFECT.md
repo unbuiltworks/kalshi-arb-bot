@@ -76,17 +76,18 @@ Corroborating evidence:
 - heartbeat `policy`: **`residual_cap_binds_session: 0`**,
   `residual_cap_binds_this_market: 0` — the cap refused nothing, ever, this
   session.
-- **zero `RESIDUAL_CAP` evaluation notes anywhere in the campaign**
-  (13:00–14:35), although the code emits `prov.note("RESIDUAL_CAP", …)` on
-  every action reaching the gate, specifically "so the treatment is read off
-  the record rather than inferred from what happened next".
+- **RETRACTED.** I first cited "zero `RESIDUAL_CAP` evaluation notes in the
+  campaign" as corroboration. That evidence does not hold: `INVENTORY_CLASS`
+  notes, emitted unconditionally eleven lines earlier at the same call site,
+  are **also** absent from the logs. So `prov.note(...)` records are simply
+  **not log-visible in this deployment**, and their absence says nothing
+  about whether the gate ran. Withdrawn.
 
-**Limit of this evidence, stated explicitly:** it has NOT been independently
-proven that `prov.note` records are log-visible in this deployment, so their
-absence is strong but not conclusive as to *why* the gate did not bind
-(unreached path versus reached-and-wrong). The *outcome* is conclusive and is
-what makes this a defect: inventory exceeded an advertised, arithmetically
-derived cap on an order qualifying for no exemption.
+**That unobservability is itself the blocking defect.** The gate's own comment
+says the note is emitted either way "so the treatment is read off the record
+rather than inferred from what happened next" — and it cannot be, because the
+notes do not reach the logs. The single most important control in the residual
+path is undebuggable in production.
 
 ## Why the dollar cap holding does not excuse it
 
@@ -116,15 +117,53 @@ settle unmatched at a worst case of about **−$0.95**, inside the $1.50 cap.
 No faster in-band mechanism was available from this session: the halt latch is
 file/endpoint-driven on an internal private domain.
 
+## Root cause, narrowed by reproduction
+
+`tests/test_l5_residual_cap_1415z_regression.py` (10 tests, all passing)
+drives the **real `InventoryStore`** with the five real fills and evaluates
+the gate's own predicate for order 6:
+
+```
+resid_before 2.17   (real store: UP 5.96 - DOWN 3.79)
+max_clip     2.17   (real store)
+b_abs 2.17 -> exempt_open False
+a_abs 4.25 -> increases   True
+cap   min(2 * 2.17, 3) = 3
+binds TRUE   -> must refuse RESIDUAL_ABOVE_CAP
+```
+
+**So the predicate is correct and the store functions are correct.** Given
+these inputs the gate refuses. Two further findings from the same run:
+
+- the gate is **sound on overshoot**, contrary to my first hypothesis. I
+  assumed a "reducing" order that overshoots past flat would slip through;
+  it does not, because `increases` compares MAGNITUDES. DOWN 6.00 against
+  UP 2.17 lands at |3.83| > |2.17|, so it binds. The only remaining
+  exemption is an overshoot that lands *closer* to flat, which is harmless
+  and intended.
+- the policy is OFF only when `PMUS_RESIDUAL_CAP_K` is unset, and the
+  heartbeat echoed `k=2` specifically so "which policy ran is read off the
+  record". So the cap was ON.
+
+**Therefore the defect is NOT in the predicate, the store, or the
+configuration. It is in reachability or in the state the gate was handed at
+evaluation time** — and it cannot be narrowed further from production
+evidence because the gate's decision record never reaches the logs.
+
 ## Required before any further live authorization
 
-1. Determine whether the gate is unreached on the two-sided probe path or
-   reached and mis-evaluating. `residual_cap_binds_session: 0` across a
-   session that produced a 4.25 residual must be explained.
-2. Add a regression test that drives two consecutive same-side fills and
-   asserts `RESIDUAL_ABOVE_CAP` on the second.
+1. **Make the gate observable.** `prov.note` must reach the logs (or an
+   equivalent record must), for `RESIDUAL_CAP` and `INVENTORY_CLASS` at
+   minimum. Without it the next incident is equally undebuggable. This is
+   the first fix, because every other answer depends on it.
+2. **Then** determine whether the order reached the gate at all. Candidate
+   paths to audit: the accumulation-round first leg (round 4 opening while
+   round 3 held unmatched inventory, after round 3's DOWN leg was claimed and
+   cancelled), `acc_recover` cancel-and-replace, Route B `book_completion`,
+   and `l5_defensive_completion` — any submitter that does not pass through
+   `handle()`'s common gates.
 3. Make the arming preflight's `effective_cap_contracts` row state which
-   execution paths actually evaluate it, so a reported control cannot be
-   advertised on a path that never calls it.
+   execution paths actually evaluate it, so a control cannot be advertised on
+   a path that never calls it.
 4. Re-verify on recorded books before re-arming. No capital increase, no
-   crossing, no new services are implicated or requested.
+   crossing and no new services are implicated or requested.
