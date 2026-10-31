@@ -227,26 +227,26 @@ def test_final_guard_refuses_the_1415z_order_six(tmp_path):
         MARKET, "UP", D("2.08"), coid="l5f-fe3923af")
     assert g["ok"] is False
     assert g["reason"] == "FINAL_RESIDUAL_ABOVE_CAP"
-    assert g["prospective_before"] == "2.17"
-    assert g["prospective_after"] == "4.25"
+    assert g["worst_case_before"] == "2.17"
+    assert g["worst_case_after"] == "4.25"
     assert g["cap_contracts"] == "3"
     assert g["increases_abs_prospective"] is True
     assert g["prospective_book_flat"] is False
 
 
 def test_final_guard_does_not_double_count_the_order(tmp_path):
-    """`outstanding` already holds this order; before must come out at 2.17.
+    """The same-side sum already holds this order; before comes out at 2.17.
 
-    Computing prospective_before as realized+outstanding (rather than
-    subtracting the order) would read 4.25 as the BEFORE figure and refuse
-    orders that are actually fine. This pins the arithmetic.
+    Reading the post-fill figure as the BEFORE figure would show 4.25 as the
+    starting point and refuse orders that are fine. This pins the arithmetic.
     """
     st = _store(tmp_path, 5)
     _record_live(st, "c1", MARKET, "UP", "2.08")
     g = _executor(st).final_residual_guard(MARKET, "UP", D("2.08"), coid="c1")
     assert g["residual_realized"] == "2.17"
-    assert g["outstanding_residual_incl_this_order"] == "2.08"
-    assert g["prospective_before"] == "2.17"
+    assert g["outstanding_same_side_incl_this_order"] == "2.08"
+    assert g["worst_case_before"] == "2.17"
+    assert g["worst_case_after"] == "4.25"
 
 
 def test_final_guard_preserves_a_risk_reducing_completion(tmp_path):
@@ -320,3 +320,98 @@ def test_final_guard_runs_the_whole_six_fill_sequence(tmp_path):
     # the position the cap was supposed to prevent never gets built
     assert st.residual(MARKET) == D("2.17")
     assert st.residual(MARKET) <= LX.ABS_RESIDUAL_CAP_CONTRACTS
+
+
+# ============ THE RECOVERED STATE: held UP plus a RESTING DOWN completion
+#
+# From the tape, order fe3923af's own RESIDUAL_CAP note at 14:21:01:
+#
+#   residual_realized      "2.17"   UP 2.17 HELD
+#   outstanding_residual  "-2.17"   a DOWN 2.17 completion RESTING
+#   prospective_before     "0.00"   the two cancelled
+#   prospective_book_flat   true    -> exempt_open fired
+#   binds                   false   -> NOT REFUSED
+#
+# The cap received inventory that was individually CORRECT and collectively
+# misleading: netting a resting opposite leg against held inventory credits
+# that leg as certain to fill. It was cancelled unfilled, and the position
+# became UP 4.25 against a 3-contract ceiling.
+#
+# My first guard copied that predicate and would have passed this order too.
+# These tests reproduce the real state and pin the corrected behaviour.
+
+def test_the_recovered_state_is_what_the_tape_recorded(tmp_path):
+    """Reproduce it: UP 2.17 held, DOWN 2.17 resting -> signed net 0.00."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "l5f-down-completion", MARKET, "DOWN", "2.17", "0.70")
+    assert st.residual(MARKET) == D("2.17")
+    assert st.outstanding_residual(MARKET) == D("-2.17")
+    assert st.residual(MARKET) + st.outstanding_residual(MARKET) == D(0)
+
+
+def test_the_netted_view_is_what_made_it_look_flat(tmp_path):
+    """The old predicate's exemption, shown firing on the real state."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "l5f-down-completion", MARKET, "DOWN", "2.17", "0.70")
+    _record_live(st, "l5f-fe3923af", MARKET, "UP", "2.08")
+    netted = st.residual(MARKET) + st.outstanding_residual(MARKET)
+    # 2.17 held + (-2.17 down + 2.08 up) = 2.08; before = 2.08 - 2.08 = 0
+    assert (netted - D("2.08")) == D("0.00"), netted
+    # which is exactly the `prospective_before: "0.00"` the tape recorded
+
+
+def test_outstanding_on_side_does_not_net_the_opposite_leg(tmp_path):
+    """The corrective primitive: one side, never netted."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "l5f-down-completion", MARKET, "DOWN", "2.17", "0.70")
+    _record_live(st, "l5f-fe3923af", MARKET, "UP", "2.08")
+    assert st.outstanding_on_side(MARKET, "UP") == D("2.08")
+    assert st.outstanding_on_side(MARKET, "DOWN") == D("2.17")
+
+
+def test_the_guard_NOW_refuses_order_six_in_the_real_state(tmp_path):
+    """THE REGRESSION THAT MATTERS. The one my first version missed."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "l5f-down-completion", MARKET, "DOWN", "2.17", "0.70")
+    _record_live(st, "l5f-fe3923af", MARKET, "UP", "2.08")
+    g = _executor(st).final_residual_guard(
+        MARKET, "UP", D("2.08"), coid="l5f-fe3923af")
+    assert g["ok"] is False, g
+    assert g["reason"] == "FINAL_RESIDUAL_ABOVE_CAP"
+    # the worst case is the real post-fill position, not the netted 2.08
+    assert g["worst_case_after"] == "4.25"
+    assert g["abs_worst_after"] == "4.25"
+    assert g["prospective_book_flat"] is False
+    # and the record shows what the netted view would have claimed
+    assert g["netted_view_would_have_said"] == "2.08"
+
+
+def test_a_truly_empty_market_is_still_exempt(tmp_path):
+    """Nothing held AND nothing resting but this order: still a first leg."""
+    st = LX.InventoryStore(str(tmp_path / "empty.json"))
+    _record_live(st, "c-open", MARKET, "UP", "2.90")
+    g = _executor(st).final_residual_guard(MARKET, "UP", D("2.90"),
+                                           coid="c-open")
+    assert g["prospective_book_flat"] is True
+    assert g["ok"] is True
+
+
+def test_a_completion_is_still_never_refused(tmp_path):
+    """The DOWN leg that pairs held UP 2.17 must still reach the wire."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "c-comp", MARKET, "DOWN", "2.17", "0.70")
+    g = _executor(st).final_residual_guard(MARKET, "DOWN", D("2.17"),
+                                           coid="c-comp")
+    assert g["ok"] is True, g
+    assert g["increases_abs_prospective"] is False
+
+
+def test_an_unreadable_side_counts_against_us(tmp_path):
+    """A row we cannot attribute must not shrink a worst case."""
+    st = _store(tmp_path, 5)
+    live = st.state.setdefault("live_orders", {})
+    live["weird"] = {"market": MARKET, "side": "???",
+                     "price": "0.25", "qty": "1.00", "remaining": "1.00"}
+    st.save()
+    assert st.outstanding_on_side(MARKET, "UP") >= D("1.00")
+    assert st.outstanding_on_side(MARKET, "DOWN") >= D("1.00")

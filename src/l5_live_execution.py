@@ -1696,6 +1696,34 @@ class InventoryStore:
             r += rem if str(o.get("side")) == "UP" else -rem
         return r
 
+    def outstanding_on_side(self, market: str, side: str) -> D:
+        """Still-fillable shares resting on ONE side. Never netted.
+
+        WHY THE SIGNED NET IS THE WRONG QUANTITY FOR A BOUND. The 1415z
+        incident of 2026-10-31: UP 2.17 was HELD while a DOWN 2.17
+        completion was RESTING, so `outstanding_residual` returned -2.17,
+        the signed net came to exactly 0.00, and the gate read the book as
+        FLAT. It then exempted an UP 2.08 as a genuine opening leg. The
+        DOWN completion was cancelled unfilled and the position became
+        UP 4.25 against a 3-contract ceiling.
+        """
+        want = canonical_side(side, doing="summing outstanding on one side")
+        r = D(0)
+        for o in (self.state.get("live_orders") or {}).values():
+            if str(o.get("market")) != market:
+                continue
+            try:
+                got = canonical_side(o.get("side"),
+                                     doing="reading an outstanding order")
+            except UnknownSide:
+                # AN UNREADABLE SIDE COUNTS ON BOTH SIDES. A row we cannot
+                # attribute must not reduce a worst case.
+                r += self.worst_case_remaining(o)
+                continue
+            if got == want:
+                r += self.worst_case_remaining(o)
+        return r
+
     def orders_uncertain(self) -> Optional[str]:
         """Set when we cannot say whether an order reached the venue.
 
@@ -6205,24 +6233,73 @@ class FaithfulExecutor:
             out["reason"] = ("RESIDUAL_STATE_UNREADABLE:%s"
                              % type(exc).__name__)
             return out
+        # THE WORST CASE, NOT THE NET. The netted prospective book credits a
+        # resting OPPOSITE-side order as though it were certain to fill. On
+        # 1415z it was cancelled unfilled, and that credit is exactly what
+        # turned a held UP 2.17 plus a resting DOWN 2.17 into a book the gate
+        # read as flat. A bound may not assume the leg that would save it
+        # fills; it must assume the leg that hurts does.
+        #
+        # So the figure compared against the cap is: realized residual, plus
+        # every still-fillable share resting on THE SIDE BEING INCREASED,
+        # with NO credit for anything resting opposite. `outstanding` (the
+        # signed net, which already carries this order) is kept only to be
+        # reported, so the record shows both what was true and what the
+        # netted view would have said.
+        try:
+            same_side = D(str(self.store.outstanding_on_side(market, side)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["ok"] = False
+            out["reason"] = ("OUTSTANDING_BY_SIDE_UNREADABLE:%s"
+                             % type(exc).__name__)
+            return out
         signed = q if str(side).upper() == UP else -q
-        # outstanding ALREADY carries this order -- see the docstring.
-        prosp_after = resid + outstanding
-        prosp_before = prosp_after - signed
-        b_abs = -prosp_before if prosp_before < 0 else prosp_before
-        a_abs = -prosp_after if prosp_after < 0 else prosp_after
+        # `same_side` already includes this order, because record_submit ran.
+        worst_after = (resid + same_side if signed > 0
+                       else resid - same_side)
+        worst_before = worst_after - signed
+        b_abs = -worst_before if worst_before < 0 else worst_before
+        a_abs = -worst_after if worst_after < 0 else worst_after
         if q > clip:
             clip = q
         cap = min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)
-        exempt_open = b_abs == 0
+        # NOTHING HELD AND NOTHING RESTING BUT THIS ORDER, which is what
+        # the exemption has always claimed to mean. `net == 0` is NOT that:
+        # it also fires when a held leg and a resting opposite leg merely
+        # cancel, which is the 1415z state exactly. The three conditions are
+        # stated separately so the record shows which one failed.
+        try:
+            other = D(str(self.store.outstanding_on_side(
+                market, DOWN if str(side).upper() == UP else UP)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["ok"] = False
+            out["reason"] = ("OUTSTANDING_BY_SIDE_UNREADABLE:%s"
+                             % type(exc).__name__)
+            return out
+        exempt_open = (resid == D(0) and other == D(0) and same_side == q)
+        out["outstanding_opposite_side"] = str(other)
+        out["nothing_held"] = bool(resid == D(0))
+        out["nothing_resting_opposite"] = bool(other == D(0))
+        out["only_this_order_resting_same_side"] = bool(same_side == q)
         increases = a_abs > b_abs
         out.update({
             "residual_realized": str(resid),
-            "outstanding_residual_incl_this_order": str(outstanding),
-            "prospective_before": str(prosp_before),
-            "prospective_after": str(prosp_after),
-            "abs_prospective_before": str(b_abs),
-            "abs_prospective_after": str(a_abs),
+            "outstanding_residual_net_incl_this_order": str(outstanding),
+            "outstanding_same_side_incl_this_order": str(same_side),
+            "worst_case_before": str(worst_before),
+            "worst_case_after": str(worst_after),
+            "abs_worst_before": str(b_abs),
+            "abs_worst_after": str(a_abs),
+            "netted_view_would_have_said": str(resid + outstanding),
+            "basis_note": ("compared against the cap on a WORST CASE: no "
+                           "credit for anything resting on the opposite "
+                           "side, because on 1415z that leg was cancelled "
+                           "unfilled and its credit made a 2.17 book read "
+                           "as flat"),
             "clip_used": str(clip), "cap_contracts": str(cap),
             "k": str(self.residual_cap_k),
             "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
