@@ -89,6 +89,11 @@ COPY src/l5_book_evidence.py src/l5_book_evidence.py
 # no order path, and cannot arm, submit or cancel -- asserted by
 # test_nothing_in_the_verifier_can_submit_arm_or_reach_a_venue.
 COPY src/l5_runtime_config_verify.py src/l5_runtime_config_verify.py
+# the one-shot, read-only tape recovery diagnostic. Imported at module
+# level by the runner, so a missing COPY is a boot failure, not a silent
+# loss of a diagnostic -- which is the image-closure contract this
+# Dockerfile exists to hold.
+COPY src/l5_tape_recovery.py src/l5_tape_recovery.py
 # The fill-horizon probe. Shipped for the SAME reason as the verifier above:
 # the only arming state that matters is the one the RUNNING process has, and
 # the flags that decide it cannot be read from outside without handling
