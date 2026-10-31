@@ -206,3 +206,27 @@ Four independent bounds now hold the schedule:
 | `max_windows` 8 | window ledger | a ninth window |
 | **`NOT_AFTER` 14:58:00Z** | **`AUTHORIZATION_EXPIRED` at arming** | **any window after the eighth, budget or no budget** |
 | `expires_utc` 15:15:01Z | `CAMPAIGN_EXPIRED` | the campaign outliving its settlement slack |
+
+## Armed — `L5_AUTHORIZATION_PREFLIGHT` at 12:38:27Z
+
+`ok: true`, `fail: []`, `unknown: []`, `reserved_nothing: true` (read-only).
+
+| check | verdict | evidence |
+|---|---|---|
+| `shadow_lock` | **PASS** | `engaged: false` — the structural lock is released |
+| `owner_arm_token` | PASS | all three arm variables agree |
+| `absolute_deadline` | **PASS** | `state OPEN`, `expires_in_s 8372.8` → from 12:38:27 that is **exactly 14:58:00Z** |
+| `campaign_approval` | PASS | `approved`, `max_windows 8`, `approved_exposure "20"`, `approved_daily_loss "5"`, `document_sha256 f721aefc…` |
+| `window_budget_env` | PASS | `max_windows_env 8` |
+| `halt_gate` | PASS | `permitted: true` |
+| `residual_ceiling` | PASS | `k 2`, absolute cap 3 contracts, `which_binds ABSOLUTE`, outer bound 10 |
+| `market_series`, `claim_ttl_s` (900s), `role_binding`, `session_id` | PASS | |
+
+Three rows read `NOT_EVALUATED` — `window_bounds`, `order_state_and_reconciliation`,
+`claim_held_and_scope_digest` — because they need a live market slug, an
+authoritative venue read, or are created inside `authorize_arming` itself.
+They are correctly **not** counted as PASS.
+
+Arm write sent 12:37:17Z, deployment `31d90751` SUCCESS, engine tree still
+byte-identical to `ff00d287` (`src` and `deploy` both). First window opens
+13:00:00Z, so no window was missed and the schedule stands unshifted.
