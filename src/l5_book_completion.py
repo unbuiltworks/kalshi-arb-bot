@@ -247,7 +247,35 @@ def decide(*, market: str, held_side: str,
     # ---- 6. MAKER ONLY, ASSERTED ON THE PRICE. Never inferred from a mode
     #         string: a quote that would take the touch is refused here even
     #         if something upstream labelled it MAKER.
-    own = px if want == "UP" else (D(1) - px)
+    # `leg["price"]` IS ALREADY THE OWN PRICE, and converting it again was a
+    # defect that refused every DOWN completion resting at the touch.
+    #
+    # `complement_order` returns both: `price` in own terms and `wire_price`
+    # beside it, and they sum to 1.00 (verified: own 0.09 / wire 0.91 on a
+    # 0.90/0.91 book). `_would_cross` takes the OWN price and does the wire
+    # conversion itself. The previous form passed `1 - px` -- the WIRE price
+    # -- into that own-price parameter, so for DOWN the helper converted a
+    # second time and tested `own <= bid` instead of `wire <= bid`.
+    #
+    # WHAT IT COST. A DOWN complement resting at the touch on a 0.90/0.91
+    # book is a YES offer AT the ask: a maker order that cannot cross. The
+    # correct test returns False; the double conversion returned True, so
+    # the quote was refused WOULD_CROSS. With COMPLETION_DEPTH_TICKS = 0 the
+    # completion always prices at the touch, so EVERY DOWN completion on
+    # this route was refused -- including 2130z of the Stage A campaign,
+    # which held UP 2.05 and needed a DOWN complement, and settled -$0.9430
+    # stranded. UP was unaffected, because for UP the conversion is the
+    # identity, which is why the defect survived the window that completed.
+    #
+    # AND IT WAS WORSE THAN THE CROSS CHECK. The same converted value fed
+    # step 7's `pair = avg + own`, so a DOWN complement's PAIR COST was
+    # computed as `avg + (1 - px)` instead of `avg + px`: on the 2130z state
+    # that is 0.46 + 0.91 = 1.37 rather than 0.46 + 0.09 = 0.55, which trips
+    # PAIR_ABOVE_REDEMPTION all on its own. Every DOWN completion therefore
+    # had TWO independent spurious refusals in front of it, and
+    # `complement_order` -- which computes `pair = paid + px` correctly --
+    # had already said yes.
+    own = px
     if _would_cross(want, own, bid, ask):
         return _no("WOULD_CROSS", price=str(px), bid=str(bid), ask=str(ask),
                    **rec)

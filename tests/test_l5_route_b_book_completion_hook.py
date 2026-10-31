@@ -63,9 +63,22 @@ def _runner(monkeypatch, *, store=None, snap=None, ws=None):
     # A BOOK THAT ACTUALLY YIELDS AN ACCEPTED DECISION. With 0.50/0.51 and
     # a 0.40 first leg the complement quote WOULD_CROSS, so every test
     # would have been asserting the economics rather than the guard it
-    # names. Held UP at own 0.40 against a 0.20/0.21 book gives a DOWN
-    # complement at own 0.23 and a pair of 0.63, comfortably accepted.
-    r.book = _Book(snap or {"bid": "0.20", "ask": "0.21",
+    # names.
+    #
+    # CORRECTED 2026-10-31. This fixture used 0.20/0.21 and described it as
+    # "a DOWN complement at own 0.23 and a pair of 0.63". It is neither.
+    # DOWN's touch in own terms is `1 - ask`, so on 0.20/0.21 the DOWN
+    # complement costs own 0.79 -- UP is the long shot there, which makes
+    # DOWN the dear side -- and the pair is 0.40 + 0.79 = 1.19, a certain
+    # loss that must be refused. The quoted 0.23/0.63 was the
+    # DOUBLE-CONVERTED value produced by the `own = 1 - px` defect in
+    # `l5_book_completion.decide`, so this fixture encoded that bug and is
+    # why it survived the suite.
+    #
+    # 0.79/0.80 is the state the comment intended: DOWN's touch is own 0.20
+    # and the pair is a genuine 0.60, comfortably accepted on arithmetic
+    # that holds.
+    r.book = _Book(snap or {"bid": "0.79", "ask": "0.80",
                             "stream_age_s": "0.1",
                             "bid_shares": "500", "ask_shares": "500"})
     # THE RESIDUAL BUDGET MUST BE PRESENT, as it is in production.
