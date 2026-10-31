@@ -2996,6 +2996,12 @@ class Runner:
             # itself, one release later.
             "two_sided_round": rec.get("TWO_SIDED_ROUND"),
             "two_sided_complement": rec.get("TWO_SIDED_COMPLEMENT"),
+            # THE RESIDUAL CONTROLS. 1415z reached 4.25 unmatched against a
+            # 3-contract cap and the records saying WHY reached only the
+            # tape. See STAGE_B2_RESIDUAL_CAP_DEFECT.md. Log-only.
+            "residual_cap": rec.get("RESIDUAL_CAP"),
+            "inventory_class": rec.get("INVENTORY_CLASS"),
+            "final_residual_guard": rec.get("FINAL_RESIDUAL_GUARD"),
             "order": {k: order.get(k) for k in
                       ("client_order_id", "submitted", "reason", "venue_order_id",
                        "state", "error")} if order else None,

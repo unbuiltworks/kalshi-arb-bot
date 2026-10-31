@@ -6148,6 +6148,92 @@ class FaithfulExecutor:
                                    else "ORDER_INTENT_BUY_SHORT")})
         return out
 
+    # ========================= THE LAST RESIDUAL CHECK BEFORE THE WIRE
+    #
+    # WHY A SECOND CHECK EXISTS. On 1415z (2026-10-31) the residual cap in
+    # `handle` passed an UP order that took realized UP inventory from 2.17
+    # to 4.25 against an advertised 3-contract ceiling. Replay against the
+    # real store proved the predicate correct, the store functions correct
+    # and the configuration correct (k=2), so the order was evaluated
+    # against state that did not describe the position it went on to create.
+    #
+    # A bound whose inputs can be wrong is not a bound. This one re-reads
+    # them at the last possible instant, from the same authoritative store,
+    # and REFUSES rather than assumes. It is deliberately redundant: if the
+    # first gate is right, this one never fires.
+
+    def final_residual_guard(self, market: str, side: str, qty: Any,
+                             *, coid: Optional[str] = None,
+                             ) -> Dict[str, Any]:
+        """Refuse an exposure-increasing order that breaches the cap. CLOSED.
+
+        `record_submit` has ALREADY run when this is called, so
+        `outstanding_residual` includes this order: realized + outstanding IS
+        the prospective-after figure, and prospective-before is recovered by
+        removing this order's own signed quantity. Computing it the other way
+        round would double-count the order and refuse legitimate ones.
+
+        RISK-REDUCING ORDERS ARE PRESERVED. A leg that leaves |residual| no
+        larger than it found it passes at any depth, exactly as the first
+        gate allows. A genuinely flat prospective book is exempt, so a first
+        leg is never refused by a bound derived from its own size.
+
+        AN UNREADABLE INVENTORY IS A REFUSAL. "I could not read the position"
+        must never be spent as "the position is flat" -- that is the one
+        reading that loses money, and it is what a missing check amounts to.
+        """
+        out: Dict[str, Any] = {
+            "ok": True, "reason": None, "coid": coid,
+            "market": str(market), "side": str(side),
+            "basis": "AUTHORITATIVE_RESTATED_IMMEDIATELY_BEFORE_SUBMIT",
+            "labels": ("the last check before the wire; redundant by design. "
+                       "If the gate in handle() is correct this never fires, "
+                       "and a firing is itself a defect report."),
+        }
+        if self.residual_cap_k is None:
+            out["reason"] = "POLICY_OFF"
+            return out
+        try:
+            q = D(str(qty))
+            resid = D(str(self.store.residual(market)))
+            outstanding = D(str(self.store.outstanding_residual(market)))
+            clip = D(str(self.store.max_clip(market)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["ok"] = False
+            out["reason"] = ("RESIDUAL_STATE_UNREADABLE:%s"
+                             % type(exc).__name__)
+            return out
+        signed = q if str(side).upper() == UP else -q
+        # outstanding ALREADY carries this order -- see the docstring.
+        prosp_after = resid + outstanding
+        prosp_before = prosp_after - signed
+        b_abs = -prosp_before if prosp_before < 0 else prosp_before
+        a_abs = -prosp_after if prosp_after < 0 else prosp_after
+        if q > clip:
+            clip = q
+        cap = min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)
+        exempt_open = b_abs == 0
+        increases = a_abs > b_abs
+        out.update({
+            "residual_realized": str(resid),
+            "outstanding_residual_incl_this_order": str(outstanding),
+            "prospective_before": str(prosp_before),
+            "prospective_after": str(prosp_after),
+            "abs_prospective_before": str(b_abs),
+            "abs_prospective_after": str(a_abs),
+            "clip_used": str(clip), "cap_contracts": str(cap),
+            "k": str(self.residual_cap_k),
+            "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
+            "prospective_book_flat": bool(exempt_open),
+            "increases_abs_prospective": bool(increases),
+        })
+        if (not exempt_open) and increases and a_abs > cap:
+            out["ok"] = False
+            out["reason"] = "FINAL_RESIDUAL_ABOVE_CAP"
+        return out
+
     def handle(self, row: Optional[Mapping[str, Any]],
                authenticated: Mapping[str, Any],
                *, market: str, window: str,
@@ -7765,6 +7851,29 @@ class FaithfulExecutor:
                 except BaseException as exc:                   # noqa: BLE001
                     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         raise
+            # DEFENCE IN DEPTH, AND THE LAST THING BEFORE THE WIRE.
+            #
+            # Every gate above has already run. This re-reads the position
+            # one more time from the authoritative store and refuses an
+            # exposure-increasing order that would breach the residual cap,
+            # because on 1415z the earlier gate passed exactly such an order
+            # and the replay proved its predicate sound -- so the failure was
+            # in the state it was handed, which only a restated read can
+            # catch. Risk-reducing legs and a genuinely flat book pass
+            # untouched; an unreadable position refuses.
+            #
+            # The order has already been claimed and recorded by this point,
+            # so a refusal here terminates it rather than leaving it pending:
+            # the claim is spent either way, which is the conservative
+            # direction and is what the claim is for.
+            _frg = self.final_residual_guard(
+                market, dec["side"], tr["qty"], coid=coid)
+            prov.note("FINAL_RESIDUAL_GUARD", _frg)
+            if not _frg.get("ok"):
+                self.store.terminate_order(
+                    coid, reason=str(_frg.get("reason")))
+                return prov.refuse("SAFETY_OVERLAY",
+                                   str(_frg.get("reason")))
             ack = self.transport.submit(intent)
             # THE CALIBRATION RECORD'S VENUE BINDING, and the first of the
             # money path's lifecycle hooks to be wired at all.

@@ -440,9 +440,39 @@ def window_record(*, market: str,
             "rejected": sum(1 for o in orders
                             if o["state"] in ("REJECTED", "REJECT")),
             "fill_events": len(ev),
+            # THE STAGES, SEPARATED, BECAUSE `submitted` IS NOT "SENT".
+            #
+            # `submitted` counts PRE-WIRE CAPTURES: one per order that passed
+            # every gate and reached `FillCalibration.pre_submit`, which runs
+            # immediately BEFORE `transport.submit` and is explicitly not a
+            # gate. An order whose submit then raises -- NotArmed after a
+            # disarm, a transport fault -- is counted here and never reaches
+            # the venue.
+            #
+            # 1445z, 2026-10-31: this window reported submitted 70 against
+            # acknowledged 1, with cancelled 0 and rejected 0 and the
+            # watchdog seeing zero open orders. Sixty-nine of those never
+            # existed at the venue: the campaign was disarmed mid-window and
+            # every subsequent tick's refused completion attempt incremented
+            # the pre-wire counter. Read alone, `submitted` said the engine
+            # was firing seventy orders at a venue it had stopped talking to.
+            #
+            # So the stages are named. `submitted` keeps its meaning for
+            # every existing reader; the two fields below say what it is and
+            # what is missing, and `unacknowledged` above zero is the signal
+            # that submissions are not reaching the venue.
+            "pre_wire_captures": len(orders),
+            "unacknowledged": sum(1 for o in orders
+                                  if not o["acknowledged"]),
             "labels": ("fill_events counts deduplicated positive deltas; "
                        "filled_orders counts distinct coids. A partial fill "
-                       "is ONE order and may be several events."),
+                       "is ONE order and may be several events. `submitted` "
+                       "and `pre_wire_captures` are the SAME number and are "
+                       "counted BEFORE the wire: neither is evidence an "
+                       "order reached the venue. `acknowledged` is the venue "
+                       "lifecycle and is the first field that is. "
+                       "`unacknowledged` above zero means submissions are "
+                       "being attempted and not landing."),
         },
         "contracts": {
             "filled_total": sum((o["qty_filled"] or D(0) for o in filled),

@@ -164,6 +164,16 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "SAFETY_OVERLAY:DAY_REALIZED_UNAVAILABLE",
     "SAFETY_OVERLAY:SAFETY_LIMITS_REFUSE",
     "SAFETY_OVERLAY:RESIDUAL_ABOVE_CAP",
+    # THE SAME CAP AGAIN, restated immediately before the wire, from the
+    # 1415z incident of 2026-10-31: the gate above passed an UP order that
+    # took realized UP inventory from 2.17 to 4.25 against a 3-contract
+    # ceiling, and replay proved its predicate, its store reads and its
+    # configuration all correct -- so it was evaluated against state that
+    # did not describe the position it created. ONE SITE, two reasons:
+    # FINAL_RESIDUAL_ABOVE_CAP and, failing closed on inventory it cannot
+    # read, RESIDUAL_STATE_UNREADABLE. Deliberately redundant: if the gate
+    # above is right this never fires, and a firing is a defect report.
+    "SAFETY_OVERLAY:FINAL_RESIDUAL_ABOVE_CAP",
     # the pre-send crossing re-check, immediately BEFORE the claim below:
     # a post-only leg the book has left is certain to be rejected and the
     # claim it would spend is never returned, so it is declined first. An

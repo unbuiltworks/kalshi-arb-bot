@@ -185,3 +185,138 @@ def test_an_unset_k_turns_the_whole_policy_off(tmp_path):
     finally:
         if old is not None:
             os.environ["PMUS_RESIDUAL_CAP_K"] = old
+
+
+# ================= PRIORITY 2: the final pre-submit guard, end to end
+#
+# These drive `FaithfulExecutor.final_residual_guard` -- the production
+# method, on the production path -- rather than a local copy of the
+# predicate. The 1415z incident is the first case.
+
+def _executor(store):
+    """A FaithfulExecutor with k=2 and nothing else wired.
+
+    The guard touches only `residual_cap_k` and the store, so the rest of
+    the executor is deliberately left unconfigured: a test that needed a
+    transport would be testing something else.
+    """
+    ex = LX.FaithfulExecutor.__new__(LX.FaithfulExecutor)
+    ex.residual_cap_k = D(2)
+    ex.store = store
+    return ex
+
+
+def _record_live(store, coid, market, side, qty, price="0.25"):
+    """Put an order in `live_orders` the way record_submit does."""
+    live = store.state.setdefault("live_orders", {})
+    live[coid] = {"market": market, "side": side,
+                  "price": str(price), "qty": str(qty),
+                  "remaining": str(qty)}
+    store.save()
+
+
+def test_final_guard_refuses_the_1415z_order_six(tmp_path):
+    """THE INCIDENT, through the production guard.
+
+    Five fills booked (realized UP 2.17) and order 6 recorded live as
+    record_submit would have left it. The guard must refuse.
+    """
+    st = _store(tmp_path, 5)
+    _record_live(st, "l5f-fe3923af", MARKET, "UP", "2.08")
+    g = _executor(st).final_residual_guard(
+        MARKET, "UP", D("2.08"), coid="l5f-fe3923af")
+    assert g["ok"] is False
+    assert g["reason"] == "FINAL_RESIDUAL_ABOVE_CAP"
+    assert g["prospective_before"] == "2.17"
+    assert g["prospective_after"] == "4.25"
+    assert g["cap_contracts"] == "3"
+    assert g["increases_abs_prospective"] is True
+    assert g["prospective_book_flat"] is False
+
+
+def test_final_guard_does_not_double_count_the_order(tmp_path):
+    """`outstanding` already holds this order; before must come out at 2.17.
+
+    Computing prospective_before as realized+outstanding (rather than
+    subtracting the order) would read 4.25 as the BEFORE figure and refuse
+    orders that are actually fine. This pins the arithmetic.
+    """
+    st = _store(tmp_path, 5)
+    _record_live(st, "c1", MARKET, "UP", "2.08")
+    g = _executor(st).final_residual_guard(MARKET, "UP", D("2.08"), coid="c1")
+    assert g["residual_realized"] == "2.17"
+    assert g["outstanding_residual_incl_this_order"] == "2.08"
+    assert g["prospective_before"] == "2.17"
+
+
+def test_final_guard_preserves_a_risk_reducing_completion(tmp_path):
+    """The DOWN leg that pairs the 2.17 must still go. Any depth."""
+    st = _store(tmp_path, 5)
+    _record_live(st, "c2", MARKET, "DOWN", "2.17")
+    g = _executor(st).final_residual_guard(MARKET, "DOWN", D("2.17"), coid="c2")
+    assert g["ok"] is True
+    assert g["increases_abs_prospective"] is False
+
+
+def test_final_guard_exempts_a_genuine_first_leg(tmp_path):
+    """A flat book places its opening leg however big the leg is."""
+    st = LX.InventoryStore(str(tmp_path / "flat2.json"))
+    _record_live(st, "c3", MARKET, "UP", "2.90")
+    g = _executor(st).final_residual_guard(MARKET, "UP", D("2.90"), coid="c3")
+    assert g["prospective_book_flat"] is True
+    assert g["ok"] is True
+
+
+def test_final_guard_fails_closed_when_inventory_is_unreadable(tmp_path):
+    """An unreadable position must REFUSE, never read as flat."""
+    class _Broken:
+        state: dict = {}
+
+        def residual(self, market):
+            raise RuntimeError("store unavailable")
+
+        def outstanding_residual(self, market):
+            return D(0)
+
+        def max_clip(self, market):
+            return D(2)
+
+    g = _executor(_Broken()).final_residual_guard(
+        MARKET, "UP", D("2.08"), coid="c4")
+    assert g["ok"] is False
+    assert g["reason"].startswith("RESIDUAL_STATE_UNREADABLE")
+
+
+def test_final_guard_is_inert_when_the_policy_is_off(tmp_path):
+    """k unset means the whole policy is off; the guard must not invent one."""
+    st = _store(tmp_path, 5)
+    ex = _executor(st)
+    ex.residual_cap_k = None
+    g = ex.final_residual_guard(MARKET, "UP", D("2.08"), coid="c5")
+    assert g["ok"] is True
+    assert g["reason"] == "POLICY_OFF"
+
+
+def test_final_guard_runs_the_whole_six_fill_sequence(tmp_path):
+    """END TO END: replay all six orders through the production guard.
+
+    Orders 1-5 must pass and order 6 must refuse. This is the sequence the
+    venue actually filled, in order, against the real store.
+    """
+    st = LX.InventoryStore(str(tmp_path / "e2e.json"))
+    ex = _executor(st)
+    seq = list(FILLS) + [("UP", "2.08", "0.25")]
+    verdicts = []
+    for i, (side, qty, px) in enumerate(seq):
+        coid = "l5f-e2e-%d" % i
+        _record_live(st, coid, MARKET, side, qty, px)
+        g = ex.final_residual_guard(MARKET, side, D(qty), coid=coid)
+        verdicts.append(bool(g["ok"]))
+        st.state.setdefault("live_orders", {}).pop(coid, None)
+        if g["ok"]:
+            st.apply_fill(MARKET, side, D(qty), D(px),
+                          coid=coid, basis=LX.OWN)
+    assert verdicts == [True, True, True, True, True, False], verdicts
+    # the position the cap was supposed to prevent never gets built
+    assert st.residual(MARKET) == D("2.17")
+    assert st.residual(MARKET) <= LX.ABS_RESIDUAL_CAP_CONTRACTS
