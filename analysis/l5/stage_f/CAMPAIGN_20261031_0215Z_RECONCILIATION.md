@@ -85,3 +85,21 @@ there was nothing to settle. It contributed $0 and stranded nothing.
 - No rebate is counted; estimated maker rebates remain uncredited.
 - $480/day remains a target. At this campaign's matched rate it would need
   roughly 31,000 matched contracts a day against the 16.14 traded here.
+
+## Correction appended after diagnostic (see STAGE_B1_DIAGNOSTIC.md)
+
+The note above that the matched edge is "consistent, but three windows cannot
+distinguish that from noise" was directionally right and is now exact:
+
+- treating each settled pair as one observation of `1.00 − pair_cost`:
+  mean **+$0.0125/contract**, stdev 0.0282, n=8 → **t = 1.26, one-sided
+  p ≈ 0.105**. Not significant.
+- **80% of the matched edge comes from one pair of eight** (0230z #4 at
+  0.9200). The other seven average **+$0.00286/contract**.
+- only **4 of 8** pairs completed strictly below $1.00.
+
+Also corrected: 0300z's zero fills were **not** caused by the book. The
+campaign's `OPEN` submission class read **12 spent of 12, remaining 0** at
+02:58:34, before window 4 armed, and the completion reserve independently
+refused opening (`NO_COMPLETION_CAPACITY_RESERVED`). The 4-window
+authorization was funded for roughly 3 windows of activity.
