@@ -140,34 +140,60 @@ class TestReq5CancelAndReconcileBeforeReplacing:
 class TestReq6NoOpeningWhileUnmatchedEatsTheBudget:
     """The one requirement I had previously assumed rather than checked."""
 
-    def test_the_cap_reads_the_PROSPECTIVE_book_not_the_realized_one(self):
+    def test_the_cap_reads_a_FILL_CONTINGENT_WORST_CASE(self):
         """Realized residual looked inside the cap on 1130z while four
-        orders filled within seven seconds to 3.24 against 1.80. The gate
-        counts every live order as if it filled."""
-        src = inspect.getsource(LX.FaithfulExecutor)
-        assert "outstanding_residual(market)" in src
-        assert "prosp_before = resid_before + outstanding" in src
-        assert '"basis": "PROSPECTIVE_NET"' in src
+        orders filled within seven seconds to 3.24 against 1.80, so the
+        gate must count live orders. But on 1415z (2026-10-31) the NETTED
+        prospective view credited a resting DOWN 2.17 against a held UP
+        2.17, read the book as flat and let an UP 2.08 through to 4.25.
+
+        So the basis is now a fill-contingent worst case: same-side
+        outstanding counts, opposite-side outstanding earns NO credit. The
+        arithmetic lives in ONE function that both the gate and the final
+        pre-wire guard call, so the two cannot drift.
+        """
+        src = inspect.getsource(LX.residual_cap_decision)
+        assert '"basis": "FILL_CONTINGENT_WORST_CASE"' in src
+        assert "worst_after = resid + signed_same" in src
+        # the gate still reads live orders, now per side
+        gate = inspect.getsource(LX.FaithfulExecutor)
+        assert "outstanding_on_side(market" in gate
+        assert "residual_cap_decision(" in gate
+
+    def test_an_opposite_side_resting_order_is_never_a_hedge(self):
+        """The 1415z property, stated as code. `other_side` is reported and
+        is NEVER added into the worst case."""
+        src = inspect.getsource(LX.residual_cap_decision)
+        assert '"outstanding_other_side": str(other_side)' in src
+        assert "worst_after = resid + signed_same" in src
+        assert "other_side" not in src.split("worst_after = resid +")[1
+            ].split("worst_before =")[0], (
+            "the worst case must not credit the opposite side")
 
     def test_an_opening_is_exempt_ONLY_from_a_completely_flat_book(self):
-        """`exempt_open` is `b_abs == 0` -- nothing held AND nothing
-        resting. So a new opening while unmatched inventory exists is never
-        exempt, which is requirement 6."""
-        src = inspect.getsource(LX.FaithfulExecutor)
-        assert "exempt_open = b_abs == 0" in src
-        assert "(not exempt_open) and increases and a_abs > cap" in src
+        """Three separate conditions, not `net == 0`.
+
+        `net == 0` was never this test: it also fires when a held leg and a
+        resting opposite leg merely cancel, which is exactly what happened
+        on 1415z. Requirement 6 needs nothing HELD and nothing RESTING.
+        """
+        src = inspect.getsource(LX.residual_cap_decision)
+        assert "nothing_held = resid == D(0)" in src
+        assert "nothing_resting = (" in src
+        assert "exempt_open = bool(nothing_held and nothing_resting)" in src
+        assert "binds = bool((not exempt_open) and increases and a_abs > cap)" \
+            in src
 
     def test_a_residual_reducing_leg_is_never_refused(self):
         """The asymmetry that keeps this from stranding a position: only
-        legs that INCREASE |prospective| can be capped."""
-        src = inspect.getsource(LX.FaithfulExecutor)
+        legs that INCREASE the worst case can be capped."""
+        src = inspect.getsource(LX.residual_cap_decision)
         assert "increases = a_abs > b_abs" in src
 
     def test_the_absolute_ceiling_is_the_approved_three_contracts(self):
         assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
-        src = inspect.getsource(LX.FaithfulExecutor)
-        assert "min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)" \
-            in src
+        src = inspect.getsource(LX.residual_cap_decision)
+        assert "cap = min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)" in src
 
 
 class TestReq7TheExistingControlsAreUntouched:

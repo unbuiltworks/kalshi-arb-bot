@@ -484,6 +484,116 @@ def controller_provisional_price(side: str, book: Mapping[str, Any],
 ABS_RESIDUAL_CAP_CONTRACTS = D("3")
 
 
+def residual_cap_decision(*, resid: D, same_side: D, other_side: D,
+                          qty: D, side: str, k: D, clip: D,
+                          same_side_includes_this_order: bool) -> Dict[str, Any]:
+    """The residual cap, on a FILL-CONTINGENT WORST CASE. One definition.
+
+    BOTH call sites use this: the gate in `handle` and the final guard
+    immediately before the wire. They are deliberately redundant and must
+    never disagree, so the arithmetic lives once.
+
+    THE RULE. For an order on side S, assume the worst thing that can
+    happen: every still-fillable order on S FILLS, and nothing resting on
+    the OTHER side fills at all. A resting opposite leg is an intention, not
+    a hedge -- it can be cancelled, and on 1415z it was.
+
+    WHAT THIS REPLACES, AND WHY. The old basis was PROSPECTIVE_NET:
+    `resid + signed_outstanding`, netting both sides. On 2026-10-31 at
+    14:21:01 that read `residual_realized 2.17` and
+    `outstanding_residual -2.17` -- UP 2.17 HELD against a DOWN 2.17
+    completion RESTING -- summed them to `prospective_before 0.00`, and
+    `exempt_open = (net == 0)` fired. An exposure-increasing UP 2.08 was
+    therefore treated as a first leg into an empty market, the 3-contract
+    ceiling never applied, the DOWN leg was cancelled unfilled, and the
+    position became UP 4.25. The net also understated the post-fill figure
+    as 2.08 when the truth was 4.25.
+
+    THE EXEMPTIONS SURVIVE, both of them, and are now stated separately so a
+    record shows which one applied:
+
+      * A GENUINE OPENING LEG -- nothing held AND nothing resting on either
+        side -- is never capped, so a first order cannot be refused by a
+        bound derived from its own size. `net == 0` was never this test and
+        is what went wrong; three explicit conditions are.
+      * A LEG THAT SHRINKS THE WORST CASE is never refused at any depth. A
+        completion against held inventory reduces |worst| and passes, which
+        is the asymmetry that keeps risk-reducing orders flowing.
+
+    `same_side_includes_this_order` exists because the two call sites differ in
+    one respect only: `record_submit` has run by the time the final guard
+    is reached, so this order is already in the same-side sum there and is
+    not in the gate's. Computing it either way round would double-count the
+    order at one site and miss it at the other.
+    """
+    up = str(side).upper() == UP
+    signed = qty if up else -qty
+    signed_same = same_side if up else -same_side
+    worst_after = resid + signed_same
+    if not same_side_includes_this_order:
+        worst_after = worst_after + signed
+    worst_before = worst_after - signed
+    b_abs = -worst_before if worst_before < 0 else worst_before
+    a_abs = -worst_after if worst_after < 0 else worst_after
+    use_clip = qty if qty > clip else clip
+    cap = min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)
+    nothing_held = resid == D(0)
+    resting_same_other_than_this = (
+        same_side - qty if same_side_includes_this_order else same_side)
+    nothing_resting = (resting_same_other_than_this == D(0)
+                       and other_side == D(0))
+    exempt_open = bool(nothing_held and nothing_resting)
+    increases = a_abs > b_abs
+    binds = bool((not exempt_open) and increases and a_abs > cap)
+    return {
+        "basis": "FILL_CONTINGENT_WORST_CASE",
+        "k": str(k), "clip_used": str(use_clip), "cap_contracts": str(cap),
+        "relative_cap_contracts": str(k * use_clip),
+        "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
+        "which_binds": ("ABSOLUTE"
+                        if ABS_RESIDUAL_CAP_CONTRACTS < k * use_clip
+                        else "RELATIVE"),
+        "residual_realized": str(resid),
+        "outstanding_same_side": str(same_side),
+        "outstanding_other_side": str(other_side),
+        "same_side_includes_this_order": bool(same_side_includes_this_order),
+        "worst_case_before": str(worst_before),
+        "worst_case_after": str(worst_after),
+        "abs_worst_before": str(b_abs), "abs_worst_after": str(a_abs),
+        "nothing_held": bool(nothing_held),
+        "nothing_resting": bool(nothing_resting),
+        "prospective_book_flat": exempt_open,
+        "increases_abs_prospective": bool(increases),
+        "binds": binds,
+        # THE OLD NETTED BASIS, reported beside the worst case so the two
+        # readings stay comparable in the record. It nets BOTH sides, which
+        # is what made a held 2.17 against a resting 2.17 read as 0.00.
+        "netted_view_would_have_said": str(
+            resid + signed_same + (-other_side if up else other_side)),
+        # LEGACY NAMES, KEPT AS ALIASES. Existing readers -- the dedicated
+        # residual-cap suite among them -- address the before/after
+        # magnitudes by these names, and the magnitudes are what changed
+        # basis, not what they mean. Renaming them outright broke eleven
+        # tests that were asserting correct behaviour, so the old names are
+        # preserved pointing at the operative worst-case figures. `basis`
+        # says which basis produced them, and that string DID change.
+        "prospective_before": str(worst_before),
+        "prospective_after_if_filled": str(worst_after),
+        "abs_prospective_before": str(b_abs),
+        "abs_prospective_after": str(a_abs),
+        "outstanding_residual": str(
+            signed_same + (-other_side if up else other_side)),
+        "comparison": ("refuse iff NOT (nothing held and nothing resting) "
+                       "AND this increases the worst case AND the worst "
+                       "case after exceeds the cap; equality passes"),
+        "note": ("a resting OPPOSITE-side order is never credited as a "
+                 "hedge; same-side resting orders count toward maximum "
+                 "potential exposure"),
+        "units": "contracts",
+    }
+
+
+
 class SafetyLimits:
     """Hard account protection. Outside L5_NATIVE, and never silent."""
 
@@ -6233,44 +6343,15 @@ class FaithfulExecutor:
             out["reason"] = ("RESIDUAL_STATE_UNREADABLE:%s"
                              % type(exc).__name__)
             return out
-        # THE WORST CASE, NOT THE NET. The netted prospective book credits a
-        # resting OPPOSITE-side order as though it were certain to fill. On
-        # 1415z it was cancelled unfilled, and that credit is exactly what
-        # turned a held UP 2.17 plus a resting DOWN 2.17 into a book the gate
-        # read as flat. A bound may not assume the leg that would save it
-        # fills; it must assume the leg that hurts does.
+        # THE SAME DEFINITION THE PRIMARY GATE USES. One function, two call
+        # sites, deliberately redundant and unable to disagree.
         #
-        # So the figure compared against the cap is: realized residual, plus
-        # every still-fillable share resting on THE SIDE BEING INCREASED,
-        # with NO credit for anything resting opposite. `outstanding` (the
-        # signed net, which already carries this order) is kept only to be
-        # reported, so the record shows both what was true and what the
-        # netted view would have said.
+        # `same_side_includes_this_order=True`: `record_submit` has already
+        # run here, so this order is in the same-side sum. Computing it the
+        # other way round would double-count it and refuse orders that are
+        # fine.
         try:
             same_side = D(str(self.store.outstanding_on_side(market, side)))
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            out["ok"] = False
-            out["reason"] = ("OUTSTANDING_BY_SIDE_UNREADABLE:%s"
-                             % type(exc).__name__)
-            return out
-        signed = q if str(side).upper() == UP else -q
-        # `same_side` already includes this order, because record_submit ran.
-        worst_after = (resid + same_side if signed > 0
-                       else resid - same_side)
-        worst_before = worst_after - signed
-        b_abs = -worst_before if worst_before < 0 else worst_before
-        a_abs = -worst_after if worst_after < 0 else worst_after
-        if q > clip:
-            clip = q
-        cap = min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)
-        # NOTHING HELD AND NOTHING RESTING BUT THIS ORDER, which is what
-        # the exemption has always claimed to mean. `net == 0` is NOT that:
-        # it also fires when a held leg and a resting opposite leg merely
-        # cancel, which is the 1415z state exactly. The three conditions are
-        # stated separately so the record shows which one failed.
-        try:
             other = D(str(self.store.outstanding_on_side(
                 market, DOWN if str(side).upper() == UP else UP)))
         except BaseException as exc:                           # noqa: BLE001
@@ -6280,33 +6361,13 @@ class FaithfulExecutor:
             out["reason"] = ("OUTSTANDING_BY_SIDE_UNREADABLE:%s"
                              % type(exc).__name__)
             return out
-        exempt_open = (resid == D(0) and other == D(0) and same_side == q)
-        out["outstanding_opposite_side"] = str(other)
-        out["nothing_held"] = bool(resid == D(0))
-        out["nothing_resting_opposite"] = bool(other == D(0))
-        out["only_this_order_resting_same_side"] = bool(same_side == q)
-        increases = a_abs > b_abs
-        out.update({
-            "residual_realized": str(resid),
-            "outstanding_residual_net_incl_this_order": str(outstanding),
-            "outstanding_same_side_incl_this_order": str(same_side),
-            "worst_case_before": str(worst_before),
-            "worst_case_after": str(worst_after),
-            "abs_worst_before": str(b_abs),
-            "abs_worst_after": str(a_abs),
-            "netted_view_would_have_said": str(resid + outstanding),
-            "basis_note": ("compared against the cap on a WORST CASE: no "
-                           "credit for anything resting on the opposite "
-                           "side, because on 1415z that leg was cancelled "
-                           "unfilled and its credit made a 2.17 book read "
-                           "as flat"),
-            "clip_used": str(clip), "cap_contracts": str(cap),
-            "k": str(self.residual_cap_k),
-            "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
-            "prospective_book_flat": bool(exempt_open),
-            "increases_abs_prospective": bool(increases),
-        })
-        if (not exempt_open) and increases and a_abs > cap:
+        rc = residual_cap_decision(
+            resid=resid, same_side=same_side, other_side=other, qty=q,
+            side=side, k=self.residual_cap_k, clip=clip,
+            same_side_includes_this_order=True)
+        out.update(rc)
+        out["outstanding_residual_net_incl_this_order"] = str(outstanding)
+        if rc["binds"]:
             out["ok"] = False
             out["reason"] = "FINAL_RESIDUAL_ABOVE_CAP"
         return out
@@ -7447,67 +7508,41 @@ class FaithfulExecutor:
         # so the treatment is read off the record rather than inferred from
         # what happened next.
         if self.residual_cap_k is not None:
-            # PROSPECTIVE NET. The gate reads realized inventory PLUS every
-            # live order in this market as if it filled, because on 1130z it
-            # did not and inventory reached 3.24 against a cap of 1.80. Four
-            # DOWN orders accepted while realized residual sat inside the cap
-            # filled inside seven seconds, two of them after resting three
-            # minutes. Realized residual is what we HAVE; prospective is what
-            # we have ALREADY COMMITTED TO, and the second is the one a bound
-            # has to be written against.
+            # FILL-CONTINGENT WORST CASE, via the ONE shared definition in
+            # `residual_cap_decision`. The final guard before the wire calls
+            # the same function, so the two cannot drift -- and the primary
+            # gate does NOT depend on that guard to correct it.
+            #
+            # WHAT THIS REPLACED. The basis was PROSPECTIVE_NET, which netted
+            # both sides. On 1415z (2026-10-31 14:21:01) it read
+            # `residual_realized 2.17` against `outstanding_residual -2.17`
+            # -- UP 2.17 HELD, a DOWN 2.17 completion RESTING -- summed them
+            # to 0.00, fired `exempt_open = (net == 0)`, and let an
+            # exposure-increasing UP 2.08 through as a first leg. The DOWN
+            # leg was cancelled unfilled and the position became UP 4.25
+            # against a 3-contract ceiling. A resting opposite leg is an
+            # intention, never a completed hedge.
+            #
+            # `same_side_includes_this_order=False`: this runs BEFORE
+            # `record_submit`, so the order is not yet in the sums.
             outstanding = self.store.outstanding_residual(market)
-            prosp_before = resid_before + outstanding
-            signed = tr["qty"] if dec["side"] == "UP" else -tr["qty"]
-            prosp_after = prosp_before + signed
-            b_abs = -prosp_before if prosp_before < 0 else prosp_before
-            a_abs = -prosp_after if prosp_after < 0 else prosp_after
-            # TWO EXEMPTIONS, BOTH DECIDED ON THE PROSPECTIVE BOOK.
-            # A genuine opening leg -- nothing held AND nothing resting -- is
-            # never capped, so the first order into a market cannot be refused
-            # by a bound derived from its own size. What cannot happen any
-            # more is four of them in a row each calling itself the first.
-            exempt_open = b_abs == 0
-            # A leg that shrinks |prospective| is never refused, at any depth,
-            # whatever is outstanding. That is the repair asymmetry, and it is
-            # unchanged except that it now reads the prospective book too.
-            increases = a_abs > b_abs
-            clip = self.store.max_clip(market)
-            if tr["qty"] > clip:
-                clip = tr["qty"]
-            # THE INTERSECTION, NEVER THE WIDER OF THE TWO. The relative
-            # bound scales with the clip and would pass the approved
-            # absolute ceiling above a clip of 1.5; the owner approved 3
-            # contracts, so 3 is the ceiling whatever k * clip computes to.
-            cap = min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)
-            prov.note("RESIDUAL_CAP", {
-                "k": str(self.residual_cap_k),
-                "relative_cap_contracts": str(self.residual_cap_k * clip),
-                "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
-                "which_binds": ("ABSOLUTE"
-                                if ABS_RESIDUAL_CAP_CONTRACTS
-                                < self.residual_cap_k * clip
-                                else "RELATIVE"),
-                "basis": "PROSPECTIVE_NET",
-                "max_clip_filled": str(self.store.max_clip(market)),
-                "clip_used": str(clip),
-                "clip_basis": "max(largest filled clip, this order's qty)",
-                "cap_contracts": str(cap),
-                "residual_realized": str(resid_before),
-                "outstanding_residual": str(outstanding),
-                "prospective_before": str(prosp_before),
-                "prospective_after_if_filled": str(prosp_after),
-                "abs_prospective_before": str(b_abs),
-                "abs_prospective_after": str(a_abs),
-                "increases_abs_prospective": bool(increases),
-                "prospective_book_flat": bool(exempt_open),
-                "inventory_class_realized": klass,
-                "binds": bool(not exempt_open and increases and a_abs > cap),
-                "comparison": ("refuse iff the prospective book is NOT flat "
-                               "AND this increases |prospective| AND "
-                               "|prospective after| > cap; equality passes"),
-                "units": "contracts",
-            })
-            if (not exempt_open) and increases and a_abs > cap:
+            _side = str(dec["side"])
+            _same = self.store.outstanding_on_side(market, _side)
+            _other = self.store.outstanding_on_side(
+                market, DOWN if _side.upper() == UP else UP)
+            _rc = residual_cap_decision(
+                resid=D(str(resid_before)), same_side=D(str(_same)),
+                other_side=D(str(_other)), qty=D(str(tr["qty"])),
+                side=_side, k=self.residual_cap_k,
+                clip=D(str(self.store.max_clip(market))),
+                same_side_includes_this_order=False)
+            prov.note("RESIDUAL_CAP", dict(
+                _rc,
+                max_clip_filled=str(self.store.max_clip(market)),
+                clip_basis="max(largest filled clip, this order's qty)",
+                outstanding_residual_net=str(outstanding),
+                inventory_class_realized=klass))
+            if _rc["binds"]:
                 return prov.refuse("SAFETY_OVERLAY", "RESIDUAL_ABOVE_CAP")
 
         # THE CONTROLLER'S KEY, RESOLVED HERE AND NOWHERE EARLIER.

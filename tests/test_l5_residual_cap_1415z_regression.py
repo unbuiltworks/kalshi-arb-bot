@@ -244,7 +244,7 @@ def test_final_guard_does_not_double_count_the_order(tmp_path):
     _record_live(st, "c1", MARKET, "UP", "2.08")
     g = _executor(st).final_residual_guard(MARKET, "UP", D("2.08"), coid="c1")
     assert g["residual_realized"] == "2.17"
-    assert g["outstanding_same_side_incl_this_order"] == "2.08"
+    assert g["outstanding_same_side"] == "2.08"
     assert g["worst_case_before"] == "2.17"
     assert g["worst_case_after"] == "4.25"
 

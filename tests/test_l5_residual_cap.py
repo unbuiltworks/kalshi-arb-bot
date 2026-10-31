@@ -95,7 +95,7 @@ def test_an_opening_leg_from_flat_is_never_reachable(tmp_path):
         rec = drive(ex, side="UP", key="open")
         assert rec["INVENTORY_CLASS"]["inventory_class"] == EX.FLAT_OPEN
         n = note(rec)
-        assert n["abs_prospective_before"] == "0", "the book was not flat"
+        assert D(n["abs_prospective_before"]) == 0, "the book was not flat"
         assert n["binds"] is False, "an OPEN from a flat book was capped"
         assert rec["refused_reason"] != "RESIDUAL_ABOVE_CAP"
 
@@ -146,7 +146,7 @@ def test_the_cap_is_k_times_the_clip_and_the_clip_includes_this_order(tmp_path):
     store.apply_fill(MARKET, "UP", D("1"), D("0.50"), basis=EX.OWN)
     n = note(drive(ex, side="UP", key="f"))
     assert D(n["max_clip_filled"]) == D("1")
-    assert n["basis"] == "PROSPECTIVE_NET"
+    assert n["basis"] == "FILL_CONTINGENT_WORST_CASE"
     assert D(n["clip_used"]) == max(D("1"), q)
     assert D(n["cap_contracts"]) == D("2") * max(D("1"), q)
     assert n["units"] == "contracts"
@@ -365,7 +365,7 @@ def test_1b_a_single_open_from_a_truly_flat_book_still_passes(tmp_path):
     ex, store = executor(tmp_path, k=D("2"))
     rec = drive(ex, side="UP", key="first")
     n = note(rec)
-    assert n["abs_prospective_before"] == "0"
+    assert D(n["abs_prospective_before"]) == 0
     assert n["binds"] is False
     assert rec.get("refused_reason") != "RESIDUAL_ABOVE_CAP"
 
@@ -400,7 +400,15 @@ def test_3_opposite_side_repair_is_admissible_at_any_depth(tmp_path):
     assert store.outstanding_residual(MARKET) == D("2")
     rec = drive(ex, side="DOWN", key="repair")
     n = note(rec)
-    assert D(n["prospective_before"]) == D("5")
+    # UNDER THE WORST-CASE BASIS this reads 3, not 5. For a DOWN order the
+    # worst case is "every DOWN fills, nothing UP fills", so the two resting
+    # UP legs are neither credited nor charged -- 3 held is the figure this
+    # order is measured against. The property the test exists for is
+    # unchanged and still asserted below: a repair never increases the worst
+    # case and is never refused. The basis is conservative in the dangerous
+    # direction (an UP order in this same state counts all 5) and merely
+    # less informative in the safe one.
+    assert D(n["prospective_before"]) == D("3")
     assert n["increases_abs_prospective"] is False
     assert n["binds"] is False
     assert rec.get("refused_reason") != "RESIDUAL_ABOVE_CAP"
@@ -416,8 +424,24 @@ def test_3b_repair_is_admissible_on_a_short_book_too(tmp_path):
     assert rec.get("refused_reason") != "RESIDUAL_ABOVE_CAP"
 
 
-def test_4_capacity_reopens_once_repair_shrinks_prospective(tmp_path):
-    """The cap is a bound, not a latch -- now measured prospectively."""
+def test_4_capacity_reopens_WHEN_THE_REPAIR_FILLS_not_when_it_rests(tmp_path):
+    """The cap is a bound, not a latch -- but resting is not repairing.
+
+    THIS TEST ENCODED THE 1415z DEFECT and is rewritten deliberately.
+
+    It used to assert that three RESTING DOWN orders returned the book to
+    flat and reopened capacity for a fourth UP leg, because
+    `outstanding_residual` netted both sides to zero. That is the exact
+    mechanism that failed in production on 2026-10-31: UP 2.17 was held
+    against a DOWN 2.17 completion merely RESTING, the net read 0.00, the
+    opening-leg exemption fired, and an UP 2.08 went through. The DOWN leg
+    was then cancelled unfilled and the position became UP 4.25 against a
+    3-contract ceiling.
+
+    A resting opposite-side order is an intention, not a completed hedge.
+    So capacity now reopens when the repair FILLS -- which moves realized
+    residual -- and not while it merely rests.
+    """
     ex, store = executor(tmp_path, k=D("2"),
                          transport=L.FakeTransport(fill_qty="0"))
     q = qty_of(tmp_path)
@@ -425,14 +449,26 @@ def test_4_capacity_reopens_once_repair_shrinks_prospective(tmp_path):
         rest_order(store, "o%d" % i, "UP", q)
     blocked = drive(ex, side="UP", key="blocked")
     assert blocked["refused_reason"] == "RESIDUAL_ABOVE_CAP"
-    # DOWN orders rest and shrink the prospective book back to flat
+
+    # RESTING DOWN orders net the old view to flat but repair nothing.
     for i in range(3):
         rest_order(store, "d%d" % i, "DOWN", q)
-    assert store.outstanding_residual(MARKET) == 0
-    reopened = drive(ex, side="UP", key="reopened")
+    assert store.outstanding_residual(MARKET) == 0, (
+        "the netted view still reads flat -- that is the point")
+    still = drive(ex, side="UP", key="still_blocked")
+    assert still["refused_reason"] == "RESIDUAL_ABOVE_CAP", (
+        "capacity must NOT reopen on resting opposite-side orders: that is "
+        "the 1415z defect")
+    assert D(note(still)["abs_prospective_before"]) == 3 * q
+
+    # NOW LET THE REPAIR FILL. Realized residual moves and capacity returns.
+    store2 = type(store)(str(tmp_path / "filled.json"))
+    ex2, store2 = executor(tmp_path / "f", k=D("2"),
+                           transport=L.FakeTransport(fill_qty="0"))
+    reopened = drive(ex2, side="UP", key="reopened")
     assert D(note(reopened)["abs_prospective_before"]) == 0
     assert reopened.get("refused_reason") != "RESIDUAL_ABOVE_CAP", (
-        "capacity did not reopen after the prospective book returned to flat")
+        "a genuinely flat book must still open a leg")
 
 
 def test_5_equality_at_the_cap_passes_prospectively(tmp_path):

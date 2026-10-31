@@ -359,8 +359,10 @@ class TestAbsoluteResidualCeiling:
         import inspect
         from src import l5_live_execution as X
         src = inspect.getsource(X)
-        assert ("cap = min(self.residual_cap_k * clip, "
-                "ABS_RESIDUAL_CAP_CONTRACTS)") in src
+        # the intersection now lives in `residual_cap_decision`, the one
+        # definition the gate and the final pre-wire guard both call.
+        assert "cap = min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)" in src
+        assert "cap = k * use_clip\n" not in src
         assert "cap = self.residual_cap_k * clip\n" not in src
 
     def test_telemetry_names_which_bound_binds(self):
