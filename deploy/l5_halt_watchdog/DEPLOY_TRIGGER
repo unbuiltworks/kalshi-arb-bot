@@ -181,3 +181,39 @@ deploy: 2026-10-27T12:19Z WATCHDOG-ONLY. Promotes the owner's emergency-HALT mar
 # place, price or cancel anything. The executor is untouched and stays
 # DISARMED. 587 tests pass across all 24 halt/watchdog/cancel/reset suites.
 promote: 644ab221221aa23621966e322fbdb918b69573da 2026-11-01 one-action HALT
+
+# 2026-11-01 — owner-authorized EMERGENCY CANCEL-ALL. Promotes ebaef2d8.
+#
+# THE GAP THIS CLOSES. The executor cancels only while ARMED, and this
+# watchdog acted only on orders older than max_order_age_s (300s here). So a
+# HALT asserted while a FRESH order rested left it live for up to five
+# minutes, free to fill and open a residual with nothing managing it.
+#
+# Once a halt is latched, every non-terminal known order becomes a target
+# regardless of age. A SEPARATE path, not a smaller deadline: lowering
+# max_order_age_s would cancel legitimately resting maker orders during
+# normal trading. The age-based path is unchanged.
+#
+# EXACT-ID CANCELLATION AND THE OWNERSHIP CHECKS ARE PRESERVED BY
+# CONSTRUCTION, not by assertion: the existing cancel loop is extracted into
+# _cancel_targets() and both paths call it, so the registry check, the
+# manualOrderIndicator check, the market-match check, the independent venue
+# re-read and the UNCERTAIN handling cannot drift apart. A test walks the AST
+# and asserts two callers and one implementation.
+#
+# An UNREADABLE latch is deliberately NOT an emergency: pulling a resting
+# COMPLETE leg strands the residual it was about to hedge, so this must not
+# fire on a transient GET failure. The emergency branch never re-asserts
+# (that would overwrite the original reason and evidence) and never attests.
+#
+# WATCHDOG ONLY. This service still cannot place or price anything. The
+# four-gate reset, its audit and its zero-obligation checks are untouched.
+# NO LATCH CLEAR IS REQUESTED OR INTENDED: the reset id is spent and
+# L5_HALT_RESET_AT_BOOT is not armed. The executor is untouched and stays
+# DISARMED. Nothing is armed, no loss limit changes, no credentials change,
+# no order is placed.
+#
+# 934 tests pass on this branch across the watchdog, halt, reset, marker and
+# cancel suites. On the source branch a differenced full-suite run showed
+# byte-identical failing-test id sets before and after: zero regressions.
+promote: ebaef2d8 2026-11-01 emergency HALT cancel-all regardless of age
