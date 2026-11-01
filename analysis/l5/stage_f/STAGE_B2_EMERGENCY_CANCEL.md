@@ -166,7 +166,11 @@ latch is not an emergency; and the AST test above.
 
 ## Baseline parity
 
-**542 passed** across every watchdog, halt, reset, marker and cancel suite.
+**1051 passed** across the watchdog, halt, reset, marker and cancel suites
+(`-k "watchdog or halt or cancel or marker"`), the 20 new tests among them.
+The narrower `-k "watchdog or halt"` selector is **542 passed**. A full-suite
+run over all ~14,400 tests was still in flight when this was written; the
+number it returns is reported separately rather than assumed here.
 
 Two existing tests changed, both on a confirmed latch, and the change is a
 strengthening: they asserted that `heartbeat_no_halt` *refuses* over a latch;
