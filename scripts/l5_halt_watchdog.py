@@ -178,8 +178,35 @@ def main() -> int:
         "labels": ("HALT only. Unreachable retains the existing state and "
                    "asserts nothing; the executor is failed closed by the "
                    "attestation going stale, not by this.")})
+    # THE OWNER'S ONE-ACTION HALT, checked EVERY sweep and independent of
+    # whether the signed-marker path is configured at all. The marker needs
+    # a secret and a published file; this needs one Railway variable, whose
+    # write is already an authenticated action carrying more authority than
+    # halting. HALT-only, idempotent, and it cannot clear: unsetting the
+    # variable leaves the latch exactly where it is.
+    emit("L5_EMERGENCY_HALT_NOW_CONFIG", {
+        "env": EHM.HALT_NOW_ENV,
+        "armed": EHM.halt_now_reason() is not None,
+        "poll_s": poll_s,
+        "labels": ("set this variable to any non-empty reason to latch HALT. "
+                   "Clearing it does NOT clear the halt -- only "
+                   "scripts/l5_halt_reset.py can, under its four gates. The "
+                   "latch is what makes the EXECUTOR cancel by exact venue "
+                   "order id via Runner.maybe_halt_deadman -> deadman().")})
     while True:
         try:
+            # FIRST in the sweep, before anything that could fail: the one
+            # action the owner has must not sit behind a marker fetch.
+            _hn = EHM.check_halt_now(
+                wd.asserter, store,
+                # whatever this watchdog is guarding, by name, for the
+                # audit record only -- the trigger is not scoped by it.
+                service=((os.getenv(EHM.MARKER_SERVICE_ENV) or "").strip()
+                         or (os.getenv("RAILWAY_SERVICE_NAME") or "").strip()
+                         or "l5-pmus-live"))
+            if _hn.get("acted") or _hn.get("reason") not in (
+                    "TRIGGER_NOT_SET", "ALREADY_LATCHED"):
+                emit("L5_EMERGENCY_HALT_NOW", _hn)
             if _ehm is not None:
                 # never allowed to break the sweep: check() does not raise.
                 _m = EHM.check(_ehm["source"], _ehm["asserter"],
