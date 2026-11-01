@@ -35,6 +35,13 @@ COPY src/l5_market_binding.py src/l5_market_binding.py
 COPY src/l5_window_actions.py src/l5_window_actions.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_window_collector.py src/l5_window_collector.py
+# THE RETENTION MODULE. `scripts/l5_window_collector_run.py` imports it at
+# MODULE level, so without this COPY the container dies at startup with
+# ModuleNotFoundError and the collector that this fix exists to restore never
+# runs at all. The collector is asserted to call no destructive verb, which is
+# why deletion lives in its own file -- and why that file has to be copied
+# explicitly rather than arriving with the module it supports.
+COPY src/l5_window_retention.py src/l5_window_retention.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
