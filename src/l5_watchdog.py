@@ -530,6 +530,46 @@ class Watchdog:
         self.cancel_enabled = bool(cancel_enabled) and oracle is not None
         self.cancel_requested = bool(cancel_enabled)
 
+    def emergency_state(self) -> tuple:
+        """(emergency, reason). Is a HALT latched right now?
+
+        Read from the SAME record the executor's gate reads, so the two
+        cannot disagree about whether the system is stopped.
+
+        AN UNREADABLE RECORD IS NOT AN EMERGENCY, and that is a deliberate
+        narrowing. The trigger is a CONFIRMED latch, because cancelling is
+        not purely risk-reducing here: pulling a resting COMPLETE leg strands
+        the residual it was about to hedge, which is the exact shape of the
+        1415z harm. Firing that automatically on every transient GET failure
+        would be a worse failure mode than the gap it closes.
+
+        Nothing is lost by waiting for a readable answer. The executor's own
+        gate already refuses to trade on an unestablished latch, so the
+        system is stopped either way; this watchdog re-reads every sweep, so
+        a real latch fires the emergency path on the next successful read;
+        and the age-based path below is untouched and still catches the
+        order on its own deadline. The cost is bounded delay, and it is
+        reported rather than silent.
+
+        The first version of this returned (True, ...) on a read failure. It
+        was wrong twice over: it made every stub-asserter sweep an emergency,
+        and -- because the emergency branch does not re-assert -- it would
+        have cancelled the book WITHOUT ever latching a halt, losing the very
+        record of why the system stopped.
+        """
+        try:
+            from src import l5_halt_gate as HG
+            kind, rec = HG._classify(self.asserter.store)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return (False, "HALT_LATCH_READ_FAILED:" + type(exc).__name__)
+        if kind == "UNREADABLE":
+            return (False, "HALT_LATCH_UNREADABLE_NOT_EMERGENCY")
+        if kind == "PRESENT" and rec is not None and rec.get("halt") is not False:
+            return (True, "HALT_LATCHED:" + str(rec.get("reason") or "?")[:80])
+        return (False, None)
+
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
         now = now or _utc()
         out: Dict[str, Any] = {
@@ -557,6 +597,50 @@ class Watchdog:
             out["read_error"] = type(exc).__name__
             return out
         out["open_orders"] = len(rows)
+        # ---- EMERGENCY HALT CANCELLATION -------------------------------
+        # A LATCHED HALT MAKES EVERY RESTING ORDER UNMANAGED, WHATEVER ITS
+        # AGE. The age-based path below answers a different question -- "has
+        # the executor stopped managing this one?" -- and answers it slowly
+        # on purpose, because a young resting maker order is normal. Once a
+        # halt is latched there is no executor still managing anything: it is
+        # refusing to trade, and on the owner-marker path it may be stopped
+        # outright. So the whole known book becomes cancellable immediately.
+        #
+        # This is why it is a SEPARATE path and not a smaller
+        # `max_order_age_s`: lowering that would cancel legitimately resting
+        # orders during normal trading, which is the one thing it must not do.
+        emergency, why = self.emergency_state()
+        out["emergency_cancel"] = bool(emergency)
+        out["emergency_reason"] = why
+        if emergency:
+            targets = []
+            for r in rows:
+                if is_terminal(r):
+                    continue
+                age = order_age_s(r, now=now)
+                targets.append({
+                    "venue_order_id": str(r.get("id") or ""),
+                    "market": str(r.get("marketSlug") or ""),
+                    "age_s": age,
+                    "age_known": age is not None,
+                    "leaves": str(r.get("leavesQuantity")),
+                    # the age is REPORTED but was not a condition: this is
+                    # what distinguishes an emergency target from an overdue
+                    # one in the record.
+                    "selected_by": "EMERGENCY_HALT_LATCHED",
+                })
+            out["emergency_targets"] = len(targets)
+            out["overdue"] = []
+            # NO assert_halt: the latch is already set, and re-asserting
+            # would overwrite the original reason and evidence -- losing the
+            # record of WHY the system stopped. NO heartbeat either: this
+            # branch never attests "no halt".
+            if not targets:
+                out["emergency_note"] = (
+                    "halt is latched and the known book is empty; nothing "
+                    "to cancel")
+                return out
+            return self._cancel_targets(targets, out)
         # A STALE REPORT IS THE WEDGED SIGNAL, and a stronger one than any
         # order's age: an executor that has stopped publishing has stopped
         # managing, whatever its last orders looked like. Only a source that
@@ -628,6 +712,18 @@ class Watchdog:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             out["halt_error"] = type(exc).__name__
+        return self._cancel_targets(overdue, out)
+
+    def _cancel_targets(self, targets: List[Dict[str, Any]],
+                        out: Dict[str, Any]) -> Dict[str, Any]:
+        """Cancel exactly these orders by venue id. ONE implementation.
+
+        Both callers -- the age-based sweep and the emergency HALT path --
+        come through here, so the ownership checks, the venue corroboration
+        and the UNCERTAIN handling cannot drift apart between them. The
+        caller decides WHICH orders; this decides whether each one may be
+        cancelled and whether it actually was.
+        """
         if not self.cancel_enabled:
             out["cancel_skipped"] = (
                 "cancel is not enabled on this watchdog; the halt is "
@@ -648,7 +744,7 @@ class Watchdog:
             # are opposite facts and must not arrive as the same empty dict.
             out["claim_refused"] = getattr(self.oracle, "last_refusal", None)
             return out
-        for o in overdue:
+        for o in targets:
             vid = o["venue_order_id"]
             if not vid:
                 out["unverified"].append(dict(o, verify_error="NO_ID"))
@@ -729,6 +825,7 @@ class Watchdog:
             else:
                 out["still_open"].append(rec)
         return out
+
 
 
 def asserter_for(store: Any, *, who: str = "l5-watchdog"):

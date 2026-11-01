@@ -206,13 +206,22 @@ def test_a_young_order_is_left_alone_and_the_executor_stays_permitted(
 
 
 def test_the_heartbeat_cannot_undo_a_latched_halt(tmp_path):
+    """Once latched, no sweep attests 'no halt' -- now by never reaching it.
+
+    A latched halt makes the sweep take the emergency-cancellation branch,
+    which has no heartbeat in it at all, so the latch is not merely
+    protected from being overwritten: nothing even tries. That the
+    heartbeat ALSO refuses on its own is covered directly, without a
+    watchdog, by test_l5_halt_gate.
+    """
     v = Venue([open_row()])
     w, _ = wd(tmp_path, v, max_order_age_s=300)
     w.sweep(now=NOW)                                   # latches
     v._open = []                                       # the order is gone
     out = w.sweep(now=NOW)
-    assert out["heartbeat"] is None
-    assert "refusing to overwrite a latched HALT" in out["heartbeat_refused"]
+    assert out["emergency_cancel"] is True
+    assert out["emergency_reason"].startswith("HALT_LATCHED:")
+    assert "heartbeat" not in out, "the emergency branch must not attest"
     assert gate(tmp_path).submissions_permitted() is False, (
         "clearing is an owner action, not an automated one")
 
@@ -445,8 +454,9 @@ def test_a_restarted_watchdog_finds_its_own_latch_and_cannot_lift_it(tmp_path):
     w2, _ = wd(tmp_path, v2, max_order_age_s=300)
     out = w2.sweep(now=NOW)
     assert out["overdue"] == []
-    assert out["heartbeat"] is None, "a restart is not an all-clear"
-    assert "refusing to overwrite a latched HALT" in out["heartbeat_refused"]
+    assert "heartbeat" not in out, "a restart is not an all-clear"
+    assert out["emergency_cancel"] is True, (
+        "the restarted process must find the latch on the volume")
     assert gate(tmp_path).submissions_permitted() is False
 
 
