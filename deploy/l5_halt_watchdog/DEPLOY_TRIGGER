@@ -168,3 +168,16 @@ deploy: 2026-10-24T22:15Z WATCHDOG-ONLY SAFETY FIX. Publishes the owner-mandate 
 deploy: 2026-10-24T22:20Z WATCHDOG TELEMETRY: log the FIRST successful mandate publish of each process. The documents are served over private networking with no public domain, so without this line there is no evidence available that publishing works or that its stamp is fresh -- the happy path was silent. One line per process, not per 20s sweep. No behaviour change, nothing armed, no latch clear requested, no loss limit touched.
 
 deploy: 2026-10-27T12:19Z WATCHDOG-ONLY. Promotes the owner's emergency-HALT marker verifier onto the sweep loop that already exists: three new files, two insertions in main(), one COPY. 788 insertions, 0 deletions against the deployed commit e778e866, and _first_publish is preserved 4->4. The mechanism is INERT on arrival -- from_env returns None unless BOTH L5_EMERGENCY_HALT_URL and L5_EMERGENCY_HALT_SECRET are set, and this service has neither, so the expected evidence of adoption is L5_EMERGENCY_HALT_MARKER_CONFIG with configured=false. NO LATCH CLEAR IS REQUESTED OR INTENDED: the reset id is spent and the hook's steady state is REFUSED/NO_LATCH_PRESENT. The executor is untouched and carries neither the verifier nor the signer. Nothing is armed, no loss limit changes, no credentials change, no order is placed.
+
+# 2026-11-01 — owner-authorized ONE-ACTION HALT. Promotes 644ab221.
+#
+# Adds L5_EMERGENCY_HALT_NOW: any non-empty value latches the durable HALT,
+# checked every sweep and FIRST, ahead of the marker fetch. HALT-only and
+# idempotent; clearing the variable leaves the latch byte-identical. The
+# four-gate reset in scripts/l5_halt_reset.py, its audit and its
+# zero-obligation checks are untouched.
+#
+# WATCHDOG ONLY. This service holds no venue credentials by design and cannot
+# place, price or cancel anything. The executor is untouched and stays
+# DISARMED. 587 tests pass across all 24 halt/watchdog/cancel/reset suites.
+promote: 644ab221221aa23621966e322fbdb918b69573da 2026-11-01 one-action HALT
