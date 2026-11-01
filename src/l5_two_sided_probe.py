@@ -1040,6 +1040,44 @@ def may_complete(now: float, t_start: float, t_end: float) -> Optional[str]:
     return None
 
 
+def binding_completion_deadline_s(window_s: float = 900.0) -> Dict[str, Any]:
+    """Which of the two completion bounds actually binds, and by how much.
+
+    WHY THIS EXISTS. `may_complete` checks `complete_cutoff_s()` BEFORE
+    `cancel_cutoff(t_end)`, so whichever is EARLIER is the real deadline and
+    the later one only ever restates a refusal that already applied. With
+    `COMPLETE_CUTOFF_S = 720` and a deployed `cancel_margin_s` of 300 the
+    terminal lands at T+600 -- identical to `ENTRY_CUTOFF_S` -- so the
+    deployed engine stops reducing risk at the same instant it stops taking
+    it. That is precisely the defect the two separate cutoffs were written to
+    fix, reintroduced by configuration rather than by code, and nothing in
+    the heartbeat said so: the live tape shows PAST_TERMINAL from T+601 to
+    T+714 and PAST_COMPLETE_CUTOFF only from T+725, which is the signature of
+    a 720 that never binds.
+
+    READ-ONLY AND GATES NOTHING. It reports; it does not move a deadline.
+    `complete_cutoff_reachable` False means the configured completion cutoff
+    is unreachable dead code, which is a configuration fault to surface, not
+    a licence to rest an order later.
+    """
+    cc = float(complete_cutoff_s())
+    term = float(cancel_cutoff(float(window_s)))
+    binding = min(cc, term)
+    return {"complete_cutoff_s": cc,
+            "cancel_terminal_s": term,
+            "binding_completion_deadline_s": binding,
+            "complete_cutoff_reachable": cc < term,
+            "entry_cutoff_s": float(entry_cutoff_s()),
+            # the property the two-cutoff design exists to guarantee
+            "completion_outlives_opening_s": binding - float(entry_cutoff_s()),
+            "collapsed_onto_entry_cutoff": binding <= float(entry_cutoff_s()),
+            "labels": ("READ-ONLY. `may_complete` tests complete_cutoff "
+                       "BEFORE the terminal, so the EARLIER bound is the "
+                       "real deadline. collapsed_onto_entry_cutoff true "
+                       "means risk-reducing completion stops when opening "
+                       "does, which the two-cutoff design forbids.")}
+
+
 def cancel_cutoff(t_end: float) -> float:
     """The hard terminal deadline. Nothing may rest past it."""
     return float(t_end) - cancel_margin_s()

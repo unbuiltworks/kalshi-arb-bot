@@ -646,6 +646,27 @@ def verify() -> Dict[str, Any]:
              _submit_pause_state),
             # VERSIONED STRATEGY CONFIGURATION, so realized results before
             # and after an update are attributable. Identifier only.
+            # THE COLLAPSED COMPLETION DEADLINE, surfaced because nothing
+            # else said it. `may_complete` tests complete_cutoff BEFORE the
+            # terminal, so the earlier bound wins; at the deployed
+            # cancel_margin_s of 300 the terminal is T+600 and
+            # COMPLETE_CUTOFF_S = 720 is unreachable, which puts
+            # risk-reducing completion on the same deadline as opening.
+            # Observed, not graded: grading it would fail the current
+            # deployment, and the fix is an owner decision about the margin,
+            # not something this row should force.
+            ("binding_completion_deadline_s",
+             "TS.binding_completion_deadline_s(900)",
+             lambda: TS.binding_completion_deadline_s(900.0)[
+                 "binding_completion_deadline_s"]),
+            ("complete_cutoff_reachable",
+             "COMPLETE_CUTOFF_S < cancel_cutoff(900)",
+             lambda: TS.binding_completion_deadline_s(900.0)[
+                 "complete_cutoff_reachable"]),
+            ("completion_collapsed_onto_entry_cutoff",
+             "binding completion deadline <= entry cutoff",
+             lambda: TS.binding_completion_deadline_s(900.0)[
+                 "collapsed_onto_entry_cutoff"]),
             ("strategy_config_label", "TS.STRATEGY_CONFIG_LABEL",
              lambda: str(TS.STRATEGY_CONFIG_LABEL)),
             ("strategy_config_digest",

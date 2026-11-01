@@ -466,3 +466,82 @@ class TestVerifierTellsTheTruth:
         for n in ("strategy_config_label", "strategy_config_digest",
                   "submission_paused_for_deploy", "promotion_gate_binds"):
             assert n in names, n
+
+
+# ================ 4. THE COLLAPSED COMPLETION DEADLINE (audit finding) =====
+class TestCollapsedCompletionDeadline:
+    """`COMPLETE_CUTOFF_S = 720` is unreachable at the DEPLOYED cancel margin.
+
+    `may_complete` tests `complete_cutoff_s()` BEFORE `cancel_cutoff(t_end)`,
+    so the earlier bound is the real deadline. The deployed
+    `cancel_margin_s` is 300 (the runtime verifier's own approved value), so
+    the terminal lands at T+600 -- identical to `ENTRY_CUTOFF_S` -- and the
+    engine stops reducing risk at the same instant it stops taking it. That
+    is the defect the two separate cutoffs exist to prevent, reintroduced by
+    configuration.
+
+    LIVE EVIDENCE (campaign 2026-11-01): PAST_TERMINAL on 39 decisions from
+    T+601 to T+714, then PAST_COMPLETE_CUTOFF on 155 from T+725 to T+880 --
+    the signature of a 720 that never binds. All 39 dead-zone decisions
+    carried a live two-sided book.
+    """
+
+    def test_at_the_deployed_margin_the_cutoff_is_unreachable(self,
+                                                              monkeypatch):
+        monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
+        d = TS.binding_completion_deadline_s(900.0)
+        assert d["cancel_terminal_s"] == 600.0
+        assert d["complete_cutoff_s"] == 720.0
+        assert d["binding_completion_deadline_s"] == 600.0
+        assert d["complete_cutoff_reachable"] is False
+        assert d["collapsed_onto_entry_cutoff"] is True
+        assert d["completion_outlives_opening_s"] == 0.0
+
+    def test_the_margin_is_raise_only_so_this_cannot_be_configured_away(
+            self, monkeypatch):
+        """`cancel_margin_s` is max(CANCEL_MARGIN_S, env): a smaller env
+        value cannot widen the completion window, so the collapse cannot be
+        fixed by lowering the margin below the code floor."""
+        monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "60")
+        assert TS.cancel_margin_s() == TS.CANCEL_MARGIN_S == 180.0
+
+    def test_at_the_code_default_completion_outlives_opening(self,
+                                                             monkeypatch):
+        """The property the design intends, which the default margin gives
+        and the deployed one removes."""
+        monkeypatch.delenv("L5_TS_CANCEL_MARGIN_S", raising=False)
+        d = TS.binding_completion_deadline_s(900.0)
+        assert d["binding_completion_deadline_s"] == 720.0
+        assert d["collapsed_onto_entry_cutoff"] is False
+        assert d["completion_outlives_opening_s"] == 120.0
+
+    def test_may_complete_refuses_in_the_dead_zone_at_the_deployed_margin(
+            self, monkeypatch):
+        """T+601..T+719 is refused as PAST_TERMINAL, matching the live tape,
+        and the 720 cutoff only speaks from T+720."""
+        monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
+        t0, t1 = 0.0, 900.0
+        assert TS.may_complete(599.0, t0, t1) is None
+        assert TS.may_complete(601.0, t0, t1) == "PAST_TERMINAL"
+        assert TS.may_complete(714.0, t0, t1) == "PAST_TERMINAL"
+        assert TS.may_complete(725.0, t0, t1) == "PAST_COMPLETE_CUTOFF"
+
+    def test_it_is_read_only_and_moves_no_deadline(self, monkeypatch):
+        monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
+        before = (TS.complete_cutoff_s(), TS.cancel_cutoff(900.0),
+                  TS.entry_cutoff_s())
+        TS.binding_completion_deadline_s(900.0)
+        assert (TS.complete_cutoff_s(), TS.cancel_cutoff(900.0),
+                TS.entry_cutoff_s()) == before
+
+    def test_the_verifier_surfaces_the_collapse(self, monkeypatch):
+        from src import l5_runtime_config_verify as V
+        monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
+        rows = {x.get("name"): x.get("effective")
+                for x in (V.verify().get("observed_not_graded") or [])}
+        assert rows["binding_completion_deadline_s"] == 600.0
+        assert rows["complete_cutoff_reachable"] is False
+        assert rows["completion_collapsed_onto_entry_cutoff"] is True
+        # and the misleading raw value is still reported beside it, which is
+        # what makes the discrepancy visible rather than merely corrected
+        assert rows["ts_complete_cutoff_s"] == 720.0
