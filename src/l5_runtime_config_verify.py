@@ -672,6 +672,31 @@ def verify() -> Dict[str, Any]:
                  __import__("src.l5_taker_completion_policy",
                             fromlist=["x"]).POLICY_ENV, "")
              ).strip().upper() == "YES"),
+            # ...AND THE SECOND SWITCH, which was missing. `TCP.authorize`
+            # requires BOTH `enabled` (above) and `owner_authorized`, and
+            # refuses OWNER_AUTHORIZATION_ABSENT without the latter -- but
+            # only the first was reported here, so a maker-only campaign
+            # could be verified against a config that showed one of the two
+            # gates on live crossing and left the other to be inferred.
+            # That is precisely what the comment above says an operator
+            # should never have to do.
+            ("taker_policy_owner_cross_authorized",
+             "env L5_TS_COMPLETION_CROSS (TCP owner_authorized)",
+             lambda: str(os.getenv("L5_TS_COMPLETION_CROSS", "")
+                         ).strip().upper() == "YES"),
+            # THE OPERATOR-FACING ANSWER, derived from both: can this
+            # process cross at all? A maker-only authorization requires
+            # this to read False, and reading it should not require
+            # knowing how the two switches combine.
+            ("taker_crossing_reachable",
+             "taker_policy_enabled AND owner_cross_authorized",
+             lambda: bool(
+                 str(os.getenv(
+                     __import__("src.l5_taker_completion_policy",
+                                fromlist=["x"]).POLICY_ENV, "")
+                     ).strip().upper() == "YES"
+                 and str(os.getenv("L5_TS_COMPLETION_CROSS", "")
+                         ).strip().upper() == "YES")),
             ("taker_policy_margin_floor_usd", "TCP margin floor",
              lambda: str(os.getenv(
                  __import__("src.l5_taker_completion_policy",
