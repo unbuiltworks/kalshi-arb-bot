@@ -179,8 +179,34 @@ independently covered without a watchdog at `tests/test_l5_halt_gate.py:133`
 and in `test_l5_ported_safety_fixes.py`, so no coverage was traded away. Both
 tests keep their real assertion — `submissions_permitted() is False`.
 
-Three test files remain excluded: `ModuleNotFoundError: No module named
-'httpx'`, pre-existing and unrelated.
+### Full-suite parity — proven by differencing, not asserted
+
+I ran the whole suite twice: once on this tree, once on a clean worktree at
+the pre-change commit `27d75333`.
+
+| | pre-change `27d75333` | this tree |
+|---|---|---|
+| passed | 14,814 | **14,834** (+20, exactly the new tests) |
+| failed | 54 | **54** |
+| errors | 23 | **23** |
+| sha of the sorted failing-test id list | `b70451e1…` | **`b70451e1…`** |
+
+**The failing-test id sets are byte-identical.** `comm` finds nothing in
+either direction: no test fails now that passed before, and none passes now
+that failed before. **Zero regressions.**
+
+Those 54 failures and 23 errors are pre-existing and unrelated to L5 live
+execution — concentrated in `test_gemini_terms_gate.py` (17),
+`test_pmus_status_live_handoff.py` (14), `test_spread_scanner.py` (9),
+`test_gemini_request_transport.py` (9), mostly missing optional dependencies
+such as `httpx`. They are a repo-health item, not this patch's, and I am
+naming them rather than leaving them behind a green subset. Three further
+files were excluded at collection for the same `httpx` import error.
+
+**Correction to my own earlier reporting:** in prior turns I described
+"baseline parity" on the strength of subset runs. A subset cannot establish
+parity. This differenced full-suite run is the first thing in this workstream
+that actually does.
 
 ## Deployment authorization IS required
 
