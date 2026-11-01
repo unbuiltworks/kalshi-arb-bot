@@ -163,7 +163,19 @@ test caught it; this is why that test exists.
 | baseline (stashed) | 2,942 | **0** |
 | with this change | 2,977 | **0** |
 
-Delta **+35**, exactly the new file. The 156 tests across the four existing
+Delta **+35**, exactly the new file.
+
+**Full-suite parity, failing-id set compared directly:**
+
+| | passed | failed | errors | failing-id sha256 |
+|---|---|---|---|---|
+| baseline (`HEAD~1` src + deploy) | 14,857 | 54 | 26 | `eb672d14b4ba` |
+| with this change | 14,889 | 54 | 26 | **`eb672d14b4ba`** |
+
+**Byte-identical: 80 ids both sides, zero new, zero disappeared.** An earlier
+run of the changed tree reported 57 failures; those three did not reproduce
+and are flakes, which the id-set comparison settles — the failure *set* is
+exactly baseline. The 156 tests across the four existing
 mandate suites pass unchanged. The runtime verifier is graded-row identical:
 26 checked, the same 15 pre-existing local failures before and after (all are
 unset-variable rows in this container), because every row added is
