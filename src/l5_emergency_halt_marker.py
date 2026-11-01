@@ -66,6 +66,34 @@ MARKER_SECRET_ENV = "L5_EMERGENCY_HALT_SECRET"
 #: an unrelated service that happens to read the same URL.
 MARKER_SERVICE_ENV = "L5_EMERGENCY_HALT_SERVICE"
 
+#: THE OWNER'S ONE-ACTION HALT, through Railway's own authentication.
+#:
+#: WHY THIS EXISTS BESIDE THE MARKER. The marker above answers "HALT when
+#: Railway is unavailable" -- its reason for being is 2026-10-21, when
+#: deploys were paused and the owner had no path to assert HALT at all. It
+#: pays for that independence with an HMAC the owner must hold and a file
+#: they must sign. That is the right trade for the Railway-is-down case and
+#: the wrong one for the ordinary case, where the owner wants to stop the
+#: engine NOW and is sitting in front of the dashboard.
+#:
+#: SETTING THIS VARIABLE IS ALREADY AN AUTHENTICATED ACTION, and it adds NO
+#: new trust assumption. Anyone who can write a Railway variable on this
+#: service can already change its source, its start command, or delete it
+#: outright -- strictly more authority than stopping it. So exposing HALT
+#: here grants nothing that was not already granted, which is exactly why it
+#: needs no second secret.
+#:
+#: IT IS HALT-ONLY AND CANNOT RESET. `HaltAsserter` has no clear by
+#: construction, and the sweep's positive no-halt attestation refuses to
+#: write `halt: false` over an existing latch. So CLEARING this variable does NOT
+#: clear the halt: the latch outlives the trigger, and the only way back is
+#: the four-gate `scripts/l5_halt_reset.py` with its audit and its
+#: zero-obligation checks. That asymmetry is the point.
+HALT_NOW_ENV = "L5_EMERGENCY_HALT_NOW"
+
+#: how the variable-triggered halt names itself in the latch and the audit.
+HALT_NOW_WHO = "owner-variable"
+
 #: the ONLY command that parses.
 COMMAND = "HALT"
 
@@ -340,3 +368,77 @@ def from_env(store: Any, asserter: Any) -> Optional[Dict[str, Any]]:
                    or "l5-pmus-live",
         "secret": (os.getenv(MARKER_SECRET_ENV) or "").strip(),
     }
+
+
+# ============================== THE ONE-ACTION HALT, FROM A RAILWAY VARIABLE
+
+def halt_now_reason() -> Optional[str]:
+    """The owner's stated reason, or None when the trigger is unset.
+
+    ANY non-empty value is a HALT. There is no magic word to get wrong at the
+    moment someone is trying to stop a trading engine, and no parsing that
+    can fail open: the presence of a value IS the instruction, and the value
+    itself becomes the reason recorded in the latch and the audit.
+    """
+    raw = (os.getenv(HALT_NOW_ENV) or "").strip()
+    return raw or None
+
+
+def check_halt_now(asserter: Any, store: Any, *, service: str,
+                   now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+    """Assert the durable latch when the variable is set. Never clears.
+
+    IDEMPOTENT. A latch already present is left exactly as it is -- the
+    reason, the timestamp and the digest of the FIRST assertion are what the
+    reset procedure's gate 2 reviews, and rewriting them on every sweep
+    would move the digest under the operator between their review and their
+    reset. So an existing halt is reported, not re-asserted.
+
+    NEVER RAISES. This runs inside the watchdog's sweep, and a trigger that
+    could break the sweep would take out the independent cancellation path
+    it exists to drive.
+    """
+    out: Dict[str, Any] = {"acted": False, "reason": None,
+                           "env": HALT_NOW_ENV, "service": str(service)}
+    try:
+        why = halt_now_reason()
+        if why is None:
+            out["reason"] = "TRIGGER_NOT_SET"
+            return out
+        out["stated_reason"] = why
+        # the latch classifier lives with the latch, in l5_halt_gate: it is
+        # the SAME reading the gate and the asserter use, so this cannot
+        # disagree with them about whether a halt is already present.
+        from src import l5_halt_gate as _HG
+        kind, cur = _HG._classify(store)
+        if kind == _HG.UNREADABLE:
+            # an unreadable latch may already BE a halt; asserting over it
+            # would move the digest, and claiming success would be a lie.
+            out["reason"] = "LATCH_UNREADABLE"
+            return out
+        if kind == _HG.PRESENT and isinstance(cur, Mapping) and cur.get("halt"):
+            out["reason"] = "ALREADY_LATCHED"
+            out["existing_who"] = cur.get("who")
+            out["existing_reason"] = cur.get("reason")
+            return out
+        rec = asserter.assert_halt(
+            reason="OWNER_VARIABLE_HALT: %s" % why[:200],
+            evidence={"env": HALT_NOW_ENV, "service": str(service),
+                      "who": HALT_NOW_WHO,
+                      "authenticated_by": ("Railway variable write on this "
+                                           "service, which already carries "
+                                           "more authority than halting"),
+                      "stated_reason": why[:200],
+                      "clears": ("NOTHING. Unsetting the variable does not "
+                                 "clear this latch; only "
+                                 "scripts/l5_halt_reset.py can, under its "
+                                 "four gates.")})
+        out["acted"] = True
+        out["reason"] = "LATCHED"
+        out["latched_at"] = rec.get("t")
+        return out
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["reason"] = "TRIGGER_FAILED:%s" % type(exc).__name__
+        return out
