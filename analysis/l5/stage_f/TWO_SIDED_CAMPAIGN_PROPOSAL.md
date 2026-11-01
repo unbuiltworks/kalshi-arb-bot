@@ -114,8 +114,21 @@ visible only by reading an env var "is exactly the configuration an operator
 should never have to infer", and it was reporting one of the two.
 
 **I added the missing rows** (`taker_policy_owner_cross_authorized` and a
-derived `taker_crossing_reachable`), 12 tests, 524 passing across the
-affected suites. Read-only reporting; no behaviour change.
+derived `taker_crossing_reachable`), 12 tests. Read-only reporting; no
+behaviour change.
+
+**Full-suite parity, differenced against the pre-change commit `27d75333`:**
+
+| | pre-change | now |
+|---|---|---|
+| passed | 14,814 | **14,846** (+32 = 20 emergency-cancel + 12 taker-observability, exactly) |
+| failed / errors | 54 / 23 | **54 / 23** |
+| sha of sorted failing-test ids | `b70451e1…` | **`b70451e1…`** |
+
+**Zero new failures, zero fixed.** Both changes in this workstream — the
+emergency cancel-all and these config rows — add only their own tests and
+disturb nothing. The 54+23 remain pre-existing and unrelated (mostly a missing
+`httpx`).
 
 **Pre-arming requirement: `taker_crossing_reachable` must read `false`.** The
 config is emitted at boot, so this needs one disarmed restart to observe.
