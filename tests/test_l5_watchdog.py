@@ -206,13 +206,22 @@ def test_a_young_order_is_left_alone_and_the_executor_stays_permitted(
 
 
 def test_the_heartbeat_cannot_undo_a_latched_halt(tmp_path):
+    """Once latched, no sweep attests 'no halt' -- now by never reaching it.
+
+    A latched halt makes the sweep take the emergency-cancellation branch,
+    which has no heartbeat in it at all, so the latch is not merely
+    protected from being overwritten: nothing even tries. That the
+    heartbeat ALSO refuses on its own is covered directly, without a
+    watchdog, by test_l5_halt_gate.
+    """
     v = Venue([open_row()])
     w, _ = wd(tmp_path, v, max_order_age_s=300)
     w.sweep(now=NOW)                                   # latches
     v._open = []                                       # the order is gone
     out = w.sweep(now=NOW)
-    assert out["heartbeat"] is None
-    assert "refusing to overwrite a latched HALT" in out["heartbeat_refused"]
+    assert out["emergency_cancel"] is True
+    assert out["emergency_reason"].startswith("HALT_LATCHED:")
+    assert "heartbeat" not in out, "the emergency branch must not attest"
     assert gate(tmp_path).submissions_permitted() is False, (
         "clearing is an owner action, not an automated one")
 
@@ -445,8 +454,9 @@ def test_a_restarted_watchdog_finds_its_own_latch_and_cannot_lift_it(tmp_path):
     w2, _ = wd(tmp_path, v2, max_order_age_s=300)
     out = w2.sweep(now=NOW)
     assert out["overdue"] == []
-    assert out["heartbeat"] is None, "a restart is not an all-clear"
-    assert "refusing to overwrite a latched HALT" in out["heartbeat_refused"]
+    assert "heartbeat" not in out, "a restart is not an all-clear"
+    assert out["emergency_cancel"] is True, (
+        "the restarted process must find the latch on the volume")
     assert gate(tmp_path).submissions_permitted() is False
 
 
@@ -544,3 +554,103 @@ def test_exactly_one_named_id_is_cancelled_and_nothing_else(tmp_path):
     w, _ = wd(tmp_path, v, max_order_age_s=300, cancel_enabled=True)
     w.sweep(now=NOW)
     assert v.cancelled == ["D1SEEN001"]
+
+
+# ================================================== STAGE A: a RESTING PAIR
+#
+# Stage A lets two of our orders rest at once -- opposite sides of one
+# market, one round. The watchdog has only ever swept at most one of ours, so
+# these pin that it recognises and cancels BOTH by their exact venue ids, and
+# that it still refuses anything it cannot prove is ours.
+
+def _pair_rows():
+    """Two overdue orders, both AUTOMATIC, both in this market."""
+    return [open_row("D1PAIRUP"), open_row("D1PAIRDN")]
+
+
+def test_both_legs_of_a_resting_pair_are_cancelled_by_exact_id(tmp_path):
+    rows = _pair_rows()
+    v = Venue(rows, reads={r["id"]: dict(r, state="ORDER_STATE_CANCELED",
+                                         leavesQuantity="0")
+                           for r in rows})
+    w, _ = wd(tmp_path, v, max_order_age_s=300,
+              cancel_enabled=True)
+    out = w.sweep(now=NOW)
+    assert sorted(o["venue_order_id"] for o in out["overdue"]) == [
+        "D1PAIRDN", "D1PAIRUP"]
+    # BOTH ids were sent, and each by its own exact id
+    assert sorted(v.cancelled) == ["D1PAIRDN", "D1PAIRUP"]
+    assert sorted(c["venue_order_id"] for c in out["cancelled"]) \
+        == ["D1PAIRDN", "D1PAIRUP"]
+    assert out["not_ours"] == []
+    assert out["unverified"] == []
+    assert out["still_open"] == []
+
+
+def test_the_halt_latches_once_for_the_pair_not_once_per_leg(tmp_path):
+    rows = _pair_rows()
+    v = Venue(rows, reads={r["id"]: dict(r, state="ORDER_STATE_CANCELED",
+                                         leavesQuantity="0")
+                           for r in rows})
+    w, _ = wd(tmp_path, v, max_order_age_s=300,
+              cancel_enabled=True)
+    out = w.sweep(now=NOW)
+    assert out["halted"] is not None
+    assert gate(tmp_path).submissions_permitted() is False
+
+
+def test_one_unownable_leg_does_not_license_cancelling_the_other_blindly(
+        tmp_path):
+    """On a SHARED account the second resting order may be the owner's. The
+    leg we can prove is cancelled; the one we cannot is reported, not sent."""
+    mine, theirs = open_row("D1MINE"), open_row("D1THEIRS")
+    v = Venue([mine, theirs],
+              reads={"D1MINE": dict(mine, state="ORDER_STATE_CANCELED",
+                                    leavesQuantity="0"),
+                     "D1THEIRS": dict(theirs)})
+
+    class ClaimsOnlyMine:
+        def claimed(self):
+            return {"D1MINE": {"venue_order_id": "D1MINE", "market": MARKET}}
+
+    w, _ = wd(tmp_path, v, max_order_age_s=300, cancel_enabled=True,
+              oracle=ClaimsOnlyMine())
+    out = w.sweep(now=NOW)
+    assert v.cancelled == ["D1MINE"]
+    assert [o["venue_order_id"] for o in out["not_ours"]] == ["D1THEIRS"]
+    assert [o["why"] for o in out["not_ours"]] == ["NOT_IN_OWNERSHIP_REGISTRY"]
+
+
+def test_a_manual_second_leg_is_never_cancelled_even_when_claimed(tmp_path):
+    """The venue's own ownership signal outranks our claim."""
+    auto, manual = open_row("D1AUTO"), open_row("D1MANUAL")
+    v = Venue([auto, manual],
+              reads={"D1AUTO": dict(auto, state="ORDER_STATE_CANCELED",
+                                    leavesQuantity="0"),
+                     "D1MANUAL": dict(manual,
+                                      manualOrderIndicator="MANUAL")})
+    w, _ = wd(tmp_path, v, max_order_age_s=300,
+              cancel_enabled=True)
+    out = w.sweep(now=NOW)
+    assert v.cancelled == ["D1AUTO"]
+    assert [o["why"] for o in out["not_ours"]] == ["VENUE_SAYS_MANUAL"]
+
+
+def test_a_failed_cancel_on_one_leg_does_not_abandon_the_other(tmp_path):
+    rows = _pair_rows()
+    v = Venue(rows,
+              reads={"D1PAIRUP": dict(rows[0]),            # still open
+                     "D1PAIRDN": dict(rows[1],
+                                      state="ORDER_STATE_CANCELED",
+                                      leavesQuantity="0")},
+              cancel_raises=["D1PAIRUP"])
+    w, _ = wd(tmp_path, v, max_order_age_s=300,
+              cancel_enabled=True)
+    out = w.sweep(now=NOW)
+    # both were attempted; the one that failed is reported, not silently lost
+    assert sorted(v.cancelled) == ["D1PAIRDN", "D1PAIRUP"]
+    assert "D1PAIRDN" in {c["venue_order_id"]
+                          for c in out["cancelled"]}
+    reported = {o["venue_order_id"] for o in
+                (out["still_open"] + out["unverified"])}
+    assert "D1PAIRUP" in reported, out
