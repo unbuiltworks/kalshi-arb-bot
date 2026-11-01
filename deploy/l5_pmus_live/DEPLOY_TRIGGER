@@ -2956,3 +2956,42 @@ campaign close lifecycle, disarmed 2026-10-30T20:55Z
 # regression tests added; baseline 54 failed / 14,716 passed / 26 errors,
 # failure set BYTE-IDENTICAL.
 down completion unit fix, shadow-only 2026-10-31T01:05Z
+
+# 2026-11-01 — OBSERVABILITY ONLY, DISARMED. Owner requirement: confirm
+# taker_crossing_reachable=false FROM THE RUNNING PROCESS before a maker-only
+# campaign, and do not infer it from configuration.
+#
+# WHY A DEPLOY WAS NECESSARY, since a restart alone could not do it. The
+# deployed build has no such row to print. `TCP.authorize` requires BOTH
+# `enabled` and `owner_authorized` (env L5_TS_COMPLETION_CROSS) and refuses
+# OWNER_AUTHORIZATION_ABSENT without the second, but only the first was ever
+# reported -- so maker-only could be asserted against a config showing one of
+# the two gates on live crossing.
+#
+# AN INFERENCE I TRIED AND DISCARDED. L5_SHADOW_COMPLETION records show the
+# taker policy refusing at WORST_OUTCOME_NOT_POSITIVE and DECISION_NOT_OK,
+# which are gates 4+, apparently proving gates 1-2 passed. They prove nothing:
+# l5_shadow_completion.evaluate defaults enabled=True and owner_authorized=True
+# "because this is a MEASUREMENT of the policy, not an execution path", and the
+# caller does not override them. Those logs carry no information about the live
+# switches.
+#
+# EXACTLY ONE FILE IN THIS IMAGE CHANGES: src/l5_runtime_config_verify.py,
+# +25 lines adding taker_policy_owner_cross_authorized and a derived
+# taker_crossing_reachable to `observed_not_graded`. Read-only reporting of
+# existing accessors; no gate, no limit, no price, no size, no behaviour.
+# src/l5_watchdog.py and src/l5_emergency_halt_marker.py also differ from the
+# running commit but are NOT COPIED into this image (verified against this
+# Dockerfile), so they cannot reach the executor.
+#
+# NOTHING IS ARMED BY THIS DEPLOYMENT. owner_arm_token false, submission gate
+# blocked, PMUS_Q1_ARM not matched, live_orders 0, no authorization in force.
+# No limit moves: $20 aggregate, $1.50 per-market deficit, $5 daily loss halt,
+# 3-contract residual cap, max 2 live orders via the pair slot only. No
+# credentials change. No order is placed.
+#
+# Full-suite parity differenced against 27d75333: passed 14,814 -> 14,846
+# (+32, exactly the 20 emergency-cancel and 12 taker-observability tests),
+# failed 54 -> 54, errors 23 -> 23, failing-test id set BYTE-IDENTICAL
+# (sha b70451e1 both sides).
+taker-cross observability, disarmed 2026-11-01T13:05Z
