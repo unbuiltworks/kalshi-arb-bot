@@ -117,6 +117,13 @@ COPY src/pmus_fill_horizon_probe.py src/pmus_fill_horizon_probe.py
 # instead of the configuration. test_the_image_copies_every_module_the_
 # entrypoint_can_reach caught exactly that.
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
+# THE PROMOTION GATE, reached from `authorize_arming` step 9b whenever a
+# signed mandate states promotion terms. Local import or not, the module has
+# to EXIST in the image: without this COPY the gate raises ImportError inside
+# the container at the exact moment it is supposed to decide whether a
+# strategy has earned live capital, and a gate that cannot be evaluated is
+# one more thing to get wrong on the money path.
+COPY src/l5_promotion_gate.py src/l5_promotion_gate.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py

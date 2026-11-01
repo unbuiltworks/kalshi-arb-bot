@@ -263,6 +263,25 @@ def verify_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _submit_pause_state() -> str:
+    """PAUSED / running, by the same reading the arming gate uses.
+
+    Duplicating the parse would let the row disagree with the gate, so this
+    mirrors `authorize_arming`'s exact test: unset or an explicit
+    off-value runs, anything else set pauses.
+    """
+    from src import l5_live_authorization as LA
+    raw = (os.getenv(LA.SUBMIT_PAUSE_ENV) or "").strip()
+    if raw and raw.lower() not in ("0", "false", "no", "off"):
+        return "PAUSED:%s" % raw[:24]
+    return "running"
+
+
+def _submit_pause_env() -> str:
+    from src import l5_live_authorization as LA
+    return str(LA.SUBMIT_PAUSE_ENV)
+
+
 def _mandate_verdict_reason() -> str:
     """The mandate verdict as a bare reason string, for REPORTING.
 
@@ -601,7 +620,37 @@ def verify() -> Dict[str, Any]:
              lambda: ",".join(sorted(MS.MANDATE_PUBKEYS)) or "(none)"),
             ("mandate_verdict", "MS.verify(reporting only)",
              _mandate_verdict_reason),
-            ("mandate_enforcing", "phase 1 constant", lambda: False),
+            # THE TRUTH, NOT A PHASE CONSTANT. This was hardcoded False
+            # while the gate was inert. The gate is SELF-ACTIVATING -- it
+            # binds exactly when a trusted key is registered -- so a
+            # hardcoded False would report "not enforcing" from the moment
+            # enforcement actually began, which is the one moment the
+            # operator most needs the row to be right. Derived from the same
+            # expression the arming gate branches on, so the two cannot
+            # disagree.
+            ("mandate_enforcing", "bool(MS.MANDATE_PUBKEYS) -- the same "
+                                  "expression authorize_arming branches on",
+             lambda: bool(MS.MANDATE_PUBKEYS)),
+            # THE PROMOTION GATE. Binds with the signed mandate and refuses
+            # live arming until measured expectancy clears the bar the
+            # mandate itself states. Reported so its refusal is visible as a
+            # deliberate state rather than looking like a broken executor.
+            ("promotion_gate_binds",
+             "wired into authorize_arming; binds with the signed mandate",
+             lambda: bool(MS.MANDATE_PUBKEYS)),
+            # THE PRE-DEPLOYMENT DRAIN. Visible so an operator can tell a
+            # paused executor from a stuck one, and so a pause left set by
+            # mistake is findable in the heartbeat instead of by inference
+            # from an absence of orders.
+            ("submission_paused_for_deploy", "env %s" % _submit_pause_env(),
+             _submit_pause_state),
+            # VERSIONED STRATEGY CONFIGURATION, so realized results before
+            # and after an update are attributable. Identifier only.
+            ("strategy_config_label", "TS.STRATEGY_CONFIG_LABEL",
+             lambda: str(TS.STRATEGY_CONFIG_LABEL)),
+            ("strategy_config_digest",
+             "TS.strategy_config_fingerprint() over the EFFECTIVE knobs",
+             lambda: str(TS.strategy_config_fingerprint().get("digest"))),
             # THE TWO-SIDED PROBE'S OWN SCOPE. These are mandate
             # parameters -- order size and whether BOTH legs may rest at
             # once -- and none of them was visible in-container, so a

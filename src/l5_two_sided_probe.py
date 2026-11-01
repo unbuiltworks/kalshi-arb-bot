@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime as dt
 import fnmatch
+import hashlib
 import os
 from decimal import Decimal as D, ROUND_CEILING, InvalidOperation
 from typing import Any, Dict, Mapping, Optional, Sequence
@@ -163,6 +164,65 @@ MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 #: Configurable DOWNWARD only; anything malformed or larger reads as 3.
 OPENING_LEG_MAX_CONTRACTS = D("3")
 OPENING_LEG_MAX_ENV = "L5_TS_OPENING_LEG_MAX_CONTRACTS"
+
+#: ======================= VERSIONED STRATEGY CONFIGURATION =================
+#:
+#: WHY A DIGEST AND NOT ONLY A LABEL. Realized results can only be compared
+#: across an update if the thing that changed is identifiable. A hand-edited
+#: version string drifts away from the constants it claims to describe --
+#: exactly how eight rows of the runtime verifier came to disagree with the
+#: configuration the owner had actually approved. So the version is a LABEL
+#: plus a DIGEST over the economically significant knobs, computed from the
+#: live values at call time. Change a knob without changing the label and
+#: the digest changes anyway, so the two settled result sets never silently
+#: merge.
+#:
+#: IT AUTHORIZES NOTHING AND GATES NOTHING. It is an identifier recorded
+#: into the arming claim so a settled window can be attributed to the
+#: configuration that produced it. Bump the LABEL when the intended
+#: behaviour changes; the digest looks after everything else.
+STRATEGY_CONFIG_LABEL = "ts2s-v1-maker-cap3"
+
+
+def strategy_config_fingerprint() -> Dict[str, Any]:
+    """The label, the knobs that matter economically, and their digest.
+
+    Reads the EFFECTIVE values (env overrides included) rather than the
+    module defaults, because the deployed configuration is what produced
+    the result, not what the source would have produced unconfigured.
+    """
+    knobs: Dict[str, str] = {}
+    for name, fn in (
+            ("entry_cutoff_s", lambda: entry_cutoff_s()),
+            ("complete_cutoff_s", lambda: complete_cutoff_s()),
+            ("round_allocations", lambda: round_allocations()),
+            ("round_allocations_max", lambda: ROUND_ALLOCATIONS_MAX),
+            # the residual cap lives in the EXECUTION module, which is
+            # where the money path reads it; the fingerprint must cover the
+            # value actually enforced, not a copy of it kept here.
+            ("abs_residual_cap_contracts",
+             lambda: __import__("src.l5_live_execution", fromlist=["x"])
+             .ABS_RESIDUAL_CAP_CONTRACTS),
+            ("opening_leg_max_contracts", lambda: OPENING_LEG_MAX_CONTRACTS),
+            ("min_first_leg_own_price", lambda: MIN_FIRST_LEG_OWN_PRICE),
+            ("completion_ceilings_in_force",
+             lambda: ",".join(COMPLETION_CEILINGS_IN_FORCE)),
+    ):
+        try:
+            knobs[name] = str(fn())
+        except BaseException:                                  # noqa: BLE001
+            # UNREADABLE IS NAMED, NEVER OMITTED: a knob dropped from the
+            # digest would make two different configurations hash alike.
+            knobs[name] = "UNREADABLE"
+    blob = ";".join("%s=%s" % (k, knobs[k]) for k in sorted(knobs))
+    return {"label": STRATEGY_CONFIG_LABEL,
+            "knobs": knobs,
+            "digest": hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16],
+            "labels": ("identifier only -- authorizes nothing, gates "
+                       "nothing. The digest covers the EFFECTIVE knob "
+                       "values so a silent config change cannot reuse a "
+                       "version label.")}
+
 
 ROUND_ALLOCATIONS = 1
 ROUND_ALLOCATIONS_ENV = "L5_TS_ROUND_ALLOCATIONS"

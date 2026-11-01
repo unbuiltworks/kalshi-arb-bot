@@ -257,6 +257,15 @@ SERIES_ENV = "L5_LIVE_AUTH_MARKET_SERIES"
 #: made at all.
 NOT_AFTER_ENV = "L5_LIVE_AUTH_NOT_AFTER"
 
+#: THE PRE-DEPLOYMENT DRAIN SWITCH. Set it to stop admitting new exposure
+#: without stopping the process, so a deploy can be staged against a book
+#: that is verifiably empty. UNSET MEANS RUNNING -- an absent variable never
+#: pauses a live executor -- and any set value other than an explicit
+#: "0"/"false"/"no"/"off" pauses, because the safe reading of an
+#: unrecognised value in a STOP switch is stop. It gates ARMING only:
+#: cancellation, reconciliation and settlement stay live by design.
+SUBMIT_PAUSE_ENV = "L5_SUBMIT_PAUSE"
+
 #: the capital envelope the owner approved, recorded INTO the claim. Arming
 #: refuses if the running limits are LOOSER than what was approved, so
 #: widening a cap after approval invalidates the authorization instead of
@@ -1652,6 +1661,39 @@ def scoped_limits(limits: Any) -> Dict[str, str]:
     return out
 
 
+def _mandate_pubkeys_present() -> bool:
+    """Whether a trusted mandate key is registered. Local import, same
+    image-closure reason as every other `l5_mandate_signature` use here."""
+    try:
+        from src import l5_mandate_signature as MS
+        return bool(MS.MANDATE_PUBKEYS)
+    except BaseException:                                      # noqa: BLE001
+        # A registry we cannot read is treated as PRESENT, so the promotion
+        # gate binds rather than silently disappearing.
+        return True
+
+
+def _strategy_config_or_note() -> Dict[str, Any]:
+    """The strategy fingerprint for the claim, or a named failure.
+
+    IMPORTED LOCALLY. `l5_two_sided_probe` is the strategy, not the
+    authorization layer, and a module-level import here would put it into
+    the import closure of the probe and halt-reset images that do not copy
+    it -- the same breakage `test_l5_live_probe_image_closure` caught for
+    `l5_mandate_signature`.
+    """
+    try:
+        from src import l5_two_sided_probe as TS
+        return dict(TS.strategy_config_fingerprint())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"label": None, "digest": None,
+                "unreadable": type(exc).__name__,
+                "labels": ("identifier only; an unreadable fingerprint "
+                           "never refuses an otherwise-permitted window")}
+
+
 def _looser(now_s: Mapping[str, str], approved: Mapping[str, str]) -> List[str]:
     """Limit fields that are now LOOSER than what was approved."""
     bad: List[str] = []
@@ -1980,6 +2022,7 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      path: Optional[str] = None,
                      require_durable: bool = True,
                      transport_armable: Optional[bool] = None,
+                     promotion_evidence: Optional[Mapping[str, Any]] = None,
                      now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     """THE ONLY PLACE ARMING IS DECIDED. Returns the claim, or raises.
 
@@ -1994,6 +2037,37 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     """
     now = now or dt.datetime.now(dt.timezone.utc)
     path = path or ledger_path()
+
+    # 0. THE DEPLOYMENT DRAIN, outermost because it is operational rather
+    #    than economic: when the operator is about to replace this image,
+    #    new submissions must stop BEFORE the restart so the process is not
+    #    killed holding a resting order it has not reconciled.
+    #
+    #    WHY ARMING AND NOT THE TRANSPORT. Cancelling must stay available
+    #    while draining -- a pause that blocked cancels could strand exactly
+    #    the order it was protecting -- and `ShadowOnlyTransport` already
+    #    establishes that asymmetry for the shadow lock. Arming is the gate
+    #    that admits NEW exposure and nothing else, so pausing here stops
+    #    submissions while leaving cancellation, reconciliation and
+    #    settlement fully live.
+    #
+    #    UNSET IS RUNNING. An absent variable must not pause a live
+    #    executor, so only an explicitly truthy value drains. Anything set
+    #    and non-empty other than "0"/"false"/"no" pauses, because the safe
+    #    reading of an unrecognised value in a STOP switch is stop.
+    # carried out of the signed-mandate block for step 9b below. None means
+    # "no signed mandate in force", which is the shipped state.
+    _mandate_promotion: Optional[Mapping[str, Any]] = None
+    _mandate_enforcing = bool(_mandate_pubkeys_present())
+
+    _pause = (os.getenv(SUBMIT_PAUSE_ENV) or "").strip()
+    if _pause and _pause.lower() not in ("0", "false", "no", "off"):
+        raise ArmingRefusal(
+            "SUBMISSION_PAUSED_FOR_DEPLOY",
+            {"env": SUBMIT_PAUSE_ENV, "value": _pause[:40],
+             "note": "new submissions are paused; cancellation, "
+                     "reconciliation and settlement are unaffected. Clear "
+                     "the variable to resume."})
 
     # 1. the structural lock, before anything else. Arming a transport whose
     #    submit() raises is meaningless, and saying so by name keeps the
@@ -2136,6 +2210,14 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         if str(_mp.get("execution_mode") or "").upper() != "MAKER_ONLY":
             raise ArmingRefusal("MANDATE_EXECUTION_MODE_NOT_MAKER_ONLY",
                                 {"mode": str(_mp.get("execution_mode"))[:40]})
+
+        # THE SIGNED PROMOTION TERMS, CARRIED FORWARD. The promotion gate
+        # itself runs LATE (step 9b): it depends on measured evidence, which
+        # makes it the least structural check in this function, and this
+        # function's contract is that a refusal names the OUTERMOST reason.
+        # Refusing here would report "the strategy is unproven" to an
+        # operator whose actual problem is a missing authorization.
+        _mandate_promotion = _mp.get("promotion")
 
     # 2. EXPLICIT OWNER AUTHORIZATION, from EITHER of two owner-held
     #    objects. Not both, and neither is weaker than the other.
@@ -2506,12 +2588,91 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                           session=sid)
     digest = scope_digest(scope)
     holder = holder_identity()
+    # 9b. THE PROMOTION GATE -- the last economic condition before a claim
+    #     is written, and deliberately the LAST of all of them.
+    #
+    #     A standing mandate is only safe to leave installed if it will not
+    #     trade a strategy nobody has shown to make money. The mandate
+    #     states the bar itself -- minimum settled sample, minimum
+    #     expectancy, a NAMED out-of-sample evidence id, and a requirement
+    #     for bounded live validation -- and this refuses until the measured
+    #     evidence clears it. The bar is in the SIGNED bytes, so no variable
+    #     edit can lower it and nothing in this process can tune it.
+    #
+    #     WHY HERE AND NOT IN THE RUNNER. Arming is the only place arming is
+    #     decided. A promotion check in the runner is a check some other call
+    #     path can forget; one here cannot be routed around.
+    #
+    #     WHY LAST. Every structural and authorization refusal above is
+    #     cheaper and more informative. Ordering this after them means an
+    #     operator missing an authorization is told that, and only a request
+    #     that is otherwise fully permitted is told the strategy is unproven.
+    #
+    #     IT BINDS ONLY WITH A SIGNED MANDATE, exactly like the signature
+    #     gate, so the shipped no-trusted-key state is unchanged.
+    #
+    #     FAIL CLOSED, TWICE OVER. `evaluate` defaults to blocking and
+    #     returns every reason; and only an EXPLICIT False is accepted, so a
+    #     malformed verdict or a missing key refuses. `blocks_live: False`
+    #     means only that this gate adds no refusal -- never permission.
+    #
+    #     THIS GATE IS EXPECTED TO REFUSE TODAY, and that refusal is the
+    #     acceptance test for requirement 9, not a defect to tune away:
+    #     measured realized expectancy is -$0.0108 per settled window over
+    #     our seven settled windows, against a best validated ex-ante
+    #     improvement of +$0.0176/window.
+    #     ON THE SECOND CLAUSE. `MS.verify` already refuses a mandate whose
+    #     `promotion` block is missing or incomplete, so a verified mandate
+    #     always carries one and the first clause is what fires in practice.
+    #     `_mandate_enforcing` is a deliberate backstop against a future
+    #     schema change that made the block optional: with a trusted key
+    #     registered, this gate binds whether or not the document asked it
+    #     to. It is exercised by
+    #     `test_the_gate_binds_on_a_trusted_key_even_with_no_promotion_terms`.
+    if _mandate_promotion is not None or _mandate_enforcing:
+        from src import l5_promotion_gate as PG
+        _pev = dict(promotion_evidence or {})
+        try:
+            _pv = PG.evaluate(promotion=_mandate_promotion,
+                              shadow=_pev.get("shadow"),
+                              oos_evidence=_pev.get("oos_evidence"),
+                              live_validation=_pev.get("live_validation"),
+                              now=now)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise ArmingRefusal(
+                "PROMOTION_GATE_UNEVALUABLE",
+                {"error": type(exc).__name__,
+                 "note": "a promotion gate that cannot be evaluated is a "
+                         "promotion gate that has not been satisfied"}
+            ) from exc
+        if _pv.get("blocks_live") is not False:
+            raise ArmingRefusal(
+                "PROMOTION_GATE_BLOCKS_LIVE",
+                {"reasons": list(_pv.get("reasons") or ())[:12],
+                 "settled_windows": _pv.get("settled_windows"),
+                 "net_per_settled_window": _pv.get("net_per_settled_window"),
+                 "note": "the signed mandate states a promotion bar and the "
+                         "measured evidence does not clear it; no variable "
+                         "edit can satisfy this and nothing here tunes it"})
+
     claim = {"event": "CLAIMED", "session_id": sid, "market": market,
              "utc": now.isoformat(), "expires_utc": window["expires_utc"],
              "ttl_s": ttl, "approved_limits": approved,
              "window": window, "scope": scope, "scope_digest": digest,
              "holder": holder,
              "boundary": "authorize_arming",
+             # THE STRATEGY CONFIGURATION THAT PRODUCED THIS WINDOW.
+             # Recorded so a settled result can be attributed to the
+             # configuration in force when it was armed, which is what makes
+             # a before/after comparison across a deployment possible at
+             # all. It is an IDENTIFIER: nothing reads it to decide
+             # anything, and an unreadable fingerprint is recorded as such
+             # rather than refusing -- a label that cannot be computed is a
+             # reporting defect, not a reason to decline a window that every
+             # risk gate has already permitted.
+             "strategy_config": _strategy_config_or_note(),
              "note": "written BEFORE arming, so a crash spends it too"}
     # 10d. A MANDATE: ONE APPROVAL, CONSECUTIVE WINDOWS, TWO LEVELS OF CLAIM.
     #
