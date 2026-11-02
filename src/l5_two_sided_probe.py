@@ -2855,11 +2855,27 @@ def completion_requote(*, side: str, resting_own_px: Any,
     #
     # DEFAULT OFF. Unset leaves `redeem_cap` in force byte-for-byte, so the
     # deployed engine is unchanged and a campaign can A/B exactly this.
+    # THE QUANTITY MUST BE `q`, THE ONE THIS REQUOTE WILL ACTUALLY BUY --
+    # the same figure `completion_ceiling` is given above, not the gross
+    # `resting_qty`. `q` is `min(working, unmatched)` floored to the lot
+    # grid, so it is net of what the resting order has ALREADY filled and
+    # clipped to the genuine imbalance.
+    #
+    # PASSING THE GROSS SIZE LOOSENS THE BOUND, and measurably. Buying
+    # `q` here always leaves `d + q <= h` (because `q <= h - dq`), so the
+    # book stays under-covered and every extra share both costs `p + fee`
+    # and adds $1.00 of coverage -- at `p < 1` that IMPROVES the modelled
+    # worst case. So an overstated `buy_qty` buys imaginary coverage. On
+    # the 1400z book with 0.96 of a 1.77 order already filled, the gross
+    # figure returns a cap of 0.43 while the true 0.81 purchase leaves the
+    # worst outcome at -$0.0358 there; the honest cap is 0.38. A bound
+    # whose whole promise is "the WHOLE BOOK never settles at a loss"
+    # cannot be computed on shares it will not buy.
     if portfolio_completion_enabled():
         _pcap = portfolio_completion_cap(
             side=side, held_qty=h, held_cost_usd=ch_total,
-            deficient_qty=deficient_qty, deficient_cost_usd=deficient_cost_usd,
-            buy_qty=resting_qty, tick=tk, ceiling=touch)
+            deficient_qty=dq, deficient_cost_usd=deficient_cost_usd,
+            buy_qty=q, tick=tk, ceiling=touch)
         if _pcap is not None:
             redeem_cap = _pcap
     edge_cap = completion_max_pair()

@@ -170,3 +170,214 @@ def test_it_moves_no_risk_limit():
         assert banned not in src, banned
     # and it reuses the engine's own settlement function
     assert "net_settlement" in src
+
+
+# ===================================================================
+# THE WIRING: the bound must be computed on the shares this requote
+# will ACTUALLY buy.
+#
+# Found by applying the owner's "verify across partial fills" to the
+# CALL SITE rather than to the function. The first wiring passed the
+# gross `resting_qty`; `completion_ceiling`, three lines above it, is
+# passed `q` -- `min(working, unmatched)` floored to the lot grid, net
+# of what the order has already filled.
+#
+# WHY THE GROSS FIGURE IS UNSAFE AND NOT MERELY WRONG. `q <= h - dq`,
+# so completing always leaves `d + q <= h`: the book stays
+# under-covered, and there every extra share costs `p + fee` but adds
+# a full $1.00 of coverage. At `p < 1` that IMPROVES the modelled
+# worst case, so an overstated `buy_qty` buys coverage that never
+# arrives. Measured on the 1400z book with 0.96 of the 1.77 order
+# filled: gross returns 0.43, where the true 0.81-share purchase
+# leaves the worst outcome at -$0.0358. The honest cap is 0.38.
+# ===================================================================
+
+#: 1400z 2026-11-02, held DOWN 4.00 for $1.4495 (2.23 matched at own
+#: 0.65 plus 1.77 stranded at own 0.25). The completing UP order is
+#: 1.77 and 0.96 of it has filled at 0.60, so UP holds 2.73 for
+#: $1.6380 and only 0.81 shares are still working.
+PF = dict(side=TS.UP, held_qty=D("4.00"), held_cost_usd=D("1.4495"),
+          deficient_qty=D("2.73"), deficient_cost_usd=D("1.6380"),
+          tick=D("0.01"), ceiling=D("0.60"))
+
+
+def _worst_at(price, buy_qty):
+    """The engine's own worst outcome after buying `buy_qty` at `price`."""
+    nd = PF["deficient_qty"] + buy_qty
+    return TS.net_settlement(
+        up_qty=nd, dn_qty=PF["held_qty"],
+        up_price=(PF["deficient_cost_usd"] + buy_qty * price) / nd,
+        dn_price=PF["held_cost_usd"] / PF["held_qty"])["worst_outcome"]
+
+
+def test_the_gross_resting_size_would_admit_a_loss_making_price():
+    """The defect, stated as arithmetic rather than as a code shape."""
+    loose = TS.portfolio_completion_cap(buy_qty=D("1.77"), **PF)
+    tight = TS.portfolio_completion_cap(buy_qty=D("0.81"), **PF)
+    assert loose == D("0.43")
+    assert tight == D("0.38")
+    # the band the gross figure opens is a book that CAN settle at a loss
+    assert _worst_at(loose, D("0.81")) < 0
+    assert _worst_at(tight, D("0.81")) >= 0
+
+
+def test_a_partially_filled_requote_is_bounded_by_its_working_size():
+    """End to end through `completion_requote`, flag on.
+
+    The resting order is 1.77 with 0.96 filled, so 0.81 is working and
+    the target may not exceed the 0.81-share cap.
+    """
+    import os
+    ws = 1_793_189_700.0
+    kw = dict(side="UP", resting_own_px="0.30", resting_qty="1.77",
+              resting_filled_qty="0.96", bid="0.5900", ask="0.6000",
+              tick="0.01", min_qty="0.01",
+              held_qty="4.00", held_cost_usd="1.4495",
+              deficient_qty="2.73", deficient_cost_usd="1.6380",
+              residual_budget_usd="3.00",
+              now_s=ws + 480.0, window_start_s=ws,
+              window_end_s=ws + TS.WINDOW_S, book_age_s="0.05")
+    old = os.environ.get(TS.PORTFOLIO_COMPLETION_ENV)
+    os.environ[TS.PORTFOLIO_COMPLETION_ENV] = "YES"
+    try:
+        r = TS.completion_requote(**kw)
+    finally:
+        if old is None:
+            os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+        else:
+            os.environ[TS.PORTFOLIO_COMPLETION_ENV] = old
+    assert r["act"] is True, r
+    to = D(r["to_price"])
+    assert to <= D("0.38"), r            # never the gross figure's 0.43
+    # and the resulting whole book cannot settle at a loss
+    assert _worst_at(to, D(r["qty"])) >= 0
+
+
+def test_the_bound_and_the_ceiling_are_given_the_same_quantity():
+    """A source check, because the two calls are three lines apart.
+
+    `completion_ceiling` gets `complete_qty=q`. The bound must get the
+    same `q`, not `resting_qty`, or the two disagree about what is
+    being bought.
+    """
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(TS.completion_requote))
+    seen = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = getattr(node.func, "id", None)
+        if fn not in ("completion_ceiling", "portfolio_completion_cap"):
+            continue
+        for kw in node.keywords:
+            if kw.arg in ("complete_qty", "buy_qty"):
+                seen[fn] = getattr(kw.value, "id", None)
+    assert seen == {"completion_ceiling": "q",
+                    "portfolio_completion_cap": "q"}, seen
+
+
+# ===================================================================
+# RESTARTS and SETTLEMENT -- the last two of the owner's item 2.
+#
+# The bound is a pure function of the figures handed to it, so a
+# restart can only reach it through those figures. Three ways it can:
+# an unreadable basis, an UNATTESTED basis that `leg_cost` reports as
+# $0.00, and an unreadable basis on the DEFICIENT side.
+# ===================================================================
+
+RS = dict(side="UP", resting_own_px="0.30", resting_qty="1.77",
+          resting_filled_qty="0", bid="0.5900", ask="0.6000",
+          tick="0.01", min_qty="0.01",
+          held_qty="4.00", held_cost_usd="1.4495",
+          deficient_qty="2.23", deficient_cost_usd="1.3380",
+          residual_budget_usd="3.00",
+          now_s=1_793_189_700.0 + 480.0,
+          window_start_s=1_793_189_700.0,
+          window_end_s=1_793_189_700.0 + TS.WINDOW_S, book_age_s="0.05")
+
+
+def _rq(flag, **over):
+    import os
+    kw = dict(RS)
+    kw.update(over)
+    old = os.environ.get(TS.PORTFOLIO_COMPLETION_ENV)
+    if flag:
+        os.environ[TS.PORTFOLIO_COMPLETION_ENV] = "YES"
+    else:
+        os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+    try:
+        return TS.completion_requote(**kw)
+    finally:
+        if old is None:
+            os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+        else:
+            os.environ[TS.PORTFOLIO_COMPLETION_ENV] = old
+
+
+def test_an_unreadable_held_basis_refuses_before_the_bound_is_reached():
+    """A restart that lost the basis must not reach the bound at all.
+
+    `HELD_COST_UNKNOWN` is raised above the bound, so the flag cannot
+    make an unpriceable book completable.
+    """
+    for flag in (False, True):
+        r = _rq(flag, held_cost_usd=None)
+        assert r["act"] is False
+        assert r["reason"] == "HELD_COST_UNKNOWN", (flag, r)
+
+
+def test_an_unreadable_deficient_basis_leaves_redeem_cap_untouched():
+    """The bound returns None, which is not a licence -- it is a no-op."""
+    off = _rq(False, deficient_cost_usd=None)
+    on = _rq(True, deficient_cost_usd=None)
+    assert on == off, (on, off)
+
+
+def test_an_unattested_zero_basis_binds_TIGHTER_than_redeem_cap():
+    """The restart case `leg_cost` actually produces, and its blast radius.
+
+    `InventoryStore.leg_cost` defaults a missing leg to D(0) rather
+    than None, so inventory ADOPTED from the venue's net -- 50 legs
+    carried that state in the live reconcile of 2026-11-02 -- reaches
+    this function priced at zero. That is a PRE-EXISTING defect in the
+    requote path's inputs, not one this bound introduces: on a zeroed
+    basis `redeem_cap = 1 - 0/h = 1.00`, i.e. already maximally
+    permissive.
+
+    What this pins is that the bound does not inherit that
+    permissiveness. Given the same zeroed basis it still demands the
+    whole book cover itself, so it binds strictly tighter than the
+    1.00 it replaces.
+    """
+    cap = TS.portfolio_completion_cap(
+        side=TS.UP, held_qty=D("4.00"), held_cost_usd=D("0"),
+        deficient_qty=D("2.23"), deficient_cost_usd=D("1.3380"),
+        buy_qty=D("1.77"), tick=D("0.01"), ceiling=D("0.99"))
+    assert cap is not None
+    assert cap < D("1.00"), cap
+
+
+def test_settlement_arithmetic_independently_of_net_settlement():
+    """Both outcomes >= 0 at the admitted price, computed from scratch.
+
+    `portfolio_completion_cap` asks `net_settlement`, so a test that
+    asks the same function proves only self-consistency. This settles
+    the book by hand: a matched pair redeems $1.00 per share, the
+    uncovered remainder redeems $1.00 on its own outcome and $0.00 on
+    the other, and cash out is what was paid.
+    """
+    h, ch = D("4.00"), D("1.4495")        # DOWN held
+    dq, cd = D("2.23"), D("1.3380")       # UP already held
+    q = D("1.77")
+    cap = TS.portfolio_completion_cap(
+        side=TS.UP, held_qty=h, held_cost_usd=ch, deficient_qty=dq,
+        deficient_cost_usd=cd, buy_qty=q, tick=D("0.01"),
+        ceiling=D("0.60"))
+    assert cap is not None
+    up_q, dn_q = dq + q, h
+    paid = ch + cd + q * cap
+    # the engine's worst case also charges a taker fee on BOTH legs, so
+    # the hand-rolled figure here is the fee-free lower bound on cost
+    for winner_qty in (up_q, dn_q):       # UP settles, then DOWN settles
+        assert winner_qty * D(1) - paid >= 0, (winner_qty, paid, cap)
