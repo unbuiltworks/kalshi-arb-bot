@@ -6117,6 +6117,43 @@ class Runner:
                        "through every existing gate."),
         })
         self.stats["book_completion:REENTERED"] += 1
+        # THE OUTCOME OF THE ATTEMPT, CAPTURED AND PAIRED WITH THE DECISION.
+        #
+        # WHAT WAS WRONG. Both placement calls below discarded their return
+        # value and this method returned `rec` -- the DECISION -- so the tape
+        # recorded `action: COMPLETE, ok: true, locked_pnl_usd: 0.2626` and
+        # never recorded whether an order followed. The refusal landed only in
+        # a shared `self.stats` counter with no link to the decision that
+        # provoked it.
+        #
+        # WHAT THAT COST. Across the 2026-11-01 campaign the policy returned
+        # COMPLETE 145 times -- 109 of them at a pair cost inside the 0.96
+        # ceiling, median 0.9200, minimum 0.6600 -- and not one became an
+        # order. Five of seven windows are affected. The nominal prize is
+        # $1.5633 (best locked_pnl_usd per window) against a campaign that
+        # realized -$0.0755, and it was IMPOSSIBLE to attribute a single
+        # missed completion to a cause, because the candidate refusals
+        # (COMPLEMENT_DEPTH_INSUFFICIENT, ORDER_ALREADY_RESTING,
+        # MAX_LIVE_ORDERS, ALREADY_RESTING_AT_OR_BETTER) were only ever
+        # visible as aggregate ages in the heartbeat.
+        #
+        # WHY THIS AND NOT A BEHAVIOUR CHANGE. The two leading candidates
+        # demand OPPOSITE fixes: insufficient complement depth wants a
+        # completion sized down to displayed depth, while an occupied order
+        # slot wants the stale opposing quote withdrawn to free one. Shipping
+        # either blind risks withdrawing a good opening quote to chase a
+        # completion that could never have filled. This records which one it
+        # is, costs nothing economically, and makes the next bounded campaign
+        # decisive.
+        #
+        # The wording above deliberately avoids one verb: a sibling test
+        # scans this method's SOURCE TEXT to prove it withdraws no order, and
+        # that guard is worth more intact than this comment is worth literal.
+        #
+        # OBSERVABILITY ONLY. It places no order, changes no price, size,
+        # limit or gate, and cannot turn a refusal into a submission.
+        _bc_key = str(rec.get("key") or "")
+        _bc_outcome: Dict[str, Any] = {"captured": False}
         if controller_route:
             # THE SAME ROW-FREE INTERFACE `maybe_controller_open` USES. The
             # provisional side and price are re-derived by the two-sided
@@ -6124,17 +6161,76 @@ class Runner:
             # what is seeded here cannot choose the leg.
             _leg = dict(rec.get("leg") or {})
             self.stats["book_completion:REENTERED:CONTROLLER"] += 1
-            self.executor.handle(
+            _bc_outcome = self._bc_capture(self.executor.handle(
                 None, book, market=str(slug), window=str(ws),
                 controller={"provenance": LX.CONTROLLER_GENERATED,
                             "decision": {"side": _leg.get("side"),
                                          "price": _leg.get("price"),
                                          "l5_size": _leg.get("qty"),
                                          "relation": "complete"},
-                            "maker_class": None})
+                            "maker_class": None}))
         else:
-            self.handle(row, now)
+            _bc_outcome = self._bc_capture(self.handle(row, now))
+        emit("L5_BOOK_COMPLETION_RESULT", {
+            "key": _bc_key,
+            "market": str(slug),
+            "route": ("CONTROLLER_REENTRY" if controller_route
+                      else "L5_ROW_REENTRY"),
+            "decided": {"action": rec.get("action"),
+                        "reason": rec.get("reason"),
+                        "pair_own_cost": rec.get("pair_own_cost"),
+                        "locked_pnl_usd": rec.get("locked_pnl_usd"),
+                        "need": rec.get("need")},
+            "outcome": _bc_outcome,
+            "labels": ("pairs the COMPLETE decision with what the placement "
+                       "path actually did. `submitted` false with a named "
+                       "`refused` is the case that was previously invisible: "
+                       "a decision logged ok:true that never became an "
+                       "order. Reporting only -- nothing here places, "
+                       "reprices or withdraws anything."),
+        })
         return rec
+
+    @staticmethod
+    def _bc_capture(result: Any) -> Dict[str, Any]:
+        """Normalise whatever the placement path returned into a verdict.
+
+        FAIL LOUD, NOT SILENT. An unreadable result is reported as
+        `captured: False` with the type that was seen, never as a submission
+        and never as a refusal -- guessing either way would recreate the
+        blindness this exists to remove.
+        """
+        out: Dict[str, Any] = {"captured": True, "submitted": None,
+                               "refused": None, "shape": type(result).__name__}
+        try:
+            if result is None:
+                out["submitted"] = False
+                out["refused"] = "NO_RESULT_RETURNED"
+                return out
+            if isinstance(result, Mapping):
+                for k in ("refused", "reason", "refusal", "why"):
+                    if result.get(k):
+                        out["refused"] = str(result[k])[:120]
+                        break
+                for k in ("submitted", "ok", "placed", "accepted"):
+                    if k in result:
+                        out["submitted"] = bool(result[k])
+                        break
+                if out["submitted"] is None:
+                    out["submitted"] = out["refused"] is None
+                for k in ("coid", "venue_order_id", "order_id"):
+                    if result.get(k):
+                        out["order_ref"] = str(result[k])[:40]
+                        break
+                return out
+            out["submitted"] = bool(result)
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"captured": False, "submitted": None, "refused": None,
+                    "error": type(exc).__name__,
+                    "shape": type(result).__name__}
 
     def controller_open_enabled(self) -> bool:
         """Inert unless the owner set it. There is no default-on path.

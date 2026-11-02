@@ -321,8 +321,22 @@ def test_provenance_is_not_misrepresented(monkeypatch):
     out = r.maybe_book_completion(1_793_000_120.0)
     assert out["ok"] is True, out
     if True:
-        label, rec = seen[-1]
+        # SELECTED BY LABEL, NOT BY POSITION. This read `seen[-1]` and so
+        # silently depended on the trigger being the LAST event emitted.
+        # `L5_BOOK_COMPLETION_RESULT` now follows it -- pairing the decision
+        # with what the order path actually did -- so position is no longer
+        # identity. Every assertion about the trigger's CONTENT below is
+        # unchanged; only the selector moved.
+        trig = [(l, r) for l, r in seen
+                if l == "L5_BOOK_COMPLETION_TRIGGER"]
+        assert len(trig) == 1, [l for l, _ in seen]
+        label, rec = trig[0]
         assert label == "L5_BOOK_COMPLETION_TRIGGER"
+        # and the outcome event must FOLLOW the decision, so the tape still
+        # reads as a book-triggered re-evaluation and then its result
+        labels = [l for l, _ in seen]
+        assert labels.index("L5_BOOK_COMPLETION_TRIGGER") < \
+            labels.index("L5_BOOK_COMPLETION_RESULT")
         assert rec["triggered_by"] == "BOOK_NOT_L5_ACTION"
         assert rec["reused_action_key"] == "0xabc"
         assert "no L5 action is synthesised" in rec["labels"]
