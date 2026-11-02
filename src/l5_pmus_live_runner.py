@@ -3629,6 +3629,63 @@ class Runner:
             return 0.0
         return max(0.0, now - self.last_progress_t)
 
+    #: BOUNDED IN-TICK RECOVERY of one order's progress read. Three
+    #: attempts in total (the original plus two), because the failure this
+    #: answers is a transient 5xx and a fault that survives two retries is
+    #: an outage the fail-closed path should own rather than a blip.
+    ORDER_REREAD_ATTEMPTS = 2
+    #: ~0.35s of added worst-case tick latency against 382.3s of lost
+    #: window in the incident. Short enough not to stall the loop, long
+    #: enough not to be a second hammer on a venue that just failed.
+    ORDER_REREAD_BACKOFF_S = (0.10, 0.25)
+
+    def _reread_order_progress(self, vid: str, exc: BaseException) -> Any:
+        """Ask the venue again about THIS order id. None when unresolved.
+
+        READ ONLY. It places, cancels, prices and sizes nothing; its whole
+        output is a venue row that the ordinary booking path then applies.
+
+        BOUNDED AND RATE-LIMIT AWARE. A rate-limited failure is not retried
+        at all, because retrying it is what turns a blip into a cooloff.
+        """
+        self.last_reread_attempts = 0
+        self.last_reread_elapsed_s = 0.0
+        t = self.transport
+        if t is None:
+            return None
+        try:
+            if T.is_rate_limited(exc):
+                self.stats["order_reread_skipped:RATE_LIMITED"] += 1
+                return None
+        except BaseException:                                  # noqa: BLE001
+            pass
+        t0 = time.monotonic()
+        for i in range(int(self.ORDER_REREAD_ATTEMPTS)):
+            delay = self.ORDER_REREAD_BACKOFF_S[
+                min(i, len(self.ORDER_REREAD_BACKOFF_S) - 1)]
+            try:
+                time.sleep(delay)
+            except BaseException:                              # noqa: BLE001
+                pass
+            self.last_reread_attempts = i + 1
+            try:
+                row = t.order(str(vid))
+            except BaseException as exc2:                      # noqa: BLE001
+                if isinstance(exc2, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["order_reread_failed:%s"
+                           % type(exc2).__name__] += 1
+                try:
+                    if T.is_rate_limited(exc2):
+                        break
+                except BaseException:                          # noqa: BLE001
+                    pass
+                continue
+            self.last_reread_elapsed_s = round(time.monotonic() - t0, 3)
+            return row
+        self.last_reread_elapsed_s = round(time.monotonic() - t0, 3)
+        return None
+
     def poll_orders(self) -> List[Dict[str, Any]]:
         """Ask the venue what each live order actually did.
 
@@ -3668,13 +3725,46 @@ class Runner:
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
+                # ============ FAIL CLOSED FIRST, THEN ASK AGAIN.
+                #
+                # THE INCIDENT THIS CLOSES. 2026-11-02 window 1330z: one
+                # HTTPError on this read latched the book and the loop
+                # moved on with `continue`. The id was not re-asked until
+                # the ordinary interval; by then it had left the venue's
+                # open list into `pending_terminal`, where reconcile
+                # RE-RAISES uncertainty on every pass that finds anything
+                # parked. Every submission was refused for 382.3s of a
+                # 900s window -- 42% of it -- and the window ended at
+                # PAST_ENTRY_CUTOFF with the book at 0.9800/0.9900.
+                #
+                # THE MARK STAYS, AND IT STAYS FIRST. The book is uncertain
+                # the instant a read fails, before any retry, so a crash
+                # mid-recovery cannot leave the session trading on a book
+                # it could not read. Clearing is still the sole privilege
+                # of an authoritative reconciliation -- a successful
+                # re-read books the ORDER, never the uncertainty.
                 self.store.mark_uncertain(
                     "order query raised %s for %s" % (type(exc).__name__,
                                                       coid))
-                out.append({"coid": coid, "event": "PROGRESS_ERROR",
+                # A RATE LIMIT IS NOT RETRIED. The reconcile path already
+                # says hammering a venue that is returning errors is how a
+                # transient fault becomes a rate limit; this honours the
+                # same rule rather than restating it.
+                row = self._reread_order_progress(str(vid), exc)
+                if row is None:
+                    out.append({"coid": coid, "event": "PROGRESS_ERROR",
+                                "error": type(exc).__name__,
+                                "reread_attempts": self.last_reread_attempts,
+                                "rate_limited": T.is_rate_limited(exc)})
+                    continue
+                # RECOVERED INSIDE THE TICK. Fall through to the SAME
+                # booking path an ordinary read uses, so the delta and
+                # idempotency logic is not duplicated here.
+                self.stats["order_read_recovered"] += 1
+                out.append({"coid": coid, "event": "PROGRESS_READ_RECOVERED",
                             "error": type(exc).__name__,
-                            "rate_limited": T.is_rate_limited(exc)})
-                continue
+                            "reread_attempts": self.last_reread_attempts,
+                            "recovered_after_s": self.last_reread_elapsed_s})
             prog = LX.order_progress(row)
             # THE ORDER'S OWN MARKET, not the transport's current one. The
             # transport follows the window; an order placed in 2045z that is

@@ -170,7 +170,12 @@ def test_one_failed_progress_read_latches_the_book(tmp):
     assert r.store.orders_uncertain() is not None
     assert "HTTPError" in r.store.orders_uncertain()
     assert COID in r.store.orders_uncertain()
-    assert any(e.get("event") == "PROGRESS_ERROR" for e in out), out
+    # the failure is RECORDED either way: PROGRESS_ERROR when it stays
+    # unresolved, PROGRESS_READ_RECOVERED when the bounded re-read wins.
+    # The subject of this test is the LATCH, which holds in both cases.
+    assert any(e.get("event") in ("PROGRESS_ERROR",
+                                  "PROGRESS_READ_RECOVERED")
+               for e in out), out
     # and while latched, nothing may be submitted
     assert _refused(r) == "ORDER_STATE_UNCERTAIN"
 
@@ -282,3 +287,100 @@ def test_recovery_submits_nothing(tmp):
 def test_the_measured_incident_cost(tmp):
     """Records the economic size of the defect: 382.3s of a 900s window."""
     assert OBSERVED_BLOCK_S / 900.0 > 0.42
+
+
+# ================================ the patch's own safety properties (7)
+
+def test_the_reread_path_is_read_only_in_its_source(tmp):
+    """It must not be able to place, cancel, price or size anything."""
+    import ast
+    import inspect
+    import textwrap
+
+    # Checked on the PARSED CALLS, not on the text. The docstring says the
+    # method "places, cancels, prices and sizes nothing", so a text scan
+    # fails on its own prose -- the same mistake this session already made
+    # once in test_l5_missed_pair_blocker.
+    tree = ast.parse(textwrap.dedent(
+        inspect.getsource(R.Runner._reread_order_progress)))
+    called = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Attribute):
+                called.add(f.attr)
+            elif isinstance(f, ast.Name):
+                called.add(f.id)
+    forbidden = {"place", "submit", "cancel", "cancel_order", "deadman",
+                 "record_submit", "apply_order_progress", "mark_uncertain",
+                 "resolve_pending_terminal", "save"}
+    assert not (called & forbidden), sorted(called & forbidden)
+    # the ONLY venue verb it uses is the read
+    assert "order" in called, sorted(called)
+
+
+def test_a_rate_limited_failure_is_not_retried(tmp):
+    """Retrying a cooloff is how a blip becomes an outage. The reconcile
+    path already says so; this honours the same rule."""
+    class RateLimited(RuntimeError):
+        pass
+
+    t = FlakyTransport(fail_times=10_000)
+
+    def _boom(vid):
+        t.calls[str(vid)] += 1
+        raise RateLimited("429")
+
+    t.order = _boom
+    r = make_runner(tmp, t)
+    _park_live_order(r)
+    import src.l5_pmus_live_runner as _R
+    orig = _R.T.is_rate_limited
+    _R.T.is_rate_limited = lambda e: isinstance(e, RateLimited)
+    try:
+        r.poll_orders()
+    finally:
+        _R.T.is_rate_limited = orig
+    assert t.calls[VENUE_ID] == 1, (
+        "a rate-limited read was retried %d times" % t.calls[VENUE_ID])
+    assert r.store.orders_uncertain() is not None
+    assert r.stats["order_reread_skipped:RATE_LIMITED"] == 1
+
+
+def test_the_latch_is_set_before_any_retry(tmp):
+    """A crash mid-recovery must not leave the session trading on a book
+    it could not read, so the mark precedes the re-read."""
+    import inspect
+    src = inspect.getsource(R.Runner.poll_orders)
+    i_mark = src.index("mark_uncertain")
+    i_reread = src.index("_reread_order_progress")
+    assert i_mark < i_reread, "the re-read runs before the book is latched"
+
+
+def test_recovery_cannot_widen_any_risk_limit(tmp):
+    """The patch touches no limit. While latched, every gate still binds,
+    and the recovered read only books what the venue already did."""
+    t = FlakyTransport(fail_times=1, cum_qty="2.2",
+                       state="ORDER_STATE_FILLED")
+    r = make_runner(tmp, t)
+    _park_live_order(r)
+    before = dict(R.PROBE_LIMITS)
+    r.poll_orders()
+    assert dict(R.PROBE_LIMITS) == before, "a limit moved"
+    # the booked position is exactly the venue's cumQuantity, never more
+    assert r.store.position(MARKET, SIDE) == D("2.2")
+    assert _refused(r) == "ORDER_STATE_UNCERTAIN"
+
+
+def test_latency_and_recovery_count_are_instrumented(tmp):
+    """Item 6: detection-to-recovery latency, and how many otherwise
+    eligible decisions the recovery gives back."""
+    t = FlakyTransport(fail_times=1)
+    r = make_runner(tmp, t)
+    _park_live_order(r)
+    out = r.poll_orders()
+    rec = [e for e in out if e.get("event") == "PROGRESS_READ_RECOVERED"]
+    assert rec, out
+    assert rec[0]["reread_attempts"] >= 1
+    assert isinstance(rec[0]["recovered_after_s"], float)
+    assert r.stats["order_read_recovered"] == 1
