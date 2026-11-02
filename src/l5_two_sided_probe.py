@@ -362,6 +362,17 @@ COMPLETION_MAX_PAIR = D("1.00")
 COMPLETION_MAX_PAIR_ENV = "L5_TS_COMPLETION_MAX_PAIR"
 
 
+#: USE THE WHOLE-BOOK SETTLEMENT BOUND for completions instead of the
+#: whole-SIDE average basis. Default OFF = today's behaviour exactly.
+PORTFOLIO_COMPLETION_ENV = "L5_TS_PORTFOLIO_COMPLETION"
+
+
+def portfolio_completion_enabled() -> bool:
+    """Opt-in by an explicit YES, so a stray value cannot enable it."""
+    return str(os.getenv(PORTFOLIO_COMPLETION_ENV, "")
+               ).strip().upper() == "YES"
+
+
 def completion_max_pair() -> D:
     """The completion pair ceiling. Unset or unreadable is 1.00 = inert.
 
@@ -2768,6 +2779,40 @@ def completion_requote(*, side: str, resting_own_px: Any,
     # owner sets the variable, so it adds no refusal to the deployed engine
     # and can be A/B'd as ONE testable change.
     redeem_cap = D(1) - (ch_total / h if h > 0 else D(1))
+    #
+    # ============ THE WHOLE-BOOK BOUND, which is the correct one.
+    #
+    # THE DEFECT IT REPLACES, measured on 1400z 2026-11-02. `ch_total / h`
+    # is the average over the ENTIRE held side, so an already-MATCHED pair's
+    # cost is averaged into the completion economics of a cheap stranded
+    # leg. The book held DOWN 4.00 -- 2.23 matched at own 0.65 plus 1.77
+    # stranded at own 0.25 -- giving an average of 0.4730 and a redeem_cap
+    # of 0.5270. UP was executable at own 0.60 against 1377 of displayed
+    # depth, so the engine refused with `pair_own_cost 1.3030,
+    # PAIR_ABOVE_REDEMPTION`.
+    #
+    # THE TRUE ECONOMICS OF THAT ORDER: buying UP 1.77 at 0.60 takes the
+    # book to UP 4.00 / DOWN 4.00 for 3.7122, so BOTH settlement outcomes
+    # become +0.2578 and the worst case improves by +0.6780. It was a
+    # PROFIT LOCK the engine scored as a 1.30 pair.
+    #
+    # THE BOUND, with no lot tracking needed. Both outcomes stay >= 0 iff
+    # min(h, d + q) >= ch + cd + q*p + fee, i.e.
+    #     p <= [min(h, d + q) - ch - cd - fee] / q
+    # That is STRICTLY STRONGER than redeem_cap's promise: redeem_cap says
+    # the matched portion never settles at a loss, this says the WHOLE BOOK
+    # never does.
+    #
+    # DEFAULT OFF. Unset leaves `redeem_cap` in force byte-for-byte, so the
+    # deployed engine is unchanged and a campaign can A/B exactly this.
+    if portfolio_completion_enabled():
+        _cd = _d(deficient_cost_usd) or D(0)
+        _dq = _d(deficient_qty) or D(0)
+        _q = _d(resting_qty) or D(0)
+        if _q > 0:
+            _num = min(h, _dq + _q) - ch_total - _cd
+            _pcap = _num / _q
+            redeem_cap = _pcap
     edge_cap = completion_max_pair()
     if edge_cap < D(1):
         redeem_cap = min(redeem_cap, edge_cap - (ch_total / h if h > 0
