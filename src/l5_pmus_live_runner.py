@@ -6538,7 +6538,80 @@ class Runner:
                         "maker_class": None})
         self.stats["controller_open:%s" % str(
             (rec or {}).get("refused_reason") or "NOT_REFUSED")] += 1
+        self._note_open_missed(str(slug), rec, book, tick)
         return rec
+
+    #: ticks behind each touch the opening maker legs are quoted. Read from
+    #: the same accessor the probe prices with, so the recorded achievable
+    #: pair cannot disagree with the one the engine could actually have got.
+    def _note_open_missed(self, slug: str, rec: Optional[Mapping[str, Any]],
+                          book: Mapping[str, Any], tick: Any) -> None:
+        """Name a refused OPENING, instead of only counting it.
+
+        WHAT WAS WRONG, and it is the same blindness `L5_MISSED_PAIR` was
+        built to remove one layer down. `controller_open:*` was a COUNTER
+        and nothing else: the 1315z-1400z campaign could report
+        `PAIR_COST_ABOVE_CEILING` 683 times and could not say whether one
+        of those 683 gave up a pair worth having. The executor's refusal
+        dict carries `effective_pair_cost` and `ceiling`, and neither
+        reached the tape. The completion layer has had this record since
+        the 1400z work; the opening layer, which refuses far more often,
+        never did.
+
+        THE ACHIEVABLE PAIR IS DERIVED FROM THE BOOK, not from the
+        refusal, so it is recorded even when the refusal fired before any
+        price was computed. Both maker legs quote `depth` ticks behind
+        their own touch -- UP at `ask - d*t`, DOWN at `(1 - bid) - d*t` --
+        so the best pair this book could have produced is
+            (ask - d*t) + (1 - bid - d*t) = 1 + (ask - bid) - 2*d*t
+        which is the spread plus one, less the depth both legs give up.
+
+        OBSERVABILITY ONLY, inside one swallow. A failure to describe a
+        refusal must never change the refusal and must never raise into a
+        caller that is about to return a decision.
+        """
+        try:
+            # IMPORTED HERE, because `l5_two_sided_probe` is a LOCAL import
+            # everywhere else in this module and is NOT a module global. The
+            # first draft of this helper referenced a module-level `TSP`
+            # that does not exist; the NameError landed in the pair-
+            # computation swallow below and every record came out with
+            # `pair_own_cost: None` -- an instrument that silently measured
+            # nothing. Its own test caught it.
+            from src import l5_two_sided_probe as TSP
+            reason = str((rec or {}).get("refused_reason") or "NOT_REFUSED")
+            if reason == "NOT_REFUSED":
+                return
+            pair = None
+            try:
+                bid = D(str(book.get("bid")))
+                ask = D(str(book.get("ask")))
+                # THE MARKET'S OWN TICK, from the transport, never a
+                # default. A guessed tick silently rescales the depth term
+                # and the recorded achievable pair stops being the one the
+                # engine could have quoted; unreadable is left UNKNOWN.
+                tk = D(str(tick))
+                d = D(str(TSP.depth_ticks()))
+                if bid > 0 and ask > bid and tk > 0:
+                    pair = D(1) + (ask - bid) - (D(2) * d * tk)
+            except BaseException:                              # noqa: BLE001
+                pair = None
+            try:
+                _ceil = TSP.max_pair_cost()
+            except BaseException:                              # noqa: BLE001
+                _ceil = None
+            emit("L5_MISSED_PAIR", MPB.record(
+                market=slug, reason=reason,
+                decision={"pair_own_cost": (None if pair is None
+                                            else str(pair)),
+                          "bid": str(book.get("bid")),
+                          "ask": str(book.get("ask")),
+                          "stream_age_s": str(book.get("stream_age_s"))},
+                entry_ceiling=_ceil, stage="OPENING"))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["open_missed_emit_failed:%s" % type(exc).__name__] += 1
 
     def maybe_ts_completion(self, now: float) -> Optional[Dict[str, Any]]:
         """Decide, on ECONOMICS, whether to cross to complete the pair.
