@@ -839,7 +839,38 @@ def verify() -> Dict[str, Any]:
             ("max_worst_case_deficit_usd",
              "VG.parse_deficit_bound(env %s)" % R.DEFICIT_ENV,
              lambda: (lambda v: "UNSET" if v is None else str(v))(
-                 VG.parse_deficit_bound(os.getenv(R.DEFICIT_ENV))))):
+                 VG.parse_deficit_bound(os.getenv(R.DEFICIT_ENV)))),
+            # ============ CAN THIS ENGINE FINISH WHAT IT STARTS?
+            #
+            # Two deployed numbers decide different halves of one cycle and
+            # nothing made them agree:
+            #
+            #   the OPENING clip, which sizes the first leg, and
+            #   the TCP per-cross cap, which bounds what retiring that leg
+            #   by crossing may cost.
+            #
+            # Completing C contracts by crossing can cost up to C * 0.99
+            # plus the taker fee, so a clip is only completable when that
+            # worst case fits the cap. Measured on the recorded tape: of 10
+            # terminal residuals, 7 were refused on the 1.20 pair ceiling
+            # and TWO were refused purely on outlay at pairs of 1.13 and
+            # 1.18 -- economically sound completions blocked by a cash cap,
+            # not by economics.
+            #
+            # AND IT COLLIDES WITH THE REBATE FLOOR. The maker rebate
+            # rounds per fill to the cent, so a clip under
+            # 0.4/(p*(1-p)) -- 1.61 contracts at the money -- is credited
+            # nothing, while a clip over ~1.45 cannot be crossed out within
+            # a $1.50 cap. The two cannot both be satisfied, and that is an
+            # owner decision rather than a bug to patch silently.
+            #
+            # OBSERVED, NEVER GRADED. Grading it would fail deployments
+            # that deliberately run maker-only and never cross, where an
+            # uncompletable clip is not a defect. The row states the
+            # arithmetic; it changes no behaviour.
+            ("opening_clip_completable_within_taker_cap",
+             "TS.opening_leg_max_contracts() vs TCP per-cross cap",
+             lambda: _clip_vs_cross_cap())):
         try:
             observed.append({"name": name, "source": source,
                              "effective": _s(read())})
@@ -980,3 +1011,36 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":                                  # pragma: no cover
     raise SystemExit(main())
+
+def _clip_vs_cross_cap() -> str:
+    """Whether the opening clip can be retired by a cross within the cap.
+
+    Pure arithmetic over two deployed figures. Reports UNKNOWN rather than
+    guessing when either is unreadable, because a guessed answer here
+    would claim a cycle can close when it cannot.
+    """
+    try:
+        from src import l5_two_sided_probe as TSP
+        from src import l5_taker_completion_policy as TCP
+        from src import pmus_fees as FEES
+        clip = TSP.opening_leg_max_contracts()
+        if clip is None or D(str(clip)) <= 0:
+            return "UNKNOWN: opening clip unreadable"
+        clip = D(str(clip))
+        cap = D(str(os.getenv(TCP.MAX_OUTLAY_ENV, "")
+                    or TCP.DEFAULT_MAX_OUTLAY_USD))
+        dear = D("0.99")
+        worst = clip * dear + FEES.taker_fee(dear, clip, cents=True)
+        floor = FEES.rebate_floor_contracts(D("0.50"))
+        return ("clip %s -> worst cross outlay %s vs cap %s: %s; "
+                "rebate floor at p=0.50 is %s contracts, confirmed floor "
+                "%s (earns $0.00 below it)"
+                % (clip, worst, cap,
+                   "COMPLETABLE" if worst <= cap else "NOT_COMPLETABLE",
+                   ("?" if floor is None else floor),
+                   FEES.CREDITED_OBSERVED[
+                       "smallest_credited_clip_contracts"]))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "UNKNOWN: %s" % type(exc).__name__
