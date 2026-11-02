@@ -6574,6 +6574,99 @@ class Runner:
         emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
         return res
 
+    def _requote_queue_ahead_fn(self, slug: str, side: str) -> Any:
+        """An accessor giving displayed size ahead of us at an OWN price.
+
+        WHY A CLOSURE. `completion_requote` derives its own target from
+        `min(touch, ceiling, redemption_cap)`; computing that target out here
+        to look up its depth would be a second copy of the pricing rule, and
+        the two copies would drift. So the decision asks for the depth at
+        whatever price it chose.
+
+        PRICE SEMANTICS, which is where this is easy to get wrong. The wire
+        is YES/UP. An UP buy at own cost p rests as a BID at wire p. A DOWN
+        buy at own cost q is a SELL of YES and rests as an ASK at wire 1-q.
+
+        Returns None for UNKNOWN -- no ladder, an unserved rung, or a bad
+        read. None is never read as zero: the caller fails closed on it.
+        """
+        lad = getattr(self, "shadow_ladder", None)
+        if lad is None or not hasattr(lad, "ahead_of_us"):
+            return None
+
+        def _ahead(own_px: Any) -> Optional[D]:
+            try:
+                p = D(str(own_px))
+            except BaseException:                              # noqa: BLE001
+                return None
+            if side == "UP":
+                wire, resting_side = p, FM.BID
+            else:
+                wire, resting_side = (D(1) - p), FM.ASK
+            try:
+                return lad.ahead_of_us(slug, resting_side, wire)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                try:
+                    self.stats["requote_queue_read_error:%s"
+                               % type(exc).__name__] += 1
+                except BaseException:                          # noqa: BLE001
+                    pass
+                return None
+
+        return _ahead
+
+    def _requote_cancel_unresolved(self, coid: str) -> Optional[str]:
+        """Whether a PREVIOUS cancel of this order never proved it was gone.
+
+        THE CAMPAIGN EVIDENCE. Ten requotes across 0145z and 0200z produced
+        not one clean cancel: seven returned `verify_error: HTTPError` and
+        three returned `still_open` carrying `ORDER_STATE_NEW` with the full
+        `leaves_qty`. The store's own `orders_uncertain()` did not catch
+        them, so the loop kept re-cancelling an order that may well have
+        still been working -- while the replacement, by the requote path's
+        own rule, could not be sent while it was live. That is how a single
+        order slot goes empty for a whole window.
+
+        Returns a short reason string when unresolved, else None.
+        """
+        try:
+            seen = self._requote_unresolved
+        except AttributeError:
+            return None
+        return seen.get(str(coid))
+
+    def _requote_note_cancel_outcome(self, coid: str,
+                                     out: Mapping[str, Any]) -> None:
+        """Record whether THIS cancel proved the order terminal.
+
+        `cancelled` is the only proof: the module's own label says it "means
+        the VENUE reported a terminal state on re-read, never that a cancel
+        call returned". `still_open` and `unverified` are both failures.
+        """
+        if not hasattr(self, "_requote_unresolved"):
+            self._requote_unresolved: Dict[str, str] = {}
+        key = str(coid)
+        try:
+            still = list(out.get("still_open") or [])
+            unver = list(out.get("unverified") or [])
+            done = list(out.get("cancelled") or [])
+            filled = list(out.get("filled") or [])
+        except BaseException:                                  # noqa: BLE001
+            self._requote_unresolved[key] = "CANCEL_OUTCOME_UNREADABLE"
+            return
+        if done or filled:
+            self._requote_unresolved.pop(key, None)
+            return
+        if still:
+            self._requote_unresolved[key] = "STILL_OPEN_AT_VENUE"
+        elif unver:
+            self._requote_unresolved[key] = "CANCEL_UNVERIFIED"
+        else:
+            # nothing terminal and nothing failed is still not proof.
+            self._requote_unresolved[key] = "NO_TERMINAL_PROOF"
+
     def maybe_completion_requote(self, now: float
                                  ) -> Optional[Dict[str, Any]]:
         """Cancel a completion that has drifted off the touch, so the
@@ -6663,6 +6756,14 @@ class Runner:
             filled = ((D(str(qty)) - working)
                       if qty is not None else D(0))
             vg = getattr(self.executor, "validation_gates", None)
+            # LOOKED UP DEFENSIVELY, like the ladder itself. This method is
+            # also borrowed by lighter harnesses that carry no ladder and no
+            # helpers; there the gate simply has nothing to measure and the
+            # pre-patch behaviour stands, recorded by the stat below.
+            _qmk = getattr(self, "_requote_queue_ahead_fn", None)
+            _qfn = (_qmk(str(slug), str(side)) if callable(_qmk) else None)
+            if _qfn is None:
+                self.stats["requote_without_queue_evidence"] += 1
             res = TSP.completion_requote(
                 side=side, resting_own_px=row.get("price"),
                 resting_qty=qty, resting_filled_qty=filled,
@@ -6679,7 +6780,27 @@ class Runner:
                 window_end_s=TSP.window_end(float(ws)),
                 book_age_s=snap.get("stream_age_s"),
                 gap_suspected=bool(snap.get("gap_suspected")),
-                orders_uncertain=self.store.orders_uncertain())
+                orders_uncertain=self.store.orders_uncertain(),
+                # THE QUEUE EVIDENCE THE DECISION ALWAYS NEEDED. It was
+                # never supplied, so every requote of the 0145z/0200z
+                # campaign decided blind and logged a null. These come from
+                # the authenticated ladder's own aggregate depth -- the same
+                # accessors the pre-submit record already uses -- and are
+                # bounds on what must clear ahead of us, never a fill
+                # probability.
+                queue_ahead_fn=_qfn,
+                # REQUIRED WHERE IT CAN BE MEASURED, which in production is
+                # everywhere: the ladder is attached per window off the same
+                # authenticated feed the book comes from. With NO ladder at
+                # all there is nothing to require, and demanding it would
+                # disable completion repricing entirely rather than make it
+                # careful -- so the old behaviour stands and the stat below
+                # records that the move was decided without queue evidence.
+                require_queue_evidence=_qfn is not None,
+                cancel_unresolved=(
+                    _cu(coid) if callable(
+                        _cu := getattr(self, "_requote_cancel_unresolved",
+                                       None)) else None))
             if not res.get("act"):
                 self.stats["requote_refused:%s" % res.get("reason")] += 1
                 return None
@@ -6691,6 +6812,11 @@ class Runner:
             # replacement racing a live order.
             out = LX.deadman(self.store, t, reason="completion_requote",
                              only=[coid])
+            # PROVE IT LANDED, OR REMEMBER THAT IT DID NOT. Without this the
+            # next tick re-cancels an order the venue may still be working.
+            _nk = getattr(self, "_requote_note_cancel_outcome", None)
+            if callable(_nk):
+                _nk(coid, out if isinstance(out, Mapping) else {})
             self.stats["requote_cancelled"] += 1
             rec = dict(res, slug=str(slug), client_order_id=coid,
                        cancel=out, now=now,

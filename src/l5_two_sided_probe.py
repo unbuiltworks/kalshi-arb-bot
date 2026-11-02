@@ -2565,6 +2565,21 @@ REQUOTE_MIN_TICKS_BEHIND = 2
 #: l5_defensive_completion's DEFENSIVE_MIN_EXECUTION_S.
 REQUOTE_MIN_RUNWAY_S = 15.0
 
+#: A QUEUE DEEPER THAN THIS MANY TIMES OUR NEED IS NOT PLAUSIBLY CLEARABLE,
+#: so joining it is not an execution improvement however good the price is.
+#:
+#: WHY A MULTIPLE AND NOT A PROBABILITY. The venue publishes no per-order
+#: queue position, so any fill probability here would be modelled, and a
+#: modelled probability is exactly what must not decide whether to spend
+#: real cash. A multiple of our own need is MEASURED: it comes from the
+#: authenticated ladder's aggregate depth at that price.
+#:
+#: CALIBRATION, from the 0145z live window: the complement rested with
+#: queue_ahead 120.01 against qty_needed 2.05 -- a 58.5x multiple -- and did
+#: not fill in the 13 minutes before it was dropped at close. 10 is well
+#: inside that, and still permits joining a queue five times our size.
+REQUOTE_QUEUE_TOLERANCE_MULTIPLE = 10
+
 
 def completion_requote(*, side: str, resting_own_px: Any,
                        resting_qty: Any, resting_filled_qty: Any = 0,
@@ -2576,6 +2591,10 @@ def completion_requote(*, side: str, resting_own_px: Any,
                        book_age_s: Any = None, gap_suspected: bool = False,
                        orders_uncertain: Any = None,
                        queue_ahead: Any = None,
+                       queue_ahead_fn: Any = None,
+                       require_queue_evidence: bool = False,
+                       queue_gate_binds: bool = True,
+                       cancel_unresolved: Any = None,
                        min_ticks_behind: Any = None) -> Dict[str, Any]:
     """Move a non-filling completion toward the touch, or say why not.
 
@@ -2593,6 +2612,17 @@ def completion_requote(*, side: str, resting_own_px: Any,
     # cannot name, and replacing it would risk two live orders on one slot.
     if orders_uncertain:
         return no("ORDERS_UNCERTAIN", detail=str(orders_uncertain)[:80])
+    # A CANCEL WE COULD NOT PROVE LANDED IS A LIVE ORDER UNTIL THE VENUE
+    # SAYS OTHERWISE. The 0145z/0200z campaign produced ten requotes and
+    # not one clean cancel: seven came back `verify_error: HTTPError` and
+    # three came back `still_open` with `ORDER_STATE_NEW` and the full
+    # `leaves_qty` outstanding. `orders_uncertain` did not catch those,
+    # because the store was not marked uncertain by a failed VERIFY. So an
+    # unresolved cancel is named here in its own right: requoting again
+    # would issue a second cancel against an order that may still be
+    # working, and the replacement cannot be sent while it is.
+    if cancel_unresolved:
+        return no("CANCEL_UNRESOLVED", detail=str(cancel_unresolved)[:80])
     if gap_suspected:
         return no("GAP_SUSPECTED")
     age = _d(book_age_s)
@@ -2710,6 +2740,63 @@ def completion_requote(*, side: str, resting_own_px: Any,
                   min_ticks_behind=str(floor_ticks))
     if leg_crosses(side, target, bid=b, ask=a):
         return no("WOULD_CROSS", target=str(target))
+
+    # ======================================= THE QUEUE PRIORITY WE WOULD PAY
+    #
+    # WHAT WAS WRONG. `queue_ahead` was documented "REPORTED, NOT ACTED ON"
+    # and the live caller never even supplied it, so all ten requotes of the
+    # 0145z/0200z campaign logged `queue_ahead_at_target: null` and acted
+    # anyway. A requote goes to the BACK of the target price's queue, so the
+    # move spends real cash (the target is strictly DEARER than where we
+    # rest) AND surrenders whatever place we already hold. Deciding that
+    # blind is not patience and it is not aggression; it is noise.
+    #
+    # NO FILL IS CLAIMED EITHER WAY. These are aggregate displayed depths
+    # from the authenticated ladder, and the venue publishes no per-order
+    # position, so they bound what must clear ahead of us -- they are not a
+    # probability and nothing here converts them into one.
+    # THE ACCESSOR IS ASKED, NOT TRUSTED. It reads a live ladder, so it may
+    # raise or return nothing; either way the answer is UNKNOWN and the
+    # gate below fails closed rather than inventing a depth.
+    def _qa(px: Any) -> Optional[D]:
+        if queue_ahead_fn is None:
+            return None
+        try:
+            return _d(queue_ahead_fn(px))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
+    qa_rest = _qa(rest_px)
+    qa_tgt = _qa(target)
+    if require_queue_evidence and (qa_rest is None or qa_tgt is None):
+        # FAIL CLOSED, and note what that costs: refusing leaves the order
+        # resting where it is, which is the safe default this function is
+        # built on. It does NOT leave us without a quote.
+        return no("QUEUE_EVIDENCE_ABSENT",
+                  queue_ahead_at_resting=(None if qa_rest is None
+                                          else str(qa_rest)),
+                  queue_ahead_at_target=(None if qa_tgt is None
+                                         else str(qa_tgt)),
+                  target=str(target))
+    if qa_tgt is not None and qa_rest is not None:
+        tolerated = D(str(REQUOTE_QUEUE_TOLERANCE_MULTIPLE)) * q
+        # STRICTLY WORSE ON BOTH AXES is the one case that needs no model:
+        # we would pay more per contract AND stand behind more size than we
+        # do now. Refuse it. A deeper queue is tolerated only while it stays
+        # inside a plausible multiple of our own need.
+        if qa_tgt > qa_rest and qa_tgt > tolerated and queue_gate_binds:
+            return no("QUEUE_COST_EXCEEDS_GAIN",
+                      queue_ahead_at_resting=str(qa_rest),
+                      queue_ahead_at_target=str(qa_tgt),
+                      qty_needed=str(q),
+                      queue_multiple_of_need=str(
+                          (qa_tgt / q).quantize(D("0.01")) if q > 0 else qa_tgt),
+                      tolerated_queue=str(tolerated),
+                      target=str(target), resting=str(rest_px),
+                      extra_cash_usd=str(((target - rest_px) * q
+                                          ).quantize(D("0.0001"))))
     return {"act": True, "reason": None, "side": side,
             "from_price": str(rest_px), "to_price": str(target),
             "qty": str(q), "ticks_behind": str(behind),
@@ -2726,6 +2813,31 @@ def completion_requote(*, side: str, resting_own_px: Any,
             # of the move, stated so it is never implicitly ignored.
             "queue_ahead_at_target": (None if queue_ahead is None
                                       else str(queue_ahead)),
+            # THE MEASURED PAIR, now graded rather than merely printed. Both
+            # are aggregate displayed depth from the authenticated ladder and
+            # neither is a fill probability.
+            "queue_ahead_at_resting_measured": (None if qa_rest is None
+                                                else str(qa_rest)),
+            "queue_ahead_at_target_measured": (None if qa_tgt is None
+                                               else str(qa_tgt)),
+            "queue_evidence_required": bool(require_queue_evidence),
+            "queue_gate_binds": bool(queue_gate_binds),
+            # WOULD THE GATE HAVE REFUSED THIS, had it been binding? Carried
+            # on an ACTING requote so the tolerance can be calibrated from
+            # real decisions before it is ever allowed to block one.
+            #
+            # WHY THIS MATTERS HERE SPECIFICALLY. The 0145z requote that
+            # moved own 0.50 -> 0.52 is the ONLY action of that campaign that
+            # produced a completed pair, and the build that made it recorded
+            # no queue depth at 0.52 -- so whether this gate would have
+            # blocked the one profitable move is UNKNOWN. Observing first is
+            # the only way to find out without risking it.
+            "queue_gate_would_refuse": bool(
+                qa_tgt is not None and qa_rest is not None
+                and qa_tgt > qa_rest
+                and qa_tgt > (D(str(REQUOTE_QUEUE_TOLERANCE_MULTIPLE)) * q)),
+            "extra_cash_usd": str(((target - rest_px) * q
+                                   ).quantize(D("0.0001"))),
             "labels": ("a cancel-and-replace PROPOSAL. Nothing is submitted "
                        "or cancelled here and no fill is implied: the move "
                        "buys a price that CAN trade, not a trade. Priced on "
