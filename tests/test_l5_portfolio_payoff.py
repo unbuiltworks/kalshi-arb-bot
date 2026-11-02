@@ -152,6 +152,11 @@ def test_a_loss_reducing_completion_above_redemption_is_a_hedge():
     # $0.30 to repair $1.10 of worst case.
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    # MECHANICS, not permission: at market this hedge is
+                    # EV-neutral before fees, so the EV gate refuses it by
+                    # default now. The override keeps this test on its own
+                    # subject -- the locked-loss arithmetic.
+                    permit_ev_negative_hedge=True,
                     **dict(BUDGETS, max_locked_loss_per_hedge_usd="0.50"))
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["delta_worst_usd"]) > 0
@@ -199,7 +204,8 @@ def test_a_partial_hedge_leaving_an_imbalance_is_accepted():
     it must only leave less unmatched inventory than it found.
     """
     r = PP.evaluate(held_up="4", held_dn="0", cost_basis_usd=D("4") * D("0.70"),
-                    side="DOWN", qty="1", own_price="0.45", fee_usd="0", **BUDGETS)
+                    side="DOWN", qty="1", own_price="0.45", fee_usd="0",
+                    permit_ev_negative_hedge=True, **BUDGETS)
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["unmatched_after_if_filled"]) > 0, "still imbalanced, by design"
     assert D(r["unmatched_after_if_filled"]) < D(r["unmatched_before"])
@@ -233,9 +239,14 @@ def test_a_hedge_locking_more_than_carrying_costs_is_rejected():
 def test_the_hedge_numbers_are_reported_for_audit():
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0",
-                    **BUDGETS)
-    assert r["holding_ev_status"] == "UNKNOWN"
-    assert r["holding_ev_usd"] is None
+                    permit_ev_negative_hedge=True, **BUDGETS)
+    # THE EV GAP IS NOW CLOSED. It used to be UNKNOWN because the only
+    # candidate was the unconditional -$0.2315/unit average the owner
+    # refused. The replacement is contemporaneous and position-specific:
+    # the complement's own executable price IS P(complement wins).
+    assert r["holding_ev_status"] == PP.MARKET_IMPLIED
+    assert r["holding_ev_usd"] is not None
+    assert r["p_complement_wins"] == "0.45"
     assert "UNCONDITIONAL" in r["unconditional_reference_only"]
     assert r["holding_worst_usd"] is not None
     assert r["holding_best_usd"] is not None
@@ -248,7 +259,7 @@ def test_a_cheap_hedge_beats_the_measured_carry_cost_and_passes():
     r = PP.evaluate(held_up="2.05", held_dn="0",
                     cost_basis_usd=D("2.05") * D("0.465"),
                     side="DOWN", qty="2.05", own_price="0.56", fee_usd="0",
-                    **BUDGETS)
+                    permit_ev_negative_hedge=True, **BUDGETS)
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["hedge_locks_certain_loss_usd"]) < D("0.15")
 
@@ -390,7 +401,8 @@ def test_the_verdict_changes_when_the_complement_price_moves_against_us():
     """
     held = dict(held_up="2.05", held_dn="0",
                 cost_basis_usd=D("2.05") * D("0.465"), side="DOWN",
-                qty="2.05", fee_usd="0", **BUDGETS)
+                qty="2.05", fee_usd="0", permit_ev_negative_hedge=True,
+                **BUDGETS)
     lock = PP.evaluate(own_price="0.50", **held)
     assert lock["action"] == PP.PROFIT_LOCK
     gone = PP.evaluate(own_price="0.56", **held)
@@ -447,3 +459,100 @@ def test_the_recommended_figures_are_not_defaults():
     assert hasattr(PP, "RECOMMENDED_CUMULATIVE_LOCKED_LOSS_USD")
     assert not hasattr(PP, "MAX_LOCKED_LOSS_PER_HEDGE_USD")
     assert not hasattr(PP, "MAX_CUMULATIVE_LOCKED_LOSS_USD")
+
+
+# ===================== HEDGE vs HOLD: the owner's rule, enforced (item 5)
+
+def test_a_full_hedge_at_market_is_exactly_ev_neutral_before_fees():
+    """THE ARITHMETIC IDENTITY, and why hedging cannot pay.
+
+    A hedge bought AT the market costs the market's own expectation, so it
+    converts an uncertain outcome into a CERTAIN one of identical expected
+    value -- an uncertain -$0.30 into a certain -$0.30, delta exactly zero
+    -- and any fee makes it strictly worse. Risk reduction is real; edge is
+    not.
+    """
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    permit_ev_negative_hedge=True, **BUDGETS)
+    assert D(r["holding_ev_usd"]) == D("-0.3000")
+    assert D(r["hedge_ev_usd"]) == D("-0.3000")
+    assert D(r["hedge_ev_delta_usd"]) == D("0")
+    assert r["hedge_ev_verdict"] == PP.EV_NEGATIVE_RISK_REDUCING
+
+
+def test_an_ev_negative_hedge_is_refused_by_default():
+    """OWNER: not merely because it reduces the worst case."""
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    **BUDGETS)
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "HEDGE_EV_NEGATIVE_VS_HOLD"
+    assert D(r["delta_worst_usd"]) > 0      # it DID reduce the worst case
+
+
+def test_a_fee_makes_the_hedge_strictly_ev_negative():
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0.04",
+                    permit_ev_negative_hedge=True, **BUDGETS)
+    assert D(r["hedge_ev_delta_usd"]) < D("0")
+
+
+def test_the_campaign_replay_shows_the_module_would_have_lost_money():
+    """THE REPLAY THAT DECIDES THIS, on the only live data we have.
+
+    2026-11-02 four-window campaign, its three stranded legs, each with the
+    best executable hedge the engine actually found at the time (taker
+    price, displayed depth 181-1634 contracts, fee included):
+
+      1315z  held UP 2.14 @0.40, hedge DOWN @0.67
+             -> REJECT HEDGE_EV_NEGATIVE_VS_HOLD          settled -0.8560
+      1345z  held UP 2.18 @0.37, hedge DOWN @0.94
+             -> REJECT HEDGE_EV_NEGATIVE_VS_HOLD          settled -0.8066
+             (under the RECOMMENDED $0.15 per-hedge cap the budget gate
+              refuses it first, for a different reason and the same
+              outcome; BUDGETS here is deliberately generous so the EV
+              gate is the thing under test)
+      1400z  held DOWN 1.77 @0.25, complete UP @0.60
+             -> PROFIT_LOCK, locking +0.2655              settled +1.3275
+
+    THE ONLY ACTION IT WOULD TAKE IS THE ONE THAT LOSES MONEY: the two
+    hedges are refused, and the single acted-on case trades a realized
+    +$1.3275 for a certain +$0.2655 -- costing $1.0620 and taking the
+    campaign from -$0.2356 to -$1.2976.
+    """
+    legs = [("UP", "2.14", "0.40", "0.67", PP.REJECT,
+             "HEDGE_EV_NEGATIVE_VS_HOLD"),
+            ("UP", "2.18", "0.37", "0.94", PP.REJECT,
+             "HEDGE_EV_NEGATIVE_VS_HOLD"),
+            ("DOWN", "1.77", "0.25", "0.60", PP.PROFIT_LOCK, None)]
+    for held_side, qty, cost, hedge_px, want_action, want_reason in legs:
+        kw = dict(cost_basis_usd=D(qty) * D(cost), qty=qty,
+                  own_price=hedge_px, fee_usd="0", **BUDGETS)
+        if held_side == "UP":
+            r = PP.evaluate(held_up=qty, held_dn="0", side="DOWN", **kw)
+        else:
+            r = PP.evaluate(held_up="0", held_dn=qty, side="UP", **kw)
+        assert r["action"] == want_action, (held_side, qty, r["action"])
+        if want_reason is not None:
+            assert r["reason"] == want_reason, r["reason"]
+
+
+def test_profit_lock_is_not_ev_compared_and_that_is_where_the_loss_is():
+    """PINS THE GAP. PROFIT_LOCK returns before the hedge branch, so no EV
+    comparison is computed for it -- deliberate, since the owner preserved
+    PROFIT_LOCK eligibility, and it is exactly where the $1.0620 comes
+    from. Recorded rather than changed unilaterally."""
+    r = PP.evaluate(held_up="0", held_dn="1.77",
+                    cost_basis_usd=D("1.77") * D("0.25"),
+                    side="UP", qty="1.77", own_price="0.60", fee_usd="0",
+                    **BUDGETS)
+    assert r["action"] == PP.PROFIT_LOCK
+    assert r.get("holding_ev_usd") is None
+
+
+def test_the_module_is_still_disabled_in_live_execution():
+    import os
+    assert os.getenv(PP.ENV) in (None, "", "NO", "no", "0"), (
+        "this experiment must not be enabled in live execution")
+    assert PP.enabled() is False

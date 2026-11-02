@@ -170,6 +170,64 @@ def _fmt(p: Dict[str, Any]) -> Dict[str, str]:
     return {k: str(v) for k, v in p.items()}
 
 
+#: THE MARKET-IMPLIED SETTLEMENT PROBABILITY, and the reason it is the only
+#: calibrated one we will use.
+#:
+#: The owner refused the historical -$0.2315/unit residual average as a
+#: conditional expectation, correctly: it was an UNCONDITIONAL mean over 384
+#: windows and the calibration study found no bucket positive at 95% with CI
+#: half-widths of 0.20-0.45 against a required 0.022. That gap has not
+#: closed and nothing here reopens it.
+#:
+#: What IS available is contemporaneous and position-specific: on a market
+#: where a matched pair redeems exactly $1.00, the complement's own
+#: executable price IS the market's probability that the complement wins.
+#: It is observed at the moment of the decision, it is the price we would
+#: actually pay, and it needs no model.
+#:
+#: ITS ONE ASSUMPTION, stated rather than buried: that the venue's price is
+#: an unbiased forecast. If it is biased we inherit the bias. That is why
+#: the verdict below is labelled MARKET_IMPLIED and never TRUE_EV, and why a
+#: hedge it rejects can still be taken under an explicit owner override.
+#:
+#: THE ARITHMETIC CONSEQUENCE, which is the whole finding. A hedge bought AT
+#: the market costs the market's own expectation plus the spread and the
+#: fee. So EV(hedge) <= EV(hold) ALWAYS, with equality only at zero spread
+#: and zero fee. A defensive hedge priced at market can therefore never be
+#: EV-improving; it buys variance reduction and pays the spread for it.
+#: Measured on the 2026-11-02 campaign's three stranded legs, HOLD was
+#: EV-superior in 3 of 3 by $0.0728-$0.1177, and hedging all three would
+#: have taken the campaign from -$0.2356 to -$0.7311.
+MARKET_IMPLIED = "MARKET_IMPLIED"
+EV_IMPROVING = "EV_IMPROVING"
+EV_NEGATIVE_RISK_REDUCING = "EV_NEGATIVE_RISK_REDUCING"
+
+
+def market_implied_hold_ev(*, held_qty: Any, cost_basis_usd: Any,
+                           complement_own_price: Any) -> Dict[str, Any]:
+    """EV of HOLDING an unmatched position, priced by the complement.
+
+    `complement_own_price` is P(the complement wins) = P(we lose). None,
+    out of (0, 1), or an unreadable quantity leaves the verdict UNKNOWN --
+    it is never guessed and never defaulted.
+    """
+    q = _d(held_qty)
+    c = _d(cost_basis_usd)
+    p = _d(complement_own_price)
+    if q is None or c is None or p is None or q <= 0 or not (0 < p < 1):
+        return {"status": "UNKNOWN", "ev_usd": None,
+                "p_complement_wins": None if p is None else str(p),
+                "basis": ("no executable complement price, so no calibrated "
+                          "settlement probability exists for this position")}
+    ev = (D(1) - p) * (q - c) + p * (-c)
+    return {"status": MARKET_IMPLIED, "ev_usd": str(ev),
+            "p_complement_wins": str(p),
+            "basis": ("the complement's own executable price is the "
+                      "market's probability that the complement wins. "
+                      "Assumes the venue price is an unbiased forecast; "
+                      "biased, we inherit the bias.")}
+
+
 def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
              side: Any, qty: Any, own_price: Any, fee_usd: Any,
              resting_same_side_qty: Any = 0,
@@ -183,6 +241,8 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
              # committed amount nobody supplied is unknown, not zero.
              cumulative_locked_loss_usd: Any = None,
              max_cumulative_locked_loss_usd: Any = None,
+             complement_own_price: Any = None,
+             permit_ev_negative_hedge: Any = False,
              partial_risk_refusals: Any = None) -> Dict[str, Any]:
     """Classify a proposed order by what it does to BOTH settlement outcomes.
 
@@ -328,16 +388,62 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
                    # EXACT BRACKETS FOR THIS SPECIFIC POSITION, arithmetic.
                    holding_worst_usd=str(before["worst_usd"]),
                    holding_best_usd=str(before["best_usd"]),
-                   # AND THE HONEST GAP.
-                   holding_ev_status="UNKNOWN",
-                   holding_ev_usd=None,
-                   holding_ev_note=(
-                       "no defensible conditional expected value exists for "
-                       "this position. The calibration study found no "
-                       "bucket positive at 95% and CI half-widths of "
-                       "0.20-0.45 against a required 0.022, so the EV "
-                       "comparison is UNKNOWN and no gate here uses one."),
                    unconditional_reference_only=RESIDUAL_ADVERSE_BASIS)
+
+        # ============ HEDGE vs HOLD, PRICED BY THE MARKET ITSELF.
+        #
+        # The owner's rule: a hedge must not be taken MERELY because it
+        # reduces the worst case. So the two must be separable, and they
+        # are -- using the complement's own executable price as P(it wins).
+        # No model, no historical average, contemporaneous, and it is the
+        # price we would actually pay.
+        _sd = str(side or "").upper()
+        # DEFAULTS TO `own_price`, which for a hedge IS the complement's own
+        # executable cost -- the same number, so no caller changes.
+        #
+        # AND IT IS THE HEDGE-FAVOURABLE CHOICE, deliberately. `own_price`
+        # is the ASK we would pay; the market's true P(complement wins) sits
+        # BELOW it by the half-spread. Using the ask therefore overstates
+        # the chance we lose, which understates EV(HOLD) and makes hedging
+        # look BETTER than it is. The conclusion below survives that bias,
+        # which is why it is left in rather than corrected out.
+        _p = _d(complement_own_price)
+        if _p is None:
+            _p = _d(own_price)
+        _ev_hold = _ev_hedge = None
+        _ev_status = "UNKNOWN"
+        if _p is not None and D(0) < _p < D(1) and _sd in ("UP", "DOWN"):
+            if _sd == "UP":
+                _ev_hold = (_p * before["pnl_if_up_usd"]
+                            + (D(1) - _p) * before["pnl_if_down_usd"])
+                _ev_hedge = (_p * full["pnl_if_up_usd"]
+                             + (D(1) - _p) * full["pnl_if_down_usd"])
+            else:
+                _ev_hold = (_p * before["pnl_if_down_usd"]
+                            + (D(1) - _p) * before["pnl_if_up_usd"])
+                _ev_hedge = (_p * full["pnl_if_down_usd"]
+                             + (D(1) - _p) * full["pnl_if_up_usd"])
+            _ev_status = MARKET_IMPLIED
+        _ev_delta = (None if _ev_hold is None
+                     else _ev_hedge - _ev_hold)
+        _verdict = ("UNKNOWN" if _ev_delta is None
+                    else (EV_IMPROVING if _ev_delta > 0
+                          else EV_NEGATIVE_RISK_REDUCING))
+        out = dict(out,
+                   holding_ev_status=_ev_status,
+                   holding_ev_usd=None if _ev_hold is None else str(_ev_hold),
+                   hedge_ev_usd=None if _ev_hedge is None else str(_ev_hedge),
+                   hedge_ev_delta_usd=(None if _ev_delta is None
+                                       else str(_ev_delta)),
+                   hedge_ev_verdict=_verdict,
+                   p_complement_wins=None if _p is None else str(_p),
+                   holding_ev_note=(
+                       "EV of HOLD and of HEDGE under the complement's own "
+                       "executable price. A hedge bought AT the market pays "
+                       "the market's expectation plus the spread and fee, "
+                       "so it is EV-negative by construction; it buys "
+                       "variance reduction. UNKNOWN when no executable "
+                       "complement price was supplied."))
 
         if unmatched_after >= unmatched_before:
             return dict(out, action=REJECT,
@@ -362,12 +468,35 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
             return dict(out, action=REJECT,
                         reason="PARTIAL_FILL_BREACHES_RISK_LIMIT",
                         partial_risk_refusals=refusals)
+        # THE OWNER'S RULE, ENFORCED: not merely because it reduces the
+        # worst case. Measured on the 2026-11-02 campaign, HOLD was
+        # EV-superior on 3 of 3 stranded legs and hedging all three would
+        # have taken the campaign from -$0.2356 to -$0.7311. An EV-negative
+        # hedge is still AVAILABLE -- it is variance reduction and may be
+        # worth buying -- but it takes an explicit owner decision, never a
+        # default.
+        if _verdict == EV_NEGATIVE_RISK_REDUCING and not bool(
+                permit_ev_negative_hedge):
+            return dict(out, action=REJECT,
+                        reason="HEDGE_EV_NEGATIVE_VS_HOLD",
+                        labels=("this hedge reduces the worst case but is "
+                                "EV-NEGATIVE against holding at the "
+                                "market's own price. Risk reduction is not "
+                                "a reason to trade on its own; taking it "
+                                "anyway needs permit_ev_negative_hedge."))
+        if _verdict == "UNKNOWN":
+            return dict(out, action=REJECT,
+                        reason="HEDGE_EV_UNRESOLVED",
+                        labels=("no executable complement price was "
+                                "supplied, so HEDGE could not be compared "
+                                "with HOLD. Unresolved is not permission."))
         return dict(out, action=DEFENSIVE_HEDGE, reason=None,
-                    labels=("reduces unmatched inventory and improves the "
-                            "worst case after fees, with a certain locked "
-                            "loss inside the owner's budgets. Protection "
-                            "begins at the FILL, never at the submission, "
-                            "and the EV of holding instead is UNKNOWN."))
+                    labels=("reduces unmatched inventory, improves the "
+                            "worst case after fees, sits inside the owner's "
+                            "locked-loss budgets AND is EV-improving "
+                            "against holding at the market's own price. "
+                            "Protection begins at the FILL, never at the "
+                            "submission."))
 
     # INVENTORY_ADD: intentional accumulation. Worsens the worst case, so
     # it needs FOUR independent things and a flag is only one of them.
