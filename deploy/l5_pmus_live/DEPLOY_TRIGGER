@@ -3038,3 +3038,18 @@ missed-pair blocker instrumentation, disarmed 2026-11-02T12:22Z
 # green both directions (32 tests); no module added.
 # Deploying DISARMED. Rollback: re-pin 060917eb.
 reliability patch 78de7d6c, disarmed 2026-11-02T15:11Z
+
+# ---- 2026-11-02 whole-book completion bound (fc0d74e0), owner-approved ----
+# Fixes the completion basis averaging an already-MATCHED pair into a cheap
+# stranded leg. 1400z 14:08:13: DOWN 4.00 = 2.23 matched @0.65 + 1.77
+# stranded @0.25 -> average 0.4730 -> redeem_cap 0.5270 -> UP at own 0.60
+# refused as "pair 1.3030". True economics: both outcomes +0.1478 on the
+# engine's own accounting, worst case +0.6780.
+# The bound REUSES net_settlement (including its worst-case taker fee on
+# held inventory, the $0.11 that reconciles -0.5302 vs -0.4202), so it can
+# never be more permissive than the engine's own worst case.
+# Campaign replay: 169 PAIR_ABOVE_REDEMPTION refusals, 92 with a matched
+# portion across 2 positions; 1400z ADMITS, 1345z still correctly refuses.
+# DEFAULT OFF (L5_TS_PORTFOLIO_COMPLETION). Parity 80/eb672d14b4baf439.
+# Deploying DISARMED. Rollback: re-pin 4ed8cd82.
+whole-book completion bound fc0d74e0, disarmed 2026-11-02T16:40Z
