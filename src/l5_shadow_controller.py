@@ -1699,6 +1699,52 @@ class ShadowController:
                     break
         return sorted(out)
 
+    #: the clip this controller models. Unit clips are what make the
+    #: rebate round to zero, so the figure is named rather than implied.
+    MODELLED_CLIP_CONTRACTS = D(1)
+
+    def _rebate_accounting(self) -> Dict[str, Any]:
+        """Why this model's rebate is zero, with the evidence beside it.
+
+        Read-only. It accrues nothing; it explains a number.
+        """
+        try:
+            from src import pmus_fees as FEES
+            obs = FEES.CREDITED_OBSERVED
+            clip = self.MODELLED_CLIP_CONTRACTS
+            at_half = FEES.maker_rebate(D("0.50"), clip, cents=True)
+            accrual = FEES.maker_rebate(D("0.50"), clip)
+            floor = FEES.rebate_floor_contracts(D("0.50"))
+            return {
+                "confirmed_rate_usd_per_contract": str(
+                    obs["usd_per_contract"]),
+                "confirmed_rows": obs["rows"],
+                "confirmed_total_usd": str(obs["total_usd"]),
+                "confirmed_total_contracts": str(obs["total_contracts"]),
+                "confirmed_evidence_floor_contracts": str(
+                    obs["smallest_credited_clip_contracts"]),
+                "accounting_unit": obs["accounting_unit"],
+                "arrival": obs["arrival"],
+                "modelled_clip_contracts": str(clip),
+                "accrual_at_p050_usd": str(accrual),
+                "credited_at_p050_usd": str(at_half),
+                "published_floor_at_p050_contracts": (
+                    None if floor is None else str(floor)),
+                "why_zero": ("the rebate rounds PER FILL to the cent and "
+                             "this controller models unit clips, which sit "
+                             "below the floor at every price; a measured "
+                             "zero, not an unobserved one"),
+                "labels": ("confirmed is what the venue has actually "
+                           "credited this account; modelled is the formula "
+                           "below the evidence floor and is NOT income. "
+                           "The two are never summed."),
+            }
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__,
+                    "labels": "rebate accounting unavailable; never assumed"}
+
     def settle(self, slug: str, yes_value: D) -> Dict[str, Any]:
         """Each scenario's matched and residual economics, at the VENUE's
         settlement price.
@@ -1709,11 +1755,26 @@ class ShadowController:
 
         FEES AND REBATES ARE REPORTED, NOT MODELLED. The PMUS maker fee is
         CONFIRMED $0.0000 across 293 actual fills on this account, so zero
-        is a measurement here and not an assumption. The maker rebate is a
-        credited line on the venue's schedule, but at q=1 it has never been
-        observed to credit anything on this account, so it is reported as
-        UNCREDITED rather than accrued: a rebate is not income until the
-        venue pays it.
+        is a measurement here and not an assumption.
+
+        THE MAKER REBATE IS NOW CONFIRMED TO CREDIT, and the old wording
+        here ("never observed to credit") read as if it never arrives at
+        all. It does: 25 PMUS maker fills carry a NEGATIVE `commission` on
+        the fill itself, $0.42 over 119.49 contracts, which is $0.003515 a
+        contract. See `pmus_fees.CREDITED_OBSERVED`.
+
+        AND THIS MODEL STILL EARNS NONE OF IT, which is a measured result
+        rather than a missing one. The rebate is rounded PER FILL to the
+        cent, and this controller models unit clips: at q=1 the accrual is
+        $0.003125 at p=0.50 and rounds to $0.00. The published floor is
+        `C > 0.4 / (p * (1 - p))` -- 1.61 contracts at the money, 2.09 at
+        p=0.26 -- so a unit clip is below it at every price. The smallest
+        clip ever CREDITED on this account is 2.52 contracts.
+
+        TWO COLUMNS, NEVER SUMMED. `confirmed` is accrued only at or above
+        that 2.52-contract evidence floor; everything smaller is reported
+        as `modelled` and is not income. Reporting the floor and the
+        shortfall is the point: it says why the rebate is zero here.
         """
         slot = self._slot(slug)
         out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
@@ -1724,11 +1785,27 @@ class ShadowController:
                "maker_fee_usd": "0.0000",
                "maker_fee_provenance": ("CONFIRMED zero over 293 actual "
                                         "maker fills on this account"),
+               # KEPT, because it is the published contract field and
+               # downstream readers assert on it. It is the CONFIRMED
+               # figure -- the only one that is ever income -- and for a
+               # unit-clip model it is a measured zero.
                "maker_rebate_usd": "0.0000",
-               "maker_rebate_provenance": ("UNCREDITED: never observed to "
-                                           "credit at q=1 on this account; "
-                                           "not accrued until the venue "
-                                           "pays it"),
+               "maker_rebate_usd_modelled": "0.0000",
+               # STILL "UNCREDITED", AND FOR A DIFFERENT REASON THAN BEFORE.
+               # The old wording was "never observed to credit at q=1",
+               # which read as if the rebate never arrives at all. It does
+               # -- 25 credited fills, $0.42 over 119.49 contracts. It is
+               # uncredited HERE because it rounds per fill to the cent and
+               # this model's clip is one contract.
+               "maker_rebate_provenance": (
+                   "UNCREDITED AT THIS CLIP: the rebate IS credited on this "
+                   "account (25 maker fills, $0.42 over 119.49 contracts, "
+                   "$0.003515/contract, arriving as a negative commission "
+                   "on the fill), but it rounds PER FILL to the cent and a "
+                   "1-contract clip accrues $0.0031 at p=0.50, which rounds "
+                   "to $0.00. Smallest clip ever credited: 2.52 contracts. "
+                   "See maker_rebate_accounting."),
+               "maker_rebate_accounting": self._rebate_accounting(),
                "labels": ("MODELLED per scenario under the queue-aware "
                           "model. NOT realized P&L: no order was ever "
                           "submitted, and no fill was ever confirmed.")}

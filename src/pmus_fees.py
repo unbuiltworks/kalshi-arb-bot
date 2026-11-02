@@ -144,3 +144,84 @@ def provenance(when: Optional[dt.datetime] = None) -> dict:
         "verified_against": ("all 99 published price rows reproduce exactly; "
                              "see tests/test_pmus_fees.py"),
     }
+
+
+# ============ WHAT THE VENUE HAS ACTUALLY CREDITED THIS ACCOUNT
+#
+# The rebate above is the PUBLISHED schedule. This block is the OBSERVED
+# accounting, from `analysis/l5/venue_rebate_credits.json`: 25 PMUS maker
+# fills, each a distinct venue fill id, each carrying a NEGATIVE
+# `commission` on the fill itself -- which is how "credited at the point
+# of trade" actually arrives. It is not a separate payout row.
+#
+# THE ACCOUNTING UNIT IS THE FILL, and that is the whole point of
+# recording it here. Each of the 25 rows is rounded to the cent on its
+# own: a 3.13-contract fill was credited $0.01 and a 5.15-contract fill
+# $0.02, and every row's implied `p*(1-p)` band is consistent with
+# `0.0125 * C * p * (1 - p)`. So the rebate is NOT aggregated per order,
+# per market or per day before rounding -- which matters, because
+# rounding per fill is what creates the uplift below.
+#
+# THE SMALLEST CREDIT WE HAVE EVER OBSERVED IS AT 2.52 CONTRACTS. Below
+# that there is no observation, so `rebate_floor_contracts` is a
+# PUBLISHED-SCHEDULE figure and anything under 2.52 is modelled, never
+# confirmed. A 1-contract fill accrues $0.003125 at p=0.50 and rounds to
+# $0.00: the engine earns nothing on unit clips, and that is a measured
+# result rather than a missing one.
+CREDITED_OBSERVED = {
+    "source_file": "analysis/l5/venue_rebate_credits.json",
+    "rows": 25,
+    "total_usd": D("0.42"),
+    "total_contracts": D("119.49"),
+    "usd_per_contract": D("0.003515"),
+    "smallest_credited_clip_contracts": D("2.52"),
+    "arrival": ("a NEGATIVE `commission` on the maker fill itself "
+                "(`commissionNotionalTotalCollected`), not a separate "
+                "payout row"),
+    "accounting_unit": "PER FILL, banker's-rounded to the cent",
+    "markets": ("PMUS sports slugs (aec-/asc-/tsc-), 2026-09-06..07; no "
+                "BTC15m credit has been observed yet"),
+}
+
+#: the smallest clip whose rebate reaches half a cent and so rounds UP.
+#: Exactly half rounds to EVEN under the published rule, hence the strict
+#: inequality: ask for a hair more than the boundary.
+def rebate_floor_contracts(price: D,
+                           when: Optional[dt.datetime] = None) -> Optional[D]:
+    """Contracts needed before a maker rebate rounds to at least $0.01.
+
+    PUBLISHED SCHEDULE, not observed. `0.0125 * C * p * (1 - p) > 0.005`
+    gives `C > 0.4 / (p * (1 - p))`, so the floor is PRICE-DEPENDENT and
+    is cheapest at the money: 1.61 contracts at p=0.50, 2.09 at p=0.26,
+    4.45 at p=0.10. A clip chosen without reference to its price can
+    therefore earn nothing at all.
+    """
+    p = D(str(price))
+    if p <= 0 or p >= 1:
+        return None
+    _t, m = thetas(when)
+    denom = m * p * (D(1) - p)
+    if denom <= 0:
+        return None
+    return (CENT / 2) / denom
+
+
+def rebate_rounding_uplift(price: D, contracts: D,
+                           when: Optional[dt.datetime] = None) -> Optional[D]:
+    """Credited rebate divided by the unrounded accrual, or None.
+
+    THE UPLIFT IS REAL AND IT IS BOUNDED. Rounding per fill pays the whole
+    cent, so a clip sitting just above the floor is paid about twice what
+    it accrues -- the 5.15-contract fills were credited $0.02 against an
+    accrual of $0.0161, which is +24%. It is a modifier on a quantity
+    worth roughly 0.7% of cash deployed, so it cannot rescue a strategy
+    whose trading leg loses materially more than that.
+    """
+    p = D(str(price)); c = D(str(contracts))
+    if p <= 0 or p >= 1 or c <= 0:
+        return None
+    _t, m = thetas(when)
+    raw = m * c * p * (D(1) - p)
+    if raw <= 0:
+        return None
+    return maker_rebate(p, c, when=when, cents=True) / raw
