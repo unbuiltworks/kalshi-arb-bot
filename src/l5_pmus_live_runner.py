@@ -53,6 +53,8 @@ from src import l5_live_authorization as AUTH
 from src import l5_decision_role as DROLE
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
+from src import l5_wake_signal as WS
+from src import pmus_ws_evidence_recorder as _REC
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
 from src import l5_runtime_config_verify as CFGV
@@ -1034,6 +1036,15 @@ class Runner:
         #: position against. None means unknown queue, which the fill
         #: model refuses to fill except on a sweep.
         self.shadow_ladder: Optional[Any] = None
+        #: AN ACTIONABLE EVENT MAY SHORTEN THE SLEEP. Raised by feed threads,
+        #: consumed only by the decision loop, which still owns every read,
+        #: gate and submission -- so this cannot create a concurrent or
+        #: duplicate order. The timer remains the fallback for stale feeds,
+        #: reconciliation, settlement and the watchdog.
+        self.wake = WS.WakeSignal()
+        #: only a TOUCH change, and only in a market we hold or rest in.
+        self.touch_watcher = WS.TouchWatcher(
+            self.wake, relevant=self._market_is_relevant_for_wake)
         #: the shared intent-level boundary. Holds nothing of its own: every
         #: safety fact it reads comes from this runner's own objects.
         self.intent_gate = GATE.IntentGate(self)
@@ -3741,6 +3752,19 @@ class Runner:
                 utc=dt.datetime.now(dt.timezone.utc).isoformat(),
                 clock="emitter")
             emit("L5_LIVE_LIFECYCLE", rec)
+            # A CONFIRMED FILL OR TERMINAL STATE IS THE MOST ACTIONABLE
+            # EVENT THERE IS: it is the moment unmatched inventory appears,
+            # or a slot frees, and the old loop could sit on it for 3.5s.
+            # Raising only re-times the next tick; the tick still decides.
+            try:
+                _wk = getattr(self, "wake", None)
+                if _wk is not None:
+                    _wk.raise_("ORDER_%s" % (
+                        "TERMINAL" if e.get("terminal") else "PROGRESS"))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["wake_raise_error:%s" % type(exc).__name__] += 1
             # kept for the per-window accounting report. A missing market is
             # NOT filed under the transport slug -- that fallback is exactly
             # the defect the identity rule above exists to prevent -- so an
@@ -3874,6 +3898,13 @@ class Runner:
             self.shadow_ladder = FM.Ladder()
             if self.fanout is not None:
                 self.fanout.add(self.shadow_ladder.ingest)
+                # AFTER the ladder, deliberately: this observer reads the
+                # top of book from the ladder that has just folded the
+                # frame, rather than re-deriving the envelope shape -- the
+                # mistake that left every queue_ahead null in 1093d4d1.
+                # FrameFanout wraps each extra observer, so a fault here can
+                # reach neither the ladder nor the money path's observer.
+                self.fanout.add(self._wake_on_frame)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -6574,6 +6605,96 @@ class Runner:
         emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
         return res
 
+    def _market_is_relevant_for_wake(self, slug: str) -> bool:
+        """Could a touch move in this market change a DECISION right now?
+
+        THE LIVE SLATE IS HUNDREDS OF MARKETS and the feed delivers ~4.5
+        frames a second across it. Waking on all of them would make the loop
+        run as fast as it can whatever moved, which is the busy-loop this is
+        not allowed to become. A market we hold nothing in and rest nothing
+        in cannot produce an action, so it cannot justify a wake.
+
+        FAILS CLOSED TOWARD NOT WAKING. Anything unreadable returns False:
+        the existing timer still picks the market up on its next pass, so a
+        missed wake costs latency and never correctness.
+        """
+        try:
+            st = getattr(self, "store", None)
+            if st is None:
+                return False
+            pos = getattr(st, "position", None)
+            if callable(pos):
+                for sd in ("UP", "DOWN"):
+                    try:
+                        if D(str(pos(slug, sd) or 0)) != 0:
+                            return True
+                    except BaseException:                      # noqa: BLE001
+                        continue
+            rows = getattr(st, "live_orders", None)
+            rows = rows() if callable(rows) else rows
+            if rows:
+                for r in (rows.values() if isinstance(rows, Mapping)
+                          else rows):
+                    try:
+                        if str((r or {}).get("market") or "") == slug:
+                            return True
+                    except BaseException:                      # noqa: BLE001
+                        continue
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+        return False
+
+    def _wake_on_frame(self, msg: Any, now: float) -> None:
+        """Fanout observer: raise the wake when a relevant touch moves.
+
+        THE ENVELOPE IS NOT RE-DERIVED HERE. `l5_maker_fill_model.ingest`
+        records that reading marketSlug/bids/offers off the TOP LEVEL was
+        wrong and left every queue_ahead null in deployment 1093d4d1, so the
+        slug comes from the recorder's own proven walker and the top of book
+        comes from the ladder that has already folded this very frame -- the
+        fanout calls the ladder before this observer.
+
+        This runs ON A FEED THREAD and therefore does nothing but raise a
+        flag: it reads no gate, holds no lock of the decision path, and
+        submits nothing.
+        """
+        tw = getattr(self, "touch_watcher", None)
+        lad = getattr(self, "shadow_ladder", None)
+        if tw is None or lad is None:
+            return
+        events: List[dict] = []
+        try:
+            _REC._walk_market_events(msg, events)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return
+        seen: Set[str] = set()
+        books = getattr(lad, "books", {}) or {}
+        for ev in events:
+            try:
+                if ev.get("kind") != "book":
+                    continue
+                slug = ev.get("slug")
+                if not isinstance(slug, str) or not slug or slug in seen:
+                    continue
+                seen.add(slug)
+                bk = books.get(slug)
+                if not bk:
+                    continue
+                bids, asks = bk.get("bids"), bk.get("asks")
+                # rows are best-first: `depth_at` treats rows[-1] as the
+                # DEEPEST rung, so rows[0] is the touch.
+                bb = bids[0][0] if bids else None
+                ba = asks[0][0] if asks else None
+                tw.observe(slug, bb, ba)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                continue
+
     def _requote_queue_ahead_fn(self, slug: str, side: str) -> Any:
         """An accessor giving displayed size ahead of us at an OWN price.
 
@@ -8950,8 +9071,48 @@ def main() -> int:
                     type(exc).__name__, exc))})
         if now - last_hb >= HB_EVERY_S:
             runner.heartbeat()
+            # ITS OWN EVENT, NOT A HEARTBEAT FIELD. The heartbeat already
+            # reaches Railway's 80 KiB line cap and is truncated mid-document,
+            # so a field appended there can simply vanish. This stays small
+            # enough to always arrive whole.
+            try:
+                emit("L5_WAKE_LATENCY", dict(
+                    runner.wake.stats(),
+                    touch_watcher=runner.touch_watcher.status(),
+                    poll_s=poll_s,
+                    loop_woken_by_event=runner.stats.get(
+                        "loop_woken_by_event", 0),
+                    loop_woken_by_timer=runner.stats.get(
+                        "loop_woken_by_timer", 0)))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                runner.stats["wake_stats_error:%s"
+                             % type(exc).__name__] += 1
             last_hb = now
-        time.sleep(poll_s)
+        # THE SLEEP THAT USED TO COST THE LATENCY. `poll_s` defaults to 3,
+        # while the authenticated book arrives ~4.5x a second and order
+        # progress lands within ~200ms -- so the data was already fast and
+        # the decisions waited for a timer. This returns on the timeout
+        # exactly as `time.sleep(poll_s)` did, so reconciliation, settlement,
+        # the watchdog and stale-feed recovery keep their cadence unchanged;
+        # an actionable event can now end it sooner.
+        #
+        # NOTHING ABOUT THE DECISION MOVES. The loop is as single-threaded
+        # after this as before: feed threads may only raise the flag.
+        try:
+            _wk = runner.wake.wait(poll_s)
+            if _wk.get("woken"):
+                runner.stats["loop_woken_by_event"] += 1
+            else:
+                runner.stats["loop_woken_by_timer"] += 1
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # a broken wake must never stop the loop: fall back to the
+            # original fixed sleep and say so.
+            runner.stats["wake_error:%s" % type(exc).__name__] += 1
+            time.sleep(poll_s)
     if runner.transport is not None and runner.transport.armed:
         emit("L5_LIVE_SHUTDOWN", LX.deadman(runner.store, runner.transport,
                                             reason="shutdown"))
