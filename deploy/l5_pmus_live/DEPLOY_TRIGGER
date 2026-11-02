@@ -3023,3 +3023,18 @@ risk limits 5->10 / 3->5, disarmed 2026-11-02T11:55Z
 # touched, the emit is inside one swallow, and the classifier holds no limit
 # (the pair ceiling is passed IN).
 missed-pair blocker instrumentation, disarmed 2026-11-02T12:22Z
+
+# ---- 2026-11-02 reliability patch 78de7d6c, owner-approved ----
+# Bounded in-tick recovery of a failed order-progress read. Closes the
+# 1330z incident: one HTTPError latched the book and the loop moved on
+# with `continue`, costing 382.3s of a 900s window (42%) and recurring in
+# 1400z. The book is now latched FIRST, then the venue is re-asked about
+# THAT order id (2 extra attempts, 0.10s/0.25s backoff). Rate-limited
+# failures are not retried at all.
+# UNCHANGED: BOOK_UNCERTAIN still refuses every submission; uncertainty is
+# still cleared only by an authoritative reconciliation; no limit, price,
+# size, gate, cancellation or submission path is touched.
+# Exact parity 80 ids / eb672d14b4baf439, 15,165 passed. Image closure
+# green both directions (32 tests); no module added.
+# Deploying DISARMED. Rollback: re-pin 060917eb.
+reliability patch 78de7d6c, disarmed 2026-11-02T15:11Z
