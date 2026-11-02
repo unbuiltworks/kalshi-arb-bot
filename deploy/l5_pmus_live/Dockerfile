@@ -189,6 +189,7 @@ COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 # test caught exactly that, as it did for l5_promotion_gate and
 # l5_window_retention before it.
 COPY src/l5_wake_signal.py src/l5_wake_signal.py
+COPY src/l5_missed_pair_blocker.py src/l5_missed_pair_blocker.py
 # imported by l5_intent_gate's PAYOFF_TWO_OUTCOME gate. Added WITH the
 # import, not before it: the closure test requires the image to be exactly
 # the import closure, in both directions.

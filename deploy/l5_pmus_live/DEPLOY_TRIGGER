@@ -3011,3 +3011,15 @@ taker-cross observability, disarmed 2026-11-01T13:05Z
 # with deploys skipped: at the old constant that still yields 5, so a failed
 # build could not have raised the limit.
 risk limits 5->10 / 3->5, disarmed 2026-11-02T11:55Z
+
+# ---- 2026-11-02 missed-pair blocker instrumentation ----
+# Emits L5_MISSED_PAIR at BOTH refusal returns in maybe_book_completion,
+# which previously emitted nothing and left a refused completion visible
+# only as an aggregate self.stats counter. Carries the named blocker, its
+# class, and a tri-state verdict on whether a PROFITABLE pair was given up
+# (YES / NO / UNKNOWN / N-A) so correct refusals do not inflate the count
+# and an unpriced refusal is never reported as unprofitable.
+# Observability only: no price, size, limit, gate or cancellation path is
+# touched, the emit is inside one swallow, and the classifier holds no limit
+# (the pair ceiling is passed IN).
+missed-pair blocker instrumentation, disarmed 2026-11-02T12:22Z

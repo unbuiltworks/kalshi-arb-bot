@@ -230,3 +230,112 @@ def test_it_decides_nothing_and_holds_no_limit():
 
 def test_the_label_is_stable_so_the_tape_can_be_queried():
     assert M.record(market="m", reason="X")["label"] == "L5_MISSED_PAIR"
+
+
+# ===================================================== THE WIRING ITSELF
+#
+# The classifier is useless unwired, and the gap it closes was precisely a
+# refusal path that emitted nothing. These pin that both refusal returns in
+# `maybe_book_completion` now describe themselves, and that the describing
+# cannot alter or break the refusal.
+
+def _runner_src():
+    import inspect
+    from src import l5_pmus_live_runner as R
+    return inspect.getsource(R.Runner.maybe_book_completion)
+
+
+def test_both_refusal_returns_are_instrumented():
+    """THE TWO PATHS THAT PREVIOUSLY EMITTED NOTHING.
+
+    `if not rec.get("ok"): return rec` is the decision-level refusal, and
+    the `resting` branch is the runner's own post-decision one. A refusal
+    that returns without a record is the whole defect.
+    """
+    src = _runner_src()
+    assert src.count("_note_missed(") >= 3, src          # def + two calls
+    body = src.split("_note_missed")[0]
+    # the generic refusal return is preceded by the note
+    assert 'if not rec.get("ok"):\n            _note_missed(' in src, src
+    assert '_note_missed("ORDER_ALREADY_RESTING")' in src, src
+
+
+def test_no_refusal_return_remains_silent():
+    """EVERY return that hands back a refusal must describe itself first.
+
+    Checked structurally so a future refusal added to this method cannot
+    quietly reintroduce the gap this module closes.
+
+    TWO FORMS OF INSTRUMENTATION COUNT, and the distinction is the method's
+    actual shape rather than a convenience. `_note_missed` covers the
+    refusals; the method's FINAL `return rec` is the SUCCESS path, where the
+    decision was ok and placement was attempted, and it is already paired
+    with its outcome by `L5_BOOK_COMPLETION_RESULT`. An earlier version of
+    this test treated every bare `return rec` as a refusal and flagged that
+    success return -- the heuristic was wrong, not the code, and the fix is
+    to recognise both records rather than to loosen the guard.
+    """
+    src = _runner_src()
+    lines = src.splitlines()
+    silent = []
+    for i, ln in enumerate(lines):
+        t = ln.strip()
+        is_return = (t == "return rec"
+                     or t.startswith("return dict(rec, ok=False"))
+        if not is_return:
+            continue
+        window = "\n".join(lines[max(0, i - 25):i])
+        if ("_note_missed" not in window
+                and "L5_BOOK_COMPLETION_RESULT" not in window):
+            silent.append((i + 1, t))
+    assert not silent, silent
+
+
+def test_the_success_return_is_the_one_covered_by_the_other_record():
+    """Pins the division of labour the test above relies on, so that if the
+    success path ever stops emitting its pairing record this fails here
+    rather than silently satisfying the guard above."""
+    src = _runner_src()
+    assert "L5_BOOK_COMPLETION_RESULT" in src
+    tail = src.split("L5_BOOK_COMPLETION_RESULT")[-1]
+    assert tail.strip().endswith("return rec"), tail[-200:]
+
+
+def test_the_emit_is_wrapped_so_it_cannot_break_the_money_path():
+    """A failure to DESCRIBE a refusal must never change the refusal."""
+    src = _runner_src()
+    note = src.split("def _note_missed")[1].split("if not rec.get")[0]
+    assert "try:" in note
+    assert "except BaseException" in note
+    assert "missed_pair_emit_failed" in note
+    # and it must not be able to swallow a shutdown
+    assert "KeyboardInterrupt, SystemExit" in note
+
+
+def test_the_ceiling_is_passed_in_and_not_read_by_the_classifier():
+    """So the record cannot disagree with the gate that actually refuses."""
+    src = _runner_src()
+    assert "max_pair_cost()" in src
+    assert "entry_ceiling=_ceil" in src
+
+
+def test_an_unreadable_ceiling_does_not_prevent_the_record():
+    """The pair ceiling is a nicety; the BLOCKER is the point. Losing the
+    ceiling must downgrade `inside_entry_ceiling` to UNKNOWN, not drop the
+    record that something was refused."""
+    r = M.record(market="m", reason="ORDER_ALREADY_RESTING",
+                 decision={"pair_own_cost": "0.92"}, entry_ceiling=None)
+    assert r["missed_profitable_pair"] == "YES"
+    assert r["pair"]["inside_entry_ceiling"] == "UNKNOWN"
+
+
+def test_the_runner_imports_it_so_the_image_closure_covers_it():
+    """The Dockerfile COPY and the import must arrive together: the image
+    must be EXACTLY the import closure, both directions, so a COPY without
+    an import fails the closure test and an import without a COPY fails the
+    boot."""
+    import inspect
+    from src import l5_pmus_live_runner as R
+    assert "l5_missed_pair_blocker" in inspect.getsource(R)
+    df = open("deploy/l5_pmus_live/Dockerfile").read()
+    assert "COPY src/l5_missed_pair_blocker.py" in df

@@ -54,6 +54,7 @@ from src import l5_decision_role as DROLE
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_wake_signal as WS
+from src import l5_missed_pair_blocker as MPB
 from src import pmus_ws_evidence_recorder as _REC
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
@@ -6116,13 +6117,57 @@ class Runner:
         if rec.get("reason") != "DECIDE_COOLDOWN":
             self._book_completion_t = now
         self.stats["book_completion:%s" % rec.get("reason")] += 1
+
+        # ============ A REFUSED COMPLETION IS NAMED, NOT JUST COUNTED.
+        #
+        # WHAT WAS WRONG. The counter above was the ONLY record of a refused
+        # completion: `if not rec.get("ok"): return rec` emitted nothing. So
+        # the tape could say `book_completion:ORDER_ALREADY_RESTING` went up
+        # 40 times and could not say whether any of those 40 gave up a pair
+        # worth having. That is the same blindness
+        # `L5_BOOK_COMPLETION_RESULT` was added to remove at the PLACEMENT
+        # layer, still fully present one layer up at the DECISION layer.
+        #
+        # WHY A HISTOGRAM IS NOT ENOUGH. Most refusals are CORRECT --
+        # NO_INVENTORY means there was nothing to complete -- so a count of
+        # reasons overstates the problem and cannot rank what to fix. The
+        # record carries a separate verdict on whether a PROFITABLE pair was
+        # given up, and only `missed_profitable_pair: YES` is a problem.
+        #
+        # THE CEILING IS PASSED IN, never read inside the classifier, so the
+        # record cannot disagree with the gate that actually refuses.
+        #
+        # OBSERVABILITY ONLY, AND IT CANNOT BREAK THE MONEY PATH. Every part
+        # of it is inside one swallow: a failure to describe a refusal must
+        # never change the refusal, and must never raise into a caller that
+        # is about to return a decision.
+        def _note_missed(_reason: Any) -> None:
+            try:
+                try:
+                    from src import l5_two_sided_probe as _TSc
+                    _ceil = _TSc.max_pair_cost()
+                except BaseException:                          # noqa: BLE001
+                    _ceil = None
+                emit("L5_MISSED_PAIR", MPB.record(
+                    market=slug, reason=_reason, decision=rec,
+                    entry_ceiling=_ceil, held_side=held,
+                    held_qty=held_qty, deficient_qty=def_qty,
+                    stage="DECISION"))
+            except BaseException as exc:                        # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["missed_pair_emit_failed:%s"
+                           % type(exc).__name__] += 1
+
         if not rec.get("ok"):
+            _note_missed(rec.get("reason"))
             return rec
         # ONE RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE. The
         # executor's own MAX_LIVE_ORDERS gate refuses a second order anyway;
         # declining before the re-entry keeps the record honest about why.
         if resting:
             self.stats["book_completion:ORDER_ALREADY_RESTING"] += 1
+            _note_missed("ORDER_ALREADY_RESTING")
             return dict(rec, ok=False, reason="ORDER_ALREADY_RESTING")
         emit("L5_BOOK_COMPLETION_TRIGGER", {
             "triggered_by": "BOOK_NOT_L5_ACTION",
