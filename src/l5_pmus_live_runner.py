@@ -6560,11 +6560,23 @@ class Runner:
 
         THE ACHIEVABLE PAIR IS DERIVED FROM THE BOOK, not from the
         refusal, so it is recorded even when the refusal fired before any
-        price was computed. Both maker legs quote `depth` ticks behind
-        their own touch -- UP at `ask - d*t`, DOWN at `(1 - bid) - d*t` --
-        so the best pair this book could have produced is
-            (ask - d*t) + (1 - bid - d*t) = 1 + (ask - bid) - 2*d*t
-        which is the spread plus one, less the depth both legs give up.
+        price was computed. It is derived by ASKING `quote_own_price`, the
+        function `build_orders` prices with, rather than by restating its
+        arithmetic here -- for the same reason the portfolio bound asks
+        `net_settlement` instead of solving a closed form.
+
+        A RESTATEMENT IS EXACTLY WHAT WENT WRONG. The first version of
+        this helper computed `1 + (ask - bid) - 2*d*t`, with the spread
+        ADDED. The true identity has the spread SUBTRACTED, because UP's
+        touch is the bid and DOWN's is `1 - ask`:
+            (bid - d*t) + (1 - ask - d*t) = 1 - (ask - bid) - 2*d*t
+        The spread HELPS the pair; it does not cost it. On the 1-tick
+        book that is BTC15m's median the sign error reported 0.97 where
+        the truth is 0.95 -- the difference between a pair outside the
+        0.96 ceiling and one comfortably inside it, and between a pair in
+        L5's losing band and one in its winning band. It is the same
+        class of error as the DOWN double-conversion this module already
+        carries a comment about.
 
         OBSERVABILITY ONLY, inside one swallow. A failure to describe a
         refusal must never change the refusal and must never raise into a
@@ -6591,9 +6603,14 @@ class Runner:
                 # and the recorded achievable pair stops being the one the
                 # engine could have quoted; unreadable is left UNKNOWN.
                 tk = D(str(tick))
-                d = D(str(TSP.depth_ticks()))
+                d = int(TSP.depth_ticks())
                 if bid > 0 and ask > bid and tk > 0:
-                    pair = D(1) + (ask - bid) - (D(2) * d * tk)
+                    _u = TSP.quote_own_price(TSP.UP, bid=bid, ask=ask,
+                                             tick=tk, depth_ticks=d)
+                    _dn = TSP.quote_own_price(TSP.DOWN, bid=bid, ask=ask,
+                                              tick=tk, depth_ticks=d)
+                    if _u is not None and _dn is not None:
+                        pair = _u + _dn
             except BaseException:                              # noqa: BLE001
                 pair = None
             try:

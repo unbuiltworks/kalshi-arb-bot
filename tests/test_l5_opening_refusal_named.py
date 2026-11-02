@@ -8,26 +8,23 @@ having. The executor's refusal dict carries `effective_pair_cost` and
 `ceiling` and neither ever reached the tape; the completion layer has
 carried `L5_MISSED_PAIR` since the 1400z work, the opening layer did not.
 
-WHAT THE RECONSTRUCTION FOUND, over the 501 `L5_CONTROLLER_OPEN_TRIGGER`
-books preserved for 1400z/1415z/1430z. Both maker legs quote `d` ticks
-behind their own touch, so the best pair a book can yield is
+THE PAIR IDENTITY, and an earlier version of this file had its SIGN
+BACKWARDS. UP's touch is the BID and DOWN's is `1 - ask`, so
 
-    (ask - d*t) + (1 - bid - d*t) = 1 + (ask - bid) - 2*d*t
+    (bid - d*t) + (1 - ask - d*t) = 1 - (ask - bid) - 2*d*t
 
-The spread was ONE TICK at the median (p90 2, max 4), so at the deployed
-`depth_ticks=2` the achievable pair was 0.97 in every one of the 501
-samples -- min 0.97, p90 0.98. Against the 0.96 entry ceiling that is:
+The spread is SUBTRACTED. A wider spread makes the pair CHEAPER, because
+both legs quote away from a touch that is further apart. On BTC15m's
+median ONE-TICK book, depth 2 plans 0.95 -- comfortably inside the 0.96
+ceiling, not outside it.
 
-    genuinely unprofitable (pair > 1.00)            0 of 501
-    profitable but above the ceiling (0.96 < p <= 1)  501 of 501
-
-So none of those refusals was a bad bargain being declined. Every one was
-a pair below the $1.00 redemption, refused by the ceiling alone.
-
-AND THE CEILING IS ARITHMETICALLY UNREACHABLE AT DEPTH 2. pair <= 0.96
-needs 1 + spread - 0.04 <= 0.96, i.e. spread <= 0.00 -- a locked or
-crossed book, which `BOOK_CROSSED_OR_LOCKED` independently refuses. This
-is why the count is 683 and not six.
+So the 683 `controller_open:PAIR_COST_ABOVE_CEILING` refusals are NOT
+openings refused by an unreachable ceiling. That gate reads
+`eff = (lc[UP] + lc[DOWN] + px*qty) / matched_after` and only fires when
+the order CREATES new matched quantity -- so it refuses SECOND legs,
+whose achieved pair drifted above 0.96 after the first leg filled. The
+cause is drift between the two fills, i.e. adverse selection, not
+arithmetic.
 
 This file pins the record, not the policy. No ceiling, depth or price
 changes here.
@@ -38,6 +35,7 @@ from decimal import Decimal as D
 
 from src import l5_missed_pair_blocker as MPB
 from src import l5_pmus_live_runner as R
+from src import l5_two_sided_probe as TS
 
 
 class _Stats(dict):
@@ -69,8 +67,14 @@ def _run(monkeypatch, rec, book, tick="0.01"):
 ONE_TICK = {"bid": "0.4700", "ask": "0.4800", "stream_age_s": "0.05"}
 
 
-def test_a_one_tick_book_records_an_achievable_pair_of_0_97(monkeypatch):
-    """The 501-sample median, and the whole point of the record."""
+def test_a_one_tick_book_records_an_achievable_pair_of_0_95(monkeypatch):
+    """The median BTC15m book, and the whole point of the record.
+
+    An earlier version of this test asserted 0.97 and PASSED, because the
+    helper it tested carried the same sign error. A test that restates the
+    code's own mistake confirms nothing, which is why the pair is now
+    taken from `quote_own_price` in the test below as well.
+    """
     _, out = _run(monkeypatch,
                   {"refused_reason": "PAIR_COST_ABOVE_CEILING"}, ONE_TICK)
     assert len(out) == 1
@@ -78,10 +82,12 @@ def test_a_one_tick_book_records_an_achievable_pair_of_0_97(monkeypatch):
     assert label == "L5_MISSED_PAIR"
     assert p["stage"] == "OPENING"
     assert p["reason"] == "PAIR_COST_ABOVE_CEILING"
-    assert D(p["pair"]["pair_own_cost"]) == D("0.97")
-    # below redemption, so it IS a pair worth having -- and refused
+    assert D(p["pair"]["pair_own_cost"]) == D("0.95")
+    # below redemption AND inside the 0.96 ceiling: this pair was one the
+    # strategy would have accepted, which is what makes the refusal worth
+    # recording at all
     assert p["pair"]["locks_gain_vs_redemption"] == "YES"
-    assert p["pair"]["inside_entry_ceiling"] == "NO"
+    assert p["pair"]["inside_entry_ceiling"] == "YES"
     assert p["missed_profitable_pair"] == "YES"
 
 
@@ -103,11 +109,11 @@ def test_the_ceiling_cannot_be_reached_at_depth_two_on_any_real_book():
     assert D(1) + D(0) - (D(2) * d * tick) == cap
 
 
-def test_a_wider_spread_is_recorded_as_a_dearer_pair(monkeypatch):
-    """p90 of the sample was a 2-tick spread -> 0.98."""
+def test_a_wider_spread_is_recorded_as_a_CHEAPER_pair(monkeypatch):
+    """A 2-tick spread quotes both legs further out: 0.94, not 0.98."""
     _, out = _run(monkeypatch, {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
                   {"bid": "0.4700", "ask": "0.4900", "stream_age_s": "0.05"})
-    assert D(out[0][1]["pair"]["pair_own_cost"]) == D("0.98")
+    assert D(out[0][1]["pair"]["pair_own_cost"]) == D("0.94")
 
 
 # --------------------------------------------------- it stays honest
@@ -165,3 +171,68 @@ def test_the_refusal_record_names_the_blocker_class(monkeypatch):
     assert seen["ORDER_ALREADY_RESTING"] == MPB.ORDER_CONCURRENCY
     # a refusal past the window is a CORRECT refusal, never a missed pair
     assert seen["PAST_TERMINAL"] == MPB.NOT_AN_OPPORTUNITY
+
+
+# ===================================================================
+# THE PAIR IDENTITY, which an earlier version of this file got
+# backwards. UP's touch is the BID and DOWN's is `1 - ask`, so
+#     (bid - d*t) + (1 - ask - d*t) = 1 - (ask - bid) - 2*d*t
+# The spread is SUBTRACTED: a wider spread makes the pair CHEAPER,
+# because both legs quote away from a touch that is further apart.
+# ===================================================================
+
+def test_the_spread_makes_the_pair_cheaper_not_dearer():
+    """A one-tick book plans 0.95 at depth 2, not 0.97."""
+    for spread_t, want in ((1, D("0.95")), (2, D("0.94")), (4, D("0.92"))):
+        bid = D("0.5000")
+        ask = bid + D("0.01") * spread_t
+        u = TS.quote_own_price(TS.UP, bid=bid, ask=ask, tick=D("0.01"),
+                               depth_ticks=2)
+        dn = TS.quote_own_price(TS.DOWN, bid=bid, ask=ask, tick=D("0.01"),
+                                depth_ticks=2)
+        assert u + dn == want, (spread_t, u + dn)
+        assert u + dn <= TS.max_pair_cost()      # and it CLEARS the ceiling
+
+
+def test_deeper_quotes_plan_cheaper_pairs(monkeypatch):
+    """Two ticks of pair per tick of depth, both legs giving up one."""
+    bid, ask = D("0.5000"), D("0.5100")
+    seen = {}
+    for d in (2, 3, 4, 5):
+        u = TS.quote_own_price(TS.UP, bid=bid, ask=ask, tick=D("0.01"),
+                               depth_ticks=d)
+        dn = TS.quote_own_price(TS.DOWN, bid=bid, ask=ask, tick=D("0.01"),
+                                depth_ticks=d)
+        seen[d] = u + dn
+    assert seen == {2: D("0.95"), 3: D("0.93"),
+                    4: D("0.91"), 5: D("0.89")}
+
+
+def test_the_recorded_pair_matches_the_engines_own_pricing(monkeypatch):
+    """The record must not restate the arithmetic, it must ask."""
+    out = []
+    monkeypatch.setattr(R, "emit", lambda label, p: out.append(p))
+    r = _Runner()
+    r._note_open_missed("m", {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
+                        {"bid": "0.5600", "ask": "0.5700",
+                         "stream_age_s": "0.05"}, "0.01")
+    u = TS.quote_own_price(TS.UP, bid=D("0.5600"), ask=D("0.5700"),
+                           tick=D("0.01"), depth_ticks=TS.depth_ticks())
+    dn = TS.quote_own_price(TS.DOWN, bid=D("0.5600"), ask=D("0.5700"),
+                            tick=D("0.01"), depth_ticks=TS.depth_ticks())
+    assert D(out[0]["pair"]["pair_own_cost"]) == u + dn == D("0.95")
+
+
+def test_an_opening_record_is_not_labelled_a_completion(monkeypatch):
+    """The tape must name the decision that was actually refused."""
+    out = []
+    monkeypatch.setattr(R, "emit", lambda label, p: out.append(p))
+    r = _Runner()
+    r._note_open_missed("m", {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
+                        ONE_TICK, "0.01")
+    assert "an OPENING pair that was DECIDED AGAINST" in out[0]["labels"]
+    assert "a completion that was" not in out[0]["labels"]
+    # and the completion layer keeps its own wording
+    comp = MPB.record(market="m", reason="PAIR_ABOVE_REDEMPTION",
+                      decision={"pair_own_cost": "1.10"}, stage="DECISION")
+    assert "a completion that was DECIDED AGAINST" in comp["labels"]

@@ -230,12 +230,20 @@ def record(*, market: Any, reason: Any,
             "locked_pnl_usd": (None if dec.get("locked_pnl_usd") is None
                                else str(dec.get("locked_pnl_usd"))),
             "need": dec.get("need"),
-            "labels": ("a completion that was DECIDED AGAINST, with the "
-                       "blocker named and the pair priced where it could be. "
+            # THE LABEL NAMES WHAT WAS ACTUALLY REFUSED. It said
+            # "a completion" on every record, including the OPENING ones,
+            # which describes the wrong decision to anyone reading the
+            # tape: an opening refusal gives up a NEW pair, not the
+            # completion of inventory already held.
+            "labels": ("%s that was DECIDED AGAINST, with the blocker "
+                       "named and the pair priced where it could be. "
                        "`missed_profitable_pair` YES is the only case that "
                        "is a problem; UNKNOWN is not NO. Reporting only -- "
                        "nothing here places, reprices or withdraws anything, "
-                       "and no figure here is a fill or realized."),
+                       "and no figure here is a fill or realized."
+                       % ("an OPENING pair"
+                          if str(stage or "").upper() == "OPENING"
+                          else "a completion")),
         }
         return out
     except BaseException as exc:                               # noqa: BLE001
