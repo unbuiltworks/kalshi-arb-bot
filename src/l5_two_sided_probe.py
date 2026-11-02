@@ -2832,19 +2832,25 @@ def completion_requote(*, side: str, resting_own_px: Any,
     #
     # ============ THE WHOLE-BOOK BOUND, which is the correct one.
     #
-    # THE DEFECT IT REPLACES, measured on 1400z 2026-11-02. `ch_total / h`
-    # is the average over the ENTIRE held side, so an already-MATCHED pair's
-    # cost is averaged into the completion economics of a cheap stranded
-    # leg. The book held DOWN 4.00 -- 2.23 matched at own 0.65 plus 1.77
-    # stranded at own 0.25 -- giving an average of 0.4730 and a redeem_cap
-    # of 0.5270. UP was executable at own 0.60 against 1377 of displayed
-    # depth, so the engine refused with `pair_own_cost 1.3030,
-    # PAIR_ABOVE_REDEMPTION`.
+    # THE DEFECT IT REPLACES. `ch_total / h` is the average over the
+    # ENTIRE held side, so an already-MATCHED pair's cost is averaged into
+    # the completion economics of a cheap stranded leg, and a completion
+    # that locks a profit can then read as a pair above redemption.
     #
-    # THE TRUE ECONOMICS OF THAT ORDER: buying UP 1.77 at 0.60 takes the
-    # book to UP 4.00 / DOWN 4.00 for 3.7122, so BOTH settlement outcomes
-    # become +0.2578 and the worst case improves by +0.6780. It was a
-    # PROFIT LOCK the engine scored as a 1.30 pair.
+    # IT DID NOT HAPPEN IN THE 1315z-1400z CAMPAIGN, and an earlier draft
+    # of this comment claimed it did. Taking the 1400z book from its own
+    # `L5_TS_COMPLETION` records -- DOWN 4.00 at avg 0.4730, UP 2.23 at
+    # avg 0.3400, need 1.77, `worst_before -0.530200`, which
+    # `net_settlement` reproduces to the cent -- the whole-book cap is
+    # 0.68, while UP was executable at own 0.72 to 0.85 for the whole
+    # window (`pair_own_cost` 1.1930 to 1.3230). So the bound REFUSES
+    # every completion the engine refused there: the averaged basis and
+    # the whole-book test agree, and the refusals were right.
+    #
+    # NOR ANYWHERE ELSE IN THAT CAMPAIGN. The engine already reports this
+    # exact question as `both_positive_after`, and across 13:15z-14:31z
+    # not one record carries it true. The bound is a correctness fix to
+    # the basis, not a source of extra fills on this evidence.
     #
     # THE BOUND, with no lot tracking needed. Both outcomes stay >= 0 iff
     # min(h, d + q) >= ch + cd + q*p + fee, i.e.
@@ -2861,16 +2867,20 @@ def completion_requote(*, side: str, resting_own_px: Any,
     # grid, so it is net of what the resting order has ALREADY filled and
     # clipped to the genuine imbalance.
     #
-    # PASSING THE GROSS SIZE LOOSENS THE BOUND, and measurably. Buying
-    # `q` here always leaves `d + q <= h` (because `q <= h - dq`), so the
-    # book stays under-covered and every extra share both costs `p + fee`
-    # and adds $1.00 of coverage -- at `p < 1` that IMPROVES the modelled
-    # worst case. So an overstated `buy_qty` buys imaginary coverage. On
-    # the 1400z book with 0.96 of a 1.77 order already filled, the gross
-    # figure returns a cap of 0.43 while the true 0.81 purchase leaves the
-    # worst outcome at -$0.0358 there; the honest cap is 0.38. A bound
-    # whose whole promise is "the WHOLE BOOK never settles at a loss"
-    # cannot be computed on shares it will not buy.
+    # THE GROSS SIZE MOVES THE BOUND EITHER WAY, AND SOMETIMES LOOSER,
+    # which is the direction that matters. Two effects fight: an extra
+    # share costs `p + fee`, and it adds coverage -- but only while
+    # `d + q <= h`, because coverage is `min(h, d + q)`. Which effect wins
+    # depends on the book, so this is NOT a uniform conservatism, and an
+    # earlier draft of this comment claiming it always loosens was wrong.
+    #
+    # MEASURED, over 2,073 random books with an independent partial fill:
+    # the gross figure is LOOSER in 650 of them -- by as much as 78 ticks
+    # -- tighter in 1,009, and identical in 414. 78 ticks of loosening
+    # admits a book that settles at a loss; the tightening refuses
+    # completions that were safe. A bound whose whole promise is "the
+    # WHOLE BOOK never settles at a loss" cannot be computed on shares it
+    # will not buy, in either direction.
     if portfolio_completion_enabled():
         _pcap = portfolio_completion_cap(
             side=side, held_qty=h, held_cost_usd=ch_total,

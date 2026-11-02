@@ -324,9 +324,63 @@ def decide(*, market: str, held_side: str,
     # The preference, recorded either way and never a refusal on its own.
     rec["within_preferred_target"] = bool(pair <= be)
     rec["locked_pnl_usd"] = str((D(1) - pair) * need)
+    #
+    #         `pair` IS AN AVERAGE OVER THE WHOLE HELD SIDE, which is the
+    #         defect this now has an answer for. `avg = hc / hq` blends an
+    #         already-MATCHED pair's cost into the economics of a cheap
+    #         STRANDED leg, so a completion that locks a profit can read as
+    #         a pair above redemption, and the whole-book test is the one
+    #         that answers whether it actually does.
+    #
+    #         THIS IS THE PATH THE RECORDED REFUSALS CAME FROM, which is
+    #         why the bound is wired here and not only in
+    #         `completion_requote`. The 1315z-1400z campaign raised
+    #         `book_completion:PAIR_ABOVE_REDEMPTION` 182 times at this
+    #         PLACEMENT decision -- its largest economic refusal. The
+    #         requote path governs REPRICING an order already resting, so
+    #         the bound there could not have reached any of them.
+    #
+    #         IT WOULD HAVE ADMITTED NONE OF THOSE 182, and that is the
+    #         measured answer rather than the hoped-for one. On the 1400z
+    #         book from its own `L5_TS_COMPLETION` records -- DOWN 4.00 at
+    #         avg 0.4730, UP 2.23 at avg 0.3400, need 1.77, `worst_before
+    #         -0.530200`, which `net_settlement` reproduces to the cent --
+    #         the whole-book cap is 0.68 while UP was executable at own
+    #         0.72 to 0.85 all window. The engine already reports this
+    #         question directly as `both_positive_after`, and across
+    #         13:15z-14:31z not one record carries it true. The averaged
+    #         basis and the whole-book test agreed: those completions
+    #         really would have locked a loss.
+    #
+    #         SO THIS IS A CORRECTNESS FIX TO THE BASIS, NOT A SOURCE OF
+    #         FILLS. It stays default-off, and the evidence for enabling it
+    #         is a book where `both_positive_after` is true -- which this
+    #         campaign never produced.
+    #
+    #         THE BOUND IS STRICTLY STRONGER THAN THE TEST IT REPLACES.
+    #         `pair <= 1.00` promises the matched portion never settles at
+    #         a loss; `portfolio_completion_cap` asks the engine's own
+    #         `net_settlement` whether the WHOLE BOOK settles >= 0 on BOTH
+    #         outcomes, fees included. Where the two disagree on an
+    #         averaged basis it is the average that is wrong.
+    #
+    #         DEFAULT OFF, and it only ever ADMITS. Unset leaves this
+    #         refusal exactly as it was, and a `None` cap -- unreadable
+    #         inputs, or no qualifying price -- also refuses. It cannot
+    #         tighten anything either, because every gate above has already
+    #         run and `complement_order` has already cleared the leg
+    #         against the owner's deficit budget.
     if pair > REDEMPTION_PAIR:
-        return _no("PAIR_ABOVE_REDEMPTION",
-                   redemption=str(REDEMPTION_PAIR), **rec)
+        _pcap = (TS.portfolio_completion_cap(
+            side=want, held_qty=hq, held_cost_usd=hc,
+            deficient_qty=dq, deficient_cost_usd=_d(deficient_cost_usd),
+            buy_qty=need, tick=_d(tick), ceiling=own)
+            if TS.portfolio_completion_enabled() else None)
+        rec["portfolio_cap"] = None if _pcap is None else str(_pcap)
+        if _pcap is None or _pcap < own:
+            return _no("PAIR_ABOVE_REDEMPTION",
+                       redemption=str(REDEMPTION_PAIR), **rec)
+        rec["admitted_by"] = "PORTFOLIO_PAYOFF"
 
     # ---- 8. IDEMPOTENCE AND REPRICING, against what is ALREADY RESTING.
     #         The same decision taken twice must not place two orders, and a

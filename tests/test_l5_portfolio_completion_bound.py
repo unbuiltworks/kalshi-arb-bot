@@ -9,23 +9,38 @@ own 0.25. `completion_requote` priced the completion off the whole side:
     ch_total / h = (2.23*0.65 + 1.77*0.25) / 4.00 = 0.4730
     redeem_cap   = 1 - 0.4730                     = 0.5270
 
-UP was executable at own 0.60 against 1377 contracts of displayed depth, so
-the engine refused:
+and the engine refused, repeatedly:
 
     L5_MISSED_PAIR  reason PAIR_ABOVE_REDEMPTION
                     pair_own_cost 1.3030   gain_per_contract -0.3030
                     held_side DOWN  held_qty 4.00  need 1.77
 
-THE TRUE ECONOMICS OF THAT ORDER. Buying UP 1.77 at own 0.60 (fee 0.03)
-takes the book to UP 4.00 / DOWN 4.00 for 3.7122:
+WHAT THE WINDOW ACTUALLY OFFERED, and an earlier version of this docstring
+got it wrong. It claimed UP was executable at own 0.60. It was not: the
+recorded `pair_own_cost` ran 1.1930 to 1.3230 against a fixed avg of
+0.4730, so the UP price was own 0.72 to 0.85 for the whole window, and
+`L5_TS_COMPLETION` prices the crossing completion at 0.79 and 0.84.
+
+SO THE BOUND REFUSES 1400z TOO. The whole-book cap on this book is 0.68,
+below everything the window offered, and the engine's own
+`both_positive_after` is false on every 1400z record. Across the entire
+13:15z-14:31z campaign not one record carries it true. The averaged basis
+and the whole-book test AGREE here: those completions really would have
+locked a loss, and the 182 `book_completion:PAIR_ABOVE_REDEMPTION`
+refusals were right.
+
+THE ARITHMETIC BELOW IS AT A HYPOTHETICAL own 0.60, which this book did
+not offer. It is kept because it is the cleanest demonstration of the
+averaging defect -- at 0.60 the completion takes the book to UP 4.00 /
+DOWN 4.00 for 3.7122:
 
     before  pnl_if_up -0.4202   pnl_if_down +1.3498   worst -0.4202
     after   pnl_if_up +0.2578   pnl_if_down +0.2578   worst +0.2578
 
-BOTH outcomes positive, worst case improved by +0.6780. It was a PROFIT
-LOCK that the engine scored as a 1.30 pair and declined. The matched 2.23
-is already settled economics; averaging its 0.65 into the basis of a leg
-bought at 0.25 is simply the wrong denominator.
+-- while `redeem_cap` of 0.5270 refuses it. The matched 2.23 is already
+settled economics; averaging its 0.65 into the basis of a leg bought at
+0.25 is the wrong denominator whether or not this particular window had a
+price where it mattered.
 
 THE BOUND, which needs no lot tracking. Both outcomes stay >= 0 iff
     min(h, d + q)  >=  ch + cd + q*p + fee
@@ -192,10 +207,15 @@ def test_it_moves_no_risk_limit():
 # leaves the worst outcome at -$0.0358. The honest cap is 0.38.
 # ===================================================================
 
-#: 1400z 2026-11-02, held DOWN 4.00 for $1.4495 (2.23 matched at own
-#: 0.65 plus 1.77 stranded at own 0.25). The completing UP order is
-#: 1.77 and 0.96 of it has filled at 0.60, so UP holds 2.73 for
-#: $1.6380 and only 0.81 shares are still working.
+#: A CONSTRUCTED book, not a recorded one -- an earlier version of this
+#: fixture was labelled 1400z and carried the matched portion's $1.4495
+#: as the whole held side's cost, where 1400z's own records give DOWN
+#: 4.00 at avg 0.4730. The arithmetic below stands as a demonstration of
+#: the loosening; it is not evidence about that window.
+#:
+#: Held DOWN 4.00 for $1.4495. The completing UP order is 1.77 and 0.96
+#: of it has filled at 0.60, so UP holds 2.73 for $1.6380 and only 0.81
+#: shares are still working.
 PF = dict(side=TS.UP, held_qty=D("4.00"), held_cost_usd=D("1.4495"),
           deficient_qty=D("2.73"), deficient_cost_usd=D("1.6380"),
           tick=D("0.01"), ceiling=D("0.60"))
@@ -225,7 +245,8 @@ def test_a_partially_filled_requote_is_bounded_by_its_working_size():
     """End to end through `completion_requote`, flag on.
 
     The resting order is 1.77 with 0.96 filled, so 0.81 is working and
-    the target may not exceed the 0.81-share cap.
+    the target may not exceed the 0.81-share cap. Constructed book, as
+    above.
     """
     import os
     ws = 1_793_189_700.0
@@ -381,3 +402,149 @@ def test_settlement_arithmetic_independently_of_net_settlement():
     # the hand-rolled figure here is the fee-free lower bound on cost
     for winner_qty in (up_q, dn_q):       # UP settles, then DOWN settles
         assert winner_qty * D(1) - paid >= 0, (winner_qty, paid, cap)
+
+
+# ===================================================================
+# THE PLACEMENT PATH, which is where the recorded refusals came from.
+#
+# `l5_book_completion.decide()` raised all 182
+# `book_completion:PAIR_ABOVE_REDEMPTION` refusals of the 1315z-1400z
+# campaign, at step 7, on `pair = avg + own`. The bound wired only into
+# `completion_requote` governs REPRICING an order already resting and
+# could not have reached one of them.
+# ===================================================================
+
+import os
+
+from src import l5_book_completion as BC
+
+WS_1400 = 1_793_196_000.0                      # 14:00:00Z
+
+#: The AUTHORITATIVE 1400z state, from that window's own
+#: `L5_TS_COMPLETION` records: up_qty 2.23 / up_cost_px 0.3400,
+#: dn_qty 4.00 / dn_cost_px 0.4730, deficit 1.77,
+#: worst_before -0.530200. The UP touch ran 0.72..0.85 all window.
+def _decide_1400(bid, ask, flag):
+    old = os.environ.get(TS.PORTFOLIO_COMPLETION_ENV)
+    if flag:
+        os.environ[TS.PORTFOLIO_COMPLETION_ENV] = "YES"
+    else:
+        os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+    try:
+        return BC.decide(
+            market="cpc-btc-updown-15m-2026-11-02-1400z",
+            held_side="DOWN",
+            held_qty=D("4.00"), held_cost_usd=D("4.00") * D("0.4730"),
+            deficient_qty=D("2.23"),
+            deficient_cost_usd=D("2.23") * D("0.3400"),
+            book={"bid": bid, "ask": ask, "stream_age_s": "0.05"},
+            now_t=WS_1400 + 560.0, window_start=WS_1400,
+            tick="0.01", min_qty="0.01", depth_ticks=2,
+            residual_budget_usd="1.50", submissions_left=8)
+    finally:
+        if old is None:
+            os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+        else:
+            os.environ[TS.PORTFOLIO_COMPLETION_ENV] = old
+
+
+def test_the_bound_still_refuses_the_real_1400z_book():
+    """The measured answer, not the hoped-for one.
+
+    The UP touch was own 0.79 (bid 0.7800 / ask 0.7900 on the YES wire),
+    the whole-book cap is 0.68, so the completion stays refused with the
+    flag ON -- and the recorded `portfolio_cap` says why.
+    """
+    off = _decide_1400("0.7800", "0.7900", False)
+    on = _decide_1400("0.7800", "0.7900", True)
+    assert off["ok"] is False
+    assert off["reason"] == "PAIR_ABOVE_REDEMPTION", off
+    assert on["ok"] is False
+    assert on["reason"] == "PAIR_ABOVE_REDEMPTION", on
+    # the flag-on record NAMES the bound that refused, which flag-off cannot
+    assert D(on["portfolio_cap"]) == D("0.68")
+    assert off.get("portfolio_cap") is None
+
+
+def test_the_bound_admits_only_where_the_whole_book_covers_itself():
+    """The mechanism works -- this book just needed a cheaper UP.
+
+    Same inventory, a book two ticks cheaper than anything 1400z
+    offered: bid 0.7000 / ask 0.7100 prices the maker completion at own
+    0.68. The averaged basis refuses it (pair 1.1530 > 1.00); the
+    whole-book test admits, because 0.68 is exactly the cap.
+    """
+    off = _decide_1400("0.7000", "0.7100", False)
+    on = _decide_1400("0.7000", "0.7100", True)
+    assert off["reason"] == "PAIR_ABOVE_REDEMPTION", off
+    assert D(off["pair_own_cost"]) == D("1.1530")
+    assert on.get("reason") != "PAIR_ABOVE_REDEMPTION", on
+    assert on.get("admitted_by") == "PORTFOLIO_PAYOFF", on
+    assert D(on["portfolio_cap"]) == D("0.68")
+
+
+def test_how_far_1400z_was_from_qualifying_four_ticks():
+    """The size of the miss, which is the number that matters.
+
+    The whole-book cap on the 1400z book is own 0.68. The cheapest UP
+    the window ever showed was own 0.72 -- the lowest recorded
+    `pair_own_cost` of 1.1930 against the fixed 0.4730 average. So the
+    bound refuses 1400z by FOUR TICKS at the window's single best
+    moment, and by seventeen at its worst (pair 1.3230 -> own 0.85).
+    """
+    cap = TS.portfolio_completion_cap(
+        side=TS.UP, held_qty=D("4.00"),
+        held_cost_usd=D("4.00") * D("0.4730"), deficient_qty=D("2.23"),
+        deficient_cost_usd=D("2.23") * D("0.3400"), buy_qty=D("1.77"),
+        tick=D("0.01"), ceiling=D("0.99"))
+    assert cap == D("0.68")
+    best_recorded_own = D("1.1930") - D("0.4730")
+    worst_recorded_own = D("1.3230") - D("0.4730")
+    assert best_recorded_own == D("0.72")
+    assert (best_recorded_own - cap) / D("0.01") == 4
+    assert (worst_recorded_own - cap) / D("0.01") == 17
+
+
+def test_the_flag_off_placement_path_is_byte_for_byte_unchanged():
+    """No record, no key, no behaviour change with the flag unset."""
+    for bid, ask in (("0.7800", "0.7900"), ("0.3900", "0.4000"),
+                     ("0.5900", "0.6000"), ("0.9000", "0.9100")):
+        off = _decide_1400(bid, ask, False)
+        assert "portfolio_cap" not in off or off["portfolio_cap"] is None
+        assert off.get("admitted_by") is None
+
+
+def test_the_bound_cannot_bypass_the_deficit_or_submission_limits():
+    """It sits BELOW every other gate, so it can only ever admit.
+
+    With no submissions left, or past the terminal, the flag changes
+    nothing -- those refusals are raised before step 7 is reached.
+    """
+    old = os.environ.get(TS.PORTFOLIO_COMPLETION_ENV)
+    os.environ[TS.PORTFOLIO_COMPLETION_ENV] = "YES"
+    try:
+        spent = BC.decide(
+            market="cpc-btc-updown-15m-2026-11-02-1400z", held_side="DOWN",
+            held_qty=D("4.00"), held_cost_usd=D("4.00") * D("0.4730"),
+            deficient_qty=D("2.23"),
+            deficient_cost_usd=D("2.23") * D("0.3400"),
+            book={"bid": "0.3900", "ask": "0.4000", "stream_age_s": "0.05"},
+            now_t=WS_1400 + 560.0, window_start=WS_1400,
+            tick="0.01", min_qty="0.01", residual_budget_usd="1.50",
+            submissions_left=0)
+        late = BC.decide(
+            market="cpc-btc-updown-15m-2026-11-02-1400z", held_side="DOWN",
+            held_qty=D("4.00"), held_cost_usd=D("4.00") * D("0.4730"),
+            deficient_qty=D("2.23"),
+            deficient_cost_usd=D("2.23") * D("0.3400"),
+            book={"bid": "0.3900", "ask": "0.4000", "stream_age_s": "0.05"},
+            now_t=WS_1400 + 880.0, window_start=WS_1400,
+            tick="0.01", min_qty="0.01", residual_budget_usd="1.50",
+            submissions_left=8)
+    finally:
+        if old is None:
+            os.environ.pop(TS.PORTFOLIO_COMPLETION_ENV, None)
+        else:
+            os.environ[TS.PORTFOLIO_COMPLETION_ENV] = old
+    assert spent["reason"] == "NO_SUBMISSIONS_LEFT", spent
+    assert late["reason"] == "PAST_TERMINAL", late
