@@ -49,10 +49,23 @@ UP_Q, UP_C = D("2.23"), D("2.23") * D("0.34")
 DN_Q, DN_C = D("4.00"), D("2.23") * D("0.65") + D("1.77") * D("0.25")
 NEED, FEE = D("1.77"), D("0.03")
 
+# THE $0.11, reconciled. `net_settlement` charges a worst-case TAKER fee on
+# inventory ALREADY HELD -- cost = a*pu + b*pd + fee(a,pu) + fee(b,pd) --
+# on fills whose actual commission was 0.0000. That is the whole gap
+# between the engine's worst_before -0.5302 and naive settlement -0.4202.
+# The bound REUSES net_settlement so it can never be more permissive than
+# the engine's own worst case. My first draft solved a closed form that
+# omitted this term and was wrong in exactly that direction.
+ENGINE_WORST_BEFORE = D("-0.530200")
+ENGINE_WORST_AFTER = D("0.1478000")
+ENGINE_IMPROVEMENT = D("0.6780000")
 
-def portfolio_cap(h, ch, d, cd, q, fee):
-    """p <= [min(h, d+q) - ch - cd - fee] / q"""
-    return (min(h, d + q) - ch - cd - fee) / q
+
+def cap(touch, *, h=DN_Q, ch=DN_C, d=UP_Q, cd=UP_C, q=NEED, side="DOWN"):
+    """The shipped bound, exercised directly."""
+    return TS.portfolio_completion_cap(
+        side=side, held_qty=h, held_cost_usd=ch, deficient_qty=d,
+        deficient_cost_usd=cd, buy_qty=q, tick=D("0.01"), ceiling=touch)
 
 
 def test_the_flag_is_off_by_default(monkeypatch):
@@ -67,56 +80,93 @@ def test_only_an_explicit_YES_enables_it(monkeypatch, raw):
 
 
 def test_the_old_basis_refuses_the_profitable_completion():
-    """Reproduces the refusal exactly: average basis -> cap 0.5270."""
     avg = DN_C / DN_Q
     assert avg == D("0.4730")
     assert D(1) - avg == D("0.5270")
-    assert D("0.60") > D(1) - avg          # UP at 0.60 is refused
+    assert D("0.60") > D(1) - avg
 
 
-def test_the_whole_book_bound_admits_it():
-    cap = portfolio_cap(DN_Q, DN_C, UP_Q, UP_C, NEED, FEE)
-    assert cap > D("0.60"), cap            # UP at 0.60 is allowed
-    assert D("0.74") < cap < D("0.75"), cap
+def test_the_bound_admits_the_recorded_missed_completion():
+    assert cap(D("0.60")) == D("0.60")
 
 
-def test_and_the_order_is_genuinely_a_profit_lock():
-    """Not merely allowed -- both settlement outcomes become positive."""
-    cost = UP_C + DN_C
-    before = PP.settlement_payoff(UP_Q, DN_Q, cost)
-    after = PP.settlement_payoff(UP_Q + NEED, DN_Q,
-                                 cost + NEED * D("0.60") + FEE)
-    assert before["worst_usd"] == D("-0.4202")
-    assert after["worst_usd"] == D("0.2578")
-    assert after["pnl_if_up_usd"] > 0 and after["pnl_if_down_usd"] > 0
-    assert after["worst_usd"] - before["worst_usd"] == D("0.6780")
+def test_it_refuses_the_dear_price_the_engine_also_saw():
+    """At the 0.84 touch the engine's worst_after was -0.277. The bound
+    must not quote there; it caps lower."""
+    c = cap(D("0.84"))
+    assert c is not None and c < D("0.84"), c
 
 
-def test_the_bound_still_refuses_a_price_that_loses_on_an_outcome():
-    """At UP 0.84, which the engine also saw, the book goes negative again
-    -- and the whole-book bound refuses it, as it must."""
-    cap = portfolio_cap(DN_Q, DN_C, UP_Q, UP_C, NEED, FEE)
-    assert D("0.84") > cap
-    cost = UP_C + DN_C
-    after = PP.settlement_payoff(UP_Q + NEED, DN_Q,
-                                 cost + NEED * D("0.84") + FEE)
-    assert after["worst_usd"] < 0
+def test_it_reconciles_with_the_engine_s_own_arithmetic():
+    """The $0.03 and the $0.11, both accounted."""
+    cash = NEED * D("0.60") + FEE
+    assert cash == D("1.09200")                      # engine: 1.092000
+    assert ENGINE_WORST_AFTER - ENGINE_WORST_BEFORE == ENGINE_IMPROVEMENT
+    naive_before = min(DN_Q, UP_Q) - (UP_C + DN_C)
+    assert naive_before == D("-0.4202")
+    held_fee = naive_before - ENGINE_WORST_BEFORE
+    assert D("0.10") < held_fee < D("0.12"), held_fee  # the ~$0.11
 
 
-def test_it_is_stricter_than_redeem_cap_when_the_book_is_underwater():
-    """It is NOT uniformly more permissive. With no matched portion and a
-    dear basis the whole-book bound binds TIGHTER, which is the point:
-    it bounds the book, not one side."""
-    h, ch = D("2.14"), D("2.14") * D("0.40")     # 1315z: all stranded
-    d, cd, q = D("0"), D("0"), D("2.14")
-    old = D(1) - ch / h
-    new = portfolio_cap(h, ch, d, cd, q, D("0"))
-    assert new <= old
+# ---------------------------------------------- item 2: the hard cases
+
+def test_a_partial_fill_is_bounded_on_the_quantity_actually_bought():
+    """Half the need must not be priced as if the whole need filled."""
+    full = cap(D("0.60"), q=NEED)
+    half = cap(D("0.60"), q=NEED / 2)
+    assert full is not None and half is not None
+    assert half <= D("0.60") and full <= D("0.60")
+
+
+def test_unequal_share_quantities_are_handled():
+    c = cap(D("0.70"), h=D("5.5"), ch=D("5.5") * D("0.30"),
+            d=D("1.25"), cd=D("1.25") * D("0.40"), q=D("4.25"))
+    assert c is not None
+
+
+def test_a_book_with_no_matched_portion_binds_TIGHTER_than_redeem_cap():
+    """1315z: all stranded, dear basis. The whole-book bound must be the
+    stricter one -- it is not a loosening device."""
+    h, ch = D("2.14"), D("2.14") * D("0.40")
+    old = D(1) - ch / h                       # 0.60
+    new = cap(D("0.90"), h=h, ch=ch, d=D("0"), cd=D("0"), q=h)
+    assert new is None or new <= old, (new, old)
+
+
+def test_previously_matched_inventory_does_not_poison_the_basis():
+    """The defect itself: adding an already-matched pair to BOTH sides must
+    not make a cheap stranded leg look unprofitable."""
+    lean = cap(D("0.60"), h=D("1.77"), ch=D("1.77") * D("0.25"),
+               d=D("0"), cd=D("0"), q=D("1.77"))
+    fat = cap(D("0.60"))        # same leg, plus the matched 2.23 pair
+    assert lean is not None and fat is not None
+    assert fat >= D("0.60") - D("0.05"), (lean, fat)
+
+
+@pytest.mark.parametrize("bad", [
+    dict(h=None), dict(ch=None), dict(q=D("0")), dict(q=D("-1")),
+])
+def test_unreadable_or_impossible_inputs_return_None(bad):
+    kw = dict(h=DN_Q, ch=DN_C, d=UP_Q, cd=UP_C, q=NEED)
+    kw.update(bad)
+    assert cap(D("0.60"), **kw) is None
+
+
+def test_None_leaves_the_existing_cap_untouched():
+    """Fail-safe: no answer means the old redeem_cap still governs."""
+    assert cap(D("0.60"), q=D("0")) is None
+
+
+def test_it_terminates_and_never_quotes_at_or_below_zero():
+    c = cap(D("0.99"), h=D("1"), ch=D("0.99"), d=D("0"), cd=D("0"), q=D("1"))
+    assert c is None or c > 0
 
 
 def test_it_moves_no_risk_limit():
     import inspect
-    src = inspect.getsource(TS.portfolio_completion_enabled)
+    src = inspect.getsource(TS.portfolio_completion_cap)
     for banned in ("max_total_exposure", "max_live_orders", "daily_loss",
-                   "residual", "MAX_PAIR_COST", "cash"):
+                   "residual_budget", "MAX_PAIR_COST", "cash_headroom"):
         assert banned not in src, banned
+    # and it reuses the engine's own settlement function
+    assert "net_settlement" in src

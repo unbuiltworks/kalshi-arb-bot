@@ -373,6 +373,56 @@ def portfolio_completion_enabled() -> bool:
                ).strip().upper() == "YES"
 
 
+def portfolio_completion_cap(*, side: str, held_qty: Any,
+                             held_cost_usd: Any, deficient_qty: Any,
+                             deficient_cost_usd: Any, buy_qty: Any,
+                             tick: Any, ceiling: Any) -> Optional[D]:
+    """Highest own price at which the WHOLE BOOK still settles >= 0.
+
+    IT REUSES `net_settlement` RATHER THAN REIMPLEMENTING IT, and that is
+    the point. My first draft solved
+        p <= [min(h, d+q) - ch - cd - fee] / q
+    in closed form and omitted a term `net_settlement` charges: a
+    worst-case TAKER fee on inventory ALREADY HELD,
+        cost = a*pu + b*pd + fee(theta,a,pu) + fee(theta,b,pd)
+    On the 1400z book that is $0.11 -- the exact gap between the engine's
+    `worst_before -0.5302` and the naive settlement arithmetic -0.4202.
+    A closed form that omits it is MORE PERMISSIVE than the engine's own
+    worst case, which is the one thing this bound must never be. Scanning
+    the tick grid with the engine's own function cannot drift from it.
+
+    Returns None when the inputs cannot be read or no price qualifies, and
+    None leaves `redeem_cap` exactly as it was.
+    """
+    h = _d(held_qty); ch = _d(held_cost_usd)
+    d = _d(deficient_qty) or D(0); cd = _d(deficient_cost_usd) or D(0)
+    q = _d(buy_qty); tk = _d(tick); hi = _d(ceiling)
+    if h is None or ch is None or q is None or tk is None or hi is None:
+        return None
+    if q <= 0 or tk <= 0 or h <= 0:
+        return None
+    held_px = ch / h
+    best: Optional[D] = None
+    px = (hi / tk).to_integral_value(rounding="ROUND_FLOOR") * tk
+    steps = 0
+    while px > 0 and steps < 200:
+        nd = d + q
+        ndpx = (cd + q * px) / nd if nd > 0 else D(0)
+        if str(side).upper() == "UP":
+            # we HOLD up, we are buying DOWN
+            ns = net_settlement(up_qty=h, dn_qty=nd,
+                                up_price=held_px, dn_price=ndpx)
+        else:
+            ns = net_settlement(up_qty=nd, dn_qty=h,
+                                up_price=ndpx, dn_price=held_px)
+        if ns["worst_outcome"] >= 0:
+            best = px
+            break
+        px -= tk
+        steps += 1
+    return best
+
+
 def completion_max_pair() -> D:
     """The completion pair ceiling. Unset or unreadable is 1.00 = inert.
 
@@ -2806,12 +2856,11 @@ def completion_requote(*, side: str, resting_own_px: Any,
     # DEFAULT OFF. Unset leaves `redeem_cap` in force byte-for-byte, so the
     # deployed engine is unchanged and a campaign can A/B exactly this.
     if portfolio_completion_enabled():
-        _cd = _d(deficient_cost_usd) or D(0)
-        _dq = _d(deficient_qty) or D(0)
-        _q = _d(resting_qty) or D(0)
-        if _q > 0:
-            _num = min(h, _dq + _q) - ch_total - _cd
-            _pcap = _num / _q
+        _pcap = portfolio_completion_cap(
+            side=side, held_qty=h, held_cost_usd=ch_total,
+            deficient_qty=deficient_qty, deficient_cost_usd=deficient_cost_usd,
+            buy_qty=resting_qty, tick=tk, ceiling=touch)
+        if _pcap is not None:
             redeem_cap = _pcap
     edge_cap = completion_max_pair()
     if edge_cap < D(1):
