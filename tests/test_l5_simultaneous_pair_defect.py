@@ -303,3 +303,78 @@ def test_the_guard_is_additive_and_never_admits_what_the_ceiling_refused(ex):
         SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "2.46"}) is not None
     assert x.worst_pair_combination_refusal(
         SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "2.46"}) is not None
+
+
+# ========== THE TWO CONVENTIONS, PINNED. Do not "simplify" to one of them.
+#
+# The guard uses the AVERAGE for confirmed holdings and the MAX for resting
+# orders. That looks inconsistent and is not: unifying it in EITHER
+# direction introduces a real defect, demonstrated by these two tests.
+
+def test_held_inventory_uses_the_AVERAGE_because_units_are_fungible(ex):
+    """Holding UP at 0.40 and 0.95 then buying DOWN 2 @ 0.30 realises cost
+    1.95 against 2.00 of settlement -- genuinely +$0.05. We cannot choose
+    which held unit to match, so a MAX-based test would refuse a profitable
+    pair.
+    """
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("1"), D("0.40"), basis="OWN")
+    x.store.apply_fill(SLUG, "UP", D("1"), D("0.95"), basis="OWN")
+    assert x.store.position(SLUG, "UP") == D("2")
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.30", "qty": "2"}) is None, (
+        "the realised pair is 0.675 + 0.30 = 0.975 and PROFITABLE; a "
+        "max-based check on held units would wrongly refuse it")
+
+
+def test_resting_orders_use_the_MAX_because_a_subset_may_fill(ex):
+    """Resting UP at 0.40 and 0.95 with a DOWN at 0.30: if only the 0.95
+    and the DOWN fill, the pair costs 1.25 and loses $0.25. An
+    average-based test would admit that reachable loss.
+    """
+    x, t, H, E = ex
+    x.store.record_submit("r40", {"market": SLUG, "side": "UP",
+                                  "price": "0.40", "qty": "1"})
+    x.store.record_submit("r95", {"market": SLUG, "side": "UP",
+                                  "price": "0.95", "qty": "1"})
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.30", "qty": "1"})
+    assert bad is not None, (
+        "an average-based check would have admitted a reachable 1.25 pair")
+    assert D(bad["dearest_up_own"]) == D("0.95")
+
+
+def test_the_guard_rejects_nothing_the_live_campaign_actually_did(ex):
+    """OBSERVATION FOR ITEM 8, pinned so it cannot be fitted to a result
+    later. Every pair the 2026-11-02 campaign completed is below redemption,
+    so the guard costs zero realised opportunity.
+    """
+    x, t, H, E = ex
+    for i, (up_px, dn_px, pair) in enumerate((
+            ("0.47", "0.52", "0.99"), ("0.51", "0.46", "0.97"),
+            ("0.58", "0.37", "0.95"))):
+        slug = "%s-camp%d" % (SLUG, i)
+        assert D(up_px) + D(dn_px) == D(pair)
+        x.store.apply_fill(slug, "UP", D("1"), D(up_px), basis="OWN")
+        assert x.worst_pair_combination_refusal(
+            slug, {"side": "DOWN"}, {"price": dn_px, "qty": "1"}) is None
+
+
+def test_the_guard_is_own_price_based_and_that_is_maker_only_scoped(ex):
+    """A SCOPE LIMIT RECORDED AS A TEST, not buried in a comment. The bound
+    compares OWN prices, which equal fee-inclusive cost only while
+    execution is maker-only -- the published schedule has no maker-fee term
+    and the campaign booked actual_fees_usd 0 with taker_orders 0.
+
+    A taker leg adds theta*p*(1-p) ~ $0.0174/contract, so a 0.99 pair with
+    two taker legs truly costs ~1.0248: a certain loss this guard WOULD
+    admit. That is not a defect today, and it becomes one the moment taker
+    crossing is authorised. Whoever enables it must add the fee term here.
+    """
+    from src import l5_live_execution as EX
+    assert EX.REDEMPTION_PAIR == D("1.00")
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("1"), D("0.47"), basis="OWN")
+    # 0.99 is admitted on own prices, which is correct under maker-only
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.52", "qty": "1"}) is None
