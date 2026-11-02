@@ -3054,3 +3054,4 @@ reliability patch 78de7d6c, disarmed 2026-11-02T15:11Z
 # Deploying DISARMED. Rollback: re-pin 4ed8cd82.
 whole-book completion bound fc0d74e0, disarmed 2026-11-02T16:40Z
 whole-book completion bound, buy_qty wiring fix dbc530ed (disarmed)
+placement-path wiring + corrected evidence ee598c45 (disarmed)
