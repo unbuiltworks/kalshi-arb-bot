@@ -31,7 +31,12 @@ DEPLOYED = {
     "L5_LIVE_AUTH_MAX_REPLACE": "64", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "40",
     "L5_MAX_TOTAL_EXPOSURE_USD": "20", "L5_MAX_CASH_DEPLOYED_USD": "12",
     "L5_MAX_L5_DAILY_LOSS_USD": "5", "L5_MAX_CUMULATIVE_LOSS_USD": "20",
-    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5",
+    # RAISED WITH THE OWNER-AUTHORIZED LIMIT 2026-11-02. This is the
+    # SECOND test snapshot carrying the figure, and it failed exactly as
+    # this file says a verifier should: "the verifier must stay capable
+    # of saying no." It said no to a deployed snapshot that no longer
+    # matched the approval, which is the behaviour, not a defect.
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10",
     "L5_TS_OPENING_NOTIONAL_BUDGET_USD": "3",
     "L5_LIVE_AUTH_MAX_WINDOWS": "4", "L5_WINDOW_STRATEGY": "TWO_SIDED",
     "L5_MAX_LIVE_ORDERS": "1", "L5_TS_CANCEL_MARGIN_S": "300",
