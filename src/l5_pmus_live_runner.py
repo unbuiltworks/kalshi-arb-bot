@@ -3750,11 +3750,21 @@ class Runner:
                 # says hammering a venue that is returning errors is how a
                 # transient fault becomes a rate limit; this honours the
                 # same rule rather than restating it.
-                row = self._reread_order_progress(str(vid), exc)
+                # DEFENSIVELY RESOLVED. `poll_orders` is borrowed by
+                # lighter harnesses (RunnerStub in test_l5_e2e_window) that
+                # are not Runners and do not carry this helper. Reaching
+                # for it unguarded raised AttributeError there and took the
+                # whole tick down -- the same mistake the completion
+                # requote helper made, caught the same way, by parity.
+                # Absent, the behaviour is exactly what it was before this
+                # patch: latch and move on.
+                _reread = getattr(self, "_reread_order_progress", None)
+                row = _reread(str(vid), exc) if _reread is not None else None
                 if row is None:
                     out.append({"coid": coid, "event": "PROGRESS_ERROR",
                                 "error": type(exc).__name__,
-                                "reread_attempts": self.last_reread_attempts,
+                                "reread_attempts": getattr(
+                                    self, "last_reread_attempts", 0),
                                 "rate_limited": T.is_rate_limited(exc)})
                     continue
                 # RECOVERED INSIDE THE TICK. Fall through to the SAME
@@ -3763,8 +3773,10 @@ class Runner:
                 self.stats["order_read_recovered"] += 1
                 out.append({"coid": coid, "event": "PROGRESS_READ_RECOVERED",
                             "error": type(exc).__name__,
-                            "reread_attempts": self.last_reread_attempts,
-                            "recovered_after_s": self.last_reread_elapsed_s})
+                            "reread_attempts": getattr(
+                                self, "last_reread_attempts", 0),
+                            "recovered_after_s": getattr(
+                                self, "last_reread_elapsed_s", 0.0)})
             prog = LX.order_progress(row)
             # THE ORDER'S OWN MARKET, not the transport's current one. The
             # transport follows the window; an order placed in 2045z that is

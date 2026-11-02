@@ -384,3 +384,29 @@ def test_latency_and_recovery_count_are_instrumented(tmp):
     assert rec[0]["reread_attempts"] >= 1
     assert isinstance(rec[0]["recovered_after_s"], float)
     assert r.stats["order_read_recovered"] == 1
+
+
+def test_a_harness_without_the_helper_still_latches_and_continues(tmp):
+    """`poll_orders` is BORROWED by lighter harnesses that are not Runners.
+
+    test_l5_e2e_window's RunnerStub is one, and reaching for the helper
+    unguarded raised AttributeError there and took the whole tick down --
+    caught by exact-parity, not by the targeted suite. Absent the helper
+    the behaviour must be exactly the pre-patch behaviour: latch the book,
+    record the failure, move on.
+    """
+    t = FlakyTransport(fail_times=10_000)
+    r = make_runner(tmp, t)
+    _park_live_order(r)
+    # a stub that has poll_orders but not the recovery helper
+    del_helper = R.Runner._reread_order_progress
+    try:
+        delattr(R.Runner, "_reread_order_progress")
+        out = r.poll_orders()
+    finally:
+        R.Runner._reread_order_progress = del_helper
+
+    assert r.store.orders_uncertain() is not None
+    assert any(e.get("event") == "PROGRESS_ERROR" for e in out), out
+    assert t.calls[VENUE_ID] == 1, "no retry is possible without the helper"
+    assert _refused(r) == "ORDER_STATE_UNCERTAIN"
