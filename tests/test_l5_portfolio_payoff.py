@@ -19,6 +19,13 @@ from decimal import Decimal as D
 
 from src import l5_portfolio_payoff as PP
 
+#: The three owner inputs a DEFENSIVE_HEDGE requires. Supplied explicitly so
+#: these tests isolate the CLASSIFICATION; the refusals for a missing cap or
+#: a missing durable committed amount have their own tests below.
+BUDGETS = dict(max_locked_loss_per_hedge_usd="5",
+               max_cumulative_locked_loss_usd="5",
+               cumulative_locked_loss_usd="0")
+
 
 # ---------------------------------------------------------------- the flag
 
@@ -145,7 +152,7 @@ def test_a_loss_reducing_completion_above_redemption_is_a_hedge():
     # $0.30 to repair $1.10 of worst case.
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0",
-                    max_locked_loss_per_hedge_usd="0.50")
+                    **dict(BUDGETS, max_locked_loss_per_hedge_usd="0.50"))
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["delta_worst_usd"]) > 0
     assert D(r["hedge_locks_certain_loss_usd"]) == D("0.30")
@@ -158,7 +165,8 @@ def test_the_default_per_hedge_budget_binds_on_a_realistic_hedge():
     $1.10 of worst case. The owner sets this number, not the engine.
     """
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
-                    side="DOWN", qty="2", own_price="0.45", fee_usd="0")
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    **dict(BUDGETS, max_locked_loss_per_hedge_usd="0.15"))
     assert r["action"] == PP.REJECT
     assert r["reason"] == "LOCKED_LOSS_EXCEEDS_PER_HEDGE_BUDGET"
 
@@ -166,9 +174,7 @@ def test_the_default_per_hedge_budget_binds_on_a_realistic_hedge():
 def test_a_hedge_that_does_not_reduce_unmatched_is_refused():
     """Reducing unmatched inventory is required; reaching BALANCE is not."""
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.40"),
-                    side="DOWN", qty="5", own_price="0.30", fee_usd="0",
-                    max_locked_loss_per_hedge_usd="5",
-                    max_cumulative_locked_loss_usd="5")
+                    side="DOWN", qty="5", own_price="0.30", fee_usd="0", **BUDGETS)
     assert r["action"] == PP.REJECT
     assert r["reason"] == "DOES_NOT_REDUCE_UNMATCHED"
     # it DID improve the worst case -- that is not sufficient on its own
@@ -193,9 +199,7 @@ def test_a_partial_hedge_leaving_an_imbalance_is_accepted():
     it must only leave less unmatched inventory than it found.
     """
     r = PP.evaluate(held_up="4", held_dn="0", cost_basis_usd=D("4") * D("0.70"),
-                    side="DOWN", qty="1", own_price="0.45", fee_usd="0",
-                    max_locked_loss_per_hedge_usd="5",
-                    max_cumulative_locked_loss_usd="5")
+                    side="DOWN", qty="1", own_price="0.45", fee_usd="0", **BUDGETS)
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["unmatched_after_if_filled"]) > 0, "still imbalanced, by design"
     assert D(r["unmatched_after_if_filled"]) < D(r["unmatched_before"])
@@ -206,8 +210,8 @@ def test_a_partial_fill_risk_refusal_blocks_the_hedge():
     hard limit at each feasible quantity."""
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0",
-                    max_locked_loss_per_hedge_usd="5",
-                    partial_risk_refusals={"partial_0.25": "RESIDUAL_CAP"})
+                    partial_risk_refusals={"partial_0.25": "RESIDUAL_CAP"},
+                    **BUDGETS)
     assert r["action"] == PP.REJECT
     assert r["reason"] == "PARTIAL_FILL_BREACHES_RISK_LIMIT"
 
@@ -219,7 +223,8 @@ def test_a_hedge_locking_more_than_carrying_costs_is_rejected():
     """
     r = PP.evaluate(held_up="2.05", held_dn="0",
                     cost_basis_usd=D("2.05") * D("0.32"),
-                    side="DOWN", qty="2.05", own_price="0.95", fee_usd="0")
+                    side="DOWN", qty="2.05", own_price="0.95", fee_usd="0",
+                    **dict(BUDGETS, max_locked_loss_per_hedge_usd="0.15"))
     assert r["action"] == PP.REJECT
     assert r["reason"] == "LOCKED_LOSS_EXCEEDS_PER_HEDGE_BUDGET"
     assert D(r["hedge_locks_certain_loss_usd"]) > D("0.15")
@@ -227,7 +232,8 @@ def test_a_hedge_locking_more_than_carrying_costs_is_rejected():
 
 def test_the_hedge_numbers_are_reported_for_audit():
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
-                    side="DOWN", qty="2", own_price="0.45", fee_usd="0")
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    **BUDGETS)
     assert r["holding_ev_status"] == "UNKNOWN"
     assert r["holding_ev_usd"] is None
     assert "UNCONDITIONAL" in r["unconditional_reference_only"]
@@ -241,7 +247,8 @@ def test_a_cheap_hedge_beats_the_measured_carry_cost_and_passes():
     """
     r = PP.evaluate(held_up="2.05", held_dn="0",
                     cost_basis_usd=D("2.05") * D("0.465"),
-                    side="DOWN", qty="2.05", own_price="0.56", fee_usd="0")
+                    side="DOWN", qty="2.05", own_price="0.56", fee_usd="0",
+                    **BUDGETS)
     assert r["action"] == PP.DEFENSIVE_HEDGE
     assert D(r["hedge_locks_certain_loss_usd"]) < D("0.15")
 
@@ -383,7 +390,7 @@ def test_the_verdict_changes_when_the_complement_price_moves_against_us():
     """
     held = dict(held_up="2.05", held_dn="0",
                 cost_basis_usd=D("2.05") * D("0.465"), side="DOWN",
-                qty="2.05", fee_usd="0")
+                qty="2.05", fee_usd="0", **BUDGETS)
     lock = PP.evaluate(own_price="0.50", **held)
     assert lock["action"] == PP.PROFIT_LOCK
     gone = PP.evaluate(own_price="0.56", **held)
@@ -398,3 +405,45 @@ def test_this_module_moves_no_limit():
     names = [n.lower() for n in dir(PP)]
     for b in banned:
         assert not any(b in n for n in names), b
+
+
+# ------------------------------------ no permissive fallback for any budget
+
+def test_a_hedge_with_no_budgets_supplied_is_refused():
+    """A cap the owner did not approve is not a limit. The wired gate used
+    to pass nothing, and a $0.60 cumulative budget degenerated into a
+    second per-hedge cap because the committed amount defaulted to zero.
+    """
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0")
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "HEDGE_BUDGET_NOT_SUPPLIED"
+    assert "max_locked_loss_per_hedge_usd" in r["missing_budget_inputs"]
+    assert "max_cumulative_locked_loss_usd" in r["missing_budget_inputs"]
+
+
+def test_an_unknown_committed_amount_is_not_a_zero_committed_amount():
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    max_locked_loss_per_hedge_usd="5",
+                    max_cumulative_locked_loss_usd="5")
+    assert r["action"] == PP.REJECT
+    assert r["missing_budget_inputs"] == ["cumulative_locked_loss_usd"]
+
+
+def test_PROFIT_LOCK_needs_no_hedge_budget_at_all():
+    """It consumes none of the negative-hedge budget, so it must not be
+    gated on one -- its payoff is nonnegative in BOTH outcomes."""
+    r = PP.evaluate(held_up="2.05", held_dn="0",
+                    cost_basis_usd=D("2.05") * D("0.465"),
+                    side="DOWN", qty="2.05", own_price="0.50", fee_usd="0")
+    assert r["action"] == PP.PROFIT_LOCK
+    assert D(r["after_if_filled"]["pnl_if_up_usd"]) > 0
+    assert D(r["after_if_filled"]["pnl_if_down_usd"]) > 0
+
+
+def test_the_recommended_figures_are_not_defaults():
+    assert hasattr(PP, "RECOMMENDED_LOCKED_LOSS_PER_HEDGE_USD")
+    assert hasattr(PP, "RECOMMENDED_CUMULATIVE_LOCKED_LOSS_USD")
+    assert not hasattr(PP, "MAX_LOCKED_LOSS_PER_HEDGE_USD")
+    assert not hasattr(PP, "MAX_CUMULATIVE_LOCKED_LOSS_USD")

@@ -92,10 +92,14 @@ RESIDUAL_ADVERSE_BASIS = ("UNCONDITIONAL average over 384 windows "
                           "conditional expectation for any specific "
                           "position, and NOT used by any gate here.")
 
-#: OWNER-DEFINED BUDGETS. Defaults are deliberately small; the caller passes
-#: the approved figures and these are only the fallback.
-MAX_LOCKED_LOSS_PER_HEDGE_USD = D("0.15")
-MAX_CUMULATIVE_LOCKED_LOSS_USD = D("0.60")
+#: RECOMMENDED FIGURES, AND NOT DEFAULTS. Nothing falls back to these.
+#:
+#: A cap the owner did not approve is not a limit, so a DEFENSIVE_HEDGE with
+#: either budget missing is REFUSED rather than quietly admitted at some
+#: number this module chose. These two values exist only to be quoted in a
+#: proposal; `evaluate` never substitutes them.
+RECOMMENDED_LOCKED_LOSS_PER_HEDGE_USD = D("0.15")
+RECOMMENDED_CUMULATIVE_LOCKED_LOSS_USD = D("0.60")
 
 #: Fill fractions reported for the partial-fill scenarios required of any
 #: maker order. A maker order is not a promise of its own size.
@@ -175,7 +179,9 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
              owner_authorized_inventory_add: Any = False,
              risk_refusal: Any = None,
              max_locked_loss_per_hedge_usd: Any = None,
-             cumulative_locked_loss_usd: Any = 0,
+             # NO DEFAULT. It must come from the DURABLE ledger; a
+             # committed amount nobody supplied is unknown, not zero.
+             cumulative_locked_loss_usd: Any = None,
              max_cumulative_locked_loss_usd: Any = None,
              partial_risk_refusals: Any = None) -> Dict[str, Any]:
     """Classify a proposed order by what it does to BOTH settlement outcomes.
@@ -291,12 +297,25 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
         unmatched_after = abs(full["up_qty"] - full["dn_qty"])
         locked_loss = -full["worst_usd"] if full["worst_usd"] < 0 else D(0)
         per_cap = _d(max_locked_loss_per_hedge_usd)
-        if per_cap is None:
-            per_cap = MAX_LOCKED_LOSS_PER_HEDGE_USD
         cum_cap = _d(max_cumulative_locked_loss_usd)
-        if cum_cap is None:
-            cum_cap = MAX_CUMULATIVE_LOCKED_LOSS_USD
-        spent = _d(cumulative_locked_loss_usd) or D(0)
+        spent = _d(cumulative_locked_loss_usd)
+        # NO SILENT FALLBACK, for any of the three. A missing cap is not a
+        # generous cap, and an unknown cumulative spend is not a spend of
+        # zero -- that is precisely the defect this replaces, where the
+        # wired gate passed nothing and a $0.60 cumulative budget
+        # degenerated into a second per-hedge cap.
+        missing = [n for n, v in (("max_locked_loss_per_hedge_usd", per_cap),
+                                  ("max_cumulative_locked_loss_usd", cum_cap),
+                                  ("cumulative_locked_loss_usd", spent))
+                   if v is None or v < 0]
+        if missing:
+            return dict(base, action=REJECT,
+                        reason="HEDGE_BUDGET_NOT_SUPPLIED",
+                        missing_budget_inputs=missing,
+                        labels=("a defensive hedge needs the owner-approved "
+                                "per-hedge cap, cumulative cap AND the "
+                                "durable committed amount. A missing cap is "
+                                "not a permissive one."))
 
         out = dict(base,
                    unmatched_before=str(unmatched_before),
