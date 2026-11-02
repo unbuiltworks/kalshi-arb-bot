@@ -184,6 +184,11 @@ COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
+# imported at module load by the entrypoint, so its absence is not a
+# degraded feature -- the container cannot start at all. The image-closure
+# test caught exactly that, as it did for l5_promotion_gate and
+# l5_window_retention before it.
+COPY src/l5_wake_signal.py src/l5_wake_signal.py
 COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
