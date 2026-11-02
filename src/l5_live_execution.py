@@ -68,6 +68,54 @@ STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
 STALE_ACTION_MAX_S = 30.0
 
 
+#: WHETHER A ROUND MAY RETIRE WHILE IT STILL HOLDS AN IMBALANCE.
+#:
+#: THE DEADLOCK THIS EXISTS TO BREAK, measured on the owner-authorized
+#: four-window campaign of 2026-11-02 (2215z/2230z/2245z/2300z). Every
+#: window produced EXACTLY ONE venue-confirmed fill and ZERO completed
+#: pairs, and the cause is a four-link freeze:
+#:
+#:   1. plans are stored only for the CURRENT round
+#:      (`probe_store_plan(market, plan, rnd)`)
+#:   2. `rnd` advances only via `probe_retire_round` + re-read
+#:   3. which runs only `if not _blocked`
+#:   4. and `probe_round_is_safe_to_retire` returns LEG_HOLDS_UNMATCHED
+#:      whenever `up != dn`
+#:
+#: So one leg filling alone makes `up != dn` permanently -- the complement
+#: is refused because the market has moved -- the round never retires,
+#: `rnd` never advances, no new plan is ever stored, and the market is dead
+#: at round 0 of 8 for the rest of the window. The campaign's own records
+#: show `accumulation_round 0`, `accumulation_max_rounds 8`,
+#: `retirement_blocked_by LEG_HOLDS_UNMATCHED:DOWN`.
+#:
+#: WHY LIFTING IT IS SAFE NOW, AND WAS NOT BEFORE. The guard's stated
+#: premise is that "the complement is tracked per round, so walking past
+#: the round walks past the only thing that would have hedged it." That
+#: premise no longer holds: `two_sided_complement` derives the complement
+#: from CURRENT inventory and the CURRENT book
+#: (`provenance: DERIVED_FROM_CURRENT_BOOK`), and `maybe_book_completion`
+#: completes held inventory independently of any round. The residual is
+#: therefore still pursued after retirement, and still bounded by the
+#: residual cap, the cash envelope, the per-market worst case, the
+#: worst-case deficit and both loss halts.
+#:
+#: WHAT IT DOES NOT TOUCH. `ORDER_STILL_LIVE` and `ORDER_STILL_FILLABLE`
+#: both remain: a round that owns a live or still-fillable order can never
+#: be walked past, so no order can be orphaned and duplicate-order
+#: protection is unchanged. Retirement stays additive and deletes no claim.
+#:
+#: DEFAULT OFF, so the deployed engine is byte-for-byte unchanged and this
+#: can be A/B'd as one testable condition.
+ROUND_RETIRE_RESIDUAL_ENV = "L5_TS_ROUND_RETIRE_WITH_RESIDUAL"
+
+
+def round_retire_with_residual() -> bool:
+    """Explicit YES only; anything else is the historical behaviour."""
+    return (str(os.getenv(ROUND_RETIRE_RESIDUAL_ENV, "")).strip().upper()
+            == "YES")
+
+
 class IncoherentBook(RuntimeError):
     """The quantities and the costs disagree in a way no trade could produce.
 
@@ -5442,7 +5490,7 @@ class FaithfulExecutor:
                 return "ORDER_STILL_FILLABLE"
             up = self.store.position(market, UP)
             dn = self.store.position(market, DOWN)
-            if up != dn:
+            if up != dn and not round_retire_with_residual():
                 return "LEG_HOLDS_UNMATCHED:%s" % (UP if up > dn else DOWN)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
