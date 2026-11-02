@@ -6595,6 +6595,7 @@ class Runner:
             if reason == "NOT_REFUSED":
                 return
             pair = None
+            placeable = None
             try:
                 bid = D(str(book.get("bid")))
                 ask = D(str(book.get("ask")))
@@ -6611,20 +6612,72 @@ class Runner:
                                               tick=tk, depth_ticks=d)
                     if _u is not None and _dn is not None:
                         pair = _u + _dn
+                        # ============ IS THE PAIR ACTUALLY PLACEABLE?
+                        #
+                        # THE PAIR COST ALONE IS VERY NEARLY A CONSTANT, and
+                        # reporting it as an opportunity was this record's
+                        # defect. Both legs quote `d` ticks behind their own
+                        # touch, so
+                        #     pair = 1 - spread - 2*d*t
+                        # is INVARIANT to the price level: on BTC15m's median
+                        # one-tick book it is 0.95 whether the book sits at
+                        # 0.50 or at 0.90. So `missed_profitable_pair: YES`
+                        # fired on a figure that barely moves, which is why
+                        # the 2215z window produced `pair_own_cost 0.9500`
+                        # beside PAIR_COST_ABOVE_CEILING and read as a lost
+                        # opportunity.
+                        #
+                        # WHAT ACTUALLY DECIDES IT is the first-leg band. At
+                        # bid 0.8900 / ask 0.9000 the legs price at own 0.8700
+                        # and 0.0800 -- one above the 0.60 ceiling and one
+                        # below the 0.20 floor -- so NEITHER leg could be
+                        # opened and there was no opportunity to miss. The
+                        # band is recorded beside the pair so a reader can
+                        # tell an economic refusal from an unplaceable book.
+                        try:
+                            _lo = TSP.min_first_leg_own_price()
+                            _hi = TSP.max_first_leg_own_price()
+                            placeable = bool(
+                                (_lo <= _u <= _hi) or (_lo <= _dn <= _hi))
+                        except BaseException:              # noqa: BLE001
+                            placeable = None
             except BaseException:                              # noqa: BLE001
                 pair = None
             try:
                 _ceil = TSP.max_pair_cost()
             except BaseException:                              # noqa: BLE001
                 _ceil = None
-            emit("L5_MISSED_PAIR", MPB.record(
+            _rec = MPB.record(
                 market=slug, reason=reason,
                 decision={"pair_own_cost": (None if pair is None
                                             else str(pair)),
                           "bid": str(book.get("bid")),
                           "ask": str(book.get("ask")),
                           "stream_age_s": str(book.get("stream_age_s"))},
-                entry_ceiling=_ceil, stage="OPENING"))
+                entry_ceiling=_ceil, stage="OPENING")
+            # AN UNPLACEABLE BOOK IS NOT A MISSED PAIR. The classifier
+            # judges economics and knows nothing of the band, so the
+            # correction is applied here where the band was read. The pair
+            # stays reported -- the record keeps its diagnostic value -- it
+            # simply stops claiming a pair was given up when no leg could
+            # have been placed at all.
+            try:
+                _rec["first_leg_placeable"] = placeable
+                _rec["first_leg_band"] = [str(TSP.min_first_leg_own_price()),
+                                          str(TSP.max_first_leg_own_price())]
+                _rec["leg_own_prices"] = {
+                    "UP": (None if _u is None else str(_u)),
+                    "DOWN": (None if _dn is None else str(_dn))}
+                if placeable is False and _rec.get(
+                        "missed_profitable_pair") == "YES":
+                    _rec["missed_profitable_pair"] = "N/A"
+                    _rec["not_an_opportunity_because"] = (
+                        "NO_LEG_IN_FIRST_LEG_BAND: the pair is economic but "
+                        "neither leg prices inside the opening band, so no "
+                        "opening could have been placed")
+            except BaseException:                              # noqa: BLE001
+                pass
+            emit("L5_MISSED_PAIR", _rec)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

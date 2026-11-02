@@ -236,3 +236,78 @@ def test_an_opening_record_is_not_labelled_a_completion(monkeypatch):
     comp = MPB.record(market="m", reason="PAIR_ABOVE_REDEMPTION",
                       decision={"pair_own_cost": "1.10"}, stage="DECISION")
     assert "a completion that was DECIDED AGAINST" in comp["labels"]
+
+
+# ===================================================================
+# THE PAIR COST IS VERY NEARLY A CONSTANT, which was this record's
+# defect. Both legs quote `d` ticks behind their own touch, so
+#     pair = 1 - spread - 2*d*t
+# is INVARIANT to the price level: 0.95 on every one-tick book,
+# whether it sits at 0.50 or at 0.90. Reporting that as
+# `missed_profitable_pair: YES` was reporting a constant and calling
+# it an opportunity.
+#
+# THE 2215z EVIDENCE, from the live campaign. The record carried
+# `pair_own_cost 0.9500` beside PAIR_COST_ABOVE_CEILING and read as a
+# lost 5c pair. At bid 0.8900 / ask 0.9000 the legs price at own
+# 0.8700 and 0.0800 -- one above the 0.60 ceiling, one below the 0.20
+# floor -- so NEITHER leg could be opened. There was no opportunity.
+# ===================================================================
+
+def test_the_pair_cost_is_invariant_to_the_price_level():
+    """Which is why it cannot, alone, signal an opportunity."""
+    seen = set()
+    for bid_c in range(5, 95, 5):
+        bid = D(bid_c) / D(100)
+        ask = bid + D("0.01")
+        u = TS.quote_own_price(TS.UP, bid=bid, ask=ask, tick=D("0.01"),
+                               depth_ticks=2)
+        dn = TS.quote_own_price(TS.DOWN, bid=bid, ask=ask, tick=D("0.01"),
+                                depth_ticks=2)
+        seen.add(u + dn)
+    assert seen == {D("0.95")}, seen
+
+
+def test_an_unplaceable_book_is_not_a_missed_pair(monkeypatch):
+    """The exact 2215z book, which used to read YES."""
+    _, out = _run(monkeypatch, {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
+                  {"bid": "0.8900", "ask": "0.9000", "stream_age_s": "0.05"})
+    r = out[0][1]
+    assert D(r["pair"]["pair_own_cost"]) == D("0.95")   # still reported
+    assert r["leg_own_prices"] == {"UP": "0.8700", "DOWN": "0.0800"}
+    assert r["first_leg_placeable"] is False
+    assert r["missed_profitable_pair"] == "N/A"
+    assert "NO_LEG_IN_FIRST_LEG_BAND" in r["not_an_opportunity_because"]
+
+
+def test_a_placeable_book_with_the_same_pair_still_reads_YES(monkeypatch):
+    """The correction must not silence genuine misses.
+
+    Identical pair cost, a book whose UP leg sits inside the band.
+    """
+    _, out = _run(monkeypatch, {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
+                  {"bid": "0.5600", "ask": "0.5700", "stream_age_s": "0.05"})
+    r = out[0][1]
+    assert D(r["pair"]["pair_own_cost"]) == D("0.95")
+    assert r["first_leg_placeable"] is True
+    assert r["missed_profitable_pair"] == "YES"
+    assert "not_an_opportunity_because" not in r
+
+
+def test_one_leg_inside_the_band_is_enough(monkeypatch):
+    """Only ONE leg is opened, so one in-band leg is an opportunity."""
+    # UP own 0.2800, DOWN own 0.6700: UP is in [0.20,0.60], DOWN is not
+    _, out = _run(monkeypatch, {"refused_reason": "PAIR_COST_ABOVE_CEILING"},
+                  {"bid": "0.3000", "ask": "0.3100", "stream_age_s": "0.05"})
+    r = out[0][1]
+    assert r["leg_own_prices"]["UP"] == "0.2800"
+    assert r["first_leg_placeable"] is True
+
+
+def test_placeability_is_None_when_the_book_is_unreadable(monkeypatch):
+    """Never asserted as placeable from a book we could not price."""
+    _, out = _run(monkeypatch, {"refused_reason": "BOOK_UNCERTAIN"},
+                  {"bid": None, "ask": None})
+    r = out[0][1]
+    assert r["first_leg_placeable"] is None
+    assert r["pair"]["pair_own_cost"] is None
