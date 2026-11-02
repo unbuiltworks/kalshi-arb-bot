@@ -2995,3 +2995,19 @@ down completion unit fix, shadow-only 2026-10-31T01:05Z
 # failed 54 -> 54, errors 23 -> 23, failing-test id set BYTE-IDENTICAL
 # (sha b70451e1 both sides).
 taker-cross observability, disarmed 2026-11-01T13:05Z
+
+# ---- 2026-11-02 risk-limit change, owner-authorized twice ----
+# MAX_ADDITIONAL_LOSS_USD 5 -> 10 and ABS_RESIDUAL_CAP_CONTRACTS 3 -> 5.
+# Exposure ($20), cash ($12), daily halt ($5), maker-only and max_live_orders
+# are UNCHANGED, on the evidence that exposure and cash never bound.
+# Full-suite parity for b8648d13 is EXACT: 80 failing ids, digest
+# eb672d14b4baf439, identical set to baseline. Image closure green both
+# directions (32 tests).
+# The cap raise re-admits the 1415z incident order (residual peak 4.25 < 5);
+# that is owner-authorized and pinned by
+# test_cap_five_readmits_the_1415z_order_six rather than left implicit.
+# The $10 needs BOTH this constant AND L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD=10,
+# because limit_from_env() = min(env, ceiling). The variable was set first
+# with deploys skipped: at the old constant that still yields 5, so a failed
+# build could not have raised the limit.
+risk limits 5->10 / 3->5, disarmed 2026-11-02T11:55Z
