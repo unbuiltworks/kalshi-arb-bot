@@ -151,6 +151,13 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # a pair cost judged on venue-confirmed fills, and one strategy per
     # authorized window so two of them cannot share one cash envelope.
     "PAIR_COST_CEILING",
+    # ADDED WITH THE GUARD, and this inventory is where that is
+    # reviewed. PAIR_COST_CEILING is judged on CONFIRMED FILLS and so
+    # never engages while both legs are merely submitted;
+    # WORST_PAIR_COMBINATION asks whether any REACHABLE combination of
+    # our own orders forms a pair costing more than the $1.00 it
+    # redeems. The two are additive and neither replaces the other.
+    "WORST_PAIR_COMBINATION",
     "STRATEGY_EXCLUSIVE_TWO_SIDED",
     "STRATEGY_EXCLUSIVE_L5_FOLLOWING",
     # the risk-reducing safeguard that lets the COMPLETE budget be looser

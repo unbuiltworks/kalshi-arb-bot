@@ -4811,6 +4811,11 @@ def residual_side_selfcheck() -> Dict[str, Any]:
                        "silently.")}
 
 
+#: A matched UP+DOWN pair redeems exactly this. Not a policy parameter and
+#: not a ceiling: above it the pair is a CERTAIN loss, whatever happens.
+REDEMPTION_PAIR = D("1.00")
+
+
 class FaithfulExecutor:
     """Drives one L5 action through the whole path. Cannot transmit alone."""
 
@@ -6009,6 +6014,133 @@ class FaithfulExecutor:
                          "pair redeems, and the price clears the completion "
                          "ceiling the owner's residual budget bounds.")
         return out
+
+    def worst_pair_combination_refusal(self, market: str,
+                                       dec: Mapping[str, Any],
+                                       tr: Mapping[str, Any]
+                                       ) -> Optional[Dict[str, Any]]:
+        """None unless some reachable fill combination pays less than it costs.
+
+        WHY THIS EXISTS SEPARATELY FROM `pair_cost_refusal`. That gate is
+        judged on VENUE-CONFIRMED FILLS and engages only on the leg that
+        CREATES matched quantity -- correct for sequential completion, and
+        exactly why SIMULTANEOUS quoting escapes it. With both legs merely
+        submitted the book is flat, each sees matched_before == matched_after
+        == 0, each is a legitimate first leg, and nothing judges the pair
+        they would form. tests/test_l5_simultaneous_pair_defect.py shows UP
+        2.46 at own 0.94 and DOWN 2.46 at own 0.90 BOTH ADMITTED -- a pair
+        costing 1.84 that pays 1.00, a certain -$2.0664. That is the shape of
+        the recorded 1215z incident.
+
+        THIS IS ADDITIVE AND ONLY EVER REFUSES. `pair_cost_refusal` keeps its
+        0.96 sequential-completion ceiling untouched; nothing here admits an
+        order that gate refused.
+
+        THE THRESHOLD IS REDEMPTION, NOT 0.96. A matched pair redeems exactly
+        $1.00, so a pair costing more is a CERTAIN loss whatever happens --
+        that needs no ceiling policy and no probability. Using 0.96 here
+        would delete the profitable 0.97-0.99 simultaneous pairs the live
+        campaign actually completed (0.9900 and 0.9700, +$0.030625 and
+        +$0.183732), which is why the bound is 1.00.
+
+        THE WORST REACHABLE COMBINATION, NOT THE ALL-FILL AVERAGE. Averaging
+        hides the case that matters: UP orders at 0.40 and 0.95 with a DOWN
+        at 0.30 average to 0.975 and look fine, but if only the 0.95 and the
+        0.30 fill the pair costs 1.25. Any matched pair can be formed from
+        the DEAREST unit still reachable on each side, so the bound is
+        max(own price reachable on UP) + max(own price reachable on DOWN).
+        That is scenario-independent: it covers every subset and every
+        partial fill without enumerating them.
+
+        RESTING ORDERS ARE POTENTIAL EXPOSURE, NEVER CONFIRMED PROTECTION.
+        They can only RAISE a side's dearest reachable price here; they are
+        never credited with matching anything.
+
+        FAILS CLOSED. Unreadable holdings, unreadable live orders or an
+        unreadable proposed order all refuse -- a combination we cannot
+        price is not one we may assume is safe.
+        """
+        try:
+            side = str(dec.get("side") or "")
+            if side not in (UP, DOWN):
+                return {"why": "SIDE_UNREADABLE", "side": side}
+            px = D(str(tr.get("price")))
+            qty = D(str(tr.get("qty")))
+            if px <= 0 or qty <= 0:
+                return {"why": "PRICE_OR_QTY_UNREADABLE",
+                        "price": str(tr.get("price")),
+                        "qty": str(tr.get("qty"))}
+            lc = self.store.leg_cost(market)
+            held = {s: self.store.position(market, s) for s in (UP, DOWN)}
+            live = self.store.live_orders()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "STATE_UNREADABLE:%s" % type(exc).__name__}
+
+        # DEAREST REACHABLE OWN PRICE PER SIDE.
+        dearest: Dict[str, Optional[D]] = {UP: None, DOWN: None}
+
+        def _bump(s: str, v: Optional[D]) -> None:
+            if v is None or v <= 0:
+                return
+            cur = dearest.get(s)
+            if cur is None or v > cur:
+                dearest[s] = v
+
+        # held units: only the average is retained, which is the best
+        # authoritative figure available for stock already bought.
+        for s in (UP, DOWN):
+            try:
+                q = D(str(held.get(s) or 0))
+                c = lc.get(s)
+                if q > 0 and c is not None:
+                    _bump(s, D(str(c)) / q)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return {"why": "HELD_BASIS_UNREADABLE:%s"
+                               % type(exc).__name__, "side": s}
+
+        # every still-live order OF OURS in this market, on either side.
+        try:
+            rows = (live or {}).values() if isinstance(live, Mapping) \
+                else (live or [])
+            for r in rows:
+                if not isinstance(r, Mapping):
+                    return {"why": "LIVE_ORDER_ROW_UNREADABLE"}
+                if str(r.get("market") or "") != str(market):
+                    continue
+                rs = str(r.get("side") or "")
+                if rs not in (UP, DOWN):
+                    return {"why": "LIVE_ORDER_SIDE_UNREADABLE"}
+                _bump(rs, D(str(r.get("price"))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "LIVE_ORDERS_UNREADABLE:%s" % type(exc).__name__}
+
+        # and the order being proposed
+        _bump(side, px)
+
+        up_d, dn_d = dearest[UP], dearest[DOWN]
+        if up_d is None or dn_d is None:
+            # ONE-SIDED. No pair is reachable at all, so there is no pair
+            # cost to bound. Intentional imbalance is governed by the
+            # residual, exposure, cash and worst-case limits, not here.
+            return None
+        worst_pair = up_d + dn_d
+        if worst_pair <= REDEMPTION_PAIR:
+            return None
+        return {"why": "WORST_REACHABLE_PAIR_ABOVE_REDEMPTION",
+                "worst_pair_cost": str(worst_pair),
+                "redemption": str(REDEMPTION_PAIR),
+                "dearest_up_own": str(up_d), "dearest_down_own": str(dn_d),
+                "certain_loss_per_pair": str(worst_pair - REDEMPTION_PAIR),
+                "labels": ("a matched pair redeems exactly $1.00, so some "
+                           "reachable fill combination here pays less than "
+                           "it costs. Resting orders are counted as "
+                           "potential exposure and never as protection.")}
 
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
@@ -7696,6 +7828,32 @@ class FaithfulExecutor:
                                "at settlement than it costs to buy.")})
                 return prov.refuse("PAIR_COST_CEILING",
                                    str(_pair_bad.get("why"))[:120])
+
+            # THE SIMULTANEOUS-PAIR GUARD, additive to the ceiling above.
+            #
+            # `pair_cost_refusal` is judged on CONFIRMED FILLS and engages
+            # only on the leg that creates matched quantity, so two legs
+            # submitted while the book is flat are each a first leg and
+            # neither is judged -- the defect c370c13d demonstrates, and the
+            # shape of the recorded 1215z incident. This asks the question
+            # that survives any fill order: is some REACHABLE combination of
+            # our own orders a pair costing more than the $1.00 it redeems?
+            #
+            # It only ever REFUSES, its bound is redemption rather than the
+            # 0.96 ceiling (so the profitable 0.97-0.99 simultaneous pairs
+            # stay allowed), and it treats resting orders as potential
+            # exposure, never as protection.
+            _combo_bad = self.worst_pair_combination_refusal(market, dec, tr)
+            if _combo_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "WORST_PAIR_COMBINATION", "detail": _combo_bad,
+                    "labels": ("judged on the dearest reachable own price "
+                               "per side across confirmed holdings, our "
+                               "live orders and this order. A pair above "
+                               "$1.00 is a certain loss.")})
+                return prov.refuse("WORST_PAIR_COMBINATION",
+                                   str(_combo_bad.get("why"))[:120])
 
             # ONE STRATEGY PER AUTHORIZED WINDOW, never both.
             #

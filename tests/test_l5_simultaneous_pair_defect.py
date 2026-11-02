@@ -162,3 +162,144 @@ def test_unreadable_state_still_refuses(ex):
     bad = x.pair_cost_refusal(SLUG, {"side": "SIDEWAYS"},
                               {"price": "0.5", "qty": "1"})
     assert bad is not None
+
+
+# ================= THE GUARD THAT CLOSES IT: worst_pair_combination_refusal
+#
+# ADDITIVE. `pair_cost_refusal` above is unchanged and keeps its 0.96
+# sequential-completion ceiling; the tests above still document its
+# behaviour. This one asks the question that survives any fill order.
+
+def test_the_guard_refuses_the_simultaneous_guaranteed_loss(ex):
+    """THE DEFECT, CLOSED. The first leg stays unconstrained; the second is
+    refused because a reachable pair would cost 1.84 against a $1.00
+    redemption."""
+    x, t, H, E = ex
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "UP"}, {"price": "0.94", "qty": "2.46"}) is None
+    x.store.record_submit("c-up", {"market": SLUG, "side": "UP",
+                                   "price": "0.94", "qty": "2.46"})
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "2.46"})
+    assert bad is not None
+    assert bad["why"] == "WORST_REACHABLE_PAIR_ABOVE_REDEMPTION"
+    assert D(bad["worst_pair_cost"]) == D("1.84")
+    assert D(bad["certain_loss_per_pair"]) == D("0.84")
+
+
+def test_the_guard_uses_the_WORST_reachable_pair_not_the_average(ex):
+    """THE CASE AVERAGING MISSES, and the reason the bound is a max.
+    UP orders at 0.40 and 0.95 with a DOWN at 0.30 average to 0.975 and look
+    fine. If only the 0.95 and the 0.30 fill, the pair costs 1.25.
+    """
+    x, t, H, E = ex
+    x.store.record_submit("a", {"market": SLUG, "side": "UP",
+                                "price": "0.40", "qty": "1"})
+    x.store.record_submit("b", {"market": SLUG, "side": "UP",
+                                "price": "0.95", "qty": "1"})
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.30", "qty": "1"})
+    assert bad is not None, "an averaged test would have admitted this"
+    assert D(bad["dearest_up_own"]) == D("0.95")
+    assert D(bad["worst_pair_cost"]) == D("1.25")
+
+
+def test_the_guard_preserves_the_campaigns_profitable_pairs(ex):
+    """0145z 0.9900, 0200z 0.9700, 0230z 0.9500 -- all admitted. A bound of
+    0.96 here would have deleted two of the three."""
+    x, t, H, E = ex
+    for i, (up_px, dn_px) in enumerate((("0.47", "0.52"), ("0.51", "0.46"),
+                                        ("0.58", "0.37"))):
+        slug = "%s-%d" % (SLUG, i)
+        x.store.record_submit("u%d" % i, {"market": slug, "side": "UP",
+                                          "price": up_px, "qty": "1"})
+        assert x.worst_pair_combination_refusal(
+            slug, {"side": "DOWN"}, {"price": dn_px, "qty": "1"}) is None, (
+            "pair %s must stay allowed" % (D(up_px) + D(dn_px)))
+
+
+def test_the_guard_allows_a_pair_at_exactly_redemption(ex):
+    """1.00 pays exactly what it costs: not a certain loss, so not refused
+    here. Other gates govern whether it is worth doing."""
+    x, t, H, E = ex
+    x.store.record_submit("u", {"market": SLUG, "side": "UP",
+                                "price": "0.58", "qty": "1"})
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.42", "qty": "1"}) is None
+
+
+def test_the_guard_ignores_one_sided_inventory(ex):
+    """No pair is reachable, so there is no pair cost to bound. Intentional
+    imbalance is governed by the residual, exposure, cash and worst-case
+    limits, not here."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("3"), D("0.30"), basis="OWN")
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "UP"}, {"price": "0.30", "qty": "3"}) is None
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "UP"}, {"price": "0.99", "qty": "1"}) is None
+
+
+def test_confirmed_holdings_raise_the_dearest_price_too(ex):
+    """A dear leg already BOUGHT is as reachable as a dear resting one."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2"), D("0.92"), basis="OWN")
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.30", "qty": "2"})
+    assert bad is not None
+    assert D(bad["dearest_up_own"]) == D("0.92")
+
+
+def test_a_resting_order_in_ANOTHER_market_is_irrelevant(ex):
+    x, t, H, E = ex
+    x.store.record_submit("other", {"market": "cpc-btc-updown-15m-OTHER",
+                                    "side": "UP", "price": "0.99",
+                                    "qty": "1"})
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "1"}) is None
+
+
+def test_the_guard_cannot_be_dodged_by_submitting_in_either_order(ex):
+    """Whichever leg arrives second is the one refused, so sequencing buys
+    nothing."""
+    x, t, H, E = ex
+    x.store.record_submit("d", {"market": SLUG, "side": "DOWN",
+                                "price": "0.90", "qty": "1"})
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "UP"}, {"price": "0.94", "qty": "1"})
+    assert bad is not None
+    assert D(bad["dearest_down_own"]) == D("0.90")
+
+
+def test_the_guard_fails_closed_on_unreadable_inputs(ex):
+    x, t, H, E = ex
+    for dec, tr in (({"side": "SIDEWAYS"}, {"price": "0.5", "qty": "1"}),
+                    ({"side": "UP"}, {"price": "0", "qty": "1"}),
+                    ({"side": "UP"}, {"price": "0.5", "qty": "0"}),
+                    ({"side": "UP"}, {"price": None, "qty": "1"})):
+        assert x.worst_pair_combination_refusal(SLUG, dec, tr) is not None
+
+
+def test_the_guard_fails_closed_when_live_orders_cannot_be_read(ex,
+                                                               monkeypatch):
+    x, t, H, E = ex
+
+    def boom():
+        raise RuntimeError("registry unreadable")
+
+    monkeypatch.setattr(x.store, "live_orders", boom)
+    bad = x.worst_pair_combination_refusal(
+        SLUG, {"side": "UP"}, {"price": "0.40", "qty": "1"})
+    assert bad is not None
+    assert bad["why"].startswith("STATE_UNREADABLE")
+
+
+def test_the_guard_is_additive_and_never_admits_what_the_ceiling_refused(ex):
+    """The sequential case both gates see: the ceiling refuses it, and the
+    guard must not be read as permission."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2.46"), D("0.94"), basis="OWN")
+    assert x.pair_cost_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "2.46"}) is not None
+    assert x.worst_pair_combination_refusal(
+        SLUG, {"side": "DOWN"}, {"price": "0.90", "qty": "2.46"}) is not None
