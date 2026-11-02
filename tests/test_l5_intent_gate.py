@@ -116,7 +116,36 @@ def test_the_gate_order_is_pinned():
         "OPERATOR_HALT", "SHADOW_ONLY_LOCK", "DURABLE_HALT_LATCH",
         "OWNER_ARM_TOKEN", "TRANSPORT_ARMED", "ACCOUNT_WIDE_EXPOSURE",
         "ORDER_REGISTRY_OWNERSHIP", "RECONCILIATION_CERTAIN",
+        # ECONOMIC, so it sits AFTER every safety gate and immediately
+        # before the boundary: an attractive payoff must never be the
+        # reason a halt, an arm token or a reconciliation refusal goes
+        # unreported.
+        "PAYOFF_TWO_OUTCOME",
         "EXECUTOR_BOUNDARY")
+
+
+def test_the_payoff_gate_is_last_before_the_boundary():
+    """Its position is the safety property, not its presence. Every gate
+    that can refuse on SAFETY must be evaluated before any economic
+    verdict, so that the reported blocker is always the strongest one.
+    """
+    o = G.GATE_ORDER
+    assert o.index("PAYOFF_TWO_OUTCOME") == o.index("EXECUTOR_BOUNDARY") - 1
+    for safety in ("OPERATOR_HALT", "SHADOW_ONLY_LOCK", "DURABLE_HALT_LATCH",
+                   "OWNER_ARM_TOKEN", "TRANSPORT_ARMED",
+                   "ACCOUNT_WIDE_EXPOSURE", "ORDER_REGISTRY_OWNERSHIP",
+                   "RECONCILIATION_CERTAIN"):
+        assert o.index(safety) < o.index("PAYOFF_TWO_OUTCOME"), safety
+
+
+def test_the_payoff_gate_observes_when_the_flag_is_off(monkeypatch):
+    """Default is measurement, not enforcement: it records the verdict and
+    passes regardless, so the classifier can be graded against settled
+    outcomes before it is ever allowed to refuse an order.
+    """
+    from src import l5_portfolio_payoff as PP
+    monkeypatch.delenv(PP.ENV, raising=False)
+    assert PP.enabled() is False
 
 
 def test_halt_is_evaluated_before_anything_that_could_submit():

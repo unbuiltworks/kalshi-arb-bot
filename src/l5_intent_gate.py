@@ -65,6 +65,11 @@ GATE_ORDER: Tuple[str, ...] = (
     "ACCOUNT_WIDE_EXPOSURE",
     "ORDER_REGISTRY_OWNERSHIP",
     "RECONCILIATION_CERTAIN",
+    # LAST BEFORE THE BOUNDARY, DELIBERATELY. It is an ECONOMIC verdict, so
+    # every safety gate above must have its say first: a payoff that looks
+    # attractive must never be the reason a halt, an arm token or a
+    # reconciliation refusal goes unreported.
+    "PAYOFF_TWO_OUTCOME",
     "EXECUTOR_BOUNDARY",
 )
 
@@ -554,6 +559,74 @@ class IntentGate:
                 return _blocked(gate, "PENDING_TERMINAL_UNRESOLVED",
                                 {"count": len(unresolved)})
             return _ok(gate)
+
+        if gate == "PAYOFF_TWO_OUTCOME":
+            # BOTH SETTLEMENT OUTCOMES, PRICED, BEFORE EVERY ORDER.
+            #
+            # OBSERVES UNLESS THE FLAG IS ON. With L5_PORTFOLIO_PAYOFF unset
+            # this computes the payoff, records it, and PASSES regardless of
+            # the verdict -- so the classifier's agreement with settled
+            # outcomes can be measured before it is ever allowed to refuse.
+            # With the flag on, a REJECT refuses here.
+            #
+            # IT CAN ONLY EVER REFUSE. There is no branch in which this gate
+            # admits something another gate blocked: it is last in the chain
+            # and `evaluate` stops at the first refusal.
+            try:
+                from src import l5_portfolio_payoff as PPX
+                from src import l5_live_authorization as AUTHX
+            except BaseException:                              # noqa: BLE001
+                return _ok(gate, {"evaluated": False,
+                                  "why": "MODULE_UNAVAILABLE"})
+            slug = str(intent.market or "")
+            side = str(intent.side or "").upper()
+            if not slug or side not in ("UP", "DOWN"):
+                return _ok(gate, {"evaluated": False,
+                                  "why": "NO_MARKET_OR_SIDE"})
+            try:
+                legs = r.store.leg_cost(slug) or {}
+                basis = None
+                up_c, dn_c = legs.get("UP"), legs.get("DOWN")
+                if up_c is not None and dn_c is not None:
+                    basis = D(str(up_c)) + D(str(dn_c))
+                # MAKER-ONLY MEANS NO FEE TERM, and only then. If the
+                # execution mode is anything else the fee is UNKNOWN here
+                # and the payoff module refuses rather than assuming zero.
+                mode = str(getattr(AUTHX, "EXECUTION_MODE", "") or "")
+                fee = D("0") if mode.upper() == "MAKER_ONLY" else None
+                res = PPX.evaluate(
+                    held_up=r.store.position(slug, "UP"),
+                    held_dn=r.store.position(slug, "DOWN"),
+                    cost_basis_usd=basis,
+                    side=side, qty=intent.size, own_price=intent.price,
+                    fee_usd=fee)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # A PAYOFF WE CANNOT COMPUTE IS NOT A PASS when enforcing.
+                if PPX.enabled():
+                    return _blocked(gate, "PAYOFF_UNREADABLE:%s"
+                                    % type(exc).__name__)
+                return _ok(gate, {"evaluated": False,
+                                  "why": "UNREADABLE:%s" % type(exc).__name__})
+            action = res.get("action")
+            rec = {"evaluated": True, "action": action,
+                   "payoff_reason": res.get("reason"),
+                   "before": res.get("before"),
+                   "after_if_filled": res.get("after_if_filled"),
+                   "marginal_cost_usd": res.get("marginal_cost_usd"),
+                   "delta_worst_usd": res.get("delta_worst_usd"),
+                   "delta_best_usd": res.get("delta_best_usd"),
+                   "scenarios": res.get("scenarios"),
+                   "fill_uncertainty": res.get("fill_uncertainty"),
+                   "enforcing": bool(PPX.enabled()),
+                   "labels": ("an UNFILLED order is not protection: "
+                              "after_if_filled is conditional and `unfilled` "
+                              "equals `before`.")}
+            if PPX.enabled() and action == PPX.REJECT:
+                return _blocked(gate, "PAYOFF_%s" % (res.get("reason")
+                                                     or "REJECT"), rec)
+            return _ok(gate, rec)
 
         if gate == "EXECUTOR_BOUNDARY":
             if intent.is_l5:

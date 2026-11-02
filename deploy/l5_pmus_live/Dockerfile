@@ -189,6 +189,10 @@ COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 # test caught exactly that, as it did for l5_promotion_gate and
 # l5_window_retention before it.
 COPY src/l5_wake_signal.py src/l5_wake_signal.py
+# imported by l5_intent_gate's PAYOFF_TWO_OUTCOME gate. Added WITH the
+# import, not before it: the closure test requires the image to be exactly
+# the import closure, in both directions.
+COPY src/l5_portfolio_payoff.py src/l5_portfolio_payoff.py
 COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/pmus_interaction_classifier.py src/pmus_interaction_classifier.py
