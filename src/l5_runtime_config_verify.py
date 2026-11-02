@@ -63,7 +63,25 @@ APPROVED: Dict[str, Any] = {
     # gate supplies this." An unset variable leaves the gate inert, which is
     # a configuration that does NOT match what was approved, so it must fail
     # here rather than pass quietly.
-    "campaign_additional_loss_usd": D("5.00"),
+    # RAISED 5.00 -> 10.00 ON OWNER AUTHORIZATION 2026-11-02.
+    #
+    # THIS IS THE FOURTH PLACE THE FIGURE LIVES and the one that is easiest
+    # to miss, because it is not derived from the approval document the way
+    # `aggregate_exposure_usd`, `max_daily_loss_usd` and `max_windows` are
+    # -- those come from `approved_scope()`, this is a literal. The other
+    # three are `CBL.MAX_ADDITIONAL_LOSS_USD` (the code ceiling),
+    # `L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD` (the variable, clamped by it),
+    # and `CBD.DEFAULT_BUDGET_USD` (a DIFFERENT gate on the gross measure,
+    # deliberately left at 5).
+    #
+    # LEAVING IT AT 5 WOULD HAVE FAILED THIS ROW FOR THE WHOLE CAMPAIGN.
+    # The row grades `CBL.limit_from_env()` against this number, so a
+    # correctly raised limit would have read effective 10 against required
+    # 5.00 and reported a regression that was actually the authorized
+    # change. That is the "silent clamp" failure mode inverted: not a limit
+    # quietly lower than approved, but a verifier quietly disagreeing with
+    # the approval it exists to enforce.
+    "campaign_additional_loss_usd": D("10.00"),
     # THE WORST-CASE OPENING NOTIONAL (OWNER 2026-10-25). Graded, not merely
     # reported, for the same reason as the row above: the owner approved this
     # campaign AS the single-variable notional-cap experiment, so an unset

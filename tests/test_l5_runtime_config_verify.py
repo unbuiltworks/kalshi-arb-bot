@@ -34,7 +34,10 @@ APPROVED_ENV = {
     # THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND. Part of the approved
     # configuration, so the fixture carries it: unset leaves the gate inert,
     # which is not the configuration that was approved.
-    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
+    # RAISED WITH THE OWNER-AUTHORIZED LIMIT 2026-11-02: the snapshot has to
+    # carry the figure the verifier now requires, or the approved
+    # configuration fails its own prediction.
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
     # THE WORST-CASE OPENING NOTIONAL. Same reasoning: the owner approved
     # this campaign AS the notional-cap experiment, so unset -- which leaves
     # the cap inert -- is not the approved configuration.
@@ -363,7 +366,10 @@ APPROVED_SNAPSHOT = {
     "L5_MAX_LIVE_ORDERS": "1",
     "L5_SHADOW_ONLY": "1",
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
-    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
+    # RAISED WITH THE OWNER-AUTHORIZED LIMIT 2026-11-02: the snapshot has to
+    # carry the figure the verifier now requires, or the approved
+    # configuration fails its own prediction.
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
     "L5_TS_OPENING_NOTIONAL_BUDGET_USD": "0.80",
 }
 
