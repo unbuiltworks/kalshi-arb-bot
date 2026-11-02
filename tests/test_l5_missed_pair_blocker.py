@@ -339,3 +339,55 @@ def test_the_runner_imports_it_so_the_image_closure_covers_it():
     assert "l5_missed_pair_blocker" in inspect.getsource(R)
     df = open("deploy/l5_pmus_live/Dockerfile").read()
     assert "COPY src/l5_missed_pair_blocker.py" in df
+
+
+# ===================================================================
+# THE WINDOW'S DEADLINES ARE NOT BLOCKERS.
+#
+# Observed live on 1915z, 2026-11-02, from the OPENING layer:
+#
+#   reason PAST_ENTRY_CUTOFF   blocker_class OTHER
+#   pair_own_cost 0.9500  inside_entry_ceiling YES
+#   missed_profitable_pair YES
+#
+# The pair was real and the engine was right to decline it -- the entry
+# window had closed. `record` scores "N/A" only for
+# NOT_AN_OPPORTUNITY, so an unmapped deadline fell through to OTHER and
+# published a correct refusal as a missed one. At the OPENING layer the
+# clock refuses far more often than any limit, so this does not merely
+# add noise, it dominates the metric.
+# ===================================================================
+
+DEADLINES = ("PAST_ENTRY_CUTOFF", "PAST_COMPLETE_CUTOFF",
+             "PAST_PLACE_CUTOFF", "WINDOW_NOT_OPEN", "BEFORE_PLACE_FLOOR")
+
+
+def test_every_window_deadline_is_not_an_opportunity():
+    for reason in DEADLINES + ("PAST_TERMINAL",):
+        assert M.classify(reason) == M.NOT_AN_OPPORTUNITY, reason
+
+
+def test_a_past_cutoff_refusal_is_not_a_missed_profitable_pair():
+    """The exact live record, which used to read YES."""
+    for reason in DEADLINES:
+        rec = M.record(market="cpc-btc-updown-15m-2026-11-02-1915z",
+                         reason=reason,
+                         decision={"pair_own_cost": "0.9500"},
+                         entry_ceiling=D("0.96"), stage="OPENING")
+        assert rec["blocker_class"] == M.NOT_AN_OPPORTUNITY, reason
+        assert rec["missed_profitable_pair"] == "N/A", reason
+        # the pair is still PRICED -- the record stays informative, it
+        # just stops claiming the refusal was a mistake
+        assert rec["pair"]["pair_own_cost"] == "0.9500", reason
+        assert rec["pair"]["inside_entry_ceiling"] == "YES", reason
+
+
+def test_a_real_blocker_on_the_same_pair_still_reads_YES():
+    """The fix must not silence genuine blockers."""
+    for reason in ("ORDER_ALREADY_RESTING", "PAIR_ABOVE_REDEMPTION",
+                   "NO_SUBMISSIONS_LEFT"):
+        rec = M.record(market="m", reason=reason,
+                         decision={"pair_own_cost": "0.9500"},
+                         entry_ceiling=D("0.96"), stage="OPENING")
+        assert rec["blocker_class"] != M.NOT_AN_OPPORTUNITY, reason
+        assert rec["missed_profitable_pair"] == "YES", reason

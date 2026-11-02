@@ -98,6 +98,18 @@ _EXACT: Dict[str, str] = {
     "NO_INVENTORY": NOT_AN_OPPORTUNITY,
     "ALREADY_MATCHED": NOT_AN_OPPORTUNITY,
     "PAST_TERMINAL": NOT_AN_OPPORTUNITY,
+    # THE WINDOW'S OWN DEADLINES, which are not blockers either. These
+    # arrive from the OPENING layer, where the clock refuses far more
+    # often than any limit does. Unmapped they fell through to OTHER, and
+    # `record` only scores NOT_AN_OPPORTUNITY as "N/A" -- so a correct
+    # past-cutoff refusal was published as `missed_profitable_pair: YES`
+    # against a perfectly good 0.95 pair, which is how the metric
+    # overstates itself. Observed live on 1915z 2026-11-02.
+    "PAST_ENTRY_CUTOFF": NOT_AN_OPPORTUNITY,
+    "PAST_COMPLETE_CUTOFF": NOT_AN_OPPORTUNITY,
+    "PAST_PLACE_CUTOFF": NOT_AN_OPPORTUNITY,
+    "WINDOW_NOT_OPEN": NOT_AN_OPPORTUNITY,
+    "BEFORE_PLACE_FLOOR": NOT_AN_OPPORTUNITY,
 }
 
 #: substring rules, in order, for the composed reasons -- `decide` emits
