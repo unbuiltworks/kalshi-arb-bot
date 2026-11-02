@@ -354,6 +354,33 @@ def opening_leg_max_contracts() -> D:
     return min(v, OPENING_LEG_MAX_CONTRACTS)
 
 
+#: THE MOST A COMPLETION MAY LET THE PAIR COST. 1.00 is the redemption
+#: line and is today's behaviour exactly, so this is INERT by default.
+#: Below 1.00 it requires the completion to create real matched edge --
+#: edge per contract is exactly (1.00 - pair) -- instead of locking $0.00.
+COMPLETION_MAX_PAIR = D("1.00")
+COMPLETION_MAX_PAIR_ENV = "L5_TS_COMPLETION_MAX_PAIR"
+
+
+def completion_max_pair() -> D:
+    """The completion pair ceiling. Unset or unreadable is 1.00 = inert.
+
+    Clamped to (0, 1.00]: a value above redemption would permit a pair that
+    settles at a loss, which `redeem_cap` exists to forbid, and this must
+    only ever TIGHTEN that bound, never loosen it.
+    """
+    raw = (os.getenv(COMPLETION_MAX_PAIR_ENV) or "").strip()
+    if not raw:
+        return COMPLETION_MAX_PAIR
+    try:
+        v = D(raw)
+    except BaseException:                                      # noqa: BLE001
+        return COMPLETION_MAX_PAIR
+    if not v.is_finite() or v <= 0 or v > COMPLETION_MAX_PAIR:
+        return COMPLETION_MAX_PAIR
+    return v
+
+
 def round_allocations() -> int:
     """How many sequential cycles to split the cash envelope across.
 
@@ -2722,7 +2749,29 @@ def completion_requote(*, side: str, resting_own_px: Any,
     # `1 - the realised basis`: the matched portion can then never settle at
     # a loss, however far the market has run. Beyond it the residual is
     # carried, which is the decision the cap exists to force.
+    #
+    # THE REDEMPTION LINE EARNS NOTHING, which is the measured defect this
+    # now parameterises. Edge per contract is EXACTLY (1.00 - pair), so a
+    # completion AT 1.00 is worth $0.00 while still spending the cash, the
+    # order slot and the window's cycle. The 2026-11-02 campaign made the
+    # point three times over: pairs at 1.00 / 0.96 / 0.99 earned +0.0000,
+    # +0.0772 and +0.0223 -- two of the three were economically free.
+    #
+    # AND HOLDING INSTEAD IS NOT WORSE IN EXPECTATION. Priced by the
+    # complement's own executable cost, EV(complete at 1.00) and EV(hold)
+    # are both exactly zero: at 13:32:34 the 1330z completion and the strand
+    # it replaced were each +0.0000. The +1.4080 that holding would have
+    # produced was variance, not edge. So declining a zero-edge completion
+    # costs no expectancy and frees the slot for one that has some.
+    #
+    # DEFAULT 1.00 IS EXACTLY TODAY'S BEHAVIOUR. This is inert until an
+    # owner sets the variable, so it adds no refusal to the deployed engine
+    # and can be A/B'd as ONE testable change.
     redeem_cap = D(1) - (ch_total / h if h > 0 else D(1))
+    edge_cap = completion_max_pair()
+    if edge_cap < D(1):
+        redeem_cap = min(redeem_cap, edge_cap - (ch_total / h if h > 0
+                                                 else D(0)))
     target = min(touch, ceil, redeem_cap)
     target = (target / tk).to_integral_value(rounding="ROUND_FLOOR") * tk
     if target < MIN_PRICE or target > MAX_PRICE:
