@@ -536,20 +536,27 @@ def test_6c_the_dollar_gate_already_counted_outstanding_orders(tmp_path):
 
 # ------------------------- the approved absolute ceiling intersects k*clip
 
-def test_a_large_clip_is_capped_by_the_approved_absolute_three(tmp_path):
-    """RESIDUAL_CAP_k2 scales with the clip, so at clip 4 it would permit 8
-    contracts -- well past the 3 the owner approved. The absolute ceiling
-    now decides instead."""
+def test_a_large_clip_is_capped_by_the_approved_absolute_five(tmp_path):
+    """RESIDUAL_CAP_k2 scales with the clip, so at clip 6 it would permit 12
+    contracts -- well past the 5 the owner approved. The absolute ceiling
+    now decides instead.
+
+    THE HELD QUANTITY MOVED 4 -> 6 WITH THE CAP RAISE 3 -> 5. At 4 held the
+    book no longer exceeds a ceiling of 5, so the scenario would have
+    stopped exercising the absolute bound and `binds` would have gone False
+    -- a test that passes by no longer testing anything. 6 keeps the
+    absolute ceiling the deciding bound, which is this test's subject.
+    """
     q = qty_of(tmp_path)
     ex, store = executor(tmp_path / "abs", k=D("2"))
-    store.apply_fill(MARKET, "UP", D("4"), D("0.20"), basis=EX.OWN)
-    assert store.max_clip(MARKET) == D("4")
+    store.apply_fill(MARKET, "UP", D("6"), D("0.20"), basis=EX.OWN)
+    assert store.max_clip(MARKET) == D("6")
     rec = drive(ex, side="UP", key="abs")
     n = note(rec)
     assert D(n["cap_contracts"]) == EX.ABS_RESIDUAL_CAP_CONTRACTS
-    assert D(n["relative_cap_contracts"]) == D("8.0")
+    assert D(n["relative_cap_contracts"]) == D("12.0")
     assert n["which_binds"] == "ABSOLUTE"
-    # 4 contracts held already exceeds 3, and this order increases it
+    # 6 contracts held already exceeds 5, and this order increases it
     assert n["binds"] is True
 
 

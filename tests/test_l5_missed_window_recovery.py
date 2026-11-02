@@ -413,7 +413,7 @@ def test_the_preflight_reports_the_effective_residual_ceiling(tmp_path,
     assert row["verdict"] == "PASS"
     assert row["largest_recorded_clip"] == "37.73"
     assert row["relative_cap_at_that_clip"] == "75.46"
-    assert row["effective_cap_contracts"] == "3"
+    assert row["effective_cap_contracts"] == "5"
     assert row["which_binds"] == "ABSOLUTE"
     # the outer SafetyLimits bound is reported separately and is NOT the
     # approved figure -- conflating them is what produced the mismatch.

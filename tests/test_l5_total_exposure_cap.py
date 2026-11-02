@@ -324,26 +324,32 @@ class TestAbsoluteResidualCeiling:
         from src.l5_live_execution import ABS_RESIDUAL_CAP_CONTRACTS as A
         return min(self.K * D(clip), A)
 
-    def test_the_approved_figure_is_three(self):
+    def test_the_approved_figure_is_five(self):
+        """RAISED 3 -> 5 ON OWNER AUTHORIZATION 2026-11-02.
+
+        The raise moves the crossover clip from 1.5 to 2.5, so the absolute
+        ceiling now binds over a strictly SMALLER range of clips -- the
+        k-rule governs more of the space than it did. See
+        `test_cap_five_readmits_the_1415z_order_six`.
+        """
         from src.l5_live_execution import ABS_RESIDUAL_CAP_CONTRACTS as A
-        assert A == D("3")
+        assert A == D("5")
 
     @pytest.mark.parametrize("clip,expect,binds", [
         ("1.0", "2.0", "RELATIVE"),
         ("1.3", "2.6", "RELATIVE"),       # the live 2015z clip
-        ("1.5", "3.0", "RELATIVE"),       # the crossover
-        ("1.51", "3", "ABSOLUTE"),
-        ("1.6", "3", "ABSOLUTE"),
-        ("2.5", "3", "ABSOLUTE"),
-        ("10", "3", "ABSOLUTE"),
-        ("37.73", "3", "ABSOLUTE"),       # a real clip from max_clip_filled
+        ("1.5", "3.0", "RELATIVE"),
+        ("2.5", "5.0", "RELATIVE"),       # the crossover, moved by the raise
+        ("2.51", "5", "ABSOLUTE"),
+        ("10", "5", "ABSOLUTE"),
+        ("37.73", "5", "ABSOLUTE"),       # a real clip from max_clip_filled
     ])
-    def test_the_effective_cap_never_exceeds_three(self, clip, expect, binds):
+    def test_the_effective_cap_never_exceeds_five(self, clip, expect, binds):
         got = self._eff(clip)
         assert str(got) == expect
-        assert got <= D("3")
+        assert got <= D("5")
         rel = self.K * D(clip)
-        assert ("ABSOLUTE" if D("3") < rel else "RELATIVE") == binds
+        assert ("ABSOLUTE" if D("5") < rel else "RELATIVE") == binds
 
     def test_it_only_ever_tightens(self):
         """min() can never produce a looser bound than the relative rule."""

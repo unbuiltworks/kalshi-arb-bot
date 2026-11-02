@@ -190,8 +190,12 @@ class TestReq6NoOpeningWhileUnmatchedEatsTheBudget:
         src = inspect.getsource(LX.residual_cap_decision)
         assert "increases = a_abs > b_abs" in src
 
-    def test_the_absolute_ceiling_is_the_approved_three_contracts(self):
-        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
+    def test_the_absolute_ceiling_is_the_approved_five_contracts(self):
+        """3 -> 5, owner authorization 2026-11-02. The STRUCTURE asserted
+        below -- that the cap is the intersection of the k-rule with the
+        absolute ceiling -- is what this test exists for and is
+        unchanged."""
+        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
         src = inspect.getsource(LX.residual_cap_decision)
         assert "cap = min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)" in src
 

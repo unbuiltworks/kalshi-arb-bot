@@ -267,8 +267,12 @@ class TestNothingElseMoved:
         assert TS.recover_max_per_market() == 1
         assert TS.recover_min_rest_s() == 15.0
 
-    def test_the_residual_ceiling_is_unchanged(self):
-        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
+    def test_the_residual_ceiling_is_the_approved_five(self):
+        """RAISED 3 -> 5 on owner authorization 2026-11-02. This class pins
+        what this change must NOT move; the residual ceiling is the one
+        thing that did, so it is pinned at its new value rather than
+        dropped."""
+        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
 
     def test_the_unmatched_cap_is_unchanged(self):
         from src.l5_live_validation_gates import ValidationGates

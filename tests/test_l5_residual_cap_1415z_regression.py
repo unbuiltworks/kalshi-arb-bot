@@ -41,6 +41,37 @@ FILLS = (("UP", "1.96", "0.32"),
 #: the order that must have been refused
 ORDER_6 = ("UP", D("2.08"))
 
+#: THE CAP IN FORCE WHEN THE INCIDENT HAPPENED, pinned deliberately.
+#:
+#: `ABS_RESIDUAL_CAP_CONTRACTS` was raised 3 -> 5 on owner authorization
+#: 2026-11-02. The incident's residual peak was 4.25, which is BELOW 5, so
+#: evaluated against the LIVE constant every `binds is True` assertion in
+#: this file inverts and the file would appear to prove that the incident
+#: order is fine.
+#:
+#: Rewriting those verdicts to False is how a regression test for a real
+#: realized loss gets quietly deleted. So this file is pinned to the cap
+#: that was ACTUALLY IN FORCE on 2026-10-31 instead. The arithmetic it
+#: checks -- fill-contingent worst case, the resting-order exemption, both
+#: call shapes -- is unchanged and still verified; only the ceiling it is
+#: measured against is held fixed, which also insulates the file from every
+#: future limit change.
+#:
+#: The consequence of the LIVE cap is not hidden: it is asserted directly by
+#: `test_cap_five_readmits_the_1415z_order_six` at the end of this file.
+#: captured AT IMPORT, before the autouse fixture can patch it, so the
+#: consequence test below reads the LIVE constant and not the pinned one.
+LIVE_CAP_AT_IMPORT = LX.ABS_RESIDUAL_CAP_CONTRACTS
+
+CAP_IN_FORCE_AT_THE_INCIDENT = D("3")
+
+
+@pytest.fixture(autouse=True)
+def _pin_the_incident_cap(monkeypatch):
+    monkeypatch.setattr(LX, "ABS_RESIDUAL_CAP_CONTRACTS",
+                        CAP_IN_FORCE_AT_THE_INCIDENT)
+
+
 
 def _store(tmp_path, n_fills: int):
     """A real store with the first `n_fills` of the incident booked."""
@@ -415,3 +446,33 @@ def test_an_unreadable_side_counts_against_us(tmp_path):
     st.save()
     assert st.outstanding_on_side(MARKET, "UP") >= D("1.00")
     assert st.outstanding_on_side(MARKET, "DOWN") >= D("1.00")
+
+
+# ============================================ THE CONSEQUENCE OF THE RAISE
+#
+# Deliberately OUTSIDE the autouse fixture's effect by reading the module
+# constant itself, so it reports the LIVE cap rather than the pinned one.
+
+def test_cap_five_readmits_the_1415z_order_six():
+    """THE RAISE 3 -> 5 ADMITS THE ORDER THAT CAUSED THE INCIDENT.
+
+    Owner-authorized on 2026-11-02 and recorded here rather than discovered
+    again by a loss. The incident peak was |residual| 4.25 against a cap of
+    3; 4.25 < 5, so the order six that the cap of 3 should have refused is
+    no longer refused by the residual cap at all.
+
+    WHAT STILL BOUNDS IT, since this ceiling no longer does: the $10
+    campaign additional-loss gate, the $12 cash cap, and the $1.50
+    worst-case-deficit ceiling. The residual cap was the tightest bound on
+    CONTRACT COUNT and is now the loosest.
+
+    If this test fails because the cap moved again, that is the point: the
+    cost of the change has to be read before it is made.
+    """
+    peak = D("4.25")
+    assert LIVE_CAP_AT_IMPORT == D("5"), (
+        "the live cap moved; re-read what it now admits")
+    assert peak < LIVE_CAP_AT_IMPORT, (
+        "the incident peak is no longer under the cap -- update this record")
+    assert peak > CAP_IN_FORCE_AT_THE_INCIDENT, (
+        "the incident peak must exceed the cap that should have refused it")

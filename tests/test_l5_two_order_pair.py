@@ -222,9 +222,18 @@ class TestTheSlotRaisesTheCeilingByExactlyOne:
     def test_the_account_wide_ceiling_is_unchanged_at_two_dollars(self):
         assert self.limits().max_total_exposure_usd == D("2")
 
-    def test_the_residual_ceiling_is_unchanged_at_three(self):
-        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
-        assert self.limits().max_abs_residual == D("3")
+    def test_the_residual_ceiling_is_five_and_the_outer_bound_is_separate(
+            self):
+        """TWO DIFFERENT BOUNDS, and only one of them moved.
+
+        `ABS_RESIDUAL_CAP_CONTRACTS` is the approved figure intersected with
+        the k-rule, raised 3 -> 5 on 2026-11-02. `max_abs_residual` is the
+        outer `SafetyLimits` bound, whose production default is 10 and which
+        this fixture sets to 3 for its own purposes. Conflating them is what
+        produced an earlier mismatch, so they are asserted separately.
+        """
+        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
+        assert self.limits().max_abs_residual == D("3")   # fixture's own
 
     def test_one_market_is_unchanged(self):
         assert self.limits().max_concurrent_markets == 1

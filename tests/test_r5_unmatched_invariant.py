@@ -31,8 +31,9 @@ def call(lim, *, qty, residual_after, outstanding_residual, **kw):
         outstanding_residual=D(str(outstanding_residual)), **kw)
 
 
-def test_the_absolute_ceiling_is_three_contracts():
-    assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
+def test_the_absolute_ceiling_is_five_contracts():
+    """RAISED 3 -> 5, owner authorization 2026-11-02."""
+    assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
 
 
 def test_residual_bound_counts_unfilled_orders_as_if_they_filled():
@@ -154,11 +155,11 @@ def test_an_unreadable_row_now_blocks_a_further_opening():
 
 
 def test_the_cap_arithmetic_never_exceeds_the_absolute_ceiling():
-    """cap = min(k * clip, 3). The intersection, never the wider."""
+    """cap = min(k * clip, 5). The intersection, never the wider."""
     for k in (D("1"), D("2"), D("5"), D("100")):
         for clip in (D("0.5"), D("1.9"), D("3"), D("10")):
             cap = min(k * clip, LX.ABS_RESIDUAL_CAP_CONTRACTS)
-            assert cap <= D("3"), (k, clip, cap)
+            assert cap <= D("5"), (k, clip, cap)
 
 
 def test_five_rounds_cannot_accumulate_five_unmatched_legs():

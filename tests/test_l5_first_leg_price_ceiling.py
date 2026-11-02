@@ -405,8 +405,12 @@ class TestNothingElseMoved:
         assert TS.complete_cutoff_s() == 720.0
         assert TS.min_entry_runway_s() == 300.0
 
-    def test_the_residual_ceiling_is_unchanged(self):
-        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("3")
+    def test_the_residual_ceiling_is_the_approved_five(self):
+        """RAISED 3 -> 5 on owner authorization 2026-11-02. This class pins
+        what this change must NOT move; the residual ceiling is the one
+        thing that did, so it is pinned at its new value rather than
+        dropped."""
+        assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
 
     def test_the_round_allocation_cap_is_unchanged(self):
         assert TS.ROUND_ALLOCATIONS_MAX == 4

@@ -478,10 +478,34 @@ def controller_provisional_price(side: str, book: Mapping[str, Any],
 #: the figure that was approved.
 #:
 #: So the relative bound is now intersected with this absolute one. It can
-#: only ever TIGHTEN: `min(k * clip, 3)`. max_abs_residual (10) remains the
+#: only ever TIGHTEN: `min(k * clip, 5)`. max_abs_residual (10) remains the
 #: outer SafetyLimits bound and is unchanged; this is the approved figure,
 #: enforced where the k-rule is applied.
-ABS_RESIDUAL_CAP_CONTRACTS = D("3")
+#:
+#: RAISED 3 -> 5 ON OWNER AUTHORIZATION 2026-11-02, twice stated, after the
+#: evidence that exposure ($20) and cash ($12) were not the binding limits.
+#:
+#: AND IT RE-ADMITS THE 1415Z INCIDENT ORDER. THIS IS NOT A SIDE EFFECT; IT
+#: IS THE DIRECT CONSEQUENCE AND IT IS RECORDED HERE SO IT CANNOT BE
+#: REDISCOVERED BY A LOSS. On 2026-10-31 the 1415z window reached 4.25
+#: contracts of unmatched residual: UP 2.17 filled, then order six added UP
+#: 2.08 on top of it. The cap of 3 is what should have refused that order,
+#: and `test_l5_residual_cap_1415z_regression` exists because it did not.
+#: 4.25 is BELOW 5, so at this cap order six is admitted again -- verified,
+#: not inferred: at cap 3 the gate refuses it, at cap 5 it does not.
+#:
+#: WHAT STILL BOUNDS THAT EXPOSURE, since the residual cap no longer does.
+#: A 4.25-contract unmatched book is bounded instead by the $10 campaign
+#: additional-loss gate (`l5_campaign_baseline`, deficit = cost - min(up,
+#: dn), so a fully unmatched 4.25 at ~0.46 is ~$1.96 of deficit and passes),
+#: by the $12 cash cap, and by the $1.50 worst-case-deficit ceiling. The
+#: residual cap was the tightest of those on CONTRACT COUNT and is now the
+#: loosest. The incident's own arithmetic is preserved as a pinned record
+#: against its historical cap of 3 rather than being rewritten away, and
+#: `test_cap_five_readmits_the_1415z_order_six` pins this consequence
+#: directly so that raising it further is a deliberate act with visible
+#: cost.
+ABS_RESIDUAL_CAP_CONTRACTS = D("5")
 
 
 def residual_cap_decision(*, resid: D, same_side: D, other_side: D,
