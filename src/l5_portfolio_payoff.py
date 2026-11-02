@@ -55,42 +55,75 @@ UP, DOWN = "UP", "DOWN"
 #: A matched pair redeems exactly this. Not a parameter.
 REDEMPTION = D("1.00")
 
-#: HEDGE BOUND -- and the first version of this was WRONG, which is worth
-#: recording because the wrong version is the intuitive one.
+#: ============================================================= TWO REMOVALS
 #:
-#: I first capped the upside surrendered per dollar of worst case repaired,
-#: at 1.0. That rejected completing a 2.05 UP leg held at 0.465 with a DOWN
-#: at 0.56: it surrenders $1.148 of best case to repair $0.902 of worst
-#: case, a ratio of 1.27. But that completion locks a CERTAIN loss of only
-#: $0.051, while carrying the same residual costs a MEASURED
-#: -$0.2315/unit -- $0.475 on 2.05 units. The rule would have refused a
-#: hedge nine times cheaper than the exposure it removes, which is exactly
-#: the completion that would have saved the 0145z window's $0.953225.
+#: THIS MODULE HAS NO CONDITIONAL EV, AND MUST NOT ACQUIRE ONE BY ACCIDENT.
+#: Two earlier versions of the hedge bound were both wrong, and both wrong
+#: in the same way -- a number that looked like economics standing in for an
+#: expectation nobody had measured.
 #:
-#: The defensible comparison is not best-case against worst-case. It is the
-#: CERTAIN loss the hedge locks against the EXPECTED cost of carrying the
-#: residual instead. Both are in dollars and both are measured.
+#: FIRST WRONG VERSION: a ratio capping upside surrendered per dollar of
+#: worst case repaired. It refused completing a 2.05 UP leg held at 0.465
+#: with a DOWN at 0.56 (ratio 1.27) even though that locks a CERTAIN $0.051
+#: -- the very completion that would have saved 0145z's $0.953225. A ratio
+#: is a derived quantity wearing the costume of an expected value.
 #:
-#: This also reproduces the known bad case: chasing a quote to own 0.95
-#: against a 0.32 basis is a pair at 1.27, locking $0.55 on 2.05 units to
-#: avoid $0.47 of expected carry -- refused, as it should be.
+#: SECOND WRONG VERSION: comparing the locked loss against
+#: -$0.2315/unit. That figure is an UNCONDITIONAL average over 384 windows
+#: of whatever residuals we happened to hold. Using it as the conditional
+#: expectation of a SPECIFIC position is wrong three ways: it embeds the
+#: entry behaviour that produced it (resting deep, adverse_rate 0.89), the
+#: maximum loss of a residual is its own basis and that varies enormously
+#: (2.05 at own 0.465 risks $0.953; at own 0.90 it risks $1.845), and the
+#: calibration study established we have NO reliable conditional settlement
+#: estimate at all (base rate 0.5135, no bucket positive at 95%, CI
+#: half-widths +/-0.20..0.45 against a required 0.022).
+#:
+#: SO THE GATE USES NEITHER. Eligibility is: the order reduces unmatched
+#: inventory, the worst case improves after fees, and the CERTAIN locked
+#: loss fits inside OWNER-DEFINED budgets. Every one of those is either
+#: arithmetic or a policy number the owner set. No probability appears.
 RESIDUAL_ADVERSE_USD_PER_UNIT = D("0.2315")
 
-#: Where that figure comes from, carried so it can be audited.
-RESIDUAL_ADVERSE_BASIS = ("measured residual adverse selection, 384 "
-                          "windows, adverse_rate 0.89, swept_share 0.98")
+#: REPORTED FOR REFERENCE ONLY and consumed by nothing. Kept so a reader can
+#: see the figure and its provenance, and see that it is unconditional.
+RESIDUAL_ADVERSE_BASIS = ("UNCONDITIONAL average over 384 windows "
+                          "(adverse_rate 0.89, swept_share 0.98). NOT a "
+                          "conditional expectation for any specific "
+                          "position, and NOT used by any gate here.")
 
-#: Kept and REPORTED for audit, no longer a gate. See above for why.
-MAX_HEDGE_COST_RATIO = D("1.0")
+#: OWNER-DEFINED BUDGETS. Defaults are deliberately small; the caller passes
+#: the approved figures and these are only the fallback.
+MAX_LOCKED_LOSS_PER_HEDGE_USD = D("0.15")
+MAX_CUMULATIVE_LOCKED_LOSS_USD = D("0.60")
 
 #: Fill fractions reported for the partial-fill scenarios required of any
 #: maker order. A maker order is not a promise of its own size.
 PARTIAL_FRACTIONS = (D("0.25"), D("0.50"), D("0.75"))
 
 PROFIT_LOCK = "PROFIT_LOCK"
-HEDGE = "HEDGE"
-DIRECTIONAL_ADD = "DIRECTIONAL_ADD"
+DEFENSIVE_HEDGE = "DEFENSIVE_HEDGE"
+#: INTENTIONAL ACCUMULATION ON EITHER SIDE. It introduces NO signal of its
+#: own and defers entirely to the existing entry strategy and the hard
+#: limits. The name matters: it is not a directional strategy.
+INVENTORY_ADD = "INVENTORY_ADD"
 REJECT = "REJECT"
+
+#: Enabling INVENTORY_ADD needs FOUR independent things, and a feature flag
+#: is only one of them. A flag that could unlock accumulation by itself is
+#: precisely the defect this guards against:
+#:   1. L5_PORTFOLIO_PAYOFF_INVENTORY_ADD set, AND
+#:   2. a marginal EV figure, AND
+#:   3. its provenance, AND
+#:   4. owner authorization passed in by the caller from the real
+#:      authorization layer -- never synthesised here.
+INVENTORY_ADD_ENV = "L5_PORTFOLIO_PAYOFF_INVENTORY_ADD"
+
+
+def inventory_add_flag() -> bool:
+    """The FLAG only. Necessary, never sufficient -- see INVENTORY_ADD."""
+    return (os.getenv(INVENTORY_ADD_ENV) or "").strip().lower() in (
+        "1", "true", "yes", "on")
 
 
 def enabled() -> bool:
@@ -139,8 +172,12 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
              resting_same_side_cost_usd: Any = 0,
              marginal_ev_usd_per_contract: Any = None,
              marginal_ev_provenance: Any = None,
+             owner_authorized_inventory_add: Any = False,
              risk_refusal: Any = None,
-             max_hedge_cost_ratio: Any = None) -> Dict[str, Any]:
+             max_locked_loss_per_hedge_usd: Any = None,
+             cumulative_locked_loss_usd: Any = 0,
+             max_cumulative_locked_loss_usd: Any = None,
+             partial_risk_refusals: Any = None) -> Dict[str, Any]:
     """Classify a proposed order by what it does to BOTH settlement outcomes.
 
     `own_price` is the EXECUTABLE own cost of the side being bought -- the
@@ -244,58 +281,107 @@ def evaluate(*, held_up: Any, held_dn: Any, cost_basis_usd: Any,
     # HEDGE: repairs the worst case, and pays no more upside than the
     # downside it removes.
     if d_worst > 0:
-        given_up = -d_best if d_best < 0 else D(0)
-        ratio = given_up / d_worst
-        # WHAT THE HEDGE LOCKS, with certainty, if it fills.
-        locked_loss = -full["worst_usd"] if full["worst_usd"] < 0 else D(0)
-        # WHAT CARRYING THE RESIDUAL INSTEAD COSTS, in expectation, on the
-        # unmatched units we hold BEFORE this order.
+        # ELIGIBILITY, AND NOT ONE PROBABILITY IN IT.
+        #   (1) it reduces unmatched inventory -- not to zero, just less.
+        #       An imbalance left standing is fine and often intended.
+        #   (2) the worst case improves after fees, at the INTENDED qty.
+        #   (3) the CERTAIN locked loss fits the owner's per-hedge and
+        #       cumulative budgets.
         unmatched_before = abs(before["up_qty"] - before["dn_qty"])
-        carry = (unmatched_before * RESIDUAL_ADVERSE_USD_PER_UNIT
-                 ).quantize(D("0.000001"))
-        out = dict(base,
-                   hedge_cost_ratio=str(ratio),
-                   hedge_cost_ratio_note=("reported, NOT a gate -- see "
-                                          "RESIDUAL_ADVERSE_USD_PER_UNIT"),
-                   hedge_locks_certain_loss_usd=str(locked_loss),
-                   residual_carry_expected_cost_usd=str(carry),
-                   residual_carry_basis=RESIDUAL_ADVERSE_BASIS)
-        if locked_loss > carry:
-            return dict(out, action=REJECT,
-                        reason="HEDGE_LOCKS_MORE_THAN_CARRY_COSTS",
-                        labels=("the worst case improves, but this locks a "
-                                "certain loss larger than the measured "
-                                "expected cost of carrying the residual. "
-                                "That is paying to make the outcome worse."))
-        return dict(out, action=HEDGE, reason=None,
-                    labels=("reduces the worst-case loss, and the certain "
-                            "loss it locks is below the measured expected "
-                            "cost of carrying the residual instead. "
-                            "Protection begins at the FILL, never at the "
-                            "submission."))
+        unmatched_after = abs(full["up_qty"] - full["dn_qty"])
+        locked_loss = -full["worst_usd"] if full["worst_usd"] < 0 else D(0)
+        per_cap = _d(max_locked_loss_per_hedge_usd)
+        if per_cap is None:
+            per_cap = MAX_LOCKED_LOSS_PER_HEDGE_USD
+        cum_cap = _d(max_cumulative_locked_loss_usd)
+        if cum_cap is None:
+            cum_cap = MAX_CUMULATIVE_LOCKED_LOSS_USD
+        spent = _d(cumulative_locked_loss_usd) or D(0)
 
-    # DIRECTIONAL_ADD: worsens the worst case. Needs an independently
-    # justified marginal EV, with provenance. Absent evidence is refused.
+        out = dict(base,
+                   unmatched_before=str(unmatched_before),
+                   unmatched_after_if_filled=str(unmatched_after),
+                   reduces_unmatched=bool(unmatched_after < unmatched_before),
+                   hedge_locks_certain_loss_usd=str(locked_loss),
+                   max_locked_loss_per_hedge_usd=str(per_cap),
+                   cumulative_locked_loss_usd=str(spent),
+                   max_cumulative_locked_loss_usd=str(cum_cap),
+                   # EXACT BRACKETS FOR THIS SPECIFIC POSITION, arithmetic.
+                   holding_worst_usd=str(before["worst_usd"]),
+                   holding_best_usd=str(before["best_usd"]),
+                   # AND THE HONEST GAP.
+                   holding_ev_status="UNKNOWN",
+                   holding_ev_usd=None,
+                   holding_ev_note=(
+                       "no defensible conditional expected value exists for "
+                       "this position. The calibration study found no "
+                       "bucket positive at 95% and CI half-widths of "
+                       "0.20-0.45 against a required 0.022, so the EV "
+                       "comparison is UNKNOWN and no gate here uses one."),
+                   unconditional_reference_only=RESIDUAL_ADVERSE_BASIS)
+
+        if unmatched_after >= unmatched_before:
+            return dict(out, action=REJECT,
+                        reason="DOES_NOT_REDUCE_UNMATCHED",
+                        labels=("a defensive hedge must leave less unmatched "
+                                "inventory than it found. It need not reach "
+                                "balance."))
+        if locked_loss > per_cap:
+            return dict(out, action=REJECT,
+                        reason="LOCKED_LOSS_EXCEEDS_PER_HEDGE_BUDGET")
+        if (spent + locked_loss) > cum_cap:
+            return dict(out, action=REJECT,
+                        reason="LOCKED_LOSS_EXCEEDS_CUMULATIVE_BUDGET",
+                        cumulative_after_usd=str(spent + locked_loss))
+        # HARD RISK CONSTRAINTS AT EVERY FEASIBLE PARTIAL. A partial need
+        # NOT improve the worst case -- requiring that would refuse sound
+        # hedges, since the DOWN-win branch gains q(1-p) while the UP-win
+        # branch loses q*p and past a certain size the minimum stops
+        # improving. What a partial MUST do is respect every hard limit.
+        refusals = dict(partial_risk_refusals or {})
+        if refusals:
+            return dict(out, action=REJECT,
+                        reason="PARTIAL_FILL_BREACHES_RISK_LIMIT",
+                        partial_risk_refusals=refusals)
+        return dict(out, action=DEFENSIVE_HEDGE, reason=None,
+                    labels=("reduces unmatched inventory and improves the "
+                            "worst case after fees, with a certain locked "
+                            "loss inside the owner's budgets. Protection "
+                            "begins at the FILL, never at the submission, "
+                            "and the EV of holding instead is UNKNOWN."))
+
+    # INVENTORY_ADD: intentional accumulation. Worsens the worst case, so
+    # it needs FOUR independent things and a flag is only one of them.
     ev = _d(marginal_ev_usd_per_contract)
     prov = str(marginal_ev_provenance or "").strip()
-    out = dict(base, action=REJECT)
+    out = dict(base, action=REJECT,
+               inventory_add_flag=bool(inventory_add_flag()),
+               owner_authorized_inventory_add=bool(
+                   owner_authorized_inventory_add))
+    if not inventory_add_flag():
+        return dict(out, reason="INVENTORY_ADD_DISABLED",
+                    labels=("intentional accumulation is architecturally "
+                            "available and disabled by default. The flag is "
+                            "necessary and NEVER sufficient."))
+    if not owner_authorized_inventory_add:
+        return dict(out, reason="INVENTORY_ADD_NOT_OWNER_AUTHORIZED",
+                    labels=("the flag is set but no owner authorization was "
+                            "supplied by the caller. A feature flag must "
+                            "never bypass owner authorization."))
     if ev is None:
-        return dict(out, reason="DIRECTIONAL_EV_ABSENT",
-                    labels=("this worsens the worst case and no marginal "
-                            "expected value was supplied. Absent evidence "
-                            "is not positive expected value."))
+        return dict(out, reason="MARGINAL_EV_ABSENT",
+                    labels=("absent evidence is not positive expected "
+                            "value."))
     if not prov:
-        return dict(out, reason="DIRECTIONAL_EV_PROVENANCE_ABSENT",
-                    marginal_ev_usd_per_contract=str(ev),
-                    labels=("an expected value with no stated source cannot "
-                            "be audited."))
+        return dict(out, reason="MARGINAL_EV_PROVENANCE_ABSENT")
     if ev <= 0:
-        return dict(out, reason="DIRECTIONAL_EV_NOT_POSITIVE",
-                    marginal_ev_usd_per_contract=str(ev),
-                    marginal_ev_provenance=prov)
-    return dict(base, action=DIRECTIONAL_ADD, reason=None,
+        return dict(out, reason="MARGINAL_EV_NOT_POSITIVE",
+                    marginal_ev_usd_per_contract=str(ev))
+    return dict(base, action=INVENTORY_ADD, reason=None,
                 marginal_ev_usd_per_contract=str(ev),
                 marginal_ev_provenance=prov,
-                labels=("increases favoured-side exposure on an "
-                        "independently justified marginal expected value. "
-                        "The worst case is WORSE after this fills."))
+                inventory_add_flag=True,
+                owner_authorized_inventory_add=True,
+                labels=("intentional accumulation on a validated marginal "
+                        "expected value WITH owner authorization. The worst "
+                        "case is WORSE after this fills."))

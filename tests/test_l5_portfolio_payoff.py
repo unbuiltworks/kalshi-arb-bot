@@ -139,10 +139,77 @@ def test_a_loss_reducing_completion_above_redemption_is_a_hedge():
     worst case improves. That is the defensive case, and it is expected to
     be negative.
     """
+    # An explicit budget is passed so this isolates the CLASSIFICATION; the
+    # default $0.15 cap would refuse it, and that refusal has its own test.
+    # Worth noting the default binds on a realistic hedge: this one locks
+    # $0.30 to repair $1.10 of worst case.
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    max_locked_loss_per_hedge_usd="0.50")
+    assert r["action"] == PP.DEFENSIVE_HEDGE
+    assert D(r["delta_worst_usd"]) > 0
+    assert D(r["hedge_locks_certain_loss_usd"]) == D("0.30")
+    assert r["reduces_unmatched"] is True
+
+
+def test_the_default_per_hedge_budget_binds_on_a_realistic_hedge():
+    """Recorded because it is a policy fact, not an accident: a completion
+    locking $0.30 is refused by the $0.15 default even though it repairs
+    $1.10 of worst case. The owner sets this number, not the engine.
+    """
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0")
-    assert r["action"] == PP.HEDGE
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "LOCKED_LOSS_EXCEEDS_PER_HEDGE_BUDGET"
+
+
+def test_a_hedge_that_does_not_reduce_unmatched_is_refused():
+    """Reducing unmatched inventory is required; reaching BALANCE is not."""
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.40"),
+                    side="DOWN", qty="5", own_price="0.30", fee_usd="0",
+                    max_locked_loss_per_hedge_usd="5",
+                    max_cumulative_locked_loss_usd="5")
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "DOES_NOT_REDUCE_UNMATCHED"
+    # it DID improve the worst case -- that is not sufficient on its own
     assert D(r["delta_worst_usd"]) > 0
+    assert D(r["unmatched_after_if_filled"]) > D(r["unmatched_before"])
+
+
+def test_a_cheap_overshoot_making_both_outcomes_positive_is_a_profit_lock():
+    """And it outranks the unmatched test, correctly: a position that pays
+    in BOTH outcomes is good regardless of how imbalanced it is. This is
+    the clearest case of intentional imbalance being welcome.
+    """
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.40"),
+                    side="DOWN", qty="9", own_price="0.05", fee_usd="0")
+    assert r["action"] == PP.PROFIT_LOCK
+    a = r["after_if_filled"]
+    assert D(a["pnl_if_up_usd"]) > 0 and D(a["pnl_if_down_usd"]) > 0
+
+
+def test_a_partial_hedge_leaving_an_imbalance_is_accepted():
+    """INTENTIONAL IMBALANCE IS WELCOME. A hedge need not reach balance --
+    it must only leave less unmatched inventory than it found.
+    """
+    r = PP.evaluate(held_up="4", held_dn="0", cost_basis_usd=D("4") * D("0.70"),
+                    side="DOWN", qty="1", own_price="0.45", fee_usd="0",
+                    max_locked_loss_per_hedge_usd="5",
+                    max_cumulative_locked_loss_usd="5")
+    assert r["action"] == PP.DEFENSIVE_HEDGE
+    assert D(r["unmatched_after_if_filled"]) > 0, "still imbalanced, by design"
+    assert D(r["unmatched_after_if_filled"]) < D(r["unmatched_before"])
+
+
+def test_a_partial_fill_risk_refusal_blocks_the_hedge():
+    """A partial need not IMPROVE the worst case, but it must respect every
+    hard limit at each feasible quantity."""
+    r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
+                    side="DOWN", qty="2", own_price="0.45", fee_usd="0",
+                    max_locked_loss_per_hedge_usd="5",
+                    partial_risk_refusals={"partial_0.25": "RESIDUAL_CAP"})
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "PARTIAL_FILL_BREACHES_RISK_LIMIT"
 
 
 def test_a_hedge_locking_more_than_carrying_costs_is_rejected():
@@ -154,17 +221,18 @@ def test_a_hedge_locking_more_than_carrying_costs_is_rejected():
                     cost_basis_usd=D("2.05") * D("0.32"),
                     side="DOWN", qty="2.05", own_price="0.95", fee_usd="0")
     assert r["action"] == PP.REJECT
-    assert r["reason"] == "HEDGE_LOCKS_MORE_THAN_CARRY_COSTS"
-    assert D(r["hedge_locks_certain_loss_usd"]) > D(
-        r["residual_carry_expected_cost_usd"])
+    assert r["reason"] == "LOCKED_LOSS_EXCEEDS_PER_HEDGE_BUDGET"
+    assert D(r["hedge_locks_certain_loss_usd"]) > D("0.15")
 
 
 def test_the_hedge_numbers_are_reported_for_audit():
     r = PP.evaluate(held_up="2", held_dn="0", cost_basis_usd=D("2") * D("0.70"),
                     side="DOWN", qty="2", own_price="0.45", fee_usd="0")
-    assert r["hedge_cost_ratio"] is not None
-    assert "NOT a gate" in r["hedge_cost_ratio_note"]
-    assert "384" in r["residual_carry_basis"]
+    assert r["holding_ev_status"] == "UNKNOWN"
+    assert r["holding_ev_usd"] is None
+    assert "UNCONDITIONAL" in r["unconditional_reference_only"]
+    assert r["holding_worst_usd"] is not None
+    assert r["holding_best_usd"] is not None
 
 
 def test_a_cheap_hedge_beats_the_measured_carry_cost_and_passes():
@@ -174,9 +242,8 @@ def test_a_cheap_hedge_beats_the_measured_carry_cost_and_passes():
     r = PP.evaluate(held_up="2.05", held_dn="0",
                     cost_basis_usd=D("2.05") * D("0.465"),
                     side="DOWN", qty="2.05", own_price="0.56", fee_usd="0")
-    assert r["action"] == PP.HEDGE
-    assert D(r["hedge_locks_certain_loss_usd"]) < D(
-        r["residual_carry_expected_cost_usd"])
+    assert r["action"] == PP.DEFENSIVE_HEDGE
+    assert D(r["hedge_locks_certain_loss_usd"]) < D("0.15")
 
 
 # --------------------------------------------------------- DIRECTIONAL_ADD
@@ -189,7 +256,7 @@ def test_adding_to_the_overweight_side_without_ev_is_rejected():
                     cost_basis_usd=D("2.04") * D("0.47"),
                     side="UP", qty="2.05", own_price="0.46", fee_usd="0")
     assert r["action"] == PP.REJECT
-    assert r["reason"] == "DIRECTIONAL_EV_ABSENT"
+    assert r["reason"] == "INVENTORY_ADD_DISABLED"
     assert D(r["delta_worst_usd"]) < 0
 
 
@@ -199,7 +266,7 @@ def test_a_directional_add_needs_provenance_not_just_a_number():
                     side="UP", qty="2.05", own_price="0.46", fee_usd="0",
                     marginal_ev_usd_per_contract="0.30")
     assert r["action"] == PP.REJECT
-    assert r["reason"] == "DIRECTIONAL_EV_PROVENANCE_ABSENT"
+    assert r["reason"] == "INVENTORY_ADD_DISABLED"
 
 
 def test_a_non_positive_ev_is_rejected():
@@ -209,17 +276,41 @@ def test_a_non_positive_ev_is_rejected():
                     marginal_ev_usd_per_contract="0",
                     marginal_ev_provenance="calib-v1")
     assert r["action"] == PP.REJECT
-    assert r["reason"] == "DIRECTIONAL_EV_NOT_POSITIVE"
+    assert r["reason"] == "INVENTORY_ADD_DISABLED"
 
 
-def test_a_justified_directional_add_is_permitted_and_says_it_is_worse():
-    r = PP.evaluate(held_up="2.04", held_dn="0",
-                    cost_basis_usd=D("2.04") * D("0.47"),
-                    side="UP", qty="2.05", own_price="0.46", fee_usd="0",
+def test_a_justified_inventory_add_needs_ALL_FOUR_conditions(monkeypatch):
+    """A feature flag must NEVER be sufficient. Flag, owner authorization,
+    a marginal EV and its provenance are each independently necessary.
+    """
+    base = dict(held_up="2.04", held_dn="0",
+                cost_basis_usd=D("2.04") * D("0.47"),
+                side="UP", qty="2.05", own_price="0.46", fee_usd="0")
+    # flag OFF beats everything else being present
+    monkeypatch.delenv(PP.INVENTORY_ADD_ENV, raising=False)
+    r = PP.evaluate(owner_authorized_inventory_add=True,
                     marginal_ev_usd_per_contract="0.30",
-                    marginal_ev_provenance="calib-v1")
-    assert r["action"] == PP.DIRECTIONAL_ADD
-    assert "worst case is WORSE" in r["labels"]
+                    marginal_ev_provenance="calib-v1", **base)
+    assert r["action"] == PP.REJECT
+    assert r["reason"] == "INVENTORY_ADD_DISABLED"
+    monkeypatch.setenv(PP.INVENTORY_ADD_ENV, "1")
+    # flag ON but no owner authorization
+    r = PP.evaluate(marginal_ev_usd_per_contract="0.30",
+                    marginal_ev_provenance="calib-v1", **base)
+    assert r["reason"] == "INVENTORY_ADD_NOT_OWNER_AUTHORIZED"
+    # flag ON, owner authorized, but no EV
+    r = PP.evaluate(owner_authorized_inventory_add=True, **base)
+    assert r["reason"] == "MARGINAL_EV_ABSENT"
+    # flag ON, owner authorized, EV but no provenance
+    r = PP.evaluate(owner_authorized_inventory_add=True,
+                    marginal_ev_usd_per_contract="0.30", **base)
+    assert r["reason"] == "MARGINAL_EV_PROVENANCE_ABSENT"
+    # all four
+    r = PP.evaluate(owner_authorized_inventory_add=True,
+                    marginal_ev_usd_per_contract="0.30",
+                    marginal_ev_provenance="calib-v1", **base)
+    assert r["action"] == PP.INVENTORY_ADD
+    assert "WORSE" in r["labels"]
 
 
 # ------------------------------------- risk controls outrank the economics
@@ -296,7 +387,7 @@ def test_the_verdict_changes_when_the_complement_price_moves_against_us():
     lock = PP.evaluate(own_price="0.50", **held)
     assert lock["action"] == PP.PROFIT_LOCK
     gone = PP.evaluate(own_price="0.56", **held)
-    assert gone["action"] == PP.HEDGE, gone["action"]
+    assert gone["action"] == PP.DEFENSIVE_HEDGE, gone["action"]
     assert D(gone["after_if_filled"]["worst_usd"]) > D(
         gone["before"]["worst_usd"])
 

@@ -217,6 +217,18 @@ class TestReq7TheExistingControlsAreUntouched:
             "OPERATOR_HALT", "SHADOW_ONLY_LOCK", "DURABLE_HALT_LATCH",
             "OWNER_ARM_TOKEN", "TRANSPORT_ARMED", "ACCOUNT_WIDE_EXPOSURE",
             "ORDER_REGISTRY_OWNERSHIP", "RECONCILIATION_CERTAIN",
+            # ADDED DELIBERATELY, and this pin is where that is reviewed.
+            # PAYOFF_TWO_OUTCOME is ECONOMIC and sits AFTER every safety
+            # gate, immediately before the boundary, so an attractive payoff
+            # can never be the reason a halt, an arm token, an exposure
+            # ceiling or a reconciliation refusal goes unreported.
+            #
+            # NOTE FOR WHOEVER TOUCHES THIS NEXT: GATE_ORDER is pinned
+            # LITERALLY IN TWO PLACES -- here and in
+            # tests/test_l5_intent_gate.py::test_the_gate_order_is_pinned.
+            # Both must move together. The duplication was only discovered
+            # by full-suite parity, which is the argument for running it.
+            "PAYOFF_TWO_OUTCOME",
             "EXECUTOR_BOUNDARY")
 
     def test_an_ambiguous_post_makes_the_book_uncertain(self):
