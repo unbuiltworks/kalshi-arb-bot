@@ -78,7 +78,22 @@ ROOT_ENV = "L5_LIVE_ROOT"
 #: ceilings are: a limit that a deployed variable can widen is not a limit. The
 #: environment may configure the gate ON, and may configure it TIGHTER, and can
 #: never configure it looser -- see `limit_from_env`.
-MAX_ADDITIONAL_LOSS_USD = D("5.00")
+#: RAISED 5.00 -> 10.00 on explicit owner authorization, 2026-11-02.
+#:
+#: WHY THIS AND NOT THE OTHERS. The owner initially authorised raising
+#: exposure to $50, cash to $35 and this to $10. Evidence narrowed it: the
+#: $10 worst-case budget binds FAR earlier than a $50 exposure ceiling, and
+#: the previous campaign deployed $0.94-$2.77 of cash per window against a
+#: $12 cap, so neither exposure nor cash was ever the binding constraint.
+#: Raising a ceiling that cannot bind removes a backstop and buys nothing.
+#:
+#: AND IT STILL FITS THE ACCOUNT-WIDE GATE, which is the check that made
+#: the earlier 11.10 figure decoration. All-time realized is -6.0979 after
+#: the 2026-11-02 campaign (+$2.8067 on -8.9046), so $13.90 of the $20
+#: account-wide ceiling is unspent and a $10 campaign budget sits inside it
+#: with $3.90 to spare. This is the first time in this workstream that the
+#: campaign budget has NOT been shadowed by the account-wide gate.
+MAX_ADDITIONAL_LOSS_USD = D("10.00")
 
 LIMIT_ENV = "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD"
 

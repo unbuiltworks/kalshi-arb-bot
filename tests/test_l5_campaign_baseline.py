@@ -225,13 +225,13 @@ def test_the_env_may_tighten_the_ceiling_and_can_never_widen_it(monkeypatch):
     monkeypatch.setenv(CB.LIMIT_ENV, "2.50")
     assert CB.limit_from_env() == D("2.50")
     monkeypatch.setenv(CB.LIMIT_ENV, "500")
-    assert CB.limit_from_env() == CB.MAX_ADDITIONAL_LOSS_USD == D("5.00")
+    assert CB.limit_from_env() == CB.MAX_ADDITIONAL_LOSS_USD == D("10.00")
 
 
 def test_the_code_constant_is_the_owner_approved_five(monkeypatch):
     """Pinned: a later edit that widens the code ceiling has to change a
     test that says why it is five."""
-    assert CB.MAX_ADDITIONAL_LOSS_USD == D("5.00")
+    assert CB.MAX_ADDITIONAL_LOSS_USD == D("10.00")
 
 
 # --------------------------------------------- wired into ValidationGates
@@ -359,8 +359,14 @@ def test_telemetry_names_the_point_in_force_and_leaks_no_secret(base,
     assert t["readable"] is True
     assert t["campaign_id"] == CID
     assert t["account_wide_realized"] == "-11.6213"
+    # THE TWO ARE DIFFERENT AND THAT IS THE POINT. `max_additional_loss_usd`
+    # is the CODE CEILING, now 10.00. `limit_in_force_usd` is
+    # `limit_from_env()` = min(env, ceiling), and this fixture's env says 5,
+    # so the EFFECTIVE limit is 5 -- raising the ceiling alone is inert.
+    # Production must also set L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD to 10 or
+    # the authorised $10 silently stays $5.
     assert t["limit_in_force_usd"] == "5.00"
-    assert t["max_additional_loss_usd"] == "5.00"
+    assert t["max_additional_loss_usd"] == "10.00"
     assert "changes nothing" in t["labels"]
 
 

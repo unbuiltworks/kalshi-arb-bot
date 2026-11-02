@@ -259,7 +259,7 @@ def test_the_pair_ceiling_and_the_limits_are_untouched(monkeypatch):
     from src import l5_campaign_approval as CA
     monkeypatch.delenv("L5_TS_MAX_PAIR_COST", raising=False)
     assert TS.max_pair_cost() == D("0.96")
-    assert CBL.MAX_ADDITIONAL_LOSS_USD == D("5.00")
+    assert CBL.MAX_ADDITIONAL_LOSS_USD == D("10.00")
     assert CA.MAX_DAILY_LOSS_USD == D("5")
     assert TS.entry_cutoff_s() == 600.0
     assert TS.order_ttl_s() == 120.0
