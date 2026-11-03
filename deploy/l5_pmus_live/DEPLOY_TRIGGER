@@ -3283,3 +3283,22 @@ margin, entry 480 / completion 600, opening clip 1, residual cap 1 contract,
 exact-order cancellation, orders_uncertain fail-closed, watchdog, daily and
 cumulative loss limits, basis attestation, defensive-unwind safeguards.
 Executor stays DISARMED, at-touch OFF, no orders.
+
+--- 2026-11-03T19:50Z ---
+Fresh deploy so the container picks up L5_ARM_SWITCH_PROBE=YES.
+
+WHY A SECOND DEPLOY. The probe stayed silent through deployment 9968667a
+and its redeploy 0ce088c8 even though the image carries the module (build
+log: "[35/72] COPY src/l5_arm_switch_gate.py") and the variable is set on
+the service. Cause: Railway snapshots a deployment's ENVIRONMENT at
+creation, and the variable write landed after 9968667a was created at
+18:21:27; `redeploy` reuses that snapshot along with the build, so neither
+container ever had the variable and emit_arm_switch_readiness returned at
+its opt-in check. A fresh deploy takes a new snapshot.
+
+State clean at 19:37:44Z: armed false, halt_latch CLEAR (submissions
+blocked NOT_ARMED), live_orders 0, pending_terminal [], cash_deployed [].
+
+Owner authorization remains limited to deploying and observing the
+read-only probe: no live trading, no arming, no campaign approval, no
+change to any financial risk limit. Executor stays DISARMED, at-touch OFF.
