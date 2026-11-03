@@ -587,3 +587,84 @@ def test_missing_fill_quantity_is_absent_not_zero():
                            fill_own_px="0.44", processing_t=1.0,
                            book_at_processing=ROW)
     assert rec["fill_qty"] is None
+
+
+# ------------------------------------------- the fill instant, bracketed
+#
+# ADDED AFTER THE 2026-11-02 2230z FORENSICS. `book_at_event` is empty on
+# EVERY real PMUS fill, because the venue's order-progress row carries no
+# event timestamp for `as_of` to locate -- the 2230z record logged exactly
+# that, "error: NO_BOOK_ROW". Its processing frame stood 1.23s later, by
+# which time the book had moved six cents against us, so reading the
+# processing frame as "the book at the fill" overstates how dear the
+# complement was, while reading the empty event book as "no evidence"
+# understates what we actually hold. The frames either side are both
+# observed, so the instant is bracketed by measurements.
+
+def test_the_fill_instant_is_bracketed_when_the_venue_gives_no_event_time():
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0, asks=[("0.5300", "100")]), 100.0)
+    r.append("m", dict(ROW, t=120.0, asks=[("0.4200", "100")]), 120.0)
+    rec = BE.fill_evidence(slug="m", coid="c", side="UP", fill_qty="2.04",
+                           fill_own_px="0.47", venue_event_t=None,
+                           processing_t=121.0, ring=r)
+    assert rec["book_at_event"]["row"] is None
+    br = rec["fill_instant_bracket"]
+    assert br["basis"] == BE.SYNC_BRACKET
+    assert br["before"]["row_t"] == 100.0
+    assert br["after"]["row_t"] == 120.0
+    # 0.47 + (1 - 0.53) = 0.94 before; 0.47 + (1 - 0.42) = 1.05 after.
+    # That straddles the ceiling, so it settles NOTHING -- which is the
+    # honest answer and exactly what the 2230z tape reading looked like.
+    assert br["pair_if_maker_bracket"] == ["0.9400", "1.0500"]
+    assert "must not be read as an opportunity" in br["labels"]
+
+
+def test_a_bracket_whose_cheap_end_still_loses_settles_the_question():
+    """The real 2230z shape: both ends above redemption, so no opportunity."""
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0, asks=[("0.4200", "910")]), 100.0)
+    r.append("m", dict(ROW, t=120.0, asks=[("0.4100", "910")]), 120.0)
+    rec = BE.fill_evidence(slug="m", coid="c", side="UP", fill_qty="2.04",
+                           fill_own_px="0.47", processing_t=121.0, ring=r)
+    lo, hi = rec["fill_instant_bracket"]["pair_if_maker_bracket"]
+    assert D(lo) == D("1.0500") and D(hi) == D("1.0600")
+    assert min(D(lo), D(hi)) > D("1.00")
+
+
+def test_no_bracket_is_added_once_the_event_book_is_actually_located():
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0), 100.0)
+    rec = BE.fill_evidence(slug="m", coid="c", side="UP", fill_qty="3",
+                           fill_own_px="0.44", venue_event_t=110.0,
+                           processing_t=125.0, ring=r)
+    assert rec["book_at_event"]["row"] is not None
+    assert "fill_instant_bracket" not in rec
+
+
+def test_the_bracket_degrades_rather_than_raising_without_a_ring():
+    rec = BE.fill_evidence(slug="m", coid="c", side="UP", fill_qty="3",
+                           fill_own_px="0.44", processing_t=1.0,
+                           book_at_processing=ROW)
+    br = rec["fill_instant_bracket"]
+    assert br["before"]["row_t"] is None
+    assert br["pair_if_maker_bracket"][0] is None
+    assert br["pair_if_maker_bracket"][1] is not None
+
+
+def test_preceding_is_strictly_before_and_never_the_frame_itself():
+    r = BE.BookRing()
+    for t in (10.0, 20.0, 30.0):
+        r.append("m", dict(ROW, t=t, asks=[("0.%02d" % int(t), "9")]), t)
+    assert r.preceding("m", 20.0)["t"] == 10.0
+    assert r.preceding("m", 10.0) is None
+    assert r.preceding("m", 31.0)["t"] == 30.0
+    assert r.preceding("m", None) is None
+    assert r.preceding("other", 20.0) is None
+
+
+def test_the_bracket_is_consulted_by_no_gate():
+    """It is reporting. If it ever reaches a decision, this test fails."""
+    import inspect as _i
+    src = _i.getsource(BE)
+    assert src.count("fill_instant_bracket") == 1          # written once

@@ -69,6 +69,7 @@ SYNC_AT_EVENT = "FRAME_IN_EFFECT_BY_LOCAL_RECEIPT_CLOCK"
 SYNC_BEFORE_RING = "NO_FRAME_AT_OR_BEFORE_EVENT"
 SYNC_NO_EVENT_TIME = "NO_VENUE_EVENT_TIME_SUPPLIED"
 SYNC_PROCESSING = "PROCESSING_TIME_SNAPSHOT"
+SYNC_BRACKET = "FRAMES_EITHER_SIDE_OF_PROCESSING"
 
 #: a reader must be able to tell these two apart, which is the whole point
 #: of carrying both: one is the book as the venue had it when the fill
@@ -327,6 +328,27 @@ class BookRing:
                 continue
             out.append(dict(r))
         return out
+
+    def preceding(self, slug: str, t: Any) -> Optional[Dict[str, Any]]:
+        """The last frame STRICTLY BEFORE `t`, or None.
+
+        Exists for one reason: PMUS order progress carries no venue event
+        timestamp, so `as_of` has nothing to locate and `book_at_event` is
+        empty on every real fill. The frame before the processing frame is
+        the only other observed bound on what the book was when the fill
+        happened, so a reader can bracket it between two MEASURED frames
+        instead of reading an unknown as an absence.
+        """
+        tt = _f(t)
+        if tt is None:
+            return None
+        prev = None
+        for r in self._rows.get(str(slug)) or ():
+            rt = r.get("t")
+            if rt is None or float(rt) >= tt:
+                break
+            prev = r
+        return None if prev is None else dict(prev)
 
     def as_of(self, slug: str, event_t: Any) -> Dict[str, Any]:
         """The frame in effect at `event_t`, with WHY it is or is not that.
@@ -672,6 +694,49 @@ def fill_evidence(*, slug: str, coid: Any, side: Any, fill_qty: Any,
             row=proc_row, pair_ceiling=pair_ceiling,
             depth_ticks=depth_ticks),
     }
+
+    # THE FILL INSTANT, BRACKETED. `book_at_event` above is empty on every
+    # real PMUS fill, because the venue's order-progress row carries no
+    # event timestamp for `as_of` to locate -- the 2026-11-02 2230z fill
+    # logged exactly that: "book_at_event ... error NO_BOOK_ROW". Its
+    # processing frame stood 1.23s later, by which time the book had moved
+    # 6 cents, so reading the processing frame as "the book at the fill"
+    # overstates how dear the complement was, and reading the absence as
+    # "no evidence" understates what we actually hold. The frame BEFORE
+    # processing is observed too, so the pair at the fill instant is
+    # bracketed by two measured frames. Additive and read-only: no gate,
+    # price, size or decision consults it.
+    if rec["book_at_event"].get("row") is None:
+        before = (ring.preceding(str(slug), (proc_row or {}).get("t"))
+                  if (ring is not None and isinstance(proc_row, Mapping))
+                  else None)
+        b_reach = complement_reachability(
+            held_side=held, first_leg_own_px=first, qty_needed=need,
+            row=before, pair_ceiling=pair_ceiling, depth_ticks=depth_ticks)
+        a_reach = rec["book_at_processing"]["reachability"]
+        rec["fill_instant_bracket"] = {
+            "basis": SYNC_BRACKET,
+            "why": ("the venue supplied no event time, so the fill instant "
+                    "is not locatable; these are the observed frames either "
+                    "side of it"),
+            "before": {"row_t": None if not isinstance(before, Mapping)
+                       else before.get("t"),
+                       "reachability": b_reach},
+            "after": {"row_t": None if not isinstance(proc_row, Mapping)
+                      else proc_row.get("t"),
+                      "reachability": a_reach},
+            "pair_if_maker_bracket": [
+                (b_reach.get("pair_if_maker") or {}).get("pair_own_cost"),
+                (a_reach.get("pair_if_maker") or {}).get("pair_own_cost"),
+            ],
+            "labels": ("REPORTING ONLY. Two OBSERVED frames, not an "
+                       "interpolation: the fill instant lies between them "
+                       "and the pair at it is not measured. A bracket whose "
+                       "cheap end still exceeds redemption settles that no "
+                       "profitable completion existed; one that straddles a "
+                       "ceiling settles nothing and must not be read as an "
+                       "opportunity. Neither end is a fill."),
+        }
     return rec
 
 
