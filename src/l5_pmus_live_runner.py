@@ -4311,9 +4311,29 @@ class Runner:
                         live += 1
             except BaseException:                              # noqa: BLE001
                 live = 0
+            # THE HELD LEG'S VENUE-CONFIRMED BASIS. Without it every
+            # `pair_if_*` term in this record reads `no_first_leg_price`, so
+            # the AUTHENTICATED sampler -- the one whose prices are
+            # executable evidence -- could not price its own pair, while the
+            # SHADOW sampler beside it could. Reconstructing those pairs by
+            # hand afterwards is exactly how the 2230z misreading happened.
+            # `leg_cost` is written from venue-confirmed fills only, so this
+            # is the same basis `pair_cost_refusal` uses and cannot drift
+            # from it.
+            _basis = None
+            try:
+                _lc = self.store.leg_cost(str(market))
+                _side = "UP" if resid > 0 else "DOWN"
+                _q = self.store.position(str(market), _side)
+                _c = _lc.get(_side)
+                if _q and _q > 0 and _c is not None:
+                    _basis = str(_c / _q)
+            except BaseException:                              # noqa: BLE001
+                _basis = None
             rec = s.sample(
                 slug=str(market), now=self.now_t, residual=resid,
                 order_resting=bool(live), ring=ring,
+                first_leg_own_px=_basis,
                 depth_ticks=_evidence_depth_ticks())
             if rec is not None:
                 emit("L5_RESIDUAL_BOOK_SAMPLE", rec)
@@ -6647,6 +6667,28 @@ class Runner:
                 _ceil = TSP.max_pair_cost()
             except BaseException:                              # noqa: BLE001
                 _ceil = None
+            # THE INVENTORY THIS REFUSAL HAPPENED IN, which this record
+            # went without and which is what made it misleading. The pair
+            # above is priced from the BOOK, as if we were flat; the gate
+            # that actually refuses -- `pair_cost_refusal` -- returns None
+            # unless the order would create NEW MATCHED QUANTITY, so when it
+            # fires we were NOT flat and the leg it priced was a completion
+            # against the basis already paid. At 2230z this record published
+            # a 0.9400 "missed 6c pair" against an effective 1.04 that was
+            # correctly refused. Read from the SAME store the gate reads, so
+            # the record cannot disagree with it, and each part separately
+            # swallowed so a missing position cannot cost us the whole row.
+            _held = _hq = _dq = None
+            try:
+                _up = self.store.position(slug, "UP")
+                _dn = self.store.position(slug, "DOWN")
+                _resid = _up - _dn
+                if _resid != 0:
+                    _held = "UP" if _resid > 0 else "DOWN"
+                    _hq = str(_resid if _resid > 0 else -_resid)
+                    _dq = "0"
+            except BaseException:                              # noqa: BLE001
+                _held = _hq = _dq = None
             _rec = MPB.record(
                 market=slug, reason=reason,
                 decision={"pair_own_cost": (None if pair is None
@@ -6654,7 +6696,9 @@ class Runner:
                           "bid": str(book.get("bid")),
                           "ask": str(book.get("ask")),
                           "stream_age_s": str(book.get("stream_age_s"))},
-                entry_ceiling=_ceil, stage="OPENING")
+                entry_ceiling=_ceil, stage="OPENING",
+                held_side=_held, held_qty=_hq, deficient_qty=_dq,
+                book_source=book.get("source"))
             # AN UNPLACEABLE BOOK IS NOT A MISSED PAIR. The classifier
             # judges economics and knows nothing of the band, so the
             # correction is applied here where the band was read. The pair

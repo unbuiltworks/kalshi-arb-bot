@@ -71,6 +71,57 @@ DATA_QUALITY = "DATA_QUALITY"
 NOT_AN_OPPORTUNITY = "NOT_AN_OPPORTUNITY"
 OTHER = "OTHER"
 
+#: THE TWO DEFINITIONS, KEPT SIDE BY SIDE ON PURPOSE.
+#:
+#: v1 (`missed_profitable_pair`) is the ORIGINAL field and its meaning is
+#: FROZEN, because records carrying it are already on the tape and in
+#: committed artifacts. It asks: was the pair priced in this record below
+#: $1.00? For a DECISION-stage record that is the right question -- the pair
+#: priced there is the actual completion of inventory actually held.
+#:
+#: v2 (`missed_profitable_pair_in_state`) asks the question the OPENING
+#: stage needs: was a pair available TO US, in the inventory state we were
+#: actually in? Two things make v1 wrong there and neither is a rounding
+#: detail.
+#:
+#:   THE FIGURE IS A CONSTANT. Both opening legs quote `d` ticks behind
+#:   their own touch, so pair = 1 - spread - 2*d*t, which is 0.95 on every
+#:   one-tick book at any price level. v1 reads that as a 5c opportunity on
+#:   every tick of every window.
+#:
+#:   AND IT IS THE WRONG QUANTITY. `PAIR_COST_ABOVE_CEILING` comes from
+#:   `pair_cost_refusal`, which returns None unless the order would create
+#:   NEW MATCHED QUANTITY -- so it cannot fire on a genuine flat first leg
+#:   at all. When it fires, the refused quantity is
+#:   `eff = cost_after / matched_after`: the effective pair over the basis
+#:   ALREADY PAID, not the fresh two-leg pair the book is showing. At the
+#:   2026-11-02 2230z window those differed by ten cents -- a recorded
+#:   0.9400 "missed 6c pair" against an effective 1.04 that was correctly
+#:   refused.
+#:
+#: So v2 downgrades to N/A when unmatched inventory was held, and names why.
+#: v1 is left exactly as it was. A reader comparing old and new records can
+#: tell which definition produced which verdict from `definitions`.
+DEF_V1 = "pair_below_redemption_regardless_of_inventory"
+DEF_V2 = "pair_available_in_the_inventory_state_we_were_actually_in"
+
+UNMATCHED_HELD = "UNMATCHED_INVENTORY_HELD"
+FRESH_PAIR_IS_LEVEL_INVARIANT = "FRESH_OPENING_PAIR_IS_LEVEL_INVARIANT"
+
+#: WHERE THE NUMBER CAME FROM, which item 4 of the owner's instruction turns
+#: into a first-class field: an authenticated websocket book and a
+#: venue-confirmed basis are evidence a fill could have happened at that
+#: price; a sparse or lagged REST observation is not. The 2230z REST tape
+#: read twelve cents away from the authenticated book in the same second, so
+#: this is not a pedantic distinction.
+EV_AUTHENTICATED = "AUTHENTICATED_WS"
+EV_REST_SPARSE = "REST_SPARSE_OR_LAGGED"
+EV_UNKNOWN = "EVIDENCE_BASIS_UNKNOWN"
+
+#: an authenticated book older than this is reported as lagged rather than
+#: authenticated, because the source only helps while it is current.
+EV_FRESH_MAX_AGE_S = 2.0
+
 #: exact reasons, matched before any substring rule. `decide`'s own
 #: vocabulary, plus the two the runner adds after `decide` returns.
 _EXACT: Dict[str, str] = {
@@ -193,12 +244,49 @@ def pair_verdict(*, pair_own_cost: Any = None,
             "gain_per_contract_usd": str(REDEMPTION - pc)}
 
 
+def evidence_basis(*, book_source: Any = None, stream_age_s: Any = None,
+                   max_age_s: float = EV_FRESH_MAX_AGE_S) -> Dict[str, Any]:
+    """Where this record's prices came from, and whether to trust them.
+
+    AUTHENTICATED_WS only when the source says so AND the stream was
+    current. A stale authenticated frame is reported as lagged, because at
+    the 2230z window a book twelve cents out of date would otherwise have
+    been labelled authenticated and read as executable.
+    """
+    src = str(book_source or "").strip().lower()
+    age = None
+    try:
+        if stream_age_s is not None:
+            age = float(str(stream_age_s))
+    except (TypeError, ValueError):
+        age = None
+    if "ws" in src or "websocket" in src or "authenticated" in src:
+        if age is None:
+            basis, why = EV_UNKNOWN, "authenticated source but stream age unreadable"
+        elif age <= max_age_s:
+            basis, why = EV_AUTHENTICATED, "authenticated stream, current"
+        else:
+            basis, why = EV_REST_SPARSE, "authenticated source but stale frame"
+    elif "rest" in src or "poll" in src or "tape" in src:
+        basis, why = EV_REST_SPARSE, "polled REST observation"
+    else:
+        basis, why = EV_UNKNOWN, "book source not stated"
+    return {"basis": basis, "book_source": (str(book_source)
+                                            if book_source is not None
+                                            else None),
+            "stream_age_s": (None if age is None else age),
+            "max_fresh_age_s": max_age_s, "why": why,
+            "executable_evidence": basis == EV_AUTHENTICATED}
+
+
 def record(*, market: Any, reason: Any,
            decision: Optional[Mapping[str, Any]] = None,
            entry_ceiling: Any = None,
            held_side: Any = None, held_qty: Any = None,
            deficient_qty: Any = None,
-           stage: str = "DECISION") -> Dict[str, Any]:
+           stage: str = "DECISION",
+           book_source: Any = None,
+           effective_pair_cost: Any = None) -> Dict[str, Any]:
     """One missed-completion record, safe to emit. Never raises.
 
     `missed_profitable_pair` is the field the campaign is read on:
@@ -225,6 +313,45 @@ def record(*, market: Any, reason: Any,
             missed = "YES"
         else:
             missed = "NO"
+
+        # ============ THE INVENTORY-AWARE VERDICT
+        #
+        # Three corrections to v1, applied in order of how badly v1 is
+        # wrong. None of them can turn a v1 NO or N/A into a YES: v2 is
+        # never more optimistic than v1.
+        _state: Dict[str, Any] = {}
+        _in_state = missed
+        _hq = _d(held_qty)
+        _eff = _d(effective_pair_cost)
+        _is_open = str(stage or "").upper() == "OPENING"
+        if _eff is not None:
+            # THE QUANTITY THAT WAS ACTUALLY REFUSED, when the caller knows
+            # it. `eff` is what the gate compared against the ceiling, so a
+            # verdict that ignores it is answering about a different trade.
+            _state["effective_pair_cost"] = str(_eff)
+            if _in_state == "YES" and _eff >= REDEMPTION:
+                _in_state = "NO"
+                _state["downgraded_because"] = (
+                    "EFFECTIVE_PAIR_ABOVE_REDEMPTION: the fresh pair shown "
+                    "here was never the refused quantity; completing at the "
+                    "effective pair would have locked a loss")
+        if (_in_state == "YES" and _is_open and _hq is not None
+                and _hq != 0):
+            # A FRESH PAIR IS NOT AVAILABLE WHILE WE ARE ALREADY LONG ONE
+            # SIDE. The engine's job in that state is to complete what it
+            # holds, and the leg it would place is priced as a completion
+            # against the basis already paid -- which is why
+            # `pair_cost_refusal` fires on it at all.
+            _in_state = "N/A"
+            _state["downgraded_because"] = UNMATCHED_HELD
+            _state["not_an_opportunity_in_state"] = (
+                "%s: %s unmatched contracts were held, so the pair priced "
+                "from the book was not a pair available to us"
+                % (UNMATCHED_HELD, _hq))
+        if _is_open:
+            _state["fresh_pair_caveat"] = FRESH_PAIR_IS_LEVEL_INVARIANT
+        _state["verdict"] = _in_state
+
         out: Dict[str, Any] = {
             "label": "L5_MISSED_PAIR",
             "market": str(market or ""),
@@ -242,6 +369,19 @@ def record(*, market: Any, reason: Any,
             "locked_pnl_usd": (None if dec.get("locked_pnl_usd") is None
                                else str(dec.get("locked_pnl_usd"))),
             "need": dec.get("need"),
+            "missed_profitable_pair_in_state": _in_state,
+            "in_state": _state,
+            "evidence": evidence_basis(
+                book_source=book_source,
+                stream_age_s=dec.get("stream_age_s")),
+            "definitions": {
+                "missed_profitable_pair": DEF_V1,
+                "missed_profitable_pair_in_state": DEF_V2,
+                "note": ("v1 is FROZEN for compatibility with records "
+                         "already emitted; v2 is the inventory-aware "
+                         "verdict and is the one to read. Where they "
+                         "disagree, v1 is the optimistic one."),
+            },
             # THE LABEL NAMES WHAT WAS ACTUALLY REFUSED. It said
             # "a completion" on every record, including the OPENING ones,
             # which describes the wrong decision to anyone reading the
