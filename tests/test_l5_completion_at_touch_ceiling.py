@@ -728,3 +728,233 @@ def test_the_gate_binds_before_any_ceiling_is_consulted(ex, monkeypatch):
         bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
                                   {"price": "0.53", "qty": "2"})
         assert bad is not None and bad["why"] == "BASIS_UNATTESTED", v
+
+
+# ========== THE UNATTESTED-BASIS EXCEPTION: AUTHORIZED *AND* REDUCING
+#
+# FOUND BY AUDITING MY OWN CHANGE, not by a test. The first version ran the
+# basis gate BEFORE `defensive_mandate_covers`, so an owner-mandated unwind
+# on an unattested book was refused -- failing closed in the RISK-INCREASING
+# direction by trapping us in the position the mandate exists to escape.
+#
+# The correction needs BOTH halves and the mandate is only the first.
+# `defensive_mandate_covers` proves AUTHORIZATION: the flag is on, and the
+# mandate names this market, side, price and quantity EXACTLY and has not
+# expired, so an expired or oversized mandate already yields None there. It
+# proves nothing about DIRECTION, so `reduces` and `no_reversal` -- the same
+# two conditions `completion_pair_rescue` enforces -- are required here too.
+# Without them a mandate would be a standing permission to trade on a basis
+# nothing attested.
+
+import datetime as _dt
+
+NOW_TS = _dt.datetime(2026, 9, 23, 16, 15, 5,
+                      tzinfo=_dt.timezone.utc).timestamp()
+
+
+@pytest.fixture()
+def defex(ex, monkeypatch):
+    """`ex` with the defensive flag on and an unattested held DOWN leg."""
+    from src import l5_defensive_completion as DC
+    x, t, H, E = ex
+    monkeypatch.setenv(DC.DEFENSIVE_ENABLED_ENV, "1")
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    return x, t, H, E
+
+
+def _mandate(side="UP", price="0.53", qty="2", expires=NOW_TS + 55.0):
+    return {"market": SLUG, "side": side, "price": price, "qty": qty,
+            "expires_at": expires}
+
+
+# ---- 1. ordinary completions with an unattested basis are refused
+
+def test_an_ordinary_completion_on_an_unattested_basis_is_refused(defex):
+    x, t, H, E = defex
+    assert x._defensive_mandate is None
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "2"})
+    assert bad is not None and bad["why"] == "BASIS_UNATTESTED"
+    assert bad["mandate_present"] is False
+    assert bad["exempt"] is False
+
+
+def test_no_ceiling_setting_lets_an_ordinary_completion_through(defex,
+                                                               monkeypatch):
+    x, t, H, E = defex
+    for v in (None, "1.00", "0.99", "0.96"):
+        if v is None:
+            monkeypatch.delenv(CEIL_ENV, raising=False)
+        else:
+            monkeypatch.setenv(CEIL_ENV, v)
+        bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                                  {"price": "0.53", "qty": "2"})
+        assert bad is not None and bad["why"] == "BASIS_UNATTESTED", v
+
+
+# ---- 2. a valid mandated unwind proceeds
+
+def test_a_valid_mandated_reducing_unwind_proceeds(defex):
+    """held DOWN 2, buying UP 2: reduces, does not reverse, authorized."""
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate()
+    assert x.pair_cost_refusal(SLUG, {"side": "UP"},
+                               {"price": "0.53", "qty": "2"}) is None
+
+
+def test_the_permitted_unwind_is_recorded_with_its_attestation(defex):
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate()
+    x.pair_cost_refusal(SLUG, {"side": "UP"}, {"price": "0.53", "qty": "2"})
+    rows = x.store.state["defensive_on_unattested_basis"]
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["market"] == SLUG and r["side"] == "UP"
+    assert r["qty"] == "2" and r["price"] == "0.53"
+    assert r["reduces"] is True and r["no_reversal"] is True
+    assert r["attestation"]["DOWN"]["reason"] == "PLACEHOLDER_BASIS"
+
+
+# ---- 3. an invalid mandate cannot bypass the gate
+
+def test_an_expired_mandate_cannot_bypass_the_gate(defex):
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(expires=NOW_TS - 1.0)
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "2"})
+    assert bad is not None and bad["why"] == "BASIS_UNATTESTED"
+    assert bad["mandate_present"] is False      # expiry makes it no mandate
+
+
+def test_an_oversized_order_cannot_bypass_the_gate(defex):
+    """The mandate names qty 2; an order for 3 is not the order it names."""
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(qty="2")
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "3"})
+    assert bad is not None and bad["why"] == "BASIS_UNATTESTED"
+    assert bad["mandate_present"] is False
+
+
+def test_a_mispriced_order_cannot_bypass_the_gate(defex):
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(price="0.53")
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.60", "qty": "2"})
+    assert bad is not None and bad["mandate_present"] is False
+
+
+def test_an_exposure_increasing_mandate_cannot_bypass_the_gate(defex):
+    """A mandate on the side we ALREADY hold adds exposure. The mandate is
+    valid and still must not exempt: authorization is not direction."""
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(side="DOWN", price="0.45", qty="2")
+    bad = x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                              {"price": "0.45", "qty": "2"})
+    # adding to the held side creates no matched quantity, so the gate is
+    # never reached -- and nothing is exempted either
+    assert bad is None
+    assert "defensive_on_unattested_basis" not in x.store.state
+
+
+def test_a_position_reversing_mandate_cannot_bypass_the_gate(defex):
+    """held DOWN 2, buying UP 5 crosses zero into fresh UP exposure. The
+    mandate is valid and exact; `no_reversal` is what refuses."""
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(side="UP", price="0.53", qty="5")
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "5"})
+    assert bad is not None and bad["why"] == "BASIS_UNATTESTED"
+    assert bad["mandate_present"] is True       # authorized ...
+    assert bad["no_reversal"] is False          # ... but reversing
+    assert bad["exempt"] is False
+    assert "defensive_on_unattested_basis" not in x.store.state
+
+
+def test_the_defensive_flag_off_means_no_mandate_at_all(defex, monkeypatch):
+    from src import l5_defensive_completion as DC
+    x, t, H, E = defex
+    monkeypatch.delenv(DC.DEFENSIVE_ENABLED_ENV, raising=False)
+    x._defensive_mandate = _mandate()
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "2"})
+    assert bad is not None and bad["mandate_present"] is False
+
+
+# ---- 4. unknown basis is recorded and cannot read as confirmed profit
+
+def test_the_record_forbids_reporting_it_as_realized_against_a_known_basis(
+        defex):
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate()
+    x.pair_cost_refusal(SLUG, {"side": "UP"}, {"price": "0.53", "qty": "2"})
+    lab = x.store.state["defensive_on_unattested_basis"][0]["labels"]
+    assert "NOT measured" in lab
+    assert "must not be reported as realized" in lab
+
+
+def test_the_unknown_basis_key_survives_in_the_durable_ledger(defex):
+    x, t, H, E = defex
+    assert "%s|DOWN" % SLUG in x.store.state["leg_cost_basis_unknown"]
+    x._defensive_mandate = _mandate()
+    x.pair_cost_refusal(SLUG, {"side": "UP"}, {"price": "0.53", "qty": "2"})
+    # permitting the unwind does NOT clear the unknown-basis marker
+    assert "%s|DOWN" % SLUG in x.store.state["leg_cost_basis_unknown"]
+    assert x.store.basis_attestation(SLUG, "DOWN")["ok"] is False
+
+
+def test_the_exception_is_persisted_not_only_in_memory(defex):
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate()
+    x.pair_cost_refusal(SLUG, {"side": "UP"}, {"price": "0.53", "qty": "2"})
+    import json as _json
+    on_disk = _json.load(open(x.store.path))
+    assert on_disk["defensive_on_unattested_basis"][0]["market"] == SLUG
+
+
+# ---- 5. every order still passes the submission-boundary controls
+
+def test_the_basis_gate_sits_at_the_single_submission_boundary():
+    """There is exactly ONE transport.submit call site and exactly ONE
+    pair_cost_refusal call site, and the refusal precedes the submit. The
+    ceiling was moved there after the 1215z loss precisely so no path could
+    bypass it; the basis gate inherits that property."""
+    import inspect
+    from src import l5_live_execution as E
+    src = inspect.getsource(E)
+    assert src.count("self.transport.submit(") == 1
+    assert src.count("self.pair_cost_refusal(") == 1
+    assert src.index("self.pair_cost_refusal(") < \
+        src.index("self.transport.submit(")
+
+
+def test_the_gate_runs_after_the_mandate_is_resolved():
+    import inspect
+    from src import l5_live_execution as E
+    src = inspect.getsource(E.FaithfulExecutor.pair_cost_refusal)
+    assert src.index("_mand = self.defensive_mandate_covers(") < \
+        src.index("basis_attestation(")
+
+
+def test_an_exempted_unwind_still_answers_to_the_defensive_ceiling(defex):
+    """The exemption is only from the BASIS gate. A mandated order still
+    answers to DEFENSIVE_PAIR_CEILING, so a pair above it is refused."""
+    from src import l5_defensive_completion as DC
+    x, t, H, E = defex
+    x._defensive_mandate = _mandate(price="0.99", qty="2")
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.99", "qty": "2"})
+    # 0.45 + 0.99 = 1.44 > the 1.20 defensive ceiling
+    assert D("0.4500") + D("0.99") > DC.DEFENSIVE_PAIR_CEILING
+    assert bad is not None and bad["why"] == "PAIR_COST_ABOVE_CEILING"
+
+
+def test_openings_are_untouched_by_the_whole_mechanism(defex):
+    """A first leg creates no matched quantity and never reaches the gate, so
+    an incoherent book cannot stop us opening elsewhere."""
+    x, t, H, E = defex
+    other = "cpc-btc-updown-15m-2026-11-02-2315z"
+    assert x.pair_cost_refusal(other, {"side": "UP"},
+                               {"price": "0.40", "qty": "2"}) is None

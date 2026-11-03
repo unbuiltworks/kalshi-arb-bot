@@ -6501,19 +6501,81 @@ class FaithfulExecutor:
         # FAIL CLOSED, and say which leg and why. An unreadable attestation
         # refuses too: a basis we cannot vouch for is not a basis we may
         # price a pair from.
+        #
+        # AND IT MUST NOT BLOCK A MANDATED DEFENSIVE UNWIND. Found by
+        # auditing my own change rather than by a test: the first version ran
+        # this gate BEFORE `_mand` below, so an owner-mandated unwind on an
+        # unattested book was refused -- failing closed in the
+        # RISK-INCREASING direction, by trapping us in the exact position the
+        # mandate exists to escape. An unwind reduces directional exposure
+        # whatever we paid, so the sunk basis cannot be a reason to forbid
+        # it. A PROFIT-SEEKING completion priced off fiction is a different
+        # thing and stays refused.
+        #
+        # The mandated case is allowed and RECORDED, so the resulting P&L is
+        # labelled as resting on a basis no fill ever stated rather than
+        # passing as measured.
+        _mand = self.defensive_mandate_covers(market, dec, tr)
         try:
             _att = {_s: self.store.basis_attestation(market, _s)
                     for _s in (UP, DOWN)}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            return {"why": "BASIS_ATTESTATION_UNREADABLE:%s"
-                           % type(exc).__name__}
+            if not _mand:
+                return {"why": "BASIS_ATTESTATION_UNREADABLE:%s"
+                               % type(exc).__name__}
+            _att = {}
         _bad = [a for a in _att.values() if not a.get("ok")]
+        # THE EXCEPTION NEEDS BOTH HALVES, and the mandate alone is not the
+        # second one. `defensive_mandate_covers` proves AUTHORIZATION -- the
+        # flag is on, the mandate names this market, side, price and quantity
+        # exactly, and it has not expired -- so an expired or oversized
+        # mandate already yields None there. It proves nothing about
+        # DIRECTION. `reduces` and `no_reversal` are the same two conditions
+        # `completion_pair_rescue` enforces below, and they run on the
+        # non-mandated branch only, so without them here a mandate would be a
+        # standing permission to trade on a basis nothing attested.
+        _reduces = False
+        _no_reversal = False
         if _bad:
+            try:
+                _reduces = bool(D(str(held[other])) > D(str(held[side])))
+                _no_reversal = bool(D(str(after[side]))
+                                    <= D(str(held[other])))
+            except BaseException:                              # noqa: BLE001
+                _reduces = _no_reversal = False     # unreadable -> refuse
+        _exempt = bool(_bad and _mand and _reduces and _no_reversal)
+        if _exempt:
+            # allowed, because it is authorized AND demonstrably reducing --
+            # but never silently
+            try:
+                self.store.state.setdefault(
+                    "defensive_on_unattested_basis", []).append({
+                        "market": market, "side": side, "price": str(px),
+                        "qty": str(qty),
+                        "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                        "attestation": _att,
+                        "mandate": {"expires_at": (None if not _mand else
+                                                   _mand.get("expires_at"))},
+                        "reduces": _reduces, "no_reversal": _no_reversal,
+                        "labels": ("a DEFENSIVE unwind was permitted against "
+                                   "inventory whose cost basis no fill "
+                                   "stated. The exposure reduction is real; "
+                                   "the P&L attributed to it is NOT measured "
+                                   "and must not be reported as realized "
+                                   "against a known basis.")})
+                self.store.save()
+            except BaseException:                              # noqa: BLE001
+                pass
+        elif _bad:
             return {"why": "BASIS_UNATTESTED",
                     "legs": _bad,
                     "attestation": _att,
+                    "mandate_present": bool(_mand),
+                    "reduces": _reduces,
+                    "no_reversal": _no_reversal,
+                    "exempt": False,
                     "this_order": {"side": side, "price": str(px),
                                    "qty": str(qty)},
                     "labels": ("a completion is priced by dividing confirmed "
@@ -6522,9 +6584,12 @@ class FaithfulExecutor:
                                "here. The quantity is real; the PRICE is "
                                "not, and a hedge sized off an invented price "
                                "is not a hedge. Reconcile the basis against "
-                               "the venue first -- this refusal is the "
-                               "conservative direction and leaves every "
-                               "risk-reducing path open.")}
+                               "the venue first. This refusal binds "
+                               "PROFIT-SEEKING completions only: a mandated "
+                               "defensive unwind is permitted and recorded "
+                               "in `defensive_on_unattested_basis`, and "
+                               "cancellation never comes through this gate "
+                               "at all.")}
         cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
         eff = cost_after / matched_after
         # THE DEFENSIVE CEILING IS SEPARATE AND LOOSER, AND ONLY HERE.
@@ -6534,7 +6599,8 @@ class FaithfulExecutor:
         # $1.00 can still be the smaller loss, so it gets its own ceiling
         # (1.20 == at most $0.20 a share of realized loss) and only for the
         # exact order a live mandate names.
-        _mand = self.defensive_mandate_covers(market, dec, tr)
+        # `_mand` was resolved above, before the basis gate, because that
+        # gate must not refuse a mandated unwind.
         cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost())
         if eff <= cap:
             return None

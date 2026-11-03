@@ -3105,3 +3105,64 @@ cancel-verification reliability 2026-11-03 (DISARMED)
 
   Parity 80 ids / eb672d14b4baf439, 15,579 passed. 19 deterministic tests
   for the fix. Nothing armed, no order submitted.
+
+2026-11-03  completion placement + basis attestation (DISARMED, FLAGS OFF)
+
+  WHY A DEPLOY IS NEEDED AT ALL: the previous three commits touched no
+  watched file, so Railway reported them SKIPPED and the running image
+  stayed at 51542dad. This entry exists to build the current tree.
+
+  TWO FLAGS SHIP OFF, so the deployed decision path is unchanged:
+
+    L5_TS_COMPLETION_AT_TOUCH   unset -> the complement keeps the OPENING
+                                depth, which is today's behaviour. Set to 1
+                                and the complement rests AT the touch via
+                                BC.completion_depth_ticks() (0). The venue
+                                record of 2026-11-02 22:45:36.749Z is why:
+                                own 0.5100 submitted into a 0.5300 bid, two
+                                ticks behind the whole visible queue, pair
+                                0.9600, cleared every economic gate, never
+                                filled. l5_book_completion had already fixed
+                                this for ITS path; the two-sided path, which
+                                is the one that submits, kept reusing
+                                L5_TS_DEPTH_TICKS.
+
+    L5_COMPLETION_PAIR_CEILING  unset -> 1.00, which is the bound
+                                completion_pair_rescue ALREADY enforced. 0.96
+                                was never the completion bound. Clamped to
+                                [max_pair_cost(), 1.00], so the knob can only
+                                tighten toward the opening cap and can never
+                                exceed redemption. Setting 0.99 TIGHTENS.
+
+  ONE BEHAVIOUR CHANGE SHIPS ON BY DESIGN, and it only ever refuses:
+
+    BASIS_UNATTESTED            pair_cost_refusal now fails closed when a leg
+                                whose basis no fill ever stated would be
+                                paired. adopt_venue_position books an adopted
+                                net at UNKNOWN_PRICE_WORST_CASE -- $1 a share
+                                -- and leg_cost_basis_unknown was read in
+                                five REPORTING paths and consulted by NO
+                                gate. The live 2300z book held 3.3600 UP at
+                                an average own cost of 0.605, exactly
+                                (0.21 + 1.00)/2. It binds ONLY orders that
+                                create new matched quantity, so openings and
+                                cancellation are untouched.
+
+    the exception               an owner-mandated DEFENSIVE unwind is
+                                permitted on an unattested basis, because
+                                refusing one traps us in the position the
+                                mandate exists to escape. It requires BOTH
+                                an exact unexpired mandate AND reduces AND
+                                no_reversal, and every instance is persisted
+                                to defensive_on_unattested_basis with its
+                                attestation and a label forbidding the P&L
+                                from being reported as realized against a
+                                known basis.
+
+  Unchanged: 0.96 OPENING cap, 300s cancellation margin, exact-order
+  cancellation, partial-fill reconciliation, orders_uncertain fail-closed,
+  watchdog, residual cap, daily and cumulative loss limits, settlement-only
+  realized labelling. HALT active, armed false, no orders.
+
+  Two new observed-not-graded verifier rows: completion_pair_ceiling and
+  ts_completion_at_touch.
