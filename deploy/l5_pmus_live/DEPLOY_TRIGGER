@@ -3076,3 +3076,32 @@ spent-leg plan judgement 2026-11-03 (disarmed)
   Diagnostic correctness in the money path; adds no exposure, forces no
   completion, loosens no limit. Both continuous flags stay OFF, HALT stays
   set, nothing armed. Parity 80 / eb672d14b4baf439.
+
+cancel-verification reliability 2026-11-03 (DISARMED)
+  Owner-approved: deploy e1758566 disarmed. HALT stays active, submission
+  disabled, L5_COMPLETION_REQUOTE NOT enabled, $0.96 cap unchanged, 300s
+  cancellation margin unchanged, every risk limit unchanged.
+
+  THE FIX. deadman's cancel VERIFICATION is retried, bounded at 3 attempts
+  with (0.20, 0.40)s backoff. Only the idempotent GET /v1/order/{id} repeats;
+  the cancel itself is still sent EXACTLY ONCE, because by then a replacement
+  may hold the same slot. A non-terminal read is retried too, which is what
+  resolves read-after-write lag. Exhausting the attempts leaves the order
+  unverified or still_open with the book uncertain, exactly as before.
+
+  WHAT ELSE IS IN THIS ARTIFACT, identified as instructed. Five src files
+  differ from the deployed 2a545a9d; only TWO can affect the runtime:
+    l5_live_execution.py      THE REVIEWED FIX (active)
+    l5_runtime_config_verify  one observed-not-graded row,
+                              completion_requote_enabled. Reporting only:
+                              PASS, failed and checked are identical with
+                              the switch on or off, asserted by test.
+    l5_continuous_inventory   inventory_epoch() added, but unreachable: the
+                              seam is flag-gated and both flags are OFF, and
+                              action_key without an epoch is byte-identical
+                              (verified: l5ci|m|UP|0.47).
+    l5_cross_shadow           taker theta 0.06 -> 0.0695. NOT in the image
+    pmus_cross_shadow_live    COPY list (grep count 0), so neither ships.
+
+  Parity 80 ids / eb672d14b4baf439, 15,579 passed. 19 deterministic tests
+  for the fix. Nothing armed, no order submitted.
