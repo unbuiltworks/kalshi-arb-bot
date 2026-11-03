@@ -62,54 +62,17 @@ OPEN, ADD, REDUCE, REVERSE = "OPEN", "ADD", "REDUCE", "REVERSE"
 KEY_PREFIX = "l5ci"
 
 
-#: L5'S OWN IMBALANCE OPTIMUM, measured, and why it is a BAND not a ceiling.
+#: THE EX-POST IMBALANCE BAND HAS BEEN REMOVED.
 #:
-#: Reconstructed from 63,686 L5 actions across 527 windows, scoring each
-#: window by its PEAK |imbalance| against that window's realized P&L. The
-#: relationship is not monotone and the turn is sharp:
+#: An earlier revision derived an ADD budget from a density fitted to each
+#: L5 window's PEAK |imbalance|. That quantity is only knowable AFTER the
+#: window ends, so a threshold fitted on it cannot be applied at decision
+#: time -- it is look-ahead, and the owner excluded it from promotion.
 #:
-#:     peak |imb|        n   mean P&L   win%   mean cash
-#:       1.0 -   30.8   52     +1.39     54       $46
-#:      70.4 -  152.2   52     +8.20     60      $266
-#:     262.1 -  308.5   52    +22.44     71    $1,415
-#:     309.4 -  352.9   52    +45.02     79    $1,746   <- optimum
-#:     358.2 -  426.1   52    -14.83     50    $2,139   <- collapse
-#:     570.3 - 1180.3   59    -71.24     15    $1,890
-#:
-#: Q3 against Q4 is t = +4.32, so the turn is not noise. Carrying temporary
-#: directional exposure DOES improve cumulative outcomes -- up to roughly
-#: 350 contracts on ~$1,750 of working cash, beyond which the win rate
-#: falls to 15% and the mean to -$71. L5's own cumulative -$1,114.64 comes
-#: entirely from the windows where it let imbalance run past that turn.
-#:
-#: SO THE POLICY IS A DENSITY, NOT A COUNT. The optimum is 0.1775 to 0.2022
-#: contracts per dollar of working cash. On our $12 envelope that is 2.13 to
-#: 2.43 contracts -- which is TIGHTER than the 5-contract residual cap we
-#: already run. Proportional to capital we have been permitting about twice
-#: L5's optimal density and about twice its COLLAPSE density, so the
-#: evidence says tighten toward the band, not loosen toward more exposure.
-#:
-#: HONEST LIMIT OF THIS EVIDENCE. Selecting windows by their realized peak
-#: imbalance selects partly on the outcome: a window that went badly is one
-#: where imbalance had reason to grow. These bands therefore describe where
-#: L5's good and bad windows LIVED; they are not a causal estimate that
-#: capping would have produced those returns, because a cap changes the
-#: trajectory. They motivate the band; they do not prove it.
-L5_IMBALANCE_DENSITY_LO = D("0.1775")
-L5_IMBALANCE_DENSITY_HI = D("0.2022")
-
-
-def imbalance_band(cash_cap: D) -> D:
-    """The largest |imbalance| justified by this much working cash.
-
-    Taken at the TOP of L5's optimal density band, because the collapse
-    begins immediately above it and the cost of being over is far larger
-    than the cost of being under: +45.02 at the optimum against -14.83 one
-    decile higher, and -71.24 at the extreme.
-    """
-    return (D(cash_cap) * L5_IMBALANCE_DENSITY_HI).quantize(D("0.01"))
-
-
+#: `decide` therefore takes `imbalance_cap` EXPLICITLY and defaults it to
+#: ZERO, which means no ADD. A caller that wants to permit a temporary
+#: imbalance must state the bound itself, from something it can know before
+#: the order, and the hard residual cap still wins over whatever it states.
 def classify(up_q: D, dn_q: D, side: str, qty: D) -> str:
     """L5's own action vocabulary, from CURRENT realized inventory.
 
@@ -163,7 +126,7 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
            clip: D = D("2.52"), depth_ticks: int = 2,
            cash_spent: D = D(0), cash_cap: D = D("12"),
            may_open: bool = True, residual_cap: D = D(5),
-           imbalance_cap: Optional[D] = None,
+           imbalance_cap: D = D(0),
            pair_ceiling: Optional[D] = None,
            complete_ceiling: D = D("1.00")) -> Dict[str, Any]:
     """The whole decision, recomputed. Returns an action or a named refusal.
@@ -236,19 +199,16 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
         aown = u if aside == UP else d
         held_cost = (up_cost if resid > 0 else dn_cost)
         held_qty = (up_q if resid > 0 else dn_q)
-        # THE IMBALANCE BAND, not a basis test.
+        # AN EXPLICIT BOUND, defaulting to zero.
         #
         # Requiring every ADD to LOWER the average basis made ADD
-        # unreachable in practice -- it fires only when the market has
-        # already moved our way, and when it has, a REDUCE is available and
-        # takes priority. L5's dominant action, 52.6% of its 63,686, never
-        # occurred. More importantly the test was the wrong question: a
-        # temporary imbalance is justified by its SIZE relative to working
-        # capital, which is what the measured band above scores, and not by
-        # whether this particular clip happens to average the basis down.
-        band = (imbalance_band(cash_cap) if imbalance_cap is None
-                else D(imbalance_cap))
-        band = min(band, D(residual_cap))     # the hard cap always wins
+        # unreachable in practice: it fires only when the market has already
+        # moved our way, and when it has, a REDUCE is available and takes
+        # priority. So the basis test is gone -- but it is NOT replaced by a
+        # threshold fitted to an outcome. The caller states the bound, or
+        # gets no ADD.
+        # STATED, never derived. Zero means no ADD.
+        band = min(D(imbalance_cap), D(residual_cap))
         if held_qty > 0 and D(held_cost) > 0:
             basis = D(held_cost) / D(held_qty)
             q = D(clip)
@@ -266,9 +226,8 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
                         "imbalance_band": band,
                         "key": action_key(market, aside, aown, q),
                         "labels": ("an ADD is permitted because the imbalance "
-                                   "it creates stays inside the band L5's own "
-                                   "record scores as economically justified, "
-                                   "scaled to this account's working cash")}
+                                   "it creates stays inside the bound the "
+                                   "CALLER stated; nothing here derives one")}
         # BOTH REASONS ARE TRUE, so both are reported. The completion
         # refusal outranks, because a held leg that cannot be completed is
         # the more consequential fact, but the band state is what says

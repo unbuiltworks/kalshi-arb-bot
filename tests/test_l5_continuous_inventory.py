@@ -226,7 +226,7 @@ def test_an_unquotable_book_is_refused():
 
 
 # ================================================ ADD is economically gated
-def test_an_ADD_that_would_not_improve_the_basis_is_refused():
+def test_an_ADD_that_would_not_improve_the_basis_is_refused_OLD_NAME():
     """Measured: L5's own ADDs carried -0.0154/contract of alpha. An ADD is
     permitted here only when it lowers the average basis, which is what
     makes a cheaper pair reachable."""
@@ -249,20 +249,37 @@ def test_the_residual_cap_makes_an_ADD_impossible_at_the_deployed_clip():
 
 
 # ================= the capital-scaled imbalance band (campaign evidence)
-def test_the_band_scales_with_working_cash():
-    """L5's optimum is a DENSITY -- 0.1775 to 0.2022 contracts per dollar of
-    working cash -- not a contract count, so it must scale."""
-    assert CI.imbalance_band(D("12")) == D("2.43")
-    assert CI.imbalance_band(D("20")) == D("4.04")
-    assert CI.imbalance_band(D("35")) == D("7.08")
+def test_the_ex_post_band_helper_is_GONE():
+    """It derived an ADD budget from each window's PEAK |imbalance|, which is
+    only knowable AFTER the window ends. Look-ahead; excluded from
+    promotion, and removed so it cannot be reintroduced by accident."""
+    assert not hasattr(CI, "imbalance_band")
+    assert not hasattr(CI, "L5_IMBALANCE_DENSITY_HI")
+    assert not hasattr(CI, "L5_IMBALANCE_DENSITY_LO")
 
 
-def test_the_band_sits_at_the_top_of_L5s_optimal_density():
-    """Taken at the TOP because the collapse begins immediately above it:
-    +45.02 mean at the optimum decile against -14.83 one decile higher."""
-    assert CI.L5_IMBALANCE_DENSITY_LO < CI.L5_IMBALANCE_DENSITY_HI
-    assert CI.imbalance_band(D("100")) == (
-        CI.L5_IMBALANCE_DENSITY_HI * D("100")).quantize(D("0.01"))
+def test_the_default_is_NO_ADD_when_the_caller_states_nothing():
+    """No bound is derived from anything. Silence means no ADD."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"), complete_ceiling=D("0.40"))
+    assert not r["ok"]
+    assert r["add_available"] is False
+    assert D(r["imbalance_band"]) == D(0)
+
+
+def test_an_ADD_is_allowed_only_when_the_caller_states_a_bound():
+    """And then it needs no basis improvement -- the basis test made ADD
+    unreachable in practice. But the bound is STATED, never fitted."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"), imbalance_cap=D("3"),
+            complete_ceiling=D("0.40"))
+    assert r["ok"] and r["action"] == CI.ADD
+    assert D(r["basis_after"]) > D(r["basis_before"])   # basis got WORSE
+
+
+def test_a_stated_ADD_is_sized_down_to_land_on_the_stated_bound():
+    r = dec(up_q=D("2.00"), up_cost=D("0.60"), clip=D("2.52"),
+            imbalance_cap=D("2.40"), complete_ceiling=D("0.40"))
+    assert r["ok"] and r["action"] == CI.ADD
+    assert D(r["imbalance_after"]) == D("2.40")
 
 
 def test_our_five_contract_cap_already_exceeds_L5s_collapse_density():
@@ -274,20 +291,14 @@ def test_our_five_contract_cap_already_exceeds_L5s_collapse_density():
     assert ours > collapse * 2
 
 
-def test_an_ADD_is_allowed_inside_the_band_without_improving_the_basis():
-    """The old gate required a basis improvement, which made ADD -- L5's
-    dominant action at 52.6% of 63,686 -- unreachable in practice."""
-    r = dec(up_q=D("1.00"), up_cost=D("0.30"),
-            complete_ceiling=D("0.40"))      # force REDUCE to refuse
-    assert r["ok"] and r["action"] == CI.ADD
-    assert D(r["basis_after"]) > D(r["basis_before"])   # basis got WORSE
-
-
-def test_an_ADD_is_sized_down_to_land_exactly_on_the_band(probe=None):
-    r = dec(up_q=D("2.00"), up_cost=D("0.60"), clip=D("2.52"),
-            complete_ceiling=D("0.40"))
-    assert r["ok"] and r["action"] == CI.ADD
-    assert D(r["imbalance_after"]) == CI.imbalance_band(D("12"))
+def test_without_a_stated_bound_no_ADD_is_offered_at_all():
+    """Replaces two tests that asked for an ADD with no bound stated and
+    expected the removed ex-post band to supply one."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"), complete_ceiling=D("0.40"))
+    assert not r["ok"] and r["add_available"] is False
+    r2 = dec(up_q=D("2.00"), up_cost=D("0.60"), clip=D("2.52"),
+             complete_ceiling=D("0.40"))
+    assert not r2["ok"] and r2["add_available"] is False
 
 
 def test_the_hard_residual_cap_always_wins_over_the_band():
