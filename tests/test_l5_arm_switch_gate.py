@@ -107,7 +107,6 @@ def test_the_gate_does_not_read_the_latch_itself():
     ("live_orders", "LIVE_ORDERS_NOT_EMPTY"),
     ("pending_terminal", "PENDING_TERMINAL_NOT_EMPTY"),
     ("quarantine", "QUARANTINE_NOT_EMPTY"),
-    ("submitted", "SUBMITTED_NOT_EMPTY"),
 ])
 def test_every_order_book_blocks_on_its_own(book, blocker):
     """Each is written by a different path and each holds an order whose
@@ -124,6 +123,50 @@ def test_the_books_are_reported_even_when_they_pass():
     out = ready()
     for book in G.ORDER_BOOKS:
         assert out["evidence"][book] == {"count": 0, "keys": []}
+
+
+# ------------------------------- `submitted` is NOT an open-order book
+
+def test_SUBMITTED_IS_A_LIFETIME_LEDGER_AND_MUST_NOT_BLOCK():
+    """THE DEFECT THE FIRST PRODUCTION EMISSION CAUGHT, in my own gate.
+
+    At 2026-11-03T19:42:11Z the probe returned
+    blockers ["HALT_NOT_ASSERTED", "SUBMITTED_NOT_EMPTY"] with
+    submitted.count = 22848 while live_orders, pending_terminal, quarantine
+    and markets_with_exposure were ALL empty. So the gate could never have
+    passed again and the arm switch would have been blocked for ever.
+
+    `submitted` is an append-only idempotency ledger: `record_submit` writes
+    it for every coid ever sent, nothing pops or deletes from it, it backs
+    `already_submitted(coid)` duplicate suppression, and it lives on a
+    volume that outlives the process. Its size is a lifetime count.
+    """
+    st = clean_state(W1, W2)
+    st["submitted"] = {"l5f-%026d" % i: {"market": W1} for i in range(5000)}
+    out = ready(state=st)
+    assert out["ok"] is True, out["blockers"]
+    assert "SUBMITTED_NOT_EMPTY" not in out["blockers"]
+    assert out["evidence"]["submitted"]["count"] == 5000
+    assert out["evidence"]["submitted"]["blocking"] is False
+    assert "submitted" not in G.ORDER_BOOKS
+    assert "submitted" in G.EVIDENCE_ONLY_BOOKS
+
+
+def test_excluding_submitted_loses_no_signal():
+    """`record_submit` writes `submitted` and `live_orders` in the SAME call
+    before one save, so a coid cannot be in one without the other; an order
+    that leaves live_orders unresolved lands in pending_terminal; and a set
+    we cannot enumerate is caught by orders_uncertain. Pinned on the source
+    so a future change to record_submit cannot quietly break the argument."""
+    import inspect
+    from src import l5_live_execution as LE
+    src = inspect.getsource(LE.InventoryStore.record_submit)
+    assert 'setdefault("submitted", {})[coid]' in src
+    assert 'setdefault("live_orders", {})[coid]' in src
+    assert "self.save()" in src
+    whole = inspect.getsource(LE)
+    for prune in ('submitted"].pop', 'pop("submitted"'):
+        assert prune not in whole, prune
 
 
 # --------------------------------------------------------- uncertainty flag

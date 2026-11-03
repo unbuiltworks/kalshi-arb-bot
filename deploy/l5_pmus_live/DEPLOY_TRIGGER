@@ -3302,3 +3302,23 @@ blocked NOT_ARMED), live_orders 0, pending_terminal [], cash_deployed [].
 Owner authorization remains limited to deploying and observing the
 read-only probe: no live trading, no arming, no campaign approval, no
 change to any financial risk limit. Executor stays DISARMED, at-touch OFF.
+
+--- 2026-11-03T20:00Z ---
+Fix a defect the probe's FIRST production emission found in the probe.
+
+At 19:42:11Z it returned blockers ["HALT_NOT_ASSERTED",
+"SUBMITTED_NOT_EMPTY"] with submitted.count = 22848 while live_orders,
+pending_terminal, quarantine and markets_with_exposure were ALL empty. So
+the gate could never have passed again and the arm switch would have been
+blocked for ever.
+
+`submitted` is an append-only IDEMPOTENCY ledger, not an open-order book:
+record_submit writes it for every coid ever sent, nothing pops it, it backs
+already_submitted() duplicate suppression, and it lives on a volume that
+outlives the process. It is now reported as evidence and cannot block.
+
+Nothing is lost: record_submit writes `submitted` and `live_orders` in the
+same call before one save, an order leaving live_orders unresolved lands in
+pending_terminal, and an unenumerable set is caught by orders_uncertain.
+
+Read-only. Executor stays DISARMED, at-touch OFF, no orders.

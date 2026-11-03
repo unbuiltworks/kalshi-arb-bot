@@ -41,9 +41,33 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 #: the row-books that must be empty. Each is written by a different path and
-#: each holds an order whose fate is not yet settled, so any one of them
+#: each holds an order whose fate is NOT YET SETTLED, so any one of them
 #: non-empty means unresolved execution state would cross the restart.
-ORDER_BOOKS = ("live_orders", "pending_terminal", "quarantine", "submitted")
+#:
+#:   live_orders       -- resting and still fillable
+#:   pending_terminal  -- left the open list and still owes this market a fill
+#:   quarantine        -- an order whose fate was deliberately set aside
+ORDER_BOOKS = ("live_orders", "pending_terminal", "quarantine")
+
+#: `submitted` IS NOT ONE OF THEM, and the first production emission is why.
+#: It came back with 22,848 entries while live_orders, pending_terminal,
+#: quarantine and markets_with_exposure were ALL empty -- so the gate
+#: reported SUBMITTED_NOT_EMPTY and could never have passed again.
+#:
+#: `submitted` is an append-only IDEMPOTENCY ledger, not a set of open
+#: orders. `record_submit` writes it for every client order id ever sent,
+#: nothing anywhere pops or deletes from it, it is the backing store for
+#: `already_submitted(coid)` duplicate suppression, and it lives on a volume
+#: that outlives the process. Its size is the account's lifetime submission
+#: count.
+#:
+#: Nothing is lost by excluding it. `record_submit` writes `submitted` and
+#: `live_orders` in the SAME call before a single save, so a coid cannot
+#: exist in one without the other; an order that leaves `live_orders`
+#: unresolved lands in `pending_terminal`; and a set we cannot enumerate at
+#: all is caught by `orders_uncertain`. It is still REPORTED as evidence,
+#: because an operator may want the number -- it just cannot block.
+EVIDENCE_ONLY_BOOKS = ("submitted",)
 
 
 def _state(store: Any) -> Optional[Mapping[str, Any]]:
@@ -94,6 +118,22 @@ def switch_readiness(store: Any, *,
         evidence[book] = {"count": n, "keys": keys}
         if n:
             blockers.append("%s_NOT_EMPTY" % book.upper())
+
+    # 2b. reported, never blocking. See EVIDENCE_ONLY_BOOKS.
+    for book in EVIDENCE_ONLY_BOOKS:
+        try:
+            rows = st.get(book) or {}
+            evidence[book] = {
+                "count": len(rows) if isinstance(rows, Mapping) else 0,
+                "blocking": False,
+                "note": ("append-only idempotency ledger of every client "
+                         "order id ever submitted; never pruned, so its size "
+                         "is a lifetime count and not open-order state")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            evidence[book] = {"count": None, "blocking": False,
+                              "error": type(exc).__name__}
 
     # 3. the executor's own uncertainty flag. A restart while the order set
     #    is uncertain is the one case where we cannot even enumerate what
