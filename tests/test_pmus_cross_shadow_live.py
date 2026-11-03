@@ -522,24 +522,36 @@ def test_20_and_21_both_confirmed_costs_are_charged():
         - D(econ["maker_rebate_forgone"]))
 
 
-def test_21b_the_forgone_rebate_is_a_real_cost_that_can_flip_the_answer():
-    """Charging only the taker fee would promote a cross that loses money.
-    Here the fee alone leaves it positive and the rebate we give up by
-    crossing sinks it -- which is precisely why the .98/.99/1.00 arms are
-    dead and are not carried."""
+def test_21b_the_forgone_rebate_is_a_real_cost_even_when_not_pivotal():
+    """The forgone maker rebate is a real cost, and the .98/.99/1.00 arms are
+    dead.
+
+    RE-PINNED 2026-11-03. At the stale theta of 0.06 this arm was positive on
+    the fee alone and only the forgone rebate sank it -- which is what the
+    name describes. At the venue-verified 0.0695 the TAKER FEE ALONE already
+    sinks it, so the conclusion is reached sooner and more firmly, by a
+    different route. The rebate is still a real cost and still makes it
+    worse; it is simply no longer the term that decides this cell."""
     econ = xs.cross_economics(contracts=D("40"), taker_price=D("0.5050"),
                               held_avg_cost=D("0.4785"), maker_price=D("0.50"))
     gross, fee = D(econ["gross_locked_pair_pnl"]), D(econ["confirmed_taker_fee"])
     forgone = D(econ["maker_rebate_forgone"])
     assert econ["pair_cost"] == "0.9835"           # inside a dead arm, not ours
-    assert gross - fee > 0, "fee alone leaves it positive"
-    assert gross - fee - forgone < 0, "the forgone rebate sinks it"
+    assert gross - fee < 0, "at the verified theta the fee alone sinks it"
+    assert gross - fee - forgone < 0, "and the forgone rebate sinks it further"
     assert econ["net_positive_after_confirmed_costs"] is False
-    # and dropping the rebate from the model would have flipped the verdict
+    # AND THE PART THAT CHANGED. At theta 0.06 dropping the rebate from the
+    # model FLIPPED this verdict to positive, which is what made this cell a
+    # demonstration that the rebate can decide an arm. At the verified 0.0695
+    # it no longer flips: the fee alone is already larger than the gross edge,
+    # so the cell is refused either way. Recorded as the honest outcome rather
+    # than replaced with a cell chosen to keep the old conclusion.
     without = xs.cross_economics(contracts=D("40"), taker_price=D("0.5050"),
                                  held_avg_cost=D("0.4785"), maker_price=None)
     assert without["maker_rebate_forgone"] == "0"
-    assert without["net_positive_after_confirmed_costs"] is True
+    assert without["net_positive_after_confirmed_costs"] is False
+    # the rebate is still a real, non-zero cost; it is simply not pivotal here
+    assert forgone > 0
 
 
 def test_22_the_net_after_both_costs_gate_refuses_a_real_0_97_row():
@@ -570,9 +582,15 @@ def test_22a_a_net_that_rounds_away_is_not_a_gain():
 def test_22d_at_the_0_97_arm_the_ceiling_does_almost_all_the_work():
     """An honest statement of what the net gate is worth here: across a grid
     of clips and prices at a pair of exactly 0.97, the confirmed costs are
-    below the gross edge except in a razor-thin rounding band. The 0.97
-    ceiling nearly implies net-positive on its own -- so the net gate is a
-    backstop, and no report may present it as the thing doing the filtering."""
+    below the gross edge except in a thin rounding band.
+
+    RE-PINNED 2026-11-03, AND THE CLAIM IS WEAKER THAN IT WAS. At the stale
+    theta of 0.06 exactly ONE grid cell bound. At the venue-verified 0.0695
+    SIX bind -- the sub-contract clips 0.3333 and 0.33334 at prices 0.4, 0.5
+    and 0.505. So the ceiling does LESS of the work than this test used to
+    assert, and the net gate correspondingly more. Still a backstop at
+    ordinary clip sizes, and still not the thing doing the filtering there,
+    but the honest figure is six cells and not one."""
     binding = []
     for q in ("0.01", "0.02", "0.1", "0.3333", "0.33334", "0.5", "1", "1.72",
               "2", "5", "40", "1000"):
@@ -584,7 +602,15 @@ def test_22d_at_the_0_97_arm_the_ceiling_does_almost_all_the_work():
                                       held_avg_cost=avg, maker_price=D(p))
             if not econ["net_positive_after_confirmed_costs"]:
                 binding.append((q, p, econ["net_locked_pair_pnl"]))
-    assert binding == [("0.33334", "0.5", "0.0000")], binding
+    assert binding == [("0.3333", "0.4", "-0.0000"),
+                       ("0.3333", "0.5", "-0.0000"),
+                       ("0.3333", "0.505", "-0.0000"),
+                       ("0.33334", "0.4", "0.0000"),
+                       ("0.33334", "0.5", "0.0000"),
+                       ("0.33334", "0.505", "0.0000")], binding
+    # and the honest reading: every binding cell is a SUB-CONTRACT clip, so
+    # at any size we actually trade the ceiling still carries the decision.
+    assert all(D(q) < D(1) for q, _p, _n in binding)
 
 
 def test_22b_the_fee_math_agrees_with_the_frozen_pre_registered_module():

@@ -24,12 +24,19 @@ OK = dict(held_residual=D("-8"), model_relation="complete", quote_age_s=3.0,
 
 # ----------------------------------------------- the confirmed fee schedule
 def test_the_fee_is_the_charge_not_the_formula_value():
-    """THE ONE THAT MATTERS AT OUR SIZE. 0.06 * 1.72 * 0.5 * 0.5 = $0.0258
+    """THE ONE THAT MATTERS AT OUR SIZE. 0.0695 * 1.72 * 0.5 * 0.5 = $0.029885
     and the venue charges $0.03. Reporting the formula value would
-    understate every cross by a double-digit percentage."""
+    understate every cross.
+
+    RE-PINNED 2026-11-03 with the venue-verified coefficient. The old figure
+    0.025800 came from theta 0.06, which the venue's own per-market
+    `feeCoefficient` contradicts: 0.0695 on every retained BTC15m market from
+    2026-09-30 to 2026-11-03. The point of the test is unchanged -- the charge
+    is the ROUNDED CENT, not the formula value -- and it survives the
+    correction, because both 0.025800 and 0.029885 round to $0.03."""
     assert cs.taker_fee(D("1.72"), D("0.50")) == D("0.03")
     q = cs.fee_quantisation(D("1.72"), D("0.50"))
-    assert q["formula_value"] == "0.025800"
+    assert q["formula_value"] == "0.029885"
     assert q["charged_after_bankers_rounding"] == "0.03"
 
 
