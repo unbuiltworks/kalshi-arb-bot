@@ -3208,3 +3208,25 @@ cancel-verification reliability 2026-11-03 (DISARMED)
   orders_uncertain fail-closed, watchdog, residual cap, daily and cumulative
   loss limits, basis attestation, defensive-unwind safeguards.
   HALT active, armed false, at-touch OFF, no orders.
+
+--- 2026-11-03T16:45Z f51b00a7 ---
+Re-run the venue-order attribution audit with the corrected extraction.
+
+WHY. The previous run (deployment fdf01fd6, L5_COST_BASIS_AUDIT emitted
+2026-11-03T16:22:24.404Z) collected 420 venue order ids of ours and matched
+ZERO: venue_order_id null on all 76 fills of 51 unknown-basis legs, owner
+UNKNOWN_OWNER / no_identity_on_the_row on every one. Cause was the
+extraction path, not missing evidence -- the feed nests the id under
+aggressorExecution / passiveExecution, never under `execution`.
+
+Restart taken with state proven clean at 16:37:52Z: armed false, halt true,
+submission_gate blocked NOT_ARMED, halt_latch CLEAR, live_orders 0,
+cash_deployed [], the only outstanding legs labelled "MODELLED hypothetical
+legs, never submitted".
+
+Unchanged: 0.96 OPENING cap, completion ceiling 1.00, 300s cancellation
+margin, entry cutoff 480 / completion cutoff 600, opening clip 1, exact-order
+cancellation, partial-fill reconciliation, orders_uncertain fail-closed,
+watchdog, residual cap, daily and cumulative loss limits, basis attestation,
+defensive-unwind safeguards.
+HALT active, armed false, at-touch OFF, no orders. Read-only audit only.
