@@ -3506,6 +3506,65 @@ class InventoryStore:
         """`position` that no fill explains. Zero on a healthy leg."""
         return self.position(market, side) - self.attested_qty(market, side)
 
+    def basis_attestation(self, market: str, side: str) -> Dict[str, Any]:
+        """Is this leg's cost basis a price a fill actually stated?
+
+        TWO WAYS IT IS NOT, and both are real and both have happened.
+
+        THE $1/SHARE PLACEHOLDER. `adopt_venue_position` books an adopted
+        net at `UNKNOWN_PRICE_WORST_CASE` -- $1 a share, the most a share can
+        cost -- and lists the key in `leg_cost_basis_unknown`. That is the
+        right conservative bound for a LOSS estimate and the wrong number for
+        pricing a pair: it is not an observed cost, and the module's own
+        comment says no later reader should mistake it for one.
+
+        QUANTITY NO FILL EXPLAINS. Shares can also arrive without any cost
+        entry at all, in which case the average silently falls.
+
+        WHY THIS IS A GATE AND NOT A REPORT. `leg_cost_basis_unknown` was
+        read in five reporting paths and consulted by NO gate, so the
+        completion path would price a hedge against the placeholder. The
+        live 2026-11-02 2300z book is the case: 3.3600 UP at an average own
+        cost of 0.605, which is exactly (0.21 + 1.00) / 2 -- the
+        venue-confirmed lot of 1.68 at own 0.2100 blended with a placeholder
+        lot. On that blend every completion in the window prices above
+        redemption and is refused; on the real lot one prices at 0.9500.
+        Same inventory, opposite decisions, and neither the engine nor the
+        operator was told which number was being used.
+
+        REPORTING ONLY HERE. This answers the question; the refusal is the
+        caller's.
+        """
+        market = canonical_market(market, doing="attesting a basis")
+        side = canonical_side(side, doing="attesting a basis")
+        k = "%s|%s" % (market, side)
+        placeholder = k in (self.state.get("leg_cost_basis_unknown") or [])
+        pos = self.position(market, side)
+        att = self.attested_qty(market, side)
+        unatt = pos - att
+        out: Dict[str, Any] = {
+            "market": market, "side": side,
+            "position": str(pos), "attested_qty": str(att),
+            "unattested_qty": str(unatt),
+            "placeholder_basis": bool(placeholder),
+            "lots": len(self.lots(market, side)),
+        }
+        if pos <= 0:
+            out["ok"] = True
+            out["reason"] = None
+            return out
+        if placeholder:
+            out["ok"] = False
+            out["reason"] = "PLACEHOLDER_BASIS"
+            return out
+        if unatt > 0:
+            out["ok"] = False
+            out["reason"] = "QUANTITY_WITHOUT_ATTESTED_COST"
+            return out
+        out["ok"] = True
+        out["reason"] = None
+        return out
+
     #: a share of a $0-$1 contract cannot have cost more than $1 or less
     #: than $0. Fees are attributable separately and are never folded into a
     #: leg's cost, so this bound is exact rather than approximate.
@@ -6423,6 +6482,49 @@ class FaithfulExecutor:
         matched_after = min(after[UP], after[DOWN])
         if matched_after <= matched_before:
             return None          # creates no new matched quantity
+        # ============ A HEDGE MAY NOT BE PRICED FROM A PLACEHOLDER
+        #
+        # Everything below divides `cost_after` by `matched_after`, so every
+        # ceiling test here is only as good as the basis. `leg_cost_basis_
+        # unknown` was read in five REPORTING paths and consulted by no gate,
+        # which is how 2300z could offer a 0.605 blended basis -- the
+        # venue-confirmed 1.68 at own 0.2100 averaged with a $1/share
+        # placeholder -- to a decision that then refused every completion in
+        # the window. On the real lot one of them priced at 0.9500.
+        #
+        # THIS RUNS AFTER THE EARLY RETURN ABOVE, so it binds ONLY orders
+        # that create new matched quantity -- completions and hedges. A first
+        # leg creates none and never reaches here, so openings are untouched
+        # and an unattested book cannot block risk-reducing cancellation
+        # either, which does not come through this gate.
+        #
+        # FAIL CLOSED, and say which leg and why. An unreadable attestation
+        # refuses too: a basis we cannot vouch for is not a basis we may
+        # price a pair from.
+        try:
+            _att = {_s: self.store.basis_attestation(market, _s)
+                    for _s in (UP, DOWN)}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "BASIS_ATTESTATION_UNREADABLE:%s"
+                           % type(exc).__name__}
+        _bad = [a for a in _att.values() if not a.get("ok")]
+        if _bad:
+            return {"why": "BASIS_UNATTESTED",
+                    "legs": _bad,
+                    "attestation": _att,
+                    "this_order": {"side": side, "price": str(px),
+                                   "qty": str(qty)},
+                    "labels": ("a completion is priced by dividing confirmed "
+                               "cost by matched quantity, so a leg whose "
+                               "basis no fill ever stated cannot be paired "
+                               "here. The quantity is real; the PRICE is "
+                               "not, and a hedge sized off an invented price "
+                               "is not a hedge. Reconcile the basis against "
+                               "the venue first -- this refusal is the "
+                               "conservative direction and leaves every "
+                               "risk-reducing path open.")}
         cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
         eff = cost_after / matched_after
         # THE DEFENSIVE CEILING IS SEPARATE AND LOOSER, AND ONLY HERE.

@@ -453,7 +453,8 @@ def test_hedge_and_profitable_completion_are_reported_separately():
     h = _doc()["item7_residual_risk_hedge_versus_profitable_completion"]
     assert h["reported_separately_on_purpose"] is True
     assert "locks a gain against the basis" in h["profitable_completion"]
-    assert "EXACTLY EV-neutral" in h["hedge"]
+    assert "UNMEASURED, not" in h["hedge"]
+    assert "OWNER CORRECTION" in h["correction"]
     assert "not rejected for being unprofitable" in \
         "a hedge is not rejected for being unprofitable"
     assert "both are true" in h["so_a_hedge_is_not_rejected_for_being_unprofitable"]
@@ -461,10 +462,13 @@ def test_hedge_and_profitable_completion_are_reported_separately():
         h["so_a_hedge_is_not_rejected_for_being_unprofitable"]
 
 
-def test_the_ev_identity_holds_for_the_two_admissible_windows():
+def test_the_arithmetic_identity_holds_without_implying_ev_neutrality():
     for basis, mk in (("0.4500", "0.5300"), ("0.2100", "0.7400")):
         b, m = D(basis), D(mk)
         assert (D(1) - b - m) == ((D(1) - m) - b)
+    # and the economic reading is withdrawn, not merely softened
+    h = _doc()["item7_residual_risk_hedge_versus_profitable_completion"]
+    assert "UNMEASURED" in h["hedge"]
 
 
 def test_the_lot_blend_arithmetic_in_the_artifact_is_exact():
@@ -495,6 +499,88 @@ def test_the_validation_config_leaves_every_protection_alone():
     assert c["limits"]["cumulative_realized_loss_limit_usd"] == 5.0
 
 
+# ===================== the budget, checked against real contract limits
+#
+# OWNER 2026-11-03: "verify that its $20 cumulative-notional budget and
+# $2-per-window limit are compatible with the intended order sizes". They
+# were not, and the arithmetic below is why.
+
+def test_my_original_budget_figures_are_recorded_as_wrong():
+    b = _doc()["bounded_live_validation_config"]["budget_arithmetic_correction"]
+    assert b["they_were_not"] is True
+    assert "REFUSED exactly the orders" in b["what_that_implies"]
+    assert "stops the run around window 10" in b["cumulative_was_also_wrong"]
+
+
+def test_the_deployed_contract_limits_are_quoted_from_the_source():
+    from src import l5_live_execution as E
+    from src import l5_two_sided_probe as TS
+    assert E.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
+    assert TS.OPENING_LEG_MAX_CONTRACTS == D("3")
+
+
+def test_a_single_completion_at_the_deployed_residual_cap_needs_495():
+    from src import l5_live_execution as E
+    assert E.ABS_RESIDUAL_CAP_CONTRACTS * D("0.99") == D("4.95")
+    # which is why a $2.00 per-window cap would have been the binding gate
+    assert D("4.95") > D("2.00")
+
+
+def test_the_observed_campaign_clip_alone_breaches_a_two_dollar_cap():
+    """2230z filled 2.04 contracts. At a 0.99 complement that is $2.0196."""
+    assert D("2.04") * D("0.99") == D("2.0196")
+    assert D("2.0196") > D("2.00")
+
+
+def test_option_A_is_self_consistent_and_is_the_recommendation():
+    L = _doc()["bounded_live_validation_config"]["limits"]
+    a = L["option_A_pinned_small_clip"]
+    assert D(str(a["per_window_cap_usd"])) == D("2") * D("0.99")
+    assert D(str(a["cumulative_cap_usd"])) >= 20 * D(str(a["per_window_cap_usd"]))
+    assert L["recommended"] == "option_A_pinned_small_clip"
+
+
+def test_option_B_covers_the_deployed_cap_without_pinning_the_clip():
+    from src import l5_live_execution as E
+    L = _doc()["bounded_live_validation_config"]["limits"]
+    b = L["option_B_leave_deployed_caps_alone"]
+    assert D(str(b["per_window_cap_usd"])) >= \
+        E.ABS_RESIDUAL_CAP_CONTRACTS * D("0.99")
+
+
+def test_the_per_window_cap_is_a_formula_not_a_constant():
+    L = _doc()["bounded_live_validation_config"]["limits"]
+    assert "NOT a constant" in L["per_window_completion_notional_usd"]
+    assert "max_unmatched_contracts" in L["per_window_completion_notional_usd"]
+
+
+def test_notional_is_distinguished_from_loss():
+    L = _doc()["bounded_live_validation_config"]["limits"]
+    assert "redeems $1.00 a contract" in L["notional_is_not_loss"]
+    assert "binding RISK control is the realized-loss limit" in \
+        L["notional_is_not_loss"]
+    assert L["first_leg_exposure_accounted_separately"] is True
+
+
+def test_realized_pnl_is_an_outcome_not_only_fill_rate():
+    """The owner asked for net realized P&L as an outcome; the fill-rate-only
+    framing rested on the withdrawn EV claim."""
+    c = _doc()["bounded_live_validation_config"]
+    joined = " ".join(c["outcomes"])
+    assert "net realized settled P&L per arm" in joined
+    assert "fill rate" in joined
+    assert "withdrawn" in c["purpose"]
+
+
+def test_the_basis_gate_is_recorded_as_shipped_and_non_blocking_for_openings():
+    shipped = _doc()["changes_shipped"]
+    gate = [c for c in shipped if "basis_attestation" in c["what"]]
+    assert len(gate) == 1
+    assert gate[0]["openings_untouched"] is True
+    assert gate[0]["risk_reducing_paths_untouched"] is True
+    assert "consulted by NO gate" in gate[0]["what"]
+
+
 def test_safety_block_says_nothing_live_moved():
     s = _doc()["safety"]
     assert s["live_policy_changed"] is False
@@ -505,3 +591,140 @@ def test_safety_block_says_nothing_live_moved():
     assert s["armed"] is False and s["orders_placed"] == 0
     assert s["new_services"] == 0 and s["new_branches"] == 0
     assert s["deployed"] is False
+
+
+# ============ A HEDGE MAY NOT BE PRICED FROM A PLACEHOLDER BASIS
+#
+# `adopt_venue_position` books an adopted net at UNKNOWN_PRICE_WORST_CASE --
+# $1 a share -- and lists the key in `leg_cost_basis_unknown`. That list was
+# read in five REPORTING paths and consulted by NO gate, so the completion
+# path would price a pair against a number nothing ever traded at. The live
+# 2300z book is the case: 3.3600 UP at an average own cost of 0.605, exactly
+# (0.21 + 1.00)/2 -- the venue-confirmed 1.68 at own 0.2100 blended with a
+# placeholder lot. On the blend every completion in the window prices above
+# redemption; on the real lot one prices at 0.9500.
+
+def test_a_clean_single_lot_basis_attests(ex):
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    a = x.store.basis_attestation(SLUG, "DOWN")
+    assert a["ok"] is True and a["reason"] is None
+    assert a["placeholder_basis"] is False
+    assert a["unattested_qty"] == "0"
+    assert a["lots"] == 1
+
+
+def test_a_flat_leg_attests_vacuously(ex):
+    x, t, H, E = ex
+    a = x.store.basis_attestation(SLUG, "UP")
+    assert a["ok"] is True
+    assert a["position"] == "0"
+
+
+def test_a_placeholder_basis_does_not_attest(ex):
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    a = x.store.basis_attestation(SLUG, "DOWN")
+    assert a["ok"] is False
+    assert a["reason"] == "PLACEHOLDER_BASIS"
+
+
+def test_quantity_no_fill_explains_does_not_attest(ex):
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("1.68"), D("0.2100"), basis="OWN")
+    x.store.state["positions"]["%s|DOWN" % SLUG] = "3.36"
+    a = x.store.basis_attestation(SLUG, "DOWN")
+    assert a["ok"] is False
+    assert a["reason"] == "QUANTITY_WITHOUT_ATTESTED_COST"
+    assert a["unattested_qty"] == "1.68"
+
+
+def test_the_completion_gate_refuses_a_placeholder_basis(ex):
+    """The defect, closed. Economics that would otherwise pass are refused
+    because the price they rest on was never traded."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    # same order that is permitted on a clean book
+    assert x.pair_cost_refusal(SLUG, {"side": "UP"},
+                               {"price": "0.53", "qty": "2"}) is None
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "2"})
+    assert bad is not None
+    assert bad["why"] == "BASIS_UNATTESTED"
+    assert bad["legs"][0]["reason"] == "PLACEHOLDER_BASIS"
+    assert "is not a hedge" in bad["labels"]
+
+
+def test_the_completion_gate_refuses_unattested_quantity(ex):
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("1.68"), D("0.2100"), basis="OWN")
+    x.store.state["positions"]["%s|DOWN" % SLUG] = "3.36"
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.40", "qty": "1.68"})
+    assert bad is not None
+    assert bad["why"] == "BASIS_UNATTESTED"
+    assert bad["legs"][0]["reason"] == "QUANTITY_WITHOUT_ATTESTED_COST"
+
+
+def test_the_2300z_blend_is_now_refused_rather_than_priced(ex):
+    """3.36 at a 0.605 average: a real 1.68 @ 0.21 lot plus a $1/share
+    placeholder. Before this gate the engine priced a pair off 0.605."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("1.68"), D("0.2100"), basis="OWN")
+    x.store.apply_fill(SLUG, "UP", D("1.68"), D("1.0000"), basis="OWN")
+    assert x.store.leg_cost(SLUG)["UP"] / x.store.position(SLUG, "UP") \
+        == D("0.605")
+    # mark the second lot as the adopted placeholder it stands for
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|UP" % SLUG)
+    bad = x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                              {"price": "0.74", "qty": "1.68"})
+    assert bad is not None
+    assert bad["why"] == "BASIS_UNATTESTED"
+
+
+def test_an_opening_is_never_blocked_by_an_unattested_book(ex):
+    """The check sits AFTER the create-no-matched-quantity early return, so a
+    first leg never reaches it. An incoherent book must not stop us opening
+    somewhere else, and must not stop risk-reducing paths either."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    # a DOWN order ADDS to the side we already hold: no new matched quantity
+    assert x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                               {"price": "0.45", "qty": "1"}) is None
+
+
+def test_the_refusal_names_the_leg_and_carries_both_attestations(ex):
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                              {"price": "0.53", "qty": "2"})
+    assert set(bad["attestation"]) == {"UP", "DOWN"}
+    assert bad["attestation"]["UP"]["ok"] is True       # flat side is fine
+    assert bad["attestation"]["DOWN"]["ok"] is False
+    assert bad["this_order"] == {"side": "UP", "price": "0.53", "qty": "2"}
+
+
+def test_the_gate_binds_before_any_ceiling_is_consulted(ex, monkeypatch):
+    """An unattested basis refuses at every ceiling setting, so no knob can
+    buy a pair priced off a placeholder."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "DOWN", D("2"), D("0.4500"), basis="OWN")
+    x.store.state.setdefault("leg_cost_basis_unknown", []).append(
+        "%s|DOWN" % SLUG)
+    for v in (None, "1.00", "0.99", "0.96"):
+        if v is None:
+            monkeypatch.delenv(CEIL_ENV, raising=False)
+        else:
+            monkeypatch.setenv(CEIL_ENV, v)
+        bad = x.pair_cost_refusal(SLUG, {"side": "UP"},
+                                  {"price": "0.53", "qty": "2"})
+        assert bad is not None and bad["why"] == "BASIS_UNATTESTED", v

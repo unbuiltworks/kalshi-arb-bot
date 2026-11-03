@@ -91,6 +91,13 @@
    "file": "src/l5_runtime_config_verify.py",
    "what": "two observed-not-graded rows: `completion_pair_ceiling` and `ts_completion_at_touch`. An operator reading only `maker_pair_ceiling` would have concluded the wrong number was in force for completions.",
    "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_live_execution.py (InventoryStore + pair_cost_refusal)",
+   "what": "`basis_attestation()` plus a fail-closed BASIS_UNATTESTED refusal in pair_cost_refusal, placed AFTER the create-no-matched-quantity early return so it binds completions and hedges only. `leg_cost_basis_unknown` was read in five reporting paths and consulted by NO gate, so the completion path would price a pair against the $1/share UNKNOWN_PRICE_WORST_CASE placeholder that `adopt_venue_position` writes. Refuses on a placeholder basis and on position no fill explains.",
+   "default_changes_behaviour": "only on a book that is already incoherent -- a tightening, in the conservative direction",
+   "openings_untouched": true,
+   "risk_reducing_paths_untouched": true
   }
  ],
  "lot_aware_pricing": {
@@ -180,9 +187,11 @@
  "item7_residual_risk_hedge_versus_profitable_completion": {
   "reported_separately_on_purpose": true,
   "profitable_completion": "the matched book locks a gain against the basis actually paid: pair < 1.00 means the completed pair redeems more than it cost. At 2245z that is $0.0400 and at 2300z $0.0840 -- confirmed, settled, realized money if the quote fills.",
-  "hedge": "forward variance reduction. Completing locks margin = 1 - basis - mk; holding the unmatched leg, marked at the same book, is worth (1 - mk) - basis. Those are the same expression, so completing at the prevailing complement price is EXACTLY EV-neutral against holding before fees, and negative after. This is algebra, not a sample statistic.",
   "so_a_hedge_is_not_rejected_for_being_unprofitable": "the two questions have different answers and both are true. 'Did this pair make money against what we paid?' -- yes, 2 to 5 cents a contract. 'Was completing better than holding?' -- neither better nor worse in expectation. For a CONFIRMED REALIZED profit target, converting an EV-neutral uncertain outcome into a locked small gain is exactly what the objective asks for, and it cuts the stranded-leg loss tail. What it does not do is create expected value, and nothing here reports it as if it did.",
-  "the_tail_it_cuts": "$2.9604 of basis sat at risk across the four windows. A stranded first leg settles at 0 or at its full quantity; completing removes that dispersion at a cost of the fee and of the upside tail."
+  "the_tail_it_cuts": "$2.9604 of basis sat at risk across the four windows. A stranded first leg settles at 0 or at its full quantity; completing removes that dispersion at a cost of the fee and of the upside tail.",
+  "SUPERSEDED_hedge": "forward variance reduction. Completing locks margin = 1 - basis - mk; holding the unmatched leg, marked at the same book, is worth (1 - mk) - basis. Those are the same expression, so completing at the prevailing complement price is EXACTLY EV-neutral against holding before fees, and negative after. This is algebra, not a sample statistic.",
+  "hedge": "forward risk transfer. The arithmetic identity 1 - basis - mk == (1 - mk) - basis holds, but it only means EV-neutral if (1 - mk) is the TRUE settlement probability and execution is free. Neither holds, so whether completing beats holding is UNMEASURED, not zero.",
+  "correction": "OWNER CORRECTION 2026-11-03, accepted: 'completing a position is not automatically expected-value neutral versus holding it. That depends on the true probability of settlement, execution costs, and the price paid for the hedge.' That is right and my framing was wrong. The ALGEBRA is sound -- 1 - basis - mk and (1 - mk) - basis are the same expression -- but calling it EV-neutral silently assumed that (1 - mk) IS the true settlement probability of the held leg. It is not. `mk` is one side of a spread, an OFFERED price rather than a mid or a probability; a maker completion also carries queue risk and may never fill; and a taker completion pays a fee that makes the comparison strictly negative. So the honest statement is CONDITIONAL: completing is EV-neutral against holding ONLY IF the complement's own price equals the true settlement probability and execution is free. Where the true probability is BELOW (1 - mk), completing is strictly better than holding; where it is above, strictly worse. Nothing in this programme has measured that probability, so the sign is UNKNOWN rather than zero -- and 'unknown' is not 'neutral', which is the same error I warned about with UNKNOWN not being NO."
  },
  "go_no_go": {
   "decision": "GO on the code, NO-GO on enabling it without the measurement",
@@ -191,7 +200,7 @@
   "not_authorized_here": "no live orders, no arming, no enablement. The flags stay off until the owner approves a campaign scope."
  },
  "bounded_live_validation_config": {
-  "purpose": "measure the at-touch completion fill rate against the depth-2 rate. That single unobservable gates every completion policy decision.",
+  "purpose": "measure venue-confirmed complement fill rate AND net realized P&L for two-tick versus at-touch completion. Both are outcomes: the earlier framing of this as fill-rate-only rested on the withdrawn EV-neutrality claim.",
   "env_to_set": {
    "L5_TS_COMPLETION_AT_TOUCH": "1 (treatment windows only)",
    "L5_COMPLETION_PAIR_CEILING": "0.99 (tightens from today's implicit 1.00)"
@@ -204,14 +213,6 @@
    "L5_MAX_WORST_CASE_DEFICIT_USD": "unchanged -- the rescue answers to it"
   },
   "design": "alternate by window: depth 2 control, at-touch treatment. 20 windows, ~1.75 admissible moments a window on campaign evidence, so roughly 35 split ~17 per arm -- enough for a large difference, not a small one. A modest result is NOT RESOLVED, not a promotion.",
-  "limits": {
-   "max_exposure_per_window_usd": 2.0,
-   "max_cumulative_completion_notional_usd": 20.0,
-   "cumulative_realized_loss_limit_usd": 5.0,
-   "max_concurrent_markets": 1,
-   "max_live_orders": 1,
-   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch"
-  },
   "preserved_unchanged": [
    "$0.96 opening ceiling",
    "300s cancellation margin",
@@ -240,6 +241,57 @@
    "<10 admissible moments in the first 10 windows -> stop, opportunity rate too low",
    "any pair priced from a placeholder basis -> stop, the 2300z defect recurring",
    "difference <20 points -> NOT RESOLVED, promote neither depth"
+  ],
+  "SUPERSEDED_limits": {
+   "max_exposure_per_window_usd": 2.0,
+   "max_cumulative_completion_notional_usd": 20.0,
+   "cumulative_realized_loss_limit_usd": 5.0,
+   "max_concurrent_markets": 1,
+   "max_live_orders": 1,
+   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch"
+  },
+  "budget_arithmetic_correction": {
+   "owner_asked": "verify that the $20 cumulative-notional budget and $2-per-window limit are compatible with the intended order sizes",
+   "they_were_not": true,
+   "the_deployed_contract_limits": {
+    "ABS_RESIDUAL_CAP_CONTRACTS": "5 (src/l5_live_execution.py)",
+    "residual_cap_formula": "min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)",
+    "OPENING_LEG_MAX_CONTRACTS": "3 (src/l5_two_sided_probe.py, env-overridable)"
+   },
+   "what_that_implies": "a completion is qty <= the unmatched leg at a complement own price <= the ceiling. At the deployed residual cap that is 5 x 0.99 = $4.95 a window, and even one opening leg at the deployed max is 3 x 0.99 = $2.97. My $2.00 per-window cap would have REFUSED exactly the orders the experiment exists to measure, and the observed campaign clip of 2.04 alone needs 2.04 x 0.99 = $2.0196.",
+   "cumulative_was_also_wrong": "20 windows at one completion each, up to $1.98 on a 2-contract clip, is up to $39.60. A $20 cumulative cap stops the run around window 10.",
+   "stated_as_formulas_not_constants": true
+  },
+  "limits": {
+   "per_window_completion_notional_usd": "max_unmatched_contracts * completion_pair_ceiling -- NOT a constant",
+   "option_A_pinned_small_clip": {
+    "set": {
+     "L5_TS_OPENING_LEG_MAX_CONTRACTS": "2",
+     "residual cap for the experiment": "2 contracts"
+    },
+    "per_window_cap_usd": 1.98,
+    "cumulative_cap_usd": 40.0,
+    "why": "makes $2.00 a window correct BY CONSTRUCTION rather than by assertion, and keeps the whole run inside $40"
+   },
+   "option_B_leave_deployed_caps_alone": {
+    "per_window_cap_usd": 5.0,
+    "cumulative_cap_usd": 100.0,
+    "why": "the deployed residual cap of 5 contracts can legitimately need 4.95 in one completion; a cap below that silently becomes the binding gate and the experiment measures the cap instead of the fill rate"
+   },
+   "recommended": "option_A_pinned_small_clip",
+   "notional_is_not_loss": "a completed pair redeems $1.00 a contract, so a $1.98 completion against 2 held contracts returns $2.00 at settlement. The binding RISK control is the realized-loss limit, not the notional cap; the notional cap exists so the experiment cannot quietly grow.",
+   "cumulative_realized_loss_limit_usd": 5.0,
+   "max_concurrent_markets": 1,
+   "max_live_orders": 1,
+   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch",
+   "first_leg_exposure_accounted_separately": true
+  },
+  "outcomes": [
+   "venue-confirmed complement fill rate, per arm, as counts",
+   "net realized settled P&L per arm, labelled settlement-only",
+   "completed pairs per arm",
+   "stranded first legs per arm and their settled loss",
+   "every pair's basis attested, with zero placeholder-priced pairs"
   ]
  },
  "safety": {

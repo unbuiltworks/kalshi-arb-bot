@@ -107,9 +107,31 @@ def test_the_experiment_is_stated_to_carry_no_economic_loosening():
 
 # --------------------------------------------- the EV identity, exactly
 
-def test_completing_is_exactly_ev_neutral_against_holding():
-    assert EV["result"].startswith("EXACTLY EV-NEUTRAL")
-    assert "algebra, not a sample statistic" in EV["the_identity"]
+def test_the_ev_neutrality_claim_is_withdrawn_and_the_reason_recorded():
+    """OWNER CORRECTION, accepted. The identity is arithmetic; the EV reading
+    assumed (1 - mk) is the true settlement probability, and it is not --
+    `mk` is one side of a spread, a maker fill is not guaranteed, and a taker
+    pays a fee. The sign is UNMEASURED, and unknown is not neutral."""
+    assert "THE EV CLAIM DOES NOT" in EV["result"]
+    assert "UNMEASURED" in EV["result"]
+    assert "OWNER CORRECTION" in EV["correction"]
+    assert "offered price" in EV["correction"].lower() or \
+        "OFFERED price" in EV["correction"]
+    assert "'unknown' is not 'neutral'" in EV["correction"]
+
+
+def test_what_survives_the_correction_is_listed_and_still_arithmetic():
+    keep = EV["what_is_still_true"]
+    assert any("arithmetic" in k for k in keep)
+    assert any("CONFIRMED gain against the basis actually paid" in k
+               for k in keep)
+    assert any("pays a fee" in k for k in keep)
+
+
+def test_the_two_overclaims_are_explicitly_withdrawn():
+    w = EV["what_I_withdraw"]
+    assert any("cannot improve expected P&L" in x for x in w)
+    assert any("net realized P&L is a legitimate outcome" in x for x in w)
 
 
 @pytest.mark.parametrize("basis,mk", [
@@ -117,16 +139,39 @@ def test_completing_is_exactly_ev_neutral_against_holding():
     ("0.2100", "0.7400"), ("0.2100", "0.7700"), ("0.4700", "0.5900"),
 ])
 def test_the_identity_holds_for_every_observed_basis_and_complement(basis, mk):
+    """ARITHMETIC ONLY. This says the two expressions are equal; it does NOT
+    say completing and holding have equal expected value, which would need
+    (1 - mk) to be the true settlement probability."""
     b, m = D(basis), D(mk)
     complete_margin = D(1) - b - m          # locked by completing
-    hold_value = (D(1) - m) - b             # marked at the same book
-    assert complete_margin == hold_value
+    hold_marked_at_this_book = (D(1) - m) - b
+    assert complete_margin == hold_marked_at_this_book
 
 
-def test_the_value_is_attributed_to_the_first_leg_not_the_completion():
-    assert "does not create expected value" in EV["consequence"]
+@pytest.mark.parametrize("basis,mk,true_p", [
+    ("0.4500", "0.5300", "0.30"),   # held leg worth less than the book implies
+    ("0.4500", "0.5300", "0.70"),   # worth more
+])
+def test_the_sign_moves_with_the_true_probability_not_with_the_identity(
+        basis, mk, true_p):
+    """Why the withdrawn claim was wrong, in one test. Holding is worth the
+    TRUE probability, not the complement's offered price, so completing can
+    be strictly better or strictly worse."""
+    b, m, p = D(basis), D(mk), D(true_p)
+    complete = D(1) - b - m                 # certain
+    hold_true_ev = p - b                    # held leg pays 1 with prob p
+    if p < D(1) - m:
+        assert complete > hold_true_ev      # completing WINS
+    else:
+        assert complete < hold_true_ev      # completing LOSES
+
+
+def test_the_first_leg_attribution_claim_is_kept_but_bounded():
+    """The consequence text is retained for the record. It is TRUE of the
+    locked margin against basis paid, and NOT a statement about expected
+    value -- which the correction above withdraws."""
     assert "FIRST leg was acquired" in EV["consequence"]
-    assert "no completion policy" in EV["consequence"]
+    assert "OWNER CORRECTION" in EV["correction"]
 
 
 def test_the_rich_looking_moments_are_explained_rather_than_claimed():

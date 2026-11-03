@@ -155,11 +155,23 @@
   "what_B_actually_changes": "not WHETHER to complete but WHERE to rest. At an admissible moment A rests 2 ticks behind the touch and B rests at it: B pays 0.02 more per contract and requires no further adverse movement to trade. B trades 2 cents of locked margin for fill probability."
  },
  "expected_settlement_versus_holding": {
-  "result": "EXACTLY EV-NEUTRAL, at all 12 admissible moments, to 4 decimals",
   "the_identity": "completing locks margin = 1 - basis - mk. Holding the unmatched leg, marked at the SAME book, is worth (1 - mk) - basis, because a matched pair redeems exactly $1.00 and the complement trades at mk. Those are the same expression, so the difference is identically zero -- this is algebra, not a sample statistic.",
   "after_fees": "strictly negative as a taker; neutral as a maker only because the verified maker fee is zero, and it would be positive only with a rebate that is NOT verified.",
   "consequence": "a completion does not create expected value. It converts a position to certainty at fair value. ALL of a matched pair's value comes from the price at which the FIRST leg was acquired -- so no completion policy, at any depth or ceiling, can recover an adversely selected first leg.",
-  "the_2215z_illustration": "those five moments show margins of 10 to 43 cents a contract and look like free money. They are not: the complement got cheap precisely BECAUSE our held leg was winning, and holding it was worth exactly the same. The engine's own label has said this all along -- 'a defensive exit bounds a tail, it does not create edge: at the touch it is expected-value neutral before fees and negative by exactly the fee.'"
+  "the_2215z_illustration": "those five moments show margins of 10 to 43 cents a contract and look like free money. They are not: the complement got cheap precisely BECAUSE our held leg was winning, and holding it was worth exactly the same. The engine's own label has said this all along -- 'a defensive exit bounds a tail, it does not create edge: at the touch it is expected-value neutral before fees and negative by exactly the fee.'",
+  "SUPERSEDED_result": "EXACTLY EV-NEUTRAL, at all 12 admissible moments, to 4 decimals",
+  "result": "THE ARITHMETIC IDENTITY HOLDS; THE EV CLAIM DOES NOT. Conditional on the complement's price being the true settlement probability and execution being free, completing and holding are equal. Neither condition holds, so the sign of the comparison is UNMEASURED.",
+  "correction": "OWNER CORRECTION 2026-11-03, accepted: 'completing a position is not automatically expected-value neutral versus holding it. That depends on the true probability of settlement, execution costs, and the price paid for the hedge.' That is right and my framing was wrong. The ALGEBRA is sound -- 1 - basis - mk and (1 - mk) - basis are the same expression -- but calling it EV-neutral silently assumed that (1 - mk) IS the true settlement probability of the held leg. It is not. `mk` is one side of a spread, an OFFERED price rather than a mid or a probability; a maker completion also carries queue risk and may never fill; and a taker completion pays a fee that makes the comparison strictly negative. So the honest statement is CONDITIONAL: completing is EV-neutral against holding ONLY IF the complement's own price equals the true settlement probability and execution is free. Where the true probability is BELOW (1 - mk), completing is strictly better than holding; where it is above, strictly worse. Nothing in this programme has measured that probability, so the sign is UNKNOWN rather than zero -- and 'unknown' is not 'neutral', which is the same error I warned about with UNKNOWN not being NO.",
+  "what_is_still_true": [
+   "the identity 1 - basis - mk == (1 - mk) - basis, which is arithmetic",
+   "a completed pair below 1.00 locks a CONFIRMED gain against the basis actually paid",
+   "a taker completion pays a fee, so against a marked-to-book hold it is negative by exactly that fee",
+   "the 2215z moments are past the completion cutoff and were not actionable, which is a timing fact and needs no EV argument"
+  ],
+  "what_I_withdraw": [
+   "that completion 'cannot improve expected P&L' -- it can, if the true settlement probability is below (1 - mk)",
+   "that the experiment's only legitimate purpose is fill-rate measurement; net realized P&L is a legitimate outcome and the owner is right to want it measured"
+  ]
  },
  "execution_realism": {
   "partial_fills": "none observed: all four venue fills completed in one print with remaining 0, so no partial-fill behaviour is measurable from this evidence",
