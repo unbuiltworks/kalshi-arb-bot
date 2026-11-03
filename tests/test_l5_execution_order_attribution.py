@@ -271,13 +271,13 @@ def test_THE_REAL_NESTING_IS_READ_at_all():
 
 
 def test_the_aggressor_flag_picks_our_execution_not_the_counterpartys():
-    ours_t, every_t = CBA._row_venue_order_candidates(
+    ours_t, every_t, src_t = CBA._row_venue_order_candidates(
         real_row(is_aggressor=True)["trade"])
-    assert ours_t == "VO-OURS"
+    assert (ours_t, src_t) == ("VO-OURS", "flag")
     assert every_t == {"VO-OURS", "VO-THEIRS"}
-    ours_f, every_f = CBA._row_venue_order_candidates(
+    ours_f, every_f, src_f = CBA._row_venue_order_candidates(
         real_row(is_aggressor=False)["trade"])
-    assert ours_f == "VO-OURS"
+    assert (ours_f, src_f) == ("VO-OURS", "flag")
     assert every_f == {"VO-OURS", "VO-THEIRS"}
 
 
@@ -312,11 +312,57 @@ def test_a_counterparty_id_alone_stays_UNKNOWN_and_is_never_called_manual():
     assert out["fills"][0]["owner_evidence"] == "no_identity_on_the_row"
 
 
-def test_our_identified_execution_that_is_not_ours_IS_manual():
-    """With the flag the row DOES say which execution is ours, so an id we
-    do not track is positive evidence of someone else's order."""
-    out = classify([real_row(ours="VO-NOT-TRACKED")], our_coids=[],
-                   our_vids=["VO-OURS"], side="UP")
+def test_a_flag_sourced_negative_IS_manual_ONLY_once_calibrated():
+    """The flag says which execution is ours -- but only a CALIBRATED flag
+    makes that positive evidence of someone else's order."""
+    out = CBA.classify_fills(
+        [real_row(ours="VO-NOT-TRACKED")],
+        market=real_row()["trade"]["marketSlug"], side="UP",
+        our_coids=set(), our_venue_orders={"VO-OURS"}, flag_calibrated=True)
+    assert out["fills"][0]["owner"] == CBA.OWNER_MANUAL
+    assert out["fills"][0]["owner_evidence"] == "venue_order_id_not_ours"
+
+
+def test_AN_UNCALIBRATED_FLAG_SOURCED_NEGATIVE_IS_NOT_MANUAL():
+    """PRODUCTION'S ACTUAL CASE, and the second over-claim this module made.
+
+    The 2026-11-03T17:06:15Z run returned NOT_CALIBRATED with EMPTY counts:
+    no fill row in the 2543-row walk carries a client order id at all, so
+    the one independent route that could check `isAggressor` had no rows to
+    check it on. With the flag unverified, calling 75 of 76 fills
+    OWNER_MANUAL asserts external activity on a SHARED account from an
+    unverified reading of a field name -- the same error as the original
+    UNKNOWN_OWNER sweep, pointing the other way.
+
+    The id is still REPORTED. What is withheld is the conclusion."""
+    for cal in (None, False):
+        out = CBA.classify_fills(
+            [real_row(ours="VO-NOT-TRACKED")],
+            market=real_row()["trade"]["marketSlug"], side="UP",
+            our_coids=set(), our_venue_orders={"VO-OURS"},
+            flag_calibrated=cal)
+        f = out["fills"][0]
+        assert f["owner"] == CBA.UNKNOWN_OWNER, cal
+        assert f["owner_evidence"] == CBA.EV_NOT_OURS_UNCALIBRATED, cal
+        assert f["venue_order_id"] == "VO-NOT-TRACKED", cal
+
+
+def test_a_POSITIVE_match_never_needs_the_flag_calibrated():
+    """An id in our own tracked set cannot be the counterparty's, so the
+    asymmetry holds: positives resolve, negatives wait for calibration."""
+    for cal in (None, False, True):
+        out = CBA.classify_fills(
+            [real_row()], market=real_row()["trade"]["marketSlug"], side="UP",
+            our_coids=set(), our_venue_orders={"VO-OURS"},
+            flag_calibrated=cal)
+        assert out["fills"][0]["owner"] == CBA.L5_OWNED, cal
+        assert out["fills"][0]["owner_evidence"] == "venue_order_id", cal
+
+
+def test_an_UNAMBIGUOUS_shape_is_manual_without_any_calibration():
+    """A single execution object or a flat id leaves nothing to select, so
+    the flag is irrelevant and the negative verdict stands on its own."""
+    out = classify([row(venue_order="VO-SOMEONE-ELSE")], our_vids=["VO-7"])
     assert out["fills"][0]["owner"] == CBA.OWNER_MANUAL
     assert out["fills"][0]["owner_evidence"] == "venue_order_id_not_ours"
 

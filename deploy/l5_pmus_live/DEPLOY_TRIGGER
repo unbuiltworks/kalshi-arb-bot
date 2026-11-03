@@ -3243,3 +3243,16 @@ client order id and the verdict is reported.
 
 HALT active, armed false, at-touch OFF, no live orders, no cash deployed.
 Read-only telemetry only.
+
+--- 2026-11-03T17:20Z ---
+Stop the audit asserting ownership it cannot establish.
+
+The 17:06:15Z calibration came back NOT_CALIBRATED with EMPTY counts: no
+fill row in the 2543-row walk carries a clientOrderId at all, so the one
+independent route that could check isAggressor had no rows to check it on.
+A flag-sourced non-match is therefore downgraded from OWNER_MANUAL to
+UNKNOWN_OWNER / venue_order_id_not_ours_but_flag_uncalibrated. The id is
+still reported; the conclusion is withheld.
+
+HALT active, armed false, at-touch OFF, no live orders, no cash deployed.
+Read-only telemetry only.

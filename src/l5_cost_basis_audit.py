@@ -271,7 +271,14 @@ def _exec_order_id(ex: Mapping[str, Any]) -> Optional[str]:
 
 
 def _row_venue_order_candidates(body: Mapping[str, Any]):
-    """(ours, every) venue order id on this fill row.
+    """(ours, every, ours_source) venue order ids on this fill row.
+
+    `ours_source` is "flag" when `ours` was selected out of the row's TWO
+    per-party executions by `isAggressor`, "unambiguous" when the row's
+    shape left nothing to select (one execution object, or a flat id), and
+    None when `ours` is None. It exists because a NEGATIVE verdict built on
+    "flag" is only as good as the flag, while one built on "unambiguous" is
+    not -- and the caller must be able to tell those apart.
 
     WHY THIS REPLACED A SINGLE-ID READ, and it is measured, not argued. The
     first version of this looked under `execution`, `exec` and `fill`. The
@@ -299,8 +306,9 @@ def _row_venue_order_candidates(body: Mapping[str, Any]):
     """
     every: set = set()
     if not isinstance(body, Mapping):
-        return None, every
+        return None, every, None
     ours = None
+    ours_source = None
     # the two real per-party executions. Built as PAIRS, not by subscript
     # assignment: the module's read-only guard forbids every subscript
     # assignment target as its proxy for "writes no store key", and that
@@ -315,25 +323,27 @@ def _row_venue_order_candidates(body: Mapping[str, Any]):
     if mine is not None:
         for ek, v in per_party:
             if ek == mine and v:
-                ours = v
+                ours, ours_source = v, "flag"
     # the unambiguous shapes: ONE execution object, or a flat id. There the
     # row's only order id is the row's own order, so it identifies ours.
     for ek in ("execution", "exec", "fill"):
         v = _exec_order_id(body.get(ek))
         if v:
             every.add(v)
-            ours = ours or v
+            if ours is None:
+                ours, ours_source = v, "unambiguous"
     for k in ("orderId", "orderID", "order_id", "venueOrderId"):
         v = body.get(k)
         if v and str(v).strip():
             every.add(str(v).strip())
-            ours = ours or str(v).strip()
-    return ours, every
+            if ours is None:
+                ours, ours_source = str(v).strip(), "unambiguous"
+    return ours, every, ours_source
 
 
 def _row_venue_order_id(body: Mapping[str, Any]) -> Optional[str]:
     """The venue's own order id for this fill, ours where the row says so."""
-    ours, every = _row_venue_order_candidates(body)
+    ours, every, _src = _row_venue_order_candidates(body)
     if ours:
         return ours
     return sorted(every)[0] if every else None
@@ -864,9 +874,18 @@ def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
     }
 
 
+#: a venue order id we do NOT track, read off the execution that
+#: `isAggressor` claims is ours, while that claim is UNVERIFIED. It is not
+#: OWNER_MANUAL, because the row may be ours and the flag may be wrong; it
+#: is not an absence either, because the id is right there. Named so the two
+#: cannot be collapsed.
+EV_NOT_OURS_UNCALIBRATED = "venue_order_id_not_ours_but_flag_uncalibrated"
+
+
 def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
                    our_coids: set,
-                   our_venue_orders: Optional[set] = None) -> Dict[str, Any]:
+                   our_venue_orders: Optional[set] = None,
+                   flag_calibrated: Optional[bool] = None) -> Dict[str, Any]:
     """Actual fills for one leg, split by owner. Nothing is assumed.
 
     TWO INDEPENDENT ROUTES TO OWNERSHIP, and the second is the owner's
@@ -899,7 +918,7 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
         # A positive match against ids we track is proof; a non-match on an
         # id that may be the COUNTERPARTY's proves nothing and must not
         # become OWNER_MANUAL.
-        vid_ours, vid_all = _row_venue_order_candidates(b)
+        vid_ours, vid_all, vid_src = _row_venue_order_candidates(b)
         vid_matched = sorted(vid_all & ovo)
         vid = (vid_matched[0] if vid_matched
                else (vid_ours or (sorted(vid_all)[0] if vid_all else None)))
@@ -909,8 +928,18 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
             owner, owner_evidence = L5_OWNED, "venue_order_id"
         elif coid:
             owner, owner_evidence = OWNER_MANUAL, "client_order_id_not_ours"
-        elif vid_ours:
+        elif vid_ours and (vid_src != "flag" or flag_calibrated is True):
             owner, owner_evidence = OWNER_MANUAL, "venue_order_id_not_ours"
+        elif vid_ours:
+            # THE ID IS RESOLVED AND THE OWNERSHIP IS NOT. Production's
+            # calibration came back NOT_CALIBRATED with EMPTY counts -- no
+            # fill row in the 2543-row walk carries a client order id at
+            # all, so the one route that could check `isAggressor` has no
+            # rows to check it on. Calling these 75 fills OWNER_MANUAL would
+            # assert external activity on a SHARED account from an
+            # unverified reading of a field name, which is the same error as
+            # the original UNKNOWN_OWNER sweep, pointing the other way.
+            owner, owner_evidence = UNKNOWN_OWNER, EV_NOT_OURS_UNCALIBRATED
         else:
             owner, owner_evidence = UNKNOWN_OWNER, "no_identity_on_the_row"
         # THE FEED'S OWN NAMES. A trade row carries qty/qtyDecimal and an
@@ -1107,6 +1136,12 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
     walk = walk_activities(transport, max_pages=max_pages)
     our = our_client_order_ids(store)
     our_vids = our_venue_order_ids(store)
+    # MEASURED BEFORE IT IS RELIED ON. Every negative ownership verdict
+    # below depends on `isAggressor`; this says whether that dependency is
+    # verified, and only "CALIBRATED" lets a non-match be called manual.
+    cal = aggressor_flag_calibration(walk["rows"], our_coids=our,
+                                     our_venue_orders=our_vids)
+    cal_ok = cal["verdict"].startswith("CALIBRATED")
     legs: List[Dict[str, Any]] = []
     placeholder_total, actual_total = D(0), D(0)
     establishable = 0
@@ -1125,7 +1160,8 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                          "fills": []})
             continue
         cls = classify_fills(walk["rows"], market=market, side=side,
-                             our_coids=our, our_venue_orders=our_vids)
+                             our_coids=our, our_venue_orders=our_vids,
+                             flag_calibrated=cal_ok)
         basis = (establish_basis(cls["fills"], expect_qty=held, side=side)
                  if walk["complete"]
                  else {"established": False,
@@ -1174,8 +1210,8 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         # WHETHER THE NEGATIVE VERDICTS CAN BE TRUSTED AT ALL. Every
         # `venue_order_id_not_ours` depends on isAggressor picking our
         # execution; this measures that against known-ours rows.
-        "aggressor_flag_calibration": aggressor_flag_calibration(
-            walk["rows"], our_coids=our, our_venue_orders=our_vids),
+        "aggressor_flag_calibration": cal,
+        "negative_verdicts_trusted": cal_ok,
         "unknown_basis_legs": len(keys),
         "establishable": establishable,
         "unestablished": len(keys) - establishable,
