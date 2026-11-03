@@ -3166,3 +3166,45 @@ cancel-verification reliability 2026-11-03 (DISARMED)
 
   Two new observed-not-graded verifier rows: completion_pair_ceiling and
   ts_completion_at_touch.
+
+2026-11-03  execution.order attribution (READ-ONLY, DISARMED)
+
+  THE OWNER'S CORRECTION, implemented. `classify_fills` decided ownership
+  from the client order id alone, so a fill row carrying NO coid became
+  UNKNOWN_OWNER whoever placed it. Measured: all 74 fills across the 49
+  unknown-basis legs carry clientOrderId null, so every leg read
+  UNKNOWN_OWNER and $294.09 of placeholder cost was read as unresolved.
+
+  The evidence was already in the feed. execution_field_inventory found
+  2,038 fill rows carrying an execution object whose keys include `order`,
+  while the per-leg view reported order_id null on all 74. The executor
+  persists a durable coid -> venue order id link at booking time plus the
+  same ids across live_orders, pending_terminal, quarantine and submitted.
+
+  ADDED, all read-only:
+    our_venue_order_ids(store)   collects the ids we track from the link and
+                                 the four row-books. Reads; writes nothing.
+    _row_venue_order_id(body)    pulls execution.order, with nested and flat
+                                 fallbacks.
+    classify_fills(..., our_venue_orders=None)
+                                 second route to ownership. None reproduces
+                                 the old coid-only behaviour EXACTLY, which
+                                 is why the 171 existing cost-basis tests
+                                 are untouched.
+    per-fill venue_order_id and owner_evidence are now surfaced.
+
+  The third state stays third: identified-but-not-ours is OWNER_MANUAL, and
+  a fill with no identity of either kind stays UNKNOWN_OWNER, because
+  unresolved attribution is not evidence of external activity.
+
+  NOTHING ELSE CHANGES. No ledger key, no cost basis, no attestation, no
+  realized total, and nothing here can relax a loss halt --
+  correct_settled_market's CORRECTION_WOULD_RELAX_LOSS_HALT is untouched.
+  The audit still runs only under L5_COST_BASIS_AUDIT=YES and APPLY remains
+  a separate owner authorization.
+
+  Unchanged: 0.96 OPENING cap, completion ceiling 1.00, 300s cancellation
+  margin, exact-order cancellation, partial-fill reconciliation,
+  orders_uncertain fail-closed, watchdog, residual cap, daily and cumulative
+  loss limits, basis attestation, defensive-unwind safeguards.
+  HALT active, armed false, at-touch OFF, no orders.

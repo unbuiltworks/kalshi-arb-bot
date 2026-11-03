@@ -203,6 +203,86 @@ def our_client_order_ids(store: Any) -> set:
     return out
 
 
+def our_venue_order_ids(store: Any) -> set:
+    """Venue order ids this executor already tracks, from the durable link.
+
+    WHY THIS EXISTS, and it is the owner's 2026-11-03 correction. Ownership
+    was decided by CLIENT ORDER ID alone:
+
+        owner = L5_OWNED if coid in ours else OWNER_MANUAL if coid
+                else UNKNOWN_OWNER
+
+    so a fill row carrying NO coid became UNKNOWN_OWNER whoever placed it.
+    Measured on this account: all 74 fills across the 49 unknown-basis legs
+    carry `clientOrderId` null, so the classifier could never resolve one of
+    them and every leg read UNKNOWN_OWNER. That is unresolved attribution
+    being reported as if it were evidence of external activity.
+
+    THE EVIDENCE WAS ALREADY THERE. `execution_field_inventory` found 2,038
+    fill rows carrying an execution object whose keys include `order`, and
+    the executor persists a durable coid -> venue order id link
+    (`VENUE_ORDER_LINK`) written at booking time plus the same ids across
+    `live_orders`, `pending_terminal`, `quarantine` and `submitted`. So a
+    venue order id on the fill can be matched against ids we know are ours.
+
+    READ-ONLY, like everything in this module. It reads four row-books and
+    one link map and writes nothing.
+    """
+    out: set = set()
+    st = (getattr(store, "state", {}) or {})
+    if not isinstance(st, Mapping):
+        return out
+    # the durable link, which outlives the order
+    link = st.get("venue_order_ids")
+    if isinstance(link, Mapping):
+        for k, v in link.items():
+            for cand in (k, v):
+                if isinstance(cand, str) and cand.strip():
+                    out.add(cand.strip())
+                elif isinstance(cand, Mapping):
+                    vid = cand.get("venue_order_id")
+                    if vid:
+                        out.add(str(vid).strip())
+    # and every row-book an id of ours can sit in
+    for book in ("live_orders", "pending_terminal", "quarantine", "submitted"):
+        rows = st.get(book)
+        if not isinstance(rows, Mapping):
+            continue
+        for row in rows.values():
+            if isinstance(row, Mapping):
+                vid = row.get("venue_order_id")
+                if vid and str(vid).strip():
+                    out.add(str(vid).strip())
+    out.discard("")
+    return out
+
+
+def _row_venue_order_id(body: Mapping[str, Any]) -> Optional[str]:
+    """The venue's own order id for this fill, from the execution object.
+
+    The feed nests it: the execution object's key set is
+    `aggressor,commissionNotionalCollected,...,order,orderRejectReason,...`,
+    so `order` is where the linkage lives. Flat fallbacks are kept because a
+    feed that stops nesting must not silently stop resolving.
+    """
+    if not isinstance(body, Mapping):
+        return None
+    for ek in ("execution", "exec", "fill"):
+        ex = body.get(ek)
+        if isinstance(ex, Mapping):
+            for k in ("order", "orderId", "orderID", "order_id"):
+                v = ex.get(k)
+                if isinstance(v, Mapping):
+                    v = v.get("id") or v.get("orderId")
+                if v and str(v).strip():
+                    return str(v).strip()
+    for k in ("orderId", "orderID", "order_id", "venueOrderId"):
+        v = body.get(k)
+        if v and str(v).strip():
+            return str(v).strip()
+    return None
+
+
 def _row_market(row: Mapping[str, Any]) -> str:
     body = _payload(row)
     for k in ("marketSlug", "market", "slug", "marketId", "ticker"):
@@ -648,8 +728,23 @@ def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
 
 
 def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
-                   our_coids: set) -> Dict[str, Any]:
-    """Actual fills for one leg, split by owner. Nothing is assumed."""
+                   our_coids: set,
+                   our_venue_orders: Optional[set] = None) -> Dict[str, Any]:
+    """Actual fills for one leg, split by owner. Nothing is assumed.
+
+    TWO INDEPENDENT ROUTES TO OWNERSHIP, and the second is the owner's
+    correction. A client order id resolves it when the feed supplies one; a
+    VENUE ORDER ID resolves it when the feed does not, matched against the
+    ids the executor durably tracks. `our_venue_orders` None reproduces the
+    old coid-only behaviour exactly, so an existing caller is unaffected.
+
+    AND THE THIRD STATE STAYS THIRD. An identified-but-not-ours fill is
+    OWNER_MANUAL; a fill with NO identity of either kind stays
+    UNKNOWN_OWNER, because unresolved attribution is not evidence of
+    external activity. Every fill records WHICH evidence resolved it, so a
+    reader can tell a match from an absence.
+    """
+    ovo = our_venue_orders if isinstance(our_venue_orders, set) else set()
     fills: List[Dict[str, Any]] = []
     for r in rows:
         if _row_market(r) != market:
@@ -663,8 +758,16 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
         b = _payload(r)
         coid = str(b.get("clientOrderId") or b.get("clientOrderID")
                    or "") or None
-        owner = (L5_OWNED if coid and coid in our_coids
-                 else OWNER_MANUAL if coid else UNKNOWN_OWNER)
+        vid = _row_venue_order_id(b)
+        if coid and coid in our_coids:
+            owner, owner_evidence = L5_OWNED, "client_order_id"
+        elif vid and vid in ovo:
+            owner, owner_evidence = L5_OWNED, "venue_order_id"
+        elif coid or vid:
+            owner, owner_evidence = OWNER_MANUAL, (
+                "client_order_id_not_ours" if coid else "venue_order_id_not_ours")
+        else:
+            owner, owner_evidence = UNKNOWN_OWNER, "no_identity_on_the_row"
         # THE FEED'S OWN NAMES. A trade row carries qty/qtyDecimal and an
         # authoritative `cost`; it carries neither `quantity` nor
         # `commission`, which is why every value read as None before.
@@ -693,7 +796,13 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
         fills.append({
             "trade_id": str(b.get("tradeId") or b.get("id") or "") or None,
             "order_id": str(b.get("orderId") or "") or None,
+            # THE VENUE ORDER ID, surfaced rather than discarded. It was
+            # being read into `execution_field_inventory` as a key NAME only
+            # while the per-leg view reported order_id null on every fill,
+            # which is why ownership looked unresolvable.
+            "venue_order_id": vid,
             "client_order_id": coid, "owner": owner,
+            "owner_evidence": owner_evidence,
             "qty": None if qty is None else str(qty),
             "price": None if px is None else str(px),
             # the venue's own cost for this execution, or None for UNKNOWN
@@ -852,6 +961,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                        .get("leg_cost_basis_unknown") or [])))
     walk = walk_activities(transport, max_pages=max_pages)
     our = our_client_order_ids(store)
+    our_vids = our_venue_order_ids(store)
     legs: List[Dict[str, Any]] = []
     placeholder_total, actual_total = D(0), D(0)
     establishable = 0
@@ -870,7 +980,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                          "fills": []})
             continue
         cls = classify_fills(walk["rows"], market=market, side=side,
-                             our_coids=our)
+                             our_coids=our, our_venue_orders=our_vids)
         basis = (establish_basis(cls["fills"], expect_qty=held, side=side)
                  if walk["complete"]
                  else {"established": False,
@@ -915,6 +1025,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                                   sides=["UP", "DOWN"])
                        if establishable == 0 and keys else None),
         "our_client_order_ids": len(our),
+        "our_venue_order_ids": len(our_vids),
         "unknown_basis_legs": len(keys),
         "establishable": establishable,
         "unestablished": len(keys) - establishable,
