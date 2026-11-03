@@ -329,3 +329,101 @@ def test_completing_still_outranks_adding(probe=None):
     on, so when both are available the REDUCE wins."""
     r = dec(up_q=D("1.00"), up_cost=D("0.47"))
     assert r["ok"] and r["action"] == CI.REDUCE
+
+
+# =============== the prospective action rule, and why it is degenerate
+def sel(**kw):
+    base = dict(bid=D("0.49"), ask=D("0.50"), tick=D("0.01"))
+    base.update(kw)
+    return CI.select_action(**base)
+
+
+def test_the_two_futures_are_priced_from_decision_time_data_only():
+    """Carrying is q*(p-b); completing is q*(1-b-c). Both knowable now."""
+    assert CI.expected_carry(qty=D(2), basis=D("0.40"),
+                             held_side_price=D("0.50")) == D("0.20")
+    assert CI.expected_complete(qty=D(2), basis=D("0.40"),
+                                complement_cost=D("0.45")) == D("0.30")
+
+
+def test_the_basis_cancels_out_of_the_decision():
+    """What was already paid is SUNK. Completing beats carrying exactly when
+    c < 1 - p, which contains no basis term -- so 'complete only when the
+    PAIR is under $1.00' is the wrong test, it chases the entry price."""
+    for b in ("0.10", "0.47", "0.90"):
+        a = CI.expected_complete(qty=D(1), basis=D(b),
+                                 complement_cost=D("0.45"))
+        c = CI.expected_carry(qty=D(1), basis=D(b),
+                              held_side_price=D("0.50"))
+        assert a - c == D("0.05")           # independent of b
+
+
+def test_completing_is_worth_it_exactly_when_cheaper_than_fair():
+    assert CI.complement_is_worth_buying(held_side_price=D("0.50"),
+                                         complement_cost=D("0.49"))
+    assert not CI.complement_is_worth_buying(held_side_price=D("0.50"),
+                                             complement_cost=D("0.50"))
+    assert not CI.complement_is_worth_buying(held_side_price=D("0.50"),
+                                             complement_cost=D("0.51"))
+
+
+@pytest.mark.parametrize("bid,ask", [("0.20", "0.21"), ("0.49", "0.50"),
+                                     ("0.80", "0.81")])
+def test_THE_DEGENERACY_the_discount_is_constant_at_every_price(bid, ask):
+    """THE FINDING. Our complement is a maker quote `depth_ticks` behind the
+    touch, so the apparent discount to fair value is mechanically
+    spread + d*tick -- a CONSTANT, at every price, in every market state.
+    An expected-value rule built on it always fires and carries no
+    information: it is reading the depth of its own quote as edge."""
+    r = sel(bid=D(bid), ask=D(ask), up_q=D("2.52"), up_cost=D("1.1844"))
+    assert r["action"] == CI.REDUCE
+    assert D(r["mechanical_discount"]) == D("0.03")      # spread 1 + depth 2
+    assert r["is_degenerate_at_touch"] is True
+
+
+def test_demanding_a_real_discount_beyond_the_mechanical_one_never_fires():
+    """Confirms the discount is entirely mechanical: ask for any margin
+    above spread+depth and nothing ever completes."""
+    for bid, ask in (("0.20", "0.21"), ("0.49", "0.50"), ("0.80", "0.81")):
+        r = sel(bid=D(bid), ask=D(ask), up_q=D("2.52"), up_cost=D("1.1844"),
+                margin=D("0.05"))
+        assert r["action"] == CI.NO_ACTION
+        assert r["reason"] == "CARRYING_BEATS_COMPLETING_AT_THIS_PRICE"
+
+
+def test_the_rule_never_returns_ADD():
+    """A maker ADD rests below the touch, so it always LOOKS +EV and never
+    is: the fill happens when the market reaches the price. Measured alpha
+    is +0.00116 on 693,916 fills and -0.00091 on 63,686 -- zero in noise.
+    So the rule will not take one to raise activity."""
+    for allow in (False, True):
+        r = sel(up_q=D("1.00"), up_cost=D("0.30"), margin=D("0.50"),
+                allow_add=allow)
+        assert r["action"] != CI.ADD
+
+
+def test_no_action_is_a_first_class_outcome_with_its_economics():
+    r = sel(up_q=D("2.52"), up_cost=D("1.1844"), margin=D("0.50"))
+    assert r["action"] == CI.NO_ACTION
+    for k in ("expected_carry", "value_if_completed",
+              "advantage_of_completing", "fair_complement"):
+        assert k in r
+
+
+def test_a_flat_book_opens_and_an_expensive_one_does_not():
+    assert sel()["action"] == CI.OPEN
+    assert sel(depth_ticks=0)["reason"] == "PAIR_ABOVE_CEILING"
+
+
+def test_unattested_basis_still_fails_closed_in_the_rule():
+    assert sel(up_q=D("2.52"), up_cost=D(0))["reason"] == "HELD_COST_UNKNOWN"
+
+
+def test_the_rule_uses_no_ex_post_quantity():
+    """The defect being corrected: a threshold fitted to a window's PEAK
+    imbalance is not knowable at decision time. `select_action` takes only
+    the current book and the current realized inventory."""
+    import inspect
+    sig = set(inspect.signature(CI.select_action).parameters)
+    assert not {"peak_imbalance", "window_peak", "imbalance_cap"} & sig
+    assert {"bid", "ask", "up_q", "dn_q", "up_cost", "dn_cost"} <= sig

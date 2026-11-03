@@ -1949,5 +1949,35 @@
    "cost_basis_placeholder": true,
    "class": "VENUE_SETTLED_OUR_LEDGER"
   }
- ]
+ ],
+ "placeholder_basis_reconstruction": {
+  "labels": "THESE ARE NOT MEASURED LOSSES. Each of the 17 rows is a single-sided leg whose cost_total equals its quantity exactly, i.e. the $1/share placeholder. Settlement is venue-confirmed; only the PRICE is unknown. A winning leg is therefore reported as $0.00 when it actually GAINED, and a losing leg as -qty when it actually lost only -qty*price.",
+  "n_markets": 17,
+  "legs_that_won": 6,
+  "legs_that_lost": 11,
+  "reported_placeholder_usd": "-51.58000000",
+  "bound_method": "the engine refuses a first leg outside [0.20,0.60], so for engine-placed legs the fill price is bounded by that band. These legs appear in reconcile as leg_cost_basis_unknown (adopted from the venue), so if any was not engine-placed only the unconstrained (0,1) bound binds.",
+  "true_value_range_usd": {
+   "worst": "-24.880000",
+   "best": "1.360000"
+  },
+  "overstatement_of_loss_usd": {
+   "at_least": "26.70000000",
+   "at_most": "52.94000000"
+  },
+  "recovery_requires": "a venue query of /v1/portfolio/activities for these markets. These dates are outside Railway log retention and the fill prices are not in this repository; this container holds no PMUS credentials."
+ },
+ "account_total_corrected": {
+  "measured_usable_basis_usd": "-1.68740000",
+  "bounded_placeholder_usd": {
+   "worst": "-24.880000",
+   "best": "1.360000"
+  },
+  "account_true_range_usd": {
+   "worst": "-26.56740000",
+   "best": "-0.32740000"
+  },
+  "previously_reported_single_figure_usd": "-53.26740000",
+  "labels": "the single -53.2674 figure summed a MEASURED -1.6874 with a $1/share UPPER BOUND of -51.5800 and reported the sum as realized. It must not be quoted as a measured loss."
+ }
 }

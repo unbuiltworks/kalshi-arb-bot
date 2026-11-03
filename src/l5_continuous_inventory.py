@@ -300,3 +300,175 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
     return {"ok": True, "action": OPEN, "side": side, "price": own, "qty": q,
             "pair_cost": u + d, "key": action_key(market, side, own, q),
             "labels": "a first leg, priced at the CURRENT book"}
+
+# ====================================================================
+# THE PROSPECTIVE ACTION RULE
+#
+# Every term below is knowable BEFORE the order is sent. Nothing in it is
+# fitted to an outcome, and nothing uses a quantity that is only observable
+# after the window ends -- which is the defect in deriving a threshold from
+# a window's ex-post PEAK imbalance.
+#
+# THE IDENTITY IT RESTS ON. A prediction market's own price IS its
+# probability. So for inventory of `q` on a side whose current market price
+# is `p`, bought at average basis `b`:
+#
+#     expected value of CARRYING it to settlement  =  q * (p - b)
+#     value of COMPLETING it at complement cost c  =  q * (1 - b - c)
+#
+# Completing beats carrying exactly when  1 - b - c > p - b, i.e. when
+#
+#     c  <  1 - p
+#
+# The basis `b` cancels. What was already paid is sunk and must not enter
+# the decision -- which is why "complete only when the PAIR is under $1.00"
+# is the wrong test: it chases the entry price instead of comparing the two
+# futures actually available now. A complement is worth buying when it
+# costs less than its own fair value, whatever the first leg cost.
+#
+# WHAT L5'S RECORD SAYS ABOUT THIS. Across 31,043 opposite-side purchases,
+# decision-time only: 57.8% completed at a pair under $1.00 and were taken
+# at prices 0.1173 BELOW that side's window-to-date mean; 42.2% completed at
+# a pair over $1.00 and were taken 0.1632 ABOVE it, with a larger prior
+# imbalance (177.79 against 133.87) and bigger clips. t = -202.69. So L5
+# completes opportunistically when the complement is cheap and pays up
+# defensively when exposure is large -- two motives, cleanly separable, and
+# both computable before the order.
+#
+# WHY ADD IS `NO_ACTION` BY DEFAULT. A maker ADD rests BELOW the touch, so
+# at decision time its price always looks better than the market's
+# probability. That edge is an illusion: the order fills only when the
+# market comes to it, and at that moment the probability equals the price.
+# Measured on 693,916 of L5's own fills the per-contract alpha is +0.00116,
+# and on a second cut of 63,686 it is -0.00091 -- opposite signs, so zero
+# within noise. An ADD therefore buys no expected edge and only adds
+# exposure, and this rule will not take one to raise activity.
+# ====================================================================
+
+NO_ACTION = "NO_ACTION"
+
+
+def complement_is_worth_buying(*, held_side_price: D, complement_cost: D,
+                               margin: D = D(0)) -> bool:
+    """`c < (1 - p) - margin`. The basis is sunk and does not appear."""
+    return D(complement_cost) < (D(1) - D(held_side_price)) - D(margin)
+
+
+def expected_carry(*, qty: D, basis: D, held_side_price: D) -> D:
+    """Expected settlement value of carrying unresolved inventory."""
+    return D(qty) * (D(held_side_price) - D(basis))
+
+
+def expected_complete(*, qty: D, basis: D, complement_cost: D) -> D:
+    """Value of resolving it now at `complement_cost`. Certain, not expected."""
+    return D(qty) * (D(1) - D(basis) - D(complement_cost))
+
+
+def select_action(*, bid: Any, ask: Any, tick: D, up_q: D = D(0),
+                  dn_q: D = D(0), up_cost: D = D(0), dn_cost: D = D(0),
+                  depth_ticks: int = 2, margin: D = D(0),
+                  may_open: bool = True, allow_add: bool = False
+                  ) -> Dict[str, Any]:
+    """OPEN, ADD, COMPLETE or NO_ACTION, with the economics that chose it.
+
+    Decided entirely from the current book and current realized inventory.
+    Returns the comparison it made, so a refusal is auditable rather than
+    merely a name.
+    """
+    up_q, dn_q = D(up_q), D(dn_q)
+    resid = up_q - dn_q
+    u = _own(UP, bid, ask, tick, depth_ticks)
+    d = _own(DOWN, bid, ask, tick, depth_ticks)
+    if u is None or d is None or u <= 0 or d <= 0:
+        return {"action": NO_ACTION, "reason": "NO_QUOTABLE_PRICE"}
+    # the MARKET's probability for each side, at the touch, not our quote
+    try:
+        p_up = D(str(bid))
+        p_dn = D(1) - D(str(ask))
+    except BaseException:                                      # noqa: BLE001
+        return {"action": NO_ACTION, "reason": "NO_QUOTABLE_PRICE"}
+
+    if resid != 0:
+        held = UP if resid > 0 else DOWN
+        cside = DOWN if held == UP else UP
+        cown = d if cside == DOWN else u
+        hq = up_q if held == UP else dn_q
+        hc = up_cost if held == UP else dn_cost
+        if hq <= 0 or D(hc) <= 0:
+            return {"action": NO_ACTION, "reason": "HELD_COST_UNKNOWN"}
+        basis = D(hc) / hq
+        p_held = p_up if held == UP else p_dn
+        q = min(abs(resid), hq)
+        carry = expected_carry(qty=q, basis=basis, held_side_price=p_held)
+        done = expected_complete(qty=q, basis=basis, complement_cost=cown)
+        info = {"held": held, "held_qty": str(q), "basis": str(basis),
+                "held_side_price": str(p_held),
+                "complement_cost": str(cown),
+                "fair_complement": str(D(1) - p_held),
+                "expected_carry": str(carry),
+                "value_if_completed": str(done),
+                "advantage_of_completing": str(done - carry)}
+        # THE COMPARISON AT THE TOUCH IS DEGENERATE, AND THAT IS THE FINDING.
+        #
+        # Our complement is a MAKER quote `depth_ticks` behind the touch, so
+        # mechanically cown = (1 - p_held) - spread - d*tick. The advantage
+        # of completing therefore comes out at exactly
+        # q * (spread + d*tick) -- a constant, positive at every price, in
+        # every market state. The rule "complete when the complement is
+        # below fair value" consequently ALWAYS fires and carries no
+        # information at all.
+        #
+        # It is the same illusion as the ADD case. The quote looks cheap
+        # only because a resting maker order fills when the market comes TO
+        # it, and at that moment the probability equals the price we paid.
+        # Priced at the fill rather than at the touch, carrying and
+        # completing have the SAME expected value, which is what the
+        # measured per-contract alpha of +0.00116 on 693,916 fills (and
+        # -0.00091 on a second cut of 63,686) already says.
+        #
+        # SO NO EXPECTED-VALUE RULE EXISTS HERE, and one that appears to is
+        # reading the depth of its own quote as edge. What genuinely differs
+        # between the two futures is not expectation but VARIANCE, plus the
+        # credited rebate on the extra fill:
+        #
+        #   completing  removes the exposure, at no expected cost
+        #   carrying    keeps a directional position with no expected gain
+        #
+        # That is why this returns REDUCE whenever a complement is quotable
+        # and NO_ACTION rather than ADD otherwise: not because completing is
+        # +EV, but because it is variance-reducing at zero expected cost,
+        # and an ADD is variance-increasing at zero expected gain. The
+        # `margin` parameter exists so a caller may demand a REAL discount
+        # to fair value -- one larger than the mechanical spread+depth --
+        # before resolving, and 0 means "resolve whenever quotable".
+        _mechanical = (D(1) - p_held) - cown
+        info["mechanical_discount"] = str(_mechanical)
+        info["is_degenerate_at_touch"] = bool(_mechanical > 0)
+        if complement_is_worth_buying(held_side_price=p_held,
+                                      complement_cost=cown, margin=margin):
+            return dict(info, action=REDUCE if q <= abs(resid) else REVERSE,
+                        side=cside, price=cown, qty=q,
+                        key=action_key("", cside, cown),
+                        labels=("resolving removes the exposure at no "
+                                "expected cost. NOT an expected-value edge: "
+                                "the apparent discount is the depth of our "
+                                "own maker quote, see the comment above"))
+        if allow_add:
+            return dict(info, action=NO_ACTION,
+                        reason="ADD_HAS_NO_EXPECTED_EDGE")
+        return dict(info, action=NO_ACTION,
+                    reason="CARRYING_BEATS_COMPLETING_AT_THIS_PRICE")
+
+    if not may_open:
+        return {"action": NO_ACTION, "reason": "OPENING_CLOSED"}
+    if (u + d) > TS.max_pair_cost():
+        return {"action": NO_ACTION, "reason": "PAIR_ABOVE_CEILING",
+                "pair_cost": str(u + d)}
+    side, own = (UP, u) if u <= d else (DOWN, d)
+    lo, hi = TS.min_first_leg_own_price(), TS.max_first_leg_own_price()
+    if not (lo <= own <= hi):
+        return {"action": NO_ACTION, "reason": "FIRST_LEG_OUTSIDE_BAND",
+                "own_price": str(own)}
+    return {"action": OPEN, "side": side, "price": own,
+            "pair_cost": str(u + d), "key": action_key("", side, own),
+            "labels": "a fee-safe opening pair at the current book"}
