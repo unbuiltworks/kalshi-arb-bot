@@ -765,6 +765,20 @@ def verify() -> Dict[str, Any]:
             ("book_completion_depth_ticks", "BC.completion_depth_ticks()",
              lambda: __import__("src.l5_book_completion", fromlist=["x"]
                                 ).completion_depth_ticks()),
+            # THE COMPLETION CEILING AND THE COMPLEMENT'S DEPTH, both
+            # observed rather than graded. 0.96 was never the completion
+            # bound -- `completion_pair_rescue` enforced redemption -- so an
+            # operator reading only `maker_pair_ceiling` would conclude the
+            # wrong number was in force. And the complement's depth decides
+            # whether a completion is fillable at all: the two-sided path
+            # reused the OPENING depth, which put 2245z's complement two
+            # ticks behind the whole visible queue.
+            ("completion_pair_ceiling", "TS.completion_pair_ceiling()",
+             lambda: str(__import__("src.l5_two_sided_probe", fromlist=["x"]
+                                    ).completion_pair_ceiling())),
+            ("ts_completion_at_touch", "L5_TS_COMPLETION_AT_TOUCH",
+             lambda: str((os.getenv("L5_TS_COMPLETION_AT_TOUCH") or ""
+                          ).strip().upper() in ("1", "YES", "TRUE", "ON")).lower()),
             # THE BOUNDED TAKER POLICY. Default-off, and the verifier must
             # say so out loud: a crossing policy whose enablement is only
             # visible by reading an env var is exactly the configuration an

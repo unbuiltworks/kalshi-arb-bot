@@ -72,6 +72,38 @@ MIN_GROSS_EDGE = D("0.01")
 MAX_PAIR_COST = D("0.96")
 MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 
+# ================================= THE COMPLETION CEILING, MADE EXPLICIT
+#
+# OWNER 2026-11-03: "implement a configurable $0.99 fee-inclusive completion
+# ceiling for already-filled unmatched inventory ... preserve the existing
+# $0.96 opening ceiling."
+#
+# WHAT HAD TO BE CORRECTED FIRST: 0.96 was NEVER the completion bound. The
+# opening cap above is enforced at the submission boundary by
+# `pair_cost_refusal`, but a COMPLETION that fails it falls through to
+# `completion_pair_rescue`, whose own limit is `eff <= 1.00` -- a matched
+# pair redeems exactly $1.00, so anything dearer is a certain loss. So the
+# deployed completion bound is 1.00 and has been all along, which is MORE
+# permissive than the 0.99 requested. Checked against the live 2245z state
+# before any of this was written: held DOWN 2 at own 0.4500, complement at
+# own 0.5300 gives eff 0.9800, which fails the 0.96 cap and CLEARS the
+# rescue -- and the venue record shows the engine submitting that window's
+# complement at a pair of 1.0000 at 22:45:40.718.
+#
+# So this does not raise a ceiling. It gives the bound a NAME, a default
+# equal to today's behaviour, telemetry, and a knob that can only move it
+# DOWN toward the opening cap. 0.99 is now settable, and it TIGHTENS.
+#
+# THE CLAMP IS TWO-SIDED ON PURPOSE. Never above 1.00, because a matched
+# pair cannot pay more than it redeems. Never below `MAX_PAIR_COST`, because
+# a completion ceiling under the opening ceiling would make completing
+# inventory we already hold stricter than opening it -- which is backwards:
+# an opening buys a bargain, a completion chooses between a dear pair and a
+# stranded leg.
+COMPLETION_PAIR_CEILING = D("1.00")
+COMPLETION_PAIR_CEILING_ENV = "L5_COMPLETION_PAIR_CEILING"
+COMPLETION_PAIR_CEILING_MAX = D("1.00")
+
 # ===================================== THE FIRST LEG'S OWN-SIDE PRICE FLOOR
 #
 # SEVEN SETTLED WINDOWS, and the separation is NOT clean. The 2026-10-23
@@ -747,6 +779,31 @@ def max_pair_cost() -> D:
     if v <= 0:
         return MAX_PAIR_COST
     return min(MAX_PAIR_COST, v)
+
+
+def completion_pair_ceiling() -> D:
+    """The dearest EFFECTIVE pair a COMPLETION may reach. Never the opening.
+
+    Default is `COMPLETION_PAIR_CEILING` (1.00), which is what
+    `completion_pair_rescue` already enforced, so an unset environment
+    behaves exactly as the deployed code does today. Readable values are
+    clamped to [max_pair_cost(), 1.00]: the knob can tighten toward the
+    opening cap and can never exceed redemption.
+
+    UNREADABLE IS NOT WIDER, matching `max_pair_cost`: a value we cannot
+    parse falls back to the default rather than to anything looser, and a
+    value above 1.00 is clamped rather than honoured.
+    """
+    raw = (os.getenv(COMPLETION_PAIR_CEILING_ENV) or "").strip()
+    if not raw:
+        return COMPLETION_PAIR_CEILING
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return COMPLETION_PAIR_CEILING
+    if not v.is_finite() or v <= 0:
+        return COMPLETION_PAIR_CEILING
+    return min(COMPLETION_PAIR_CEILING_MAX, max(max_pair_cost(), v))
 #: retained for callers that still read it; the binding test is now
 #: `fee_floor()`, computed from the ACTUAL proposed quote prices.
 MIN_EDGE = MIN_GROSS_EDGE

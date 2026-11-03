@@ -3438,6 +3438,74 @@ class InventoryStore:
         """
         return self.fill_count(market, side) > 0
 
+    def lots(self, market: str, side: str) -> List[Dict[str, str]]:
+        """This leg's fills as INDIVIDUAL LOTS, dearest first.
+
+        WHY LOTS AND NOT THE AVERAGE. `leg_cost` is one scalar per side, so a
+        leg built from a cheap fill and an expensive one reports only their
+        blend -- and a blend can be a price that neither lot ever traded at.
+        The live 2026-11-02 2300z book is the case: it held 3.3600 UP at an
+        average own cost of 0.605, which is exactly 2 x 1.68 and exactly
+        (0.21 + 1.00) / 2 -- the venue-confirmed lot of 1.68 at own 0.2100
+        blended with a second lot carrying the 1.00 unattested-basis
+        placeholder. Priced on that average every completion in the window
+        reads 1.77-1.94 and the window disappears; priced on the real lot it
+        contributes six admissible completions.
+
+        NO NEW STATE. `apply_fill` already appends every fill to
+        `fill_provenance[market]["entries"]` with its side, quantity and
+        actual cost, and that structure is already persisted, so this is a
+        READER over a ledger that exists rather than a second copy of it.
+
+        ATTESTATION IS THE POINT. Only a real fill writes an entry here, so
+        quantity that arrived from `reconcile_from_venue`'s net has NO lot --
+        which is exactly how an unattested placeholder is told apart from
+        shares somebody actually bought. Compare `attested_qty` against
+        `position` to find it.
+
+        Dearest first, because a gate that must choose an attribution should
+        choose the conservative one: matching the dearest lots first can
+        never make a completion look cheaper than it is.
+        """
+        market = canonical_market(market, doing="reading lots")
+        side = canonical_side(side, doing="reading lots")
+        prov = (self.state.get("fill_provenance") or {}).get(market) or {}
+        out: List[Dict[str, str]] = []
+        for e in (prov.get("entries") or ()):
+            if not isinstance(e, Mapping):
+                continue
+            if str(e.get("side") or "") != side:
+                continue
+            try:
+                q = D(str(e.get("qty")))
+                c = D(str(e.get("actual_cost")))
+            except BaseException:                              # noqa: BLE001
+                continue
+            if q <= 0:
+                continue
+            out.append({"qty": str(q), "cost_usd": str(c),
+                        "own_px": str(c / q),
+                        "coid": (None if e.get("coid") is None
+                                 else str(e.get("coid"))),
+                        "l5_owner_verified": bool(
+                            e.get("l5_owner_verified"))})
+        out.sort(key=lambda r: D(str(r["own_px"])), reverse=True)
+        return out
+
+    def attested_qty(self, market: str, side: str) -> D:
+        """Quantity on this leg that a real fill accounted for.
+
+        `position` minus this is quantity with no cost basis of its own --
+        the 2300z class. A completion priced against it would be priced
+        against a placeholder, so callers that must not do that compare the
+        two and refuse rather than averaging.
+        """
+        return sum((D(str(r["qty"])) for r in self.lots(market, side)), D(0))
+
+    def unattested_qty(self, market: str, side: str) -> D:
+        """`position` that no fill explains. Zero on a healthy leg."""
+        return self.position(market, side) - self.attested_qty(market, side)
+
     #: a share of a $0-$1 contract cannot have cost more than $1 or less
     #: than $0. Fees are attributable separately and are never folded into a
     #: leg's cost, so this bound is exact rather than approximate.
@@ -6131,7 +6199,29 @@ class FaithfulExecutor:
             return out
         # A MATCHED PAIR PAYS EXACTLY $1.00 A SHARE. Above that the matched
         # book is a certain loss, which no residual argument can justify.
-        if eff > D(1):
+        #
+        # THE LIMIT IS NOW NAMED AND CONFIGURABLE, which is the owner's
+        # 2026-11-03 completion-ceiling direction. It defaults to 1.00 --
+        # exactly the bound this branch has always enforced -- so an unset
+        # environment is byte-identical to the deployed behaviour, and the
+        # knob can only tighten toward the 0.96 opening cap. 0.96 was never
+        # the completion bound: a completion that fails the opening cap
+        # arrives HERE, and here the test was redemption. Setting
+        # L5_COMPLETION_PAIR_CEILING=0.99 makes the bound 0.99.
+        #
+        # UNREADABLE FAILS CLOSED to the default rather than to anything
+        # looser, and the accessor clamps above 1.00, so a fat-fingered
+        # value cannot buy a pair dearer than it redeems.
+        try:
+            _cap = TS.completion_pair_ceiling()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = ("COMPLETION_CEILING_UNREADABLE:%s"
+                             % type(exc).__name__)
+            return out
+        out["completion_pair_ceiling"] = str(_cap)
+        if eff > _cap:
             out["reason"] = "EFFECTIVE_PAIR_ABOVE_REDEMPTION"
             out["redemption"] = "1.00"
             return out
@@ -7012,6 +7102,46 @@ class FaithfulExecutor:
             ts_book = self.ts_authenticated_book(market, authenticated)
             _tick = getattr(self.transport, "tick_size", None)
             _dticks = int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+            # ============ THE COMPLEMENT'S OWN DEPTH, NOT THE OPENING'S
+            #
+            # THE DEFECT, from the venue record of 2026-11-02 2245z. At
+            # 22:45:36.749 this path submitted the complement at own 0.5100
+            # while the UP bid was 0.5300 -- two ticks BELOW the touch,
+            # behind the entire visible queue, unfillable unless the market
+            # moves two more ticks AGAINST the leg we are trying to hedge.
+            # Its pair was 0.9600 and it cleared every economic gate. It
+            # never filled, and nothing in the campaign's four windows ever
+            # completed.
+            #
+            # `l5_book_completion` already diagnosed and fixed exactly this
+            # for ITS path -- COMPLETION_DEPTH_TICKS defaults to 0, and its
+            # comment records the same failure at 1445z -- but the two-sided
+            # path kept reusing the OPENING depth, and the two-sided path is
+            # the one that submits here.
+            #
+            # An opening rests behind the touch to earn the spread. A
+            # completion is removing risk from inventory already held, and
+            # queue position is the whole of its fill probability. Those are
+            # different jobs and they do not share a number.
+            #
+            # DEFAULT OFF, so an unset environment prices the complement
+            # exactly as the deployed code does and parity is unchanged.
+            # Resting AT the touch is a FILLABLE price and nothing more: it
+            # is not an assumption of a fill, post-only still proves it does
+            # not cross, and no resting complement is ever reported as a
+            # hedge.
+            _cdticks = _dticks
+            try:
+                if (os.getenv("L5_TS_COMPLETION_AT_TOUCH") or ""
+                        ).strip().upper() in ("1", "YES", "TRUE", "ON"):
+                    from src import l5_book_completion as _BCd
+                    _cdticks = int(_BCd.completion_depth_ticks())
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # a depth we cannot resolve falls back to the OPENING depth,
+                # which is the behaviour that is already deployed
+                _cdticks = _dticks
 
             rnd = self.probe_round(market)
             if rnd is None:
@@ -7352,7 +7482,7 @@ class FaithfulExecutor:
                     tick=_tick,
                     min_qty=getattr(self.transport, "quantity_increment",
                                     None),
-                    depth_ticks=_dticks,
+                    depth_ticks=_cdticks,
                     book_age_s=ts_book.get("stream_age_s"),
                     gap_suspected=bool(ts_book.get("gap_suspected")),
                     # WHAT THE COMPLEMENT IS FOR, stated rather than
@@ -7382,7 +7512,7 @@ class FaithfulExecutor:
                 # considered at all.
                 #
                 # THE EXECUTABLE PRICE, NOT THE MAKER PRICE. `comp`'s price
-                # is a post-only quote `_dticks` behind the touch -- what we
+                # is a post-only quote `_cdticks` behind the touch -- what we
                 # HOPE to fill at. An unwind has to cross, so its price is
                 # the touch on the side we would consume: buying DOWN sells
                 # the YES token into the bid, buying UP lifts the ask.
