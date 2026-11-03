@@ -3256,3 +3256,30 @@ still reported; the conclusion is withheld.
 
 HALT active, armed false, at-touch OFF, no live orders, no cash deployed.
 Read-only telemetry only.
+
+--- 2026-11-03T18:20Z 452355cd ---
+Deploy the read-only blocked-arm readiness probe.
+
+Owner authorization is limited to deploying and observing the probe. It does
+NOT authorize live trading, arming, new campaign approvals, or any change to
+financial risk limits.
+
+Adds src/l5_arm_switch_gate.py and L5_ARM_SWITCH_READINESS on the heartbeat,
+opt-in via L5_ARM_SWITCH_PROBE. Read-only: it reads row-books, the exposure
+set and retired_markets, and decides nothing about money. The halt latch is
+passed IN rather than read, so it cannot acquire a second divergent reading
+of a latch HaltGate owns.
+
+Also carries the signed-mandate finding: MANDATE_PUBKEYS = {} is the shipped
+state, no key is generated here, and the owner's offline procedure is
+docs/OWNER_MANDATE_SIGNING.md. No authorization artifact is modified.
+
+Restart taken with state proven clean at 18:08:53Z: armed false,
+submission_gate blocked NOT_ARMED, halt_local_env true, live_orders 0,
+pending_terminal [], cash_deployed [].
+
+Unchanged: 0.96 OPENING cap, completion ceiling 1.00, 300s cancellation
+margin, entry 480 / completion 600, opening clip 1, residual cap 1 contract,
+exact-order cancellation, orders_uncertain fail-closed, watchdog, daily and
+cumulative loss limits, basis attestation, defensive-unwind safeguards.
+Executor stays DISARMED, at-touch OFF, no orders.
