@@ -470,19 +470,15 @@ class TestVerifierTellsTheTruth:
 
 # ================ 4. THE COLLAPSED COMPLETION DEADLINE (audit finding) =====
 class TestCollapsedCompletionDeadline:
-    """`COMPLETE_CUTOFF_S = 720` was unreachable at the SUPERSEDED margin.
+    """`COMPLETE_CUTOFF_S = 720` is unreachable at the DEPLOYED cancel margin.
 
     `may_complete` tests `complete_cutoff_s()` BEFORE `cancel_cutoff(t_end)`,
-    so the earlier bound is the real deadline. At a `cancel_margin_s` of 300
+    so the earlier bound is the real deadline. The deployed
+    `cancel_margin_s` is 300 (the runtime verifier's own approved value), so
     the terminal lands at T+600 -- identical to `ENTRY_CUTOFF_S` -- and the
     engine stops reducing risk at the same instant it stops taking it. That
     is the defect the two separate cutoffs exist to prevent, reintroduced by
     configuration.
-
-    CORRECTED 2026-11-03: the override is removed, so the code floor of 180
-    governs, the terminal is T+720 and completion outlives opening by 120s.
-    The 300 cases below are retained as REGRESSION cover -- widening is the
-    one thing the env can still do, and widening is what re-collapses it.
 
     LIVE EVIDENCE (campaign 2026-11-01): PAST_TERMINAL on 39 decisions from
     T+601 to T+714, then PAST_COMPLETE_CUTOFF on 155 from T+725 to T+880 --
@@ -490,8 +486,8 @@ class TestCollapsedCompletionDeadline:
     carried a live two-sided book.
     """
 
-    def test_at_the_superseded_margin_300_the_cutoff_is_unreachable(self,
-                                                                    monkeypatch):
+    def test_at_the_deployed_margin_the_cutoff_is_unreachable(self,
+                                                              monkeypatch):
         monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
         d = TS.binding_completion_deadline_s(900.0)
         assert d["cancel_terminal_s"] == 600.0
@@ -511,19 +507,18 @@ class TestCollapsedCompletionDeadline:
 
     def test_at_the_code_default_completion_outlives_opening(self,
                                                              monkeypatch):
-        """The property the design intends. This is now the DEPLOYED state:
-        the override is gone, so the code default of 180 governs."""
+        """The property the design intends, which the default margin gives
+        and the deployed one removes."""
         monkeypatch.delenv("L5_TS_CANCEL_MARGIN_S", raising=False)
         d = TS.binding_completion_deadline_s(900.0)
         assert d["binding_completion_deadline_s"] == 720.0
         assert d["collapsed_onto_entry_cutoff"] is False
         assert d["completion_outlives_opening_s"] == 120.0
 
-    def test_may_complete_refuses_in_the_dead_zone_at_margin_300(
+    def test_may_complete_refuses_in_the_dead_zone_at_the_deployed_margin(
             self, monkeypatch):
-        """T+601..T+719 is refused as PAST_TERMINAL, matching the live tape
-        of the collapsed configuration, and the 720 cutoff only speaks from
-        T+720. Regression cover for a re-widened margin."""
+        """T+601..T+719 is refused as PAST_TERMINAL, matching the live tape,
+        and the 720 cutoff only speaks from T+720."""
         monkeypatch.setenv("L5_TS_CANCEL_MARGIN_S", "300")
         t0, t1 = 0.0, 900.0
         assert TS.may_complete(599.0, t0, t1) is None

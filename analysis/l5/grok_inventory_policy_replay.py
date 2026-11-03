@@ -78,14 +78,19 @@ def sim(w, *, depth, band_lo, band_hi, comp_cap, mfloor, comp_dl,
             for s in ("UP","DOWN"):
                 q=touch(s,bid,ask); p=q-depth*TICK
                 if not (band_lo<=p<=band_hi): continue
-                # risk-adjusted EV per unit: gross maker edge minus the
-                # calibrated adverse-selection penalty for THAT price band
-                ev=(q-p) - lam*penalty(p)
+                # risk-adjusted EV per unit. THE GROSS EDGE IS THE PAIR
+                # MARGIN, not the distance behind the touch: with both legs
+                # at depth d, pair = 1 - spread - 2*d*tick, so the margin a
+                # completed pair earns is spread + 2*d*tick. Measuring (q-p)
+                # instead made depth 0 look edgeless by construction, which
+                # is an artifact of the formula and not of the economics.
+                margin=(ask-bid) + 2*depth*TICK
+                ev=margin - lam*penalty(p)
                 cands.append((ev,p,s))
             if not cands: refusals["NO_BAND"]+=1; continue
             cands.sort(reverse=True) if ev_select else cands.sort(key=lambda x:x[1])
             ev,opx,side = cands[0]
-            if ev<=0: refusals["EV_NEGATIVE"]+=1; opx=None; continue
+            if lam>0 and ev<=0: refusals["EV_NEGATIVE"]+=1; opx=None; continue
             comp="UP" if side=="DOWN" else "DOWN"; st="RESTING"
     if st=="MATCHED":
         return dict(res="PAIR",pairs=QTY,m=(D(1)-mcost)*QTY-fees,r=D(0),ru=D(0),
@@ -113,16 +118,13 @@ def agg(ws,**kw):
         ref={k2:sum(x["ref"][k2] for x in rs) for k2 in ("EV_NEGATIVE","BUDGET","NO_BAND")})
 BASE=dict(depth=2,band_lo=D("0.20"),band_hi=D("0.60"),comp_cap=D("0.96"),
           mfloor=D("0.25"),comp_dl=D(720),lam=D(0),decay=False,ev_select=False)
-ARMS=[("BASELINE (existing executor)", dict(BASE)),
-      ("G1 budget decay only",        dict(BASE,decay=True)),
-      ("G2 EV side-select only",      dict(BASE,ev_select=True)),
-      ("G3 penalty lam=0.25",         dict(BASE,lam=D("0.25"),ev_select=True)),
-      ("G4 penalty lam=0.50",         dict(BASE,lam=D("0.50"),ev_select=True)),
-      ("G5 penalty lam=1.00 (full)",  dict(BASE,lam=D(1),ev_select=True)),
-      ("G6 FULL Grok (lam=1,decay)",  dict(BASE,lam=D(1),decay=True,ev_select=True)),
-      ("G7 lam=1,decay,floor 0.05",   dict(BASE,lam=D(1),decay=True,ev_select=True,band_lo=D("0.05"))),
-      ("G9 floor 0.05 ONLY (lam=0)",  dict(BASE,band_lo=D("0.05"))),
-      ("G10 floor 0.05 + decay",      dict(BASE,band_lo=D("0.05"),decay=True)),
+ARMS=[("BASELINE d2 cap0.96", dict(BASE)),
+      ("D0a depth0 cap0.99",  dict(BASE,depth=0,comp_cap=D("0.99"))),
+      ("D0b depth0 cap1.00",  dict(BASE,depth=0,comp_cap=D("1.00"))),
+      ("D0c depth0 cap1.00 m0", dict(BASE,depth=0,comp_cap=D("1.00"),mfloor=D(0))),
+      ("D1a depth1 cap0.98",  dict(BASE,depth=1,comp_cap=D("0.98"))),
+      ("D1b depth1 cap1.00",  dict(BASE,depth=1,comp_cap=D("1.00"))),
+      ("D2 depth2 cap1.00",   dict(BASE,depth=2,comp_cap=D("1.00"))),
      ]
 H="%-32s %3s %4s %4s %4s %8s %8s %7s %7s %8s %8s"
 print("windows=%d TRAIN=%d HOLDOUT=%d"%(len(W),k,len(W)-k))
