@@ -3230,3 +3230,16 @@ cancellation, partial-fill reconciliation, orders_uncertain fail-closed,
 watchdog, residual cap, daily and cumulative loss limits, basis attestation,
 defensive-unwind safeguards.
 HALT active, armed false, at-touch OFF, no orders. Read-only audit only.
+
+--- 2026-11-03T16:58Z ---
+Measure the isAggressor assumption that every negative ownership verdict
+depends on, and report the applied residual cap beside the historical one.
+
+The 16:42:28Z run resolved all 76 fills: 1 L5_OWNED, 75 OWNER_MANUAL
+(venue_order_id_not_ours), 0 UNKNOWN. "75 fills were somebody else's" on a
+SHARED account is too strong a claim to rest on an unverified reading of a
+field name, so it is now calibrated against rows already known to be ours by
+client order id and the verdict is reported.
+
+HALT active, armed false, at-touch OFF, no live orders, no cash deployed.
+Read-only telemetry only.

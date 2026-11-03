@@ -495,6 +495,87 @@ def execution_field_inventory(rows: List[Mapping[str, Any]]
     }
 
 
+def aggressor_flag_calibration(rows: List[Mapping[str, Any]], *,
+                               our_coids: set, our_venue_orders: set
+                               ) -> Dict[str, Any]:
+    """Does `isAggressor` really pick OUR execution? Measured, not assumed.
+
+    WHY THIS HAD TO EXIST BEFORE THE VERDICT COULD BE REPORTED. Ownership by
+    venue order id reads one of a row's TWO executions as ours, selected by
+    `isAggressor`. A POSITIVE match needs no such selection -- an id we track
+    cannot be the counterparty's -- but a NEGATIVE one does: every
+    `venue_order_id_not_ours` verdict is only as good as that flag. The
+    2026-11-03T16:42:28Z run returned 75 of 76 fills as OWNER_MANUAL on
+    exactly that basis, and "75 fills were somebody else's" is far too strong
+    a claim to rest on an unverified assumption about a field name.
+
+    So it is calibrated against fills we already know are ours by the OTHER,
+    independent route: a client order id in our provenance. For each such
+    row, is the flag-selected execution's order id one we track, or is the
+    OTHER execution's? If the flag means what it appears to, the first
+    should dominate and `flag_picked_the_other_side` should be ~0. A
+    material count there means the flag is inverted or means something else,
+    and every negative verdict in this audit is then unsafe.
+
+    READ-ONLY. Counts only -- no identifier, price or quantity is reported.
+    """
+    c: Counter = Counter()
+    for r in rows:
+        k = str(r.get("kind") or r.get("type") or "").strip().lower()
+        if k not in FILL_KINDS:
+            continue
+        b = _payload(r)
+        if not isinstance(b, Mapping):
+            continue
+        coid = str(b.get("clientOrderId") or b.get("clientOrderID") or "")
+        if not coid or coid not in our_coids:
+            continue                      # calibrate on KNOWN-ours rows only
+        c["known_ours_by_client_order_id"] += 1
+        agg = _exec_order_id(b.get("aggressorExecution"))
+        pas = _exec_order_id(b.get("passiveExecution"))
+        flag = b.get("isAggressor")
+        if flag not in (True, False):
+            c["flag_absent_or_unreadable"] += 1
+            continue
+        mine = agg if flag is True else pas
+        theirs = pas if flag is True else agg
+        if mine is None and theirs is None:
+            c["no_order_id_on_either_execution"] += 1
+            continue
+        m_in = bool(mine and mine in our_venue_orders)
+        t_in = bool(theirs and theirs in our_venue_orders)
+        if m_in and t_in:
+            c["both_sides_in_our_set"] += 1
+        elif m_in:
+            c["flag_picked_our_side"] += 1
+        elif t_in:
+            c["flag_picked_the_other_side"] += 1
+        else:
+            c["neither_side_in_our_set"] += 1
+    agree = c["flag_picked_our_side"]
+    disagree = c["flag_picked_the_other_side"]
+    decided = agree + disagree
+    if decided == 0:
+        verdict = ("NOT_CALIBRATED: no row was both known-ours by client "
+                   "order id and resolvable by venue order id, so every "
+                   "`venue_order_id_not_ours` verdict in this audit rests on "
+                   "an UNVERIFIED reading of isAggressor and must be read as "
+                   "unresolved rather than as external activity")
+    elif disagree == 0:
+        verdict = "CALIBRATED: the flag picked our side on every decided row"
+    elif agree == 0:
+        verdict = ("INVERTED: the flag picked the OTHER side on every decided "
+                   "row -- every negative verdict here is unsafe")
+    else:
+        verdict = ("AMBIGUOUS: the flag disagreed on %d of %d decided rows -- "
+                   "treat negative verdicts as unresolved" % (disagree, decided))
+    return {"counts": dict(c), "decided_rows": decided, "verdict": verdict,
+            "labels": ("Calibrates the isAggressor assumption that every "
+                       "venue_order_id_not_ours verdict depends on, against "
+                       "rows already known to be ours by client order id. "
+                       "Counts only.")}
+
+
 def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     body = _payload(row)
     if not isinstance(body, Mapping):
@@ -1090,6 +1171,11 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                        if establishable == 0 and keys else None),
         "our_client_order_ids": len(our),
         "our_venue_order_ids": len(our_vids),
+        # WHETHER THE NEGATIVE VERDICTS CAN BE TRUSTED AT ALL. Every
+        # `venue_order_id_not_ours` depends on isAggressor picking our
+        # execution; this measures that against known-ours rows.
+        "aggressor_flag_calibration": aggressor_flag_calibration(
+            walk["rows"], our_coids=our, our_venue_orders=our_vids),
         "unknown_basis_legs": len(keys),
         "establishable": establishable,
         "unestablished": len(keys) - establishable,

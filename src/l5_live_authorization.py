@@ -564,6 +564,7 @@ def authorization_preflight(market: str = "", *,
     try:
         from src import l5_live_execution as _LX
         from src import l5_pmus_live_runner as _R3
+        from src import l5_two_sided_probe as _TS
         absolute = _LX.ABS_RESIDUAL_CAP_CONTRACTS
         k = _R3.residual_cap_k()
         clip = _R3.largest_recorded_clip(root=root)
@@ -583,9 +584,35 @@ def authorization_preflight(market: str = "", *,
                          else "NOT_EVALUATED"),
             outer_bound_contracts=str(
                 (_R3.PROBE_LIMITS or {}).get("max_abs_residual")),
-            note=("the applied ceiling is min(k * clip, absolute); the outer "
-                  "bound is the separate SafetyLimits max_abs_residual and "
-                  "is not the approved figure"))
+            # WHAT WILL ACTUALLY BIND THE NEXT WINDOW, reported beside the
+            # historical worst case because the two differ by 5x at pilot
+            # size and an operator was misled by the historical one.
+            # `largest_recorded_clip` is account-wide and a BTC15m window
+            # that has never filled has max_clip 0, so the gate's
+            # `use_clip = max(qty, clip)` falls back to the ORDER's own size.
+            # At a 1-contract clip that is min(1 * 1, 5) = 1 contract, which
+            # is the approved figure -- not the 5 the row above implies.
+            applied_cap_at_opening_clip=(
+                "POLICY_OFF" if k is None else str(
+                    min(_LX.D(str(k)) * _LX.D(str(
+                        _TS.opening_leg_max_contracts())), absolute))),
+            applied_cap_basis=("min(k * max(this order's qty, THIS market's "
+                               "recorded clip), absolute). A market with no "
+                               "fill has clip 0, so the order's own size "
+                               "decides and a 1-contract clip gives a "
+                               "1-contract cap. The fields above answer a "
+                               "different question: which half would bind at "
+                               "the largest clip this ACCOUNT has ever "
+                               "produced. POLICY_OFF means "
+                               "PMUS_RESIDUAL_CAP_K is unset, blank, "
+                               "unparseable or non-positive -- which selects "
+                               "no policy rather than some default k, so this "
+                               "cap does not apply at all and only the "
+                               "separate outer bound does."),
+            note=("the applied ceiling is min(k * clip, absolute) computed "
+                  "PER MARKET inside the gate; the outer bound is the "
+                  "separate SafetyLimits max_abs_residual and is not the "
+                  "approved figure"))
     except BaseException as exc:                               # noqa: BLE001
         # NOT_EVALUATED, never UNKNOWN. This row REPORTS a ceiling the gate
         # enforces for itself; it is not one of the arming blockers, so a
