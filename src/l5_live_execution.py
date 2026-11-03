@@ -147,6 +147,52 @@ def _money(v: Any) -> D:
         return D(0)
 
 
+def _money_or_none(v: Any) -> Optional[D]:
+    """A venue money field, preserving the difference between ABSENT and ZERO.
+
+    WHY THIS IS NOT `_money`. `_money` returns D(0) for a field the venue did
+    not send, because for a PRICE or a QUANTITY a missing value and a zero
+    are both "nothing to book". For a COMMISSION they are opposite facts, and
+    conflating them silently destroyed the only positive term in this
+    account's economics.
+
+    THE INCIDENT. On the owner-authorized campaign of 2026-11-02 all four
+    venue-confirmed maker fills recorded `fee_usd 0.0000` from
+    `venue_order_progress.commission`. Three of the four cleared the
+    cent-rounding floor (1.92, 2.04 and 2.00 shares against
+    REBATE_FLOOR_SHARES 1.62) and the venue's own published formula
+    -0.0125*C*p*(1-p) puts a $0.01 maker rebate on each of them. The
+    recorded zeros were read as "the venue credited nothing", and that
+    reading is what made the strategy look unconditionally unprofitable.
+
+    It was not a venue statement at all. `/v1/order/{id}` carries
+    `commissionNotionalTotalCollected`, and when that key is simply absent
+    `_money` turns None into D(0) -- so `order_progress` handed the caller a
+    hard zero, the caller's own `None`-means-unknown branch became
+    unreachable, and an UNMEASURED quantity was durably booked as a measured
+    one. The authoritative per-fill credit lives on a different object
+    entirely: `/v1/portfolio/activities` -> trade -> the execution that is
+    ours by `isAggressor` -> `commissionNotionalCollected` (note: no
+    `Total`), which is what `pmus_incentive_audit.credited_on_fills` reads
+    and where all 25 of the September credits were found as NEGATIVE
+    commissions.
+
+    So: a stated value, including a stated ZERO, is a fact and is returned.
+    An absent or unparseable field returns None, which the ledger records as
+    unknown rather than as zero. This function never invents a number.
+    """
+    if isinstance(v, Mapping):
+        if "value" not in v:
+            return None
+        v = v.get("value")
+    if v is None:
+        return None
+    try:
+        return D(str(v))
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
 class IncoherentOrderRow(ValueError):
     """The venue's own numbers for one order do not add up.
 
@@ -302,7 +348,10 @@ def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
             "cum_qty": cum,
             "leaves_qty": leaves,
             "avg_px": _money(row.get("avgPx")),
-            "commission": _money(
+            # ABSENT IS NOT ZERO. `_money` would turn a missing key into
+            # D(0) and the caller would durably book an unmeasured rebate as
+            # a measured zero -- see `_money_or_none`.
+            "commission": _money_or_none(
                 row.get("commissionNotionalTotalCollected")),
             "terminal": bool(terminal)}
 
@@ -3618,7 +3667,16 @@ class InventoryStore:
                             basis=WIRE)
             self.state.setdefault("filled_qty", {})[coid] = str(cum)
             fees = self.state.setdefault("fees", {})
-            fees[coid] = str(D(str(prog.get("commission") or 0)))
+            # ABSENT IS NOT ZERO, and this map's consumer already relies on
+            # that: `l5_only_attested_net` refuses FEE_EVIDENCE_MISSING for an
+            # order with NO recorded commission and accepts a RECORDED zero as
+            # a fact. Writing "0" for a commission the venue never stated
+            # turned the unknown into a fact and let an unknown net reach a
+            # risk gate -- the thing that docstring exists to prevent. So the
+            # key is written only when the venue actually stated a figure.
+            _c = prog.get("commission")
+            if _c is not None:
+                fees[coid] = str(D(str(_c)))
             # THE CALIBRATION RECORD'S FILL AND ITS ACTUAL FEE, from the one
             # place the venue's own numbers are booked.
             #
@@ -8560,7 +8618,9 @@ def deadman(store: InventoryStore, transport: Any, *,
                                   "venue_order_id": vid, "market": market,
                                   "side": side, "qty": str(booked),
                                   "avg_px": str(prog.get("avg_px")),
-                                  "commission": str(prog.get("commission")),
+                                  "commission": (
+                                      None if prog.get("commission") is None
+                                      else str(prog.get("commission"))),
                                   "labels": ("filled before the cancel took; "
                                              "booked with its cost basis")})
         rec = {"client_order_id": coid, "venue_order_id": vid,
