@@ -3070,3 +3070,9 @@ promote 6e772c95 disarmed 2026-11-03
   Ex-post imbalance band removed. L5_LIVE_HALT stays set. No authorization
   created or renewed, nothing armed, no orders.
   Parity 80 / eb672d14b4baf439.
+
+spent-leg plan judgement 2026-11-03 (disarmed)
+  A spent leg's dead price no longer vetoes the live complement.
+  Diagnostic correctness in the money path; adds no exposure, forces no
+  completion, loosens no limit. Both continuous flags stay OFF, HALT stays
+  set, nothing armed. Parity 80 / eb672d14b4baf439.

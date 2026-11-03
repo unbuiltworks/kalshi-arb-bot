@@ -2236,12 +2236,37 @@ def quote_own_price(side: str, *, bid: Any, ask: Any, tick: Any,
 
 def plan_executable(plan: Mapping[str, Any], *, bid: Any, ask: Any,
                     tick: Any, depth_ticks: int,
-                    drift_ticks: Optional[int] = None) -> Optional[str]:
+                    drift_ticks: Optional[int] = None,
+                    spent_sides: Optional[Sequence[str]] = None
+                    ) -> Optional[str]:
     """None if this frozen plan is still executable, else WHY it is not.
 
     Says nothing about whether retiring the round is SAFE -- that is the
     caller's business, and it must confirm no order is live and no leg holds a
     fill before acting on this. This function only reads prices.
+
+    `spent_sides` NAMES THE LEGS THAT HAVE ALREADY BEEN SUBMITTED, and this
+    is the 2215z defect. A spent leg's price is HISTORY: it has filled or been
+    claimed and will never be sent again, so whether it would cross the book
+    as it stands now says nothing about whether this plan can still be
+    worked. Judging it anyway is how a dead price vetoes a live one.
+
+    THE MEASURED CASE, from the owner-authorized campaign of 2026-11-02.
+    2215z held DOWN 1.92 at own 0.3900 -- wire 0.61, an offer -- filled at
+    22:17:09. The book then ran to 0.8800/0.9000, which puts that old offer
+    far below the bid, so the SPENT leg crossed. The loop below returns on
+    the FIRST crossing leg, so it returned LEG_WOULD_CROSS:DOWN and the plan
+    was declared unexecutable. The UP complement, frozen at own 0.5600, did
+    NOT cross that book and was perfectly placeable. It was never judged.
+    The engine then tried to retire the round, was refused
+    LEG_HOLDS_UNMATCHED:DOWN, never re-planned, and never submitted the
+    complement. A real complement was lost to a dead leg's stale price in
+    three of the campaign's four windows.
+
+    DEFAULT None JUDGES BOTH LEGS, byte-for-byte as before, so a plan whose
+    two legs are both still to be placed is unaffected. Only a caller that
+    KNOWS a leg is spent may exclude it, and it must pass that knowledge
+    from the durable claim record rather than from memory.
     """
     tk = _d(tick)
     if tk is None or tk <= 0:
@@ -2257,13 +2282,23 @@ def plan_executable(plan: Mapping[str, Any], *, bid: Any, ask: Any,
         return "PLAN_NOT_TWO_LEGS"
     allow = stale_drift_ticks() if drift_ticks is None else min(
         stale_drift_ticks(), int(drift_ticks))
+    _spent = {str(x).strip().upper() for x in (spent_sides or ())}
     priced = []
     for leg in legs:
         side = str(leg.get("side"))
         own = _d(leg.get("price"))
         if own is None:
             return "LEG_PRICE_UNREADABLE"
+        # a SPENT leg's price is history and is not judged -- see the
+        # docstring. Its price is still read above, so an unreadable one
+        # still fails closed.
+        if side.strip().upper() in _spent:
+            continue
         priced.append((side, own))
+    if not priced:
+        # every leg is spent: there is nothing left to place, which is not
+        # the same as a plan that cannot be placed.
+        return None
     # CROSSING FIRST, BOTH LEGS, BEFORE ANY DRIFT. A crossing leg is rejected
     # by the venue outright; a leg left behind is merely unable to fill. When
     # both are true -- which a large move usually makes true, since on a

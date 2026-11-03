@@ -7041,14 +7041,32 @@ class FaithfulExecutor:
             # additive durable fact.
             _stale_plan = self.probe_stored_plan(market, rnd)
             if _stale_plan is not None:
+                # THE SPENT LEGS ARE EXCLUDED FROM THE JUDGEMENT, read from
+                # the DURABLE claim record rather than from memory.
+                #
+                # 2215z, 2026-11-02: the DOWN leg filled at 22:17:09, the
+                # book ran to 0.8800/0.9000, and that leg's old offer at
+                # wire 0.61 then "crossed". `plan_executable` judged both
+                # legs and returned on the first crossing one, so it blamed
+                # a leg whose price was history and would never be sent
+                # again -- while the UP complement at own 0.5600, which did
+                # NOT cross, was never judged at all. The record read
+                # LEG_WOULD_CROSS:DOWN and no complement was submitted.
+                try:
+                    _spent = [k for k, v in
+                              (self.probe_legs_claimed(market, rnd) or
+                               {}).items() if v]
+                except BaseException:                          # noqa: BLE001
+                    _spent = None      # unreadable claims: judge both legs
                 _why = TS.plan_executable(
                     _stale_plan, bid=ts_book.get("bid"),
                     ask=ts_book.get("ask"), tick=_tick,
-                    depth_ticks=_dticks)
+                    depth_ticks=_dticks, spent_sides=_spent)
                 if _why:
                     _blocked = self.probe_round_is_safe_to_retire(market, rnd)
                     prov.stage("TWO_SIDED_ROUND", {
                         "round": rnd, "plan_unexecutable": _why,
+                        "spent_legs_excluded": _spent,
                         "retired": not _blocked,
                         "retirement_blocked_by": _blocked,
                         "labels": ("a frozen plan the book has left cannot "
