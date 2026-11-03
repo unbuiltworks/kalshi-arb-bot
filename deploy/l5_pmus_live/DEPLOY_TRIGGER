@@ -3061,3 +3061,12 @@ deadline classification fix (disarmed)
 credited per-fill rebate accounting (disarmed)
 clip-vs-cross-cap consistency row (disarmed)
 missed-pair placeability fix 917d1ffe (disarmed, post-campaign)
+
+promote 6e772c95 disarmed 2026-11-03
+  Candidate: 6e772c952728ff09fbab0d8c0a50aeb1eec4c468
+  Both continuous-inventory flags remain UNSET, so the only behavioural
+  change in the deployed engine is the commission fix: an absent venue
+  commission records as UNKNOWN instead of a false zero.
+  Ex-post imbalance band removed. L5_LIVE_HALT stays set. No authorization
+  created or renewed, nothing armed, no orders.
+  Parity 80 / eb672d14b4baf439.
