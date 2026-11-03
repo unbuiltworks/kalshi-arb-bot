@@ -152,6 +152,12 @@ COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 # wired. It is read-only and writes nothing.
 COPY src/l5_continuous_inventory.py src/l5_continuous_inventory.py
 COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
+# The blocked-arm switch gate, called from the HEARTBEAT when
+# L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
+# would NOT fail the boot -- it would report PROBE_FAILED:
+# ModuleNotFoundError at the exact moment an operator is deciding
+# whether a restart is safe. Named here so that cannot happen.
+COPY src/l5_arm_switch_gate.py src/l5_arm_switch_gate.py
 COPY src/l5_depth_comparison.py src/l5_depth_comparison.py
 # the bounded cancellation-mechanism leg. Imported EAGERLY by the
 # runner, so leaving it out of this list crashloops the executor on

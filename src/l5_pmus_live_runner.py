@@ -5411,7 +5411,57 @@ class Runner:
                           "qty). Contracts. A leg that shrinks |prospective| "
                           "is never refused at any depth.")},
             "frozen_rule": "030d8bf"})
+        self.emit_arm_switch_readiness()
         self.emit_two_sided_comparison()
+
+    #: the windows the FINISHED arm worked, comma-separated, so the switch
+    #: readiness can require THEIR confirmed settlement by name rather than
+    #: inferring it from a quiet book -- a quiet book is also what a window
+    #: that never traded looks like.
+    ARM_SWITCH_WINDOWS_ENV = "L5_ARM_SWITCH_WINDOWS"
+    ARM_SWITCH_PROBE_ENV = "L5_ARM_SWITCH_PROBE"
+
+    def emit_arm_switch_readiness(self) -> None:
+        """May this process be restarted into the other completion arm?
+
+        ON THE HEARTBEAT CADENCE AND NOT AT BOOT, which is the whole point.
+        The question has to be answered BEFORE the process goes down; a boot
+        emission would describe the state on the far side of the restart,
+        after anything that was going to cross already had.
+
+        OPT-IN, so it costs nothing until an arm switch is actually being
+        prepared. READ-ONLY, like the gate it calls.
+        """
+        if str(os.getenv(self.ARM_SWITCH_PROBE_ENV, "")).strip().upper() \
+                not in ("1", "YES", "TRUE", "ON"):
+            return
+        try:
+            from src import l5_arm_switch_gate as ASG
+            sg = self.submission_gate()
+            latch = sg.get("halt_latch")
+            # THREE STATES, NOT TWO. "HALT" is asserted, "CLEAR" is not, and
+            # None / NO_GATE / anything else is UNESTABLISHED -- which the
+            # gate treats as a blocker, never as a pass.
+            halt = (True if latch == "HALT"
+                    else False if latch == "CLEAR" else None)
+            raw = (os.getenv(self.ARM_SWITCH_WINDOWS_ENV) or "").strip()
+            windows = tuple(w.strip() for w in raw.split(",") if w.strip())
+            out = ASG.switch_readiness(self.store, windows=windows,
+                                       halt_asserted=halt)
+            emit("L5_ARM_SWITCH_READINESS",
+                 dict(out, label="L5_ARM_SWITCH_READINESS",
+                      utc=now_utc().isoformat(),
+                      halt_latch=latch,
+                      windows_declared=list(windows)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # NEVER ok ON AN ERROR. A probe that cannot answer must not look
+            # like a clean one.
+            emit("L5_ARM_SWITCH_READINESS",
+                 {"label": "L5_ARM_SWITCH_READINESS", "ok": False,
+                  "blockers": ["PROBE_FAILED:%s" % type(exc).__name__],
+                  "detail": ("%s" % exc)[:160]})
 
     def emit_two_sided_comparison(self) -> None:
         """The two-sided comparison, as ONE SHORT LINE.
