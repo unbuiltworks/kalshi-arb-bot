@@ -18,12 +18,46 @@
 #   signing does. If you run this twice you get the SAME public key.
 set -euo pipefail
 
+if [ -z "${HOME:-}" ]; then
+  echo "HOME is not set; refusing to guess where your key should live." >&2
+  exit 2
+fi
+
 KEY="$HOME/.l5/mandate_ed25519.key"
 OUT="$HOME/.l5"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 KEY_ID="${KEY_ID:-owner-2026-11}"
 
+# THE KEY MUST NEVER LIVE IN THE REPOSITORY. If HOME somehow sits inside the
+# checkout, stop rather than create a key that a later `git add` could
+# commit. The signing tool refuses this too; two checks, because the cost of
+# being wrong once is the whole control.
+case "$OUT/" in
+  "$REPO"/*) echo "refusing: $OUT is inside the repository ($REPO)." >&2
+             exit 2 ;;
+esac
+
 mkdir -p "$OUT"; chmod 700 "$OUT"
+
+# ---- 0. a usable python3, named clearly if absent ----------------------
+# On a Mac that has never had the Command Line Tools, /usr/bin/python3 is a
+# STUB: it opens a GUI dialog and exits non-zero. Saying so beats a cryptic
+# failure three steps later.
+if ! python3 -c "import sys" >/dev/null 2>&1; then
+  cat >&2 <<'MSG'
+python3 is not usable on this Mac yet.
+
+Run this once, click Install in the dialog, wait for it to finish, then run
+this script again:
+
+    xcode-select --install
+
+That installs Apple's Command Line Tools. It is not Xcode, it needs no
+Apple developer account, and it takes a couple of minutes.
+MSG
+  exit 2
+fi
+PY_BIN="python3"
 
 # ---- 1. the key. Stdlib only, never overwritten. ------------------------
 if [ -f "$KEY" ]; then
@@ -41,17 +75,36 @@ PY
 fi
 
 # ---- 2. the one dependency, only if missing -----------------------------
-if python3 -c "import cryptography" 2>/dev/null; then
-  echo "[2/4] cryptography already installed"
+# Three routes, because the right one depends on which python3 this Mac has:
+# Apple's system Python takes --user; a Homebrew Python refuses it under
+# PEP 668 as "externally-managed"; a private venv works on all of them and
+# needs no flags. Prebuilt wheels exist for macOS, so no compiler is needed
+# on any route.
+if "$PY_BIN" -c "import cryptography" >/dev/null 2>&1; then
+  echo "[2/4] cryptography already available"
+elif "$PY_BIN" -m pip install --user --quiet cryptography >/dev/null 2>&1 \
+     && "$PY_BIN" -c "import cryptography" >/dev/null 2>&1; then
+  echo "[2/4] cryptography installed for your user"
 else
-  echo "[2/4] installing cryptography (one-time)..."
-  python3 -m pip install --user --quiet cryptography \
-    || pip3 install --user --quiet cryptography
+  echo "[2/4] using a private virtual environment instead..."
+  "$PY_BIN" -m venv "$OUT/venv" >/dev/null 2>&1 || true
+  if [ -x "$OUT/venv/bin/python" ]; then
+    "$OUT/venv/bin/python" -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
+    "$OUT/venv/bin/python" -m pip install --quiet cryptography
+    PY_BIN="$OUT/venv/bin/python"
+    echo "      using $PY_BIN"
+  fi
+  if ! "$PY_BIN" -c "import cryptography" >/dev/null 2>&1; then
+    echo >&2
+    echo "Could not install the 'cryptography' package." >&2
+    echo "Send Claude the error text above rather than working around it." >&2
+    exit 2
+  fi
 fi
 
 # ---- 3. sign the prepared payload --------------------------------------
 echo "[3/4] signing config/mandate_payload_pilot.json ..."
-python3 "$REPO/tools/owner_sign_mandate.py" \
+"$PY_BIN" "$REPO/tools/owner_sign_mandate.py" \
   --key "$KEY" \
   --payload "$REPO/config/mandate_payload_pilot.json" \
   --key-id "$KEY_ID" \
@@ -61,7 +114,7 @@ python3 "$REPO/tools/owner_sign_mandate.py" \
 # Issued now, because the gate treats an approval older than its 4-hour
 # campaign ceiling as `approval_stale` -- which is the exact blocker the
 # deployed preflight is reporting today.
-python3 - "$OUT" <<'PY'
+"$PY_BIN" - "$OUT" <<'PY'
 import datetime as dt, json, os, secrets, sys
 out = sys.argv[1]
 now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
