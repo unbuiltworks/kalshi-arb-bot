@@ -246,3 +246,86 @@ def test_the_residual_cap_makes_an_ADD_impossible_at_the_deployed_clip():
             clip=D("2.52"), residual_cap=D(5),
             complete_ceiling=D("0.50"))
     assert not r["ok"]
+
+
+# ================= the capital-scaled imbalance band (campaign evidence)
+def test_the_band_scales_with_working_cash():
+    """L5's optimum is a DENSITY -- 0.1775 to 0.2022 contracts per dollar of
+    working cash -- not a contract count, so it must scale."""
+    assert CI.imbalance_band(D("12")) == D("2.43")
+    assert CI.imbalance_band(D("20")) == D("4.04")
+    assert CI.imbalance_band(D("35")) == D("7.08")
+
+
+def test_the_band_sits_at_the_top_of_L5s_optimal_density():
+    """Taken at the TOP because the collapse begins immediately above it:
+    +45.02 mean at the optimum decile against -14.83 one decile higher."""
+    assert CI.L5_IMBALANCE_DENSITY_LO < CI.L5_IMBALANCE_DENSITY_HI
+    assert CI.imbalance_band(D("100")) == (
+        CI.L5_IMBALANCE_DENSITY_HI * D("100")).quantize(D("0.01"))
+
+
+def test_our_five_contract_cap_already_exceeds_L5s_collapse_density():
+    """The counterintuitive finding: proportional to capital we permit about
+    twice the imbalance density at which L5's own economics collapsed, so
+    the evidence says TIGHTEN rather than loosen."""
+    ours = D(5) / D(12)                      # contracts per dollar
+    collapse = D("358") / D("1746")          # L5's collapse decile
+    assert ours > collapse * 2
+
+
+def test_an_ADD_is_allowed_inside_the_band_without_improving_the_basis():
+    """The old gate required a basis improvement, which made ADD -- L5's
+    dominant action at 52.6% of 63,686 -- unreachable in practice."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"),
+            complete_ceiling=D("0.40"))      # force REDUCE to refuse
+    assert r["ok"] and r["action"] == CI.ADD
+    assert D(r["basis_after"]) > D(r["basis_before"])   # basis got WORSE
+
+
+def test_an_ADD_is_sized_down_to_land_exactly_on_the_band(probe=None):
+    r = dec(up_q=D("2.00"), up_cost=D("0.60"), clip=D("2.52"),
+            complete_ceiling=D("0.40"))
+    assert r["ok"] and r["action"] == CI.ADD
+    assert D(r["imbalance_after"]) == CI.imbalance_band(D("12"))
+
+
+def test_the_hard_residual_cap_always_wins_over_the_band():
+    """The band is a policy; the residual cap is a risk limit. A band wider
+    than the cap must never widen the cap."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"), cash_cap=D("1000"),
+            residual_cap=D("2"), complete_ceiling=D("0.40"))
+    if r["ok"]:
+        assert D(r["imbalance_after"]) <= D(2)
+
+
+def test_a_zero_band_makes_no_ADD_available():
+    """The configuration that reproduces the deployed engine's behaviour.
+    The completion refusal outranks in `reason`, but the band state is
+    reported alongside it so the absence of an ADD is visible."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.30"), imbalance_cap=D(0),
+            complete_ceiling=D("0.40"))
+    assert not r["ok"]
+    assert r["add_available"] is False
+    assert D(r["imbalance_band"]) == D(0)
+
+
+def test_a_full_band_makes_no_further_ADD_available():
+    r = dec(up_q=D("2.43"), up_cost=D("1.1421"), complete_ceiling=D("0.40"))
+    assert not r["ok"]
+    assert r["add_available"] is False
+    assert D(r["imbalance"]) == D("2.43")
+
+
+def test_a_refusal_with_room_left_still_reports_the_band():
+    r = dec(up_q=D("2.43"), up_cost=D("1.1421"), imbalance_cap=D("4.00"),
+            complete_ceiling=D("0.40"))
+    if not r["ok"]:
+        assert r["add_available"] is True
+
+
+def test_completing_still_outranks_adding(probe=None):
+    """Priority is unchanged: a REDUCE removes exposure and an ADD takes it
+    on, so when both are available the REDUCE wins."""
+    r = dec(up_q=D("1.00"), up_cost=D("0.47"))
+    assert r["ok"] and r["action"] == CI.REDUCE

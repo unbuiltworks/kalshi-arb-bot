@@ -62,6 +62,54 @@ OPEN, ADD, REDUCE, REVERSE = "OPEN", "ADD", "REDUCE", "REVERSE"
 KEY_PREFIX = "l5ci"
 
 
+#: L5'S OWN IMBALANCE OPTIMUM, measured, and why it is a BAND not a ceiling.
+#:
+#: Reconstructed from 63,686 L5 actions across 527 windows, scoring each
+#: window by its PEAK |imbalance| against that window's realized P&L. The
+#: relationship is not monotone and the turn is sharp:
+#:
+#:     peak |imb|        n   mean P&L   win%   mean cash
+#:       1.0 -   30.8   52     +1.39     54       $46
+#:      70.4 -  152.2   52     +8.20     60      $266
+#:     262.1 -  308.5   52    +22.44     71    $1,415
+#:     309.4 -  352.9   52    +45.02     79    $1,746   <- optimum
+#:     358.2 -  426.1   52    -14.83     50    $2,139   <- collapse
+#:     570.3 - 1180.3   59    -71.24     15    $1,890
+#:
+#: Q3 against Q4 is t = +4.32, so the turn is not noise. Carrying temporary
+#: directional exposure DOES improve cumulative outcomes -- up to roughly
+#: 350 contracts on ~$1,750 of working cash, beyond which the win rate
+#: falls to 15% and the mean to -$71. L5's own cumulative -$1,114.64 comes
+#: entirely from the windows where it let imbalance run past that turn.
+#:
+#: SO THE POLICY IS A DENSITY, NOT A COUNT. The optimum is 0.1775 to 0.2022
+#: contracts per dollar of working cash. On our $12 envelope that is 2.13 to
+#: 2.43 contracts -- which is TIGHTER than the 5-contract residual cap we
+#: already run. Proportional to capital we have been permitting about twice
+#: L5's optimal density and about twice its COLLAPSE density, so the
+#: evidence says tighten toward the band, not loosen toward more exposure.
+#:
+#: HONEST LIMIT OF THIS EVIDENCE. Selecting windows by their realized peak
+#: imbalance selects partly on the outcome: a window that went badly is one
+#: where imbalance had reason to grow. These bands therefore describe where
+#: L5's good and bad windows LIVED; they are not a causal estimate that
+#: capping would have produced those returns, because a cap changes the
+#: trajectory. They motivate the band; they do not prove it.
+L5_IMBALANCE_DENSITY_LO = D("0.1775")
+L5_IMBALANCE_DENSITY_HI = D("0.2022")
+
+
+def imbalance_band(cash_cap: D) -> D:
+    """The largest |imbalance| justified by this much working cash.
+
+    Taken at the TOP of L5's optimal density band, because the collapse
+    begins immediately above it and the cost of being over is far larger
+    than the cost of being under: +45.02 at the optimum against -14.83 one
+    decile higher, and -71.24 at the extreme.
+    """
+    return (D(cash_cap) * L5_IMBALANCE_DENSITY_HI).quantize(D("0.01"))
+
+
 def classify(up_q: D, dn_q: D, side: str, qty: D) -> str:
     """L5's own action vocabulary, from CURRENT realized inventory.
 
@@ -115,6 +163,7 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
            clip: D = D("2.52"), depth_ticks: int = 2,
            cash_spent: D = D(0), cash_cap: D = D("12"),
            may_open: bool = True, residual_cap: D = D(5),
+           imbalance_cap: Optional[D] = None,
            pair_ceiling: Optional[D] = None,
            complete_ceiling: D = D("1.00")) -> Dict[str, Any]:
     """The whole decision, recomputed. Returns an action or a named refusal.
@@ -187,22 +236,50 @@ def decide(*, market: str, bid: Any, ask: Any, tick: D,
         aown = u if aside == UP else d
         held_cost = (up_cost if resid > 0 else dn_cost)
         held_qty = (up_q if resid > 0 else dn_q)
+        # THE IMBALANCE BAND, not a basis test.
+        #
+        # Requiring every ADD to LOWER the average basis made ADD
+        # unreachable in practice -- it fires only when the market has
+        # already moved our way, and when it has, a REDUCE is available and
+        # takes priority. L5's dominant action, 52.6% of its 63,686, never
+        # occurred. More importantly the test was the wrong question: a
+        # temporary imbalance is justified by its SIZE relative to working
+        # capital, which is what the measured band above scores, and not by
+        # whether this particular clip happens to average the basis down.
+        band = (imbalance_band(cash_cap) if imbalance_cap is None
+                else D(imbalance_cap))
+        band = min(band, D(residual_cap))     # the hard cap always wins
         if held_qty > 0 and D(held_cost) > 0:
             basis = D(held_cost) / D(held_qty)
             q = D(clip)
-            new_basis = (D(held_cost) + aown * q) / (held_qty + q)
-            if new_basis < basis and _afford(aown, q) \
-                    and abs(resid) + q <= D(residual_cap):
+            # size the clip down to land exactly on the band rather than
+            # refuse: a smaller ADD inside the band is still an ADD.
+            room = band - abs(resid)
+            if room < q:
+                q = room
+            if q > 0 and _afford(aown, q):
+                new_basis = (D(held_cost) + aown * q) / (held_qty + q)
                 return {"ok": True, "action": ADD, "side": aside,
                         "price": aown, "qty": q,
                         "basis_before": basis, "basis_after": new_basis,
+                        "imbalance_after": abs(resid) + q,
+                        "imbalance_band": band,
                         "key": action_key(market, aside, aown, q),
-                        "labels": ("an ADD is permitted only because it "
-                                   "LOWERS the average basis, which is what "
-                                   "makes a cheaper pair reachable")}
-        if red is not None:
-            return red
-        return {"ok": False, "reason": "ADD_WOULD_NOT_IMPROVE_BASIS"}
+                        "labels": ("an ADD is permitted because the imbalance "
+                                   "it creates stays inside the band L5's own "
+                                   "record scores as economically justified, "
+                                   "scaled to this account's working cash")}
+        # BOTH REASONS ARE TRUE, so both are reported. The completion
+        # refusal outranks, because a held leg that cannot be completed is
+        # the more consequential fact, but the band state is what says
+        # whether an ADD was even available -- and a refusal that named
+        # only one of them made the other invisible in the record.
+        out = dict(red) if red is not None else {
+            "ok": False, "reason": "IMBALANCE_BAND_EXHAUSTED"}
+        out["imbalance"] = str(abs(resid))
+        out["imbalance_band"] = str(band)
+        out["add_available"] = bool(band - abs(resid) > 0)
+        return out
 
     # ------------------------------------------------------------ OPEN
     if not may_open:
