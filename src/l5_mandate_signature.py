@@ -52,7 +52,15 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 #: different key: `seq` monotonicity is tracked per key_id, so reusing an id
 #: would let an old sequence number apply to a new key.
 MANDATE_PUBKEYS: Dict[str, str] = {
-    # "owner-2026-10": "<64 hex chars>",
+    # The owner runs `bash tools/owner_setup.sh`, which prints a 64-hex
+    # PUBLIC key under the key_id `owner-2026-11` (the script's default).
+    # Registering it is a one-line reviewed change here:
+    #
+    #     "owner-2026-11": "<the 64 hex chars the script printed>",
+    #
+    # and it is what makes a signature REQUIRED for live arming. Until then
+    # this registry is empty, which refuses every mandate rather than
+    # trusting any.
 }
 
 #: the schema this code understands. A document naming anything else is
