@@ -737,6 +737,20 @@ def verify() -> Dict[str, Any]:
             ("book_completion_enabled", "BC.enabled()",
              lambda: __import__("src.l5_book_completion", fromlist=["x"]
                                 ).enabled()),
+            # THE COMPLEMENT REQUOTE SWITCH, surfaced for exactly the reason
+            # the row above exists. `maybe_completion_requote` is called on
+            # every tick -- L5_LIVE_TICK_STAGES shows the stage at 0.000s --
+            # so the loop LOOKS healthy whether or not the path does
+            # anything. `completion_requote_enabled()` defaults to OFF, and
+            # nothing in the heartbeat said so: the only way to tell was to
+            # notice that no requote ever fired, which is an inference drawn
+            # from an absence. That is precisely how the book-completion
+            # switch stayed unexamined, and this is the same switch class --
+            # the one deciding whether a stranded leg's complement may be
+            # repriced toward the touch at all.
+            ("completion_requote_enabled", "R.completion_requote_enabled()",
+             lambda: __import__("src.l5_pmus_live_runner", fromlist=["x"]
+                                ).completion_requote_enabled()),
             ("book_completion_breakeven_pair", "BC.BREAKEVEN_PAIR",
              lambda: str(__import__("src.l5_book_completion", fromlist=["x"]
                                     ).BREAKEVEN_PAIR)),
