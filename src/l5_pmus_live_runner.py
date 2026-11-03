@@ -456,6 +456,15 @@ def settlement_sweep_cap() -> Optional[int]:
     return cap if cap > 0 else None
 
 
+#: BOUNDED RETRY for a venue-confirmation read that did not answer.
+#: Six attempts over ~135s sit entirely inside the t+480 entry cutoff, so a
+#: window recovered on the last attempt can still open a leg. The cap exists
+#: so a dead gateway is read six times, not six hundred. Module scope, not a
+#: class attribute, so the read works identically under a caller's stub.
+VENUE_BOUNDS_MAX_ATTEMPTS = 6
+VENUE_BOUNDS_BACKOFF_S = (5.0, 10.0, 20.0, 40.0, 60.0, 60.0)
+
+
 def residual_cap_k() -> Optional[D]:
     """The k for RESIDUAL_CAP, read from PMUS_RESIDUAL_CAP_K. None is OFF.
 
@@ -1029,6 +1038,8 @@ class Runner:
         #: venue-confirmed bounds per window start. None means the venue
         #: did not confirm, which refuses arming rather than falling back.
         self.window_bounds: Dict[int, Optional[Dict[str, Any]]] = {}
+        #: per-window transient-retry state; never a substitute for bounds
+        self.window_bounds_retry: Dict[int, Dict[str, Any]] = {}
         self.arm_claim: Optional[Dict[str, Any]] = None
         #: fans one book frame out to the money path's observer and the
         #: shadow policies' ladder; see FrameFanout.
@@ -5535,36 +5546,88 @@ class Runner:
         existing, tested read that does it, and it is reused rather than
         reimplemented.
 
-        Cached per window: one confirmation per fifteen minutes, not one per
-        tick. A failure caches as None for this window, so arming refuses
-        WINDOW_BOUNDS_UNCONFIRMED by name instead of silently falling back to
-        the clock-derived window.
+        A CONFIRMATION IS CACHED; A FAILURE TO READ ONE IS NOT. This used to
+        cache either way, with the rationale that an unconfirmed window "must
+        not become confirmed by retrying". That is right for a venue that
+        DISAGREES and wrong for a venue that did not answer, and collapsing
+        the two cost three consecutive live windows on 2026-11-03 -- 2300z
+        refused 241 times with a healthy book, because one failed lookup at
+        23:01 was cached for the remaining 900 seconds.
+
+        So the three outcomes are now handled as three:
+
+          CONFIRMED -- cached for the window. One read per fifteen minutes,
+                       as before.
+          MISMATCH  -- the venue states a start that DISAGREES with ours.
+                       Cached as a refusal, never retried: retrying cannot
+                       make two different fifteen minutes into one.
+          TRANSIENT -- no usable answer. Retried inside this window with
+                       bounded backoff, and NEVER cached until the attempts
+                       are spent, at which point it becomes a cached refusal
+                       so a dead gateway is not hammered for 900 seconds.
+
+        The clock-derived window is still never substituted: every path that
+        does not CONFIRM returns None and arming refuses by name.
         """
         ws = self.ws
         if ws is None:
             return None
-        if ws in self.window_bounds:
+        if ws in self.window_bounds:       # a SETTLED answer, either way
             return self.window_bounds[ws]
-        out: Optional[Dict[str, Any]] = None
         try:
-            out = OBS.venue_window_bounds(int(ws), AB.WINDOW_S)
-            if out is None:
-                emit("L5_LIVE_WINDOW_UNCONFIRMED",
-                     {"market": AB.slug_for(int(ws)),
-                      "labels": ("the venue did not confirm this window's "
-                                 "start, so no venue-bounded authorization "
-                                 "can be issued for it")})
+            retry = self.window_bounds_retry
+        except AttributeError:            # a caller's stub; create it there
+            retry = self.window_bounds_retry = {}
+        st = retry.setdefault(int(ws), {"attempts": 0, "next_t": 0.0})
+        now = float(getattr(self, "now_t", 0.0) or 0.0)
+        if st["attempts"] and now < float(st["next_t"]):
+            return None                    # backing off: not an answer yet
+        try:
+            rep = dict(OBS.venue_window_bounds_report(int(ws), AB.WINDOW_S)
+                       or {})
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            out = None
+            rep = {"bounds": None, "classification": OBS.BOUNDS_TRANSIENT,
+                   "why": "%s" % type(exc).__name__}
+        st["attempts"] = int(st["attempts"]) + 1
+        cls = str(rep.get("classification") or OBS.BOUNDS_TRANSIENT)
+        bounds = rep.get("bounds")
+        slug = AB.slug_for(int(ws))
+        if cls == OBS.BOUNDS_CONFIRMED and bounds:
+            self.window_bounds[int(ws)] = bounds
+            emit("L5_LIVE_WINDOW_CONFIRMED",
+                 {"market": slug, "attempts": st["attempts"],
+                  "bounds": bounds,
+                  "labels": ("the venue states this window's start and it "
+                             "matches ours; bounds cached for the window")})
+            return bounds
+        base = {"market": slug, "classification": cls,
+                "why": rep.get("why"),
+                "pmus_start_utc": rep.get("pmus_start_utc"),
+                "attempts": st["attempts"],
+                "max_attempts": VENUE_BOUNDS_MAX_ATTEMPTS,
+                "labels": ("the venue did not confirm this window's start, "
+                           "so no venue-bounded authorization can be issued "
+                           "for it. The clock-derived window is never "
+                           "substituted.")}
+        if cls == OBS.BOUNDS_MISMATCH:
+            # DEFINITIVE. The venue named a different fifteen minutes.
+            self.window_bounds[int(ws)] = None
             emit("L5_LIVE_WINDOW_UNCONFIRMED",
-                 {"market": AB.slug_for(int(ws)),
-                  "why": "%s" % type(exc).__name__})
-        # cached either way: an unconfirmed window must not be re-read on
-        # every tick, and must not become confirmed by retrying.
-        self.window_bounds[ws] = out
-        return out
+                 dict(base, retryable=False, reason="VENUE_DISAGREES"))
+            return None
+        if st["attempts"] >= VENUE_BOUNDS_MAX_ATTEMPTS:
+            self.window_bounds[int(ws)] = None
+            emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                 dict(base, retryable=False, reason="ATTEMPTS_EXHAUSTED"))
+            return None
+        idx = min(st["attempts"] - 1, len(VENUE_BOUNDS_BACKOFF_S) - 1)
+        st["next_t"] = now + float(VENUE_BOUNDS_BACKOFF_S[idx])
+        emit("L5_LIVE_WINDOW_UNCONFIRMED",
+             dict(base, retryable=True, reason="TRANSIENT_WILL_RETRY",
+                  retry_in_s=float(VENUE_BOUNDS_BACKOFF_S[idx])))
+        return None
 
     def maybe_expire_authorization(self, now: float) -> Optional[Dict[str, Any]]:
         """A CLAIM THAT HAS EXPIRED MUST ALSO CANCEL, not merely stop arming.

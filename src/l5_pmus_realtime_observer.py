@@ -65,6 +65,11 @@ L5_ADDR = "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
 PMUS_GATEWAY = "https://gateway.polymarket.us"
 UA = {"User-Agent": "Mozilla/5.0 (l5-pmus-realtime-observer; read-only)"}
 
+#: the fallback listing's offset cap. Named so it is visible that this walk
+#: is bounded and cannot reach a current window on its own -- that is the
+#: direct slug resource's job, and this is only the fallback.
+EVENTS_WALK_MAX_OFFSET = 4000
+
 L5_SERIES = "btc-updown-15m"
 PMUS_SERIES = "btc-updown-15m"
 WINDOW_S = 900
@@ -385,6 +390,62 @@ def pmus_slug_for(window_start: int) -> str:
         d.strftime("%Y-%m-%d"), d.hour, d.minute)
 
 
+#: HOW A CONFIRMATION ATTEMPT ENDED. Three outcomes, because collapsing them
+#: is what cost three live windows on 2026-11-03.
+#:
+#:   CONFIRMED -- the venue states this window's start and it matches ours.
+#:   MISMATCH  -- the venue states a start and it DISAGREES. Definitive: the
+#:                two clocks mean different fifteen minutes, and no amount of
+#:                retrying makes that safe. Never retried, always refused.
+#:   TRANSIENT -- we could not get an answer: the read raised, the host
+#:                answered nothing usable, the event was not served, or its
+#:                startTime was unparseable. Retryable, because "I could not
+#:                tell" is not "the venue disagrees".
+BOUNDS_CONFIRMED = "CONFIRMED"
+BOUNDS_MISMATCH = "MISMATCH"
+BOUNDS_TRANSIENT = "TRANSIENT"
+
+
+def venue_window_bounds_report(window_start: int, window_s: int = 900,
+                               verify=None) -> Dict[str, Any]:
+    """`venue_window_bounds` plus WHY, so a caller can retry the right half.
+
+    The bounds alone cannot distinguish "the venue disagrees" from "the
+    gateway did not answer", and those two want opposite handling. This
+    returns both, and `venue_window_bounds` stays the thin wrapper it was.
+    """
+    verify = verify or verify_alignment
+    rep = verify(int(window_start)) or {}
+    cls = str(rep.get("classification") or "").strip()
+    if not cls:
+        # a caller's fake, or an older verify: infer conservatively. A stated
+        # start that disagrees is the only DEFINITIVE case.
+        cls = (BOUNDS_CONFIRMED if rep.get("aligned") is True
+               else BOUNDS_MISMATCH if rep.get("pmus_start_utc")
+               else BOUNDS_TRANSIENT)
+    out: Dict[str, Any] = {"bounds": None, "classification": cls,
+                           "why": rep.get("why"),
+                           "pmus_start_utc": rep.get("pmus_start_utc"),
+                           "pmus_slug": rep.get("pmus_slug")}
+    if rep.get("aligned") is not True or not rep.get("pmus_start_utc"):
+        return out
+    try:
+        start = dt.datetime.fromisoformat(str(rep["pmus_start_utc"]))
+    except (TypeError, ValueError):
+        # a start we cannot parse is not a start we can bound a window with
+        out["classification"] = BOUNDS_TRANSIENT
+        out["why"] = "pmus_start_utc unparseable"
+        return out
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt.timezone.utc)
+    out["classification"] = BOUNDS_CONFIRMED
+    out["bounds"] = {"source": "VENUE", "start": start.isoformat(),
+                     "end": (start + dt.timedelta(
+                         seconds=int(window_s))).isoformat(),
+                     "confirmed_by": "verify_alignment"}
+    return out
+
+
 def venue_window_bounds(window_start: int, window_s: int = 900,
                         verify=None) -> Optional[Dict[str, Any]]:
     """A window's bounds AS THE VENUE STATES THEM, or None.
@@ -401,16 +462,8 @@ def venue_window_bounds(window_start: int, window_s: int = 900,
     lives here, beside the read it depends on, because both the continuous
     runner and the one-shot probe need it and this module is in both images.
     """
-    verify = verify or verify_alignment
-    rep = verify(int(window_start)) or {}
-    if rep.get("aligned") is not True or not rep.get("pmus_start_utc"):
-        return None
-    start = dt.datetime.fromisoformat(str(rep["pmus_start_utc"]))
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=dt.timezone.utc)
-    return {"source": "VENUE", "start": start.isoformat(),
-            "end": (start + dt.timedelta(seconds=int(window_s))).isoformat(),
-            "confirmed_by": "verify_alignment"}
+    return venue_window_bounds_report(window_start, window_s,
+                                      verify=verify)["bounds"]
 
 
 def verify_alignment(window_start: int) -> Dict[str, Any]:
@@ -430,36 +483,94 @@ def verify_alignment(window_start: int) -> Dict[str, Any]:
     }
     want_ev = "btc-updown-15m-%s-%02d%02dz" % (
         want.strftime("%Y-%m-%d"), want.hour, want.minute)
+
+    def _settle(got_raw: Any) -> Dict[str, Any]:
+        """Classify a startTime the venue actually stated."""
+        try:
+            got = dt.datetime.fromisoformat(
+                str(got_raw or "").replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            out["classification"] = BOUNDS_TRANSIENT
+            out["why"] = "PMUS startTime unparseable: %r" % (got_raw,)
+            return out
+        if got.tzinfo is None:
+            got = got.replace(tzinfo=dt.timezone.utc)
+        out["pmus_start_utc"] = got.isoformat()
+        out["aligned"] = (got == want)
+        out["classification"] = (BOUNDS_CONFIRMED if out["aligned"]
+                                 else BOUNDS_MISMATCH)
+        out["why"] = ("PMUS event startTime equals L5's window epoch"
+                      if out["aligned"] else
+                      "PMUS startTime %s != L5 %s" % (got, want))
+        return out
+
+    # THE DIRECT RESOURCE, and it is the whole fix. `/v1/events/slug/{event}`
+    # addresses the event BY NAME, so it reaches the current window however
+    # old the series is.
+    #
+    # WHAT THIS REPLACES, and why it had to go. The previous read walked
+    # `/v1/events?series_id=375` OLDEST FIRST with `while off < 4000`, so it
+    # could only ever see the series' oldest 4,000 events. At 96 windows a
+    # day the series outgrew that cap, and from then on EVERY window came
+    # back "not listed" -- which `venue_window_bounds` turned into None and
+    # the runner cached for the whole window. Measured on 2026-11-03: three
+    # consecutive windows refused, 2300z alone 241 times, with a healthy
+    # book (subscribed before open, 8,540 updates, 500 trades, 0.46/0.59).
+    #
+    # The identical defect was already found and fixed once, in
+    # `l5_pmus_transport.resolve_market`, for the /v1/markets catalogue:
+    # "paged properly it runs past 40,000 rows ordered by ascending id, so a
+    # continuously created 15m window sits at the far end and a bounded walk
+    # can never reach it." This read never got that fix.
+    #
+    # A QUERY PARAMETER IS NOT AN OPTION. The same module records that the
+    # gateway silently IGNORES filters it does not know -- `?slug=`,
+    # `?seriesId=` and `?seriesSlug=` all answer 200 with the unfiltered
+    # default page -- so the slug is matched HERE, on the response, never
+    # delegated to a filter that may not exist.
     try:
-        # PAGINATED, oldest first. A single unpaginated page answers for the
-        # series' FIRST hundred windows and silently reports "not listed" for
-        # every current one -- which reads as a failed alignment when it is
-        # only a short page.
+        ev = _get("%s/v1/events/slug/%s" % (PMUS_GATEWAY, want_ev),
+                  no_cache=True) or {}
+        row = ev.get("event") if isinstance(ev, Mapping) else None
+        if not isinstance(row, Mapping):
+            row = ev if isinstance(ev, Mapping) else {}
+        if str(row.get("slug")) == want_ev and row.get("startTime"):
+            return _settle(row.get("startTime"))
+        # served something, but not this event: fall through to the listing.
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        # a 404 here is NOT definitive -- a window is created shortly before
+        # it opens -- so this is transient and the listing is still tried.
+        out["why"] = "slug lookup failed: %s" % type(exc).__name__
+
+    # THE BOUNDED LISTING, kept only as a fallback for the case where the
+    # slug resource does not carry `startTime`. Still bounded, and still
+    # oldest-first, so it is NOT relied on: it is the belt to the direct
+    # read's braces, and a miss here is TRANSIENT rather than definitive.
+    try:
         off = 0
-        while off < 4000:
+        while off < EVENTS_WALK_MAX_OFFSET:
             ev = _get("%s/v1/events?series_id=375&limit=100&offset=%d"
                       % (PMUS_GATEWAY, off))
-            rows = ev.get("events") or []
+            rows = (ev.get("events") or []) if isinstance(ev, Mapping) else []
             if not rows:
                 break
             for e in rows:
-                if str(e.get("slug")) != want_ev:
-                    continue
-                st = str(e.get("startTime", "")).replace("Z", "+00:00")
-                got = dt.datetime.fromisoformat(st)
-                out["pmus_start_utc"] = got.isoformat()
-                out["aligned"] = (got == want)
-                out["why"] = ("PMUS event startTime equals L5's window epoch"
-                              if out["aligned"] else
-                              "PMUS startTime %s != L5 %s" % (got, want))
-                return out
+                if isinstance(e, Mapping) and str(e.get("slug")) == want_ev:
+                    return _settle(e.get("startTime"))
             off += len(rows)
             if len(rows) < 100:
                 break
     except Exception as exc:                                   # noqa: BLE001
+        out["classification"] = BOUNDS_TRANSIENT
         out["why"] = "alignment check failed: %s" % type(exc).__name__
         return out
-    out["why"] = "PMUS event not listed (window may be outside its horizon)"
+    # NOT LISTED IS NOT A DISAGREEMENT. The venue told us nothing about this
+    # window, which is exactly the state a bounded retry exists for.
+    out["classification"] = BOUNDS_TRANSIENT
+    out["why"] = ("PMUS event not served for %s by /v1/events/slug/ or the "
+                  "bounded listing" % want_ev)
     return out
 
 
