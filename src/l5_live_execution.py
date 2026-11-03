@@ -8591,9 +8591,78 @@ def settle(records: Sequence[Mapping[str, Any]], *, market: str,
     }
 
 
+#: HOW MANY TIMES THE CANCEL VERIFICATION MAY BE RE-READ, and how long it
+#: waits between attempts. Bounded and tiny by construction: this runs on the
+#: deadman path, so a long stall here is itself a hazard.
+#:
+#: THE 0145z/0200z INCIDENT IS WHY. Ten requotes produced not one clean
+#: cancel: SEVEN came back `verify_error: HTTPError` and THREE came back
+#: `still_open` with `ORDER_STATE_NEW` and the full `leaves_qty`. The verify
+#: was a SINGLE attempt, so one transient error on an idempotent read left
+#: the order's fate permanently unknown and marked the whole book uncertain
+#: -- which then blocks every subsequent submission. Seven of ten were lost
+#: to that, not to anything the venue decided.
+#:
+#: ONLY THE READ IS RETRIED, NEVER THE CANCEL. `GET /v1/order/{id}` is
+#: idempotent, so asking again is free and cannot move anything. Re-issuing
+#: `transport.cancel` would not be: by then a replacement may exist on the
+#: same slot, and a second cancel could retire the wrong order. The cancel is
+#: sent exactly once, as before.
+#:
+#: A NON-TERMINAL READ IS ALSO RETRIED, for the three `still_open` rows. A
+#: venue's order query can lag its own cancel, so an immediate re-read can
+#: report ORDER_STATE_NEW on an order that is already gone -- the same
+#: read-after-write lag the reference quoter allows 30s of indexing grace
+#: for. Retrying can only ever turn a FALSE still_open into a proven
+#: cancellation; it can never invent a terminal state, because the verdict is
+#: still the venue's own last word. Exhaust the attempts and the order is
+#: `still_open` exactly as it is today.
+VERIFY_ATTEMPTS = 3
+VERIFY_BACKOFF_S = (0.20, 0.40)
+
+
+def _verify_cancelled(transport: Any, vid: str, *,
+                      attempts: int = VERIFY_ATTEMPTS,
+                      sleeper: Any = None) -> Dict[str, Any]:
+    """Re-read one order id until the venue reports it terminal, or give up.
+
+    Returns {"prog": ..., "attempts": n, "errors": [...], "terminal": bool}.
+    `prog` is None only when EVERY attempt raised. Fail-closed is preserved:
+    the caller still treats a None `prog` as unverified and a non-terminal
+    `prog` as still_open.
+    """
+    if sleeper is None:
+        import time as _t
+        sleeper = _t.sleep
+    n = max(1, int(attempts))
+    errors: List[str] = []
+    prog = None
+    for i in range(n):
+        if i:
+            idx = min(i - 1, len(VERIFY_BACKOFF_S) - 1)
+            try:
+                sleeper(VERIFY_BACKOFF_S[idx])
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+        try:
+            prog = order_progress(transport.order(vid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            errors.append(type(exc).__name__)
+            continue
+        if prog.get("terminal"):
+            return {"prog": prog, "attempts": i + 1, "errors": errors,
+                    "terminal": True}
+    return {"prog": prog, "attempts": n, "errors": errors,
+            "terminal": bool(prog is not None and prog.get("terminal"))}
+
+
 def deadman(store: InventoryStore, transport: Any, *,
-            reason: str, only: Optional[Iterable[str]] = None
-            ) -> Dict[str, Any]:
+            reason: str, only: Optional[Iterable[str]] = None,
+            verify_attempts: int = VERIFY_ATTEMPTS,
+            verify_sleeper: Any = None) -> Dict[str, Any]:
     """Cancel our RESTING orders by VENUE id, then prove it by reading them.
 
     THREE DEFECTS THIS REPLACES, all in the four lines it used to be, none of
@@ -8678,19 +8747,22 @@ def deadman(store: InventoryStore, transport: Any, *,
             # NOT a failure yet: a cancel can raise on an order the venue has
             # already retired. The re-read decides.
             ack_error = type(exc).__name__
-        try:
-            prog = order_progress(transport.order(vid))
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
+        ver = _verify_cancelled(transport, vid, attempts=verify_attempts,
+                                sleeper=verify_sleeper)
+        prog = ver["prog"]
+        if prog is None:
+            # EVERY attempt raised. Unchanged outcome, but the record now
+            # says how hard we tried rather than implying one try was all.
             out["unverified"].append({"client_order_id": coid,
                                       "venue_order_id": vid,
                                       "market": market,
                                       "cancel_error": ack_error,
-                                      "verify_error": type(exc).__name__})
+                                      "verify_error": (ver["errors"] or [None])[0],
+                                      "verify_attempts": ver["attempts"],
+                                      "verify_errors": list(ver["errors"])})
             store.mark_uncertain(
-                "deadman could not verify the cancel of %s (%s)"
-                % (vid, type(exc).__name__))
+                "deadman could not verify the cancel of %s (%s, %d attempts)"
+                % (vid, (ver["errors"] or ["?"])[0], ver["attempts"]))
             continue
         res = store.apply_order_progress(coid, prog, market=market, side=side)
         booked = D(str(res.get("filled_delta") or res.get("delta") or 0))
@@ -8709,7 +8781,9 @@ def deadman(store: InventoryStore, transport: Any, *,
                "venue_state": prog.get("state"),
                "cum_qty": str(prog.get("cum_qty")),
                "leaves_qty": str(prog.get("leaves_qty")),
-               "cancel_error": ack_error}
+               "cancel_error": ack_error,
+               "verify_attempts": ver["attempts"],
+               "verify_errors": list(ver["errors"])}
         if prog.get("terminal"):
             out["cancelled"].append(rec)
         else:
