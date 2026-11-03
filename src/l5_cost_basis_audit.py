@@ -257,30 +257,86 @@ def our_venue_order_ids(store: Any) -> set:
     return out
 
 
-def _row_venue_order_id(body: Mapping[str, Any]) -> Optional[str]:
-    """The venue's own order id for this fill, from the execution object.
-
-    The feed nests it: the execution object's key set is
-    `aggressor,commissionNotionalCollected,...,order,orderRejectReason,...`,
-    so `order` is where the linkage lives. Flat fallbacks are kept because a
-    feed that stops nesting must not silently stop resolving.
-    """
-    if not isinstance(body, Mapping):
+def _exec_order_id(ex: Mapping[str, Any]) -> Optional[str]:
+    """The venue order id inside ONE execution object, or None."""
+    if not isinstance(ex, Mapping):
         return None
-    for ek in ("execution", "exec", "fill"):
-        ex = body.get(ek)
-        if isinstance(ex, Mapping):
-            for k in ("order", "orderId", "orderID", "order_id"):
-                v = ex.get(k)
-                if isinstance(v, Mapping):
-                    v = v.get("id") or v.get("orderId")
-                if v and str(v).strip():
-                    return str(v).strip()
-    for k in ("orderId", "orderID", "order_id", "venueOrderId"):
-        v = body.get(k)
+    for k in ("order", "orderId", "orderID", "order_id"):
+        v = ex.get(k)
+        if isinstance(v, Mapping):
+            v = v.get("id") or v.get("orderId") or v.get("order_id")
         if v and str(v).strip():
             return str(v).strip()
     return None
+
+
+def _row_venue_order_candidates(body: Mapping[str, Any]):
+    """(ours, every) venue order id on this fill row.
+
+    WHY THIS REPLACED A SINGLE-ID READ, and it is measured, not argued. The
+    first version of this looked under `execution`, `exec` and `fill`. The
+    feed uses NEITHER: `execution_field_inventory` names the two real
+    parents, `aggressorExecution` and `passiveExecution` (EXEC_KEYS), and
+    the production audit of 2026-11-03T16:22:24Z consequently resolved
+    `venue_order_id: null` on all 76 fills of the 51 unknown-basis legs and
+    reported owner UNKNOWN_OWNER / no_identity_on_the_row on every one --
+    while the same run collected 420 venue order ids of ours. Zero matches
+    out of 420 known ids was an extraction defect, not an absence of
+    evidence.
+
+    A TRADE HAS TWO PARTIES AND WE ARE ONE OF THEM. Both executions carry an
+    order id and only one of them is ours, so taking either would invent an
+    attribution. `isAggressor` on the payload says which is ours: True ->
+    aggressorExecution, False -> passiveExecution. `ours` is set ONLY when
+    the row says which side we are (or the shape is unambiguous: a single
+    execution object, or a flat id). `every` is both, so a POSITIVE match
+    against ids we know are ours still resolves when `isAggressor` is
+    missing -- an id of ours cannot belong to the counterparty.
+
+    This asymmetry is deliberate. A positive match is proof of ownership; a
+    non-match on an id that may be the counterparty's proves nothing, so it
+    must leave the fill UNKNOWN rather than downgrade it to OWNER_MANUAL.
+    """
+    every: set = set()
+    if not isinstance(body, Mapping):
+        return None, every
+    ours = None
+    # the two real per-party executions. Built as PAIRS, not by subscript
+    # assignment: the module's read-only guard forbids every subscript
+    # assignment target as its proxy for "writes no store key", and that
+    # guard is worth more than the convenience of a dict literal.
+    per_party = tuple((ek, _exec_order_id(body.get(ek))) for ek in EXEC_KEYS)
+    for _ek, v in per_party:
+        if v:
+            every.add(v)
+    agg = body.get("isAggressor")
+    mine = ("aggressorExecution" if agg is True
+            else "passiveExecution" if agg is False else None)
+    if mine is not None:
+        for ek, v in per_party:
+            if ek == mine and v:
+                ours = v
+    # the unambiguous shapes: ONE execution object, or a flat id. There the
+    # row's only order id is the row's own order, so it identifies ours.
+    for ek in ("execution", "exec", "fill"):
+        v = _exec_order_id(body.get(ek))
+        if v:
+            every.add(v)
+            ours = ours or v
+    for k in ("orderId", "orderID", "order_id", "venueOrderId"):
+        v = body.get(k)
+        if v and str(v).strip():
+            every.add(str(v).strip())
+            ours = ours or str(v).strip()
+    return ours, every
+
+
+def _row_venue_order_id(body: Mapping[str, Any]) -> Optional[str]:
+    """The venue's own order id for this fill, ours where the row says so."""
+    ours, every = _row_venue_order_candidates(body)
+    if ours:
+        return ours
+    return sorted(every)[0] if every else None
 
 
 def _row_market(row: Mapping[str, Any]) -> str:
@@ -758,14 +814,22 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
         b = _payload(r)
         coid = str(b.get("clientOrderId") or b.get("clientOrderID")
                    or "") or None
-        vid = _row_venue_order_id(b)
+        # BOTH parties' order ids, plus ours where the row identifies it.
+        # A positive match against ids we track is proof; a non-match on an
+        # id that may be the COUNTERPARTY's proves nothing and must not
+        # become OWNER_MANUAL.
+        vid_ours, vid_all = _row_venue_order_candidates(b)
+        vid_matched = sorted(vid_all & ovo)
+        vid = (vid_matched[0] if vid_matched
+               else (vid_ours or (sorted(vid_all)[0] if vid_all else None)))
         if coid and coid in our_coids:
             owner, owner_evidence = L5_OWNED, "client_order_id"
-        elif vid and vid in ovo:
+        elif vid_matched:
             owner, owner_evidence = L5_OWNED, "venue_order_id"
-        elif coid or vid:
-            owner, owner_evidence = OWNER_MANUAL, (
-                "client_order_id_not_ours" if coid else "venue_order_id_not_ours")
+        elif coid:
+            owner, owner_evidence = OWNER_MANUAL, "client_order_id_not_ours"
+        elif vid_ours:
+            owner, owner_evidence = OWNER_MANUAL, "venue_order_id_not_ours"
         else:
             owner, owner_evidence = UNKNOWN_OWNER, "no_identity_on_the_row"
         # THE FEED'S OWN NAMES. A trade row carries qty/qtyDecimal and an

@@ -1,0 +1,87 @@
+{
+  "artifact": "venue_order_attribution_20261103",
+  "status": "MEASURED. The attribution fix resolved ZERO fills on real data. Root cause found and corrected; a re-run is required to report matches.",
+  "read_only": true,
+  "production_run": {
+    "deployment": "fdf01fd6-c4f6-4965-b723-30536519322f",
+    "emitted_at": "2026-11-03T16:22:24.404Z",
+    "marker": "L5_COST_BASIS_AUDIT",
+    "ok": true,
+    "writes": "NONE",
+    "activity_walk": {"pages": 128, "ended": "eof", "complete": true},
+    "activity_rows": 2543
+  },
+  "attribution_actual_matches": {
+    "our_client_order_ids_collected": 305,
+    "our_venue_order_ids_collected": 420,
+    "fills_examined": 76,
+    "legs_examined": 51,
+    "L5_OWNED": 0,
+    "OWNER_MANUAL": 0,
+    "UNKNOWN_OWNER": 76,
+    "owner_evidence_distribution": {"no_identity_on_the_row": 76},
+    "venue_order_id_resolved_on_fills": 0,
+    "verdict": "ZERO matches against 420 known ids. That is an extraction defect, not an absence of evidence."
+  },
+  "root_cause": {
+    "defect": "_row_venue_order_id looked for the execution object under the keys `execution`, `exec` and `fill`. The PMUS feed uses NONE of those.",
+    "real_shape": "EXEC_KEYS = (aggressorExecution, passiveExecution) -- the module's own execution_field_inventory already named them, and reported 2255 fill rows carrying 4510 execution objects (TWO per row) whose key set includes `order`.",
+    "consequence": "venue_order_id read null on every production fill, so the second ownership route could never fire and every leg still reported UNKNOWN_OWNER.",
+    "how_found": "by comparing the extractor's path against execution_field_inventory's path in the same module, after the production run returned 0 matches on 420 ids."
+  },
+  "fix": {
+    "_exec_order_id": "pulls the id out of ONE execution object (order / orderId / nested {id}).",
+    "_row_venue_order_candidates": "returns (ours, every). Walks EXEC_KEYS, plus the unambiguous single-object and flat shapes.",
+    "two_party_problem": "A trade has two parties and the account is ONE of them. Both executions carry an order id. `isAggressor` on the payload says which is ours (True -> aggressorExecution, False -> passiveExecution).",
+    "deliberate_asymmetry": "A POSITIVE match against ids we track resolves ownership even without isAggressor, because an id of ours cannot belong to the counterparty. A NON-match on an id that may be the counterparty's proves nothing and leaves the fill UNKNOWN_OWNER -- it is never downgraded to OWNER_MANUAL. OWNER_MANUAL requires the row to identify WHICH execution is ours.",
+    "money_fields": "untouched. cost, qty and price are identical before and after; this change is attribution only.",
+    "read_only_guard_preserved": "built as pairs rather than by subscript assignment, because the module's test guard forbids every subscript assignment target as its proxy for 'writes no store key'."
+  },
+  "cost_basis_result_from_the_same_run": {
+    "unknown_basis_legs": 51,
+    "establishable": 49,
+    "unestablished": 2,
+    "placeholder_cost_total_usd": "297.6800",
+    "established_placeholder_cost_usd": "294.6400",
+    "actual_cost_total_usd": "51.69340000",
+    "overstatement_usd": "242.94660000",
+    "overstatement_basis": "established legs ONLY. NOT the difference against placeholder_cost_total_usd, because the 2 unestablished legs have no measured cost to subtract -- their cost stays UNKNOWN and is never treated as zero.",
+    "applied": false,
+    "why_not_applied": "correct_settled_market refuses it as CORRECTION_WOULD_RELAX_LOSS_HALT. Applying it moves realized toward zero and needs its own owner decision."
+  },
+  "accounting_from_the_same_run": {
+    "account_wide_realized": "-10.62110000",
+    "verified_l5_realized": "0.179500",
+    "unknown_unattributed_realized": "-87.02580000",
+    "manual_realized": null,
+    "manual_unavailable_reason": "UNATTRIBUTED_RESIDUAL_NONZERO: manual is a residual and is only meaningful once nothing is unattributable",
+    "identity_holds": false,
+    "pre_baseline_total_l5_share_unknown": "-79.01000000",
+    "pre_baseline_unknown_basis_legs": 42,
+    "post_baseline_settlements_not_attested_count": 10,
+    "legs_priced_at_one_dollar_upper_bound": 51,
+    "label": "A $1/share upper bound is an estimate, not a verified realized loss. verified_l5_realized counts ONLY attested L5 settlements after the 2026-10-16T02:45:12Z baseline."
+  },
+  "tests": {
+    "file": "tests/test_l5_execution_order_attribution.py",
+    "count": 34,
+    "new": 8,
+    "covers": [
+      "the real nesting is read at all (returned None on every production fill before)",
+      "isAggressor picks our execution, not the counterparty's",
+      "the real shape resolves to L5_OWNED",
+      "a positive match resolves even without the aggressor flag",
+      "a counterparty id alone stays UNKNOWN and is never called manual",
+      "our identified execution that is not ours IS manual",
+      "the coid route is untouched",
+      "no money field changes"
+    ]
+  },
+  "parity": {
+    "command": "PYTHONPATH=. python3 -m pytest tests/ -q -p no:randomly --continue-on-collection-errors -rfE",
+    "failing_ids": 80,
+    "digest": "eb672d14b4baf439",
+    "baseline_digest": "eb672d14b4baf439",
+    "verdict": "EXACT"
+  }
+}

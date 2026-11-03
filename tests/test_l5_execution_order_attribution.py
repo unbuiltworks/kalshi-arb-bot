@@ -232,3 +232,109 @@ def test_the_collector_does_not_mutate_the_store():
     snapshot = json.dumps(st, sort_keys=True)
     CBA.our_venue_order_ids(FakeStore(st))
     assert json.dumps(st, sort_keys=True) == snapshot
+
+
+# ================================================================
+# THE REAL FEED SHAPE, and the defect the production audit exposed.
+#
+# The 2026-11-03T16:22:24Z audit run collected 420 venue order ids of ours
+# and matched NONE of them: `venue_order_id` came back null on all 76 fills
+# of the 51 unknown-basis legs and every one read UNKNOWN_OWNER /
+# no_identity_on_the_row. The cause was the extraction path, not the
+# evidence -- the feed nests the id under `aggressorExecution` /
+# `passiveExecution` (EXEC_KEYS), never under `execution`.
+# ================================================================
+
+def real_row(*, market="cpc-btc-updown-15m-2026-10-16-0000z", side="UP",
+             ours="VO-OURS", theirs="VO-THEIRS", is_aggressor=True,
+             qty="0.4500", price="0.0700", cost="0.0315"):
+    """A trade row shaped the way PMUS actually sends one."""
+    agg, pas = (ours, theirs) if is_aggressor else (theirs, ours)
+    body = {
+        "marketSlug": market, "qty": qty, "price": price, "cost": cost,
+        "tradeId": "D3NMZPH42Z6Y", "isAggressor": is_aggressor,
+        "outcomeSide": "OUTCOME_SIDE_YES" if side == "UP"
+                       else "OUTCOME_SIDE_NO",
+        "aggressorExecution": {"order": agg, "lastPx": price,
+                               "lastShares": qty,
+                               "commissionNotionalCollected": "0"},
+        "passiveExecution": {"order": pas, "lastPx": price,
+                             "lastShares": qty,
+                             "commissionNotionalCollected": "0"},
+    }
+    return {"type": "activity_type_trade", "trade": body}
+
+
+def test_THE_REAL_NESTING_IS_READ_at_all():
+    """Before the fix this returned None on every production fill."""
+    assert CBA._row_venue_order_id(real_row()["trade"]) == "VO-OURS"
+
+
+def test_the_aggressor_flag_picks_our_execution_not_the_counterpartys():
+    ours_t, every_t = CBA._row_venue_order_candidates(
+        real_row(is_aggressor=True)["trade"])
+    assert ours_t == "VO-OURS"
+    assert every_t == {"VO-OURS", "VO-THEIRS"}
+    ours_f, every_f = CBA._row_venue_order_candidates(
+        real_row(is_aggressor=False)["trade"])
+    assert ours_f == "VO-OURS"
+    assert every_f == {"VO-OURS", "VO-THEIRS"}
+
+
+def test_the_real_shape_now_resolves_to_L5_OWNED():
+    out = classify([real_row()], our_coids=[], our_vids=["VO-OURS"], side="UP")
+    f = out["fills"][0]
+    assert f["owner"] == CBA.L5_OWNED
+    assert f["owner_evidence"] == "venue_order_id"
+    assert f["venue_order_id"] == "VO-OURS"
+
+
+def test_a_positive_match_resolves_even_without_the_aggressor_flag():
+    """An id of OURS cannot be the counterparty's, so the match still holds
+    when the row does not say which side we are."""
+    r = real_row()
+    r["trade"].pop("isAggressor")
+    out = classify([r], our_coids=[], our_vids=["VO-OURS"], side="UP")
+    assert out["fills"][0]["owner"] == CBA.L5_OWNED
+    assert out["fills"][0]["venue_order_id"] == "VO-OURS"
+
+
+def test_a_counterparty_id_alone_stays_UNKNOWN_and_is_never_called_manual():
+    """THE ASYMMETRY. Without the flag we cannot tell which of the two ids
+    is ours, so a non-match proves nothing. Calling it OWNER_MANUAL would
+    report unresolved attribution as evidence of external activity --
+    exactly the error the owner corrected."""
+    r = real_row()
+    r["trade"].pop("isAggressor")
+    out = classify([r], our_coids=[], our_vids=["VO-SOMETHING-ELSE"],
+                   side="UP")
+    assert out["fills"][0]["owner"] == CBA.UNKNOWN_OWNER
+    assert out["fills"][0]["owner_evidence"] == "no_identity_on_the_row"
+
+
+def test_our_identified_execution_that_is_not_ours_IS_manual():
+    """With the flag the row DOES say which execution is ours, so an id we
+    do not track is positive evidence of someone else's order."""
+    out = classify([real_row(ours="VO-NOT-TRACKED")], our_coids=[],
+                   our_vids=["VO-OURS"], side="UP")
+    assert out["fills"][0]["owner"] == CBA.OWNER_MANUAL
+    assert out["fills"][0]["owner_evidence"] == "venue_order_id_not_ours"
+
+
+def test_the_coid_route_is_untouched_by_the_nesting_fix():
+    r = real_row()
+    r["trade"]["clientOrderId"] = "l5f-mine"
+    out = classify([r], our_coids=["l5f-mine"], our_vids=[], side="UP")
+    assert out["fills"][0]["owner_evidence"] == "client_order_id"
+
+
+def test_the_nesting_fix_changes_no_money_field():
+    """Attribution only. The cost the placeholder stood in for is the same
+    figure before and after."""
+    r = real_row(qty="2.9000", price="0.2034", cost="0.5900")
+    a = classify([r], our_coids=[], our_vids=[], side="UP")["fills"][0]
+    b = classify([r], our_coids=[], our_vids=["VO-OURS"],
+                 side="UP")["fills"][0]
+    assert a["cost"] == b["cost"] == "0.5900"
+    assert a["qty"] == b["qty"]
+    assert a["price"] == b["price"]
