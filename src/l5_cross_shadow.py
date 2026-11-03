@@ -31,12 +31,25 @@ from decimal import Decimal as D, ROUND_HALF_EVEN
 from typing import Any, Mapping, Optional
 
 # --- confirmed fee schedule -------------------------------------------------
-TAKER_THETA = D("0.06")
+#: CORRECTED 2026-11-03 against the VENUE'S OWN RECORDS. Every retained
+#: BTC15m market from 2026-09-30 to 2026-11-03 carries `feeCoefficient`
+#: 0.0695 -- queried individually by slug, 11 dates spanning the claimed
+#: 2026-10-19 change, with no step at it. The 0.06 here came from a
+#: docs.polymarket.us/fees read on 2026-09-13, which predates the gateway's
+#: market-retention floor (~2026-09-30) and therefore cannot be re-verified.
+#:
+#: DIRECTION OF THE ERROR: 0.06 UNDERSTATES the taker charge by ~16%, so
+#: every crossing cost computed with it was optimistic. All of our own live
+#: trade dates (2026-10-11 .. 2026-11-02) fall inside the verified span, so
+#: one coefficient covers them and no per-date split is warranted.
+TAKER_THETA = D("0.0695")
 MAKER_THETA = D("0.0125")           # credited to us; a rebate, not a charge
 TAKER_MAX = D("1.50")
 MAKER_REBATE_MAX = D("0.31")
-FEE_SOURCE = ("docs.polymarket.us/fees fetched 2026-09-13; effective "
-              "12 AM ET 2026-07-01; exchange-wide")
+FEE_SOURCE = ("taker theta from the venue's own per-market feeCoefficient, "
+              "gateway.polymarket.us/v1/market/slug/<slug>, verified constant at "
+              "0.0695 across 2026-09-30..2026-11-03; maker theta from "
+              "docs.polymarket.us/fees fetched 2026-09-13")
 FEE_STATUS_CONFIRMED = "CONFIRMED"
 REDUCED_TIER_FLOOR_USD = D("250000")
 

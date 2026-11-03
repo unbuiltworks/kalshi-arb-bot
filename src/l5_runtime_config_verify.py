@@ -92,10 +92,30 @@ APPROVED: Dict[str, Any] = {
     "daily_realized_loss_halt_usd": D("5"),
     "maker_pair_ceiling": D("0.96"),
     "defensive_pair_ceiling": D("1.20"),
-    "cancel_margin_s": 300.0,
-    "defensive_terminal_s": 600.0,
-    "defensive_guard_opens_s": 540.0,
-    "defensive_last_actionable_s": 585.0,
+    # THE COMPLETION DEADLINE COLLAPSE, CORRECTED (owner 2026-11-03).
+    #
+    # The override `L5_TS_CANCEL_MARGIN_S=300` pulled the terminal to T+600,
+    # exactly `ENTRY_CUTOFF_S`, so `COMPLETE_CUTOFF_S = 720` never bound and
+    # the engine stopped REDUCING risk at the same instant it stopped taking
+    # it -- a code feature cancelled by configuration. At the code floor of
+    # 180 the terminal is T+720 and completion outlives opening by 120s,
+    # which is the property the two separate cutoffs exist to provide.
+    #
+    # THE GUARD INTERVAL MOVES WITH IT, which is why all four are re-pinned
+    # together: T+540-585 was approved BECAUSE the margin was 300, and at 180
+    # the same derivation gives T+660-705. Both are 180s clear of settlement.
+    #
+    # TERMINAL SAFETY IS UNCHANGED IN SUBSTANCE. `ORDER_TTL_S = 120` already
+    # bounds every order's rest per-order, so the maximum age an order can
+    # reach is 120s against the watchdog's 300s overdue threshold -- 180s of
+    # headroom, structural rather than operational. The measured cancel
+    # round-trip is 1.021-1.072s and the ack 0.09-0.42s, so a 180s margin is
+    # ~168x the observed round trip. The pre-TTL rationale for widening to
+    # 300 (a 600s rest tripping the watchdog) no longer applies.
+    "cancel_margin_s": 180.0,
+    "defensive_terminal_s": 720.0,
+    "defensive_guard_opens_s": 660.0,
+    "defensive_last_actionable_s": 705.0,
     "max_windows": 8,
     "max_live_orders": 1,
     "window_strategy": "TWO_SIDED",

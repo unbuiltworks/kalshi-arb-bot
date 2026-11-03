@@ -21,7 +21,7 @@ APPROVED_ENV = {
     "L5_LIVE_AUTH_MAX_REPLACE": "32",
     "L5_LIVE_AUTH_MAX_SUBMISSIONS": "56",
     "L5_LIVE_AUTH_MAX_WINDOWS": "8",
-    "L5_TS_CANCEL_MARGIN_S": "300",
+    "L5_TS_CANCEL_MARGIN_S": "180",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
     "L5_MAX_LIVE_ORDERS": "1",
     # THE APPROVED AGGREGATE CEILING, and it has to be HERE rather than
@@ -133,24 +133,32 @@ def test_every_row_names_the_accessor_it_read(approved):
 
 # ------------------------------------------- the owner's margin condition
 
-def test_a_cancel_margin_that_is_not_300_fails_and_takes_the_guard_with_it(
+def test_a_cancel_margin_that_is_not_180_fails_and_takes_the_guard_with_it(
         approved):
-    """The owner approved T+540-585 BECAUSE the margin is 300. The guard is
+    """The owner approved T+660-705 BECAUSE the margin is 180. The guard is
     derived from it, so a different margin silently moves the approved
     interval -- which is exactly why the margin and all three derived rows
-    are checked rather than the margin alone."""
-    approved.setenv("L5_TS_CANCEL_MARGIN_S", "180")
+    are checked rather than the margin alone.
+
+    WIDENING is what the env can still do (`max(CANCEL_MARGIN_S, env)`), and
+    widening back to 300 is precisely what re-collapses the completion
+    deadline onto the entry cutoff. So that is the direction tested."""
+    approved.setenv("L5_TS_CANCEL_MARGIN_S", "300")
     out = V.verify()
     assert out["PASS"] is False
-    for name, expect in (("cancel_margin_s", "300.0"),
-                         ("defensive_terminal_s", "600.0"),
-                         ("defensive_guard_opens_s", "540.0"),
-                         ("defensive_last_actionable_s", "585.0")):
+    for name, expect in (("cancel_margin_s", "180.0"),
+                         ("defensive_terminal_s", "720.0"),
+                         ("defensive_guard_opens_s", "660.0"),
+                         ("defensive_last_actionable_s", "705.0")):
         r = row(out, name)
         assert r["ok"] is False, name
         assert str(r["required"]) == expect
-    # and the guard really has moved, which is the harm
-    assert row(out, "defensive_terminal_s")["effective"] == 720.0
+    # and the guard really has moved, which is the harm: widening back to
+    # 300 pulls the terminal to T+600, collapsing it onto ENTRY_CUTOFF_S and
+    # leaving completion no time the opening did not already have.
+    assert row(out, "defensive_terminal_s")["effective"] == 600.0
+    from src import l5_two_sided_probe as _TS
+    assert float(_TS.entry_cutoff_s()) == 600.0
 
 
 def test_the_derived_guard_rows_track_the_margin_rather_than_being_fixtures(
@@ -339,9 +347,9 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["daily_realized_loss_halt_usd"] == D("5")
     assert V.APPROVED["maker_pair_ceiling"] == D("0.96")
     assert V.APPROVED["defensive_pair_ceiling"] == D("1.20")
-    assert V.APPROVED["cancel_margin_s"] == 300.0
-    assert V.APPROVED["defensive_guard_opens_s"] == 540.0
-    assert V.APPROVED["defensive_last_actionable_s"] == 585.0
+    assert V.APPROVED["cancel_margin_s"] == 180.0
+    assert V.APPROVED["defensive_guard_opens_s"] == 660.0
+    assert V.APPROVED["defensive_last_actionable_s"] == 705.0
     assert V.APPROVED["max_windows"] == 8
     assert V.APPROVED["max_live_orders"] == 1
     assert V.APPROVED["defensive_execution_enabled"] is False
@@ -361,7 +369,7 @@ APPROVED_SNAPSHOT = {
     "L5_LIVE_AUTH_MAX_REPLACE": "32",
     "L5_LIVE_AUTH_MAX_SUBMISSIONS": "56",
     "L5_LIVE_AUTH_MAX_WINDOWS": "8",
-    "L5_TS_CANCEL_MARGIN_S": "300",
+    "L5_TS_CANCEL_MARGIN_S": "180",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
     "L5_MAX_LIVE_ORDERS": "1",
     "L5_SHADOW_ONLY": "1",

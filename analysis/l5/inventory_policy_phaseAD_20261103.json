@@ -1,0 +1,137 @@
+{
+  "schema": "inventory_policy_phases/1",
+  "generated_utc": "2026-11-03T12:00:00Z",
+  "owner_directive": "PROFITABLE PAIRS + DYNAMIC INVENTORY SELECTION; smallest viable implementation change that improves executable expected value",
+  "labels": {
+    "MEASURED_L5": "from the normalized L5 history; L5's own trades on Polymarket, not ours",
+    "VENUE_CONFIRMED": "our own PMUS orders, fills and settlements",
+    "REPLAY": "simulated openings and completions on harvested tape; NOT realized money",
+    "BLOCKED": "cannot be computed from available data; the missing input is named"
+  },
+
+  "phase_A_L5_inventory_decisions": {
+    "source": "analysis/l5/l5_completion_ceiling.json -- 71,984 fills, 2,216 windows, span 2026-03-19..2026-08-31",
+    "action_mix_all_venues": {"OPEN": 2864, "EXTEND": 35353, "COMPLETE": 33765, "SELL": 2,
+      "reading": "L5 opens rarely (4.0%) and then alternates same-side EXTEND (49.1%) with opposite-side COMPLETE (46.9%). He essentially never sells -- 2 of 71,984."},
+    "btc15m_specific": {"windows": 527, "any_complete_pct": 96.02, "median_completes_per_window": 52,
+      "matched_pair_usd_pct_of_bought": 93.68, "held_residual_ge_1share_pct": 98.86,
+      "flat_at_settlement_pct": 1.14, "residual_usd_at_settlement_p50": 43.57},
+    "completion_pair_cost_by_time_to_expiry": {
+      "tte<30s":    {"n": 382,   "mean": 0.9630, "pct_above_1.00": 26.70},
+      "tte30-120s": {"n": 4784,  "mean": 0.9733, "pct_above_1.00": 23.72},
+      "tte2-5m":    {"n": 8191,  "mean": 0.9729, "pct_above_1.00": 18.45},
+      "tte5-10m":   {"n": 11456, "mean": 0.9656, "pct_above_1.00": 15.14},
+      "tte>10m":    {"n": 8952,  "mean": 0.9669, "pct_above_1.00": 15.38},
+      "reading": "L5's mean completion cost is 0.963-0.973 at every horizon, and the share he pays ABOVE par rises from 15% to 27% as settlement approaches. He tolerates dearer completion near the end; he does not change his average."},
+    "completion_pair_cost_by_imbalance": {
+      "imb1-10": {"n": 1707, "mean": 0.9710, "pct_above_1.00": 20.04},
+      "imb10-50": {"n": 6833, "mean": 0.9698, "pct_above_1.00": 19.67},
+      "imb>50": {"n": 25225, "mean": 0.9683, "pct_above_1.00": 16.54},
+      "reading": "more imbalanced does NOT make him pay up. The above-par share FALLS as imbalance grows."},
+    "answers": {
+      "accumulates_one_side_aggressively": "YES -- EXTEND is 49.1% of all fills, the single largest action class",
+      "buys_the_opposite_side": "YES -- COMPLETE is 46.9%, and 17-27% of those cost more than the $1.00 the pair redeems",
+      "stops_adding_exposure": "NOT ISOLABLE from this dataset: it carries fills, not the quotes that rested unfilled, so a decision not to add leaves no row",
+      "completes_pairs": "YES -- 96.02% of BTC15m windows see at least one completion, median 52 per window",
+      "changes_behaviour_near_settlement": "YES -- the above-par share nearly doubles inside the last 30s (15.4% -> 26.7%) while the mean cost does not move"
+    },
+    "comparison_to_our_engine": {
+      "our_completes_per_window": "~1 (one outstanding order, 3-contract clip)",
+      "l5_completes_per_window": 52,
+      "our_completion_ceiling": "0.96",
+      "l5_mean_completion_cost": "0.9656-0.9733",
+      "finding": "our ceiling is TIGHTER than L5's measured average completion cost. Tested in Phase D and it changed nothing: no completion in the replay ever priced between 0.96 and 0.97."
+    }
+  },
+
+  "phase_B_policy_status": "BLOCKED on one named input, and the block is the finding",
+  "phase_B_blocker": {
+    "requirement": "an independently calibrated probability estimate with explicit uncertainty, used to accumulate on the positive-EV side rather than the cheaper side",
+    "settlement_rule": "UP iff BRTI at window end >= BRTI at window start (CF Benchmarks Bitcoin Real-Time Index). The strike IS the window's own opening price, so the estimate needs the BRTI series, not the market's own price.",
+    "what_is_missing": [
+      "no BRTI endpoint on gateway.polymarket.us: /v1/market/slug/<slug> returns assetPriceTerms with strike:null and priceToBeat:null, and 8 candidate chart/price routes all 404",
+      "cfbenchmarks.com, api.coinbase.com and api.binance.com are all refused by this environment's network policy",
+      "our own code has no BRTI fetcher -- only a prose statement of the settlement rule in l5_venue_adapter.py",
+      "the only local reference series, analysis/profit_search/tick/spot.json, is ~50 minutes on one day (epoch 1792940994..1792943972) and covers NONE of the 19 replay windows"
+    ],
+    "consequence": "EV-based side selection, hedging assessed against both outcomes using an independent probability, and 'reduce exposure when the probability estimate changes' are all unimplementable today. They are not refused on evidence; they have no input. The market price is the only probability available, and using it makes the EV test circular.",
+    "what_would_unblock_it": "a BRTI (or equivalent BTC reference) series at 1s-5s resolution, live for execution and historical for replay. One allowed outbound host, or a recorder on existing infrastructure, is the whole requirement."
+  },
+
+  "phase_C_corrections": {
+    "C1_completion_deadline": {
+      "defect": "`L5_TS_CANCEL_MARGIN_S=300` overrode the code floor of 180, pulling cancel_cutoff to T+600 -- exactly ENTRY_CUTOFF_S -- so COMPLETE_CUTOFF_S=720 was unreachable and the engine stopped reducing risk at the same instant it stopped taking it. A code feature cancelled by configuration.",
+      "live_signature": "PAST_TERMINAL on 143 book-completion decisions from T+601 to T+714; PAST_COMPLETE_CUTOFF only from T+725",
+      "correction": "stop widening: the floor of 180 governs, terminal T+720, completion outlives opening by 120s",
+      "derived_values_moved": {"cancel_margin_s": "300 -> 180", "defensive_terminal_s": "600 -> 720",
+                               "defensive_guard_opens_s": "540 -> 660", "defensive_last_actionable_s": "585 -> 705"},
+      "safety": {"max_order_age_s": 120, "source": "ORDER_TTL_S, per-order", "watchdog_overdue_s": 300,
+                 "headroom_s": 180, "seconds_before_settlement": 180,
+                 "measured_cancel_round_trip_s": "1.021-1.072", "measured_ack_s": "0.09-0.42",
+                 "note": "the pre-TTL rationale for widening to 300 (a 600s rest tripping the watchdog) no longer applies; the TTL bounds age structurally"},
+      "side_effect": "TOO_LATE_TO_WITHDRAW becomes unreachable on a full-length window because PAST_ENTRY_CUTOFF (600) is checked first. It is NOT dead code: t_end is the VENUE's close and an early close makes it binding again, which is pinned by test."
+    },
+    "C2_fee_schedule": {
+      "question": "verify the reported 2026-10-19 schedule change against official venue records",
+      "method": "gateway.polymarket.us/v1/market/slug/<slug> carries feeCoefficient and resolved markets keep it; queried individually across 13 dates",
+      "result": "0.0695 on every date from 2026-09-30 to 2026-11-03, including 2026-10-18, 2026-10-19 and 2026-10-20",
+      "verdict": "the 2026-10-19 change is NOT corroborated. No step exists at that date.",
+      "limit_of_evidence": "markets before ~2026-09-30 return 404 (retention floor), so a change at or before that date cannot be ruled out. The docs.polymarket.us read of 0.06 on 2026-09-13 sits below the floor and cannot be re-verified.",
+      "consequence": "all our live trade dates (2026-10-11..2026-11-02) sit inside one verified coefficient, so NO per-date split is warranted; a date-split would invent a change the venue does not show",
+      "defect_found_and_fixed": "l5_cross_shadow.py and pmus_cross_shadow_live.py both carried TAKER_THETA 0.06, understating the taker charge by 14% and flattering every crossing cost computed with them. Both corrected to 0.0695. Neither is on the money path or in the image COPY list; l5_two_sided_probe, l5_queue_measurement and l5_strand_policy_replay were already correct.",
+      "taker_tier": "base rate; reduced tiers begin at $250,000 prior-calendar-month volume and we are orders of magnitude below"
+    },
+    "C3_duplicate_suppression": {
+      "defect": "action_key was (market, side, price) alone, which cannot distinguish a re-fire at an unchanged book (must suppress) from the first leg of a SECOND pair at the same price after the first completed (must allow). That is why L5_TS_CONTINUOUS_INVENTORY regressed pair-after-pair.",
+      "fix": "an optional `epoch` from inventory_epoch(up_q, dn_q) -- a fingerprint of REALIZED inventory that moves only when a fill lands. Still content-addressed: no clock, no counter, no round. epoch=None is byte-for-byte the old key.",
+      "residual_opening": "flag B stays bounded: decide() takes imbalance_cap explicitly and defaults it to D(0), so no ADD is permitted unless a caller states a bound it can know before the order. Pinned by test.",
+      "flags": "BOTH REMAIN OFF. This closes a precondition for promotion; it promotes nothing."
+    }
+  },
+
+  "phase_D_replay": {
+    "basis": "REPLAY -- 19 harvested BTC15m windows with two-sided tape, 2026-10-28..2026-11-02, chronological 60/40 split (11 train / 8 holdout). Openings AND completions are simulated. Conservative fill rule: a resting maker order fills only when the wire trades through its price; queue position is ignored, which is OPTIMISTIC on fills. Fees at the verified 0.0695 taker / 0.0125 maker rebate, banker's cent. No look-ahead and no guaranteed fills. Incentives counted at ZERO.",
+    "calibration_against_realized": {"replay_residual_per_unit": "-0.203", "venue_realized_per_unit": "-0.1855",
+      "replay_matched_per_contract": "+0.143", "venue_realized_per_pair": "+0.0922",
+      "note": "the replay matches realized residual economics closely and OVERSTATES matched margin by ~55%, so it is biased toward promoting a change"},
+    "single_factor_decomposition": [
+      {"arm": "A baseline cap0.96 margin0.25 deadline600", "pairs": 6, "matched": "+1.7200", "residual": "-4.0600", "hedge": "0.0000", "max_exposure": "0.94", "max_drawdown": "-2.3400", "net": "-2.3400", "train": "-0.7400", "holdout": "-1.6000"},
+      {"arm": "A1 deadline720 ONLY", "pairs": 7, "matched": "+1.8900", "residual": "-3.6600", "hedge": "0.0000", "max_exposure": "0.94", "max_drawdown": "-1.7700", "net": "-1.7700", "train": "-0.7400", "holdout": "-1.0300", "verdict": "BEST HOLDOUT; train unchanged, so the gain is not fitted"},
+      {"arm": "A2 cap0.97 ONLY", "pairs": 6, "net": "-2.3400", "train": "-0.7400", "holdout": "-1.6000", "verdict": "NO EFFECT -- identical to baseline; no completion in the sample priced between 0.96 and 0.97"},
+      {"arm": "A3 margin floor 0 ONLY", "pairs": 7, "net": "-1.8500", "train": "-0.1900", "holdout": "-1.6600", "verdict": "TRAIN-ONLY; holdout WORSE than baseline"},
+      {"arm": "A4 cap0.97 + floor0", "pairs": 7, "net": "-1.8500", "train": "-0.1900", "holdout": "-1.6600"},
+      {"arm": "A5 cap0.97 + deadline720", "pairs": 7, "net": "-1.7700", "train": "-0.7400", "holdout": "-1.0300", "verdict": "identical to A1 -- the cap contributes nothing"},
+      {"arm": "C all three", "pairs": 8, "matched": "+1.9200", "residual": "-3.2600", "hedge": "0.0000", "max_drawdown": "-1.3400", "net": "-1.3400", "train": "-0.1900", "holdout": "-1.1500", "verdict": "worse holdout than A1 alone; the floor removal drags it"},
+      {"arm": "B opening depth 1", "pairs": 6, "net": "-2.6600", "train": "-0.9200", "holdout": "-1.7400", "verdict": "WORSE in both halves; opening depth is not the lever"},
+      {"arm": "E no-trade", "pairs": 0, "net": "0.0000", "train": "0.0000", "holdout": "0.0000"}
+    ],
+    "regime_split_holdout": {
+      "A_baseline": {"lo_vol": {"n": 3, "net": "-0.2600"}, "hi_vol": {"n": 5, "net": "-1.3400"}},
+      "C_all_three": {"lo_vol": {"n": 3, "net": "-0.3200"}, "hi_vol": {"n": 5, "net": "-0.8300"}},
+      "reading": "every gain is concentrated in high-volatility windows, which is where the book moves enough for a later completion to become reachable at all"
+    },
+    "hedge_cost": "0.0000 in every arm -- no completion above $1.00 ever fired, so no loss-making hedge was taken anywhere in the replay",
+    "fidelity_to_L5": "still far off: the replay completes 0.3-0.4 pairs per window against L5's median of 52 on BTC15m, and our matched:residual ratio cannot approach his 5.34 at a 3-contract clip and $12 of cash"
+  },
+
+  "candidate": {
+    "change": "the completion-deadline correction ALONE (C1), plus the two accounting corrections (C2, C3) which do not touch the money path",
+    "explicitly_NOT_changed": [
+      "completion ceiling stays 0.96 -- measured no effect, and L5's 0.97 average did not transfer",
+      "taker margin floor stays $0.25 -- removing it is a train-only gain and worsens the holdout",
+      "opening depth stays 2 -- depth 1 is worse in both halves",
+      "both continuous-inventory flags stay OFF",
+      "no risk limit, exposure cap, clip size or band moved"
+    ],
+    "holdout_improvement_usd": "+0.5700 on 8 windows (-1.6000 -> -1.0300)",
+    "honest_caveat": "the corrected arm is STILL LOSS-MAKING in replay and no-trade still beats it on this sample. The fix reduces the loss; it does not make the strategy profitable. And on the four VENUE-CONFIRMED fills of 2026-11-02 it recovers exactly nothing, because those fills landed at T+21..T+130 and the deadline never bound. Its value is for LATE fills, a state the live campaign has not yet produced."
+  },
+
+  "remaining_risks": [
+    "the replay simulates openings; only 4 of the 19 windows ever had a real order, so the 19-window result is not realized money",
+    "no queue model: our own pre-submit records carry our_position_within_level UNKNOWN against touch depth of 52,000-100,000 shares for a 2-contract clip",
+    "n=8 holdout windows. A +$0.57 difference on 8 windows is not statistically established",
+    "the 89-window venue ledger spans a period in which the executor was repeatedly modified, so pooling it as one strategy's history is invalid and its chronological split aligns with a regime break at 2026-10-26/27",
+    "TOO_LATE_TO_WITHDRAW is now unreachable on full-length windows; the early-close path is pinned by test but has never been exercised live"
+  ]
+}

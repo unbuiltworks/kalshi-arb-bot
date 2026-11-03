@@ -92,11 +92,43 @@ def classify(up_q: D, dn_q: D, side: str, qty: D) -> str:
     return REVERSE if qty > abs(resid) else REDUCE
 
 
-def action_key(market: str, side: str, price: D, qty: Any = None) -> str:
+def inventory_epoch(up_q: Any, dn_q: Any) -> str:
+    """A durable fingerprint of REALIZED inventory, for the action key.
+
+    THE DUPLICATE-SUPPRESSION DEFECT THIS CLOSES. The key was
+    (market, side, price) alone, which collapses two genuinely different
+    intents into one: a re-fire at an unchanged book (which MUST be
+    suppressed) and the FIRST LEG OF A SECOND PAIR at the same price after
+    the first pair completed (which must NOT be). The second is the whole
+    point of continuous inventory, and the old key silently refused it --
+    which is why `L5_TS_CONTINUOUS_INVENTORY` regressed pair-after-pair and
+    was not promotable.
+
+    WHY REALIZED INVENTORY IS THE RIGHT DISCRIMINATOR. It moves when, and
+    only when, a fill lands. A re-tick against an unchanged book leaves it
+    identical, so suppression still fires; a completed pair changes it, so
+    the next intent at the same price is a NEW identity. No clock, no
+    counter and no round -- still content-addressed, just on the content
+    that actually distinguishes the two cases.
+
+    It is NOT a sequence number: it cannot advance on its own, cannot be
+    incremented by a retry, and after a restart it is recomputed from the
+    durable ledger rather than remembered.
+    """
+    return "%s:%s" % (D(up_q).normalize(), D(dn_q).normalize())
+
+
+def action_key(market: str, side: str, price: D, qty: Any = None,
+               *, epoch: Any = None) -> str:
     """Content-addressed idempotency key. No round, no clock, no counter.
 
-    KEYED ON (market, side, price). `qty` is accepted so callers can pass
-    the order they built, and is deliberately NOT part of the identity.
+    KEYED ON (market, side, price) and, when the caller supplies it, the
+    realized-inventory `epoch` from `inventory_epoch`. `qty` is accepted so
+    callers can pass the order they built, and is deliberately NOT part of
+    the identity.
+
+    `epoch=None` reproduces the previous key byte-for-byte, so a caller that
+    does not opt in is unaffected.
 
     WHY QUANTITY IS EXCLUDED, measured. The executor SHRINKS an order to fit
     whatever cash and headroom are left, so four identical ticks against an
@@ -107,12 +139,14 @@ def action_key(market: str, side: str, price: D, qty: Any = None) -> str:
     intent, so it cannot be allowed to mint a new identity.
 
     What remains is the property that matters: the same side at the same
-    price is ONE intent however the size is trimmed, so a repeated trigger
-    is suppressed; and a genuine book move changes the price, which is the
-    signal that a different order is actually wanted.
+    price against the same realized inventory is ONE intent however the size
+    is trimmed, so a repeated trigger is suppressed; a genuine book move
+    changes the price, and a landed fill changes the epoch -- either of which
+    is the signal that a different order is actually wanted.
     """
-    return "%s|%s|%s|%s" % (KEY_PREFIX, str(market), str(side).upper(),
+    base = "%s|%s|%s|%s" % (KEY_PREFIX, str(market), str(side).upper(),
                             D(price).normalize())
+    return base if epoch is None else "%s|%s" % (base, epoch)
 
 
 def _own(side: str, bid: Any, ask: Any, tick: D, depth: int) -> Optional[D]:

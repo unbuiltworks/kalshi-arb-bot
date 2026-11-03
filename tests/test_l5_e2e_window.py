@@ -14,7 +14,7 @@ answers one question -- does the money path hold together across a window? --
 and it answers it deterministically: no network, no real sockets, no threads,
 no live orders, a clock that only moves when a test moves it.
 
-PRODUCTION CONFIGURATION, NOT A CONVENIENT ONE. `L5_TS_CANCEL_MARGIN_S=300`,
+PRODUCTION CONFIGURATION, NOT A CONVENIENT ONE. `L5_TS_CANCEL_MARGIN_S=180`,
 `L5_TS_DEPTH_TICKS=2`, `max_live_orders=1`, `max_cash_deployed_usd=4.65`,
 `max_usd_per_market=5`, `max_total_exposure_usd=5`,
 `daily_realized_loss_halt_usd=5`, `NO_RECYCLING`. A harness that relaxes any
@@ -40,7 +40,7 @@ WS = 1_792_468_800.0                      # the window START, 04:00:00Z
 WE = WS + TS.WINDOW_S                     # ... and its END, 04:15:00Z
 
 #: the production margin, so the terminal is WS+600 and not WS+720
-MARGIN_S = 300.0
+MARGIN_S = 180.0                           # the code floor; see production_configuration
 TERMINAL = WE - MARGIN_S                  # WS + 600
 
 
@@ -307,7 +307,7 @@ def production_configuration(monkeypatch, tmp_path):
     monkeypatch.setenv(TS.EXPERIMENT_ENV, "E2E-WINDOW")
     monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
     monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "E2E-WINDOW")
-    monkeypatch.setenv(TS.CANCEL_MARGIN_ENV, "300")
+    monkeypatch.setenv(TS.CANCEL_MARGIN_ENV, "180")
     monkeypatch.setenv("L5_TS_DEPTH_TICKS", "2")
     monkeypatch.setattr("src.l5_pmus_auth_book.slug_start",
                         lambda slug: WS if slug == SLUG else None)
@@ -321,21 +321,32 @@ def win(tmp_path):
 
 # =================================================== the configuration itself
 
-def test_the_production_margin_moves_the_terminal_to_T_plus_600():
-    """ARITHMETIC THAT DECIDES A LIVE WINDOW. With the deployed margin of
-    300s the terminal is WS+600, which is EARLIER than the 720s completion
-    cutoff -- so `COMPLETE_CUTOFF_S` is unreachable in production and
-    `PAST_TERMINAL` is what actually stops a completion. Entry stops 60s
-    before that, at WS+540, on TOO_LATE_TO_WITHDRAW rather than on the 600s
-    entry cutoff. If this test fails, every offset below means something
-    different."""
-    assert TS.cancel_margin_s() == 300.0
-    assert TS.cancel_cutoff(WE) == WS + 600.0
-    assert TS.complete_cutoff_s() == 720.0          # configured, unreachable
-    assert TS.may_enter(WS + 539.0, WS, WE) is None
-    assert TS.may_enter(WS + 541.0, WS, WE) == "TOO_LATE_TO_WITHDRAW"
-    assert TS.may_complete(WS + 599.0, WS, WE) is None
-    assert TS.may_complete(WS + 601.0, WS, WE) == "PAST_TERMINAL"
+def test_the_production_margin_lets_completion_outlive_opening_by_120s():
+    """ARITHMETIC THAT DECIDES A LIVE WINDOW, corrected 2026-11-03.
+
+    At the code-floor margin of 180s the terminal is WS+720, so the 720s
+    completion cutoff is REACHED instead of being dead configuration, and
+    completion keeps running for 120s after opening has stopped. That
+    120-second tail is the whole point of having two cutoffs: the engine goes
+    on REDUCING risk after it has stopped TAKING it.
+
+    Under the superseded 300s override the terminal was WS+600 -- identical
+    to ENTRY_CUTOFF_S -- so entry died at WS+540 on TOO_LATE_TO_WITHDRAW and
+    completion died at WS+601 on PAST_TERMINAL, 119s of the window spent
+    unable to reduce an unmatched leg. If this test fails, every offset
+    below means something different."""
+    assert TS.cancel_margin_s() == 180.0
+    assert TS.cancel_cutoff(WE) == WS + 720.0
+    assert TS.complete_cutoff_s() == 720.0
+    # opening stops on its OWN cutoff now, not on the terminal
+    assert TS.may_enter(WS + 599.0, WS, WE) is None
+    assert TS.may_enter(WS + 601.0, WS, WE) == "PAST_ENTRY_CUTOFF"
+    # and completion carries on for another 120s
+    assert TS.may_complete(WS + 601.0, WS, WE) is None
+    assert TS.may_complete(WS + 719.0, WS, WE) is None
+    assert TS.may_complete(WS + 721.0, WS, WE) == "PAST_COMPLETE_CUTOFF"
+    # the tail, stated as a number
+    assert TS.complete_cutoff_s() - TS.entry_cutoff_s() == 120.0
 
 
 # ============================================ book freshness and disconnects
@@ -581,13 +592,35 @@ def test_nothing_may_rest_past_the_terminal_and_it_cancels_by_exact_id(
     assert w.store.still_fillable_order_count() == 0
 
 
-def test_no_NEW_leg_is_opened_once_it_could_not_be_withdrawn(tmp_path):
+def test_no_NEW_leg_is_opened_once_the_entry_cutoff_has_passed(tmp_path):
+    """At the corrected margin the ENTRY CUTOFF is the earlier bound, so it
+    is what stops a new leg -- at WS+600 rather than at WS+540.
+
+    Under the superseded 300s margin the terminal sat at WS+600 and its
+    60s withdraw guard bit first, at WS+540, on TOO_LATE_TO_WITHDRAW. Entry
+    therefore lost 60s it was configured to have."""
     w = Window(tmp_path)
-    assert w.reason(w.tick(539.0)) == "SUBMITTED"
+    assert w.reason(w.tick(599.0)) == "SUBMITTED"
     w2 = Window(tmp_path / "x")
     (tmp_path / "x").mkdir(exist_ok=True)
-    assert w2.reason(w2.tick(541.0)) == "TOO_LATE_TO_WITHDRAW"
+    assert w2.reason(w2.tick(601.0)) == "PAST_ENTRY_CUTOFF"
     assert w2.venue.sent == []
+
+
+def test_the_withdraw_guard_still_bites_when_the_VENUE_closes_early(tmp_path):
+    """THE INVARIANT THE PREVIOUS TEST EXISTED FOR, preserved.
+
+    `may_enter` checks the entry cutoff BEFORE the withdraw guard, so on a
+    full-length 900s window the guard is now unreachable. It is NOT dead
+    code: `t_end` comes from the VENUE and the venue's close can be earlier
+    than start+WINDOW_S, which is exactly the 2026-10-23 0000z case. With an
+    early close the guard is the binding bound again, and no leg is opened
+    that the terminal could not withdraw."""
+    early_end = WS + 400.0                       # venue closes 500s early
+    assert TS.may_enter(WS + 100.0, WS, early_end) is None
+    # terminal is 400-180 = WS+220; the guard opens 60s before that
+    assert TS.may_enter(WS + 161.0, WS, early_end) == "TOO_LATE_TO_WITHDRAW"
+    assert TS.cancel_cutoff(early_end) == WS + 220.0
 
 
 def test_realized_net_comes_only_from_SETTLEMENT_and_keeps_fees_apart():
