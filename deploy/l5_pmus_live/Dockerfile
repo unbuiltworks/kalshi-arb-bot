@@ -150,6 +150,7 @@ COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 # is exactly what the closure test could not see: the module was missing from
 # this image and the audit raised ImportError at 01:46:08Z while looking
 # wired. It is read-only and writes nothing.
+COPY src/l5_continuous_inventory.py src/l5_continuous_inventory.py
 COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
 COPY src/l5_depth_comparison.py src/l5_depth_comparison.py
 # the bounded cancellation-mechanism leg. Imported EAGERLY by the

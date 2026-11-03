@@ -107,6 +107,29 @@ STALE_ACTION_MAX_S = 30.0
 #:
 #: DEFAULT OFF, so the deployed engine is byte-for-byte unchanged and this
 #: can be A/B'd as one testable condition.
+#: WHETHER A CONTINUOUS-INVENTORY DECISION MAY CLAIM A SUBMISSION IDENTITY.
+#:
+#: `l5_continuous_inventory` decides from the current book and the current
+#: realized inventory, with no round and no stored plan. Its decisions could
+#: not be submitted at all while the claimable identity existed only in the
+#: round-scoped form, so the candidate was untestable against real fills.
+#: This switch admits its content-addressed key at that one seam.
+#:
+#: It grants NO allowance of any other kind. Every capital limit, the
+#: residual cap, both loss halts, the cash envelope, the order-concurrency
+#: ceiling, reconciliation, exact-order cancellation and the watchdog are
+#: upstream of the seam and are untouched by it.
+#:
+#: DEFAULT OFF, so the deployed engine is unchanged, and explicit YES only.
+CONTINUOUS_INVENTORY_ENV = "L5_TS_CONTINUOUS_INVENTORY"
+
+
+def continuous_inventory_enabled() -> bool:
+    """Explicit YES only; anything else keeps the round-scoped identity."""
+    return (str(os.getenv(CONTINUOUS_INVENTORY_ENV, "")).strip().upper()
+            == "YES")
+
+
 ROUND_RETIRE_RESIDUAL_ENV = "L5_TS_ROUND_RETIRE_WITH_RESIDUAL"
 
 
@@ -7826,10 +7849,50 @@ class FaithfulExecutor:
         if controller is not None:
             _clg = getattr(self, "_probe_leg_pending", None)
             _crd = getattr(self, "_probe_round_pending", None)
-            if not _clg or _crd is None:
+            # THE ONE COUPLING THAT BLOCKED THE CANDIDATE ENTIRELY.
+            #
+            # The claimable identity was available ONLY in the round-scoped
+            # form, so a decision taken without a round -- which is every
+            # decision `l5_continuous_inventory` makes -- hit
+            # CONTROLLER_NO_PROBE_LEG here and was refused BEFORE submission.
+            # The continuous candidate could therefore never place an order
+            # at all, which is what stopped it from being testable against
+            # real venue fills under any authorization.
+            #
+            # `_continuous_key_pending` carries that decision's own
+            # content-addressed key (`l5_continuous_inventory.action_key`,
+            # on market/side/price/qty). It is accepted only when the flag
+            # is on AND the candidate actually set one, so with no caller
+            # change and no flag this branch is byte-for-byte what it was.
+            #
+            # FAIL CLOSED IS PRESERVED, and that is the property that
+            # matters: if NEITHER a round-scoped leg NOR a continuous key is
+            # pending there is still nothing legitimate to submit and this
+            # still refuses. Nothing may submit under the UNRESOLVED
+            # placeholder.
+            #
+            # IDEMPOTENCE IS PRESERVED because the continuous key is also
+            # DERIVED, not minted: the same wanted order yields the same key
+            # and hence the same client_order_id, so a repeated trigger is
+            # still DUPLICATE_SUPPRESSED. It is not round-scoped, which is
+            # the intended behavioural change, and every gate between the
+            # decision and this line has already run on the order itself --
+            # so moving the key does not move a gate.
+            if continuous_inventory_enabled():
+                # DERIVED HERE, from the order that is actually about to be
+                # submitted, so no new durable state is introduced and
+                # nothing has to survive a call. `tr` and `dec` are the same
+                # translated order and decision the payload is built from
+                # thirty lines below, which is what makes the key and the
+                # order one object rather than two that could disagree.
+                from src import l5_continuous_inventory as _CI
+                key = _CI.action_key(market, str(dec["side"]),
+                                     D(str(tr["price"])), D(str(tr["qty"])))
+            elif not _clg or _crd is None:
                 return prov.refuse("CONTROLLER_INTENT",
                                    "CONTROLLER_NO_PROBE_LEG")
-            key = controller_action_key(market, _crd, _clg)
+            else:
+                key = controller_action_key(market, _crd, _clg)
             prov.rec["action_key"] = key
 
         # WHICH PLACEMENT OF THIS LEG THIS IS, and it must be the SAME index

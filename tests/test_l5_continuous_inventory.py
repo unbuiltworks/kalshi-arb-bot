@@ -89,16 +89,24 @@ def test_the_key_carries_no_round_and_no_clock():
     assert k == CI.action_key("m", "UP", D("0.47"), D("2.52"))
 
 
-def test_the_key_is_content_addressed_on_side_price_and_quantity():
+def test_the_key_is_content_addressed_on_market_side_and_price():
     base = CI.action_key("m", "UP", D("0.47"), D("2.52"))
     assert CI.action_key("m", "DOWN", D("0.47"), D("2.52")) != base
     assert CI.action_key("m", "UP", D("0.48"), D("2.52")) != base
-    assert CI.action_key("m", "UP", D("0.47"), D("2.00")) != base
     assert CI.action_key("other", "UP", D("0.47"), D("2.52")) != base
 
 
-def test_equal_quantities_written_differently_share_one_key():
-    """2.5 and 2.50 are the same order and must not place two."""
+def test_quantity_is_deliberately_NOT_part_of_the_identity():
+    """Measured: the executor shrinks an order to fit the remaining budget,
+    so four identical ticks produced sizes 3, 1 and 2. With quantity in the
+    key none of them suppressed and three orders went out. Size is a
+    consequence of the budget, not a statement of intent."""
+    base = CI.action_key("m", "UP", D("0.47"), D("2.52"))
+    assert CI.action_key("m", "UP", D("0.47"), D("1.00")) == base
+    assert CI.action_key("m", "UP", D("0.47")) == base
+
+
+def test_equal_prices_written_differently_share_one_key():
     assert CI.action_key("m", "UP", D("0.47"), D("2.5")) == \
         CI.action_key("m", "UP", D("0.470"), D("2.50"))
 

@@ -81,14 +81,27 @@ def classify(up_q: D, dn_q: D, side: str, qty: D) -> str:
     return REVERSE if qty > abs(resid) else REDUCE
 
 
-def action_key(market: str, side: str, price: D, qty: D) -> str:
+def action_key(market: str, side: str, price: D, qty: Any = None) -> str:
     """Content-addressed idempotency key. No round, no clock, no counter.
 
-    Same wanted order -> same key -> DUPLICATE_SUPPRESSED. A different
-    wanted order gets a different key and must still clear every risk gate.
+    KEYED ON (market, side, price). `qty` is accepted so callers can pass
+    the order they built, and is deliberately NOT part of the identity.
+
+    WHY QUANTITY IS EXCLUDED, measured. The executor SHRINKS an order to fit
+    whatever cash and headroom are left, so four identical ticks against an
+    unchanged book produced sizes 3, then 1, then 2. With quantity in the
+    key each of those was a different identity, duplicate suppression never
+    fired, and three orders went out where the round-scoped key would have
+    sent one. Quantity is a consequence of the budget, not a statement of
+    intent, so it cannot be allowed to mint a new identity.
+
+    What remains is the property that matters: the same side at the same
+    price is ONE intent however the size is trimmed, so a repeated trigger
+    is suppressed; and a genuine book move changes the price, which is the
+    signal that a different order is actually wanted.
     """
-    return "%s|%s|%s|%s|%s" % (KEY_PREFIX, str(market), str(side).upper(),
-                               D(price).normalize(), D(qty).normalize())
+    return "%s|%s|%s|%s" % (KEY_PREFIX, str(market), str(side).upper(),
+                            D(price).normalize())
 
 
 def _own(side: str, bid: Any, ask: Any, tick: D, depth: int) -> Optional[D]:
