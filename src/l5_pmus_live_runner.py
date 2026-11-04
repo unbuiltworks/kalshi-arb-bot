@@ -1253,6 +1253,15 @@ class Runner:
         #: so a long-running process cannot grow it without limit; the only
         #: consumer is `l5_window_accounting`, which cannot trade.
         self.win_lifecycle: Dict[str, List[Dict[str, Any]]] = {}
+        #: VENUE-CONFIRMED CANCELLATIONS, per market, for the accounting
+        #: report only. An order the venue took and then cancelled emits no
+        #: progress row, so without this the window report counted it
+        #: `unacknowledged` -- 8 of window 3's 12 on 2026-11-04, under a
+        #: label reading "submissions are being attempted and not landing",
+        #: when all 12 had venue order ids and venue-confirmed terminal
+        #: states. Acknowledgement evidence only: no fill, quantity, fee or
+        #: P&L is derived from it anywhere.
+        self.win_cancels: Dict[str, List[Dict[str, Any]]] = {}
         #: the latest report per market, provisional then confirmed. One entry
         #: per window, overwritten in place, so a window is never double
         #: counted in the rolling totals.
@@ -3942,6 +3951,11 @@ class Runner:
                 # on cumulative quantity, so this can only ever add a fill
                 # the lifecycle stream never reported.
                 fills=_window_fills(self, str(market)),
+                # Venue-confirmed cancellations, so an order the venue took
+                # and then cancelled is not reported as never having landed.
+                # Acknowledgement only: adds no fill and no P&L.
+                cancels=(getattr(self, "win_cancels", None)
+                         or {}).get(str(market)) or (),
                 settlement=settlement,
                 # ONLY ACTUALLY CREDITED rebates, and we hold none: no venue
                 # credit record is reachable from this process, so the field
@@ -7456,6 +7470,27 @@ class Runner:
             if callable(_nk):
                 _nk(coid, out if isinstance(out, Mapping) else {})
             self.stats["requote_cancelled"] += 1
+            # ACKNOWLEDGEMENT EVIDENCE for the window report. Only rows the
+            # VENUE confirmed terminal on a re-read are recorded; `errors`,
+            # `unverified` and `still_open` are failures that mark the book
+            # uncertain and are deliberately not recorded as evidence of
+            # anything. Reporting only, and it can never stop a cancel.
+            try:
+                if getattr(self, "win_cancels", None) is None:
+                    self.win_cancels = {}
+                _rows = (out or {}).get("cancelled") or []
+                _bucket = self.win_cancels.setdefault(str(slug), [])
+                _seen = {str(r.get("client_order_id") or "")
+                         for r in _bucket}
+                for _r in _rows:
+                    if not isinstance(_r, Mapping):
+                        continue
+                    _c = str(_r.get("client_order_id") or "")
+                    if _c and _c not in _seen and _r.get("venue_order_id"):
+                        _bucket.append(dict(_r))
+                        _seen.add(_c)
+            except BaseException:                              # noqa: BLE001
+                pass
             rec = dict(res, slug=str(slug), client_order_id=coid,
                        cancel=out, now=now,
                        labels=("the CANCEL half only. The replacement is "
