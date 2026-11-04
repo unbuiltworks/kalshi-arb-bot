@@ -630,7 +630,8 @@ ABS_RESIDUAL_CAP_CONTRACTS = D("5")
 
 def residual_cap_decision(*, resid: D, same_side: D, other_side: D,
                           qty: D, side: str, k: D, clip: D,
-                          same_side_includes_this_order: bool) -> Dict[str, Any]:
+                          same_side_includes_this_order: bool,
+                          certain: bool = True) -> Dict[str, Any]:
     """The residual cap, on a FILL-CONTINGENT WORST CASE. One definition.
 
     BOTH call sites use this: the gate in `handle` and the final guard
@@ -686,7 +687,14 @@ def residual_cap_decision(*, resid: D, same_side: D, other_side: D,
         same_side - qty if same_side_includes_this_order else same_side)
     nothing_resting = (resting_same_other_than_this == D(0)
                        and other_side == D(0))
-    exempt_open = bool(nothing_held and nothing_resting)
+    # AN APPARENT FLAT POSITION MAY NOT EXEMPT AN OPENING WHILE THE BOOK IS
+    # UNCERTAIN. `nothing_held` reads OUR ledger, and on 1445z our ledger
+    # was wrong: a phantom DOWN leg had netted a real UP contract to zero,
+    # so this read flat and waived the cap for a second opening that took
+    # venue exposure to 2 contracts. The exemption exists so a FIRST order
+    # cannot be refused by a bound derived from its own size; it was never
+    # meant to cover a flat reading we cannot trust.
+    exempt_open = bool(nothing_held and nothing_resting and certain)
     increases = a_abs > b_abs
     binds = bool((not exempt_open) and increases and a_abs > cap)
     return {
@@ -707,6 +715,7 @@ def residual_cap_decision(*, resid: D, same_side: D, other_side: D,
         "nothing_held": bool(nothing_held),
         "nothing_resting": bool(nothing_resting),
         "prospective_book_flat": exempt_open,
+        "certain": bool(certain),
         "increases_abs_prospective": bool(increases),
         "binds": binds,
         # THE OLD NETTED BASIS, reported beside the worst case so the two
@@ -1220,6 +1229,52 @@ def tracked_coid_for_venue_order(venue_order_id: Optional[str],
             if str(row.get("venue_order_id") or "").strip() == vid:
                 hits.add(str(coid))
     return min(hits) if hits else None
+
+
+def submitted_identity_mismatch(state: Mapping[str, Any], coid: str,
+                                market: str, side: str) -> Optional[str]:
+    """Why this (market, side) may not be booked under `coid`, or None.
+
+    THE 1445z PHANTOM, 2026-11-04T14:47:13Z. The runner books order progress
+    with `side=o.get("side")` read from its OWN `live_orders` record, and
+    `apply_order_progress` trusted it. The venue's order row carries no side
+    for us to check it against, so a wrong side was unfalsifiable: a real UP
+    execution at WIRE 0.26 was booked as DOWN, whose own price is
+    1 - 0.26 = 0.74. That phantom DOWN leg zeroed the engine's residual, the
+    residual cap then read the market as flat, exempted a new opening, and
+    real venue exposure reached 2.0000 UP contracts against a 1-contract
+    cap. The venue-authoritative audit recorded the disagreement as
+    QUANTITY_MISMATCH venue_qty 2.0000 / ledger_qty 1.0000 and booked the
+    leg at the $1-a-share placeholder, which is why the window reported
+    -$1.00 against a true -$0.51.
+
+    THE ONLY SIDE WE MAY BOOK IS THE ONE WE SUBMITTED. `submitted[coid]` is
+    written when the order is sent and is the sole durable record of what
+    was authorized under that client id, so it -- not a later in-memory
+    read -- decides. A disagreement is REFUSED and the store is marked
+    uncertain rather than reconciled here, because nothing inside this
+    process can tell which of the two readings is the real order.
+
+    ABSENT IS NOT A MISMATCH. An order submitted before this record existed
+    has no `submitted` entry, and refusing those would strand real
+    inventory, so they keep the previous behaviour. A record that EXISTS and
+    DISAGREES is the only case this refuses -- the same compatibility line
+    the opening-bound guard draws.
+    """
+    if not coid:
+        return None
+    sub = (state.get("submitted") or {}).get(str(coid))
+    if not isinstance(sub, Mapping):
+        return None
+    want_m = str(sub.get("market") or "").strip()
+    want_s = str(sub.get("side") or "").strip().upper()
+    got_m = str(market or "").strip()
+    got_s = str(side or "").strip().upper()
+    if want_m and want_m != got_m:
+        return "SUBMITTED_MARKET_DISAGREES:%s!=%s" % (got_m or None, want_m)
+    if want_s and want_s != got_s:
+        return "SUBMITTED_SIDE_DISAGREES:%s!=%s" % (got_s or None, want_s)
+    return None
 
 
 def duplicate_venue_order_coid(state: Mapping[str, Any],
@@ -3779,6 +3834,22 @@ class InventoryStore:
         """
         # refuse before anything is recorded, not after
         market = canonical_market(market, doing="booking order progress")
+        # IDENTITY BEFORE ARITHMETIC, and before any state is written.
+        # The caller supplies `side` from its own bookkeeping; booking the
+        # wrong one is how the 1445z phantom DOWN leg was created. See
+        # `submitted_identity_mismatch`.
+        _bad = submitted_identity_mismatch(self.state, coid, market, side)
+        if _bad:
+            self.mark_uncertain(
+                "order progress for %s disagrees with what was submitted "
+                "under it (%s); refusing to book it" % (coid, _bad))
+            return {"coid": coid, "refused": _bad, "delta": "0",
+                    "booked": "0", "terminal": bool(prog.get("terminal")),
+                    "state": prog.get("state"),
+                    "labels": ("nothing was booked and the store is now "
+                               "uncertain, so exposure-increasing "
+                               "submissions fail closed until a "
+                               "reconciliation clears it")}
         # PERSIST THE LINK FIRST. A terminal order is popped out of
         # `live_orders` below, so this is the last moment its venue id is
         # readable -- and the duplicate guard needs it to outlive the order.
@@ -6937,7 +7008,8 @@ class FaithfulExecutor:
         rc = residual_cap_decision(
             resid=resid, same_side=same_side, other_side=other, qty=q,
             side=side, k=self.residual_cap_k, clip=clip,
-            same_side_includes_this_order=True)
+            same_side_includes_this_order=True,
+            certain=(self.store.orders_uncertain() is None))
         out.update(rc)
         out["outstanding_residual_net_incl_this_order"] = str(outstanding)
         if rc["binds"]:
@@ -8166,7 +8238,8 @@ class FaithfulExecutor:
                 other_side=D(str(_other)), qty=D(str(tr["qty"])),
                 side=_side, k=self.residual_cap_k,
                 clip=D(str(self.store.max_clip(market))),
-                same_side_includes_this_order=False)
+                same_side_includes_this_order=False,
+                certain=(self.store.orders_uncertain() is None))
             prov.note("RESIDUAL_CAP", dict(
                 _rc,
                 max_clip_filled=str(self.store.max_clip(market)),

@@ -223,13 +223,20 @@ def test_a_partial_fill_leaves_a_decidable_state(rig):
     prog = E.order_progress({"id": "V1", "state": "ORDER_STATE_NEW",
                              "quantity": "4", "cumQuantity": "1.5",
                              "leavesQuantity": "2.5", "avgPx": "0.58"})
-    ex.store.apply_order_progress(coid, prog, market="m", side="UP")
+    # THE SIDE THE ENGINE ACTUALLY SUBMITTED, read back from the store.
+    # This used to hard-code "UP" while the continuous decision had chosen
+    # DOWN, so it booked a fill on a side no order existed on -- the exact
+    # shape of the 1445z phantom, asserted as correct. `apply_order_progress`
+    # now refuses that, so the fixture states the real side.
+    _sub = (ex.store.state.get("submitted") or {}).get(coid) or {}
+    _side = str(_sub.get("side") or "UP")
+    ex.store.apply_order_progress(coid, prog, market="m", side=_side)
     # a partial fill books a DELTA against what was already recorded, and
     # the engine may have trimmed the submitted size, so assert the
     # PROPERTY -- inventory moved and nothing was lost -- not a figure this
     # test cannot predict.
-    booked = ex.store.position("m", "UP")
-    assert booked > 0, booked
+    booked = ex.store.position("m", _side)
+    assert booked > 0, (booked, _side)
     assert ex.store.residual("m") != 0
     j.tick(ex, E, side="DOWN", label="decide after partial")
     assert len(j.rows) == 2
