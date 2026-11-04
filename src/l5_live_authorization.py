@@ -1338,6 +1338,61 @@ def probe_leg_sid(experiment: str, leg: str) -> str:
     return "ts1.%s.%s" % (experiment, leg)
 
 
+def refuse_unauthorized_window(market: str) -> None:
+    """Raise unless this market's window is inside the authorized grant.
+
+    THE INCIDENT, 2026-11-04T08:00Z. The owner authorized eight windows
+    ending 07:45Z with expiry 08:15Z; an un-enumerated 08:00Z window was
+    claimed and traded -- 5 orders, 3 fills, settled -$0.2900 -- because
+    `expires_utc` was doing double duty as trading authorization AND
+    settlement grace.
+
+    CALLED FROM EVERY MARKET-KEYED PRE-WIRE CLAIM, and that is the point.
+    The first fix guarded `claim_submission` alone, and
+    `claim_accumulation_leg` -- the branch the accumulation path actually
+    takes, which the runner calls three times over -- went straight past
+    it. A bound enforced on one of three doors is not a bound. The window
+    decision itself lives once, in `l5_campaign_approval.opening_refusal`,
+    so no two call sites can disagree about which windows exist.
+
+    ABSENT SAYS NOTHING; PRESENT AND INVALID REFUSES. Only the three
+    spellings of absent leave the pre-campaign single-window handshake
+    alone. A stale, expired or malformed document refuses, because
+    otherwise an exhausted campaign quietly becomes a fresh one-window
+    authorization at the last boundary before the venue. An unreadable one
+    refuses too: a submission we cannot place inside the grant is refused.
+    """
+    mkt = str(market or "").strip()
+    try:
+        from src import l5_campaign_approval as _CAW   # late: avoids a cycle
+        _st = _CAW.approval_gate().state()
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        # Only the READ is guarded. The decision below raises `Refused` on
+        # its own account and must not be swallowed and relabelled.
+        raise Refused("SUBMISSION_WINDOW_UNVERIFIABLE",
+                      {"error": type(_exc).__name__,
+                       "note": "the authorized-window set could not be "
+                               "established; a submission we cannot place "
+                               "inside the grant is refused."})
+    _why = str(_st.get("why") or "")
+    if _st.get("approved"):
+        _bad = _CAW.opening_refusal(_st.get("scope") or {}, mkt)
+        if _bad is not None:
+            raise Refused("SUBMISSION_WINDOW_NOT_AUTHORIZED",
+                          dict(_bad.get("detail") or {},
+                               why=str(_bad.get("reason")),
+                               market=mkt[:80]))
+    elif _why not in ("approval_absent", "approval_empty",
+                      "approval_not_set"):
+        raise Refused("SUBMISSION_WINDOW_NOT_AUTHORIZED",
+                      {"why": _why or "approval_not_valid",
+                       "market": mkt[:80],
+                       "note": "an approval document is present and does "
+                               "not authorize anything."})
+
+
 def claim_probe_leg(leg: str, payload: Mapping[str, Any],
                     path: Optional[str] = None) -> Dict[str, Any]:
     """Consume ONE two-sided probe leg's claim, or raise. Never auto-resets.
@@ -1449,6 +1504,10 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
     mkt = str(market or "").strip()
     if not mkt:
         raise Refused("ACC_CLAIM_NO_MARKET")
+    # THE SAME WINDOW BOUND AS EVERY OTHER PRE-WIRE CLAIM. This is the
+    # branch the accumulation path actually takes, so leaving it unguarded
+    # left the 08:00Z hole open on the busiest door.
+    refuse_unauthorized_window(mkt)
     side = str(leg or "").upper()
     if side not in PROBE_LEGS:
         raise Refused("ACC_CLAIM_BAD_LEG", side)
@@ -1639,57 +1698,7 @@ def claim_submission(market: str, payload: Mapping[str, Any],
     if not mkt:
         raise Refused("SUBMISSION_CLAIM_NO_MARKET",
                       {"note": "the claim is per experiment AND market."})
-    # ===== THE SUBMISSION MUST BELONG TO AN AUTHORIZED WINDOW
-    #
-    # THE INCIDENT, 2026-11-04T08:00Z. The owner authorized eight windows
-    # ending 07:45Z with expiry 08:15Z, and an un-enumerated 08:00Z window
-    # was claimed and traded: 5 orders, 3 fills, settled -$0.2900. The
-    # opening bound now refuses that window at the CLAIM, and this refuses
-    # it again at the SUBMISSION, because "may this window be opened" and
-    # "may this order be sent into it" must never be able to disagree. One
-    # shared definition, two independent call sites, before the wire and
-    # before any budget or ticket is consumed.
-    #
-    # AN ABSENT DOCUMENT SAYS NOTHING HERE, exactly as `authorize_window`
-    # treats it: a campaign system that silently replaced the single-window
-    # handshake would be a widening disguised as a feature. What it must
-    # never do is PERMIT a window that a present document excludes.
-    try:
-        from src import l5_campaign_approval as _CAW   # late: avoids a cycle
-        _st = _CAW.approval_gate().state()
-    except BaseException as _exc:                              # noqa: BLE001
-        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
-            raise
-        # UNREADABLE IS NOT ABSENT. A storage fault must not read as "no
-        # campaign, carry on" at the one boundary before the wire. The READ
-        # is all that is guarded here: the decision below raises `Refused`
-        # on its own account and must not be swallowed and relabelled.
-        raise Refused("SUBMISSION_WINDOW_UNVERIFIABLE",
-                      {"error": type(_exc).__name__,
-                       "note": "the authorized-window set could not be "
-                               "established; a submission we cannot place "
-                               "inside the grant is refused."})
-    _why = str(_st.get("why") or "")
-    if _st.get("approved"):
-        _bad = _CAW.opening_refusal(_st.get("scope") or {}, mkt)
-        if _bad is not None:
-            raise Refused("SUBMISSION_WINDOW_NOT_AUTHORIZED",
-                          dict(_bad.get("detail") or {},
-                               why=str(_bad.get("reason")),
-                               market=mkt[:80]))
-    elif _why not in ("approval_absent", "approval_empty",
-                      "approval_not_set"):
-        # PRESENT AND NOT VALID IS A REFUSAL, never silence. A stale,
-        # expired or malformed document must not read as "no campaign,
-        # carry on" -- that is how an exhausted campaign would quietly
-        # become a fresh single-window authorization at the one boundary
-        # before the wire. Only those three spellings of ABSENT say nothing,
-        # which is the doctrine `authorize_window` already follows.
-        raise Refused("SUBMISSION_WINDOW_NOT_AUTHORIZED",
-                      {"why": _why or "approval_not_valid",
-                       "market": mkt[:80],
-                       "note": "an approval document is present and does "
-                               "not authorize anything."})
+    refuse_unauthorized_window(mkt)
     # the same exemption, on the other strategy's path: a risk-reducing
     # order is never refused by the flat total, whichever engine chose it.
     if total_backstop_binds(reducing):

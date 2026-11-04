@@ -328,3 +328,64 @@ def test_NO_approval_document_leaves_the_submission_path_alone(monkeypatch,
                             path=str(tmp_path / "ledger.json"))
     except LX.Refused as exc:
         assert "SUBMISSION_WINDOW_NOT_AUTHORIZED" not in str(exc), exc
+
+
+# ===== EVERY market-keyed pre-wire claim is guarded, not just one
+
+def test_claim_accumulation_leg_refuses_an_unauthorized_window(monkeypatch,
+                                                               tmp_path):
+    """THE BYPASS THIS CLOSES. The first fix guarded `claim_submission`
+    alone; the accumulation branch -- which the execution path actually
+    takes and the runner calls three times over -- went straight past it.
+    A bound enforced on one of three doors is not a bound."""
+    from src import l5_live_authorization as LX
+    d, base0 = live_doc()
+    beyond = live_slug(base0 + dt.timedelta(minutes=60))
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", json.dumps(d))
+    monkeypatch.setenv("L5_EXPERIMENT_ID", "opening-bound-test")
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path))
+    with pytest.raises(LX.Refused) as e:
+        LX.claim_accumulation_leg(beyond, 0, "UP", {"probe": True},
+                                  path=str(tmp_path / "ledger.json"))
+    assert e.value.reason == "SUBMISSION_WINDOW_NOT_AUTHORIZED"
+    assert e.value.detail["why"] == "WINDOW_AFTER_LAST_AUTHORIZED_OPEN", \
+        e.value.detail
+
+
+def test_claim_accumulation_leg_allows_an_authorized_window(monkeypatch,
+                                                            tmp_path):
+    from src import l5_live_authorization as LX
+    d, base0 = live_doc()
+    inside = live_slug(base0 + dt.timedelta(minutes=45))
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", json.dumps(d))
+    monkeypatch.setenv("L5_EXPERIMENT_ID", "opening-bound-test")
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path))
+    try:
+        LX.claim_accumulation_leg(inside, 0, "UP", {"probe": True},
+                                  path=str(tmp_path / "ledger.json"))
+    except LX.Refused as exc:
+        assert exc.reason != "SUBMISSION_WINDOW_NOT_AUTHORIZED", exc.detail
+
+
+def test_EVERY_market_keyed_preWire_claim_calls_the_shared_guard():
+    """A STRUCTURAL PIN, so a fourth door cannot be added unguarded. Every
+    claim function taking a `market` must call the one shared guard; the
+    check itself lives once, in l5_campaign_approval.opening_refusal."""
+    import inspect
+    from src import l5_live_authorization as LX
+    guarded, unguarded = [], []
+    for name in dir(LX):
+        if not name.startswith("claim_"):
+            continue
+        fn = getattr(LX, name)
+        if not callable(fn) or not hasattr(fn, "__code__"):
+            continue
+        if "market" not in inspect.signature(fn).parameters:
+            continue
+        src = inspect.getsource(fn)
+        (guarded if "refuse_unauthorized_window(" in src
+         else unguarded).append(name)
+    assert unguarded == [], (
+        "market-keyed pre-wire claims with no window guard: %s" % unguarded)
+    assert sorted(guarded) == ["claim_accumulation_leg", "claim_submission"], \
+        guarded
