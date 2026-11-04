@@ -3553,3 +3553,39 @@ deploy: 2026-11-04T05:51Z arm campaign camp1.4675472c2b625a967df9d14c
 #
 # No limit, strategy parameter or safety check changes.
 deploy: 2026-11-04T07:56Z HALT asserted, authorized schedule complete
+
+# 2026-11-04 AUTHORIZATION-BOUNDARY SAFETY FIX. HALT ASSERTED, NOT ARMED.
+# Promotes cde63cb5. L5_LIVE_HALT is set in the environment this deployment
+# snapshots and no campaign is approved, so nothing can arm.
+#
+# WHAT IT FIXES: the 08:00Z incident. `expires_utc` was doing double duty as
+# BOTH trading authorization and settlement grace, so an un-enumerated
+# 08:00Z window was claimed and traded (5 orders, 3 fills, settled
+# -$0.2900) under a grant that ended at 07:45Z.
+#
+#  * an OPENING BOUND is now required and separate: `last_open_utc` and/or
+#    an explicit `window_starts` set, carried in the durable approval and
+#    enforced on the WINDOW'S OWN START, never on `now`. Expiry is a
+#    settlement grace and can no longer authorize an opening.
+#  * `opening_refusal` is ONE definition with THREE call sites: the window
+#    claim, `claim_submission`, and `claim_accumulation_leg`. That last one
+#    is the branch the accumulation path actually takes and the runner calls
+#    three times over -- it was an open bypass after the first fix, and a
+#    bound enforced on one of three doors is not a bound.
+#  * absent says nothing (the pre-campaign handshake is untouched); PRESENT
+#    AND INVALID REFUSES; unreadable refuses; a document with no bound is
+#    INERT -- it settles and reconciles and opens nothing.
+#  * automatic at the boundary BY CONSTRUCTION: no session, no scheduled
+#    redeploy and no manual HALT is involved, because the bound is a
+#    property of the document and the window's start.
+#
+# VERIFICATION: parity 80 failing ids, digest eb672d14b4baf439, identical to
+# baseline, 16,023 passing. 35 opening-bound tests incl. 07:45 permitted,
+# 08:00 refused at expiry 08:15, restart at 07:59/08:01/08:14:59, and a
+# structural pin that every market-keyed claim calls the shared guard. 260
+# further tests across watchdog, halt gate, deadman exact cancel, emergency
+# cancellation proof, cancel-verify retry, disarmed cancellation, retirement
+# safety and restart ledger recovery -- none needing an interactive session.
+#
+# No limit, strategy parameter or infrastructure change.
+deploy: 2026-11-04 authorization-boundary safety fix, HALT asserted
