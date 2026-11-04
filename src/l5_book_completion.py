@@ -142,6 +142,114 @@ def _would_cross(side: str, own_px: D, bid: D, ask: D) -> bool:
     return (D(1) - own_px) <= bid
 
 
+def cooldown_observation(*, held_side: str, held_qty: Any,
+                         held_cost_usd: Any, deficient_qty: Any,
+                         book: Mapping[str, Any], tick: Any,
+                         depth_ticks: int, now_t: float,
+                         last_decide_t: float) -> Dict[str, Any]:
+    """What the book looked like when the cadence declined to re-decide.
+
+    WHY THIS EXISTS. `decide` returns DECIDE_COOLDOWN at step 0, BEFORE the
+    book is read, so every cooldown record carried `pair: None` and
+    `executable_evidence: false`. On the 2000z window of
+    camp1.5b2fa83e916c04d7e2871bca that was 98 of 201 refusal records, and
+    it made the one question worth asking -- did the cadence decline a
+    completion that was actually available -- unanswerable from the logs in
+    either direction. The 101 OPENING refusals in the same window carried
+    the band, the pair and the evidence basis; the DECISION refusals that
+    covered real held inventory carried none of it.
+
+    REPORTING ONLY, AND STRUCTURALLY INCAPABLE OF BEING ANYTHING ELSE. It
+    takes no decision, prices no order, consults no gate and returns a dict
+    the caller merges into a refusal that has already been chosen. The
+    cadence condition above it is untouched, so the 5-second interval, the
+    order behaviour, every risk limit and the HALT state are exactly what
+    they were. Any failure inside here returns {} rather than propagating:
+    a diagnostic that can change a refusal is not a diagnostic.
+
+    A PRICE IS NOT A FILL. `at_touch`, `behind_touch` and `marketable` are
+    the prices at which a complement COULD be quoted or crossed against the
+    displayed book. The venue publishes no queue position, so none of them
+    is a promise of execution, and `pair_*` is what the pair WOULD have cost
+    had the corresponding leg filled in full. Nothing here may be read as a
+    completion that was available, only as one that was priceable.
+    """
+    try:
+        out: Dict[str, Any] = {}
+        out["cooldown_remaining_s"] = round(
+            float(DECIDE_EVERY_S) - (float(now_t) - float(last_decide_t)), 3)
+        out["decide_every_s"] = float(DECIDE_EVERY_S)
+        want = "DOWN" if str(held_side).upper() == "UP" else "UP"
+        out["complement_side"] = want
+
+        bid, ask = _d(book.get("bid")), _d(book.get("ask"))
+        age = _d(book.get("stream_age_s"))
+        gap = bool(book.get("gap_suspected"))
+        usable = bool(bid is not None and ask is not None
+                      and bid > 0 and ask > bid)
+        fresh = bool(age is not None
+                     and age <= D(str(TS.MAX_BOOK_AGE_S)) and not gap)
+        out["book"] = {
+            "bid": None if bid is None else str(bid),
+            "ask": None if ask is None else str(ask),
+            "bid_shares": book.get("bid_shares"),
+            "ask_shares": book.get("ask_shares"),
+            "stream_age_s": None if age is None else str(age),
+            "gap_suspected": gap, "usable": usable}
+        # the SAME freshness test step 3 applies, reported rather than enforced
+        out["evidence"] = {
+            "executable_evidence": bool(usable and fresh),
+            "basis": ("AUTHENTICATED_WS" if (usable and fresh)
+                      else "NOT_ESTABLISHED"),
+            "why": ("book usable and within MAX_BOOK_AGE_S"
+                    if (usable and fresh)
+                    else "book unusable, stale or gapped at this observation")}
+        if not usable:
+            return out
+
+        tk = _d(tick) or D("0.01")
+        d = D(int(depth_ticks)) * tk
+        # own-price convention: the wire is YES/UP, so a DOWN leg's own cost
+        # at wire p is 1 - p. Joining means resting on the side that leaves
+        # us long `want`; crossing means taking the other one.
+        if want == "UP":
+            at_touch, behind, marketable = bid, bid - d, ask
+        else:
+            at_touch = D(1) - ask
+            behind = D(1) - (ask + d)
+            marketable = D(1) - bid
+        out["complement_own"] = {
+            "at_touch": str(at_touch), "behind_touch": str(behind),
+            "marketable": str(marketable), "depth_ticks": int(depth_ticks),
+            "labels": ("prices, not fills. The venue publishes no queue "
+                       "position, so a touch at one of these is not an "
+                       "execution and must never be counted as one")}
+
+        hq, dqv = _d(held_qty), (_d(deficient_qty) or D(0))
+        hc = _d(held_cost_usd)
+        # AN UNATTESTED BASIS IS NOT A FREE POSITION. Cost zero against
+        # positive quantity means the basis was never attested, which is the
+        # same reading `l5_continuous_inventory.decide` and
+        # `adopt_venue_position` already take. Reporting a pair priced from
+        # a zero basis would make every completion look free.
+        basis = ((hc / hq) if (hc is not None and hq is not None
+                               and hq > 0 and hc > 0) else None)
+        out["held_avg_basis"] = None if basis is None else str(basis)
+        out["need"] = (None if (hq is None) else str(hq - dqv))
+        if basis is not None:
+            out["pair_if"] = {
+                "at_touch": str(basis + at_touch),
+                "behind_touch": str(basis + behind),
+                "marketable": str(basis + marketable),
+                "breakeven_pair": str(BREAKEVEN_PAIR),
+                "redemption": str(REDEMPTION_PAIR),
+                "labels": ("what the pair WOULD have cost had that leg "
+                           "filled in full. Conditional, never realized")}
+        return out
+    except BaseException:                                      # noqa: BLE001
+        return {}
+
+
 def decide(*, market: str, held_side: str,
            held_qty: Any, held_cost_usd: Any,
            deficient_qty: Any = None, deficient_cost_usd: Any = None,
@@ -167,6 +275,15 @@ def decide(*, market: str, held_side: str,
     # ---- 0. CADENCE. Bounded re-decision, so this cannot become a
     #         requote per tick.
     if last_decide_t is not None and (now_t - last_decide_t) < DECIDE_EVERY_S:
+        # THE CONDITION IS UNCHANGED. Only the RECORD gains the book that
+        # was already in hand, so a cooldown refusal can be told apart from
+        # one that declined a priceable completion. See
+        # `cooldown_observation`: reporting only, {} on any failure.
+        rec.update(cooldown_observation(
+            held_side=held_side, held_qty=held_qty,
+            held_cost_usd=held_cost_usd, deficient_qty=deficient_qty,
+            book=book, tick=tick, depth_ticks=depth_ticks,
+            now_t=now_t, last_decide_t=last_decide_t))
         return _no("DECIDE_COOLDOWN", **rec)
 
     # ---- 1. IS THERE ANYTHING TO COMPLETE? Only an UNMATCHED remainder.
