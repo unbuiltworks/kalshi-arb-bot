@@ -3407,3 +3407,25 @@ deploy: 2026-11-04T02:45Z campaign-scoped budget correction, HALT asserted
 # cash ceiling reads store.committed() and the $20 exposure cap is
 # account-wide -- none of them is scoped to the experiment.
 deploy: 2026-11-04T03:05Z campaign camp1.cf28b0c9 staged, HALT asserted
+
+# 2026-11-04T03:14Z ARMING DEPLOY, owner-authorized campaign camp1.cf28b0c9.
+# HALT CLEARED: L5_LIVE_HALT is empty in the environment this deployment
+# snapshots. Verified on the preceding HALT-asserted boot (72d2652a) with
+# this exact approval in force:
+#   L5_AUTHORIZATION_PREFLIGHT ok true, fail [] -- campaign_approval PASS
+#     (approved, 4 windows, exposure 20, daily loss 5, document sha256
+#     47cfc319692649b3c89d19d3b0c7f1f1bf580829be3eda4ccee06eb177dbf888),
+#     absolute_deadline PASS OPEN 5908.8s to 04:45:00Z, residual applied cap
+#     1 contract, shadow_lock / owner_arm_token / role_binding all PASS;
+#   L5_EFFECTIVE_RUNTIME_CONFIG PASS, 26 checked, 0 failed --
+#     taker_crossing_reachable FALSE on both switches, at-touch false,
+#     exposure 20, daily halt 5, max_live_orders 1, cancel margin 300s,
+#     maker pair ceiling 0.96, series allowlist cpc-btc-updown-15m-,
+#     campaign_authorized_start 2026-11-04T03:30:00+00:00;
+#   reconciliation clean -- live_orders 0, pending_terminal 0, quarantine 0,
+#     orders_uncertain null, markets_with_exposure [], venue positions 0.
+# Submission capacity is fresh because the claim namespace is
+# l5-btc15m-prog25-c1-d823f1d0.camp.a90d42d3242277cc6048e075, which has
+# never existed: experiment_id() composes <owner id>.camp.<digest> under an
+# approved campaign, so the budget is per-campaign by construction.
+deploy: 2026-11-04T03:14Z arm campaign camp1.cf28b0c9, HALT cleared
