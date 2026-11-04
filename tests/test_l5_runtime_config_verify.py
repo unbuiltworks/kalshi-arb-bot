@@ -23,7 +23,7 @@ APPROVED_ENV = {
     "L5_LIVE_AUTH_MAX_WINDOWS": "8",
     "L5_TS_CANCEL_MARGIN_S": "300",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
-    "L5_MAX_LIVE_ORDERS": "1",
+    "L5_MAX_LIVE_ORDERS": "2",
     # THE APPROVED AGGREGATE CEILING, and it has to be HERE rather than
     # left to the code default. `R.PROBE_LIMITS` defaults to the $20 of the
     # earlier eight-window mandate, so omitting this variable tested the
@@ -343,7 +343,7 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["defensive_guard_opens_s"] == 540.0
     assert V.APPROVED["defensive_last_actionable_s"] == 585.0
     assert V.APPROVED["max_windows"] == 8
-    assert V.APPROVED["max_live_orders"] == 1
+    assert V.APPROVED["max_live_orders"] == 2
     assert V.APPROVED["defensive_execution_enabled"] is False
 
 
@@ -363,7 +363,13 @@ APPROVED_SNAPSHOT = {
     "L5_LIVE_AUTH_MAX_WINDOWS": "8",
     "L5_TS_CANCEL_MARGIN_S": "300",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
-    "L5_MAX_LIVE_ORDERS": "1",
+    # RAISED 1 -> 2 WITH THE OWNER-AUTHORIZED SLOT 2026-11-04, for the same
+    # reason the additional-loss line below was raised: the snapshot has to
+    # carry the figure the verifier now requires, or the approved
+    # configuration fails its own prediction. Production already holds 2, so
+    # this is NOT one of the rows the owner must still change and
+    # CURRENT_SNAPSHOT inherits it unchanged.
+    "L5_MAX_LIVE_ORDERS": "2",
     "L5_SHADOW_ONLY": "1",
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
     # RAISED WITH THE OWNER-AUTHORIZED LIMIT 2026-11-02: the snapshot has to
