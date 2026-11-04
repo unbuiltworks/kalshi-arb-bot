@@ -3429,3 +3429,28 @@ deploy: 2026-11-04T03:05Z campaign camp1.cf28b0c9 staged, HALT asserted
 # never existed: experiment_id() composes <owner id>.camp.<digest> under an
 # approved campaign, so the budget is per-campaign by construction.
 deploy: 2026-11-04T03:14Z arm campaign camp1.cf28b0c9, HALT cleared
+
+# 2026-11-04 PLANNER BUDGET-BASIS FIX, mid-campaign, owner-authorized.
+# Promotes 1cf90ca1 into the LIVE campaign camp1.cf28b0c9 for its remaining
+# windows. HALT stays CLEAR and the approval is unchanged: same nonce, same
+# four windows, same 04:45:00Z expiry, same limits.
+#
+# WHY NOW. Window 1 armed cleanly at 03:31:38Z -- venue bounds confirmed in
+# one attempt, baseline captured, submission gate OPEN, submission capacity
+# fresh -- and still could not place a first leg, because
+# FaithfulExecutor.probe_budget_headroom read the account's ALL-OF-HISTORY
+# realized figure ($10.6211) against the $5 campaign budget and reported
+# zero room, while the gate it exists to anticipate held the full $5. Every
+# remaining window would refuse CAMPAIGN_BUDGET_EXHAUSTED identically, so
+# the restart costs nothing that was reachable anyway.
+#
+# The planner now reads the same CampaignBaseline.additional_loss_usd the
+# gate reads and still fails closed to zero on an unestablished baseline.
+# No gate, threshold, limit or authorization requirement changes; gate 3b
+# still evaluates every order independently on its own basis.
+#
+# A restart does NOT re-measure the campaign: CampaignBaseline.capture is
+# idempotent per campaign id and the store is on the volume, so the zero
+# point stays -10.62110000 and windows already spent stay spent.
+deploy: 2026-11-04T03:52Z planner budget basis, campaign camp1.cf28b0c9 live
+# Parity: 80 failing ids, digest eb672d14b4baf439 -- identical to baseline.
