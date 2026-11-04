@@ -219,3 +219,112 @@ def test_AFTER_EXPIRY_nothing_opens_including_an_authorized_window(
                               reserve=False)
     assert res["ok"] is False
     assert res["reason"] == "CAMPAIGN_EXPIRED", res
+
+
+# ===== the SUBMISSION path shares the one definition (requirement 2)
+
+def live_doc(**over):
+    """A document anchored to the REAL clock.
+
+    The submission path reads `approval_gate()`, which uses the real clock
+    for staleness and expiry, so the fixed-date document used above would be
+    stale here -- and a stale document is now a refusal in its own right,
+    which would mask the WINDOW check under test. Windows are placed on the
+    current 15-minute grid: the last authorized open is 45 minutes out and
+    the settlement grace runs an hour.
+    """
+    now = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
+    base0 = now - dt.timedelta(minutes=now.minute % 15)
+    d = {"approved": True, "nonce": "b" * 24, "series": SERIES,
+         "issued_utc": (now - dt.timedelta(minutes=1)).isoformat(),
+         "starts_utc": base0.isoformat(),
+         "last_open_utc": (base0 + dt.timedelta(minutes=45)).isoformat(),
+         "expires_utc": (base0 + dt.timedelta(minutes=60)).isoformat(),
+         "max_windows": 4, "max_total_exposure_usd": "20",
+         "max_daily_loss_usd": "5"}
+    d.update(over)
+    return d, base0
+
+
+def live_slug(at):
+    return "%s%s-%02d%02dz" % (SERIES, at.strftime("%Y-%m-%d"),
+                               at.hour, at.minute)
+
+
+def _claim(monkeypatch, tmp_path, market, d=None):
+    from src import l5_live_authorization as LX
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", json.dumps(d))
+    monkeypatch.setenv("L5_EXPERIMENT_ID", "opening-bound-test")
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path))
+    return LX.claim_submission(market, {"probe": True},
+                               path=str(tmp_path / "ledger.json"))
+
+
+def test_a_submission_AFTER_the_last_open_IS_REFUSED_before_the_wire(
+        monkeypatch, tmp_path):
+    """Belt and braces on the incident: even with a claim somehow held, the
+    submission refuses before any budget or ticket is consumed and before
+    anything reaches the venue."""
+    from src import l5_live_authorization as LX
+    d, base0 = live_doc()
+    beyond = live_slug(base0 + dt.timedelta(minutes=60))   # past last_open
+    with pytest.raises(LX.Refused) as e:
+        _claim(monkeypatch, tmp_path, beyond, d=d)
+    assert e.value.reason == "SUBMISSION_WINDOW_NOT_AUTHORIZED"
+    assert e.value.detail["why"] == "WINDOW_AFTER_LAST_AUTHORIZED_OPEN", \
+        e.value.detail
+
+
+def test_a_submission_into_an_authorized_window_passes_the_WINDOW_check(
+        monkeypatch, tmp_path):
+    """It may still be refused by a budget or ticket downstream; what
+    matters is that the WINDOW check does not reject it."""
+    from src import l5_live_authorization as LX
+    d, base0 = live_doc()
+    inside = live_slug(base0 + dt.timedelta(minutes=45))   # the last open
+    try:
+        _claim(monkeypatch, tmp_path, inside, d=d)
+    except LX.Refused as exc:
+        assert "SUBMISSION_WINDOW_NOT_AUTHORIZED" not in str(exc), exc
+
+
+def test_a_bound_less_document_refuses_every_submission(monkeypatch, tmp_path):
+    """An inert legacy document settles and reconciles; it submits nothing."""
+    from src import l5_live_authorization as LX
+    d, base0 = live_doc()
+    d.pop("last_open_utc")
+    with pytest.raises(LX.Refused) as e:
+        _claim(monkeypatch, tmp_path, live_slug(base0), d=d)
+    assert e.value.reason == "SUBMISSION_WINDOW_NOT_AUTHORIZED"
+    assert e.value.detail["why"] == "CAMPAIGN_OPENING_BOUND_ABSENT", \
+        e.value.detail
+
+
+def test_a_STALE_document_refuses_rather_than_reading_as_absent(
+        monkeypatch, tmp_path):
+    """Present and not valid is a refusal, never silence: otherwise an
+    exhausted campaign quietly becomes a fresh one-window authorization at
+    the one boundary before the wire."""
+    from src import l5_live_authorization as LX
+    stale, base0 = live_doc(issued_utc=(
+        dt.datetime.now(dt.timezone.utc)
+        - dt.timedelta(hours=9)).isoformat())
+    with pytest.raises(LX.Refused) as e:
+        _claim(monkeypatch, tmp_path, live_slug(base0), d=stale)
+    assert e.value.reason == "SUBMISSION_WINDOW_NOT_AUTHORIZED"
+    assert e.value.detail["why"] == "approval_stale", e.value.detail
+
+
+def test_NO_approval_document_leaves_the_submission_path_alone(monkeypatch,
+                                                               tmp_path):
+    """Absent says nothing, exactly as authorize_window treats it: the
+    pre-campaign single-window handshake is not replaced by this layer."""
+    from src import l5_live_authorization as LX
+    monkeypatch.delenv("L5_CAMPAIGN_APPROVAL", raising=False)
+    monkeypatch.setenv("L5_EXPERIMENT_ID", "opening-bound-test")
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path))
+    try:
+        LX.claim_submission(slug("0800"), {"probe": True},
+                            path=str(tmp_path / "ledger.json"))
+    except LX.Refused as exc:
+        assert "SUBMISSION_WINDOW_NOT_AUTHORIZED" not in str(exc), exc
