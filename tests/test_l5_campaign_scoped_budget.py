@@ -373,3 +373,74 @@ def test_a_MISSING_scoped_figure_still_refuses_a_fresh_campaign(root):
                    cumulative_realized=D("-10.6211"),
                    l5_scoped_realized=None)
     assert why == "L5_SCOPED_REALIZED_UNAVAILABLE", why
+
+
+# ===== 9. the zero point cannot be re-measured, and outstanding
+#          commitments are never forgiven by a rollover
+
+def test_the_baseline_cannot_be_RECAPTURED_AFTER_LOSSES(root):
+    """OWNER 2026-11-04. A campaign that has lost money must not be able to
+    re-measure its own zero point and win back headroom.
+
+    The campaign starts at -10.6211, loses $4, and `capture` is called again
+    with the WORSE figure -- which is what a re-arm inside the same campaign
+    does. The stored zero point is returned unchanged, `captured` is False,
+    and the $4 is still charged."""
+    b = baseline(root, realized="-10.6211")
+    again = b.capture(CID, account_wide_realized="-14.6211",
+                      now_iso="2026-11-04T03:00:00+00:00")
+    assert again["ok"] is True
+    assert again["captured"] is False, "a second capture must not re-measure"
+    assert again["baseline"]["account_wide_realized"] == "-10.6211"
+
+    # and the loss is still charged against the campaign
+    got = b.additional_loss_usd(CID, account_wide_realized=D("-14.6211"),
+                                open_worst_case_usd=D(0))
+    assert got["realized_delta_loss_usd"] == "4.0000"
+    g = gates(root, base=b)
+    why = refuse(g, realized="-14.6211", price="0.99", qty="2")
+    assert why is not None and "CAMPAIGN_WORST_CASE" in why, why
+
+
+def test_the_baseline_cannot_be_RECAPTURED_AFTER_A_RESTART(root):
+    """A restart constructs a NEW CampaignBaseline over the same durable
+    root. It must read the stored zero point back, not write a new one from
+    whatever realized figure the restarted process happens to see first."""
+    b = baseline(root, realized="-10.6211")
+    del b
+    fresh = CBL.CampaignBaseline(root=root)          # as a restart would
+    res = fresh.capture(CID, account_wide_realized="-13.0000",
+                        now_iso="2026-11-04T04:00:00+00:00")
+    assert res["captured"] is False
+    assert res["baseline"]["account_wide_realized"] == "-10.6211"
+    assert fresh.read()["captured_utc"] == "2026-11-04T01:00:00+00:00"
+
+
+def test_a_ROLLOVER_does_not_forgive_an_OUTSTANDING_COMMITMENT(root):
+    """OWNER 2026-11-04: outstanding commitments stay charged.
+
+    A new campaign id does move the realized zero point -- that costs an
+    owner action and is the point of the correction. It does NOT discharge
+    live commitments: `open_worst_case_usd` is read from the durable ledger
+    at evaluation time, so inventory and resting orders that survive the
+    rollover are charged in full to whoever is trading now. That is the
+    conservative direction and it can never under-charge."""
+    b = CBL.CampaignBaseline(root=root)
+    assert b.capture(OTHER, account_wide_realized="-10.6211",
+                     now_iso="2026-11-04T05:00:00+00:00")["ok"] is True
+    g = gates(root, cid=OTHER, base=b)
+
+    # a $4.50 resting BUY_SHORT survives from before: charged at full
+    # dollars, as pending_obligation does, so $4.50 of the $5 is spent
+    # `pending_obligation` keys on `intent`, and charges a resting SHORT at
+    # FULL DOLLARS -- $4.50, not 4.5 * 0.20 -- because a short owes up to $1
+    # a share if YES settles 1.
+    outstanding = ({"intent": "ORDER_INTENT_BUY_SHORT",
+                    "qty": "4.5", "price": "0.20",
+                    "market": "cpc-btc-updown-15m-2026-11-04-0500z"},)
+    why = g.refuse(order_price=D("0.60"), order_qty=D("1"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   outstanding=outstanding,
+                   cumulative_realized=D("-10.6211"))
+    assert why is not None, "the surviving commitment must still be charged"
+    assert ("CAMPAIGN_WORST_CASE" in why or "CASH" in why), why
