@@ -107,14 +107,32 @@ def test_an_explicit_window_set_refuses_a_gap_inside_the_range(monkeypatch):
 
 # ================================================ FAIL CLOSED
 
-def test_a_document_with_NO_opening_bound_is_NOT_APPROVED(monkeypatch):
-    """The defect itself: expiry alone must never approve a document. This
-    is the one backward incompatibility, and it cannot permit trading."""
+def test_a_document_with_NO_opening_bound_OPENS_NOTHING(monkeypatch, tmp_path):
+    """THE DEFECT ITSELF, and where the compatibility line goes.
+
+    A legacy document with no opening bound still PARSES -- every identity,
+    namespace, clamping and budget property that does not open a window
+    keeps working -- because parsing cannot trade. It is INERT rather than
+    invalid: it may settle and reconcile, and it may not open any window,
+    including one comfortably inside its expiry.
+    """
     d = doc()
     d.pop("last_open_utc")
     st = gate(monkeypatch, d).state()
-    assert st.get("approved") is not True
-    assert st.get("why") == "approval_opening_bound_absent", st
+    assert st.get("approved") is True, st          # parses
+    sc = st["scope"]
+    assert sc["last_open_utc"] is None
+    assert sc["window_starts"] is None
+    for hhmm in ("0600", "0700", "0745", "0800"):
+        bad = CA.opening_refusal(sc, slug(hhmm))
+        assert bad is not None, hhmm
+        assert bad["reason"] == "CAMPAIGN_OPENING_BOUND_ABSENT", (hhmm, bad)
+    # and end to end: the claim path refuses and reserves nothing
+    res = CA.authorize_window(gate(monkeypatch, d), slug("0745"),
+                              ledger=CA.WindowLedger(str(tmp_path)),
+                              now=FROZEN, reserve=True)
+    assert res["ok"] is False
+    assert res["reason"] == "CAMPAIGN_OPENING_BOUND_ABSENT", res
 
 
 @pytest.mark.parametrize("over,why", [

@@ -302,8 +302,20 @@ class ApprovalGate:
             if len(win_starts) > MAX_WINDOWS:
                 return no("approval_window_starts_above_ceiling",
                           count=len(win_starts), ceiling=MAX_WINDOWS)
-        if win_starts is None and last_open is None:
-            return no("approval_opening_bound_absent")
+        # ABSENT IS NOT REFUSED HERE, AND IS STILL NOT PERMISSIVE.
+        #
+        # WHERE THE LINE GOES, and why it is not here. Requirement: preserve
+        # backward compatibility ONLY where it cannot permit unintended
+        # trading. PARSING a document as approved cannot trade; OPENING a
+        # window can. So a document with no opening bound still parses --
+        # every identity, namespace, clamping and budget property that does
+        # not open a window keeps working -- and `opening_refusal` refuses
+        # EVERY window for it with CAMPAIGN_OPENING_BOUND_ABSENT. A legacy
+        # document is therefore inert rather than invalid: it can settle and
+        # reconcile, and it cannot trade.
+        #
+        # Inconsistency is a different matter and IS refused below: a bound
+        # the owner stated incoherently is not a bound we may interpret.
         # INCONSISTENT IS REFUSED, not reconciled. A bound we would have to
         # guess at is a bound the owner did not state.
         if last_open is not None and last_open > eff_expires:
