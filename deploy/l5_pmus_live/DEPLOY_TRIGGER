@@ -3354,3 +3354,41 @@ campaign is authorized.
 
 Unchanged: every risk limit, HALT, watchdog, reconciliation, cancellation
 margin, residual cap, strategy parameters. No new services.
+
+# ============================================================ 2026-11-04
+# OWNER-AUTHORIZED DEPLOY of the campaign-scoped budget correction.
+# Promotes e3196760. HALT IS ASSERTED for this deployment: L5_LIVE_HALT is
+# set in the service environment, which this deployment snapshots, so
+# try_arm() returns on self.halted() before any authorization work and no
+# order can be submitted. No new campaign is approved.
+#
+# WHY. Campaign camp1.9c793662 was authorized for four windows at 01:30,
+# 01:45, 02:00 and 02:15Z. All four were venue-confirmed -- 02:15Z in one
+# attempt, bounds 02:15:00->02:30:00 from the venue -- and all four were
+# then refused at l5_live_authorization.authorize_arming with
+# CAMPAIGN_WORST_CASE_EXHAUSTED:11.33690000>=5. Zero orders, zero fills,
+# no stranded inventory, settled net P&L $0.00. The $5 campaign budget was
+# measuring the account's LIFETIME realized loss ($10.6211) plus a CLOSED
+# predecessor's recorded peak, so every fresh campaign was born exhausted.
+#
+# WHAT CHANGES. Two runtime files, both already COPYed into this image
+# (Dockerfile lines 80 and 146), image-closure test passing:
+#   src/l5_live_validation_gates.py -- the campaign term now comes from
+#     CampaignBaseline.additional_loss_usd(), a durable per-campaign-id
+#     zero point keyed on the owner's approval nonce, instead of
+#     max(0, -lifetime_realized). Fails closed, never back to lifetime.
+#   src/l5_campaign_budget.py -- refuse_arming consults a recorded peak
+#     only when it belongs to our own campaign id.
+#
+# WHAT DOES NOT CHANGE. No historical loss is written down, reset or
+# erased. The $5 campaign budget, $5 daily realized-loss halt, $12 cash
+# ceiling, $20 exposure limit, 1-contract residual cap, one live order and
+# the 300s cancellation margin are untouched, and the independent daily,
+# cumulative and account-wide controls still read the full lifetime figure
+# and are still evaluated BEFORE the campaign term. Strategy, trade sizes
+# and infrastructure unchanged.
+#
+# EVIDENCE. 28 deterministic tests in tests/test_l5_campaign_scoped_budget
+# .py; full parity 80 failing ids, digest eb672d14b4baf439, identical to
+# baseline.
+deploy: 2026-11-04T02:45Z campaign-scoped budget correction, HALT asserted
