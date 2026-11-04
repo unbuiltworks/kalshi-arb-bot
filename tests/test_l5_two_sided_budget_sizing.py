@@ -202,14 +202,30 @@ class TestTheHeadroomHelperMirrorsTheGate:
         ex.validation_gates = Gates()
         assert ex.probe_budget_headroom() is None
 
-    def test_the_realized_loss_is_subtracted_on_the_gates_own_basis(self):
+    def test_the_realized_loss_is_subtracted_on_the_gates_own_basis(
+            self, tmp_path):
+        """The gate's basis is now CAMPAIGN-SCOPED, and this helper still
+        mirrors it -- which is the whole point of the class.
+
+        The zero point is captured at realized 0, which makes the scoped
+        basis `max(0, 0 - now) + commitments` arithmetically identical to
+        the lifetime `max(0, -now) + commitments` this test was written
+        against, so the expected figure is unchanged. What is pinned is the
+        MIRRORING, not which basis the gate happens to use.
+        """
+        from src import l5_campaign_baseline as CBL
         from src import l5_live_execution as E
+
+        _b = CBL.CampaignBaseline(root=str(tmp_path))
+        assert _b.capture("camp1.sizing", account_wide_realized="0")["ok"]
 
         class Budget:
             budget_usd = D("11.10")
 
         class Gates:
             campaign_budget = Budget()
+            campaign_baseline = _b
+            campaign_id = "camp1.sizing"
 
             def cash_committed(self, legs):
                 return D(0)
@@ -228,15 +244,23 @@ class TestTheHeadroomHelperMirrorsTheGate:
         ex.outstanding_for_gates = lambda: []
         assert ex.probe_budget_headroom() == D("2.2012")
 
-    def test_a_realized_GAIN_does_not_create_headroom(self):
-        """max(0, -realized): a gain is not a loss that did not happen."""
+    def test_a_realized_GAIN_does_not_create_headroom(self, tmp_path):
+        """max(0, baseline - realized): a gain is not a loss that did not
+        happen, and it is not headroom either. Holds on the campaign-scoped
+        basis exactly as it held on the lifetime one."""
+        from src import l5_campaign_baseline as CBL
         from src import l5_live_execution as E
+
+        _b = CBL.CampaignBaseline(root=str(tmp_path))
+        assert _b.capture("camp1.sizing", account_wide_realized="0")["ok"]
 
         class Budget:
             budget_usd = D("11.10")
 
         class Gates:
             campaign_budget = Budget()
+            campaign_baseline = _b
+            campaign_id = "camp1.sizing"
 
             def cash_committed(self, legs):
                 return D(0)
