@@ -733,6 +733,82 @@ A residual must never be hidden by integer conversion. Any nonzero Decimal posit
 - `src/pmus_settlement_auditor.py` — PMUS settlement/reconciliation authority.
 - `L5_STATUS.md` — broader historical pipeline/status; some transfer/live details may lag and should be refreshed against issue #167/current branch before operational use.
 
+## 13b. Standing preflight operating procedure (OWNER 2026-11-04)
+
+Permanent. Every campaign reuses the EXISTING preflight checks, thresholds,
+configuration and authorization requirements exactly as implemented. Nothing
+in this section adds, removes, relaxes or reorders a gate; it fixes only how
+the already-emitted result is read and reported.
+
+### Where the result already comes from
+
+The running service emits both halves on every boot, unprompted. There is
+nothing to execute by hand and nothing new to build:
+
+- `L5_AUTHORIZATION_PREFLIGHT` — `ok`, `fail[]`, `unknown[]`,
+  `not_evaluated[]` and one row per check. `UNKNOWN` and `NOT_EVALUATED` are
+  never PASS. `authorize_arming` still decides; this is read-only.
+- `L5_ARM_SWITCH_READINESS` — the reconciliation half: `live_orders`,
+  `pending_terminal`, `quarantine`, `orders_uncertain`,
+  `markets_with_exposure`. An unestablished answer is a blocker, never a
+  pass. `submitted` is an append-only lifetime idempotency ledger and is
+  evidence only, never open-order state.
+- `L5_EFFECTIVE_RUNTIME_CONFIG` — the configured-vs-required grading, read
+  for the FAILED CHECKS line when a limit or switch is the thing at fault.
+
+### The report
+
+Exactly these seven lines, in this order, every time:
+
+```
+PREFLIGHT: PASS / FAIL
+SHA:
+CAMPAIGN:
+AUTHORIZATION:
+FAILED CHECKS: None / exact reasons
+RECONCILIATION: PASS / FAIL
+READY TO ARM: YES / NO
+```
+
+Rules for filling it in:
+
+- **PREFLIGHT** is `L5_AUTHORIZATION_PREFLIGHT.ok` verbatim. Not a judgement.
+- **SHA** is the running commit from the deployment actually serving traffic.
+- **CAMPAIGN** is the approval's `nonce_sid`, with the window schedule.
+- **AUTHORIZATION** is the effective expiry, from the approval scope and
+  `L5_LIVE_AUTH_NOT_AFTER`, whichever binds earlier.
+- **FAILED CHECKS** quotes the gate's own reason strings. Never a paraphrase,
+  never a summary. `None` only when `fail[]`, `unknown[]` are both empty.
+- **RECONCILIATION** is PASS only when orders and exposure are all
+  established AND empty. Unreadable is FAIL.
+- **READY TO ARM** is YES only when PREFLIGHT is PASS, RECONCILIATION is
+  PASS, and an explicit owner authorization covers this campaign.
+
+Three rows are `NOT_EVALUATED` on every pre-arm read, by construction, and
+this is not a failure: `window_bounds` needs live venue metadata,
+`order_state_and_reconciliation` needs an authoritative venue read, and
+`claim_held_and_scope_digest` is created inside `authorize_arming` itself.
+
+The campaign baseline is likewise not verifiable before arming: it is
+captured at the first SUCCESSFUL arm from live cash, positions and realized
+P&L. The order path fails closed without it
+(`CAMPAIGN_BASELINE_UNAVAILABLE`), so it is reported from the actual
+`L5_CAMPAIGN_BASELINE` emission rather than asserted in advance.
+
+### Standing authority, and its limit
+
+On an all-PASS report, proceed under the authorization already given. Do not
+ask for routine checks to be re-approved.
+
+On a failure, fix only the specific failing thing, inside the existing
+authorization, and report the exact reason. Never bypass, widen, disable or
+reorder a gate to obtain a PASS. A gate that refuses has done its job. If
+clearing a failure would need a limit raised, a control disabled or scope
+widened, that is not a fix -- stop and report it.
+
+Engineering effort belongs on realized trading performance. Preflight is
+settled; do not revisit it.
+
 ## 14. Anti-drift rule
 
 Before adding a new strategy, venue behavior, or risk increase, answer:
