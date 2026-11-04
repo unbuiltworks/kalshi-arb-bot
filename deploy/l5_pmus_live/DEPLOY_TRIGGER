@@ -3537,3 +3537,19 @@ deploy: 2026-11-04T05:42Z campaign camp1.4675472c2b625a967df9d14c, HALT asserted
 # 0.96, 300s cancel margin, at-touch off. Watchdog, exact-order
 # cancellation, reconciliation and automatic halts untouched.
 deploy: 2026-11-04T05:51Z arm campaign camp1.4675472c2b625a967df9d14c
+
+# 2026-11-04T07:56Z HALT ASSERTED -- AUTHORIZED SCHEDULE COMPLETE.
+# Campaign camp1.4675472c2b625a967df9d14c traded W6 07:15Z, W7 07:30Z and
+# W8 07:45Z. The owner enumerated EIGHT windows ending 07:45Z; the approval
+# document's own expires_utc is 08:15Z and the window budget still has
+# capacity, so nothing in the engine would have stopped it claiming an
+# un-enumerated 08:00Z window. Asserting HALT is what holds the campaign to
+# the schedule the owner actually approved.
+#
+# TIMED FOR SAFETY, NOT CONVENIENCE: pushed after W8's 300-second
+# cancellation margin had already cleared its orders (~07:55Z) and before
+# 08:00Z, so no live order is interrupted. Settlement and retirement are
+# durable on the volume and resume after the restart.
+#
+# No limit, strategy parameter or safety check changes.
+deploy: 2026-11-04T07:56Z HALT asserted, authorized schedule complete
