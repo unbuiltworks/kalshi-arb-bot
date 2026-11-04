@@ -180,7 +180,14 @@ class TestReq6NoOpeningWhileUnmatchedEatsTheBudget:
         src = inspect.getsource(LX.residual_cap_decision)
         assert "nothing_held = resid == D(0)" in src
         assert "nothing_resting = (" in src
-        assert "exempt_open = bool(nothing_held and nothing_resting)" in src
+        # STRICTER THAN WHEN THIS WAS WRITTEN, and deliberately. The two
+        # conditions this test exists for are still conjoined; a THIRD was
+        # added after the 1445z phantom-fill breach, because `nothing_held`
+        # reads OUR ledger and on 1445z our ledger was wrong. An apparent
+        # flat book may no longer exempt an opening while the book is
+        # uncertain. Requirement 6 is unchanged and now also fail-closed.
+        assert "exempt_open = bool(nothing_held and nothing_resting" in src
+        assert "and certain)" in src
         assert "binds = bool((not exempt_open) and increases and a_abs > cap)" \
             in src
 
