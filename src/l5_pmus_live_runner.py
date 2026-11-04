@@ -4312,17 +4312,61 @@ class Runner:
                              "orders", None) or {}
             sub = ((orders.get(coid) or {}).get("pre_submit")) or {}
             side = ev.get("side_tracked") or sub.get("side")
+            # THE VENUE QUOTES WIRE, THIS RECORD IS IN OWN TERMS.
+            # `ev["avg_px"]` is the venue's average fill price, which is
+            # YES/UP -- the WIRE price. It was passed straight into
+            # `fill_own_px`, so for every DOWN fill that field held
+            # `1 - own`. Verified against all 8 DOWN fills of Campaigns C
+            # and D: `first_leg_own_px` (our submitted `own_px`) equalled
+            # `1 - fill_own_px` in each one, and equalled it for the UP
+            # fills, where wire and own coincide.
+            #
+            # WHY IT IS NOT ONLY A LABEL. `fill_evidence` falls back to
+            # `fill_own_px` for `first_leg_own_px` when the pre-submit
+            # record is missing, and `first_leg_own_px` is what every
+            # `pair_if_*` term is priced from -- so on a DOWN fill whose
+            # pre-submit had been evicted the record's pair arithmetic was
+            # wrong by `1 - 2p`, not merely mislabelled.
+            #
+            # `TS.wire_price` is the one place the transformation lives and
+            # it is an involution -- wire for UP is own, and for DOWN each
+            # is `1 - ` the other -- so applying it to a wire price yields
+            # the own price. FAIL CLOSED on an unknown side: a fill whose
+            # side we cannot name gets no own price rather than a guess,
+            # and the wire price is recorded either way so nothing is lost.
+            # LOCAL IMPORT, as everywhere else in this file: module-level
+            # `TS` is `l5_two_sided_shadow`, a different module, and this
+            # whole method swallows BaseException -- so reaching for the
+            # wrong `TS` here would have silently stopped every fill
+            # evidence record rather than failing loudly.
+            from src import l5_two_sided_probe as TSP
+            # ONLY A SIDE WE RECOGNISE IS CONVERTED. `wire_price` treats
+            # anything that is not UP as DOWN, so passing an unrecognised
+            # label through it would silently return `1 - p` -- the exact
+            # class of error this fix exists to remove.
+            _wire_px = ev.get("avg_px")
+            _sd = None if side is None else str(side).strip().upper()
+            _own_px = (TSP.wire_price(_sd, _wire_px)
+                       if _sd in ("UP", "DOWN") else None)
             rec = BE.fill_evidence(
                 slug=str(m), coid=coid, side=side,
-                fill_qty=ev.get("delta"), fill_own_px=ev.get("avg_px"),
+                fill_qty=ev.get("delta"), fill_own_px=_own_px,
                 venue_event_t=ev.get("venue_event_t"),
                 processing_t=self.now_t,
                 residual_after=self.store.residual(str(m)),
-                first_leg_own_px=sub.get("own_px") or ev.get("avg_px"),
+                first_leg_own_px=sub.get("own_px") or _own_px,
                 qty_needed=self.store.residual(str(m)),
                 ring=ring, order_resting=None,
                 depth_ticks=_evidence_depth_ticks())
             rec["venue_event_t_key"] = ev.get("venue_event_t_key")
+            # KEPT BESIDE IT, so a reader can reconcile this record against
+            # the venue's own fill report without redoing the conversion.
+            rec["fill_wire_px"] = (None if _wire_px is None
+                                   else str(_wire_px))
+            rec["own_price_basis"] = (
+                "fill_own_px is OWN-outcome, converted from the venue's "
+                "wire avg_px by side; fill_wire_px is the venue's own "
+                "figure. None own price means the side was unknown.")
             emit("L5_FILL_BOOK_EVIDENCE", rec)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):

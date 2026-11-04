@@ -7054,6 +7054,45 @@ class FaithfulExecutor:
                     % (controller.get("provenance"),))
             dec = controller.get("decision")
             dec = dict(dec) if isinstance(dec, Mapping) else None
+            # ONE NUMERIC CONTRACT FOR BOTH ROUTES, AND IT IS THE L5 ONE.
+            # `FT.l5_native` coerces `price` and `l5_size` to Decimal and
+            # returns None when either is unreadable. This route took the
+            # caller's mapping VERBATIM, so a caller that passed strings
+            # reached `dec["l5_size"] * self.lam` -- three sites below --
+            # and raised TypeError before any gate, order, refusal or
+            # record.
+            #
+            # WHAT THAT COST, MEASURED. 1815z on 2026-11-04:
+            # `maybe_book_completion` seeds its controller re-entry from
+            # `TS.complement_order`, whose `leg` carries `str(px)` and
+            # `str(q)`. All 14 RISK_REDUCING_COMPLETION decisions in 93
+            # seconds -- pair 0.96 to 0.99, locked_pnl_usd 0.01 to 0.04 --
+            # raised `TypeError: can't multiply sequence by non-int of type
+            # 'decimal.Decimal'` and not one became an order.
+            # `order_resting` was false for all 125 residual samples of
+            # that window, and `L5_BOOK_COMPLETION_RESULT` is emitted AFTER
+            # the placement call, so the tape recorded the decision, the
+            # trigger and a bare `L5_LIVE_ERROR` -- and could not say that
+            # the two were the same event. The 2026-11-01 note above
+            # `_bc_capture` records the same signature: COMPLETE 145 times,
+            # 109 inside the 0.96 ceiling, no order.
+            #
+            # FAIL CLOSED, NOT COERCE-ANYTHING. `X._d` is the same helper
+            # `l5_native` uses; an unreadable number becomes a NAMED
+            # REFUSAL, never a TypeError and never a silent zero. A
+            # non-positive size is refused for the same reason `l5_native`
+            # refuses one. Only these two fields are touched: every other
+            # key reaches the gates exactly as the caller wrote it.
+            _bad_num: Optional[str] = None
+            if dec is not None:
+                for _f in ("price", "l5_size"):
+                    if dec.get(_f) is None:
+                        continue
+                    _v = X._d(dec[_f])
+                    if _v is None or (_f == "l5_size" and _v <= 0):
+                        _bad_num = _f
+                        break
+                    dec[_f] = _v
             # PROVISIONAL, and refined to the real (round, leg) once the
             # two-sided branch has chosen them -- see THE CONTROLLER'S KEY
             # below. It is never the key an order is submitted under.
@@ -7062,6 +7101,10 @@ class FaithfulExecutor:
             prov = Provenance(key, dec or {"unreadable": True},
                               market, window,
                               provenance=CONTROLLER_GENERATED)
+            if _bad_num is not None:
+                return prov.refuse(
+                    "PMUS_TRANSLATION",
+                    "CONTROLLER_DECISION_UNREADABLE:%s" % _bad_num)
         else:
             key = str(row.get("action_key"))
             dec = FT.l5_native(row)
