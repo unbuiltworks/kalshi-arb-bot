@@ -3392,3 +3392,18 @@ margin, residual cap, strategy parameters. No new services.
 # .py; full parity 80 failing ids, digest eb672d14b4baf439, identical to
 # baseline.
 deploy: 2026-11-04T02:45Z campaign-scoped budget correction, HALT asserted
+
+# 2026-11-04T03:05Z VERIFICATION DEPLOY, HALT STILL ASSERTED.
+# Owner-authorized campaign camp1.cf28b0c9 (03:30/03:45/04:00/04:15Z, expiry
+# 04:45Z) and the owner-authorized rotation of L5_EXPERIMENT_ID to
+# l5-btc15m-prog25-c1-d823f1d0. L5_LIVE_HALT REMAINS SET, so try_arm()
+# returns on self.halted() and nothing can arm: this boot exists so the
+# preflight can be read with the approval in force before HALT is cleared.
+# Taker crossing is disabled on BOTH switches (L5_TAKER_COMPLETION_POLICY=NO
+# and L5_TS_COMPLETION_CROSS=NO), so taker_crossing_reachable must read
+# false. The rotation resets experiment-scoped SUBMISSION COUNTS only; the
+# $5 campaign budget and baseline are keyed on the approval nonce, the $5
+# daily halt and cumulative ceilings read the store's realized ledger, the
+# cash ceiling reads store.committed() and the $20 exposure cap is
+# account-wide -- none of them is scoped to the experiment.
+deploy: 2026-11-04T03:05Z campaign camp1.cf28b0c9 staged, HALT asserted
