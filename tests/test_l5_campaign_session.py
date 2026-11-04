@@ -43,6 +43,31 @@ class Store:
         return json.dumps(self.doc).encode()
 
 
+def _bound(base, over):
+    """Derive the opening bound from the expiry the caller ACTUALLY ends up
+    with, one window inside it.
+
+    Several tests here override `expires_utc`, and the settlement grace must
+    outlast the last permitted open -- while `eff_expires` is itself clamped
+    to issued + MAX_CAMPAIGN_S. A fixed bound would sit outside a shortened
+    expiry and be refused as inconsistent, which is a fixture artefact and
+    not the property under test. An explicit `last_open_utc` from the caller
+    always wins.
+    """
+    if "last_open_utc" in over:
+        return base
+    iss = dt.datetime.fromisoformat(base["issued_utc"])
+    exp = dt.datetime.fromisoformat(base["expires_utc"])
+    eff = min(exp, iss + dt.timedelta(seconds=14400))
+    # THE EFFECTIVE EXPIRY ITSELF, not one window inside it. This file's
+    # properties are about the WINDOW BUDGET and the expiry: W5 sits exactly
+    # on the expiry, so insetting the bound would refuse it as out of
+    # schedule and mask the exhaustion and expiry rules under test. Equal to
+    # the effective expiry is permitted -- the bound is checked with `>`.
+    base["last_open_utc"] = eff.isoformat()
+    return base
+
+
 def doc(**over):
     base = {"approved": True, "nonce": "nonce-abcdef123456",
             "series": SERIES,
@@ -52,7 +77,7 @@ def doc(**over):
             "max_total_exposure_usd": "5",
             "max_daily_loss_usd": "5"}
     base.update(over)
-    return base
+    return _bound(base, over)
 
 
 def gate(d=None, raises=None):
@@ -238,15 +263,35 @@ def test_the_FOUR_HOUR_ceiling_CLAMPS_a_longer_document(tmp_path):
 
 
 def test_expiry_mid_campaign_stops_the_NEXT_window(tmp_path):
+    """REWRITTEN 2026-11-04 to stop relying on a window that STARTS AFTER
+    THE CAMPAIGN EXPIRES.
+
+    It used to grant W1 at 16:00 under a campaign expiring 15:10, because
+    only `now` was checked against the expiry and nothing checked the
+    window's own start. That is the 08:00Z incident in miniature, so the
+    fixture is corrected rather than the rule: the expiry now contains W1,
+    and the property under test -- expiry mid-campaign stops the NEXT
+    window -- is exercised by moving the CLOCK past it, which is what
+    "mid-campaign" actually means.
+    """
     L = led(tmp_path)
-    live = gate(doc(expires_utc=(NOW + dt.timedelta(minutes=10)).isoformat()))
+    expires = (NOW + dt.timedelta(hours=1, minutes=5)).isoformat()
+    live = gate(doc(expires_utc=expires))
     assert CA.authorize_window(live, W1, ledger=L, now=NOW)["ok"] is True
-    later = NOW + dt.timedelta(minutes=20)
-    g2 = CA.ApprovalGate(Store(doc(
-        expires_utc=(NOW + dt.timedelta(minutes=10)).isoformat())),
-        now_fn=lambda: later)
+    later = NOW + dt.timedelta(hours=1, minutes=30)
+    # MAX_CAMPAIGN_S staleness, as the production `campaign_gate()` factory
+    # uses, so the EXPIRY is what refuses rather than the 1-hour default
+    # staleness preempting it at an advanced clock.
+    g2 = CA.ApprovalGate(Store(doc(expires_utc=expires)),
+                         max_age_s=CA.MAX_CAMPAIGN_S,
+                         now_fn=lambda: later)
     out = CA.authorize_window(g2, W2, ledger=L, now=later)
     assert out["ok"] is False
+    # the DOCUMENT is past its expiry by now, so `state()` refuses it before
+    # authorize_window reaches its own CAMPAIGN_EXPIRED branch. Either way
+    # the next window is stopped, which is the property.
+    assert out["reason"] == "APPROVAL_NOT_VALID", out
+    assert out["detail"]["why"] == "approval_expired", out
     # the window already spent is NOT handed back
     assert L.read(CA.nonce_sid("nonce-abcdef123456"))["windows"] == [W1]
 

@@ -57,6 +57,12 @@ def _doc(**over):
     base = {"approved": True, "nonce": NONCE, "series": SERIES,
             "issued_utc": (now - dt.timedelta(minutes=1)).isoformat(),
             "expires_utc": (now + dt.timedelta(hours=2)).isoformat(),
+            # OPENING BOUND, 2026-11-04. Set equal to the expiry so this
+            # fixture reproduces the pre-bound semantics EXACTLY -- windows
+            # may open until expiry -- and keeps testing what it tested.
+            # The bound itself is covered in test_l5_opening_bound.py.
+            "last_open_utc": (now + dt.timedelta(hours=2)
+                              - dt.timedelta(minutes=15)).isoformat(),
             "max_windows": 3, "max_total_exposure_usd": "20",
             "max_daily_loss_usd": "5"}
     base.update(over)

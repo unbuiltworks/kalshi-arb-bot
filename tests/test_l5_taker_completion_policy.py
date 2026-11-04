@@ -425,6 +425,7 @@ def test_a_window_opening_before_the_authorized_start_is_refused():
 
     scope = {"series": "cpc-btc-updown-15m-",
              "expires_utc": "2026-10-30T22:45:00+00:00",
+             "last_open_utc": "2026-10-30T22:30:00+00:00",
              "starts_utc": "2026-10-30T21:30:00+00:00"}
 
     class _G:
@@ -444,6 +445,7 @@ def test_the_authorized_window_itself_is_not_refused_by_the_start_gate():
 
     scope = {"series": "cpc-btc-updown-15m-",
              "expires_utc": "2026-10-30T22:45:00+00:00",
+             "last_open_utc": "2026-10-30T22:30:00+00:00",
              "starts_utc": "2026-10-30T21:30:00+00:00"}
 
     class _G:
@@ -461,6 +463,7 @@ def test_an_unlocatable_window_fails_closed_when_a_start_is_in_force():
 
     scope = {"series": "cpc-",
              "expires_utc": "2026-10-30T22:45:00+00:00",
+             "last_open_utc": "2026-10-30T22:30:00+00:00",
              "starts_utc": "2026-10-30T21:30:00+00:00"}
 
     class _G:

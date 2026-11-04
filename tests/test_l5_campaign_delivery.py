@@ -44,6 +44,26 @@ W5 = SERIES + "2026-10-20-1700z"
 NONCE = "delivery-test-nonce-0123456789"
 
 
+def _bound(base, over):
+    """Derive the opening bound from the expiry the caller ACTUALLY ends up
+    with, one window inside it.
+
+    Several tests here override `expires_utc`, and the settlement grace must
+    outlast the last permitted open -- while `eff_expires` is itself clamped
+    to issued + MAX_CAMPAIGN_S. A fixed bound would sit outside a shortened
+    expiry and be refused as inconsistent, which is a fixture artefact and
+    not the property under test. An explicit `last_open_utc` from the caller
+    always wins.
+    """
+    if "last_open_utc" in over:
+        return base
+    iss = dt.datetime.fromisoformat(base["issued_utc"])
+    exp = dt.datetime.fromisoformat(base["expires_utc"])
+    eff = min(exp, iss + dt.timedelta(seconds=14400))
+    base["last_open_utc"] = (eff - dt.timedelta(minutes=15)).isoformat()
+    return base
+
+
 def live_doc(**over):
     now = dt.datetime.now(dt.timezone.utc)
     base = {"approved": True, "nonce": NONCE, "series": SERIES,
@@ -53,7 +73,7 @@ def live_doc(**over):
             "max_total_exposure_usd": "5",
             "max_daily_loss_usd": "5"}
     base.update(over)
-    return base
+    return _bound(base, over)
 
 
 # ====================================================== the env-backed store

@@ -148,6 +148,11 @@ class TestNoMarketYetDoesNotFakeASeriesMismatch:
             "series": "cpc-btc-updown-15m-",
             "issued_utc": (now - dt.timedelta(minutes=2)).isoformat(),
             "expires_utc": (now + dt.timedelta(minutes=73)).isoformat(),
+            # OPENING BOUND, 2026-11-04. Set equal to the expiry so this
+            # fixture reproduces the pre-bound semantics EXACTLY -- windows
+            # may open until expiry -- and keeps testing what it tested.
+            # The bound itself is covered in test_l5_opening_bound.py.
+            "last_open_utc": (now + dt.timedelta(minutes=58)).isoformat(),
             "max_windows": 4, "max_total_exposure_usd": "2.00",
             "max_daily_loss_usd": "5"})
 
