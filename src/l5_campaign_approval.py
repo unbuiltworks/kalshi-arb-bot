@@ -260,6 +260,67 @@ class ApprovalGate:
         if (eff_expires - now).total_seconds() <= 0:
             return no("approval_campaign_ceiling_expired")
 
+        # ================= THE OPENING BOUND, AND WHY EXPIRY IS NOT ONE
+        #
+        # THE INCIDENT THIS EXISTS TO PREVENT, 2026-11-04T08:00Z. The owner
+        # authorized EIGHT windows ending 07:45Z and set expiry 08:15Z so
+        # that the 07:45 window could finish and settle. The engine read the
+        # expiry as "windows may OPEN until then", claimed an un-enumerated
+        # 08:00Z window, submitted 5 orders, filled 3 and settled -$0.2900.
+        # No gate failed: `starts_utc` bounded the grant from below and
+        # NOTHING bounded it from above, so a settlement allowance silently
+        # became a trading allowance.
+        #
+        # EXPIRY IS A SETTLEMENT GRACE. It bounds how long the campaign may
+        # still reconcile, cancel and settle. It must never be the thing
+        # that decides a new window may open, because those two periods are
+        # different by design: the last window needs time to finish AFTER
+        # the last window may start.
+        #
+        # SO AN OPENING BOUND IS REQUIRED AND SEPARATE. Either an explicit
+        # set of authorized `window_starts`, or a `last_open_utc` after
+        # which no window may open. ABSENT IS NOT PERMISSIVE: a document
+        # carrying neither is refused outright rather than falling back to
+        # the expiry, because that fallback is precisely the defect. Older
+        # documents therefore stop being approved, which is the only
+        # backward incompatibility that cannot permit unintended trading.
+        last_open = _ts(doc.get("last_open_utc"))
+        if doc.get("last_open_utc") is not None and last_open is None:
+            return no("approval_last_open_unusable")
+        raw_starts = doc.get("window_starts")
+        win_starts = None
+        if raw_starts is not None:
+            if not isinstance(raw_starts, (list, tuple)) or not raw_starts:
+                return no("approval_window_starts_unusable")
+            parsed = []
+            for item in raw_starts:
+                t = _ts(item)
+                if t is None:
+                    return no("approval_window_starts_unusable")
+                parsed.append(t)
+            win_starts = sorted(set(parsed))
+            if len(win_starts) > MAX_WINDOWS:
+                return no("approval_window_starts_above_ceiling",
+                          count=len(win_starts), ceiling=MAX_WINDOWS)
+        if win_starts is None and last_open is None:
+            return no("approval_opening_bound_absent")
+        # INCONSISTENT IS REFUSED, not reconciled. A bound we would have to
+        # guess at is a bound the owner did not state.
+        if last_open is not None and last_open > eff_expires:
+            return no("approval_last_open_after_expiry",
+                      last_open_utc=last_open.isoformat(),
+                      expires_utc=eff_expires.isoformat())
+        if win_starts is not None:
+            if starts is not None and win_starts[0] < starts:
+                return no("approval_window_starts_before_start")
+            if last_open is not None and win_starts[-1] > last_open:
+                return no("approval_window_starts_after_last_open")
+            if win_starts[-1] >= eff_expires:
+                return no("approval_window_starts_after_expiry")
+            if len(win_starts) > eff_w:
+                return no("approval_window_starts_exceed_max_windows",
+                          count=len(win_starts), max_windows=eff_w)
+
         self.last_state = "approved"
         return {"approved": True, "why": None,
                 "scope": {"nonce": nonce, "nonce_sid": nonce_sid(nonce),
@@ -293,6 +354,15 @@ class ApprovalGate:
                           "issued_utc": issued.isoformat(),
                           "starts_utc": (None if starts is None
                                          else starts.isoformat()),
+                          # THE OPENING BOUND, carried separately from the
+                          # settlement grace above. `expires_utc` says how
+                          # long we may still settle; these say which
+                          # windows may be OPENED, and only these do.
+                          "last_open_utc": (None if last_open is None
+                                            else last_open.isoformat()),
+                          "window_starts": (
+                              None if win_starts is None
+                              else [t.isoformat() for t in win_starts]),
                           "clamped": {
                               "max_windows": want_w != eff_w,
                               "max_total_exposure_usd": want_exp != eff_exp,
@@ -443,6 +513,66 @@ class WindowLedger:
                 "reserved_now": True, "market": market}
 
 
+def opening_refusal(scope: Mapping[str, Any], market: str
+                    ) -> Optional[Dict[str, Any]]:
+    """None when this market's window may be OPENED. Else why not.
+
+    ONE DEFINITION, TWO CALLERS. The window claim asks this, and so does the
+    submission path, because "may this window be opened" and "may this order
+    be sent into it" must never be able to disagree. A second opinion
+    computed elsewhere is how the 08:00Z window came to be traded.
+
+    THE WINDOW'S OWN START DECIDES, never `now`. A window that opened
+    outside the grant is outside it however punctually we arrive, and a
+    window inside the grant does not leave it because we are late -- that is
+    what the entry cutoff and the settlement grace are for, separately.
+
+    NO BOUND IS NOT AN UNBOUNDED GRANT. `state()` already refuses a document
+    carrying neither bound, and this refuses again rather than trusting that
+    it did: a scope assembled by any other path cannot quietly become
+    permissive here.
+    """
+    starts = _ts(scope.get("starts_utc"))
+    last_open = _ts(scope.get("last_open_utc"))
+    raw_set = scope.get("window_starts")
+    allowed = None
+    if raw_set is not None:
+        allowed = [t for t in (_ts(x) for x in raw_set) if t is not None]
+        if len(allowed) != len(list(raw_set)):
+            return {"reason": "CAMPAIGN_WINDOW_SET_UNREADABLE",
+                    "detail": {"window_starts": str(raw_set)[:120]}}
+    if allowed is None and last_open is None:
+        return {"reason": "CAMPAIGN_OPENING_BOUND_ABSENT",
+                "detail": {"note": "expiry is a settlement grace and never "
+                                   "authorizes opening a window"}}
+    ws = _slug_start_utc(market)
+    if ws is None:
+        # FAIL CLOSED: a window we cannot locate cannot be shown to be in
+        # the grant, and the grant is a SET of windows.
+        return {"reason": "WINDOW_START_UNREADABLE",
+                "detail": {"market": str(market)[:80]}}
+    if starts is not None and ws < starts:
+        return {"reason": "WINDOW_BEFORE_AUTHORIZED_START",
+                "detail": {"market": str(market)[:80],
+                           "window_start_utc": ws.isoformat(),
+                           "starts_utc": starts.isoformat(),
+                           "early_by_s": round((starts - ws).total_seconds(), 1)}}
+    if allowed is not None and ws not in allowed:
+        return {"reason": "WINDOW_NOT_IN_AUTHORIZED_SET",
+                "detail": {"market": str(market)[:80],
+                           "window_start_utc": ws.isoformat(),
+                           "authorized": [t.isoformat() for t in allowed]}}
+    if last_open is not None and ws > last_open:
+        return {"reason": "WINDOW_AFTER_LAST_AUTHORIZED_OPEN",
+                "detail": {"market": str(market)[:80],
+                           "window_start_utc": ws.isoformat(),
+                           "last_open_utc": last_open.isoformat(),
+                           "late_by_s": round((ws - last_open).total_seconds(), 1),
+                           "note": "the campaign may still SETTLE until "
+                                   "expires_utc; it may not open this"}}
+    return None
+
+
 def authorize_window(gate: "ApprovalGate", market: str, *,
                      ledger: Optional[WindowLedger] = None,
                      now: Optional[dt.datetime] = None,
@@ -508,26 +638,10 @@ def authorize_window(gate: "ApprovalGate", market: str, *,
     # The window's own START decides, not `now`: a window that OPENED before
     # the authorized start is refused even if we reach it late, because
     # trading it is trading an unapproved window.
-    starts = _ts(scope.get("starts_utc"))
-    if starts is not None:
-        ws = _slug_start_utc(market)
-        if ws is None:
-            # FAIL CLOSED. With a start bound in force, a slug whose window
-            # we cannot locate cannot be shown to be inside the grant.
-            return {"present": True, "ok": False,
-                    "reason": "WINDOW_START_UNREADABLE",
-                    "detail": {"market": str(market)[:80],
-                               "starts_utc": scope.get("starts_utc")},
-                    "scope": scope}
-        if ws < starts:
-            return {"present": True, "ok": False,
-                    "reason": "WINDOW_BEFORE_AUTHORIZED_START",
-                    "detail": {"market": str(market)[:80],
-                               "window_start_utc": ws.isoformat(),
-                               "starts_utc": starts.isoformat(),
-                               "early_by_s": round(
-                                   (starts - ws).total_seconds(), 1)},
-                    "scope": scope}
+    bad = opening_refusal(scope, market)
+    if bad is not None:
+        return {"present": True, "ok": False, "reason": bad["reason"],
+                "detail": bad.get("detail") or {}, "scope": scope}
 
     led = ledger or WindowLedger()
     try:
