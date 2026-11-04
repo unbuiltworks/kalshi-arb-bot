@@ -3454,3 +3454,39 @@ deploy: 2026-11-04T03:14Z arm campaign camp1.cf28b0c9, HALT cleared
 # point stays -10.62110000 and windows already spent stay spent.
 deploy: 2026-11-04T03:52Z planner budget basis, campaign camp1.cf28b0c9 live
 # Parity: 80 failing ids, digest eb672d14b4baf439 -- identical to baseline.
+
+# 2026-11-04T05:02Z TWO-SLOT EXECUTION, owner-authorized config change.
+# HALT IS ASSERTED: L5_LIVE_HALT is set in the environment this deployment
+# snapshots, so try_arm() returns on self.halted() and nothing can arm.
+# This boot exists to verify the two-slot configuration before any arming.
+#
+# THE ONLY NEW TRADING CONFIGURATION CHANGE: L5_MAX_LIVE_ORDERS 1 -> 2, so
+# a same-side replacement may overlap its predecessor instead of the engine
+# going flat between every reprice. On window 3 of camp1.cf28b0c9 the
+# complement took 28.3s and 7 requote laps to complete, spending 13 verify
+# round trips, while measured queue ahead of our resting price ran a median
+# 2,148 contracts against 617 at the target. In the canonical L5 corpus the
+# number of distinct prices worked on the opening side is the single
+# strongest completion predictor: one price completes 36.8%, four or more
+# 93.5% (n=1,030 of 2,216).
+#
+# NOT A RISK-ENVELOPE CHANGE, and the tests prove it rather than assert it.
+# `refuse` prices every outstanding order as though it fills in full, and
+# `residual_cap_decision` runs on a FILL_CONTINGENT_WORST_CASE basis that
+# refuses to net the opposite side. Verified identical at one and two slots
+# for per-market, exposure and daily-halt refusals; an uncertain book still
+# refuses; two same-side resting legs are refused at ANY slot count; an
+# existing UP 1 plus TWO overlapping DOWN all filling lands one matched
+# pair plus ONE contract of residual, with $2.34 of the $12 ceiling
+# reserved; a third overlapping lap is refused before the wire.
+#
+# ALSO APPLIED: L5_TS_MIN_FIRST_LEG_PRICE=0.10 (the owner-approved band
+# floor, honoured in 0..0.50; the 0.60 ceiling is untouched) and
+# L5_LIVE_AUTH_MAX_WINDOWS 4 -> 8, which would otherwise silently cap the
+# eight-window campaign. L5_TS_ENTRY_CUTOFF_S stays 480. No book-imbalance
+# gate. No dollar or inventory limit changes.
+#
+# Campaign camp1.4675472c2b625a967df9d14c is staged (06:00-07:45Z, expiry
+# 08:15Z) and is NOT approved for arming.
+# Parity: 80 failing ids, digest eb672d14b4baf439 -- identical to baseline.
+deploy: 2026-11-04T05:02Z two-slot execution, HALT asserted
