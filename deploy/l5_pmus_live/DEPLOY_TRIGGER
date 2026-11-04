@@ -3512,3 +3512,28 @@ deploy: 2026-11-04T05:02Z two-slot execution, HALT asserted
 #
 # No limit, strategy parameter or safety check changes on this deploy.
 deploy: 2026-11-04T05:42Z campaign camp1.4675472c2b625a967df9d14c, HALT asserted
+
+# 2026-11-04T05:51Z ARMING DEPLOY, HALT CLEARED.
+# Owner-authorized campaign camp1.4675472c2b625a967df9d14c, authorization
+# sha256 0eafa9497238cd8fb4f28f3d4299cd8e1612aa9c7c2027cc3e57cb02cf5529eb.
+# Eight windows 06:00, 06:15, 06:30, 06:45, 07:00, 07:15, 07:30, 07:45Z.
+# Authorization expires 08:15:00Z. ONLY these eight windows.
+#
+# All five owner conditions verified on the preceding HALT-asserted boot
+# (deployment 1f5f451f, SHA 07fbaed8 carrying b899f612):
+#  1. parity 80 ids, digest eb672d14b4baf439, identical to baseline;
+#  2. deployment SUCCESS, serving SHA verified;
+#  3. L5_AUTHORIZATION_PREFLIGHT ok true fail [] AND
+#     L5_EFFECTIVE_RUNTIME_CONFIG PASS true, 26 checked, 0 failed, with
+#     max_live_orders effective 2 required 2 ok true;
+#  4. live_orders 0, pending_terminal 0, quarantine 0, orders_uncertain
+#     null, markets_with_exposure [] -- no unexpected orders, no inventory;
+#  5. halt_local_env true, submission_gate blocked NOT_ARMED.
+#
+# Hard limits in force and unchanged: $5 campaign budget, $5 daily halt
+# ($5.3400 room, today +0.3400), $12 cash ceiling, $20 exposure, 1-contract
+# residual cap, 1 concurrent market, 1-contract opening clip, 2 live orders,
+# maker-only (taker_crossing_reachable false), band 0.10-0.60, pair ceiling
+# 0.96, 300s cancel margin, at-touch off. Watchdog, exact-order
+# cancellation, reconciliation and automatic halts untouched.
+deploy: 2026-11-04T05:51Z arm campaign camp1.4675472c2b625a967df9d14c
