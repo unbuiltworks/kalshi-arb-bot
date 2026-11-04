@@ -7100,10 +7100,25 @@ class FaithfulExecutor:
             # note in the runner avoids one verb.
             if dec is not None:
                 for _f in ("price", "l5_size"):
-                    if dec.get(_f) is None:
-                        continue
-                    _v = X._d(dec[_f])
-                    if _v is None or (_f == "l5_size" and _v <= 0):
+                    # ABSENT COUNTS AS UNREADABLE, for the same reason
+                    # `l5_native` returns None on a missing price: the L5
+                    # route refuses by name, while this route handed the
+                    # mapping to `FT.controller_translate`, which does
+                    # `decision["price"]` unconditionally and raised
+                    # KeyError -- a second crash of the same family as the
+                    # TypeError above, one layer further on. `X._d(None)`
+                    # is already None, so no extra branch is needed.
+                    _v = X._d(dec.get(_f))
+                    # NaN AND INFINITY ARE READABLE DECIMALS AND NOT
+                    # NUMBERS. `X._d("nan")` returns Decimal("NaN"), which
+                    # is not None and for which `<= 0` is False, so both
+                    # slipped past a null-and-sign check and raised
+                    # InvalidOperation inside `controller_translate`
+                    # instead. `opening_leg_max_contracts` already guards
+                    # its own input with `is_finite()`; this is the same
+                    # standard applied at the boundary.
+                    if (_v is None or not _v.is_finite()
+                            or (_f == "l5_size" and _v <= 0)):
                         _bad_num = _f
                         break
                     dec[_f] = _v

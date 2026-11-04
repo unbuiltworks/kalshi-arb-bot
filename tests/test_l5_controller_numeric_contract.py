@@ -127,7 +127,7 @@ def _src() -> str:
 def test_the_controller_route_coerces_both_numeric_fields():
     s = _src()
     assert 'for _f in ("price", "l5_size"):' in s
-    assert "_v = X._d(dec[_f])" in s
+    assert "_v = X._d(dec.get(_f))" in s
     assert "dec[_f] = _v" in s
 
 
@@ -146,6 +146,22 @@ def test_an_unreadable_controller_number_is_a_named_refusal():
 def test_a_non_positive_controller_size_is_refused_like_l5_native():
     s = _src()
     assert '(_f == "l5_size" and _v <= 0)' in s
+
+
+def test_non_finite_numbers_are_refused():
+    """NaN and Infinity are readable Decimals and not numbers, and `<= 0`
+    is False for NaN, so a null-and-sign check alone let them through to
+    raise InvalidOperation deeper in."""
+    s = _src()
+    assert "not _v.is_finite()" in s
+
+
+def test_an_absent_number_is_treated_as_unreadable():
+    """`dec.get` not `dec[...]`, so a missing field becomes the same named
+    refusal rather than a KeyError in controller_translate."""
+    s = _src()
+    assert "X._d(dec.get(_f))" in s
+    assert "if dec.get(_f) is None:" not in s
 
 
 def test_the_coercion_runs_before_the_three_multiplication_sites():
@@ -177,7 +193,8 @@ def test_the_l5_route_is_not_touched_by_this_change():
     coercion: the new loop must not reach into it."""
     s = _src()
     assert "dec = FT.l5_native(row)" in s
-    assert "l5_native" not in _coercion_block(s)
+    # the block may NAME l5_native in a comment; it must not CALL it.
+    assert "FT.l5_native" not in _coercion_block(s)
 
 
 def test_bad_num_is_bound_on_both_routes():
