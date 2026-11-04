@@ -241,3 +241,26 @@ def test_the_cash_envelope_binds_on_BOTH_overlapping_DOWN_orders():
                        outstanding=two_shorts[:1],
                        cumulative_realized=D(0))
     assert why is not None and "CASH" in why.upper(), why
+
+
+# ===== the verifier's approved value must track the approval exactly
+
+def test_the_approved_max_live_orders_is_TWO():
+    """OWNER 2026-11-04. The approved-values table IS the approval, so a
+    verifier that disagrees with it reports the authorized change as a
+    regression and makes FAILED CHECKS permanently non-empty."""
+    from src import l5_runtime_config_verify as C
+    assert C.APPROVED["max_live_orders"] == 2
+
+
+@pytest.mark.parametrize("value,ok", [("1", False), ("2", True), ("20", False)])
+def test_the_row_is_an_EXACT_match_so_an_unclamped_typo_still_fails(
+        value, ok, monkeypatch):
+    """`R.max_live_orders()` is max(1, n) with NO upper clamp, so a typo
+    setting 20 is accepted by the accessor in silence. Grading this row
+    against exactly 2 is what makes that detectable -- the row is tighter
+    after the change than before it, not looser."""
+    from src import l5_runtime_config_verify as C
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", value)
+    row = [r for r in C.verify()["rows"] if r["name"] == "max_live_orders"][0]
+    assert row["ok"] is ok, row

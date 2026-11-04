@@ -97,7 +97,30 @@ APPROVED: Dict[str, Any] = {
     "defensive_guard_opens_s": 540.0,
     "defensive_last_actionable_s": 585.0,
     "max_windows": 8,
-    "max_live_orders": 1,
+    # RAISED 1 -> 2 BY OWNER DECISION, 2026-11-04, for the eight-window
+    # bounded live validation of campaign camp1.4675472c2b625a967df9d14c.
+    #
+    # WHY THE VERIFIER HAD TO MOVE WITH IT. This table is the approval, and a
+    # verifier that disagrees with the approval it exists to enforce reports
+    # the authorized change as a regression -- the same inverted "silent
+    # clamp" failure the campaign_additional_loss_usd note above records. It
+    # read effective 2 against required 1 and made FAILED CHECKS permanently
+    # non-empty, which would mask the next real failure.
+    #
+    # IT IS STILL AN EXACT MATCH, DELIBERATELY. `R.max_live_orders()` is
+    # `max(1, n)` with NO upper clamp, so a typo setting 20 would be accepted
+    # by the accessor in silence. Grading this row against exactly 2 is what
+    # makes that detectable, so the row is a tighter check after this change
+    # than before it, not a looser one.
+    #
+    # WHAT THE SLOT DOES AND DOES NOT BUY. It lets a same-side replacement
+    # overlap its predecessor instead of the engine going flat between every
+    # reprice. It grants no headroom: `refuse` prices every outstanding order
+    # as though it fills in full, and `residual_cap_decision` runs on a
+    # FILL_CONTINGENT_WORST_CASE basis that refuses to net the opposite side,
+    # so two same-side resting legs are refused at ANY slot count. Pinned in
+    # tests/test_l5_two_order_slot_safety.py.
+    "max_live_orders": 2,
     "window_strategy": "TWO_SIDED",
     "campaign_duration_ceiling_s": 14400.0,
     # RAISED 5 -> 20 by owner decision for the eight-window sequential
