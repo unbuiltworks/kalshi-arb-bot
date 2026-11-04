@@ -3322,3 +3322,35 @@ same call before one save, an order leaving live_orders unresolved lands in
 pending_terminal, and an unenumerable set is caught by orders_uncertain.
 
 Read-only. Executor stays DISARMED, at-touch OFF, no orders.
+
+--- 2026-11-04T00:30Z 4e469815 ---
+Deploy the venue window-confirmation reliability fix.
+
+WHY. The authorized 4-window campaign submitted ZERO orders. Three
+consecutive windows were refused -- 2300z alone 241 times with a healthy
+book (subscribed before open, 8,540 updates, 500 trades, 0.46/0.59) --
+because verify_alignment walked /v1/events?series_id=375 OLDEST FIRST under
+`while off < 4000` and the series had outgrown that cap, so every current
+window read "not listed", and one such read was cached as None for the whole
+900 seconds.
+
+THE FIX. Address the event BY NAME via /v1/events/slug/{event} (the resource
+resolve_market already relies on, immune to series age; a query parameter is
+NOT used because the gateway silently ignores unknown filters). Classify the
+outcome three ways: CONFIRMED cached, MISMATCH never retried, TRANSIENT
+retried in-window with bounded backoff and never cached until spent. Bound
+every retry by the runway ACTUALLY left (ws + entry_cutoff - 20s) with the
+measured lookup latency counted, so a late confirmation can never bypass the
+entry cutoff. Clock-derived bounds are NEVER substituted.
+
+CAMPAIGN ENDED AND STATE RECONCILED before this deploy, verified 00:26:01Z:
+live_orders 0, pending_terminal 0, quarantine 0, orders_uncertain null,
+markets_with_exposure [], submitted 22848 (unchanged all campaign).
+
+The campaign authorization has EXPIRED (L5_LIVE_AUTH_NOT_AFTER 00:25:00Z),
+so this restart cannot trade: window confirmation will be attempted and
+arming will refuse AUTHORIZATION_EXPIRED. That is the intended state. No new
+campaign is authorized.
+
+Unchanged: every risk limit, HALT, watchdog, reconciliation, cancellation
+margin, residual cap, strategy parameters. No new services.
