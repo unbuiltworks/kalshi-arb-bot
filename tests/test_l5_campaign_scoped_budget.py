@@ -295,3 +295,81 @@ def test_the_budget_and_the_ceilings_are_unchanged_constants():
 
 def _d(v):
     return D(str(v or 0))
+
+
+# ========== 8. a FRESH campaign is allowed only when the independent
+#               account-wide gates also pass
+
+def _gates_with_l5_ceilings(root, base, *, daily="5", cumulative="20"):
+    """The same gate, with the two independent L5 loss ceilings configured.
+
+    These read `l5_scoped_realized` / `l5_scoped_realized_today` -- the
+    account-wide post-baseline figures -- and they are checked BEFORE the
+    campaign term. Scoping the campaign budget must not give a fresh
+    campaign a way past them.
+    """
+    return VG.ValidationGates(
+        max_cash_deployed_usd=D("12"),
+        max_l5_daily_loss_usd=D(daily),
+        max_l5_cumulative_loss_usd=D(cumulative),
+        campaign_budget=CBD.CampaignBudgetLedger(root=root, budget_usd="5"),
+        campaign_id=CID,
+        campaign_baseline=base,
+        cash_policy=VG.NO_RECYCLING)
+
+
+def test_a_fresh_campaign_still_refuses_on_the_DAILY_halt(root):
+    """REQUIREMENT 6. The campaign's own baseline is clean -- it has lost
+    nothing -- but today's account-wide realized loss has reached the $5
+    daily halt. The fresh campaign is refused anyway, on the daily control,
+    not on the campaign budget."""
+    b = baseline(root, realized="-10.6211")
+    g = _gates_with_l5_ceilings(root, b)
+    why = g.refuse(order_price=D("0.50"), order_qty=D("1"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   cumulative_realized=D("-10.6211"),
+                   l5_scoped_realized=D("-5.00"),
+                   l5_scoped_realized_today=D("-5.00"))
+    assert why is not None, "the daily halt must still refuse"
+    assert why.startswith("L5_DAILY_LOSS_LIMIT:"), why
+
+
+def test_a_fresh_campaign_still_refuses_on_the_CUMULATIVE_ceiling(root):
+    """REQUIREMENT 6, lifetime arm. Nothing lost by THIS campaign, no loss
+    today, but the post-baseline cumulative figure has reached its own $20
+    ceiling. Still refused, on the lifetime control."""
+    b = baseline(root, realized="-10.6211")
+    g = _gates_with_l5_ceilings(root, b)
+    why = g.refuse(order_price=D("0.50"), order_qty=D("1"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   cumulative_realized=D("-10.6211"),
+                   l5_scoped_realized=D("-20.00"),
+                   l5_scoped_realized_today=D("0"))
+    assert why is not None, "the cumulative ceiling must still refuse"
+    assert why.startswith("L5_CUMULATIVE_LOSS_LIMIT:"), why
+
+
+def test_a_fresh_campaign_is_ALLOWED_when_every_gate_passes(root):
+    """REQUIREMENT 8, the positive case. $10.6211 of standing historical
+    loss, a clean campaign baseline, both independent L5 ceilings unspent,
+    cash within the $12 ceiling: the order is allowed. This is the whole
+    point of the correction -- and it holds only with all of the above."""
+    b = baseline(root, realized="-10.6211")
+    g = _gates_with_l5_ceilings(root, b)
+    assert g.refuse(order_price=D("0.50"), order_qty=D("1"),
+                    order_intent="ORDER_INTENT_BUY_LONG",
+                    cumulative_realized=D("-10.6211"),
+                    l5_scoped_realized=D("-1.00"),
+                    l5_scoped_realized_today=D("-1.00")) is None
+
+
+def test_a_MISSING_scoped_figure_still_refuses_a_fresh_campaign(root):
+    """MISSING IS NOT ZERO survives the change: a configured ceiling with
+    no scoped figure refuses rather than reading absence as no loss."""
+    b = baseline(root, realized="-10.6211")
+    g = _gates_with_l5_ceilings(root, b)
+    why = g.refuse(order_price=D("0.50"), order_qty=D("1"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   cumulative_realized=D("-10.6211"),
+                   l5_scoped_realized=None)
+    assert why == "L5_SCOPED_REALIZED_UNAVAILABLE", why
