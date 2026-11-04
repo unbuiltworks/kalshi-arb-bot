@@ -70,6 +70,14 @@ UA = {"User-Agent": "Mozilla/5.0 (l5-pmus-realtime-observer; read-only)"}
 #: direct slug resource's job, and this is only the fallback.
 EVENTS_WALK_MAX_OFFSET = 4000
 
+#: LOOKUP LATENCY IS PART OF A WINDOW'S BUDGET. `_get`'s 20s default applied
+#: to a 40-page fallback walk is up to 800 seconds -- longer than the window
+#: it is trying to confirm. The direct read gets a short timeout and the
+#: fallback walk gets a wall-clock budget, so one attempt cannot consume the
+#: runway the caller is trying to bound.
+VENUE_LOOKUP_TIMEOUT_S = 8.0
+EVENTS_WALK_BUDGET_S = 20.0
+
 L5_SERIES = "btc-updown-15m"
 PMUS_SERIES = "btc-updown-15m"
 WINDOW_S = 900
@@ -530,7 +538,7 @@ def verify_alignment(window_start: int) -> Dict[str, Any]:
     # delegated to a filter that may not exist.
     try:
         ev = _get("%s/v1/events/slug/%s" % (PMUS_GATEWAY, want_ev),
-                  no_cache=True) or {}
+                  VENUE_LOOKUP_TIMEOUT_S, no_cache=True) or {}
         row = ev.get("event") if isinstance(ev, Mapping) else None
         if not isinstance(row, Mapping):
             row = ev if isinstance(ev, Mapping) else {}
@@ -550,9 +558,16 @@ def verify_alignment(window_start: int) -> Dict[str, Any]:
     # read's braces, and a miss here is TRANSIENT rather than definitive.
     try:
         off = 0
+        walk_t0 = time.time()
         while off < EVENTS_WALK_MAX_OFFSET:
+            if time.time() - walk_t0 > EVENTS_WALK_BUDGET_S:
+                out["classification"] = BOUNDS_TRANSIENT
+                out["why"] = ("fallback listing walk exceeded its %.0fs "
+                              "budget at offset %d" % (EVENTS_WALK_BUDGET_S,
+                                                       off))
+                return out
             ev = _get("%s/v1/events?series_id=375&limit=100&offset=%d"
-                      % (PMUS_GATEWAY, off))
+                      % (PMUS_GATEWAY, off), VENUE_LOOKUP_TIMEOUT_S)
             rows = (ev.get("events") or []) if isinstance(ev, Mapping) else []
             if not rows:
                 break

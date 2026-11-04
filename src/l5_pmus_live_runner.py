@@ -464,6 +464,19 @@ def settlement_sweep_cap() -> Optional[int]:
 VENUE_BOUNDS_MAX_ATTEMPTS = 6
 VENUE_BOUNDS_BACKOFF_S = (5.0, 10.0, 20.0, 40.0, 60.0, 60.0)
 
+#: THE REAL BOUND IS THE WINDOW, NOT THE SCHEDULE. The attempt budget above
+#: sums to 195s, and comparing that sum to the entry cutoff proves nothing:
+#: the first attempt can land late in a window (a restart at t+400, a slow
+#: first tick), and a lookup can itself take seconds. So every attempt is
+#: bounded by the runway ACTUALLY remaining, measured from the window start
+#: against `TS.entry_cutoff_s()`, with the observed lookup latency counted.
+#:
+#: A confirmation that arrives with less than this left cannot produce a
+#: placed order -- `may_enter` refuses PAST_ENTRY_CUTOFF on its own -- so
+#: retrying into it spends venue requests to buy a refusal. Below the floor
+#: the window is given up by name instead.
+VENUE_BOUNDS_MIN_RUNWAY_S = 20.0
+
 
 def residual_cap_k() -> Optional[D]:
     """The k for RESIDUAL_CAP, read from PMUS_RESIDUAL_CAP_K. None is OFF.
@@ -5582,6 +5595,46 @@ class Runner:
         now = float(getattr(self, "now_t", 0.0) or 0.0)
         if st["attempts"] and now < float(st["next_t"]):
             return None                    # backing off: not an answer yet
+        slug_ = AB.slug_for(int(ws))
+        # THE USABLE DEADLINE for this window's confirmation: the entry
+        # cutoff, less the runway a confirmation needs to be worth having.
+        # AN UNREADABLE CUTOFF IS NOT PERMISSION. Defaulting to the nominal
+        # 480 would be the looser answer when the deployed value can only be
+        # configured EARLIER, so a cutoff we cannot read gives the window up.
+        try:
+            from src import l5_two_sided_probe as _TSP
+            deadline = (float(ws) + float(_TSP.entry_cutoff_s())
+                        - VENUE_BOUNDS_MIN_RUNWAY_S)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.window_bounds[int(ws)] = None
+            emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                 {"market": slug_, "retryable": False,
+                  "reason": "ENTRY_CUTOFF_UNREADABLE",
+                  "why": "%s" % type(exc).__name__,
+                  "labels": ("the entry cutoff could not be read, so the "
+                             "retry budget cannot be bounded by it; the "
+                             "window is refused rather than retried against "
+                             "a guessed cutoff")})
+            return None
+        if now >= deadline:
+            # Past the point where a confirmation could still open a leg.
+            # Give the window up BY NAME rather than keep reading the venue.
+            self.window_bounds[int(ws)] = None
+            emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                 {"market": slug_, "retryable": False,
+                  "reason": "ENTRY_CUTOFF_REACHED",
+                  "attempts": st["attempts"],
+                  "now_minus_window_start_s": round(now - float(ws), 1),
+                  "usable_deadline_offset_s": round(
+                      deadline - float(ws), 1),
+                  "labels": ("no entry runway left, so a confirmation could "
+                             "not produce a placed order; the window is "
+                             "given up rather than re-read. The "
+                             "clock-derived window is never substituted.")})
+            return None
+        t0 = time.time()
         try:
             rep = dict(OBS.venue_window_bounds_report(int(ws), AB.WINDOW_S)
                        or {})
@@ -5590,6 +5643,11 @@ class Runner:
                 raise
             rep = {"bounds": None, "classification": OBS.BOUNDS_TRANSIENT,
                    "why": "%s" % type(exc).__name__}
+        latency = max(0.0, time.time() - t0)
+        # LATENCY IS PART OF THE BUDGET. The tick clock is sampled once per
+        # tick, so a lookup that blocked for seconds would otherwise be
+        # invisible to the deadline arithmetic below.
+        now = max(now, now + latency)
         st["attempts"] = int(st["attempts"]) + 1
         cls = str(rep.get("classification") or OBS.BOUNDS_TRANSIENT)
         bounds = rep.get("bounds")
@@ -5607,6 +5665,8 @@ class Runner:
                 "pmus_start_utc": rep.get("pmus_start_utc"),
                 "attempts": st["attempts"],
                 "max_attempts": VENUE_BOUNDS_MAX_ATTEMPTS,
+                "lookup_latency_s": round(latency, 3),
+                "runway_left_s": round(deadline - now, 1),
                 "labels": ("the venue did not confirm this window's start, "
                            "so no venue-bounded authorization can be issued "
                            "for it. The clock-derived window is never "
@@ -5623,10 +5683,20 @@ class Runner:
                  dict(base, retryable=False, reason="ATTEMPTS_EXHAUSTED"))
             return None
         idx = min(st["attempts"] - 1, len(VENUE_BOUNDS_BACKOFF_S) - 1)
-        st["next_t"] = now + float(VENUE_BOUNDS_BACKOFF_S[idx])
+        wait = float(VENUE_BOUNDS_BACKOFF_S[idx])
+        # A RETRY THAT WOULD LAND PAST THE USABLE DEADLINE IS NOT SCHEDULED.
+        # This is the bound that matters: it is computed from where we are in
+        # THIS window, after this lookup's latency, not from the schedule.
+        if now + wait >= deadline:
+            self.window_bounds[int(ws)] = None
+            emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                 dict(base, retryable=False,
+                      reason="NO_RUNWAY_FOR_RETRY", would_retry_in_s=wait))
+            return None
+        st["next_t"] = now + wait
         emit("L5_LIVE_WINDOW_UNCONFIRMED",
              dict(base, retryable=True, reason="TRANSIENT_WILL_RETRY",
-                  retry_in_s=float(VENUE_BOUNDS_BACKOFF_S[idx])))
+                  retry_in_s=wait))
         return None
 
     def maybe_expire_authorization(self, now: float) -> Optional[Dict[str, Any]]:
