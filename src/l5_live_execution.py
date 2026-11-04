@@ -7042,6 +7042,10 @@ class FaithfulExecutor:
         guarded against throughout. So each of the four is sourced from the
         controller instead, and `provenance` records which happened.
         """
+        # BOUND ON BOTH ROUTES, because the refusal that reads it sits
+        # after the branch rejoins -- the L5 route never sets it, and an
+        # unbound local there would raise where the old code did not.
+        _bad_num: Optional[str] = None
         if controller is not None:
             if row is not None:
                 raise ValueError(
@@ -7083,7 +7087,17 @@ class FaithfulExecutor:
             # non-positive size is refused for the same reason `l5_native`
             # refuses one. Only these two fields are touched: every other
             # key reaches the gates exactly as the caller wrote it.
-            _bad_num: Optional[str] = None
+            # THE REFUSAL IS TAKEN BELOW, AFTER THE MARKER RESET, never
+            # here: `test_l5_probe_leg_marker_leak` requires the
+            # unconditional reset of `_probe_leg_pending` to precede EVERY
+            # refusal exit in this method, because a refusal taken ahead of
+            # it leaks the marker into the next call. So this only RECORDS
+            # which field was unreadable.
+            #
+            # That test substring-searches this method's SOURCE TEXT, so the
+            # wording here deliberately avoids spelling the refusal
+            # statement out -- the same reason `maybe_book_completion`'s
+            # note in the runner avoids one verb.
             if dec is not None:
                 for _f in ("price", "l5_size"):
                     if dec.get(_f) is None:
@@ -7101,10 +7115,6 @@ class FaithfulExecutor:
             prov = Provenance(key, dec or {"unreadable": True},
                               market, window,
                               provenance=CONTROLLER_GENERATED)
-            if _bad_num is not None:
-                return prov.refuse(
-                    "PMUS_TRANSLATION",
-                    "CONTROLLER_DECISION_UNREADABLE:%s" % _bad_num)
         else:
             key = str(row.get("action_key"))
             dec = FT.l5_native(row)
@@ -7143,6 +7153,13 @@ class FaithfulExecutor:
         # set and consumed within one `handle()`.
         self._probe_leg_pending = None
         self._probe_round_pending = None
+
+        # A CONTROLLER DECISION WHOSE NUMBERS CANNOT BE READ, refused here
+        # rather than where it was detected: the reset above must precede
+        # every refusal exit in this method. See the note beside `_bad_num`.
+        if _bad_num is not None:
+            return prov.refuse("PMUS_TRANSLATION",
+                               "CONTROLLER_DECISION_UNREADABLE:%s" % _bad_num)
 
         # INDEPENDENT HALT, read FIRST. Before translation, before the book,
         # before any other gate: a halt must not depend on the rest of this

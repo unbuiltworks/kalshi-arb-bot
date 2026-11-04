@@ -154,21 +154,50 @@ def test_the_coercion_runs_before_the_three_multiplication_sites():
     assert s.index("dec[_f] = _v") < s.index('want = dec["l5_size"] * self.lam')
 
 
+def _coercion_block(s: str) -> str:
+    """Just the coercion loop, anchored on the loop itself rather than on
+    the `_bad_num` declaration -- that declaration has to sit ahead of the
+    controller/L5 branch so both routes bind it, so it is not a usable
+    anchor for 'what the controller branch does'."""
+    i = s.index('for _f in ("price", "l5_size"):')
+    j = s.index("# PROVISIONAL, and refined to the real", i)
+    return s[i:j]
+
+
 def test_only_the_two_numeric_fields_are_touched():
     """Every other key must reach the gates as the caller wrote it."""
-    s = _src()
-    i = s.index("_bad_num: Optional[str] = None")
-    j = s.index("# PROVISIONAL, and refined to the real", i)
-    block = s[i:j]
+    block = _coercion_block(_src())
     assert '"price", "l5_size"' in block
     for k in ("side", "relation", "maker_class", "provenance"):
         assert ('dec["%s"] =' % k) not in block
 
 
 def test_the_l5_route_is_not_touched_by_this_change():
-    """`dec = FT.l5_native(row)` still the whole of the L5 route's coercion."""
+    """`dec = FT.l5_native(row)` is still the whole of the L5 route's
+    coercion: the new loop must not reach into it."""
     s = _src()
     assert "dec = FT.l5_native(row)" in s
-    i = s.index("_bad_num: Optional[str] = None")
-    j = s.index("# PROVISIONAL, and refined to the real", i)
-    assert "l5_native" not in s[i:j]
+    assert "l5_native" not in _coercion_block(s)
+
+
+def test_bad_num_is_bound_on_both_routes():
+    """The refusal is read after the branch rejoins, so the L5 route must
+    bind it too or it raises UnboundLocalError where it used not to."""
+    s = _src()
+    assert s.index("_bad_num: Optional[str] = None") < s.index(
+        "if controller is not None:")
+
+
+def test_the_refusal_is_taken_after_the_marker_reset():
+    """`test_l5_probe_leg_marker_leak` requires the unconditional reset to
+    precede every refusal exit; this refusal must obey that."""
+    s = _src()
+    assert s.index("self._probe_leg_pending = None") < s.index(
+        "if _bad_num is not None:")
+
+
+def test_the_new_refusal_is_in_the_reviewed_inventory():
+    """`test_l5_intent_gate` counts refusal sites against this tuple."""
+    from src import l5_intent_gate as G
+    assert ("PMUS_TRANSLATION:CONTROLLER_DECISION_UNREADABLE"
+            in G.EXECUTOR_GATES_NOT_EVALUATED_HERE)

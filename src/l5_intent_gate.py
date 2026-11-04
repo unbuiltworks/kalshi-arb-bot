@@ -97,6 +97,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # client_order_id are keyed on. Without it there is nothing legitimate
     # to submit.
     "CONTROLLER_INTENT:CONTROLLER_NO_PROBE_LEG",
+    # a controller decision is taken VERBATIM, unlike an L5 row which
+    # `FT.l5_native` coerces, so a caller that passes a string price or
+    # size is refused by name here rather than raising TypeError on
+    # `dec["l5_size"] * self.lam`. 1815z lost all 14 of its completion
+    # decisions that way.
+    "PMUS_TRANSLATION:CONTROLLER_DECISION_UNREADABLE",
     "PMUS_TRANSLATION:STALE_ACTION",
     "SAFETY_OVERLAY:TICK_SIZE_UNKNOWN",
     "PMUS_TRANSLATION:PRICE_BELOW_MIN_TICK",

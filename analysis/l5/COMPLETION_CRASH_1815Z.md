@@ -126,6 +126,58 @@ all seven strands, locking ~2¢ each is ≈ **+$0.14** against the **−$0.3346*
 actually realised — but that comparison is an n=7 outcome, driven by which
 way BTC moved, and must not be read as the expected gain.
 
+## 6b. The stable resting-quote counterfactual, measured
+
+The engine's 14 intended complements were own 0.50-0.53 against the 0.46
+basis, i.e. pair 0.96-0.99. Measured over all 125 recorded books of that
+residual's life, asking only **did the touch reach that price** -- never
+whether it filled:
+
+| a quote resting at | touch reached it |
+|---|---|
+| pair 0.96 (own 0.50) | **17 / 125** samples |
+| pair 0.97 (own 0.51) | 19 / 125 |
+| pair 0.98 (own 0.52) | 21 / 125 |
+| pair 0.99 (own 0.53) | 30 / 125 |
+
+**Reached is not filled.** The venue publishes no per-order queue position,
+and `queue_ahead_bound` at those 17 moments, against a need of 1 contract,
+was: 99, 979, 191, 800, 900, 110, 126, 81, 140, 877, 81, 470, 141, 937,
+**1.0**, 869, 68. Only one of the seventeen -- 18:27:55, touch pair 0.82,
+queue 1.0 -- sits inside the 10x-of-need multiple
+`QUEUE_AHEAD_MAX_MULTIPLE` is calibrated at. On the rest a resting quote
+would have been behind hundreds of contracts at its own price.
+
+So the stable-resting-quote counterfactual is **not** "+$0.49 recovered on
+1815z". It is: the quote would have existed instead of not existing, it
+would have been reachable on about one sample in seven, and on all but one
+of those the queue ahead of it makes a fill unlikely.
+
+### What the cheap moments actually were
+
+The late samples (18:26:44 onward) show the pair falling to 0.82-0.94. That
+is not the complement getting generous -- it is **our own leg winning**. At
+18:26:56, pair 0.87 means the DOWN complement cost 0.41, so the market put
+UP's own price at ~0.59 against our 0.46 basis: the leg was ahead by 0.13,
+and completing would have locked exactly that 0.13. Mark-to-market and
+locked pair agree, as no-arbitrage requires.
+
+That is the general shape, and it holds in both directions -- 2000z's
+residual went the other way and carrying it won by 3.5c. **A cheap pair is
+the market telling you that you are ahead.** Completing then converts an
+unrealised gain into a realised one at the same expectation; it does not
+create edge.
+
+Which is why the fix matters operationally rather than in expectation: with
+a $5 daily-loss halt and $20 of exposure, a stream of small locked results
+survives where a coin-flip portfolio does not. Today two winning strands
+(+$0.58, +$0.615) masked five losers (-$1.53) and the campaigns still came
+out at -$0.1384. The same positions, completed whenever the pair cleared
+the ceiling, would have produced a much narrower distribution around a
+slightly positive number -- and would have stopped the engine spending its
+only order slot, its decision cadence and its whole residual cap on an
+operation that could not place an order at all.
+
 ## 7. The k=1/2/3 replay is moot until this ships
 
 Its premise is false. More residual headroom cannot buy more completed pairs
@@ -162,6 +214,9 @@ leg asserted permitted and string-typed, coercion ordering before the three
 multiplication sites, and that the refusal sits after `prov` exists so it
 refuses instead of raising `NameError`. Six of them fail on the
 pre-fix tree.
+
+Full-suite parity after both fixes: **80 failing ids, identical to the
+baseline set** (`diff` empty; 54 failed + 26 errors, same 80).
 
 Also fixed, reporting-only: `emit_fill_evidence` passed the venue's wire
 `avg_px` as `fill_own_px`, so for DOWN fills that field held `1 − own`.
