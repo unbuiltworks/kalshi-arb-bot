@@ -5473,9 +5473,39 @@ class FaithfulExecutor:
             budget = finite_decimal(vg.campaign_budget.budget_usd)
             if realized is None or budget is None:
                 return D(0)
-            used = (max(D(0), -realized)
-                    + vg.cash_committed(self.cash_legs_for_gates())
-                    + vg.pending_obligation(self.outstanding_for_gates()))
+            open_risk = (vg.cash_committed(self.cash_legs_for_gates())
+                         + vg.pending_obligation(self.outstanding_for_gates()))
+            # THE CAMPAIGN-SCOPED BASIS, which is the one gate 3b enforces.
+            #
+            # THE DRIFT THIS REPAIRS, measured live at 2026-11-04T03:34:35Z.
+            # Until the campaign budget was scoped to the campaign, the term
+            # here was `max(0, -realized)` and gate 3b's was identical, so
+            # the two agreed. Scoping the GATE and not the PLANNER made them
+            # disagree in the one direction this method exists to prevent:
+            # with $10.6211 of standing account-wide realized loss against a
+            # $5 budget, the planner read `max(0, 5 - 10.6211)` = 0 and
+            # refused every window with CAMPAIGN_BUDGET_EXHAUSTED, while the
+            # gate it is supposed to anticipate held $5 of room. Four
+            # authorized windows could not place a first leg.
+            #
+            # So this reuses the baseline the gate reads, exactly as the
+            # docstring above requires: the planner must size against the
+            # budget somebody actually holds. It is not a relaxation -- gate
+            # 3b still evaluates every order independently and still refuses
+            # on its own basis; this only stops the planner refusing room
+            # the gate would have allowed.
+            base = getattr(vg, "campaign_baseline", None)
+            if base is None:
+                return D(0)
+            cs = base.additional_loss_usd(
+                getattr(vg, "campaign_id", "") or "",
+                account_wide_realized=realized,
+                open_worst_case_usd=open_risk)
+            if not cs.get("ok"):
+                return D(0)          # an unestablished baseline is not room
+            used = finite_decimal(cs.get("additional_loss_usd"))
+            if used is None:
+                return D(0)
             return max(D(0), budget - used)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):

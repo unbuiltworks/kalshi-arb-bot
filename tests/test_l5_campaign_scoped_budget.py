@@ -444,3 +444,69 @@ def test_a_ROLLOVER_does_not_forgive_an_OUTSTANDING_COMMITMENT(root):
                    cumulative_realized=D("-10.6211"))
     assert why is not None, "the surviving commitment must still be charged"
     assert ("CAMPAIGN_WORST_CASE" in why or "CASH" in why), why
+
+
+# ===== 10. the PLANNER must size against the budget the GATE enforces
+
+class _Store:
+    def __init__(self, realized):
+        self._r = D(realized)
+
+    def realized_today(self):
+        return self._r
+
+
+class _Exec:
+    """Only what probe_budget_headroom reads. Called unbound, as the
+    runner's own self-checks do, so no executor is constructed."""
+
+    def __init__(self, vg, realized):
+        self.validation_gates = vg
+        self.store = _Store(realized)
+
+    def cash_legs_for_gates(self):
+        return ()
+
+    def outstanding_for_gates(self):
+        return ()
+
+
+def _headroom(vg, realized):
+    from src import l5_live_execution as LX
+    return LX.FaithfulExecutor.probe_budget_headroom(_Exec(vg, realized))
+
+
+def test_the_PLANNER_headroom_matches_the_GATE_not_lifetime_loss(root):
+    """THE DRIFT. Scoping the gate and not the planner made the planner
+    refuse every window with CAMPAIGN_BUDGET_EXHAUSTED while the gate it
+    exists to anticipate held the full $5. Measured live 2026-11-04T03:34Z
+    with $10.6211 of standing account-wide realized loss."""
+    b = baseline(root, realized="-10.6211")
+    g = gates(root, base=b)
+    assert _headroom(g, "-10.6211") == D("5")
+    # and the gate agrees: the same state allows an order
+    assert refuse(g, realized="-10.6211") is None
+
+
+def test_the_planner_charges_THIS_campaigns_own_loss(root):
+    """Not a relaxation: a loss the campaign itself caused still reduces
+    the room the planner sizes against."""
+    b = baseline(root, realized="-10.6211")
+    g = gates(root, base=b)
+    assert _headroom(g, "-13.6211") == D("2")      # $3 of the $5 spent
+    assert _headroom(g, "-16.6211") == D("0")      # exhausted
+
+
+def test_the_planner_reports_NO_ROOM_when_the_baseline_is_unestablished(root):
+    """Unreadable is never headroom, and an absent baseline is unreadable.
+    Same fail-closed direction the method already had."""
+    g = gates(root, base=CBL.CampaignBaseline(root=root))   # nothing captured
+    assert _headroom(g, "-10.6211") == D("0")
+
+
+def test_the_planner_is_UNCONSTRAINED_with_no_campaign_budget(root):
+    """None means no campaign is running; build_orders treats that as
+    unconstrained. The pre-campaign behaviour, unchanged."""
+    vg = VG.ValidationGates(max_cash_deployed_usd=D("12"),
+                            cash_policy=VG.NO_RECYCLING)
+    assert _headroom(vg, "-10.6211") is None
