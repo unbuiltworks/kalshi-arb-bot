@@ -543,6 +543,26 @@ class CampaignBudgetLedger:
             return "CAMPAIGN_BUDGET_LOCKED:%s" % open_id
         # Nothing is reserved at arming, so the question is only whether any
         # room remains at all. The peak is the campaign's high-water mark.
+        #
+        # OURS, NOT A FINISHED CAMPAIGN'S. The lock above is closed-aware --
+        # it fires only while another campaign still OWNS the budget -- and
+        # this check was not, so a CLOSED predecessor's high-water mark
+        # refused a brand-new campaign that had spent nothing. Measured on
+        # 2026-11-04: peak 11.3369 from the closed camp1.1c6b9f88, against
+        # the fresh camp1.9c793662's $5, refusing every window. And because
+        # `refuse_arming` runs BEFORE `open_or_resume`, the new campaign
+        # never reached the call that would have reset its own peak to 0.
+        #
+        # THE ANTI-RESET PROPERTY IS UNTOUCHED. A campaign that has spent
+        # its own budget still refuses, because the peak is still consulted
+        # whenever the ledger belongs to THIS campaign; and an OPEN foreign
+        # campaign is still refused by the lock above. What no longer
+        # happens is a finished campaign's history being charged to a new
+        # one whose zero point is a fresh, owner-gated baseline.
+        peak_owner = str(doc.get("campaign_id") or "")
+        if peak_owner and peak_owner != cid:
+            # a closed predecessor: its peak is its own history
+            return None
         peak = _d(doc.get("peak_usd"))
         if peak >= self.budget_usd:
             return ("CAMPAIGN_WORST_CASE_EXHAUSTED:%s>=%s"

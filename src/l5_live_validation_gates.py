@@ -691,9 +691,44 @@ class ValidationGates:
             # configured; an identity we cannot establish is a refusal.
             if not self.campaign_id:
                 return "CAMPAIGN_IDENTITY_UNAVAILABLE"
-            campaign_used = (max(D(0), -_d(cumulative_realized))
-                             + self.cash_committed(filled_legs)
-                             + self.pending_obligation(outstanding))
+            # CAMPAIGN-SCOPED, NOT LIFETIME, and this is the 2026-11-04
+            # correction. This term was `max(0, -cumulative_realized)` --
+            # the account's LIFETIME realized loss. Against a $5 campaign
+            # budget and a standing account loss of $10.62, the budget was
+            # spent before a single order existed: `refuse_arming` refused
+            # every window with CAMPAIGN_WORST_CASE_EXHAUSTED:11.3369>=5 and
+            # an authorized four-window campaign submitted nothing. A
+            # per-campaign budget that counts history it did not cause is
+            # not a campaign budget.
+            #
+            # The baseline machinery for this already existed and was
+            # already wired here for `max_campaign_additional_loss_usd`; it
+            # is simply used at this gate too, so BOTH campaign gates now
+            # measure the same campaign-scoped quantity through the same
+            # tested function rather than two opinions of it.
+            #
+            # NOTHING IS WRITTEN DOWN. `cumulative_realized` is still the
+            # full lifetime figure and every independent account-wide,
+            # lifetime and daily control still reads it unchanged; only the
+            # ZERO POINT this campaign is measured from moves, and that
+            # point is owner-gated -- the baseline is keyed on the approval
+            # nonce, which this executor cannot write, and `capture` is
+            # idempotent so a restart or re-arm cannot move it.
+            #
+            # A GAIN CREATES NO ROOM: the delta is `max(0, base - now)`.
+            if self.campaign_baseline is None:
+                # A budget was configured and its basis cannot be
+                # established. That is a refusal, never a pass, and never a
+                # silent fall back to the lifetime figure.
+                return "CAMPAIGN_BASELINE_UNAVAILABLE"
+            _cs = self.campaign_baseline.additional_loss_usd(
+                self.campaign_id,
+                account_wide_realized=cumulative_realized,
+                open_worst_case_usd=(self.cash_committed(filled_legs)
+                                     + self.pending_obligation(outstanding)))
+            if not _cs.get("ok"):
+                return str(_cs.get("reason") or "CAMPAIGN_BASELINE_UNKNOWN")
+            campaign_used = _d(_cs.get("additional_loss_usd"))
             try:
                 why = self.campaign_budget.refuse_amount(
                     campaign_id=self.campaign_id,

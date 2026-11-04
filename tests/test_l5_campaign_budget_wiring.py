@@ -8,8 +8,28 @@ from __future__ import annotations
 
 from decimal import Decimal as D
 
+from src import l5_campaign_baseline as CBL
 from src import l5_campaign_budget as CB
 from src import l5_live_validation_gates as VG
+
+
+def _base(tmp_path, cid, realized="0"):
+    """The campaign's zero point, which the budget gate now requires.
+
+    CAPTURED AT REALIZED 0 ON PURPOSE. The gate measures
+    `max(0, baseline - now) + commitments`; with a zero baseline that is
+    `max(0, -now) + commitments`, which is exactly the lifetime expression
+    these tests were written against. So every property below -- the three
+    evasion routes, the full-dollar short charge, partial fills,
+    cancellation, settlement persistence -- is pinned on identical
+    arithmetic, and only the SETUP gained the baseline the corrected gate
+    requires. The 2026-11-04 change was to the zero point, not to what
+    counts as commitment.
+    """
+    b = CBL.CampaignBaseline(root=str(tmp_path))
+    b.capture(cid, account_wide_realized=realized,
+              now_iso="2026-11-04T00:00:00+00:00")
+    return b
 
 
 def gates(tmp_path, budget="11.10", cid="camp1.alpha", cash="100"):
@@ -19,7 +39,8 @@ def gates(tmp_path, budget="11.10", cid="camp1.alpha", cash="100"):
         max_cash_deployed_usd=D(cash),
         max_unmatched_contracts=D("1000"),
         max_cumulative_loss_usd=D("1000"),
-        campaign_budget=led, campaign_id=cid), led
+        campaign_budget=led, campaign_id=cid,
+        campaign_baseline=_base(tmp_path, cid)), led
 
 
 def ask(g, *, qty="1", price="0.50", legs=(), outstanding=(), realized="0"):
@@ -125,14 +146,16 @@ def test_settlement_loss_persists_across_a_restart(tmp_path):
     g1 = VG.ValidationGates(max_cash_deployed_usd=D("100"),
                             max_unmatched_contracts=D("1000"),
                             max_cumulative_loss_usd=D("1000"),
-                            campaign_budget=led, campaign_id="camp1.alpha")
+                            campaign_budget=led, campaign_id="camp1.alpha",
+                            campaign_baseline=_base(tmp_path, "camp1.alpha"))
     assert ask(g1, qty="1", price="0.50", realized="-10") is None
     # a brand new process reading the same volume
     led2 = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
     g2 = VG.ValidationGates(max_cash_deployed_usd=D("100"),
                             max_unmatched_contracts=D("1000"),
                             max_cumulative_loss_usd=D("1000"),
-                            campaign_budget=led2, campaign_id="camp1.alpha")
+                            campaign_budget=led2, campaign_id="camp1.alpha",
+                            campaign_baseline=_base(tmp_path, "camp1.alpha"))
     assert led2.is_active() is True
     out = ask(g2, qty="4", price="0.50", realized="-10")   # 10 + 2 > 11.10
     assert out is not None and out.startswith("CAMPAIGN_WORST_CASE_BUDGET")
@@ -143,7 +166,9 @@ def test_a_rotated_nonce_is_refused_on_the_order_path_too(tmp_path):
     g2 = VG.ValidationGates(max_cash_deployed_usd=D("100"),
                             max_unmatched_contracts=D("1000"),
                             max_cumulative_loss_usd=D("1000"),
-                            campaign_budget=led, campaign_id="camp1.ROTATED")
+                            campaign_budget=led, campaign_id="camp1.ROTATED",
+                            campaign_baseline=_base(tmp_path,
+                                                    "camp1.ROTATED"))
     out = ask(g2, qty="1", price="0.50")
     assert out is not None and out.startswith("CAMPAIGN_BUDGET_LOCKED")
 
