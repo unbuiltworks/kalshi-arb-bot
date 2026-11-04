@@ -120,7 +120,7 @@ def fill_events(lifecycle: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def merge_fill_sources(lifecycle: Sequence[Mapping[str, Any]],
-                       fills: Sequence[Mapping[str, Any]] = (),
+                       fills: Sequence[Mapping[str, Any]] = ()
                        ) -> List[Dict[str, Any]]:
     """Lifecycle rows plus any fill the lifecycle stream never reported.
 
@@ -197,14 +197,59 @@ def merge_fill_sources(lifecycle: Sequence[Mapping[str, Any]],
     return merged
 
 
+def venue_confirmed_cancels(cancels: Sequence[Mapping[str, Any]]
+                            ) -> Dict[str, Dict[str, Any]]:
+    """coid -> the venue's own terminal cancel line, for acknowledgement.
+
+    WHAT THIS REPAIRS, measured on camp1.cf28b0c9 window 3. `acknowledged`
+    was `bool(f)` over the LIFECYCLE stream alone, and an order that the
+    venue acknowledged and then cancelled through the requote path never
+    produces a progress row. All 12 submissions of that window reached the
+    venue, each with its own venue_order_id and a venue-confirmed terminal
+    state, yet 8 were reported `unacknowledged` -- under a label that reads
+    "submissions are being attempted and not landing". The figure sent an
+    operator hunting a transport fault that did not exist.
+
+    ONLY THE VENUE'S OWN WORD COUNTS. A row is evidence here only when it
+    carries a venue_order_id AND a venue_state, which `cancel_exact` sets
+    from a re-read and never from a cancel call returning. `still_open` and
+    `unverified` rows are failures that mark the book uncertain; they are
+    NOT acknowledgement and are not admitted. This adds no fill, no
+    quantity and no P&L -- `cum_qty` is carried only so a cancel that raced
+    a fill cannot be read as a zero.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in cancels or ():
+        if not isinstance(row, Mapping):
+            continue
+        coid = str(row.get("client_order_id") or row.get("coid") or "")
+        if not coid:
+            continue
+        if not str(row.get("venue_order_id") or ""):
+            continue
+        state = str(row.get("venue_state") or "")
+        if not state:
+            continue
+        out[coid] = {"state": state.replace("ORDER_STATE_", ""),
+                     "cum": _d(row.get("cum_qty")),
+                     "venue_order_id": str(row.get("venue_order_id"))}
+    return out
+
+
 def order_outcomes(submits: Sequence[Mapping[str, Any]],
-                   lifecycle: Sequence[Mapping[str, Any]]
+                   lifecycle: Sequence[Mapping[str, Any]],
+                   cancels: Sequence[Mapping[str, Any]] = ()
                    ) -> List[Dict[str, Any]]:
     """One row per SUBMITTED order, in submission order, with its final state.
 
     Submission order is what assigns FIRST_LEG and COMPLEMENT: the planner
     places the cheaper leg first, and nothing in an individual record says
     which role it held.
+
+    `cancels` is the venue-confirmed cancellation stream. It settles
+    ACKNOWLEDGEMENT ONLY, for orders the venue took and then cancelled
+    without ever emitting a progress row. Omitting it reproduces the old
+    counts exactly, including the old overstated `unacknowledged`.
     """
     finals: Dict[str, Dict[str, Any]] = {}
     for row in lifecycle or ():
@@ -228,6 +273,7 @@ def order_outcomes(submits: Sequence[Mapping[str, Any]],
                 "terminal": bool(row.get("terminal")),
                 "commission": _d(row.get("commission")),
                 "avg_px_wire": _d(row.get("avg_px"))}
+    cancel_ack = venue_confirmed_cancels(cancels)
     ev = fill_events(lifecycle)
     ev_by_coid: Dict[str, int] = {}
     for e in ev:
@@ -252,6 +298,11 @@ def order_outcomes(submits: Sequence[Mapping[str, Any]],
             continue
         coid = str(s.get("coid") or "")
         f = finals.get(coid, {})
+        # ACKNOWLEDGED BY EITHER WITNESS. A progress row is one; the venue's
+        # own terminal cancel line is the other, and it is just as much the
+        # venue's word. Only the acknowledgement flag and the state read from
+        # the cancel line: no quantity, fee or P&L is taken from it.
+        cx = cancel_ack.get(coid)
         side = str(s.get("side") or "").strip().upper()
         other = "DOWN" if side.endswith("UP") else "UP"
         role = COMPLEMENT if held.get(other, D(0)) > 0 else FIRST_LEG
@@ -270,9 +321,9 @@ def order_outcomes(submits: Sequence[Mapping[str, Any]],
             "own_px": _d(s.get("own_px")),
             "qty_submitted": asked,
             "qty_filled": got,
-            "state": state,
-            "terminal": f.get("terminal", False),
-            "acknowledged": bool(f),
+            "state": state or (cx or {}).get("state"),
+            "terminal": f.get("terminal", bool(cx)),
+            "acknowledged": bool(f) or bool(cx),
             "fill_events": ev_by_coid.get(coid, 0),
             "partial": (asked is not None and got is not None
                         and D(0) < got < asked),
@@ -404,6 +455,7 @@ def window_record(*, market: str,
                   submits: Sequence[Mapping[str, Any]] = (),
                   lifecycle: Sequence[Mapping[str, Any]] = (),
                   fills: Sequence[Mapping[str, Any]] = (),
+                  cancels: Sequence[Mapping[str, Any]] = (),
                   settlement: Optional[Mapping[str, Any]] = None,
                   rebate_credits: Iterable[Mapping[str, Any]] = (),
                   rebate_eligibility: str = "UNVERIFIED",
@@ -416,7 +468,7 @@ def window_record(*, market: str,
     reproduces the old counts exactly.
     """
     lifecycle = merge_fill_sources(lifecycle, fills)
-    orders = order_outcomes(submits, lifecycle)
+    orders = order_outcomes(submits, lifecycle, cancels)
     ev = fill_events(lifecycle)
     filled = [o for o in orders if (o["qty_filled"] or D(0)) > 0]
     est = sum((o["rebate_estimate_usd"] or D(0) for o in orders), D(0))
