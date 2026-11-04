@@ -3490,3 +3490,25 @@ deploy: 2026-11-04T03:52Z planner budget basis, campaign camp1.cf28b0c9 live
 # 08:15Z) and is NOT approved for arming.
 # Parity: 80 failing ids, digest eb672d14b4baf439 -- identical to baseline.
 deploy: 2026-11-04T05:02Z two-slot execution, HALT asserted
+
+# 2026-11-04T05:42Z OWNER-AUTHORIZED campaign camp1.4675472c2b625a967df9d14c
+# authorization sha256 0eafa9497238cd8fb4f28f3d4299cd8e1612aa9c7c2027cc3e57c
+# b02cf5529eb, eight windows 06:00-07:45Z, expiry 08:15Z.
+#
+# HALT REMAINS ASSERTED ON THIS BOOT. The owner's condition 5 requires HALT
+# confirmed asserted BEFORE the final arming procedure, so this deployment
+# exists to verify conditions 2-5 against the running process and arms
+# nothing. Clearing HALT is a separate deployment.
+#
+# Promotes b899f612, which is 990f4bd4 plus the config-verifier fixture
+# repin. PARITY CAUGHT THAT: raising the approved max_live_orders to 2 took
+# parity 80 -> 89 ids, because nine tests in the verifier's own suites baked
+# max_live_orders=1 into their fixtures, so the AUTHORIZED change read as a
+# regression in the very place built to catch an unauthorized one. Repinned
+# at four sites; the row still passes only at exactly 2 and still fails at 1
+# and at 20, which is what makes R.max_live_orders()'s missing upper clamp
+# detectable. Parity is back to 80 ids, digest eb672d14b4baf439, identical
+# to baseline.
+#
+# No limit, strategy parameter or safety check changes on this deploy.
+deploy: 2026-11-04T05:42Z campaign camp1.4675472c2b625a967df9d14c, HALT asserted
