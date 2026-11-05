@@ -3591,3 +3591,4 @@ deploy: 2026-11-04T07:56Z HALT asserted, authorized schedule complete
 deploy: 2026-11-04 authorization-boundary safety fix, HALT asserted
 2026-11-04T16:55Z b775bec0 phantom-fill + residual-cap safety fix; HALT asserted
 2026-11-05T00:04Z b17903a4 controller completion numeric-contract crash fix; HALT asserted
+2026-11-05T03:40Z reassert L5_LIVE_HALT=1 after Campaign E; src identical to pinned 2d74847f; no trading logic change
