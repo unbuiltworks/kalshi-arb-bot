@@ -78,7 +78,7 @@ def load():
 def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
         simultaneous, replenish, max_subs,
         entry_cut=ENTRY_CUT, complete_cut=COMPLETE_CUT, rounds=None,
-        slots=1):
+        slots=1, paired=False):
     """One window.
 
     simultaneous  True  = quote BOTH sides whenever inventory permits
@@ -109,6 +109,22 @@ def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
                 if not replenish:
                     continue
         # ---- 2. (re)quote
+        if paired and resid() == 0 and rest["UP"] is None \
+                and rest["DOWN"] is None and t <= entry_cut \
+                and ref["UP"] is not None and ref["DOWN"] is not None:
+            # THE PAIR IS GATED AS A PAIR, exactly as probe_precheck does:
+            # neither leg is placed unless the two together clear the ceiling.
+            wu = ref["UP"] - depth * TICK
+            wd = ref["DOWN"] - depth * TICK
+            if (wu + wd) <= comp_cap and band_lo <= wu <= band_hi \
+                    and band_lo <= wd <= band_hi \
+                    and (rounds is None or opens < rounds) \
+                    and subs + 2 <= max_subs and D(k) >= D(clip):
+                rest["UP"], rest["DOWN"] = wu, wd
+                subs += 2; opens += 1
+                continue
+            ref_ct["PAIR_NOT_JOINTLY_ECONOMIC"] = ref_ct.get(
+                "PAIR_NOT_JOINTLY_ECONOMIC", 0) + 1
         sides = ("UP", "DOWN") if simultaneous else (o,)
         for s in sides:
             if ref[s] is None: continue

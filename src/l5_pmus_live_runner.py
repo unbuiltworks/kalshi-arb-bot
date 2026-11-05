@@ -66,6 +66,7 @@ from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
+from src import l5_dual_quote as DQ
 from src import l5_fidelity_mode as FID
 from src import l5_pmus_transport as T
 from src import l5_fill_calibration as CALIB
@@ -6856,19 +6857,78 @@ class Runner:
                        "claim and limit applies unchanged."),
         })
         self.stats["controller_open:ENTERED"] += 1
-        rec = self.executor.handle(
-            None, book, market=str(slug), window=str(ws),
-            controller={"provenance": LX.CONTROLLER_GENERATED,
-                        "decision": dec,
-                        # NO REPLAY CLASSIFICATION EXISTS FOR AN ORDER THAT
-                        # HAS NOT BEEN PLACED. The L5 path is handed `{}`
-                        # here too and lands on the same T_UNEVALUABLE,
-                        # which MAKER_TREATMENT answers; passing a class we
-                        # do not have would be inventing evidence.
-                        "maker_class": None})
-        self.stats["controller_open:%s" % str(
-            (rec or {}).get("refused_reason") or "NOT_REFUSED")] += 1
-        self._note_open_missed(str(slug), rec, book, tick)
+
+        # ============ BOTH LEGS IN ONE PASS, AND NOTHING ELSE CHANGES.
+        #
+        # This used to call `handle` ONCE and return, so the complement waited
+        # for the next tick ~5s later. With the one-order lockout that refused
+        # re-entry while anything rested, openings were capped at
+        # floor(entry_cutoff / order_ttl) = floor(480/120) = 4. Campaign E
+        # spent OPEN 3/4 and produced three fills: arithmetic, not a market
+        # outcome.
+        #
+        # EVERY GATE RUNS ON EVERY PASS, because every pass is a full `handle`
+        # call -- the pair precheck, the claim, MAX_LIVE_ORDERS, the cash and
+        # exposure overlays, the residual cap, the opening floor and the pair
+        # ceiling. Pass two cannot place anything a tick-later pass would have
+        # been refused; it only stops waiting.
+        #
+        # THE COMPLEMENT'S SIDE IS NOT FORCED HERE. The provisional side in
+        # `dec` is advisory, as the trigger record above says. On pass two the
+        # two-sided branch sees leg one already CLAIMED and `probe_leg_order`
+        # hands it the unclaimed leg on its own -- the same mechanism that
+        # picks it one tick later today.
+        #
+        # THE BOOK IS RE-READ EACH PASS, so the complement is priced against
+        # what is actually there. `max_placements_per_pass()` is 1 unless
+        # L5_DUAL_QUOTE is exactly "ON", which is why an unset environment
+        # behaves precisely as before.
+        rec = None
+        passes = DQ.max_placements_per_pass()
+        for _p in range(max(1, int(passes))):
+            if _p:
+                # a later pass needs a CURRENT book; a stale one would price
+                # the complement against a market that has moved.
+                _b = self.book.snapshot(slug) if self.book is not None else None
+                if not isinstance(_b, Mapping) or not _b:
+                    self.stats["controller_open:PASS2_NO_BOOK"] += 1
+                    break
+                book = _b
+                # and a slot must still be free by the LEDGER, not by this
+                # method's memory of what it just did.
+                try:
+                    if int(self.store.still_fillable_order_count()) >= \
+                            int(max_live_orders()):
+                        self.stats["controller_open:PASS2_NO_SLOT"] += 1
+                        break
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    # FAIL CLOSED: an unreadable ledger ends the pass loop.
+                    self.stats["controller_open:PASS2_LEDGER_UNREADABLE:%s"
+                               % type(exc).__name__] += 1
+                    break
+            rec = self.executor.handle(
+                None, book, market=str(slug), window=str(ws),
+                controller={"provenance": LX.CONTROLLER_GENERATED,
+                            "decision": dec,
+                            # NO REPLAY CLASSIFICATION EXISTS FOR AN ORDER
+                            # THAT HAS NOT BEEN PLACED. The L5 path is handed
+                            # `{}` here too and lands on the same
+                            # T_UNEVALUABLE, which MAKER_TREATMENT answers;
+                            # passing a class we do not have would be
+                            # inventing evidence.
+                            "maker_class": None})
+            self.stats["controller_open:%s%s" % (
+                ("pass2:" if _p else ""),
+                str((rec or {}).get("refused_reason") or "NOT_REFUSED"))] += 1
+            self._note_open_missed(str(slug), rec, book, tick)
+            # A REFUSAL ENDS THE PASS LOOP. Retrying the same decision against
+            # the same book in the same tick would only repeat the refusal,
+            # and a refused pair must not have its second leg attempted
+            # anyway -- the precheck gates the PAIR.
+            if (rec or {}).get("refused_reason"):
+                break
         return rec
 
     #: ticks behind each touch the opening maker legs are quoted. Read from
