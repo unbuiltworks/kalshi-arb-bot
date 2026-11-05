@@ -93,6 +93,7 @@ COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # must carry it or the entrypoint cannot start at all.
 COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
 COPY src/l5_dual_quote.py src/l5_dual_quote.py
+COPY src/l5_replenish.py src/l5_replenish.py
 
 COPY scripts/__init__.py scripts/__init__.py
 COPY scripts/l5_pmus_live_oneshot.py scripts/l5_pmus_live_oneshot.py

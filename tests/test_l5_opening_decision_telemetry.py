@@ -34,6 +34,11 @@ SKIP_REASONS = (
     "NO_AUTHENTICATED_BOOK",
     "PROVISIONAL_PRICE_UNREADABLE",
     "OPENING_CAP_UNREADABLE",
+    # the bounded replenishment gate: a re-open with no fill or cancellation
+    # behind it, or with the window's rounds already spent. One literal
+    # reason on purpose -- the specific cause rides in the detail, because
+    # an interpolated reason could not be checked by this enumeration.
+    "REPLENISH_UNPAID",
 )
 
 

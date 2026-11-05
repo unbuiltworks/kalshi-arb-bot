@@ -132,6 +132,7 @@ COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # must carry it or the entrypoint cannot start at all.
 COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
 COPY src/l5_dual_quote.py src/l5_dual_quote.py
+COPY src/l5_replenish.py src/l5_replenish.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 COPY src/l5_two_sided_shadow.py src/l5_two_sided_shadow.py
 # Disarmed-shadow validation additions. This image COPYs an explicit file

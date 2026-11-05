@@ -128,6 +128,12 @@ _EXACT: Dict[str, str] = {
     # the runner's own post-decision refusals
     "ORDER_ALREADY_RESTING": ORDER_CONCURRENCY,
     "MAX_LIVE_ORDERS": ORDER_CONCURRENCY,
+    # the duplicate hedge, refused per-market rather than account-wide, and
+    # the reservation that makes a second hedge unnecessary. Both are
+    # concurrency and neither is a missed opportunity: the hedge they would
+    # have duplicated is already working at the venue.
+    "HEDGE_ALREADY_RESTING": ORDER_CONCURRENCY,
+    "ALREADY_RESERVED": ORDER_CONCURRENCY,
     # idempotence and cadence: the quote is already good, or too soon
     "ALREADY_RESTING_AT_OR_BETTER": REQUOTE_CHURN,
     "DECIDE_COOLDOWN": REQUOTE_CHURN,
@@ -143,6 +149,10 @@ _EXACT: Dict[str, str] = {
     # the book itself could not be trusted
     "STALE_BOOK": DATA_QUALITY,
     "BOOK_AGE_UNKNOWN": DATA_QUALITY,
+    # the reservation could not be READ, which is a ledger fault and not a
+    # limit. Named apart from the concurrency refusals so a reader can tell
+    # "the hedge is already working" from "we cannot tell what is working".
+    "OUTSTANDING_UNREADABLE": DATA_QUALITY,
     "BOOK_GAP_SUSPECTED": DATA_QUALITY,
     "CUTOFF_UNREADABLE": DATA_QUALITY,
     # correct refusals, and NOT missed profit

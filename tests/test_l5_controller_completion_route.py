@@ -234,7 +234,16 @@ class TestTheFixCannotMisbehave:
 
     # ---- cannot double-submit
     def test_resting_orders_are_passed_for_idempotence(self):
-        assert "resting=_resting_rows(self.store, slug)" in self.src
+        # HOISTED 2026-11-05, because the post-decision guard now needs the
+        # same rows the decision was made on. Reading the ledger twice could
+        # hand the gate a different book than `decide` saw. The invariant is
+        # unchanged and is what is asserted: the rows are read from the
+        # LEDGER and passed to `decide` for idempotence.
+        assert "_rows = _resting_rows(self.store, slug)" in self.src
+        assert "resting=_rows," in self.src
+        # and the reservation derived from those same rows
+        assert "_outstanding = _outstanding_on_side(_rows, other)" in self.src
+        assert "outstanding_qty=_outstanding," in self.src
 
     def test_the_cadence_blocks_a_retry_every_tick(self):
         assert "last_decide_t=self._book_completion_t" in self.src
@@ -259,8 +268,23 @@ class TestTheFixCannotMisbehave:
     def test_the_executor_limit_still_applies_on_top(self):
         """The route adds no slot. MAX_LIVE_ORDERS is enforced in the
         executor's own gate, which the re-entry goes through."""
-        assert "ONE RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE" \
-            in self.src
+        # RESTATED 2026-11-05. The old assertion pinned the COMMENT "ONE
+        # RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE", and that
+        # comment had become false in the direction that cost money: the
+        # test was `if resting:` on the ACCOUNT-WIDE still-fillable count, so
+        # a resting UP opening refused the DOWN completion of UP inventory we
+        # already held -- strictly tighter than the MAX_LIVE_ORDERS gate it
+        # claimed to mirror, and the reason a held leg could go uncompleted.
+        #
+        # THE INVARIANT THE TEST EXISTS FOR IS INTACT AND IS WHAT IS NOW
+        # ASSERTED: this route adds no slot of its own. The ceiling is the
+        # executor's own `max_live_orders()`, so declining here cannot
+        # disagree with the gate it anticipates, and the executor still
+        # re-checks it -- nothing is placed on this path's say-so.
+        assert "_slots = int(max_live_orders())" in self.src
+        assert "if resting >= _slots:" in self.src
+        # and no second order on the hedge side, ever
+        assert "HEDGE_ALREADY_RESTING" in self.src
 
     # ---- cannot interfere with cancellation or reconciliation
     def test_it_cancels_nothing_and_reconciles_nothing(self):

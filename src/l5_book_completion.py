@@ -261,6 +261,7 @@ def decide(*, market: str, held_side: str,
            residual_budget_usd: Any = None,
            breakeven_pair: Any = None,
            submissions_left: Optional[int] = None,
+           outstanding_qty: Any = None,
            last_decide_t: Optional[float] = None) -> Dict[str, Any]:
     """One decision for inventory already held. Submits nothing.
 
@@ -294,9 +295,66 @@ def decide(*, market: str, held_side: str,
     hq, dq = _d(held_qty), _d(deficient_qty) or D(0)
     if hq is None or hq <= 0:
         return _no("NO_INVENTORY", **rec)
-    need = hq - dq
+
+    # ---- 1a. WHAT IS ALREADY WORKING ON THE SIDE WE WOULD BUY IS ALREADY
+    #          OURS, and subtracting it is the whole of the reservation.
+    #
+    # WHAT THIS CLOSES. `need` used to be `held - deficient`, read from
+    # POSITIONS only. A resting order on the deficient side is not a
+    # position yet, so it counted for nothing: holding 3 UP with a DOWN
+    # order for 3 still working computed `need = 3` and decided a SECOND
+    # DOWN order for 3. Nothing downstream merges them -- this policy
+    # cancels nothing, as its own sibling test asserts of the caller -- so
+    # both could fill and leave 6 DOWN against 3 UP. The excess is not a
+    # hedge; it is a fresh directional position on the side we were trying
+    # to flatten, and it arrives at exactly the moment the engine believed
+    # it was reducing risk.
+    #
+    # WHY IT ALSO SHRINKS A PARTIAL. A partially filled DOWN order books
+    # its filled part into `dq` and keeps the rest working. Both parts are
+    # spoken for, and only the sum of them is.
+    #
+    # UNREADABLE IS NOT ZERO. The caller derives this from
+    # `worst_case_remaining`, which charges an unreadable row at the
+    # absolute residual ceiling rather than at nothing. So an unreadable
+    # ledger makes the reservation LARGER and this policy more reluctant --
+    # the same fail-closed direction every other bound in the engine takes.
+    #
+    # THIS CANNOT CREATE A COMPLETION. It only ever makes `need` smaller,
+    # so every path below either refuses where it used to act, or sizes
+    # smaller. There is no input for which the reservation enlarges an
+    # order.
+    # AN UNREADABLE RESERVATION REFUSES, rather than reserving nothing. The
+    # `or D(0)` idiom used everywhere else in this module is right for an
+    # optional INPUT and wrong for a BOUND: it maps "we could not read how
+    # much is working" onto "nothing is working", which is the one reading
+    # that can place the duplicate order. `None` still means the caller
+    # passed no reservation at all, which is how every existing caller
+    # behaves and why parity holds.
+    if outstanding_qty is None:
+        res = D(0)
+    else:
+        res = _d(outstanding_qty)
+        # NaN AND INFINITY ARE UNREADABLE, NOT LARGE. `_d` parses both
+        # happily -- `Decimal("NaN")` is a Decimal -- and then every
+        # comparison against one RAISES InvalidOperation, which would take
+        # the whole completion path down rather than refuse it. The finite
+        # test belongs with the parse, not after the first comparison.
+        if res is None or not res.is_finite():
+            return _no("OUTSTANDING_UNREADABLE",
+                       outstanding_raw=str(outstanding_qty)[:40], **rec)
+        if res < 0:
+            res = D(0)
+    rec["reserved"] = str(res)
+    need = hq - dq - res
     if need <= 0:
-        return _no("ALREADY_MATCHED", matched=str(dq), **rec)
+        # NAMED APART FROM `ALREADY_MATCHED`, because the two mean opposite
+        # things operationally: matched inventory is a finished pair, while
+        # a reserved remainder is a pair still in flight at the venue. A
+        # reader who cannot tell them apart cannot tell a completed round
+        # from one waiting on a fill.
+        return _no("ALREADY_MATCHED" if res <= 0 else "ALREADY_RESERVED",
+                   matched=str(dq), **rec)
     rec["need"] = str(need)
 
     want = "DOWN" if str(held_side).upper() == "UP" else "UP"

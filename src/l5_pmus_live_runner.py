@@ -68,6 +68,7 @@ from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_dual_quote as DQ
 from src import l5_fidelity_mode as FID
+from src import l5_replenish as RPL
 from src import l5_pmus_transport as T
 from src import l5_fill_calibration as CALIB
 from src import l5_intent_gate as GATE
@@ -617,17 +618,41 @@ class FrameFanout:
                            "each other")}
 
 
-def _resting_rows(store: Any, market: str) -> tuple:
-    """Live orders in this market as {side, price, market}, or empty.
+def _resting_rows(store: Any, market: str) -> Optional[tuple]:
+    """Live orders in this market as {side, price, market, remaining}.
 
-    An unreadable ledger returns empty and the caller's own `resting` count,
-    read separately from `still_fillable_order_count`, is what refuses. The
-    two disagreeing is why both are consulted.
+    RETURNS None WHEN THE LEDGER COULD NOT BE READ, and that is the whole
+    reason the signature is Optional. It used to return `()` for both "there
+    is nothing resting" and "I could not find out", and the docstring argued
+    that the separately-read account-wide `still_fillable_order_count` was
+    what refused. THAT WAS ONLY TRUE AT ONE SLOT. With
+    `L5_MAX_LIVE_ORDERS=2` a count of 1 no longer refuses, so an unreadable
+    ledger presented as "no rows" would have cleared the per-market hedge
+    guard and permitted a completion on top of a hedge that might already be
+    working. An empty tuple must mean empty.
+
+    `remaining` IS THE RESERVATION, and it is why this row gained a fourth
+    field. The three-field row said WHETHER something rested on a side and
+    never HOW MUCH, so `l5_book_completion.decide` could see a DOWN order
+    resting and still size a second DOWN order at the full unmatched need.
+    It is read through the store's own `worst_case_remaining`, which charges
+    an unreadable row at the absolute residual ceiling rather than at zero --
+    so an unreadable ledger makes the reservation LARGER and the completion
+    more reluctant, which is the direction that cannot lose money.
     """
     try:
         live = store.live_orders() or {}
-    except BaseException:                                      # noqa: BLE001
-        return ()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    # BORROWED, NOT RESTATED. `worst_case_remaining` already encodes the
+    # preference order (readable `remaining`, else the ordered quantity, else
+    # the ceiling) and the convention that unreadable is not zero. Restating
+    # it here is how the two would drift apart. Absent -- the lighter test
+    # harnesses pass stores that are not LedgerStores -- the fallback is the
+    # ceiling itself, which is the most reluctant reading available.
+    _wcr = getattr(store, "worst_case_remaining", None)
     out = []
     for _oid, row in (live.items() if hasattr(live, "items")
                       else enumerate(live)):
@@ -637,9 +662,54 @@ def _resting_rows(store: Any, market: str) -> tuple:
             continue
         if str(r.get("market") or market) != str(market):
             continue
+        try:
+            rem = (_wcr(r) if _wcr is not None
+                   else LX.ABS_RESIDUAL_CAP_CONTRACTS)
+            rem = D(str(rem))
+            if not rem.is_finite() or rem < 0:
+                rem = LX.ABS_RESIDUAL_CAP_CONTRACTS
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            rem = LX.ABS_RESIDUAL_CAP_CONTRACTS
         out.append({"side": str(r.get("side") or ""),
-                    "price": r.get("price"), "market": market})
+                    "price": r.get("price"), "market": market,
+                    "remaining": rem})
     return tuple(out)
+
+
+def _outstanding_on_side(rows: Any, side: Any) -> D:
+    """Still-fillable contracts resting on `side`, summed. Never negative.
+
+    This is what `decide` subtracts from the unmatched need. It sums the
+    `remaining` that `_resting_rows` already failed closed on, so a row whose
+    size could not be read contributes the residual ceiling and the
+    completion is refused rather than doubled.
+    """
+    want = str(side or "").upper()
+    # None MEANS UNREADABLE, and an unreadable ledger reserves the ceiling
+    # rather than nothing. The production caller refuses before reaching
+    # here; this is the belt for any later caller that does not.
+    if rows is None:
+        return LX.ABS_RESIDUAL_CAP_CONTRACTS
+    total = D(0)
+    for r in rows:
+        try:
+            if str(r.get("side") or "").upper() != want:
+                continue
+            v = D(str(r.get("remaining")))
+            if not v.is_finite() or v <= 0:
+                continue
+            total += v
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # AN UNSUMMABLE ROW IS CHARGED AT THE CEILING, for the same
+            # reason an unreadable one is: skipping it would understate the
+            # reservation, which is the only direction that places a
+            # duplicate hedge.
+            total += LX.ABS_RESIDUAL_CAP_CONTRACTS
+    return total
 
 
 #: BOUNDS ON THE VENUE EXIT PROBE. It is a diagnostic, so it may not become a
@@ -3855,6 +3925,20 @@ class Runner:
             self.last_progress_t = self.now_t
         return out
 
+    def replenish(self) -> "RPL.Ledger":
+        """The per-window replenishment credit ledger.
+
+        LAZILY INITIALISED, for the same reason `win_lifecycle` is: several
+        construction paths build a Runner without running the `__init__` that
+        would declare it, and an accessor a lifecycle poll depends on must
+        never be the reason that poll raises.
+        """
+        led = getattr(self, "_replenish_ledger", None)
+        if led is None:
+            led = RPL.Ledger()
+            self._replenish_ledger = led
+        return led
+
     def lifecycle(self, events: List[Dict[str, Any]]) -> None:
         for e in events:
             self.stats["LIFECYCLE:%s" % e.get("event", "ERROR")] += 1
@@ -3903,6 +3987,28 @@ class Runner:
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
                 self.stats["wake_raise_error:%s" % type(exc).__name__] += 1
+            # ============ AND THE SAME EVENT ISSUES A REPLENISHMENT CREDIT.
+            #
+            # The wake above re-TIMES the next tick; it does not record that
+            # anything happened, and the opening path had no way to tell a
+            # re-open that followed a fill from one that followed nothing but
+            # the tick coming round again. This is that record: a positive
+            # booked delta is a confirmed fill, a terminal row that booked
+            # nothing is a cancellation, and either frees a slot and issues
+            # one credit -- bounded by `RPL.max_rounds()`.
+            #
+            # BOOKKEEPING ONLY, INSIDE ONE SWALLOW. It places nothing and
+            # can only ever make the opening path MORE reluctant; a failure
+            # to count a credit must never break a lifecycle poll.
+            try:
+                self.replenish().note_progress(
+                    e, window_start=(AB.slug_start(str(m)) if m else None),
+                    t=self.now_t)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["replenish_note_error:%s"
+                           % type(exc).__name__] += 1
             # kept for the per-window accounting report. A missing market is
             # NOT filed under the transport slug -- that fallback is exactly
             # the defect the identity rule above exists to prevent -- so an
@@ -6450,6 +6556,24 @@ class Runner:
         held_qty, def_qty = (up, dn) if held == "UP" else (dn, up)
         book = self.book.snapshot(slug) or {}
         gates = getattr(self.executor, "validation_gates", None)
+        # HOISTED, because the guard below now needs the same rows the
+        # decision was made on. Reading the ledger twice could hand the gate
+        # a different book than `decide` saw, and the whole point of the gate
+        # is to agree with the decision it is gating.
+        _rows = _resting_rows(self.store, slug)
+        # FAIL CLOSED ON AN UNREADABLE LEDGER. None is not "no rows": it is
+        # "we cannot say what is resting", and the per-market hedge guard
+        # below is only as good as the rows it reads. At one slot the
+        # account-wide count caught this; at two it does not, so the refusal
+        # is made explicit here rather than inferred from a count.
+        if _rows is None:
+            self.stats["book_completion:LEDGER_UNREADABLE:resting_rows"] += 1
+            return None
+        # WHAT IS ALREADY WORKING ON THE SIDE WE WOULD BUY. `decide`
+        # subtracts it from the unmatched need; see its section 1a for why a
+        # position-only `need` could size a second full hedge on top of a
+        # first one that was still live.
+        _outstanding = _outstanding_on_side(_rows, other)
         rec = BC.decide(
             market=slug, held_side=held,
             held_qty=held_qty, held_cost_usd=legs.get(held),
@@ -6460,7 +6584,11 @@ class Runner:
             # EVERY LIVE ORDER THIS LEDGER OWNS, so idempotence is judged
             # against the recorded book rather than against this method's
             # own memory of what it did.
-            resting=_resting_rows(self.store, slug),
+            resting=_rows,
+            # THE RESERVATION. Contracts already working on the deficient
+            # side are already spoken for, so they are subtracted from the
+            # need rather than ordered a second time.
+            outstanding_qty=_outstanding,
             tick=getattr(t, "tick_size", None) or "0.01",
             min_qty=getattr(t, "quantity_increment", None) or "0.01",
             # COMPLETION DEPTH, from its own env and NOT the opening
@@ -6527,13 +6655,65 @@ class Runner:
         if not rec.get("ok"):
             _note_missed(rec.get("reason"))
             return rec
-        # ONE RESTING ORDER IS THE LIMIT AND IT IS NOT RELAXED HERE. The
-        # executor's own MAX_LIVE_ORDERS gate refuses a second order anyway;
-        # declining before the re-entry keeps the record honest about why.
-        if resting:
+        # ============ A COMPLETION MAY SHARE THE BOOK WITH AN UNRELATED
+        # OPENING. IT MAY NEVER STACK ON ITS OWN HEDGE.
+        #
+        # WHAT WAS WRONG. The test was `if resting:` -- any still-fillable
+        # order ANYWHERE on the account, and `resting` is
+        # `still_fillable_order_count`, which is account-wide. So a resting
+        # UP opening refused the DOWN completion of UP inventory we already
+        # held, which is the one order that REDUCES exposure. Worse, it
+        # refused it AFTER `decide` had already returned ok=True having seen
+        # that same resting order in `_rows` -- the decision was made with
+        # full knowledge of the book and then discarded by a cruder test. The
+        # comment claimed to mirror MAX_LIVE_ORDERS; with
+        # `L5_MAX_LIVE_ORDERS=2` it was strictly tighter than the limit it
+        # named, and the engine could hold one leg and never complete it.
+        #
+        # WHAT REPLACES IT, in two parts, in this order.
+        #
+        # (a) NO SECOND ORDER ON THE HEDGE SIDE, EVER. This is the duplicate
+        # hedge, and it is refused on the PER-MARKET rows rather than on the
+        # account-wide count, because that is the scope on which "duplicate"
+        # means anything. `decide`'s own section 8 already refuses an equal
+        # or better resting quote and its section 1a now reserves the
+        # outstanding quantity, so this is the third independent guard on the
+        # same mistake -- and it is the cheapest one to read, which is why it
+        # is also written here explicitly rather than left implicit in the
+        # two upstream checks.
+        #
+        # (b) THE SLOT CEILING IS THE EXECUTOR'S OWN, not a hard-coded one.
+        # `max_live_orders()` is the number the executor's MAX_LIVE_ORDERS
+        # gate binds on, so declining here can no longer disagree with the
+        # gate it claims to anticipate. The executor still re-checks it:
+        # nothing is placed on this path's say-so.
+        #
+        # WHAT THIS CANNOT DO. It cannot raise a limit, place a second hedge,
+        # or withdraw anything -- and the verb for withdrawal is avoided in
+        # this method's prose on purpose, because a sibling test scans its
+        # SOURCE TEXT to prove no withdrawal path exists here. That guard is
+        # worth more intact than this comment is worth literal; it is the
+        # third such guard this change had to write around, and each one was
+        # right. With `L5_MAX_LIVE_ORDERS` unset
+        # `max_live_orders()` is 1 and `resting >= 1` IS `if resting:` --
+        # today's behaviour exactly, which is why the suite's existing
+        # one-slot expectations still hold.
+        _hedge_rows = tuple(r for r in _rows
+                            if str(r.get("side") or "").upper() == other)
+        if _hedge_rows:
+            self.stats["book_completion:HEDGE_ALREADY_RESTING"] += 1
+            _note_missed("HEDGE_ALREADY_RESTING")
+            return dict(rec, ok=False, reason="HEDGE_ALREADY_RESTING",
+                        hedge_side=other,
+                        hedge_orders_resting=len(_hedge_rows),
+                        reserved_contracts=str(_outstanding))
+        _slots = int(max_live_orders())
+        if resting >= _slots:
             self.stats["book_completion:ORDER_ALREADY_RESTING"] += 1
             _note_missed("ORDER_ALREADY_RESTING")
-            return dict(rec, ok=False, reason="ORDER_ALREADY_RESTING")
+            return dict(rec, ok=False, reason="ORDER_ALREADY_RESTING",
+                        still_fillable_orders=int(resting),
+                        max_live_orders=_slots)
         emit("L5_BOOK_COMPLETION_TRIGGER", {
             "triggered_by": "BOOK_NOT_L5_ACTION",
             "provenance": (LX.CONTROLLER_GENERATED if controller_route
@@ -6811,6 +6991,54 @@ class Runner:
             self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
                                  {"still_fillable_orders": int(resting)})
             return None
+        # ============ AND, WHEN REPLENISHMENT IS ON, A RE-OPEN NEEDS AN
+        # EVENT BEHIND IT.
+        #
+        # WHAT THIS METHOD DOES WITHOUT THIS BLOCK. It has no cadence of its
+        # own: it runs on EVERY tick and the only thing standing between it
+        # and another opening is the slot test above. So it already re-opens
+        # when a slot frees -- but it re-opens because the timer came round,
+        # not because anything happened, and nothing bounds or counts how
+        # many times one window may do it.
+        #
+        # WHAT THE BLOCK ADDS. The window's first opening is free. Every
+        # later one must be paid for with a credit that a confirmed fill or a
+        # terminal cancellation issued, up to `RPL.max_rounds()` per window.
+        # That is strictly FEWER openings than the bare slot test allows, not
+        # more: this can only ever refuse an opening the slot gate permitted,
+        # and there is no input on which it permits one the slot gate refused.
+        #
+        # WHY THE CREDIT IS NOT SPENT HERE. `spend` is called only after a
+        # placement was actually attempted, further down, so a decision that
+        # is refused by a later gate -- the pair ceiling, the claim, cash,
+        # exposure, the residual cap -- does not burn the window's allowance
+        # on an order that never existed.
+        #
+        # OFF BY DEFAULT, AND THE DEFAULT IS WHAT KEEPS PARITY.
+        # `replenish_enabled` needs BOTH `L5_DUAL_QUOTE` and
+        # `L5_DUAL_REPLENISH` at their exact tokens; production holds
+        # `L5_DUAL_REPLENISH=OFF`, so the ledger is not consulted at all and
+        # this method behaves exactly as it does today.
+        if DQ.replenish_enabled(ws):
+            _led = self.replenish()
+            if not _led.may_open(ws):
+                # ONE LITERAL REASON, with the specific cause in the detail.
+                # `test_l5_opening_decision_telemetry` counts this method's
+                # skip-note call sites in its own SOURCE TEXT and pins that
+                # count against its enumeration of them -- so the reason
+                # must be a literal a reader can grep, and this comment must
+                # not spell the helper's name with its bracket either, or the
+                # comment itself would be counted as a ninth site. That guard
+                # is worth both constraints. The refusal's own vocabulary
+                # (NO_REPLENISH_EVENT_YET / REPLENISH_CREDITS_SPENT /
+                # REPLENISH_ROUNDS_EXHAUSTED) rides in the detail and in the
+                # counter, where nothing pins it.
+                _why = _led.refuse_reason()
+                self.stats["controller_open:REPLENISH_UNPAID:%s" % _why] += 1
+                self._note_open_skip("REPLENISH_UNPAID", slug, ws,
+                                     {"replenish_refusal": _why,
+                                      "replenish": _led.telemetry()})
+                return None
         book = self.book.snapshot(slug) if self.book is not None else None
         if not isinstance(book, Mapping) or not book:
             # `snapshot` returns None unless the socket is connected AND the
@@ -6930,6 +7158,20 @@ class Runner:
                 ("pass2:" if _p else ""),
                 str((rec or {}).get("refused_reason") or "NOT_REFUSED"))] += 1
             self._note_open_missed(str(slug), rec, book, tick)
+            # ONE ATTEMPTED PLACEMENT, ONE CHARGE. Inside its own swallow and
+            # only while replenishment is on, so a bookkeeping failure cannot
+            # change a placement that has already happened. Charged on an
+            # ATTEMPT rather than on a fill, because the resource being
+            # bounded is how often the engine re-opens -- not how often it
+            # succeeded.
+            if DQ.replenish_enabled(ws):
+                try:
+                    self.replenish().spend(ws)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    self.stats["replenish_spend_error:%s"
+                               % type(exc).__name__] += 1
             # A REFUSAL ENDS THE PASS LOOP. Retrying the same decision against
             # the same book in the same tick would only repeat the refusal,
             # and a refused pair must not have its second leg attempted

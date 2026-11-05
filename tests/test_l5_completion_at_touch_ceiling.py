@@ -119,10 +119,35 @@ def test_the_opening_ceiling_is_untouched_by_the_completion_knob(monkeypatch):
     assert TS.MAX_PAIR_COST == D("0.96")
 
 
-def test_the_opening_cap_still_only_configures_cheaper(monkeypatch):
-    """The existing widen-downward-only guard must survive this change."""
+def test_the_opening_cap_configures_up_to_the_explicit_bound(monkeypatch):
+    """REPINNED to commit cc02550b, "Allow explicitly configured opening pair
+    cap up to 0.99; preserve 0.96 default".
+
+    WHAT THIS TEST USED TO ASSERT, and why it had to change. It pinned
+    `L5_TS_MAX_PAIR_COST=0.99` to 0.96 -- i.e. the knob could only ever
+    tighten. cc02550b deliberately replaced that with a SECOND, higher bound:
+    the default is still 0.96 and is what an unset or unreadable environment
+    gets, but an operator who sets the variable explicitly may reach 0.99 and
+    not a cent further.
+
+    THE DEFAULT IS THE PART THAT MATTERS OPERATIONALLY, and it is unchanged.
+    Production does not set `L5_TS_MAX_PAIR_COST`, so the deployed opening
+    ceiling remains 0.96; the 0.99 path is reachable only by an explicit
+    owner decision to set it.
+    """
+    monkeypatch.delenv(TS.MAX_PAIR_COST_ENV, raising=False)
+    assert TS.max_pair_cost() == D("0.96"), "the default is untouched"
+    assert TS.MAX_PAIR_COST == D("0.96")
     monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, "0.99")
-    assert TS.max_pair_cost() == D("0.96")
+    assert TS.max_pair_cost() == D("0.99")
+    # and 0.99 is a CEILING, not a suggestion
+    assert TS.MAX_PAIR_COST_MAX == D("0.99")
+    for over in ("1.00", "1.50", "9.99"):
+        monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, over)
+        assert TS.max_pair_cost() == D("0.99"), over
+    # tightening is still always available
+    monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, "0.90")
+    assert TS.max_pair_cost() == D("0.90")
 
 
 # ============================== the rescue honours the configurable ceiling

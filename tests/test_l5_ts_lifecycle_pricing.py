@@ -276,12 +276,27 @@ def test_a_pair_above_the_0_96_SPRING_TARGET_is_now_refused(monkeypatch):
     assert ok["both_positive_if_taker"] is True
 
 
-def test_the_cap_may_be_tightened_and_never_loosened(monkeypatch):
+def test_the_cap_may_be_tightened_and_never_passes_its_explicit_bound(
+        monkeypatch):
+    """REPINNED to commit cc02550b, which gave the opening cap a second,
+    higher bound (0.99) reachable only by setting the variable explicitly.
+    The 0.96 DEFAULT is unchanged and is what an unset or unreadable
+    environment still gets, which is what production runs on.
+    """
     monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, "0.90")
     assert TS.max_pair_cost() == D("0.90")
-    for bad in ("0.99", "1.50", "0", "-1", "nonsense", ""):
+    # an explicit value between the default and the bound is honoured
+    monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, "0.99")
+    assert TS.max_pair_cost() == D("0.99")
+    # UNREADABLE OR NONSENSICAL FALLS BACK TO THE DEFAULT, not to the bound:
+    # a value we cannot read must never buy the dearest pair available.
+    for bad in ("0", "-1", "nonsense", "", "NaN", "Infinity"):
         monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, bad)
-        assert TS.max_pair_cost() == TS.MAX_PAIR_COST
+        assert TS.max_pair_cost() == TS.MAX_PAIR_COST, bad
+    # and nothing configurable reaches redemption
+    for over in ("1.00", "1.50"):
+        monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, over)
+        assert TS.max_pair_cost() == TS.MAX_PAIR_COST_MAX == D("0.99"), over
 
 
 def test_a_dear_first_leg_tightens_the_complement_against_the_same_cap():
