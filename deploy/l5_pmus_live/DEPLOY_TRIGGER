@@ -3590,3 +3590,4 @@ deploy: 2026-11-04T07:56Z HALT asserted, authorized schedule complete
 # No limit, strategy parameter or infrastructure change.
 deploy: 2026-11-04 authorization-boundary safety fix, HALT asserted
 2026-11-04T16:55Z b775bec0 phantom-fill + residual-cap safety fix; HALT asserted
+2026-11-05T00:04Z b17903a4 controller completion numeric-contract crash fix; HALT asserted
