@@ -17,10 +17,10 @@ def buy(side, price, **kw):
     return m.Candidate("BUY", side, price, **kw)
 
 def test_completion_reduces_residual_without_calibration():
-    r = m.evaluate(inv(), buy("DOWN", .3), .7, False)
+    r = m.evaluate(inv(), buy("DOWN", .25), .7, False)
     assert r["eligible"] and r["candidate_better_than_hold"]
-    assert r["filled_up_payoff"] == pytest.approx(.15)
-    assert r["filled_down_payoff"] == pytest.approx(.15)
+    assert r["filled_up_payoff"] == pytest.approx(.20)
+    assert r["filled_down_payoff"] == pytest.approx(.20)
 
 def test_uncalibrated_directional_refused():
     r = m.evaluate(inv(0, 0, 0), buy("DOWN", .2), .3, False)
