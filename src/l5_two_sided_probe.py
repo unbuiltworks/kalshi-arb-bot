@@ -71,7 +71,8 @@ MIN_GROSS_EDGE = D("0.01")
 #: a gate rather than a side effect of a setting.
 from src import l5_fidelity_mode as FID  # policy ceilings; see module docstring
 
-MAX_PAIR_COST = D("0.96")
+MAX_PAIR_COST = D("0.96")  # unchanged default unless explicitly configured
+MAX_PAIR_COST_MAX = D("0.99")  # explicit upper bound for opening pair cost
 MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 
 # ================================= THE COMPLETION CEILING, MADE EXPLICIT
@@ -770,7 +771,7 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
 
 
 def max_pair_cost() -> D:
-    """The pair ceiling. Configurable CHEAPER only; unreadable is not wider."""
+    """Opening pair ceiling: default 0.96, explicit override capped at 0.99."""
     raw = (os.getenv(MAX_PAIR_COST_ENV) or "").strip()
     if not raw:
         return MAX_PAIR_COST
@@ -778,9 +779,9 @@ def max_pair_cost() -> D:
         v = D(raw)
     except (InvalidOperation, ValueError, ArithmeticError):
         return MAX_PAIR_COST
-    if v <= 0:
+    if not v.is_finite() or v <= 0:
         return MAX_PAIR_COST
-    return min(MAX_PAIR_COST, v)
+    return min(MAX_PAIR_COST_MAX, v)
 
 
 def completion_pair_ceiling() -> D:
