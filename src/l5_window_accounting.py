@@ -553,12 +553,58 @@ def window_record(*, market: str,
         "pair_economics": pair_economics(orders),
     }
     if settlement is None:
+        # ============ MATCHED IS A SIDE QUESTION, NOT A ROLE QUESTION.
+        #
+        # WHAT WAS WRONG. This read `min(role FIRST_LEG, role COMPLEMENT)`
+        # and `abs(FIRST_LEG - COMPLEMENT)`. A matched pair is one UP and one
+        # DOWN; which leg happened to be PLACED as the first leg and which as
+        # the complement is a fact about our own sequencing, not about
+        # whether the contracts offset. Across several rounds in one window
+        # the complement role carries both sides, so the two never had to
+        # agree -- and did not.
+        #
+        # 2230z, 2026-11-05, is the case. first_leg_filled 1,
+        # complement_filled 4, 5 contracts filled. The role arithmetic gave
+        # matched_estimate min(1,4) = 1 and unmatched_estimate |1-4| = 3.
+        # `pair_economics` in the SAME record, which matches on side, found
+        # two pairs -- UP 0.4300 + DOWN 0.5600 and UP 0.4500 + DOWN 0.5100 --
+        # and residual UP 1. Four contracts matched, one unmatched. The
+        # provisional line overstated unmatched THREEFOLD.
+        #
+        # THE FIX IS TO STOP COMPUTING IT TWICE. `pair_economics` already
+        # did the side-based work in this very record, so this now reports
+        # ITS answer rather than a second, weaker one. Two numbers for one
+        # question is how they come to disagree.
+        #
+        # REPORTING ONLY, BOTH BEFORE AND AFTER. Nothing in src, scripts or
+        # analysis reads `provisional_inventory`; it is what a human reads to
+        # judge unmatched exposure before settlement, which is exactly why it
+        # must not be wrong by 3x. `realized_net_usd` stays None here and the
+        # settled block still rewrites matched/unmatched from the venue,
+        # which remains the authority.
+        # UNREADABLE STAYS UNREADABLE, never a silent zero -- `_d`'s own
+        # rule. A count we cannot build is reported as None so a reader
+        # cannot mistake it for "nothing unmatched".
+        _pe = rec["pair_economics"]
+        _mq = _d(_pe.get("matched_qty"))
+        _resid = _pe.get("residual_qty") or {}
+        _rvals = [_d(v) for v in _resid.values()]
+        _unmatched = (None if any(v is None for v in _rvals)
+                      else sum(_rvals, D(0)))
         rec["provisional_inventory"] = {
             "filled_contracts": rec["contracts"]["filled_total"],
-            "matched_estimate": min(_role(FIRST_LEG), _role(COMPLEMENT)),
-            "unmatched_estimate": abs(_role(FIRST_LEG)
-                                      - _role(COMPLEMENT)),
-            "labels": ("PROVISIONAL, from our own fills. Matched and "
+            # contracts, not pairs: two sides of a pair are two contracts.
+            "matched_estimate": (None if _mq is None else _mq * D(2)),
+            "unmatched_estimate": _unmatched,
+            "matched_pairs_estimate": _pe.get("pairs_completed"),
+            "basis": "SIDE_OFFSET_VIA_PAIR_ECONOMICS",
+            "role_counts": {"first_leg": str(_role(FIRST_LEG)),
+                            "complement": str(_role(COMPLEMENT))},
+            "labels": ("PROVISIONAL, from our own fills, matched on SIDE "
+                       "(one UP offsets one DOWN) and not on which leg we "
+                       "happened to place first -- the role split is "
+                       "reported beside it because it is a fact about our "
+                       "sequencing, not about offsetting. Matched and "
                        "unmatched are rewritten from the venue's settlement "
                        "record, which is authority."),
         }

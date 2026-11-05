@@ -195,6 +195,12 @@ def cooldown_observation(*, held_side: str, held_qty: Any,
             "bid_shares": book.get("bid_shares"),
             "ask_shares": book.get("ask_shares"),
             "stream_age_s": None if age is None else str(age),
+            # THE SOURCE, because the consumer grades evidence on it. Without
+            # it `l5_missed_pair_blocker.evidence_basis` falls to
+            # EVIDENCE_BASIS_UNKNOWN with "book source not stated" -- which
+            # is what every DECISION-stage record said while this block was
+            # pricing a perfectly good authenticated book.
+            "source": book.get("source"),
             "gap_suspected": gap, "usable": usable}
         # the SAME freshness test step 3 applies, reported rather than enforced
         out["evidence"] = {

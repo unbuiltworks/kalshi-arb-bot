@@ -312,9 +312,52 @@ def record(*, market: Any, reason: Any,
     """
     try:
         dec = dict(decision or {})
+        # ============ READ THE KEYS THE WRITER ACTUALLY WRITES.
+        #
+        # THE DEFECT THIS CLOSES, and it made this whole record useless at
+        # the DECISION stage. Two callers hand us two different shapes:
+        #
+        #   OPENING  hand-builds flat keys and passes book_source, so it
+        #            reported AUTHENTICATED_WS, stream_age_s 0.076 and a
+        #            priced pair.
+        #   DECISION passes `decide`'s own dict and no book_source. There
+        #            the pair lives at `pair_if.at_touch`, the age at
+        #            `book.stream_age_s` and the source at `book.source` --
+        #            none of which this function read.
+        #
+        # So every DECISION record came out `pair.known false`,
+        # `missed_profitable_pair UNKNOWN`, `basis EVIDENCE_BASIS_UNKNOWN`,
+        # "book source not stated". `cooldown_observation` was added
+        # specifically because "every cooldown record carried pair: None and
+        # executable_evidence: false ... it made the one question worth
+        # asking unanswerable". It priced all of it correctly and handed it
+        # to a reader that looked elsewhere. Verified on the 2026-11-05
+        # campaign: all six DECIDE_COOLDOWN records in window 2230z reported
+        # UNKNOWN while holding UP 3.
+        #
+        # REPORTING ONLY. Nothing gates on this record; the fallbacks can
+        # only make an existing record say more than "unknown".
+        _bk = dec.get("book") if isinstance(dec.get("book"), Mapping) else {}
+        _age = dec.get("stream_age_s")
+        if _age is None:
+            _age = _bk.get("stream_age_s")
+        _src = book_source if book_source is not None else _bk.get("source")
+        # THE PAIR, AND ITS PROVENANCE. `pair_if.at_touch` is explicitly
+        # "what the pair WOULD have cost had that leg filled in full --
+        # conditional, never realized". That is exactly the right basis for
+        # "was a pair available", which is what this field answers, and the
+        # source is recorded so a conditional pair can never be read as an
+        # executed one.
+        _pair = dec.get("pair_own_cost")
+        _pair_src = "decision.pair_own_cost" if _pair is not None else None
+        if _pair is None:
+            _pif = (dec.get("pair_if")
+                    if isinstance(dec.get("pair_if"), Mapping) else {})
+            _pair = _pif.get("at_touch")
+            if _pair is not None:
+                _pair_src = "decision.pair_if.at_touch (CONDITIONAL)"
         cls = classify(reason)
-        pv = pair_verdict(pair_own_cost=dec.get("pair_own_cost"),
-                          entry_ceiling=entry_ceiling)
+        pv = pair_verdict(pair_own_cost=_pair, entry_ceiling=entry_ceiling)
         if cls == NOT_AN_OPPORTUNITY:
             missed = "N/A"
         elif not pv["known"]:
@@ -382,8 +425,8 @@ def record(*, market: Any, reason: Any,
             "missed_profitable_pair_in_state": _in_state,
             "in_state": _state,
             "evidence": evidence_basis(
-                book_source=book_source,
-                stream_age_s=dec.get("stream_age_s")),
+                book_source=_src, stream_age_s=_age),
+            "pair_source": _pair_src,
             "definitions": {
                 "missed_profitable_pair": DEF_V1,
                 "missed_profitable_pair_in_state": DEF_V2,
