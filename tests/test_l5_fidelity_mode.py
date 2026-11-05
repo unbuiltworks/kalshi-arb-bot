@@ -205,7 +205,7 @@ def test_the_runner_compares_against_the_ceiling_not_truthiness():
     import inspect
     from src import l5_pmus_live_runner as R
     src = inspect.getsource(R.Runner.maybe_controller_open)
-    assert 'resting >= int(FM.ceiling("concurrent_opening_orders"))' in src
+    assert 'resting >= int(FID.ceiling("concurrent_opening_orders"))' in src
     assert "\n        if resting:\n" not in src
 
 
@@ -226,3 +226,54 @@ def test_describe_arms_nothing():
     d = FM.describe()
     assert "token" not in str(d).lower() or "owner_arm_token" in str(d)
     assert d["label"] == "L5_FIDELITY_MODE"
+
+
+# ------------------------------------------- the alias collision, regressed
+
+def test_no_module_alias_is_bound_twice_in_the_runner():
+    """`from src import l5_fidelity_mode as FM` SHADOWED l5_maker_fill_model.
+
+    The runner already aliased `l5_maker_fill_model` to FM and used FM.UP,
+    FM.BID, FM.ASK, FM.Ladder and FM.ModelSession. Re-binding the name broke
+    58 tests, and it surfaced as `KeyError: ts_queue_view_error:AttributeError`
+    from inside a swallow -- a second-order symptom naming neither the module
+    nor the alias.
+
+    MODULE LEVEL ONLY. A function-local import that deliberately shadows a
+    module-level alias is an existing, intentional pattern here: TS is
+    l5_two_sided_shadow at module scope and l5_two_sided_probe locally inside
+    one method. That is its own hazard -- it nearly cost a wire/own price
+    conversion earlier -- but failing on it would make this guard unusable.
+    """
+    import ast as _ast
+    import collections as _c
+    for path in ("src/l5_pmus_live_runner.py", "src/l5_two_sided_probe.py"):
+        tree = _ast.parse(open(path).read())
+        seen = _c.defaultdict(set)
+        for node in tree.body:                      # top level, not walk()
+            if isinstance(node, (_ast.Import, _ast.ImportFrom)):
+                for al in node.names:
+                    if al.asname:
+                        seen[al.asname].add(al.name)
+        dupes = {a: sorted(m) for a, m in seen.items() if len(m) > 1}
+        assert dupes == {}, "%s binds one alias to several modules: %r" % (
+            path, dupes)
+
+
+def test_the_fidelity_alias_is_not_FM():
+    """FM is l5_maker_fill_model in both files. The fidelity module is FID."""
+    for path in ("src/l5_pmus_live_runner.py", "src/l5_two_sided_probe.py"):
+        src = open(path).read()
+        assert "l5_fidelity_mode as FID" in src, path
+        assert "l5_fidelity_mode as FM" not in src, path
+
+
+def test_the_image_carries_the_fidelity_module():
+    """The import is unconditional, so a missing COPY breaks the entrypoint.
+
+    Omitting it failed every image-closure suite with ModuleNotFoundError.
+    """
+    for dockerfile in ("deploy/l5_pmus_live/Dockerfile",
+                       "deploy/l5_live_probe/Dockerfile"):
+        assert "COPY src/l5_fidelity_mode.py" in open(dockerfile).read(), (
+            dockerfile)

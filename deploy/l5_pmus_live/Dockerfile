@@ -127,6 +127,10 @@ COPY src/l5_promotion_gate.py src/l5_promotion_gate.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
+# policy ceilings read by l5_two_sided_probe and the runner. Inert with
+# L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image
+# must carry it or the entrypoint cannot start at all.
+COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 COPY src/l5_two_sided_shadow.py src/l5_two_sided_shadow.py
 # Disarmed-shadow validation additions. This image COPYs an explicit file

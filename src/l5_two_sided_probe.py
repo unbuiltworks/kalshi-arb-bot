@@ -69,7 +69,7 @@ MIN_GROSS_EDGE = D("0.01")
 #: At 1 tick a one-cent book gives 0.97 and at 0 it gives 0.99, both sendable.
 #: 0.96 is the spring target in L5_OPERATING_MODEL, so the discipline is now
 #: a gate rather than a side effect of a setting.
-from src import l5_fidelity_mode as FM   # policy ceilings; see module docstring
+from src import l5_fidelity_mode as FID  # policy ceilings; see module docstring
 
 MAX_PAIR_COST = D("0.96")
 MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
@@ -385,7 +385,7 @@ def opening_leg_max_contracts() -> D:
         return OPENING_LEG_MAX_CONTRACTS
     if not v.is_finite() or v <= 0:
         return OPENING_LEG_MAX_CONTRACTS
-    return min(v, D(str(FM.ceiling("opening_leg_max_contracts"))))
+    return min(v, D(str(FID.ceiling("opening_leg_max_contracts"))))
 
 
 #: THE MOST A COMPLETION MAY LET THE PAIR COST. 1.00 is the redemption
@@ -490,7 +490,7 @@ def round_allocations() -> int:
         n = int(raw)
     except (TypeError, ValueError):
         return ROUND_ALLOCATIONS
-    if n < 1 or n > int(FM.ceiling("round_allocations_max")):
+    if n < 1 or n > int(FID.ceiling("round_allocations_max")):
         return ROUND_ALLOCATIONS
     return n
 
@@ -1015,7 +1015,7 @@ def _earlier_only(env: str, default: float, knob: str = "") -> float:
         v = float(raw) if raw else default
     except ValueError:
         return default                      # unreadable is not permission
-    cap = FM.ceiling(knob) if knob else default
+    cap = FID.ceiling(knob) if knob else default
     return min(float(cap), v)
 
 
@@ -1053,7 +1053,7 @@ def order_ttl_s() -> float:
         return ORDER_TTL_S
     if v <= 0:
         return ORDER_TTL_S
-    return min(float(FM.ceiling("order_ttl_s")), v)
+    return min(float(FID.ceiling("order_ttl_s")), v)
 
 
 def order_due(now: float, submitted_t: float, t_start: float,
