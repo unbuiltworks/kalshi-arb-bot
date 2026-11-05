@@ -3606,3 +3606,8 @@ ingest:FEED_FAILED stops being a bare count, counts the
 dual-quote/requote interaction, and reports the dual-quote switches in
 L5_EFFECTIVE_RUNTIME_CONFIG. READ-ONLY INGESTION + TELEMETRY ONLY.
 Local HALT and NOT_ARMED locks stay in force; no variable changed.
+
+2026-11-05T21:26Z — re-trigger after unpinning the service source (commitSha was
+pinned to ecd0e9cd, which is why two pushes produced no build). Deploying
+a0e72421 feed fix + restored 0.96 pair ceiling + campaign budget variables.
+Trading stays halted: L5_LIVE_HALT untouched and still asserted.
