@@ -69,6 +69,8 @@ MIN_GROSS_EDGE = D("0.01")
 #: At 1 tick a one-cent book gives 0.97 and at 0 it gives 0.99, both sendable.
 #: 0.96 is the spring target in L5_OPERATING_MODEL, so the discipline is now
 #: a gate rather than a side effect of a setting.
+from src import l5_fidelity_mode as FM   # policy ceilings; see module docstring
+
 MAX_PAIR_COST = D("0.96")
 MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 
@@ -383,7 +385,7 @@ def opening_leg_max_contracts() -> D:
         return OPENING_LEG_MAX_CONTRACTS
     if not v.is_finite() or v <= 0:
         return OPENING_LEG_MAX_CONTRACTS
-    return min(v, OPENING_LEG_MAX_CONTRACTS)
+    return min(v, D(str(FM.ceiling("opening_leg_max_contracts"))))
 
 
 #: THE MOST A COMPLETION MAY LET THE PAIR COST. 1.00 is the redemption
@@ -488,7 +490,7 @@ def round_allocations() -> int:
         n = int(raw)
     except (TypeError, ValueError):
         return ROUND_ALLOCATIONS
-    if n < 1 or n > ROUND_ALLOCATIONS_MAX:
+    if n < 1 or n > int(FM.ceiling("round_allocations_max")):
         return ROUND_ALLOCATIONS
     return n
 
@@ -999,22 +1001,32 @@ ENTRY_CUTOFF_ENV = "L5_TS_ENTRY_CUTOFF_S"
 COMPLETE_CUTOFF_ENV = "L5_TS_COMPLETE_CUTOFF_S"
 
 
-def _earlier_only(env: str, default: float) -> float:
-    """Configured value, accepted only when it is EARLIER than the default."""
+def _earlier_only(env: str, default: float, knob: str = "") -> float:
+    """Configured value, clamped to the POLICY CEILING for this knob.
+
+    With the fidelity mode off the ceiling IS `default`, so this is exactly
+    the old `min(default, v)` and an unset environment is unchanged. With the
+    mode on the ceiling widens, which only means a configured value is no
+    longer clamped away -- the DEFAULT never moves, so headroom must still be
+    asked for explicitly.
+    """
     raw = (os.getenv(env) or "").strip()
     try:
         v = float(raw) if raw else default
     except ValueError:
         return default                      # unreadable is not permission
-    return min(default, v)
+    cap = FM.ceiling(knob) if knob else default
+    return min(float(cap), v)
 
 
 def entry_cutoff_s() -> float:
-    return _earlier_only(ENTRY_CUTOFF_ENV, ENTRY_CUTOFF_S)
+    return _earlier_only(ENTRY_CUTOFF_ENV, ENTRY_CUTOFF_S,
+                         "entry_cutoff_s")
 
 
 def complete_cutoff_s() -> float:
-    return _earlier_only(COMPLETE_CUTOFF_ENV, COMPLETE_CUTOFF_S)
+    return _earlier_only(COMPLETE_CUTOFF_ENV, COMPLETE_CUTOFF_S,
+                         "complete_cutoff_s")
 
 
 #: HOW LONG ONE ORDER MAY REST, from its own submission. This is what makes
@@ -1041,7 +1053,7 @@ def order_ttl_s() -> float:
         return ORDER_TTL_S
     if v <= 0:
         return ORDER_TTL_S
-    return min(ORDER_TTL_S, v)
+    return min(float(FM.ceiling("order_ttl_s")), v)
 
 
 def order_due(now: float, submitted_t: float, t_start: float,

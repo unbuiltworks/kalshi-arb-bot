@@ -76,7 +76,9 @@ def load():
     return out
 
 def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
-        simultaneous, replenish, max_subs):
+        simultaneous, replenish, max_subs,
+        entry_cut=ENTRY_CUT, complete_cut=COMPLETE_CUT, rounds=None,
+        slots=1):
     """One window.
 
     simultaneous  True  = quote BOTH sides whenever inventory permits
@@ -90,6 +92,7 @@ def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
     ref_ct = {"RESIDUAL_ABOVE_CAP": 0, "NO_BAND": 0, "PAIR_ABOVE_CEILING": 0,
               "PAST_ENTRY_CUT": 0, "PAST_COMPLETE_CUT": 0, "SUB_BUDGET": 0,
               "ONE_ORDER_SLOT": 0}
+    opens = 0
     def resid(): return qty["UP"] - qty["DOWN"]
     def avg(s): return (cost[s] / qty[s]) if qty[s] > 0 else None
 
@@ -111,7 +114,8 @@ def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
             if ref[s] is None: continue
             if rest[s] is not None: continue
             # one-order-at-a-time engine: any resting order blocks the other
-            if not simultaneous and rest[other(s)] is not None:
+            live = sum(1 for z in ("UP", "DOWN") if rest[z] is not None)
+            if not simultaneous and live >= slots:
                 ref_ct["ONE_ORDER_SLOT"] += 1; continue
             want = ref[s] - depth * TICK
             reduces = (resid() > 0 and s == "DOWN") or (resid() < 0 and s == "UP")
@@ -119,16 +123,20 @@ def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
             if abs(after) > D(k):
                 ref_ct["RESIDUAL_ABOVE_CAP"] += 1; continue
             if reduces:
-                if t > COMPLETE_CUT: ref_ct["PAST_COMPLETE_CUT"] += 1; continue
+                if t > complete_cut: ref_ct["PAST_COMPLETE_CUT"] += 1; continue
                 a = avg(other(s))
                 if a is not None and a + want > comp_cap:
                     ref_ct["PAIR_ABOVE_CEILING"] += 1; continue
             else:
-                if t > ENTRY_CUT: ref_ct["PAST_ENTRY_CUT"] += 1; continue
+                if t > entry_cut: ref_ct["PAST_ENTRY_CUT"] += 1; continue
+                if rounds is not None and opens >= rounds:
+                    ref_ct["ROUNDS_SPENT"] = ref_ct.get("ROUNDS_SPENT", 0) + 1
+                    continue
                 if not (band_lo <= want <= band_hi):
                     ref_ct["NO_BAND"] += 1; continue
             if subs >= max_subs: ref_ct["SUB_BUDGET"] += 1; continue
             subs += 1; rest[s] = want
+            if not reduces: opens += 1
 
     matched = min(qty["UP"], qty["DOWN"])
     a_up = avg("UP") or D(0); a_dn = avg("DOWN") or D(0)

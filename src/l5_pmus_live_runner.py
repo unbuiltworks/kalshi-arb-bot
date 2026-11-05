@@ -66,6 +66,7 @@ from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
+from src import l5_fidelity_mode as FM
 from src import l5_pmus_transport as T
 from src import l5_fill_calibration as CALIB
 from src import l5_intent_gate as GATE
@@ -6796,7 +6797,14 @@ class Runner:
             self._note_open_skip("LEDGER_UNREADABLE", slug, ws,
                                  {"error": type(exc).__name__})
             return None
-        if resting:
+        # THE AUTHORIZED NUMBER OF SLOTS, not one. This refused a new opening
+        # whenever ANY order was still fillable, while `max_live_orders` is 2
+        # -- strictly tighter than the limit the comment above claims it
+        # mirrors. One slot x a 120s TTL x a 480s entry cutoff caps openings
+        # at floor(480/120) = 4, which is exactly what Campaign E spent
+        # (OPEN 3/4) and why it produced three fills. With the fidelity mode
+        # off the ceiling is 1 and `resting >= 1` IS `if resting:`.
+        if resting >= int(FM.ceiling("concurrent_opening_orders")):
             self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
             self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
                                  {"still_fillable_orders": int(resting)})
