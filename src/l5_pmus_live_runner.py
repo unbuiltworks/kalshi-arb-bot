@@ -618,6 +618,22 @@ class FrameFanout:
                            "each other")}
 
 
+def _feed_failure_detail() -> Dict[str, Any]:
+    """The last L5-feed failure, for the ingest report. Never raises.
+
+    A diagnostic must never be the reason a heartbeat fails to emit, so an
+    observer that cannot answer yields a named placeholder rather than an
+    exception.
+    """
+    try:
+        fn = getattr(OBS, "last_feed_failure", None)
+        return dict(fn() or {}) if fn is not None else {}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"kind": "DETAIL_UNAVAILABLE", "error": type(exc).__name__}
+
+
 def _resting_rows(store: Any, market: str) -> Optional[tuple]:
     """Live orders in this market as {side, price, market, remaining}.
 
@@ -5426,6 +5442,12 @@ class Runner:
             "counters": ing,
             "counter_age_s": ages,
             "feed_errors": self.stats.get("feed_errors", 0),
+            # WHAT THE LAST FAILURE ACTUALLY WAS, not just how many there
+            # were. `ingest:FEED_FAILED` reached 577 carrying no status, no
+            # exception type and no body, and the cause turned out to be an
+            # HTTP 410 "Data API v1 has been retired" that nothing recorded.
+            # Reporting only; {} when the last poll succeeded.
+            "last_feed_failure": _feed_failure_detail(),
             "distinct_slugs_seen": len(self.ingest_slugs),
             "rows_btc15m": btc,
             "top_slugs_seen": [{"slug": sl, "rows": n} for sl, n in top],
@@ -7782,6 +7804,21 @@ class Runner:
             live = {c: o for c, o in (self.store.live_orders() or {}).items()
                     if str((o or {}).get("market") or "") == str(slug)}
             if len(live) != 1:
+                # NAMED, NOT JUST DECLINED. Zero is nothing to requote; TWO
+                # is now a state this engine DOES create -- `L5_DUAL_QUOTE`
+                # with `L5_MAX_LIVE_ORDERS=2` rests one order on each side
+                # of the same market, which is the configuration the
+                # two-hour campaign asks for. Declining is still right:
+                # guessing which of two to cancel is how a requote becomes
+                # an unhedged leg. But this return bumped NO counter, so an
+                # operator running both flags would see repricing simply
+                # never happen with nothing in the telemetry saying why --
+                # the same blindness as `ingest:FEED_FAILED` carrying no
+                # status. The two flags are safe together and mutually
+                # exclusive per market; this is what makes that visible.
+                self.stats["requote_refused:%s" % (
+                    "NO_RESTING_ORDER" if not live
+                    else "MULTIPLE_RESTING_ORDERS_IN_MARKET")] += 1
                 return None
             coid, row = next(iter(live.items()))
             if not str(row.get("venue_order_id") or "").strip():

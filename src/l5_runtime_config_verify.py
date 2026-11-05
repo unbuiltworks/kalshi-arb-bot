@@ -774,6 +774,36 @@ def verify() -> Dict[str, Any]:
             ("completion_requote_enabled", "R.completion_requote_enabled()",
              lambda: __import__("src.l5_pmus_live_runner", fromlist=["x"]
                                 ).completion_requote_enabled()),
+            # ============ THE SIMULTANEOUS-QUOTING SWITCHES, for the same
+            # reason the requote switch above is here: issue #194 item 4 asks
+            # what `L5_DUAL_QUOTE` and `L5_DUAL_REPLENISH` are set to in
+            # production, and this block -- which is where an operator reads
+            # the effective state of every other switch -- did not report
+            # them. The only way to tell was to read the variable names out
+            # of Railway, where an OAuth caller gets names WITHOUT values.
+            #
+            # AND THEY INTERACT WITH THE ONE ABOVE. `dual_quote` rests one
+            # order on each side of a market; `completion_requote` requires
+            # EXACTLY ONE resting order in the market and declines
+            # otherwise. Both are on in production with max_live_orders 2,
+            # so repricing is inert whenever a pair is working -- which is
+            # safe (it never guesses which of two to cancel) and which no
+            # operator could see from here until these rows existed.
+            ("dual_quote_ab_mode", "DQ.describe()['ab_mode']",
+             lambda: bool(__import__("src.l5_dual_quote", fromlist=["x"]
+                                     ).describe().get("ab_mode"))),
+            ("dual_quote_enabled_now", "DQ.enabled()",
+             lambda: bool(__import__("src.l5_dual_quote", fromlist=["x"]
+                                     ).enabled())),
+            ("dual_replenish_enabled_now", "DQ.replenish_enabled()",
+             lambda: bool(__import__("src.l5_dual_quote", fromlist=["x"]
+                                     ).replenish_enabled())),
+            ("dual_max_placements_per_pass", "DQ.max_placements_per_pass()",
+             lambda: int(__import__("src.l5_dual_quote", fromlist=["x"]
+                                    ).max_placements_per_pass())),
+            ("replenish_max_rounds", "RPL.max_rounds()",
+             lambda: int(__import__("src.l5_replenish", fromlist=["x"]
+                                    ).max_rounds())),
             ("book_completion_breakeven_pair", "BC.BREAKEVEN_PAIR",
              lambda: str(__import__("src.l5_book_completion", fromlist=["x"]
                                     ).BREAKEVEN_PAIR)),

@@ -51,6 +51,7 @@ import os
 import ssl
 import sys
 import time
+import urllib.error
 import urllib.request
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -145,22 +146,142 @@ def _get(url: str, timeout: float = 20.0, *,
         return json.loads(fh.read().decode())
 
 
+#: ============ THE v1 -> v2 MIGRATION OF THE ACTIVITY FEED.
+#:
+#: WHAT HAPPENED. Polymarket RETIRED Data API v1. The legacy `/activity`
+#: path this module polled now answers:
+#:
+#:   HTTP 410 Gone
+#:   {"error": "Data API v1 has been retired",
+#:    "migration": "https://data-api.polymarket.com/v2/"}
+#:
+#: and `l5_activity` swallowed that exception whole and returned None, so the
+#: executor counted `ingest:FEED_FAILED` 577 times with no status, no
+#: exception type and no body anywhere in the telemetry. `distinct_slugs_seen
+#: 0` and `rows_btc15m 0` followed mechanically, and the heartbeat could not
+#: distinguish "L5 stopped trading" from "we cannot read the feed at all".
+#:
+#: IT WAS THE SECOND. Checked against v2 at 2026-11-05T20:40Z, L5
+#: (l5Zn1bWoM8eTsK) was trading BTC15m THAT MINUTE -- slug
+#: btc-updown-15m-1793910600, "Bitcoin Up or Down - November 5,
+#: 3:30PM-3:45PM ET". Every row the replication program needs has been
+#: arriving at an endpoint we stopped being able to read.
+#:
+#: TWO SEPARATE BREAKS, and fixing only one of them still yields None:
+#:   1. THE ENVELOPE. v1 returned a BARE LIST. v2 returns
+#:      {"data": [...], "pagination": {...}}, so `isinstance(rows, list)`
+#:      is False and the old guard maps a perfectly good response to a
+#:      feed failure.
+#:   2. THE FIELD NAMES. v2 is snake_case. Confirmed field-by-field against
+#:      a real v1 row captured 2026-09-01 (data/l5/ops/activity_20260901.jsonl):
+#:      ten fields are pure case changes, and `asset` was RENAMED to
+#:      `token_id` -- both long decimal ERC1155 token ids. Nothing else in
+#:      v1 is absent from v2 but our own `_`-prefixed annotations.
+#:
+#: WHY NORMALIZE INWARD RATHER THAN CHASE 290 CALL SITES. `src` reads
+#: `slug` 253 times, `side` 152, `price` 128, `asset` 22, `transactionHash`
+#: 6. Renaming at the boundary keeps every one of them correct and puts the
+#: migration in ONE reviewable place. A half-done rename is worse than the
+#: outage: rows would flow and `action_key` would quietly key on
+#: `None|None|...`, which LOOKS like a working feed.
+V2_ACTIVITY = "%s/v2/activity?user=%s&limit=%d&type=TRADE&_cb=%d"
+
+#: v2 name -> the v1 name the rest of this repository reads. Case changes
+#: plus the one true rename.
+V2_FIELD_MAP = {
+    "transaction_hash": "transactionHash",
+    "token_id": "asset",
+    "usdc_size": "usdcSize",
+    "condition_id": "conditionId",
+    "outcome_index": "outcomeIndex",
+    "event_slug": "eventSlug",
+    "proxy_wallet": "proxyWallet",
+    "profile_image": "profileImage",
+    "profile_image_optimized": "profileImageOptimized",
+}
+
+#: THE LAST FEED FAILURE, so `ingest:FEED_FAILED` stops being a bare count.
+#: This is the third time in this repository that an error swallowed to a
+#: counter has cost a diagnosis -- after the 2026-10-18 cancel 400 and the
+#: watchdog's `read_error: "HTTPError"`. Reporting only: nothing reads it to
+#: decide anything, and it can never turn a failure into a success.
+_LAST_FEED_FAILURE: Dict[str, Any] = {}
+
+
+def last_feed_failure() -> Dict[str, Any]:
+    """What the most recent feed failure actually was. Read-only."""
+    return dict(_LAST_FEED_FAILURE)
+
+
+def normalize_activity_row(row: Any) -> Any:
+    """One v2 row under the v1 field names. Non-mappings pass through.
+
+    ADDITIVE AND NON-DESTRUCTIVE: a v1 name already present is never
+    overwritten, so a mixed or already-normalized row is left alone and
+    this is safe to apply twice. `_api_version` is stamped for provenance,
+    because a row's shape should be answerable from the row.
+    """
+    if not isinstance(row, Mapping):
+        return row
+    out = dict(row)
+    for v2k, v1k in V2_FIELD_MAP.items():
+        if v2k in out and v1k not in out:
+            out[v1k] = out[v2k]
+    out.setdefault("_api_version", "v2")
+    return out
+
+
 def l5_activity(limit: int = 200) -> Optional[List[dict]]:
     """L5's published trades, newest first. None means the feed failed.
 
     REVALIDATED ON EVERY POLL, and the URL carries a cache-buster, because
     a frozen body behind a clean 200 is indistinguishable from a quiet
-    wallet from in here. See NO_CACHE. The parameter is additive and the
-    endpoint ignores unknown query keys, so a server that was never caching
-    behaves exactly as before.
+    wallet from in here. See NO_CACHE.
+
+    v2, UNWRAPPED AND NORMALIZED. See V2_ACTIVITY above for why both steps
+    are needed. A failure records its status and body in
+    `last_feed_failure()` instead of vanishing.
     """
+    global _LAST_FEED_FAILURE
+    url = V2_ACTIVITY % (L5_DATA, L5_ADDR, limit, int(time.time()))
     try:
-        rows = _get("%s/activity?user=%s&limit=%d&type=TRADE&_cb=%d"
-                    % (L5_DATA, L5_ADDR, limit, int(time.time())),
-                    no_cache=True)
-    except Exception:                                          # noqa: BLE001
+        payload = _get(url, no_cache=True)
+    except urllib.error.HTTPError as exc:                      # noqa: BLE001
+        body = ""
+        try:
+            body = exc.read().decode()[:400]
+        except Exception:                                      # noqa: BLE001
+            body = "BODY_UNREADABLE"
+        _LAST_FEED_FAILURE = {
+            "kind": "HTTPError", "status": getattr(exc, "code", None),
+            "reason": str(getattr(exc, "reason", ""))[:120],
+            "body": body, "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
         return None
-    return rows if isinstance(rows, list) else None
+    except Exception as exc:                                   # noqa: BLE001
+        _LAST_FEED_FAILURE = {
+            "kind": type(exc).__name__, "status": None,
+            "reason": repr(exc)[:200], "body": "",
+            "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+        return None
+    # THE ENVELOPE. v2 wraps the rows; v1 did not. Both are accepted so a
+    # server that reverts, or a cached v1 body, still reads.
+    rows = payload
+    if isinstance(payload, Mapping):
+        rows = payload.get("data")
+    if not isinstance(rows, list):
+        _LAST_FEED_FAILURE = {
+            "kind": "UNEXPECTED_SHAPE", "status": 200,
+            "reason": "no row list; payload was %s%s"
+                      % (type(payload).__name__,
+                         (" keys=%s" % sorted(payload)[:8])
+                         if isinstance(payload, Mapping) else ""),
+            "body": "", "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+        return None
+    _LAST_FEED_FAILURE = {}
+    return [normalize_activity_row(r) for r in rows]
 
 
 #: Gamma, for profile identity. Separate host from the activity API.
