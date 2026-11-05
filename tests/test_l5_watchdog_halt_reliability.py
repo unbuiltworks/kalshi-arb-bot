@@ -324,3 +324,132 @@ def test_the_digest_identifies_the_record_both_sides_read(store):
     g.state()
     assert g.last_sha256
     assert len(g.last_sha256) == 64
+
+
+# ================ THE PRESENT BLOCKER: bounded retry on a rate-limited read
+
+import urllib.error as _ue
+
+
+def _http(code):
+    return _ue.HTTPError("https://venue/v1/orders/open", code, "x", {}, None)
+
+
+class Flaky:
+    """Transient failures then success, counting attempts and sleeps."""
+
+    def __init__(self, fail_times, code=429, rows=None):
+        self.fail_times = fail_times
+        self.code = code
+        self.rows = rows if rows is not None else []
+        self.attempts = 0
+
+    def request(self, method, path, body=None, base=None):
+        assert method == "GET" and path == "/v1/orders/open", (method, path)
+        self.attempts += 1
+        if self.attempts <= self.fail_times:
+            raise _http(self.code)
+        return {"orders": self.rows}
+
+
+def transport_with(src, slept):
+    t = W.CancelOnlyTransport.__new__(W.CancelOnlyTransport)
+    t.request = src.request
+    t._retry_sleep = slept.append
+    return t
+
+
+class TestBoundedRetryOnTheVenueRead:
+
+    def test_the_retry_budget_matches_the_proven_executor_values(self):
+        """Divergence here is how the watchdog got it wrong in the first place."""
+        from src import pmus_q1_executor as Q
+        T = W.CancelOnlyTransport
+        assert set(T.TRANSIENT_CODES) == set(Q.TRANSIENT_CODES)
+        assert T.GET_RETRY_MAX == Q.GET_RETRY_MAX
+        assert T.GET_RETRY_SLEEP_S == Q.GET_RETRY_SLEEP_S
+        assert T.GET_RETRY_BACKOFF == Q.GET_RETRY_BACKOFF
+
+    @pytest.mark.parametrize("code", [404, 429, 500, 502, 503, 504])
+    def test_a_transient_code_is_retried_and_can_succeed(self, code):
+        src = Flaky(2, code=code, rows=[{"order_id": "v1"}])
+        slept = []
+        rows = transport_with(src, slept).open_orders()
+        assert rows == [{"order_id": "v1"}]
+        assert src.attempts == 3
+        assert slept == [1.0, 2.0]          # exponential, not flat
+
+    def test_the_backoff_is_exponential_and_bounded(self):
+        src = Flaky(99, code=429)
+        slept = []
+        with pytest.raises(_ue.HTTPError):
+            transport_with(src, slept).open_orders()
+        assert src.attempts == W.CancelOnlyTransport.GET_RETRY_MAX
+        assert slept == [1.0, 2.0, 4.0, 8.0]
+        assert sum(slept) == 15.0
+
+    @pytest.mark.parametrize("code", [400, 401, 403, 422])
+    def test_a_non_transient_code_is_not_retried(self, code):
+        """401 is a credential fault; retrying it is pointless and noisy."""
+        src = Flaky(99, code=code)
+        slept = []
+        with pytest.raises(_ue.HTTPError):
+            transport_with(src, slept).open_orders()
+        assert src.attempts == 1
+        assert slept == []
+
+    def test_an_exhausted_budget_still_raises_so_the_sweep_goes_blind(self):
+        """A retry must never become an attestation."""
+        src = Flaky(99, code=429)
+        t = transport_with(src, [])
+        store = HG.FileStore(__import__("tempfile").mkdtemp())
+        out = W.Watchdog(t, W.asserter_for(store, who="test"),
+                         max_order_age_s=300.0, cancel_enabled=False,
+                         oracle=None).sweep()
+        assert out["read_error"] == "HTTPError"
+        assert out["read_error_detail"]["status"] == 429
+        assert out.get("heartbeat") is None
+        assert out["halted"] is None
+        assert HG.HaltGate(store).state()["permitted"] is False
+
+    def test_a_recovered_read_heartbeats_normally(self, store):
+        """The whole point: a transient 429 no longer costs the attestation."""
+        src = Flaky(3, code=429, rows=[])
+        t = transport_with(src, [])
+        out = W.Watchdog(t, W.asserter_for(store, who="test"),
+                         max_order_age_s=300.0, cancel_enabled=False,
+                         oracle=None).sweep()
+        assert out["read_error"] is None
+        assert out.get("heartbeat") is not None
+        assert HG.HaltGate(store).state()["permitted"] is True
+
+    def test_a_recovered_read_still_cannot_clear_a_latch(self, store):
+        W.asserter_for(store, who="test").assert_halt(
+            reason="owner stop", evidence={"src": "test"})
+        src = Flaky(2, code=429, rows=[])
+        out = W.Watchdog(transport_with(src, []),
+                         W.asserter_for(store, who="test"),
+                         max_order_age_s=300.0, cancel_enabled=False,
+                         oracle=None).sweep()
+        assert out["read_error"] is None
+        assert HG.HaltGate(store).state()["why"] == "halt_asserted"
+
+    def test_only_the_read_only_get_is_retried(self):
+        """No mutation is retried anywhere."""
+        import inspect
+        src = inspect.getsource(W.CancelOnlyTransport.open_orders)
+        assert '"GET", "/v1/orders/open"' in src
+        cancel = inspect.getsource(W.CancelOnlyTransport.cancel)
+        for bad in ("GET_RETRY_MAX", "_retry_sleep", "for attempt"):
+            assert bad not in cancel, bad
+
+    def test_a_non_http_exception_is_not_retried(self):
+        class Boom:
+            attempts = 0
+            def request(self, *a, **k):
+                Boom.attempts += 1
+                raise RuntimeError("socket died")
+        src = Boom(); slept = []
+        with pytest.raises(RuntimeError):
+            transport_with(src, slept).open_orders()
+        assert Boom.attempts == 1 and slept == []
