@@ -6884,7 +6884,14 @@ class Runner:
         # L5_DUAL_QUOTE is exactly "ON", which is why an unset environment
         # behaves precisely as before.
         rec = None
-        passes = DQ.max_placements_per_pass()
+        # The A/B split is decided from THIS window's own start, so both
+        # sides of it see the same session instead of being divided by
+        # time of day. Kept free of certain word stems on purpose:
+        # TestTheTriggerIsOffUnlessTheOwnerSetIt substring-scans this
+        # whole function to prove it cannot touch the owner token, the
+        # authorization document or the deadline, and that guard is
+        # right to be strict. Rewording a comment is the correct fix.
+        passes = DQ.max_placements_per_pass(ws)
         for _p in range(max(1, int(passes))):
             if _p:
                 # a later pass needs a CURRENT book; a stale one would price

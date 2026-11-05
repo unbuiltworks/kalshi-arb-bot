@@ -41,6 +41,11 @@ DUAL_ENV = "L5_DUAL_QUOTE"
 REPLENISH_ENV = "L5_DUAL_REPLENISH"
 #: the only value that enables either. A typo must not widen live behaviour.
 ENABLE_TOKEN = "ON"
+#: INTERLEAVED A/B. Same-pass placement on the B windows only, so both arms
+#: see the same session, the same volatility and the same book regime. A
+#: sequential "4 windows old then 4 windows new" split would confound the arms
+#: with time of day, which at four windows each is the larger effect.
+AB_TOKEN = "AB"
 
 #: a pass may never place more than this, whatever the environment says. Two
 #: is the pair; a third order in one tick is not a pair and has no economics
@@ -86,31 +91,74 @@ def _on(env: str) -> bool:
     return (os.getenv(env) or "").strip() == ENABLE_TOKEN
 
 
-def enabled() -> bool:
-    """Same-pass two-sided placement. OFF unless the exact token is set."""
-    return _on(DUAL_ENV)
+def _raw() -> str:
+    return (os.getenv(DUAL_ENV) or "").strip()
 
 
-def replenish_enabled() -> bool:
+def ab_mode() -> bool:
+    """Interleaved A/B: arm B gets same-pass placement, arm A does not."""
+    return _raw() == AB_TOKEN
+
+
+def arm_for(window_start: Any) -> Optional[str]:
+    """"A" or "B" for a window, from its own start minute.
+
+    B is the :15 and :45 window of each hour, A is :00 and :30, so an
+    8-window block is 4 and 4 and the arms alternate. Derived from the window
+    itself, so the assignment is reproducible from the tape and cannot drift
+    with process state.
+
+    None when the window cannot be read. Callers treat that as arm A -- the
+    LESS active arm -- because an unreadable window must never buy the extra
+    placement.
+    """
+    try:
+        if window_start is None:
+            return None
+        if hasattr(window_start, "minute"):
+            minute = int(window_start.minute)
+        else:
+            import datetime as _dt
+            minute = _dt.datetime.fromtimestamp(
+                float(window_start), _dt.timezone.utc).minute
+    except BaseException:                                      # noqa: BLE001
+        return None
+    return "B" if (minute // 15) % 2 == 1 else "A"
+
+
+def enabled(window_start: Any = None) -> bool:
+    """Same-pass two-sided placement for THIS window.
+
+    "ON" enables it everywhere. "AB" enables it on arm B only. Anything else,
+    including an unreadable window under "AB", is off.
+    """
+    if _on(DUAL_ENV):
+        return True
+    if ab_mode():
+        return arm_for(window_start) == "B"
+    return False
+
+
+def replenish_enabled(window_start: Any = None) -> bool:
     """Re-open after a fill or cancellation frees a slot.
 
     Requires the dual-quote switch too: replenishing into a single-leg
     controller would just place more unpaired first legs, which is the
     behaviour the measurement says loses money.
     """
-    return enabled() and _on(REPLENISH_ENV)
+    return enabled(window_start) and _on(REPLENISH_ENV)
 
 
-def max_placements_per_pass() -> int:
+def max_placements_per_pass(window_start: Any = None) -> int:
     """How many placements one controller tick may attempt.
 
     1 when off -- today's behaviour, and the reason parity holds. Never more
     than MAX_PLACEMENTS_CEILING whatever the environment says.
     """
-    return MAX_PLACEMENTS_CEILING if enabled() else 1
+    return MAX_PLACEMENTS_CEILING if enabled(window_start) else 1
 
 
-def opening_preference() -> Optional[D]:
+def opening_preference(window_start: Any = None) -> Optional[D]:
     """The own price L5 actually opened at, for ordering candidate legs.
 
     None when the mode is off, so the existing cheaper-leg-first ordering is
@@ -122,7 +170,8 @@ def opening_preference() -> Optional[D]:
     ADVISORY ONLY. It returns a number; it places nothing, and it can neither
     widen the opening band nor move a price past any ceiling.
     """
-    return L5_OBSERVED["median_opening_own_px"] if enabled() else None
+    return (L5_OBSERVED["median_opening_own_px"]
+            if enabled(window_start) else None)
 
 
 def describe() -> Dict[str, Any]:
@@ -130,6 +179,8 @@ def describe() -> Dict[str, Any]:
     return {
         "label": "L5_DUAL_QUOTE",
         "enabled": enabled(),
+        "ab_mode": ab_mode(),
+        "ab_assignment": "B = :15 and :45 windows; A = :00 and :30",
         "replenish": replenish_enabled(),
         "max_placements_per_pass": max_placements_per_pass(),
         "env": {"dual": DUAL_ENV, "replenish": REPLENISH_ENV},

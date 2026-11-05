@@ -120,7 +120,7 @@ def test_the_named_non_negotiables_are_safety(must):
 
 def test_the_loop_runs_once_when_off():
     src = inspect.getsource(R.Runner.maybe_controller_open)
-    assert "DQ.max_placements_per_pass()" in src
+    assert "DQ.max_placements_per_pass(ws)" in src
     assert "for _p in range(max(1, int(passes)))" in src
 
 
@@ -206,3 +206,89 @@ def test_describe_reports_what_is_in_force(monkeypatch):
     d = DQ.describe()
     assert d["enabled"] is True and d["max_placements_per_pass"] == 2
     assert "max_total_exposure_usd" in d["safety_never_touched_here"]
+
+
+# ============================================== interleaved A/B assignment
+
+import datetime as _dt
+
+
+def _ws(h, m):
+    return _dt.datetime(2026, 11, 5, h, m, tzinfo=_dt.timezone.utc).timestamp()
+
+
+class TestAbAssignment:
+
+    def test_b_is_the_quarter_past_and_quarter_to_windows(self):
+        assert DQ.arm_for(_ws(5, 15)) == "B"
+        assert DQ.arm_for(_ws(5, 45)) == "B"
+        assert DQ.arm_for(_ws(5, 0)) == "A"
+        assert DQ.arm_for(_ws(5, 30)) == "A"
+
+    def test_an_eight_window_block_is_four_and_four(self):
+        arms = [DQ.arm_for(_ws(h, m)) for h in (5, 6) for m in (0, 15, 30, 45)]
+        assert arms.count("A") == 4 and arms.count("B") == 4
+
+    def test_the_arms_alternate_so_neither_owns_a_session(self):
+        """A sequential split would confound the arms with time of day."""
+        arms = [DQ.arm_for(_ws(h, m)) for h in (5, 6) for m in (0, 15, 30, 45)]
+        assert arms == ["A", "B", "A", "B", "A", "B", "A", "B"]
+
+    def test_the_assignment_is_derived_from_the_window_not_process_state(self):
+        a = [DQ.arm_for(_ws(5, 15)) for _ in range(5)]
+        assert a == ["B"] * 5
+
+    def test_a_datetime_works_as_well_as_a_timestamp(self):
+        d = _dt.datetime(2026, 11, 5, 5, 45, tzinfo=_dt.timezone.utc)
+        assert DQ.arm_for(d) == "B"
+
+    @pytest.mark.parametrize("bad", [None, "nope", object(), float("nan")])
+    def test_an_unreadable_window_is_not_an_arm(self, bad):
+        assert DQ.arm_for(bad) is None
+
+    def test_ab_mode_gives_two_placements_on_b_only(self, monkeypatch):
+        monkeypatch.setenv(DQ.DUAL_ENV, "AB")
+        assert DQ.ab_mode() is True
+        assert DQ.max_placements_per_pass(_ws(5, 15)) == 2
+        assert DQ.max_placements_per_pass(_ws(5, 0)) == 1
+
+    def test_ab_mode_fails_to_the_less_active_arm(self, monkeypatch):
+        """An unreadable window must never buy the extra placement."""
+        monkeypatch.setenv(DQ.DUAL_ENV, "AB")
+        assert DQ.max_placements_per_pass(None) == 1
+        assert DQ.enabled(None) is False
+
+    @pytest.mark.parametrize("tok", ["ab", "Ab", "A/B", "AB ", "BA"])
+    def test_only_the_exact_ab_token_arms_the_split(self, monkeypatch, tok):
+        monkeypatch.setenv(DQ.DUAL_ENV, tok)
+        assert DQ.ab_mode() is (tok.strip() == "AB")
+        if tok.strip() != "AB":
+            assert DQ.max_placements_per_pass(_ws(5, 15)) == 1
+
+    def test_on_overrides_the_split_and_enables_everywhere(self, monkeypatch):
+        monkeypatch.setenv(DQ.DUAL_ENV, "ON")
+        assert DQ.ab_mode() is False
+        assert DQ.max_placements_per_pass(_ws(5, 0)) == 2
+        assert DQ.max_placements_per_pass(_ws(5, 15)) == 2
+
+    def test_off_is_one_placement_in_both_arms(self, monkeypatch):
+        for tok in ("", "OFF"):
+            monkeypatch.setenv(DQ.DUAL_ENV, tok)
+            assert DQ.max_placements_per_pass(_ws(5, 0)) == 1
+            assert DQ.max_placements_per_pass(_ws(5, 15)) == 1
+
+    def test_replenish_follows_the_arm(self, monkeypatch):
+        monkeypatch.setenv(DQ.DUAL_ENV, "AB")
+        monkeypatch.setenv(DQ.REPLENISH_ENV, "ON")
+        assert DQ.replenish_enabled(_ws(5, 15)) is True
+        assert DQ.replenish_enabled(_ws(5, 0)) is False
+
+    def test_the_runner_passes_the_window_to_the_arm_decision(self):
+        src = inspect.getsource(R.Runner.maybe_controller_open)
+        assert "DQ.max_placements_per_pass(ws)" in src
+
+    def test_describe_states_the_assignment(self, monkeypatch):
+        monkeypatch.setenv(DQ.DUAL_ENV, "AB")
+        d = DQ.describe()
+        assert d["ab_mode"] is True
+        assert ":15" in d["ab_assignment"] and ":45" in d["ab_assignment"]
