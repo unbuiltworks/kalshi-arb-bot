@@ -6683,6 +6683,55 @@ class Runner:
         return str(os.getenv("L5_CONTROLLER_OPEN", "")).strip().upper() \
             in ("1", "YES", "TRUE", "ON")
 
+    def _note_open_skip(self, reason: str, slug: Any, ws: Any = None,
+                        detail: Optional[Mapping[str, Any]] = None) -> None:
+        """Name a tick on which NO OPENING WAS EVEN CONSIDERED.
+
+        WHAT WAS WRONG. `maybe_controller_open` has seven early returns that
+        bump a `controller_open:*` counter and emit nothing. `L5_MISSED_PAIR`
+        only fires AFTER `executor.handle` has produced a refusal, so a tick
+        that never reached the executor left no timestamped trace at all.
+
+        WHAT THAT COST. Campaign E's 0245z window has no decision record
+        between 02:45:00 and 02:53:45 -- the span containing all six of its
+        submissions. The counters existed but are CUMULATIVE over the
+        process lifetime, so when deployment 05884c9c was replaced the only
+        snapshot left covered 02:18-03:01 across two windows and could not
+        be attributed to the window at all. A counter cannot be windowed
+        after the fact; a timestamped record can.
+
+        REPORTING ONLY. It returns None, it is called immediately before an
+        early return that has already been decided, and every part of it sits
+        inside one swallow. It cannot change which tick opens, cannot place
+        or price an order, and cannot raise into the caller.
+        """
+        try:
+            rec: Dict[str, Any] = {
+                "label": "L5_OPENING_DECISION",
+                "considered": False,
+                "reason": str(reason),
+                "market": (None if slug is None else str(slug)),
+                "utc": now_utc().isoformat(),
+                "labels": ("ONE TICK on which no opening was considered. "
+                           "Not a refusal by any gate, not a missed pair, "
+                           "and never a fill: the opening path returned "
+                           "before the executor saw anything."),
+            }
+            try:
+                if ws is not None:
+                    rec["window"] = str(ws)
+                    rec["elapsed_s"] = round(float(time.time()) - float(ws), 1)
+            except BaseException:                              # noqa: BLE001
+                pass
+            if isinstance(detail, Mapping):
+                for k, v in detail.items():
+                    rec[str(k)] = v
+            emit("L5_OPENING_DECISION", rec)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["open_skip_emit_failed:%s" % type(exc).__name__] += 1
+
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
 
@@ -6725,10 +6774,12 @@ class Runner:
         # legible and spends no book read.
         if not TSP.active(slug):
             self.stats["controller_open:NOT_AUTHORIZED_MARKET"] += 1
+            self._note_open_skip("NOT_AUTHORIZED_MARKET", slug)
             return None
         ws = AB.slug_start(slug)
         if ws is None:
             self.stats["controller_open:WINDOW_START_UNKNOWN"] += 1
+            self._note_open_skip("WINDOW_START_UNKNOWN", slug)
             return None
         # ONE OUTSTANDING ORDER, read from the ledger rather than from this
         # method's memory of what it did. Checked here as well as in the
@@ -6742,15 +6793,20 @@ class Runner:
             # FAIL CLOSED: an unreadable ledger is not an empty one.
             self.stats["controller_open:LEDGER_UNREADABLE:%s"
                        % type(exc).__name__] += 1
+            self._note_open_skip("LEDGER_UNREADABLE", slug, ws,
+                                 {"error": type(exc).__name__})
             return None
         if resting:
             self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
+            self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
+                                 {"still_fillable_orders": int(resting)})
             return None
         book = self.book.snapshot(slug) if self.book is not None else None
         if not isinstance(book, Mapping) or not book:
             # `snapshot` returns None unless the socket is connected AND the
             # book is two-sided, so this is the no-book case and it refuses.
             self.stats["controller_open:NO_AUTHENTICATED_BOOK"] += 1
+            self._note_open_skip("NO_AUTHENTICATED_BOOK", slug, ws)
             return None
         tick = getattr(t, "tick_size", None)
         # THE PROVISIONAL SIDE: the cheaper own-price, which is the order
@@ -6762,11 +6818,15 @@ class Runner:
         px_dn = LX.controller_provisional_price("DOWN", book, tick)
         if px_up is None or px_dn is None:
             self.stats["controller_open:PROVISIONAL_PRICE_UNREADABLE"] += 1
+            self._note_open_skip("PROVISIONAL_PRICE_UNREADABLE", slug, ws,
+                                 {"bid": str(book.get("bid")),
+                                  "ask": str(book.get("ask"))})
             return None
         side, px = ("UP", px_up) if px_up <= px_dn else ("DOWN", px_dn)
         size = TSP.opening_leg_max_contracts()
         if size is None or size <= 0:
             self.stats["controller_open:OPENING_CAP_UNREADABLE"] += 1
+            self._note_open_skip("OPENING_CAP_UNREADABLE", slug, ws)
             return None
         dec = {"side": side, "price": px, "l5_size": size,
                "relation": "open"}
