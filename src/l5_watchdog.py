@@ -595,6 +595,26 @@ class Watchdog:
             # executor by omission within max_age_s -- without latching the
             # system on a single transient network error.
             out["read_error"] = type(exc).__name__
+            # WHAT THE VENUE ACTUALLY SAID, sanitized. `read_error` alone is
+            # the exact gap `http_error_detail` was written for on the CANCEL
+            # path -- its own docstring records that `cancel_error:
+            # "HTTPError"` left the 2026-10-18 cancel 400 undiagnosed for a
+            # whole authorized window -- and this read path never called it.
+            # On 2026-11-05 that cost the same thing again: every sweep from
+            # at least 11:55 reported `read_error: "HTTPError"` with no
+            # status, so the halt record went stale, the executor refused at
+            # HALT_GATE, and Campaign F could not be activated or diagnosed.
+            #
+            # REPORTING ONLY, and deliberately ADDITIVE: `read_error` keeps
+            # its exact previous value and shape so nothing reading it
+            # changes, and the three lines above this one still decide. The
+            # sweep still does NOT heartbeat and still returns here, so a
+            # blind watchdog still stops the executor by omission within
+            # max_age_s. A diagnostic must never become a permission.
+            try:
+                out["read_error_detail"] = http_error_detail(exc)
+            except BaseException:                              # noqa: BLE001
+                out["read_error_detail"] = {"error": "DETAIL_UNAVAILABLE"}
             return out
         out["open_orders"] = len(rows)
         # ---- EMERGENCY HALT CANCELLATION -------------------------------
