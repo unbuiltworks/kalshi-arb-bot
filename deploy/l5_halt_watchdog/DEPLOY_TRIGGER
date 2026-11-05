@@ -217,3 +217,4 @@ promote: 644ab221221aa23621966e322fbdb918b69573da 2026-11-01 one-action HALT
 # cancel suites. On the source branch a differenced full-suite run showed
 # byte-identical failing-test id sets before and after: zero regressions.
 promote: ebaef2d8 2026-11-01 emergency HALT cancel-all regardless of age
+2026-11-05T12:40Z watchdog read-only bounded retry on /v1/orders/open + redacted read_error_detail; owner-approved Option A; no trading change

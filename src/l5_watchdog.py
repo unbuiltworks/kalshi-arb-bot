@@ -49,6 +49,7 @@ import datetime as dt
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List, Mapping, Optional
 
 # THE SIGNING MODULE IS OPTIONAL ON PURPOSE. The credential-free watchdog
@@ -170,10 +171,71 @@ class CancelOnlyTransport:
             return json.loads(r.read() or b"{}")
 
     # the two verbs the watchdog actually uses, named for what they mean
+    #: Transient venue codes worth one bounded retry on a READ-ONLY GET, and
+    #: the backoff that `pmus_q1_executor` already proved in production. Kept
+    #: as local constants rather than imported so this image stays
+    #: credential-light, and pinned equal to that module's values by
+    #: `test_the_retry_budget_matches_the_proven_executor_values`.
+    TRANSIENT_CODES = (404, 429, 500, 502, 503, 504)
+    GET_RETRY_MAX = 5
+    GET_RETRY_SLEEP_S = 1.0
+    GET_RETRY_BACKOFF = 2.0
+
     def open_orders(self) -> List[Dict[str, Any]]:
-        body = self.request("GET", "/v1/orders/open") or {}
-        rows = body.get("orders") if isinstance(body, Mapping) else None
-        return [r for r in (rows or []) if isinstance(r, Mapping)]
+        """The venue's open orders, with the SAME bounded retry every other
+        caller of this endpoint already uses.
+
+        THE 2026-11-05 FAILURE. This was a bare single request, and it is the
+        only caller of `/v1/orders/open` in the repository that was. Every
+        working one wraps it -- `pmus_q1_executor._get_with_retry`,
+        `pmus_micro_executor`, `pmus_aws_supervisor` -- because the venue
+        rate-limits this read; that module's own note records a live 429 whose
+        "rate budget recovers on the order of a minute: the same read cleared
+        70 s later". Polling it bare every 20 s, alongside the executor, meant
+        every sweep reported `read_error: "HTTPError"`, never heartbeated, and
+        the halt record aged past HaltGate's 900 s bound -- which refused the
+        executor at HALT_GATE and blocked the campaign.
+
+        PATIENCE IS 15 s PER SWEEP, NOT 31, and that is deliberate. This
+        sleeps between attempts but not after the last one, so the budget is
+        1+2+4+8; `pmus_q1_executor` sleeps after its final attempt too and so
+        documents 31. The difference does not matter here and the shorter one
+        is better: that module gets ONE pass at the read, whereas this sweep
+        repeats every L5_WATCHDOG_POLL_S, giving well over a hundred
+        further attempts
+        inside HaltGate's 900 s staleness bound. Resilience comes from the
+        loop, not from one long stall that would also lag the sweep.
+
+        FAIL-CLOSED IS UNCHANGED. Retries apply ONLY to transient codes on
+        this read-only GET. A non-transient code raises immediately, and an
+        exhausted budget raises too -- so the caller still records
+        `read_error`, still does NOT heartbeat, and a genuinely blind watchdog
+        still stops the executor by omission. A retry must never become an
+        attestation, and no mutation is retried anywhere.
+        """
+        last: Optional[BaseException] = None
+        for attempt in range(self.GET_RETRY_MAX):
+            try:
+                body = self.request("GET", "/v1/orders/open") or {}
+                rows = body.get("orders") if isinstance(body, Mapping) else None
+                return [r for r in (rows or []) if isinstance(r, Mapping)]
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                code = getattr(exc, "code", None)
+                if code not in self.TRANSIENT_CODES:
+                    raise
+                last = exc
+                if attempt == self.GET_RETRY_MAX - 1:
+                    break
+                self._retry_sleep(
+                    self.GET_RETRY_SLEEP_S * (self.GET_RETRY_BACKOFF ** attempt))
+        # EXHAUSTED IS STILL BLIND. Re-raise the venue's own error so the
+        # sweep records it, including its status, and declines to attest.
+        raise last if last is not None else RuntimeError("open_orders_failed")
+
+    #: overridable so tests do not actually sleep 31 seconds.
+    _retry_sleep = staticmethod(time.sleep)
 
     def order(self, order_id: str) -> Dict[str, Any]:
         body = self.request("GET", "/v1/order/%s" % order_id) or {}
@@ -595,6 +657,26 @@ class Watchdog:
             # executor by omission within max_age_s -- without latching the
             # system on a single transient network error.
             out["read_error"] = type(exc).__name__
+            # WHAT THE VENUE ACTUALLY SAID, sanitized. `read_error` alone is
+            # the exact gap `http_error_detail` was written for on the CANCEL
+            # path -- its own docstring records that `cancel_error:
+            # "HTTPError"` left the 2026-10-18 cancel 400 undiagnosed for a
+            # whole authorized window -- and this read path never called it.
+            # On 2026-11-05 that cost the same thing again: every sweep from
+            # at least 11:55 reported `read_error: "HTTPError"` with no
+            # status, so the halt record went stale, the executor refused at
+            # HALT_GATE, and Campaign F could not be activated or diagnosed.
+            #
+            # REPORTING ONLY, and deliberately ADDITIVE: `read_error` keeps
+            # its exact previous value and shape so nothing reading it
+            # changes, and the three lines above this one still decide. The
+            # sweep still does NOT heartbeat and still returns here, so a
+            # blind watchdog still stops the executor by omission within
+            # max_age_s. A diagnostic must never become a permission.
+            try:
+                out["read_error_detail"] = http_error_detail(exc)
+            except BaseException:                              # noqa: BLE001
+                out["read_error_detail"] = {"error": "DETAIL_UNAVAILABLE"}
             return out
         out["open_orders"] = len(rows)
         # ---- EMERGENCY HALT CANCELLATION -------------------------------
