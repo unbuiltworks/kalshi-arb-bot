@@ -3594,3 +3594,5 @@ deploy: 2026-11-04 authorization-boundary safety fix, HALT asserted
 2026-11-05T03:40Z reassert L5_LIVE_HALT=1 after Campaign E; src identical to pinned 2d74847f; no trading logic change
 2026-11-05T05:30Z deploy same-pass two-sided controller; L5_DUAL_QUOTE=OFF, HALT asserted
 2026-11-05T11:47Z Campaign F: approval camp1.28f1cb6a installed, L5_DUAL_QUOTE=AB, HALT still asserted
+
+2026-11-05T18:55Z — deploy inventory completion/replenishment commit 4b428b0c; keep local HALT and NOT_ARMED locks in force.
