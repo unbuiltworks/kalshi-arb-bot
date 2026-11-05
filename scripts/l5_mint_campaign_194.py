@@ -61,22 +61,94 @@ MAX_SUBMISSIONS = 500
 CLASS_BUDGETS = {"OPEN": 140, "COMPLETE": 300, "REPLACE": 60}
 
 
+#: BTC15m windows open on the quarter hour.
+WINDOW_PERIOD_S = 900
+#: SETTLEMENT GRACE after the last authorized window CLOSES. `expires_utc`
+#: is a settlement grace and never authorizes opening a window -- see
+#: `upcoming_window_starts` for the bound that does.
+GRACE_S = 900
+
+
+def upcoming_window_starts(now: dt.datetime, n: int = WINDOWS) -> list:
+    """The next `n` BTC15m window starts strictly after `now`.
+
+    THE OPENING BOUND, AND WHY IT IS AN EXPLICIT SET. `opening_refusal`
+    needs `window_starts` or `last_open_utc`; with NEITHER it returns
+    CAMPAIGN_OPENING_BOUND_ABSENT and refuses every window, which is exactly
+    what happened to camp1.29bbb533 at 21:34:07Z -- the document parsed as
+    `approved`, the preflight PASSED, and arming was refused at
+    `authorize_arming` on every tick of the 2130z window.
+
+    A SET RATHER THAN JUST A LAST-OPEN, because it names precisely which
+    eight windows the grant covers. `last_open_utc` alone would authorize
+    every window up to it, including ones we never intended and any the
+    venue happens to list in between.
+    """
+    step = dt.timedelta(seconds=WINDOW_PERIOD_S)
+    t = now.replace(second=0, microsecond=0)
+    t -= dt.timedelta(minutes=t.minute % (WINDOW_PERIOD_S // 60))
+    while t <= now:
+        t += step
+    return [t + i * step for i in range(n)]
+
+
 def mint(now: dt.datetime | None = None, nonce: str | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     nonce = nonce or secrets.token_hex(16)
+    starts = upcoming_window_starts(now)
+    last_open = starts[-1]
+    # expiry covers the last window's CLOSE plus a settlement grace, so a
+    # position opened in the final window can still settle inside the
+    # document. It is NOT what authorizes opening -- `window_starts` is.
+    expires = last_open + dt.timedelta(
+        seconds=WINDOW_PERIOD_S + GRACE_S)
     return {
         "approved": True,
         "nonce": nonce,
         "series": CA.ALLOWED_SERIES[0],
         "issued_utc": now.replace(microsecond=0).isoformat(),
-        "expires_utc": (now + dt.timedelta(seconds=DURATION_S)
-                        ).replace(microsecond=0).isoformat(),
+        "expires_utc": expires.isoformat(),
+        # ---- THE OPENING BOUND, all three stated so none has to be guessed
+        "starts_utc": starts[0].isoformat(),
+        "last_open_utc": last_open.isoformat(),
+        "window_starts": [t.isoformat() for t in starts],
         "max_windows": WINDOWS,
         "max_total_exposure_usd": EXPOSURE_USD,
         "max_daily_loss_usd": DAILY_LOSS_USD,
         "note": ("issue-194 two-hour bounded L5 PMUS campaign; "
                  "500 submissions, 2 resting orders, $12 deployed cash"),
     }
+
+
+def slug_for(start: dt.datetime) -> str:
+    """The BTC15m slug of the window beginning at `start`."""
+    return "%s%s-%s" % (CA.ALLOWED_SERIES[0],
+                        start.strftime("%Y-%m-%d"),
+                        start.strftime("%H%M").lower() + "z")
+
+
+def opening_check(doc: dict) -> list:
+    """Can EVERY authorized window actually be opened? One row each.
+
+    WHY THIS EXISTS, and it is the exact gap that cost camp1.29bbb533.
+    `ApprovalGate.state()` approves a document with no opening bound ON
+    PURPOSE -- parsing cannot trade, so a legacy document stays inert rather
+    than invalid. Validating with `state()` alone therefore CANNOT catch a
+    missing opening bound, and the first evidence is a live arming refusal.
+    `opening_refusal` is the function the money path actually consults, so
+    it is the one this script must ask.
+    """
+    st, _raw = validate(doc)
+    scope = (st or {}).get("scope") or {}
+    rows = []
+    for iso in doc.get("window_starts") or []:
+        start = dt.datetime.fromisoformat(iso)
+        slug = slug_for(start)
+        ref = CA.opening_refusal(scope, slug)
+        rows.append({"slug": slug,
+                     "openable": ref is None,
+                     "refusal": None if ref is None else ref.get("reason")})
+    return rows
 
 
 def validate(doc: dict) -> dict:
@@ -147,6 +219,19 @@ if __name__ == "__main__":
           % (worst, "reserve holds for every permitted OPEN" if ok
              else "RESERVE FAILS"))
     print("  class sum within total   %s" % total_ok)
+
+    print("\n--- opening bound: can every authorized window OPEN? ---")
+    rows = opening_check(doc)
+    for r in rows:
+        print("  %-40s openable=%-5s %s"
+              % (r["slug"], r["openable"], r["refusal"] or ""))
+    if not rows or not all(r["openable"] for r in rows):
+        print("\n  REFUSED: at least one authorized window cannot be opened.")
+        print("  This is the check `state()` alone cannot make -- it is why")
+        print("  camp1.29bbb533 parsed as approved and still refused every")
+        print("  window with CAMPAIGN_OPENING_BOUND_ABSENT.")
+        raise SystemExit(1)
+    print("  all %d authorized windows are openable" % len(rows))
 
     print("\n--- 1. install this campaign document ---")
     print("  %s=%s" % (CA.APPROVAL_ENV, raw))
