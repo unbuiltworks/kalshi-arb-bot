@@ -3596,3 +3596,13 @@ deploy: 2026-11-04 authorization-boundary safety fix, HALT asserted
 2026-11-05T11:47Z Campaign F: approval camp1.28f1cb6a installed, L5_DUAL_QUOTE=AB, HALT still asserted
 
 2026-11-05T18:55Z — deploy inventory completion/replenishment commit 4b428b0c; keep local HALT and NOT_ARMED locks in force.
+
+2026-11-05T21:0xZ — deploy a0e72421: Polymarket Data API v1 is RETIRED (HTTP 410).
+l5_activity now polls /v2/activity, unwraps {"data":[...]} and normalizes the
+snake_case field names back to the v1 names src reads (asset <- token_id). The
+feed was never quiet: v2 served 200 rows, newest 1.2 min old, 179 BTC15m, at
+2026-11-05T20:42Z. Also records the feed failure detail (status+body) so
+ingest:FEED_FAILED stops being a bare count, counts the
+dual-quote/requote interaction, and reports the dual-quote switches in
+L5_EFFECTIVE_RUNTIME_CONFIG. READ-ONLY INGESTION + TELEMETRY ONLY.
+Local HALT and NOT_ARMED locks stay in force; no variable changed.
