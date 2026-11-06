@@ -1682,3 +1682,82 @@ def test_the_runner_carries_the_floor_into_the_proposal():
     src = inspect.getsource(RUN2.Runner.submit_ts_completion)
     assert "min_worst_improvement_usd" in src
     assert "TCP.MIN_WORST_IMPROVEMENT_ENV" in src
+
+
+# =====================================================================
+# 12. THE REAL FILL PATH, END TO END INTO THE EXECUTION CHECK.
+#
+# Every test above sets `fill_count` by hand, which proves the CHECK but
+# not that the thing it checks is what a genuine fill produces. The
+# ledger key is built in exactly one place on the fill path -- inside
+# `apply_fill`, which normalises both the side and the price convention
+# -- so if that key disagreed with the one `cost_attested` reads, step 8b
+# would refuse a real maker fill with COMPLETION_BASIS_UNATTESTED_AT_
+# EXECUTION and the Phase B window would be spent discovering it.
+#
+# The live reconciler currently lists 54 legs under
+# `leg_cost_basis_unknown`, so this is not hypothetical: unattested legs
+# exist on the volume right now. These tests pin that they are the
+# reconcile-written ones and that a fill is not among them.
+# =====================================================================
+
+def test_a_fill_booked_the_real_way_attests_its_own_basis(ex):
+    """No hand-written fill_count anywhere in this test."""
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2"), D("0.6200"), basis="OWN")
+    x.store.apply_fill(SLUG, "DOWN", D("1"), D("0.3500"), basis="OWN")
+    x.store.save()
+    assert x.store.cost_attested(SLUG, "UP") is True
+    assert x.store.cost_attested(SLUG, "DOWN") is True
+
+
+def test_the_execution_check_accepts_a_genuinely_filled_leg(ex):
+    """The Phase B question: does a real maker fill reach submission?
+
+    Not asserting the completion SUCCEEDS -- that needs the switches and
+    an armed transport. Asserting only that it is not refused for want of
+    an attested basis, which is the one refusal that would make B3
+    unreachable however the rest is configured.
+    """
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2"), D("0.6200"), basis="OWN")
+    x.store.apply_fill(SLUG, "DOWN", D("1"), D("0.3500"), basis="OWN")
+    x.store.save()
+    x.transport.venue_positions = venue_rows(D("1"), SLUG)
+    out = run(x)
+    assert out.get("reason") != "COMPLETION_BASIS_UNATTESTED_AT_EXECUTION"
+    # and in fact it goes all the way: a real fill reaches submission
+    assert out["ok"] is True, out.get("reason")
+
+
+def test_apply_fill_and_the_hand_written_helper_build_the_same_key(ex):
+    """If these diverge, every test above is testing a key nothing writes."""
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2"), D("0.6200"), basis="OWN")
+    x.store.save()
+    real = set(x.store.state["fill_count"])
+    x.store.state["fill_count"] = {}
+    x.store.state["positions"] = {}
+    x.store.state["leg_cost"] = {}
+    hold(x, up="2", dn="0")
+    assert {k for k in x.store.state["fill_count"]
+            if x.store.state["fill_count"][k]} == real
+
+
+def test_a_reconcile_written_quantity_is_the_unattested_case(ex):
+    """The 54 legs on the volume are this shape, not the fill shape."""
+    x, t, E = ex
+    k = "%s|UP" % SLUG
+    x.store.state.setdefault("positions", {})[k] = "2"
+    x.store.save()
+    assert x.store.cost_attested(SLUG, "UP") is False
+
+
+def test_a_genuine_fill_at_zero_is_attested_and_a_missing_one_is_not(ex):
+    """The distinction the counter exists for: free shares vs lost cost."""
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("1"), D("0.0000"), basis="OWN")
+    x.store.save()
+    assert x.store.leg_cost(SLUG)["UP"] == D("0")
+    assert x.store.cost_attested(SLUG, "UP") is True     # free, and known
+    assert x.store.cost_attested(SLUG, "DOWN") is False  # nothing at all
