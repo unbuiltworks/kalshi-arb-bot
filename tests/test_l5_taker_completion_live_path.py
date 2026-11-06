@@ -1238,6 +1238,17 @@ class _SubStore:
     def __init__(self, up="2", dn="1"):
         self.state = {"submitted": {}}
         self._up, self._dn = D(up), D(dn)
+        #: the LIFETIME completion budget. Production debits this inside
+        #: `completion_taker_execute` and nowhere else, which is what makes
+        #: a debit the signature of a real bounded taker cross.
+        self._defensive_spent = D(0)
+
+    def defensive_spent(self):
+        return self._defensive_spent
+
+    def defensive_charge(self, amount, _rec=None):
+        self._defensive_spent += D(str(amount))
+        return self._defensive_spent
 
     def live_orders(self):
         return {}
@@ -1250,13 +1261,27 @@ class _SubStore:
 
 
 class _SubExec:
-    def __init__(self):
+    """Stands in for the real executor.
+
+    `crosses` mirrors what `completion_taker_execute` does on a bounded
+    taker cross: it DEBITS the lifetime budget. With `crosses=False` it
+    behaves like a controller re-entry that posted a maker quote under
+    `execution_mode: MAKER_ONLY` -- submitted, no debit -- which is the
+    2026-11-06 20:15z case that was misreported as a cross.
+    """
+
+    def __init__(self, crosses=True, debit="0.45"):
         self.calls = []
         self.taker_completion_proposal = None
         self.validation_gates = None
+        self.crosses = bool(crosses)
+        self.debit = D(str(debit))
+        self.store = None
 
     def handle(self, *a, **kw):
         self.calls.append(kw)
+        if self.crosses and self.store is not None:
+            self.store.defensive_charge(self.debit)
         return {"submitted": True, "coid": "l5f-x"}
 
 
@@ -1283,6 +1308,10 @@ class _SubRunner:
     # a staticmethod on the real Runner; rebinding it as a plain
     # attribute would make it an instance method and lose the first arg
     _bc_capture = staticmethod(RUN.Runner._bc_capture)
+    # the five-stage classifier and the budget readers it compares across
+    completion_stages = RUN.Runner.completion_stages
+    defensive_spent_usd = RUN.Runner.defensive_spent_usd
+    COMPLETION_STAGES = RUN.Runner.COMPLETION_STAGES
 
     def __init__(self, rungs):
         import collections
@@ -1290,6 +1319,7 @@ class _SubRunner:
         self.store = _SubStore()
         self.book = _SubBook(rungs)
         self.executor = _SubExec()
+        self.executor.store = self.store
         self.stats = collections.Counter()
         self._rungs = rungs
 
@@ -2022,3 +2052,202 @@ def test_every_bound_the_owner_named_is_read_from_state_not_telemetry(ex):
     for token in ("defensive_spent", "DEFENSIVE_LOSS_BUDGET",
                   "cost_attested", "deadman", "cancel_confirmed"):
         assert token in src, token
+
+
+# =====================================================================
+# 15. THE FIVE STAGES OF A COMPLETION, NEVER COLLAPSED.
+#
+# THE INCIDENT, 2026-11-06 20:15z. L5_TS_COMPLETION_RESULT reported
+# `{"captured":true,"submitted":true,"refused":null}` for a ranked
+# TAKER_COMPLETE, side UP, qty 1, own price 0.4300, route
+# CONTROLLER_REENTRY. Reconciling the order tape afterwards:
+#
+#   there is NO submission at own 0.4300 anywhere in that window.
+#   the nearest UP orders are 0.3900 (filled) and 0.3700 (cancelled),
+#   six and eight seconds later.
+#
+# Under `execution_mode: MAKER_ONLY` the placement path posted a MAKER
+# quote and returned ok, and `_bc_capture` reads `submitted` from `ok`.
+# So a field named `crossed` was set from "an order was placed".
+#
+# The budget is the clean discriminator: `completion_taker_execute` is
+# the ONLY path that debits `defensive_spent_usd`. No debit, no cross.
+# =====================================================================
+
+def _stages(spent_before, spent_after, submitted, order_ref=None):
+    import src.l5_pmus_live_runner as R
+    import collections
+
+    class S:
+        stats = collections.Counter()
+        completion_stages = R.Runner.completion_stages
+    return S().completion_stages(
+        {"submitted": submitted, "order_ref": order_ref},
+        want_side="UP", want_px=D("0.4300"),
+        spent_before=spent_before, spent_after=spent_after)
+
+
+def test_controller_reentry_with_no_budget_debit_is_not_a_cross():
+    """The 20:15z case, exactly: submitted true, budget unmoved."""
+    st = _stages("0", "0", True, order_ref="DJDCEDVG13Z6")
+    assert st["venue_submitted"] is True
+    assert st["taker_cross_confirmed"] is False
+    assert st["classification"] == "CONTROLLER_REENTRY_NO_CROSS"
+    assert st["budget_debited_usd"] == "0"
+
+
+def test_a_real_debit_is_a_confirmed_cross():
+    st = _stages("0", "0.45", True, order_ref="X1")
+    assert st["taker_cross_confirmed"] is True
+    assert st["classification"] == "TAKER_CROSS_CONFIRMED"
+    assert st["budget_debited_usd"] == "0.45"
+
+
+def test_an_unreadable_budget_leaves_the_cross_UNKNOWN_not_false():
+    """None is UNKNOWN. Reading it as False would under-report a cross
+    that did happen, which is the mirror of the bug being fixed."""
+    for before, after in (("0", None), (None, "0.45"), (None, None)):
+        st = _stages(before, after, True)
+        assert st["taker_cross_confirmed"] is None, (before, after)
+        assert st["classification"] == "CROSS_UNDETERMINED_BUDGET_UNREADABLE"
+
+
+def test_not_submitted_is_its_own_classification():
+    st = _stages("0", "0", False)
+    assert st["venue_submitted"] is False
+    assert st["taker_cross_confirmed"] is False
+    assert st["classification"] == "NOT_SUBMITTED"
+    assert st["acknowledged"] is None       # nothing to acknowledge
+
+
+def test_an_unreadable_placement_is_not_a_cross_either():
+    st = _stages("0", "0", None)
+    assert st["classification"] == "PLACEMENT_UNREADABLE"
+    assert st["taker_cross_confirmed"] is False
+
+
+def test_the_requested_price_is_recorded_so_it_can_be_compared():
+    """The 20:15z defect was invisible because the RANKED price was
+    logged and the PLACED price was not. The requested price is now on
+    the record for exactly that comparison."""
+    st = _stages("0", "0", True)
+    assert st["requested_price_own"] == "0.4300"
+    assert st["requested_side"] == "UP"
+
+
+def test_fill_is_never_asserted_here():
+    """A fill is a later, separate venue event."""
+    st = _stages("0", "0.45", True, order_ref="X1")
+    assert st["filled"] is None
+    assert "L5_LIVE_LIFECYCLE" in st["labels"]
+
+
+def test_all_five_stages_are_named_and_present():
+    import src.l5_pmus_live_runner as R
+    st = _stages("0", "0", True, order_ref="X1")
+    assert R.Runner.COMPLETION_STAGES == (
+        "controller_selected", "venue_submitted", "acknowledged",
+        "filled", "budget_debited")
+    for k in ("controller_selected", "venue_submitted", "acknowledged",
+              "filled"):
+        assert k in st, k
+    assert "budget_debited_usd" in st
+
+
+def test_the_outlay_follows_the_cross_not_the_placement():
+    """The per-window taker outlay must not accrue for a maker quote."""
+    import inspect
+    import src.l5_pmus_live_runner as R
+    src = inspect.getsource(R.Runner.submit_ts_completion)
+    i = src.index('out["crossed"] = bool(stages.get("taker_cross_confirmed"))')
+    tail = src[i:i + 400]
+    assert 'if out["crossed"]:' in tail, tail[:200]
+
+
+def test_the_result_line_carries_the_classification():
+    import inspect
+    import src.l5_pmus_live_runner as R
+    src = inspect.getsource(R.Runner.submit_ts_completion)
+    assert '"taker_cross_confirmed": stages.get("taker_cross_confirmed")' in src
+    assert '"classification": stages.get("classification")' in src
+
+
+def test_END_TO_END_the_20_15z_case_is_no_longer_reported_as_a_cross(
+        monkeypatch):
+    """The regression that matters. A controller re-entry that posts a
+    MAKER quote and returns ok must come back NOT crossed, with the
+    classification naming why, and must NOT accrue the taker outlay."""
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    r.executor.crosses = False            # MAKER_ONLY placement, no debit
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs),
+                                 _pol("0.3300"), 1793934115.0)
+    assert out["outcome"]["submitted"] is True      # an order WAS placed
+    assert out["crossed"] is False                  # but it did not cross
+    st = out["stages"]
+    assert st["taker_cross_confirmed"] is False
+    assert st["classification"] == "CONTROLLER_REENTRY_NO_CROSS"
+    assert st["budget_debited_usd"] == "0"
+    assert st["requested_price_own"] == "0.3300"
+    assert out["withheld_by"].startswith(
+        "PLACEMENT:CONTROLLER_REENTRY_NO_CROSS")
+    # and the per-window taker outlay did NOT accrue for a maker quote
+    assert D(str(getattr(r, "_taker_outlay_usd", 0) or 0)) == 0
+
+
+def test_END_TO_END_a_real_cross_is_reported_and_charged(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    r.executor.crosses = True
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs),
+                                 _pol("0.3300"), 1793934115.0)
+    assert out["crossed"] is True
+    assert out["stages"]["classification"] == "TAKER_CROSS_CONFIRMED"
+    assert D(out["stages"]["budget_debited_usd"]) > 0
+    assert D(str(r._taker_outlay_usd)) > 0
+
+
+def test_the_budget_telemetry_reports_spent_limit_and_remaining():
+    import src.l5_pmus_live_runner as R
+    import collections
+
+    class S:
+        defensive_budget_telemetry = R.Runner.defensive_budget_telemetry
+        defensive_spent_usd = R.Runner.defensive_spent_usd
+        stats = collections.Counter()
+
+        def __init__(self):
+            self.store = _SubStore()
+
+    s = S()
+    t = s.defensive_budget_telemetry()
+    assert t["spent_usd"] == "0"
+    assert t["limit_usd"] == "2.00"
+    assert t["remaining_usd"] == "2.00"
+    s.store.defensive_charge("0.45")
+    t2 = s.defensive_budget_telemetry()
+    assert t2["spent_usd"] == "0.45"
+    assert t2["remaining_usd"] == "1.55"
+    assert "LIFETIME" in t2["labels"]
+
+
+def test_an_unreadable_budget_telemetry_is_none_not_zero():
+    import src.l5_pmus_live_runner as R
+    import collections
+
+    class Bad:
+        def defensive_spent(self):
+            raise RuntimeError("volume unreadable")
+
+    class S:
+        defensive_budget_telemetry = R.Runner.defensive_budget_telemetry
+        defensive_spent_usd = R.Runner.defensive_spent_usd
+        stats = collections.Counter()
+        store = Bad()
+
+    t = S().defensive_budget_telemetry()
+    assert t["spent_usd"] is None
+    assert t["remaining_usd"] is None       # not computed from a guess
+    assert t["limit_usd"] == "2.00"

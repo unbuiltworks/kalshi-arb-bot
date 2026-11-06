@@ -935,6 +935,10 @@ HB_NEVER_REDUCE = (
     # preflight said ok=false fail=["absolute_deadline"] 26
     # minutes beforehand and nobody was reading that line.
     "authorization_preflight",
+    # THE LIFETIME COMPLETION BUDGET. Its balance had to be
+    # INFERRED after the first live window because the
+    # heartbeat never carried it.
+    "defensive_budget",
 )
 
 

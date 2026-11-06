@@ -5738,6 +5738,10 @@ class Runner:
         t = self.transport
         emit("L5_LIVE_HB", TS.bounded_hb({
             "authorization_preflight": self.authorization_preflight_verdict(),
+            # THE LIFETIME COMPLETION BUDGET, on the tape. Absent from the
+            # heartbeat until 2026-11-06, which is why its balance had to be
+            # inferred after the first live window instead of read.
+            "defensive_budget": self.defensive_budget_telemetry(),
             "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
@@ -7845,6 +7849,124 @@ class Runner:
         self.stats["ts_completion:%s" % (dec.get("reason") or "OK")] += 1
         return rec
 
+    def defensive_budget_telemetry(self) -> Dict[str, Any]:
+        """Spent, limit and remaining for the LIFETIME completion budget.
+
+        `DEF` is imported function-locally everywhere else in this module,
+        so it is imported here too rather than at module scope -- the image
+        closure test pins which modules the live image carries.
+        """
+        spent = self.defensive_spent_usd()
+        try:
+            from src import l5_defensive_completion as _DEF
+            limit = str(_DEF.DEFENSIVE_LOSS_BUDGET_USD)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["defensive_budget_limit_unreadable:%s"
+                       % type(exc).__name__] += 1
+            limit = None
+        rem = None
+        if spent is not None and limit is not None:
+            try:
+                rem = str(D(limit) - D(spent))
+            except BaseException:                              # noqa: BLE001
+                rem = None
+        return {"spent_usd": spent, "limit_usd": limit,
+                "remaining_usd": rem,
+                "labels": ("LIFETIME, monotone, never reset, durable on the "
+                           "volume. None is UNREADABLE and never zero. A "
+                           "debit here is the signature of a bounded taker "
+                           "cross -- nothing else writes it.")}
+
+    def defensive_spent_usd(self) -> Optional[str]:
+        """The durable lifetime completion-budget balance, as a string.
+
+        WHY IT IS HERE. The owner asked for the $2.00 lifetime budget
+        balance after the 20:15z window and it was NOT on the tape: the
+        heartbeat never emitted it, so the answer had to be inferred from
+        the absence of a charge record. An inferred budget is not a budget
+        you can police.
+
+        None means UNREADABLE and must never be read as zero.
+        """
+        try:
+            return str(self.store.defensive_spent())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["defensive_spent_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return None
+
+    #: The five stages a completion passes through, named so that no two can
+    #: be conflated. The 2026-11-06 20:15z window reported
+    #: `submitted: true` for a ranked TAKER_COMPLETE at own 0.4300 while the
+    #: order that actually reached the venue was a MAKER quote at own 0.3900
+    #: -- because `_bc_capture` reads `ok` from whatever `handle` returned,
+    #: and under `execution_mode: MAKER_ONLY` `handle` posts a maker quote
+    #: and returns ok. Controller re-entry is NOT a taker cross.
+    COMPLETION_STAGES = ("controller_selected", "venue_submitted",
+                         "acknowledged", "filled", "budget_debited")
+
+    def completion_stages(self, outcome: Mapping[str, Any], *,
+                          want_side: str, want_px: Any,
+                          spent_before: Optional[str],
+                          spent_after: Optional[str]) -> Dict[str, Any]:
+        """Classify a completion attempt across all five stages.
+
+        `taker_cross_confirmed` is deliberately strict: it requires a
+        BUDGET DEBIT, because `completion_taker_execute` is the only path
+        that debits `defensive_spent_usd`. No debit means no bounded taker
+        cross happened, whatever `submitted` says. An unreadable balance
+        yields None -- not False, and certainly not True.
+        """
+        sub = outcome.get("submitted")
+        debit = None
+        if spent_before is not None and spent_after is not None:
+            try:
+                debit = D(str(spent_after)) - D(str(spent_before))
+            except BaseException:                              # noqa: BLE001
+                debit = None
+        if debit is None:
+            cross = None                      # cannot be established
+        else:
+            cross = bool(sub) and debit > 0
+        if cross:
+            cls = "TAKER_CROSS_CONFIRMED"
+        elif sub and debit is not None and debit == 0:
+            cls = "CONTROLLER_REENTRY_NO_CROSS"
+        elif sub is False:
+            cls = "NOT_SUBMITTED"
+        elif sub is None:
+            cls = "PLACEMENT_UNREADABLE"
+        else:
+            cls = "CROSS_UNDETERMINED_BUDGET_UNREADABLE"
+        return {
+            "controller_selected": True,
+            "venue_submitted": sub,
+            "requested_price_own": (None if want_px is None
+                                    else str(want_px)),
+            "requested_side": want_side,
+            "acknowledged": (bool(outcome.get("order_ref"))
+                             if sub else None),
+            "order_ref": outcome.get("order_ref"),
+            "filled": None,
+            "budget_debited_usd": (None if debit is None else str(debit)),
+            "defensive_spent_before": spent_before,
+            "defensive_spent_after": spent_after,
+            "taker_cross_confirmed": cross,
+            "classification": cls,
+            "labels": ("five stages, never collapsed. "
+                       "`taker_cross_confirmed` requires a BUDGET DEBIT, "
+                       "because completion_taker_execute is the only path "
+                       "that debits it -- controller re-entry that posts a "
+                       "maker quote reads CONTROLLER_REENTRY_NO_CROSS. "
+                       "`filled` is None here because a fill is a later, "
+                       "separate venue event; read L5_LIVE_LIFECYCLE for "
+                       "it. None is UNKNOWN and never False."),
+        }
+
     def submit_ts_completion(self, dec: Mapping[str, Any],
                              src: Mapping[str, Any],
                              pol: Mapping[str, Any],
@@ -8014,6 +8136,11 @@ class Runner:
                        "synthesised L5 action. The order, if any, is placed "
                        "by the existing path through every existing gate.")})
 
+        # ---- THE BUDGET, BEFORE. The debit across the placement is what
+        # proves a bounded taker cross actually happened, so it is read
+        # BEFORE the path runs and compared after.
+        _spent_before = self.defensive_spent_usd()
+
         # ---- HAND IT TO THE EXISTING PATH. Single use: `handle` takes the
         # proposal off the executor before acting on it.
         self.executor.taker_completion_proposal = proposal
@@ -8041,8 +8168,14 @@ class Runner:
 
         outcome = self._bc_capture(res)
         out["outcome"] = outcome
-        out["crossed"] = bool(outcome.get("submitted"))
-        if outcome.get("submitted"):
+        # THE FIVE STAGES, so controller re-entry can never read as a cross.
+        stages = self.completion_stages(
+            outcome, want_side=side, want_px=px,
+            spent_before=_spent_before,
+            spent_after=self.defensive_spent_usd())
+        out["stages"] = stages
+        out["crossed"] = bool(stages.get("taker_cross_confirmed"))
+        if out["crossed"]:
             # THE WINDOW'S OUTLAY, so the policy's per-window cap reads a
             # real number rather than the structural zero it read while
             # nothing crossed. Charged at the WORST case, like the budget.
@@ -8056,14 +8189,18 @@ class Runner:
                 self.stats["ts_completion_outlay_unrecordable:%s"
                            % type(exc).__name__] += 1
         else:
-            out["withheld_by"] = "PLACEMENT:%s" % str(
-                outcome.get("refused"))[:60]
+            out["withheld_by"] = "PLACEMENT:%s/%s" % (
+                stages.get("classification"),
+                str(outcome.get("refused"))[:50])
         self.stats["ts_completion_submit:%s" % (
             "SUBMITTED" if out["crossed"] else "REFUSED")] += 1
         emit("L5_TS_COMPLETION_RESULT", {
             "market": str(slug), "side": side,
             "qty": str(qty), "price": str(px),
             "ranked": rank["chosen"],
+            "stages": stages,
+            "taker_cross_confirmed": stages.get("taker_cross_confirmed"),
+            "classification": stages.get("classification"),
             "outcome": outcome,
             "window_outlay_usd": str(getattr(self, "_taker_outlay_usd", 0)),
             "labels": ("pairs the authorized completion with what the "
