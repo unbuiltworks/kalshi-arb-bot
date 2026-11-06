@@ -951,3 +951,144 @@ def test_a_failing_size_report_cannot_break_the_settle_pass():
     i = src.index('emit("L5_SHADOW_LEDGER"')
     assert "try:" in src[max(0, i - 400):i]
     assert "shadow_ledger_size_report_failed" in src
+
+
+# =====================================================================
+# 11. THE HEARTBEAT WAS TRUNCATED TOO, AND IT TOOK THE SAFETY FIELDS.
+#
+# Found during preflight for the authorized two-window live test, on
+# deployment 84909719. The `L5_LIVE_HB` line arrives at exactly 81,921
+# bytes -- the platform limit -- and the fields past the cut are the
+# ones a live window has to be policed by:
+#
+#   readable      armed, halt_local_env, halt_latch, shadow_lock,
+#                 owner_arm_token, preflight, approval_state,
+#                 windows_remaining, submission_gate, http_429,
+#                 seeded, submissions_spent
+#   NOT PRESENT   realized_today, orders_uncertain,
+#                 defensive_spent_usd, peak_usd, cash_deployed_usd,
+#                 open_orders
+#
+# Field sizes at that moment:
+#
+#   shadow_controller   61,450   <- 75% of the line
+#   retired_markets      4,550
+#   stats_age_s          4,072
+#   stats                3,945
+#   campaign               968
+#   submission_gate        748
+#   day_realized           385
+#
+# The line was spent on shadow-lane observability while the safety state
+# fell off the end. You cannot promise to disarm on a safety failure you
+# cannot see, so this is a preflight blocker and not a cosmetic one.
+# =====================================================================
+
+def _hb(extra_bytes=0, **kw):
+    hb = {"utc": "2026-11-06T18:05:00Z", "role": "live", "market": "m",
+          "armed": False, "preflight": "PASSED", "owner_arm_token": True,
+          "halt_local_env": False, "halt_latch": "CLEAR",
+          "shadow_lock": False, "approval_state": "approval_stale",
+          "windows_remaining": None,
+          "submission_gate": {"blocked": True, "why": "NOT_ARMED"},
+          "seeded": True, "submissions_spent": 166,
+          "realized_today": "-14.74950000", "orders_uncertain": [],
+          "defensive_spent_usd": "0", "peak_usd": "3.32",
+          "cash_deployed_usd": "0", "open_orders": 0,
+          "campaign": {"journal": 69}, "unresolved_accounting": {},
+          "stats": {"a": 1}}
+    if extra_bytes:
+        hb["shadow_controller"] = {"blob": "x" * extra_bytes}
+    hb.update(kw)
+    return hb
+
+
+SAFETY = ("armed", "halt_local_env", "halt_latch", "shadow_lock",
+          "approval_state", "windows_remaining", "submission_gate",
+          "realized_today", "orders_uncertain", "defensive_spent_usd",
+          "peak_usd", "cash_deployed_usd", "open_orders", "campaign",
+          "submissions_spent", "seeded", "owner_arm_token", "preflight")
+
+
+def test_a_small_heartbeat_is_unchanged():
+    import json as _j
+    hb = _hb()
+    assert _j.dumps(TS.bounded_hb(hb), sort_keys=True, default=str) \
+        == _j.dumps(hb, sort_keys=True, default=str)
+
+
+def test_an_oversized_heartbeat_is_brought_inside_budget():
+    import json as _j
+    out = TS.bounded_hb(_hb(extra_bytes=200000))
+    assert len(_j.dumps(out, default=str)) <= TS.LOG_BUDGET_BYTES
+
+
+def test_it_stays_under_the_platform_limit_that_truncated_it():
+    import json as _j
+    out = TS.bounded_hb(_hb(extra_bytes=400000))
+    assert len(_j.dumps(out, default=str)) < TS.LOG_LINE_LIMIT
+
+
+@pytest.mark.parametrize("field", SAFETY)
+def test_every_safety_field_survives_the_reduction(field):
+    """The whole point. These are what a live window is policed by."""
+    out = TS.bounded_hb(_hb(extra_bytes=400000))
+    assert field in out
+    assert out[field] == _hb()[field]
+    assert not (isinstance(out[field], dict)
+                and out[field].get("_reduced"))
+
+
+def test_the_bloated_field_is_the_one_reduced():
+    out = TS.bounded_hb(_hb(extra_bytes=200000))
+    assert out["shadow_controller"]["_reduced"] is True
+    assert out["hb_reduced"]["fields"]["shadow_controller"] > 100000
+
+
+def test_the_largest_reducible_field_goes_first():
+    hb = _hb()
+    hb["small_extra"] = {"b": "y" * 5000}
+    hb["shadow_controller"] = {"b": "x" * 200000}
+    out = TS.bounded_hb(hb)
+    assert out["shadow_controller"].get("_reduced") is True
+    # the small one was not needed, so it is untouched
+    assert out["small_extra"] == {"b": "y" * 5000}
+
+
+def test_protected_fields_are_never_reduced_even_if_they_are_the_bloat():
+    """A huge submission_gate must still arrive whole: it is the gate."""
+    import json as _j
+    hb = _hb()
+    hb["submission_gate"] = {"blocked": True, "why": "z" * 120000}
+    out = TS.bounded_hb(hb)
+    assert out["submission_gate"] == hb["submission_gate"]
+    assert "_reduced" not in _j.dumps(out["submission_gate"])
+
+
+def test_the_reduction_states_that_it_happened():
+    out = TS.bounded_hb(_hb(extra_bytes=200000))
+    r = out["hb_reduced"]
+    assert r["budget_bytes"] == TS.LOG_BUDGET_BYTES
+    assert "SAFETY" in r["labels"]
+    assert "HB_NEVER_REDUCE" in r["labels"]
+
+
+def test_bounded_hb_does_not_mutate_its_argument():
+    hb = _hb(extra_bytes=200000)
+    TS.bounded_hb(hb)
+    assert "hb_reduced" not in hb
+    assert hb["shadow_controller"]["blob"].startswith("x")
+
+
+def test_the_runner_wraps_its_only_heartbeat_emit():
+    src = inspect.getsource(RUN)
+    assert src.count('emit("L5_LIVE_HB"') == 1
+    assert 'emit("L5_LIVE_HB", TS.bounded_hb(' in src
+
+
+def test_the_never_reduce_list_covers_what_the_owner_is_owed():
+    """submissions, fills, inventory, fees, rebates, settled P&L."""
+    for k in ("realized_today", "day_realized", "defensive_spent_usd",
+              "open_orders", "live_orders", "positions", "inventory",
+              "fees", "rebates", "orders_uncertain", "submission_gate"):
+        assert k in TS.HB_NEVER_REDUCE, k

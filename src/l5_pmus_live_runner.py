@@ -5691,7 +5691,7 @@ class Runner:
 
     def heartbeat(self) -> None:
         t = self.transport
-        emit("L5_LIVE_HB", {
+        emit("L5_LIVE_HB", TS.bounded_hb({
             "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
@@ -5839,7 +5839,7 @@ class Runner:
                           "after| > k * max(largest filled clip, this order's "
                           "qty). Contracts. A leg that shrinks |prospective| "
                           "is never refused at any depth.")},
-            "frozen_rule": "030d8bf"})
+            "frozen_rule": "030d8bf"}))
         self.emit_arm_switch_readiness()
         self.emit_two_sided_comparison()
 

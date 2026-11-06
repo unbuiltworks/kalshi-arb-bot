@@ -918,6 +918,87 @@ def _cells_rollup(cells: Any) -> Dict[str, Any]:
             "totals": {k: str(v) for k, v in sums.items()}}
 
 
+#: Heartbeat fields that must NEVER be reduced. Every safety decision and
+#: every figure the owner is owed during a live window is read from one of
+#: these, so they are preserved whole however large the rest grows.
+HB_NEVER_REDUCE = (
+    "utc", "role", "market", "armed", "preflight", "owner_arm_token",
+    "halt_local_env", "halt_latch", "shadow_lock", "approval_state",
+    "windows_remaining", "submission_gate", "seeded", "submissions_spent",
+    "realized_today", "day_realized", "orders_uncertain", "open_orders",
+    "live_orders", "defensive_spent_usd", "peak_usd", "cash_deployed_usd",
+    "campaign", "unresolved_accounting", "venue_requests", "http_429",
+    "fill_calibration", "positions", "inventory", "fees", "rebates",
+    "auth_book", "t_in_window_s", "LABEL",
+)
+
+
+def bounded_hb(hb: Mapping[str, Any], *,
+               budget: int = LOG_BUDGET_BYTES) -> Dict[str, Any]:
+    """The heartbeat, small enough that its SAFETY fields arrive.
+
+    WHY, MEASURED. On deployment 84909719 the `L5_LIVE_HB` line arrives at
+    exactly 81,921 bytes -- truncated at the platform limit -- and the
+    fields past the cut are the ones a live window has to be policed by:
+    `realized_today`, `orders_uncertain`, `defensive_spent_usd`,
+    `cash_deployed_usd`, `open_orders`. They were simply absent from the
+    tape. Field sizes at that moment:
+
+        shadow_controller   61,450      <- 75% of the line
+        retired_markets      4,550
+        stats_age_s          4,072
+        stats                3,945
+        ...
+        submission_gate        748
+        campaign               968
+        day_realized           385
+
+    So the line was spent on shadow-lane observability while the safety
+    state fell off the end. This reduces the LARGEST reducible field first
+    and never touches anything in `HB_NEVER_REDUCE`, so the safety fields
+    cannot be the ones dropped. A heartbeat already inside budget is
+    returned unchanged.
+    """
+    try:
+        if len(json.dumps(hb, default=str)) <= budget:
+            return dict(hb)
+    except BaseException:                                      # noqa: BLE001
+        return dict(hb)
+    out = dict(hb)
+    dropped: Dict[str, Any] = {}
+    while True:
+        try:
+            if len(json.dumps(out, default=str)) <= budget:
+                break
+        except BaseException:                                  # noqa: BLE001
+            break
+        biggest, big_sz = None, -1
+        for k, v in out.items():
+            if k in HB_NEVER_REDUCE or k in dropped:
+                continue
+            try:
+                sz = len(json.dumps(v, default=str))
+            except BaseException:                              # noqa: BLE001
+                sz = 0
+            if sz > big_sz:
+                biggest, big_sz = k, sz
+        if biggest is None:
+            break                      # only protected fields remain
+        dropped[biggest] = big_sz
+        out[biggest] = {"_reduced": True, "bytes": big_sz}
+    if dropped:
+        out["hb_reduced"] = {
+            "fields": dropped,
+            "budget_bytes": budget,
+            "labels": ("reduced so the SAFETY fields reach the tape. The "
+                       "line was truncated at 81,920 bytes and the fields "
+                       "past the cut were the ones a live window is "
+                       "policed by. Nothing in HB_NEVER_REDUCE is ever "
+                       "reduced here."),
+        }
+    return out
+
+
 class ShadowLedger:
     """Durable, shadow-only record of parked and finalized windows.
 
