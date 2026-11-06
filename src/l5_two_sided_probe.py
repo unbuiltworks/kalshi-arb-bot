@@ -1802,7 +1802,7 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
     if gap_suspected:
         return no("GAP_SUSPECTED", side=side, deficit=str(deficit))
     age = _d(book_age_s)
-    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+    if age is None or age < 0 or age > D(str(MAX_BOOK_AGE_S)):
         # A STALE BOOK IS NOT AN EXECUTABLE PRICE. Crossing on a price we
         # cannot date is how a "completion" becomes a worse one-sided book.
         return no("BOOK_STALE", side=side, book_age_s=None if age is None
