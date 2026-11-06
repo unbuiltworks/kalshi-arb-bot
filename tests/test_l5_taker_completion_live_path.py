@@ -1863,3 +1863,162 @@ def test_every_one_of_the_54_unattested_keys_reads_as_unattested(ex):
     for k in keys:
         m, s = k.rsplit("|", 1)
         assert x.store.cost_attested(m, s) is False, k
+
+
+# =====================================================================
+# 14. THE LIMITS BIND WITHOUT LOGGING.
+#
+# Two log lines on this service were truncating and both have now been
+# bounded. That raises a fair question: is any limit enforced THROUGH
+# the logging, so that reducing or losing a log line could loosen a
+# bound? These tests answer it by breaking logging outright -- `emit`
+# raises on every call -- and asserting every bound still refuses.
+#
+# If a limit were enforced via its telemetry, these tests fail.
+# =====================================================================
+
+class _Boom(Exception):
+    pass
+
+
+def _break_emit(monkeypatch):
+    """Make every emit raise. Logging is now hostile, not merely absent."""
+    def boom(*a, **k):
+        raise _Boom("logging is broken")
+    import src.l5_live_execution as _EX
+    monkeypatch.setattr(_EX, "emit", boom, raising=False)
+    return boom
+
+
+def test_the_2_dollar_lifetime_budget_still_refuses_with_logging_broken(
+        ex, monkeypatch):
+    """DEFENSIVE_LOSS_BUDGET_USD is the $2.00 lifetime completion budget."""
+    x, t, E = ex
+    hold(x)
+    rest(x)
+    x.store.state["defensive_spent_usd"] = "2.00"      # budget exhausted
+    x.store.save()
+    _break_emit(monkeypatch)
+    out = run(x, resting=[COID])
+    assert out["ok"] is False
+    assert x._defensive_mandate is None
+    assert D(str(x.store.defensive_spent())) <= D("2.00")
+
+
+def test_the_budget_is_read_from_the_volume_not_from_a_log(ex):
+    """It is durable state, so a lost log line cannot reset it."""
+    x, t, E = ex
+    x.store.state["defensive_spent_usd"] = "1.75"
+    x.store.save()
+    reloaded = type(x.store)(x.store.path)
+    assert D(str(reloaded.defensive_spent())) == D("1.75")
+
+
+def test_broken_logging_cannot_create_authorization_it_did_not_have(
+        ex, monkeypatch):
+    """The mandate is the single exemption point for the maker_only
+    overlay. Breaking logging must not be able to open it.
+
+    NOT asserting that no mandate appears at all: with the switches on,
+    an attested basis and budget remaining, a mandate IS the correct
+    outcome and a broken log must not suppress a legitimate completion
+    either. What must hold is that logging state cannot SUBSTITUTE for
+    authorization -- so the unauthorized cases are the test.
+    """
+    x, t, E = ex
+    _break_emit(monkeypatch)
+    for setup in ("switch_off", "budget_spent", "unattested"):
+        x._defensive_mandate = None
+        hold(x)
+        rest(x)
+        if setup == "switch_off":
+            monkeypatch.delenv(TCP.POLICY_ENV, raising=False)
+        elif setup == "budget_spent":
+            monkeypatch.setenv(TCP.POLICY_ENV, "YES")
+            x.store.state["defensive_spent_usd"] = "2.00"
+        else:
+            monkeypatch.setenv(TCP.POLICY_ENV, "YES")
+            x.store.state["defensive_spent_usd"] = "0"
+            x.store.state["fill_count"] = {}
+        x.store.save()
+        try:
+            out = run(x, resting=[COID])
+            assert out["ok"] is False, setup
+        except _Boom:
+            pass                  # failing closed by raising is acceptable
+        assert x._defensive_mandate is None, setup
+
+
+def test_the_switches_still_gate_with_logging_broken(ex, monkeypatch):
+    x, t, E = ex
+    monkeypatch.delenv(TCP.POLICY_ENV, raising=False)
+    hold(x)
+    rest(x)
+    _break_emit(monkeypatch)
+    out = run(x, resting=[COID])
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_TAKER_NOT_ENABLED"
+    assert COID in x.store.live_orders()
+
+
+def test_an_unattested_basis_still_refuses_with_logging_broken(
+        ex, monkeypatch):
+    x, t, E = ex
+    hold(x)
+    x.store.state["fill_count"] = {}
+    x.store.save()
+    _break_emit(monkeypatch)
+    out = run(x)
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_BASIS_UNATTESTED_AT_EXECUTION"
+
+
+def _code_lines(fn):
+    """Source lines that are CODE, not docstring or comment. The first
+    version of the test below matched `defensive_charge` in the
+    docstring on line 30 and reported a defect that was not there."""
+    import inspect
+    out = []
+    for i, L in enumerate(inspect.getsource(fn).split("\n")):
+        t = L.strip()
+        if not t or t.startswith("#") or t.startswith('"') or t.startswith("*"):
+            continue
+        out.append((i, L))
+    return out
+
+
+def test_the_budget_check_precedes_the_charge_in_source_order(ex):
+    """Ordering, not just presence: a charge before its test would spend
+    the budget and only then discover it was gone.
+
+    Verified against the real code lines: the budget is READ, then the
+    refusal is tested, and only afterwards is anything charged.
+    """
+    rows = _code_lines(type(ex[0]).completion_taker_execute)
+    refuse = [i for i, L in rows
+              if "> DEF.DEFENSIVE_LOSS_BUDGET_USD" in L]
+    charge = [i for i, L in rows if ".defensive_charge(" in L]
+    assert refuse, "no budget refusal found"
+    assert charge, "no charge found"
+    assert min(refuse) < min(charge), (
+        "budget charged at line %d before it was tested at line %d"
+        % (min(charge), min(refuse)))
+
+
+def test_an_unreadable_budget_is_treated_as_fully_spent(ex):
+    """Fail closed: the handler sets `spent` to the whole budget, so an
+    unreadable figure refuses rather than reading as zero."""
+    rows = _code_lines(type(ex[0]).completion_taker_execute)
+    i_except = [i for i, L in rows
+                if "spent = DEF.DEFENSIVE_LOSS_BUDGET_USD" in L]
+    assert i_except, "no fail-closed assignment for an unreadable budget"
+
+
+def test_every_bound_the_owner_named_is_read_from_state_not_telemetry(ex):
+    """$2 completion budget, worst-case deficit, unmatched contracts and
+    the cash gate are all read from the store or the gates object."""
+    import inspect
+    src = inspect.getsource(type(ex[0]).completion_taker_execute)
+    for token in ("defensive_spent", "DEFENSIVE_LOSS_BUDGET",
+                  "cost_attested", "deadman", "cancel_confirmed"):
+        assert token in src, token
