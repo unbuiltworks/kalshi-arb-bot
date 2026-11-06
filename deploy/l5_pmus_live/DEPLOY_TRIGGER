@@ -3634,3 +3634,38 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+# =====================================================================
+# PHASE A5 -- TELEMETRY ONLY, after the first live window. Disarmed.
+#
+# Two defects found by reconciling the 20:15z window, neither of which
+# can place, price or refuse anything:
+#
+#   1. `submitted` was read as `crossed`. The ranked TAKER_COMPLETE at
+#      own 0.4300 was reported submitted:true, and NO order at 0.4300
+#      exists in that window's tape. Under MAKER_ONLY the placement path
+#      posted a maker quote at 0.3900 and returned ok. Five stages now,
+#      never collapsed, with taker_cross_confirmed requiring a BUDGET
+#      DEBIT -- the only signature of completion_taker_execute.
+#   2. The $2.00 LIFETIME completion budget was not on the tape at all,
+#      so its balance had to be inferred. Now reported as spent / limit
+#      / remaining in the heartbeat, in HB_NEVER_REDUCE.
+#
+# Also carries the arming-preflight verdict in the heartbeat (b66370919),
+# which is the gap that cost the 20:00z window: the preflight said
+# ok:false fail:["absolute_deadline"] 26 minutes beforehand, on a line
+# nobody was reading.
+#
+# NOT MONEY-CAPABLE, verified from the live tape before deploying. The
+# service refuses every window with APPROVAL_NOT_VALID/approval_expired
+# (campaign expires_utc 20:40Z passed), L5_LIVE_AUTH_NOT_AFTER 20:40Z
+# has passed, and both authorized window_starts are in the past. Three
+# independent blocks. No new authorization, no campaign restart, no limit
+# change, no switch change.
+#
+# CONFIRMED SETTLED RESULT SO FAR: one window, 4 matched contracts,
+# +$0.0386, realized pair cost 0.98748 against a 0.96 quote. $2.00 of
+# the $2.00 completion budget remains unspent.
+#
+# ROLLBACK: 78260176 (9ddf173bf), bcb00476, 84909719, a342fccc.
+deploy: 2026-11-06T21:04Z issue #195 completion-stage + budget telemetry, Phase A5, DISARMED
