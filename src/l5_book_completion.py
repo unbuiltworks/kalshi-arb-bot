@@ -187,7 +187,9 @@ def cooldown_observation(*, held_side: str, held_qty: Any,
         gap = bool(book.get("gap_suspected"))
         usable = bool(bid is not None and ask is not None
                       and bid > 0 and ask > bid)
-        fresh = bool(age is not None
+        # reporting only, but a future-dated age must not be REPORTED
+        # fresh either: the telemetry is what the next audit reads.
+        fresh = bool(age is not None and age >= 0
                      and age <= D(str(TS.MAX_BOOK_AGE_S)) and not gap)
         out["book"] = {
             "bid": None if bid is None else str(bid),
@@ -386,7 +388,10 @@ def decide(*, market: str, held_side: str,
     age = _d(book.get("stream_age_s"))
     if age is None:
         return _no("BOOK_AGE_UNKNOWN", **rec)
-    if age > D(str(TS.MAX_BOOK_AGE_S)):
+    # NEGATIVE IS STALE, not fresh. A future-dated stream age means the
+    # snapshot is dated ahead of us, which is the one reading that must
+    # never pass a freshness test. Same guard as l5_two_sided_probe.
+    if age < 0 or age > D(str(TS.MAX_BOOK_AGE_S)):
         return _no("STALE_BOOK", stream_age_s=str(age), **rec)
     if book.get("gap_suspected"):
         return _no("BOOK_GAP_SUSPECTED", **rec)

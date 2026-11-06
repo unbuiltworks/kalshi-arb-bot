@@ -19,20 +19,53 @@ executable profitability are both unproven.
 | Whole `test_l5_two_sided_probe.py` | **85 passed** |
 | New `test_l5_mint_campaign_windows.py` | **18 passed** |
 | Full suite, owner's two commits alone | 54 failed / **16,844 passed** / 26 errors — **exact parity, 80 ids** |
-| Full suite, final tree | 54 failed / **16,862 passed** / 26 errors — **exact parity, 80 ids, identical set** |
+| New `test_l5_negative_book_age_everywhere.py` | **10 passed** |
+| Full suite, final tree | 54 failed / **16,873 passed** / 26 errors — **exact parity, 80 ids, identical set** |
 
-The owner's fix at `432ff7c3` adds `age < 0` to the `BOOK_STALE` guard in
-`src/l5_two_sided_probe.py:1805`. A negative book age is a future-dated
-snapshot — future information, never executable liquidity. **No failures were
-introduced; nothing needed fixing.** The 18-test delta is exactly the new mint
-suite.
+The owner's fixes add `age < 0` to the `BOOK_STALE` guard: `432ff7c3` at
+`completion_decision` and `e7177bb5` at `complement_order`. A negative book
+age is a future-dated snapshot — future information, never executable
+liquidity. **No failures were introduced by either; nothing needed fixing.**
+
+### But the fix was incomplete, and four of the gaps are on the money path
+
+Auditing every site that dates a book, the owner had fixed 2 of 8. Five more
+compared only the upper bound, so a negative age passed as the freshest
+possible book:
+
+| site | function | path |
+|---|---|---|
+| `l5_two_sided_probe.py:1430` | `build_orders` | **money — opening orders** |
+| `l5_two_sided_probe.py:2822` | `completion_requote` | **money — and `completion_requote_enabled` is true in the deployed config** |
+| `l5_queue_measurement.py:191` | `build_order` | **money** |
+| `l5_book_completion.py:389` | `decide` | **money — returns `STALE_BOOK`** |
+| `l5_book_completion.py:191` | `cooldown_observation` | telemetry |
+
+The sixth site (`:2151`, the stale-recover path) already had the guard.
+
+All five now carry it, each a one-line extension of the owner's own change,
+adding refusals only. The telemetry one matters more than it looks: `fresh`
+feeds `evidence.executable_evidence` and `basis`, so an unguarded future-dated
+book was reported `executable_evidence: true, basis: AUTHENTICATED_WS` — the
+exact telemetry a later audit reads as proof a price was executable.
+
+`tests/test_l5_negative_book_age_everywhere.py` (10 tests) walks every entry
+point and includes a **structural** test that fails if any future site
+compares only the upper bound. Writing it surfaced three facts worth keeping:
+`build_orders` gates on the authorized market *before* the book age (so the
+test must name it, and `active()` needs an experiment id too — there is no
+partial arming); `completion_requote` answers `act`, not `ok`; and
+`cooldown_observation` exposes freshness through `evidence`, not `book`.
+
+Test-count delta: 18 mint tests + 10 book-age tests.
 
 ## 2. Deployment and live state, read fresh
 
 | | |
 |---|---|
 | Deployment | `9e24cd66-aeca-45ee-923a-b4247c5dcc75` **SUCCESS** 2026-11-06T01:32:55Z, region us-east4 |
-| SHA | `9a87a199279ca855cf99252336fd7a6a591275b3` |
+| SHA deployed | `9a87a199279ca855cf99252336fd7a6a591275b3` |
+| SHA on the branch now | `e052c0c7` + this commit — the complement-repricing fix and the five-site completion are **NOT yet deployed** |
 | `halt_local_env` | **true** — `L5_LIVE_HALT=1` genuinely active (it read **false** last cycle; the owner's change is confirmed, not assumed) |
 | `halt_latch` | `CLEAR` (remote latch unset; the local env halt is what is holding) |
 | `armed` | **false** |
@@ -235,6 +268,15 @@ verify the digest against the installed document and confirm
 `approval_state: approved`, all three windows openable, and the budget ledger
 owned by the new nonce — before anything arms.
 
+**(b2) Decide whether to deploy the outstanding book-age work first.**
+`e7177bb5` (complement repricing) and the five-site completion in this commit
+are on the branch but not in deployment `9e24cd66`. All are refuse-only
+guards on the paired-only path this campaign exercises. Deploying them is one
+`DEPLOY_TRIGGER` touch and ~4 minutes; running the campaign on `9a87a199`
+without them is also defensible, since the deployed build already refuses
+negative ages at `completion_decision`. **My recommendation: deploy first** —
+`completion_requote` is enabled and is one of the unguarded paths.
+
 **(c) Explicitly authorize withdrawing `L5_LIVE_HALT`.** This is a separate
 decision from (a): installing an approval authorizes a campaign, it does not
 clear the halt. I will not withdraw it, or arm, on the strength of (a) or of
@@ -250,7 +292,7 @@ quarter-hours strictly after `now`. A mint at 02:00Z gives 02:15/02:30/02:45Z.
 
 | check | state |
 |---|---|
-| Deployed SHA | `9a87a199`, deployment `9e24cd66` SUCCESS |
+| Deployed SHA | `9a87a199`, deployment `9e24cd66` SUCCESS. The complement fix `e7177bb5` and the five-site completion are committed but **NOT deployed** — a redeploy is an owner decision and is listed below |
 | Negative-book-age regression | PASS |
 | Full-suite parity | **exact, 80 ids, 16,862 passed** |
 | Cumulative headroom | **$4.8530** (18.6325 − 13.7795, unrealized $0) |

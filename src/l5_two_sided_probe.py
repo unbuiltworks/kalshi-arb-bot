@@ -1427,7 +1427,11 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     if gap_suspected:
         return no("GAP_SUSPECTED")
     age = _d(book_age_s)
-    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+    # A NEGATIVE AGE IS FUTURE DATA, not fresh liquidity. Extends the
+    # same guard 432ff7c3 added at completion_decision and e7177bb5 at
+    # complement_order; this site had been left comparing only the upper
+    # bound, so a future-dated snapshot passed as the freshest possible.
+    if age is None or age < 0 or age > D(str(MAX_BOOK_AGE_S)):
         return no("BOOK_STALE")
     b = _d(bid); a = _d(ask)
     if b is None or a is None or b <= 0 or a <= 0:
@@ -2819,7 +2823,11 @@ def completion_requote(*, side: str, resting_own_px: Any,
     if gap_suspected:
         return no("GAP_SUSPECTED")
     age = _d(book_age_s)
-    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+    # A NEGATIVE AGE IS FUTURE DATA, not fresh liquidity. Extends the
+    # same guard 432ff7c3 added at completion_decision and e7177bb5 at
+    # complement_order; this site had been left comparing only the upper
+    # bound, so a future-dated snapshot passed as the freshest possible.
+    if age is None or age < 0 or age > D(str(MAX_BOOK_AGE_S)):
         return no("BOOK_STALE",
                   book_age_s=(None if age is None else str(age)))
     b, a = _d(bid), _d(ask)

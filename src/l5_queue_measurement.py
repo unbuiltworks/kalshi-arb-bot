@@ -188,7 +188,8 @@ def build_order(*, market: str, bid: Any, ask: Any, bid_depth: Any,
         # through the ask, which is not a maker order.
         return no("BOOK_CROSSED_OR_LOCKED", bid=str(b), ask=str(a))
     age = _d(book_age_s)
-    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+    # A negative age is future data; see l5_two_sided_probe.
+    if age is None or age < 0 or age > D(str(MAX_BOOK_AGE_S)):
         return no("BOOK_STALE", book_age_s=(None if age is None else str(age)))
     if b < MIN_PRICE or b > MAX_PRICE:
         return no("PRICE_OUT_OF_BAND", bid=str(b))
