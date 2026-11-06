@@ -3634,3 +3634,50 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+# =====================================================================
+# PHASE A2 -- the residual rollover cost, DISARMED. Owner-authorized.
+#
+# Phase A on a342fccc (commit e131437c8, code 496c2f375) removed the 93 s
+# stall and held every other criterion:
+#
+#   A1 rollover   FAIL as written -- 8 windows, min 6.400 max 7.984
+#                 mean 6.882 s against a < 2 s bar. Was 93.2 s.
+#   A2 over-budget lines          zero
+#   A3 cost-basis audit           once per process, 12 chunks off the roll
+#                                 path, writes NONE, 133 pages complete
+#   A4 settlement / reconcile     unchanged, 5-min SOAK_PERIODIC
+#   A5 health, disarmed           armed false, no traceback,
+#                                 zero WOULD_SUBMIT
+#
+# NOT ROLLED BACK. Rolling back would restore a 93 s stall to avoid a
+# 6.4 s one. The owner directed preserving the better deployment and
+# fixing the remaining defect, which is what this is.
+#
+# WHAT THIS CHANGES: one oversized log line, bounded. The full
+# L5_TWO_SIDED_SHADOW report serialises past 80 KB, arrives TRUNCATED at
+# the platform's 81,920-byte limit, and lands at exactly the 6 s stage
+# boundaries, while the 29,109-byte interim line costs 0.002 s.
+# `TS.bounded_for_log` reduces the LOG copy in four stages and leaves the
+# durable copy alone -- `park` and `finalize` still write the whole
+# report to the volume.
+#
+# THE MECHANISM IS NOT CONFIRMED, only the correlation. A 70,220-byte
+# intact line is cheap, so truncation rather than size alone may be the
+# cost. This deployment IS the test: if roll does not fall below 2 s, the
+# hypothesis is wrong and that gets reported, not explained away.
+#
+# NOT MONEY-CAPABLE. No arming, no campaign, no switch change. The
+# completion switches stay as they are -- L5_TAKER_COMPLETION_POLICY and
+# L5_TS_COMPLETION_CROSS are SET but not YES, read from the process as
+# taker_policy POLICY_DISABLED and authorized_to_cross false -- and the
+# three rescue variables remain absent. The volume persists: the ledger,
+# the cursor, defensive_spent_usd, the claim ledger, settlement history.
+#
+# ROLLBACK: deployment a342fccc (commit e131437c8), canRollback true.
+# That is the deployment this replaces, NOT the 93 s one.
+#
+# PHASE B -- arming, a campaign, and the five completion variables -- is
+# NOT part of this and needs separate owner authorization. See
+# analysis/l5/issue195/VALIDATION_PROPOSAL.md.
+deploy: 2026-11-06T17:17Z issue #195 bounded shadow log line, Phase A2, DISARMED
