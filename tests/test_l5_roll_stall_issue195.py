@@ -530,3 +530,99 @@ def test_the_budget_is_reported_and_never_enforced():
 def test_the_default_roll_budget_is_well_under_the_observed_stall():
     assert RD.DEFAULT_ROLL_BUDGET_S <= 15.0
     assert RD.DEFAULT_ROLL_BUDGET_S < OBSERVED_ROLL_S
+
+
+# =====================================================================
+# 7. ROLLOVER LATENCY, BEHAVIOURALLY: ENABLING THE DIAGNOSTICS MUST NOT
+#    MAKE `roll` DO ANY WORK.
+#
+# The source scan above proves `roll` names none of the slow calls. This
+# proves the stronger thing: with ALL FOUR switches on, the enqueue that
+# replaced them touches no transport, no store and no tape, so a window
+# roll costs the same whether they are enabled or not. That is the
+# property the 93 seconds violated.
+# =====================================================================
+
+class _Exploding:
+    """Anything touched here fails the test by raising."""
+
+    def __getattr__(self, name):
+        raise AssertionError(
+            "the enqueue touched %r; enabling a diagnostic must not make "
+            "`roll` do its work" % name)
+
+
+class _EnqueueRunner:
+    enqueue_roll_diagnostics = RUN.Runner.enqueue_roll_diagnostics
+
+    def __init__(self):
+        import collections
+        self.roll_diag = RD.DeferredDiagnostics()
+        self.stats = collections.Counter()
+        # every collaborator a job would need, rigged to explode if used
+        self.transport = _Exploding()
+        self.store = _Exploding()
+        self.tape = _Exploding()
+        self.root = "/nonexistent"
+
+    # the two jobs are bound methods on the real Runner; they must be
+    # QUEUED, never called, so referencing them is all that may happen.
+    _cost_basis_audit_step = RUN.Runner._cost_basis_audit_step
+    _establish_baseline_step = RUN.Runner._establish_baseline_step
+
+
+@pytest.fixture()
+def _all_switches_on(monkeypatch):
+    monkeypatch.setenv("L5_DEPTH_COMPARISON", "YES")
+    monkeypatch.setenv("L5_COST_BASIS_AUDIT", "YES")
+    monkeypatch.setenv("L5_ESTABLISH_BASELINE", "YES")
+    monkeypatch.setenv("L5_TAPE_RECOVERY_COID", "l5f-something")
+
+
+def test_enqueuing_every_diagnostic_touches_no_transport_store_or_tape(
+        _all_switches_on):
+    r = _EnqueueRunner()
+    r.enqueue_roll_diagnostics()        # must not raise
+    assert set(r.roll_diag.pending) == {
+        "depth_comparison", "tape_recovery", "cost_basis_audit",
+        "establish_baseline"}
+
+
+def test_enqueuing_every_diagnostic_is_effectively_free(_all_switches_on):
+    """Not a benchmark -- a bound. 93 s was the defect; this is the
+    difference between queuing four closures and doing their work."""
+    r = _EnqueueRunner()
+    started = time.monotonic()
+    r.enqueue_roll_diagnostics()
+    assert time.monotonic() - started < 0.5
+
+
+def test_a_second_roll_enqueues_nothing_further(_all_switches_on):
+    """`roll` fires every fifteen minutes. The inline version did the work
+    every time; the queue latches, so ninety-six rolls queue four jobs."""
+    r = _EnqueueRunner()
+    for _ in range(96):
+        r.enqueue_roll_diagnostics()
+    assert len(r.roll_diag.pending) == 4
+
+
+def test_with_the_switches_off_nothing_is_queued_at_all(monkeypatch):
+    for env in ("L5_DEPTH_COMPARISON", "L5_COST_BASIS_AUDIT",
+                "L5_ESTABLISH_BASELINE", "L5_TAPE_RECOVERY_COID"):
+        monkeypatch.delenv(env, raising=False)
+    r = _EnqueueRunner()
+    r.enqueue_roll_diagnostics()
+    assert r.roll_diag.pending == []
+
+
+def test_a_queued_job_only_reads_the_transport_when_it_actually_runs(
+        _all_switches_on):
+    """The complement of the test above: the work is not GONE, it is
+    DEFERRED. Running the job must reach the transport -- otherwise the
+    enqueue test would pass on a job that does nothing."""
+    r = _EnqueueRunner()
+    r.enqueue_roll_diagnostics()
+    out = r.roll_diag.drain(t_in_window_s=600.0, entry_critical=False)
+    # it ran, and it failed BECAUSE it reached the exploding collaborator
+    assert out["ran"] is not None
+    assert out["outcome"] == RD.FAILED

@@ -1466,6 +1466,14 @@ def inventory_origin(state: Mapping[str, Any], market: str,
     return ORIGIN_UNKNOWN
 
 
+#: How many bounded-taker-completion claims the durable ledger keeps. A claim
+#: only has to outlive its own 15-minute window, so 256 is days of history and
+#: far more than the duplicate-prevention it exists for needs; the bound is
+#: there because the whole state dict is rewritten on every save and nothing
+#: else ever removed these rows.
+CLAIM_RETENTION = 256
+
+
 class UnrecognizedVenueShape(RuntimeError):
     """A venue row we cannot read. Carries the structure, never a guess.
 
@@ -6549,13 +6557,48 @@ class FaithfulExecutor:
                       residual_venue=str(venue_net),
                       rows=[dict(r) for r in mine_rows])
 
-        # ---- 9. CHARGE THE SHARED BUDGET BEFORE THE MANDATE AND BEFORE THE
-        # WIRE, at the worst case. A completion that does not fill costs
-        # nothing, but the attempt is a real offer to spend that money, and a
-        # budget that counted only fills would let an unbounded number of
-        # attempts through. `defensive_charge` fsyncs, so a process that dies
-        # between here and the venue has already paid.
+        # ---- 9. THE SHARED LOSS BUDGET, CHECKED AND ONLY THEN CHARGED.
+        #
+        # THE GAP THIS CLOSES, FOUND BY REVIEWING THIS METHOD AGAINST THE ONE
+        # IT MIRRORS. `InventoryStore.defensive_charge` ONLY ACCUMULATES --
+        # it adds to `defensive_spent_usd` and saves, and it refuses nothing.
+        # The defensive path is bounded because `DEF.decide` tests
+        # `spent + exit_downside > loss_budget_usd` and returns
+        # DEFENSIVE_LOSS_BUDGET before `defensive_execute` ever charges. This
+        # method does not call `DEF.decide`, so charging without testing left
+        # the campaign-wide $2.00 budget unenforced on the completion route --
+        # and worse, a completion could quietly exhaust the budget the
+        # defensive unwind depends on, since the two deliberately share it.
+        #
+        # The per-cross ($1.50) and per-window ($3.00) outlay caps in
+        # `l5_taker_completion_policy` bound a single attempt either way, so
+        # this was never unbounded; it was unbounded ACROSS the campaign,
+        # which is exactly the dimension this budget exists to bound.
+        #
+        # FAIL CLOSED ON AN UNREADABLE BUDGET, which `defensive_spent` already
+        # delivers by returning the whole budget when the read raises -- a
+        # budget we cannot read is exhausted.
         worst_outlay = qty * px + TS.worst_fee(qty, px)
+        try:
+            spent = self.store.defensive_spent()
+        except BaseException:                                  # noqa: BLE001
+            spent = DEF.DEFENSIVE_LOSS_BUDGET_USD
+        if spent + worst_outlay > DEF.DEFENSIVE_LOSS_BUDGET_USD:
+            return no("COMPLETION_LOSS_BUDGET_EXHAUSTED",
+                      defensive_spent_usd=str(spent),
+                      would_charge_usd=str(worst_outlay),
+                      defensive_budget_usd=str(
+                          DEF.DEFENSIVE_LOSS_BUDGET_USD),
+                      budget_remaining_usd=str(
+                          DEF.DEFENSIVE_LOSS_BUDGET_USD - spent),
+                      note=("the same campaign-wide budget the defensive "
+                            "unwind spends, tested the same way DEF.decide "
+                            "tests it. Charged at the WORST case, because an "
+                            "attempt that does not fill is still a real "
+                            "offer to spend that money."))
+        # CHARGED BEFORE THE MANDATE AND BEFORE THE WIRE. `defensive_charge`
+        # fsyncs, so a process that dies between here and the venue has
+        # already paid.
         try:
             total = self.store.defensive_charge(worst_outlay, {
                 "market": market, "buy_side": buy_side, "qty": str(qty),
@@ -6587,6 +6630,28 @@ class FaithfulExecutor:
                 "labels": ("written BEFORE the wire and never released by a "
                            "retry. A restart or an uncertain ACK comes back "
                            "to this row and does not try again.")}
+            # BOUNDED, because this is on the durable volume and the WHOLE
+            # state dict is rewritten on every `save()`. One entry per
+            # (market, side) with a 15-minute window is 192 a day and nothing
+            # ever removed them -- a slow leak that would eventually make
+            # every ledger write bigger, in the one file the loss halt is
+            # measured from. Oldest out first, by claim time, the way
+            # `_shadow_completion_parked` is bounded in the runner.
+            #
+            # IT CANNOT EVICT A CLAIM THAT STILL MATTERS. A claim only has to
+            # outlive its own window, and CLAIM_RETENTION windows of history
+            # is far more than that; the eviction is by `claimed_at`, so the
+            # row being written now is never the one dropped.
+            if len(claims) > CLAIM_RETENTION:
+                def _age(kv):
+                    try:
+                        return float(kv[1].get("claimed_at") or 0)
+                    except (TypeError, ValueError, AttributeError):
+                        return 0.0
+                for k, _v in sorted(claims.items(), key=_age)[
+                        :len(claims) - CLAIM_RETENTION]:
+                    if k != claim_key:
+                        claims.pop(k, None)
             self.store.save()
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):

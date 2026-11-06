@@ -139,6 +139,53 @@ an `origin`, and `defensive_mandate_covers` gates a `TAKER_COMPLETION` mandate
 on the taker policy's own switches and a defensive one on `DEF.enabled()`.
 An unrecognised origin reads as defensive — the stricter reading.
 
+### Two costs of the claim, accepted deliberately
+
+The durable claim is written **before** the wire and is **never** released by a
+retry, because issue #195 requires exactly that: *"Never duplicate a hedge
+after partial fill, retry, uncertain ACK or restart."* Two consequences follow
+and neither is a surprise to be discovered later:
+
+1. **A burned claim is not re-earned.** If `handle`'s remaining gates refuse
+   after `completion_taker_execute` has claimed — cash, the unmatched cap, the
+   cumulative-loss ceiling, the worst-case deficit — then that (market, side,
+   window) can no longer be completed even though **no order ever reached the
+   venue**. The alternative is releasing the claim on a refusal we believe was
+   pre-wire, and `_bc_capture` cannot reliably tell a pre-wire refusal from an
+   uncertain acknowledgement. Fail-closed is the required direction.
+
+2. **Cancelled and not replaced.** The resting complement is cancelled and
+   venue-confirmed gone *before* the verdict that could submit. If anything
+   after that refuses, the window ends with no complement resting. This is
+   byte-for-byte the shape `defensive_execute` already has and its own
+   docstring accepts: *"the complement either still rests (cancel refused) or
+   is gone and nothing replaces it, which is the state the window was heading
+   for anyway."*
+
+What bounds the second cost is the **maker-patience gate**, which runs before a
+proposal exists: `TCP.authorize` refuses `MAKER_NOT_ATTEMPTED` unless a maker
+quote was actually posted on the completing side, and `MAKER_PATIENCE_NOT_SPENT`
+until it has rested `L5_TAKER_MAKER_PATIENCE_S` (default 90 s) unfilled. So a
+freshly-posted hedge cannot be cancelled out from under itself.
+
+### The shared loss budget is tested, not merely charged
+
+Found by reviewing this method against the one it mirrors.
+`InventoryStore.defensive_charge` **only accumulates** — it refuses nothing.
+The defensive path is bounded because `DEF.decide` tests
+`spent + exit_downside > loss_budget_usd` *before* `defensive_execute` charges.
+`completion_taker_execute` does not call `DEF.decide`, so charging without
+testing left the campaign-wide **$2.00** budget unenforced on the completion
+route — and worse, a completion could quietly exhaust the budget the defensive
+unwind depends on, since the two share it on purpose.
+
+The per-cross (**$1.50**) and per-window (**$3.00**) outlay caps in
+`l5_taker_completion_policy` bounded any single attempt either way, so this was
+never unbounded; it was unbounded **across the campaign**, which is exactly the
+dimension that budget exists to bound. Now tested against the same constant,
+read from the same place, before the charge — and an unreadable budget reads as
+exhausted, which `defensive_spent` already delivers.
+
 ### The switches, all default-OFF
 
 | env | what it authorizes |

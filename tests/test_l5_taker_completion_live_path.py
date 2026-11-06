@@ -693,3 +693,374 @@ def test_the_defensive_route_is_still_asked_first():
     tcomp = src.index("_tact = self.completion_taker_execute(")
     assert d < tcomp
     assert "(_dact is None or not _dact.get(\"ok\")) and _tprop" in src
+
+
+# =====================================================================
+# 9. THE SHARED LOSS BUDGET IS TESTED, NOT MERELY CHARGED.
+#
+# THE GAP THIS PINS. `defensive_charge` ONLY ACCUMULATES -- it refuses
+# nothing. The defensive path is bounded because `DEF.decide` tests
+# `spent + exit_downside > loss_budget_usd` before `defensive_execute`
+# charges. This method does not call `DEF.decide`, so charging without
+# testing left the campaign-wide $2.00 budget unenforced on the completion
+# route, and let a completion exhaust the budget the defensive unwind
+# depends on -- the two share it on purpose.
+# =====================================================================
+
+def test_a_completion_is_refused_when_the_shared_budget_is_exhausted(ex):
+    x, t, E = ex
+    hold(x)
+    x.store.state["defensive_spent_usd"] = str(DC.DEFENSIVE_LOSS_BUDGET_USD)
+    x.store.save()
+    out = run(x)
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED"
+    assert x._defensive_mandate is None
+    assert "ts_completion_claims" not in x.store.state or not x.store.state[
+        "ts_completion_claims"]
+
+
+def test_the_budget_test_is_on_the_worst_case_not_the_price(ex):
+    """Charged at price*qty PLUS the taker fee, so the figure tested is the
+    figure charged."""
+    x, t, E = ex
+    hold(x)
+    worst = D("0.3500") + TS.worst_fee(D(1), D("0.3500"))
+    # leave exactly one cent less than the worst case
+    x.store.state["defensive_spent_usd"] = str(
+        DC.DEFENSIVE_LOSS_BUDGET_USD - worst + D("0.01"))
+    x.store.save()
+    out = run(x)
+    assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED"
+    assert D(out["would_charge_usd"]) == worst
+
+
+def test_exactly_enough_budget_is_allowed(ex):
+    x, t, E = ex
+    hold(x)
+    worst = D("0.3500") + TS.worst_fee(D(1), D("0.3500"))
+    x.store.state["defensive_spent_usd"] = str(
+        DC.DEFENSIVE_LOSS_BUDGET_USD - worst)
+    x.store.save()
+    assert run(x)["ok"] is True
+
+
+def test_an_unreadable_budget_reads_as_exhausted(ex):
+    """A budget we cannot read is spent, which `defensive_spent` already
+    delivers by returning the whole budget when the read raises."""
+    x, t, E = ex
+    hold(x)
+    x.store.state["defensive_spent_usd"] = "not-a-number"
+    x.store.save()
+    out = run(x)
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED"
+
+
+def test_a_completion_cannot_exhaust_the_budget_past_the_cap(ex):
+    """The two routes share one budget on purpose, so a completion must not
+    be able to spend past the bound the defensive unwind relies on."""
+    x, t, E = ex
+    hold(x)
+    assert run(x)["ok"] is True
+    assert x.store.defensive_spent() <= DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_the_budget_check_is_the_same_bound_DEF_uses():
+    """One bound, one constant, read from the same place by both routes."""
+    import inspect
+    from src import l5_live_execution as E
+    src = inspect.getsource(E.FaithfulExecutor.completion_taker_execute)
+    assert "DEF.DEFENSIVE_LOSS_BUDGET_USD" in src
+    assert "self.store.defensive_spent()" in src
+    # tested BEFORE it is charged
+    assert src.index("COMPLETION_LOSS_BUDGET_EXHAUSTED") < src.index(
+        "defensive_charge(")
+
+
+# =====================================================================
+# 10. THE DURABLE CLAIM LEDGER IS BOUNDED.
+#
+# One entry per (market, side) with a 15-minute window is 192 a day and
+# nothing ever removed them, in the one file the loss halt is measured
+# from and which is rewritten whole on every save.
+# =====================================================================
+
+def test_the_claim_ledger_does_not_grow_without_bound(ex):
+    from src import l5_live_execution as E
+    x, t, E2 = ex
+    claims = x.store.state.setdefault("ts_completion_claims", {})
+    for i in range(E.CLAIM_RETENTION + 50):
+        claims["market-%d|DOWN" % i] = {
+            "market": "market-%d" % i, "side": "DOWN",
+            "claimed_at": str(float(i))}
+    hold(x)
+    assert run(x)["ok"] is True
+    kept = x.store.state["ts_completion_claims"]
+    assert len(kept) <= E.CLAIM_RETENTION + 1
+    # the row just written is never the one evicted
+    assert "%s|DOWN" % SLUG in kept
+    # and the OLDEST are the ones gone
+    assert "market-0|DOWN" not in kept
+
+
+def test_eviction_survives_an_unreadable_claim_time(ex):
+    from src import l5_live_execution as E
+    x, t, E2 = ex
+    claims = x.store.state.setdefault("ts_completion_claims", {})
+    for i in range(E.CLAIM_RETENTION + 10):
+        claims["junk-%d|DOWN" % i] = {"claimed_at": None}
+    hold(x)
+    assert run(x)["ok"] is True
+    assert "%s|DOWN" % SLUG in x.store.state["ts_completion_claims"]
+
+
+def test_the_retention_bound_is_far_longer_than_a_window(ex):
+    """A claim only has to outlive its own 15-minute window."""
+    from src import l5_live_execution as E
+    assert E.CLAIM_RETENTION >= 64
+
+
+# =====================================================================
+# 11. ADVERSARIAL: NOTHING SHORT OF FULL OWNER AUTHORIZATION SUBMITS.
+# =====================================================================
+
+AUTH_KEYS = ("policy", "owner_cross", "authorized_proposal")
+
+
+@pytest.mark.parametrize("policy", [True, False])
+@pytest.mark.parametrize("owner_cross", [True, False])
+@pytest.mark.parametrize("authorized_proposal", [True, False])
+def test_no_partial_authorization_can_reach_a_mandate(
+        ex, monkeypatch, policy, owner_cross, authorized_proposal):
+    """EVERY COMBINATION. A mandate is the only thing that exempts an order
+    from the maker-only overlay, so "no mandate" is "no crossing order".
+    Only all three together may produce one."""
+    x, t, E = ex
+    hold(x)
+    if policy:
+        monkeypatch.setenv(TCP.POLICY_ENV, "YES")
+    else:
+        monkeypatch.delenv(TCP.POLICY_ENV, raising=False)
+    if owner_cross:
+        monkeypatch.setenv(TCP.OWNER_CROSS_ENV, "YES")
+    else:
+        monkeypatch.delenv(TCP.OWNER_CROSS_ENV, raising=False)
+    prop = proposal() if authorized_proposal else proposal(
+        authorized=False, reason="MARGIN_BELOW_FLOOR")
+    out = run(x, prop=prop)
+    expected = policy and owner_cross and authorized_proposal
+    assert bool(out.get("ok")) is expected, out.get("reason")
+    assert (x._defensive_mandate is not None) is expected
+
+
+def test_a_mandate_stops_covering_the_instant_a_switch_goes_off(
+        ex, monkeypatch):
+    """Even an ALREADY ISSUED mandate must stop exempting anything if the
+    authorization is withdrawn -- it is consulted per order, not cached."""
+    x, t, E = ex
+    hold(x)
+    assert run(x)["ok"] is True
+    ok = (SLUG, {"side": "DOWN"}, {"price": "0.3500", "qty": "1"})
+    assert x.defensive_mandate_covers(*ok)
+    for env in (TCP.POLICY_ENV, TCP.OWNER_CROSS_ENV):
+        monkeypatch.delenv(env, raising=False)
+        assert x.defensive_mandate_covers(*ok) is None
+        monkeypatch.setenv(env, "YES")
+    assert x.defensive_mandate_covers(*ok)
+
+
+def test_the_maker_only_overlay_refuses_a_taker_with_no_mandate(ex):
+    """The overlay is what actually stops the order. With no mandate a TAKER
+    intent is refused MAKER_ONLY_NO_TAKER regardless of anything else."""
+    x, t, E = ex
+    x._defensive_mandate = None
+    assert x.maker_only is True
+    assert x.defensive_mandate_covers(
+        SLUG, {"side": "DOWN"}, {"price": "0.3500", "qty": "1"}) is None
+
+
+def test_the_runner_never_calls_submit_when_the_policy_withholds():
+    """`submit_ts_completion` is reached only inside the branch that
+    requires dec.ok AND the owner cross flag AND armed AND the policy's own
+    authorization -- checked on the parsed tree, not on prose."""
+    import ast
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    src = inspect.getsource(RUN.Runner.maybe_ts_completion)
+    tree = ast.parse(src.lstrip())
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test)
+        for stmt in ast.walk(node):
+            if (isinstance(stmt, ast.Call)
+                    and isinstance(stmt.func, ast.Attribute)
+                    and stmt.func.attr == "submit_ts_completion"):
+                found.append(test)
+    assert found, "submit_ts_completion is not called at all"
+    for test in found:
+        for required in ("dec.get('ok')", "authorized", "t.armed",
+                         "pol.get('authorized')"):
+            assert required in test, (required, test)
+
+
+def test_the_shadow_only_transport_blocks_submit_whatever_is_mandated():
+    """The structural lock sits in FRONT of every authorization, so a
+    mandate cannot reach the wire through it."""
+    from src import l5_pmus_live_runner as RUN
+    assert "submit" in RUN.ShadowOnlyTransport.BLOCKED
+
+    class Inner:
+        armed = True
+        def submit(self, intent):
+            raise AssertionError("the lock must not delegate submit")
+
+    locked = RUN.ShadowOnlyTransport(Inner())
+    with pytest.raises(Exception) as got:
+        locked.submit({"side": "DOWN"})
+    assert "SHADOW_ONLY" in str(got.value)
+
+
+# =====================================================================
+# 12. EXACT-ORDER CANCELLATION.
+# =====================================================================
+
+def test_only_the_named_orders_are_cancelled(ex, monkeypatch):
+    """`deadman` is given `only=` the exact client order ids, never the
+    market. The REAL deadman still runs -- this only observes what it was
+    asked to cancel -- so the confirmation path is the real one."""
+    import src.l5_live_execution as LXM
+    seen = {}
+    real = LXM.deadman
+
+    def spy(store, transport, *, reason, only=None, **kw):
+        seen["reason"] = reason
+        seen["only"] = list(only or [])
+        return real(store, transport, reason=reason, only=only, **kw)
+
+    x, t, E = ex
+    hold(x)
+    rest(x, coid=COID, vid="v1")
+    rest(x, coid="untouched-order", side="UP", vid="v9")
+    monkeypatch.setattr(LXM, "deadman", spy)
+    out = run(x, resting=[COID])
+    assert out["ok"] is True
+    assert seen["only"] == [COID]
+    assert seen["reason"] == "TAKER_COMPLETION"
+    # the order this route was not asked to cancel is still on the book
+    assert "untouched-order" in x.store.live_orders()
+
+
+def test_every_named_order_must_be_confirmed_not_just_the_first(ex,
+                                                                monkeypatch):
+    x, t, E = ex
+    hold(x)
+    rest(x, coid="a", vid="va")
+    rest(x, coid="b", vid="vb")
+    monkeypatch.setattr("src.l5_live_execution.deadman",
+                        lambda *a, **k: {"cancelled": ["a"]})
+    monkeypatch.setattr(
+        "src.l5_defensive_completion.cancel_confirmed",
+        lambda res, coid: {"confirmed": coid in (res.get("cancelled") or [])})
+    out = run(x, resting=["a", "b"])
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_CANCEL_NOT_CONFIRMED"
+    assert x._defensive_mandate is None
+
+
+def test_the_cancel_is_recorded_before_the_verdict_that_could_submit(ex):
+    """So a cancellation stands in the record even if everything after it
+    refuses or raises."""
+    import inspect
+    from src import l5_live_execution as E2
+    src = inspect.getsource(E2.FaithfulExecutor.completion_taker_execute)
+    assert src.index("TAKER_COMPLETION_CANCEL") < src.index(
+        "_defensive_mandate = {")
+
+
+# =====================================================================
+# 13. MAKER-FIRST PROTECTS A FRESH HEDGE FROM BEING CANCELLED.
+#
+# This route CANCELS the resting complement and crosses. What stops it
+# doing that to a quote that has barely been posted is the policy's
+# maker-patience gate, which must run BEFORE the proposal exists.
+# =====================================================================
+
+def _policy(**kw):
+    """A PROFIT-mode completion, deliberately.
+
+    The real 0300z price of 0.3500 makes the CONSERVATIVE worst outcome
+    marginally negative once both legs are charged a taker fee -- which is
+    the whole finding that those windows were rescues and not profit
+    completions, and it means 0.3500 cannot be used to isolate a later gate.
+    0.2000 is a genuine profit completion, so these tests exercise the gate
+    each one names rather than tripping on positivity first.
+    """
+    dec = {"ok": True, "side": "DOWN", "qty": "1", "price": "0.2000",
+           "deficit": "1", "displayed_depth": "1312.39",
+           "both_positive_after": True,
+           "worst_before": "-0.4000", "worst_after": "0.3900"}
+    base = dict(decision=dec, enabled=True, owner_authorized=True,
+                # ONE unmatched leg and no existing complement, so the
+                # conservative re-pricing is not blended down by a dearer
+                # leg already on the books and clears the +$0.25 floor.
+                held_up_qty=D(1), held_dn_qty=D(0),
+                held_up_px=D("0.38"), held_dn_px=D(0),
+                maker_attempted=True, maker_rested_s=D(120),
+                # deep enough that the CONSERVATIVE re-pricing at the 0.25
+                # haircut still clears one contract, so these tests exercise
+                # the gate they name rather than the depth check.
+                book_rungs=[["0.2000", "1312.39"]],
+                window_outlay_spent_usd=D(0), halted=False)
+    base.update(kw)
+    return TCP.authorize(**base)
+
+
+def test_a_hedge_that_has_barely_rested_is_not_crossed_over(ex):
+    out = _policy(maker_rested_s=D(5))
+    assert out["authorized"] is False
+    assert out["reason"] == "MAKER_PATIENCE_NOT_SPENT"
+
+
+def test_a_hedge_that_was_never_posted_is_not_crossed_over(ex):
+    assert _policy(maker_attempted=False)["reason"] == "MAKER_NOT_ATTEMPTED"
+
+
+def test_an_unknown_maker_history_fails_closed(ex):
+    assert _policy(maker_attempted=None)["reason"] == "MAKER_HISTORY_UNKNOWN"
+    assert _policy(maker_rested_s=None)["reason"] == "MAKER_RESTED_UNKNOWN"
+
+
+def test_a_halt_outranks_the_opportunity(ex):
+    assert _policy(halted=True)["reason"] == "HALTED"
+    assert _policy(halted=None)["reason"] == "HALT_STATE_UNKNOWN"
+
+
+def test_the_runner_reads_the_same_halt_the_money_path_reads():
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    src = inspect.getsource(RUN.Runner.taker_policy_halted)
+    assert "self.halted()" in src
+    assert "day_realized_line()" in src
+    assert "would_halt" in src
+
+
+def test_the_window_outlay_cap_binds_across_repeated_crosses(ex):
+    assert _policy(window_outlay_spent_usd=D("99"))["reason"] == (
+        "WINDOW_OUTLAY_EXHAUSTED")
+    assert _policy(window_outlay_spent_usd=None)["reason"] == (
+        "WINDOW_OUTLAY_SPENT_UNKNOWN")
+
+
+def test_the_runner_records_the_window_outlay_so_the_cap_reads_a_real_number():
+    """It read a structural zero while nothing crossed; now a submitted
+    completion charges it at the worst case."""
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    src = inspect.getsource(RUN.Runner.submit_ts_completion)
+    assert "_taker_outlay_usd" in src
+    assert "TSP.worst_fee(qty, px)" in src
+    accessor = inspect.getsource(RUN.Runner.taker_outlay_spent)
+    assert "_taker_outlay_usd" in accessor
