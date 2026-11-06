@@ -578,3 +578,94 @@ Proposed shape when it is taken: bound `finalized` the way `pending` already
 is, keeping the most recent N scored reports whole and reducing older ones to
 their economics via the digest `bounded_for_log` already has. Scoring reads the
 recent ones; the older ones only need their P&L.
+
+---
+
+## A1 root cause, CONFIRMED from the volume: `ShadowLedger.save` on a 270 MB file
+
+Two hypotheses were tested and falsified before this one. Recording all three,
+because the sequence is the finding.
+
+**Falsified #1 — the log line.** The full `L5_TWO_SIDED_SHADOW` report arrived
+TRUNCATED at the platform's 81,920-byte limit at exactly the 6 s stage
+boundaries, while a 29,109-byte line cost 0.002 s. Bounding it was deployed
+(`7e3d1e1b` at `a31fe8fd4`). The reduction worked — the live line carries
+`cells_reduced {"cells":27,"full_bytes":155943,"budget_bytes":48000}` and every
+cell is `_reduced`, revealing the reports were really ~156 KB and had been
+losing about half to truncation all along. The latency did not move: 6.511 s
+against a 6.882 s eight-window mean. **Correlation, not cause.** The bound is
+kept anyway: the record now reaches the log intact.
+
+**Falsified #2 — building and scoring the report.** Measured on the live
+window's exact shape, 189 ticks / 1,735 prints / 27 cells: 0.030 s for all 189
+`step()` calls, and `report()` + `score_report()` effectively zero.
+
+**CONFIRMED #3 — the ledger write.** Instrumented (`84909719` at
+`0d2449fbbe`) rather than assumed, because the previous unmeasured hypothesis
+was wrong. The 18:00z roll, from the service's own output:
+
+```
+18:00:08  park      last_save_s 6.7426  bytes 270,438,265  finalized 2173
+18:00:08  roll      6.979 s                       <- the save is 96.6% of it
+18:00:52  finalize  last_save_s 6.5145  bytes 270,438,813  finalized 2174
+18:00:44  settle    6.561 s                       <- the save is 99.3% of it
+```
+
+`finalized` is unbounded, every scored report is ~156 KB, and `save` rewrites
+the **entire 270 MB file** on every `park` and every `finalize` — twice a
+window, on a network-attached volume. The attribution is near-exact in both
+stages, which is what distinguishes this from the two guesses before it.
+
+An earlier note in this file dismissed this on a local-disk measurement at a
+guessed 84 KB record. That dismissal was unsound on both counts and is
+superseded here.
+
+### A deadline, not just a defect
+
+At 6.7426 s for 2,173 records the cost is **3.10 ms per record**, and
+`L5_ROLL_BUDGET_S` is 10 s:
+
+```
+records at the 10 s budget   3,223
+windows remaining            1,049   =>  ~10.9 days at 96 a day
+```
+
+So A2 — currently passing with zero over-budget lines — begins failing in
+about eleven days if nothing changes. The retention fix has a date, and it is
+gated on the backup procedure in LEDGER_BACKUP_AND_RECOVERY.md.
+
+### Does it block trading, or only historical settlement?
+
+**The work is historical. The placement is on the trading path.** Both answers
+are true and the distinction is what matters.
+
+`park` stores the window that just closed; `finalize` scores one the venue has
+already settled. Neither is a new-market trading decision. But `roll` is tick
+stage **1** of 15, so everything after it waits — including
+`maybe_ts_completion` and the entry path before `maybe_preflight`.
+
+Measured against the trading schedule (`WINDOW_S` 900, `ENTRY_CUTOFF_S` 600,
+`COMPLETE_CUTOFF_S` 720, `TS_COMPLETION_EVERY_S` 10.0):
+
+| | |
+|---|---|
+| first decision delayed by | 6.98 s = **1.16%** of the 600 s entry window |
+| in completion intervals | **0.70** of one 10 s interval |
+| `two_sided_settle` | stage 13, *after* completion — delays only the next tick, once a window |
+| roll + settle combined | 13.5 s = **1.50%** of the window |
+
+Compare the original defect: 93 s was 15.5% of entry time and **nine** missed
+completion intervals, and the first completion decisions of 0300z and 0315z
+landed at +98.5 s and +97.5 s. That is why it mattered and why this does not.
+
+**What cannot be measured from the two recorded windows, and why.** The
+earliest residual-book sample in 0300z is t+115 s and in 0315z t+124 s — there
+is no early-window data at all, because the 93 s stall prevented sampling then.
+Any statement about what the first seven seconds of those windows was worth
+would be reading a selection effect created by the very defect being fixed. So
+the impact above is argued from the schedule and the stage order, which are
+measurable, and not from an improvement curve that does not exist.
+
+**Conclusion: trading is responsive.** The sub-2-second target is worth
+reaching and now has a known cause and a dated deadline, but it is not a
+blocker for a bounded live validation.
