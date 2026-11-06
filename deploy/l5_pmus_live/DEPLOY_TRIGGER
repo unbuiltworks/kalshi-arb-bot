@@ -3634,3 +3634,49 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+# =====================================================================
+# PHASE A4 -- heartbeat observability, DISARMED. A preflight blocker.
+#
+# The owner authorized the two-window live validation "provided all
+# preflight safety checks pass". Three of four passed. This is the
+# fourth, and it failed:
+#
+#   deployed SHA              PASS  0d2449fbbe, staged null
+#   completion policy         PASS  at 0.25/0.05 the replay authorizes
+#                                   117/133 and 96/123 samples; campaign
+#                                   -$0.97 -> +$0.03
+#   watchdog / reconcile      PASS  (re-verified below before arming)
+#   SAFETY FIELD READABILITY  FAIL
+#
+# L5_LIVE_HB arrives at exactly 81,921 bytes, truncated, and the fields
+# past the cut are the ones a live window is policed by:
+# realized_today, orders_uncertain, defensive_spent_usd, peak_usd,
+# cash_deployed_usd, open_orders. shadow_controller alone was 61,450
+# bytes, 75% of the line.
+#
+# defensive_spent_usd is the $2.00 LIFETIME completion budget. The owner
+# requires immediate disarm on any safety failure and a report of fills,
+# paired inventory, fees, rebates and settled net P&L. None of that is
+# possible for figures that are not on the tape. So no arming until the
+# tape carries them.
+#
+# bounded_hb reduces the largest REDUCIBLE field first and never touches
+# HB_NEVER_REDUCE, which names every safety and accounting field. A
+# 120 KB submission_gate still arrives whole -- tested.
+#
+# NOT MONEY-CAPABLE. No arming, no campaign, no variable written. The
+# completion switches remain SET-but-not-YES; the three rescue variables
+# remain absent. Arming is a SEPARATE step after this deploy is verified
+# to carry the safety fields.
+#
+# A1 remains at ~6.9 s with its cause now CONFIRMED by measurement --
+# ShadowLedger.save on a 270,438,265-byte file, 6.7426 s of a 6.979 s
+# roll -- and quantified as 1.16% of the entry window and 0.70 of one
+# completion interval. The owner directed not letting it delay the test.
+# Its retention fix is gated on LEDGER_BACKUP_AND_RECOVERY.md and has a
+# deadline of about 11 days, when the 10 s roll budget trips.
+#
+# ROLLBACK: 84909719 (0d2449fbbe), 7e3d1e1b (a31fe8fd4), a342fccc
+# (e131437c8). All canRollback true.
+deploy: 2026-11-06T19:06Z issue #195 heartbeat observability, Phase A4, DISARMED
