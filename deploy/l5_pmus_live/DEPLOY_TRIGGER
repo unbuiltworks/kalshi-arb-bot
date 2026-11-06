@@ -3634,3 +3634,51 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+# =====================================================================
+# PHASE A, ISSUE #195: the 93-second rollover stall fix, DISARMED.
+#
+# OWNER-AUTHORIZED: "Deploy it disarmed now (Phase A)", 2026-11-06.
+#
+# WHY THIS COMMIT EXISTS SEPARATELY FROM PR #197. The service's watchPattern
+# is this file, so a build needs it touched -- and PR #197 deliberately does
+# NOT touch it, so that merging #197 can never itself deploy. This commit is
+# the deploy action, on its own branch, carrying nothing but these lines on
+# top of 496c2f375. The code being shipped is byte-identical to the SHA that
+# CI and the local suite both verified; `git diff 496c2f375` over src/,
+# deploy/*/Dockerfile, scripts/ and tests/ is empty.
+#
+# WHAT SHIPS, and it is a LATENCY fix, not a trading change:
+#   * `roll` enqueues the four optional read-only diagnostics instead of
+#     running them. L5_COST_BASIS_AUDIT was walking 133 pages of the account
+#     activity feed through the 1.5 rps shared limiter INSIDE roll -- 88.7 s
+#     of sleeping on the window's opening, every window, measured at 92.9-93.9 s
+#     and corroborated by the platform's own DNS stream at one lookup per
+#     0.666 s. It also ran 96 times a day despite documenting itself as
+#     once-per-process.
+#   * the real bounded second-leg completion route, replacing the
+#     `WOULD_SUBMIT` string -- reached 43 times in 0300z and 22 in 0315z with
+#     the economics and the policy both saying yes, while both residuals
+#     settled for -$1.00.
+#   * one inventory-aware alternative ranking, and the execution-time
+#     re-verification of a rescue's economics after the cancel.
+#
+# NOTHING ABOUT THIS DEPLOYMENT CAN SUBMIT AN ORDER.
+#   armed                      false on a fresh container
+#   approval_state             approval_stale, NOT replaced here
+#   windows_remaining          null
+#   L5_TAKER_COMPLETION_POLICY absent from the service  -> route disabled
+#   L5_TS_COMPLETION_CROSS     absent from the service  -> crossing disabled
+#   L5_TAKER_LOSS_REDUCTION    absent from the service  -> rescue disabled
+#   L5_TAKER_MIN_WORST_IMPROVEMENT_USD / L5_MAX_COMPLETION_EV_GIVEUP_USD
+#                              absent -> unset floors REFUSE, never default
+# No variable is written by this deploy. L5_LIVE_HALT is untouched (and is
+# currently EMPTY -- asserting it remains an owner action). The /data volume,
+# the ledger, the durable claim ledger and defensive_spent_usd all persist.
+#
+# ROLLBACK: deployment 1603da04 (commit 341548fc), canRedeploy true.
+#
+# PHASE B -- arming, a campaign, and the completion switches -- is NOT part of
+# this and needs separate owner authorization. See
+# analysis/l5/issue195/VALIDATION_PROPOSAL.md.
+deploy: 2026-11-06T15:10Z issue #195 rollover fix, Phase A, DISARMED
