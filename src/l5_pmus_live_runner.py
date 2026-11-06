@@ -7907,6 +7907,11 @@ class Runner:
         if qty <= 0:
             return dict(out, withheld_by="PROPOSAL_QTY_NOT_POSITIVE")
         proposal = dict(pol, qty=str(qty), price=str(px), side=side,
+                        # THE MARKET THIS WAS PRICED ON, carried so
+                        # `completion_taker_execute` can refuse a proposal
+                        # that reached a different one rather than take the
+                        # caller's word for it.
+                        market=str(slug),
                         expires_at=float(TSP.cancel_cutoff_from_start(
                             float(ws))),
                         ranked_as=rank["chosen"],

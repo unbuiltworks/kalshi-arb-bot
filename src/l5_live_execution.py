@@ -6368,6 +6368,18 @@ class FaithfulExecutor:
             return no("COMPLETION_PROPOSAL_SIDE_MISMATCH",
                       proposal_side=str(proposal.get("side")),
                       buy_side=buy_side)
+        # ---- THE PROPOSAL MUST NAME THIS MARKET, and it is checked here
+        # rather than trusted. Today the runner sets the proposal and calls
+        # `handle` synchronously for the same slug, so a mismatch is
+        # unreachable -- which is exactly why it is worth refusing now: the
+        # side check alone would not catch a proposal priced on one market's
+        # book reaching another's, and the mandate would then name an order
+        # in the wrong market. An absent market reads as a mismatch, not as a
+        # wildcard.
+        if str(proposal.get("market") or "") != str(market):
+            return no("COMPLETION_PROPOSAL_MARKET_MISMATCH",
+                      proposal_market=str(proposal.get("market"))[:60],
+                      market=str(market)[:60])
         if "__unreadable__" in (resting or []):
             return no("COMPLETION_LIVE_ORDERS_UNREADABLE")
 

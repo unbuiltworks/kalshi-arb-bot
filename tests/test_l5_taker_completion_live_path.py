@@ -95,6 +95,7 @@ def proposal(**kw):
     with the live 0300z figures."""
     base = {"ok": True, "authorized": True, "reason": "AUTHORIZED",
             "side": "DOWN", "qty": "1", "price": "0.3500",
+            "market": SLUG,
             "policy": "BOUNDED_TAKER_COMPLETION",
             "expires_at": WS + 600.0}
     base.update(kw)
@@ -379,6 +380,27 @@ def test_a_proposal_for_the_wrong_side_is_refused(ex):
     hold(x)
     out = run(x, prop=proposal(side="UP"))
     assert out["reason"] == "COMPLETION_PROPOSAL_SIDE_MISMATCH"
+
+
+@pytest.mark.parametrize("market", ["some-other-market", "", None])
+def test_a_proposal_that_does_not_name_this_market_is_refused(ex, market):
+    """The side check alone would not catch a proposal priced on one
+    market's book reaching another's, and the mandate would then name an
+    order in the wrong market. An absent market is a mismatch, not a
+    wildcard."""
+    x, t, E = ex
+    hold(x)
+    out = run(x, prop=proposal(market=market))
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_PROPOSAL_MARKET_MISMATCH"
+    assert x._defensive_mandate is None
+
+
+def test_the_runner_stamps_the_market_it_priced_on():
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    src = inspect.getsource(RUN.Runner.submit_ts_completion)
+    assert "market=str(slug)," in src
 
 
 @pytest.mark.parametrize("bad,reason", [
