@@ -1466,6 +1466,14 @@ def inventory_origin(state: Mapping[str, Any], market: str,
     return ORIGIN_UNKNOWN
 
 
+def _floor_to_inc(qty: D, inc: D) -> D:
+    """`qty` floored to a whole multiple of `inc`. Never rounds up: a size
+    the venue's grid cannot express must become smaller, never larger."""
+    if inc is None or inc <= 0:
+        return qty
+    return (qty / inc).to_integral_value(rounding="ROUND_FLOOR") * inc
+
+
 #: How many bounded-taker-completion claims the durable ledger keeps. A claim
 #: only has to outlive its own 15-minute window, so 256 is days of history and
 #: far more than the duplicate-prevention it exists for needs; the bound is
@@ -6557,6 +6565,114 @@ class FaithfulExecutor:
                       residual_venue=str(venue_net),
                       rows=[dict(r) for r in mine_rows])
 
+        # ---- 8b. THE ECONOMICS, RE-VERIFIED AFTER THE CANCEL, AGAINST THE
+        # BOOK AS IT IS NOW.
+        #
+        # THE GAP THIS CLOSES. `proposal` is `TCP.authorize`'s verdict, and
+        # it was computed BEFORE the cancel. Between then and here there are
+        # venue round trips -- the cancel, its verification re-read, and the
+        # positions read above -- and the book moves. So the mandate could be
+        # issued, and the 1.20 ceiling unlocked, on economics that had
+        # already evaporated. Nothing downstream would catch it:
+        # `pair_cost_refusal` SKIPS `completion_pair_rescue` for a mandated
+        # order precisely because the mandate holder is supposed to have
+        # established this.
+        #
+        # So it is established here, three ways, and all three must hold:
+        #
+        #   (a) WE NEVER PAY MORE THAN WAS AUTHORIZED. If the executable own
+        #       price has moved against us the completion is refused rather
+        #       than re-priced upward: chasing a rescue is how a rescue
+        #       becomes the loss it was meant to avoid.
+        #   (b) THE IMPROVEMENT IS RECOMPUTED at the clamped quantity and
+        #       the post-cancel inventory, through the SAME `TS.top_up`
+        #       arithmetic the policy used, which charges the taker fee on
+        #       both legs. So "positive expected risk reduction AFTER FEES"
+        #       is a measurement here and not an inherited claim.
+        #   (c) IT MUST STILL CLEAR THE OWNER'S FLOOR. A rescue that no
+        #       longer removes the exposure the owner priced is not a rescue.
+        #
+        # FAIL CLOSED ON AN UNREADABLE OR STALE BOOK. The 1.20 ceiling is
+        # worth $0.20 a share of deliberate loss; it is not a licence to
+        # trade on a book we cannot see.
+        _floor = _money_or_none(proposal.get("min_worst_improvement_usd"))
+        _snap = None
+        try:
+            _getter = getattr(getattr(self, "ts_book", None), "snapshot", None)
+            if callable(_getter):
+                _snap = _getter(market) or None
+        except BaseException:                                  # noqa: BLE001
+            _snap = None
+        if _snap is None:
+            return no("COMPLETION_BOOK_UNREADABLE_AT_EXECUTION")
+        if bool(_snap.get("gap_suspected")):
+            return no("COMPLETION_BOOK_GAP_AT_EXECUTION")
+        _bid = _money_or_none(_snap.get("bid"))
+        _ask = _money_or_none(_snap.get("ask"))
+        if _bid is None or _ask is None or _bid <= 0 or _ask >= D(1) \
+                or _bid >= _ask:
+            return no("COMPLETION_BOOK_NOT_TWO_SIDED_AT_EXECUTION",
+                      bid=str(_bid), ask=str(_ask))
+        # OWN-OUTCOME EXECUTABLE PRICE. Buying DOWN consumes the YES bid, so
+        # our own cost is 1 - bid; buying UP lifts the ask.
+        _now_px = (D(1) - _bid) if buy_side == DOWN else _ask
+        if _now_px > px:
+            return no("COMPLETION_PRICE_MOVED_AGAINST_US",
+                      authorized_px=str(px), executable_px=str(_now_px),
+                      note=("refused rather than re-priced upward: chasing "
+                            "a rescue is how a rescue becomes the loss it "
+                            "was meant to avoid"))
+        # AN UNATTESTED BASIS IS NOT A ZERO BASIS, and this check is what
+        # makes step 8b self-sufficient rather than dependent on the caller.
+        # `TS.top_up` reads a missing price as `D(0)` -- a FREE leg -- and a
+        # free leg makes EVERY completion look like an improvement, however
+        # dear. `ts_completion_inputs` already refuses UNKNOWN_COST_BASIS
+        # upstream and `pair_cost_refusal` has its own BASIS_UNATTESTED gate,
+        # but this is the check the mandate's authority now rests on, so it
+        # asks for itself. `cost_attested` is the right predicate rather than
+        # "basis > 0": a fill at a wire price of 0.00 is a real thing and is
+        # attested, while a quantity reconcile adopted from the venue's net
+        # has no attestation at all.
+        for _s in (held_side, buy_side):
+            try:
+                if self.store.position(market, _s) and not \
+                        self.store.cost_attested(market, _s):
+                    return no("COMPLETION_BASIS_UNATTESTED_AT_EXECUTION",
+                              side=_s,
+                              note=("this leg's quantity came from the "
+                                    "venue's net, not from a fill of ours, "
+                                    "so its cost basis is unknown. It is "
+                                    "NOT priced at zero, and a zero basis "
+                                    "would make any completion look like an "
+                                    "improvement."))
+            except BaseException:                              # noqa: BLE001
+                return no("COMPLETION_BASIS_ATTESTATION_UNREADABLE",
+                          side=_s)
+        _tu = TS.top_up(up_qty=self.store.position(market, UP),
+                        dn_qty=self.store.position(market, DOWN),
+                        up_price=(self.store.leg_cost(market) or {}).get(UP),
+                        dn_price=(self.store.leg_cost(market) or {}).get(DOWN),
+                        extra_side=buy_side, extra_qty=qty, extra_price=px)
+        _wb = _money_or_none((_tu or {}).get("worst_before"))
+        _wa = _money_or_none((_tu or {}).get("worst_after"))
+        if _wb is None or _wa is None:
+            return no("COMPLETION_IMPROVEMENT_UNREADABLE_AT_EXECUTION",
+                      top_up=dict(_tu or {}))
+        _impr = _wa - _wb
+        if _impr <= 0:
+            return no("COMPLETION_NO_RISK_REDUCTION_AT_EXECUTION",
+                      worst_before=str(_wb), worst_after=str(_wa),
+                      improvement_usd=str(_impr),
+                      note=("recomputed after the cancel at the clamped "
+                            "quantity, with the taker fee charged on both "
+                            "legs. The 1.20 ceiling is never permission to "
+                            "buy a pair that reduces no exposure."))
+        if _floor is not None and _impr < _floor:
+            return no("COMPLETION_IMPROVEMENT_BELOW_FLOOR_AT_EXECUTION",
+                      improvement_usd=str(_impr),
+                      min_worst_improvement_usd=str(_floor),
+                      worst_before=str(_wb), worst_after=str(_wa))
+
         # ---- 9. THE SHARED LOSS BUDGET, CHECKED AND ONLY THEN CHARGED.
         #
         # THE GAP THIS CLOSES, FOUND BY REVIEWING THIS METHOD AGAINST THE ONE
@@ -6583,19 +6699,66 @@ class FaithfulExecutor:
             spent = self.store.defensive_spent()
         except BaseException:                                  # noqa: BLE001
             spent = DEF.DEFENSIVE_LOSS_BUDGET_USD
+        _remaining = DEF.DEFENSIVE_LOSS_BUDGET_USD - spent
         if spent + worst_outlay > DEF.DEFENSIVE_LOSS_BUDGET_USD:
-            return no("COMPLETION_LOSS_BUDGET_EXHAUSTED",
-                      defensive_spent_usd=str(spent),
-                      would_charge_usd=str(worst_outlay),
-                      defensive_budget_usd=str(
-                          DEF.DEFENSIVE_LOSS_BUDGET_USD),
-                      budget_remaining_usd=str(
-                          DEF.DEFENSIVE_LOSS_BUDGET_USD - spent),
-                      note=("the same campaign-wide budget the defensive "
-                            "unwind spends, tested the same way DEF.decide "
-                            "tests it. Charged at the WORST case, because an "
-                            "attempt that does not fill is still a real "
-                            "offer to spend that money."))
+            # ---- SIZE TO WHAT IS LEFT, THEN RE-EARN THE FLOOR AT THAT SIZE.
+            #
+            # A flat refusal here respected the budget but threw away the
+            # part of the rescue the budget could still afford. So the
+            # quantity is cut to the largest increment whose WORST outlay
+            # fits what remains -- and then the improvement floor is tested
+            # AGAIN at that smaller size, because a smaller cross removes
+            # less exposure and may no longer be worth its own fee. Only a
+            # completion that still clears the owner's floor at the affordable
+            # size proceeds; anything else refuses, as before.
+            _fit = D(0)
+            if _remaining > 0 and px > 0:
+                _fit = _floor_to_inc(_remaining / px, inc)
+                # the fee is charged on top, so step down until it fits
+                for _ in range(64):
+                    if _fit <= 0:
+                        break
+                    if _fit * px + TS.worst_fee(_fit, px) <= _remaining:
+                        break
+                    _fit -= inc
+            _fit = min(_fit, qty)
+            if _fit <= 0:
+                return no("COMPLETION_LOSS_BUDGET_EXHAUSTED",
+                          defensive_spent_usd=str(spent),
+                          would_charge_usd=str(worst_outlay),
+                          defensive_budget_usd=str(
+                              DEF.DEFENSIVE_LOSS_BUDGET_USD),
+                          budget_remaining_usd=str(_remaining),
+                          note=("the same campaign-wide budget the defensive "
+                                "unwind spends, tested the same way "
+                                "DEF.decide tests it. Charged at the WORST "
+                                "case, because an attempt that does not fill "
+                                "is still a real offer to spend that money."))
+            _tu2 = TS.top_up(
+                up_qty=self.store.position(market, UP),
+                dn_qty=self.store.position(market, DOWN),
+                up_price=(self.store.leg_cost(market) or {}).get(UP),
+                dn_price=(self.store.leg_cost(market) or {}).get(DOWN),
+                extra_side=buy_side, extra_qty=_fit, extra_price=px)
+            _wb2 = _money_or_none((_tu2 or {}).get("worst_before"))
+            _wa2 = _money_or_none((_tu2 or {}).get("worst_after"))
+            if _wb2 is None or _wa2 is None:
+                return no("COMPLETION_BUDGET_RESIZE_UNREADABLE")
+            _impr2 = _wa2 - _wb2
+            if _impr2 <= 0 or (_floor is not None and _impr2 < _floor):
+                return no("COMPLETION_BUDGET_RESIZE_BELOW_FLOOR",
+                          budget_remaining_usd=str(_remaining),
+                          affordable_qty=str(_fit),
+                          improvement_usd=str(_impr2),
+                          min_worst_improvement_usd=(
+                              None if _floor is None else str(_floor)),
+                          note=("the budget could afford only a smaller "
+                                "cross, and the smaller cross no longer "
+                                "earns its own fee. Refused rather than "
+                                "spending what was left on a completion "
+                                "that does not pay."))
+            qty = _fit
+            worst_outlay = qty * px + TS.worst_fee(qty, px)
         # CHARGED BEFORE THE MANDATE AND BEFORE THE WIRE. `defensive_charge`
         # fsyncs, so a process that dies between here and the venue has
         # already paid.

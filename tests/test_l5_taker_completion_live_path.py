@@ -71,6 +71,17 @@ def ex(monkeypatch, tmp_path):
         def positions(self):
             return list(self.venue_positions)
 
+    class _Book:
+        """The authenticated mirror the executor re-reads at execution.
+        0.67/0.68 is the real 0300z top of book, so own DOWN is 0.33 --
+        cheaper than the 0.3500 these tests authorize, i.e. the price has
+        NOT moved against us."""
+        snap = {"bid": "0.6700", "ask": "0.6800", "stream_age_s": "0.05",
+                "bid_shares": "448", "ask_shares": "120.84"}
+
+        def snapshot(self, _slug):
+            return dict(self.snap) if self.snap is not None else None
+
     monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "auth.jsonl"))
     monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "TAKER_COMPLETION")
     monkeypatch.delenv(TS.EXPERIMENT_ENV, raising=False)
@@ -79,14 +90,28 @@ def ex(monkeypatch, tmp_path):
     t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
     x = E.FaithfulExecutor(H.store(tmp_path), H.limits(max_live_orders=1),
                            transport=t, now_fn=H.NOW, maker_only=True)
+    x.ts_book = _Book()
     return x, t, E
 
 
-def hold(x, *, up="2", dn="1", market=SLUG):
-    """The 0300z book: UP 2 at own 0.6200, DOWN 1 at own 0.3500."""
+def hold(x, *, up="2", dn="1", market=SLUG, up_px="0.6200",
+         dn_px="0.3500"):
+    """The 0300z book: UP 2 at own 0.6200, DOWN 1 at own 0.3500.
+
+    THE COST BASIS AND ITS ATTESTATION ARE SET TOO, not just the quantity.
+    `TS.top_up` reads a missing price as D(0) -- a FREE leg -- and a free leg
+    makes every completion look like an improvement however dear, so a
+    helper that set only `positions` had the tests measuring the wrong
+    arithmetic. `fill_count` is what `cost_attested` reads, and the
+    execution-time check refuses an unattested leg outright.
+    """
     pos = x.store.state.setdefault("positions", {})
-    pos["%s|UP" % market] = str(up)
-    pos["%s|DOWN" % market] = str(dn)
+    lc = x.store.state.setdefault("leg_cost", {})
+    fc = x.store.state.setdefault("fill_count", {})
+    for side, qty, px in (("UP", up, up_px), ("DOWN", dn, dn_px)):
+        pos["%s|%s" % (market, side)] = str(qty)
+        lc["%s|%s" % (market, side)] = str(D(str(qty)) * D(str(px)))
+        fc["%s|%s" % (market, side)] = 1 if D(str(qty)) > 0 else 0
     x.store.save()
     x.transport.venue_positions = venue_rows(D(str(up)) - D(str(dn)), market)
 
@@ -504,6 +529,7 @@ def test_the_claim_is_durable_so_a_restart_cannot_cross_twice(ex, tmp_path):
     import tests.test_l5_live_execution as H
     fresh = E.FaithfulExecutor(H.store(tmp_path), H.limits(max_live_orders=1),
                                transport=t, now_fn=H.NOW, maker_only=True)
+    fresh.ts_book = x.ts_book
     assert fresh._defensive_mandate is None
     out = fresh.completion_taker_execute(
         market=SLUG, buy_side="DOWN", held_side="UP", resting=[],
@@ -521,6 +547,7 @@ def test_the_claim_is_per_window_so_the_next_window_may_complete(ex,
     import tests.test_l5_live_execution as H
     fresh = E.FaithfulExecutor(H.store(tmp_path), H.limits(max_live_orders=1),
                                transport=t, now_fn=H.NOW, maker_only=True)
+    fresh.ts_book = x.ts_book
     out = fresh.completion_taker_execute(
         market=SLUG, buy_side="DOWN", held_side="UP", resting=[],
         proposal=proposal(), window_start=WS + 900.0, now_t=NOW_TS,
@@ -721,19 +748,53 @@ def test_a_completion_is_refused_when_the_shared_budget_is_exhausted(ex):
         "ts_completion_claims"]
 
 
-def test_the_budget_test_is_on_the_worst_case_not_the_price(ex):
-    """Charged at price*qty PLUS the taker fee, so the figure tested is the
-    figure charged."""
+def test_the_budget_sizes_the_cross_down_instead_of_throwing_it_away(ex):
+    """A flat refusal respected the budget and discarded the part of the
+    rescue the budget could still afford. With one cent less than the full
+    worst case left, the cross is cut to what fits -- and the spend still
+    lands inside the bound."""
     x, t, E = ex
-    hold(x)
+    hold(x, up="20", dn="0")             # a deficit big enough to cut
     worst = D("0.3500") + TS.worst_fee(D(1), D("0.3500"))
-    # leave exactly one cent less than the worst case
     x.store.state["defensive_spent_usd"] = str(
         DC.DEFENSIVE_LOSS_BUDGET_USD - worst + D("0.01"))
     x.store.save()
+    out = run(x, prop=proposal(qty="20"))
+    assert out["ok"] is True
+    assert D(out["leg"]["qty"]) < D("20")
+    assert x.store.defensive_spent() <= DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_a_budget_with_nothing_left_still_refuses_outright(ex):
+    x, t, E = ex
+    hold(x)
+    x.store.state["defensive_spent_usd"] = str(DC.DEFENSIVE_LOSS_BUDGET_USD)
+    x.store.save()
     out = run(x)
+    assert out["ok"] is False
     assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED"
-    assert D(out["would_charge_usd"]) == worst
+
+
+def test_a_resize_must_re_earn_the_improvement_floor(ex):
+    """A smaller cross removes less exposure and may no longer pay for its
+    own fee. The floor is tested AGAIN at the affordable size."""
+    x, t, E = ex
+    hold(x, up="20", dn="0")
+    x.store.state["defensive_spent_usd"] = str(
+        DC.DEFENSIVE_LOSS_BUDGET_USD - D("0.40"))
+    x.store.save()
+    # a floor the FULL size clears (~$12.48 of improvement on 20 contracts)
+    # but the affordable ~1.1 contracts does not (~$0.76), so the refusal
+    # under test is the RESIZE's own re-check and not the earlier one
+    out = run(x, prop=proposal(qty="20",
+                               min_worst_improvement_usd="5.00"))
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_BUDGET_RESIZE_BELOW_FLOOR"
+    assert D(out["affordable_qty"]) < D("20")
+    assert x._defensive_mandate is None
+    assert x.store.defensive_spent() == (
+        DC.DEFENSIVE_LOSS_BUDGET_USD - D("0.40")), (
+        "a refused resize must not charge the budget")
 
 
 def test_exactly_enough_budget_is_allowed(ex):
@@ -1356,3 +1417,268 @@ def test_the_window_outlay_is_charged_only_on_a_submission(monkeypatch):
     r2.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
                             1793934115.0)
     assert D(str(r2._taker_outlay_usd)) > 0
+
+
+# =====================================================================
+# 16. THE $2.00 BUDGET CANNOT BE EXCEEDED BY REPEATED COMPLETIONS,
+#     ACROSS WINDOWS, ACROSS MARKETS, OR ACROSS RESTARTS.
+#
+# `defensive_spent_usd` has exactly ONE write site --
+# `InventoryStore.defensive_charge` -- it is monotone increasing, and
+# nothing in src/ or scripts/ ever resets or clears it. It lives in the
+# store on the mounted volume, so it is a LIFETIME bound rather than a
+# per-campaign one. These tests hammer it.
+# =====================================================================
+
+def _hold_market(x, market, *, up="2", dn="1"):
+    hold(x, up=up, dn=dn, market=market)
+
+
+def test_repeated_completions_across_markets_stop_at_the_budget(ex):
+    """Each attempt is charged at the worst case BEFORE the wire, so a
+    sequence of them walks the budget down and then refuses -- it never
+    walks through it."""
+    x, t, E = ex
+    granted, refused = 0, 0
+    for i in range(40):
+        market = "cpc-btc-updown-15m-2026-11-06-%04dz" % i
+        _hold_market(x, market)
+        x._defensive_mandate = None          # a fresh window, mandate expired
+        out = x.completion_taker_execute(
+            market=market, buy_side="DOWN", held_side="UP", resting=[],
+            proposal=proposal(market=market), window_start=WS + i * 900.0,
+            now_t=NOW_TS + i * 900.0, prov=None)
+        if out.get("ok"):
+            granted += 1
+        else:
+            refused += 1
+            assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED", (
+                i, out["reason"])
+    assert granted > 0, "the first attempts must be permitted"
+    assert refused > 0, "the budget must eventually bind"
+    assert x.store.defensive_spent() <= DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_the_budget_survives_a_restart_and_is_not_re_granted(ex, tmp_path):
+    """The one failure that would matter most: a process that comes back
+    believing it has a fresh $2.00."""
+    import tests.test_l5_live_execution as H
+    x, t, E = ex
+    spent_before = None
+    for i in range(40):
+        market = "cpc-btc-updown-15m-2026-11-06-%04dz" % i
+        # a FRESH executor every iteration, same volume -- i.e. a restart
+        fresh = E.FaithfulExecutor(H.store(tmp_path),
+                                   H.limits(max_live_orders=1),
+                                   transport=t, now_fn=H.NOW, maker_only=True)
+        fresh.ts_book = x.ts_book
+        _hold_market(fresh, market)
+        out = fresh.completion_taker_execute(
+            market=market, buy_side="DOWN", held_side="UP", resting=[],
+            proposal=proposal(market=market), window_start=WS + i * 900.0,
+            now_t=NOW_TS + i * 900.0, prov=None)
+        spent = fresh.store.defensive_spent()
+        assert spent <= DC.DEFENSIVE_LOSS_BUDGET_USD, (i, str(spent))
+        if spent_before is not None:
+            assert spent >= spent_before, "a restart must not reduce spend"
+        spent_before = spent
+        if not out.get("ok"):
+            assert out["reason"] == "COMPLETION_LOSS_BUDGET_EXHAUSTED"
+    assert spent_before <= DC.DEFENSIVE_LOSS_BUDGET_USD
+    assert spent_before > 0
+
+
+def test_the_budget_has_exactly_one_write_site_and_is_monotone():
+    """If a second writer appeared, or any reset, the bound above would be
+    a statement about today's code and not about the invariant."""
+    import pathlib
+    import re
+    hits = []
+    for path in pathlib.Path("src").glob("*.py"):
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(r'\[["\']defensive_spent_usd["\']\]\s*=', line):
+                hits.append("%s:%d" % (path.name, i))
+    # the FILE and the COUNT, never the line number: pinning a line makes
+    # this test fail on any edit above it, which says nothing about the
+    # invariant it is here to protect.
+    assert len(hits) == 1, hits
+    assert hits[0].startswith("l5_live_execution.py:"), hits
+    # and the charge only ever ADDS: a negative amount is floored at zero
+    import inspect
+    from src import l5_live_execution as E2
+    body = inspect.getsource(E2.InventoryStore.defensive_charge)
+    assert "if amt < 0:" in body and "amt = D(0)" in body
+    assert "total = self.defensive_spent() + amt" in body
+
+
+def test_an_unreadable_budget_is_the_whole_budget_not_zero():
+    """So a corrupted ledger exhausts the budget rather than resetting it."""
+    import inspect
+    from src import l5_live_execution as E2
+    body = inspect.getsource(E2.InventoryStore.defensive_spent)
+    assert "return DEF.DEFENSIVE_LOSS_BUDGET_USD" in body
+
+
+def test_one_mandate_per_market_per_window_bounds_attempts_per_window(ex):
+    """Two completions cannot be mandated in one market in one window, so
+    the per-window spend is bounded by ONE worst case."""
+    x, t, E = ex
+    hold(x)
+    assert run(x)["ok"] is True
+    spent_after_one = x.store.defensive_spent()
+    second = run(x)
+    assert second["ok"] is False
+    assert second["reason"] == "COMPLETION_ALREADY_MANDATED"
+    assert x.store.defensive_spent() == spent_after_one, (
+        "a refused second attempt must not charge the budget")
+
+
+# =====================================================================
+# 17. THE 1.20 CEILING IS NOT PERMISSION. THE ECONOMICS ARE RE-EARNED
+#     AFTER THE CANCEL, AGAINST THE BOOK AS IT IS THEN.
+#
+# `proposal` is TCP.authorize's verdict and it was computed BEFORE the
+# cancel. Between then and the mandate there are venue round trips -- the
+# cancel, its verification re-read, the positions read -- and the book
+# moves. Nothing downstream would catch stale economics, because
+# `pair_cost_refusal` SKIPS completion_pair_rescue for a mandated order
+# precisely because the holder is supposed to have established this.
+# =====================================================================
+
+def test_a_price_that_moved_against_us_is_refused_not_chased(ex):
+    """Chasing a rescue is how a rescue becomes the loss it was meant to
+    avoid. Authorized at own 0.3500; the book now wants 0.4500."""
+    x, t, E = ex
+    hold(x)
+    x.ts_book.snap = {"bid": "0.5500", "ask": "0.5600",
+                      "stream_age_s": "0.05"}
+    out = run(x)
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_PRICE_MOVED_AGAINST_US"
+    assert D(out["executable_px"]) > D(out["authorized_px"])
+    assert x._defensive_mandate is None
+    assert x.store.defensive_spent() == 0
+
+
+def test_a_price_that_moved_in_our_favour_still_pays_only_what_was_authorized(
+        ex):
+    x, t, E = ex
+    hold(x)
+    x.ts_book.snap = {"bid": "0.8000", "ask": "0.8100",
+                      "stream_age_s": "0.05"}      # own DOWN now 0.20
+    out = run(x)
+    assert out["ok"] is True
+    assert out["leg"]["price"] == "0.3500"          # never re-priced upward
+
+
+def test_an_unreadable_book_at_execution_refuses(ex):
+    x, t, E = ex
+    hold(x)
+    x.ts_book.snap = None
+    out = run(x)
+    assert out["reason"] == "COMPLETION_BOOK_UNREADABLE_AT_EXECUTION"
+    assert x._defensive_mandate is None
+
+
+def test_a_gapped_book_at_execution_refuses(ex):
+    x, t, E = ex
+    hold(x)
+    x.ts_book.snap = {"bid": "0.6700", "ask": "0.6800",
+                      "gap_suspected": True}
+    assert run(x)["reason"] == "COMPLETION_BOOK_GAP_AT_EXECUTION"
+
+
+@pytest.mark.parametrize("snap", [
+    {"bid": "0.6700"},                              # one-sided
+    {"ask": "0.6800"},
+    {"bid": "0.6800", "ask": "0.6700"},              # crossed
+    {"bid": "0", "ask": "0.6800"},
+])
+def test_a_book_that_is_not_two_sided_at_execution_refuses(ex, snap):
+    x, t, E = ex
+    hold(x)
+    x.ts_book.snap = snap
+    assert run(x)["reason"] == (
+        "COMPLETION_BOOK_NOT_TWO_SIDED_AT_EXECUTION")
+
+
+def test_a_completion_that_reduces_no_exposure_is_refused_at_execution(ex):
+    """The exact thing the 1.20 ceiling must never be read as permitting.
+
+    AND THE ARITHMETIC WORTH KNOWING. A matched pair caps the worse outcome
+    at `1 - q - p - fees`, and holding leaves `-q - fee`, so the improvement
+    is about `1 - p` less the extra fee. Measured on a 1 UP leg at own 0.05:
+
+        complement own px   0.90   0.95   0.98   0.99
+        improvement        0.09   0.04   0.01   0.00
+
+    So worst-case improvement is positive for ALMOST ANY complement below
+    ~0.99 -- which is exactly why the improvement floor and the EV give-up
+    budget carry the weight here, and why "it improves the worse outcome"
+    is a necessary and badly insufficient condition on its own. At 0.99 the
+    improvement is zero and this refuses.
+    """
+    x, t, E = ex
+    hold(x, up="1", dn="0", up_px="0.0500")
+    x.ts_book.snap = {"bid": "0.0100", "ask": "0.0200",
+                      "stream_age_s": "0.05"}       # own DOWN 0.99
+    out = run(x, prop=proposal(price="0.9900"))
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_NO_RISK_REDUCTION_AT_EXECUTION"
+    assert D(out["improvement_usd"]) <= 0
+    assert x._defensive_mandate is None
+    assert x.store.defensive_spent() == 0
+
+
+def test_an_unattested_held_basis_is_refused_rather_than_priced_at_zero(ex):
+    """`TS.top_up` reads a missing price as D(0) -- a FREE leg -- and a free
+    leg makes every completion look like an improvement however dear."""
+    x, t, E = ex
+    hold(x)
+    x.store.state["fill_count"] = {}          # quantity adopted, not filled
+    x.store.save()
+    out = run(x)
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_BASIS_UNATTESTED_AT_EXECUTION"
+    assert x._defensive_mandate is None
+
+
+def test_the_improvement_is_re_earned_at_the_clamped_quantity(ex):
+    """The policy priced 1 contract; the post-cancel deficit is 0.4. The
+    improvement is recomputed at 0.4, not inherited from the 1."""
+    x, t, E = ex
+    hold(x, up="2", dn="1.6")
+    out = run(x, prop=proposal(qty="1",
+                               min_worst_improvement_usd="0.01"))
+    assert out["ok"] is True
+    assert D(out["leg"]["qty"]) == D("0.40")
+
+
+def test_an_execution_time_floor_breach_is_named_distinctly(ex):
+    """So the tape can tell a rescue that never qualified from one whose
+    economics evaporated during the cancel."""
+    x, t, E = ex
+    hold(x)
+    out = run(x, prop=proposal(min_worst_improvement_usd="99.00"))
+    assert out["reason"] == (
+        "COMPLETION_IMPROVEMENT_BELOW_FLOOR_AT_EXECUTION")
+    assert D(out["improvement_usd"]) > 0        # it DID reduce risk ...
+    assert D(out["improvement_usd"]) < D("99.00")   # ... just not enough
+
+
+def test_the_re_verification_runs_before_the_budget_is_charged(ex):
+    import inspect
+    from src import l5_live_execution as E2
+    src = inspect.getsource(E2.FaithfulExecutor.completion_taker_execute)
+    assert src.index("COMPLETION_NO_RISK_REDUCTION_AT_EXECUTION") < src.index(
+        "defensive_charge(")
+    assert src.index("COMPLETION_PRICE_MOVED_AGAINST_US") < src.index(
+        "_defensive_mandate = {")
+
+
+def test_the_runner_carries_the_floor_into_the_proposal():
+    import inspect
+    from src import l5_pmus_live_runner as RUN2
+    src = inspect.getsource(RUN2.Runner.submit_ts_completion)
+    assert "min_worst_improvement_usd" in src
+    assert "TCP.MIN_WORST_IMPROVEMENT_ENV" in src

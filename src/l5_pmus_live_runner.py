@@ -7897,6 +7897,8 @@ class Runner:
         # ---- THE PROPOSAL. The policy's own conservative quantity and VWAP,
         # clamped again by the ranking's size: two independent sizings and the
         # order is the smaller, which can only ever reduce it.
+        _impr_floor = self._taker_policy_number(
+            TCP.MIN_WORST_IMPROVEMENT_ENV, None)
         try:
             qty = min(D(str(pol.get("qty"))), D(str(chosen.get("qty"))))
             px = D(str(pol.get("price")))
@@ -7907,6 +7909,13 @@ class Runner:
         if qty <= 0:
             return dict(out, withheld_by="PROPOSAL_QTY_NOT_POSITIVE")
         proposal = dict(pol, qty=str(qty), price=str(px), side=side,
+                        # CARRIED SO THE EXECUTOR CAN RE-EARN IT. The policy
+                        # tested the improvement floor against the book as it
+                        # was; `completion_taker_execute` tests it AGAIN
+                        # after the cancel, at the clamped quantity, and
+                        # again if the budget forces a smaller size.
+                        min_worst_improvement_usd=(
+                            None if _impr_floor is None else str(_impr_floor)),
                         # THE MARKET THIS WAS PRICED ON, carried so
                         # `completion_taker_execute` can refuse a proposal
                         # that reached a different one rather than take the

@@ -223,6 +223,68 @@ per-window outlay caps. My first version of the mandate's own label said it was
 "not a change to the 0.96 pair ceiling" — true of every *other* order and
 misleading about this one. Corrected in the code and pinned by five tests.
 
+### Recommended values, chosen from the replay rather than from taste
+
+**`L5_TAKER_MIN_WORST_IMPROVEMENT_USD = 0.25`**
+**`L5_MAX_COMPLETION_EV_GIVEUP_USD = 0.05`**
+
+Measured distributions over the recorded books:
+
+| | 0300z (117 actionable) | 0315z (96 actionable) | OOS (387) |
+|---|---|---|---|
+| improvement min / median / max | 0.005 / **0.60** / 0.79 | 0.01 / **0.19** / 0.35 | 0.01 / **0.35** / 1.72 |
+| EV give-up min / median / max | 0.0138 / **0.025** / 0.04 | 0.015 / **0.025** / 0.03 | — |
+
+EV give-up is **essentially the taker fee** — the complement is bought near fair
+value, so the only expected value surrendered is the commission.
+
+Candidate pairs, applied to the two windows that actually lost money:
+
+| floor / EV cap | 0300z | 0315z |
+|---|---|---|
+| 0.10 / 0.05 | 110 opportunities, first t+115 s @ 0.65 | 69, first t+124 s @ 0.35 |
+| **0.25 / 0.05** | **94, first t+115 s @ 0.65** | **18, first t+124 s @ 0.35** |
+| 0.25 / **0.02** | 86, first @ 0.49 | **0 — window lost entirely** |
+| **0.50** / 0.05 | 81, first @ 0.65 | **0 — window lost entirely** |
+
+Why these two numbers and not others:
+
+* **The floor must be ≤ 0.35**, because 0315z's *best* opportunity all window
+  was +$0.35. A floor of 0.50 discards that window completely.
+* **The EV cap must be ≥ 0.05**, because 0315z's complement at own 0.63 carries
+  a 2-cent fee and a cap of 0.02 refuses it — losing the window for the sake of
+  a cent.
+* **0.25 captures both windows at their first and best moment** (+$0.65 and
+  +$0.35) while cutting the marginal tail hard: 0315z drops from 96 nominal
+  opportunities to the 18 that are materially worth the scarce budget, and OOS
+  from 387 to 244 (63 %).
+* **The $2.00 lifetime budget affords only 3–5 attempts, ever**, charged at the
+  worst case (~$0.37 at own 0.35, ~$0.65 at own 0.63). With so few shots the
+  floor has to be selective, which rules the lower candidates out on
+  budget-allocation grounds even though they admit more nominal opportunities.
+
+**A trap worth naming: a fixed-dollar EV cap is an implicit size cap.** The fee
+is linear in quantity — 1 contract ≈ $0.02, 2 ≈ $0.04, 5 ≈ $0.08, 10 ≈ $0.16 —
+so $0.05 permits a 1–2 contract cross and silently refuses a 5-contract one. At
+the validation sizes proposed that is the correct behaviour and a useful second
+bound, but it must be raised deliberately if size ever grows, or it will read as
+an unexplained refusal.
+
+### Why worst-case improvement alone is a weak gate
+
+A matched pair caps the worse outcome at `1 - q - p - fees` and holding leaves
+`-q - fee`, so the improvement is about `1 - p` less the extra fee. Measured on
+a 1 UP leg at own 0.05:
+
+| complement own px | 0.90 | 0.95 | 0.98 | 0.99 |
+|---|---|---|---|---|
+| improvement | 0.09 | 0.04 | 0.01 | 0.00 |
+
+So *almost any* complement below ~0.99 "improves the worse outcome". That makes
+`worst_after > worst_before` a necessary and badly insufficient condition, and
+it is why the improvement floor and the EV give-up budget carry the real weight.
+Pinned by `test_a_completion_that_reduces_no_exposure_is_refused_at_execution`.
+
 ### The switches, all default-OFF
 
 | env | what it authorizes |
