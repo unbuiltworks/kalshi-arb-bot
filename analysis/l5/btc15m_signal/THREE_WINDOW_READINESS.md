@@ -308,3 +308,61 @@ quarter-hours strictly after `now`. A mint at 02:00Z gives 02:15/02:30/02:45Z.
 **submitted 0 · filled 0 · settled 0 · realized $0.00**
 
 Stopping here. I will not arm.
+
+---
+
+# INSTALLED CAMPAIGN — 2026-11-06T02:37Z
+
+Minted with `scripts/l5_mint_campaign_194.py --windows 3` and installed on the
+owner's written instruction ("Mint and install the fresh campaign"). Note the
+script's own convention is that installing is the owner's action; it was done
+here on that explicit instruction, and the audit trail shows this session as
+the installer. **Trading remained blocked throughout by `L5_LIVE_HALT=1` and
+`armed=false`, neither of which was touched.**
+
+| field | value |
+|---|---|
+| campaign id (engine, `nonce_sid`) | **`camp1.085d0f207999ebb732fc7eda6118c7be`** |
+| nonce | `085d0f207999ebb732fc7eda6118c7be` |
+| document SHA256 | **`620b36ade74f2d063ca0d802bb2bb782d96f7d290d2fd82a3a483bdc5454aa0e`** |
+| series | `cpc-btc-updown-15m-` |
+| issued_utc | 2026-11-06T02:37:12Z |
+| expires_utc | 2026-11-06T03:45:00Z |
+| windows | 02:45Z, 03:00Z, 03:15Z |
+| `L5_LIVE_AUTH_NOT_AFTER` | 2026-11-06T03:45:00Z (pinned to the document expiry) |
+
+Digest recomputed independently from the exact installed string, not taken
+from the script's own print.
+
+## A reporting defect found and fixed while verifying
+
+The script printed `camp1.` + `sha256(nonce)[:24]` = `camp1.a8a513d6a8d112c7e83d197e`.
+**No gate ever computes that string.** `CA.nonce_sid()` returns
+`camp1.` + the nonce verbatim, and that is what the claim ledger, the budget
+ledger, `refuse_arming` and `L5_LIVE_GATES` all key on — confirmed live:
+`"campaign_id":"camp1.085d0f207999ebb732fc7eda6118c7be"`. An owner authorizing
+the sha-derived id would have named something absent from the running system,
+and a later `close()` or `release_stale()` keyed on it would not have matched.
+Fixed to call `CA.nonce_sid`, with two tests including one that asserts the
+discarded derivation is genuinely different.
+
+## Post-install verification, new container (deployment `b1f067fe`, 02:40:40Z)
+
+| check | value |
+|---|---|
+| `approval_state` | **`approved`** (was `approval_stale`) |
+| `campaign_id` in gates | `camp1.085d0f207999ebb732fc7eda6118c7be` |
+| `max_windows` / `windows_remaining` | **3 / 3** |
+| `submissions_spent` / `max_submissions` | **0 / 500** — fresh nonce, own claim ledger |
+| `expires_utc` | 2026-11-06T03:45:00Z |
+| `halt_local_env` | **true** — untouched |
+| `armed` | **false** |
+| `preflight` | PASSED |
+| reconciled / authority / ALERT | true / VENUE / null |
+| open orders / pending terminal / quarantined | 0 / 0 / none |
+| `realized_today` | **−$13.7795** |
+| `max_cumulative_loss_usd` | **$18.6325** |
+| **headroom** | **$4.8530** |
+| 3-window worst case | $4.50 — fits, margin $0.3530 |
+| predecessor budget ledger | `camp1.4a09bc22` `closed: true`, peak not chargeable to the new nonce |
+| venue requests | `http_429: 0`, not in cooloff |

@@ -220,8 +220,15 @@ if __name__ == "__main__":
     doc = mint(windows=_w)
     st, raw = validate(doc)
     digest = hashlib.sha256(raw.encode()).hexdigest()
-    cid = "camp1." + hashlib.sha256(
-        doc["nonce"].encode()).hexdigest()[:24]
+    # THE ID THE ENGINE ACTUALLY USES, not a second derivation of it.
+    # This printed "camp1." + sha256(nonce)[:24], which is a string no gate
+    # ever computes: `CA.nonce_sid` returns "camp1." + the nonce verbatim,
+    # and that is what the claim ledger, the budget ledger, refuse_arming
+    # and the L5_LIVE_GATES telemetry all key on. Printing the other one
+    # meant an owner authorizing "campaign camp1.a8a513d6..." named an id
+    # that appears nowhere in the running system, and a later close() or
+    # release_stale() keyed on it would not match.
+    cid = CA.nonce_sid(doc["nonce"])
 
     worst, ok, total_ok, per = reserve_holds()
     print("=" * 72)

@@ -140,3 +140,26 @@ def test_minting_installs_nothing():
     before = os.environ.get(CA.APPROVAL_ENV)
     M.validate(M.mint(now=NOW, nonce="i" * 32, windows=3))
     assert os.environ.get(CA.APPROVAL_ENV) == before
+
+
+# ------------------------------------- the campaign id must be the engine's
+def test_the_printed_campaign_id_is_the_one_the_engine_keys_on():
+    """`nonce_sid` is what the ledgers, refuse_arming and telemetry use.
+
+    The script printed "camp1." + sha256(nonce)[:24] instead, a string no
+    gate ever computes, so an owner authorizing that id named something that
+    appears nowhere in the running system.
+    """
+    import hashlib
+    doc = M.mint(now=NOW, nonce="j" * 32, windows=3)
+    assert CA.nonce_sid(doc["nonce"]) == "camp1." + doc["nonce"]
+    # and the discarded derivation is genuinely different
+    assert CA.nonce_sid(doc["nonce"]) != "camp1." + hashlib.sha256(
+        doc["nonce"].encode()).hexdigest()[:24]
+
+
+def test_the_mint_scripts_main_uses_nonce_sid():
+    import inspect
+    src = inspect.getsource(M)
+    assert "CA.nonce_sid(doc[\"nonce\"])" in src
+    assert 'hashlib.sha256(\n        doc["nonce"]' not in src
