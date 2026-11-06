@@ -795,3 +795,58 @@ def test_a_clamped_scalar_says_it_was_clamped():
     out = TS.bounded_for_log(rep)
     assert out["state"].endswith("...[clamped]")
     assert len(out["state"]) < 300
+
+
+# =====================================================================
+# 9. THE BOUND IS SCOPED TO THE OBSERVABILITY LINE AND NOTHING ELSE.
+#
+# The reduction must not reach the records that are authoritative:
+# settlement, reconciliation, the window accounting, or the durable
+# shadow ledger on the volume. Those are read to decide what is REALIZED,
+# and a reduced one would be a silently incomplete financial record.
+# =====================================================================
+
+AUTHORITATIVE = (
+    "L5_LIVE_SETTLED", "L5_LIVE_RECONCILE", "L5_LIVE_WINDOW",
+    "L5_CAMPAIGN_ROLLING", "L5_LIVE_GATES", "L5_TS_COMPLETION",
+    "L5_TS_COMPLETION_RESULT", "L5_SHADOW_COMPLETION_SETTLED",
+)
+
+
+@pytest.mark.parametrize("label", AUTHORITATIVE)
+def test_no_authoritative_record_is_passed_through_the_bound(label):
+    """Only L5_TWO_SIDED_SHADOW is reduced. Everything that decides what
+    is realized is emitted whole."""
+    import re
+    src = inspect.getsource(RUN)
+    for m in re.finditer(r'emit\("%s",\s*(.{0,60})' % re.escape(label),
+                         src, re.S):
+        assert "bounded_for_log" not in m.group(1), (label, m.group(1))
+
+
+def test_the_bound_is_applied_to_exactly_one_label():
+    import re
+    src = inspect.getsource(RUN)
+    labels = set()
+    for m in re.finditer(r'emit\("([A-Z0-9_]+)",\s*(?:\n\s*)?'
+                         r'(?:[A-Za-z_.]*\()?TS\.bounded_for_log', src):
+        labels.add(m.group(1))
+    assert labels == {"L5_TWO_SIDED_SHADOW"}, labels
+
+
+def test_the_ledgers_own_writers_do_not_reduce():
+    """park and finalize are the durable copy; neither may bound."""
+    for fn in (TS.ShadowLedger.park, TS.ShadowLedger.finalize):
+        assert "bounded_for_log" not in inspect.getsource(fn)
+
+
+def test_bounded_for_log_does_not_mutate_what_it_is_given():
+    """The caller still holds the full report to store on the volume."""
+    rep = _big_report(cells=400)
+    before_cells = len(rep["cells"])
+    before_hist = len(rep["spread_histogram"])
+    TS.bounded_for_log(rep)
+    assert len(rep["cells"]) == before_cells
+    assert len(rep["spread_histogram"]) == before_hist
+    assert "cells_reduced" not in rep
+    assert "noise" in rep["cells"][0]

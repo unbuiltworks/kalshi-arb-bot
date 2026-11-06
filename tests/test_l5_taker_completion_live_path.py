@@ -1761,3 +1761,105 @@ def test_a_genuine_fill_at_zero_is_attested_and_a_missing_one_is_not(ex):
     assert x.store.leg_cost(SLUG)["UP"] == D("0")
     assert x.store.cost_attested(SLUG, "UP") is True     # free, and known
     assert x.store.cost_attested(SLUG, "DOWN") is False  # nothing at all
+
+
+# =====================================================================
+# 13. THE LEGACY UNATTESTED INVENTORY THAT IS ON THE VOLUME RIGHT NOW.
+#
+# `L5_LIVE_RECONCILE` on deployment a342fccc, every sweep, 2026-11-06:
+#
+#   drift  cpc-btc-updown-15m-2026-10-12-0030z|DOWN  ours 2       venue 0
+#          cpc-btc-updown-15m-2026-10-14-2230z|UP    ours 2.9000  venue 0
+#   leg_cost_basis_unknown  54 entries
+#   gross_detail_lost       both markets above
+#
+# These are real rows on the live volume: quantity our book believes in,
+# which the venue does not report, with no attested cost. Three separate
+# things must refuse to cross on them, and a test for each -- because any
+# ONE of them holding is not evidence that the others do.
+# =====================================================================
+
+LEGACY_DN = "cpc-btc-updown-15m-2026-10-12-0030z"
+LEGACY_UP = "cpc-btc-updown-15m-2026-10-14-2230z"
+
+
+def _legacy(x, market, side, qty):
+    """The reconcile shape: quantity, no leg_cost, no fill_count."""
+    x.store.state.setdefault("positions", {})["%s|%s" % (market, side)] = qty
+    x.store.state.pop("fill_count", None)
+    x.store.state.pop("leg_cost", None)
+    x.store.save()
+
+
+def test_the_live_legacy_DOWN_leg_cannot_authorize_a_cross(ex):
+    x, t, E = ex
+    _legacy(x, LEGACY_DN, "DOWN", "2")
+    assert x.store.cost_attested(LEGACY_DN, "DOWN") is False
+    out = run(x, market=LEGACY_DN, buy_side="UP", held_side="DOWN",
+              prop=proposal(side="UP"))
+    assert out["ok"] is False
+    assert x._defensive_mandate is None
+    assert x.store.defensive_spent() == 0
+
+
+def test_the_live_legacy_UP_leg_cannot_authorize_a_cross(ex):
+    x, t, E = ex
+    _legacy(x, LEGACY_UP, "UP", "2.9000")
+    assert x.store.cost_attested(LEGACY_UP, "UP") is False
+    out = run(x, market=LEGACY_UP, buy_side="DOWN", held_side="UP")
+    assert out["ok"] is False
+    assert x._defensive_mandate is None
+    assert x.store.defensive_spent() == 0
+
+
+def test_legacy_inventory_in_ANOTHER_market_is_not_reachable_from_this_one(ex):
+    """A proposal names its market. The 54 legs live in other markets, and
+    the route must not find them from the window it is working: a proposal
+    for one market cannot be spent on inventory in another."""
+    x, t, E = ex
+    _legacy(x, LEGACY_DN, "DOWN", "2")
+    hold(x)                      # attested inventory in the CURRENT market
+    out = run(x, prop=proposal(market=LEGACY_DN))
+    assert out["ok"] is False
+    assert out["reason"] == "COMPLETION_PROPOSAL_MARKET_MISMATCH"
+    assert x._defensive_mandate is None
+
+
+def test_a_legacy_leg_the_venue_does_not_report_is_refused(ex):
+    """ours 2, venue 0. Even with a basis invented, the venue disagrees."""
+    x, t, E = ex
+    k = "%s|DOWN" % LEGACY_DN
+    x.store.state.setdefault("positions", {})[k] = "2"
+    x.store.state.setdefault("leg_cost", {})[k] = "0.70"
+    x.store.state.setdefault("fill_count", {})[k] = 1
+    x.store.save()
+    x.transport.venue_positions = venue_rows(D("0"), LEGACY_DN)
+    out = run(x, market=LEGACY_DN, buy_side="UP", held_side="DOWN",
+              prop=proposal(side="UP"))
+    assert out["ok"] is False
+    assert x._defensive_mandate is None
+
+
+def test_every_one_of_the_54_unattested_keys_reads_as_unattested(ex):
+    """The whole list from the live sweep, not a sample of it."""
+    x, t, E = ex
+    keys = [
+        "cpc-btc-updown-15m-2026-10-14-2230z|UP",
+        "cpc-btc-updown-15m-2026-10-15-1915z|DOWN",
+        "cpc-btc-updown-15m-2026-10-15-1930z|UP",
+        "cpc-btc-updown-15m-2026-10-15-1945z|DOWN",
+        "cpc-btc-updown-15m-2026-10-15-2215z|DOWN",
+        "cpceth-eth-updown-15m-2026-10-15-2230z|DOWN",
+        "cpcsol-sol-updown-15m-2026-10-15-2330z|UP",
+        "cpcxrp-xrp-updown-15m-2026-10-16-0100z|DOWN",
+        "cpc-btc-updown-1d-2026-10-15-2100z|DOWN",
+        "cpc-btc-updown-15m-2026-11-05-2315z|UP",
+    ]
+    pos = x.store.state.setdefault("positions", {})
+    for k in keys:
+        pos[k] = "1"
+    x.store.state.pop("fill_count", None)
+    x.store.save()
+    for k in keys:
+        m, s = k.rsplit("|", 1)
+        assert x.store.cost_attested(m, s) is False, k
