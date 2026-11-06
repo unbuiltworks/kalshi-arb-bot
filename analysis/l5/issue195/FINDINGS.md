@@ -521,3 +521,60 @@ That is a thinner margin than the layering is capable of. Asserting
 `L5_LIVE_HALT`, or setting `L5_SHADOW_ONLY`, each needs a variable write and a
 redeploy of a money-capable service, so both are left as owner actions and
 neither was done here.
+
+---
+
+## A separate defect found while verifying the durable ledger: `finalized` is unbounded
+
+Found while checking the owner's Phase A item "the watchdog and durable
+ledger remain healthy", and worth recording because it was very nearly
+mistaken for the cause of the residual rollover cost.
+
+`ShadowLedger.state` has two halves. `pending` is bounded — `max_pending = 16`,
+oldest first out, so a stuck window cannot starve new ones. **`finalized` has
+no bound at all.** Every window ever scored is retained in full, cells
+included, and `save()` rewrites the WHOLE file on every `park` and every
+`finalize` — which are called in `two_sided_close` and `two_sided_settle`,
+exactly the two stages carrying the 6-7 s.
+
+So the obvious hypothesis was that the growing roll cost (6.400 s, 6.606 s,
+7.437 s across windows 1-3) was this file growing, not the log line. Measured
+rather than assumed:
+
+```
+one scored report serialises to 84,376 bytes
+
+ N finalized |  file MB | save() s
+           0 |     0.00 |    0.000
+          50 |     4.22 |    0.052
+          96 |     8.11 |    0.075
+         200 |    16.89 |    0.136
+         480 |    40.53 |    0.333
+         960 |    81.05 |    0.684
+        2000 |   168.86 |    1.623
+```
+
+**It is not the cause.** At a realistic 96 windows the save costs 0.075 s,
+which is 90x short of the 7 s observed. The log-line explanation survives this
+test; this one does not. Recorded because a plausible hypothesis that fails a
+measurement is worth keeping, and because the next person to look at those two
+stages will have the same idea.
+
+**It is still a defect, and a slow-motion version of the one just fixed.**
+
+* growth is ~8.1 MB a day at 96 windows a day, so the 50 GB volume is not at
+  risk for years — this is NOT the 2026-09-26 observer volume failure
+  repeating.
+* the cost is linear in session age. At 2,000 windows, about three weeks, the
+  save is 1.6 s and it runs TWICE a window. Far enough out to not be urgent,
+  certain enough to not be ignorable.
+
+**Deliberately NOT bundled into the Phase A2 deploy.** That deploy exists to
+test one hypothesis — bound the log line, see whether roll falls below 2 s. Two
+changes at once and a pass would not say which one worked. The retention fix
+belongs in its own change, after A1 is settled either way.
+
+Proposed shape when it is taken: bound `finalized` the way `pending` already
+is, keeping the most recent N scored reports whole and reducing older ones to
+their economics via the digest `bounded_for_log` already has. Scoring reads the
+recent ones; the older ones only need their P&L.
