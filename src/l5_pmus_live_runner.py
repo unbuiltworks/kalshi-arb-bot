@@ -3749,6 +3749,19 @@ class Runner:
         if t is None or now - self.last_two_sided_settle_t < SETTLEMENT_POLL_S:
             return
         self.last_two_sided_settle_t = now
+        # WHAT THE LEDGER COSTS. One small line a settle pass, reporting
+        # only: `finalized` is unbounded and `save` rewrites the whole file
+        # twice a window on a network volume, which is the remaining
+        # candidate for the residual rollover cost now that bounding the log
+        # line has been deployed and demonstrably changed nothing. Measure
+        # first; the retention fix waits on this number.
+        try:
+            emit("L5_SHADOW_LEDGER", self.two_sided_ledger.size_report())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_ledger_size_report_failed:%s"
+                       % type(exc).__name__] += 1
         for bad in self.two_sided_ledger.expire(now):
             self.stats["two_sided_settle_expired"] += 1
             emit("L5_TWO_SIDED_SHADOW", TS.bounded_for_log(bad))

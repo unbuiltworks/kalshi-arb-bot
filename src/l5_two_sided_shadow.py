@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -947,10 +948,46 @@ class ShadowLedger:
             self.state = {"pending": {}, "finalized": {}}
 
     def save(self) -> None:
+        """Write the ledger, and MEASURE the write.
+
+        The write is instrumented because the rollover cost of issue #195
+        outlived the fix that was supposed to remove it. Bounding the log
+        line was deployed on the strength of a correlation and changed the
+        roll cost by nothing -- 6.511 s against a 6.882 s mean -- so the
+        remaining candidate is this: `finalized` is unbounded, every scored
+        report is ~156 KB, and this method rewrites the WHOLE file on every
+        park and every finalize, twice a window, on a network-attached
+        volume. That is a hypothesis and it is not being acted on until it
+        is measured, which is what these four attributes are for.
+
+        Reporting only. Nothing here changes what is written.
+        """
         tmp = self.path + ".tmp"
+        t0 = time.monotonic()
         with open(tmp, "w") as fh:
             json.dump(self.state, fh)
         os.replace(tmp, self.path)
+        self.last_save_s = round(time.monotonic() - t0, 4)
+        self.saves = int(getattr(self, "saves", 0)) + 1
+        try:
+            self.last_save_bytes = os.path.getsize(self.path)
+        except BaseException:                                  # noqa: BLE001
+            self.last_save_bytes = None
+
+    def size_report(self) -> Dict[str, Any]:
+        """What the ledger costs, for one log line per roll."""
+        return {"finalized": len(self.state.get("finalized") or {}),
+                "pending": len(self.state.get("pending") or {}),
+                "bytes": getattr(self, "last_save_bytes", None),
+                "last_save_s": getattr(self, "last_save_s", None),
+                "saves_this_process": int(getattr(self, "saves", 0)),
+                "max_pending": self.max_pending,
+                "labels": ("`finalized` has NO bound: every window ever "
+                           "scored is kept whole. Two saves a window, each "
+                           "rewriting the entire file. This line exists to "
+                           "measure whether that is the residual rollover "
+                           "cost, before anything is changed on that "
+                           "belief.")}
 
     # ------------------------------------------------------------ parking
     def park(self, report: Mapping[str, Any], *, now: float) -> Dict[str, Any]:

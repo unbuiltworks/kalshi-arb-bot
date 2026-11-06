@@ -858,3 +858,96 @@ def test_bounded_for_log_does_not_mutate_what_it_is_given():
     assert len(rep["spread_histogram"]) == before_hist
     assert "cells_reduced" not in rep
     assert "noise" in rep["cells"][0]
+
+
+# =====================================================================
+# 10. THE INSTRUMENTATION THAT CAME AFTER THE FIX DID NOT WORK.
+#
+# Bounding the log line was deployed on 7e3d1e1b at a31fe8fd4 and the
+# reduction DID work -- the live line carries
+# `cells_reduced {"cells": 27, "full_bytes": 155943, "budget_bytes":
+# 48000}` and every cell is `_reduced` -- while the roll cost did not
+# move at all:
+#
+#   before, 8 windows   6.400 6.606 7.437 6.649 6.683 6.417 7.984 6.558
+#                       mean 6.882
+#   after, 17:45z       6.511          two_sided_settle 6.315
+#
+# So the log write was NOT the cost. The hypothesis is falsified by its
+# own fix. `report()` and `score_report()` were measured next and are
+# free -- 0.030 s for all 189 ticks of the live window.
+#
+# The remaining candidate is this ledger: `finalized` is unbounded, a
+# scored report is ~156 KB, and `save` rewrites the WHOLE file on every
+# park and every finalize -- twice a window, on a network volume. Local
+# disk at the real record size:
+#
+#      N | file MB | save() s | 2x/window
+#     96 |    15.3 |    0.064 |   0.127
+#    480 |    76.6 |    0.469 |   0.937
+#    960 |   153.2 |    0.807 |   1.615
+#   1440 |   229.8 |    1.833 |   3.665
+#
+# which reaches the observed range at a plausible N once the volume is
+# slower than local disk. PLAUSIBLE IS NOT MEASURED, and the last
+# plausible hypothesis was wrong, so nothing is changed on this belief
+# until the running service reports its own number.
+# =====================================================================
+
+def test_save_records_its_own_duration_and_size(tmp_path):
+    led = TS.ShadowLedger(str(tmp_path / "s.json"))
+    led.state["finalized"] = {"w%d" % i: {"market": "w%d" % i} for i in range(5)}
+    led.save()
+    assert led.last_save_s is not None and led.last_save_s >= 0
+    assert led.last_save_bytes == (tmp_path / "s.json").stat().st_size
+    assert led.saves == 1
+    led.save()
+    assert led.saves == 2
+
+
+def test_the_size_report_names_the_unbounded_half(tmp_path):
+    led = TS.ShadowLedger(str(tmp_path / "s.json"))
+    led.state["finalized"] = {"w%d" % i: {"market": "w%d" % i}
+                              for i in range(7)}
+    led.state["pending"] = {"p1": {"market": "p1"}}
+    led.save()
+    r = led.size_report()
+    assert r["finalized"] == 7
+    assert r["pending"] == 1
+    assert r["max_pending"] == led.max_pending
+    assert r["bytes"] == (tmp_path / "s.json").stat().st_size
+    assert r["saves_this_process"] == 1
+    assert "NO bound" in r["labels"]
+
+
+def test_the_size_report_works_before_any_save(tmp_path):
+    """A fresh process must not raise on the first settle pass."""
+    led = TS.ShadowLedger(str(tmp_path / "s.json"))
+    r = led.size_report()
+    assert r["bytes"] is None and r["last_save_s"] is None
+    assert r["saves_this_process"] == 0
+
+
+def test_the_instrumentation_changes_nothing_that_is_written(tmp_path):
+    """Reporting only: the file is byte-identical to an uninstrumented
+    dump of the same state."""
+    import json as _j
+    led = TS.ShadowLedger(str(tmp_path / "s.json"))
+    led.state["finalized"] = {"w1": {"market": "w1", "cells": [{"a": "1"}]}}
+    led.save()
+    on_disk = (tmp_path / "s.json").read_text()
+    assert on_disk == _j.dumps(led.state)
+
+
+def test_the_runner_emits_the_ledger_size_once_a_settle_pass():
+    src = inspect.getsource(RUN)
+    assert src.count('emit("L5_SHADOW_LEDGER"') == 1
+    assert "size_report()" in src
+
+
+def test_a_failing_size_report_cannot_break_the_settle_pass():
+    """It is instrumentation. It must not be able to stop settlement."""
+    src = inspect.getsource(RUN.Runner.two_sided_settle)
+    i = src.index('emit("L5_SHADOW_LEDGER"')
+    assert "try:" in src[max(0, i - 400):i]
+    assert "shadow_ledger_size_report_failed" in src
