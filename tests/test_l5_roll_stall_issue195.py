@@ -1092,3 +1092,97 @@ def test_the_never_reduce_list_covers_what_the_owner_is_owed():
               "open_orders", "live_orders", "positions", "inventory",
               "fees", "rebates", "orders_uncertain", "submission_gate"):
         assert k in TS.HB_NEVER_REDUCE, k
+
+
+# =====================================================================
+# 12. THE AUTHORIZATION PREFLIGHT VERDICT, IN THE HEARTBEAT.
+#
+# THE INCIDENT, 2026-11-06. The authorized 20:00z window of the
+# two-window live test never armed:
+#
+#   L5_LIVE_DISARMED  market=...-2000z  why=AUTHORIZATION_EXPIRED
+#                     not_after=2026-11-06T03:45:00+00:00
+#                     boundary=l5_live_authorization.authorize_arming
+#
+# `L5_LIVE_AUTH_NOT_AFTER` had lapsed ~16 hours earlier. The preflight
+# CAUGHT IT, at the 19:34 boot, 26 minutes before the window:
+#
+#   L5_AUTHORIZATION_PREFLIGHT  ok=false  fail=["absolute_deadline"]
+#     {"check":"absolute_deadline","verdict":"FAIL","state":"EXPIRED",
+#      "expires_in_s":-56974.4,"blocks":"AUTHORIZATION_EXPIRED (step 26)"}
+#
+# with every other check PASS, campaign_approval included. Nobody read
+# that line, and the campaign looked ready in the heartbeat.
+#
+# WHY IT WAS NOT IN THE HEARTBEAT. The runner's own comment: "Its own
+# line because the heartbeat already exceeds the log transport's
+# per-line limit and its tail is truncated in production." The
+# workaround for the truncation `bounded_hb` now fixes is the reason the
+# verdict was absent from the line anyone was polling.
+#
+# So it goes back in, compact, and CONTINUOUS rather than boot-only --
+# a deadline that lapses mid-campaign is now visible before the next
+# window instead of after it.
+# =====================================================================
+
+def test_the_verdict_is_in_the_heartbeat_and_never_reduced():
+    assert "authorization_preflight" in TS.HB_NEVER_REDUCE
+    src = inspect.getsource(RUN)
+    assert '"authorization_preflight": self.authorization_preflight_verdict()' \
+        in src
+
+
+def test_the_verdict_survives_an_oversized_heartbeat():
+    """The whole point: it must not be the field that gets dropped."""
+    hb = _hb(extra_bytes=400000)
+    hb["authorization_preflight"] = {"ok": False,
+                                     "fail": ["absolute_deadline"],
+                                     "unknown": []}
+    out = TS.bounded_hb(hb)
+    assert out["authorization_preflight"]["ok"] is False
+    assert out["authorization_preflight"]["fail"] == ["absolute_deadline"]
+
+
+def test_an_unreadable_verdict_is_not_ok(monkeypatch):
+    """A verdict we cannot compute must never read as a pass."""
+    import src.l5_pmus_live_runner as R
+
+    class Boom:
+        @staticmethod
+        def authorization_preflight(*a, **k):
+            raise RuntimeError("env unreadable")
+
+    class FakeRunner:
+        root = "/tmp"
+        transport = None
+        stats = __import__("collections").Counter()
+        authorization_preflight_verdict = \
+            R.Runner.authorization_preflight_verdict
+
+    monkeypatch.setattr(R, "AUTH", Boom)
+    v = FakeRunner().authorization_preflight_verdict()
+    assert v["ok"] is None          # NOT True, and not False either
+    assert v["error"] == "RuntimeError"
+    assert "never read this as ok" in v["labels"]
+
+
+def test_the_verdict_is_compact_not_the_full_rows():
+    """The full rows stay on their own line; the heartbeat carries the
+    verdict. A heartbeat that re-embedded every row would reintroduce the
+    size problem this whole fix exists to remove."""
+    src = inspect.getsource(RUN.Runner.authorization_preflight_verdict)
+    assert '"rows"' not in src
+    for k in ('"ok"', '"fail"', '"unknown"'):
+        assert k in src, k
+
+
+def test_the_absolute_deadline_is_one_of_the_checks_it_reports():
+    """The check that cost the 20:00z window must be among those whose
+    failure the heartbeat would now surface."""
+    from src import l5_live_authorization as A
+    pf = A.authorization_preflight("")
+    names = [r["check"] for r in pf["rows"]]
+    assert "absolute_deadline" in names
+    assert "campaign_approval" in names
+    # and a FAIL anywhere makes ok false
+    assert pf["ok"] == (not pf["fail"] and not pf["unknown"])

@@ -5689,9 +5689,55 @@ class Runner:
                        "admitted does not mean submitted."),
         }
 
+    def authorization_preflight_verdict(self) -> Dict[str, Any]:
+        """The arming preflight's VERDICT, compact, for the heartbeat.
+
+        WHY IT BELONGS HERE, and it is an operational scar. On 2026-11-06
+        the 20:00z authorized window was lost to AUTHORIZATION_EXPIRED --
+        `L5_LIVE_AUTH_NOT_AFTER` had lapsed 56,974 s earlier. The preflight
+        CAUGHT it: at the 19:34 boot it emitted `ok: false`,
+        `fail: ["absolute_deadline"]`, 26 minutes before the window, with
+        every other check PASS. Nobody read that line.
+
+        It was on its own line because the heartbeat used to exceed the log
+        transport's per-line limit -- the defect `bounded_hb` now fixes --
+        so the workaround for a truncated heartbeat is why the verdict was
+        not in the heartbeat anyone was polling.
+
+        TWO THINGS CHANGE. It becomes CONTINUOUS rather than boot-only, so
+        a deadline that lapses mid-campaign is visible before the next
+        window rather than after it; and it sits beside `campaign`, so a
+        campaign can never LOOK ready while the preflight says it is not.
+
+        Compact on purpose: `ok`, `fail` and `unknown` only. The full
+        `rows` stay on their own L5_AUTHORIZATION_PREFLIGHT line.
+        Reporting only -- `authorize_arming` still decides.
+        """
+        try:
+            pf = AUTH.authorization_preflight(
+                str(getattr(self.transport, "market_slug", "") or ""),
+                root=self.root)
+            return {"ok": pf.get("ok"), "fail": pf.get("fail"),
+                    "unknown": pf.get("unknown"),
+                    "labels": ("compact verdict; full rows on the "
+                               "L5_AUTHORIZATION_PREFLIGHT line. ok false "
+                               "means arming WILL refuse for the named "
+                               "check, whatever the campaign says.")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # UNREADABLE IS NOT OK. A verdict we cannot compute must not
+            # read as a pass.
+            self.stats["auth_preflight_verdict_failed:%s"
+                       % type(exc).__name__] += 1
+            return {"ok": None, "fail": None, "unknown": None,
+                    "error": type(exc).__name__,
+                    "labels": "UNREADABLE -- never read this as ok"}
+
     def heartbeat(self) -> None:
         t = self.transport
         emit("L5_LIVE_HB", TS.bounded_hb({
+            "authorization_preflight": self.authorization_preflight_verdict(),
             "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,

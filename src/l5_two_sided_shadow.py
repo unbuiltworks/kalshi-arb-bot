@@ -930,6 +930,11 @@ HB_NEVER_REDUCE = (
     "campaign", "unresolved_accounting", "venue_requests", "http_429",
     "fill_calibration", "positions", "inventory", "fees", "rebates",
     "auth_book", "t_in_window_s", "LABEL",
+    # THE ARMING PREFLIGHT VERDICT. Boot-only and on its own
+    # line was how the 2026-11-06 20:00z window was lost: the
+    # preflight said ok=false fail=["absolute_deadline"] 26
+    # minutes beforehand and nobody was reading that line.
+    "authorization_preflight",
 )
 
 
