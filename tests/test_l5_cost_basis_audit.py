@@ -181,16 +181,81 @@ def test_the_audit_writes_nothing_to_the_store():
 def test_the_runner_hook_is_env_gated_and_runs_after_the_transport_exists():
     """THE BUG THIS PINS. The hook was first placed in __init__ before
     self.transport was assigned, so it could only ever raise AttributeError
-    and the audit would silently never run."""
+    and the audit would silently never run.
+
+    REWRITTEN FOR THE DEFERRED QUEUE, AND STRICTLY STRONGER. The audit no
+    longer runs inside `roll` at all -- it walked 133 pages of the activity
+    feed through a 1.5-requests-a-second limiter there, which is the 93-second
+    window-roll stall of issue #195. `roll` now ENQUEUES it and the tick
+    drains it after every trading stage.
+
+    The ordering property survives and is checked on the enqueue, which is
+    still between the transport and the executor. Two new properties are
+    checked beside it, and either one failing would reintroduce the stall:
+    `roll` must not call the audit, and the job must read `self.transport`
+    when it runs rather than capture one at enqueue time.
+    """
+    import ast
+    import inspect
+    from src import l5_pmus_live_runner as RUN
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "src/l5_pmus_live_runner.py")).read()
     t = src.index("self.transport = T.PmusTransport(")
-    a = src.index('os.getenv("L5_COST_BASIS_AUDIT"')
+    a = src.index("self.enqueue_roll_diagnostics()")
     e = src.index("self.executor = LX.FaithfulExecutor(")
-    assert t < a < e, "the audit must run after the transport is built"
+    assert t < a < e, "the audit must be queued after the transport is built"
     # gated: a normal boot must not spend the feed walk
     assert '"L5_COST_BASIS_AUDIT", ""' in src
     assert '.upper() == "YES"' in src
+
+    # `roll` ITSELF MUST NOT WALK THE FEED. This is the regression guard for
+    # the stall: any call to the audit or to the walk from inside `roll`
+    # puts ~89 s of paced venue reads back on the window's opening.
+    roll_src = inspect.getsource(RUN.Runner.roll)
+    for forbidden in ("CBA.audit", "walk_activities", "DC.from_tape",
+                      "TR.from_env", "establish_l5_baseline",
+                      "apply_cost_basis_corrections"):
+        assert forbidden not in roll_src, forbidden
+
+    # AND THE JOB READS THE LIVE TRANSPORT. A walk may span a rollover, which
+    # rebuilds `self.transport`, so capturing one at enqueue time would leave
+    # the walk talking to a stale object.
+    step = inspect.getsource(RUN.Runner._cost_basis_audit_step)
+    assert "pw.transport = self.transport" in step
+    assert "walk=pw.walk" in step
+    # nothing is computed from a walk that is not finished
+    tree = ast.parse(step.lstrip())
+    guarded = [n for n in ast.walk(tree)
+               if isinstance(n, ast.If) and "pw.done" in ast.unparse(n.test)]
+    assert guarded, "the audit must be guarded on a completed walk"
+
+
+def test_the_deferred_queue_runs_the_audit_once_per_process():
+    """ITS OWN COMMENT SAID ONCE AND IT RAN NINETY-SIX TIMES A DAY.
+
+    `roll` fires on every window roll, so the inline audit -- documented as
+    reading the feed "ONCE" -- took 133 pages of it every fifteen minutes.
+    The queue latches on the job name, so repeated enqueues are no-ops.
+    """
+    from src import l5_roll_diagnostics as RD
+    rd = RD.DeferredDiagnostics()
+    calls = []
+
+    def job(_deadline):
+        calls.append(1)
+        return {"ok": True}
+
+    assert rd.enqueue("cost_basis_audit", job) is True
+    for _ in range(96):
+        assert rd.enqueue("cost_basis_audit", job) is False
+    assert rd.pending == ["cost_basis_audit"]
+    out = rd.drain(t_in_window_s=600.0, entry_critical=False)
+    assert out["outcome"] == RD.DONE
+    assert calls == [1]
+    assert rd.pending == []
+    # and a later roll cannot put it back
+    assert rd.enqueue("cost_basis_audit", job) is False
+    assert rd.pending == []
 
 
 def test_the_audit_module_calls_no_write_or_order_verb():
