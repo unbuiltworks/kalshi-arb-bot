@@ -52,6 +52,7 @@ import pytest
 from src import l5_cost_basis_audit as CBA
 from src import l5_pmus_live_runner as RUN
 from src import l5_roll_diagnostics as RD
+from src import l5_two_sided_shadow as TS
 
 
 #: the production figure, so the reproduction is the measured one
@@ -626,3 +627,171 @@ def test_a_queued_job_only_reads_the_transport_when_it_actually_runs(
     # it ran, and it failed BECAUSE it reached the exploding collaborator
     assert out["ran"] is not None
     assert out["outcome"] == RD.FAILED
+
+
+# =====================================================================
+# 8. THE RESIDUAL COST AFTER THE 93 SECONDS WAS REMOVED.
+#
+# MEASURED ON THE LIVE DEPLOYMENT a342fccc, 2026-11-06, after the
+# diagnostics moved off `roll`:
+#
+#   L5_LIVE_ROLL_STAGE  two_sided_close   6.158 s   <- new slowest stage
+#   L5_LIVE_TICK_STAGES two_sided_settle  6.180 s   <- same cost, other stage
+#   L5_LIVE_TICK_STAGES roll              6.400 s   (was 93.2 s)
+#
+# and the line sizes at those exact instants:
+#
+#   15:30:09.619  len 81920  truncated   <- two_sided_close's emit
+#   15:30:17.568  len 29109  intact      <- two_sided_advance, 0.002 s
+#   15:30:34.115  len 81920  truncated   <- two_sided_settle's emit
+#
+# A 29 KB write returns immediately; an 80 KB write blocks about six
+# seconds and is TRUNCATED at the platform's 81,920-byte limit, so it was
+# both slow and lossy. The whole report is already on the volume --
+# `park` and `finalize` write it there -- so bounding the LOG copy loses
+# nothing that was not already being discarded.
+# =====================================================================
+
+def _big_report(cells=40):
+    return {
+        "LABEL": "L5_TWO_SIDED_SHADOW",
+        "market": "cpc-btc-updown-15m-2026-11-06-1530z",
+        "ticks": 4000,
+        "spread_histogram": {str(i): i for i in range(400)},
+        "cells": [{"name": "cell-%d" % i, "depth_ticks": i % 5,
+                   "matched_shares": "1", "residual_shares": "-1",
+                   "residual_cost": "0.42",
+                   "matched_pnl_modelled": "0.03",
+                   "net_pnl_modelled": "-0.11",
+                   "state": "PENDING",
+                   "noise": "x" * 2000} for i in range(cells)],
+        "discipline": "y" * 500,
+    }
+
+
+def test_a_small_report_is_returned_byte_identical():
+    small = {"LABEL": "L5_TWO_SIDED_SHADOW", "market": "m", "cells": []}
+    import json as _j
+    assert _j.dumps(TS.bounded_for_log(small), default=str, sort_keys=True) \
+        == _j.dumps(small, default=str, sort_keys=True)
+
+
+def test_an_oversized_report_is_brought_inside_the_budget():
+    import json as _j
+    rep = _big_report()
+    raw = len(_j.dumps(rep, default=str))
+    assert raw > TS.LOG_BUDGET_BYTES, raw
+    out = TS.bounded_for_log(rep)
+    assert len(_j.dumps(out, default=str)) <= TS.LOG_BUDGET_BYTES
+
+
+def test_the_bounded_report_stays_under_the_platform_line_limit():
+    import json as _j
+    out = TS.bounded_for_log(_big_report(cells=400))
+    assert len(_j.dumps(out, default=str)) < TS.LOG_LINE_LIMIT
+
+
+def test_the_pnl_and_inventory_figures_survive_the_reduction():
+    out = TS.bounded_for_log(_big_report())
+    assert out["cells_reduced"]["cells"] == 40
+    for c in out["cells"]:
+        for k in ("matched_shares", "residual_shares", "residual_cost",
+                  "matched_pnl_modelled", "net_pnl_modelled", "state"):
+            assert k in c, k
+        assert c["_reduced"] is True
+        assert "noise" not in c
+
+
+def test_the_reduction_says_it_happened_and_why():
+    out = TS.bounded_for_log(_big_report())
+    cr = out["cells_reduced"]
+    assert cr["full_bytes"] > cr["budget_bytes"]
+    assert "shadow ledger on the volume" in cr["labels"]
+    assert str(TS.LOG_LINE_LIMIT) in cr["labels"]
+
+
+def test_the_market_and_label_are_never_dropped():
+    out = TS.bounded_for_log(_big_report(cells=400))
+    assert out["LABEL"] == "L5_TWO_SIDED_SHADOW"
+    assert out["market"].endswith("1530z")
+
+
+def test_an_unserialisable_report_is_returned_rather_than_raising():
+    class Odd:
+        pass
+    rep = {"LABEL": "x", "cells": [], "weird": Odd()}
+    out = TS.bounded_for_log(rep)        # must not raise
+    assert out["LABEL"] == "x"
+
+
+def test_the_ledger_still_stores_the_WHOLE_report(tmp_path):
+    """The reduction is the LOG copy only. This is what makes it lossless."""
+    led = TS.ShadowLedger(str(tmp_path / "s.json"))
+    rep = _big_report()
+    led.park(rep, now=1.0)
+    stored = led.state["pending"][rep["market"]]
+    assert len(stored["cells"]) == 40
+    assert "noise" in stored["cells"][0]          # full detail retained
+    assert "cells_reduced" not in stored
+
+
+def test_every_runner_emit_of_the_report_is_bounded():
+    """All four sites, so none can reintroduce the six seconds."""
+    import inspect
+    src = inspect.getsource(RUN)
+    import re
+    for m in re.finditer(r'emit\("L5_TWO_SIDED_SHADOW",\s*(.{0,40})',
+                         src, re.S):
+        assert "bounded_for_log" in m.group(1), m.group(1)
+    assert src.count('emit("L5_TWO_SIDED_SHADOW"') == 4
+    assert src.count("TS.bounded_for_log(") == 4
+
+
+def test_a_very_large_grid_still_fits_because_cells_roll_up():
+    """Stage 3. 400 digests are 80 KB, so reduction alone is not a bound."""
+    import json as _j
+    out = TS.bounded_for_log(_big_report(cells=400))
+    assert len(_j.dumps(out, default=str)) <= TS.LOG_BUDGET_BYTES
+    assert out["cells"]["_rollup"] is True
+    assert out["cells"]["count"] == 400
+
+
+def test_the_rollup_preserves_the_economic_totals():
+    out = TS.bounded_for_log(_big_report(cells=400))
+    tot = out["cells"]["totals"]
+    # 400 cells x the fixed per-cell figures in _big_report
+    assert D(tot["matched_shares"]) == D("400")
+    assert D(tot["residual_shares"]) == D("-400")
+    assert D(tot["residual_cost"]) == D("0.42") * 400
+    assert D(tot["net_pnl_modelled"]) == D("-0.11") * 400
+    assert out["cells"]["by_state"] == {"PENDING": 400}
+
+
+def test_a_pathological_report_falls_back_to_a_bounded_floor():
+    """Stage 4. A single enormous top-level field cannot defeat the bound."""
+    import json as _j
+    rep = _big_report(cells=400)
+    rep["some_new_field"] = "z" * 200000
+    out = TS.bounded_for_log(rep)
+    assert len(_j.dumps(out, default=str)) <= TS.LOG_BUDGET_BYTES
+    assert out["_log_floor"] is True
+    assert out["LABEL"] == "L5_TWO_SIDED_SHADOW"
+    assert out["market"].endswith("1530z")
+    assert "some_new_field" not in out
+
+
+def test_the_bound_holds_for_every_grid_size_we_could_ever_emit():
+    import json as _j
+    for n in (0, 1, 5, 40, 120, 400, 2000):
+        out = TS.bounded_for_log(_big_report(cells=n))
+        assert len(_j.dumps(out, default=str)) <= TS.LOG_BUDGET_BYTES, n
+        assert len(_j.dumps(out, default=str)) < TS.LOG_LINE_LIMIT, n
+
+
+def test_a_clamped_scalar_says_it_was_clamped():
+    rep = _big_report(cells=400)
+    rep["some_new_field"] = "z" * 200000
+    rep["state"] = "s" * 5000
+    out = TS.bounded_for_log(rep)
+    assert out["state"].endswith("...[clamped]")
+    assert len(out["state"]) < 300

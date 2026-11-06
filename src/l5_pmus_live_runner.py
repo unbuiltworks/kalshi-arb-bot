@@ -3559,7 +3559,8 @@ class Runner:
             return
         if now - self.last_two_sided_report_t >= self.TWO_SIDED_REPORT_S:
             self.last_two_sided_report_t = now
-            emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=True))
+            emit("L5_TWO_SIDED_SHADOW",
+                 TS.bounded_for_log(dict(ev.report(None), interim=True)))
         self.shadow_completion_step(ev, now, snap)
 
     #: how often the shadow completion policy is evaluated, per window.
@@ -3716,9 +3717,17 @@ class Runner:
                 raise
             self.stats["shadow_completion_park_failed:%s"
                        % type(exc).__name__] += 1
+        # THE LEDGER GETS THE WHOLE REPORT; THE LOG GETS A LINE THAT FITS.
+        # `park` writes the full record to the volume, which is the durable
+        # copy the scoring reads. The log copy is bounded because an 80 KB
+        # write blocks this process for about six seconds -- measured at
+        # 6.158 s in this very stage on deployment a342fccc -- and is
+        # truncated at 81,920 bytes anyway. See `TS.bounded_for_log`.
         emit("L5_TWO_SIDED_SHADOW",
-             dict(self.two_sided_ledger.park(ev.report(None), now=self.now_t),
-                  interim=False))
+             TS.bounded_for_log(
+                 dict(self.two_sided_ledger.park(ev.report(None),
+                                                 now=self.now_t),
+                      interim=False)))
 
     def two_sided_settle(self, now: float) -> None:
         """Finalize parked shadow windows from the venue's own resolution.
@@ -3742,7 +3751,7 @@ class Runner:
         self.last_two_sided_settle_t = now
         for bad in self.two_sided_ledger.expire(now):
             self.stats["two_sided_settle_expired"] += 1
-            emit("L5_TWO_SIDED_SHADOW", bad)
+            emit("L5_TWO_SIDED_SHADOW", TS.bounded_for_log(bad))
         for slug in self.two_sided_ledger.pending_slugs():
             if slug == getattr(t, "market_slug", None) and self.two_sided:
                 continue                     # still being collected
@@ -3787,8 +3796,9 @@ class Runner:
             px = rep.get("settlement_px")
             scored = self.two_sided_ledger.finalize(slug, px == D(1))
             if scored is not None:
-                emit("L5_TWO_SIDED_SHADOW", dict(scored, yes_value=str(px),
-                                                 venue_state=rep.get("state")))
+                emit("L5_TWO_SIDED_SHADOW", TS.bounded_for_log(
+                    dict(scored, yes_value=str(px),
+                         venue_state=rep.get("state"))))
                 self.shadow_completion_settle(slug, scored, px == D(1),
                                               rep.get("state"))
 
