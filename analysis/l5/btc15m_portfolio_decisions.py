@@ -44,7 +44,7 @@ def evaluate(inv: Inventory, candidate: Candidate, p_up: float,
         raise ValueError("nonfinite input")
     if min(inv.up_qty, inv.down_qty) < 0 or min(inv.up_qty, inv.down_qty) != int(min(inv.up_qty, inv.down_qty)):
         raise ValueError("invalid inventory")
-    if not isinstance(inv.up_qty, int) or not isinstance(inv.down_qty, int):
+    if type(inv.up_qty) is not int or type(inv.down_qty) is not int:
         raise ValueError("integer quantities required")
     if inv.sunk_cost < 0 or inv.cash_available < 0 or max_gross_spend < 0:
         raise ValueError("invalid budget")
@@ -52,12 +52,16 @@ def evaluate(inv: Inventory, candidate: Candidate, p_up: float,
         raise ValueError("invalid probability")
     if candidate.action not in ("HOLD", "BUY") or candidate.side not in ("UP", "DOWN"):
         raise ValueError("invalid action")
-    if not isinstance(candidate.qty, int) or candidate.qty < 0:
+    if type(candidate.qty) is not int or candidate.qty < 0:
         raise ValueError("invalid quantity")
     if not 0 <= candidate.fill_probability <= 1 or candidate.execution_cost < 0:
         raise ValueError("invalid fill/cost")
+    if candidate.action == "BUY" and candidate.qty == 0:
+        raise ValueError("BUY quantity must be positive")
     if candidate.action == "BUY" and not 0 < candidate.price < 1:
         raise ValueError("invalid price")
+    if candidate.action == "HOLD" and candidate.execution_cost != 0:
+        raise ValueError("HOLD cannot incur execution cost")
     if candidate.action == "HOLD" and candidate.qty != 0:
         raise ValueError("HOLD quantity must be zero")
     delta_up = candidate.qty if candidate.action == "BUY" and candidate.side == "UP" else 0
@@ -79,16 +83,21 @@ def evaluate(inv: Inventory, candidate: Candidate, p_up: float,
     old_ev = p_up * payoff(inv, True) + (1-p_up) * payoff(inv, False)
     new_up = up - inv.sunk_cost - cost
     new_down = down - inv.sunk_cost - cost
-    new_ev = conservative_up * new_up + conservative_down * new_down
     # Avoid conservative-score bias on sunk costs by computing incremental EV
     # directly: payout on the bought side minus purchase/execution cost.
     side_probability = conservative_up if delta_up else conservative_down if delta_down else 0.0
     delta_ev_if_filled = candidate.qty * side_probability - cost
     expected_increment = candidate.fill_probability * delta_ev_if_filled
+    # Risk-reducing completion can be rational even with negative standalone EV:
+    # record the guaranteed filled-outcome floor improvement separately.
+    old_worst = min(payoff(inv, True), payoff(inv, False))
+    worst_case_improvement_if_filled = min(new_up, new_down) - old_worst
     return {"eligible": True, "reason": "RESEARCH_ONLY",
             "hold_expected_payoff": old_ev, "filled_up_payoff": new_up,
             "filled_down_payoff": new_down, "worst_case_filled": min(new_up, new_down),
             "expected_increment_vs_hold": expected_increment,
             "estimated_fill_probability": candidate.fill_probability,
             "candidate_better_than_hold": expected_increment > 0,
+            "reduces_unmatched_inventory": unmatched_after < unmatched_before,
+            "worst_case_improvement_if_filled": worst_case_improvement_if_filled,
             "live_eligible": False}
