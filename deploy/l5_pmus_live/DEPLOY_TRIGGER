@@ -3611,3 +3611,26 @@ Local HALT and NOT_ARMED locks stay in force; no variable changed.
 pinned to ecd0e9cd, which is why two pushes produced no build). Deploying
 a0e72421 feed fix + restored 0.96 pair ceiling + campaign budget variables.
 Trading stays halted: L5_LIVE_HALT untouched and still asserted.
+
+# 2026-11-06 — OWNER-AUTHORIZED deployment of the book-age completion only.
+# "Deploy the outstanding book-age fixes first, then I'll mint."
+#
+# WHAT SHIPS: the negative-book-age guard at every site that dates a book.
+# 432ff7c3 (completion_decision) and e7177bb5 (complement_order) were already
+# on the branch but only the first was deployed; this adds the second plus the
+# five sites that still compared only the upper bound --
+# two_sided_probe.build_orders, two_sided_probe.completion_requote,
+# queue_measurement.build_order, book_completion.decide and
+# book_completion.cooldown_observation. A negative age is a snapshot dated
+# AHEAD of us, which is the one reading that must never pass a freshness test.
+#
+# REFUSALS ONLY. Every change is one comparison added to an existing guard.
+# No reason string changed, no limit moved, no capability added. Parity is
+# exact against the established baseline: 80 failing ids, identical set.
+#
+# BOTH TRADING LOCKS STAY ON. L5_LIVE_HALT=1 is an environment variable and
+# survives this deploy; a fresh container starts armed=false; the installed
+# approval is approval_stale and is NOT being replaced here. Nothing is armed
+# and no order can be submitted by this deployment. Minting the three-window
+# campaign approval is the owner's next and separate action.
+deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
