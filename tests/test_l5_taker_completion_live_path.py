@@ -28,6 +28,7 @@ import pytest
 
 from src import l5_defensive_completion as DC
 from src import l5_live_authorization as AUTH
+from src import l5_pmus_live_runner as RUN
 from src import l5_taker_completion_policy as TCP
 from src import l5_two_sided_probe as TS
 
@@ -1161,3 +1162,197 @@ def test_what_bounds_a_dear_rescue_is_the_improvement_floor_not_the_ceiling():
     # and the floor must be NAMED at all
     assert TCP.authorize(**common)["reason"] == (
         "RESCUE_IMPROVEMENT_FLOOR_UNSET")
+
+
+# =====================================================================
+# 15. THE RANKER'S VERDICT ACTUALLY BLOCKS THE SUBMISSION.
+#
+# `submit_ts_completion` consults `l5_inventory_decision` on top of the two
+# gates that already said yes. A source scan proves it is CALLED; this
+# proves it DECIDES -- that a HOLD verdict means `executor.handle` is
+# never reached, and a taker verdict means it is.
+# =====================================================================
+
+class _SubStore:
+    def __init__(self, up="2", dn="1"):
+        self.state = {"submitted": {}}
+        self._up, self._dn = D(up), D(dn)
+
+    def live_orders(self):
+        return {}
+
+    def position(self, _m, side):
+        return self._up if side == "UP" else self._dn
+
+    def leg_cost(self, _m):
+        return {"UP": self._up * D("0.62"), "DOWN": self._dn * D("0.35")}
+
+
+class _SubExec:
+    def __init__(self):
+        self.calls = []
+        self.taker_completion_proposal = None
+        self.validation_gates = None
+
+    def handle(self, *a, **kw):
+        self.calls.append(kw)
+        return {"submitted": True, "coid": "l5f-x"}
+
+
+class _SubBook:
+    def __init__(self, rungs):
+        self._rungs = rungs
+
+    def snapshot(self, _slug):
+        return {"bid": "0.6700", "ask": "0.6800", "bid_shares": "448",
+                "ask_shares": "120.84", "stream_age_s": "0.05"}
+
+
+class _SubTransport:
+    market_slug = SLUG
+    tick_size = D("0.01")
+    quantity_increment = D("0.01")
+    armed = True
+
+
+class _SubRunner:
+    submit_ts_completion = RUN.Runner.submit_ts_completion
+    maker_completion_history = RUN.Runner.maker_completion_history
+    _taker_policy_number = RUN.Runner._taker_policy_number
+    # a staticmethod on the real Runner; rebinding it as a plain
+    # attribute would make it an instance method and lose the first arg
+    _bc_capture = staticmethod(RUN.Runner._bc_capture)
+
+    def __init__(self, rungs):
+        import collections
+        self.transport = _SubTransport()
+        self.store = _SubStore()
+        self.book = _SubBook(rungs)
+        self.executor = _SubExec()
+        self.stats = collections.Counter()
+        self._rungs = rungs
+
+
+def _src(rungs, **kw):
+    base = {
+        "ok": True, "side": "DOWN", "up_qty": D(2), "dn_qty": D(1),
+        "up_cost_px": D("0.62"), "dn_cost_px": D("0.35"),
+        "min_qty": D("0.01"), "tick": D("0.01"),
+        "book_rungs": rungs, "maker_own_px": None,
+        "maker_queue_ahead": D("120.84"), "mid_wire": D("0.675"),
+        "cash_headroom": D("10.41"), "worst_case_ceiling": D("1.50"),
+    }
+    base.update(kw)
+    return base
+
+
+def _dec(price, **kw):
+    base = {"ok": True, "side": "DOWN", "qty": "1", "price": price,
+            "deficit": "1", "displayed_depth": "448"}
+    base.update(kw)
+    return base
+
+
+def _pol(price, qty="1"):
+    return {"ok": True, "authorized": True, "reason": "AUTHORIZED",
+            "side": "DOWN", "qty": qty, "price": price}
+
+
+def test_a_taker_verdict_reaches_the_existing_handle_re_entry(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                                 1793934115.0)
+    assert out["crossed"] is True
+    assert len(r.executor.calls) == 1
+    ctl = r.executor.calls[0]["controller"]
+    assert ctl["decision"]["relation"] == "complete"
+    assert ctl["decision"]["side"] == "DOWN"
+    assert out["inventory_decision"]["chosen"] in ("TAKER_COMPLETE",
+                                                   "TAKER_PARTIAL")
+
+
+def test_a_hold_verdict_never_reaches_handle(monkeypatch):
+    """A complement so dear that nothing improves the worse outcome. The
+    two upstream gates said yes; the ranker is what stops it."""
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.9900", "448"]]
+    r = _SubRunner(rungs)
+    out = r.submit_ts_completion(_dec("0.9900"), _src(rungs), _pol("0.9900"),
+                                 1793934115.0)
+    assert out["crossed"] is False
+    assert out["withheld_by"].startswith("RANKED_HOLD")
+    assert r.executor.calls == []
+    assert r.executor.taker_completion_proposal is None
+
+
+def test_a_stale_book_never_reaches_handle(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    r.book.snapshot = lambda _s: {"bid": "0.67", "ask": "0.68",
+                                  "stream_age_s": "900"}
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                                 1793934115.0)
+    assert out["crossed"] is False
+    assert r.executor.calls == []
+
+
+def test_the_order_size_is_the_smaller_of_the_two_independent_sizings(
+        monkeypatch):
+    """The policy's conservative quantity and the ranker's own size are
+    both computed; the order is the smaller, which can only reduce it."""
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    r.submit_ts_completion(_dec("0.3300", qty="50"), _src(rungs),
+                           _pol("0.3300", qty="50"), 1793934115.0)
+    sent = D(r.executor.calls[0]["controller"]["decision"]["l5_size"])
+    assert sent <= D("1"), sent          # the deficit, not the authorization
+
+
+def test_an_unreadable_ledger_never_reaches_handle(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+
+    def boom(*a, **k):
+        raise RuntimeError("ledger unreadable")
+    r.store.position = boom
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                                 1793934115.0)
+    assert out["crossed"] is False
+    assert out["withheld_by"] == "LEDGER_UNREADABLE"
+    assert r.executor.calls == []
+
+
+def test_the_proposal_is_cleared_even_when_handle_raises(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+
+    def boom(*a, **k):
+        raise RuntimeError("venue 500")
+    r.executor.handle = boom
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                                 1793934115.0)
+    assert out["crossed"] is False
+    assert out["withheld_by"].startswith("HANDLE_RAISED")
+    assert r.executor.taker_completion_proposal is None
+
+
+def test_the_window_outlay_is_charged_only_on_a_submission(monkeypatch):
+    monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
+    rungs = [["0.3300", "448"]]
+    r = _SubRunner(rungs)
+    r.executor.handle = lambda *a, **k: {"submitted": False,
+                                         "refused": "MAX_LIVE_ORDERS"}
+    out = r.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                                 1793934115.0)
+    assert out["crossed"] is False
+    assert getattr(r, "_taker_outlay_usd", None) is None
+    r2 = _SubRunner(rungs)
+    r2.submit_ts_completion(_dec("0.3300"), _src(rungs), _pol("0.3300"),
+                            1793934115.0)
+    assert D(str(r2._taker_outlay_usd)) > 0
