@@ -203,3 +203,71 @@ workflow that runs only on dispatch and two branches that are not this one.
   proves the route works; it proves nothing about profitability, and the
   148-window attested structure says the per-pair economics are the open
   question.
+
+---
+
+## Phase B runbook — the exact ordered steps, none of them taken
+
+Written out so the live test is a sequence to execute rather than a decision
+to make under time pressure. **Nothing below has been done.** Every step is an
+owner action or needs owner authorization first.
+
+### Preconditions, all checkable before anything is written
+
+| # | precondition | how to check | state at time of writing |
+|---|---|---|---|
+| P1 | Phase A passed, including A1 after the log-bound fix is deployed | `L5_LIVE_TICK_STAGES.stages_s.roll` | **A1 open** — 6.4-6.6 s, root cause fixed on the branch, not deployed |
+| P2 | `L5_LIVE_HALT` asserted before any switch is written | `L5_LIVE_HB.halt_local_env` | currently **not asserted** |
+| P3 | watchdog sweeping, `read_error: null` | `L5_WATCHDOG_SWEEP` | **PASS**, 20 s cadence |
+| P4 | `open_orders_at_venue: 0` and `uncertainty_cleared: true` | `L5_LIVE_RECONCILE` | **PASS** |
+| P5 | cumulative headroom still >= $3.00 | `realized_today` vs `L5_MAX_CUMULATIVE_LOSS_USD` | **PASS**, $3.8830 |
+| P6 | `defensive_spent_usd` read and recorded as the starting point | volume state | needed; budget is **lifetime**, not per campaign |
+
+### The five variable writes, in this order
+
+Order matters: the floor must exist before the route that reads it can be
+authorized, or a rescue refuses with `RESCUE_IMPROVEMENT_FLOOR_UNSET` and the
+window is spent on a no-op.
+
+```
+1  L5_TAKER_MIN_WORST_IMPROVEMENT_USD = 0.25
+2  L5_MAX_COMPLETION_EV_GIVEUP_USD    = 0.05
+3  L5_TAKER_LOSS_REDUCTION            = YES
+4  L5_TAKER_COMPLETION_POLICY         = YES     (already SET, not YES)
+5  L5_TS_COMPLETION_CROSS             = YES     (already SET, not YES)
+```
+
+Then, and only then, the campaign mint and the arm. Clearing `L5_LIVE_HALT` is
+the **last** step, not the first.
+
+### Why 0.25 and 0.05, from the replay and not from preference
+
+Restating so the numbers are not re-derived under pressure. Both come from
+`src/l5_issue195_replay.py` against the recorded books of the two windows that
+actually lost money.
+
+| window | best executable improvement | EV given up | floor 0.25 | floor 0.35 | floor 0.50 |
+|---|---|---|---|---|---|
+| 0300z | **$0.65** | $0.0138 | captures | captures | captures |
+| 0315z | **$0.35** | $0.0400 | captures | marginal | **loses** |
+
+A floor above 0.35 discards 0315z outright. A floor at 0.35 catches it only at
+its single best moment, which is not a margin. 0.25 captures both windows and
+still refuses the marginal tail, which is what a floor is for. The EV cap at
+0.05 covers the measured 0.0138-0.0400 with room; a 0.02 cap would discard
+0315z to save one cent of modelled give-up.
+
+Neither number is a target. If a window offers nothing above 0.25 the correct
+outcome is **no cross**, and that is a pass, not a failed test.
+
+### Rollback, at every step
+
+| if | then |
+|---|---|
+| any abort condition fires | assert `L5_LIVE_HALT`; watchdog and deadman cancel by exact id; reconcile; report; do **not** re-arm |
+| the deploy itself is bad | roll back to the prior deployment (`canRollback: true`) |
+| the switches need undoing | set all five back; the two pre-existing ones to their prior non-`YES` values, the three new ones removed |
+
+Setting the switches back is not sufficient on its own if a leg has already
+filled: the inventory is real and must be completed or settled, which is what
+the completion route and the reconciler are for.
