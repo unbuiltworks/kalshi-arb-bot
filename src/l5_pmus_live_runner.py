@@ -1525,15 +1525,28 @@ class Runner:
         }
 
     def roll(self, now: float) -> None:
+        # Diagnose the recurring ~93s window-roll stall without changing
+        # order submission, cancellation, settlement, or failure semantics.
+        # Emit each completed stage even if a later stage blocks or raises.
+        def _roll_stage(stage, fn, *args, **kwargs):
+            started = time.monotonic()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                elapsed = time.monotonic() - started
+                emit("L5_LIVE_ROLL_STAGE", {
+                    "stage": stage, "elapsed_s": round(elapsed, 3),
+                    "window_start": str(AB.window_start(now)),
+                    "labels": "observability only; no timeout or behavior change"})
         ws = AB.window_start(now)
         if ws == self.ws:
             return
         if self.ws is not None:
-            self.model_close()
-            self.close_window()
+            _roll_stage("model_close", self.model_close)
+            _roll_stage("close_window", self.close_window)
             # the shadow's own window close. After close_window, which must
             # not be delayed by it, and before self.ws moves.
-            self.shadow_close()
+            _roll_stage("shadow_close", self.shadow_close)
         # a claim is for ONE window; it does not carry into the next one.
         self.arm_claim = None
         self.ws = ws
@@ -1551,7 +1564,7 @@ class Runner:
                     ).get("phase") != "CONFIRMED":
                 self.emit_window_accounting(str(prev), settlement=None)
         self.last_rolled_slug = str(slug)
-        self.two_sided_close()
+        _roll_stage("two_sided_close", self.two_sided_close)
         self.two_sided = TS.TwoSidedShadow(slug, window_start=float(ws))
         # MODELLED fill session for this window. Attaching the ladder
         # observer here is what gives a maker quote a queue position; it is
@@ -1583,8 +1596,8 @@ class Runner:
         # touch-through guess. A fanout with no observers at all behaves
         # like the None it replaces.
         self.fanout = FrameFanout(primary)
-        self.shadow_attach_ladder(slug)
-        self.evidence_attach(slug)
+        _roll_stage("shadow_attach_ladder", self.shadow_attach_ladder, slug)
+        _roll_stage("evidence_attach", self.evidence_attach, slug)
         self.book.frame_observer = (self.fanout
                                     if (primary is not None
                                         or self.fanout.extra) else None)
