@@ -112,3 +112,71 @@ not depend on any shadow figure.
 produce no pair at all, which yields $0.00, not a deficit. The residual risk
 is one unmatched contract, which the imbalance cap bounds at 1 and the
 existing per-window worst-case deficit bounds at $1.50.
+
+---
+
+## CORRECTION — the lifetime completion budget is NOT untouched
+
+The Phase A5 telemetry deploy made the durable figure readable for the first
+time, and it contradicts what I reported:
+
+```
+defensive_budget {"spent_usd":    "0.49916626650000",
+                  "limit_usd":    "2.00",
+                  "remaining_usd":"1.50083373350000"}
+```
+
+**I reported "$2.00 of $2.00 remains". That was wrong.** It was inferred from
+the absence of a charge record in the window's log slice, and the durable
+value says **$0.4992 spent, $1.5008 remaining**. This is the second time an
+inferred figure has turned out wrong — the first was the heartbeat's missing
+safety fields — and both were resolved only by putting the number on the
+tape rather than deducing it.
+
+### The debit does not reconcile to the one completion attempt I can see
+
+```
+20:16:47 completion: qty 1 at own 0.4300, window_outlay_usd 0.4500
+  qty*px                              0.4300
+  unrounded fee theta*q*p*(1-p)       0.017034450000
+  qty*px + unrounded fee              0.447034450000
+  durable defensive_spent_usd         0.49916626650000
+  unexplained difference              0.05213181650000
+```
+
+So the charge is in the right neighbourhood of that attempt but is not equal
+to it. Three readings are possible and I cannot choose between them from the
+tape I have:
+
+1. the charge includes a prior debit from an earlier session — the budget is
+   LIFETIME and monotone, so this is entirely possible;
+2. the charge was computed at a different price or quantity than the one the
+   trigger reported;
+3. `completion_taker_execute` ran further than finding 2 of this document
+   concluded — charging the budget before the downstream path posted a maker
+   quote — in which case the completion route reached the mandate stage and
+   the "no order at 0.4300" observation and the debit are both true.
+
+Reading 3 is consistent with the order of operations, which tests the budget
+and charges it BEFORE the mandate is issued. If it is right, the route went
+further than I described, and `taker_cross_confirmed` requiring a debit —
+which is what I just shipped — would have classified that attempt as a
+cross. That is a real tension between two things I have asserted, and it is
+not resolved here.
+
+### What resolves it
+
+`store.defensive_charge(worst_outlay, record)` takes a record, so a durable
+charge journal exists on the volume. It is not emitted. Emitting its last few
+entries — slug, timestamp, qty, price, amount — is a small read-only
+telemetry addition and would settle both the timing and the amount.
+
+### What it does and does not change for the proposed experiment
+
+* **It does not change the $1 maximum exposure.** The experiment disables
+  taker completion, so the completion budget is not reachable and no debit
+  can occur.
+* **It does change the standing figure**: the lifetime budget available to
+  any FUTURE taker test is **$1.5008, not $2.00**.
+* **It means finding 2 above is in question**, and a future taker-cross
+  experiment should not be designed until the charge journal explains this.
