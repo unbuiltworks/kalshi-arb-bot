@@ -64,8 +64,8 @@ Test-count delta: 18 mint tests + 10 book-age tests.
 | | |
 |---|---|
 | Deployment | `9e24cd66-aeca-45ee-923a-b4247c5dcc75` **SUCCESS** 2026-11-06T01:32:55Z, region us-east4 |
-| SHA deployed | `9a87a199279ca855cf99252336fd7a6a591275b3` |
-| SHA on the branch now | `e052c0c7` + this commit — the complement-repricing fix and the five-site completion are **NOT yet deployed** |
+| SHA deployed | **`2d6eef95`** — deployment `31712caa` SUCCESS 2026-11-06T02:25:23Z, region us-east4 (owner-authorized 2026-11-06, "Deploy the outstanding book-age fixes first, then I'll mint") |
+| Book-age work | **fully deployed.** `e7177bb5` plus all five extended sites are now live; the previous build `9a87a199` carried only `432ff7c3` |
 | `halt_local_env` | **true** — `L5_LIVE_HALT=1` genuinely active (it read **false** last cycle; the owner's change is confirmed, not assumed) |
 | `halt_latch` | `CLEAR` (remote latch unset; the local env halt is what is holding) |
 | `armed` | **false** |
@@ -268,14 +268,13 @@ verify the digest against the installed document and confirm
 `approval_state: approved`, all three windows openable, and the budget ledger
 owned by the new nonce — before anything arms.
 
-**(b2) Decide whether to deploy the outstanding book-age work first.**
-`e7177bb5` (complement repricing) and the five-site completion in this commit
-are on the branch but not in deployment `9e24cd66`. All are refuse-only
-guards on the paired-only path this campaign exercises. Deploying them is one
-`DEPLOY_TRIGGER` touch and ~4 minutes; running the campaign on `9a87a199`
-without them is also defensible, since the deployed build already refuses
-negative ages at `completion_decision`. **My recommendation: deploy first** —
-`completion_requote` is enabled and is one of the unguarded paths.
+**(b2) DONE — deployed on your authorization.** Deployment `31712caa`
+SUCCESS 2026-11-06T02:25:23Z at `2d6eef95`. Post-deploy verified:
+`halt_local_env: true`, `armed: false`, `approval_state: approval_stale`
+(unchanged, not replaced), `submission_gate: NOT_ARMED`, `preflight: PASSED`,
+no tracebacks, `feed_errors: 0`. The `854a1b21` push before it correctly
+SKIPPED, confirming the `DEPLOY_TRIGGER` watchPattern still isolates the
+money-capable service from ordinary branch pushes.
 
 **(c) Explicitly authorize withdrawing `L5_LIVE_HALT`.** This is a separate
 decision from (a): installing an approval authorizes a campaign, it does not
@@ -292,7 +291,7 @@ quarter-hours strictly after `now`. A mint at 02:00Z gives 02:15/02:30/02:45Z.
 
 | check | state |
 |---|---|
-| Deployed SHA | `9a87a199`, deployment `9e24cd66` SUCCESS. The complement fix `e7177bb5` and the five-site completion are committed but **NOT deployed** — a redeploy is an owner decision and is listed below |
+| Deployed SHA | **`2d6eef95`**, deployment `31712caa` SUCCESS 02:25:23Z. All book-age work live. No tracebacks, no `ModuleNotFoundError`, `feed_errors: 0`, `rows_btc15m: 390`, observed `stream_age_s` 0.0 and 0.105 so the new guard is not refusing fresh books |
 | Negative-book-age regression | PASS |
 | Full-suite parity | **exact, 80 ids, 16,862 passed** |
 | Cumulative headroom | **$4.8530** (18.6325 − 13.7795, unrealized $0) |
