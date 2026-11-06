@@ -26,6 +26,7 @@ import json
 import os
 import secrets
 import sys
+from typing import Sequence
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -45,6 +46,37 @@ from src import l5_live_authorization as AUTH       # noqa: E402
 #:   duration 2h              <= CA.MAX_CAMPAIGN_S (4h)
 WINDOWS = 8
 DURATION_S = 2 * 3600
+
+#: THE THREE-WINDOW VARIANT, and why the count is a parameter rather than a
+#: second script. The owner approved a THREE-window paired-only experiment on
+#: 2026-11-06, and three is not a smaller taste of eight: it is the largest
+#: count whose WORST CASE fits the cumulative-loss headroom that remains.
+#:
+#:   deployed max_cumulative_loss_usd      18.6325   (L5_LIVE_GATES, live)
+#:   lifetime realized loss already counted 13.7795   (realized_today, live)
+#:   remaining headroom                      4.8530
+#:   3 windows x max_worst_case_deficit_usd  4.5000
+#:   margin                                  0.3530
+#:
+#: A FOURTH WINDOW DOES NOT FIT: 4 x 1.50 = 6.0000 exceeds 4.8530 by 1.1470,
+#: and the fourth would be refused mid-campaign at CUMULATIVE_LOSS_LIMIT.
+#: Pass --windows to choose; the default stays 8 so nothing already approved
+#: changes shape.
+def _windows_from_argv(argv: Sequence[str]) -> int:
+    """`--windows N`, clamped to the code ceiling. Never widens anything."""
+    n = WINDOWS
+    for i, a in enumerate(argv):
+        if a == "--windows" and i + 1 < len(argv):
+            n = int(argv[i + 1])
+        elif a.startswith("--windows="):
+            n = int(a.split("=", 1)[1])
+    if n < 1:
+        raise SystemExit("--windows must be >= 1")
+    if n > CA.MAX_WINDOWS:
+        raise SystemExit("--windows %d exceeds the code ceiling CA.MAX_WINDOWS "
+                         "(%d); this script never widens a ceiling"
+                         % (n, CA.MAX_WINDOWS))
+    return n
 EXPOSURE_USD = "20"
 DAILY_LOSS_USD = "5"
 CASH_USD = "12"
@@ -92,10 +124,11 @@ def upcoming_window_starts(now: dt.datetime, n: int = WINDOWS) -> list:
     return [t + i * step for i in range(n)]
 
 
-def mint(now: dt.datetime | None = None, nonce: str | None = None) -> dict:
+def mint(now: dt.datetime | None = None, nonce: str | None = None,
+         windows: int = WINDOWS) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     nonce = nonce or secrets.token_hex(16)
-    starts = upcoming_window_starts(now)
+    starts = upcoming_window_starts(now, windows)
     last_open = starts[-1]
     # expiry covers the last window's CLOSE plus a settlement grace, so a
     # position opened in the final window can still settle inside the
@@ -112,11 +145,14 @@ def mint(now: dt.datetime | None = None, nonce: str | None = None) -> dict:
         "starts_utc": starts[0].isoformat(),
         "last_open_utc": last_open.isoformat(),
         "window_starts": [t.isoformat() for t in starts],
-        "max_windows": WINDOWS,
+        "max_windows": windows,
         "max_total_exposure_usd": EXPOSURE_USD,
         "max_daily_loss_usd": DAILY_LOSS_USD,
-        "note": ("issue-194 two-hour bounded L5 PMUS campaign; "
-                 "500 submissions, 2 resting orders, $12 deployed cash"),
+        "note": ("issue-194 bounded L5 PMUS paired-only campaign, %d x 15m "
+                 "consecutive; 2 resting orders, $12 deployed cash, $5 daily "
+                 "realized-loss halt. PAIRED-ONLY: the probability model is "
+                 "disabled and no directional underdog accumulation is "
+                 "authorized." % windows),
     }
 
 
@@ -180,7 +216,8 @@ def reserve_holds() -> tuple:
 
 
 if __name__ == "__main__":
-    doc = mint()
+    _w = _windows_from_argv(sys.argv[1:])
+    doc = mint(windows=_w)
     st, raw = validate(doc)
     digest = hashlib.sha256(raw.encode()).hexdigest()
     cid = "camp1." + hashlib.sha256(
@@ -188,8 +225,8 @@ if __name__ == "__main__":
 
     worst, ok, total_ok, per = reserve_holds()
     print("=" * 72)
-    print("ISSUE 194 - TWO-HOUR BOUNDED CAMPAIGN - mint %s"
-          % doc["issued_utc"])
+    print("ISSUE 194 - BOUNDED PAIRED-ONLY CAMPAIGN - %d window(s) - mint %s"
+          % (_w, doc["issued_utc"]))
     print("=" * 72)
     print("\n--- gate verdict (read-only; nothing reserved) ---")
     for k in ("approved", "reason", "state", "max_windows",
@@ -203,11 +240,17 @@ if __name__ == "__main__":
 
     print("\n--- ceilings: asked vs code constant ---")
     for label, asked, ceil in (
-            ("max_windows", WINDOWS, CA.MAX_WINDOWS),
+            ("max_windows", _w, CA.MAX_WINDOWS),
             ("max_total_exposure_usd", EXPOSURE_USD,
              CA.MAX_TOTAL_EXPOSURE_USD),
             ("max_daily_loss_usd", DAILY_LOSS_USD, CA.MAX_DAILY_LOSS_USD),
-            ("duration_s", DURATION_S, int(CA.MAX_CAMPAIGN_S))):
+            # THE SPAN THE DOCUMENT ACTUALLY STATES, not the module default.
+            # DURATION_S described the 8-window shape; printing it for a
+            # 3-window mint reported 7200 s for a 2700 s campaign.
+            ("duration_s", int(
+                (dt.datetime.fromisoformat(doc["expires_utc"])
+                 - dt.datetime.fromisoformat(doc["issued_utc"])
+                 ).total_seconds()), int(CA.MAX_CAMPAIGN_S))):
         print("  %-26s asked %-8s ceiling %-8s %s"
               % (label, asked, ceil,
                  "OK" if float(str(asked)) <= float(str(ceil)) else "EXCEEDS"))
@@ -243,7 +286,12 @@ if __name__ == "__main__":
     print("  L5_MAX_CASH_DEPLOYED_USD=%s" % CASH_USD)
     print("  L5_MAX_L5_DAILY_LOSS_USD=%s" % DAILY_LOSS_USD)
     print("  L5_MAX_LIVE_ORDERS=2")
-    print("  L5_LIVE_AUTH_MAX_WINDOWS=%d" % WINDOWS)
+    # MUST MATCH THE DOCUMENT. The gate takes the min of the env and the
+    # document, so a stale 8 here was not unsafe -- but the runtime-config
+    # verifier grades the DEPLOYED variable against the document that
+    # approved it, and printing 8 beside a 3-window grant is an instruction
+    # to install a disagreement.
+    print("  L5_LIVE_AUTH_MAX_WINDOWS=%d" % doc["max_windows"])
 
     print("\n--- audit identity ---")
     print("  campaign id     %s" % cid)
