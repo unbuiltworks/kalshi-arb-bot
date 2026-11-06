@@ -816,11 +816,19 @@ AUTHORITATIVE = (
 @pytest.mark.parametrize("label", AUTHORITATIVE)
 def test_no_authoritative_record_is_passed_through_the_bound(label):
     """Only L5_TWO_SIDED_SHADOW is reduced. Everything that decides what
-    is realized is emitted whole."""
+    is realized is emitted whole.
+
+    THE LABEL MUST EXIST FIRST. A parametrised test that walks regex
+    matches passes VACUOUSLY when there are none, so a renamed or removed
+    emit would read as a pass forever. The count is asserted before the
+    content is.
+    """
     import re
     src = inspect.getsource(RUN)
-    for m in re.finditer(r'emit\("%s",\s*(.{0,60})' % re.escape(label),
-                         src, re.S):
+    sites = list(re.finditer(r'emit\("%s",\s*(.{0,60})' % re.escape(label),
+                             src, re.S))
+    assert sites, "no emit site for %s -- this test was vacuous" % label
+    for m in sites:
         assert "bounded_for_log" not in m.group(1), (label, m.group(1))
 
 
