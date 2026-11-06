@@ -121,7 +121,11 @@ def _simulate(ts: List[Dict], *,
               resid_cap: int = RESIDUAL_CAP,
               ceiling: float = PAIR_CEILING,
               participation: float = 1.0,
-              max_actions: int = 8) -> Dict[str, Any]:
+              max_actions: int = 8,
+              complete_cutoff_s: float = COMPLETE_CUTOFF_S,
+              fee_per_contract: float = 0.0,
+              rescue: bool = False,
+              rescue_allow: Optional[Callable[..., bool]] = None) -> Dict[str, Any]:
     """The deployed paired controller, plus signal-gated underdog entries.
 
     Derived line by line from favorite_accumulation._simulate; the only added
@@ -134,6 +138,8 @@ def _simulate(ts: List[Dict], *,
     spend = 0.0
     acts = 0
     directional = 0
+    rescued = 0
+    fees = 0.0
     dir_rows: List[Dict[str, Any]] = []
     stride = max(1, int(round(1.0 / participation))) if participation > 0 else 10 ** 9
     for idx, t in enumerate(ts):
@@ -145,7 +151,7 @@ def _simulate(ts: List[Dict], *,
         held_same = up if oc == "Up" else dn
         held_other = dn if oc == "Up" else up
         reduces = held_other > held_same
-        if reduces and off > COMPLETE_CUTOFF_S:
+        if reduces and off > complete_cutoff_s:
             continue
         if (not reduces) and off > ENTRY_CUTOFF_S:
             continue
@@ -171,7 +177,25 @@ def _simulate(ts: List[Dict], *,
             if held_other > 0:
                 carried = spend / (up + dn) if (up + dn) > 0 else px
                 if carried + px > ceiling:
-                    continue
+                    # THE COMPLETION RESCUE, as deployed. src/l5_two_sided_probe
+                    # refuses the cap and then re-asks whether completing beats
+                    # carrying the residual to settlement. Replayed here: a
+                    # contract costing px returns $1 if its side wins and the
+                    # alternative is an unmatched unit, so completing is better
+                    # whenever px plus fee is under $1. It earns ~nothing; it
+                    # exists to avoid a residual worth -$0.27 measured.
+                    if not rescue or px + fee_per_contract >= 1.0:
+                        continue
+                    # `rescue_allow`, when given, is the policy. Without it
+                    # the branch accepts every complement under $1.00, which
+                    # is an UPPER BOUND on what rescuing can do, not a
+                    # policy: it assumes a complement is always there to be
+                    # had. Policies that mean to be deployable pass one.
+                    if rescue_allow is not None and not rescue_allow(
+                            slug=slug, t_abs=t["ws"] + off, px=px,
+                            up=up, dn=dn, spend=spend, off=off, side=oc):
+                        continue
+                    rescued += 1
         if spend + px * CLIP > CASH_CAP:
             continue
         if max(up, dn) + CLIP > EXPOSURE_CAP:
@@ -181,6 +205,7 @@ def _simulate(ts: List[Dict], *,
         else:
             dn += CLIP
         spend += px * CLIP
+        fees += fee_per_contract * CLIP
         acts += 1
         if is_directional:
             directional += 1
@@ -191,11 +216,12 @@ def _simulate(ts: List[Dict], *,
     resid_up, resid_dn = up - matched, dn - matched
     res_win = resid_up if winner == "Up" else resid_dn
     res_other = resid_dn if winner == "Up" else resid_up
-    realized = matched * 1.0 + res_win - spend
-    other = matched * 1.0 + res_other - spend
+    realized = matched * 1.0 + res_win - spend - fees
+    other = matched * 1.0 + res_other - spend - fees
     return {"pairs": int(matched), "residual": resid_up + resid_dn,
             "residual_won": res_win, "residual_lost": res_other,
-            "spend": spend, "fees": 0.0, "actions": acts,
+            "rescued": rescued,
+            "spend": spend, "fees": fees, "actions": acts,
             "directional": directional, "directional_rows": dir_rows,
             "realized": realized, "if_other_outcome": other,
             "worst_case": min(realized, other)}
