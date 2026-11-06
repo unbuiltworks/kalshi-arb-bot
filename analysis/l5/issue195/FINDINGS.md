@@ -79,6 +79,21 @@ rebuild, the cancel-ownership oracle, the gates, settlement, reconciliation
 and exact-order cancellation. `test_roll_still_does_every_thing_that_is_not_a_diagnostic`
 pins each one.
 
+### A consequence worth stating rather than discovering
+
+`entry_critical` is true while **any** order is resting or **any** inventory is
+held in the live market. So during an armed campaign that holds inventory
+continuously, the deferred diagnostics may not run at all for the duration —
+they are deprioritised indefinitely, not merely delayed.
+
+That is the correct ordering (a read-only diagnostic must never outrank a
+completion decision) and it is the safe direction, but it does mean
+`L5_COST_BASIS_AUDIT` will not emit during an active campaign the way it used
+to. In the current flat, disarmed state it runs normally. Anyone looking for
+that record mid-campaign should expect `roll_diag:deferred:ENTRY_CRITICAL` in
+`stats` instead, which is counted precisely so a queue that never drains is
+visible rather than silent.
+
 ---
 
 ## 2. `maybe_ts_completion` reached `WOULD_SUBMIT` and submitted nothing
