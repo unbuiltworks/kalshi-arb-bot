@@ -105,6 +105,15 @@ The 40-second correction follows from
 Using the naive horizon on the TWAP stream overstates variance and pulls every
 probability toward 0.5.
 
+**SUPERSEDED 2026-11-06 — the reference has since changed off Chainlink
+entirely.** Read live from `gateway.polymarket.us`, the current BTC15m
+markets settle on **CF Benchmarks' BRTI**, not Chainlink. The functional form
+below carried over (a trailing-60s average at both endpoints) but the index
+did not, so **every fidelity and calibration figure in this report describes
+a reference the market no longer uses.** See
+`analysis/l5/btc15m_signal/LIVE_PREREQUISITE_AUDIT.md`. The original caveat,
+which proved correct, follows.
+
 **One gap, stated plainly: the stream in force *today* is not verified from
 this session.** `gamma-api.polymarket.com` is outside this environment's
 network allowlist and no local capture extends past 2026-08-31. The last

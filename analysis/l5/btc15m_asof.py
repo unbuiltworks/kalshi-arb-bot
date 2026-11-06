@@ -77,6 +77,35 @@ MINUTE_S = 60.0
 #: averages, and a 60 s average of a 60 s candle is that candle.
 TWAP_SOURCE = "btc-usd-twap-60s-streams"
 SPOT_SOURCE = "btc-usd"
+#: THE LIVE MARKET NO LONGER USES EITHER OF THE ABOVE. Read from the venue on
+#: 2026-11-06 for cpc-btc-updown-15m-2026-11-06-0130z and -0145z, via
+#: gateway.polymarket.us/v1/markets, the settlement text is:
+#:
+#:   "Outcome sourced from CF Benchmarks' Bitcoin Real-Time Index (BRTI) ...
+#:    in the last minute before each of those two times, 60 BRTI prices are
+#:    collected. The official value for that time is the simple average of
+#:    these prices, rounded to the nearest 2 decimal places. Please note that
+#:    this market is about the price according to CF Benchmarks' BRTI, not
+#:    according to other sources or spot markets."
+#:
+#: So the FUNCTIONAL FORM carried over -- a trailing-60s average at both
+#: endpoints, ties to Up -- but the REFERENCE INDEX did not: Chainlink is
+#: gone and CF Benchmarks BRTI is in its place. Every fidelity number in
+#: analysis/l5/btc15m_signal/VERDICT.md was measured against CHAINLINK
+#: windows from 2026-03 to 2026-08 and does NOT transfer to BRTI.
+#:
+#: This constant exists so `averaging()` refuses it by name rather than by
+#: falling through to "unrecognised". It is NOT wired into a strike or a
+#: horizon, because no BRTI history has been collected and the proxy
+#: agreement against BRTI is unmeasured.
+BRTI_SOURCE = "brti"
+#: Named for the same reason: the venue field carrying the window start
+#: changed too. The historical corpus used `eventStartTime` with
+#: `endDate` == start + 900 s. The live gateway rows use `gameStartTime` for
+#: the window start, and their `endDate` is start + 45 MINUTES -- a market
+#: housekeeping time, not the settlement time. Reading `endDate` as the
+#: settlement instant would put it three windows late.
+LIVE_WINDOW_START_FIELD = "gameStartTime"
 
 
 @dataclass(frozen=True)
@@ -148,6 +177,16 @@ def averaging(resolution_source: str = TWAP_SOURCE) -> bool:
         return True
     if tail == SPOT_SOURCE:
         return False
+    if BRTI_SOURCE in str(resolution_source).lower():
+        # The live reference as of 2026-11-06. Refused BY NAME, not as an
+        # unknown string, so the message says what is actually wrong: the
+        # functional form matches the TWAP branch but no BRTI history has
+        # been collected, so neither the proxy fidelity nor the calibration
+        # transfers. Treating it as the TWAP source would silently reuse a
+        # Chainlink-derived calibration on a different index.
+        raise ValueError(
+            "CF Benchmarks BRTI is the live reference and is NOT calibrated "
+            "here: no BRTI history collected, proxy agreement unmeasured")
     raise ValueError("unrecognised resolution source: %r" % (resolution_source,))
 
 

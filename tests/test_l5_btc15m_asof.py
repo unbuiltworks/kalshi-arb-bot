@@ -256,3 +256,33 @@ def test_an_unrecognised_stream_refuses_a_snapshot():
     s = _flat(step=20.0)
     with pytest.raises(ValueError):
         asof_snapshot(s, WS, WS + 300.0, resolution_source="eth-usd")
+
+
+# ------------------------------------- the live reference moved off Chainlink
+# Read from gateway.polymarket.us on 2026-11-06: the live BTC15m markets now
+# settle on CF Benchmarks BRTI, not Chainlink. The functional form carried
+# over but the index did not, so nothing calibrated against Chainlink may be
+# applied to it. These pin the refusal rather than a silent fallback.
+from analysis.l5.btc15m_asof import BRTI_SOURCE, LIVE_WINDOW_START_FIELD
+
+
+def test_the_live_brti_reference_is_refused_by_name():
+    for src in ("brti", "BRTI",
+                "https://www.cfbenchmarks.com/data/indices/BRTI"):
+        with pytest.raises(ValueError, match="BRTI"):
+            averaging(src)
+
+
+def test_brti_is_not_silently_treated_as_the_twap_source():
+    """The shapes match; the calibration does not. It must still refuse."""
+    with pytest.raises(ValueError):
+        averaging(BRTI_SOURCE)
+    s = _flat(step=20.0)
+    with pytest.raises(ValueError):
+        asof_snapshot(s, WS, WS + 300.0, resolution_source=BRTI_SOURCE)
+
+
+def test_the_live_window_start_field_is_recorded_as_game_start_time():
+    # the historical corpus used eventStartTime with endDate == start + 900s;
+    # live rows use gameStartTime and their endDate is start + 45 minutes
+    assert LIVE_WINDOW_START_FIELD == "gameStartTime"
