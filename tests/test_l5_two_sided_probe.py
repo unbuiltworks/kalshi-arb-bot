@@ -911,3 +911,18 @@ def test_the_l5_following_translation_path_is_untouched():
     # the resolver is reached only through probe_plan
     plan = inspect.getsource(E.FaithfulExecutor.probe_plan)
     assert "ts_authenticated_book" in plan
+
+
+def test_completion_refuses_future_dated_book_snapshot():
+    """A negative book age is future information, never executable liquidity."""
+    result = TS.completion_decision(
+        up_qty=D("1"), dn_qty=D("0"),
+        up_cost_px=D("0.55"), dn_cost_px=D("0"),
+        taker_price=D("0.35"), available_depth=D("1"),
+        tick=D("0.01"), min_qty=D("1"),
+        cash_headroom=D("1"), worst_case_ceiling=D("1"),
+        book_age_s=D("-0.01"), gap_suspected=False,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "BOOK_STALE"
+    assert result["cross"] is False
