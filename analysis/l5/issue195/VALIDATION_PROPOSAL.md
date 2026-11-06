@@ -39,8 +39,41 @@ So to run `3f9ca7458` on `l5-pmus-live`:
 | `/data` volume | **preserved** — the ledger, the cursor, `defensive_spent_usd`, the claim ledger, settlement history |
 | `L5_LIVE_HALT` | unchanged (currently **empty**, i.e. not asserted) |
 | `approval_state` | unchanged (`approval_stale`, `windows_remaining: null`) |
-| the three new switches | **absent from the service**, so default-OFF |
+| the three new switches | **present but not `YES`** on `l5-pmus-live`, so OFF — corrected below, this was wrong when written |
 | rollback | `canRedeploy` is true on the prior deployment |
+
+### CORRECTION, measured on the running Phase A deployment
+
+This document originally said the three new switches were *absent from the
+service*. That was wrong, and the correct reading is the stronger one.
+
+`list-variables` on `l5-pmus-live` shows **`L5_TAKER_COMPLETION_POLICY` and
+`L5_TS_COMPLETION_CROSS` are both SET**. Values are redacted to a connected
+app, so the switch state was read from the process's own output instead —
+deployment `a342fccc`, 2026-11-06T15:38-15:39Z, `L5_TS_COMPLETION`:
+
+```
+"authorized_to_cross": false            <- L5_TS_COMPLETION_CROSS is not YES
+"taker_policy": {"reason": "POLICY_DISABLED", "default": "OFF"}
+                                        <- L5_TAKER_COMPLETION_POLICY is not YES
+"armed": false
+"reason": "NO_INVENTORY_TO_COMPLETE"    <- the named refusal, not WOULD_SUBMIT
+"cash_headroom": "12", "worst_case_ceiling": "1.50"
+```
+
+So both switches exist with non-`YES` values and both evaluate OFF. What makes
+that safe is `_flag`, which is an exact `== "YES"` string comparison and not a
+truthy env read, so a stray `0`, `false`, `off` or empty value cannot enable
+live crossing. A set-but-not-YES variable is the case that would have defeated
+a truthy check, and it is the case that is actually on the service.
+
+The remaining three — `L5_TAKER_LOSS_REDUCTION`,
+`L5_TAKER_MIN_WORST_IMPROVEMENT_USD` and `L5_MAX_COMPLETION_EV_GIVEUP_USD` —
+are genuinely absent from the variable list. With the floor unset the rescue
+path refuses with `RESCUE_IMPROVEMENT_FLOOR_UNSET`, so Phase B needs all three
+written, not just the two that exist flipped to `YES`.
+
+Phase B therefore requires **five** variable writes, not three.
 
 ---
 
