@@ -331,11 +331,32 @@ strong** as before, because the structure they pinned moved for a reason:
 
 ### One observation that is an owner decision, not a code change
 
-As of 2026-11-06T13:14Z the running service reports `armed: false`,
-`preflight: PASSED`, `approval_state: approval_stale`,
-`windows_remaining: null`, `http_429: 0` — and **`owner_arm_token: true`**.
-`L5_LIVE_HALT` was left empty by the previous session (its own commit message
-says so and recommends asserting it). Trading is therefore currently stopped by
-the expired approval and the exhausted window ledger, **not** by the halt.
-Asserting `L5_LIVE_HALT` needs a variable write and a redeploy of a
-money-capable service, so it is left as an owner action and was not done here.
+**Read from the live heartbeat at 2026-11-06T13:21:52Z, not from a commit
+message.** The two previous commit records disagreed about the halt — the
+install commit says `halt_local_env true`, the campaign-close commit says
+`L5_LIVE_HALT IS STILL EMPTY` — and `list-variables` redacts values, so it was
+verified from `L5_LIVE_HB` instead. The campaign-close commit is the correct
+one:
+
+```
+submission_gate  blocked true, reason "NOT_ARMED"
+halt_local_env   false          <- L5_LIVE_HALT is NOT asserted
+shadow_lock      false          <- L5_SHADOW_ONLY is NOT on
+halt_latch       "CLEAR"        <- the independent latch is PRESENT, halt false
+owner_arm_token  true           <- the owner's arm token IS in place
+armed            false
+approval_state   "approval_stale"
+windows_remaining null
+http_429         0
+```
+
+So the **only** thing blocking the wire is `NOT_ARMED`, and arming is blocked
+by the stale approval and the empty window ledger alone. The env halt, the
+shadow lock and the watchdog latch are all currently **not** asserting, and the
+arm token is already present. The independent watchdog is running and
+reporting (`kind: PRESENT`), which is the part that is working as designed.
+
+That is a thinner margin than the layering is capable of. Asserting
+`L5_LIVE_HALT`, or setting `L5_SHADOW_ONLY`, each needs a variable write and a
+redeploy of a money-capable service, so both are left as owner actions and
+neither was done here.
