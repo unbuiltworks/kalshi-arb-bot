@@ -52,7 +52,13 @@ def evaluate(inv: Inventory, candidate: Candidate, p_up: float,
         raise ValueError("invalid probability")
     if candidate.action not in ("HOLD", "BUY") or candidate.side not in ("UP", "DOWN"):
         raise ValueError("invalid action")
-    if type(candidate.qty) is not int or candidate.qty < 0:
+    # Split deliberately: bool is a subclass of int, so True would otherwise
+    # pass an isinstance check and act as qty=1. The two conditions get
+    # distinct messages because they are distinct mistakes, and the inventory
+    # guard above already says "integer".
+    if type(candidate.qty) is not int:
+        raise ValueError("integer quantity required")
+    if candidate.qty < 0:
         raise ValueError("invalid quantity")
     if not 0 <= candidate.fill_probability <= 1 or candidate.execution_cost < 0:
         raise ValueError("invalid fill/cost")

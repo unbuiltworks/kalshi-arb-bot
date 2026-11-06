@@ -36,7 +36,7 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from analysis.l5.btc15m_asof import asof_snapshot, strike
-from analysis.l5.btc15m_calibration import (OFFSETS, apply_logistic,
+from analysis.l5.btc15m_calibration_report import (OFFSETS, apply_logistic,
                                             clustered_mean, fit_logistic,
                                             load_candles, load_sources)
 from analysis.l5.btc15m_probability import estimate_up

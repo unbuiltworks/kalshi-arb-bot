@@ -17,11 +17,11 @@ sign out of sample.
 | Step | Result |
 |---|---|
 | Run the new tests | 21/21 pass, no corrections needed |
-| Verify baseline parity | exact: 80 failing ids, identical set; 16,784 passed on the final tree |
+| Verify baseline parity | exact: 80 failing ids, identical set; 16,803 passed on the merged tree |
 | Reuse existing BTC collectors for as-of estimates | done, `analysis/l5/btc15m_asof.py` |
 | Verify settlement reference, strike, timestamps | done; the published description is **wrong**, and the functional differs by stream (§3) |
 | Calibrate chronologically | done, 4,095 observations over 315 windows |
-| Integrate into the replay and compare | done, §6 |
+| Integrate into the replay and compare | done, §6; cross-checked through the owner's gate, §6b |
 | Promotion? | **NO** |
 
 ## 2. The data, and what it is not
@@ -221,6 +221,59 @@ construction, so a completely uninformative `p_up = 0.5` already clears
 model only earns its keep through departures from 0.5, and the margin is the
 only parameter that makes the gate require real confidence. This is pinned by
 `test_a_flat_half_probability_is_not_a_no_op_so_threshold_is_not_a_skill_gate`.
+
+## 6b. The owner's gate, and the one lead worth recording
+
+`analysis/l5/btc15m_calibration.py` (owner, `0ff3b381`) is a stricter
+chronological gate: exactly one prediction per window, its own frozen split.
+My report now runs it per decision offset with the **market price as the
+baseline**, so it answers "does the model beat the price out of sample"
+rather than "does it beat a coin flip". It agrees with my own
+window-clustered statistic in sign — model better on both scores at 9 of 13
+offsets — and it surfaces structure the pooled number hid.
+
+Held-out paired ΔBrier, market minus model, positive = model better, one
+observation per window:
+
+| offset | windows | ΔBrier ± 95% | deployed gate at that offset |
+|---|---|---|---|
+| 60 | 122 | +0.00259 ± 0.00948 | OPEN allowed |
+| 120 | 124 | +0.00566 ± 0.01045 | OPEN allowed |
+| 180 | 124 | +0.00061 ± 0.00998 | OPEN allowed |
+| 240 | 124 | −0.00393 ± 0.01054 | OPEN allowed |
+| 300 | 124 | +0.00927 ± 0.01039 | OPEN allowed |
+| 360 | 124 | −0.00347 ± 0.00930 | OPEN allowed |
+| 420 | 124 | −0.00140 ± 0.01083 | OPEN allowed |
+| 480 | 125 | −0.00138 ± 0.01014 | OPEN allowed |
+| 540 | 125 | +0.00857 ± 0.01254 | completion only |
+| 600 | 125 | +0.01071 ± 0.01308 | completion only |
+| 660 | 125 | +0.01241 ± 0.01497 | **no action** |
+| 720 | 126 | +0.01599 ± 0.01988 | **no action** |
+| 780 | 126 | +0.01774 ± 0.02053 | **no action** |
+
+Pooled: offsets ≤480 (entry allowed) **+0.00099 ± 0.00542**; offsets ≥540
+(entry forbidden) **+0.01301 ± 0.01370**.
+
+Two things are true at once and both belong in the record.
+
+**It is a coherent pattern.** The advantage rises monotonically from offset
+180 to 780 — not the scatter you would expect from noise — and it has an
+obvious mechanism: as the horizon shrinks the lognormal gets easy and the
+reference tape is more informative than a thin late book.
+
+**It is not established, and it is not harvestable.** **No individual offset
+is significant and neither pooled group is**; the late group's interval still
+crosses zero on 126 windows. And the offsets where the advantage is largest
+are exactly the ones where the deployed controller may not open: the entry
+cutoff is 480 s, and the ≤480 s region where we *can* act is where the model
+has **no** measurable advantage (+0.00099 ± 0.00542, essentially zero).
+
+So this is recorded as a lead, not acted on. Harvesting it would require
+extending the entry cutoff past 480 s, which is a change the owner has
+explicitly reserved, and I am not relaxing a cutoff to chase a result that is
+not significant in the first place. If it is ever pursued, the prerequisite
+is not more modelling: it is the Chainlink reference history (§8), because a
+2.5% proxy sign error swamps a 0.013 Brier difference.
 
 ## 7. What this does not claim
 

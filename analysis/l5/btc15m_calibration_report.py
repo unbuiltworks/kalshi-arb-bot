@@ -19,7 +19,7 @@ Observations are CLUSTERED BY WINDOW -- all 13 decision points in one window
 share one outcome -- so every interval is a window-clustered interval and the
 effective n is the window count, not the row count.
 
-Run: PYTHONPATH=. python3 analysis/l5/btc15m_calibration.py
+Run: PYTHONPATH=. python3 analysis/l5/btc15m_calibration_report.py
 """
 from __future__ import annotations
 
@@ -34,6 +34,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from analysis.l5.btc15m_asof import (SETTLE_AVERAGE_S, WINDOW_S, MinuteSeries,
                                      asof_snapshot, minutes_from_coinbase_rows,
                                      settled_value, strike)
+from analysis.l5.btc15m_calibration import (WindowPrediction,
+                                            chronological_gate)
 from analysis.l5.btc15m_probability import estimate_up
 from analysis.l5.favorite_accumulation import load_outcomes, load_trades
 
@@ -375,6 +377,41 @@ def main() -> int:
             "n": len(ages), "median": ages[len(ages) // 2],
             "p90": ages[int(0.9 * len(ages))], "max": ages[-1]}
 
+    # INDEPENDENT CROSS-CHECK through the owner's gate in
+    # analysis/l5/btc15m_calibration.py, which takes exactly ONE prediction
+    # per window and freezes the split itself. Run once per decision offset,
+    # with the MARKET PRICE as the baseline, so the question it answers is
+    # "does the model beat the price out of sample" rather than "does it beat
+    # a coin flip". Reported separately from my own window-clustered paired
+    # statistic because the two are computed differently and agreeing is
+    # evidence; the gate is strict about chronology and refuses rather than
+    # reporting when a split is too thin.
+    out["owner_gate_by_offset"] = {}
+    for off in OFFSETS:
+        sub = sorted((r for r in rows
+                      if r["off"] == off and r["mkt"] is not None),
+                     key=lambda r: r["ws"])
+        cand = [WindowPrediction(window_start=int(r["ws"]),
+                                 predicted_up=r["p"],
+                                 settled_up=bool(r["y"])) for r in sub]
+        base = [WindowPrediction(window_start=int(r["ws"]),
+                                 predicted_up=r["mkt"],
+                                 settled_up=bool(r["y"])) for r in sub]
+        try:
+            g = chronological_gate(cand, base)
+        except ValueError as exc:
+            out["owner_gate_by_offset"][int(off)] = {"refused": str(exc),
+                                                     "windows": len(sub)}
+            continue
+        out["owner_gate_by_offset"][int(off)] = {
+            "test_windows": g["test_windows"],
+            "brier_improvement": g["brier_improvement"],
+            "log_loss_improvement": g["log_loss_improvement"],
+            "forecast_better_on_both_scores":
+                g["forecast_better_on_both_scores"],
+            "candidate_bias": g["candidate"]["mean_bias"],
+            "baseline_bias": g["baseline"]["mean_bias"]}
+
     edges = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0001]
     out["reliability"]["model_test"] = reliability(test, "p", edges)
     out["reliability"]["calibrated_test"] = reliability(test, "cal", edges)
@@ -433,6 +470,26 @@ def main() -> int:
             e = out["executable_edge"][name][label]
             print(eh % (name, label, e["rows"], e["windows"],
                         f(e["net_per_contract"]), f(e["ci"])))
+    print()
+    print("OWNER GATE (btc15m_calibration.chronological_gate), model vs the")
+    print("market price, one prediction per window, per decision offset:")
+    gh = "  %-5s %6s %12s %12s %7s"
+    print(gh % ("off", "testWin", "dBrier", "dLogLoss", "better"))
+    better = 0
+    ran = 0
+    for off in sorted(out["owner_gate_by_offset"], key=int):
+        g = out["owner_gate_by_offset"][off]
+        if "refused" in g:
+            print("  %-5s refused: %s (%d windows)"
+                  % (off, g["refused"], g["windows"]))
+            continue
+        ran += 1
+        better += bool(g["forecast_better_on_both_scores"])
+        print(gh % (off, g["test_windows"], f(g["brier_improvement"], 5),
+                    f(g["log_loss_improvement"], 5),
+                    "yes" if g["forecast_better_on_both_scores"] else "no"))
+    if ran:
+        print("  model better on BOTH scores at %d of %d offsets" % (better, ran))
     print()
     print("HELD-OUT reliability, model vs market")
     print("%-12s %5s %5s %9s %9s" % ("bucket", "n", "wins", "mean_p", "realized"))

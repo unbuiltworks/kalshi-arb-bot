@@ -38,7 +38,7 @@ from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 from analysis.l5.btc15m_asof import (MINUTE_S, SETTLE_AVERAGE_S, SPOT_SOURCE,
                                      TWAP_SOURCE, WINDOW_S, MinuteSeries)
-from analysis.l5.btc15m_calibration import load_candles
+from analysis.l5.btc15m_calibration_report import load_candles
 
 SLUG_RE = re.compile(r"^btc-updown-15m-\d+$")
 CAPTURES = ["data/l5/raw/markets.jsonl"] + sorted(
