@@ -926,3 +926,15 @@ def test_completion_refuses_future_dated_book_snapshot():
     assert result["ok"] is False
     assert result["reason"] == "BOOK_STALE"
     assert result["cross"] is False
+
+
+def test_complement_refuses_future_dated_book_snapshot():
+    """Matching inventory must not quote using a future book snapshot."""
+    result = TS.complement_order(
+        side=TS.DOWN, qty=D("1"), cost_px=D("0.55"),
+        bid=D("0.60"), ask=D("0.62"),
+        tick=D("0.01"), min_qty=D("1"), depth_ticks=0,
+        book_age_s=D("-0.01"), held_side=TS.UP,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "BOOK_STALE"
