@@ -2536,7 +2536,7 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     if gap_suspected:
         return no("GAP_SUSPECTED")
     age = _d(book_age_s)
-    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+    if age is None or age < 0 or age > D(str(MAX_BOOK_AGE_S)):
         return no("BOOK_STALE")
     b = _d(bid)
     a = _d(ask)
