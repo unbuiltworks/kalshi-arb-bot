@@ -186,6 +186,43 @@ dimension that budget exists to bound. Now tested against the same constant,
 read from the same place, before the charge — and an unreadable budget reads as
 exhausted, which `defensive_spent` already delivers.
 
+### What the mandate widens — stated, because its own label understated it
+
+A mandate is the only thing that exempts an order from the maker-only overlay,
+and auditing `pair_cost_refusal` against my change showed it does **two more
+things** for that one order:
+
+```python
+cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost())
+...
+if not _mand:
+    _resc = self.completion_pair_rescue(...)   # three conditions
+else:
+    _resc = None                               # skipped
+```
+
+So a `TAKER_COMPLETION` mandate:
+
+1. exempts the maker-only overlay (the intended, documented effect);
+2. raises the pair ceiling from **0.96 to 1.20** — *above* the $1.00
+   certain-loss line;
+3. skips `completion_pair_rescue`'s three conditions.
+
+**That is the intended shape for a rescue, not an accident.** 0.96 is an
+*entry* ceiling for spread capture; a leg that would otherwise settle worthless
+is the one case where paying above a dollar is the *smaller* loss. The
+campaign's own completed pair cost **0.97** and its commit called it "a RESCUE,
+not spread capture". And (3) is safe only because
+`completion_taker_execute` enforces the two directional conditions itself —
+`COMPLETION_WOULD_INCREASE_EXPOSURE`, `COMPLETION_WOULD_REVERSE_EXPOSURE`, both
+against the store's *and* the venue's positions.
+
+What bounds a dear rescue is therefore **not a pair-cost line** but the owner's
+`L5_TAKER_MIN_WORST_IMPROVEMENT_USD` floor plus the $1.50 per-cross and $3.00
+per-window outlay caps. My first version of the mandate's own label said it was
+"not a change to the 0.96 pair ceiling" — true of every *other* order and
+misleading about this one. Corrected in the code and pinned by five tests.
+
 ### The switches, all default-OFF
 
 | env | what it authorizes |

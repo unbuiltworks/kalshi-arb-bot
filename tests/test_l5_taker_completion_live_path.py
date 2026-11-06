@@ -1064,3 +1064,100 @@ def test_the_runner_records_the_window_outlay_so_the_cap_reads_a_real_number():
     assert "TSP.worst_fee(qty, px)" in src
     accessor = inspect.getsource(RUN.Runner.taker_outlay_spent)
     assert "_taker_outlay_usd" in accessor
+
+
+# =====================================================================
+# 14. WHAT THE MANDATE ACTUALLY WIDENS, STATED RATHER THAN INCIDENTAL.
+#
+# Found by auditing `pair_cost_refusal` against my own change. A mandate
+# does two things beyond exempting the maker-only overlay, and the
+# mandate's own label did not spell either out:
+#
+#   cap = DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost()
+#
+# so a TAKER_COMPLETION mandate raises the pair ceiling from 0.96 to 1.20
+# for that one order -- ABOVE the $1.00 certain-loss line -- and the three
+# `completion_pair_rescue` conditions are SKIPPED for a mandated order
+# (`if not _mand: ... else: _resc = None`).
+#
+# That is the intended shape for a rescue: 0.96 is an ENTRY ceiling for
+# spread capture, and a leg that would otherwise settle worthless is the
+# one case where paying above $1.00 is the SMALLER loss. The campaign's own
+# completed pair cost 0.97 and its commit called it "a RESCUE, not spread
+# capture". What bounds it is not a pair-cost line but the improvement
+# floor and the outlay caps -- and `completion_taker_execute` enforces the
+# two directional conditions itself, which is why skipping them there is
+# safe. These tests pin all of that.
+# =====================================================================
+
+def _pair_args(px="0.99", qty="1"):
+    return (SLUG, {"side": "DOWN"}, {"price": px, "qty": qty})
+
+
+def test_without_a_mandate_the_pair_ceiling_is_the_entry_ceiling(ex):
+    x, t, E = ex
+    assert x._defensive_mandate is None
+    assert TS.max_pair_cost() <= D("0.96")
+
+
+def test_a_taker_completion_mandate_raises_the_pair_ceiling_to_the_defensive_one(
+        ex):
+    """Asserted on the source of the one line that chooses the cap, because
+    driving `pair_cost_refusal` needs a full attested ledger and the
+    property under test is which constant is selected."""
+    import inspect
+    from src import l5_live_execution as E2
+    src = inspect.getsource(E2.FaithfulExecutor.pair_cost_refusal)
+    assert ("cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand "
+            "else TS.max_pair_cost())") in src
+    assert DC.DEFENSIVE_PAIR_CEILING == D("1.20")
+    assert DC.DEFENSIVE_PAIR_CEILING > D("1.00") > TS.max_pair_cost()
+
+
+def test_the_rescue_conditions_are_skipped_for_a_mandated_order(ex):
+    """So the mandate HOLDER must enforce them -- which is why the two
+    directional ones are enforced inside completion_taker_execute."""
+    import inspect
+    from src import l5_live_execution as E2
+    src = inspect.getsource(E2.FaithfulExecutor.pair_cost_refusal)
+    assert "if not _mand:" in src
+    assert "_resc = None" in src
+
+
+def test_completion_taker_execute_enforces_both_directional_conditions(ex):
+    """REDUCES and NO-REVERSAL, on the store's own venue-confirmed
+    positions, so a mandated order can neither increase directional
+    exposure nor cross through flat."""
+    import inspect
+    from src import l5_live_execution as E2
+    src = inspect.getsource(E2.FaithfulExecutor.completion_taker_execute)
+    assert "COMPLETION_WOULD_INCREASE_EXPOSURE" in src
+    assert "COMPLETION_WOULD_REVERSE_EXPOSURE" in src
+    # and against the VENUE's exposure, not only ours
+    assert "COMPLETION_VENUE_POSITION_DISAGREES" in src
+
+
+def test_what_bounds_a_dear_rescue_is_the_improvement_floor_not_the_ceiling():
+    """A pair at 1.20 is a 20-cent-a-share certain loss. The thing that
+    stops it being taken for no reason is the improvement floor: the cross
+    must remove at least that much worst-case exposure."""
+    dec = {"ok": True, "side": "DOWN", "qty": "1", "price": "0.9500",
+           "deficit": "1", "displayed_depth": "809",
+           "book_rungs": [["0.9500", "809"]],
+           "both_positive_after": False,
+           "worst_before": "-0.4000", "worst_after": "-0.3600"}
+    common = dict(decision=dec, enabled=True, owner_authorized=True,
+                  held_up_qty=D(1), held_dn_qty=D(0),
+                  held_up_px=D("0.38"), held_dn_px=D(0),
+                  book_rungs=[["0.9500", "809"]],
+                  maker_attempted=True, maker_rested_s=D(120),
+                  window_outlay_spent_usd=D(0), halted=False,
+                  loss_reduction=True)
+    # a four-cent improvement does not clear a 25-cent floor
+    out = TCP.authorize(**dict(common,
+                               min_worst_improvement_usd=D("0.25")))
+    assert out["authorized"] is False
+    assert out["reason"].startswith("RESCUE_")
+    # and the floor must be NAMED at all
+    assert TCP.authorize(**common)["reason"] == (
+        "RESCUE_IMPROVEMENT_FLOOR_UNSET")

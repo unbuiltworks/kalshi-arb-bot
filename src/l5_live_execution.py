@@ -6664,12 +6664,28 @@ class FaithfulExecutor:
             "origin": TCP.MANDATE_ORIGIN,
             "reason": "TAKER_COMPLETION",
             "budget_total_usd": str(total),
-            "labels": ("permits ONE crossing order and only this one. It is "
-                       "not a change to the maker-only overlay or to the "
-                       "0.96 pair ceiling, which stand for everything "
-                       "else, and it is gated by the taker-completion "
-                       "policy's two default-off switches rather than by "
-                       "the defensive flag."),
+            # WHAT THIS MANDATE ACTUALLY WIDENS, for THIS ONE ORDER, stated
+            # rather than left to be read off `pair_cost_refusal`. The first
+            # version of this label said it was "not a change to the 0.96
+            # pair ceiling", which was misleading: the ceiling stands for
+            # every other order, and for this one it does not.
+            "labels": ("permits ONE crossing order and only this one, and "
+                       "for that order it widens exactly three things: the "
+                       "maker-only overlay is exempted, the pair ceiling "
+                       "becomes the DEFENSIVE 1.20 rather than the 0.96 "
+                       "entry ceiling, and `completion_pair_rescue`'s three "
+                       "conditions are skipped because the holder enforces "
+                       "the two directional ones itself. 1.20 is ABOVE the "
+                       "$1.00 certain-loss line on purpose: 0.96 is an "
+                       "ENTRY ceiling for spread capture, and a leg that "
+                       "would otherwise settle worthless is the one case "
+                       "where paying above a dollar is the SMALLER loss. "
+                       "What bounds it is not a pair-cost line but the "
+                       "owner's improvement floor and the per-cross and "
+                       "per-window outlay caps. Every other order in the "
+                       "system is unaffected, and this is gated by the "
+                       "taker-completion policy's own default-off switches "
+                       "rather than by the defensive flag."),
         }
         return {"ok": True, "confirmations": confirmations,
                 "authorization": dict(proposal),
