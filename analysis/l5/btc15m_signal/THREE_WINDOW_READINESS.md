@@ -366,3 +366,70 @@ discarded derivation is genuinely different.
 | 3-window worst case | $4.50 — fits, margin $0.3530 |
 | predecessor budget ledger | `camp1.4a09bc22` `closed: true`, peak not chargeable to the new nonce |
 | venue requests | `http_429: 0`, not in cooloff |
+
+---
+
+# CAMPAIGN SETTLED — camp1.085d0f20 — net −$0.97
+
+Armed 2026-11-06T02:49:33Z on owner authorization; self-disarmed after the
+third window. All figures venue-confirmed from `L5_LIVE_SETTLED`
+(`resolution_source: VENUE_SETTLEMENT_PX`, `venue_state: MARKET_STATE_EXPIRED`).
+**All three fills carry an attested cost basis — no $1/share placeholder.**
+
+| window | fills | matched | residual | settled |
+|---|---|---|---|---|
+| 0245z | none | — | — | $0.00 |
+| 0300z | 2 UP $1.24, 1 DOWN $0.35 | 1 pair @ **$0.97** → **+$0.03** | 1 UP @ $0.62 → **−$0.62** | **−$0.59** |
+| 0315z | 1 UP $0.38 | none | 1 UP @ $0.38 → **−$0.38** | **−$0.38** |
+| **total** | **4 contracts** | **1 pair, +$0.0300** | **2 units, −$1.0000** | **−$0.9700** |
+
+Cost $1.97, redemption $1.00. Reconciles exactly: `realized_today`
+−$13.7795 → **−$14.7495**, delta **−$0.9700**.
+
+## Lifecycle, kept separate
+
+**submitted 10** (OPEN 3, COMPLETE 4, REPLACE 3, of 500) · **filled 4
+contracts** · **settled 3 of 3 windows** · **realized −$0.9700**
+
+## What it confirms, and it is the same finding as the replay
+
+- **Paired-fill rate 1 of 2 traded windows = 50%.**
+- **The single completed pair cost $0.97 — above the $0.96 ceiling.** It is a
+  **rescue**, not spread capture, and it earned **+$0.03**: squarely the
+  rescue bucket's +$0.0175/pair, nothing like the profit bucket's
+  +$0.1032/pair.
+- **Residual: 2 units, both UP, both lost.** Both windows settled DOWN
+  (`yes_value: 0.0000`). **0% residual win rate**, −$0.50/unit against the
+  −$0.2685/unit ledger prior.
+- One pair earning $0.03 against two residuals losing $1.00 is the 2.6:1
+  breakeven arithmetic failing in live miniature.
+
+n=3 windows proves nothing on its own. What it does do is reproduce the
+structure the 148-window attested ledger already showed, at the same signs
+and roughly the same magnitudes.
+
+## Every limit held
+
+| | |
+|---|---|
+| worst case projected / actual | $4.50 / **−$0.97** |
+| expected projected / actual | ≈−$0.78 / **−$0.97** |
+| daily realized loss | −$0.97 vs $5 halt |
+| **cumulative headroom left** | **$18.6325 − $14.7495 = $3.8830** |
+| submissions | 10 of 500 |
+| windows | 3 of 3, `windows_remaining: 0` |
+
+## Final safety state, 03:39:05Z
+
+`armed: **false**` — self-disarmed when the window ledger emptied ·
+`reconciled: true` · `authority: VENUE` · `uncertainty_cleared: true` ·
+**`ALERT: null`** · `open_orders_at_venue: 0` · `pending_terminal_total: 0` ·
+`live_orders_pending_terminal: []` · `quarantined: []` · `risk_floor_usd: {}` ·
+`http_429: 0`, not in cooloff. Nothing resting, nothing unsettled from this
+campaign.
+
+**`L5_LIVE_HALT` is still empty, i.e. NOT asserted.** Trading is currently
+stopped only by the exhausted window ledger and the approval expiring at
+03:45Z. Re-asserting the halt is recommended and is an owner action: set it to
+any **non-empty** value (an empty string means no halt), which needs a
+variable write plus a ~2–3 minute redeploy.
