@@ -371,3 +371,76 @@ def test_the_deadline_sweep_is_not_weakened_by_the_completion_path():
     assert _TSP.complement_retire_from_start(
         _ws, _DEFC.DEFENSIVE_MIN_EXECUTION_S) <= _terminal
     assert "maybe_ts_completion" not in src
+
+
+# -------------------------------------------- the REAL store, not the fake
+#
+# Every test above uses FakeStore, which answers `cost_attested` from a set
+# the test chose. That proves the runner's BRANCHES but not that the real
+# store's `apply_fill` produces what `ts_completion_inputs` reads. The
+# ledger key is built in one place on the fill path, inside apply_fill,
+# which normalises both the side and the price convention -- so if it
+# disagreed with what cost_attested reads, every real maker fill would
+# refuse UNKNOWN_COST_BASIS and the completion controller would never see
+# inventory. That is the one link a fake cannot test.
+
+def _real_store(tmp_path):
+    from src import l5_live_execution as EX
+    return EX.InventoryStore(str(tmp_path / "inv.json"))
+
+
+def test_a_real_fill_through_the_real_store_reaches_the_controller(
+        tmp_path, armed):
+    st = _real_store(tmp_path)
+    st.apply_fill(SLUG, "UP", D("5"), D("0.5900"), basis="OWN")
+    st.save()
+    assert st.cost_attested(SLUG, "UP") is True
+    src = Stub(store=st).ts_completion_inputs(SLUG)
+    assert src["ok"] is True, src.get("reason")
+    assert src["up_qty"] == D("5")
+    assert src["up_cost_px"] == D("0.59")        # 2.95 / 5, from the fill
+
+
+def test_two_real_fills_blend_to_the_cost_the_controller_prices_on(
+        tmp_path, armed):
+    """A leg built from two lots prices on their blend, and the blend comes
+    from the real ledger rather than from a number a test picked."""
+    st = _real_store(tmp_path)
+    st.apply_fill(SLUG, "UP", D("2"), D("0.6000"), basis="OWN")
+    st.apply_fill(SLUG, "UP", D("3"), D("0.5000"), basis="OWN")
+    st.save()
+    src = Stub(store=st).ts_completion_inputs(SLUG)
+    assert src["ok"] is True, src.get("reason")
+    assert src["up_qty"] == D("5")
+    assert src["up_cost_px"] == D("2.7") / D("5")       # (1.2 + 1.5) / 5
+
+
+def test_real_legacy_inventory_refuses_at_the_controller(tmp_path, armed):
+    """The live shape: `cpc-btc-updown-15m-2026-10-14-2230z|UP` = 2.9000
+    with no leg_cost and no fill_count, one of 54 such legs on the volume
+    as of 2026-11-06. It must refuse BEFORE any execution check."""
+    st = _real_store(tmp_path)
+    st.state.setdefault("positions", {})["%s|UP" % SLUG] = "2.9000"
+    st.save()
+    assert st.cost_attested(SLUG, "UP") is False
+    src = Stub(store=st).ts_completion_inputs(SLUG)
+    assert src["ok"] is False
+    assert src["reason"] == "UNKNOWN_COST_BASIS"
+    assert src["side"] == "UP"
+    # and not priced at zero or a dollar on the way out
+    assert "up_cost_px" not in src or src.get("up_cost_px") in (None, D(0))
+
+
+def test_unattested_inventory_is_refused_at_BOTH_layers(tmp_path, armed):
+    """Defence in depth, and the point of asserting it: the controller
+    refusing is not evidence that the execution path would have."""
+    st = _real_store(tmp_path)
+    st.state.setdefault("positions", {})["%s|UP" % SLUG] = "2.9000"
+    st.save()
+    assert Stub(store=st).ts_completion_inputs(SLUG)["reason"] \
+        == "UNKNOWN_COST_BASIS"
+    import inspect
+    from src import l5_live_execution as EX
+    exec_src = inspect.getsource(EX.FaithfulExecutor.completion_taker_execute)
+    assert "COMPLETION_BASIS_UNATTESTED_AT_EXECUTION" in exec_src
+    assert "cost_attested" in exec_src

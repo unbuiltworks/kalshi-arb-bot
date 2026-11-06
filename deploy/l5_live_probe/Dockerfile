@@ -87,6 +87,9 @@ COPY src/l5_session_integrity.py src/l5_session_integrity.py
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
+COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
+COPY src/l5_inventory_decision.py src/l5_inventory_decision.py
+COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image

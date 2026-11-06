@@ -56,6 +56,7 @@ from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
 from src import l5_queue_measurement as QM
 from src import l5_defensive_completion as DEF
+from src import l5_taker_completion_policy as TCP
 from src import l5_two_sided_probe as TS
 from src import l5_execution_translations as X
 
@@ -1463,6 +1464,22 @@ def inventory_origin(state: Mapping[str, Any], market: str,
     if ORIGIN_CONTROLLER in seen:
         return ORIGIN_CONTROLLER
     return ORIGIN_UNKNOWN
+
+
+def _floor_to_inc(qty: D, inc: D) -> D:
+    """`qty` floored to a whole multiple of `inc`. Never rounds up: a size
+    the venue's grid cannot express must become smaller, never larger."""
+    if inc is None or inc <= 0:
+        return qty
+    return (qty / inc).to_integral_value(rounding="ROUND_FLOOR") * inc
+
+
+#: How many bounded-taker-completion claims the durable ledger keeps. A claim
+#: only has to outlive its own 15-minute window, so 256 is days of history and
+#: far more than the duplicate-prevention it exists for needs; the bound is
+#: there because the whole state dict is rewritten on every save and nothing
+#: else ever removed these rows.
+CLAIM_RETENTION = 256
 
 
 class UnrecognizedVenueShape(RuntimeError):
@@ -5253,6 +5270,13 @@ class FaithfulExecutor:
         # sets it unless `l5_defensive_completion.enabled()` is true, which
         # is false on every deployment by default.
         self._defensive_mandate: Optional[Dict[str, Any]] = None
+        #: THE RUNNER'S BOUNDED TAKER COMPLETION PROPOSAL, or None. Attached
+        #: after construction for the same reason the validation gates are:
+        #: the executor's own signature stays unchanged and an executor
+        #: nobody attached one to simply has no proposal rather than a
+        #: different constructor. It is SINGLE USE -- `handle` takes it off
+        #: before acting on it -- so a refusal cannot be re-ridden next tick.
+        self.taker_completion_proposal: Optional[Dict[str, Any]] = None
         #: PROBE 08 TREATMENT. While the market's REALIZED residual is
         #: non-zero, an order that would deepen the imbalance is refused.
         #: It refuses and nothing else: it never invents a trade, never
@@ -6256,6 +6280,11 @@ class FaithfulExecutor:
         self._defensive_mandate = {
             "market": market, "side": buy_side, "price": str(px),
             "qty": str(qty), "expires_at": expires,
+            # NAMED, not implied. `defensive_mandate_covers` gates a
+            # defensive mandate on DEF.enabled() and a taker-completion
+            # mandate on its own two switches, so the origin has to be on
+            # the record rather than inferred from which method wrote it.
+            "origin": "DEFENSIVE",
             "reason": verdict.get("reason"),
             "budget_total_usd": str(total),
             "labels": ("permits ONE crossing order and the defensive pair "
@@ -6286,6 +6315,567 @@ class FaithfulExecutor:
                                    "this position is NOT hedged until the "
                                    "venue confirms one.")}}
 
+    def completion_taker_execute(self, *, market: str, buy_side: str,
+                                 held_side: str, resting,
+                                 proposal: Mapping[str, Any],
+                                 window_start: Any, now_t: Any,
+                                 prov=None) -> Dict[str, Any]:
+        """Retire the resting complement, PROVE it is gone, then authorize
+        exactly one bounded crossing completion -- or refuse and change
+        nothing.
+
+        THIS IS THE ROUTE `maybe_ts_completion` DID NOT HAVE. That method
+        computed the economics, asked the bounded policy, got a yes, and
+        wrote `crossed: "WOULD_SUBMIT"` with `submission_route: "deliberately
+        not wired"`. On 2026-11-06 it did that 43 times in the 0300z window
+        and 22 times in 0315z, against worst-case improvements of $0.44-$0.79
+        and $0.04-$0.35, while both residuals rode to settlement for -$1.00.
+        This is the wiring, and it is the SAME order of operations the
+        defensive unwind uses, because that order IS the safety property:
+
+          cancel -> prove by the venue's own re-read -> re-read OUR OWN
+          inventory -> re-check the authorized size against what is actually
+          there -> cross-check the venue's exposure -> charge the budget ->
+          issue a mandate naming that one order.
+
+        Every failure returns `ok: False` and leaves the position exactly as
+        it was. The complement either still rests (cancel refused) or is gone
+        and nothing replaces it, which is the state the window was heading for
+        anyway.
+
+        WHAT IT SHARES WITH THE DEFENSIVE PATH, DELIBERATELY. One mandate
+        slot, so "one crossing order per market per window" stays one
+        invariant; one `defensive_charge` budget, because both are crossing
+        orders bought to reduce a residual and a second budget would let the
+        pair of them spend twice what either was allowed; and one exemption
+        point in the maker-only overlay.
+
+        WHAT IS ITS OWN. The authorization. `proposal` is the runner's
+        already-computed `l5_taker_completion_policy.authorize` result, whose
+        conservative quantity and VWAP are what this may submit -- never the
+        quantity that was hoped for. The two default-off switches are checked
+        here as well as at the exemption point, because a route that is
+        unreachable when off is better than one that is merely unlikely to
+        fire.
+
+        OVERHEDGING IS REFUSED, NOT RESIZED IN FLIGHT. If the complement
+        filled while we were cancelling it the residual has already shrunk,
+        so this tick stops and the next one decides again from
+        venue-confirmed state.
+        """
+        def no(reason: str, **extra: Any) -> Dict[str, Any]:
+            return dict({"ok": False, "reason": reason}, **extra)
+
+        # ---- 0. THE SWITCHES, BEFORE ANY STATE IS READ OR ANY ORDER IS
+        # CANCELLED. With either off this method must be indistinguishable
+        # from not existing.
+        if not TCP.taker_completion_enabled():
+            return no("COMPLETION_TAKER_NOT_ENABLED",
+                      policy=TCP.policy_enabled(),
+                      owner=TCP.owner_cross_authorized())
+        if not isinstance(proposal, Mapping) or not proposal.get("authorized"):
+            return no("COMPLETION_TAKER_NOT_AUTHORIZED",
+                      proposal_reason=str((proposal or {}).get("reason"))[:60])
+        if buy_side not in (UP, DOWN) or held_side not in (UP, DOWN) \
+                or buy_side == held_side:
+            return no("COMPLETION_SIDES_NOT_OPPOSED",
+                      buy_side=str(buy_side), held_side=str(held_side))
+        if str(proposal.get("side") or "").strip().upper() != buy_side:
+            return no("COMPLETION_PROPOSAL_SIDE_MISMATCH",
+                      proposal_side=str(proposal.get("side")),
+                      buy_side=buy_side)
+        # ---- THE PROPOSAL MUST NAME THIS MARKET, and it is checked here
+        # rather than trusted. Today the runner sets the proposal and calls
+        # `handle` synchronously for the same slug, so a mismatch is
+        # unreachable -- which is exactly why it is worth refusing now: the
+        # side check alone would not catch a proposal priced on one market's
+        # book reaching another's, and the mandate would then name an order
+        # in the wrong market. An absent market reads as a mismatch, not as a
+        # wildcard.
+        if str(proposal.get("market") or "") != str(market):
+            return no("COMPLETION_PROPOSAL_MARKET_MISMATCH",
+                      proposal_market=str(proposal.get("market"))[:60],
+                      market=str(market)[:60])
+        if "__unreadable__" in (resting or []):
+            return no("COMPLETION_LIVE_ORDERS_UNREADABLE")
+
+        # ---- 1. AN UNCERTAIN LEDGER IS NOT PERMISSION TO SPEND. While we
+        # cannot say whether an earlier order reached the venue, a crossing
+        # order could be the second copy of one already resting.
+        try:
+            unc = self.store.orders_uncertain()
+        except BaseException:                                  # noqa: BLE001
+            return no("COMPLETION_UNCERTAINTY_UNREADABLE")
+        if unc:
+            return no("COMPLETION_ORDERS_UNCERTAIN", why=str(unc)[:120])
+
+        # ---- 2. ONE CROSSING ORDER PER MARKET PER WINDOW. The mandate
+        # outlives the order it was issued for -- it expires on the clock,
+        # not on consumption -- so without this a completion refused further
+        # downstream could be rebuilt identically next tick and ride a
+        # mandate that was already paid for.
+        _live = self._defensive_mandate
+        if isinstance(_live, Mapping):
+            try:
+                _unexpired = (float(self._now().timestamp())
+                              < float(_live["expires_at"]))
+            except BaseException:                              # noqa: BLE001
+                _unexpired = True          # unreadable expiry blocks
+            if _unexpired and str(_live.get("market")) == str(market):
+                return no("COMPLETION_ALREADY_MANDATED",
+                          mandate=dict(_live))
+
+        # ---- 3. THE DURABLE CLAIM, written BEFORE the wire and never
+        # released by a retry. This is what makes an uncertain
+        # acknowledgement and a restart safe: the claim is on the volume, so
+        # a process that dies between here and the venue comes back already
+        # holding it and does not try again.
+        claim_key = "%s|%s" % (market, buy_side)
+        try:
+            claims = self.store.state.setdefault("ts_completion_claims", {})
+            held_claim = claims.get(claim_key)
+        except BaseException:                                  # noqa: BLE001
+            return no("COMPLETION_CLAIM_LEDGER_UNREADABLE")
+        if isinstance(held_claim, Mapping):
+            try:
+                same_window = (str(held_claim.get("window_start"))
+                               == str(window_start))
+            except BaseException:                              # noqa: BLE001
+                same_window = True
+            if same_window:
+                return no("COMPLETION_ALREADY_CLAIMED",
+                          claim=dict(held_claim),
+                          note=("a crossing completion was already claimed "
+                                "for this market, side and window. It is "
+                                "never retried: an unknown order is assumed "
+                                "live, because assuming otherwise is the "
+                                "assumption that loses money"))
+
+        # ---- 4. CANCEL AND PROVE. Exactly the named orders, by venue id,
+        # through the existing deadman with proof by re-read.
+        confirmations: List[Dict[str, Any]] = []
+        filled_during = D(0)
+        if resting:
+            try:
+                res = deadman(self.store, self.transport,
+                              reason="TAKER_COMPLETION", only=resting)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return no("COMPLETION_CANCEL_FAILED",
+                          error="%s: %s" % (type(exc).__name__,
+                                            str(exc)[:120]))
+            if prov is not None:
+                try:
+                    prov.note("TAKER_COMPLETION_CANCEL", dict(
+                        res, labels=("recorded BEFORE the verdict that could "
+                                     "submit, so a cancellation stands in "
+                                     "the record even if everything after "
+                                     "it refuses or raises.")))
+                except BaseException:                          # noqa: BLE001
+                    pass
+            for coid in resting:
+                c = DEF.cancel_confirmed(res, coid)
+                confirmations.append(c)
+                if not c.get("confirmed"):
+                    return no("COMPLETION_CANCEL_NOT_CONFIRMED",
+                              confirmations=confirmations)
+                filled_during += D(str(c.get("filled_during_cancel") or 0))
+            if filled_during > 0:
+                return no("COMPLETION_FILLED_DURING_CANCEL",
+                          filled_during_cancel=str(filled_during),
+                          confirmations=confirmations)
+
+        # ---- 5. THE INVENTORY AFTER THE CANCEL is the only inventory that
+        # may be completed, read from the store rather than carried in.
+        try:
+            held = self.store.position(market, held_side)
+            mine = self.store.position(market, buy_side)
+            inc = getattr(self.transport, "quantity_increment", None)
+            inc = None if inc is None else D(str(inc))
+        except BaseException:                                  # noqa: BLE001
+            return no("COMPLETION_POSITION_UNREADABLE")
+        need = held - mine
+        if need <= 0:
+            return no("COMPLETION_NOTHING_UNMATCHED", unmatched=str(need))
+        if inc is None or inc <= 0:
+            return no("COMPLETION_QUANTITY_INCREMENT_UNKNOWN")
+
+        # ---- 6. NEVER MORE THAN THE CONFIRMED DEFICIT, AND NEVER MORE THAN
+        # THE POLICY AUTHORIZED. The policy's figure is its CONSERVATIVE
+        # quantity, computed against haircut depth; the deficit is what the
+        # ledger says is actually unmatched now. The order is the smaller.
+        want = _money_or_none(proposal.get("qty"))
+        px = _money_or_none(proposal.get("price"))
+        if want is None or want <= 0:
+            return no("COMPLETION_PROPOSAL_QTY_UNREADABLE")
+        if px is None or px <= 0 or px >= D(1):
+            return no("COMPLETION_PROPOSAL_PRICE_UNREADABLE")
+        qty = floor_to_increment(min(want, need), inc)
+        if qty <= 0:
+            return no("COMPLETION_BELOW_MIN_INCREMENT",
+                      unmatched=str(need), authorized=str(want),
+                      increment=str(inc))
+
+        # ---- 7. IT MUST REDUCE, AND IT MUST NOT REVERSE. Asserted against
+        # the store's own venue-confirmed positions rather than against this
+        # function's arithmetic, for the same reason the defensive path
+        # asserts it: if `need` is ever sourced differently these fire
+        # instead of a directional position being doubled while the record
+        # calls it a completion.
+        try:
+            resid = self.store.residual(market)
+        except BaseException:                                  # noqa: BLE001
+            return no("COMPLETION_RESIDUAL_UNREADABLE")
+        reduces = ((buy_side == DOWN and resid > 0)
+                   or (buy_side == UP and resid < 0))
+        if not reduces:
+            return no("COMPLETION_WOULD_INCREASE_EXPOSURE",
+                      buy_side=buy_side, held_side=held_side,
+                      residual=str(resid), unmatched=str(need))
+        if qty > abs(resid):
+            return no("COMPLETION_WOULD_REVERSE_EXPOSURE",
+                      qty=str(qty), residual=str(resid))
+
+        # ---- 8. AND THE EXPOSURE IS THE VENUE'S, NOT OURS. "Our books say
+        # we are long 1" is not the claim "the venue says we are long 1", and
+        # only the second is the exposure a completion has to reduce. Fail
+        # closed on an endpoint that raises, a shape the parser will not
+        # accept, a market with no row while we believe we hold one, or any
+        # disagreement at all.
+        try:
+            rows = [position_row(r)
+                    for r in (self.transport.positions() or [])]
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("COMPLETION_VENUE_POSITIONS_UNREADABLE",
+                      error="%s: %s" % (type(exc).__name__, str(exc)[:160]))
+        mine_rows = [r for r in rows
+                     if canonical_market(r["market"], doing="taker "
+                                         "completion venue reconciliation")
+                     == market]
+        if not mine_rows:
+            return no("COMPLETION_VENUE_POSITION_ABSENT",
+                      residual_local=str(resid))
+        venue_net = sum((D(r["signed_net"]) for r in mine_rows), D(0))
+        if venue_net != resid:
+            return no("COMPLETION_VENUE_POSITION_DISAGREES",
+                      residual_local=str(resid),
+                      residual_venue=str(venue_net),
+                      rows=[dict(r) for r in mine_rows])
+
+        # ---- 8b. THE ECONOMICS, RE-VERIFIED AFTER THE CANCEL, AGAINST THE
+        # BOOK AS IT IS NOW.
+        #
+        # THE GAP THIS CLOSES. `proposal` is `TCP.authorize`'s verdict, and
+        # it was computed BEFORE the cancel. Between then and here there are
+        # venue round trips -- the cancel, its verification re-read, and the
+        # positions read above -- and the book moves. So the mandate could be
+        # issued, and the 1.20 ceiling unlocked, on economics that had
+        # already evaporated. Nothing downstream would catch it:
+        # `pair_cost_refusal` SKIPS `completion_pair_rescue` for a mandated
+        # order precisely because the mandate holder is supposed to have
+        # established this.
+        #
+        # So it is established here, three ways, and all three must hold:
+        #
+        #   (a) WE NEVER PAY MORE THAN WAS AUTHORIZED. If the executable own
+        #       price has moved against us the completion is refused rather
+        #       than re-priced upward: chasing a rescue is how a rescue
+        #       becomes the loss it was meant to avoid.
+        #   (b) THE IMPROVEMENT IS RECOMPUTED at the clamped quantity and
+        #       the post-cancel inventory, through the SAME `TS.top_up`
+        #       arithmetic the policy used, which charges the taker fee on
+        #       both legs. So "positive expected risk reduction AFTER FEES"
+        #       is a measurement here and not an inherited claim.
+        #   (c) IT MUST STILL CLEAR THE OWNER'S FLOOR. A rescue that no
+        #       longer removes the exposure the owner priced is not a rescue.
+        #
+        # FAIL CLOSED ON AN UNREADABLE OR STALE BOOK. The 1.20 ceiling is
+        # worth $0.20 a share of deliberate loss; it is not a licence to
+        # trade on a book we cannot see.
+        _floor = _money_or_none(proposal.get("min_worst_improvement_usd"))
+        _snap = None
+        try:
+            _getter = getattr(getattr(self, "ts_book", None), "snapshot", None)
+            if callable(_getter):
+                _snap = _getter(market) or None
+        except BaseException:                                  # noqa: BLE001
+            _snap = None
+        if _snap is None:
+            return no("COMPLETION_BOOK_UNREADABLE_AT_EXECUTION")
+        if bool(_snap.get("gap_suspected")):
+            return no("COMPLETION_BOOK_GAP_AT_EXECUTION")
+        _bid = _money_or_none(_snap.get("bid"))
+        _ask = _money_or_none(_snap.get("ask"))
+        if _bid is None or _ask is None or _bid <= 0 or _ask >= D(1) \
+                or _bid >= _ask:
+            return no("COMPLETION_BOOK_NOT_TWO_SIDED_AT_EXECUTION",
+                      bid=str(_bid), ask=str(_ask))
+        # OWN-OUTCOME EXECUTABLE PRICE. Buying DOWN consumes the YES bid, so
+        # our own cost is 1 - bid; buying UP lifts the ask.
+        _now_px = (D(1) - _bid) if buy_side == DOWN else _ask
+        if _now_px > px:
+            return no("COMPLETION_PRICE_MOVED_AGAINST_US",
+                      authorized_px=str(px), executable_px=str(_now_px),
+                      note=("refused rather than re-priced upward: chasing "
+                            "a rescue is how a rescue becomes the loss it "
+                            "was meant to avoid"))
+        # AN UNATTESTED BASIS IS NOT A ZERO BASIS, and this check is what
+        # makes step 8b self-sufficient rather than dependent on the caller.
+        # `TS.top_up` reads a missing price as `D(0)` -- a FREE leg -- and a
+        # free leg makes EVERY completion look like an improvement, however
+        # dear. `ts_completion_inputs` already refuses UNKNOWN_COST_BASIS
+        # upstream and `pair_cost_refusal` has its own BASIS_UNATTESTED gate,
+        # but this is the check the mandate's authority now rests on, so it
+        # asks for itself. `cost_attested` is the right predicate rather than
+        # "basis > 0": a fill at a wire price of 0.00 is a real thing and is
+        # attested, while a quantity reconcile adopted from the venue's net
+        # has no attestation at all.
+        for _s in (held_side, buy_side):
+            try:
+                if self.store.position(market, _s) and not \
+                        self.store.cost_attested(market, _s):
+                    return no("COMPLETION_BASIS_UNATTESTED_AT_EXECUTION",
+                              side=_s,
+                              note=("this leg's quantity came from the "
+                                    "venue's net, not from a fill of ours, "
+                                    "so its cost basis is unknown. It is "
+                                    "NOT priced at zero, and a zero basis "
+                                    "would make any completion look like an "
+                                    "improvement."))
+            except BaseException:                              # noqa: BLE001
+                return no("COMPLETION_BASIS_ATTESTATION_UNREADABLE",
+                          side=_s)
+        _tu = TS.top_up(up_qty=self.store.position(market, UP),
+                        dn_qty=self.store.position(market, DOWN),
+                        up_price=(self.store.leg_cost(market) or {}).get(UP),
+                        dn_price=(self.store.leg_cost(market) or {}).get(DOWN),
+                        extra_side=buy_side, extra_qty=qty, extra_price=px)
+        _wb = _money_or_none((_tu or {}).get("worst_before"))
+        _wa = _money_or_none((_tu or {}).get("worst_after"))
+        if _wb is None or _wa is None:
+            return no("COMPLETION_IMPROVEMENT_UNREADABLE_AT_EXECUTION",
+                      top_up=dict(_tu or {}))
+        _impr = _wa - _wb
+        if _impr <= 0:
+            return no("COMPLETION_NO_RISK_REDUCTION_AT_EXECUTION",
+                      worst_before=str(_wb), worst_after=str(_wa),
+                      improvement_usd=str(_impr),
+                      note=("recomputed after the cancel at the clamped "
+                            "quantity, with the taker fee charged on both "
+                            "legs. The 1.20 ceiling is never permission to "
+                            "buy a pair that reduces no exposure."))
+        if _floor is not None and _impr < _floor:
+            return no("COMPLETION_IMPROVEMENT_BELOW_FLOOR_AT_EXECUTION",
+                      improvement_usd=str(_impr),
+                      min_worst_improvement_usd=str(_floor),
+                      worst_before=str(_wb), worst_after=str(_wa))
+
+        # ---- 9. THE SHARED LOSS BUDGET, CHECKED AND ONLY THEN CHARGED.
+        #
+        # THE GAP THIS CLOSES, FOUND BY REVIEWING THIS METHOD AGAINST THE ONE
+        # IT MIRRORS. `InventoryStore.defensive_charge` ONLY ACCUMULATES --
+        # it adds to `defensive_spent_usd` and saves, and it refuses nothing.
+        # The defensive path is bounded because `DEF.decide` tests
+        # `spent + exit_downside > loss_budget_usd` and returns
+        # DEFENSIVE_LOSS_BUDGET before `defensive_execute` ever charges. This
+        # method does not call `DEF.decide`, so charging without testing left
+        # the campaign-wide $2.00 budget unenforced on the completion route --
+        # and worse, a completion could quietly exhaust the budget the
+        # defensive unwind depends on, since the two deliberately share it.
+        #
+        # The per-cross ($1.50) and per-window ($3.00) outlay caps in
+        # `l5_taker_completion_policy` bound a single attempt either way, so
+        # this was never unbounded; it was unbounded ACROSS the campaign,
+        # which is exactly the dimension this budget exists to bound.
+        #
+        # FAIL CLOSED ON AN UNREADABLE BUDGET, which `defensive_spent` already
+        # delivers by returning the whole budget when the read raises -- a
+        # budget we cannot read is exhausted.
+        worst_outlay = qty * px + TS.worst_fee(qty, px)
+        try:
+            spent = self.store.defensive_spent()
+        except BaseException:                                  # noqa: BLE001
+            spent = DEF.DEFENSIVE_LOSS_BUDGET_USD
+        _remaining = DEF.DEFENSIVE_LOSS_BUDGET_USD - spent
+        if spent + worst_outlay > DEF.DEFENSIVE_LOSS_BUDGET_USD:
+            # ---- SIZE TO WHAT IS LEFT, THEN RE-EARN THE FLOOR AT THAT SIZE.
+            #
+            # A flat refusal here respected the budget but threw away the
+            # part of the rescue the budget could still afford. So the
+            # quantity is cut to the largest increment whose WORST outlay
+            # fits what remains -- and then the improvement floor is tested
+            # AGAIN at that smaller size, because a smaller cross removes
+            # less exposure and may no longer be worth its own fee. Only a
+            # completion that still clears the owner's floor at the affordable
+            # size proceeds; anything else refuses, as before.
+            _fit = D(0)
+            if _remaining > 0 and px > 0:
+                _fit = _floor_to_inc(_remaining / px, inc)
+                # the fee is charged on top, so step down until it fits
+                for _ in range(64):
+                    if _fit <= 0:
+                        break
+                    if _fit * px + TS.worst_fee(_fit, px) <= _remaining:
+                        break
+                    _fit -= inc
+            _fit = min(_fit, qty)
+            if _fit <= 0:
+                return no("COMPLETION_LOSS_BUDGET_EXHAUSTED",
+                          defensive_spent_usd=str(spent),
+                          would_charge_usd=str(worst_outlay),
+                          defensive_budget_usd=str(
+                              DEF.DEFENSIVE_LOSS_BUDGET_USD),
+                          budget_remaining_usd=str(_remaining),
+                          note=("the same campaign-wide budget the defensive "
+                                "unwind spends, tested the same way "
+                                "DEF.decide tests it. Charged at the WORST "
+                                "case, because an attempt that does not fill "
+                                "is still a real offer to spend that money."))
+            _tu2 = TS.top_up(
+                up_qty=self.store.position(market, UP),
+                dn_qty=self.store.position(market, DOWN),
+                up_price=(self.store.leg_cost(market) or {}).get(UP),
+                dn_price=(self.store.leg_cost(market) or {}).get(DOWN),
+                extra_side=buy_side, extra_qty=_fit, extra_price=px)
+            _wb2 = _money_or_none((_tu2 or {}).get("worst_before"))
+            _wa2 = _money_or_none((_tu2 or {}).get("worst_after"))
+            if _wb2 is None or _wa2 is None:
+                return no("COMPLETION_BUDGET_RESIZE_UNREADABLE")
+            _impr2 = _wa2 - _wb2
+            if _impr2 <= 0 or (_floor is not None and _impr2 < _floor):
+                return no("COMPLETION_BUDGET_RESIZE_BELOW_FLOOR",
+                          budget_remaining_usd=str(_remaining),
+                          affordable_qty=str(_fit),
+                          improvement_usd=str(_impr2),
+                          min_worst_improvement_usd=(
+                              None if _floor is None else str(_floor)),
+                          note=("the budget could afford only a smaller "
+                                "cross, and the smaller cross no longer "
+                                "earns its own fee. Refused rather than "
+                                "spending what was left on a completion "
+                                "that does not pay."))
+            qty = _fit
+            worst_outlay = qty * px + TS.worst_fee(qty, px)
+        # CHARGED BEFORE THE MANDATE AND BEFORE THE WIRE. `defensive_charge`
+        # fsyncs, so a process that dies between here and the venue has
+        # already paid.
+        try:
+            total = self.store.defensive_charge(worst_outlay, {
+                "market": market, "buy_side": buy_side, "qty": str(qty),
+                "price": str(px), "reason": "TAKER_COMPLETION",
+                "origin": TCP.MANDATE_ORIGIN})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("COMPLETION_BUDGET_NOT_CHARGEABLE",
+                      error=type(exc).__name__)
+
+        # ---- 10. THE CLAIM AND THE MANDATE, in that order. The claim is
+        # durable and blocks a retry; the mandate is in-process and permits
+        # exactly this order.
+        expires = _money_or_none(proposal.get("expires_at"))
+        if expires is None:
+            try:
+                expires = D(str(now_t)) + D(str(
+                    DEF.DEFENSIVE_MIN_EXECUTION_S))
+            except BaseException:                              # noqa: BLE001
+                expires = None
+        if expires is None:
+            return no("COMPLETION_MANDATE_HAS_NO_EXPIRY")
+        try:
+            claims[claim_key] = {
+                "market": market, "side": buy_side, "qty": str(qty),
+                "price": str(px), "window_start": str(window_start),
+                "claimed_at": str(now_t), "origin": TCP.MANDATE_ORIGIN,
+                "labels": ("written BEFORE the wire and never released by a "
+                           "retry. A restart or an uncertain ACK comes back "
+                           "to this row and does not try again.")}
+            # BOUNDED, because this is on the durable volume and the WHOLE
+            # state dict is rewritten on every `save()`. One entry per
+            # (market, side) with a 15-minute window is 192 a day and nothing
+            # ever removed them -- a slow leak that would eventually make
+            # every ledger write bigger, in the one file the loss halt is
+            # measured from. Oldest out first, by claim time, the way
+            # `_shadow_completion_parked` is bounded in the runner.
+            #
+            # IT CANNOT EVICT A CLAIM THAT STILL MATTERS. A claim only has to
+            # outlive its own window, and CLAIM_RETENTION windows of history
+            # is far more than that; the eviction is by `claimed_at`, so the
+            # row being written now is never the one dropped.
+            if len(claims) > CLAIM_RETENTION:
+                def _age(kv):
+                    try:
+                        return float(kv[1].get("claimed_at") or 0)
+                    except (TypeError, ValueError, AttributeError):
+                        return 0.0
+                for k, _v in sorted(claims.items(), key=_age)[
+                        :len(claims) - CLAIM_RETENTION]:
+                    if k != claim_key:
+                        claims.pop(k, None)
+            self.store.save()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("COMPLETION_CLAIM_NOT_WRITABLE",
+                      error=type(exc).__name__)
+        self._defensive_mandate = {
+            "market": market, "side": buy_side, "price": str(px),
+            "qty": str(qty), "expires_at": float(expires),
+            "origin": TCP.MANDATE_ORIGIN,
+            "reason": "TAKER_COMPLETION",
+            "budget_total_usd": str(total),
+            # WHAT THIS MANDATE ACTUALLY WIDENS, for THIS ONE ORDER, stated
+            # rather than left to be read off `pair_cost_refusal`. The first
+            # version of this label said it was "not a change to the 0.96
+            # pair ceiling", which was misleading: the ceiling stands for
+            # every other order, and for this one it does not.
+            "labels": ("permits ONE crossing order and only this one, and "
+                       "for that order it widens exactly three things: the "
+                       "maker-only overlay is exempted, the pair ceiling "
+                       "becomes the DEFENSIVE 1.20 rather than the 0.96 "
+                       "entry ceiling, and `completion_pair_rescue`'s three "
+                       "conditions are skipped because the holder enforces "
+                       "the two directional ones itself. 1.20 is ABOVE the "
+                       "$1.00 certain-loss line on purpose: 0.96 is an "
+                       "ENTRY ceiling for spread capture, and a leg that "
+                       "would otherwise settle worthless is the one case "
+                       "where paying above a dollar is the SMALLER loss. "
+                       "What bounds it is not a pair-cost line but the "
+                       "owner's improvement floor and the per-cross and "
+                       "per-window outlay caps. Every other order in the "
+                       "system is unaffected, and this is gated by the "
+                       "taker-completion policy's own default-off switches "
+                       "rather than by the defensive flag."),
+        }
+        return {"ok": True, "confirmations": confirmations,
+                "authorization": dict(proposal),
+                "exposure": {"residual_before": str(resid),
+                             "residual_venue_confirmed": str(venue_net),
+                             "residual_after": str(
+                                 resid - qty if buy_side == DOWN
+                                 else resid + qty),
+                             "held_side": held_side, "buy_side": buy_side,
+                             "basis": ("venue-confirmed fills only. This is "
+                                       "the exposure the order REDUCES; it "
+                                       "is not matched until the venue "
+                                       "confirms a fill.")},
+                "mandate": dict(self._defensive_mandate),
+                "claim": dict(claims[claim_key]),
+                "leg": {"side": buy_side, "action": "BUY", "price": str(px),
+                        "qty": str(qty), "mode": FT.TAKER,
+                        "post_only": False,
+                        "taker_completion": True,
+                        "labels": ("a crossing order against displayed "
+                                   "depth, sized to the CONSERVATIVE "
+                                   "quantity the policy authorized and "
+                                   "never above the confirmed unmatched "
+                                   "deficit. Displayed size is not a fill "
+                                   "and this position is NOT matched until "
+                                   "the venue confirms one.")}}
+
     def defensive_mandate_covers(self, market: str, dec: Mapping[str, Any],
                                  tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """The live defensive mandate, but only if it names THIS order.
@@ -6299,7 +6889,27 @@ class FaithfulExecutor:
         rules apply -- which is the direction that refuses.
         """
         m = self._defensive_mandate
-        if not isinstance(m, Mapping) or not DEF.enabled():
+        if not isinstance(m, Mapping):
+            return None
+        # ---- WHICH POLICY AUTHORIZED IT DECIDES WHICH FLAG GATES IT.
+        #
+        # One mandate slot, two issuers, and the origin says which. A
+        # defensive unwind is gated by `DEF.enabled()` exactly as before; a
+        # bounded taker COMPLETION is gated by its own pair of default-off
+        # switches -- the policy flag and the owner's separate authorization
+        # for live taker execution -- which is the authorization issue #195
+        # requires and which `DEF.enabled()` does not express.
+        #
+        # SHARING THE SLOT IS THE POINT. "One crossing order per market per
+        # window" stays ONE invariant with one latch, rather than two
+        # invariants that could each be satisfied while two crossing orders
+        # went out. An unknown origin is treated as defensive, which is the
+        # stricter reading of a mandate we did not recognise.
+        _origin = str(m.get("origin") or "DEFENSIVE").upper()
+        if _origin == TCP.MANDATE_ORIGIN:
+            if not TCP.taker_completion_enabled():
+                return None
+        elif not DEF.enabled():
             return None
         try:
             if str(m.get("market")) != str(market):
@@ -7959,17 +8569,60 @@ class FaithfulExecutor:
                                  "reason": "DEFENSIVE_EXECUTE_FAILED",
                                  "error": "%s: %s" % (type(exc).__name__,
                                                       str(exc)[:120])}
+                # ============ THE BOUNDED TAKER COMPLETION
+                #
+                # ONLY WHEN THE DEFENSIVE UNWIND DID NOT ACT, and only when
+                # the runner has attached a FRESH proposal its own economics
+                # and the bounded policy both authorized. The two routes
+                # share one mandate slot and one budget, so they can never
+                # both put a crossing order on the book for this market in
+                # this window; the defensive one is asked first because it
+                # is the one that exists for the last minute before the
+                # terminal, where there is nothing else left to try.
+                #
+                # INERT WITHOUT BOTH SWITCHES. `completion_taker_execute`
+                # checks them before it reads any state or cancels anything,
+                # and `taker_completion_proposal` is None unless the runner
+                # put one there, so with the policy off this block is
+                # indistinguishable from not existing.
+                #
+                # SINGLE USE. The proposal is taken off the executor here,
+                # before it is acted on, so a refusal downstream cannot be
+                # re-ridden on the next tick by a proposal nobody refreshed.
+                _tprop = getattr(self, "taker_completion_proposal", None)
+                self.taker_completion_proposal = None
+                _tact = None
+                if (_dact is None or not _dact.get("ok")) and _tprop:
+                    try:
+                        _tact = self.completion_taker_execute(
+                            market=market, buy_side=nxt, held_side=_other,
+                            resting=_resting, proposal=_tprop,
+                            window_start=ws, now_t=_tnow, prov=prov)
+                    except BaseException as exc:           # noqa: BLE001
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        _tact = {"ok": False,
+                                 "reason": "COMPLETION_TAKER_EXECUTE_FAILED",
+                                 "error": "%s: %s" % (type(exc).__name__,
+                                                      str(exc)[:120])}
                 prov.stage("TWO_SIDED_COMPLEMENT", dict(
                     comp, round=rnd, matching_side=_other,
                     filled_qty=str(_held), already_matched=str(_mine),
                     unmatched=str(_need),
                     frozen_price_superseded=str(leg.get("price")),
                     defensive=_defensive,
-                    defensive_action=_dact))
+                    defensive_action=_dact,
+                    taker_completion_proposed=bool(_tprop),
+                    taker_completion_action=_tact))
                 if _dact is not None and _dact.get("ok"):
                     # THE DEFENSIVE ORDER REPLACES THE COMPLEMENT, and it is
                     # reached only with the complement venue-confirmed gone.
                     leg = dict(_dact["leg"])
+                elif _tact is not None and _tact.get("ok"):
+                    # SAME RULE, SAME REASON: reached only with the resting
+                    # complement venue-confirmed gone, sized to the confirmed
+                    # deficit, and covered by a mandate naming this order.
+                    leg = dict(_tact["leg"])
                 elif not comp.get("ok"):
                     return prov.refuse("TWO_SIDED_PROBE",
                                        str(comp.get("reason"))[:120])
