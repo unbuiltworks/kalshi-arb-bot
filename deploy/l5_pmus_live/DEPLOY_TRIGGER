@@ -3634,3 +3634,49 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+# =====================================================================
+# PHASE A3 -- INSTRUMENTATION ONLY, DISARMED. Not a fix.
+#
+# Phase A2 bounded the shadow log line and FAILED to move A1:
+#
+#   before, 8 windows  6.400 6.606 7.437 6.649 6.683 6.417 7.984 6.558
+#                      mean 6.882
+#   after,  17:45z     roll 6.511   two_sided_settle 6.315
+#
+# The reduction itself worked -- the live line carries
+# cells_reduced {"cells":27,"full_bytes":155943,"budget_bytes":48000}
+# and every cell is _reduced -- so the reports were really ~156 KB and
+# had been losing about half to truncation all along. They now arrive
+# whole. But the log write was NOT the rollover cost. Hypothesis
+# falsified by its own deploy, as the A2 commit said it would be if it
+# failed.
+#
+# report() and score_report() were measured next on the live window's
+# exact shape and are free: 0.030 s for all 189 step() calls.
+#
+# THE REMAINING CANDIDATE is the shadow ledger. `finalized` is
+# unbounded, a scored report is ~156 KB, and `save` rewrites the WHOLE
+# file on every park and every finalize -- twice a window, on a
+# network-attached volume. It fits every fact, including that the cost
+# was 6.0-6.8 s on the OLD deployment before any of these changes.
+#
+# BUT PLAUSIBLE IS NOT MEASURED, and the last plausible hypothesis was
+# wrong. So this deploy changes NOTHING on that belief. It only adds:
+#   ShadowLedger.save -> last_save_s, last_save_bytes, save counter
+#   size_report()     -> finalized, pending, bytes, last_save_s
+#   one L5_SHADOW_LEDGER line a settle pass, wrapped so it cannot stop
+#   settlement
+# A test asserts the file written is byte-identical to an
+# uninstrumented dump, so the measurement cannot alter the record.
+#
+# The retention fix waits for the running service's own number.
+#
+# NOT MONEY-CAPABLE. No arming, no campaign, no variable written. The
+# completion switches are unchanged and remain SET-but-not-YES; the
+# three rescue variables remain absent. Phase B needs five variable
+# writes and separate owner authorization.
+#
+# ROLLBACK: deployment 7e3d1e1b (commit a31fe8fd4), or a342fccc
+# (e131437c8). Both are ~6.9 s; neither is the 93 s one.
+deploy: 2026-11-06T17:51Z issue #195 ledger instrumentation, Phase A3, DISARMED
