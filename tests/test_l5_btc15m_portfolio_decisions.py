@@ -51,3 +51,18 @@ def test_cash_blocks():
 def test_full_payoffs_not_just_increment():
     r = m.evaluate(inv(), buy("DOWN", .3), .7, False)
     assert r["worst_case_filled"] == pytest.approx(.15)
+
+def test_completion_can_reduce_tail_loss_despite_negative_ev():
+    r = m.evaluate(inv(), buy("DOWN", .35), .7, False)
+    assert r["eligible"]
+    assert not r["candidate_better_than_hold"]
+    assert r["reduces_unmatched_inventory"]
+    assert r["worst_case_improvement_if_filled"] == pytest.approx(.65)
+
+def test_zero_quantity_buy_refused():
+    with pytest.raises(ValueError, match="positive"):
+        m.evaluate(inv(), buy("DOWN", .25, qty=0), .7, False)
+
+def test_boolean_quantity_refused():
+    with pytest.raises(ValueError, match="integer"):
+        m.evaluate(inv(), buy("DOWN", .25, qty=True), .7, False)
