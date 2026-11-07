@@ -76,10 +76,13 @@ def measure(group, depth):
                     ft = _touches(frames[fi]) if fi is not None else None
                     if ft is None:
                         continue
+                    # crossing price for the completion (lift the far
+                    # side), maker touch for the wait-for-0.96 branch
+                    cross = (D(1) - ft[0]) if pu else ft[1]
                     other = (D(1) - ft[1]) if pu else ft[0]
                     h = settle - cost
                     hold += h
-                    comp += (D(1) - (cost + other)) - taker_fee(other)
+                    comp += (D(1) - (cost + cross)) - taker_fee(cross)
                     got = None
                     for j in range(fi, len(frames)):
                         t2 = _touches(frames[j])
