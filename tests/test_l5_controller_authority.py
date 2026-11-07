@@ -47,7 +47,14 @@ NOW = 1794013240.1147778
 # ===================================================== 1. THE VERDICT STORE
 
 def _bare(**kw):
-    r = SimpleNamespace(stats=collections.Counter(), _disposition_last={})
+    """A runner carrying only what the verdict store and the fingerprint
+    read. The fingerprint needs a store and a book, because a verdict is
+    now tied to the STATE it was formed on, not just to a timestamp."""
+    r = SimpleNamespace(stats=collections.Counter(), _disposition_last={},
+                        store=_Store({}), book=SimpleNamespace(
+                            snapshot=lambda s: {"bid": D("0.51"),
+                                                "ask": D("0.53"),
+                                                "stream_age_s": 0.05}))
     r.__dict__.update(kw)
     for n in ("controller_verdict", "controller_preserves"):
         setattr(r, n, getattr(R.Runner, n).__get__(r))
@@ -56,9 +63,16 @@ def _bare(**kw):
     return r
 
 
+def _write_verdict(runner, slug, selected, when):
+    """Record a verdict exactly as `maybe_unmatched_disposition` does:
+    action, clock, and the fingerprint of the state it was formed on."""
+    runner._disposition_last[str(slug)] = (
+        selected, float(when), R.disposition_fingerprint(runner, slug))
+
+
 def test_a_fresh_preserve_verdict_binds():
     r = _bare()
-    r._disposition_last[SLUG] = ("PRESERVE", NOW)
+    _write_verdict(r, SLUG, "PRESERVE", NOW)
     assert r.controller_verdict(SLUG, NOW) == "PRESERVE"
     assert r.controller_preserves(SLUG, NOW) is True
 
@@ -67,14 +81,14 @@ def test_a_fresh_preserve_verdict_binds():
                                  "COMPLETE_TAKER", "REDUCE", None])
 def test_only_preserve_binds_the_discretionary_cancels(sel):
     r = _bare()
-    r._disposition_last[SLUG] = (sel, NOW)
+    _write_verdict(r, SLUG, sel, NOW)
     assert r.controller_preserves(SLUG, NOW) is False
 
 
 def test_a_stale_verdict_does_not_bind_anything():
     """Older than one tick is from a book we are no longer looking at."""
     r = _bare()
-    r._disposition_last[SLUG] = ("PRESERVE", NOW - 10.0)
+    _write_verdict(r, SLUG, "PRESERVE", NOW - 10.0)
     assert r.controller_verdict(SLUG, NOW) is None
     assert r.controller_preserves(SLUG, NOW) is False
 
@@ -97,8 +111,9 @@ def test_an_absent_or_unreadable_verdict_is_not_a_veto():
 
 def test_another_markets_verdict_never_binds_this_one():
     r = _bare()
+    _write_verdict(r, SLUG, "PRESERVE", NOW)
     r._disposition_last["cpc-btc-updown-15m-2026-11-07-0115z"] = (
-        "PRESERVE", NOW)
+        r._disposition_last.pop(SLUG))
     assert r.controller_preserves(SLUG, NOW) is False
 
 
@@ -161,7 +176,7 @@ def _requote_runner(monkeypatch, *, bid=D("0.51"), ask=D("0.53"),
     monkeypatch.setattr(R.AUTH, "experiment_id", lambda *a, **k: "t")
     r = SimpleNamespace(
         stats=collections.Counter(),
-        _disposition_last=({SLUG: (verdict, NOW)} if verdict else {}),
+        _disposition_last={},
         transport=SimpleNamespace(armed=True, market_slug=SLUG,
                                   tick_size=D("0.01"),
                                   quantity_increment=D("1")),
@@ -178,6 +193,8 @@ def _requote_runner(monkeypatch, *, bid=D("0.51"), ask=D("0.53"),
         setattr(r, n, getattr(R.Runner, n).__get__(r))
     r.DISPOSITION_AUTHORITY_MAX_AGE_S = (
         R.Runner.DISPOSITION_AUTHORITY_MAX_AGE_S)
+    if verdict:
+        _write_verdict(r, SLUG, verdict, NOW)
     return r, fired
 
 
@@ -317,7 +334,7 @@ def test_no_mechanism_replaces_a_keepable_pair_with_a_dearer_one(
         assert (basis + D(rq["to_price"])) <= cap, (name, rq)
         # and the gate stands it down, because the controller said PRESERVE
         gated = _bare()
-        gated._disposition_last[name] = (UD.PRESERVE, WS + 40.0)
+        _write_verdict(gated, name, UD.PRESERVE, WS + 40.0)
         assert gated.controller_preserves(name, WS + 40.0) is True
 
     # 3. the distance recovery does not strand it
@@ -394,3 +411,155 @@ def test_a_stub_runner_still_reaches_its_requote(monkeypatch):
     del r.controller_preserves
     r.maybe_completion_requote(NOW)
     assert fired == [["c1"]], "a stub without the accessor was gated"
+
+
+# ========== 6. REVIEW ITEM 2: A FUTURE-DATED VERDICT MUST NOT VETO
+#
+# `age > MAX` alone let a future verdict through, because a negative age is
+# not greater than 3.0. A clock rollback, an NTP step or a bad write could
+# therefore veto EVERY discretionary cancellation indefinitely -- the one
+# failure mode of this gate that is a risk problem rather than an economic
+# one. The test is now two-sided.
+
+@pytest.mark.parametrize("ahead_s", [0.001, 1.0, 5.0, 3600.0, 86400.0])
+def test_a_future_dated_verdict_never_binds(ahead_s):
+    r = _bare()
+    _write_verdict(r, SLUG, "PRESERVE", NOW + ahead_s)
+    assert r.controller_verdict(SLUG, NOW) is None, ahead_s
+    assert r.controller_preserves(SLUG, NOW) is False, ahead_s
+
+
+def test_a_clock_rollback_cannot_freeze_the_discretionary_cancels(
+        monkeypatch):
+    """End to end: the requote must still act when `now` jumps backwards."""
+    r, fired = _requote_runner(monkeypatch, bid=D("0.60"), ask=D("0.62"),
+                               verdict="PRESERVE", row=MOVABLE,
+                               legs={"DOWN": D("0.30")})
+    assert r.maybe_completion_requote(NOW) is None       # binds normally
+    assert fired == []
+    r.maybe_completion_requote(NOW - 10.0)               # clock rolled back
+    assert fired == [["c1"]], "a future verdict froze the cancel"
+
+
+@pytest.mark.parametrize("age", [0.0, 1.5, 2.999])
+def test_the_freshness_window_is_inclusive_of_the_present(age):
+    r = _bare()
+    _write_verdict(r, SLUG, "PRESERVE", NOW - age)
+    assert r.controller_preserves(SLUG, NOW) is True, age
+
+
+@pytest.mark.parametrize("age", [3.001, 10.0, 900.0])
+def test_past_the_window_it_stops_binding(age):
+    r = _bare()
+    _write_verdict(r, SLUG, "PRESERVE", NOW - age)
+    assert r.controller_preserves(SLUG, NOW) is False, age
+
+
+# ===== 7. REVIEW ITEM 2b/4: THE VERDICT IS TIED TO THE STATE IT JUDGED
+
+def test_the_fingerprint_covers_inventory_orders_and_the_book():
+    """Named explicitly, so a future change cannot silently drop one."""
+    r = _bare(store=_Store({"c1": dict(UP_ROW)}))
+    fp = R.disposition_fingerprint(r, SLUG)
+    assert fp is not None
+    for piece in ("-1", "0.4900", "0.51", "0.53", "c1", "0.4600", "LIVE"):
+        assert piece in fp, piece
+
+
+@pytest.mark.parametrize("mutate,why", [
+    (lambda r: setattr(r.store, "_resid", D("-2")), "residual changed"),
+    (lambda r: r.store._legs.update({"DOWN": D("0.4000")}), "basis changed"),
+    (lambda r: setattr(r.store, "_uncertain", "UNVERIFIED_SUBMIT"),
+     "orders became uncertain"),
+    (lambda r: r.store._rows.clear(), "the resting order went terminal"),
+    (lambda r: r.store._rows["c1"].update({"remaining": "0.4"}),
+     "a partial fill landed"),
+    (lambda r: r.store._rows["c1"].update({"price": "0.5000"}),
+     "the order was re-priced"),
+    (lambda r: setattr(r, "book", SimpleNamespace(
+        snapshot=lambda s: {"bid": D("0.60"), "ask": D("0.62"),
+                            "stream_age_s": 0.05})), "the book moved"),
+])
+def test_any_state_change_between_decisions_stops_the_veto(mutate, why):
+    """REVIEW ITEM 4, and it does not depend on tick order: a verdict formed
+    on inventory that has since changed must not veto a cancellation."""
+    r = _bare(store=_Store({"c1": dict(UP_ROW)}))
+    _write_verdict(r, SLUG, "PRESERVE", NOW)
+    assert r.controller_preserves(SLUG, NOW) is True, why
+    mutate(r)
+    assert r.controller_preserves(SLUG, NOW) is False, why
+    assert r.stats["disposition:STATE_CHANGED_SINCE_VERDICT"] == 1, why
+
+
+def test_an_unreadable_state_cannot_be_matched_and_so_cannot_veto():
+    r = _bare(store=_Store({"c1": dict(UP_ROW)}))
+    _write_verdict(r, SLUG, "PRESERVE", NOW)
+
+    def boom(_s):
+        raise RuntimeError("feed gone")
+    r.book = SimpleNamespace(snapshot=boom)
+    assert R.disposition_fingerprint(r, SLUG) is None
+    assert r.controller_preserves(SLUG, NOW) is False
+
+
+def test_a_verdict_with_no_fingerprint_is_refused_not_trusted():
+    """The legacy 2-tuple shape, e.g. a verdict written by older code."""
+    r = _bare()
+    r._disposition_last[SLUG] = ("PRESERVE", NOW)
+    assert r.controller_verdict(SLUG, NOW) == "PRESERVE"
+    assert r.controller_preserves(SLUG, NOW) is False
+    assert r.stats["disposition:VERDICT_WITHOUT_FINGERPRINT"] == 1
+
+
+def test_a_racing_fill_breaks_the_veto_so_the_cancel_route_proceeds(
+        monkeypatch):
+    """The cancellation race, end to end. The deadline route polls the
+    venue BEFORE it cancels; that reconciliation is exactly what changes
+    the state and releases the gate."""
+    r, fired = _requote_runner(monkeypatch, bid=D("0.60"), ask=D("0.62"),
+                               verdict="PRESERVE", row=MOVABLE,
+                               legs={"DOWN": D("0.30")})
+    assert r.maybe_completion_requote(NOW) is None
+    assert fired == []
+    assert r.stats["requote_refused:CONTROLLER_SELECTED_PRESERVE"] == 1
+
+    # THE VENUE BOOKS A PARTIAL FILL on our resting completion.
+    r.store._rows["c1"]["remaining"] = "0.4"
+    r.store._legs["UP"] = D("0.24")
+
+    # The veto is released immediately -- the verdict no longer describes
+    # this inventory. Asserted on the gate itself, because after a partial
+    # fill `completion_requote` also refuses on its OWN terms and returns
+    # before the gate is consulted; that is correct, and it means the
+    # end-to-end call cannot observe the release.
+    assert R.controller_preserves(r, SLUG, NOW) is False
+    assert r.stats["disposition:STATE_CHANGED_SINCE_VERDICT"] >= 1
+
+    # and nothing was cancelled while the veto was in force
+    assert fired == []
+
+
+# ============ 8. REVIEW ITEM 3: ORDER OF THE SCHEDULE, PROVEN
+
+def test_the_controller_runs_before_BOTH_discretionary_paths():
+    import re
+    src = inspect.getsource(R.Runner.tick)
+    head = src[:src.index("self.maybe_preflight(now)")]
+    order = [m.group(1) for m in
+             re.finditer(r'_sc\.mark\("([a-z_]+)"\)', head)]
+    i = order.index("maybe_unmatched_disposition")
+    assert i < order.index("maybe_acc_deadline"), order
+    assert i < order.index("maybe_completion_requote"), order
+
+
+def test_the_mandatory_paths_still_run_before_the_controller():
+    """The halt deadman and the orphan sweep bound real exposure and must
+    not wait on a decision layer."""
+    import re
+    src = inspect.getsource(R.Runner.tick)
+    head = src[:src.index("self.maybe_preflight(now)")]
+    order = [m.group(1) for m in
+             re.finditer(r'_sc\.mark\("([a-z_]+)"\)', head)]
+    i = order.index("maybe_unmatched_disposition")
+    assert order.index("maybe_halt_deadman") < i, order
+    assert order.index("maybe_cancel_orphans") < i, order
