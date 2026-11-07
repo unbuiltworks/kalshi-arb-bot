@@ -829,6 +829,17 @@ def verify() -> Dict[str, Any]:
             ("completion_pair_ceiling", "TS.completion_pair_ceiling()",
              lambda: str(__import__("src.l5_two_sided_probe", fromlist=["x"]
                                     ).completion_pair_ceiling())),
+            # AND THE REQUOTE'S OWN PAIR BOUND, by the same argument one
+            # paragraph up. It is a THIRD ceiling, it is the one that
+            # decides what a reprice may pay for the pair, and it was
+            # invisible: 0100z cancelled a 0.9500 pair to chase 1.0000 with
+            # `L5_TS_COMPLETION_MAX_PAIR` unset and nothing in the verifier
+            # reporting that the bound was the redemption line. It now
+            # defaults to the opening ceiling, which is exactly why an
+            # operator must be able to read which value is in force.
+            ("completion_max_pair", "TS.completion_max_pair()",
+             lambda: str(__import__("src.l5_two_sided_probe", fromlist=["x"]
+                                    ).completion_max_pair())),
             ("ts_completion_at_touch", "L5_TS_COMPLETION_AT_TOUCH",
              lambda: str((os.getenv("L5_TS_COMPLETION_AT_TOUCH") or ""
                           ).strip().upper() in ("1", "YES", "TRUE", "ON")).lower()),

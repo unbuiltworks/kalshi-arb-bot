@@ -238,7 +238,14 @@ def strategy_config_fingerprint() -> Dict[str, Any]:
             ("abs_residual_cap_contracts",
              lambda: __import__("src.l5_live_execution", fromlist=["x"])
              .ABS_RESIDUAL_CAP_CONTRACTS),
-            ("opening_leg_max_contracts", lambda: OPENING_LEG_MAX_CONTRACTS),
+            # THE RESOLVER, NOT THE CONSTANT. With
+            # L5_TS_OPENING_LEG_MAX_CONTRACTS=1 the effective cap is 1 while
+            # the constant is 3, so the digest that claims to cover the
+            # EFFECTIVE knob values reported a figure the engine was not
+            # using -- and two different configurations hashed alike.
+            ("opening_leg_max_contracts",
+             lambda: opening_leg_max_contracts()),
+            ("completion_max_pair", lambda: completion_max_pair()),
             ("min_first_leg_own_price", lambda: MIN_FIRST_LEG_OWN_PRICE),
             ("completion_ceilings_in_force",
              lambda: ",".join(COMPLETION_CEILINGS_IN_FORCE)),
@@ -389,10 +396,34 @@ def opening_leg_max_contracts() -> D:
     return min(v, D(str(FID.ceiling("opening_leg_max_contracts"))))
 
 
-#: THE MOST A COMPLETION MAY LET THE PAIR COST. 1.00 is the redemption
-#: line and is today's behaviour exactly, so this is INERT by default.
-#: Below 1.00 it requires the completion to create real matched edge --
-#: edge per contract is exactly (1.00 - pair) -- instead of locking $0.00.
+#: THE MOST A COMPLETION REQUOTE MAY LET THE PAIR COST.
+#:
+#: 1.00 REMAINS THE HARD CLAMP: never above the redemption line, because a
+#: matched pair cannot pay more than it redeems.
+#:
+#: THE DEFAULT IS NO LONGER 1.00, AND 2026-11-07 0100z IS WHY. Held DOWN 1
+#: at own 0.4900 with our own UP quote resting at own 0.4600 -- pair 0.9500,
+#: +$0.05 of matched edge -- the requote cancelled that order 1.5s after the
+#: first leg filled to chase the touch at 0.5100, i.e. a pair of EXACTLY
+#: 1.0000 and $0.0000 of edge. Venue-confirmed, twice (DJHDVD5014ET then
+#: DJHE328054EX), and the engine priced the giveaway itself as
+#: `extra_cash_usd` 0.0500 and 0.0200 while doing it. The same tick's
+#: `L5_MISSED_PAIR` recorded that completion as `inside_entry_ceiling: NO`
+#: and `gain_per_contract_usd: 0.0000` and DECLINED it -- so one path knew
+#: the pair was out of bounds and worth nothing while the other cancelled
+#: toward it. The window settled with no pair at all and -$0.4900 realized.
+#:
+#: WHY THE OPENING CEILING IS THE RIGHT DEFAULT HERE, when
+#: `completion_pair_ceiling` deliberately allows a completion to be DEARER
+#: than an opening. That latitude exists for a choice between a dear pair
+#: and a STRANDED leg, where paying up genuinely converts the residual. A
+#: REQUOTE is not that choice: it already holds a cheaper resting quote, so
+#: it chooses between a cheap maker quote that may fill and a dear maker
+#: quote that may equally not. Touching the book guarantees nothing, and a
+#: pair at 1.00 earns $0.00 even when it DOES fill. Absent an explicit owner
+#: choice the requote therefore inherits the approved opening ceiling
+#: instead of the redemption line. Setting the variable still overrides it,
+#: up to the 1.00 clamp, for the stranded-leg case.
 COMPLETION_MAX_PAIR = D("1.00")
 COMPLETION_MAX_PAIR_ENV = "L5_TS_COMPLETION_MAX_PAIR"
 
@@ -459,21 +490,27 @@ def portfolio_completion_cap(*, side: str, held_qty: Any,
 
 
 def completion_max_pair() -> D:
-    """The completion pair ceiling. Unset or unreadable is 1.00 = inert.
+    """The requote pair ceiling. Unset or unreadable is the OPENING ceiling.
 
     Clamped to (0, 1.00]: a value above redemption would permit a pair that
-    settles at a loss, which `redeem_cap` exists to forbid, and this must
-    only ever TIGHTEN that bound, never loosen it.
+    settles at a loss, which `redeem_cap` exists to forbid.
+
+    THE DEFAULT READS `max_pair_cost()`, it does not move it. An opening
+    priced to a 0.96 pair that a requote may then reprice to 1.00 is not a
+    ceiling, and 0100z proved it is not a theoretical one. Falling back to
+    the opening bound only ever TIGHTENS `redeem_cap`, so it can remove a
+    requote and can never add one, raise exposure, cross a book or spend a
+    dollar the opening path would not already have spent.
     """
     raw = (os.getenv(COMPLETION_MAX_PAIR_ENV) or "").strip()
     if not raw:
-        return COMPLETION_MAX_PAIR
+        return max_pair_cost()
     try:
         v = D(raw)
     except BaseException:                                      # noqa: BLE001
-        return COMPLETION_MAX_PAIR
+        return max_pair_cost()
     if not v.is_finite() or v <= 0 or v > COMPLETION_MAX_PAIR:
-        return COMPLETION_MAX_PAIR
+        return max_pair_cost()
     return v
 
 
@@ -3087,6 +3124,14 @@ def completion_requote(*, side: str, resting_own_px: Any,
             "redemption_cap": str(redeem_cap),
             "ceiling_binds": bool(ceil < touch),
             "redemption_cap_binds": bool(redeem_cap < min(touch, ceil)),
+            # WHICH PAIR BOUND WAS IN FORCE, and the pair this move would
+            # actually buy. 0100z logged `redemption_cap_binds: false` and a
+            # target of 1.0000 in the same record; the reader could not see
+            # that the pair bound was inert because nothing printed it.
+            "pair_ceiling_in_force": str(edge_cap),
+            "pair_own_cost_at_target": str(
+                (target + (ch_total / h)).quantize(D("0.0001"))
+                if h > 0 else D(0)),
             "unmatched": str(unmatched),
             "runway_s": str(round(runway, 1)),
             # REPORTED, NOT ACTED ON. A requote goes to the BACK of the
