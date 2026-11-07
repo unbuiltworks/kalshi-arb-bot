@@ -59,11 +59,11 @@ git diff --name-only 26dbfa119 a2f65375 -- src/ deploy/ \
   | while read f; do [ -f "$f" ] && sha256sum "$f"; done
 ```
 
-### Image closure — proven, not assumed
+### Image closure — what the staged check does and does not establish
 
-No Docker daemon is available in this environment, so closure is established
-by staging the Dockerfile's COPY set into an empty tree and importing the
-entrypoint from **that tree alone**:
+No Docker daemon is available in this environment, so the Dockerfile's COPY
+set is staged into an empty tree and the entrypoint is imported from **that
+tree alone**:
 
 ```bash
 python3 -I - <<'EOF'
@@ -83,14 +83,40 @@ cd /tmp/imgstage && python3 -I -c "import sys; sys.path.insert(0,'.'); \
 import src.l5_pmus_live_runner as m; print('entrypoint OK', m.DEFICIT_ENV)"
 ```
 
-Expected: `COPY directives: 75`, then `entrypoint OK
-L5_MAX_WORST_CASE_DEFICIT_USD`. **Verified at this SHA.**
+Verified at this SHA: `COPY directives: 75`, all 75 sources present, then
+`entrypoint OK L5_MAX_WORST_CASE_DEFICIT_USD`.
 
-Only `l5_unmatched_disposition.py` among the new modules is reachable from
-the runtime and it is in the COPY set. `l5_capital_plan.py`,
-`l5_capital_block.py` and `l5_queue_depletion.py` are imported by no module
-under `src/` that the entrypoint reaches — they are read-only analysis and
-are deliberately **not** in the image:
+**WHAT THIS PROVES — and it is narrower than "image closure".** Every COPY
+source exists in the tree, and the module graph the entrypoint reaches at
+import time is satisfied by the copied files alone. So a module reachable
+from `import src.l5_pmus_live_runner` cannot be missing from the image.
+
+**WHAT IT DOES NOT PROVE.** It is a static import check on a copy of the
+tree, not a build and not a run:
+
+- that the Railway **build** succeeds (base image, `pip install`, layer
+  cache, build-arg differences);
+- that the **container starts** — `CMD ["python3", "-m",
+  "src.l5_pmus_live_runner"]` runs `__main__`, not just an import, and
+  anything in start-up (volume mount, ledger open, transport construction,
+  watchdog attach) is outside the check;
+- that a module imported **lazily** — inside a function, after start-up —
+  is present. `l5_unmatched_disposition` is imported this way at two sites,
+  and a lazy import is still an import: the staged check catches it only
+  because it is listed in a COPY directive, not because the check executed
+  that code path;
+- that the container **behaves** correctly once up.
+
+**Those are exactly what V1–V6 cover, and why they are not optional.** The
+staged check narrows the risk to "builds and starts"; it does not remove it.
+Treat it as a necessary pre-condition, never as evidence the deployment
+worked.
+
+Of the new modules, only `l5_unmatched_disposition.py` is reachable from the
+runtime and it is in the COPY set. `l5_capital_plan.py`,
+`l5_capital_block.py` and `l5_queue_depletion.py` have no importer under
+`src/` that the entrypoint reaches and are deliberately **not** in the
+image:
 
 ```bash
 grep -rn 'l5_capital_plan\|l5_capital_block\|l5_queue_depletion' \
@@ -208,16 +234,59 @@ unresolved_accounting      : 0 (or absent)
 And in the runner's heartbeat, `halt` must be the submission gate's verdict
 (`true`), not an absent key.
 
-### V7 — settled P&L has not moved
+### V7 — every P&L measure unchanged, each against its OWN baseline
+
+**CORRECTION.** An earlier version of this manifest checked
+`realized_today_after = -15.2009` while separately asserting an all-time
+figure of `-15.6109`, and treated the pair as interchangeable. They are not
+interchangeable, and the first figure was additionally **stale**: both name
+the *cumulative* measure, and `-15.2009` was its value before the 12:30z
+window settled `-0.4100`. `realized_today()` in the code returns
+`realized_attributed + realized_unattributed` — cumulative, despite the
+name — while `l5_realized_today()` is the day-scoped one. The heartbeat
+says so itself: *"the DAILY ceiling reads `utc_day_realized_usd`; the
+separate cumulative ceilings read `all_time_realized_usd`."*
+
+**Three measures, three baselines. Capture all three BEFORE the deploy and
+require all three unchanged after.** Taking any one as a proxy for another
+is the error this check exists to prevent.
 
 ```bash
-# Railway MCP: get-logs, filter 'L5_LIVE_SETTLED', limit 1
-#   realized_today_after must still read -15.20090000 and no new
-#   settlement record may appear: this deployment trades nothing.
+# Railway MCP: get-logs, filter 'shadow_lock', limit 1   (one heartbeat
+# carries all three; capture it pre-deploy and keep it as the baseline)
 ```
 
-**Confirmed settled realized net must remain −$15.6109 all-time.** Any
-change means something traded and the deployment has failed its premise.
+| # | measure | heartbeat field | baseline at 2026-11-07T19:11:58Z |
+|---|---|---|---|
+| **7a** | **cumulative, account-wide** | `realized.realized_total` (= `realized_attributed` + `realized_unattributed`) | **`-15.61090000`** |
+| **7b** | **day-scoped** | `day_realized.utc_day_realized_usd` for `utc_day` | **`-0.9000`** on `2026-11-07` |
+| **7c** | **verified L5-strategy** | `accounting.verified_l5_realized` | **`-3.410300`** |
+
+Supporting values that must also be unchanged, because a change in any of
+them moves a measure above without a settlement:
+
+```
+realized.realized_unattributed      : "0"
+day_realized.undated_settlements    : []
+day_realized.room_usd               : "4.1000"     (halt_usd 5)
+defensive_budget.spent_usd          : "0.49916626650000"   (never reset)
+```
+
+**7b depends on the deployment date.** The day-scoped figure resets at
+00:00 UTC, so if the deploy lands on a later day its baseline is that day's
+value — which with no settlements is `0.0000`, not `-0.9000`. **Read it
+from the pre-deployment heartbeat; do not carry `-0.9000` forward.**
+
+**Pass condition:** 7a, 7b and 7c each identical to the pre-deployment
+heartbeat, and no new `L5_LIVE_SETTLED` record. This deployment trades
+nothing, so any movement in any measure means the premise has failed —
+**roll back.**
+
+**Not a pass condition, and deliberately so:** `accounting.verified_l5_status`
+reads `UNPROVEN_LEGACY_ATTRIBUTION` and `realized.unknown_basis_keys` lists
+eight 2026-10-14/15 markets with unattested basis. That is a pre-existing
+reconciliation gap, it is **not** created or changed by this deployment, and
+it must not block it. It is tracked separately — see §8.
 
 ### V8 — regression parity at the deployed SHA
 
@@ -250,3 +319,27 @@ introduced.
 A live Stage 1 window would need, separately and afterwards: the two
 variable writes in §3, a fresh campaign naming one window, an unexpired
 `L5_LIVE_AUTH_NOT_AFTER`, and lifting both locks for that window only.
+
+## 8. Open reconciliation — tracked, and NOT a blocker for this deploy
+
+`accounting.verified_l5_status` reads `UNPROVEN_LEGACY_ATTRIBUTION` and
+`realized.unknown_basis_keys` lists eight 2026-10-14/15 markets with
+unattested cost basis. This deployment neither creates nor changes that, and
+V7 deliberately does not gate on it.
+
+It does gate the next LIVE decision. From
+`analysis/l5/issue206/REBATE_RECONCILIATION.md`:
+
+- **$2.13 of maker rebates IS confirmed credited** (293 fills), and the
+  bridge's double-count test reproduced 3 of 3 markets exactly, so credits
+  are additive to the venue's `realizedPnl` rather than already inside it.
+- Rebate-adjusted realized net is therefore **−$13.4809**, not −$15.6109.
+- **The $10 `remediation` transfer is balance, not performance**, and the
+  bridge excludes it on purpose. Any figure near −$5 that includes it is
+  counting a goodwill credit as trading income.
+- **−$1.27 of the bridge's A line is unreconciled** against the current
+  ledger, beyond the settlements recorded since the snapshot.
+
+Closing it needs a read-only authenticated venue read plus attestation of
+the eight legacy markets. **Neither requires trading authorization**, and
+both should precede the next live decision.
