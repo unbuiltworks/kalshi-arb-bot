@@ -3634,3 +3634,12 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+
+deploy 2026-11-07: controller stack, DISARMED
+  PR #197 rollover + real second-leg completion
+  PR #200 requote bounded by the opening pair ceiling
+  PR #202 pair-aware stale recovery
+  PR #203 queue-depletion estimator (analysis only, not in the image)
+  PR #204 unmatched-inventory disposition controller
+  PR #205 one controller authoritative over the discretionary cancels
+Code only. No variable written, no arming, no taker route, no campaign.
