@@ -63,3 +63,27 @@ def test_unknown_inventory_cannot_authorize_optional_cancel(monkeypatch):
                     "t": "2026-11-07T01:00:13+00:00"}})
     assert result == []
     assert runner.stats["acc_recover:RESIDUAL_UNREADABLE"] == 1
+
+
+def test_mandatory_age_deadline_still_cancels_reducing_quote(monkeypatch):
+    """Optional distance guard never overrides mandatory age-based cancellation."""
+    market = "cpc-btc-updown-15m-2026-11-07-0100z"
+    coid = "up-complement"
+    row = {"market": market, "side": "UP", "price": "0.46",
+           "qty": "1", "remaining": "1", "state": "OPEN",
+           "t": "2026-11-07T01:00:13+00:00"}
+    cancellations = []
+    monkeypatch.setattr(R.AB, "slug_start", lambda slug: 1794013200.0)
+    monkeypatch.setattr(TSP, "active", lambda slug: True)
+    monkeypatch.setattr(TSP, "order_due", lambda *args: True)
+    monkeypatch.setattr(R, "acc_stale_by_distance", lambda *args, **kwargs: [])
+    monkeypatch.setattr(R, "emit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(R.LX, "deadman", lambda store, transport, **kw:
+                        cancellations.append(kw) or {"cancelled": [coid]})
+    runner = SimpleNamespace(
+        transport=SimpleNamespace(market_slug=market, armed=True),
+        store=SimpleNamespace(live_orders=lambda: {coid: row}),
+        poll_orders=lambda: [], win=Counter(), acc_recoveries={})
+    result = R.Runner.maybe_acc_deadline(runner, 1794013330.0)
+    assert cancellations == [{"reason": "acc_order_deadline", "only": [coid]}]
+    assert result["overdue"] == [coid]
