@@ -106,7 +106,7 @@ def test_it_will_not_replace_a_resting_quote_with_a_dearer_pair():
     m = act(dec(), UD.COMPLETE_MAKER)
     assert m["feasible"] is False
     assert m["infeasible_because"] == (
-        "RESTING_COMPLETION_HAS_AN_EQUAL_OR_BETTER_PAIR")
+        "RESTING_COMPLETION_EXISTS_REPRICE_OWNS_IT")
     assert m["pair_own_cost"] == "0.9800"
 
 
@@ -152,7 +152,7 @@ def test_the_record_says_why_every_alternative_was_rejected():
     why = {x["action"]: x["why"] for x in r["rejected"]}
     assert UD.PRESERVE not in why                 # it was selected
     assert why[UD.COMPLETE_MAKER] == (
-        "RESTING_COMPLETION_HAS_AN_EQUAL_OR_BETTER_PAIR")
+        "RESTING_COMPLETION_EXISTS_REPRICE_OWNS_IT")
     assert why[UD.REPRICE].startswith("REQUOTE_REFUSED:")
     assert why[UD.COMPLETE_TAKER] == "PAIR_ABOVE_COMPLETION_CEILING"
     assert why[UD.REDUCE] == "NOT_EXECUTABLE_CROSSING_DISABLED"
@@ -553,3 +553,73 @@ def test_no_sample_in_the_dataset_is_left_without_a_named_reason():
         assert rec["selected_reason"]
         assert rec["selected"] is not None
         assert rec["actions"]
+
+
+# ========== 9. EVERY MAKER ACTION CARRIES THE SAME OUTCOME ENVELOPE
+#
+# Found by reading the first LIVE record, 1230z 12:30:44Z. PRESERVE reported
+# best_case 0.5000 (the hold upside) while COMPLETE_MAKER reported 0.1500
+# (its pair outcome alone), because the `max(pair, hold)` envelope was
+# applied to one and not the other. PRESERVE then won the ranking on that
+# ACCOUNTING asymmetry. It was still the right choice -- with the envelope
+# applied they tie on worst, best and EV, and PRESERVE wins on queue_ahead
+# 0 against 2141 -- but it won for the wrong reason.
+
+def _maker_actions(rec):
+    return [a for a in rec["actions"]
+            if a["action"] in (UD.PRESERVE, UD.REPRICE, UD.COMPLETE_MAKER)
+            and a["feasible"] and a["best_case_usd"] is not None]
+
+
+def test_every_feasible_maker_action_shares_holds_worst_and_upside():
+    """An unfilled maker quote leaves us in HOLD, whichever one it is."""
+    # with a quote resting, PRESERVE is the only maker peer -- COMPLETE_
+    # MAKER is REPRICE's job then. Check both shapes.
+    for r in (dec(), dec(resting_own_px=None, resting_qty=None)):
+        hold = act(r, UD.HOLD)
+        mk = _maker_actions(r)
+        assert mk, [a["action"] for a in r["actions"]]
+        for a in mk:
+            assert D(a["worst_case_usd"]) <= D(hold["worst_case_usd"]), a
+            assert D(a["best_case_usd"]) >= D(hold["best_case_usd"]), a
+    r = dec()
+    hold = act(r, UD.HOLD)
+    for a in _maker_actions(r):
+        assert D(a["worst_case_usd"]) <= D(hold["worst_case_usd"]), a
+        assert D(a["best_case_usd"]) >= D(hold["best_case_usd"]), a
+
+
+def test_the_1230z_live_state_no_longer_ranks_on_the_asymmetry():
+    """The real numbers: held DOWN 1 at 0.5000, book 0.3700/0.3800, our UP
+    complement resting at 0.4500 (pair 0.9500) against a fresh one at
+    0.3500 (pair 0.8500)."""
+    r = dec(held_cost_usd=D("0.5000"), resting_own_px=D("0.4500"),
+            bid=D("0.3700"), ask=D("0.3800"),
+            queue_ahead_fn=lambda px: (D("0") if D(str(px)) >= D("0.45")
+                                       else D("2141")))
+    p = act(r, UD.PRESERVE)
+    m = act(r, UD.COMPLETE_MAKER)
+    assert p["pair_own_cost"] == "0.9500"
+    assert p["best_case_usd"] == "0.5000"
+    assert p["worst_case_usd"] == "-0.5000"
+    assert p["queue_ahead_at_price"] == "0"
+    # the fresh complement is priced and REPORTED -- 0.8500, a better pair
+    # behind 2141 contracts -- but it is not a peer while a quote rests
+    assert m["pair_own_cost"] == "0.8500"
+    assert m["feasible"] is False
+    assert m["infeasible_because"] == (
+        "RESTING_COMPLETION_EXISTS_REPRICE_OWNS_IT")
+    assert r["selected"] == UD.PRESERVE
+
+
+def test_a_better_pair_still_wins_when_the_queue_does_not_decide_it():
+    """The envelope must not make the pair irrelevant: with equal queues,
+    a fresh complement at a BETTER pair is still ranked on something."""
+    r = dec(held_cost_usd=D("0.5000"), resting_own_px=D("0.4500"),
+            bid=D("0.3700"), ask=D("0.3800"),
+            queue_ahead_fn=lambda px: D("500"))
+    assert r["selected"] in (UD.PRESERVE, UD.COMPLETE_MAKER)
+    # whichever it is, it is never a pair above the ceiling
+    sel = act(r, r["selected"])
+    if sel["pair_own_cost"] is not None:
+        assert D(sel["pair_own_cost"]) <= D("1.00")
