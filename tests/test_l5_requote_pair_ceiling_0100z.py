@@ -370,3 +370,71 @@ def test_a_refusal_withdraws_nothing_at_all():
         assert out["act"] is False
         assert out.get("to_price") is None
         assert "cancel" not in out
+
+
+# ============== 8. THE OTHER CANCEL PATH DOES NOT DEFEAT THE FIX
+#
+# 0100z cancelled THREE UP orders through TWO mechanisms, not one:
+#
+#   l5f-b0b2...9bb2  DJHDVD5014ET  own 0.4600  01:00:40.456
+#                    L5_TS_REQUOTE, reason completion_requote
+#   l5f-dc6b...f904  DJHE2YA0144P              01:00:59.510
+#                    L5_ACC_DEADLINE, reason acc_order_deadline,
+#                    stale_by_distance, ttl_s 120.0, recoveries_used 1
+#   l5f-3df3...e403  DJHE328054EX  own 0.4900  01:01:00.551
+#                    L5_TS_REQUOTE, reason completion_requote
+#
+# All three `cum_qty 0`, all venue-confirmed ORDER_STATE_CANCELED. So a fix
+# to the requote alone is worth nothing if `recover_stale_leg` -- which
+# takes NO inventory and NO cost basis, and judges distance only -- would
+# cancel the quote the requote now preserves. Measured, it does not.
+
+def _recover(own_px, bid, now_s, **over):
+    kw = dict(side="UP", own_px=D(str(own_px)), qty=D("1"),
+              remaining=D("1"), state="LIVE",
+              submitted_t=WINDOW_START, now=now_s,
+              bid=D(str(bid)), ask=(D(str(bid)) + D("0.02")),
+              tick=D("0.01"), depth_ticks=TS.depth_ticks(),
+              book_age_s=0.061, recoveries_used=0,
+              open_budget_remaining=None)
+    kw.update(over)
+    return TS.recover_stale_leg(**kw)
+
+
+def test_the_distance_recovery_leaves_the_preserved_0100z_quote_alone():
+    """The exact post-fill state: resting 0.4600, touch 0.5100, T+40s."""
+    v = _recover("0.4600", "0.51", 1794013240.1147778)
+    assert v["recover"] is False
+    assert v["reason"] == "WITHIN_TOLERANCE"
+    assert v["drift_ticks"] == "3.00"
+    assert D(v["allowed_ticks"]) == D("4")
+    # the price a replacement would be quoted at, two ticks behind the touch
+    assert v["would_quote_now"] == "0.49"
+
+
+def test_the_order_the_recovery_did_cancel_is_the_one_that_drifted():
+    """01:00:59: the 0.4900 replacement against a touch already at 0.7100.
+    20 ticks past a 4-tick tolerance, which is a real stale leg."""
+    v = _recover("0.4900", "0.71", 1794013259.5)
+    assert v["recover"] is True, v
+    assert D(v["drift_ticks"]) == D("20.00")
+
+
+def test_a_quote_that_became_more_competitive_is_never_cancelled():
+    v = _recover("0.4600", "0.44", 1794013240.1147778)
+    assert v["recover"] is False
+    assert v["reason"] == "NOT_DRIFTED_AWAY"
+
+
+def test_the_recovery_still_knows_nothing_about_pair_economics():
+    """Stated, not assumed, because it bounds what this fix can claim.
+
+    `recover_stale_leg` accepts no held quantity and no cost basis, so it
+    cannot preserve a cheap pair on economics -- only on DISTANCE. The fix
+    holds at 0100z because 3 ticks is inside tolerance, not because the
+    recovery understands that 0.46 was a 0.9500 pair.
+    """
+    import inspect
+    params = set(inspect.signature(TS.recover_stale_leg).parameters)
+    assert not params & {"held_qty", "held_cost_usd", "deficient_qty",
+                         "pair_ceiling", "residual_budget_usd"}

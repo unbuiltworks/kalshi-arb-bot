@@ -75,6 +75,48 @@ gain $0.0000. At 01:01:00 the touch had moved to 0.7100 → pair 1.2000, a
 loss. The justified action at both decisions was to **leave the 0.4600 quote
 resting**, which is precisely what the fix produces.
 
+## 2a. Three UP orders, two cancel mechanisms
+
+The requote-filtered tape showed two cancels; the unfiltered one shows
+**three orders terminated by two different mechanisms**, which matches the
+owner's tape in issue #195 and corrects my earlier account that all the
+cancels were requote-driven:
+
+| client order id | venue id | own px | cancelled | by |
+|---|---|---|---|---|
+| `l5f-b0b2…9bb2` | `DJHDVD5014ET` | 0.4600 | 01:00:40.456 | `L5_TS_REQUOTE`, `completion_requote` |
+| `l5f-dc6b…f904` | `DJHE2YA0144P` | — | 01:00:59.510 | `L5_ACC_DEADLINE`, `acc_order_deadline`, **`stale_by_distance`**, `ttl_s 120.0`, `recoveries_used 1` |
+| `l5f-3df3…e403` | `DJHE328054EX` | 0.4900 | 01:01:00.551 | `L5_TS_REQUOTE`, `completion_requote` |
+
+All three `cum_qty 0`, all `ORDER_STATE_CANCELED` confirmed by re-read
+(`verify_attempts 2`), each scoped to exactly one client order id. The
+second was not a TTL expiry — it was cancelled ~15s into a 120s TTL by the
+**distance** rule, which cleared the second order and so let the requote act
+again on the third (`maybe_completion_requote` requires exactly one resting
+order, and `requote_refused:MULTIPLE_RESTING_ORDERS_IN_MARKET` appears 4
+times in the window while both were live).
+
+**So the obvious question is whether a requote fix is defeated by the
+distance rule.** `recover_stale_leg` accepts no held quantity and no cost
+basis: it judges drift only. Measured against the exact post-fill state —
+resting 0.4600, touch 0.5100, T+40s:
+
+    recover: False   reason: WITHIN_TOLERANCE
+    would_quote_now 0.49   drift 3.00 ticks   allowed 4 ticks
+
+**It does not cancel the quote the fix preserves.** The order it *did*
+recover was the 0.4900 replacement at 01:00:59, by which time the touch had
+reached 0.7100 — a 20-tick drift against a 4-tick tolerance, which is a
+genuine stale leg. So the preserved quote survives the post-fill cancel and
+the first distance check, and is released only once the market has moved
+more than 4 ticks past where a replacement would be quoted — at which point
+the pair available is above the ceiling anyway. Patience while the pair is
+good; release when it cannot be.
+
+This holds **because 3 ticks is inside the tolerance, not because the
+recovery understands that 0.46 was a 0.9500 pair.** That bound on the claim
+is pinned by a test.
+
 ## 3. The fix
 
 One default. `completion_max_pair()` now falls back to the **opening**
@@ -172,7 +214,35 @@ different configurations hashed alike. Now reports the resolver, and
 `l5_book_completion.decide`, reporting-only, and it placed, repriced and
 withdrew nothing. No change made.
 
-## 6. Still open
+## 6. The next blocker: the complement rescue can also breach the cap
+
+**Not fixed here, deliberately.** The 0.4900 replacement posted after the
+first cancel was a pair of **0.98**, above the campaign's approved 0.96.
+That price came from `complement_order`, which tries the 0.96 opening cap
+first and then falls back to `completion_pair_ceiling()` — a *third* pair
+ceiling, also defaulting to **1.00** and also unset in the deployed
+configuration.
+
+I have not changed it, and the reason is a real asymmetry rather than
+caution:
+
+- **The requote had no defensible rationale.** Cancelling a cheaper resting
+  maker quote for a dearer one converts nothing: both outcomes are maker
+  quotes, and the dear one earns $0.00 even when it fills. There is no state
+  in which it is the better choice, so tightening it needs no judgement call.
+- **The complement rescue has one.** It *places* a completion rather than
+  destroying a cheaper one, so it is a genuine choice between a dear pair and
+  a stranded leg — and paying 0.98 for a pair does beat holding a leg worth
+  either $0 or $1. Its own code comment makes that argument, and tightening
+  it would make some completions refuse outright.
+
+That trade-off is an owner decision about the approved limit, not an
+engineering one, so it is reported rather than taken. **Recommendation:**
+set `L5_COMPLETION_PAIR_CEILING` to the approved campaign cap for the next
+experiment, so all three ceilings agree, and measure completed pairs against
+stranded legs. That is one variable and it only tightens.
+
+## 7. Still open
 
 - The **$0.0521 completion-budget discrepancy remains open** and the durable
   budget has **not** been reset. (Resolvable later by emitting the durable
