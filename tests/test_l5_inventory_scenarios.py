@@ -159,14 +159,25 @@ def test_inventory_held_at_rollover_is_still_disposed_of():
 
 # --------------------------------------------------------- 6. MULTIPLE ROUNDS
 
-def test_the_first_round_opens_and_1230z_round_one_does_not():
+def test_the_first_round_opens_and_so_does_the_second():
+    """REPEATED ROUNDS ARE THE NORMAL CASE. L5 trades a median of 32 times
+    per BTC15m window and p90 of 135; a controller that stopped after one
+    pair would reproduce none of that."""
     first = UD.decide_inventory(market=SLUG, held_qty=D("0"), rounds_used=0,
                                 reopen_kwargs=reop())
     assert first["selected"] == UD.OPEN
     second = UD.decide_inventory(market=SLUG, held_qty=D("0"), rounds_used=1,
                                  reopen_kwargs=reop())
-    assert second["selected"] is None
-    assert "INCREMENTAL_EXPECTANCY_BELOW_FLOOR" in second["selected_reason"]
+    assert second["selected"] == UD.REPLENISH
+
+
+def test_a_round_is_still_refused_when_it_cannot_be_AFFORDED():
+    """Capacity, not expectancy, is what bounds throughput."""
+    r = UD.decide_inventory(
+        market=SLUG, held_qty=D("0"), rounds_used=1,
+        reopen_kwargs=reop(exposure_headroom_usd=D("0.10")))
+    assert r["selected"] is None
+    assert "EXPOSURE_HEADROOM_BELOW_WORST_CASE" in r["selected_reason"]
 
 
 @pytest.mark.parametrize("used", [1, 2, 5])
@@ -201,13 +212,20 @@ def test_the_book_running_away_does_not_strand_the_held_leg():
     assert r["selected"] is not None
 
 
-def test_an_adverse_book_makes_reopening_no_more_attractive():
-    """A wider spread raises the edge; an adverse LEVEL does not."""
+def test_an_adverse_book_is_bounded_by_its_WORST_CASE_not_its_level():
+    """An 0.89 leg cannot fit a $1 budget once anything else is standing.
+
+    The price LEVEL carries no expectancy signal -- the pair identity
+    depends on the spread, not on where the book sits -- so what refuses a
+    round into an extreme book is the capacity test.
+    """
     r = UD.decide_inventory(
         market=SLUG, held_qty=D("0"), rounds_used=1,
         reopen_kwargs=reop(bid=D("0.9100"), ask=D("0.9200"),
-                           worst_leg_own_px=D("0.8900")))
+                           worst_leg_own_px=D("0.8900"),
+                           outstanding_worst_case_usd=D("0.50")))
     assert r["selected"] is None
+    assert "EXPOSURE_HEADROOM_BELOW_WORST_CASE" in r["selected_reason"]
 
 
 def test_a_genuinely_wider_spread_does_raise_the_edge():

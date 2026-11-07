@@ -80,46 +80,86 @@ def base(**kw):
 
 # ================================================ 1. THE WINDOW IS REFUSED
 
-def test_1230z_round_one_is_refused_on_its_own_numbers():
+def test_1230z_round_one_is_PERMITTED_on_the_corrected_numbers():
+    """THE REVERSAL, and it is a reversal of MY error, not of the evidence.
+
+    This test used to assert the round was refused, on a single-leg outcome
+    of -$0.2440 taken from recorded books under PROVEN fills. A PROVEN fill
+    is one where the opposite touch crossed our price, so every leg in that
+    sample filled because the market moved against it: the constant
+    measured the sampling rule, not the market, and at 6.4x the pair edge
+    it refused every reopening at the deployed depth.
+
+    L5's own fills say an unmatched leg is roughly EV-neutral -- +$0.0367
+    per contract over 20,069 residual contracts whose outcome is directly
+    determinable -- which is also exactly what this module's EV identity
+    predicts for a leg bought at a fair price.
+
+    So round 1 of 1230z was a POSITIVE-EXPECTANCY round that lost. That is
+    what trading is, and refusing it was the defect. What must still hold is
+    that its worst case fitted the budget, which the capacity test below
+    pins.
+    """
     r = UD.reopen_decision(**base())
-    assert r["reopen"] is False
-    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
-    # 0.525*0.05 + 0.423*(-0.2440)
-    assert D(r["expectancy_usd"]) == D("-0.0770")
+    assert r["reopen"] is True
+    # 0.727*0.05 + 0.273*0
+    assert D(r["expectancy_usd"]) == D("0.0364")
     assert D(r["pair_edge_usd"]) == D("0.0500")
 
 
-def test_the_refusal_states_what_would_have_to_be_true_instead():
-    """A refusal that does not price itself is an opinion, not a decision."""
-    r = UD.reopen_decision(**base())
-    assert D(r["breakeven_single_outcome_usd"]) == D("-0.0384")
-    # and the measured figure it is being judged against
-    assert D(r["single_outcome_usd_per_contract"]) == D("-0.2440")
+def test_the_old_adverse_selection_constant_is_what_forbade_throughput():
+    """Pass the superseded figure back in and the round is refused again.
+
+    Pinning this makes the dependency explicit: one parameter, sourced from
+    a biased sample, was the whole reason the gate behaved as a blanket
+    restriction rather than a price.
+    """
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.2440")))
+    assert r["reopen"] is False
+    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
 
 
-def test_the_measured_priors_are_the_out_of_sample_conservative_ones():
-    assert UD.REOPEN_P_PAIR == D("0.525")
-    assert UD.REOPEN_P_SINGLE == D("0.423")
-    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("-0.2440")
+def test_it_opens_even_on_the_pessimistic_PROVEN_pairing_rate():
+    """The pair rate was never what blocked it; the single outcome was."""
+    r = UD.reopen_decision(**base(p_pair=D("0.525"), p_single=D("0.423")))
+    assert r["reopen"] is True
+    assert D(r["expectancy_usd"]) > D(r["min_edge_usd"])
+
+
+def test_the_record_always_prices_itself_either_way():
+    """A decision that does not state its own break-even is an opinion."""
     r = UD.reopen_decision(**base())
-    src = r["prior_source"]
-    assert "QUEUE_DEPLETION_FINDINGS" in src
-    assert "out" in src and "sample" in src
-    # the five 1230z orders are explicitly NOT the source
-    assert "1230z" in src
+    # how bad an unmatched leg would have to be to make this round marginal
+    assert D(r["breakeven_single_outcome_usd"]) == D("-0.0965")
+    assert D(r["single_outcome_usd_per_contract"]) == D("0")
+
+
+def test_the_priors_come_from_real_fills_not_from_a_sampling_rule():
+    """Our own orders for pairing; L5's own residuals for the single."""
+    assert UD.REOPEN_P_PAIR == D("0.727")
+    assert UD.REOPEN_P_SINGLE == D("0.273")
+    # ZERO, not L5's measured +0.0367: banking an edge we have not
+    # reproduced ourselves would be assuming the conclusion, and zero is
+    # what the EV identity gives for a leg bought at a fair price.
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
+
+
+def test_the_conservative_choice_is_below_what_was_measured():
+    """Zero is stricter than L5's +0.0367, so nothing is banked."""
+    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0.0367")
 
 
 def test_the_taker_disposition_is_not_assumed_available():
     """Taker is disabled by owner order, so the gate may not price it in.
 
-    `taker $` at d=2 OOS is -$0.0542; using it would raise expectancy to
-    +$0.0033 -- still under the floor, but the point is that the DEFAULT
-    must not quietly assume a disposition we are forbidden to execute.
+    The default must never quietly assume a disposition we are forbidden to
+    execute. Zero is the EV identity's answer for a MAKER-only hold, which
+    is the authorized configuration.
     """
-    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("-0.20")
-    cheap = UD.reopen_decision(**base(single_outcome_usd=D("-0.0542")))
-    assert cheap["reopen"] is False, "even taker-grade is under the floor"
-    assert D(cheap["expectancy_usd"]) == D("0.0033")
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
+    r = UD.reopen_decision(**base())
+    assert "maker" in r["prior_source"].lower() or \
+        "taker" in r["prior_source"].lower()
 
 
 # ======================== 2. IT IS NOT FINANCED OUT OF THE LOCKED PAIR
@@ -133,9 +173,10 @@ def test_locked_pair_profit_never_changes_the_decision(locked):
     profit must not buy a single bad round.
     """
     r = UD.reopen_decision(**base(locked_pair_pnl_usd=D(locked)))
-    assert r["reopen"] is False
-    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
-    assert D(r["expectancy_usd"]) == D("-0.0770")
+    # the VERDICT is whatever the round's own economics say; what must never
+    # change is that it does not move with the locked profit.
+    assert D(r["expectancy_usd"]) == D("0.0364")
+    assert D(r["locked_pair_pnl_usd"]) == D(locked)
 
 
 def test_locked_profit_is_reported_so_its_exclusion_is_visible():
@@ -363,11 +404,13 @@ def gate(ex, rnd, plan, **kw):
     return ex.probe_reopen_decision(SLUG, rnd, plan, **args)
 
 
-def test_the_executor_refuses_1230z_round_one(rig):
+def test_the_executor_permits_1230z_round_one_on_the_corrected_numbers(rig):
+    """And the capacity test is what still has to pass, not expectancy."""
     r = gate(rig["ex"], 1, PLAN1)
-    assert r["reopen"] is False
-    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
+    assert r["reopen"] is True
     assert r["round"] == 1
+    assert D(r["worst_case_usd"]) == D("0.4900")
+    assert D(r["exposure_headroom_usd"]) >= D(r["worst_case_usd"])
 
 
 def test_round_zero_is_never_gated_by_the_executor(rig):
@@ -478,7 +521,8 @@ def test_a_plan_whose_leg_is_on_the_DEEPER_side_is_not_a_reduction(rig):
     r = gate(ex, 1, {"pair_cost": "0.9500",
                      "legs": [{"side": "UP", "price": "0.4600",
                                "qty": "1", "mode": "MAKER"}]})
-    assert r["reopen"] is False
+    # it may still be permitted on its own economics -- what must NOT happen
+    # is that it is waved through as a REDUCTION when it deepens the side
     assert r["reason"] != "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
 
 
@@ -491,8 +535,10 @@ def test_a_reducing_leg_larger_than_the_gap_is_not_exempted(rig):
     r = gate(ex, 1, {"pair_cost": "0.9500",
                      "legs": [{"side": "DOWN", "price": "0.4900",
                                "qty": "5", "mode": "MAKER"}]})
-    assert r["reopen"] is False
     assert r["reason"] != "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+    # a 5-contract worst case does not fit the $1 budget, so capacity binds
+    assert r["reopen"] is False
+    assert r["reason"] == "EXPOSURE_HEADROOM_BELOW_WORST_CASE"
 
 
 def test_an_unreadable_leg_cap_refuses_rather_than_exempting(rig):
@@ -653,7 +699,9 @@ def test_the_gate_reports_locked_pair_pnl_without_spending_it(rig):
     assert locked == D("0.0500")
     r = gate(rig["ex"], 1, PLAN1)
     assert D(r["locked_pair_pnl_usd"]) == D("0.0500")
-    assert r["reopen"] is False, "and it still buys nothing"
+    # reported and excluded: the expectancy is the ROUND's own, unchanged by
+    # whatever has already been locked
+    assert D(r["expectancy_usd"]) == D("0.0364")
 
 
 def test_locked_pnl_is_zero_with_no_matched_inventory(rig):

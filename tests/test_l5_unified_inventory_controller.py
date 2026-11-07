@@ -140,12 +140,26 @@ def test_the_first_round_is_OPEN_and_a_later_one_is_REPLENISH():
 
 
 def test_an_unjustified_reopening_selects_nothing_at_all():
-    """1230z: the round is refused and no action replaces it."""
-    r = UD.decide_inventory(market="m", held_qty=D("0"), rounds_used=1,
-                            reopen_kwargs=reopen_kw())
+    """A refused round is refused outright; no action replaces it.
+
+    Driven by capacity, which is the bound that still binds now that the
+    single-leg outcome is sourced from real fills rather than from a
+    PROVEN sampling artefact.
+    """
+    r = UD.decide_inventory(
+        market="m", held_qty=D("0"), rounds_used=1,
+        reopen_kwargs=reopen_kw(exposure_headroom_usd=D("0.10")))
     assert r["selected"] is None
     assert r["selected_reason"].startswith("REOPENING_NOT_JUSTIFIED:")
-    assert "INCREMENTAL_EXPECTANCY_BELOW_FLOOR" in r["selected_reason"]
+    assert "EXPOSURE_HEADROOM_BELOW_WORST_CASE" in r["selected_reason"]
+
+
+def test_a_justified_reopening_selects_REPLENISH():
+    """THROUGHPUT: repeated rounds are the normal case, not the exception."""
+    r = UD.decide_inventory(market="m", held_qty=D("0"), rounds_used=1,
+                            reopen_kwargs=reopen_kw())
+    assert r["selected"] == UD.REPLENISH
+    assert r["selected_reason"] == "BALANCED_ROUND_IS_JUSTIFIED"
 
 
 def test_state_decides_the_branch_not_preference():

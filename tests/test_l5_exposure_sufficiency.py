@@ -54,9 +54,11 @@ def test_both_legs_filling_at_once_leaves_no_residual_to_mistake(probe,
     ex.store.apply_fill("m", "DOWN", D("1"), D("0.37"), basis="OWN")
     assert ex.store.residual("m") == D("0")
     r = gate(ex)
-    # flat after a simultaneous pair: no gap, so the ECONOMICS decide
-    assert r["reopen"] is False
-    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
+    # flat after a simultaneous pair: no gap, so the ECONOMICS decide, and
+    # on real-fill priors another round is justified. What matters here is
+    # that the pair is not double-counted as exposure.
+    assert r["reopen"] is True
+    assert D(r["outstanding_worst_case_usd"]) == D("0")
 
 
 def test_the_reservation_takes_the_max_not_the_sum_of_live_sides(probe,

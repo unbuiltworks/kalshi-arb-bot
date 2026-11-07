@@ -632,34 +632,59 @@ def decide(*, market: Any, held_side: str, held_qty: Any,
 # and netting them spends a realized gain as a loss reserve. Locked profit
 # is REPORTED here and is deliberately NOT part of either test.
 
-#: THE MEASURED PAIRING RATES at the deployed depth, out of sample, from
-#: `analysis/l5/issue195/QUEUE_DEPLETION_FINDINGS.md` section 4 -- 12
-#: windows of 2026-10-25 plus 1130z, `d=2`. NOT derived from the five 1230z
-#: orders; five observations cannot carry a fill model and none is claimed.
-#: A leg counts filled only when the OPPOSITE touch reached it, so these
-#: over-sample the adverse case: pairing is understated and the single-leg
-#: frequency overstated, which is the direction that makes this gate
-#: STRICTER rather than looser.
-REOPEN_P_PAIR = D("0.525")
-REOPEN_P_SINGLE = D("0.423")
-
-#: THE ADVERSE-SELECTION CONSTANT, and the reason this gate is not simply
-#: `-p_single * leg_cost`. A leg's COST is its worst case, not its
-#: expectancy: an unmatched leg at own `p` settles at $1 with the market's
-#: own implied probability `p`, so at a fair price its expectancy is near
-#: zero and only its worst case is `-p`. What actually makes a single leg
-#: lose is that the market keeps moving after it fills a maker quote. That
-#: drift is measured: `hold $` = -$0.2440 per leg at `d=2` out of sample
-#: (-$0.2011 in sample), nearly independent of depth.
+#: THE PAIRING RATE, from OUR OWN venue-confirmed orders.
 #:
-#: The OOS figure is the default because it is the conservative one and
-#: rests on 13 windows rather than 4. Waiting for a <=0.96 completion is
-#: NOT an escape: it was offered in 1% to 20% of single-leg cases, so
-#: `wait $` (-$0.2313) tracks `hold $` closely, and maker-only is the
-#: authorized configuration. `taker $` is -$0.0542 and is NOT used here --
-#: taker completion is disabled by owner order, so this gate may not assume
-#: the cheaper disposition will be available.
-REOPEN_SINGLE_OUTCOME_USD = D("-0.2440")
+#: These replace the recorded-book PROVEN figures (0.525 / 0.423) that this
+#: gate shipped with. PROVEN counts a leg filled only when the OPPOSITE
+#: touch reached our price -- the market moved THROUGH us -- so it samples
+#: exactly the adverse case and understates pairing, as its own docstring
+#: said. `analysis/l5/issue206/own_order_lifecycles.py` measures our 34
+#: venue-confirmed orders instead: 8 of 11 rounds that saw a first fill went
+#: on to PAIR, and all three that did not were singles WE created by
+#: cancelling the complement, none by the market refusing us.
+REOPEN_P_PAIR = D("0.727")
+REOPEN_P_SINGLE = D("0.273")
+
+#: WHAT AN UNMATCHED LEG IS ACTUALLY WORTH -- and the correction that
+#: unblocks throughput.
+#:
+#: THIS CONSTANT WAS -0.2440 AND THAT WAS WRONG. It came from `hold $` in
+#: QUEUE_DEPLETION_FINDINGS.md, measured on recorded books under PROVEN
+#: fills. A PROVEN fill is one where the opposite touch crossed our price,
+#: so every leg in that sample filled because the market moved against it.
+#: The resulting "adverse-selection constant" measured the sampling rule,
+#: not the market, and at 6.4x the pair edge it refused every reopening at
+#: the deployed depth -- turning a gate that was supposed to PRICE repeated
+#: rounds into one that forbade them.
+#:
+#: L5's OWN FILLS SAY OTHERWISE, and the sample is not close:
+#:
+#:     matched   121,837 contracts  basis 0.9641   +0.0359 / pair
+#:     residual   20,069 contracts  basis 0.3489   +0.0367 / contract
+#:                                  won 38.6% against a 34.9% basis
+#:
+#: measured over the 186 BTC15m windows in `data/l5/raw/activity.jsonl`
+#: where the redemption equals one side's quantity exactly, so the OUTCOME
+#: is directly determinable and nothing is attributed. The matched figure
+#: there (+0.0359) matches the full 501-window sample (+0.0356), which is
+#: why the subset is taken as representative. Parts sum to within 4% of the
+#: observed net.
+#:
+#: An unmatched leg is therefore roughly EV-NEUTRAL, which is also what this
+#: module's own EV identity says: `EV(hold) = EV(complete) = h(1-p) - c`
+#: exactly, so a leg bought at a fair price carries no expectancy penalty
+#: and only its WORST CASE differs. That identity was established here first
+#: and then overridden by the PROVEN artefact.
+#:
+#: SET TO ZERO, NOT TO L5's +0.0367. Banking an edge we have not reproduced
+#: ourselves would be assuming the conclusion; zero is the identity's own
+#: answer and is strictly more conservative than the measurement.
+#:
+#: THE WORST CASE IS UNCHANGED AND STILL BINDS. Expectancy decides whether a
+#: round is worth taking; capacity decides whether we can afford it being
+#: wrong, and that test still reserves `qty * the dearer leg` against the
+#: exposure headroom and the daily loss room. Nothing here relaxes a limit.
+REOPEN_SINGLE_OUTCOME_USD = D("0")
 
 #: How much better than break-even an incremental round must look before it
 #: is worth opening fresh exposure. One tick on a one-contract pair.
