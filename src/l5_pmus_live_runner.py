@@ -889,6 +889,23 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                 continue
             if str(row.get("market") or "") != str(slug):
                 continue
+            # Distance recovery is for speculative opening orders, not the
+            # sole maker order reducing already-confirmed unmatched inventory.
+            # Its OPEN-budget check cannot guarantee a replacement; cancelling
+            # that reducing quote can strand the filled leg. The separate
+            # completion-requote controller owns economic repricing. This
+            # guard does NOT affect the mandatory age/terminal deadline,
+            # independent watchdog, halt, or authorization-expiry cancels.
+            try:
+                residual = D(str(runner.store.residual(str(slug))))
+                side = str(row.get("side") or "")
+            except (AttributeError, TypeError, ValueError, ArithmeticError):
+                # Uncertain inventory is not permission for an optional cancel.
+                count("acc_recover:RESIDUAL_UNREADABLE")
+                continue
+            if (residual > 0 and side == "DOWN") or (residual < 0 and side == "UP"):
+                count("acc_recover:REDUCING_LEG_DEFER_TO_COMPLETION")
+                continue
             sub = None
             try:
                 st = dt.datetime.fromisoformat(str(row.get("t")))
