@@ -884,6 +884,58 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
             obr = "UNREADABLE"
         used = int((getattr(runner, "acc_recoveries", None)
                     or {}).get(str(slug), 0))
+        # ============ THE INVENTORY THIS LEG WOULD COMPLETE, READ ONCE
+        #
+        # WHY. `recover_stale_leg` judged DRIFT only, so it cancelled a
+        # resting completion because the book had left it -- without ever
+        # asking what pair that order was holding. Over the recorded
+        # ladders, 24 of 35 fires on 1215z and 72 of 72 on 1245z would have
+        # cancelled a quote whose pair the cap permitted and whose
+        # replacement the cap then forbade, leaving NO quote at all.
+        #
+        # READ-ONLY AND FAIL-SOFT THROUGHOUT. Anything unreadable here
+        # yields None, the extra question is declined, and the behaviour is
+        # exactly what it was before -- which is why this cannot take down
+        # the deadline that bounds real exposure.
+        #
+        # THE REDUCING SIDE IS JUDGED ON THE REALISED RESIDUAL, exactly as
+        # `maybe_completion_requote` does and for the same reason: the
+        # question is about the order we are about to CANCEL, so the
+        # position to read is the one that would remain without it.
+        # `probe_reducing_side` reads the PROSPECTIVE residual, which a
+        # completion that fully covers its deficit drives to zero.
+        _reducing = None
+        _legs: Mapping[str, Any] = {}
+        try:
+            _realised = D(str(runner.store.residual(str(slug))))
+            if _realised != 0:
+                _reducing = "DOWN" if _realised > 0 else "UP"
+                _legs = runner.store.leg_cost(str(slug)) or {}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            count("acc_recover_inventory:UNREADABLE:%s" % type(exc).__name__)
+            _reducing, _legs = None, {}
+
+        def _held_for(order_side: str):
+            """(held_qty, held_cost_usd) for a REDUCING order, else Nones.
+
+            An OPENING leg has no complement to pair with, so there is no
+            pair to protect and the drift test stands alone. Only the leg
+            that reduces the realised residual gets the extra question.
+            """
+            if _reducing is None or str(order_side) != _reducing:
+                return None, None
+            other = "DOWN" if str(order_side) == "UP" else "UP"
+            try:
+                hq = runner.store.position(str(slug), other)
+                return hq, _legs.get(other)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                count("acc_recover_inventory:POSITION_UNREADABLE")
+                return None, None
+
         for coid, row in sorted(live.items()):
             if coid in set(skip or ()):
                 continue
@@ -898,6 +950,7 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                 sub = None
             if sub is None:
                 continue       # the time path halts on this; not ours
+            _hq, _hc = _held_for(row.get("side"))
             v = TSP.recover_stale_leg(
                 side=str(row.get("side")), own_px=row.get("price"),
                 qty=row.get("qty"), remaining=row.get("remaining"),
@@ -906,7 +959,12 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                 depth_ticks=TSP.depth_ticks(),
                 book_age_s=snap.get("stream_age_s"),
                 recoveries_used=used + len(out),
-                open_budget_remaining=obr)
+                open_budget_remaining=obr,
+                # THE PAIR THE CAP WOULD ACTUALLY JUDGE. The ceiling is left
+                # to the probe, which reads `max_pair_cost()` -- the same
+                # accessor the complement path prices the replacement
+                # against -- so the two can never disagree.
+                held_qty=_hq, held_cost_usd=_hc)
             count("acc_recover:%s" % (v.get("reason") or "RECOVER"))
             # LOG-ONLY. A leg refused RECOVERY_BUDGET_SPENT passed every
             # other test and was declined by the cap alone, which is the
