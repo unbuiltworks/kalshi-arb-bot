@@ -74,6 +74,20 @@ HOLD = "HOLD"
 #: Every disposition considered, in a fixed order so a record is diffable.
 ACTIONS = (PRESERVE, REPRICE, COMPLETE_MAKER, COMPLETE_TAKER, REDUCE, HOLD)
 
+# ---- the OPENING family. `decide` above disposes of inventory we already
+# hold; these are the actions available when the market is FLAT, and they
+# are named separately because they ADD exposure rather than manage it.
+OPEN = "OPEN"                            # the first exposure-taking round
+REPLENISH = "REPLENISH"                  # another round after one completed
+ACCUMULATE_FAVORED = "ACCUMULATE_FAVORED"    # more of the likelier side
+ACQUIRE_UNFAVORED = "ACQUIRE_UNFAVORED"      # more of the cheaper side
+OPENING_ACTIONS = (OPEN, REPLENISH, ACCUMULATE_FAVORED, ACQUIRE_UNFAVORED)
+
+#: Every action one controller decides between. There is no second
+#: controller: `decide_inventory` dispatches over this set and the pricing
+#: lives in `decide` and `reopen_decision`, each called exactly once.
+UNIFIED_ACTIONS = ACTIONS + OPENING_ACTIONS
+
 #: The two that cross a book. Both are PRICED and REPORTED always, and both
 #: are executable only while the owner's taker route is enabled -- which it
 #: is not. REDUCE sells the held leg, which is also a crossing order.
@@ -739,24 +753,32 @@ def reopen_decision(*, market: Any, rounds_used: int,
     outstanding = _d(outstanding_worst_case_usd)
     locked = _d(locked_pair_pnl_usd)
 
-    # ---- the FIRST round is not a reopening and this never gates it.
-    #      Gating round 0 would turn the strategy off, which is not what
-    #      "decide whether to reopen" asks for.
+    # ---- STRUCTURAL READS FIRST, AND FOR EVERY ROUND. A round cannot be
+    #      called justified on a book, tick or size we cannot read, whether
+    #      it is the first or the fifth -- `decide_inventory` reports this
+    #      verdict as an ACTION, and "OPEN into a one-sided book" is not one.
+    #      The ECONOMIC tests below still exempt the first round.
     try:
         used_rounds = int(rounds_used)
     except (TypeError, ValueError):
         return no("ROUNDS_USED_UNREADABLE")
-    if used_rounds <= 0:
-        return dict(reopen=True, reason="FIRST_ROUND_NOT_A_REOPENING",
-                    market=(None if market is None else str(market)),
-                    rounds_used=used_rounds)
-
     if q is None or q <= 0 or leg is None or leg <= 0:
         return no("ROUND_SIZE_OR_PRICE_UNREADABLE")
     if tk is None or tk <= 0:
         return no("TICK_UNKNOWN")
     if b is None or a is None or b <= 0 or a <= 0 or a <= b:
         return no("BOOK_NOT_TWO_SIDED")
+
+    # ---- the FIRST round is not a reopening and the ECONOMICS never gate
+    #      it. Gating round 0 would turn the strategy off, which is not what
+    #      "decide whether to reopen" asks for, and the executor's own cash,
+    #      deficit and exposure gates already own the first leg.
+    if used_rounds <= 0:
+        return dict(reopen=True, reason="FIRST_ROUND_NOT_A_REOPENING",
+                    market=(None if market is None else str(market)),
+                    rounds_used=used_rounds,
+                    economics_not_evaluated_for_the_first_round=True)
+
     if cap_room is None:
         return no("EXPOSURE_BUDGET_UNREADABLE")
     if outstanding is None:
@@ -858,3 +880,298 @@ def reopen_decision(*, market: Any, rounds_used: int,
     if expectancy <= floor:
         return no("INCREMENTAL_EXPECTANCY_BELOW_FLOOR", **rec)
     return dict(rec, reopen=True, reason=None)
+
+
+# ============================================ UNEQUAL INVENTORY, PRICED
+#
+# WHAT PHASE 3 ASKED FOR: accumulate the favoured side when an independently
+# estimated probability supports it, and acquire the unfavoured side when
+# that is economically justified. Unequal inventory allowed when its
+# conservative EV and worst case justify it.
+#
+# THE ARITHMETIC SAYS WHAT TO LOOK FOR. Let the market's own implied
+# probability of UP be p, and rest each leg `delta` behind its touch, so
+# u = p - delta and d = (1 - p) - delta. For n_up UP and n_dn DOWN settling
+# at S in {0, 1}:
+#
+#     net = n_up*S + n_dn*(1 - S) - n_up*u - n_dn*d
+#
+#     BALANCED (1,1):  net = 1 - (u + d) = 2*delta, for EITHER outcome.
+#     FAVOURED (2,1):  EV  = p + 1 - 2u - d        = 3*delta.
+#     worst case (2,1) when the favourite loses:   = 3*delta - p.
+#
+# So under a fair market EVERY LEG EARNS ITS OWN DELTA and expectancy scales
+# with the TOTAL contract count, balanced or not. Unequal inventory buys no
+# extra expectancy per contract -- it buys VARIANCE, and a worst case that
+# grows with the favourite's own price. 1230z is that worst case: UP 2 /
+# DOWN 1 paid 1.4100 for a 1.0000 payout.
+#
+# AND WE HAVE NO QUALIFYING SIGNAL. "Independently estimated" has to mean
+# independent of the price, because the mid IS the market's probability and
+# weighting toward it carries no information the price does not already
+# hold. The only outside signal in our recordings is top-of-book size
+# imbalance, and `analysis/l5/issue195/inventory_weighting_compare.py`
+# measures it directly: where imbalance DISAGREES with the mid it calls the
+# direction correctly 14.0% of the time in sample and 20.1% out of sample.
+# It is strongly ANTI-predictive -- resting size is supply of liquidity and
+# the market trades through it. Weighted by it, favourite accumulation was
+# the worst of five variants in both samples (-0.1573 against balanced's
+# -0.0774 per attempt out of sample) and doubled the worst case.
+#
+# So this function PRICES the action and refuses it for want of a signal,
+# rather than the engine being structurally unable to consider it. When a
+# calibrated independent estimate exists, pass it and the same arithmetic
+# admits the trade.
+
+#: How much better than balanced an unequal round must look, per contract,
+#: before taking directional risk. Unequal inventory must EARN its variance.
+WEIGHT_MIN_EDGE_USD = D("0.01")
+
+#: A probability estimate must beat the market's own mid by at least this
+#: much to count as information. Below it, we are paying spread to express
+#: the price's own opinion.
+WEIGHT_MIN_EDGE_PROB = D("0.05")
+
+
+def weighted_inventory_decision(*, market: Any, favoured_side: Any,
+                                n_favoured: Any, n_other: Any,
+                                up_own_px: Any, down_own_px: Any,
+                                p_up_independent: Any = None,
+                                bid: Any, ask: Any,
+                                exposure_headroom_usd: Any,
+                                min_edge_usd: Any = None,
+                                min_edge_prob: Any = None
+                                ) -> Dict[str, Any]:
+    """Is UNEQUAL inventory justified? Read-only. Refuses without a signal.
+
+    `p_up_independent` is a probability of UP from a source INDEPENDENT of
+    this book's price. None means we have none, which is the current state
+    of the evidence, and the answer is then no -- not because unequal
+    inventory is forbidden but because nothing distinguishes it from paying
+    spread to repeat the market's own opinion.
+
+    Returns `{"take": bool, "reason": str, ...}` with the balanced
+    alternative always priced alongside, so the comparison is on the record.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, take=False, reason=reason,
+                    market=(None if market is None else str(market)))
+
+    nf, no_ = _d(n_favoured), _d(n_other)
+    u, dn = _d(up_own_px), _d(down_own_px)
+    b, a = _d(bid), _d(ask)
+    room = _d(exposure_headroom_usd)
+    floor = (_d(min_edge_usd) if min_edge_usd is not None
+             else WEIGHT_MIN_EDGE_USD)
+    pfloor = (_d(min_edge_prob) if min_edge_prob is not None
+              else WEIGHT_MIN_EDGE_PROB)
+    side = str(favoured_side).upper() if favoured_side is not None else None
+
+    if nf is None or no_ is None or nf <= 0 or no_ <= 0:
+        return no("WEIGHTS_UNREADABLE")
+    if u is None or dn is None or u <= 0 or dn <= 0:
+        return no("LEG_PRICES_UNREADABLE")
+    if b is None or a is None or a <= b:
+        return no("BOOK_NOT_TWO_SIDED")
+    if room is None:
+        return no("EXPOSURE_BUDGET_UNREADABLE")
+    if side not in (TS.UP, TS.DOWN):
+        return no("FAVOURED_SIDE_UNREADABLE")
+    if nf == no_:
+        return no("NOT_AN_UNEQUAL_ROUND")
+
+    n_up, n_dn = ((nf, no_) if side == TS.UP else (no_, nf))
+    spend = (n_up * u) + (n_dn * dn)
+    # exact binary payouts, both outcomes
+    if_up = (n_up * D(1)) - spend
+    if_dn = (n_dn * D(1)) - spend
+    worst, best = min(if_up, if_dn), max(if_up, if_dn)
+    # the BALANCED alternative at the same prices, always on the record
+    k = min(n_up, n_dn)
+    bal = (k * (D(1) - (u + dn))) if k > 0 else D(0)
+    mid = (b + a) / 2
+
+    rec: Dict[str, Any] = {
+        "market": (None if market is None else str(market)),
+        "favoured_side": side, "n_up": str(n_up), "n_dn": str(n_dn),
+        "up_own_px": str(u), "down_own_px": str(dn),
+        "spend_usd": str(spend.quantize(D("0.0001"))),
+        "if_up_wins_usd": str(if_up.quantize(D("0.0001"))),
+        "if_down_wins_usd": str(if_dn.quantize(D("0.0001"))),
+        "worst_case_usd": str(worst.quantize(D("0.0001"))),
+        "best_case_usd": str(best.quantize(D("0.0001"))),
+        "balanced_alternative_usd": str(bal.quantize(D("0.0001"))),
+        "market_implied_p_up": str(mid),
+        "exposure_headroom_usd": str(room),
+        "unequal_inventory_is_not_risk_free": True,
+        "labels": ("UNEQUAL INVENTORY, priced. An unequal round is a "
+                   "directional bet carried on top of a pair: under a fair "
+                   "market every leg earns only its own depth discount, so "
+                   "weighting adds variance rather than expectancy. It is "
+                   "admitted only on a probability estimate INDEPENDENT of "
+                   "this book's price, because the mid is already the "
+                   "market's own."),
+    }
+
+    # ---- capacity first, as everywhere else
+    if room < -worst:
+        return no("EXPOSURE_HEADROOM_BELOW_WORST_CASE", **rec)
+
+    # ---- the signal, or its absence
+    pi = _d(p_up_independent)
+    if pi is None:
+        return no("NO_INDEPENDENT_PROBABILITY_ESTIMATE", **rec)
+    if not (D(0) < pi < D(1)):
+        return no("INDEPENDENT_PROBABILITY_OUT_OF_RANGE", **rec)
+    rec["p_up_independent"] = str(pi)
+    edge_prob = pi - mid
+    rec["probability_edge_vs_mid"] = str(edge_prob.quantize(D("0.0001")))
+    # the estimate must favour the side we are overweighting, by enough
+    want_up = side == TS.UP
+    if (edge_prob > 0) != want_up:
+        return no("ESTIMATE_DISAGREES_WITH_THE_OVERWEIGHTED_SIDE", **rec)
+    if abs(edge_prob) < pfloor:
+        return no("PROBABILITY_EDGE_BELOW_FLOOR",
+                  min_edge_prob=str(pfloor), **rec)
+
+    # ---- expectancy under the INDEPENDENT estimate, not the mid
+    ev = (pi * if_up) + ((D(1) - pi) * if_dn)
+    rec["expectancy_usd"] = str(ev.quantize(D("0.0001")))
+    rec["expectancy_over_balanced_usd"] = str((ev - bal).quantize(D("0.0001")))
+    rec["min_edge_usd"] = str(floor)
+    if (ev - bal) <= floor:
+        return no("NO_ADVANTAGE_OVER_THE_BALANCED_ROUND", **rec)
+    return dict(rec, take=True, reason=None)
+
+
+# ================================= ONE CONTROLLER OVER THE WHOLE ACTION SET
+#
+# Phase 1 asked for a single controller responsible for opening,
+# accumulating, acquiring, completing, preserving, repricing, replenishing,
+# reducing and holding -- and explicitly for NO competing controllers or
+# duplicated decision logic.
+#
+# This is that entry point, and it is a DISPATCHER, not a third opinion. It
+# owns one thing only: which FAMILY of actions the current inventory state
+# puts us in. The pricing stays where it already lives and each is called at
+# most once:
+#
+#     holding something  -> `decide`                  (6 disposition actions)
+#     flat               -> `reopen_decision`         (OPEN / REPLENISH)
+#                        -> `weighted_inventory_decision` (the unequal ones)
+#
+# Nothing is re-derived here. If a figure appears in the record it was
+# returned by one of those three, and the pair ceilings, requote rules and
+# risk bounds they consult are unchanged.
+
+
+def decide_inventory(*, market: Any, held_side: Any = None, held_qty: Any = 0,
+                     rounds_used: Any = 0,
+                     disposition_kwargs: Optional[Mapping[str, Any]] = None,
+                     reopen_kwargs: Optional[Mapping[str, Any]] = None,
+                     weighting_kwargs: Optional[Mapping[str, Any]] = None
+                     ) -> Dict[str, Any]:
+    """The one controller. Dispatches by inventory state; prices nothing.
+
+    Returns a record whose `selected` is a member of `UNIFIED_ACTIONS`, or
+    None when no action is justified. `family` says which branch decided, so
+    a reader can always tell what question was actually asked.
+
+    WHY STATE AND NOT PREFERENCE DECIDES THE BRANCH. Holding an unmatched
+    leg and being flat are not competing options between which expectancy
+    can choose -- `EV(hold)` and `EV(complete)` are equal exactly, which is
+    why `decide` ranks on the worst case instead. What differs is the
+    QUESTION: with inventory the question is how to dispose of it, and flat
+    the question is whether to take any on. Ranking those against each other
+    would be comparing answers to different questions.
+
+    FAILS CLOSED. An unreadable state takes no action at all, and the
+    opening branch is refused rather than defaulted -- the safe direction
+    for ADDING exposure is to stop.
+    """
+    rec: Dict[str, Any] = {
+        "label": "L5_INVENTORY_DECISION",
+        "market": (None if market is None else str(market)),
+        "actions_available": list(UNIFIED_ACTIONS),
+        "labels": ("ONE controller over the whole action set. This is a "
+                   "dispatcher: it chooses the action FAMILY from inventory "
+                   "state and defers every price to `decide`, "
+                   "`reopen_decision` and `weighted_inventory_decision`, "
+                   "each called at most once. No figure here is re-derived "
+                   "and nothing here submits an order."),
+    }
+    hq = _d(held_qty)
+    if hq is None:
+        return dict(rec, family="UNREADABLE", selected=None,
+                    selected_reason="HELD_QTY_UNREADABLE")
+
+    # ---- HOLDING SOMETHING: dispose of it. `decide` owns this entirely.
+    if hq > 0:
+        if not disposition_kwargs:
+            return dict(rec, family="DISPOSITION", selected=None,
+                        selected_reason="DISPOSITION_INPUTS_MISSING")
+        try:
+            d = decide(market=market, held_side=held_side, held_qty=hq,
+                       **dict(disposition_kwargs))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(rec, family="DISPOSITION", selected=None,
+                        selected_reason="DISPOSITION_RAISED",
+                        detail=str(exc)[:160])
+        # MERGED, NOT NESTED. `decide`'s record is the one the tape, the
+        # heartbeat and `controller_preserves` already read, and a
+        # dispatcher is no reason to change its shape. It gains the family
+        # marker and keeps every key it had.
+        return dict(d, inventory_family="DISPOSITION",
+                    actions_available=list(UNIFIED_ACTIONS))
+
+    # ---- FLAT: should we take exposure on at all, and in what shape?
+    rec["family"] = "OPENING"
+    if not reopen_kwargs:
+        return dict(rec, selected=None,
+                    selected_reason="OPENING_INPUTS_MISSING")
+    try:
+        r = reopen_decision(market=market, rounds_used=rounds_used,
+                            **dict(reopen_kwargs))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return dict(rec, selected=None,
+                    selected_reason="REOPEN_DECISION_RAISED",
+                    detail=str(exc)[:160])
+    rec["reopen"] = r
+    if not r.get("reopen"):
+        return dict(rec, selected=None,
+                    selected_reason="REOPENING_NOT_JUSTIFIED:%s"
+                                    % (r.get("reason") or "UNSTATED"))
+
+    # the round is justified. BALANCED is the default shape and an unequal
+    # one must beat it on the record -- never the other way round.
+    try:
+        used = int(rounds_used)
+    except (TypeError, ValueError):
+        used = 0
+    base_action = OPEN if used <= 0 else REPLENISH
+
+    if weighting_kwargs:
+        try:
+            w = weighted_inventory_decision(market=market,
+                                            **dict(weighting_kwargs))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            w = {"take": False, "reason": "WEIGHTING_RAISED",
+                 "detail": str(exc)[:160]}
+        rec["weighting"] = w
+        if w.get("take"):
+            side = str(w.get("favoured_side") or "").upper()
+            heavier_is_favoured = _d(w.get("n_up")) is not None and (
+                (_d(w.get("n_up")) > _d(w.get("n_dn"))) == (side == TS.UP))
+            return dict(rec,
+                        selected=(ACCUMULATE_FAVORED if heavier_is_favoured
+                                  else ACQUIRE_UNFAVORED),
+                        selected_reason="UNEQUAL_ROUND_BEATS_BALANCED")
+
+    return dict(rec, selected=base_action,
+                selected_reason="BALANCED_ROUND_IS_JUSTIFIED")

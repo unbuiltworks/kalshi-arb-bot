@@ -5,15 +5,25 @@ Reconstructed from the venue tape of **2026-11-07 12:30z**, replayed against
 
 ## 1. What actually happened, and what did not
 
-| time | event | economics |
+| time | venue event | coid |
 |---|---|---|
-| 12:30:21 | round 0 opens UP 0.4750 / DOWN 0.4800 | pair 0.9550 |
-| 12:30:49 | round 0 **pairs** | **+$0.0450 locked** |
+| 12:30:27 | **DOWN 0.5000 fills** | `l5f-b195e736…` |
+| 12:30:49 | **UP 0.4500 fills** — round 0 pairs at **0.9500**, +$0.0500 | `l5f-83557f64…` |
 | 12:32:54 | round 1 opens UP 0.4600 / DOWN 0.4900 | — |
-| 12:33:57 | round 1 **UP fills 1** | — |
-| 12:34:58 | round 1 DOWN cancelled, never filled | — |
-| 12:45:00 | settlement, UP unmatched | **−$0.4550** |
-| | **window settled** | **−$0.4100** |
+| 12:33:57 | **UP 0.4600 fills** | `l5f-fc3f9809…` |
+| 12:34:58 | DOWN 0.4900 cancelled, zero fill (UP 0.3500 likewise) | `l5f-19329b90…` |
+| 12:45:57 | settlement, `yes_value 0.0000` — DOWN won | — |
+| | UP 2 @ basis 0.9100, DOWN 1 @ 0.5000; payout 1.0000 − spend 1.4100 | **−$0.4100** |
+
+**Two decompositions, both correct, and the difference is a convention.** At
+the order level the pair is 0.9500 (+$0.0500) and the stranded leg is the UP
+at 0.4600 (−$0.4600). The settlement record uses **average basis** — UP
+averages 0.4550 — so it reads matched 0.9550 (+$0.0450), residual −$0.4550.
+Both sum to **−$0.4100**, which is the only figure that is money. An earlier
+draft of this document quoted "UP 0.4750 / DOWN 0.4800" for round 0; those
+prices appear in no venue record and were back-derived from the 0.9550
+average. The table above is the venue's own, cross-checked against
+`WINDOW_1230Z_RESULT.md` and PR #207's independent fixture.
 
 **Nobody broke a rule and nothing malfunctioned.** The owner's reading of
 the mechanism was exactly right:
@@ -212,3 +222,45 @@ parameter change. Three candidates, in order of expected information:
 3. **Taker completion**, which the same table shows caps the single's cost at
    −$0.0542 and is the only measured action that moves the sign. Disabled by
    owner order; priced counterfactually only.
+
+## 7. Depth sweep: is any configuration better than the deployed one?
+
+The A/B/C table above ran at the deployed `depth_ticks=2`. Sweeping depth for
+the deployed policy (B) and the risk-budgeted one (C), net per window:
+
+| d | B in-sample | **C in-sample** | B out-of-sample | **C out-of-sample** |
+|---|---|---|---|---|
+| 0 | — | −0.0040 | −0.2112 | −0.0127 |
+| 1 | −0.2230 | +0.0160 | −0.2450 | −0.0177 |
+| **2** ⬅ deployed | −0.2790 | +0.0360 | −0.1738 | **+0.0008** |
+| **3** | −0.3250 | **+0.0560** | −0.1935 | **+0.0054** |
+| 4 | −0.4270 | −0.0660 | −0.1050 | +0.0019 |
+| 5 | −0.2140 | −0.0500 | −0.0735 | −0.0154 |
+| 6 | −0.3310 | −0.0640 | −0.0327 | +0.0015 |
+
+**Two things this settles.**
+
+**(a) The deployed repeated-round policy is negative at every depth.** B
+ranges −0.0327 to −0.2450 per window out of sample. Depth is not what is
+wrong with it; the unpriced reopening is.
+
+**(b) `d=3` is the best depth for C in both samples** — +0.0560 in sample and
++0.0054 out of sample, against the deployed `d=2`'s +0.0360 and +0.0008. It
+also opens *more* rounds (17 against 15 out of sample) for *more* pairs and
+the same 2 unmatched legs, which is the shape the mandate asked for: more
+completed pairs without sacrificing pair economics.
+
+**But the effect is not cleanly separated from noise, and saying otherwise
+would be overclaiming.** The out-of-sample curve is non-monotonic — `d=4`
++0.0019, `d=5` −0.0154, `d=6` +0.0015 — so neighbouring depths differ by less
+than the scatter between them. Thirteen correlated windows cannot resolve a
+half-cent-per-window difference.
+
+**No variable was changed.** `L5_TS_DEPTH_TICKS` is a deployed Railway
+variable and the freeze prohibits touching it. `d=3` is recorded here as a
+**candidate for owner decision**, to be confirmed by live measurement rather
+than adopted on this table. Reproduce with
+`analysis/l5/issue195/round_strategy_compare.py` (set `DEPTH`).
+
+At +0.0054 per window, `d=3` out of sample is **$0.52/day** against the
+$480/day target. It is a better configuration, not a route to the target.

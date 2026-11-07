@@ -8686,9 +8686,18 @@ class Runner:
             _qmk = getattr(self, "_requote_queue_ahead_fn", None)
             _qfn = (_qmk(slug, comp) if callable(_qmk) else None)
             vg = getattr(self.executor, "validation_gates", None)
-            rec = UDP.decide(
+            # ONE CONTROLLER. `decide_inventory` dispatches over the whole
+            # action set -- the six dispositions plus OPEN / REPLENISH /
+            # ACCUMULATE_FAVORED / ACQUIRE_UNFAVORED -- and defers every
+            # price to `decide`, `reopen_decision` and
+            # `weighted_inventory_decision`. Holding inventory puts us in
+            # the disposition family, whose record it returns MERGED, so
+            # the tape, the heartbeat and `controller_preserves` read
+            # exactly the keys they always did.
+            rec = UDP.decide_inventory(
                 market=slug, held_side=held,
                 held_qty=self.store.position(slug, held),
+                disposition_kwargs=dict(
                 held_cost_usd=legs.get(held),
                 deficient_qty=self.store.position(slug, comp),
                 deficient_cost_usd=legs.get(comp),
@@ -8715,7 +8724,7 @@ class Runner:
                 # crossing actions are then still PRICED, because the whole
                 # point of the record is to state what declining them
                 # costs, but they can never be selected.
-                taker_enabled=self._taker_route_open())
+                taker_enabled=self._taker_route_open()))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

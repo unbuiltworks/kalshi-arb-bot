@@ -2,14 +2,27 @@
 
 WHAT HAPPENED, from the venue tape of 2026-11-07 12:30z:
 
-    12:30:21  round 0 opens   UP 0.4750 / DOWN 0.4800   pair 0.9550
-    12:30:49  round 0 PAIRS                             +$0.0450 locked
-    12:32:54  round 1 opens   UP 0.4600 / DOWN 0.4900
-    12:33:57  round 1 UP FILLS 1
-    12:34:58  round 1 DOWN cancelled, never filled
-    12:45:00  settlement      UP unmatched              -$0.4550
+    12:30:27  DOWN 0.5000 FILLS      l5f-b195e7360f86e0e4b6c9363a
+    12:30:49  UP   0.4500 FILLS      l5f-83557f64dd82a6809828ef7d
+              round 0 PAIRS at 0.9500                   +$0.0500
+    12:32:54  round 1 opens UP 0.4600 / DOWN 0.4900
+    12:33:57  UP   0.4600 FILLS      l5f-fc3f9809135cd723b717ab4f
+    12:34:58  DOWN 0.4900 cancelled, zero fill
+              (UP 0.3500 also cancelled, zero fill)
+    12:45:57  settlement, yes_value 0.0000 -- DOWN won
     ------------------------------------------------------------
-              window settled                            -$0.4100
+              UP 2 @ basis 0.9100, DOWN 1 @ 0.5000
+              payout 1.0000 - spend 1.4100  =       -$0.4100
+
+TWO DECOMPOSITIONS, BOTH CORRECT, AND THE DIFFERENCE IS A CONVENTION. At
+the ORDER level the pair is DOWN 0.5000 + UP 0.4500 = 0.9500 (+$0.0500) and
+the stranded leg is the UP at 0.4600 (-$0.4600). The settlement record uses
+AVERAGE BASIS -- UP averages (0.45+0.46)/2 = 0.4550 -- so it reads matched
+0.9550 (+$0.0450) and residual 0.4550 (-$0.4550). Both sum to -$0.4100,
+which is the only figure that is money. Earlier drafts of this file quoted
+"UP 0.4750 / DOWN 0.4800" for round 0; those prices are in no venue record
+and were back-derived from the 0.9550 average. The order prices above are
+the venue's.
 
 NOBODY MADE A MISTAKE AND NOBODY BROKE A RULE. `L5_TS_ROUND_ALLOCATIONS=1`
 splits the CASH ENVELOPE across cycles; it never limited opening rounds.
@@ -35,11 +48,11 @@ from tests import test_l5_live_execution as H
 
 SLUG = "cpc-btc-updown-15m-2026-11-07-1230z"
 
-#: ROUND 0, at the prices the window actually quoted. It PAIRED.
-PLAN0 = {"pair_cost": "0.9550",
-         "legs": [{"side": "UP", "price": "0.4750", "qty": "1",
+#: ROUND 0, at the venue's own prices. It PAIRED at 0.9500.
+PLAN0 = {"pair_cost": "0.9500",
+         "legs": [{"side": "UP", "price": "0.4500", "qty": "1",
                    "mode": "MAKER"},
-                  {"side": "DOWN", "price": "0.4800", "qty": "1",
+                  {"side": "DOWN", "price": "0.5000", "qty": "1",
                    "mode": "MAKER"}]}
 #: ROUND 1, at the prices that lost the window. The UP filled alone.
 PLAN1 = {"pair_cost": "0.9500",
@@ -55,6 +68,7 @@ BOOK = {"bid": D("0.4800"), "ask": D("0.4900")}
 def base(**kw):
     """The pure decision's inputs for 1230z round 1, overridable."""
     out = dict(market=SLUG, rounds_used=1,
+               # the settlement record's average-basis figure
                locked_pair_pnl_usd=D("0.0450"),
                worst_leg_own_px=D("0.4900"), qty=D("1"),
                bid=BOOK["bid"], ask=BOOK["ask"], tick=D("0.01"),
@@ -168,6 +182,33 @@ def test_greater_depth_raises_the_edge_the_identity_predicts():
         if prev is not None:
             assert edge > prev
         prev = edge
+
+
+@pytest.mark.parametrize("kw,why", [
+    ({"bid": None}, "BOOK_NOT_TWO_SIDED"),
+    ({"ask": None}, "BOOK_NOT_TWO_SIDED"),
+    ({"bid": D("0.50"), "ask": D("0.49")}, "BOOK_NOT_TWO_SIDED"),
+    ({"tick": None}, "TICK_UNKNOWN"),
+    ({"qty": D("0")}, "ROUND_SIZE_OR_PRICE_UNREADABLE"),
+])
+def test_the_structural_reads_apply_to_the_FIRST_round_too(kw, why):
+    """Round 0 is exempt from the ECONOMICS, not from being readable.
+
+    `decide_inventory` reports this verdict as an ACTION, and "OPEN into a
+    one-sided book" is not one. The economic exemption for the first round
+    is deliberate -- the executor's own cash, deficit and exposure gates
+    own the first leg -- but it must not become an exemption from reading
+    the book at all.
+    """
+    r = UD.reopen_decision(**base(rounds_used=0, **kw))
+    assert r["reopen"] is False, (kw, r.get("reason"))
+    assert r["reason"] == why
+
+
+def test_the_first_round_says_so_when_it_skips_the_economics():
+    r = UD.reopen_decision(**base(rounds_used=0))
+    assert r["reopen"] is True
+    assert r["economics_not_evaluated_for_the_first_round"] is True
 
 
 def test_the_first_round_is_never_gated():
@@ -479,14 +520,19 @@ def test_a_raising_decision_refuses_rather_than_opens(rig):
 
 
 def test_the_gate_reports_locked_pair_pnl_without_spending_it(rig):
-    """Round 0 paired at 0.9550 for +$0.0450. It must appear and not count."""
+    """Round 0 paired at 0.9500 for +$0.0500. It must appear and not count.
+
+    The venue's own fill prices: DOWN 0.5000 at 12:30:27, UP 0.4500 at
+    12:30:49. The settlement record's 0.9550 is the same money at AVERAGE
+    basis once the second UP filled at 0.4600; see the module docstring.
+    """
     st = rig["store"]
-    st.apply_fill(SLUG, "UP", D("1"), D("0.4750"), basis="OWN")
-    st.apply_fill(SLUG, "DOWN", D("1"), D("0.4800"), basis="OWN")
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4500"), basis="OWN")
+    st.apply_fill(SLUG, "DOWN", D("1"), D("0.5000"), basis="OWN")
     locked = rig["ex"].probe_locked_pair_pnl(SLUG)
-    assert locked == D("0.0450")
+    assert locked == D("0.0500")
     r = gate(rig["ex"], 1, PLAN1)
-    assert D(r["locked_pair_pnl_usd"]) == D("0.0450")
+    assert D(r["locked_pair_pnl_usd"]) == D("0.0500")
     assert r["reopen"] is False, "and it still buys nothing"
 
 
