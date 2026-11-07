@@ -103,7 +103,7 @@ def test_1230z_round_one_is_PERMITTED_on_the_corrected_numbers():
     r = UD.reopen_decision(**base())
     assert r["reopen"] is True
     # 0.727*0.05 + 0.273*0
-    assert D(r["expectancy_usd"]) == D("0.0364")
+    assert D(r["expectancy_usd"]) == D("0.0299")
     assert D(r["pair_edge_usd"]) == D("0.0500")
 
 
@@ -131,22 +131,32 @@ def test_the_record_always_prices_itself_either_way():
     r = UD.reopen_decision(**base())
     # how bad an unmatched leg would have to be to make this round marginal
     assert D(r["breakeven_single_outcome_usd"]) == D("-0.0965")
-    assert D(r["single_outcome_usd_per_contract"]) == D("0")
+    # and the MEASURED figure it is judged against: 1.24M residual
+    # contracts on the repaired union
+    assert D(r["single_outcome_usd_per_contract"]) == D("-0.0236")
+    assert D(r["single_outcome_usd_per_contract"]) > \
+        D(r["breakeven_single_outcome_usd"]), "measured is inside break-even"
 
 
 def test_the_priors_come_from_real_fills_not_from_a_sampling_rule():
-    """Our own orders for pairing; L5's own residuals for the single."""
+    """Our own orders for pairing; the REPAIRED union for the single leg."""
     assert UD.REOPEN_P_PAIR == D("0.727")
     assert UD.REOPEN_P_SINGLE == D("0.273")
-    # ZERO, not L5's measured +0.0367: banking an edge we have not
-    # reproduced ourselves would be assuming the conclusion, and zero is
-    # what the EV identity gives for a leg bought at a fair price.
-    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
+    # measured on 1,240,600 residual contracts across 4,720 COMPLETE
+    # btc15m windows after the dataset repair -- NOT the zero hypothesis,
+    # which the repair showed to be optimistic rather than conservative
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("-0.0236")
 
 
-def test_the_conservative_choice_is_below_what_was_measured():
-    """Zero is stricter than L5's +0.0367, so nothing is banked."""
-    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0.0367")
+def test_the_measured_single_leg_outcome_is_a_LOSS():
+    """The small-sample +0.0367 was selection: those 186 windows were the
+    quiet ones. On 60x the sample a residual loses 2.4 cents."""
+    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0")
+    assert UD.REOPEN_SINGLE_OUTCOME_USD > D("-0.05")
+
+
+def test_it_still_sits_far_above_the_superseded_PROVEN_artefact():
+    assert UD.REOPEN_SINGLE_OUTCOME_USD > D("-0.2440") * 9
 
 
 def test_the_taker_disposition_is_not_assumed_available():
@@ -156,7 +166,7 @@ def test_the_taker_disposition_is_not_assumed_available():
     execute. Zero is the EV identity's answer for a MAKER-only hold, which
     is the authorized configuration.
     """
-    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("-0.0236")
     r = UD.reopen_decision(**base())
     assert "maker" in r["prior_source"].lower() or \
         "taker" in r["prior_source"].lower()
@@ -175,7 +185,7 @@ def test_locked_pair_profit_never_changes_the_decision(locked):
     r = UD.reopen_decision(**base(locked_pair_pnl_usd=D(locked)))
     # the VERDICT is whatever the round's own economics say; what must never
     # change is that it does not move with the locked profit.
-    assert D(r["expectancy_usd"]) == D("0.0364")
+    assert D(r["expectancy_usd"]) == D("0.0299")
     assert D(r["locked_pair_pnl_usd"]) == D(locked)
 
 
@@ -701,7 +711,7 @@ def test_the_gate_reports_locked_pair_pnl_without_spending_it(rig):
     assert D(r["locked_pair_pnl_usd"]) == D("0.0500")
     # reported and excluded: the expectancy is the ROUND's own, unchanged by
     # whatever has already been locked
-    assert D(r["expectancy_usd"]) == D("0.0364")
+    assert D(r["expectancy_usd"]) == D("0.0299")
 
 
 def test_locked_pnl_is_zero_with_no_matched_inventory(rig):

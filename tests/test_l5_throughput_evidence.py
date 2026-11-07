@@ -62,12 +62,28 @@ def base(**over):
 
 # ================================ 1. THE PRIORS ARE THE MEASURED ONES
 
-def test_the_single_leg_outcome_is_no_longer_the_PROVEN_artefact():
-    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
+#: The repaired union supersedes the small-sample figures above: 4,720
+#: COMPLETE windows, 1,240,600 residual contracts, basis 0.3205.
+L5_REPAIRED_RESIDUAL_PER_CONTRACT = D("-0.0236")
+L5_REPAIRED_PAIR_PER_CONTRACT = D("0.0350")
+
+
+def test_the_single_leg_outcome_is_the_REPAIRED_measurement():
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == L5_REPAIRED_RESIDUAL_PER_CONTRACT
     assert UD.REOPEN_SINGLE_OUTCOME_USD > D("-0.2440"), \
-        "the superseded recorded-book constant"
-    assert UD.REOPEN_SINGLE_OUTCOME_USD < L5_RESIDUAL_PNL_PER_CONTRACT, \
-        "and strictly more conservative than what L5 actually realised"
+        "far above the superseded recorded-book artefact"
+    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0"), \
+        "and a LOSS, which the small sample had hidden"
+
+
+def test_the_matched_edge_is_stable_across_every_cut_ever_measured():
+    """Which is why the repair is believed rather than its convenient half.
+
+    +0.0356 (501 windows), +0.0359 (186 determinable), +0.0350 (4,720
+    COMPLETE after repair).
+    """
+    for v in (L5_PAIR_PNL_PER_CONTRACT, L5_REPAIRED_PAIR_PER_CONTRACT):
+        assert D("0.034") < v < D("0.036"), v
 
 
 def test_the_pairing_rate_is_our_own_orders_not_the_touch_crossing_rule():
@@ -124,7 +140,7 @@ def test_our_authorized_scale_cannot_reach_the_target_on_this_edge():
 def test_a_repeated_round_is_now_permitted_at_the_deployed_depth():
     r = UD.reopen_decision(**base())
     assert r["reopen"] is True
-    assert D(r["expectancy_usd"]) == D("0.0364")
+    assert D(r["expectancy_usd"]) == D("0.0299")
 
 
 def test_the_old_constant_still_forbids_it_if_passed_back_in():

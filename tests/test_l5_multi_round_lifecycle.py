@@ -246,24 +246,23 @@ def test_an_unmatched_leg_settles_at_zero_or_one_never_in_between():
         assert D(r["if_down_wins_usd"]) == D("-0.4100")
 
 
-def test_the_zero_residual_expectancy_is_a_NEUTRAL_HYPOTHESIS():
-    """Item 3, pinned in code.
+def test_the_residual_prior_is_MEASURED_not_a_neutral_hypothesis():
+    """The zero hypothesis is retired, and in the direction that costs us.
 
-    Zero is not a claim that our maker fills are profitable. It is the EV
-    identity's own answer for a leg bought at a fair price -- and it is
-    strictly BELOW the +$0.0263 to +$0.0367 per contract that L5's own
-    capture-consistent residuals realised, so nothing is banked.
+    Zero was adopted when the only L5 sample available put a residual at
+    +$0.026..+$0.037, so zero looked conservative. The dataset repair --
+    4,720 COMPLETE windows, 1,240,600 residual contracts -- puts it at
+    -$0.0236, which makes zero OPTIMISTIC. The measurement replaces it.
 
-    Our own settled residuals, by contrast, lost 4 of 5. n=5 cannot refute
-    20,069 contracts, and 20,069 contracts of someone else's fills cannot
-    establish ours.
+    Our own settled residuals lost 4 of 5. n=5 still establishes nothing,
+    but it no longer disagrees with the large sample.
     """
     from src import l5_unmatched_disposition as UD
-    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("0")
-    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0.0263"), \
-        "below the lower of the two L5 estimates: nothing banked"
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("-0.0236")
+    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("0"), \
+        "a residual LOSES; zero would have been optimistic"
     assert UD.REOPEN_SINGLE_OUTCOME_USD > D("-0.2440"), \
-        "and above the superseded PROVEN artefact"
+        "and far above the superseded PROVEN artefact"
     # the WORST case is still the full leg, unchanged by the neutral prior
     r = UD.reopen_decision(
         market="m", rounds_used=1, worst_leg_own_px=D("0.4900"),

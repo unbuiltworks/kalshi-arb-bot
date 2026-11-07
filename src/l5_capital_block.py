@@ -143,3 +143,117 @@ def capital_block_record(*, reason: Any, side: str, price: Any, qty: Any,
         "additional_obligation_usd follows the cash gate's own convention, "
         "a dollar a share for a BUY_SHORT leg.")
     return out
+
+
+# ================== HOW MUCH OF THE COMMITTED CASH IS ACTUALLY AT RISK
+#
+# THE QUESTION THIS ANSWERS, and it is the one the throughput argument turns
+# on. The cash gate charges `cash_committed`, which is every unsettled
+# fill's outlay. It does not distinguish a MATCHED pair from an UNMATCHED
+# leg, and economically those are nothing alike:
+#
+#   a matched UP+DOWN pair redeems EXACTLY $1.00 whichever way the window
+#   resolves, so its worst case is `1 - basis` -- a GAIN. It cannot lose.
+#
+#   an unmatched leg redeems $1.00 or $0.00, so its worst case is its whole
+#   basis.
+#
+# Both are the same number to `cash_committed`, because that gate measures
+# CASH OUT and the cash really has left the account until settlement. That
+# is correct for a cash bound. It is the wrong shape for a WORST-CASE
+# EXPOSURE bound, and when a $1 authorization meant as the latter is
+# configured onto the former, one matched pair at a 0.95 basis consumes 95%
+# of it while carrying no risk at all.
+#
+# MEASURED against the real executor: with $1 on the cash gate the engine
+# places 2 orders and completes 1 pair, then refuses
+# `CASH_COMMITMENT:1.3766>1.00`. With the same $1 on the WORST-CASE DEFICIT
+# gate and the cash gate left generous, it completes FOUR pairs and the risk
+# gate never binds -- because four matched pairs carry ~zero worst case.
+#
+# THIS FUNCTION CHANGES NO LIMIT AND NO BEHAVIOUR. It reports the split so
+# the difference is visible in the record, because the choice between a cash
+# bound and a risk bound is the owner's and should be made against numbers.
+
+
+def matched_cash_split(*, positions: Any, leg_cost: Any,
+                       up_key: str = "UP", down_key: str = "DOWN"
+                       ) -> Dict[str, Any]:
+    """Split committed cash into its risk-free and at-risk parts.
+
+    `positions` and `leg_cost` are the store's own per-side mappings for ONE
+    market. Returns a record, or `readable: False` with a reason -- never a
+    guess, because an unreadable book must not be reported as risk-free.
+
+    The split is exact and needs no probability:
+
+        matched   = min(|up|, |down|)      pairs, worst case = 1 - basis
+        residual  = |up - down|            one-sided, worst case = basis
+    """
+    def no(reason: str) -> Dict[str, Any]:
+        return {"readable": False, "reason": reason}
+
+    # AN ABSENT KEY MEANS FLAT; A PRESENT-BUT-UNREADABLE ONE MEANS UNKNOWN.
+    # Collapsing those would let `{"UP": None}` be reported as a risk-free
+    # book, which is the one answer this function must never give on a
+    # book it cannot read.
+    def read(src: Any, k: str) -> Any:
+        m = src or {}
+        if k not in m:
+            return D(0)
+        v = m.get(k)
+        if v is None:
+            return None
+        return _d(v)
+
+    try:
+        up, dn = read(positions, up_key), read(positions, down_key)
+        cu, cd = read(leg_cost, up_key), read(leg_cost, down_key)
+    except BaseException:                                      # noqa: BLE001
+        return no("POSITIONS_OR_COST_UNREADABLE")
+    if up is None or dn is None or cu is None or cd is None:
+        return no("POSITIONS_OR_COST_UNREADABLE")
+    aup, adn = abs(up), abs(dn)
+    if aup < 0 or adn < 0:
+        return no("NEGATIVE_QUANTITY")
+    committed = cu + cd
+    matched = min(aup, adn)
+    residual = abs(aup - adn)
+
+    if matched > 0 and (aup == 0 or adn == 0):
+        return no("MATCHED_WITHOUT_BOTH_SIDES")
+    # per-share basis on each side, needed to price each part separately
+    bu = (cu / aup) if aup > 0 else D(0)
+    bd = (cd / adn) if adn > 0 else D(0)
+    pair_basis = bu + bd if matched > 0 else D(0)
+    matched_cash = matched * pair_basis
+    residual_basis = bu if aup > adn else bd
+    residual_cash = residual * residual_basis
+
+    # the worst case of each part, which is what a RISK bound should charge
+    matched_worst = matched * (D(1) - pair_basis)    # a gain, or a loss if
+    #                                                 the pair cost over $1
+    residual_worst = -residual_cash                  # the whole basis
+    return {
+        "readable": True,
+        "committed_cash_usd": str(committed.quantize(D("0.0001"))),
+        "matched_qty": str(matched),
+        "matched_pair_basis": str(pair_basis.quantize(D("0.0001"))),
+        "matched_cash_usd": str(matched_cash.quantize(D("0.0001"))),
+        "matched_worst_case_usd": str(matched_worst.quantize(D("0.0001"))),
+        "residual_qty": str(residual),
+        "residual_basis": str(residual_basis.quantize(D("0.0001"))),
+        "residual_cash_usd": str(residual_cash.quantize(D("0.0001"))),
+        "residual_worst_case_usd": str(residual_worst.quantize(D("0.0001"))),
+        # the two numbers the decision needs, side by side
+        "cash_bound_charges_usd": str(committed.quantize(D("0.0001"))),
+        "risk_bound_charges_usd": str(residual_cash.quantize(D("0.0001"))),
+        "risk_free_cash_usd": str(matched_cash.quantize(D("0.0001"))),
+        "labels": ("A matched pair redeems $1.00 either way, so its worst "
+                   "case is a GAIN and a risk bound charges it nothing; the "
+                   "cash gate charges its full outlay because the cash has "
+                   "genuinely left the account until settlement. Both are "
+                   "right for what they measure. Reported so the choice "
+                   "between them is made against numbers. NOTHING HERE "
+                   "RELEASES ANY RESERVATION OR CHANGES ANY LIMIT."),
+    }

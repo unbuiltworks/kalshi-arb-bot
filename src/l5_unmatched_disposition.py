@@ -645,46 +645,47 @@ def decide(*, market: Any, held_side: str, held_qty: Any,
 REOPEN_P_PAIR = D("0.727")
 REOPEN_P_SINGLE = D("0.273")
 
-#: WHAT AN UNMATCHED LEG IS ACTUALLY WORTH -- and the correction that
-#: unblocks throughput.
+#: WHAT AN UNMATCHED LEG IS ACTUALLY WORTH, measured on the REPAIRED
+#: dataset. This constant has now been wrong twice in opposite directions
+#: and both errors came from incomplete data rather than from bad algebra.
 #:
-#: THIS CONSTANT WAS -0.2440 AND THAT WAS WRONG. It came from `hold $` in
-#: QUEUE_DEPLETION_FINDINGS.md, measured on recorded books under PROVEN
-#: fills. A PROVEN fill is one where the opposite touch crossed our price,
-#: so every leg in that sample filled because the market moved against it.
-#: The resulting "adverse-selection constant" measured the sampling rule,
-#: not the market, and at 6.4x the pair edge it refused every reopening at
-#: the deployed depth -- turning a gate that was supposed to PRICE repeated
-#: rounds into one that forbade them.
+#: FIRST IT WAS -0.2440, from `hold $` in QUEUE_DEPLETION_FINDINGS.md:
+#: recorded books under PROVEN fills, where a leg counts filled only when
+#: the opposite touch CROSSED our price. Every leg in that sample filled
+#: because the market moved against it, so the figure measured the sampling
+#: rule. At 6.4x the pair edge it refused every reopening.
 #:
-#: L5's OWN FILLS SAY OTHERWISE, and the sample is not close:
+#: THEN IT WAS 0, from L5's own fills -- but on the 186 windows of
+#: `data/l5/raw/activity.jsonl` whose redemption identity held, and that
+#: file was itself missing rows. It put a residual contract at +0.026 to
+#: +0.037, so zero looked conservative.
 #:
-#:     matched   121,837 contracts  basis 0.9641   +0.0359 / pair
-#:     residual   20,069 contracts  basis 0.3489   +0.0367 / contract
-#:                                  won 38.6% against a 34.9% basis
+#: THE REPAIRED UNION SAYS OTHERWISE. `analysis/l5/issue206/
+#: l5_repair_dataset.py` unions every capture in the repository --
+#: `activity_gap.jsonl.gz` alone adds 691,077 rows the offset-paged file
+#: had lost -- giving 902,016 deduped trades against 70,435, and 4,720
+#: COMPLETE btc15m windows against 408. Cross-checked against the separate
+#: `/trades` endpoint capture: 10,183 rows, 100% present, none missing.
 #:
-#: measured over the 186 BTC15m windows in `data/l5/raw/activity.jsonl`
-#: where the redemption equals one side's quantity exactly, so the OUTCOME
-#: is directly determinable and nothing is attributed. The matched figure
-#: there (+0.0359) matches the full 501-window sample (+0.0356), which is
-#: why the subset is taken as representative. Parts sum to within 4% of the
-#: observed net.
+#:     matched   5,089,010 contracts  basis 0.9650  +0.0350 / pair
+#:     residual  1,240,600 contracts  basis 0.3205  -0.0236 / contract
 #:
-#: An unmatched leg is therefore roughly EV-NEUTRAL, which is also what this
-#: module's own EV identity says: `EV(hold) = EV(complete) = h(1-p) - c`
-#: exactly, so a leg bought at a fair price carries no expectancy penalty
-#: and only its WORST CASE differs. That identity was established here first
-#: and then overridden by the PROVEN artefact.
+#: So a residual LOSES about 2.4 cents a contract, and the +0.026..+0.037
+#: that the small sample showed was selection: those 186 windows were the
+#: quiet ones. The matched figure is unchanged across every cut ever
+#: measured (+0.0356, +0.0359, +0.0350), which is why the repair is
+#: believed rather than the convenient half of it.
 #:
-#: SET TO ZERO, NOT TO L5's +0.0367. Banking an edge we have not reproduced
-#: ourselves would be assuming the conclusion; zero is the identity's own
-#: answer and is strictly more conservative than the measurement.
+#: THIS IS THE MEASURED VALUE, NOT A NEUTRAL PRIOR. Zero is no longer
+#: conservative -- it is optimistic -- so the hypothesis is retired in
+#: favour of the measurement, over a sample 60x larger than the one that
+#: produced zero.
 #:
-#: THE WORST CASE IS UNCHANGED AND STILL BINDS. Expectancy decides whether a
-#: round is worth taking; capacity decides whether we can afford it being
-#: wrong, and that test still reserves `qty * the dearer leg` against the
-#: exposure headroom and the daily loss room. Nothing here relaxes a limit.
-REOPEN_SINGLE_OUTCOME_USD = D("0")
+#: Throughput survives it. At the deployed d=2:
+#:     E = 0.727*0.0500 + 0.273*(-0.0236) = +0.0299, above the floor.
+#: The gate still prices repeated rounds rather than forbidding them, and
+#: the WORST CASE is untouched: capacity still reserves the whole leg.
+REOPEN_SINGLE_OUTCOME_USD = D("-0.0236")
 
 #: How much better than break-even an incremental round must look before it
 #: is worth opening fresh exposure. One tick on a one-contract pair.
