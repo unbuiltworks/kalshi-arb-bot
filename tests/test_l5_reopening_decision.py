@@ -1,0 +1,519 @@
+"""The 1230z window, as a permanent fixture, and the decision it was missing.
+
+WHAT HAPPENED, from the venue tape of 2026-11-07 12:30z:
+
+    12:30:21  round 0 opens   UP 0.4750 / DOWN 0.4800   pair 0.9550
+    12:30:49  round 0 PAIRS                             +$0.0450 locked
+    12:32:54  round 1 opens   UP 0.4600 / DOWN 0.4900
+    12:33:57  round 1 UP FILLS 1
+    12:34:58  round 1 DOWN cancelled, never filled
+    12:45:00  settlement      UP unmatched              -$0.4550
+    ------------------------------------------------------------
+              window settled                            -$0.4100
+
+NOBODY MADE A MISTAKE AND NOBODY BROKE A RULE. `L5_TS_ROUND_ALLOCATIONS=1`
+splits the CASH ENVELOPE across cycles; it never limited opening rounds.
+`acc_max_rounds()` does, and `probe_round` walked to the first incomplete
+round and asked nothing else. The round COUNT was not the defect. The
+MISSING DECISION was: no code anywhere compared what round 1 could earn
+against what it could lose.
+
+These tests pin that decision. They are deliberately written so that the
+ONE thing they cannot be satisfied by is a counter: a cap of one pair per
+window would pass the refusal tests and fail every permission test below.
+"""
+from __future__ import annotations
+
+from decimal import Decimal as D
+
+import pytest
+
+from src import l5_live_execution as E
+from src import l5_live_validation_gates as VG
+from src import l5_unmatched_disposition as UD
+from tests import test_l5_live_execution as H
+
+SLUG = "cpc-btc-updown-15m-2026-11-07-1230z"
+
+#: ROUND 0, at the prices the window actually quoted. It PAIRED.
+PLAN0 = {"pair_cost": "0.9550",
+         "legs": [{"side": "UP", "price": "0.4750", "qty": "1",
+                   "mode": "MAKER"},
+                  {"side": "DOWN", "price": "0.4800", "qty": "1",
+                   "mode": "MAKER"}]}
+#: ROUND 1, at the prices that lost the window. The UP filled alone.
+PLAN1 = {"pair_cost": "0.9500",
+         "legs": [{"side": "UP", "price": "0.4600", "qty": "1",
+                   "mode": "MAKER"},
+                  {"side": "DOWN", "price": "0.4900", "qty": "1",
+                   "mode": "MAKER"}]}
+
+#: The book round 1 was opened into: one tick wide, as 217 of 220 samples.
+BOOK = {"bid": D("0.4800"), "ask": D("0.4900")}
+
+
+def base(**kw):
+    """The pure decision's inputs for 1230z round 1, overridable."""
+    out = dict(market=SLUG, rounds_used=1,
+               locked_pair_pnl_usd=D("0.0450"),
+               worst_leg_own_px=D("0.4900"), qty=D("1"),
+               bid=BOOK["bid"], ask=BOOK["ask"], tick=D("0.01"),
+               depth_ticks=2, now_s=0.0, window_end_s=900.0,
+               exposure_headroom_usd=D("1.00"))
+    out.update(kw)
+    return out
+
+
+# ================================================ 1. THE WINDOW IS REFUSED
+
+def test_1230z_round_one_is_refused_on_its_own_numbers():
+    r = UD.reopen_decision(**base())
+    assert r["reopen"] is False
+    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
+    # 0.525*0.05 + 0.423*(-0.2440)
+    assert D(r["expectancy_usd"]) == D("-0.0770")
+    assert D(r["pair_edge_usd"]) == D("0.0500")
+
+
+def test_the_refusal_states_what_would_have_to_be_true_instead():
+    """A refusal that does not price itself is an opinion, not a decision."""
+    r = UD.reopen_decision(**base())
+    assert D(r["breakeven_single_outcome_usd"]) == D("-0.0384")
+    # and the measured figure it is being judged against
+    assert D(r["single_outcome_usd_per_contract"]) == D("-0.2440")
+
+
+def test_the_measured_priors_are_the_out_of_sample_conservative_ones():
+    assert UD.REOPEN_P_PAIR == D("0.525")
+    assert UD.REOPEN_P_SINGLE == D("0.423")
+    assert UD.REOPEN_SINGLE_OUTCOME_USD == D("-0.2440")
+    r = UD.reopen_decision(**base())
+    src = r["prior_source"]
+    assert "QUEUE_DEPLETION_FINDINGS" in src
+    assert "out" in src and "sample" in src
+    # the five 1230z orders are explicitly NOT the source
+    assert "1230z" in src
+
+
+def test_the_taker_disposition_is_not_assumed_available():
+    """Taker is disabled by owner order, so the gate may not price it in.
+
+    `taker $` at d=2 OOS is -$0.0542; using it would raise expectancy to
+    +$0.0033 -- still under the floor, but the point is that the DEFAULT
+    must not quietly assume a disposition we are forbidden to execute.
+    """
+    assert UD.REOPEN_SINGLE_OUTCOME_USD < D("-0.20")
+    cheap = UD.reopen_decision(**base(single_outcome_usd=D("-0.0542")))
+    assert cheap["reopen"] is False, "even taker-grade is under the floor"
+    assert D(cheap["expectancy_usd"]) == D("0.0033")
+
+
+# ======================== 2. IT IS NOT FINANCED OUT OF THE LOCKED PAIR
+
+@pytest.mark.parametrize("locked", ["0.0450", "0", "5.00", "500.00"])
+def test_locked_pair_profit_never_changes_the_decision(locked):
+    """The exact reasoning that lost the window: +$0.045 funds -$0.455.
+
+    It is wrong twice -- the locked profit is a tenth of the risk, and
+    netting them spends a realized gain as a loss reserve. $500 of locked
+    profit must not buy a single bad round.
+    """
+    r = UD.reopen_decision(**base(locked_pair_pnl_usd=D(locked)))
+    assert r["reopen"] is False
+    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
+    assert D(r["expectancy_usd"]) == D("-0.0770")
+
+
+def test_locked_profit_is_reported_so_its_exclusion_is_visible():
+    r = UD.reopen_decision(**base())
+    assert D(r["locked_pair_pnl_usd"]) == D("0.0450")
+    assert r["locked_pnl_is_not_a_loss_reserve"] is True
+
+
+# ============================================ 3. IT IS NOT A CAP: PERMISSION
+
+def test_reopening_is_permitted_when_the_economics_support_it():
+    """THE TEST A COUNTER CANNOT PASS.
+
+    Same market, same round index, same locked pair -- only the measured
+    single-leg cost differs. A cap of one pair per window fails this.
+    """
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03")))
+    assert r["reopen"] is True
+    assert r["reason"] is None
+    assert D(r["expectancy_usd"]) > D(r["min_edge_usd"])
+
+
+@pytest.mark.parametrize("rounds_used", [1, 2, 3, 7])
+def test_no_round_index_is_refused_merely_for_being_late(rounds_used):
+    r = UD.reopen_decision(**base(rounds_used=rounds_used,
+                                  single_outcome_usd=D("-0.03")))
+    assert r["reopen"] is True, "the gate is arithmetic, not a counter"
+    assert r["rounds_used"] == rounds_used
+
+
+def test_a_wider_spread_can_justify_reopening():
+    """The pair identity is 1 - spread - 2*d*tick, so spread is the edge."""
+    wide = UD.reopen_decision(**base(bid=D("0.30"), ask=D("0.70")))
+    assert D(wide["pair_edge_usd"]) == D("0.4400")
+    assert wide["reopen"] is True
+
+
+def test_greater_depth_raises_the_edge_the_identity_predicts():
+    prev = None
+    for d in (0, 1, 2, 3, 4, 5, 6):
+        r = UD.reopen_decision(**base(depth_ticks=d))
+        edge = D(r["pair_edge_usd"])
+        assert edge == D("0.01") + (2 * D(d) * D("0.01"))
+        if prev is not None:
+            assert edge > prev
+        prev = edge
+
+
+def test_the_first_round_is_never_gated():
+    """Gating round 0 would turn the strategy off, which nobody asked for."""
+    r = UD.reopen_decision(**base(rounds_used=0))
+    assert r["reopen"] is True
+    assert r["reason"] == "FIRST_ROUND_NOT_A_REOPENING"
+
+
+# ======================== 4. CAPACITY IS A HARD BOUND, NEVER TRADED AGAINST
+
+def test_a_great_round_is_still_refused_without_headroom():
+    """Expectancy never buys its way past the owner's exposure bound."""
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                  exposure_headroom_usd=D("0.10")))
+    assert r["reopen"] is False
+    assert r["reason"] == "EXPOSURE_HEADROOM_BELOW_WORST_CASE"
+    assert D(r["worst_case_usd"]) == D("0.4900")
+
+
+def test_outstanding_orders_are_counted_as_if_they_filled():
+    """1130z: four legs each calling itself the opening one, in 7 seconds."""
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                  exposure_headroom_usd=D("1.00"),
+                                  outstanding_worst_case_usd=D("0.60")))
+    assert r["reopen"] is False
+    assert r["reason"] == "EXPOSURE_HEADROOM_BELOW_WORST_CASE"
+    assert D(r["exposure_headroom_usd"]) == D("0.4000")
+
+
+def test_the_daily_loss_room_binds_independently():
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                  daily_loss_room_usd=D("0.10")))
+    assert r["reopen"] is False
+    assert r["reason"] == "DAILY_LOSS_ROOM_BELOW_WORST_CASE"
+
+
+def test_the_worst_case_is_the_dearer_leg_not_the_cheaper():
+    """Which leg fills alone is not ours to choose."""
+    r = UD.reopen_decision(**base(worst_leg_own_px=D("0.4900")))
+    assert D(r["worst_case_usd"]) == D("0.4900")
+
+
+def test_worst_case_is_not_used_as_expectancy():
+    """The error this gate was rewritten to remove.
+
+    An unmatched leg at own `p` settles at $1 with the market's own implied
+    probability `p`, so its EXPECTANCY is near zero and only its WORST CASE
+    is -p. Pricing expectancy as `-p_single * leg_cost` would make the
+    decision depend on the leg price; it must not.
+    """
+    cheap = UD.reopen_decision(**base(worst_leg_own_px=D("0.0600")))
+    dear = UD.reopen_decision(**base(worst_leg_own_px=D("0.9000")))
+    assert D(cheap["expectancy_usd"]) == D(dear["expectancy_usd"])
+    assert cheap["worst_case_is_not_expectancy"] is True
+
+
+# ==================================================== 5. TIME AND THE BOOK
+
+def test_a_round_needs_runway_for_two_legs_and_a_completion():
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                  now_s=800.0))
+    assert r["reopen"] is False
+    assert r["reason"] == "INSUFFICIENT_RUNWAY_FOR_A_ROUND"
+    assert r["runway_s"] == 100.0
+
+
+def test_runway_is_measured_not_assumed():
+    ok = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                   now_s=719.0))
+    assert ok["reopen"] is True and ok["runway_s"] == 181.0
+    bad = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"),
+                                    now_s=721.0))
+    assert bad["reopen"] is False and bad["runway_s"] == 179.0
+
+
+@pytest.mark.parametrize("kw,why", [
+    ({"bid_shares": D("0")}, "BID_DEPTH_BELOW_ROUND_SIZE"),
+    ({"ask_shares": D("0")}, "ASK_DEPTH_BELOW_ROUND_SIZE"),
+])
+def test_a_book_that_cannot_absorb_either_leg_refuses(kw, why):
+    r = UD.reopen_decision(**base(single_outcome_usd=D("-0.03"), **kw))
+    assert r["reopen"] is False and r["reason"] == why
+
+
+def test_a_one_sided_book_refuses():
+    for kw in ({"bid": None}, {"ask": None}, {"bid": D("0.50"),
+                                              "ask": D("0.49")}):
+        r = UD.reopen_decision(**base(**kw))
+        assert r["reopen"] is False
+        assert r["reason"] == "BOOK_NOT_TWO_SIDED"
+
+
+# ============================================= 6. EVERY UNKNOWN FAILS CLOSED
+
+@pytest.mark.parametrize("kw,why", [
+    ({"rounds_used": "x"}, "ROUNDS_USED_UNREADABLE"),
+    ({"qty": None}, "ROUND_SIZE_OR_PRICE_UNREADABLE"),
+    ({"qty": D("0")}, "ROUND_SIZE_OR_PRICE_UNREADABLE"),
+    ({"worst_leg_own_px": None}, "ROUND_SIZE_OR_PRICE_UNREADABLE"),
+    ({"tick": None}, "TICK_UNKNOWN"),
+    ({"tick": D("0")}, "TICK_UNKNOWN"),
+    ({"exposure_headroom_usd": None}, "EXPOSURE_BUDGET_UNREADABLE"),
+    ({"exposure_headroom_usd": "junk"}, "EXPOSURE_BUDGET_UNREADABLE"),
+    ({"outstanding_worst_case_usd": "junk"},
+     "OUTSTANDING_EXPOSURE_UNREADABLE"),
+    ({"p_pair": "junk"}, "ECONOMIC_PRIORS_UNREADABLE"),
+    ({"single_outcome_usd": "junk"}, "ECONOMIC_PRIORS_UNREADABLE"),
+    ({"depth_ticks": -1}, "DEPTH_UNREADABLE"),
+    ({"now_s": None}, "WINDOW_UNREADABLE"),
+    ({"window_end_s": "x"}, "WINDOW_UNREADABLE"),
+    ({"daily_loss_room_usd": "junk"}, "DAILY_LOSS_ROOM_UNREADABLE"),
+])
+def test_an_unreadable_input_never_opens_exposure(kw, why):
+    r = UD.reopen_decision(**base(**kw))
+    assert r["reopen"] is False, (kw, r.get("reason"))
+    assert r["reason"] == why
+
+
+def test_nothing_in_this_module_can_place_an_order():
+    """It returns data. That is what makes the counterfactual safe."""
+    r = UD.reopen_decision(**base())
+    assert isinstance(r, dict)
+    for banned in ("submit", "order_id", "coid", "transport"):
+        assert banned not in r
+
+
+# ==================================== 7. THE EXECUTOR GATE: OPENING ONLY
+
+@pytest.fixture()
+def rig(tmp_path, monkeypatch):
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "auth.jsonl"))
+    monkeypatch.setenv("L5_WINDOW_STRATEGY", "TWO_SIDED")
+    monkeypatch.setenv("L5_TS_MARKET", SLUG)
+    monkeypatch.delenv("L5_CAMPAIGN_APPROVAL", raising=False)
+    t = H.FakeTransport(fill_all=True)
+    t.tick_size = D("0.01")
+    st = H.store(tmp_path)
+    ex = E.FaithfulExecutor(st, H.limits(), transport=t, now_fn=H.NOW,
+                            maker_only=True)
+    ex.validation_gates = VG.ValidationGates(max_cash_deployed_usd=D("12"),
+                                             max_cumulative_loss_usd=D("1"))
+    ex.available_cash_usd = D("300")
+    ex.probe_store_plan(SLUG, PLAN0, 0)
+    return {"ex": ex, "store": st, "mp": monkeypatch}
+
+
+def gate(ex, rnd, plan, **kw):
+    args = dict(bid=BOOK["bid"], ask=BOOK["ask"], tick=D("0.01"),
+                depth_ticks=2, now_s=0.0, window_end_s=900.0)
+    args.update(kw)
+    return ex.probe_reopen_decision(SLUG, rnd, plan, **args)
+
+
+def test_the_executor_refuses_1230z_round_one(rig):
+    r = gate(rig["ex"], 1, PLAN1)
+    assert r["reopen"] is False
+    assert r["reason"] == "INCREMENTAL_EXPECTANCY_BELOW_FLOOR"
+    assert r["round"] == 1
+
+
+def test_round_zero_is_never_gated_by_the_executor(rig):
+    r = gate(rig["ex"], 0, PLAN0)
+    assert r["reopen"] is True
+    assert r["reason"] == "FIRST_EXPOSURE_TAKING_ROUND_NOT_A_REOPENING"
+
+
+def test_a_retired_round_does_not_count_as_a_round_used(rig):
+    """A RETIRED ROUND TOOK NO EXPOSURE, so the next one is still the first.
+
+    Retirement abandons a plan the book has walked away from, and
+    `probe_round_is_safe_to_retire` refuses while anything is live or
+    filled. The 0330z window re-proposed a plan frozen against a 0.42/0.56
+    touch 32 times after the book had gone to 0.91/0.92; retiring and
+    re-planning is the fix for that, and it is not an accumulation of
+    exposure. Counting the round INDEX instead of rounds that actually
+    spent legs would have blocked it.
+    """
+    ex = rig["ex"]
+    ex.probe_retire_round(SLUG, 0, "LEG_WOULD_CROSS:DOWN")
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is True
+    assert r["reason"] == "FIRST_EXPOSURE_TAKING_ROUND_NOT_A_REOPENING"
+    assert r["rounds_used"] == 0
+    assert r["retired_rounds_do_not_count"] is True
+
+
+def test_a_round_with_a_leg_already_standing_is_a_completion(rig):
+    """THE SAFETY ARGUMENT. Refusing a complement strands the residual.
+
+    Round 1's UP filled at 12:33:57. From that instant, round 1 is being
+    COMPLETED, not opened, and the gate must get out of the way -- it exists
+    to stop unmatched legs, so it must never cause one.
+    """
+    from src import l5_live_authorization as AUTH
+    ex = rig["ex"]
+    ex.probe_store_plan(SLUG, PLAN1, 1)
+    # a real durable claim, as a submission takes it BEFORE the wire, then
+    # the fill that makes the leg unrepeatable
+    AUTH.claim_accumulation_leg(SLUG, 1, "UP", {"px": "0.4600"})
+    rig["store"].apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+    assert any(ex.probe_legs_claimed(SLUG, 1).values())
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is True
+    assert r["reason"] == \
+        "ROUND_ALREADY_HAS_A_LEG_COMPLETING_NOT_OPENING"
+
+
+def test_unreadable_claims_are_treated_as_completing_never_as_a_veto(rig):
+    """The lesson of `acc_stale_by_distance`: never veto on a missing read."""
+    ex = rig["ex"]
+
+    def boom(*a, **k):
+        raise RuntimeError("claims unreadable")
+    rig["mp"].setattr(ex, "probe_legs_claimed", boom)
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is True
+    assert r["reason"] == "CLAIMS_UNREADABLE_TREATED_AS_COMPLETING"
+
+
+def test_the_executor_prices_the_dearer_leg_of_the_plan(rig):
+    """PLAN1 is UP 0.4600 / DOWN 0.4900; the worst case is 0.4900."""
+    r = gate(rig["ex"], 1, PLAN1)
+    assert D(r["worst_case_usd"]) == D("0.4900")
+    assert D(r["worst_leg_own_px"]) == D("0.4900")
+
+
+def test_a_held_residual_makes_the_next_leg_a_reduction_not_an_opening(rig):
+    """It must not be gated: refusing it would STRAND the residual.
+
+    `probe_leg_order` puts the reducing leg first whenever a residual is
+    held and `probe_leg_qty_cap` caps it at the residual's magnitude, so the
+    worst case FALLS. A gate that exists to prevent unmatched legs must
+    never itself cause one.
+    """
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is True
+    assert r["reason"] == "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+    assert D(r["held_residual"]) == D("1")
+    assert r["reducing_side"] == "DOWN"
+
+
+def test_a_residual_already_being_worked_is_not_a_second_exemption(rig):
+    """THE 1415z TRAP, and why the signed net is the wrong quantity.
+
+    On 2026-10-31 UP 2.17 was HELD while a DOWN 2.17 completion was
+    RESTING. The signed net came to exactly 0.00, a gate read the book as
+    FLAT, and it exempted an UP 2.08 as a genuine opening leg. The
+    completion was cancelled unfilled and the position became UP 4.25
+    against a 3-contract ceiling. So the exemption asks whether residual
+    remains NOT ALREADY BEING WORKED -- never whether a net is zero.
+    """
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+    rig["mp"].setattr(st, "outstanding_on_side",
+                      lambda m, side: D("1") if side == "DOWN" else D("0"))
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is False, "the residual is already covered"
+    # capacity binds first here, and it binds because BOTH the held leg and
+    # the resting completion are reserved: (1 + 1) * 0.49 = 0.98 against the
+    # $1 bound. That is the 1415z arithmetic the old gate did not do.
+    assert r["reason"] == "EXPOSURE_HEADROOM_BELOW_WORST_CASE"
+    assert D(r["outstanding_worst_case_usd"]) == D("2") * D("0.4900")
+
+
+def test_live_orders_on_either_side_are_reserved_as_if_they_filled(rig):
+    """Owner requirement 2.9, including SIMULTANEOUS fills.
+
+    `max`, not the sum: if both sides fill they match each other, so the
+    worst case is whichever side fills ALONE. On 1130z four legs each
+    calling itself the opening one filled inside seven seconds.
+    """
+    ex, st = rig["ex"], rig["store"]
+    clean = gate(ex, 1, PLAN1)
+    rig["mp"].setattr(st, "outstanding_on_side",
+                      lambda m, side: D("2") if side == "DOWN" else D("0"))
+    dirty = gate(ex, 1, PLAN1)
+    assert D(dirty["exposure_headroom_usd"]) < \
+        D(clean["exposure_headroom_usd"])
+    assert D(dirty["outstanding_worst_case_usd"]) == D("2") * D("0.4900")
+
+
+@pytest.mark.parametrize("plan,why", [
+    ({"legs": []}, "PLAN_HAS_NO_LEGS"),
+    (None, "PLAN_HAS_NO_LEGS"),
+    ({"legs": [{"side": "UP"}]}, "PLAN_UNREADABLE"),
+])
+def test_an_unreadable_plan_refuses_the_reopening(rig, plan, why):
+    r = gate(rig["ex"], 1, plan)
+    assert r["reopen"] is False and r["reason"] == why
+
+
+def test_no_configured_exposure_bound_refuses(rig):
+    """Unconstrained is fine for the planner; it is not fine for ADDING."""
+    rig["ex"].validation_gates = None
+    r = gate(rig["ex"], 1, PLAN1)
+    assert r["reopen"] is False
+    assert r["reason"] == "NO_CONFIGURED_EXPOSURE_BOUND_TO_REOPEN_AGAINST"
+
+
+def test_a_raising_decision_refuses_rather_than_opens(rig):
+    rig["mp"].setattr(UD, "reopen_decision",
+                      lambda **k: (_ for _ in ()).throw(RuntimeError("x")))
+    r = gate(rig["ex"], 1, PLAN1)
+    assert r["reopen"] is False
+    assert r["reason"] == "REOPEN_DECISION_RAISED"
+
+
+def test_the_gate_reports_locked_pair_pnl_without_spending_it(rig):
+    """Round 0 paired at 0.9550 for +$0.0450. It must appear and not count."""
+    st = rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4750"), basis="OWN")
+    st.apply_fill(SLUG, "DOWN", D("1"), D("0.4800"), basis="OWN")
+    locked = rig["ex"].probe_locked_pair_pnl(SLUG)
+    assert locked == D("0.0450")
+    r = gate(rig["ex"], 1, PLAN1)
+    assert D(r["locked_pair_pnl_usd"]) == D("0.0450")
+    assert r["reopen"] is False, "and it still buys nothing"
+
+
+def test_locked_pnl_is_zero_with_no_matched_inventory(rig):
+    assert rig["ex"].probe_locked_pair_pnl(SLUG) == D("0")
+
+
+def test_locked_pnl_is_none_rather_than_wrong_when_unreadable(rig):
+    def boom(*a, **k):
+        raise RuntimeError("no store")
+    rig["mp"].setattr(rig["ex"].store, "position", boom)
+    assert rig["ex"].probe_locked_pair_pnl(SLUG) is None
+
+
+# ================================= 8. THE EXISTING CONTROLLER IS UNCHANGED
+
+def test_decide_still_has_its_own_actions_and_ranking():
+    """`reopen_decision` is a sibling of `decide`, not a replacement."""
+    assert UD.PRESERVE in UD.ACTIONS and UD.COMPLETE_MAKER in UD.ACTIONS
+    assert UD.COMPLETE_TAKER in UD.CROSSING
+    assert callable(UD.decide) and callable(UD.reopen_decision)
+
+
+def test_probe_round_itself_still_only_walks_rounds(rig):
+    """The walker keeps its single job; the economics live in one module."""
+    assert rig["ex"].probe_round(SLUG) == 0
+    import inspect
+    src = inspect.getsource(E.FaithfulExecutor.probe_round)
+    for banned in ("reopen_decision", "expectancy", "p_pair"):
+        assert banned not in src

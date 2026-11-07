@@ -3518,6 +3518,9 @@ class Runner:
                        "state", "error")} if order else None,
             "intent": order.get("intent"),
             "decision_role": _role,
+            # the reopening decision 1230z did not make; see
+            # `probe_reopen_decision`. Carries its own break-even.
+            "two_sided_reopen": rec.get("TWO_SIDED_REOPEN"),
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.

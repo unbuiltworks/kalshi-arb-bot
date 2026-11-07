@@ -588,3 +588,273 @@ def decide(*, market: Any, held_side: str, held_qty: Any,
     best = sorted(pool, key=_rank_key)[0]
     return out(best["action"],
                "BEST_WORST_CASE_THEN_BEST_PAIR_AMONG_EXECUTABLE", acts)
+
+
+# ======================================================= THE REOPENING CHOICE
+#
+# 1230z IS WHY THIS EXISTS, and the owner's reading of the mechanism was
+# exactly right. `L5_TS_ROUND_ALLOCATIONS` splits the CASH ENVELOPE across
+# cycles; the number of opening rounds is `acc_max_rounds()`, and
+# `probe_round` walked to the first incomplete round with NO ECONOMICS AT
+# ALL. So after round 0 matched its pair at 12:30:49, round 1 opened at
+# 12:32:54 -- UP 0.4600 and DOWN 0.4900 together. The UP filled at 12:33:57,
+# the DOWN never did and was cancelled at 12:34:58, and the window settled:
+#
+#     round 0, pair at 0.9550      +$0.0450
+#     round 1, unmatched UP        -$0.4550
+#     settled                      -$0.4100
+#
+# The system behaved as implemented. What was missing was a decision.
+#
+# WHAT THIS IS NOT. It is not a cap of one pair per window -- the owner's
+# objective is REPEATED profitable completion, and a counter cannot tell a
+# good round from a bad one. It is not a new controller either: it lives
+# beside `decide` in the authoritative disposition module and is consulted
+# by the existing opening path.
+#
+# AND IT WILL NOT FINANCE A RESIDUAL OUT OF A LOCKED PAIR. "We are +$0.045
+# up, so a -$0.455 risk is affordable" is the reasoning that lost the
+# window, and it is wrong twice: the locked profit is a tenth of the risk,
+# and netting them spends a realized gain as a loss reserve. Locked profit
+# is REPORTED here and is deliberately NOT part of either test.
+
+#: THE MEASURED PAIRING RATES at the deployed depth, out of sample, from
+#: `analysis/l5/issue195/QUEUE_DEPLETION_FINDINGS.md` section 4 -- 12
+#: windows of 2026-10-25 plus 1130z, `d=2`. NOT derived from the five 1230z
+#: orders; five observations cannot carry a fill model and none is claimed.
+#: A leg counts filled only when the OPPOSITE touch reached it, so these
+#: over-sample the adverse case: pairing is understated and the single-leg
+#: frequency overstated, which is the direction that makes this gate
+#: STRICTER rather than looser.
+REOPEN_P_PAIR = D("0.525")
+REOPEN_P_SINGLE = D("0.423")
+
+#: THE ADVERSE-SELECTION CONSTANT, and the reason this gate is not simply
+#: `-p_single * leg_cost`. A leg's COST is its worst case, not its
+#: expectancy: an unmatched leg at own `p` settles at $1 with the market's
+#: own implied probability `p`, so at a fair price its expectancy is near
+#: zero and only its worst case is `-p`. What actually makes a single leg
+#: lose is that the market keeps moving after it fills a maker quote. That
+#: drift is measured: `hold $` = -$0.2440 per leg at `d=2` out of sample
+#: (-$0.2011 in sample), nearly independent of depth.
+#:
+#: The OOS figure is the default because it is the conservative one and
+#: rests on 13 windows rather than 4. Waiting for a <=0.96 completion is
+#: NOT an escape: it was offered in 1% to 20% of single-leg cases, so
+#: `wait $` (-$0.2313) tracks `hold $` closely, and maker-only is the
+#: authorized configuration. `taker $` is -$0.0542 and is NOT used here --
+#: taker completion is disabled by owner order, so this gate may not assume
+#: the cheaper disposition will be available.
+REOPEN_SINGLE_OUTCOME_USD = D("-0.2440")
+
+#: How much better than break-even an incremental round must look before it
+#: is worth opening fresh exposure. One tick on a one-contract pair.
+REOPEN_MIN_EDGE_USD = D("0.01")
+
+#: A round needs time to place two legs, see one fill, and work the other.
+#: Below this the second leg cannot realistically be completed.
+REOPEN_MIN_RUNWAY_S = 180.0
+
+
+def reopen_decision(*, market: Any, rounds_used: int,
+                    locked_pair_pnl_usd: Any = None,
+                    worst_leg_own_px: Any,
+                    bid: Any, ask: Any, tick: Any,
+                    bid_shares: Any = None, ask_shares: Any = None,
+                    qty: Any = D(1),
+                    now_s: Any, window_end_s: Any,
+                    exposure_headroom_usd: Any,
+                    outstanding_worst_case_usd: Any = D(0),
+                    daily_loss_room_usd: Any = None,
+                    depth_ticks: Optional[int] = None,
+                    p_pair: Any = None, p_single: Any = None,
+                    single_outcome_usd: Any = None,
+                    min_edge_usd: Any = None) -> Dict[str, Any]:
+    """Is ANOTHER opening round economically justified? Read-only.
+
+    Returns `{"reopen": bool, "reason": str, ...}`. `reopen` is True only
+    when every hard bound holds AND incremental expectancy clears the floor.
+    Anything unreadable refuses, because an unknown is not a zero and the
+    safe direction for OPENING exposure is to stop.
+
+    SCOPE, stated precisely: this gates opening a NEW round only. It never
+    gates completing, repricing or preserving inventory already held --
+    those are `decide`'s actions and a residual must still be worked after
+    a refusal here. A refusal stops us ADDING risk, not managing it.
+
+    THE TWO TESTS, in this order, because a hard bound is not an opinion.
+
+      1. CAPACITY, on the worst case. Both legs fill and one settles
+         worthless: `qty * worst_leg_own_px`, and `worst_leg_own_px` is
+         the DEARER of the round's two legs, because which one fills alone
+         is not ours to choose. That must fit what remains of
+         the aggregate exposure cap AND the daily realized-loss room, with
+         every outstanding order counted as if it filled. This is the
+         owner's bound and expectancy is never traded against it.
+
+      2. EXPECTANCY, on measured quantities only:
+
+             E = p_pair * pair_edge  +  p_single * single_outcome
+
+         The pair identity gives `pair_cost = 1 - spread - 2*d*tick`, so
+         `pair_edge = qty * (spread + 2*d*tick)` exactly. `single_outcome`
+         is the measured adverse-selection constant, NOT the leg's cost --
+         see `REOPEN_SINGLE_OUTCOME_USD` for why those differ. The round
+         opens only if `E > min_edge_usd`.
+
+    WHAT THAT ARITHMETIC SAYS TODAY, and it is not the comfortable answer.
+    At the deployed `d=2` with the usual 1-tick spread:
+
+        pair_edge = 0.01 + 0.04                   = 0.0500
+        E         = 0.525*0.05 + 0.423*(-0.2440)  = -0.0770
+
+    Refused -- and 1230z round 1 is refused by exactly this, with no
+    reference to the +$0.0450 already locked. Inverting it gives the number
+    worth quoting: reopening pays only once an unmatched leg costs less
+    than **$0.0384**, against $0.2440 measured. A factor of 6.4.
+
+    So this gate currently refuses every maker-only reopening at the
+    deployed depth, and that is the correct reading of the evidence rather
+    than a cap: the record always reports `breakeven_single_outcome_usd`,
+    and the moment pairing improves, the spread widens, depth increases or
+    adverse selection is measured smaller, the same arithmetic permits it.
+    No depth in either sample reaches the floor on maker-only economics
+    (best is +$0.0020 at `d=6` in sample), which is the evidence this
+    program needs next, not a parameter to relax.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, reopen=False, reason=reason, market=(
+            None if market is None else str(market)))
+
+    pp = _d(p_pair) if p_pair is not None else REOPEN_P_PAIR
+    ps = _d(p_single) if p_single is not None else REOPEN_P_SINGLE
+    single = (_d(single_outcome_usd) if single_outcome_usd is not None
+              else REOPEN_SINGLE_OUTCOME_USD)
+    floor = (_d(min_edge_usd) if min_edge_usd is not None
+             else REOPEN_MIN_EDGE_USD)
+    q = _d(qty)
+    leg = _d(worst_leg_own_px)
+    b, a, tk = _d(bid), _d(ask), _d(tick)
+    cap_room = _d(exposure_headroom_usd)
+    outstanding = _d(outstanding_worst_case_usd)
+    locked = _d(locked_pair_pnl_usd)
+
+    # ---- the FIRST round is not a reopening and this never gates it.
+    #      Gating round 0 would turn the strategy off, which is not what
+    #      "decide whether to reopen" asks for.
+    try:
+        used_rounds = int(rounds_used)
+    except (TypeError, ValueError):
+        return no("ROUNDS_USED_UNREADABLE")
+    if used_rounds <= 0:
+        return dict(reopen=True, reason="FIRST_ROUND_NOT_A_REOPENING",
+                    market=(None if market is None else str(market)),
+                    rounds_used=used_rounds)
+
+    if q is None or q <= 0 or leg is None or leg <= 0:
+        return no("ROUND_SIZE_OR_PRICE_UNREADABLE")
+    if tk is None or tk <= 0:
+        return no("TICK_UNKNOWN")
+    if b is None or a is None or b <= 0 or a <= 0 or a <= b:
+        return no("BOOK_NOT_TWO_SIDED")
+    if cap_room is None:
+        return no("EXPOSURE_BUDGET_UNREADABLE")
+    if outstanding is None:
+        return no("OUTSTANDING_EXPOSURE_UNREADABLE")
+    if pp is None or ps is None or single is None or floor is None:
+        return no("ECONOMIC_PRIORS_UNREADABLE")
+    try:
+        d_ticks = int(depth_ticks) if depth_ticks is not None \
+            else int(TS.depth_ticks())
+    except BaseException:
+        return no("DEPTH_UNREADABLE")
+    if d_ticks < 0:
+        return no("DEPTH_UNREADABLE")
+
+    # ---- 1. CAPACITY. An unmatched leg is the worst case of a round, and
+    #         every live order is counted as if it filled.
+    worst_case = q * leg
+    headroom = cap_room - outstanding
+    rec: Dict[str, Any] = {
+        "market": (None if market is None else str(market)),
+        "rounds_used": used_rounds,
+        "qty": str(q), "worst_leg_own_px": str(leg),
+        "bid": str(b), "ask": str(a), "spread": str(a - b),
+        "depth_ticks": d_ticks,
+        "worst_case_usd": str(worst_case.quantize(D("0.0001"))),
+        "exposure_headroom_gross_usd": str(cap_room),
+        "outstanding_worst_case_usd": str(outstanding),
+        "exposure_headroom_usd": str(headroom.quantize(D("0.0001"))),
+        "daily_loss_room_usd": (None if _d(daily_loss_room_usd) is None
+                                else str(_d(daily_loss_room_usd))),
+        # REPORTED, NOT NETTED. A realized gain is not a loss reserve, and
+        # "we are up $0.045 so a $0.455 risk is affordable" is the
+        # reasoning that lost 1230z. It appears here so a reader can see it
+        # was considered and deliberately excluded from both tests.
+        "locked_pair_pnl_usd": (None if locked is None else str(locked)),
+        "locked_pnl_is_not_a_loss_reserve": True,
+    }
+
+    if headroom < worst_case:
+        return no("EXPOSURE_HEADROOM_BELOW_WORST_CASE", **rec)
+    if daily_loss_room_usd is not None:
+        room = _d(daily_loss_room_usd)
+        if room is None:
+            return no("DAILY_LOSS_ROOM_UNREADABLE", **rec)
+        if room < worst_case:
+            return no("DAILY_LOSS_ROOM_BELOW_WORST_CASE", **rec)
+
+    # ---- runway: two legs, a fill and a completion all need time
+    try:
+        runway = float(window_end_s) - float(now_s)
+    except (TypeError, ValueError):
+        return no("WINDOW_UNREADABLE", **rec)
+    rec["runway_s"] = round(runway, 1)
+    if runway < REOPEN_MIN_RUNWAY_S:
+        return no("INSUFFICIENT_RUNWAY_FOR_A_ROUND",
+                  required_s=REOPEN_MIN_RUNWAY_S, **rec)
+
+    # ---- displayed depth on both sides, so a round is never opened into a
+    #      book that cannot absorb either leg
+    bs, as_ = _d(bid_shares), _d(ask_shares)
+    if bs is not None and bs < q:
+        return no("BID_DEPTH_BELOW_ROUND_SIZE", displayed=str(bs), **rec)
+    if as_ is not None and as_ < q:
+        return no("ASK_DEPTH_BELOW_ROUND_SIZE", displayed=str(as_), **rec)
+
+    # ---- 2. EXPECTANCY, on the pair identity and the measured constants
+    spread = a - b
+    pair_edge = q * (spread + (2 * D(d_ticks) * tk))
+    single_total = q * single
+    expectancy = (pp * pair_edge) + (ps * single_total)
+    # the number worth quoting: how cheap an unmatched leg must be for this
+    # round to pay. Always reported, including on a refusal.
+    breakeven = (((floor - (pp * pair_edge)) / ps) / q) if ps > 0 else None
+    rec.update({
+        "p_pair": str(pp), "p_single": str(ps),
+        "single_outcome_usd_per_contract": str(single),
+        "prior_source": ("QUEUE_DEPLETION_FINDINGS.md section 4, d=2 out "
+                         "of sample over 13 recorded windows; pairing is a "
+                         "LOWER bound and the single-leg cost an UPPER "
+                         "one. Never derived from the five 1230z orders. "
+                         "Maker-only: the cheaper taker disposition is "
+                         "disabled by owner order and is not assumed."),
+        "pair_edge_usd": str(pair_edge.quantize(D("0.0001"))),
+        "single_leg_outcome_usd": str(single_total.quantize(D("0.0001"))),
+        "worst_case_is_not_expectancy": True,
+        "expectancy_usd": str(expectancy.quantize(D("0.0001"))),
+        "min_edge_usd": str(floor),
+        "breakeven_single_outcome_usd": (
+            None if breakeven is None
+            else str(breakeven.quantize(D("0.0001")))),
+        "labels": ("the reopening DECISION, not a cap and not a realized "
+                   "result. Capacity is a hard bound and is never traded "
+                   "against expectancy. Expectancy uses the pair identity "
+                   "1 - spread - 2*d*tick and measured adverse selection; "
+                   "no fill probability is invented. A refusal stops "
+                   "OPENING a new round only -- inventory already held is "
+                   "still worked by `decide`."),
+    })
+    if expectancy <= floor:
+        return no("INCREMENTAL_EXPECTANCY_BELOW_FLOOR", **rec)
+    return dict(rec, reopen=True, reason=None)

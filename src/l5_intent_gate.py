@@ -120,6 +120,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # budget; and a completion whose fresh price no longer clears the fee
     # floor or the pair cap is refused rather than repriced into a loss.
     "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_AFTER_RETIREMENT",
+    # THE REOPENING DECISION. A round beyond the first exposure-taking one
+    # is refused unless its own incremental economics justify it -- 1230z
+    # opened round 1 into a flat book because `probe_round` returned the
+    # next incomplete round and nothing priced it. Not evaluated here
+    # because it needs the book, the plan and the live budget.
+    "TWO_SIDED_PROBE:REOPENING_NOT_JUSTIFIED",
     "TWO_SIDED_PROBE:COMPLEMENT_REASON",
     # the defensive budget, applied to ENTRIES ONLY. The $2 campaign budget
     # is what pays to get OUT of an unmatched leg, so once it is spent a new
