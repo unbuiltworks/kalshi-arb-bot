@@ -46,6 +46,32 @@ TICK = D("0.01")
 DEPTH = 2                 # the deployed depth
 MAX_ROUNDS = 3            # what `acc_max_rounds` was set to
 TTL_FRAMES = 60           # a leg's order deadline, in frames
+
+#: WHICH FILL MODEL, and it is a BRACKET rather than an estimate. PROVEN
+#: means the opposite touch reached our price -- sufficient, so a LOWER
+#: bound on fills, and it over-samples the adverse case because the market
+#: moved THROUGH us. POSSIBLE means enough size left the queue ahead of us
+#: -- necessary only, since a decrease may be a cancellation, so an UPPER
+#: bound. The truth is between them and neither is a point estimate.
+#: `FILL_MODEL` selects which end; the sensitivity report runs both.
+FILL_MODEL = QD.PROVEN
+
+
+def _filled_frame(side, px, frames, i):
+    """The frame this leg filled on under `FILL_MODEL`, or None."""
+    v = QD.fill_verdict(side, px, frames, start=i)
+    verdict = v.get("verdict")
+    if FILL_MODEL == QD.PROVEN:
+        if verdict != QD.PROVEN:
+            return None
+        return v.get("proven_at_frame")
+    # POSSIBLE: count PROVEN too, since proven implies possible. A leg with
+    # no proven frame is dated at the first frame its queue could have
+    # cleared, which is the most generous reading the data supports.
+    if verdict == QD.IMPOSSIBLE:
+        return None
+    return (v.get("proven_at_frame") if v.get("proven_at_frame") is not None
+            else v.get("possible_at_frame"))
 EXPOSURE_CAP = D("1.00")  # the owner's $1 aggregate worst case
 FRAME_S = 1.0             # recorded sampling cadence
 WINDOW_S = 900.0
@@ -73,10 +99,8 @@ def _round_outcome(frames, i):
     if px is None:
         return None
     up, dn, bb, ba = px
-    vu = QD.fill_verdict("UP", up, frames, start=i)
-    vd = QD.fill_verdict("DOWN", dn, frames, start=i)
-    fu = vu.get("proven_at_frame") if vu.get("verdict") == QD.PROVEN else None
-    fd = vd.get("proven_at_frame") if vd.get("verdict") == QD.PROVEN else None
+    fu = _filled_frame("UP", up, frames, i)
+    fd = _filled_frame("DOWN", dn, frames, i)
     # a fill after the TTL is a cancel, not a fill
     if fu is not None and fu - i > TTL_FRAMES:
         fu = None
@@ -143,9 +167,7 @@ def replay(frames, policy):
                 if held != 0:
                     red = "DOWN" if held > 0 else "UP"
                     px = r["dn"] if red == "DOWN" else r["up"]
-                    v = QD.fill_verdict(red, px, frames, start=r["i"])
-                    f = (v.get("proven_at_frame")
-                         if v.get("verdict") == QD.PROVEN else None)
+                    f = _filled_frame(red, px, frames, r["i"])
                     if f is not None and f - r["i"] > TTL_FRAMES:
                         f = None
                     out["rounds"] += 1

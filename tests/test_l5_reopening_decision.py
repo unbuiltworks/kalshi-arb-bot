@@ -413,20 +413,139 @@ def test_a_round_with_a_leg_already_standing_is_a_completion(rig):
     assert any(ex.probe_legs_claimed(SLUG, 1).values())
     r = gate(ex, 1, PLAN1)
     assert r["reopen"] is True
-    assert r["reason"] == \
-        "ROUND_ALREADY_HAS_A_LEG_COMPLETING_NOT_OPENING"
+    # DURABLE INVENTORY ANSWERS FIRST, and that ordering is deliberate: the
+    # filled UP is in the store, so the reduction is established from the
+    # position and the venue's resting orders rather than from a claim
+    # file. The claim branch is the fallback for a leg that is SUBMITTED
+    # but not yet filled, which carries no residual to find.
+    assert r["reason"] == "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+    assert r["verified_reduces_not_opens"] is True
+    assert r["reducing_side"] == "DOWN"
 
 
-def test_unreadable_claims_are_treated_as_completing_never_as_a_veto(rig):
-    """The lesson of `acc_stale_by_distance`: never veto on a missing read."""
+def test_a_leg_SUBMITTED_but_unfilled_still_gets_its_complement(rig):
+    """A STRANDING PATH FOUND WHILE FIXING REVIEW BLOCKER 1.
+
+    `probe_legs_claimed` reports a submitted-but-unfilled leg as UNCLAIMED
+    on purpose -- an unfilled leg is deliberately replaceable within its
+    attempt budget. So the claim branch does NOT exempt it, and before the
+    prospective per-side rule the economics would have refused its
+    complement and stranded it the moment it filled.
+
+    The state that matters is the LIVE ORDER, not the claim file:
+    `record_submit` persists the order before the wire, and a claim with no
+    live order and no fill is a leg that never reached the venue or already
+    ended there -- no exposure, correctly gated.
+    """
+    ex = rig["ex"]
+    ex.probe_store_plan(SLUG, PLAN1, 1)
+    rig["mp"].setattr(rig["store"], "outstanding_on_side",
+                      lambda m, side: D("1") if side == "UP" else D("0"))
+    assert rig["store"].residual(SLUG) == D("0"), "nothing filled yet"
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is True
+    assert r["reason"] == "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+    assert r["reducing_side"] == "DOWN", "the side with no order working"
+    assert D(r["imbalance_gap"]) == D("1")
+
+
+def test_the_1415z_shape_is_still_gated_as_the_opening_it_was(rig):
+    """REVIEW BLOCKER 3, and the case the per-side rule exists for.
+
+    UP 2.17 HELD while a DOWN 2.17 completion RESTS. Per side the
+    prospective totals are EQUAL, so no side is smaller, there is nothing
+    to reduce, and the proposed UP leg is gated as the opening it is. The
+    signed net reads 0.00 here, which is what let an UP 2.08 through and
+    took the position to UP 4.25 against a 3-contract ceiling.
+    """
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("2.17"), D("0.4600"), basis="OWN")
+    rig["mp"].setattr(st, "outstanding_on_side",
+                      lambda m, side: D("2.17") if side == "DOWN" else D("0"))
+    assert st.residual(SLUG) + D("-2.17") == D("0"), "signed net reads flat"
+    r = gate(ex, 1, {"pair_cost": "0.9500",
+                     "legs": [{"side": "UP", "price": "0.4600",
+                               "qty": "2.08", "mode": "MAKER"}]})
+    assert r["reopen"] is False
+    assert r["reason"] != "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+
+
+def test_a_plan_whose_leg_is_on_the_DEEPER_side_is_not_a_reduction(rig):
+    """Some imbalance existing is not an excuse; the leg must close it."""
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+    # the gap is on DOWN, but this plan offers only another UP
+    r = gate(ex, 1, {"pair_cost": "0.9500",
+                     "legs": [{"side": "UP", "price": "0.4600",
+                               "qty": "1", "mode": "MAKER"}]})
+    assert r["reopen"] is False
+    assert r["reason"] != "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+
+
+def test_a_reducing_leg_larger_than_the_gap_is_not_exempted(rig):
+    """Capped to the unworked gap, or it is partly a new opening."""
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+    rig["mp"].setattr(ex, "probe_leg_qty_cap",
+                      lambda m, side, qty: D("5"))      # cap defeated
+    r = gate(ex, 1, {"pair_cost": "0.9500",
+                     "legs": [{"side": "DOWN", "price": "0.4900",
+                               "qty": "5", "mode": "MAKER"}]})
+    assert r["reopen"] is False
+    assert r["reason"] != "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+
+
+def test_an_unreadable_leg_cap_refuses_rather_than_exempting(rig):
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+
+    def boom(*a, **k):
+        raise RuntimeError("cap unreadable")
+    rig["mp"].setattr(ex, "probe_leg_qty_cap", boom)
+    r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is False
+    assert r["reason"] == "REDUCING_LEG_QTY_UNREADABLE"
+
+
+def test_unreadable_claims_cannot_authorise_an_unverified_opening(rig):
+    """REVIEW BLOCKER 1. A missing state may not AUTHORIZE NEW EXPOSURE.
+
+    My first version returned reopen=True here, reasoning from
+    `acc_stale_by_distance` that one must never veto on a failed read. That
+    lesson is about CANCELLING -- a veto there strands inventory. This is
+    the opposite direction: permitting here ADDS risk. I had the two
+    conflated and the review was right.
+    """
     ex = rig["ex"]
 
     def boom(*a, **k):
         raise RuntimeError("claims unreadable")
     rig["mp"].setattr(ex, "probe_legs_claimed", boom)
     r = gate(ex, 1, PLAN1)
+    assert r["reopen"] is False
+    assert r["reason"] == "CLAIMS_UNREADABLE_NO_UNVERIFIED_OPENING"
+    assert r["durable_inventory_already_checked"] is True
+
+
+def test_unreadable_claims_still_cannot_strand_a_filled_leg(rig):
+    """WHY FAILING CLOSED IS SAFE: durable inventory is checked FIRST.
+
+    A leg that actually filled is in the store and on the venue; a claim
+    FILE only says a leg was once submitted. So with the claim read broken
+    AND a real residual held, the reduction is still established and the
+    round still proceeds -- nothing that exists can be stranded by the
+    refusal above, only an unverified opening.
+    """
+    ex, st = rig["ex"], rig["store"]
+    st.apply_fill(SLUG, "UP", D("1"), D("0.4600"), basis="OWN")
+
+    def boom(*a, **k):
+        raise RuntimeError("claims unreadable")
+    rig["mp"].setattr(ex, "probe_legs_claimed", boom)
+    r = gate(ex, 1, PLAN1)
     assert r["reopen"] is True
-    assert r["reason"] == "CLAIMS_UNREADABLE_TREATED_AS_COMPLETING"
+    assert r["reason"] == "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS"
+    assert r["verified_reduces_not_opens"] is True
 
 
 def test_the_executor_prices_the_dearer_leg_of_the_plan(rig):
@@ -485,8 +604,9 @@ def test_live_orders_on_either_side_are_reserved_as_if_they_filled(rig):
     """
     ex, st = rig["ex"], rig["store"]
     clean = gate(ex, 1, PLAN1)
-    rig["mp"].setattr(st, "outstanding_on_side",
-                      lambda m, side: D("2") if side == "DOWN" else D("0"))
+    # BALANCED live orders, so no side is smaller and no exemption applies
+    # -- which is the state in which the reservation is what binds.
+    rig["mp"].setattr(st, "outstanding_on_side", lambda m, side: D("2"))
     dirty = gate(ex, 1, PLAN1)
     assert D(dirty["exposure_headroom_usd"]) < \
         D(clean["exposure_headroom_usd"])

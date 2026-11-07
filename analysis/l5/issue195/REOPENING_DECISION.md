@@ -187,8 +187,9 @@ is a **lower** bound), no look-ahead, rounds never overlapping in time, a
 
 ### What this does and does not establish
 
-**C strictly dominates the deployed B on every metric that matters**, in both
-samples: a third of the exposure peak, a seventh of the unmatched legs,
+**C dominates the deployed B on every metric that matters under this fill
+model** (see §8: the ranking reverses at the other end of the bracket, and
+the robustness argument is what survives), in both samples: a third of the exposure peak, a seventh of the unmatched legs,
 and +$2.27 better out of sample. B is the worst of the three and it is what
 is deployed.
 
@@ -264,3 +265,68 @@ than adopted on this table. Reproduce with
 
 At +0.0054 per window, `d=3` out of sample is **$0.52/day** against the
 $480/day target. It is a better configuration, not a route to the target.
+
+## 8. Fill-model sensitivity, and a correction to §4
+
+The review asked whether the PROVEN fill model biases adverse selection, and
+to report sensitivity. It does, and the answer **changes one of my
+conclusions.**
+
+`l5_queue_depletion` brackets fills rather than estimating them. **PROVEN** —
+the opposite touch reached our price — is *sufficient*, so a **lower** bound
+on fills, and it over-samples the adverse case because the market moved
+*through* us. **POSSIBLE** — enough size left the queue ahead of us — is
+*necessary only*, since a decrease may be a cancellation, so an **upper**
+bound. The truth lies between, and neither is a point estimate.
+
+Net per window, both ends of the bracket:
+
+| fill model | d | **B** (deployed) | **C** (risk-budgeted) |
+|---|---|---|---|
+| PROVEN (lower) | 2 | −0.1738 | **+0.0008** |
+| PROVEN (lower) | 3 | −0.1935 | **+0.0054** |
+| **POSSIBLE (upper)** | 2 | **+0.1265** | +0.0508 |
+| **POSSIBLE (upper)** | 3 | **+0.1681** | +0.0708 |
+
+*(out of sample, 13 windows; in sample the same flip occurs — B goes from
+−0.2790 to +0.1500 at d=2)*
+
+**THE CORRECTION.** §4 said C "strictly dominates B in both samples". That
+is true **only under the PROVEN model.** Under POSSIBLE the ranking
+**reverses**: B's extra rounds convert to pairs (33 against C's 13 out of
+sample) and it earns more than twice C's net. I should not have stated
+dominance without testing the other end of a bracket I had already
+described as a bracket.
+
+**What survives the correction, and it is the part that matters.** The two
+policies differ in *robustness*, not just in level:
+
+| | B (deployed) | C (risk-budgeted) |
+|---|---|---|
+| net/window across the bracket | **−0.1935 … +0.1681** | **+0.0008 … +0.0708** |
+| sign depends on the fill model | **yes** | no |
+| unmatched legs (OOS) | 1 … **14** | 0 … 2 |
+| peak worst-case exposure | **$2.34** | $0.86 |
+
+C is positive at **both** ends and never carries more than 2 unmatched legs.
+B is a **bet on the fill model being the generous one**: if real fills look
+like POSSIBLE it is the better policy, and if they look like PROVEN it loses
+−$0.19 a window and strands 14 legs. Choosing C is choosing the policy whose
+sign does not depend on an assumption we cannot currently measure — which is
+a different and weaker claim than dominance, and the right one.
+
+**No profitability is claimed at either end.** C's range is **+$0.0008 to
++$0.0708 per window** — **$0.08 to $6.80/day against the $480/day target**,
+on 13 correlated windows. Even the generous end is two orders of magnitude
+short.
+
+**And this is now the top blocker, stated precisely.** The gap between the
+two ends of the bracket is larger than the difference between the policies,
+so no further offline work on these recordings can rank B against C. Only
+measuring our **own** resting orders — join time, queue ahead, and whether
+they filled without the touch crossing — closes it. That is the single
+experiment that would convert this from a bracket into a number, and it
+needs owner authorization for a bounded maker-only window.
+
+Reproduce with `analysis/l5/issue195/round_strategy_compare.py`
+(`FILL_MODEL`, `DEPTH`).

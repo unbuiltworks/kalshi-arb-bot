@@ -5996,25 +5996,9 @@ class FaithfulExecutor:
                     "rounds_used": used,
                     "retired_rounds_do_not_count": True}
 
-        # A round with a leg already standing is a COMPLETION, never a
-        # reopening. Unreadable claims are treated as claimed -- the
-        # direction that leaves the complement available.
-        try:
-            claimed = self.probe_legs_claimed(market, rnd) or {}
-            if any(claimed.values()):
-                return {"reopen": True, "round": rnd, "market": str(market),
-                        "reason": ("ROUND_ALREADY_HAS_A_LEG_"
-                                   "COMPLETING_NOT_OPENING"),
-                        "claimed": {str(k): bool(v)
-                                    for k, v in claimed.items()}}
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            return {"reopen": True, "round": rnd, "market": str(market),
-                    "reason": "CLAIMS_UNREADABLE_TREATED_AS_COMPLETING"}
-
-        # THE DEARER LEG IS THE WORST CASE: which leg fills alone is not
-        # ours to choose, so the capacity test prices the expensive one.
+        # ---- THE PLAN'S OWN LEGS, read before anything that depends on
+        #      them. THE DEARER LEG IS THE WORST CASE: which leg fills
+        #      alone is not ours to choose, so capacity prices the dear one.
         try:
             _legs = list((plan or {}).get("legs") or [])
             pxs = [D(str(l["price"])) for l in _legs]
@@ -6027,6 +6011,131 @@ class FaithfulExecutor:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             return no("PLAN_UNREADABLE")
+
+        # ---- STANDING EXPOSURE FIRST, FROM DURABLE INVENTORY, and this
+        #      ordering is the whole safety argument for the claim read
+        #      below. A leg that actually FILLED is in the store and on the
+        #      venue; a claim FILE only says a leg was once submitted. So
+        #      the thing that protects real inventory from being stranded is
+        #      this check, not the claim read -- which means the claim read
+        #      is then free to fail CLOSED without stranding anything.
+        #
+        #      NEVER ON THE SIGNED NET. On 1415z UP 2.17 was HELD while a
+        #      DOWN 2.17 completion was RESTING; the signed net came to
+        #      exactly 0.00, a gate read the book as FLAT and exempted an
+        #      UP 2.08 as a genuine opening leg. The completion was
+        #      cancelled unfilled and the position reached UP 4.25 against a
+        #      3-contract ceiling. So the question is per side: is there
+        #      residual NOT ALREADY BEING WORKED.
+        try:
+            held = D(str(self.store.residual(market)))
+            up_live = D(str(self.store.outstanding_on_side(market, UP)))
+            dn_live = D(str(self.store.outstanding_on_side(market, DOWN)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("PROSPECTIVE_RESIDUAL_UNREADABLE")
+
+        # PROSPECTIVE PER-SIDE TOTALS are the quantity that answers this,
+        # and one rule covers every case. For each side: what we HOLD plus
+        # every live order on it as if it filled. The side with the SMALLER
+        # total is the one a new leg REDUCES; the side with the larger total
+        # is the one it would deepen.
+        #
+        # This is deliberately not the signed net. On 1415z UP 2.17 was HELD
+        # while a DOWN 2.17 completion was RESTING; the net came to exactly
+        # 0.00, a gate read the book as FLAT and exempted an UP 2.08 as a
+        # genuine opening leg. The completion was cancelled unfilled and the
+        # position reached UP 4.25 against a 3-contract ceiling. Per side
+        # those totals are 2.17 and 2.17 -- EQUAL, no side is smaller, so
+        # there is nothing to reduce and the UP is gated as the opening it
+        # was. The same arithmetic also admits the cases that must not be
+        # stranded: a filled leg with nothing working against it, and a leg
+        # SUBMITTED but not yet filled -- which reads as UNCLAIMED by
+        # design, since an unfilled leg is deliberately replaceable, and so
+        # would otherwise fall through to the economics and have its
+        # complement refused.
+        try:
+            prosp = {}
+            for _s in (UP, DOWN):
+                prosp[_s] = (abs(D(str(self.store.position(market, _s) or 0)))
+                             + (up_live if _s == UP else dn_live))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("PROSPECTIVE_RESIDUAL_UNREADABLE")
+
+        smaller = UP if prosp[UP] < prosp[DOWN] else DOWN
+        gap = abs(prosp[UP] - prosp[DOWN])
+        if gap > 0:
+            # A GAP EXISTING IS NOT ENOUGH. The exemption has to establish
+            # that THIS plan's leg actually closes it: the smaller side must
+            # be IN the plan, and the quantity that would really be
+            # submitted -- after `probe_leg_qty_cap`, the authority on it --
+            # must be positive and no larger than the gap. Anything else is
+            # an opening wearing a completion's clothes, and it falls
+            # through to the full economics below.
+            red_leg = None
+            for _l in _legs:
+                try:
+                    if canonical_side(_l.get("side"),
+                                      doing="reading a plan leg") == smaller:
+                        red_leg = _l
+                        break
+                except UnknownSide:
+                    continue
+            if red_leg is not None:
+                try:
+                    want = D(str(red_leg.get("qty") or 0))
+                    capped = self.probe_leg_qty_cap(market, smaller, want)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    return no("REDUCING_LEG_QTY_UNREADABLE")
+                if capped > 0 and capped <= gap:
+                    return {"reopen": True, "round": rnd,
+                            "market": str(market),
+                            "reason":
+                                "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS",
+                            "held_residual": str(held),
+                            "prospective_up": str(prosp[UP]),
+                            "prospective_down": str(prosp[DOWN]),
+                            "reducing_side": smaller,
+                            "imbalance_gap": str(gap),
+                            "reducing_leg_qty_requested": str(want),
+                            "reducing_leg_qty_after_cap": str(capped),
+                            "verified_reduces_not_opens": True}
+
+        # ---- THE CLAIM READ, AND IT FAILS CLOSED.
+        #
+        # A round with a leg already standing is a COMPLETION, not a
+        # reopening, and must not be gated. But an UNREADABLE claim is a
+        # missing state, and a missing state may not AUTHORIZE NEW
+        # EXPOSURE. My first version returned reopen=True here, reasoning
+        # from `acc_stale_by_distance` that one must never veto on a failed
+        # read. That lesson is about CANCELLING -- a veto there strands
+        # inventory. This is the opposite direction: permitting here ADDS
+        # risk. The two cases pull apart and I had them conflated.
+        #
+        # Failing closed is safe precisely because of the ordering above:
+        # real filled inventory was already established from the durable
+        # store and the venue's own resting orders, neither of which
+        # depends on a claim file. So nothing that actually exists can be
+        # stranded by refusing here -- only an unverified opening is.
+        try:
+            claimed = self.probe_legs_claimed(market, rnd) or {}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("CLAIMS_UNREADABLE_NO_UNVERIFIED_OPENING",
+                      detail=str(exc)[:120],
+                      durable_inventory_already_checked=True)
+        if any(claimed.values()):
+            return {"reopen": True, "round": rnd, "market": str(market),
+                    "reason": ("ROUND_ALREADY_HAS_A_LEG_"
+                               "COMPLETING_NOT_OPENING"),
+                    "claimed": {str(k): bool(v)
+                                for k, v in claimed.items()}}
 
         # the budget actually enforced, not a second opinion of it
         try:
@@ -6043,39 +6152,6 @@ class FaithfulExecutor:
             return no("NO_CONFIGURED_EXPOSURE_BOUND_TO_REOPEN_AGAINST")
         bound = ceil if room is None else (
             room if ceil is None else min(room, ceil))
-
-        # IS THERE A RESIDUAL STILL TO REDUCE? If so the next leg CUTS
-        # exposure rather than adding it, and this is not an opening.
-        # `probe_leg_order` already places the reducing leg first whenever a
-        # residual is held and `probe_leg_qty_cap` caps it at the residual's
-        # magnitude, so the worst case FALLS. Refusing it would strand
-        # precisely the unmatched leg this gate exists to prevent.
-        #
-        # NEVER ON THE SIGNED NET, and `outstanding_on_side` carries the
-        # receipt. On 1415z UP 2.17 was HELD while a DOWN 2.17 completion
-        # was RESTING; the signed net came to exactly 0.00, a gate read the
-        # book as FLAT and exempted an UP 2.08 as a genuine opening leg. The
-        # completion was cancelled unfilled and the position became UP 4.25
-        # against a 3-contract ceiling. So the question is not "is the net
-        # zero" but "is there residual NOT ALREADY BEING WORKED".
-        try:
-            held = D(str(self.store.residual(market)))
-            up_live = D(str(self.store.outstanding_on_side(market, UP)))
-            dn_live = D(str(self.store.outstanding_on_side(market, DOWN)))
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            return no("PROSPECTIVE_RESIDUAL_UNREADABLE")
-        if held != 0:
-            reducing = DOWN if held > 0 else UP
-            working = dn_live if reducing == DOWN else up_live
-            if working < abs(held):
-                return {"reopen": True, "round": rnd, "market": str(market),
-                        "reason":
-                            "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS",
-                        "held_residual": str(held),
-                        "reducing_side": reducing,
-                        "already_working_that_side": str(working)}
 
         # THE WORST CASE RESERVED HERE covers held inventory AND live orders
         # on EITHER side filling alone -- `max`, not the sum, because if

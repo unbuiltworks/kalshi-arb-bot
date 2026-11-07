@@ -293,11 +293,11 @@ def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
     H, E = probe
     ex, t = mk(H, E, tmp_path)
     ex.limits = H.limits(max_live_orders=6)
-    ex.handle(_row(H), _wide_book(), market="m", window="21:00")
+    ex.handle(_row(H), _book(), market="m", window="21:00")
     assert len(t.sent) == 1
     ex2, t2 = mk(H, E, tmp_path)          # new process, same ledger dir
     ex2.limits = H.limits(max_live_orders=6)
-    ex2.handle(_row(H), _wide_book(), market="m", window="21:00")
+    ex2.handle(_row(H), _book(), market="m", window="21:00")
     assert [s["side"] for s in t2.sent] == ["UP"]     # only the unclaimed leg
     # both legs of round 0 now hold filled quantity, so a third process
     # re-places NEITHER; the only thing it may do is open the NEXT round,
@@ -308,7 +308,7 @@ def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
     assert ex3.store.position("m", "DOWN") > D(0)
     assert ex3.acc_leg_attempt("m", 0, "UP") is None
     assert ex3.acc_leg_attempt("m", 0, "DOWN") is None
-    ex3.handle(_row(H), _wide_book(), market="m", window="21:00")
+    ex3.handle(_row(H), _book(), market="m", window="21:00")
     # ONE order, and it is the leg that REDUCES the prospective residual.
     # Realized inventory is balanced here (1 of each filled), but the two
     # resting remainders are DOWN-heavy by 2, so UP is the reducing side.
