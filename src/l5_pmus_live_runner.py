@@ -8921,7 +8921,36 @@ class Runner:
             _qfn = (_qmk(str(slug), str(side)) if callable(_qmk) else None)
             if _qfn is None:
                 self.stats["requote_without_queue_evidence"] += 1
+            # HOW LONG THIS QUOTE HAS ACTUALLY RESTED, from the row's own
+            # submit stamp -- the same field and the same parse the
+            # distance-recovery path uses. Our 34 venue-confirmed orders put
+            # the median fill at 17.1s while five of 2015z's cancellations
+            # fired between 1.1s and 6.8s, each with a 76-81% conditional
+            # chance of still filling. See TSP.REQUOTE_MIN_REST_S.
+            #
+            # AN AGE WE CANNOT ESTABLISH LEAVES THE OLD BEHAVIOUR STANDING,
+            # and the stat records that the move was decided without it.
+            # Same judgement as `require_queue_evidence` directly below: a
+            # floor we cannot evaluate must not disable completion
+            # repricing entirely rather than make it careful -- that would
+            # re-create the 0330z frozen-plan failure, where a quote the
+            # book had left behind was re-proposed 32 times and never
+            # moved. The floor binds wherever the row carries its stamp,
+            # which in production it does: the distance-recovery path
+            # parses the same field and its recoveries fire live.
+            _rest_s = None
+            try:
+                _st = dt.datetime.fromisoformat(str(row.get("t")))
+                if _st.tzinfo is not None:
+                    _rest_s = float(now) - _st.timestamp()
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _rest_s = None
+            if _rest_s is None:
+                self.stats["requote_without_resting_age"] += 1
             res = TSP.completion_requote(
+                resting_rest_s=_rest_s,
                 side=side, resting_own_px=row.get("price"),
                 resting_qty=qty, resting_filled_qty=filled,
                 bid=snap.get("bid"), ask=snap.get("ask"),
