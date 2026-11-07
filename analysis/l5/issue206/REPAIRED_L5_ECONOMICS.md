@@ -162,3 +162,61 @@ rather than cash**, which the measurement above says permits ~4 matched
 pairs at ~zero added worst case. It would be the first test of repeated
 completion in live conditions, and it needs an owner decision on how the $1
 is expressed — **not** an increase in it.
+
+## 7. How often is a residual negative, and do the wins cover the losses?
+
+Measured on the 4,719 redemption-consistent windows that carried a residual,
+1,240,600 contracts.
+
+**The structure is exactly as expected.** A residual bought at basis `b`
+pays `1−b` when it wins and loses `b` when it does not, so **one win covers
+`(1−b)/b` losses**. At L5's measured basis of **0.3205** that is **2.12
+losses per win** — so the whole question reduces to one comparison:
+
+| | |
+|---|---|
+| break-even win rate (= the basis) | **0.3205** |
+| **realised payout per contract** | **0.2995** |
+| shortfall | **−2.1 points** |
+
+**It misses by about two points.** Not a rout, not free money.
+
+| per window | windows | share | total | mean |
+|---|---|---|---|---|
+| residual **negative** | 2,406 | **51.0%** | −$152,438 | −$63.36 |
+| residual **positive** | 2,313 | **49.0%** | +$126,411 | +$54.65 |
+| | | | **net −$26,027** | |
+
+**The wins recover 82.9% of what the losses cost.** So a residual is close
+to a fairly-priced coin flip with a ~2-point drag — which is why the
+per-contract figure is −$0.021 rather than the −$0.244 my earlier model
+claimed.
+
+**Residuals are a cost of doing business, not a profit centre.** L5 still
+nets +$31.54/window because matched pairs earn +$178,176 against the
+residual's −$26,027 — the pairs pay for the drag nearly seven times over.
+
+### Why this does not transfer to our Stage 1 size
+
+The per-window swings are large relative to the mean:
+
+| p01 | p10 | p50 | p90 | p99 | worst | best |
+|---|---|---|---|---|---|---|
+| −$244 | −$104 | −$0.80 | +$81 | +$241 | −$522 | +$773 |
+
+That is on ~$1,065 of turnover per window. Scaled to a $10 envelope the
+same distribution is roughly **±$2.30** at the 1st and 99th percentiles —
+against a **$1.00** loss-at-risk budget.
+
+**So the budget that protects us also removes the dynamic.** "One win makes
+up for two losses" needs enough residual inventory for a win to be
+material, and at $10 with a $1.00 deficit bound the bound cuts off the left
+tail — and necessarily the right tail with it. The asymmetry only starts
+paying for itself at a size where a single window's residual can swing tens
+of dollars, which is Stage 3–4 territory, not Stage 1.
+
+**The Stage 1 blocker is therefore narrowed, not removed.** The residual's
+sign is now measured: **negative, by about 2 points of win rate, on 1.24M
+contracts.** What remains unknown is whether OUR residuals behave like
+L5's — ours are 5 settled legs, 4 of which lost — and that is still only
+answerable from our own fills.
