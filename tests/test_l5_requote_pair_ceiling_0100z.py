@@ -426,15 +426,27 @@ def test_a_quote_that_became_more_competitive_is_never_cancelled():
     assert v["reason"] == "NOT_DRIFTED_AWAY"
 
 
-def test_the_recovery_still_knows_nothing_about_pair_economics():
-    """Stated, not assumed, because it bounds what this fix can claim.
+def test_the_0100z_tolerance_refusal_comes_before_any_pair_test():
+    """Stated, not assumed, because it bounds what THIS fix can claim.
 
-    `recover_stale_leg` accepts no held quantity and no cost basis, so it
-    cannot preserve a cheap pair on economics -- only on DISTANCE. The fix
-    holds at 0100z because 3 ticks is inside tolerance, not because the
-    recovery understands that 0.46 was a 0.9500 pair.
+    `recover_stale_leg` has since gained the pair test
+    (`RESTING_PAIR_WORTH_KEEPING`, a separate PR), so it is no longer true
+    that it knows nothing about pair economics. What is still true, and is
+    the bound on the requote fix, is that the pair test never ran at 0100z:
+    3 ticks of drift is inside the 4-tick tolerance, so the distance rule
+    declined on DISTANCE and the 0.46 quote owed its survival to the
+    requote ceiling alone.
     """
     import inspect
     params = set(inspect.signature(TS.recover_stale_leg).parameters)
-    assert not params & {"held_qty", "held_cost_usd", "deficient_qty",
-                         "pair_ceiling", "residual_budget_usd"}
+    assert {"held_qty", "held_cost_usd", "pair_ceiling"} <= params
+    v = TS.recover_stale_leg(
+        side="UP", own_px=D("0.4600"), qty=D("1"), remaining=D("1"),
+        state="LIVE", submitted_t=WINDOW_START, now=1794013240.1147778,
+        bid=D("0.51"), ask=D("0.53"), tick=D("0.01"),
+        depth_ticks=TS.depth_ticks(), book_age_s=0.061, recoveries_used=0,
+        held_qty=D("1"), held_cost_usd=FILL_OWN_PX)
+    assert v["recover"] is False
+    assert v["reason"] == "WITHIN_TOLERANCE"
+    # the pair was never priced, which is the point
+    assert "pair_at_resting" not in v

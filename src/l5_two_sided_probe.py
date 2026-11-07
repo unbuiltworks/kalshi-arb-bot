@@ -2141,7 +2141,10 @@ def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
                       bid: Any, ask: Any, tick: Any, depth_ticks: int,
                       book_age_s: Any,
                       recoveries_used: int,
-                      open_budget_remaining: Any = None) -> Dict[str, Any]:
+                      open_budget_remaining: Any = None,
+                      held_qty: Any = None,
+                      held_cost_usd: Any = None,
+                      pair_ceiling: Any = None) -> Dict[str, Any]:
     """Should this RESTING leg be cancelled now and re-quoted? Read-only.
 
     Returns {"recover": bool, "reason": str, ...}. `recover` is True only
@@ -2165,6 +2168,33 @@ def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
     IT DECIDES NOTHING ABOUT SAFETY. The caller must still poll the venue
     first, confirm zero cumulative fill on the authoritative read, cancel by
     exact venue order id, and prove the cancel terminal before replacing.
+
+    THE PAIR ECONOMICS ARE OPTIONAL AND ONLY EVER REFUSE. `held_qty` and
+    `held_cost_usd` describe the inventory this leg would COMPLETE, and with
+    both readable the drift test gains one more question: would the
+    replacement buy a pair the ceiling forbids while the resting order
+    already holds one it permits? Measured over the recorded authenticated
+    ladders, that case is the common one rather than the corner:
+
+        window  resting pair       samples  recovery fires  destroys a
+                                                            keepable quote
+        1215z   0.8393  (+$0.16)        57              35             24
+        1245z   0.9500  (+$0.05)        88              72             72
+        0100z   0.9500  (+$0.05)         1               0              0
+
+    On 1245z EVERY recovery would have cancelled a profitable quote that the
+    pair cap then forbade re-placing, leaving no quote at all. 0100z is the
+    control: 3 ticks of drift is inside the 4-tick tolerance, so the
+    distance rule never fired there and this test changes nothing about that
+    window -- its loss was the requote, fixed separately.
+
+    WHAT THIS DELIBERATELY DOES NOT DO is protect reducing orders as a
+    class. A resting quote whose own pair is ALREADY outside the ceiling is
+    not worth keeping, and recovering it is correct -- that is exactly the
+    01:00:59 recovery of a 0.98 pair 20 ticks adrift. Only the trade of a
+    GOOD pair for NO quote is refused. Unreadable inventory, an unreadable
+    basis, zero held quantity or an absent ceiling all decline the extra
+    question and leave the pre-existing behaviour exactly as it was.
     """
     def no(reason: str, **kw: Any) -> Dict[str, Any]:
         return dict(kw, recover=False, reason=reason)
@@ -2227,6 +2257,41 @@ def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
                   would_quote_now=str(now_px), drift_ticks=str(ticks),
                   allowed_ticks=str(allow))
 
+    # 4b. WOULD THE REPLACEMENT BUY A WORSE PAIR THAN WE ALREADY HOLD?
+    #
+    # Drift says the order is far from the touch. It does not say the order
+    # is bad. A completion's worth is its PAIR -- the realised basis of the
+    # inventory it matches plus its own price -- and `quote_own_price` prices
+    # the replacement two ticks behind the CURRENT touch, which the pair cap
+    # is then free to refuse. Cancelling on drift alone therefore trades a
+    # permitted pair for no quote at all.
+    #
+    # STRICTLY A REFUSAL, AND ONLY HERE. Placed after the drift tests so it
+    # can only ever REMOVE a recovery that was about to happen; it can never
+    # create one, widen a tolerance, spend a budget or relax a safety test.
+    # Everything above still refuses first: a partial fill is still
+    # NOT_ZERO_FILL, a stale book still BOOK_STALE, a young order still
+    # TOO_YOUNG.
+    hq, hc = _d(held_qty), _d(held_cost_usd)
+    cap = _d(pair_ceiling) if pair_ceiling is not None else max_pair_cost()
+    if hq is not None and hc is not None and hq > 0 and cap is not None:
+        basis = hc / hq
+        pair_rest = own + basis
+        pair_repl = now_px + basis
+        if pair_rest <= cap < pair_repl:
+            return no("RESTING_PAIR_WORTH_KEEPING",
+                      own_px=str(own), would_quote_now=str(now_px),
+                      drift_ticks=str(ticks), allowed_ticks=str(allow),
+                      held_basis=str(basis.quantize(D("0.0001"))),
+                      pair_at_resting=str(pair_rest.quantize(D("0.0001"))),
+                      pair_at_replacement=str(
+                          pair_repl.quantize(D("0.0001"))),
+                      pair_ceiling=str(cap),
+                      note=("the resting quote buys a pair the ceiling "
+                            "permits and the replacement would not, so "
+                            "cancelling it on drift alone would leave no "
+                            "quote at all"))
+
     # 5. CHURN AND BUDGET. Cancelling without the capacity to re-place is
     #    strictly worse than leaving the order resting, so an exhausted OPEN
     #    budget declines the recovery rather than spending the cancel.
@@ -2254,9 +2319,25 @@ def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
         except (TypeError, ValueError):
             return no("OPEN_BUDGET_UNREADABLE", open_remaining=str(obr))
 
+    _hq, _hc = _d(held_qty), _d(held_cost_usd)
+    _cap = _d(pair_ceiling) if pair_ceiling is not None else max_pair_cost()
+    _basis = (_hc / _hq) if (_hq is not None and _hc is not None
+                             and _hq > 0) else None
     return {"recover": True, "reason": None, "side": str(side),
             "own_px": str(own), "would_quote_now": str(now_px),
             "drift_ticks": str(ticks), "allowed_ticks": str(allow),
+            # WHY THIS ONE IS STILL WORTH RECOVERING, stated rather than
+            # left to be inferred from the absence of a refusal. None means
+            # the inventory was unreadable and the pair was not judged.
+            "held_basis": (None if _basis is None
+                           else str(_basis.quantize(D("0.0001")))),
+            "pair_at_resting": (None if _basis is None
+                                else str((own + _basis
+                                          ).quantize(D("0.0001")))),
+            "pair_at_replacement": (None if _basis is None
+                                    else str((now_px + _basis
+                                              ).quantize(D("0.0001")))),
+            "pair_ceiling": (None if _cap is None else str(_cap)),
             "rest_s": str(rest), "book_age_s": str(age),
             "recoveries_used": int(recoveries_used),
             "max_per_market": recover_max_per_market(),

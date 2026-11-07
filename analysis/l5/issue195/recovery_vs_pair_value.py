@@ -53,6 +53,7 @@ def main():
         pair_rest = (rested + paid).quantize(D("0.0001"))
         t0 = min(r["t"] for r in samples)
         n = fires = keepable = stranded = repl_refused = 0
+        fires_fix = 0
         for r in samples:
             bids, asks = r.get("bids") or [], r.get("asks") or []
             if not bids or not asks:
@@ -61,12 +62,20 @@ def main():
             if a <= b:
                 continue
             n += 1
-            v = TS.recover_stale_leg(
+            kw = dict(
                 side=side, own_px=rested, qty=D("1"), remaining=D("1"),
                 state="LIVE", submitted_t=t0, now=float(r["t"]),
                 bid=b, ask=a, tick=TICK, depth_ticks=TS.depth_ticks(),
                 book_age_s=0.05, recoveries_used=0,
                 open_budget_remaining=None)
+            # WITHOUT the inventory this is the pre-fix decision exactly,
+            # because absent inventory declines the extra question.
+            v = TS.recover_stale_leg(**kw)
+            vfix = TS.recover_stale_leg(
+                **kw, held_qty=D(c["held_qty"]),
+                held_cost_usd=D(c["held_cost_usd"]))
+            if vfix.get("recover"):
+                fires_fix += 1
             if not v.get("recover"):
                 continue
             fires += 1
@@ -87,11 +96,14 @@ def main():
               % (paid.quantize(D("0.0001")), pair_rest,
                  "inside" if pair_rest <= cap else "OUTSIDE", cap))
         print("  samples                                      %d" % n)
-        print("  recovery would fire                          %d" % fires)
+        print("  recovery would fire       BEFORE            %d" % fires)
+        print("  recovery would fire       AFTER the fix    %d" % fires_fix)
         print("  ... and the replacement's pair exceeds cap   %d" % repl_refused)
         print("  ... on a resting quote worth keeping         %d" % keepable)
         print("  ... BOTH: a good quote cancelled, unreplaceable  %d"
               % stranded)
+        print("  destructive recoveries PREVENTED             %d" % (fires - fires_fix))
+        print("  legitimate recoveries still possible         %d" % fires_fix)
     print("=" * 72)
     print("0100z, the venue-confirmed state: resting UP own 0.4600 against a")
     v = TS.recover_stale_leg(
