@@ -146,17 +146,34 @@ def _get(transport: Any, path: str) -> Any:
         "transport exposes neither _get nor request; the audit cannot read")
 
 
-def walk_activities(transport: Any, *, max_pages: int = MAX_PAGES
-                    ) -> Dict[str, Any]:
+def walk_activities(transport: Any, *, max_pages: int = MAX_PAGES,
+                    cursor: Optional[str] = None,
+                    rows: Optional[List[Dict[str, Any]]] = None,
+                    pages_done: int = 0) -> Dict[str, Any]:
     """Every reachable activity row, newest first. READ-ONLY GETs only.
 
     The walk's ENDING is returned beside the rows, because a truncated feed
     and a complete one are different facts: a basis computed from a
     truncated walk could be missing fills, so the caller must be able to
     tell. `ended` is "eof", "no_cursor", "max_pages" or "error:<Type>".
+
+    RESUMABLE, AND THAT IS A LATENCY PROPERTY RATHER THAN A NEW CAPABILITY.
+    `cursor`, `rows` and `pages_done` let a caller take the feed a few pages
+    at a time and continue on a later tick, because this walk is paced by the
+    process's shared venue limiter -- 1.5 requests a second -- and a 133-page
+    feed therefore costs about 89 seconds of wall clock. Run in one go on the
+    window-roll path that is exactly 89 seconds of a 15-minute window in which
+    no trading decision can be made; see `l5_roll_diagnostics`. Resuming reads
+    the SAME pages in the SAME order and accumulates into the SAME list, so a
+    walk completed across several calls is byte-identical to one completed in
+    a single call. `next_cursor` is the continuation point and is None unless
+    `ended` is "max_pages"; `pages` counts the pages of THIS walk including
+    the ones already done, so `complete` keeps its meaning.
     """
-    rows: List[Dict[str, Any]] = []
-    cursor, pages, ended = None, 0, "eof"
+    rows = [] if rows is None else rows
+    cursor = (str(cursor).strip() or None) if cursor else None
+    pages, ended = int(pages_done), "eof"
+    next_cursor: Optional[str] = None
     while pages < max_pages:
         path = ACTIVITIES_PATH + ("?cursor=%s" % cursor if cursor else "")
         try:
@@ -181,8 +198,14 @@ def walk_activities(transport: Any, *, max_pages: int = MAX_PAGES
             break
     else:
         ended = "max_pages"
+        next_cursor = cursor
     return {"rows": rows, "pages": pages, "ended": ended,
-            "complete": ended in ("eof", "no_cursor")}
+            "complete": ended in ("eof", "no_cursor"),
+            # the continuation point, or None when there is nothing to
+            # continue. A truncated walk that cannot say where to resume is
+            # reported as max_pages with next_cursor None, which a resuming
+            # caller must treat as INCOMPLETE rather than as finished.
+            "next_cursor": next_cursor}
 
 
 def our_client_order_ids(store: Any) -> set:
@@ -1127,13 +1150,21 @@ def _leg_quantity(store: Any, market: str, side: str, key: str
     return (q, "positions")
 
 
-def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
-          ) -> Dict[str, Any]:
-    """The whole read-only pass. Writes nothing, decides nothing."""
+def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES,
+          walk: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """The whole read-only pass. Writes nothing, decides nothing.
+
+    `walk` accepts a walk this function did not make, which is how a caller
+    that took the feed a few pages at a time across several ticks hands in the
+    result. It changes nothing about what is computed: the walk is the walk,
+    whoever paced it, and an incomplete one still refuses every basis with
+    ACTIVITY_WALK_INCOMPLETE exactly as it does here.
+    """
     keys = sorted(set(str(k) for k in
                       ((getattr(store, "state", {}) or {})
                        .get("leg_cost_basis_unknown") or [])))
-    walk = walk_activities(transport, max_pages=max_pages)
+    walk = (dict(walk) if walk is not None
+            else walk_activities(transport, max_pages=max_pages))
     our = our_client_order_ids(store)
     our_vids = our_venue_order_ids(store)
     # MEASURED BEFORE IT IS RELIED ON. Every negative ownership verdict

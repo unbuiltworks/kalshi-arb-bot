@@ -66,6 +66,7 @@ from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
+from src import l5_roll_diagnostics as RD
 from src import l5_dual_quote as DQ
 from src import l5_fidelity_mode as FID
 from src import l5_replenish as RPL
@@ -888,6 +889,23 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                 continue
             if str(row.get("market") or "") != str(slug):
                 continue
+            # Distance recovery is for speculative opening orders, not the
+            # sole maker order reducing already-confirmed unmatched inventory.
+            # Its OPEN-budget check cannot guarantee a replacement; cancelling
+            # that reducing quote can strand the filled leg. The separate
+            # completion-requote controller owns economic repricing. This
+            # guard does NOT affect the mandatory age/terminal deadline,
+            # independent watchdog, halt, or authorization-expiry cancels.
+            try:
+                residual = D(str(runner.store.residual(str(slug))))
+                side = str(row.get("side") or "")
+            except (AttributeError, TypeError, ValueError, ArithmeticError):
+                # Uncertain inventory is not permission for an optional cancel.
+                count("acc_recover:RESIDUAL_UNREADABLE")
+                continue
+            if (residual > 0 and side == "DOWN") or (residual < 0 and side == "UP"):
+                count("acc_recover:REDUCING_LEG_DEFER_TO_COMPLETION")
+                continue
             sub = None
             try:
                 st = dt.datetime.fromisoformat(str(row.get("t")))
@@ -1374,6 +1392,14 @@ class Runner:
         #: and must survive a restart without scoring anything twice.
         self.two_sided_ledger = TS.ShadowLedger(
             os.path.join(root, "two_sided_shadow.json"))
+        #: THE DEFERRED READ-ONLY DIAGNOSTICS. Built here rather than in
+        #: `roll` so the latch survives every rollover: a job enqueued on the
+        #: first window is not re-enqueued on the ninety-sixth. See
+        #: `l5_roll_diagnostics` for what this fixes and what it measured.
+        self.roll_diag = RD.DeferredDiagnostics()
+        #: the cost-basis audit's paced activity walk, built on first use and
+        #: carried across ticks. None until the job runs once.
+        self._cost_basis_walk: Optional[Any] = None
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -1525,15 +1551,37 @@ class Runner:
         }
 
     def roll(self, now: float) -> None:
+        # Diagnose the recurring ~93s window-roll stall without changing
+        # order submission, cancellation, settlement, or failure semantics.
+        # Emit each completed stage even if a later stage blocks or raises.
+        def _roll_stage(stage, fn, *args, **kwargs):
+            started = time.monotonic()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                elapsed = time.monotonic() - started
+                emit("L5_LIVE_ROLL_STAGE", {
+                    "stage": stage, "elapsed_s": round(elapsed, 3),
+                    "window_start": str(AB.window_start(now)),
+                    "labels": "observability only; no timeout or behavior change"})
         ws = AB.window_start(now)
         if ws == self.ws:
             return
+        # THE BUDGET, MEASURED AND REPORTED. A roll that blocks is the defect
+        # this guard exists to surface, and it is surfaced rather than
+        # enforced on purpose: nothing here may be abandoned half-done. The
+        # window summary, the shadow close, the two-sided close and the
+        # executor rebuild are not interruptible work, and a timeout that cut
+        # one of them short would trade a latency problem for an accounting
+        # one. So the stall becomes one loud line instead of something a
+        # reader has to reconstruct from stage timings and a DNS stream.
+        _roll_t0 = time.monotonic()
         if self.ws is not None:
-            self.model_close()
-            self.close_window()
+            _roll_stage("model_close", self.model_close)
+            _roll_stage("close_window", self.close_window)
             # the shadow's own window close. After close_window, which must
             # not be delayed by it, and before self.ws moves.
-            self.shadow_close()
+            _roll_stage("shadow_close", self.shadow_close)
         # a claim is for ONE window; it does not carry into the next one.
         self.arm_claim = None
         self.ws = ws
@@ -1551,7 +1599,7 @@ class Runner:
                     ).get("phase") != "CONFIRMED":
                 self.emit_window_accounting(str(prev), settlement=None)
         self.last_rolled_slug = str(slug)
-        self.two_sided_close()
+        _roll_stage("two_sided_close", self.two_sided_close)
         self.two_sided = TS.TwoSidedShadow(slug, window_start=float(ws))
         # MODELLED fill session for this window. Attaching the ladder
         # observer here is what gives a maker quote a queue position; it is
@@ -1583,8 +1631,8 @@ class Runner:
         # touch-through guess. A fanout with no observers at all behaves
         # like the None it replaces.
         self.fanout = FrameFanout(primary)
-        self.shadow_attach_ladder(slug)
-        self.evidence_attach(slug)
+        _roll_stage("shadow_attach_ladder", self.shadow_attach_ladder, slug)
+        _roll_stage("evidence_attach", self.evidence_attach, slug)
         self.book.frame_observer = (self.fanout
                                     if (primary is not None
                                         or self.fanout.extra) else None)
@@ -1621,131 +1669,39 @@ class Runner:
                            "PMUS_Q1_LIVE/SESSION_ID/ARM. The owner's "
                            "live authorization is unchanged; this "
                            "lock sits in front of it.")})
-        # THE $1/SHARE PLACEHOLDER AUDIT, READ-ONLY and OFF by default.
-        # `leg_cost_basis_unknown` legs arrived as a venue NET position this
-        # executor never booked, so no order of ours exists to ask about and
-        # settlement priced them at the $1/share upper bound -- which is what
-        # makes realized_attributed an ESTIMATE rather than a measurement. It
-        # reads the account activity feed ONCE and reports what the fills
-        # actually were, split L5-owned vs OWNER_MANUAL by our own persisted
-        # client order ids. It WRITES NOTHING and cannot: applying its finding
-        # would move realized toward zero, which correct_settled_market
-        # refuses as CORRECTION_WOULD_RELAX_LOSS_HALT and which needs its own
-        # owner decision. Gated so a normal boot does not spend the feed walk.
-        # 1 TICK vs 2 TICKS, from the ACTUAL order and fill records on this
-        # volume. READ-ONLY and OFF by default. It exists because a deeper
-        # quote always shows a larger QUOTED edge -- 0.95 against 0.97 on a
-        # one-tick book -- so comparing quoted edges would always "prove"
-        # that deeper is better and prove nothing. It reports per depth the
-        # measured single-leg and both-leg fill rates, the realized edge from
-        # recorded prices and commissions, and withholds any verdict below
-        # the sample thresholds. It WRITES NOTHING.
-        if str(os.getenv("L5_DEPTH_COMPARISON", "")).strip().upper() == "YES":
-            try:
-                from src import l5_depth_comparison as DC
-                emit("L5_DEPTH_COMPARISON", DC.from_tape(self.tape))
-            except BaseException as exc:                       # noqa: BLE001
-                emit("L5_DEPTH_COMPARISON_FAILED", {
-                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
-                    "labels": ("the comparison is read-only; a failure "
-                               "changes nothing and never alters the "
-                               "ledger")})
-        # ONE-SHOT TAPE RECOVERY. Off unless L5_TAPE_RECOVERY_COID names a
-        # client order id, and then it runs EXACTLY ONCE PER PROCESS.
+        # ============ THE OPTIONAL READ-ONLY DIAGNOSTICS ARE QUEUED HERE,
+        # NOT RUN HERE, AND THAT IS THE 93-SECOND FIX.
         #
-        # `roll` fires on every window roll, NOT at startup -- I first
-        # described this as a startup call and it is not one. The module
-        # latches on the coid so the tape is read once and not reopened;
-        # without that latch it re-read 143,829 lines every fifteen minutes.
+        # Four blocks used to run inline at this point: the depth comparison,
+        # the one-shot tape recovery, the cost-basis audit with its apply, and
+        # the L5 baseline epoch. All four are read-only; none of them places,
+        # cancels, settles or reconciles anything. But `roll` is synchronous
+        # and runs FIRST in the tick, so every second one of them spends is a
+        # second in which this window cannot evaluate an opening or a
+        # completion -- and the cost-basis audit spends about ninety.
         #
-        # It exists because the 1415z residual-cap decision was written to
-        # the tape and omitted from the emitted line, so the one record that
-        # says whether the cap bound could not be read from the logs. This
-        # lifts that record out and nothing else: read-only, bounded, and
-        # reduced to an allowlist before it is emitted. See
-        # analysis/l5/stage_f/STAGE_B2_TAPE_RECOVERY.md.
-        if TR.configured() is not None:
-            try:
-                emit("L5_TAPE_RECOVERY", TR.from_env(self.root))
-            except BaseException as exc:                       # noqa: BLE001
-                emit("L5_TAPE_RECOVERY_FAILED", {
-                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
-                    "labels": ("read-only; a failure changes nothing, writes "
-                               "nothing and never touches the ledger")})
-        if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
-            try:
-                from src import l5_cost_basis_audit as CBA
-                result = CBA.audit(self.store, self.transport)
-                emit("L5_COST_BASIS_AUDIT", result)
-                # THE MEASURED-COST CORRECTION, from the walk that JUST ran.
-                # INSPECT is the default and writes nothing; a batch id in
-                # L5_COST_BASIS_APPLY is the owner's authorization to write.
-                # Boot only, so it cannot run twice in a session, and each
-                # leg still passes all ten guards inside the store's verb.
-                mode = CBA.apply_mode()
-                emit("L5_COST_BASIS_APPLY", CBA.apply_cost_basis_corrections(
-                    self.store, result,
-                    batch_id=(None if mode == CBA.APPLY_INSPECT else mode),
-                    manifest=CBA.batch_manifest()))
-            except BaseException as exc:                       # noqa: BLE001
-                emit("L5_COST_BASIS_AUDIT_FAILED", {
-                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
-                    "labels": ("the audit is read-only. The correction is "
-                               "guarded leg by leg and INSPECT by default, so "
-                               "a failure here leaves the ledger as it was")})
-        # THE L5 BASELINE EPOCH, struck ONCE and only from authoritative
-        # reads (OWNER 2026-10-16). It is NOT a claim that historical L5
-        # losses were zero: establish_l5_baseline snapshots and preserves
-        # every pre-T figure, including the unknown-cost provenance keys. It
-        # is the instant from which ATTESTED L5 settlements are counted.
+        # ITS OWN RECORD SAYS SO: `activity_walk {"pages":133}`, taken through
+        # the process's one shared limiter at PMUS_RPS = 1.5 requests a
+        # second, which is 88.7 seconds of paced sleeping. Measured on
+        # 2026-11-06, `roll` returned after 93.1-93.9 s on every window for
+        # hours, and the first completion decision of the 0300z and 0315z
+        # windows -- the two that settled -$0.97 -- landed at +98.5 s and
+        # +97.5 s after the window opened. See `l5_roll_diagnostics`.
         #
-        # Every read is required and none may be inferred. Cash comes from
-        # /v1/account/balances, the positions from /v1/portfolio/positions,
-        # L5-owned open orders from our OWN durable live-order record (the
-        # account's open orders say what is resting, not whose it is, and
-        # this account is SHARED), and the outstanding obligation from the
-        # same helper the cash gate uses. A failure strikes NO baseline, so
-        # the scoped ceilings keep refusing L5_SCOPED_REALIZED_UNAVAILABLE --
-        # the safe direction.
-        if str(os.getenv("L5_ESTABLISH_BASELINE", "")).strip().upper() == "YES":
-            try:
-                acct = self.transport.account() or {}
-                # THE DEFECT THIS REPLACES. /v1/account/balances returns
-                # `balances` as a LIST of entries carrying buyingPower; the
-                # first version read availableBalance/cash/etc off the
-                # TOP-LEVEL dict, never looked inside balances[], and so
-                # produced cash=None and refused BASELINE_READS_UNAVAILABLE
-                # at 02:39:36Z with venue_positions_read=true. The runner's
-                # own cash refresh already does this correctly, and this now
-                # uses the identical proven parser rather than guessing key
-                # names. Still None on a genuinely unreadable balance, which
-                # still refuses -- the validation is unchanged.
-                cash = T.PmusTransport.buying_power(acct)
-                pos = self.transport.positions()
-                # from the store's OWN committed-cash record, not from the
-                # executor (which is constructed below and would therefore
-                # have reported a silent zero -- missing is never zero).
-                oblig = sum((D(str(v)) for v in
-                             (self.store.committed() or {}).values()), D(0))
-                mine = sorted(str((r or {}).get("venue_order_id") or "")
-                              for r in (self.store.live_orders() or {}).values()
-                              if (r or {}).get("venue_order_id"))
-                res = self.store.establish_l5_baseline(
-                    cash_usd=cash, l5_open_orders=mine,
-                    positions={str(k): str(v) for k, v in
-                               (self.store.state.get("positions") or {}).items()},
-                    outstanding_obligations_usd=oblig,
-                    source=self.store.L5_BASELINE_SOURCE)
-                emit("L5_BASELINE_ESTABLISHED" if res.get("established")
-                     else "L5_BASELINE_REFUSED",
-                     dict(res, venue_positions_read=(pos is not None)))
-            except BaseException as exc:                       # noqa: BLE001
-                emit("L5_BASELINE_REFUSED", {
-                    "established": False,
-                    "reason": "BASELINE_READ_FAILED",
-                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
-                    "labels": ("no baseline was struck, so the L5-scoped "
-                               "ceilings keep refusing -- the safe direction")})
+        # AND EACH WAS MEANT TO RUN ONCE. The audit's comment below says it
+        # "reads the account activity feed ONCE"; the apply's says "Boot only,
+        # so it cannot run twice in a session". `roll` fires every fifteen
+        # minutes, so both ran ninety-six times a day. The queue's latch is
+        # per name and set at enqueue time, so each now runs exactly once per
+        # process, which is what they always claimed to do.
+        #
+        # NOTHING ELSE MOVES. The window summary, the model close, the shadow
+        # close, the two-sided close, the window accounting, the transport and
+        # executor rebuild, the ownership oracle and the gates all stay here,
+        # in this order, undeferred. Only the four diagnostics are queued, and
+        # queued is not skipped: a job stays queued until it reports done.
+        self.enqueue_roll_diagnostics()
+
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
@@ -1828,6 +1784,261 @@ class Runner:
         self.last_blockers = _BLOCKERS_UNSET
         self.win = collections.Counter()
         self.first_action_t = None
+        _roll_elapsed = time.monotonic() - _roll_t0
+        _roll_budget = RD.roll_budget_s()
+        if _roll_elapsed > _roll_budget:
+            emit("L5_LIVE_ROLL_OVER_BUDGET", {
+                "elapsed_s": round(_roll_elapsed, 3),
+                "budget_s": _roll_budget,
+                "budget_env": RD.ROLL_BUDGET_S_ENV,
+                "window_start": str(ws),
+                "deferred": self.roll_diag.report(),
+                "labels": ("`roll` runs FIRST in the tick and is "
+                           "synchronous, so every second here is a second "
+                           "this window cannot evaluate an opening or a "
+                           "completion. On 2026-11-06 this was 93 s on every "
+                           "window, spent by a read-only diagnostic that is "
+                           "now deferred. Reporting only: nothing is "
+                           "abandoned or cut short.")})
+        self.stats["roll_elapsed_s_max"] = max(
+            round(_roll_elapsed, 3),
+            float(self.stats.get("roll_elapsed_s_max", 0) or 0))
+
+    # ----------------------------------------- deferred roll diagnostics
+    def enqueue_roll_diagnostics(self) -> None:
+        """Queue the optional read-only diagnostics. Runs none of them.
+
+        Each job is latched on its name by the queue, so calling this on every
+        window roll enqueues each one exactly once per process -- which is the
+        cadence all four of them documented and none of them had.
+
+        THE GATE IS STILL READ AT ENQUEUE TIME, deliberately. An operator who
+        has not set `L5_COST_BASIS_AUDIT` gets no job and no record, exactly
+        as before; the switches keep their meaning and their default-OFF.
+        Reading them here rather than inside the job also means the job cannot
+        be enabled halfway through a process by a variable that changed under
+        it, which is a property the inline version had by accident and this
+        keeps on purpose.
+        """
+        rd = self.roll_diag
+
+        if str(os.getenv("L5_DEPTH_COMPARISON", "")).strip().upper() == "YES":
+            # 1 TICK vs 2 TICKS, from the ACTUAL order and fill records on
+            # this volume. READ-ONLY. It exists because a deeper quote always
+            # shows a larger QUOTED edge -- 0.95 against 0.97 on a one-tick
+            # book -- so comparing quoted edges would always "prove" that
+            # deeper is better and prove nothing. It reports per depth the
+            # measured single-leg and both-leg fill rates, the realized edge
+            # from recorded prices and commissions, and withholds any verdict
+            # below the sample thresholds. It WRITES NOTHING.
+            def _depth_comparison(_deadline: float) -> Dict[str, Any]:
+                from src import l5_depth_comparison as DC
+                return {"_kind": "L5_DEPTH_COMPARISON",
+                        "report": DC.from_tape(self.tape)}
+            rd.enqueue("depth_comparison", _depth_comparison)
+
+        if TR.configured() is not None:
+            # ONE-SHOT TAPE RECOVERY, off unless L5_TAPE_RECOVERY_COID names a
+            # client order id. It exists because the 1415z residual-cap
+            # decision was written to the tape and omitted from the emitted
+            # line, so the one record that says whether the cap bound could
+            # not be read from the logs. This lifts that record out and
+            # nothing else: read-only, bounded, and reduced to an allowlist
+            # before it is emitted. The module latches on the coid too, so
+            # without the queue's latch it re-read 143,829 lines every fifteen
+            # minutes. See analysis/l5/stage_f/STAGE_B2_TAPE_RECOVERY.md.
+            def _tape_recovery(_deadline: float) -> Dict[str, Any]:
+                return {"_kind": "L5_TAPE_RECOVERY",
+                        "report": TR.from_env(self.root)}
+            rd.enqueue("tape_recovery", _tape_recovery)
+
+        if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
+            rd.enqueue("cost_basis_audit", self._cost_basis_audit_step)
+
+        if str(os.getenv("L5_ESTABLISH_BASELINE", "")).strip().upper() == "YES":
+            rd.enqueue("establish_baseline", self._establish_baseline_step)
+
+    def _cost_basis_audit_step(self, deadline: float) -> Dict[str, Any]:
+        """One slice of the $1/share placeholder audit, then its apply.
+
+        THE AUDIT. `leg_cost_basis_unknown` legs arrived as a venue NET
+        position this executor never booked, so no order of ours exists to ask
+        about and settlement priced them at the $1/share upper bound -- which
+        is what makes realized_attributed an ESTIMATE rather than a
+        measurement. It reads the account activity feed and reports what the
+        fills actually were, split L5-owned vs OWNER_MANUAL by our own
+        persisted client order ids. It WRITES NOTHING and cannot: applying its
+        finding would move realized toward zero, which correct_settled_market
+        refuses as CORRECTION_WOULD_RELAX_LOSS_HALT and which needs its own
+        owner decision.
+
+        WHY IT IS SLICED. The feed was 133 pages on 2026-11-06 and the shared
+        limiter paces reads at PMUS_RPS = 1.5 a second, so one pass is ~89
+        seconds of sleeping. Taken `L5_COST_BASIS_PAGES_PER_TICK` pages at a
+        time it is the same walk in the same order, and no single call holds
+        the limiter long enough to delay an order poll or a book read.
+
+        NOTHING IS COMPUTED FROM A PARTIAL WALK. `audit` is called only once
+        the walk is done, and an incomplete walk still refuses every basis
+        with ACTIVITY_WALK_INCOMPLETE exactly as it did inline.
+        """
+        from src import l5_cost_basis_audit as CBA
+        pw = getattr(self, "_cost_basis_walk", None)
+        if pw is None:
+            pw = RD.PagedWalk(
+                CBA.walk_activities, self.transport,
+                pages_per_step=int(str(os.getenv(
+                    "L5_COST_BASIS_PAGES_PER_TICK", "12")).strip() or 12),
+                max_pages=CBA.MAX_PAGES)
+            self._cost_basis_walk = pw
+        # THE CURRENT WINDOW'S TRANSPORT, re-bound each step: `roll` rebuilds it
+        # every fifteen minutes and a walk that spans a rollover must keep
+        # using a live object rather than the one it started with.
+        pw.transport = self.transport
+        pw.step(deadline)
+        if not pw.done:
+            return {"_resume": True, "_kind": "L5_COST_BASIS_AUDIT_PROGRESS",
+                    "walk": pw.report(),
+                    "labels": ("the activity walk is paced across ticks and "
+                               "is NOT finished. Nothing has been computed "
+                               "from it and nothing has been written.")}
+        result = CBA.audit(self.store, self.transport, walk=pw.walk)
+        # THE MEASURED-COST CORRECTION, from the walk that JUST ran.
+        # INSPECT is the default and writes nothing; a batch id in
+        # L5_COST_BASIS_APPLY is the owner's authorization to write.
+        # Once per process, so it cannot run twice in a session, and each
+        # leg still passes all ten guards inside the store's verb.
+        mode = CBA.apply_mode()
+        emit("L5_COST_BASIS_APPLY", CBA.apply_cost_basis_corrections(
+            self.store, result,
+            batch_id=(None if mode == CBA.APPLY_INSPECT else mode),
+            manifest=CBA.batch_manifest()))
+        return dict(result, _kind="L5_COST_BASIS_AUDIT",
+                    walk_pacing=pw.report())
+
+    def _establish_baseline_step(self, _deadline: float) -> Dict[str, Any]:
+        """The L5 BASELINE EPOCH, struck ONCE and only from authoritative
+        reads (OWNER 2026-10-16).
+
+        It is NOT a claim that historical L5 losses were zero:
+        establish_l5_baseline snapshots and preserves every pre-T figure,
+        including the unknown-cost provenance keys. It is the instant from
+        which ATTESTED L5 settlements are counted.
+
+        Every read is required and none may be inferred. Cash comes from
+        /v1/account/balances, the positions from /v1/portfolio/positions,
+        L5-owned open orders from our OWN durable live-order record (the
+        account's open orders say what is resting, not whose it is, and this
+        account is SHARED), and the outstanding obligation from the same
+        helper the cash gate uses. A failure strikes NO baseline, so the
+        scoped ceilings keep refusing L5_SCOPED_REALIZED_UNAVAILABLE -- the
+        safe direction.
+        """
+        acct = self.transport.account() or {}
+        # THE DEFECT THIS REPLACES. /v1/account/balances returns
+        # `balances` as a LIST of entries carrying buyingPower; the
+        # first version read availableBalance/cash/etc off the
+        # TOP-LEVEL dict, never looked inside balances[], and so
+        # produced cash=None and refused BASELINE_READS_UNAVAILABLE
+        # at 02:39:36Z with venue_positions_read=true. The runner's
+        # own cash refresh already does this correctly, and this now
+        # uses the identical proven parser rather than guessing key names.
+        # Still None on a genuinely unreadable balance, which still
+        # refuses -- the validation is unchanged.
+        cash = T.PmusTransport.buying_power(acct)
+        pos = self.transport.positions()
+        # from the store's OWN committed-cash record, not from the
+        # executor (which is constructed after `roll` queues this and would
+        # therefore have reported a silent zero -- missing is never zero).
+        oblig = sum((D(str(v)) for v in
+                     (self.store.committed() or {}).values()), D(0))
+        mine = sorted(str((r or {}).get("venue_order_id") or "")
+                      for r in (self.store.live_orders() or {}).values()
+                      if (r or {}).get("venue_order_id"))
+        res = self.store.establish_l5_baseline(
+            cash_usd=cash, l5_open_orders=mine,
+            positions={str(k): str(v) for k, v in
+                       (self.store.state.get("positions") or {}).items()},
+            outstanding_obligations_usd=oblig,
+            source=self.store.L5_BASELINE_SOURCE)
+        return dict(res, venue_positions_read=(pos is not None),
+                    _kind=("L5_BASELINE_ESTABLISHED" if res.get("established")
+                           else "L5_BASELINE_REFUSED"))
+
+    def entry_critical(self, now: float) -> bool:
+        """Is this window still in the phase where a decision is at stake?
+
+        TRUE IS THE SAFE ANSWER and it is the one every uncertainty gets. A
+        deferred diagnostic has no deadline of its own: it can always wait one
+        more tick, and the whole reason it was deferred is that waiting costs
+        nothing while running at the wrong moment cost 93 seconds of every
+        window. So anything unreadable, any resting order, any held
+        inventory in the live market and any window whose age we cannot
+        compute all read as critical.
+        """
+        try:
+            if self.ws is None:
+                return True
+            if int(self.store.still_fillable_order_count() or 0) > 0:
+                return True
+            slug = getattr(self.transport, "market_slug", None)
+            if slug:
+                for side in ("UP", "DOWN"):
+                    if D(str(self.store.position(str(slug), side) or 0)) != 0:
+                        return True
+            return False
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["entry_critical_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return True
+
+    def drain_roll_diagnostics(self, now: float) -> Optional[Dict[str, Any]]:
+        """Run at most one deferred read-only diagnostic, or none.
+
+        PLACED AFTER EVERY TRADING STAGE IN THE TICK, which is the whole
+        point: a diagnostic may only ever use time this tick's decisions have
+        already finished with. It is wrapped, because a diagnostic that raises
+        must not be able to end a tick that still has settlement and
+        reconciliation to do below it.
+        """
+        try:
+            rd = self.roll_diag
+            if not rd.pending:
+                return None
+            age = None if self.ws is None else (now - float(self.ws))
+            out = rd.drain(t_in_window_s=age,
+                           entry_critical=self.entry_critical(now))
+            if out.get("ran") is None:
+                self.stats["roll_diag:deferred:%s"
+                           % str(out.get("reason"))] += 1
+                return out
+            rec = dict(out.get("record") or {})
+            kind = str(rec.pop("_kind", "") or "L5_ROLL_DIAGNOSTIC")
+            self.stats["roll_diag:%s:%s" % (out["ran"], out["outcome"])] += 1
+            if out.get("outcome") == RD.FAILED:
+                emit("%s_FAILED" % kind, dict(
+                    rec, job=out["ran"],
+                    labels=("the diagnostic is read-only; a failure changes "
+                            "nothing, writes nothing and never touches the "
+                            "ledger or the order path")))
+            elif out.get("emit"):
+                emit(kind, dict(rec, deferred_job={
+                    "name": out["ran"], "outcome": out["outcome"],
+                    "attempt": out["attempt"],
+                    "elapsed_s": out["elapsed_s"],
+                    "t_in_window_s": out.get("t_in_window_s"),
+                    "still_pending": out.get("still_pending"),
+                    "labels": ("ran off the window-roll path, after every "
+                               "trading stage in the tick")}))
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["roll_diag_drain_failed:%s"
+                       % type(exc).__name__] += 1
+            return None
 
     def emit_preflight_attempt(self, now: float, rep: Mapping[str, Any],
                                dur_s: float) -> None:
@@ -3365,7 +3576,8 @@ class Runner:
             return
         if now - self.last_two_sided_report_t >= self.TWO_SIDED_REPORT_S:
             self.last_two_sided_report_t = now
-            emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=True))
+            emit("L5_TWO_SIDED_SHADOW",
+                 TS.bounded_for_log(dict(ev.report(None), interim=True)))
         self.shadow_completion_step(ev, now, snap)
 
     #: how often the shadow completion policy is evaluated, per window.
@@ -3522,9 +3734,17 @@ class Runner:
                 raise
             self.stats["shadow_completion_park_failed:%s"
                        % type(exc).__name__] += 1
+        # THE LEDGER GETS THE WHOLE REPORT; THE LOG GETS A LINE THAT FITS.
+        # `park` writes the full record to the volume, which is the durable
+        # copy the scoring reads. The log copy is bounded because an 80 KB
+        # write blocks this process for about six seconds -- measured at
+        # 6.158 s in this very stage on deployment a342fccc -- and is
+        # truncated at 81,920 bytes anyway. See `TS.bounded_for_log`.
         emit("L5_TWO_SIDED_SHADOW",
-             dict(self.two_sided_ledger.park(ev.report(None), now=self.now_t),
-                  interim=False))
+             TS.bounded_for_log(
+                 dict(self.two_sided_ledger.park(ev.report(None),
+                                                 now=self.now_t),
+                      interim=False)))
 
     def two_sided_settle(self, now: float) -> None:
         """Finalize parked shadow windows from the venue's own resolution.
@@ -3546,9 +3766,22 @@ class Runner:
         if t is None or now - self.last_two_sided_settle_t < SETTLEMENT_POLL_S:
             return
         self.last_two_sided_settle_t = now
+        # WHAT THE LEDGER COSTS. One small line a settle pass, reporting
+        # only: `finalized` is unbounded and `save` rewrites the whole file
+        # twice a window on a network volume, which is the remaining
+        # candidate for the residual rollover cost now that bounding the log
+        # line has been deployed and demonstrably changed nothing. Measure
+        # first; the retention fix waits on this number.
+        try:
+            emit("L5_SHADOW_LEDGER", self.two_sided_ledger.size_report())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_ledger_size_report_failed:%s"
+                       % type(exc).__name__] += 1
         for bad in self.two_sided_ledger.expire(now):
             self.stats["two_sided_settle_expired"] += 1
-            emit("L5_TWO_SIDED_SHADOW", bad)
+            emit("L5_TWO_SIDED_SHADOW", TS.bounded_for_log(bad))
         for slug in self.two_sided_ledger.pending_slugs():
             if slug == getattr(t, "market_slug", None) and self.two_sided:
                 continue                     # still being collected
@@ -3593,8 +3826,9 @@ class Runner:
             px = rep.get("settlement_px")
             scored = self.two_sided_ledger.finalize(slug, px == D(1))
             if scored is not None:
-                emit("L5_TWO_SIDED_SHADOW", dict(scored, yes_value=str(px),
-                                                 venue_state=rep.get("state")))
+                emit("L5_TWO_SIDED_SHADOW", TS.bounded_for_log(
+                    dict(scored, yes_value=str(px),
+                         venue_state=rep.get("state"))))
                 self.shadow_completion_settle(slug, scored, px == D(1),
                                               rep.get("state"))
 
@@ -5472,9 +5706,59 @@ class Runner:
                        "admitted does not mean submitted."),
         }
 
+    def authorization_preflight_verdict(self) -> Dict[str, Any]:
+        """The arming preflight's VERDICT, compact, for the heartbeat.
+
+        WHY IT BELONGS HERE, and it is an operational scar. On 2026-11-06
+        the 20:00z authorized window was lost to AUTHORIZATION_EXPIRED --
+        `L5_LIVE_AUTH_NOT_AFTER` had lapsed 56,974 s earlier. The preflight
+        CAUGHT it: at the 19:34 boot it emitted `ok: false`,
+        `fail: ["absolute_deadline"]`, 26 minutes before the window, with
+        every other check PASS. Nobody read that line.
+
+        It was on its own line because the heartbeat used to exceed the log
+        transport's per-line limit -- the defect `bounded_hb` now fixes --
+        so the workaround for a truncated heartbeat is why the verdict was
+        not in the heartbeat anyone was polling.
+
+        TWO THINGS CHANGE. It becomes CONTINUOUS rather than boot-only, so
+        a deadline that lapses mid-campaign is visible before the next
+        window rather than after it; and it sits beside `campaign`, so a
+        campaign can never LOOK ready while the preflight says it is not.
+
+        Compact on purpose: `ok`, `fail` and `unknown` only. The full
+        `rows` stay on their own L5_AUTHORIZATION_PREFLIGHT line.
+        Reporting only -- `authorize_arming` still decides.
+        """
+        try:
+            pf = AUTH.authorization_preflight(
+                str(getattr(self.transport, "market_slug", "") or ""),
+                root=self.root)
+            return {"ok": pf.get("ok"), "fail": pf.get("fail"),
+                    "unknown": pf.get("unknown"),
+                    "labels": ("compact verdict; full rows on the "
+                               "L5_AUTHORIZATION_PREFLIGHT line. ok false "
+                               "means arming WILL refuse for the named "
+                               "check, whatever the campaign says.")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # UNREADABLE IS NOT OK. A verdict we cannot compute must not
+            # read as a pass.
+            self.stats["auth_preflight_verdict_failed:%s"
+                       % type(exc).__name__] += 1
+            return {"ok": None, "fail": None, "unknown": None,
+                    "error": type(exc).__name__,
+                    "labels": "UNREADABLE -- never read this as ok"}
+
     def heartbeat(self) -> None:
         t = self.transport
-        emit("L5_LIVE_HB", {
+        emit("L5_LIVE_HB", TS.bounded_hb({
+            "authorization_preflight": self.authorization_preflight_verdict(),
+            # THE LIFETIME COMPLETION BUDGET, on the tape. Absent from the
+            # heartbeat until 2026-11-06, which is why its balance had to be
+            # inferred after the first live window instead of read.
+            "defensive_budget": self.defensive_budget_telemetry(),
             "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
@@ -5622,7 +5906,7 @@ class Runner:
                           "after| > k * max(largest filled clip, this order's "
                           "qty). Contracts. A leg that shrinks |prospective| "
                           "is never refused at any depth.")},
-            "frozen_rule": "030d8bf"})
+            "frozen_rule": "030d8bf"}))
         self.emit_arm_switch_readiness()
         self.emit_two_sided_comparison()
 
@@ -6159,6 +6443,20 @@ class Runner:
                 depth_haircut=self._taker_policy_number(
                     TCP.DEPTH_HAIRCUT_ENV, TCP.DEFAULT_DEPTH_HAIRCUT),
                 halted=self.taker_policy_halted(),
+                # THE LOSS-REDUCING CASE, SEPARATELY AUTHORIZED AND
+                # DEFAULT-OFF. A rescue cannot clear the +$0.25 margin floor
+                # -- the first leg's cost is sunk, so the best achievable
+                # worse outcome is still negative -- and replaying the 0300z
+                # and 0315z windows against their own recorded books showed
+                # the policy refusing both for exactly that reason even with
+                # the submission route wired. This is the owner-specified
+                # completion-loss budget issue #195 asks for: with the
+                # switch unset `authorize` takes the identical path it takes
+                # today, and with it set the test becomes how much exposure
+                # the cross removes rather than where the outcome lands.
+                loss_reduction=TCP.loss_reduction_authorized(),
+                min_worst_improvement_usd=self._taker_policy_number(
+                    TCP.MIN_WORST_IMPROVEMENT_ENV, None),
             )
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -6399,7 +6697,40 @@ class Runner:
                     book_rungs=(
                         self.completion_rungs(slug, side)
                         if callable(getattr(self, "completion_rungs", None))
-                        else None))
+                        else None),
+                    # ---- THE MAKER SIDE OF THE SAME BOOK, and the mid.
+                    #
+                    # REPORTING-ONLY ENRICHMENT on the same terms as the
+                    # rungs above: every field degrades to None and no
+                    # existing caller grows a requirement. They exist so the
+                    # ONE alternative ranking in `l5_inventory_decision` can
+                    # price RESTING against CROSSING on the same book read,
+                    # rather than two paths each reading their own.
+                    #
+                    # THE SIDES ARE NOT INTERCHANGEABLE, and this is the
+                    # arithmetic error worth naming. To BUY DOWN as a maker
+                    # we post a YES OFFER, so joining the touch means
+                    # offering at the best ASK and our own DOWN price is
+                    # 1 - ask, queued behind `ask_shares`. To BUY UP as a
+                    # maker we post a YES BID at the best bid, own price
+                    # `bid`, queued behind `bid_shares`. The CROSSING side
+                    # above is the opposite one in both cases -- buying DOWN
+                    # consumes the bid, buying UP lifts the ask -- so a
+                    # single "depth" field could not serve both and there
+                    # are deliberately two.
+                    maker_own_px=(
+                        None if (bid is None if side == "UP" else ask is None)
+                        else (D(str(bid)) if side == "UP"
+                              else D(1) - D(str(ask)))),
+                    maker_queue_ahead=(snap.get("bid_shares") if side == "UP"
+                                       else snap.get("ask_shares")),
+                    # THE MARKET'S OWN IMPLIED PROBABILITY THAT UP SETTLES.
+                    # The mid and nothing else: a model of our own here would
+                    # be a prediction, and this programme has no view on
+                    # outcomes. None on a one-sided book, which makes the
+                    # expectation unavailable rather than guessed.
+                    mid_wire=(None if (bid is None or ask is None)
+                              else (D(str(bid)) + D(str(ask))) / D(2)))
 
     def completion_rungs(self, slug: str, side: str
                          ) -> Optional[List[List[str]]]:
@@ -7512,11 +7843,21 @@ class Runner:
                      "reason": "POLICY_NOT_WIRED"})
         rec["taker_policy"] = pol
         if dec.get("ok") and authorized and t.armed and pol.get("authorized"):
-            rec["crossed"] = "WOULD_SUBMIT"
-            rec["submission_route"] = ("deliberately not wired: crossing "
-                                       "requires the owner's separate "
-                                       "explicit authorization for live "
-                                       "taker execution")
+            # ============ THE SUBMISSION, WHICH USED TO BE A STRING.
+            #
+            # This branch wrote `crossed: "WOULD_SUBMIT"` and
+            # `submission_route: "deliberately not wired"`. It reached that
+            # string 43 times in the 0300z window of 2026-11-06 and 22 times
+            # in 0315z -- every one of them with the economics and the
+            # bounded policy both saying yes -- while the two residuals those
+            # windows left rode to settlement for -$1.00. See issue #195.
+            #
+            # IT IS WIRED NOW, and through the path that already existed:
+            # the same `executor.handle` controller re-entry
+            # `maybe_book_completion` uses, which passes every gate, claim,
+            # overlay, limit check and reconciliation the L5-driven call
+            # passes, because it is the same call.
+            rec.update(self.submit_ts_completion(dec, src, pol, now))
         elif dec.get("ok") and authorized and t.armed:
             rec["crossed"] = False
             rec["withheld_by"] = "TAKER_POLICY:%s" % str(
@@ -7524,6 +7865,367 @@ class Runner:
         emit("L5_TS_COMPLETION", rec)
         self.stats["ts_completion:%s" % (dec.get("reason") or "OK")] += 1
         return rec
+
+    def defensive_budget_telemetry(self) -> Dict[str, Any]:
+        """Spent, limit and remaining for the LIFETIME completion budget.
+
+        `DEF` is imported function-locally everywhere else in this module,
+        so it is imported here too rather than at module scope -- the image
+        closure test pins which modules the live image carries.
+        """
+        spent = self.defensive_spent_usd()
+        try:
+            from src import l5_defensive_completion as _DEF
+            limit = str(_DEF.DEFENSIVE_LOSS_BUDGET_USD)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["defensive_budget_limit_unreadable:%s"
+                       % type(exc).__name__] += 1
+            limit = None
+        rem = None
+        if spent is not None and limit is not None:
+            try:
+                rem = str(D(limit) - D(spent))
+            except BaseException:                              # noqa: BLE001
+                rem = None
+        return {"spent_usd": spent, "limit_usd": limit,
+                "remaining_usd": rem,
+                "labels": ("LIFETIME, monotone, never reset, durable on the "
+                           "volume. None is UNREADABLE and never zero. A "
+                           "debit here is the signature of a bounded taker "
+                           "cross -- nothing else writes it.")}
+
+    def defensive_spent_usd(self) -> Optional[str]:
+        """The durable lifetime completion-budget balance, as a string.
+
+        WHY IT IS HERE. The owner asked for the $2.00 lifetime budget
+        balance after the 20:15z window and it was NOT on the tape: the
+        heartbeat never emitted it, so the answer had to be inferred from
+        the absence of a charge record. An inferred budget is not a budget
+        you can police.
+
+        None means UNREADABLE and must never be read as zero.
+        """
+        try:
+            return str(self.store.defensive_spent())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["defensive_spent_unreadable:%s"
+                       % type(exc).__name__] += 1
+            return None
+
+    #: The five stages a completion passes through, named so that no two can
+    #: be conflated. The 2026-11-06 20:15z window reported
+    #: `submitted: true` for a ranked TAKER_COMPLETE at own 0.4300 while the
+    #: order that actually reached the venue was a MAKER quote at own 0.3900
+    #: -- because `_bc_capture` reads `ok` from whatever `handle` returned,
+    #: and under `execution_mode: MAKER_ONLY` `handle` posts a maker quote
+    #: and returns ok. Controller re-entry is NOT a taker cross.
+    COMPLETION_STAGES = ("controller_selected", "venue_submitted",
+                         "acknowledged", "filled", "budget_debited")
+
+    def completion_stages(self, outcome: Mapping[str, Any], *,
+                          want_side: str, want_px: Any,
+                          spent_before: Optional[str],
+                          spent_after: Optional[str]) -> Dict[str, Any]:
+        """Classify a completion attempt across all five stages.
+
+        `taker_cross_confirmed` is deliberately strict: it requires a
+        BUDGET DEBIT, because `completion_taker_execute` is the only path
+        that debits `defensive_spent_usd`. No debit means no bounded taker
+        cross happened, whatever `submitted` says. An unreadable balance
+        yields None -- not False, and certainly not True.
+        """
+        sub = outcome.get("submitted")
+        debit = None
+        if spent_before is not None and spent_after is not None:
+            try:
+                debit = D(str(spent_after)) - D(str(spent_before))
+            except BaseException:                              # noqa: BLE001
+                debit = None
+        if debit is None:
+            cross = None                      # cannot be established
+        else:
+            cross = bool(sub) and debit > 0
+        if cross:
+            cls = "TAKER_CROSS_CONFIRMED"
+        elif sub and debit is not None and debit == 0:
+            cls = "CONTROLLER_REENTRY_NO_CROSS"
+        elif sub is False:
+            cls = "NOT_SUBMITTED"
+        elif sub is None:
+            cls = "PLACEMENT_UNREADABLE"
+        else:
+            cls = "CROSS_UNDETERMINED_BUDGET_UNREADABLE"
+        return {
+            "controller_selected": True,
+            "venue_submitted": sub,
+            "requested_price_own": (None if want_px is None
+                                    else str(want_px)),
+            "requested_side": want_side,
+            "acknowledged": (bool(outcome.get("order_ref"))
+                             if sub else None),
+            "order_ref": outcome.get("order_ref"),
+            "filled": None,
+            "budget_debited_usd": (None if debit is None else str(debit)),
+            "defensive_spent_before": spent_before,
+            "defensive_spent_after": spent_after,
+            "taker_cross_confirmed": cross,
+            "classification": cls,
+            "labels": ("five stages, never collapsed. "
+                       "`taker_cross_confirmed` requires a BUDGET DEBIT, "
+                       "because completion_taker_execute is the only path "
+                       "that debits it -- controller re-entry that posts a "
+                       "maker quote reads CONTROLLER_REENTRY_NO_CROSS. "
+                       "`filled` is None here because a fill is a later, "
+                       "separate venue event; read L5_LIVE_LIFECYCLE for "
+                       "it. None is UNKNOWN and never False."),
+        }
+
+    def submit_ts_completion(self, dec: Mapping[str, Any],
+                             src: Mapping[str, Any],
+                             pol: Mapping[str, Any],
+                             now: float) -> Dict[str, Any]:
+        """Actually place the authorized bounded completion. Or say why not.
+
+        WHAT THIS ADDS, AND WHAT IT REUSES. It adds no transport, no second
+        order path and no authorization. It compares the executable
+        alternatives through `l5_inventory_decision` -- one process, one
+        arithmetic, every alternative priced -- and then hands the chosen one
+        to the SAME `executor.handle(None, book, controller=...)` re-entry
+        that `maybe_book_completion` uses. Inside `handle`, the bounded taker
+        route cancels the resting complement, proves the cancellation at the
+        venue, re-reads our own inventory, clamps the size to the confirmed
+        deficit, cross-checks the venue's exposure, charges the shared
+        budget, writes a durable claim and issues a mandate naming that one
+        order. None of that is new code reached from here; it is
+        `completion_taker_execute`, and it is the defensive unwind's order of
+        operations because that order is the safety property.
+
+        THE RANKING CAN ONLY REFUSE. `completion_decision` and
+        `l5_taker_completion_policy.authorize` have already both said yes
+        before this method is called. The ranking is consulted on top of
+        them, so an alternative it declines is an order that is not placed --
+        it cannot approve anything the two existing gates refused, and it
+        cannot raise a limit.
+
+        AND IT IS STILL DOUBLY GATED. `L5_TS_COMPLETION_CROSS` and
+        `L5_TAKER_COMPLETION_POLICY` are both default-OFF and both are
+        re-checked inside `completion_taker_execute` before it reads any
+        state. With either off this method records a refusal and places
+        nothing.
+        """
+        from src import l5_inventory_decision as ID
+        from src import l5_two_sided_probe as TSP
+        out: Dict[str, Any] = {"crossed": False}
+        t = self.transport
+        slug = getattr(t, "market_slug", None) if t is not None else None
+        if not slug:
+            return dict(out, withheld_by="NO_MARKET")
+        ws = AB.slug_start(slug)
+        if ws is None:
+            return dict(out, withheld_by="WINDOW_START_UNKNOWN")
+        side = str(dec.get("side") or "").strip().upper()
+        held = "UP" if side == "DOWN" else "DOWN"
+
+        # ---- THE LEDGER, RE-READ. Never this method's memory of what the
+        # decision was priced on: the ledger is what reconciliation
+        # certifies, and `completion_taker_execute` re-reads it again after
+        # the cancel. Fail closed on anything unreadable.
+        try:
+            rows = _resting_rows(self.store, str(slug))
+            up = self.store.position(str(slug), "UP")
+            dn = self.store.position(str(slug), "DOWN")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["ts_completion_submit:LEDGER_UNREADABLE:%s"
+                       % type(exc).__name__] += 1
+            return dict(out, withheld_by="LEDGER_UNREADABLE")
+        if rows is None or up is None or dn is None:
+            return dict(out, withheld_by="LEDGER_UNREADABLE")
+
+        book = self.book.snapshot(str(slug)) or {}
+        mk = {}
+        try:
+            mk = self.maker_completion_history(str(slug), side=side, now=now)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["ts_completion_submit:MAKER_HISTORY:%s"
+                       % type(exc).__name__] += 1
+
+        # ---- ONE COMPARISON OVER EVERY ALTERNATIVE, on the current book.
+        rank = ID.rank(
+            up_qty=up, dn_qty=dn,
+            up_cost_px=src.get("up_cost_px"), dn_cost_px=src.get("dn_cost_px"),
+            deficient_side=side, deficit=dec.get("deficit"),
+            min_qty=src.get("min_qty"), tick=src.get("tick"),
+            taker_rungs=src.get("book_rungs"),
+            taker_displayed_qty=dec.get("displayed_depth"),
+            taker_own_px=dec.get("price"),
+            depth_haircut=self._taker_policy_number(
+                TCP.DEPTH_HAIRCUT_ENV, TCP.DEFAULT_DEPTH_HAIRCUT),
+            maker_own_px=src.get("maker_own_px"),
+            maker_queue_ahead=src.get("maker_queue_ahead"),
+            # MEASURED OR ABSENT. With no measured maker fill rate the maker
+            # alternative is UNAVAILABLE rather than priced off a guess, so
+            # this cannot talk itself into resting.
+            maker_fill_rate=os.getenv("L5_MAKER_FILL_RATE_MEASURED") or None,
+            seconds_to_settlement=max(
+                0.0, TSP.window_end(float(ws)) - float(now)),
+            up_mid_wire=src.get("mid_wire"),
+            adverse_shift=self._taker_policy_number(
+                "L5_ADVERSE_SELECTION_SHIFT", D("0.05")),
+            max_ev_giveup_usd=self._taker_policy_number(
+                "L5_MAX_COMPLETION_EV_GIVEUP_USD", None),
+            cash_headroom=src.get("cash_headroom"),
+            worst_case_ceiling=src.get("worst_case_ceiling"),
+            book_age_s=book.get("stream_age_s"),
+            gap_suspected=bool(book.get("gap_suspected")))
+        out["inventory_decision"] = {
+            k: v for k, v in rank.items() if k != "alternatives"}
+        out["alternatives"] = rank.get("alternatives")
+        if rank.get("chosen") not in (ID.TAKER_COMPLETE, ID.TAKER_PARTIAL):
+            self.stats["ts_completion_submit:RANKED_%s"
+                       % str(rank.get("chosen"))] += 1
+            return dict(out, withheld_by="RANKED_%s" % rank.get("chosen"),
+                        why=rank.get("why_hold"))
+
+        chosen = None
+        for alt in (rank.get("alternatives") or ()):
+            if alt.get("alternative") == rank["chosen"]:
+                chosen = alt
+                break
+        if chosen is None:
+            return dict(out, withheld_by="RANKED_ALTERNATIVE_MISSING")
+
+        # ---- THE PROPOSAL. The policy's own conservative quantity and VWAP,
+        # clamped again by the ranking's size: two independent sizings and the
+        # order is the smaller, which can only ever reduce it.
+        _impr_floor = self._taker_policy_number(
+            TCP.MIN_WORST_IMPROVEMENT_ENV, None)
+        try:
+            qty = min(D(str(pol.get("qty"))), D(str(chosen.get("qty"))))
+            px = D(str(pol.get("price")))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(out, withheld_by="PROPOSAL_UNREADABLE")
+        if qty <= 0:
+            return dict(out, withheld_by="PROPOSAL_QTY_NOT_POSITIVE")
+        proposal = dict(pol, qty=str(qty), price=str(px), side=side,
+                        # CARRIED SO THE EXECUTOR CAN RE-EARN IT. The policy
+                        # tested the improvement floor against the book as it
+                        # was; `completion_taker_execute` tests it AGAIN
+                        # after the cancel, at the clamped quantity, and
+                        # again if the budget forces a smaller size.
+                        min_worst_improvement_usd=(
+                            None if _impr_floor is None else str(_impr_floor)),
+                        # THE MARKET THIS WAS PRICED ON, carried so
+                        # `completion_taker_execute` can refuse a proposal
+                        # that reached a different one rather than take the
+                        # caller's word for it.
+                        market=str(slug),
+                        expires_at=float(TSP.cancel_cutoff_from_start(
+                            float(ws))),
+                        ranked_as=rank["chosen"],
+                        ranked_worst_after=chosen.get("worst_after"),
+                        ranked_expected_worst_after=chosen.get(
+                            "expected_worst_after"),
+                        ranked_ev_giveup_usd=chosen.get("ev_giveup_usd"),
+                        maker_attempted=mk.get("attempted"),
+                        maker_rested_s=mk.get("rested_s"))
+        out["proposal"] = {k: v for k, v in proposal.items()
+                           if k not in ("conservative_fill",)}
+
+        emit("L5_TS_COMPLETION_TRIGGER", {
+            "market": str(slug), "side": side, "held_side": held,
+            "qty": str(qty), "price": str(px),
+            "route": "CONTROLLER_REENTRY",
+            "ranked": rank["chosen"],
+            "ranking_basis": rank.get("ranking_basis"),
+            "resting_orders": len(rows),
+            "labels": ("emitted BEFORE the re-entry, so the tape shows a "
+                       "completion the ENGINE asked for and never a "
+                       "synthesised L5 action. The order, if any, is placed "
+                       "by the existing path through every existing gate.")})
+
+        # ---- THE BUDGET, BEFORE. The debit across the placement is what
+        # proves a bounded taker cross actually happened, so it is read
+        # BEFORE the path runs and compared after.
+        _spent_before = self.defensive_spent_usd()
+
+        # ---- HAND IT TO THE EXISTING PATH. Single use: `handle` takes the
+        # proposal off the executor before acting on it.
+        self.executor.taker_completion_proposal = proposal
+        try:
+            res = self.executor.handle(
+                None, book, market=str(slug), window=str(ws),
+                controller={"provenance": LX.CONTROLLER_GENERATED,
+                            "decision": {"side": side, "price": str(px),
+                                         "l5_size": str(qty),
+                                         "relation": "complete"},
+                            "maker_class": None})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.executor.taker_completion_proposal = None
+            self.stats["ts_completion_submit:HANDLE_RAISED:%s"
+                       % type(exc).__name__] += 1
+            return dict(out, withheld_by="HANDLE_RAISED:%s"
+                        % type(exc).__name__)
+        finally:
+            # BELT AND BRACES. `handle` clears it on the path that reads it;
+            # clearing here too means a return BEFORE that path cannot leave
+            # a live proposal for the next tick to ride.
+            self.executor.taker_completion_proposal = None
+
+        outcome = self._bc_capture(res)
+        out["outcome"] = outcome
+        # THE FIVE STAGES, so controller re-entry can never read as a cross.
+        stages = self.completion_stages(
+            outcome, want_side=side, want_px=px,
+            spent_before=_spent_before,
+            spent_after=self.defensive_spent_usd())
+        out["stages"] = stages
+        out["crossed"] = bool(stages.get("taker_cross_confirmed"))
+        if out["crossed"]:
+            # THE WINDOW'S OUTLAY, so the policy's per-window cap reads a
+            # real number rather than the structural zero it read while
+            # nothing crossed. Charged at the WORST case, like the budget.
+            try:
+                self._taker_outlay_usd = (
+                    D(str(getattr(self, "_taker_outlay_usd", 0) or 0))
+                    + qty * px + TSP.worst_fee(qty, px))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["ts_completion_outlay_unrecordable:%s"
+                           % type(exc).__name__] += 1
+        else:
+            out["withheld_by"] = "PLACEMENT:%s/%s" % (
+                stages.get("classification"),
+                str(outcome.get("refused"))[:50])
+        self.stats["ts_completion_submit:%s" % (
+            "SUBMITTED" if out["crossed"] else "REFUSED")] += 1
+        emit("L5_TS_COMPLETION_RESULT", {
+            "market": str(slug), "side": side,
+            "qty": str(qty), "price": str(px),
+            "ranked": rank["chosen"],
+            "stages": stages,
+            "taker_cross_confirmed": stages.get("taker_cross_confirmed"),
+            "classification": stages.get("classification"),
+            "outcome": outcome,
+            "window_outlay_usd": str(getattr(self, "_taker_outlay_usd", 0)),
+            "labels": ("pairs the authorized completion with what the "
+                       "placement path actually did. `submitted` false with "
+                       "a named `refused` is a decision that did not become "
+                       "an order -- which is the state issue #195 was "
+                       "opened about, and it is now visible per attempt.")})
+        return out
 
     def maybe_ts_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel the two-sided probe's resting legs at the TERMINAL deadline.
@@ -8223,6 +8925,16 @@ class Runner:
         # remains. Inert unless L5_COMPLETION_REQUOTE is set.
         self.maybe_completion_requote(now)
         _sc.mark("maybe_completion_requote")
+        # THE DEFERRED READ-ONLY DIAGNOSTICS, and their position in this list
+        # is the fix. They used to run inside `roll`, which is the FIRST call
+        # in the tick, so their cost came out of the window's opening -- 93
+        # seconds of it, every window, on 2026-11-06. Here they can only ever
+        # use time the completion decision, the requote and the opening
+        # trigger above have already finished with, and only outside the
+        # window's entry-critical phase. At most one job, with a wall-clock
+        # budget. See `l5_roll_diagnostics`.
+        self.drain_roll_diagnostics(now)
+        _sc.mark("roll_diagnostics")
         self.maybe_ts_deadline(now)
         _sc.mark("maybe_ts_deadline")
         # MODELLED fills advance BEFORE the cool-off check, for the same

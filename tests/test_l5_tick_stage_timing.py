@@ -123,10 +123,16 @@ def test_the_emit_is_guarded_so_reporting_cannot_kill_a_tick():
 
 
 def test_every_pre_preflight_call_has_a_mark():
-    """All fourteen, so the holder of the tick cannot hide in an
-    unmeasured gap. `maybe_completion_requote` is the fourteenth: a new
-    stage must be MARKED and declared, which is exactly what this guard is
-    for."""
+    """All fifteen, so the holder of the tick cannot hide in an
+    unmeasured gap. A new stage must be MARKED and declared, which is
+    exactly what this guard is for -- `maybe_completion_requote` was the
+    fourteenth and `roll_diagnostics` is the fifteenth.
+
+    `roll_diagnostics` is the deferred read-only work that used to run
+    inside `roll` and held it for 93 seconds on every window (issue #195).
+    It is marked for precisely the reason this test exists: the cost moved,
+    so the measurement has to move with it, or the next regression hides in
+    an unmeasured gap exactly as the last one did."""
     import inspect
     src = inspect.getsource(R.Runner.tick)
     head = src[:src.index("self.maybe_preflight(now)")]
@@ -137,4 +143,4 @@ def test_every_pre_preflight_call_has_a_mark():
         "sample_residual_book", "maybe_ts_completion",
         "maybe_completion_requote", "maybe_ts_deadline",
         "model_advance", "two_sided_advance", "two_sided_settle",
-        "venue_cooling"}, sorted(marked)
+        "venue_cooling", "roll_diagnostics"}, sorted(marked)

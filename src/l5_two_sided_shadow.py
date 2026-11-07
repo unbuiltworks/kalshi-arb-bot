@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -771,6 +772,242 @@ def pending_report(report: Mapping[str, Any], *, reason: str = "",
     return out
 
 
+#: The platform truncates a log line at exactly this many bytes. Measured,
+#: not assumed: every full `L5_TWO_SIDED_SHADOW` line on deployment a342fccc
+#: arrived at len 81920 with its tail gone, and the runner's own heartbeat
+#: comment records the same limit.
+LOG_LINE_LIMIT = 81920
+
+#: What one emitted report may cost. Well under the limit above, and under a
+#: 64 KiB pipe buffer, which is the number that actually matters -- see
+#: `bounded_for_log`.
+LOG_BUDGET_BYTES = 48000
+
+
+def _cell_digest(cell: Mapping[str, Any]) -> Dict[str, Any]:
+    """One cell reduced to the figures the economics are read from.
+
+    Everything dropped here is still in the ledger on the volume: `park` and
+    `finalize` store the WHOLE report, so this reduces the log copy only.
+    """
+    keep = ("name", "label", "depth_ticks", "side", "resting",
+            "matched_shares", "residual_shares", "residual_cost",
+            "matched_pnl_modelled", "residual_pnl_modelled",
+            "net_pnl_modelled", "state", "fills", "capital_deployed")
+    out = {k: cell[k] for k in keep if k in cell}
+    out["_reduced"] = True
+    return out
+
+
+def bounded_for_log(report: Mapping[str, Any], *,
+                    budget: int = LOG_BUDGET_BYTES) -> Dict[str, Any]:
+    """The report, small enough to reach the log intact.
+
+    WHY THIS EXISTS, MEASURED ON THE LIVE SERVICE. The full report serialises
+    to more than 80 KB. Three things follow, and the first two were costing
+    real time on the window's opening:
+
+      * a write larger than the pipe buffer between the process and the log
+        shipper BLOCKS until the shipper drains it. Measured on deployment
+        a342fccc: the 29,109-byte interim line costs 0.000-0.002 s, while the
+        81,920-byte full line costs 6.158 s in `two_sided_close` and 6.180 s
+        in `two_sided_settle` -- the two stages that emit it. After the
+        93-second diagnostic was moved off `roll`, this became the single
+        largest remaining cost of a window roll.
+      * the line is TRUNCATED at LOG_LINE_LIMIT anyway, so the tail has been
+        discarded in production all along. Paying six seconds for a record
+        that arrives incomplete is the worst of both.
+      * nothing is lost by reducing it. `ShadowLedger.park` and `finalize`
+        write the WHOLE report to the volume, which is the durable copy the
+        scoring actually reads; this is the observability copy.
+
+    REDUCES, NEVER SUMMARISES AWAY. The cells are replaced by digests
+    carrying the P&L and inventory figures, the count is stated, and
+    `cells_reduced` says it happened. A report already inside budget is
+    returned unchanged, so the common small case is byte-identical.
+    """
+    try:
+        raw = json.dumps(report, default=str)
+    except BaseException:                                      # noqa: BLE001
+        return dict(report)
+    if len(raw) <= budget:
+        return dict(report)
+    out = dict(report)
+    cells = list(out.get("cells") or ())
+    out["cells"] = [_cell_digest(c) if isinstance(c, Mapping) else c
+                    for c in cells]
+    out["cells_reduced"] = {
+        "cells": len(cells), "full_bytes": len(raw), "budget_bytes": budget,
+        "labels": ("the per-cell detail is in the shadow ledger on the "
+                   "volume, which `park` and `finalize` write in full. It is "
+                   "dropped HERE because a line this size blocks the "
+                   "process for about six seconds and is truncated at "
+                   "%d bytes anyway." % LOG_LINE_LIMIT)}
+    if _fits(out, budget):
+        return out
+
+    # STAGE 2. The histogram is the next largest field and the ledger has it,
+    # so the log keeps only its size.
+    hist = out.get("spread_histogram")
+    if isinstance(hist, Mapping):
+        out["spread_histogram"] = {"_buckets": len(hist), "_reduced": True}
+    if _fits(out, budget):
+        return out
+
+    # STAGE 3. Enough cells and even the digests do not fit. Replace them with
+    # the roll-up the economics are actually read from, which is a FIXED size
+    # whatever the grid does. 400 cells x ~200 bytes of digest is 80 KB, so a
+    # large grid reaches here; this is what makes the function bounded rather
+    # than merely smaller.
+    out["cells"] = _cells_rollup(out.get("cells") or ())
+    if _fits(out, budget):
+        return out
+
+    # STAGE 4. The guaranteed floor: the identifying fields, the roll-up, and
+    # nothing else. Fixed size by construction, so this always fits, and it
+    # states that it is the floor rather than pretending to be the report.
+    floor: Dict[str, Any] = {"LABEL": out.get("LABEL"),
+                             "market": out.get("market"),
+                             "cells": out.get("cells"),
+                             "cells_reduced": out.get("cells_reduced")}
+    for k in ("window_start", "window_end", "ticks", "state", "outcome",
+              "net_pnl_modelled", "matched_pnl_modelled",
+              "residual_pnl_modelled", "capital_deployed", "fills",
+              "discipline_label"):
+        if k in out:
+            floor[k] = _clamp_scalar(out[k])
+    floor["_log_floor"] = True
+    return floor
+
+
+def _fits(obj: Any, budget: int) -> bool:
+    try:
+        return len(json.dumps(obj, default=str)) <= budget
+    except BaseException:                                      # noqa: BLE001
+        return True          # unserialisable: nothing further to do with it
+
+
+def _clamp_scalar(v: Any, *, limit: int = 240) -> Any:
+    if isinstance(v, (int, float, bool)) or v is None:
+        return v
+    t = v if isinstance(v, str) else str(v)
+    return t if len(t) <= limit else t[:limit] + "...[clamped]"
+
+
+def _cells_rollup(cells: Any) -> Dict[str, Any]:
+    """The cell list as totals. Fixed size however many cells there are."""
+    rows = [c for c in cells if isinstance(c, Mapping)]
+    sums = {k: D("0") for k in ("matched_shares", "residual_shares",
+                                "residual_cost", "matched_pnl_modelled",
+                                "residual_pnl_modelled", "net_pnl_modelled",
+                                "capital_deployed")}
+    states: Dict[str, int] = {}
+    resting = 0
+    for c in rows:
+        for k in sums:
+            try:
+                sums[k] += D(str(c.get(k, "0") or "0"))
+            except BaseException:                              # noqa: BLE001
+                pass
+        st = str(c.get("state", "?"))
+        states[st] = states.get(st, 0) + 1
+        if c.get("resting"):
+            resting += 1
+    return {"_rollup": True, "count": len(rows), "by_state": states,
+            "resting": resting,
+            "totals": {k: str(v) for k, v in sums.items()}}
+
+
+#: Heartbeat fields that must NEVER be reduced. Every safety decision and
+#: every figure the owner is owed during a live window is read from one of
+#: these, so they are preserved whole however large the rest grows.
+HB_NEVER_REDUCE = (
+    "utc", "role", "market", "armed", "preflight", "owner_arm_token",
+    "halt_local_env", "halt_latch", "shadow_lock", "approval_state",
+    "windows_remaining", "submission_gate", "seeded", "submissions_spent",
+    "realized_today", "day_realized", "orders_uncertain", "open_orders",
+    "live_orders", "defensive_spent_usd", "peak_usd", "cash_deployed_usd",
+    "campaign", "unresolved_accounting", "venue_requests", "http_429",
+    "fill_calibration", "positions", "inventory", "fees", "rebates",
+    "auth_book", "t_in_window_s", "LABEL",
+    # THE ARMING PREFLIGHT VERDICT. Boot-only and on its own
+    # line was how the 2026-11-06 20:00z window was lost: the
+    # preflight said ok=false fail=["absolute_deadline"] 26
+    # minutes beforehand and nobody was reading that line.
+    "authorization_preflight",
+    # THE LIFETIME COMPLETION BUDGET. Its balance had to be
+    # INFERRED after the first live window because the
+    # heartbeat never carried it.
+    "defensive_budget",
+)
+
+
+def bounded_hb(hb: Mapping[str, Any], *,
+               budget: int = LOG_BUDGET_BYTES) -> Dict[str, Any]:
+    """The heartbeat, small enough that its SAFETY fields arrive.
+
+    WHY, MEASURED. On deployment 84909719 the `L5_LIVE_HB` line arrives at
+    exactly 81,921 bytes -- truncated at the platform limit -- and the
+    fields past the cut are the ones a live window has to be policed by:
+    `realized_today`, `orders_uncertain`, `defensive_spent_usd`,
+    `cash_deployed_usd`, `open_orders`. They were simply absent from the
+    tape. Field sizes at that moment:
+
+        shadow_controller   61,450      <- 75% of the line
+        retired_markets      4,550
+        stats_age_s          4,072
+        stats                3,945
+        ...
+        submission_gate        748
+        campaign               968
+        day_realized           385
+
+    So the line was spent on shadow-lane observability while the safety
+    state fell off the end. This reduces the LARGEST reducible field first
+    and never touches anything in `HB_NEVER_REDUCE`, so the safety fields
+    cannot be the ones dropped. A heartbeat already inside budget is
+    returned unchanged.
+    """
+    try:
+        if len(json.dumps(hb, default=str)) <= budget:
+            return dict(hb)
+    except BaseException:                                      # noqa: BLE001
+        return dict(hb)
+    out = dict(hb)
+    dropped: Dict[str, Any] = {}
+    while True:
+        try:
+            if len(json.dumps(out, default=str)) <= budget:
+                break
+        except BaseException:                                  # noqa: BLE001
+            break
+        biggest, big_sz = None, -1
+        for k, v in out.items():
+            if k in HB_NEVER_REDUCE or k in dropped:
+                continue
+            try:
+                sz = len(json.dumps(v, default=str))
+            except BaseException:                              # noqa: BLE001
+                sz = 0
+            if sz > big_sz:
+                biggest, big_sz = k, sz
+        if biggest is None:
+            break                      # only protected fields remain
+        dropped[biggest] = big_sz
+        out[biggest] = {"_reduced": True, "bytes": big_sz}
+    if dropped:
+        out["hb_reduced"] = {
+            "fields": dropped,
+            "budget_bytes": budget,
+            "labels": ("reduced so the SAFETY fields reach the tape. The "
+                       "line was truncated at 81,920 bytes and the fields "
+                       "past the cut were the ones a live window is "
+                       "policed by. Nothing in HB_NEVER_REDUCE is ever "
+                       "reduced here."),
+        }
+    return out
+
+
 class ShadowLedger:
     """Durable, shadow-only record of parked and finalized windows.
 
@@ -801,10 +1038,46 @@ class ShadowLedger:
             self.state = {"pending": {}, "finalized": {}}
 
     def save(self) -> None:
+        """Write the ledger, and MEASURE the write.
+
+        The write is instrumented because the rollover cost of issue #195
+        outlived the fix that was supposed to remove it. Bounding the log
+        line was deployed on the strength of a correlation and changed the
+        roll cost by nothing -- 6.511 s against a 6.882 s mean -- so the
+        remaining candidate is this: `finalized` is unbounded, every scored
+        report is ~156 KB, and this method rewrites the WHOLE file on every
+        park and every finalize, twice a window, on a network-attached
+        volume. That is a hypothesis and it is not being acted on until it
+        is measured, which is what these four attributes are for.
+
+        Reporting only. Nothing here changes what is written.
+        """
         tmp = self.path + ".tmp"
+        t0 = time.monotonic()
         with open(tmp, "w") as fh:
             json.dump(self.state, fh)
         os.replace(tmp, self.path)
+        self.last_save_s = round(time.monotonic() - t0, 4)
+        self.saves = int(getattr(self, "saves", 0)) + 1
+        try:
+            self.last_save_bytes = os.path.getsize(self.path)
+        except BaseException:                                  # noqa: BLE001
+            self.last_save_bytes = None
+
+    def size_report(self) -> Dict[str, Any]:
+        """What the ledger costs, for one log line per roll."""
+        return {"finalized": len(self.state.get("finalized") or {}),
+                "pending": len(self.state.get("pending") or {}),
+                "bytes": getattr(self, "last_save_bytes", None),
+                "last_save_s": getattr(self, "last_save_s", None),
+                "saves_this_process": int(getattr(self, "saves", 0)),
+                "max_pending": self.max_pending,
+                "labels": ("`finalized` has NO bound: every window ever "
+                           "scored is kept whole. Two saves a window, each "
+                           "rewriting the entire file. This line exists to "
+                           "measure whether that is the residual rollover "
+                           "cost, before anything is changed on that "
+                           "belief.")}
 
     # ------------------------------------------------------------ parking
     def park(self, report: Mapping[str, Any], *, now: float) -> Dict[str, Any]:

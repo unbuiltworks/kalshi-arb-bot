@@ -55,6 +55,7 @@ COPY src/__init__.py src/__init__.py
 # image it raises ModuleNotFoundError on the first tick with
 # L5_BOOK_COMPLETION set.
 COPY src/l5_book_completion.py src/l5_book_completion.py
+COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 # The bounded taker-completion authorization. The runner imports it
 # UNCONDITIONALLY -- the policy is evaluated on every completion tick so the
 # tape records what it would have authorized -- so its absence is an import
@@ -126,6 +127,7 @@ COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_promotion_gate.py src/l5_promotion_gate.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
+COPY src/l5_inventory_decision.py src/l5_inventory_decision.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image

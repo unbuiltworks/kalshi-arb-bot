@@ -205,13 +205,32 @@ def test_the_scoped_ceilings_are_absent_unless_configured():
 
 def test_the_runner_baseline_caller_is_gated_and_reads_before_striking():
     """The caller must be env-gated, use authoritative reads, and run where
-    the transport exists."""
+    the transport exists.
+
+    REWRITTEN FOR THE DEFERRED QUEUE. The baseline is no longer struck
+    inside `roll`: it made two venue reads on the window's opening, where
+    the cost-basis audit beside it was spending 93 seconds (issue #195).
+    `roll` now ENQUEUES it and the tick drains it after every trading stage.
+
+    The ordering property survives and is checked on the enqueue, which is
+    still between the transport and the executor, plus two new ones: `roll`
+    must not strike the baseline itself, and the job must read the LIVE
+    transport rather than one captured when it was queued.
+    """
+    import inspect
+    from src import l5_pmus_live_runner as RUN
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "src/l5_pmus_live_runner.py")).read()
     t = src.index("self.transport = T.PmusTransport(")
-    b = src.index('os.getenv("L5_ESTABLISH_BASELINE"')
+    b = src.index("self.enqueue_roll_diagnostics()")
     e = src.index("self.executor = LX.FaithfulExecutor(")
-    assert t < b < e, "the baseline must be struck after the transport exists"
+    assert t < b < e, "the baseline must be queued after the transport exists"
+    assert 'os.getenv("L5_ESTABLISH_BASELINE"' in src
+    roll_src = inspect.getsource(RUN.Runner.roll)
+    assert "establish_l5_baseline" not in roll_src
+    step = inspect.getsource(RUN.Runner._establish_baseline_step)
+    assert "self.transport.account()" in step
+    assert "self.transport.positions()" in step
     assert ".account()" in src and ".positions()" in src
     # obligations must NOT come from the not-yet-built executor
     assert "self.executor_cash_legs()" not in src
@@ -327,10 +346,12 @@ def test_the_production_balances_shape_yields_cash_not_none():
 
 
 def test_the_runner_uses_the_proven_parser_not_guessed_key_names():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    src = open(os.path.join(root, "src/l5_pmus_live_runner.py")).read()
-    b = src.index('os.getenv("L5_ESTABLISH_BASELINE"')
-    tail = src[b:b + 2600]
+    """Read off the baseline step itself rather than off a byte window of
+    the file: the block moved out of `roll` into its own deferred job, and
+    a character offset is not what this test is about."""
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    tail = inspect.getsource(RUN.Runner._establish_baseline_step)
     assert "T.PmusTransport.buying_power(acct)" in tail
     # the guessed-key list must be gone from the baseline block
     assert '"availableBalance", "available", "cash"' not in tail

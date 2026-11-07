@@ -21,6 +21,25 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # THE WHOLE HISTORY, because the suite cannot be COLLECTED without
+          # it. `tests/test_l5_controller_translate_parity.py` pins the
+          # frozen translation by COMMIT and loads it at module import:
+          #
+          #   FROZEN = _original_module()
+          #     -> git show 030d8bf:src/l5_faithful_translation.py
+          #
+          # with check=True. The default checkout is shallow, so that commit
+          # is absent, the subprocess exits 128 and pytest aborts with
+          # "Interrupted: 1 error during collection" -- before a single test
+          # runs. This workflow therefore reported FAILURE on every branch
+          # it has ever run on, including `claude/compassionate-allen-wic64u`
+          # (run 42225771158), which made it useless as a parity signal.
+          #
+          # Pinning to a commit is the right call for that test -- comparing
+          # the refactor against HEAD would compare it against itself -- so
+          # the fix belongs here, in the checkout, and not in the test.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

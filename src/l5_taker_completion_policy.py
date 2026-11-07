@@ -61,6 +61,7 @@ after CONSERVATIVE execution costs, and a hard additional-outlay cap.
 
 from __future__ import annotations
 
+import os
 from decimal import Decimal as D
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -72,6 +73,10 @@ __all__ = [
     "DEFAULT_MARGIN_FLOOR_USD", "DEFAULT_MAX_OUTLAY_USD",
     "DEFAULT_WINDOW_OUTLAY_USD", "DEFAULT_MAKER_PATIENCE_S",
     "DEFAULT_DEPTH_HAIRCUT",
+    "OWNER_CROSS_ENV", "MANDATE_ORIGIN",
+    "LOSS_REDUCTION_ENV", "MIN_WORST_IMPROVEMENT_ENV",
+    "loss_reduction_authorized",
+    "policy_enabled", "owner_cross_authorized", "taker_completion_enabled",
     "conservative_fill", "authorize",
 ]
 
@@ -110,6 +115,100 @@ DEFAULT_MAKER_PATIENCE_S = 90.0
 #: displayed depth is not a fill. Only this fraction of each displayed rung
 #: is believed when checking whether the size can clear.
 DEFAULT_DEPTH_HAIRCUT = D("0.25")
+
+# =====================================================================
+# LOSS REDUCTION, which the margin floor cannot express.
+#
+# WHY THIS EXISTS, FROM THE REPLAY THAT FOUND IT. `DEFAULT_MARGIN_FLOOR_USD`
+# is +$0.25 and was calibrated on the two PROFITABLE completions of the
+# 2026-10-30 campaign (2130z +0.2890, 2145z +0.2600). It asks that the worse
+# settlement outcome end up at least a quarter ABOVE zero.
+#
+# A rescue cannot satisfy that, ever, by construction. Replaying the two
+# losing windows of 2026-11-06 against their own recorded books:
+#
+#   0300z  worst_before -0.6500  best worst_after -0.0200  improvement 0.6300
+#   0315z  worst_before -0.4000  best worst_after -0.0500  improvement 0.3500
+#
+# Both are large reductions in exposure and both end BELOW zero, because the
+# first leg's cost is already sunk. So with the route wired and the deployed
+# floor in force, the policy would still have refused both, and both
+# residuals would still have settled for -$1.00.
+#
+# WHAT THIS ADDS. A SEPARATE, DEFAULT-OFF authorization for the loss-reducing
+# case, gated on an improvement floor rather than an outcome floor. It is the
+# "owner-specified maximum completion-loss budget" of issue #195 item 3, and
+# it is deliberately not a relaxation of the margin floor: the profit case
+# still has to clear +$0.25, and this case still has to clear every outlay
+# cap, the conservative-fill re-pricing and the deficit bound.
+#
+# WITH IT UNSET NOTHING CHANGES. `authorize` takes the identical path it
+# takes today and refuses WORST_OUTCOME_NOT_POSITIVE exactly as before.
+# =====================================================================
+
+#: default-off, and an explicit YES like every other switch here
+LOSS_REDUCTION_ENV = "L5_TAKER_LOSS_REDUCTION"
+
+#: how much worse-case exposure a loss-reducing cross must actually remove.
+#: UNSET IS OFF: with the switch on and no floor named, `authorize` refuses
+#: rather than accepting any improvement at all, because "strictly better
+#: than carrying" by a hundredth of a cent is not a reason to spend cash.
+MIN_WORST_IMPROVEMENT_ENV = "L5_TAKER_MIN_WORST_IMPROVEMENT_USD"
+
+
+def loss_reduction_authorized() -> bool:
+    """The owner's separate authorization for the loss-reducing case.
+
+    THREE SWITCHES NOW, AND THAT IS THE POINT. The policy flag says the
+    bounded route exists; the owner cross flag authorizes live taker
+    execution; this one authorizes crossing where the best achievable
+    outcome is still a loss. Each is a different decision and each is
+    default-off, so none of them can be reached by setting another.
+    """
+    return _flag(LOSS_REDUCTION_ENV)
+
+
+#: The owner's separate authorization for crossing. `authorize` takes both as
+#: arguments and the runner reads them there; this helper exists so the ONE
+#: place that exempts an order from the maker-only overlay can ask the same
+#: question without importing the runner.
+OWNER_CROSS_ENV = "L5_TS_COMPLETION_CROSS"
+
+#: The mandate origin a bounded taker completion issues. It shares the
+#: executor's single mandate slot with the defensive unwind -- deliberately,
+#: so "one crossing order per market per window" is one invariant and not two
+#: -- and the origin is what says which policy authorized it.
+MANDATE_ORIGIN = "TAKER_COMPLETION"
+
+
+def _flag(env: str) -> bool:
+    """An explicit YES and nothing else.
+
+    Spelled as a string comparison rather than a truthy env read for the same
+    reason `POLICY_ENV` is: a stray "0", "false" or "off" must not be able to
+    enable live crossing.
+    """
+    return str(os.getenv(env, "")).strip().upper() == "YES"
+
+
+def policy_enabled() -> bool:
+    return _flag(POLICY_ENV)
+
+
+def owner_cross_authorized() -> bool:
+    return _flag(OWNER_CROSS_ENV)
+
+
+def taker_completion_enabled() -> bool:
+    """BOTH switches, and both default OFF.
+
+    The policy flag says the bounded taker route exists; the owner flag is
+    the separate explicit authorization for live taker execution that issue
+    #195 requires. Neither alone is permission, and this is the single
+    predicate the maker-only exemption consults, so there is no second place
+    where the pair could come apart.
+    """
+    return policy_enabled() and owner_cross_authorized()
 
 
 def _d(v: Any) -> Optional[D]:
@@ -246,6 +345,8 @@ def authorize(*, decision: Optional[Dict[str, Any]],
               book_rungs: Any = None,
               depth_haircut: Any = DEFAULT_DEPTH_HAIRCUT,
               halted: Optional[bool] = None,
+              loss_reduction: bool = False,
+              min_worst_improvement_usd: Any = None,
               ) -> Dict[str, Any]:
     """Is this already-priced cross AUTHORIZED? Default: no.
 
@@ -297,9 +398,37 @@ def authorize(*, decision: Optional[Dict[str, Any]],
     #         `completion_decision` deliberately leaves to its caller: it
     #         asks only that the cross improve the worst outcome and pay for
     #         its own fee, which 2115z satisfied at worst_after -0.0400.
-    if not bool(decision.get("both_positive_after")):
-        return _no("WORST_OUTCOME_NOT_POSITIVE",
-                   worst_after=str(decision.get("worst_after")), **rec)
+    #
+    #         THE LOSS-REDUCING CASE IS A SEPARATE AUTHORIZATION, not a
+    #         relaxation of this one. A rescue can never end above zero --
+    #         the first leg's cost is already sunk -- so with the owner's
+    #         loss-reduction switch off this still refuses, byte for byte as
+    #         it does today, and with it on the test becomes how much
+    #         exposure is removed rather than where the outcome lands.
+    rec["loss_reduction_requested"] = bool(loss_reduction)
+    _positive = bool(decision.get("both_positive_after"))
+    _rescue = False
+    if not _positive:
+        if not bool(loss_reduction):
+            return _no("WORST_OUTCOME_NOT_POSITIVE",
+                       worst_after=str(decision.get("worst_after")), **rec)
+        _rescue = True
+        _wb = _d(decision.get("worst_before"))
+        _wa = _d(decision.get("worst_after"))
+        _floor = _d(min_worst_improvement_usd)
+        if _wb is None or _wa is None:
+            return _no("RESCUE_WORST_OUTCOMES_UNREADABLE", **rec)
+        if _floor is None or _floor <= 0:
+            # UNSET IS OFF. "Strictly better than carrying" by a hundredth of
+            # a cent is not a reason to spend cash, so the floor has to be
+            # NAMED and positive or this refuses.
+            return _no("RESCUE_IMPROVEMENT_FLOOR_UNSET", **rec)
+        rec["rescue"] = True
+        rec["worst_before"] = str(_wb)
+        rec["min_worst_improvement_usd"] = str(_floor)
+        rec["worst_improvement_usd"] = str(_wa - _wb)
+        if (_wa - _wb) < _floor:
+            return _no("RESCUE_IMPROVEMENT_BELOW_FLOOR", **rec)
 
     # ---- 5. MAKER FIRST. Crossing is the expensive route and must not be
     #         the first one tried. Unknown history fails closed.
@@ -367,7 +496,7 @@ def authorize(*, decision: Optional[Dict[str, Any]],
         return _no("CONSERVATIVE:%s"
                    % str(tu.get("reason") or "WORSENS_WORST_OUTCOME")[:40],
                    **rec)
-    if not bool(tu.get("both_positive_after")):
+    if not bool(tu.get("both_positive_after")) and not _rescue:
         return _no("CONSERVATIVE_WORST_NOT_POSITIVE", **rec)
 
     # ---- 8. THE MARGIN FLOOR. Positivity alone bought +$0.0870 across the
@@ -380,7 +509,21 @@ def authorize(*, decision: Optional[Dict[str, Any]],
     if worst_after is None:
         return _no("CONSERVATIVE_WORST_UNREADABLE", **rec)
     rec["margin_floor_usd"] = str(floor)
-    if worst_after < floor:
+    if _rescue:
+        # THE RESCUE'S FLOOR IS ON THE IMPROVEMENT, RE-CHECKED AT THE
+        # CONSERVATIVE QUANTITY. The margin floor cannot apply here -- a
+        # rescue ends below zero by construction -- so the same question is
+        # asked of the size that CONSERVATIVELY clears rather than of the
+        # size we asked for, which is what step 7 exists to do for every
+        # other bound.
+        _cwb = _d(tu.get("worst_before"))
+        _cfloor = _d(min_worst_improvement_usd)
+        if _cwb is None or _cfloor is None:
+            return _no("RESCUE_CONSERVATIVE_UNREADABLE", **rec)
+        rec["conservative_worst_improvement_usd"] = str(worst_after - _cwb)
+        if (worst_after - _cwb) < _cfloor:
+            return _no("RESCUE_CONSERVATIVE_IMPROVEMENT_BELOW_FLOOR", **rec)
+    elif worst_after < floor:
         return _no("MARGIN_BELOW_FLOOR", **rec)
 
     # ---- 9. THE HARD OUTLAY CAP, per cross and per window, computed on the
@@ -406,7 +549,8 @@ def authorize(*, decision: Optional[Dict[str, Any]],
     if spent + outlay > wcap:
         return _no("WINDOW_OUTLAY_EXHAUSTED", **rec)
 
-    return dict(rec, ok=True, authorized=True, reason="AUTHORIZED",
+    return dict(rec, ok=True, authorized=True,
+                reason="AUTHORIZED_RESCUE" if _rescue else "AUTHORIZED",
                 qty=str(cq), price=str(cv),
                 qty_requested=str(qty), price_requested=str(px),
                 clears_in_full=bool(cf.get("clears_in_full")),
