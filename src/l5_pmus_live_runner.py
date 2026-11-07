@@ -1687,11 +1687,35 @@ class Runner:
             "max_unmatched_contracts": str(getattr(
                 vg, "max_unmatched_contracts", "") or ""),
             "max_usd_per_market": str(self.limits.max_usd_per_market),
+            # THE WORST-CASE DEFICIT BOUND, REPORTED EVEN WHEN ABSENT.
+            #
+            # This line used to omit it entirely, and that omission is how
+            # the Stage 1 blocker stayed invisible: the deficit gate reads
+            # `if self.max_worst_case_deficit_usd is not None:`, so an unset
+            # limit REMOVES the check rather than widening it -- and the
+            # heartbeat enumerated the gates in force without saying that
+            # one was not among them. A limit an operator cannot see is a
+            # limit nobody can verify.
+            #
+            # `null` here means NO DEFICIT CHECK RUNS AT ALL. That is a
+            # different and more serious statement than a large number, so
+            # it is spelled out rather than left to inference.
+            "max_worst_case_deficit_usd": (
+                None if getattr(vg, "max_worst_case_deficit_usd", None)
+                is None
+                else str(getattr(vg, "max_worst_case_deficit_usd"))),
+            "worst_case_deficit_check": (
+                "ACTIVE" if getattr(vg, "max_worst_case_deficit_usd", None)
+                is not None else "NOT_CONFIGURED_NO_CHECK_RUNS"),
             "distinction": ("max_cash_deployed_usd is the run-scoped GROSS "
                             "CASH OUT bound (the mandate). max_usd_per_market "
-                            "is a per-market WORST-CASE LOSS ceiling. They are "
+                            "is a per-market WORST-CASE LOSS ceiling. "
+                            "max_worst_case_deficit_usd bounds "
+                            "C - min(up, dn), the most the book can lose "
+                            "HOWEVER the window resolves, and when it is "
+                            "null that check does not run. They are "
                             "different quantities and the smaller one binds; "
-                            "neither is the other's default."),
+                            "none is another's default."),
         }
 
     def roll(self, now: float) -> None:
@@ -3019,6 +3043,14 @@ class Runner:
                     getattr(self, "executor", None), "halt_gate", None)
                 is not None,
                 reconciled=self.reconciled,
+                # THE VALIDATION GATES, so step 14 can see the worst-case
+                # deficit bound. getattr twice: a runner with no executor,
+                # or an executor with no gates, passes None and step 14
+                # then refuses CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT for any
+                # campaign that names one -- which is the fail-closed
+                # direction. A campaign that names none is unaffected.
+                gates=getattr(getattr(self, "executor", None),
+                              "validation_gates", None),
                 unresolved=unresolved_discrepancies(self.store),
                 # getattr on SELF too: a runner without an executor has no
                 # capital envelope at all, and the boundary must refuse that
