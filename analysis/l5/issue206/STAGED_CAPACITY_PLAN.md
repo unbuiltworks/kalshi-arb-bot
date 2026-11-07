@@ -83,7 +83,7 @@ pins it.
 
 ### Capacity at each envelope, at a 0.95 pair cost
 
-| envelope | pairs/window | pair P&L at +3.5¢ | worst case if **half** strand |
+| envelope | pairs/window | pair P&L at +3.5¢ | worst case if **every round strands one leg** |
 |---|---|---|---|
 | $1 | 1 | +$0.035 | $0.48 |
 | **$10** | 10 | +$0.35 | **$4.75** |
@@ -173,3 +173,125 @@ across all the stage's windows** — not one good window.
 
 **Our confirmed settled realized net remains −$15.6109 all-time.** Every
 positive figure in this document is L5's money or arithmetic, never ours.
+
+---
+
+# Addendum: pair completion, residual risk, and the loss-at-risk budget
+
+## A1. Why every unmatched leg we have ever carried existed
+
+Reconstructed from the venue tapes. Each traces to **one** of four
+mechanisms, and which one matters because each has a different guard:
+
+| window | role | own | cancelled at | rest at recovery | mechanism |
+|---|---|---|---|---|---|
+| 0100z | first leg | 0.28 | 44.8s | **44.13s** | recovery gate |
+| 0115z | **complement** | 0.70 | 21.0s | **16.62s** | recovery gate |
+| 0145z | **complement** | 0.61 | 13.6s | **16.79s** | recovery gate |
+| 0100z 11-07 | complement | 0.4600 | — | — | completion requote → 0.51 target (a **1.0000** pair, worth $0.0000) |
+| 0100z 11-07 | complement | 0.4900 | — | — | completion requote, same |
+| 1230z | complement | 0.4900 | 124.0s | — | ACC deadline TTL (120s) |
+| 2015z | first leg | 0.5700 | 120.9s | — | ACC deadline TTL |
+
+Plus a fourth class — legs **never replaced** once the round was spent,
+fixed by the round-retirement work.
+
+**The TTL cancellations cost nothing.** Past the last observed fill our own
+Kaplan–Meier curve puts the conditional chance of filling at **0.0%**, so
+the mandatory deadline is not what cost us pairs.
+
+## A2. The rest floors are not what saves the costly cancels
+
+**0115z and 0145z were cancelled at rest 16.62s and 16.79s — above *both*
+floors** (`recover_min_rest_s` 15.0, `REQUOTE_MIN_REST_S` 14.0). So the
+minimum-rest logic does **not** reach the two cancellations that actually
+cost us pairs. It stops the sub-7s churn and nothing more.
+
+**PRESERVE is what prevents them**, for its own reason: a resting quote has
+the same worst case as holding and strictly better upside, so cancelling it
+is never an improvement. Verified at all three historical prices.
+
+**And it does not become blind patience.** Above redemption, preserving is
+refused outright:
+
+| resting pair | PRESERVE |
+|---|---|
+| 0.94 (0115z) · 0.96 (0145z) · 0.97 (2015z) · 1.00 | **feasible, selected** |
+| 1.05 · 1.20 | **infeasible — `RESTING_PAIR_ABOVE_REDEMPTION`** |
+
+So a quote is held while it can still lock a gain and never while it would
+lock a loss. Both floors and PRESERVE are needed; neither substitutes.
+
+## A3. The loss-at-risk budget — it already exists, and it is not cash
+
+`ValidationGates.max_worst_case_deficit_usd` enforces `C − min(up, dn)`:
+the most the book can lose **however the window resolves**, maximised over
+the four corners of which outstanding orders fill (nothing / UP only / DOWN
+only / everything) — exact rather than conservative — with fees included and
+never netted, and failing closed as `WORST_CASE_DEFICIT_NO_INVENTORY` when
+the book cannot be read.
+
+**No second budget is added.** A second opinion beside it could drift from
+the one enforced, which is the hazard this program has already paid for
+twice. What is now pinned by test is that it is **independent of cash** and
+**binds first when set below it** — at $200 cash with a $0.01 deficit bound
+the engine places **nothing**.
+
+**That is what makes "$200 of cash is not permission to risk $200"
+enforceable**, and it gives the honest answer to *maximum modelled loss per
+window*: **it equals the deficit bound by construction**, because no order
+may leave the book able to lose more than it.
+
+| stage | cash | **loss-at-risk budget** | if the bound were absent | daily halt |
+|---|---|---|---|---|
+| 1 | $10 | **$1.00** | $4.75 | $5 |
+| 2 | $25 | **$2.50** | $12.35 | $12 |
+| 3 | $50 | **$5.00** | $24.70 | $25 |
+| 4 | $200 | **$20.00** | $99.75 | $100 |
+
+The fourth column is what a window could lose with cash as the only bound.
+The third is what it can lose with the deficit bound set. **The ratio of
+worst case to expected edge is ~13.6× at every scale** — it is
+scale-invariant, since both terms are linear in the pair count — so a gate
+set against the edge would be set 13× too loose.
+
+## A4. Completed-pair rate versus unmatched-leg rate
+
+| source | pairs | unmatched | note |
+|---|---|---|---|
+| **our own 34 venue orders** | **8 of 11 rounds (72.7%)** | 3 (27.3%) | and **all three** self-inflicted |
+| L5, repaired union | 5,089,010 ct matched | 1,240,600 ct (**19.6%**) | 4,720 windows |
+
+Our pair rate is *higher* than L5's contract-weighted ratio, on a far
+smaller sample, and every residual we carried was created by our own
+cancellation — not by the market refusing us.
+
+## A5. Proven, assumed, and unknown — kept apart
+
+**Proven (venue-confirmed):** our 34 orders and their terminal states; 8 of
+11 rounds paired; median fill 17.1s; the four cancellation mechanisms; our
+settled realised net **−$15.6109**; that PRESERVE holds ≤1.00 pairs and
+refuses above; that the deficit bound binds before cash.
+
+**Assumed (measured on someone else's fills):** the +$0.0350 matched edge
+and 2.80% of turnover, from L5's repaired union. Our own matched sample is 8
+pairs.
+
+**Unknown:** the residual's **sign** (−$0.024 … +$0.037 across credible
+subsamples); whether any **rebate** is credited to our account — none ever
+has been, so every figure here is gross of it; whether our 72.7% pair rate
+survives at L5's quote frequency; and the mechanism behind the 1,789
+redemption-inconsistent windows.
+
+## A6. Remaining blocker to a separately authorized $10 test
+
+**One, and it is not code.** The residual sign is unresolved, and at Stage 1
+size it dominates: ~10 pairs earn **+$0.35** at the measured matched edge,
+while the loss-at-risk budget allows **$1.00**. A residual at the
+pessimistic end of its range costs more than the pairs earn. Only our own
+fills can settle it, which is what a Stage 1 window would measure — so the
+blocker is also the reason to run it, under the $1.00 deficit bound rather
+than the $10 of cash.
+
+`test_stage1_readiness_is_blocked_on_the_residual_SIGN_not_on_code` pins
+this so it cannot be quietly dropped.
