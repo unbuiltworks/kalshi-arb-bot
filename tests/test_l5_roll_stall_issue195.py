@@ -744,7 +744,11 @@ def test_every_runner_emit_of_the_report_is_bounded():
                          src, re.S):
         assert "bounded_for_log" in m.group(1), m.group(1)
     assert src.count('emit("L5_TWO_SIDED_SHADOW"') == 4
-    assert src.count("TS.bounded_for_log(") == 4
+    # FIVE SITES NOW. The fifth is L5_UNMATCHED_DISPOSITION, which is
+    # bounded for the same reason: it is emitted on a tick, it embeds a
+    # priced action list, and an unbounded line is what truncated the
+    # heartbeat past the fields a live window is policed by.
+    assert src.count("TS.bounded_for_log(") == 5
 
 
 def test_a_very_large_grid_still_fits_because_cells_roll_up():
@@ -832,14 +836,22 @@ def test_no_authoritative_record_is_passed_through_the_bound(label):
         assert "bounded_for_log" not in m.group(1), (label, m.group(1))
 
 
-def test_the_bound_is_applied_to_exactly_one_label():
+def test_the_bound_is_applied_to_exactly_the_declared_labels():
+    """Two, and both are tick-rate records carrying a nested report.
+
+    Kept as an allow-list rather than a count so a THIRD label cannot
+    acquire the bound silently -- the point of the original single-label
+    assertion. `L5_UNMATCHED_DISPOSITION` was added deliberately with the
+    hold-versus-complete decision engine.
+    """
     import re
     src = inspect.getsource(RUN)
     labels = set()
     for m in re.finditer(r'emit\("([A-Z0-9_]+)",\s*(?:\n\s*)?'
                          r'(?:[A-Za-z_.]*\()?TS\.bounded_for_log', src):
         labels.add(m.group(1))
-    assert labels == {"L5_TWO_SIDED_SHADOW"}, labels
+    assert labels == {"L5_TWO_SIDED_SHADOW",
+                      "L5_UNMATCHED_DISPOSITION"}, labels
 
 
 def test_the_ledgers_own_writers_do_not_reduce():

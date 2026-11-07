@@ -1409,6 +1409,9 @@ class Runner:
         #: states. Acknowledgement evidence only: no fill, quantity, fee or
         #: P&L is derived from it anywhere.
         self.win_cancels: Dict[str, List[Dict[str, Any]]] = {}
+        #: market -> (selected action, when emitted). Bounds the repeat rate
+        #: of L5_UNMATCHED_DISPOSITION without ever delaying a CHANGE.
+        self._disposition_last: Dict[str, Any] = {}
         #: the latest report per market, provisional then confirmed. One entry
         #: per window, overwritten in place, so a window is never double
         #: counted in the rolling totals.
@@ -8506,6 +8509,128 @@ class Runner:
             # nothing terminal and nothing failed is still not proof.
             self._requote_unresolved[key] = "NO_TERMINAL_PROOF"
 
+    def _taker_route_open(self) -> bool:
+        """Both owner switches, or FALSE. Unreadable is never enabled."""
+        try:
+            return bool(self.ts_completion_cross_authorized()
+                        and self.taker_policy_enabled())
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["disposition:ROUTE_UNREADABLE"] += 1
+            except BaseException:                               # noqa: BLE001
+                pass
+            return False
+
+    #: HOW OFTEN THE DISPOSITION RECORD REPEATS while nothing changes. A
+    #: change of selected action always emits immediately, so this only
+    #: bounds the quiet case -- the one that produced 83 identical `N/A`
+    #: records at 0100z.
+    DISPOSITION_EVERY_S = 15.0
+
+    def maybe_unmatched_disposition(self, now: float
+                                    ) -> Optional[Dict[str, Any]]:
+        """Price every disposition of the unmatched leg and RECORD it.
+
+        THE SILENCE THIS ENDS. 0100z carried a residual 1 DOWN to a
+        -$0.4900 settlement, and in the 14 minutes after the last cancel
+        the tape held 152 decision records of which the final 83 read
+        `NOT_AN_OPPORTUNITY` with verdict `N/A`. Not one named the
+        position, its worst case, or the fact that nothing was available.
+        The engine stopped ASKING rather than deciding.
+
+        READ-ONLY, STRUCTURALLY. It reads the store, the book and the
+        ladder, calls a pure function, and emits. It holds no transport
+        here and submits nothing: the selected action is DATA, and routing
+        it would go through the same `submit_*` path and the same arming,
+        campaign, budget and halt gates as any other order -- none of which
+        this method touches or can bypass.
+
+        CADENCE. Only while unmatched inventory exists, at most once every
+        `self.DISPOSITION_EVERY_S`, and always immediately when the selected
+        action changes -- so a state change is never missed and a quiet
+        residual does not flood the tape.
+        """
+        # BOTH LOCAL, like `maybe_completion_requote`'s own import: `TSP`
+        # is not a module-level name in this file.
+        from src import l5_two_sided_probe as TSP
+        from src import l5_unmatched_disposition as UDP
+        try:
+            t = self.transport
+            slug = getattr(t, "market_slug", None) if t is not None else None
+            if not slug:
+                slug = getattr(self, "ws", None) and TSP.named_market()
+            if not slug:
+                return None
+            slug = str(slug)
+            realised = D(str(self.store.residual(slug)))
+            if realised == 0:
+                if getattr(self, "_disposition_last", None):
+                    self._disposition_last.pop(slug, None)
+                return None
+            held = TSP.UP if realised > 0 else TSP.DOWN
+            comp = TSP.DOWN if held == TSP.UP else TSP.UP
+            legs = self.store.leg_cost(slug) or {}
+            snap = self.book.snapshot(slug) or {}
+            ws = AB.slug_start(slug)
+            if ws is None:
+                return None
+            live = {c: o for c, o in (self.store.live_orders() or {}).items()
+                    if str((o or {}).get("market") or "") == slug
+                    and str((o or {}).get("side") or "") == comp}
+            row = next(iter(live.values())) if len(live) == 1 else None
+            _qmk = getattr(self, "_requote_queue_ahead_fn", None)
+            _qfn = (_qmk(slug, comp) if callable(_qmk) else None)
+            vg = getattr(self.executor, "validation_gates", None)
+            rec = UDP.decide(
+                market=slug, held_side=held,
+                held_qty=self.store.position(slug, held),
+                held_cost_usd=legs.get(held),
+                deficient_qty=self.store.position(slug, comp),
+                deficient_cost_usd=legs.get(comp),
+                resting_own_px=(row or {}).get("price"),
+                resting_qty=(row or {}).get("qty"),
+                resting_filled_qty=(
+                    (D(str((row or {}).get("qty"))) -
+                     LX.InventoryStore.worst_case_remaining(row))
+                    if row and (row or {}).get("qty") is not None else 0),
+                bid=snap.get("bid"), ask=snap.get("ask"),
+                tick=getattr(t, "tick_size", None),
+                min_qty=getattr(t, "quantity_increment", None),
+                now_s=float(now), window_start_s=float(ws),
+                window_end_s=TSP.window_end(float(ws)),
+                book_age_s=snap.get("stream_age_s"),
+                gap_suspected=bool(snap.get("gap_suspected")),
+                orders_uncertain=self.store.orders_uncertain(),
+                residual_budget_usd=getattr(
+                    vg, "max_worst_case_deficit_usd", None),
+                queue_ahead_fn=_qfn,
+                # THE OWNER'S ROUTE, READ NOT ASSUMED, AND FAIL CLOSED.
+                # Both switches must say YES. An accessor that cannot be
+                # read at all reports the route OFF, never on -- the
+                # crossing actions are then still PRICED, because the whole
+                # point of the record is to state what declining them
+                # costs, but they can never be selected.
+                taker_enabled=self._taker_route_open())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["disposition:LAYER_FAILED:%s"
+                       % type(exc).__name__] += 1
+            return None
+        if getattr(self, "_disposition_last", None) is None:
+            self._disposition_last = {}
+        prev = self._disposition_last.get(slug)
+        changed = (prev is None or prev[0] != rec.get("selected"))
+        if not changed and (now - prev[1]) < self.DISPOSITION_EVERY_S:
+            self.stats["disposition:THROTTLED"] += 1
+            return rec
+        self._disposition_last[slug] = (rec.get("selected"), float(now))
+        self.stats["disposition:%s" % rec.get("selected")] += 1
+        emit("L5_UNMATCHED_DISPOSITION", TS.bounded_for_log(rec))
+        return rec
+
     def maybe_completion_requote(self, now: float
                                  ) -> Optional[Dict[str, Any]]:
         """Cancel a completion that has drifted off the touch, so the
@@ -8964,6 +9089,10 @@ class Runner:
         # do so rather than be cancelled first; before, because a quote the
         # market has walked away from is worth replacing while runway
         # remains. Inert unless L5_COMPLETION_REQUOTE is set.
+        # BEFORE the requote, so the record describes the state the
+        # requote then acts on rather than the state it left behind.
+        self.maybe_unmatched_disposition(now)
+        _sc.mark("maybe_unmatched_disposition")
         self.maybe_completion_requote(now)
         _sc.mark("maybe_completion_requote")
         # THE DEFERRED READ-ONLY DIAGNOSTICS, and their position in this list

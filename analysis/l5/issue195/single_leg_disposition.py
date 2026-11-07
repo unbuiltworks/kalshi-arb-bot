@@ -84,11 +84,18 @@ def run(group, label, depth=2):
                 ft = _touches(frames[fill_i]) if fill_i is not None else None
                 if ft is None:
                     continue
-                # the opposite leg's own touch at the moment we filled
+                # THE CROSSING PRICE, NOT THE MAKER TOUCH. Completing as
+                # a taker LIFTS the far side: to buy DOWN we sell YES into
+                # the bid (own 1 - bid), and to buy UP we pay the ask. An
+                # earlier version of this script used the maker touch and
+                # so understated the taker's cost by a whole spread.
+                cross = (D(1) - ft[0]) if side == "UP" else ft[1]
+                # and the MAKER touch, which is what a resting completion
+                # would have to wait for
                 other_touch = (D(1) - ft[1]) if side == "UP" else ft[0]
-                pair_now = cost + other_touch
+                pair_now = cost + cross
                 hold = settle - cost
-                comp = (D(1) - pair_now) - taker_fee(other_touch)
+                comp = (D(1) - pair_now) - taker_fee(cross)
                 # WAIT096: does the touch ever offer a <=0.96 pair later?
                 got = None
                 for j in range(fill_i, len(frames)):

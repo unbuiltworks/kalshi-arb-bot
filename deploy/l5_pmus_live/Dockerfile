@@ -129,6 +129,12 @@ COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_inventory_decision.py src/l5_inventory_decision.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
+# the hold-versus-complete decision engine, imported LAZILY by
+# `maybe_unmatched_disposition`. A lazy import is still an import: without
+# this line the runner's except branch would swallow the ImportError and
+# the residual would go back to settling with no decision record at all --
+# which is the exact silence the module exists to end.
+COPY src/l5_unmatched_disposition.py src/l5_unmatched_disposition.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image
 # must carry it or the entrypoint cannot start at all.

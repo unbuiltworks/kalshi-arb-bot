@@ -123,10 +123,13 @@ def test_the_emit_is_guarded_so_reporting_cannot_kill_a_tick():
 
 
 def test_every_pre_preflight_call_has_a_mark():
-    """All fifteen, so the holder of the tick cannot hide in an
+    """All sixteen, so the holder of the tick cannot hide in an
     unmeasured gap. A new stage must be MARKED and declared, which is
     exactly what this guard is for -- `maybe_completion_requote` was the
-    fourteenth and `roll_diagnostics` is the fifteenth.
+    fourteenth, `roll_diagnostics` the fifteenth, and
+    `maybe_unmatched_disposition` is the sixteenth. It runs immediately
+    BEFORE the requote, so the disposition record describes the state the
+    requote then acts on rather than the state it left behind.
 
     `roll_diagnostics` is the deferred read-only work that used to run
     inside `roll` and held it for 93 seconds on every window (issue #195).
@@ -141,6 +144,7 @@ def test_every_pre_preflight_call_has_a_mark():
         "roll", "maybe_halt_deadman", "maybe_expire_authorization",
         "maybe_cancel_orphans", "maybe_qm_deadline", "maybe_acc_deadline",
         "sample_residual_book", "maybe_ts_completion",
+        "maybe_unmatched_disposition",
         "maybe_completion_requote", "maybe_ts_deadline",
         "model_advance", "two_sided_advance", "two_sided_settle",
         "venue_cooling", "roll_diagnostics"}, sorted(marked)
