@@ -18,10 +18,16 @@ exists again.
 THE SOURCES, none of which is modified:
 
   data/l5/raw/activity.jsonl              the capture the analysis used
-  data/l5/raw/activity_gap.jsonl.gz       an explicit gap-fill pass, with
-                                          start/end params rather than
-                                          offset -- so it is NOT subject to
-                                          the same drift
+  data/l5/raw/activity_gap.jsonl.gz       a deeper pass over the same
+                                          endpoint. CORRECTION: an earlier
+                                          version of this file said it
+                                          paged by TIME WINDOW rather than
+                                          offset. It does not -- its params
+                                          are `end` + `offset` + DESC, the
+                                          same shape as the other capture.
+                                          It simply walked far more anchors,
+                                          which is why it holds 691,077 rows
+                                          the first file lacks.
   data/l5/sep2026/l5_activity_sep2026_raw.json.gz
   data/l5/sep2026/l5_activity_sep2223_raw.json.gz
 
@@ -62,8 +68,34 @@ ACTIVITY_SOURCES = [
 FAMILY = "btc-updown-15m"
 TOL = 0.02
 
-COMPLETE, INCOMPLETE, INDETERMINATE = "COMPLETE", "INCOMPLETE", \
-    "INDETERMINATE"
+#: WHAT THESE NAMES ASSERT, narrowed after review.
+#:
+#: They used to read COMPLETE / INCOMPLETE / INDETERMINATE, which claimed
+#: more than the test delivers. The redemption identity -- payout cannot
+#: exceed the larger side's holding -- is NECESSARY for completeness and
+#: NOT SUFFICIENT: a window missing rows on its smaller side, or missing
+#: them proportionally from both, passes it and is still short. So the
+#: classes now say only what is actually checked.
+#:
+#: TWO MECHANISMS WERE TESTED AND ONE WAS REFUTED. The captures page
+#: contiguous offsets under a fixed `end` and then re-anchor `end` to the
+#: oldest timestamp seen; consecutive anchors chain exactly, so coverage is
+#: continuous. Timestamp ties at those re-anchor boundaries were the obvious
+#: candidate for the loss and the data says no: a boundary falls inside
+#: 3.4% of inconsistent windows against 2.4% of consistent ones, which is
+#: no signal at all. The mechanism behind the remaining inconsistency is
+#: therefore UNKNOWN -- plausibly negative-risk position merging, which the
+#: positions capture exposes as `negativeRisk` and `mergeable` and which
+#: would break per-slug redemption accounting outright.
+REDEMPTION_CONSISTENT = "REDEMPTION_CONSISTENT"
+REDEMPTION_INCONSISTENT = "REDEMPTION_INCONSISTENT"
+UNSETTLEABLE = "UNSETTLEABLE"
+
+#: kept as aliases so existing callers and tests keep working, but the
+#: names above are the ones that describe the evidence
+COMPLETE = REDEMPTION_CONSISTENT
+INCOMPLETE = REDEMPTION_INCONSISTENT
+INDETERMINATE = UNSETTLEABLE
 
 
 def _open(path):
@@ -175,6 +207,39 @@ def classify(e):
     if e["red"] > max(e["uq"], e["dq"]) * (1.0 + TOL):
         return INCOMPLETE
     return COMPLETE
+
+
+def completeness_evidence(e):
+    """Every independent check we can actually run, reported separately.
+
+    NO SINGLE CHECK CERTIFIES COMPLETENESS and this does not pretend
+    otherwise. It lists what passed so a reader can see the strength of the
+    claim rather than a label.
+
+      redemption_within_holding   NECESSARY: payout <= larger side
+      redemption_equals_a_side    STRONGER: payout == one side exactly, so
+                                  the winning position redeemed in full and
+                                  the outcome is known without attribution
+      both_sides_present          a one-sided window cannot be paired
+      has_redemption              without one nothing can be settled
+    """
+    mx = max(e["uq"], e["dq"])
+    within = mx > 0 and e["red"] <= mx * (1.0 + TOL)
+    equals = False
+    if e["uq"] > 0 and abs(e["red"] - e["uq"]) / e["uq"] < TOL:
+        equals = True
+    if e["dq"] > 0 and abs(e["red"] - e["dq"]) / e["dq"] < TOL:
+        equals = True
+    return {
+        "has_trades": e["n"] > 0,
+        "has_redemption": e["red"] > 0,
+        "both_sides_present": e["uq"] > 0 and e["dq"] > 0,
+        "redemption_within_holding": bool(within),
+        "redemption_equals_a_side": bool(equals),
+        "note": ("the redemption identity is NECESSARY, not sufficient: a "
+                 "window short of rows on its smaller side passes it. No "
+                 "check here certifies completeness and none is claimed."),
+    }
 
 
 def economics(group):

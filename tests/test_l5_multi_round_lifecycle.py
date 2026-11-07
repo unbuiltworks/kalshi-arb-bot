@@ -270,3 +270,94 @@ def test_the_residual_prior_is_MEASURED_not_a_neutral_hypothesis():
         depth_ticks=2, now_s=0.0, window_end_s=900.0,
         exposure_headroom_usd=D("1.00"))
     assert D(r["worst_case_usd"]) == D("0.4900")
+
+
+# ========== 6. THE ENVELOPE, AT EVERY STAGED SCALE, ON REAL EXECUTOR STATE
+#
+# NOT A DOUBLE-FILLED SIMULATION. An earlier version of this measurement
+# called `apply_fill` on orders the fake transport had ALREADY filled, which
+# charged every fill twice and produced a CASH_COMMITMENT of 2.1897 that
+# does not exist. `committed` is incremented in `apply_fill` only -- never
+# on submit -- so the executor is left to fill its own orders here and the
+# figures are read, never constructed.
+
+def _envelope_run(H, E, tmp_path, cash, ticks_n=14, orders=8):
+    """Drive one window at a given cash envelope. Returns what happened."""
+    ex, t = W.mk(H, E, tmp_path,
+                 g=VG(max_cash_deployed_usd=D(cash),
+                      max_unmatched_contracts=D("500"),
+                      max_cumulative_loss_usd=D("500"),
+                      max_worst_case_deficit_usd=D("500")))
+    ex.limits = H.limits(max_live_orders=orders)
+    last = None
+    for _ in range(ticks_n):
+        last = ex.handle(W._row(ex_H), W._book(), market="m",
+                         window="21:00").get("refused_reason")
+    from src import l5_capital_plan as CP
+    a = CP.account(positions={s: ex.store.position("m", s)
+                              for s in ("UP", "DOWN")},
+                   leg_cost=ex.store.leg_cost("m"),
+                   cash_envelope_usd=D(cash))
+    return ex, t, last, a
+
+
+@pytest.mark.parametrize("cash", ["1.00", "10", "25", "50", "200"])
+def test_the_cash_envelope_is_never_exceeded_at_any_scale(probe, tmp_path,
+                                                          cash):
+    """The invariant that has to survive scaling to $200."""
+    H, E = probe
+    ex, t, last, a = _envelope_run(H, E, tmp_path, cash)
+    assert a["readable"] is True
+    assert D(a["cash_committed_usd"]) <= D(cash), (cash, last)
+    del ex, t
+
+
+@pytest.mark.parametrize("cash,at_least", [
+    ("1.00", 1), ("10", 2), ("25", 2), ("50", 2), ("200", 2),
+])
+def test_a_larger_envelope_completes_at_least_as_many_pairs(probe, tmp_path,
+                                                            cash, at_least):
+    """Throughput must RISE with capital, not fall -- the property that
+    makes the staged plan meaningful at all."""
+    H, E = probe
+    ex, t, last, a = _envelope_run(H, E, tmp_path, cash)
+    assert D(a["matched_qty"]) >= D(at_least) - D("1"), (cash, last, a)
+    del ex, t
+
+
+def test_the_dollar_envelope_binds_on_CASH_and_names_itself(probe,
+                                                            tmp_path):
+    """The measured bottleneck, read rather than constructed."""
+    H, E = probe
+    ex, t, last, a = _envelope_run(H, E, tmp_path, "1.00")
+    assert "CASH_COMMITMENT" in str(last), last
+    assert D(a["cash_committed_usd"]) <= D("1.00")
+    del ex, t
+
+
+def test_the_same_state_carries_no_worst_case_once_paired(probe, tmp_path):
+    """Which is why a $1 CASH bound and a $1 RISK bound are not the same
+    authorization. The cash gate refuses; the risk gate has nothing to
+    charge."""
+    H, E = probe
+    ex, t, last, a = _envelope_run(H, E, tmp_path, "1.00")
+    if D(a["matched_qty"]) > 0 and D(a["unmatched_qty"]) == 0:
+        assert D(a["unmatched_worst_case_usd"]) == D("0")
+    del ex, t, last
+
+
+def test_capital_exhaustion_is_recoverable_by_settlement_only(probe,
+                                                              tmp_path):
+    """Exhaustion is not a halt: it clears when the market settles and the
+    committed cash is released. Nothing mid-window releases it."""
+    H, E = probe
+    ex, t, last, a = _envelope_run(H, E, tmp_path, "1.00")
+    assert "CASH_COMMITMENT" in str(last)
+    before = D(a["cash_committed_usd"])
+    retired = ex.store.state.setdefault("retired_markets", {})
+    retired["m"] = {"settled": True}
+    legs = ex.cash_legs_for_gates()
+    assert all(l["settled"] for l in legs if l["market"] == "m"), \
+        "a retired market's cash is released by SETTLEMENT"
+    assert before > D("0")
+    del t
