@@ -830,6 +830,106 @@ def _gates_realized(runner: Any) -> Any:
         return None
 
 
+def disposition_fingerprint(runner: Any, slug: Any) -> Optional[str]:
+    """The STATE a disposition verdict was formed on. None if unreadable.
+
+    WHY A TIMESTAMP IS NOT ENOUGH, which is review item 2. A verdict keyed
+    only on (slug, when) says WHEN we decided, not WHAT WE DECIDED ABOUT.
+    Between the controller and a discretionary cancel the venue can book a
+    fill, `poll_orders` can correct the basis, the resting order can go
+    terminal and the book can move -- and a stale verdict would still veto
+    on an age test alone. So the gate recomputes this and binds only on an
+    EXACT match.
+
+    It also answers review item 4 without relying on tick ORDER: whatever
+    sequence the schedule runs, a verdict formed on inventory that has
+    since changed stops binding, because the fingerprint no longer agrees.
+    `maybe_acc_deadline` polls the venue before it cancels, so a racing
+    fill lands in the store first and is reconciled -- and that very
+    reconciliation breaks this fingerprint, which is the behaviour we want.
+
+    EVERY COMPONENT IS A CONFIRMED FIGURE: realised residual, both realised
+    leg costs, the resting completion's own id and price, the two touches,
+    and the uncertainty flag. Unreadable anything returns None, which never
+    matches, so the gate declines rather than guesses.
+    """
+    try:
+        st = getattr(runner, "store", None)
+        if st is None:
+            return None
+        resid = st.residual(str(slug))
+        legs = st.leg_cost(str(slug)) or {}
+        unc = bool(st.orders_uncertain())
+        live = {c: o for c, o in (st.live_orders() or {}).items()
+                if str((o or {}).get("market") or "") == str(slug)}
+        rows = sorted((str(c), str((o or {}).get("side") or ""),
+                       str((o or {}).get("price") or ""),
+                       str((o or {}).get("remaining") or ""),
+                       str((o or {}).get("state") or ""))
+                      for c, o in live.items())
+        bk = getattr(runner, "book", None)
+        snap = (bk.snapshot(str(slug)) or {}) if bk is not None else {}
+        return "|".join([
+            str(slug), str(resid),
+            str(legs.get("UP")), str(legs.get("DOWN")),
+            ("U" if unc else "-"),
+            str(snap.get("bid")), str(snap.get("ask")),
+            ";".join(",".join(r) for r in rows),
+        ])
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
+def controller_preserves(runner: Any, slug: Any, now: float) -> bool:
+    """Did the one controller decide to KEEP this market's completion?
+
+    A FUNCTION, NOT A METHOD CALL, and `runner` is read through getattr --
+    exactly as `acc_stale_by_distance` is and for the reason its docstring
+    already gave: every duck-typed runner stub in the suite grafts these
+    methods onto an object carrying only what the method touched, so a new
+    `self.` call breaks all of them. I added one and broke 39 tests.
+
+    ABSENT IS NOT A VETO. No verdict, a stale verdict, a stub without the
+    accessor, or any failure at all yields False, which leaves the
+    pre-existing behaviour exactly as it was -- and that behaviour already
+    carries the pair ceiling of PR #200 and the pair-aware recovery of
+    PR #202. So this can only ever ADD a refusal; it can never enable a
+    cancel, a submission or a crossing.
+    """
+    try:
+        fn = getattr(runner, "controller_verdict", None)
+        if not callable(fn):
+            return False
+        if fn(slug, now) != "PRESERVE":
+            return False
+        # THE STATE MUST STILL BE THE ONE WE DECIDED ABOUT. A verdict whose
+        # fingerprint no longer matches describes inventory, orders or a
+        # book that has since changed, and must not veto anything.
+        prev = (getattr(runner, "_disposition_last", None) or {}).get(
+            str(slug))
+        want = prev[2] if (prev and len(prev) > 2) else None
+        if want is None:
+            try:
+                runner.stats["disposition:VERDICT_WITHOUT_FINGERPRINT"] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+            return False
+        got = disposition_fingerprint(runner, slug)
+        if got is None or got != want:
+            try:
+                runner.stats["disposition:STATE_CHANGED_SINCE_VERDICT"] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+            return False
+        return True
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return False
+
+
 def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                           live: Mapping[str, Any],
                           *, skip: Any = ()) -> List[str]:
@@ -8623,13 +8723,79 @@ class Runner:
             self._disposition_last = {}
         prev = self._disposition_last.get(slug)
         changed = (prev is None or prev[0] != rec.get("selected"))
-        if not changed and (now - prev[1]) < self.DISPOSITION_EVERY_S:
+        if not changed and abs(now - prev[1]) < self.DISPOSITION_EVERY_S:
             self.stats["disposition:THROTTLED"] += 1
             return rec
-        self._disposition_last[slug] = (rec.get("selected"), float(now))
+        self._disposition_last[slug] = (
+            rec.get("selected"), float(now),
+            disposition_fingerprint(self, slug))
         self.stats["disposition:%s" % rec.get("selected")] += 1
         emit("L5_UNMATCHED_DISPOSITION", TS.bounded_for_log(rec))
         return rec
+
+    #: HOW FRESH A VERDICT MUST BE to bind the discretionary cancels. One
+    #: tick, not one cadence: the controller runs immediately before the
+    #: requote on the same `now`, so a verdict older than this is from a
+    #: book we are no longer looking at and must not govern anything.
+    DISPOSITION_AUTHORITY_MAX_AGE_S = 3.0
+
+    def controller_verdict(self, slug: Any,
+                           now: float) -> Optional[str]:
+        """The authoritative action for this market, or None.
+
+        NONE IS NOT A VETO. An absent, stale or unreadable verdict leaves
+        the pre-existing behaviour exactly as it was -- which already
+        carries the pair ceilings of PR #200 and the pair-aware recovery of
+        PR #202, so falling back is safe rather than merely tolerable. The
+        gates built on this can therefore only ever ADD a refusal; none of
+        them can enable a cancel, a submission or a crossing.
+        """
+        try:
+            prev = (getattr(self, "_disposition_last", None)
+                    or {}).get(str(slug))
+            if not prev:
+                return None
+            sel, when = prev[0], prev[1]
+            age = float(now) - float(when)
+            # TWO-SIDED ON PURPOSE. `age > MAX` alone let a FUTURE-dated
+            # verdict through, because a negative age is not greater than
+            # 3.0 -- so a clock rollback or a bad write could veto every
+            # discretionary cancellation indefinitely. Review item 2.
+            if age < 0.0 or age > self.DISPOSITION_AUTHORITY_MAX_AGE_S:
+                return None
+            return None if sel is None else str(sel)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
+    def controller_preserves(self, slug: Any, now: float) -> bool:
+        """Did the one controller decide to KEEP the resting completion?
+
+        A THIN ALIAS over the module-level function, which is what the
+        gates actually call so that a duck-typed stub without this method
+        simply does not gate.
+
+        THIS IS WHAT MAKES IT AUTHORITATIVE. Four mechanisms could each
+        withdraw a second leg on their own judgement -- the requote, the
+        distance recovery, the complement path and the age deadline -- and
+        0100z lost its window to two of them disagreeing about the same
+        0.9500 pair within 21 seconds. The discretionary two now ask here
+        first.
+
+        THE MANDATORY ONES ARE DELIBERATELY NOT GATED. The per-order age
+        TTL, the terminal sweep, the halt latch and the independent
+        watchdog bound REAL exposure; a decision layer that could suppress
+        them would trade an economic problem for a risk one. They stay
+        exactly as they were.
+        """
+        # DELEGATES, so the method and the gate can never disagree. An
+        # earlier version answered on the age test alone while the gates
+        # used the module function's fingerprint check -- two different
+        # answers to the same question, which is the class of defect this
+        # whole PR exists to remove.
+        return controller_preserves(self, slug, now)
+
 
     def maybe_completion_requote(self, now: float
                                  ) -> Optional[Dict[str, Any]]:
@@ -8783,6 +8949,18 @@ class Runner:
             if not res.get("act"):
                 self.stats["requote_refused:%s" % res.get("reason")] += 1
                 return None
+            # ============ THE ONE CONTROLLER DECIDES, NOT THIS PATH ALONE
+            #
+            # `completion_requote` answers "may this be repriced", and the
+            # disposition controller asks it exactly that when pricing its
+            # REPRICE action. So a permitted requote that the controller
+            # then declined in favour of PRESERVE is the controller being
+            # overruled by the mechanism it consulted -- which is the
+            # architecture that lost 0100z. It runs on the same `now`,
+            # immediately before this, so the verdict is from this book.
+            if controller_preserves(self, slug, now):
+                self.stats["requote_refused:CONTROLLER_SELECTED_PRESERVE"] += 1
+                return None
             # CANCEL EXACTLY THIS ORDER, by venue id, proof by re-read, and
             # any fill found while cancelling is BOOKED with its cost basis
             # rather than discarded. An ambiguous outcome marks the store
@@ -8917,8 +9095,28 @@ class Runner:
         # by the ordinary plan path, two ticks behind the CURRENT touch, with
         # the pair cap re-tested. This only decides that the stale order
         # should stop resting.
-        stale = acc_stale_by_distance(self, now, slug, live,
-                                      skip=set(overdue))
+        # ============ THE ONE CONTROLLER DECIDES THE DISCRETIONARY CANCEL
+        #
+        # `acc_stale_by_distance` is the OPTIONAL half of this route: it
+        # proposes cancelling a leg the book has left behind so the
+        # complement path can re-place it. PR #202 made it pair-aware, but
+        # pair-awareness is not authority -- it still judged alone, and at
+        # 0100z two mechanisms disagreed about the same 0.9500 pair inside
+        # 21 seconds. When the controller has decided to KEEP the resting
+        # completion on this tick's book, the discretionary recovery stands
+        # down.
+        #
+        # THE MANDATORY HALF IS UNTOUCHED. `overdue` above is the per-order
+        # AGE deadline and it is computed and acted on regardless of this;
+        # so are the terminal sweep, the halt latch and the independent
+        # watchdog. A decision layer that could suppress those would trade
+        # an economic problem for a risk one.
+        if controller_preserves(self, slug, now):
+            self.stats["acc_recover:CONTROLLER_SELECTED_PRESERVE"] += 1
+            stale = []
+        else:
+            stale = acc_stale_by_distance(self, now, slug, live,
+                                          skip=set(overdue))
         if stale:
             overdue = overdue + [c for c in stale if c not in overdue]
         if not overdue:
@@ -9060,6 +9258,23 @@ class Runner:
         # completion decision and before the window sweep, because an
         # overdue leg must be withdrawn before anything new is priced
         # against the inventory it would have left.
+        # ============ THE ONE CONTROLLER DECIDES FIRST, ON THIS BOOK
+        #
+        # AHEAD OF BOTH DISCRETIONARY PATHS, which is review item 3. It
+        # used to sit between them, so `maybe_acc_deadline` -- the
+        # EARLIER one -- only ever saw the PREVIOUS tick's verdict, and
+        # on the first tick with a residual it saw none at all. The
+        # fingerprint already made a stale verdict harmless, but harmless
+        # is not authoritative, and the owner asked for authoritative.
+        #
+        # DECIDING BEFORE THE DEADLINE'S `poll_orders` IS SAFE because of
+        # that same fingerprint: if the poll books a racing fill, the
+        # state no longer matches the verdict, the gate stops binding and
+        # the recovery proceeds on its own judgement with both PRs'
+        # ceilings still in force.
+        self.maybe_unmatched_disposition(now)
+        _sc.mark("maybe_unmatched_disposition")
+
         self.maybe_acc_deadline(now)
         _sc.mark("maybe_acc_deadline")
         # REPORTING ONLY: the opposite side while we hold unmatched
@@ -9089,10 +9304,6 @@ class Runner:
         # do so rather than be cancelled first; before, because a quote the
         # market has walked away from is worth replacing while runway
         # remains. Inert unless L5_COMPLETION_REQUOTE is set.
-        # BEFORE the requote, so the record describes the state the
-        # requote then acts on rather than the state it left behind.
-        self.maybe_unmatched_disposition(now)
-        _sc.mark("maybe_unmatched_disposition")
         self.maybe_completion_requote(now)
         _sc.mark("maybe_completion_requote")
         # THE DEFERRED READ-ONLY DIAGNOSTICS, and their position in this list

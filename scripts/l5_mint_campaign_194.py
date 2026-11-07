@@ -77,6 +77,75 @@ def _windows_from_argv(argv: Sequence[str]) -> int:
                          "(%d); this script never widens a ceiling"
                          % (n, CA.MAX_WINDOWS))
     return n
+def _usd_from_argv(argv: Sequence[str], flag: str, default: str,
+                   ceiling: str) -> str:
+    """`--flag USD`, which may only ever TIGHTEN. Never widens a ceiling.
+
+    Refuses anything above the module default OR above the code constant,
+    so an owner grant smaller than the script's historical scope can be
+    minted without editing the script, and a LARGER one cannot be minted
+    at all.
+    """
+    from decimal import Decimal as _D
+    raw = None
+    for i, a in enumerate(argv):
+        if a == flag and i + 1 < len(argv):
+            raw = argv[i + 1]
+        elif a.startswith(flag + "="):
+            raw = a.split("=", 1)[1]
+    if raw is None:
+        return default
+    try:
+        v = _D(raw)
+    except BaseException:                                      # noqa: BLE001
+        raise SystemExit("%s %r is not a number" % (flag, raw))
+    if v <= 0:
+        raise SystemExit("%s must be > 0" % flag)
+    if v > _D(default):
+        raise SystemExit("%s %s exceeds this script's scope (%s); it only "
+                         "ever tightens" % (flag, raw, default))
+    if v > _D(ceiling):
+        raise SystemExit("%s %s exceeds the code ceiling (%s)"
+                         % (flag, raw, ceiling))
+    return str(v)
+
+
+def _start_from_argv(argv: Sequence[str]):
+    """`--start-utc ISO` -- mint for ONE named window instead of the next.
+
+    WHY. `upcoming_window_starts` returns the windows strictly after NOW, so
+    a one-window mint always lands on the NEXT quarter hour. That is often
+    minutes away -- too soon for a variable write, a redeploy, a boot and a
+    preflight -- and an owner who approved a specific window must get that
+    window and no other. Validated to be a real BTC15m boundary strictly in
+    the future; it cannot name a window that has already opened.
+    """
+    raw = None
+    for i, a in enumerate(argv):
+        if a == "--start-utc" and i + 1 < len(argv):
+            raw = argv[i + 1]
+        elif a.startswith("--start-utc="):
+            raw = a.split("=", 1)[1]
+    if raw is None:
+        return None
+    try:
+        t = dt.datetime.fromisoformat(raw)
+    except BaseException:                                      # noqa: BLE001
+        raise SystemExit("--start-utc %r is not an ISO timestamp" % raw)
+    if t.tzinfo is None:
+        raise SystemExit("--start-utc must carry an explicit timezone")
+    t = t.astimezone(dt.timezone.utc).replace(microsecond=0)
+    if int(t.timestamp()) % WINDOW_PERIOD_S != 0:
+        raise SystemExit("--start-utc %s is not a %ds window boundary"
+                         % (t.isoformat(), WINDOW_PERIOD_S))
+    now = dt.datetime.now(dt.timezone.utc)
+    if t <= now:
+        raise SystemExit("--start-utc %s is not in the future (now %s); a "
+                         "window that has already opened must never be "
+                         "minted" % (t.isoformat(), now.isoformat()))
+    return t
+
+
 EXPOSURE_USD = "20"
 DAILY_LOSS_USD = "5"
 CASH_USD = "12"
@@ -125,10 +194,18 @@ def upcoming_window_starts(now: dt.datetime, n: int = WINDOWS) -> list:
 
 
 def mint(now: dt.datetime | None = None, nonce: str | None = None,
-         windows: int = WINDOWS) -> dict:
+         windows: int = WINDOWS, exposure_usd: str | None = None,
+         daily_loss_usd: str | None = None,
+         first_start: dt.datetime | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     nonce = nonce or secrets.token_hex(16)
-    starts = upcoming_window_starts(now, windows)
+    exposure_usd = exposure_usd or EXPOSURE_USD
+    daily_loss_usd = daily_loss_usd or DAILY_LOSS_USD
+    if first_start is not None:
+        step = dt.timedelta(seconds=WINDOW_PERIOD_S)
+        starts = [first_start + i * step for i in range(windows)]
+    else:
+        starts = upcoming_window_starts(now, windows)
     last_open = starts[-1]
     # expiry covers the last window's CLOSE plus a settlement grace, so a
     # position opened in the final window can still settle inside the
@@ -146,13 +223,14 @@ def mint(now: dt.datetime | None = None, nonce: str | None = None,
         "last_open_utc": last_open.isoformat(),
         "window_starts": [t.isoformat() for t in starts],
         "max_windows": windows,
-        "max_total_exposure_usd": EXPOSURE_USD,
-        "max_daily_loss_usd": DAILY_LOSS_USD,
+        "max_total_exposure_usd": exposure_usd,
+        "max_daily_loss_usd": daily_loss_usd,
         "note": ("issue-194 bounded L5 PMUS paired-only campaign, %d x 15m "
                  "consecutive; 2 resting orders, $12 deployed cash, $5 daily "
                  "realized-loss halt. PAIRED-ONLY: the probability model is "
                  "disabled and no directional underdog accumulation is "
-                 "authorized." % windows),
+                 "authorized. exposure=%s daily_loss=%s"
+                 % (windows, exposure_usd, daily_loss_usd)),
     }
 
 
@@ -217,7 +295,13 @@ def reserve_holds() -> tuple:
 
 if __name__ == "__main__":
     _w = _windows_from_argv(sys.argv[1:])
-    doc = mint(windows=_w)
+    _exp = _usd_from_argv(sys.argv[1:], "--exposure", EXPOSURE_USD,
+                          str(CA.MAX_TOTAL_EXPOSURE_USD))
+    _loss = _usd_from_argv(sys.argv[1:], "--loss", DAILY_LOSS_USD,
+                           str(CA.MAX_DAILY_LOSS_USD))
+    _first = _start_from_argv(sys.argv[1:])
+    doc = mint(windows=_w, exposure_usd=_exp, daily_loss_usd=_loss,
+               first_start=_first)
     st, raw = validate(doc)
     digest = hashlib.sha256(raw.encode()).hexdigest()
     # THE ID THE ENGINE ACTUALLY USES, not a second derivation of it.
@@ -248,9 +332,9 @@ if __name__ == "__main__":
     print("\n--- ceilings: asked vs code constant ---")
     for label, asked, ceil in (
             ("max_windows", _w, CA.MAX_WINDOWS),
-            ("max_total_exposure_usd", EXPOSURE_USD,
+            ("max_total_exposure_usd", _exp,
              CA.MAX_TOTAL_EXPOSURE_USD),
-            ("max_daily_loss_usd", DAILY_LOSS_USD, CA.MAX_DAILY_LOSS_USD),
+            ("max_daily_loss_usd", _loss, CA.MAX_DAILY_LOSS_USD),
             # THE SPAN THE DOCUMENT ACTUALLY STATES, not the module default.
             # DURATION_S described the 8-window shape; printing it for a
             # 3-window mint reported 7200 s for a 2700 s campaign.
@@ -289,9 +373,9 @@ if __name__ == "__main__":
     print("  L5_LIVE_AUTH_MAX_SUBMISSIONS=%d" % MAX_SUBMISSIONS)
     for k, v in CLASS_BUDGETS.items():
         print("  L5_LIVE_AUTH_MAX_%-9s=%d" % (k, v))
-    print("  L5_MAX_TOTAL_EXPOSURE_USD=%s" % EXPOSURE_USD)
+    print("  L5_MAX_TOTAL_EXPOSURE_USD=%s" % _exp)
     print("  L5_MAX_CASH_DEPLOYED_USD=%s" % CASH_USD)
-    print("  L5_MAX_L5_DAILY_LOSS_USD=%s" % DAILY_LOSS_USD)
+    print("  L5_MAX_L5_DAILY_LOSS_USD=%s" % _loss)
     print("  L5_MAX_LIVE_ORDERS=2")
     # MUST MATCH THE DOCUMENT. The gate takes the min of the env and the
     # document, so a stale 8 here was not unsafe -- but the runtime-config

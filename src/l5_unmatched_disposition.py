@@ -185,6 +185,15 @@ def _rank_key(a: Mapping[str, Any]):
     return (-num("worst_case_usd", D("-999")),
             -num("best_case_usd", D("-999")),
             -num("ev_at_market_usd", D("-999")),
+            # THE CHEAPER PAIR, BEFORE THE QUEUE. Giving every maker action
+            # the same outcome envelope made worst, best and EV tie among
+            # them -- correct, since an unfilled quote leaves us in HOLD
+            # whichever one it is -- but it also made the PAIR invisible to
+            # the ranking, and the queue then chose a WORSE pair. That is
+            # the PR #200 defect arriving by a different door. A missing
+            # pair sorts last so an unpriced action cannot outrank a priced
+            # one.
+            num("pair_own_cost", D("9")),
             num("queue_ahead_at_price", D("999999")))
 
 
@@ -427,10 +436,16 @@ def decide(*, market: Any, held_side: str, held_qty: Any,
         else:
             tgt = _d(rq_out.get("to_price"))
             pair_tgt = basis + tgt if tgt is not None else None
+            # THE SAME ENVELOPE AGAIN: a repriced maker quote that does
+            # not fill also leaves us in HOLD.
+            pair_out_rq = ((h * (D(1) - pair_tgt))
+                           if pair_tgt is not None else None)
             acts.append(_act(
-                REPRICE, executable=True, worst=worst_hold,
-                best=(h * (D(1) - pair_tgt) if pair_tgt is not None
-                      else None),
+                REPRICE, executable=True,
+                worst=(worst_hold if pair_out_rq is None
+                       else min(pair_out_rq, worst_hold)),
+                best=(None if pair_out_rq is None
+                      else max(pair_out_rq, best_hold)),
                 ev=ev_common, pair=pair_tgt, fee=D(0), px=tgt, qty=working,
                 queue_ahead=qa(tgt),
                 note=("cancel and re-place nearer the touch. Permitted by "
@@ -450,21 +465,47 @@ def decide(*, market: Any, held_side: str, held_qty: Any,
             acts.append(_act(
                 COMPLETE_MAKER, executable=False, pair=pair_mk, px=quote,
                 infeasible="PAIR_ABOVE_COMPLETION_CEILING"))
-        elif (_resting_pair is not None and working is not None
-              and working > 0 and _resting_pair <= pair_mk):
-            # NOT MERELY RANKED LOWER -- INFEASIBLE. There is one order per
-            # side, so placing this means cancelling the resting one first,
-            # and withdrawing a quote to post a DEARER pair is the exact
-            # move PR #200 proved destroys the edge. Repricing toward a
-            # BETTER pair is still available: it goes through REPRICE,
-            # which `completion_requote` owns.
+        elif _resting_pair is not None and working is not None \
+                and working > 0:
+            # NOT AN ALTERNATIVE AT ALL WHILE A COMPLETION RESTS, and the
+            # first live record is what settled this. There is one order per
+            # side, so "place a fresh complement" over a resting one is not
+            # a placement -- it is a CANCEL AND REPRICE, and REPRICE is the
+            # action for that, owned by `completion_requote`.
+            #
+            # TREATING IT AS A PEER FORCED A COMPARISON I CANNOT MAKE. At
+            # 1230z 12:30:44 the resting quote held the best bid at own
+            # 0.4500 (pair 0.9500) with queue_ahead 0, against a fresh one
+            # at 0.3500 (pair 0.8500) behind 2141 contracts. Better pair,
+            # far worse queue. Ranking pair-before-queue picks the deep
+            # one; queue-before-pair picks a WORSE pair elsewhere. Both are
+            # wrong, because weighing a pair against a queue needs a fill
+            # probability and `l5_queue_depletion` establishes that we do
+            # not have one.
+            #
+            # So the scalar comparison is removed rather than guessed at.
+            # One owner per decision is the whole architecture of PRs #200,
+            # #202 and #205.
             acts.append(_act(
                 COMPLETE_MAKER, executable=False, pair=pair_mk, px=quote,
-                infeasible="RESTING_COMPLETION_HAS_AN_EQUAL_OR_BETTER_PAIR"))
+                infeasible="RESTING_COMPLETION_EXISTS_REPRICE_OWNS_IT"))
         else:
+            # THE SAME OUTCOME ENVELOPE AS PRESERVE, and the 1230z live
+            # record is why. A maker complement that does not fill leaves
+            # us in HOLD exactly as a preserved quote does, so its best
+            # case is the better of the pair and the hold upside. Reporting
+            # only the pair outcome made PRESERVE's best 0.5000 against
+            # this one's 0.1500 on an ACCOUNTING asymmetry rather than on
+            # economics: at 12:30:44 PRESERVE won the ranking on that
+            # difference, when the honest discriminator was the queue --
+            # 0 ahead for the resting order against 2141 for a new one.
+            # Same answer, sound reason.
+            pair_out_mk = h * (D(1) - pair_mk)
             acts.append(_act(
-                COMPLETE_MAKER, executable=True, worst=worst_hold,
-                best=h * (D(1) - pair_mk), ev=ev_common, pair=pair_mk,
+                COMPLETE_MAKER, executable=True,
+                worst=min(pair_out_mk, worst_hold),
+                best=max(pair_out_mk, best_hold),
+                ev=ev_common, pair=pair_mk,
                 fee=D(0), px=quote, qty=h, queue_ahead=qa(quote),
                 note=("place a fresh maker complement %s ticks behind the "
                       "touch. No fill is predicted." % TS.depth_ticks())))
