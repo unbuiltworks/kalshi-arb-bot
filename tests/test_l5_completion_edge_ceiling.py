@@ -22,9 +22,13 @@ SO THE CEILING IS THE LEVER, and it is the single testable change:
 complete only where the pair creates real edge, otherwise carry the
 residual and keep the slot free for a cycle that can.
 
-DEFAULT 1.00 IS BYTE-FOR-BYTE TODAY'S BEHAVIOUR. Inert until an owner sets
-`L5_TS_COMPLETION_MAX_PAIR`, so the deployed engine gains no refusal and the
-campaign can A/B exactly one variable.
+THE 1.00 DEFAULT WAS THE DEFECT, and 2026-11-07 0100z is where it cost real
+money: the requote cancelled a resting UP quote at a pair of 0.9500 to chase
+a pair of EXACTLY 1.0000, venue-confirmed twice, and the window settled with
+no pair and -$0.4900. Inert was not harmless. The default is now the
+OPENING ceiling `max_pair_cost()`, which the requote path had never been
+bound by; the variable still overrides it, up to the 1.00 clamp. See
+`tests/test_l5_requote_pair_ceiling_0100z.py` for the recorded sequence.
 """
 from __future__ import annotations
 
@@ -35,9 +39,21 @@ import pytest
 from src import l5_two_sided_probe as TS
 
 
-def test_the_default_is_the_redemption_line_and_therefore_inert(monkeypatch):
+def test_the_default_is_the_opening_ceiling_not_the_redemption_line(
+        monkeypatch):
+    """An opening priced to a 0.96 pair that a requote may reprice to 1.00
+    is not a ceiling. Absent an explicit owner choice the two now agree."""
     monkeypatch.delenv(TS.COMPLETION_MAX_PAIR_ENV, raising=False)
-    assert TS.completion_max_pair() == D("1.00")
+    monkeypatch.delenv(TS.MAX_PAIR_COST_ENV, raising=False)
+    assert TS.completion_max_pair() == TS.max_pair_cost() == D("0.96")
+
+
+@pytest.mark.parametrize("opening", ["0.90", "0.96", "0.99"])
+def test_the_default_tracks_the_configured_opening_ceiling(monkeypatch,
+                                                           opening):
+    monkeypatch.delenv(TS.COMPLETION_MAX_PAIR_ENV, raising=False)
+    monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, opening)
+    assert TS.completion_max_pair() == D(opening)
 
 
 @pytest.mark.parametrize("raw,want", [
@@ -51,9 +67,13 @@ def test_a_configured_ceiling_is_honoured(monkeypatch, raw, want):
 @pytest.mark.parametrize("raw", ["1.01", "2", "0", "-0.5", "abc", "", "NaN"])
 def test_it_can_only_ever_tighten_never_loosen(monkeypatch, raw):
     """Above redemption would permit a pair that settles at a loss, which
-    `redeem_cap` exists to forbid. Unreadable is also 1.00, never a guess."""
+    `redeem_cap` exists to forbid. Unreadable falls back to the OPENING
+    ceiling -- the tighter of the two candidates -- never to a guess and
+    never to the looser bound."""
     monkeypatch.setenv(TS.COMPLETION_MAX_PAIR_ENV, raw)
-    assert TS.completion_max_pair() == D("1.00")
+    monkeypatch.delenv(TS.MAX_PAIR_COST_ENV, raising=False)
+    assert TS.completion_max_pair() == D("0.96")
+    assert TS.completion_max_pair() <= D("1.00")
 
 
 def test_the_campaign_pairs_show_where_the_edge_actually_was():
@@ -87,14 +107,26 @@ def test_declining_a_zero_edge_completion_is_ev_neutral():
 def test_the_module_still_never_permits_a_pair_above_redemption(monkeypatch):
     """The existing hard bound is untouched by this knob."""
     monkeypatch.setenv(TS.COMPLETION_MAX_PAIR_ENV, "0.90")
-    assert TS.completion_max_pair() <= D("1.00")
+    assert TS.completion_max_pair() == D("0.90") <= D("1.00")
     monkeypatch.delenv(TS.COMPLETION_MAX_PAIR_ENV, raising=False)
-    assert TS.completion_max_pair() == D("1.00")
+    monkeypatch.setenv(TS.MAX_PAIR_COST_ENV, "0.99")
+    assert TS.completion_max_pair() == D("0.99") <= D("1.00")
 
 
 def test_this_knob_moves_no_risk_limit():
+    """It READS the opening ceiling for its default; it never writes one.
+
+    `max_pair_cost()` is in the source deliberately -- that is the whole
+    fix -- so the assertion is that nothing here MUTATES a bound: no
+    assignment to any limit, and the opening ceiling is unchanged across a
+    call.
+    """
     import inspect
     src = inspect.getsource(TS.completion_max_pair)
     for banned in ("max_total_exposure", "max_live_orders", "daily_loss",
-                   "residual", "cash", "MAX_PAIR_COST"):
+                   "residual", "cash", "setenv", "os.environ["):
         assert banned not in src, banned
+    assert "max_pair_cost()" in src
+    before = TS.max_pair_cost()
+    TS.completion_max_pair()
+    assert TS.max_pair_cost() == before

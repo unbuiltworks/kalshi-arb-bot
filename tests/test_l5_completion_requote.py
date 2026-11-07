@@ -70,22 +70,60 @@ def test_1215z_requotes_from_0_47_to_the_0_49_touch():
     assert D(r["qty"]) <= D("2.29")
 
 
-def test_1245z_requotes_to_a_touch_the_opening_cap_would_refuse():
+def test_1245z_no_longer_requotes_past_the_opening_cap():
+    """THIS TEST USED TO PIN THE DEFECT, and its own name said so.
+
+    It asserted `act True`, a target of 0.65, and -- explicitly --
+    `0.3200 + 0.65 > max_pair_cost()`, on the reasoning that "completing
+    beats stranding inside the owner's budget". That reasoning is sound for
+    a TAKER completion, which converts a stranded leg. It is not sound for
+    a maker REQUOTE, which converts nothing: it cancels a cheaper resting
+    quote for a dearer one that may equally not fill, and a pair at or above
+    redemption earns nothing even when it does.
+
+    2026-11-07 0100z is the measured cost: that path cancelled a 0.9500 pair
+    (+$0.05) to chase 1.0000 ($0.00), twice, venue-confirmed, and the window
+    settled unmatched at -$0.4900. `completion_max_pair()` now defaults to
+    the opening ceiling, so this fixture refuses instead.
+    """
+    r = rq(L1245)
+    assert r["act"] is False, r
+    assert r["reason"] == "IMPROVEMENT_BELOW_MIN_TICKS"
+    # the dearest target the pair ceiling now allows, and the pair it buys
+    assert D(r["target"]) == D("0.64")
+    assert D("0.3200") + D(r["target"]) == TS.max_pair_cost() == D("0.96")
+
+
+def test_an_owner_may_still_opt_into_the_old_1245z_behaviour(monkeypatch):
+    """The stranded-leg latitude is preserved, but it is now a CHOICE."""
+    monkeypatch.setenv(TS.COMPLETION_MAX_PAIR_ENV, "1.00")
     r = rq(L1245)
     assert r["act"] is True, r
     assert D(r["to_price"]) == D("0.65")
-    # the pair this implies is above the opening ceiling, and permitted
-    # only because completing beats stranding inside the owner's budget
     assert D("0.3200") + D(r["to_price"]) > TS.max_pair_cost()
     assert r["completion_ceiling"] == "0.95"
 
 
-def test_the_requote_never_crosses_on_either_fixture():
+@pytest.mark.parametrize("ceiling", [None, "1.00"])
+def test_the_requote_never_crosses_on_either_fixture(monkeypatch, ceiling):
+    """Asserted on whatever target is produced, under both configurations.
+
+    A refusal is not a pass by default here: each fixture must ACT under at
+    least one of the two settings, or this would assert nothing.
+    """
+    if ceiling is None:
+        monkeypatch.delenv(TS.COMPLETION_MAX_PAIR_ENV, raising=False)
+    else:
+        monkeypatch.setenv(TS.COMPLETION_MAX_PAIR_ENV, ceiling)
+    acted = 0
     for case in (L1215, L1245):
         r = rq(case)
-        assert r["act"] is True
-        assert TS.leg_crosses("DOWN", D(r["to_price"]),
+        px = r["to_price"] if r.get("act") else r.get("target")
+        assert px is not None, r
+        acted += bool(r.get("act"))
+        assert TS.leg_crosses("DOWN", D(px),
                               bid=D(case["bid"]), ask=D(case["ask"])) is False
+    assert acted >= 1
 
 
 # -------------------------------------------------- it must not act

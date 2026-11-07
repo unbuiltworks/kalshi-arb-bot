@@ -101,8 +101,13 @@ def test_the_real_0145z_queue_refuses_the_move():
     assert res["qty_needed"] == "2.05"
     # 120.01 / 2.05 = 58.54
     assert res["queue_multiple_of_need"] == "58.54"
-    # and it states the cash the move would have spent: 3 ticks x 2.05
-    assert res["extra_cash_usd"] == "0.0615"
+    # AND IT STATES THE CASH THE MOVE WOULD HAVE SPENT: 2 ticks x 2.05.
+    # Was 3 ticks x 2.05 = 0.0615. The pair ceiling now caps the target one
+    # tick cheaper -- `completion_max_pair()` defaults to the opening
+    # ceiling rather than to redemption -- so the move this gate refuses is
+    # a cheaper one than before. The gate itself is unchanged and still
+    # refuses on the same 58.54x queue multiple.
+    assert res["extra_cash_usd"] == "0.0410"
 
 
 def test_a_shallower_target_queue_is_an_improvement_on_both_axes():
