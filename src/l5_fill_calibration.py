@@ -91,6 +91,13 @@ FRAME_RACE_TOLERANCE_S = 1.0
 #: rather than implying continuity it does not have.
 MAX_OBSERVATION_GAP_S = 20.0
 
+#: a single observation is not LIFETIME coverage. One sample cannot show
+#: that the order was watched while it rested -- there is no interval
+#: between one point and itself, so the gap check it passes is vacuous.
+#: The pre-flight gate in ORDER_OBSERVER_TRACE.md always required two; the
+#: code did not, so one observation read as PRESENT.
+MIN_LIFETIME_OBSERVATIONS = 2
+
 
 def _d(v: Any) -> Optional[D]:
     try:
@@ -105,6 +112,38 @@ def _utc() -> str:
 
 def _missing(reason: str) -> str:
     return "MISSING:%s" % reason
+
+
+def _queue_capture(q: Mapping[str, Any]) -> str:
+    """Is this queue evidence usable to CALIBRATE a queue model?
+
+    Three questions, and the old code asked only the first:
+
+      1. is there a depth figure at all?          -- `queue_ahead`
+      2. is the frame it came from current?       -- `stale`
+      3. did the frame exist before we read it?   -- `causal`
+
+    `PRESENT` whenever `queue_ahead` was not None made a record look
+    calibration-usable on future-dated queue evidence, on a frame with no
+    timestamp, on a stale frame, and on one whose clock is not comparable
+    to ours -- every case where the depth figure exists but cannot be
+    attributed to the queue our order actually joined.
+
+    This narrows eligibility only. It can make a record ineligible; it can
+    never make an ineligible one eligible, never refuses anything, and is
+    not on the money path.
+    """
+    if q.get("queue_ahead") is None:
+        return _missing(str(q.get("why") or "queue_unavailable"))
+    stale, causal = q.get("stale"), q.get("causal")
+    age = q.get("frame_age_s")
+    if stale is True:
+        return _missing("queue_frame_stale:%ss" % age)
+    if causal is False:
+        return _missing("queue_frame_future_dated_by:%ss" % abs(float(age)))
+    if stale is None or causal is None:
+        return _missing(str(q.get("why") or "queue_frame_freshness_unknown"))
+    return PRESENT
 
 
 class CalibrationRecorder:
@@ -167,6 +206,19 @@ class CalibrationRecorder:
             # the fold still happened in memory; the record will report the
             # write failure rather than pretend it persisted
             self._bump("ledger_write_failed")
+            # AND IT IS ATTRIBUTED TO THE RECORD THAT LOST THE EVENT, so
+            # eligibility can be decided per record rather than poisoning
+            # every record in the recorder. `_fold` always runs before
+            # `_append`, so the record exists by now. Wrapped because
+            # marking a record must never be what propagates out of a
+            # recorder that is already failing to write.
+            try:
+                _r = self.orders.get(str(ev.get("coid") or ""))
+                if _r is not None:
+                    _r["write_failures"] = int(
+                        _r.get("write_failures", 0)) + 1
+            except BaseException:                              # noqa: BLE001
+                self._bump("write_failure_unattributed")
 
     def _bump(self, key: str) -> None:
         self.errors[key] = self.errors.get(key, 0) + 1
@@ -210,10 +262,8 @@ class CalibrationRecorder:
             r["pre_submit"] = dict(ev)
             r["capture"]["pre_submit_book"] = (
                 PRESENT if ev.get("book") else _missing("no_book_snapshot"))
-            q = ev.get("queue") or {}
-            r["capture"]["queue_estimate"] = (
-                PRESENT if q.get("queue_ahead") is not None
-                else _missing(str(q.get("why") or "queue_unavailable")))
+            r["capture"]["queue_estimate"] = _queue_capture(
+                ev.get("queue") or {})
             r["capture"]["fee_accounting"] = (
                 PRESENT if ev.get("fees") else _missing("no_fee_estimate"))
         elif kind == "ack":
@@ -247,8 +297,14 @@ class CalibrationRecorder:
             "gaps_over_%gs" % MAX_OBSERVATION_GAP_S: len(gaps),
             "largest_gap_s": round(max(gaps), 3) if gaps else 0.0,
         }
-        r["capture"]["lifetime_observation"] = (
-            PRESENT if not gaps else _missing("coverage_gap"))
+        if gaps:
+            r["capture"]["lifetime_observation"] = _missing("coverage_gap")
+        elif len(obs) < MIN_LIFETIME_OBSERVATIONS:
+            r["capture"]["lifetime_observation"] = _missing(
+                "insufficient_observations:%d_of_%d"
+                % (len(obs), MIN_LIFETIME_OBSERVATIONS))
+        else:
+            r["capture"]["lifetime_observation"] = PRESENT
 
     # ------------------------------------------------------- entry points
     def pre_submit(self, coid: str, *, slug: str, side: str,
@@ -341,7 +397,7 @@ class CalibrationRecorder:
                           "a position"),
                 "queue_ahead": None, "level_depth": None,
                 "frame_t": None, "frame_age_s": None,
-                "frame_updates": None, "stale": None}
+                "frame_updates": None, "stale": None, "causal": None}
         if ladder is None:
             return dict(base, why="no_ladder")
         if wire_px is None:
@@ -362,21 +418,36 @@ class CalibrationRecorder:
         # and it is certainly not stale. Beyond it the two timestamps are
         # not on one clock, so whether the frame is current is UNKNOWN --
         # and the record says unknown rather than False.
+        #
+        # AND FRESHNESS IS NOT CAUSALITY. `stale` answers "is this frame
+        # current?"; `causal` answers "did this frame exist BEFORE we read
+        # it?". A frame dated up to FRAME_RACE_TOLERANCE_S after our read
+        # instant is certainly not stale -- it is NEWER than the read --
+        # but it is not evidence of the queue we actually met, because it
+        # may hold depth that arrived after our decision. Calibrating a
+        # fill model on it fits our order against a book from its own
+        # future. The old code recorded only `stale`, so that case read as
+        # perfectly good queue evidence. Two fields now, because they are
+        # two questions.
         if age is None:
             stale: Optional[bool] = None
+            causal: Optional[bool] = None
         elif age >= 0.0:
             stale = bool(age > STALE_FRAME_S)
+            causal = True
         elif age >= -FRAME_RACE_TOLERANCE_S:
             stale = False
+            causal = False
         else:
             stale = None
+            causal = None
         out = dict(base,
                    queue_ahead=None if q is None else str(q),
                    level_depth=None if dep is None else str(dep),
                    frame_t=ft, frame_age_s=age,
                    frame_updates=(None if not isinstance(bk, Mapping)
                                   else bk.get("updates")),
-                   stale=stale)
+                   stale=stale, causal=causal)
         if age is not None and -FRAME_RACE_TOLERANCE_S <= age < 0.0:
             out["clock_note"] = ("frame_newer_than_read_by_%ss: the feed "
                                  "ingested between the clock read and the "
@@ -553,13 +624,40 @@ class CalibrationRecorder:
                     "why": "no_record"}
         cap = dict(r.get("capture") or {})
         missing = [k for k, v in cap.items() if v != PRESENT]
+        # A RECORD WHOSE OWN EVENTS DID NOT REACH DISK IS NOT A
+        # CALIBRATION. The five capture statuses are computed from the
+        # IN-MEMORY fold, which succeeds whether or not the append did, so
+        # they cannot see a durability failure -- `usable_for_calibration`
+        # used to be true on a record that existed only in this process and
+        # would vanish on restart, while reporting the write failure
+        # alongside as if it were a footnote.
+        #
+        # PER RECORD, not recorder-wide: a failure appending some other
+        # order's event says nothing about this record's durability, and
+        # disqualifying every record for one unrelated ENOSPC would be
+        # wrong in the other direction. The recorder-wide count is still
+        # reported beside it.
+        own_wf = int(r.get("write_failures", 0) or 0)
+        why = None
+        if missing:
+            why = "missing_capture"
+        elif own_wf:
+            why = "events_not_durable:%d_failed_appends" % own_wf
         return {"coid": coid, "known": True, "capture": cap,
                 "missing": missing,
-                "usable_for_calibration": not missing,
-                "write_failures": self.errors.get("ledger_write_failed", 0),
+                "usable_for_calibration": not missing and not own_wf,
+                "why": why,
+                "write_failures": own_wf,
+                "recorder_write_failures": self.errors.get(
+                    "ledger_write_failed", 0),
                 "labels": ("usable_for_calibration is true only when every "
-                           "required category is PRESENT. A record with a "
-                           "gap says so rather than reading as complete.")}
+                           "required category is PRESENT **and** every one "
+                           "of this record's own events reached disk. A "
+                           "record with a gap, with future-dated queue "
+                           "evidence, with fewer than "
+                           "%d lifetime observations, or with a failed "
+                           "append says so rather than reading as "
+                           "complete." % MIN_LIFETIME_OBSERVATIONS)}
 
     def precapture_ok(self, coid: str) -> bool:
         """Is the PRE-SUBMISSION half of this record sound?

@@ -42,19 +42,51 @@ def _print(px, qty="1", t=T0 + 1.0):
     return {"t": t, "px": str(px), "qty": str(qty)}
 
 
+class _Clock:
+    """A settable stand-in for the recorder's own `read_t` source.
+
+    The recorder reads the instant it looked at the book from its OWN
+    clock, not from the `now` a caller passes -- deliberately, because the
+    frame age is `read_t - frame_t` and those are two independent sources.
+    The default is wall-clock, which against a fixture dated T0 makes every
+    frame tens of days stale. These fixtures mean "the frame is current",
+    so the clock is anchored to T0 and moved with the drive.
+    """
+
+    def __init__(self, t=T0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
 def _rec(tmp_path, **kw):
-    return CAL.CalibrationRecorder(str(tmp_path), **kw)
+    kw.setdefault("clock", _Clock())
+    r = CAL.CalibrationRecorder(str(tmp_path), **kw)
+    r._clock = kw["clock"]
+    return r
 
 
 def _full(r, coid="c1", *, px="0.45", qty="1", side=FM.UP, lad=None,
           book=None, t=T0):
     """Drive a complete, usable record end to end."""
+    if getattr(r, "_clock", None) is not None and hasattr(r._clock, "t"):
+        r._clock.t = t
     r.pre_submit(coid, slug=SLUG, side=side, own_px=px, qty=qty,
                  book=book if book is not None else _book(),
                  ladder=lad if lad is not None else _ladder(), now=t)
     r.on_ack(coid, "V-1", now=t + 0.2)
-    r.observe(t + 5.0, slug=SLUG, book=_book(), ladder=_ladder(t=t + 5.0),
-              prints=[_print(px, "5", t + 4.0)], open_coids=[coid])
+    # TWO observations, because one is not lifetime coverage: the gap check
+    # between a single point and itself is vacuous, and MIN_LIFETIME_
+    # OBSERVATIONS now requires two. This fixture claims to drive a
+    # COMPLETE record, so it has to satisfy the documented requirement
+    # rather than the weaker one the code used to enforce.
+    for _dt in (5.0, 9.0):
+        if getattr(r, "_clock", None) is not None and hasattr(r._clock, "t"):
+            r._clock.t = t + _dt
+        r.observe(t + _dt, slug=SLUG, book=_book(),
+                  ladder=_ladder(t=t + _dt),
+                  prints=[_print(px, "5", t + _dt - 1.0)], open_coids=[coid])
     r.on_terminal(coid, state="CANCELLED", reason="deadline",
                   venue_confirmed=True, now=t + 10.0)
     return coid
