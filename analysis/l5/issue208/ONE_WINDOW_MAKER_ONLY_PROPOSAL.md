@@ -47,14 +47,35 @@ aggregate:
 6. **Settled cashflows**: per-leg cost, matched redemption, residual, fees
    and any credited rebate, each on its own line.
 
-### Pre-flight that must pass before the window is judged
+### Observation acceptance gates
 
-The per-order observation loop runs over **live** orders and the calibration
-ledger currently reports `events_appended: 0`. **If that loop does not
-produce records, the window teaches us nothing we do not already know.** So
-before arming, confirm on a disarmed tick that the observation path is
-reached and would append; if it would not, fix that first and do not spend
-the window.
+**My first version of this section was too weak and is replaced.** It said
+"confirm the observation path is reached and would append". That would have
+passed on `pre_submit` alone and still produced an unusable record — see
+`ORDER_OBSERVER_TRACE.md`, where the live path turned out to have every
+venue-confirmed half of a record and **no lifetime observation at all**,
+because `observe` was reached only for shadow coids. That is fixed; these
+gates are what verify the fix on real data rather than trusting it.
+
+In order, and gate 1 decides whether the window is spent at all:
+
+1. **Before arming, on a disarmed tick.** `report()` must show
+   `orders > 0` from the shadow rehearsal with at least one record whose
+   `capture.lifetime_observation == PRESENT`. That proves the observation
+   machinery runs against real venue data, with real prints and a real
+   ladder. **If this fails, do not arm.** The window is worth nothing
+   without it.
+2. **Within the window, before the second leg is quoted.**
+   `precapture_ok(coid)` must be true for the live order — that is
+   `pre_submit_book`, `queue_estimate` and `fee_accounting` all `PRESENT`.
+   The probe may decline an uncalibratable order on exactly this test.
+3. **At the end.** `completeness(coid)["usable_for_calibration"]` must be
+   **true**, with at least two observations and **zero** coverage gaps over
+   `MAX_OBSERVATION_GAP_S`. A record with a gap is not a failed experiment,
+   but it is not a calibration either and must not be used as one.
+4. **Always reported.** `orders_straddling_a_restart`. A record whose events
+   span a restart is still evidence; it simply may not be read as one
+   continuous observation.
 
 ## 3. Configuration — no limit changes requested
 
@@ -71,8 +92,8 @@ is being asked for.**
 | taker crossing | **off** | maker-only; no authorization sought |
 | watchdog | independent, unchanged | must be verified live before arming |
 | size | **1 contract a leg** | the minimum that produces a queue observation |
-| **depth** | **2 ticks behind each touch** | the only depth that survives the conservative arm (+0.0163/entry); the touch does not (−0.0014) |
-| **TTL** | **none before 120 s** | the 60 s TTL flips the d=2 pessimistic cell to −0.0036. Cancelling early destroys exactly the fills that make this work |
+| **depth** | **2 ticks behind each touch** | the only depth that survives the conservative arm in the simultaneous replay (+0.0163/entry); the touch does not (−0.0014). In the SEQUENTIAL case depth barely matters — all three landed within 0.0004 — so this choice is made on the entry, which is where the edge is |
+| **TTL** | **none before 120 s** | the 60 s TTL flips the d=2 pessimistic cell to −0.0036, and the sequential replay found the benefit of waiting saturates by 120 s. Cancelling early destroys exactly the fills that make this work |
 
 The depth and the TTL are the two settings this experiment would exercise
 differently from ROUTE B's current `completion_depth_ticks() = 0`, and both
@@ -123,6 +144,24 @@ Any one of these ends the window immediately and leaves the system disarmed:
 
 Afterwards: settlement audit, then **no repeat** without separate approval.
 A completed probe does not authorize the next one.
+
+## 6b. What the sequential replay changed about why this is worth doing
+
+`SEQUENTIAL_COMPLETION.md` found that once one leg has filled alone, **every**
+outcome is negative: the gated policy returns ≈−0.0186/leg against −0.0236
+for holding and −0.0642 for crossing out, and **every** sequential pair is
+dearer than 0.96. The rescue is damage limitation, not profit.
+
+So this experiment is **not** a test of the rescue. Its value is entirely in
+the entry: the simultaneous two-sided pair at `d=2`, which is the only cell
+that was positive under the conservative arm (+0.0163/entry OOS). The one
+observation that decides whether that cell is real is **whether a leg fills
+without the opposite touch crossing it** — and that is what gate 3 above
+makes recordable.
+
+If the window produces a completed pair at a dear price, that is **not** the
+result to celebrate; it is the damage-limitation case, and it should be
+reported as such.
 
 ## 7. What it still will not establish
 

@@ -185,6 +185,25 @@ class CalibrationRecorder:
         if not coid:
             return
         r = self._slot(coid)
+        # RESTART BOUNDARIES, WHICH THIS USED TO PROMISE AND NOT DELIVER.
+        #
+        # The class docstring says "a record whose events straddle a restart
+        # is marked with the gap rather than stitched over". It was not:
+        # `replay` was accepted and never read, and `restart_boundaries` was
+        # initialised to 0 and incremented nowhere, so such a record was
+        # silently stitched and read as though one process had seen all of
+        # it. For an order whose life spans a container restart -- exactly
+        # the case a durable ledger exists for -- the record looked complete
+        # and was not.
+        #
+        # A boundary is the moment a record that came back FROM THE FILE
+        # first receives a live event: its events demonstrably span two
+        # processes. Replayed events only set the flag; they never count a
+        # boundary themselves, or merely reloading would invent one.
+        if replay:
+            r["_from_replay"] = True
+        elif r.pop("_from_replay", False):
+            r["restart_boundaries"] = int(r.get("restart_boundaries", 0)) + 1
         r["events"] += 1
         kind = str(ev.get("kind") or "")
         if kind == "pre_submit":
@@ -558,15 +577,22 @@ class CalibrationRecorder:
         r = self.orders.get(coid)
         if r is None:
             return None
-        return dict(r, completeness=self.completeness(coid))
+        out = {k: v for k, v in r.items() if not k.startswith("_")}
+        return dict(out, completeness=self.completeness(coid))
 
     def report(self) -> Dict[str, Any]:
         usable = sum(1 for c in self.orders
                      if self.completeness(c)["usable_for_calibration"])
+        straddled = sum(1 for r in self.orders.values()
+                        if int(r.get("restart_boundaries", 0)) > 0)
         return {"path": self.path, "orders": len(self.orders),
                 "usable_for_calibration": usable,
                 "not_usable": len(self.orders) - usable,
                 "events_appended": self.appended,
+                # orders whose events span more than one process. Reported
+                # because such a record is the one most likely to be trusted
+                # wrongly.
+                "orders_straddling_a_restart": straddled,
                 "errors": dict(self.errors),
                 "required_capture": list(REQUIRED_CAPTURE),
                 "labels": ("observational only: holds no transport, no "

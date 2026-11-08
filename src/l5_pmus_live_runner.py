@@ -5147,6 +5147,9 @@ class Runner:
         # pre-submission observation rather than a later re-read.
         self.calibration_shadow_tick(now, slug=slug, book=book,
                                      prints=prints)
+        # AND THE ORDERS THAT ARE ACTUALLY RESTING, which the shadow tick
+        # does not cover. Same book, same ladder, same prints, same instant.
+        self.calibration_live_tick(now, slug=slug, book=book, prints=prints)
         return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
@@ -5208,6 +5211,52 @@ class Runner:
                     raise
                 self.stats["shadow_error:%s:%s"
                            % (name, type(exc).__name__)] += 1
+
+    def calibration_live_tick(self, now: float, *, slug: str,
+                              book: Any = None,
+                              prints: Any = None) -> None:
+        """Lifetime observations for the orders the venue is actually holding.
+
+        THE GAP THIS CLOSES, and it is the whole reason a live window could
+        have been spent for nothing. `observe` -- the only producer of
+        `lifetime_observation`, one of the five REQUIRED_CAPTURE categories,
+        and the only source of `prints_at_our_price` -- was reached ONLY from
+        `calibration_shadow_tick`, with `shadow|...` coids. So:
+
+            shadow records  observations, and NO venue-confirmed terminal
+            live records    ack, fill, fees, venue terminal, and NO observations
+
+        Neither half could ever be `usable_for_calibration`, and the two
+        never met. An `l5f-` order that rested for two minutes produced a
+        record with four of five categories present and not one reading of
+        the queue it was sitting in.
+
+        OBSERVATIONAL, exactly like every other recorder call on this path:
+        it holds no transport, cannot refuse or alter a submission, and
+        swallows its own faults. `observe` itself filters the coids it is
+        given to those it already knows and whose slug matches, so handing
+        it every live order is safe.
+        """
+        cal = self.fill_calibration
+        if cal is None:
+            return
+        try:
+            store = getattr(getattr(self, "executor", None), "store", None)
+            if store is None:
+                return
+            live = [c for c in (store.live_orders() or {})
+                    if str(c).startswith("l5f-")]
+            if not live:
+                return
+            n = cal.observe(now, slug=slug, book=book,
+                            ladder=self.shadow_ladder, prints=prints,
+                            open_coids=live)
+            self.stats["calib_live_observations"] += int(n)
+            self.stats["calib_live_orders_seen"] = len(live)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["calib_live_error:%s" % type(exc).__name__] += 1
 
     def calibration_shadow_tick(self, now: float, *, slug: str,
                                 book: Any = None,
