@@ -55,6 +55,7 @@ COPY src/__init__.py src/__init__.py
 # image it raises ModuleNotFoundError on the first tick with
 # L5_BOOK_COMPLETION set.
 COPY src/l5_book_completion.py src/l5_book_completion.py
+COPY src/l5_completion_latency.py src/l5_completion_latency.py
 COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 # The bounded taker-completion authorization. The runner imports it
 # UNCONDITIONALLY -- the policy is evaluated on every completion tick so the
