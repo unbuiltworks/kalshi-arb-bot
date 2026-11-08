@@ -146,11 +146,15 @@ contract per leg, OOS pessimistic (PROVEN, queue-independent):
 | completed pair at 0.95 | 52.5% | **+$0.0500** |
 | one leg stranded | 42.3% | **−$0.0236** carry |
 | nothing fills | 5.3% | $0 (a submission) |
-| **expected net** | | **+$0.0270** |
+| **expected pre-rebate (rounded outcome table)** | | **+$0.0163** |
+| **historical credited-rebate assumption (not guaranteed prospectively)** | | **+$0.0107** |
+| **expected net including historical rebate assumption** | | **+$0.0270** |
 | **bounded worst case** | | **−$1.00** (`worst_case_deficit_check` ACTIVE) |
 
-**Read that honestly: the probe's entire expected value is about three
-cents, against a bounded downside of a dollar.** It cannot and must not be
+**Read that honestly: the probe's modeled pre-rebate expectation is about 1.6
+cents, rising to about 2.7 cents only under a historical credited-rebate
+assumption that is not guaranteed for a future probe, against a bounded
+downside of a dollar.** It cannot and must not be
 run to prove profitability — the gap to profitable matched-pair execution
 is +0.0651/pair, 6.5 ticks, and no 1–2-window probe resolves that.
 
