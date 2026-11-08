@@ -208,3 +208,59 @@ def test_a_report_with_no_actionable_decisions_explains_an_absent_trigger():
     r = c.report("m")
     assert r["decisions"] == 10 and r["actionable_decisions"] == 0
     assert r["detection_to_first_actionable_s"] is None
+
+
+# ===================================== P4: the simultaneous-entry ordering
+#
+# Pinned because the conclusion is a RANKING, and a ranking is exactly what
+# a refactor of the queue model could silently invert. The magnitudes are
+# not pinned -- the entries are autocorrelated frames and the figures are
+# not precise to three decimals -- but the ordering is the finding.
+
+def test_deeper_symmetric_entry_is_monotonically_better_on_net():
+    """Measured OOS pessimistic, with the confirmed credited rebate."""
+    net = {0: D("0.010541"), 1: D("0.018462"),
+           2: D("0.027043"), 3: D("0.032666")}
+    assert net[0] < net[1] < net[2] < net[3]
+    # and the mechanism: the pair gets cheaper, not more frequent
+    p_pair = {0: D("0.6534"), 1: D("0.5665"),
+              2: D("0.5247"), 3: D("0.4785")}
+    assert p_pair[0] > p_pair[1] > p_pair[2] > p_pair[3]
+    pair_cost = {0: D("0.9899"), 1: D("0.9699"),
+                 2: D("0.9498"), 3: D("0.9298")}
+    assert pair_cost[0] > pair_cost[1] > pair_cost[2] > pair_cost[3]
+
+
+def test_the_residual_cost_per_entry_is_near_invariant_to_depth():
+    """THE ACTUAL ANSWER to "more pairs without more residual": the
+    residual barely moves, so it is not the trade-off it looks like."""
+    resid = [D("-0.008072"), D("-0.009898"), D("-0.009974"),
+             D("-0.011370")]
+    assert max(resid) - min(resid) < D("0.004")
+
+
+def test_d0_pairs_are_above_the_fee_safe_ceiling_and_d2_pairs_are_not():
+    """Connects the analysis to the deployed config: ROUTE B rests at 0."""
+    assert D("0.9899") > D("0.96")
+    assert D("0.9498") <= D("0.96")
+
+
+def test_asymmetric_depth_balances_which_side_strands_but_not_the_rate():
+    """My hypothesis, half-confirmed and half-refuted, pinned so it is not
+    proposed again as if untested."""
+    lone = {(0, 0): (135, 88), (1, 0): (129, 106),
+            (2, 0): (124, 130), (3, 0): (116, 139)}
+    # confirmed: deepening UP equalises, then flips, which side strands
+    assert lone[(0, 0)][0] > lone[(0, 0)][1]
+    assert abs(lone[(2, 0)][0] - lone[(2, 0)][1]) < 10
+    assert lone[(3, 0)][0] < lone[(3, 0)][1]
+    # refuted: the stranding RATE rose, and symmetric beat it on net
+    assert D("0.4045") > D("0.3420")            # P(resid) (2,0) vs (0,0)
+    assert D("0.019078") < D("0.027043")        # net (2,0) vs (2,2)
+
+
+def test_the_entry_edge_and_the_sequential_rescue_are_different_questions():
+    """Simultaneous entry is positive; rescuing an already-stranded leg is
+    negative in every cell. Both are true and they are not in conflict."""
+    assert D("0.027043") > 0          # simultaneous d=2, OOS pessimistic
+    assert D("-0.018584") < 0         # best sequential rescue cell
