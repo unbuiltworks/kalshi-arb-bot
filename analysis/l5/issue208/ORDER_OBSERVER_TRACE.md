@@ -128,6 +128,48 @@ cashflows are already accounted on the money path by `L5_LIVE_SETTLED`.
 Recorded here so it is not mistaken for wired, and pinned by a test so it
 cannot be quietly assumed.
 
+## 5b. What production's own accessors say, read while verifying this
+
+From `L5_EFFECTIVE_RUNTIME_CONFIG` on deployment `4cec3f66` — every row is
+the value the money path's accessor returns, not the text of a variable:
+
+| row | effective | bearing |
+|---|---|---|
+| `shadow_only` | `true` | disarmed |
+| `taker_crossing_reachable` | `false` | maker-only holds |
+| `max_live_orders` | `2` | two slots |
+| `max_total_exposure_usd` | `1.00` | unchanged |
+| `max_worst_case_deficit_usd` | `1.00` | unchanged, and active |
+| `dual_quote_enabled_now` | `true` | simultaneous two-sided quoting IS live |
+| `dual_max_placements_per_pass` | `2` | one per side, matching the slots |
+| `dual_replenish_enabled_now` | `false` | no replenishment |
+| **`ts_order_ttl_s`** | **`120.0`** | see below |
+| `book_completion_depth_ticks` | `0` | ROUTE B rests at the touch |
+| `book_completion_breakeven_pair` | `0.9532` | BC's own constant |
+| `completion_max_pair` | `0.96` | the ceiling, unchanged |
+| `ts_opening_leg_max_contracts` | `1` | one contract a leg |
+| `ts_entry_cutoff_s` / `ts_complete_cutoff_s` | `480` / `600` | runway |
+
+**The deployed order TTL is already 120 s**, which is precisely where
+`SEQUENTIAL_COMPLETION.md` independently found the benefit of waiting
+saturates. Two different methods landing on the same number is worth noting;
+it also means the proposal's "no TTL before 120 s" asks for nothing new.
+
+`PASS: false` with eight failed rows is **correct for a disarmed system** —
+every failure reads `NO_APPROVAL_IN_FORCE`, which is the verifier refusing to
+grade a submission budget against an approval that does not exist.
+
+### One observability gap, reported not fixed
+
+The verifier reports `book_completion_depth_ticks` (the **completion**
+depth) but **not the two-sided entry depth** — and the entry depth is the one
+knob the only positive out-of-sample cell depends on (+0.0163/entry at
+`d=2`; the touch was −0.0014). So the single most decision-relevant depth is
+absent from the verified set and can only be inferred from
+`strategy_config_digest`. Worth a row; not added here, because adding rows
+to the effective-config verifier is a change to deployed observability and
+was not asked for.
+
 ## 6. What this changes in the experiment proposal
 
 My proposed pre-flight was **too weak** and I am correcting it. It said
