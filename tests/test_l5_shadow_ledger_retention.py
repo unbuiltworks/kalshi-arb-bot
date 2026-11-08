@@ -135,12 +135,18 @@ def test_the_records_reach_the_log_before_the_manifest_is_replaced(tmp_path, mon
     assert json.loads(open(p).read())["format"] == TS.LEDGER_FORMAT
 
 
-def test_an_unverified_migration_keeps_the_v1_document_and_the_v1_write(tmp_path, monkeypatch):
-    """If the records cannot be read back out of the log, nothing is swapped:
-    the ledger keeps every record and keeps writing the slow v1 format."""
+def test_an_unverified_migration_leaves_the_v1_document_alone(tmp_path, monkeypatch):
+    """If the records cannot be read back out of the log, nothing is swapped.
+
+    The v1 document is the only copy that is provably complete, so it is not
+    rewritten from records we have just failed to read -- that would be the
+    one way to actually lose one. Manifest writes are suspended and said to
+    be, and a later start migrates cleanly and swaps.
+    """
     p = str(tmp_path / "s.json")
     recs = {"w%d" % i: record("w%d" % i) for i in range(3)}
     v1_document(p, recs)
+    before = open(p).read()
     monkeypatch.setattr(TS.FinalizedRecords, "flush", lambda self: 0)
 
     led = TS.ShadowLedger(p)
@@ -148,13 +154,21 @@ def test_an_unverified_migration_keeps_the_v1_document_and_the_v1_write(tmp_path
     assert led.migration_state == TS.NOT_VERIFIED
     assert len(led.state["finalized"]) == 3        # kept, in memory
     assert led.state["finalized"]["w1"] == recs["w1"]
+    r = led.size_report()
+    assert r["manifest_writes"] == "SUSPENDED_MIGRATION_NOT_VERIFIED"
+    assert r["pending_durable"] is False
     monkeypatch.undo()
     led.save()
-    doc = json.loads(open(p).read())
-    assert set(doc["finalized"]) == set(recs)      # the v1 shape, on purpose
-    r = led.size_report()
-    assert r["migration_state"] == TS.NOT_VERIFIED
-    assert r["format"] == 1                        # what it is still writing
+    assert open(p).read() == before                # untouched, on purpose
+    assert len(log_lines(p)) == 3                  # the log did get them
+
+    recovered = TS.ShadowLedger(p)                 # a later start
+    assert recovered.migration_state == TS.MIGRATED
+    assert len(recovered.state["finalized"]) == 3
+    assert len(log_lines(p)) == 3                  # resumed, not duplicated
+    assert recovered.state["finalized"]["w2"] == recs["w2"]
+    assert recovered.size_report()["pending_durable"] is True
+    assert json.loads(open(p).read())["format"] == TS.LEDGER_FORMAT
 
 
 # =====================================================================

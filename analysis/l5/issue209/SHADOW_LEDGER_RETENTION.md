@@ -89,10 +89,14 @@ dropped rather than appended, so a window cannot be scored twice however many ti
 
 A crash at any point leaves the v1 document untouched, so the migration simply runs
 again; a log that was half written is resumed, because records already in the index are
-not appended twice. If step 2 does not verify, nothing is swapped: `migration_state`
-becomes `MIGRATION_NOT_VERIFIED`, every record is kept in memory, and the ledger keeps
-writing the **v1 format** — slow and correct — until someone looks at the telemetry.
-Nothing is ever deleted.
+not appended twice. If step 2 does not verify, nothing is swapped. The v1 document is the only copy that
+is provably complete, so it is **left exactly as it is**: rewriting it from records we
+have just failed to read back would be the one way to actually lose one. `migration_state`
+becomes `MIGRATION_NOT_VERIFIED`, every record stays reachable, scoring carries on
+against the log, and manifest writes are **suspended** — reported as
+`manifest_writes: SUSPENDED_MIGRATION_NOT_VERIFIED` and `pending_durable: false`, so
+the cost is one window's modelled `pending` rather than the scoring history. A later
+start resumes the half-written log without duplicating it and swaps once it verifies.
 
 An unparseable manifest is **moved aside** to `…json.unparseable-<epoch>` instead of
 being silently overwritten by the next save, and the log survives it, so a corrupt

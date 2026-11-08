@@ -1462,13 +1462,16 @@ class ShadowLedger:
         except BaseException:                                  # noqa: BLE001
             missing, unreadable = list(slugs), []
         if missing or unreadable:
-            # DO NOT touch the v1 document. Keep every record in memory and
-            # keep writing the v1 format, which is slow and correct, until
-            # someone looks at `migration_state`.
+            # DO NOT TOUCH THE V1 DOCUMENT. It is the only copy that is
+            # provably complete, and rewriting it from records we have just
+            # failed to read back would be the one way to actually lose one.
+            # Scoring carries on against the log; manifest writes are
+            # suspended, so `pending` stops being durable until a later
+            # start migrates cleanly. That is modelled evidence for one
+            # window against the whole scoring history.
             self.migration_state = NOT_VERIFIED
             self._legacy_fallback = True
             self.migrated_records = 0
-            self.format = 1          # what it will keep WRITING, not an aim
             return
         self.migration_state = MIGRATED if n else NATIVE
         self.migrated_records = n
@@ -1497,10 +1500,8 @@ class ShadowLedger:
                 # records and put the view back, so the next save is cheap.
                 self.records.absorb(fin or {})
                 self.state["finalized"] = self.records
-            if self._legacy_fallback:
-                written = self._save_v1()
-            else:
-                written = self.records.flush()
+            written = self.records.flush()
+            if not self._legacy_fallback:
                 written += self._write_manifest()
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -1537,19 +1538,6 @@ class ShadowLedger:
         _fsync_dir(os.path.dirname(self.path))
         return os.path.getsize(self.path)
 
-    def _save_v1(self) -> int:
-        """The v1 whole-file write. ONLY reachable when migration did not
-        verify, so that an unverified migration is slow rather than lossy."""
-        doc = {"pending": self.state.get("pending") or {},
-               "finalized": self.records.as_dict()}
-        tmp = self.path + ".tmp"
-        with open(tmp, "w") as fh:
-            json.dump(doc, fh, default=str)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, self.path)
-        return os.path.getsize(self.path)
-
     def size_report(self) -> Dict[str, Any]:
         """What the ledger costs, for one log line per roll."""
         r = self.records if isinstance(self.records, FinalizedRecords) else None
@@ -1570,6 +1558,9 @@ class ShadowLedger:
                 "load_s": self.load_s,
                 "migration_state": self.migration_state,
                 "migrated_records": self.migrated_records,
+                "manifest_writes": ("SUSPENDED_MIGRATION_NOT_VERIFIED"
+                                    if self._legacy_fallback else "ACTIVE"),
+                "pending_durable": not self._legacy_fallback,
                 "index_state": r.index_state if r is not None else None,
                 "records_unreadable": (r.records_unreadable
                                        if r is not None else None),
