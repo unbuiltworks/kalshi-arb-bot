@@ -125,3 +125,81 @@ really live in — and that is worth far more than another depth sweep.
 - Sources: `QS.OUT_OF_SAMPLE` only.
 - Residual −0.0236/contract (measured); rebate $0.00727/fill (confirmed
   credited, $2.13 over 293 fills).
+
+---
+
+# Addendum: the depth-2 fill-rate comparison, for choosing the probe depth
+
+Requested to settle depth 0 versus depth 2. OOS, hold, confirmed credited
+rebate. **Read the `pessimistic` arm**: `base` and `optimistic` use the
+POSSIBLE verdict, which is a necessary-only upper bound, and their 0.90+
+pair rates should not be planned against.
+
+| arm | d | n | P(UP fills) | P(DOWN fills) | P(pair) | P(lone leg) | P(neither) |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| pessimistic | 0 | 652 | 0.8604 | 0.7883 | 0.6534 | 0.3420 | 0.0046 |
+| pessimistic | 1 | 639 | 0.8216 | 0.7308 | 0.5665 | 0.4194 | 0.0141 |
+| **pessimistic** | **2** | 627 | **0.7735** | **0.6986** | **0.5247** | **0.4226** | **0.0526** |
+| pessimistic | 3 | 604 | 0.7467 | 0.6921 | 0.4785 | 0.4818 | 0.0397 |
+| base | 2 | 627 | 0.9187 | 0.9569 | 0.8995 | 0.0766 | 0.0239 |
+| optimistic | 2 | 627 | 0.9904 | 0.9729 | 0.9649 | 0.0335 | 0.0016 |
+
+**Depth 0 → 2 costs about 9 points of fill rate on each leg** (UP 0.8604 →
+0.7735, DOWN 0.7883 → 0.6986) and raises the chance that **neither** leg
+fills more than tenfold, 0.46% → 5.26%.
+
+## For a one-or-two-window probe, net-per-entry is the wrong statistic
+
+The table above is per-entry expectation over hundreds of autocorrelated
+frames. A probe with two order slots and one outstanding entry gets
+roughly **one** entry, so what governs it is the **outcome distribution of
+a single draw**, not the mean:
+
+| | depth 0 | depth 2 |
+|---|--:|--:|
+| completes a pair | 65% | 52% |
+| strands one leg | 34% | 42% |
+| nothing fills | 0.5% | 5.3% |
+
+**Do not read the `pair/win` counts from the raw output as achievable
+volume.** The replay opens an entry on every frame; 25 pairs in a window
+is an artifact of that, not something two order slots can do.
+
+## The part that decides it, and it cuts against intuition
+
+**A completed pair leaves no unmatched inventory, so the completion
+controller never evaluates.** The probe's single most valuable output —
+**book age when the completion controller evaluates**, which production
+has never produced — is only generated when **one leg is stranded**.
+
+So the two goals want opposite depths:
+
+| what you want measured | the state you need | best depth |
+|---|---|--:|
+| pair economics, cheaply completed | PAIR | **0** (65%) |
+| the completion path: book age, fill→quote latency, refusal reasons | LONE LEG | **2–3** (42–48%) |
+| best expected net per entry | — | **3** (+0.0327) |
+
+At depth 2, **95% of single-entry outcomes are informative** — a pair
+teaches us the pair economics, a lone leg teaches us the completion path —
+and only the 5.3% no-fill case teaches nothing. At depth 0, 99.5% are
+informative but only 34% exercise the completion controller at all.
+
+**Recommendation, with its reason stated plainly:** depth 2 is the better
+probe depth, but **not** primarily for the pair economics. It is better
+because it is the depth most likely to exercise the second-leg decision
+path at all, which is the thing we have never measured and the thing the
+whole program is blocked on. The pair-cost advantage (0.9498 vs 0.9899,
+i.e. inside our own 0.96 ceiling rather than outside it) is a second
+reason, not the first.
+
+**What would change this:** if the probe's purpose were instead to confirm
+a completed pair settles at the modelled cost, depth 0 is the right
+choice. That is a different experiment and should be run as one.
+
+## Standing caveat
+
+Every fill above is a **queue model**, not a fill. The pessimistic arm is a
+lower bound by construction and still a model of our place in a queue the
+venue does not publish. Which arm we actually live in is exactly what one
+live window would tell us, and it is worth more than any further sweep.

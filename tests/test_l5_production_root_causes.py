@@ -264,3 +264,53 @@ def test_the_entry_edge_and_the_sequential_rescue_are_different_questions():
     negative in every cell. Both are true and they are not in conflict."""
     assert D("0.027043") > 0          # simultaneous d=2, OOS pessimistic
     assert D("-0.018584") < 0         # best sequential rescue cell
+
+
+# ============================ P4 addendum: the probe-depth fill comparison
+
+def test_depth_2_costs_about_nine_points_of_fill_rate_on_each_leg():
+    """OOS pessimistic. The cost side of choosing depth 2."""
+    up = {0: D("0.8604"), 2: D("0.7735")}
+    dn = {0: D("0.7883"), 2: D("0.6986")}
+    assert up[0] - up[2] > D("0.08") and up[0] - up[2] < D("0.10")
+    assert dn[0] - dn[2] > D("0.08") and dn[0] - dn[2] < D("0.10")
+
+
+def test_the_chance_nothing_fills_rises_tenfold_from_depth_0_to_2():
+    none = {0: D("0.0046"), 2: D("0.0526")}
+    assert none[2] / none[0] > 10
+
+
+def test_a_completed_pair_leaves_no_inventory_for_the_controller_to_judge():
+    """THE POINT THAT DECIDES THE PROBE DEPTH, and it cuts against
+    intuition: the measurement we most want needs the outcome we least
+    want. `maybe_book_completion` reads the store's positions, so a
+    matched book gives it nothing to decide."""
+    import inspect
+    from src import l5_pmus_live_runner as RUN
+    src = inspect.getsource(RUN.Runner.maybe_book_completion)
+    # it decides on the DIFFERENCE between the two sides
+    assert 'self.store.position(slug, "UP")' in src
+    assert 'self.store.position(slug, "DOWN")' in src
+    # and a matched book refuses -- NO_INVENTORY lives in decide()
+    from src import l5_book_completion as BC
+    rec = BC.decide(
+        market="m", held_side="UP", held_qty=D("0"), held_cost_usd=D("0"),
+        deficient_qty=D("0"), deficient_cost_usd=D("0"),
+        book={"bid": D("0.62"), "ask": D("0.63"), "stream_age_s": D("0.4")},
+        now_t=100.0, window_start=0.0, resting=[], outstanding_qty=D("0"),
+        tick="0.01", min_qty="1", depth_ticks=0,
+        residual_budget_usd=D("1"), submissions_left=5, last_decide_t=0.0)
+    assert rec["ok"] is False and rec["reason"] == "NO_INVENTORY"
+
+
+def test_depth_2_is_likelier_to_exercise_the_completion_path_than_depth_0():
+    """Which is the stated reason for preferring it as a PROBE depth --
+    not the pair economics."""
+    p_resid = {0: D("0.3420"), 2: D("0.4226")}
+    p_pair = {0: D("0.6534"), 2: D("0.5247")}
+    assert p_resid[2] > p_resid[0]
+    assert p_pair[2] < p_pair[0]
+    # and at depth 2 all but the no-fill case teaches something
+    informative = p_resid[2] + p_pair[2]
+    assert informative > D("0.94")
