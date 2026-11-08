@@ -196,3 +196,46 @@ def test_the_report_separates_the_observer_from_the_markets():
     rep = f._latency_report()
     assert rep["observer"]["market"] == RUN.Runner.LATENCY_OBSERVER_KEY
     assert [m["market"] for m in rep["markets"]] == ["mkt"]
+
+
+# ============================== 4. it is safe on a half-built object
+#
+# THIS CLASS OF MISTAKE HAPPENED TWICE, so it is pinned rather than
+# remembered. A bare `self._latency_observer_note()` broke seven
+# synthetic-transport rigs; a bare `self._latency_safe(...)` in
+# `maybe_book_completion` and `poll_orders` then broke ten end-to-end
+# window tests. Both are AttributeErrors on a rig that is not a fully
+# built Runner -- and in production, on a Runner whose __init__ failed
+# midway. Reporting-only telemetry must never be what stops a
+# cancellation path from running.
+
+def test_no_latency_call_site_invokes_the_helper_by_name_on_self():
+    """Every site goes through `_lat(self, ...)` or a getattr lookup."""
+    for fn in (RUN.Runner.maybe_book_completion, RUN.Runner.poll_orders,
+               RUN.Runner.calibration_live_tick):
+        b = body_of(fn)
+        assert "self._latency_safe(" not in b, fn.__name__
+        assert "self._latency_observer_note(" not in b, fn.__name__
+
+
+def test_the_module_helper_is_a_no_op_on_an_object_without_the_method():
+    class Bare:
+        pass
+    RUN._lat(Bare(), "note_poll", "m", 1.0)        # must not raise
+    RUN._lat(None, "note_poll", "m", 1.0)
+
+
+def test_the_module_helper_forwards_args_and_kwargs_when_it_can():
+    seen = []
+
+    class Rec:
+        def _latency_safe(self, meth, *a, **kw):
+            seen.append((meth, a, kw))
+    RUN._lat(Rec(), "note_decision", "m", 2.0, reason="X")
+    assert seen == [("note_decision", ("m", 2.0), {"reason": "X"})]
+
+
+def test_the_observer_heartbeat_is_reached_by_getattr_in_the_tick_body():
+    b = body_of(RUN.Runner.calibration_live_tick)
+    assert "getattr(self, '_latency_observer_note', None)" in b.replace(
+        '"', "'")

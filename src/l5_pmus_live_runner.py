@@ -91,6 +91,23 @@ MANIFEST_LAMBDA = D("0.04518752824220514525")
 #: dollar. The dollar bound was never the problem; the count bound did not
 #: exist. The pilot default is 1; a deployment that wants the old behaviour
 #: must say 8 out loud.
+def _lat(obj: Any, meth: str, *a: Any, **kw: Any) -> None:
+    """Note one latency observation on `obj`, if it can take one.
+
+    LOOKED UP, NOT CALLED BY NAME, for the same reason the observer
+    heartbeat is: `maybe_book_completion` and `poll_orders` are both driven
+    by test rigs that are not fully built Runners, and a bare
+    `self._latency_safe(...)` broke ten end-to-end window tests with an
+    AttributeError the instant it was added. Reporting-only telemetry must
+    never be the thing that stops a cancellation path from running, in a
+    rig or in a half-built process.
+    """
+    f = getattr(obj, "_latency_safe", None)
+    if f is None:
+        return
+    f(meth, *a, **kw)
+
+
 def max_live_orders() -> int:
     raw = (os.getenv("L5_MAX_LIVE_ORDERS") or "").strip()
     try:
@@ -4270,8 +4287,8 @@ class Runner:
             self.last_order_poll[coid] = self.now_t
             # REPORTING ONLY: realized poll cadence, which is the only
             # bound available on fill->detection latency.
-            self._latency_safe("note_poll",
-                               getattr(t, "market_slug", "") or "", self.now_t)
+            _lat(self, "note_poll",
+                 getattr(t, "market_slug", "") or "", self.now_t)
             try:
                 row = t.order(str(vid))
             except BaseException as exc:                       # noqa: BLE001
@@ -7265,7 +7282,7 @@ class Runner:
         # REPORTING ONLY: the first tick on which we SAW a held position.
         # Not the fill -- see l5_completion_latency on why that interval is
         # a bound and not a measurement.
-        self._latency_safe("note_fill_detected", slug, held, now)
+        _lat(self, "note_fill_detected", slug, held, now)
         book = self.book.snapshot(slug) or {}
         gates = getattr(self.executor, "validation_gates", None)
         # HOISTED, because the guard below now needs the same rows the
@@ -7325,8 +7342,7 @@ class Runner:
         # REPORTING ONLY. The decision, the reason it reached, and the age
         # of the book it was taken on -- which `decide` now carries on
         # every outcome rather than only on a stale refusal.
-        self._latency_safe(
-            "note_decision", slug, now,
+        _lat(self, "note_decision", slug, now,
             action=("COMPLETE" if rec.get("ok") else "NO"),
             reason=(rec.get("reason") or "OK"),
             book_age_s=rec.get("stream_age_s"))
