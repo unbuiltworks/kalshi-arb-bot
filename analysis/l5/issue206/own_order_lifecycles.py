@@ -40,8 +40,18 @@ are excluded:
   * 2015z 2026-11-06, 18 orders -- `analysis/l5/issue195/
     FILL_RECONCILIATION.md`, deployment 78260176. Fills sum penny-exact to
     the settlement's `up_cost 1.541400` / `dn_cost 2.4200`.
-  * 0100z-0200z 2026-11-02, 11 orders -- `analysis/l5/residual_exit/
+  * 0100z-0200z **2026-10-24**, 11 orders -- `analysis/l5/residual_exit/
     preserved/TICK_DISTANCE_AND_FILL_LATENCY.md`.
+    CORRECTED, and SUPERSEDED for these windows. This entry said 2026-11-02;
+    those windows exist only in the 2026-10-24 tapes, and the cited report
+    names no date (the 2026-11-02 campaign covers 2215z-2300z and holds one
+    l5f- coid, so it is not the source). The same tapes also hold FOUR MORE
+    venue-confirmed orders, in 0215z and 0230z, which this table omits.
+    `analysis/l5/issue208/order_lifecycle_reconstruction.py` derives all 15
+    from the tapes and reconciles every window penny-exact to settlement;
+    prefer it. Note also that the `dur_s` values below mix two clocks -- see
+    section 3c of `analysis/l5/issue208/ORDER_BY_ORDER_RECONSTRUCTION.md` --
+    so the same-clock KM median is 14.1s against the 17.1s published here.
   * 1230z 2026-11-07, 5 orders -- `analysis/l5/issue195/
     WINDOW_1230Z_RESULT.md`, cross-checked against PR #207's fixture.
 """
