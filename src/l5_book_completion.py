@@ -388,11 +388,17 @@ def decide(*, market: str, held_side: str,
     age = _d(book.get("stream_age_s"))
     if age is None:
         return _no("BOOK_AGE_UNKNOWN", **rec)
+    # REPORTING ONLY, and deliberately before the freshness test: the age
+    # used to be recorded only when it FAILED, so a passing evaluation
+    # carried no evidence of how fresh the book it acted on was. That made
+    # the 2-second requirement unauditable in exactly the case that
+    # matters -- the one where we traded. Carried on every outcome now.
+    rec["stream_age_s"] = str(age)
     # NEGATIVE IS STALE, not fresh. A future-dated stream age means the
     # snapshot is dated ahead of us, which is the one reading that must
     # never pass a freshness test. Same guard as l5_two_sided_probe.
     if age < 0 or age > D(str(TS.MAX_BOOK_AGE_S)):
-        return _no("STALE_BOOK", stream_age_s=str(age), **rec)
+        return _no("STALE_BOOK", **rec)
     if book.get("gap_suspected"):
         return _no("BOOK_GAP_SUSPECTED", **rec)
     bid, ask = _d(book.get("bid")), _d(book.get("ask"))

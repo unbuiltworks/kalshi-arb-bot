@@ -72,6 +72,7 @@ from src import l5_fidelity_mode as FID
 from src import l5_replenish as RPL
 from src import l5_pmus_transport as T
 from src import l5_fill_calibration as CALIB
+from src import l5_completion_latency as LAT
 from src import l5_intent_gate as GATE
 from src import l5_shadow_controller as SHADOW
 from src import pmus_q1_executor as Q1
@@ -1333,6 +1334,19 @@ class Runner:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             self.stats["fill_calib_init_error:%s" % type(exc).__name__] += 1
+        #: WHERE THE TIME GOES between a first-leg fill and a second-leg
+        #: quote. In-memory, pure, holds no transport and no clock of its
+        #: own; every figure is reporting only and `_latency_safe` swallows
+        #: its faults. See `src/l5_completion_latency.py` for which of the
+        #: six questions it can answer and which it can only bound.
+        self.completion_latency = None
+        self._latency_last_slug = None
+        try:
+            self.completion_latency = LAT.CompletionLatency()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_init_error:%s" % type(exc).__name__] += 1
         # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
@@ -4254,6 +4268,10 @@ class Runner:
             if self.now_t - self.last_order_poll.get(coid, 0.0) < interval:
                 continue
             self.last_order_poll[coid] = self.now_t
+            # REPORTING ONLY: realized poll cadence, which is the only
+            # bound available on fill->detection latency.
+            self._latency_safe("note_poll",
+                               getattr(t, "market_slug", "") or "", self.now_t)
             try:
                 row = t.order(str(vid))
             except BaseException as exc:                       # noqa: BLE001
@@ -5209,6 +5227,65 @@ class Runner:
                 self.stats["shadow_error:%s:%s"
                            % (name, type(exc).__name__)] += 1
 
+    #: the accumulator's key for the OBSERVER itself, as distinct from any
+    #: one market. Observer continuity is a property of the process across a
+    #: window roll, so it cannot be keyed by the market that just changed.
+    LATENCY_OBSERVER_KEY = "__observer__"
+
+    def _latency_report(self) -> Optional[Dict[str, Any]]:
+        """The latency report, or None, and never an exception."""
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return None
+        try:
+            rs = acc.reports()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:report:%s" % type(exc).__name__] += 1
+            return None
+        obs = next((r for r in rs
+                    if r.get("market") == self.LATENCY_OBSERVER_KEY), None)
+        return {"observer": obs,
+                "markets": [r for r in rs
+                            if r.get("market") != self.LATENCY_OBSERVER_KEY]}
+
+    def _latency_safe(self, meth: str, *a: Any, **kw: Any) -> None:
+        """Call the latency accumulator and never let it matter.
+
+        Same contract as `_calib_safe`: observational, swallows its own
+        faults, counts them, and cannot refuse or alter anything. An
+        accumulator that raises must not be able to stop a cancellation.
+        """
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return
+        try:
+            getattr(acc, meth)(*a, **kw)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:%s:%s" % (meth, type(exc).__name__)] += 1
+
+    def _latency_observer_note(self) -> None:
+        """One observer heartbeat, and a rollover when the slug changes."""
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return
+        try:
+            slug = getattr(self.transport, "market_slug", None)
+            k = self.LATENCY_OBSERVER_KEY
+            prev = getattr(self, "_latency_last_slug", None)
+            if slug and prev and str(slug) != str(prev):
+                self._latency_safe("note_rollover", k, self.now_t)
+            if slug:
+                self._latency_last_slug = str(slug)
+            self._latency_safe("note_observation", k, self.now_t)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:observer:%s" % type(exc).__name__] += 1
+
     def calibration_live_tick(self, now: float) -> None:
         """Lifetime observations for the orders the venue is actually holding.
 
@@ -5254,6 +5331,23 @@ class Runner:
         cal = self.fill_calibration
         if cal is None:
             return
+        # REPORTING ONLY, and ABOVE every other guard on purpose: this is
+        # the record that the observer stage ran at all, and it has to be
+        # taken on the ticks where there is nothing to observe too --
+        # otherwise "the observer continued across the rollover" could not
+        # be distinguished from "the observer stopped and there happened to
+        # be no orders". A window roll is read as a change of the
+        # transport's slug, which is the market our orders are in.
+        # LOOKED UP, NOT CALLED BY NAME. This method's contract is that an
+        # object which is not a fully built Runner cannot be made to raise
+        # here -- about forty tests drive `tick` with partial rigs, and a
+        # Runner whose __init__ failed midway is the same shape. A bare
+        # `self._latency_observer_note()` broke seven of those rigs with an
+        # AttributeError the instant it was added, which is the contract
+        # catching the mistake rather than a reason to weaken the rigs.
+        _note = getattr(self, "_latency_observer_note", None)
+        if _note is not None:
+            _note()
         try:
             store = getattr(getattr(self, "executor", None), "store", None)
             if store is None:
@@ -6047,6 +6141,11 @@ class Runner:
             "auth_book": self.book.status(),
             "fill_calibration": (None if self.fill_calibration is None
                                  else self.fill_calibration.report()),
+            # WHERE THE TIME GOES, on every heartbeat. The one figure the
+            # 6.4-6.9s recorded ladders could never supply: the age of the
+            # book the completion controller actually evaluated, measured
+            # on this process's own clock. Reporting only.
+            "completion_latency": self._latency_report(),
             "frame_fanout": (self.fanout.status() if self.fanout else None),
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
@@ -7163,6 +7262,10 @@ class Runner:
             return None
         held, other = ("UP", "DOWN") if up > dn else ("DOWN", "UP")
         held_qty, def_qty = (up, dn) if held == "UP" else (dn, up)
+        # REPORTING ONLY: the first tick on which we SAW a held position.
+        # Not the fill -- see l5_completion_latency on why that interval is
+        # a bound and not a measurement.
+        self._latency_safe("note_fill_detected", slug, held, now)
         book = self.book.snapshot(slug) or {}
         gates = getattr(self.executor, "validation_gates", None)
         # HOISTED, because the guard below now needs the same rows the
@@ -7219,6 +7322,14 @@ class Runner:
         if rec.get("reason") != "DECIDE_COOLDOWN":
             self._book_completion_t = now
         self.stats["book_completion:%s" % rec.get("reason")] += 1
+        # REPORTING ONLY. The decision, the reason it reached, and the age
+        # of the book it was taken on -- which `decide` now carries on
+        # every outcome rather than only on a stale refusal.
+        self._latency_safe(
+            "note_decision", slug, now,
+            action=("COMPLETE" if rec.get("ok") else "NO"),
+            reason=(rec.get("reason") or "OK"),
+            book_age_s=rec.get("stream_age_s"))
 
         # ============ A REFUSED COMPLETION IS NAMED, NOT JUST COUNTED.
         #
