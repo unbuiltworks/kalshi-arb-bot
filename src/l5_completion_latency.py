@@ -62,6 +62,7 @@ class CompletionLatency:
         return self.m.setdefault(str(market), {
             "polls": [], "detected_t": None, "detected_side": None,
             "decisions": [], "eligible": [], "rollovers": [],
+            "first_decision_t": None,
             "observations_before_roll": 0, "observations_after_roll": 0,
         })
 
@@ -98,6 +99,8 @@ class CompletionLatency:
             return
         s = self._slot(market)
         det = s["detected_t"]
+        if s["first_decision_t"] is None:
+            s["first_decision_t"] = ft
         s["decisions"].append({
             "t": ft, "action": str(action), "reason": str(reason),
             "book_age_s": None if book_age_s is None else _f(book_age_s),
@@ -178,6 +181,15 @@ class CompletionLatency:
                                         "median": _median(waits),
                                         "p95": _pct(waits, 0.95),
                                         "max": (max(waits) if waits else None)},
+            # THE AGGREGATE ABOVE IS DOMINATED BY HOW LONG THE WINDOW
+            # RAN, not by latency: every later decision in the same window
+            # is further from the one detection. The figure that answers
+            # "how long before we decided anything" is this one, and the
+            # first deployed heartbeat is why it exists.
+            "detection_to_first_decision_s": (
+                None if (s["detected_t"] is None
+                         or s["first_decision_t"] is None)
+                else round(s["first_decision_t"] - s["detected_t"], 3)),
             "detection_to_first_actionable_s": (
                 firsts[0]["since_detection_s"] if firsts else None),
             # 4

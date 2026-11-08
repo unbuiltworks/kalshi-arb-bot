@@ -7279,10 +7279,21 @@ class Runner:
             return None
         held, other = ("UP", "DOWN") if up > dn else ("DOWN", "UP")
         held_qty, def_qty = (up, dn) if held == "UP" else (dn, up)
-        # REPORTING ONLY: the first tick on which we SAW a held position.
-        # Not the fill -- see l5_completion_latency on why that interval is
-        # a bound and not a measurement.
-        _lat(self, "note_fill_detected", slug, held, now)
+        # REPORTING ONLY: the first tick on which we SAW a HELD POSITION.
+        #
+        # THE `held_qty > 0` GUARD IS THE WHOLE POINT, and leaving it out
+        # was a real defect in production. With up == dn == 0, `up > dn` is
+        # False, so `held` is "DOWN" and `held_qty` is 0 -- a flat market
+        # reads as a held DOWN leg. The first deployed heartbeat showed it
+        # exactly: 256 decisions, every one of them NO_INVENTORY or
+        # DECIDE_COOLDOWN, and `detection_to_decision_s` n 256 median
+        # 451.7 s. That figure was not a fill-to-decision latency at all;
+        # it was time since the first tick of the window.
+        #
+        # Not the fill either -- see l5_completion_latency on why that
+        # interval is a bound and not a measurement.
+        if held_qty > 0:
+            _lat(self, "note_fill_detected", slug, held, now)
         book = self.book.snapshot(slug) or {}
         gates = getattr(self.executor, "validation_gates", None)
         # HOISTED, because the guard below now needs the same rows the
@@ -7790,13 +7801,40 @@ class Runner:
         # way.
         px_up = LX.controller_provisional_price("UP", book, tick)
         px_dn = LX.controller_provisional_price("DOWN", book, tick)
-        if px_up is None or px_dn is None:
+        # ONE UNREADABLE SIDE USED TO DISQUALIFY BOTH, and production
+        # counted it 9 times. `controller_provisional_price` returns None
+        # when `touch - tick <= 0`, so an UP price is unreadable once the
+        # ask is down to a single tick and a DOWN price is unreadable once
+        # the bid is within a tick of 1.00. BTC15m books run to those
+        # extremes routinely as a window resolves -- and the OTHER side is
+        # perfectly restable at that moment. Refusing to open at all
+        # because the side we were not going to choose is pinned is the
+        # defect; the readable side is used instead, and the fact that the
+        # choice was FORCED rather than cheaper is recorded so the
+        # economics stay auditable.
+        #
+        # THIS WIDENS WHEN THE CONTROLLER OPENS and is flagged for review
+        # as such. It does not widen WHAT may be placed: this price feeds
+        # the translation gate only, `TS.build_orders` still builds the
+        # real order from the same authenticated book, and every economic,
+        # campaign, slot and authorization gate downstream is untouched.
+        if px_up is None and px_dn is None:
             self.stats["controller_open:PROVISIONAL_PRICE_UNREADABLE"] += 1
             self._note_open_skip("PROVISIONAL_PRICE_UNREADABLE", slug, ws,
                                  {"bid": str(book.get("bid")),
-                                  "ask": str(book.get("ask"))})
+                                  "ask": str(book.get("ask")),
+                                  "unreadable": "BOTH"})
             return None
-        side, px = ("UP", px_up) if px_up <= px_dn else ("DOWN", px_dn)
+        if px_dn is None:
+            side, px, _forced = "UP", px_up, "DOWN"
+        elif px_up is None:
+            side, px, _forced = "DOWN", px_dn, "UP"
+        else:
+            side, px, _forced = (("UP", px_up, None) if px_up <= px_dn
+                                 else ("DOWN", px_dn, None))
+        if _forced is not None:
+            self.stats["controller_open:PROVISIONAL_SIDE_FORCED:%s"
+                       % _forced] += 1
         size = TSP.opening_leg_max_contracts()
         if size is None or size <= 0:
             self.stats["controller_open:OPENING_CAP_UNREADABLE"] += 1
