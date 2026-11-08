@@ -191,6 +191,13 @@ def leg_outcome(side: str, own_px: D, frames: Sequence[Mapping[str, Any]],
             "need": str(need), "cleared": str(cleared),
             "proven": proven_at is not None,
             "possible": possible_at is not None,
+            "proven_at": proven_at, "possible_at": possible_at,
+            # THE FRAME INDEX, returned rather than recoverable from
+            # `seconds_held`. That duration is rounded for reporting, so
+            # recovering an index from it by matching float timestamps fails
+            # -- which silently sent a sequential replay's completions down
+            # a no-runway branch and reported a 0% completion rate.
+            "fill_index": idx,
             "seconds_held": held}
 
 
