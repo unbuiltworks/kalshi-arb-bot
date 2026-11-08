@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
@@ -1078,6 +1079,21 @@ SAVE_BUDGET_S = 0.25
 #: it and 2,294 of them are never resident at once.
 RECORD_CACHE = 8
 
+#: index entries verified against the LOG'S OWN BYTES before the index is
+#: trusted. The index is a cache and the log is the authority, so acceptance
+#: is spot-checked rather than assumed. See `_spot_check`.
+IDX_SPOT_CHECKS = 16
+
+#: every log line is `{"market": "<slug>", "record": {...}}` and this reads
+#: the slug off the front of it, so indexing or verifying a line costs ~60
+#: bytes rather than parsing a 128 KB body.
+_MARKET_PREFIX = re.compile(br'^\{"market": "((?:[^"\\]|\\.)*)"')
+
+#: `integrity` values. Only the first means the log and the manifest agree.
+INTEGRITY_OK = "LOG_AGREES_WITH_MANIFEST"
+INTEGRITY_SHORT = "RECORDS_MISSING_FROM_LOG"
+INTEGRITY_UNWITNESSED = "NO_MANIFEST_COUNT_TO_CHECK_AGAINST"
+
 #: `migration_state` values.
 NATIVE = "FORMAT_2_NATIVE"
 MIGRATED = "MIGRATED_FROM_V1"
@@ -1128,10 +1144,34 @@ class FinalizedRecords(_ABCMapping):
         self.records_unreadable = 0
         self.truncated_tail_bytes = 0
         self.duplicates_dropped = 0
+        self.index_refusals = 0        # a damaged index refused at load
+        self.index_spot_mismatches = 0  # entries naming the wrong bytes
+        self.slug_mismatches = 0       # caught on a read, healed by rescan
+        #: SCORED, BUT NOT READABLE IN THE LOG. Two kinds of evidence live in
+        #: the index and they are not the same: the OFFSETS are a cache, and
+        #: the log overrules them; the SLUG SET is the record that a window
+        #: was scored at all. Rebuilding geometry from the log must not throw
+        #: that away, or a window whose bytes were destroyed would look
+        #: unscored and could be scored a second time -- and refusing to
+        #: score twice is the half of this ledger that matters. So a slug the
+        #: index named and the log no longer yields stays IN the mapping,
+        #: reads raise, and the count is reported. Fail closed, and loudly.
+        self._orphans: Dict[str, Any] = {}
 
     # ------------------------------------------------------------ loading
     def load(self) -> None:
-        """Index the log. Reads the small index file, or scans the log."""
+        """Index the log. Reads the small index file, or scans the log.
+
+        THE INDEX IS NEVER TRUSTED ON ITS WORD. A cache that merely ENDS at
+        the right byte can still hide a record -- drop one entry from the
+        middle and the slug it named becomes invisible, which would let an
+        already-scored window be scored again. So the index is accepted only
+        when it TILES the log (`_read_idx`) and a bounded sample of its
+        entries is verified against the log's own bytes (`_spot_check`). Any
+        failure rebuilds from the log, which is the authority, and says which
+        check refused it. A record that is on disk is never hidden by a
+        damaged index; the worst it costs is a scan.
+        """
         self._index, self._dirty, self._cache = {}, {}, {}
         self._log_end, self.index_state = 0, "EMPTY"
         if not os.path.exists(self.log_path):
@@ -1143,12 +1183,19 @@ class FinalizedRecords(_ABCMapping):
         except BaseException:                                  # noqa: BLE001
             idx = None
         if idx is None or end > size:
-            # no index, unreadable index, or an index AHEAD of the log: the
-            # log is the only authority, so rebuild from it.
-            self._scan_from(0)
-            self.index_state = "REBUILT_BY_SCAN"
+            # no index, an index that does not tile the log, or one AHEAD of
+            # it: the log is the only authority, so rebuild from it.
+            self.index_refusals += 1
+            self.rescan("REBUILT_BY_SCAN", known=self._idx_slugs())
             return
         self._index, self._log_end = idx, end
+        bad = self._spot_check()
+        if bad:
+            # the index named bytes that are not the record it claimed.
+            self.index_spot_mismatches += bad
+            self.index_refusals += 1
+            self.rescan("REBUILT_AFTER_SPOT_CHECK_FAILED")
+            return
         self.index_state = "READ_FROM_INDEX"
         if end < size:
             # records were appended and the index write was lost, or the
@@ -1156,19 +1203,133 @@ class FinalizedRecords(_ABCMapping):
             self._scan_from(end)
             self.index_state = "INDEX_CAUGHT_UP_WITH_LOG"
 
+    def _idx_slugs(self) -> Any:
+        """The slug column alone, geometry ignored.
+
+        A refused index is refused for its OFFSETS. The slugs it names are
+        still a record that those windows were scored, and that evidence is
+        what stops one being scored twice, so it is harvested even when the
+        arithmetic is rejected.
+        """
+        out = set()
+        try:
+            with open(self.idx_path, "r") as fh:
+                for line in fh:
+                    if not line.endswith("\n"):
+                        break        # torn by a crash: NOT an entry, and its
+                                     # slug column may be half a slug, which
+                                     # would invent a missing record
+                    parts = line[:-1].split("\t")
+                    if len(parts) != 3 or not parts[0]:
+                        continue
+                    try:
+                        int(parts[1]), int(parts[2])
+                    except BaseException:                      # noqa: BLE001
+                        continue
+                    out.add(parts[0])
+        except BaseException:                                  # noqa: BLE001
+            pass
+        return out
+
+    def rescan(self, state: str = "REBUILT_BY_SCAN", known: Any = None) -> None:
+        """Rebuild geometry from the log, KEEPING the slug set it had.
+
+        The log decides where every record is. It does not get to decide
+        which windows were scored, because a destroyed record would then
+        become a window we would score again. Slugs we knew and the log no
+        longer yields become orphans: still present, still unscorable,
+        unreadable, and counted.
+        """
+        known = set(known or ()) | set(self._index) | set(self._orphans)
+        self._index, self._cache = {}, {}
+        self._log_end = 0
+        self._scan_from(0)
+        self._orphans = {s: None for s in known if s not in self._index}
+        self.index_state = state
+        try:
+            self._write_idx()
+        except BaseException:                                  # noqa: BLE001
+            pass
+
+    def readable_count(self) -> int:
+        """Records whose bytes are in the log, orphans excluded."""
+        extra = sum(1 for s in self._dirty if s not in self._index)
+        return len(self._index) + extra
+
+    def orphan_slugs(self) -> List[str]:
+        return sorted(self._orphans)
+
     def _read_idx(self) -> Any:
+        """Read the index, and REFUSE it unless it tiles the log.
+
+        The entries must cover the log from byte 0, end to end, with no gap
+        and no overlap, because that is what the writer produces. A missing
+        entry leaves a gap, a shifted one leaves an overlap, and a phantom
+        one collides -- so the arithmetic alone catches the damage that an
+        endpoint check cannot see. Raising here sends `load` to the log.
+        """
         idx: Dict[str, Any] = {}
-        end = 0
+        spans: List[Any] = []
         with open(self.idx_path, "r") as fh:
             for line in fh:
                 line = line.rstrip("\n")
                 if not line:
                     continue
-                slug, off, n = line.split("\t")
+                slug, off, n = line.split("\t")          # ValueError -> scan
                 off, n = int(off), int(n)
-                idx.setdefault(slug, (off, n))
-                end = max(end, off + n)
-        return idx, end
+                if off < 0 or n <= 0:
+                    raise ValueError("INDEX_SPAN_NOT_POSITIVE")
+                if slug in idx:
+                    raise ValueError("INDEX_NAMES_A_SLUG_TWICE")
+                idx[slug] = (off, n)
+                spans.append((off, n))
+        cur = 0
+        for off, n in sorted(spans):
+            if off != cur:
+                raise ValueError("INDEX_DOES_NOT_TILE_THE_LOG")
+            cur = off + n
+        return idx, cur
+
+    def _slug_of(self, raw: bytes) -> str:
+        """The slug on the front of a log line, without parsing the body."""
+        m = _MARKET_PREFIX.match(raw[:512])
+        if m:
+            return str(json.loads('"' + m.group(1).decode("utf-8") + '"'))
+        return str(json.loads(raw.decode("utf-8"))["market"])
+
+    def _spot_check(self, checks: int = IDX_SPOT_CHECKS) -> int:
+        """Verify index entries against the log's bytes. Returns mismatches.
+
+        Reads the slug off the front of the line at each sampled offset, so
+        the whole check costs a few hundred bytes. The first and last entries
+        are always checked and the rest are spread evenly, which catches
+        wholesale damage at load; a single mis-paired entry that escapes the
+        sample is caught by `_read` the first time that slug is touched.
+        """
+        items = sorted(self._index.items(), key=lambda kv: kv[1][0])
+        if not items:
+            return 0
+        picks = {0, len(items) - 1}
+        step = max(1, len(items) // max(1, checks - len(picks)))
+        for i in range(0, len(items), step):
+            if len(picks) >= checks:
+                break
+            picks.add(i)
+        bad = 0
+        try:
+            with open(self.log_path, "rb") as fh:
+                for i in sorted(picks):
+                    slug, (off, n) = items[i]
+                    fh.seek(off)
+                    raw = fh.read(min(n, 512))
+                    try:
+                        if self._slug_of(raw) != slug:
+                            bad += 1
+                    except BaseException:                      # noqa: BLE001
+                        bad += 1
+        except BaseException:                                  # noqa: BLE001
+            return len(picks)                 # cannot verify -> do not trust
+        return bad
 
     def _scan_from(self, start: int) -> None:
         """Index the log from `start`, which must begin a line."""
@@ -1182,7 +1343,7 @@ class FinalizedRecords(_ABCMapping):
                     tail = n            # a crash mid-append is NOT a record
                     break
                 try:
-                    slug = str(json.loads(raw.decode("utf-8"))["market"])
+                    slug = self._slug_of(raw)
                 except BaseException:                          # noqa: BLE001
                     self.records_unreadable += 1
                 else:
@@ -1195,23 +1356,43 @@ class FinalizedRecords(_ABCMapping):
 
     # ------------------------------------------------------------ mapping
     def __getitem__(self, slug: str) -> Any:
-        slug = str(slug)
+        return self._read(str(slug), healed=False)
+
+    def _read(self, slug: str, *, healed: bool) -> Any:
+        """One record, and PROOF it is the one that was asked for.
+
+        The line carries its own slug, so the index's claim is checked
+        against the record rather than believed. A mismatch means the cache
+        named the wrong bytes: the log is the authority, so the index is
+        rebuilt from it and the read is tried once more. That heals every
+        other mis-paired entry at the same time, including the ones that
+        would otherwise have made a scored window look unscored.
+        """
         if slug in self._dirty:
             return self._dirty[slug]
         if slug in self._cache:
             return self._cache[slug]
         loc = self._index.get(slug)
         if loc is None:
+            if slug in self._orphans:
+                self.records_unreadable += 1    # scored; bytes not in the log
             raise KeyError(slug)
         off, n = loc
         try:
             with open(self.log_path, "rb") as fh:
                 fh.seek(off)
                 raw = fh.read(n)
-            rec = json.loads(raw.decode("utf-8"))["record"]
+            obj = json.loads(raw.decode("utf-8"))
+            got, rec = str(obj["market"]), obj["record"]
         except BaseException:                                  # noqa: BLE001
             self.records_unreadable += 1
             raise KeyError(slug)
+        if got != slug:
+            self.slug_mismatches += 1
+            if healed:
+                raise KeyError(slug)
+            self.rescan("REBUILT_AFTER_SLUG_MISMATCH")
+            return self._read(slug, healed=True)
         if len(self._cache) >= RECORD_CACHE:
             self._cache.clear()
         self._cache[slug] = rec
@@ -1219,24 +1400,29 @@ class FinalizedRecords(_ABCMapping):
 
     def __setitem__(self, slug: str, rec: Any) -> None:
         slug = str(slug)
-        if slug in self._index:
+        if slug in self._index or slug in self._orphans:
             self.duplicates_dropped += 1       # scored once, by storage
             return
         self._dirty[slug] = rec
 
     def __contains__(self, slug: Any) -> bool:
         slug = str(slug)
-        return slug in self._index or slug in self._dirty
+        return (slug in self._index or slug in self._dirty
+                or slug in self._orphans)
 
     def __len__(self) -> int:
-        extra = sum(1 for s in self._dirty if s not in self._index)
-        return len(self._index) + extra
+        orph = sum(1 for s in self._orphans
+                   if s not in self._index and s not in self._dirty)
+        return self.readable_count() + orph
 
     def __iter__(self) -> Any:
         for slug in self._index:
             yield slug
         for slug in self._dirty:
             if slug not in self._index:
+                yield slug
+        for slug in self._orphans:
+            if slug not in self._index and slug not in self._dirty:
                 yield slug
 
     def __eq__(self, other: Any) -> bool:
@@ -1273,7 +1459,8 @@ class FinalizedRecords(_ABCMapping):
         staged = 0
         for slug, rec in dict(other or {}).items():
             slug = str(slug)
-            if slug in self._index or slug in self._dirty:
+            if (slug in self._index or slug in self._dirty
+                    or slug in self._orphans):
                 continue
             self._dirty[slug] = rec
             staged += 1
@@ -1373,6 +1560,12 @@ class ShadowLedger:
         self.migration_state = NATIVE
         self.migrated_records = 0
         self.quarantined: Optional[str] = None
+        #: the manifest's own count, an INDEPENDENT witness to how many
+        #: windows were scored. It is what makes a lost record impossible to
+        #: pass off as an empty history.
+        self.expected_finalized: Optional[int] = None
+        self.records_missing = 0
+        self.integrity = INTEGRITY_UNWITNESSED
         self.saves = 0
         self.slow_saves = 0
         self.last_save_s: Optional[float] = None
@@ -1414,6 +1607,7 @@ class ShadowLedger:
         self.state["pending"] = dict(got.get("pending") or {})
         legacy = dict(got.get("finalized") or {})
         fmt = got.get("format")
+        count = got.get("finalized_count")
         got = None                                 # release the v1 document
         try:
             fmt = int(fmt)
@@ -1421,7 +1615,46 @@ class ShadowLedger:
             fmt = 1
         if fmt < LEDGER_FORMAT or legacy:
             self._migrate_v1(legacy)
+        self._check_against_manifest(count)
         self.load_s = round(time.monotonic() - t0, 4)
+
+    def _check_against_manifest(self, count: Any) -> None:
+        """Compare what the log holds against what the manifest witnessed.
+
+        A damaged index is caught by `FinalizedRecords.load`. This catches
+        the other direction -- records missing from the LOG -- and refuses to
+        let it pass silently: the log is rescanned first, because the index
+        is only a cache, and a shortfall that survives the rescan is named
+        with its size in `size_report`. Nothing is deleted and nothing is
+        repaired by guesswork; the discrepancy is reported for a human.
+        """
+        r = self.records
+        orphans = len(r.orphan_slugs()) if isinstance(r, FinalizedRecords) else 0
+        try:
+            self.expected_finalized = int(count)
+        except BaseException:                                  # noqa: BLE001
+            self.expected_finalized = None
+        exp = self.expected_finalized
+        readable = (r.readable_count() if isinstance(r, FinalizedRecords)
+                    else len(r or {}))
+        if exp is not None and readable < exp and not orphans:
+            # the log holds fewer records than the manifest witnessed and no
+            # orphan explains it. The index is only a cache, so read the log
+            # itself before believing a shortfall.
+            try:
+                r.rescan("REBUILT_FOR_COUNT_SHORTFALL")
+            except BaseException:                              # noqa: BLE001
+                pass
+            orphans = len(r.orphan_slugs())
+            readable = r.readable_count()
+        gap = 0 if exp is None else max(0, exp - readable)
+        self.records_missing = max(orphans, gap)
+        if self.records_missing:
+            self.integrity = INTEGRITY_SHORT
+        elif exp is None:
+            self.integrity = INTEGRITY_UNWITNESSED
+        else:
+            self.integrity = INTEGRITY_OK
 
     def _quarantine(self) -> None:
         """Move an unparseable manifest aside rather than lose it."""
@@ -1562,6 +1795,19 @@ class ShadowLedger:
                                     if self._legacy_fallback else "ACTIVE"),
                 "pending_durable": not self._legacy_fallback,
                 "index_state": r.index_state if r is not None else None,
+                "integrity": self.integrity,
+                "expected_finalized": self.expected_finalized,
+                "records_missing": self.records_missing,
+                "index_refusals": (r.index_refusals
+                                   if r is not None else None),
+                "index_spot_mismatches": (r.index_spot_mismatches
+                                          if r is not None else None),
+                "slug_mismatches": (r.slug_mismatches
+                                    if r is not None else None),
+                "readable_records": (r.readable_count()
+                                     if r is not None else None),
+                "orphan_slugs": (len(r.orphan_slugs())
+                                 if r is not None else None),
                 "records_unreadable": (r.records_unreadable
                                        if r is not None else None),
                 "duplicates_dropped": (r.duplicates_dropped

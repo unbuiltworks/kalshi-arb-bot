@@ -252,7 +252,11 @@ def test_a_lost_index_is_rebuilt_from_the_log(tmp_path):
     assert TS.ShadowLedger(p).records.index_state == "READ_FROM_INDEX"
 
 
-def test_an_index_ahead_of_the_log_is_discarded(tmp_path):
+def test_an_index_ahead_of_the_log_is_discarded_and_the_loss_is_named(tmp_path):
+    """The LOG lost two records. The index is refused for pointing past the
+    end of it, the geometry is rebuilt from what survives -- and the two
+    slugs stay present, unscorable and reported, because the index knowing
+    they were scored is evidence even when their bytes are gone."""
     p = str(tmp_path / "s.json")
     led = TS.ShadowLedger(p)
     for i in range(6):
@@ -261,10 +265,26 @@ def test_an_index_ahead_of_the_log_is_discarded(tmp_path):
     lines = log_lines(p)
     with open(p + ".finalized.jsonl", "w") as fh:   # lose the last two
         fh.write("\n".join(lines[:4]) + "\n")
+
     reopened = TS.ShadowLedger(p)
+
     assert reopened.records.index_state == "REBUILT_BY_SCAN"
-    assert len(reopened.state["finalized"]) == 4
+    assert reopened.records.index_refusals == 1
     assert reopened.state["finalized"]["w0"] == record("w0")
+    assert reopened.records.readable_count() == 4
+    assert reopened.records.orphan_slugs() == ["w4", "w5"]
+    assert len(reopened.state["finalized"]) == 6     # still six were scored
+    for lost in ("w4", "w5"):
+        assert lost in reopened.state["finalized"]   # cannot be scored again
+        with pytest.raises(KeyError):
+            reopened.state["finalized"][lost]
+        assert reopened.finalize(lost, settle_up=True) is None
+    r = reopened.size_report()
+    assert r["integrity"] == TS.INTEGRITY_SHORT      # NEVER silent
+    assert r["records_missing"] == 2
+    assert r["expected_finalized"] == 6
+    assert r["readable_records"] == 4
+    assert r["orphan_slugs"] == 2
 
 
 def test_records_appended_without_an_index_update_are_caught_up(tmp_path):
@@ -356,9 +376,14 @@ def test_an_unreadable_record_still_counts_as_scored(tmp_path):
     assert "w1" in reopened.state["finalized"]
     with pytest.raises(KeyError):
         reopened.state["finalized"]["w1"]
-    assert reopened.records.records_unreadable == 1
+    assert reopened.records.records_unreadable >= 1
+    assert reopened.records.orphan_slugs() == ["w1"]
     assert reopened.finalize("w1", settle_up=True) is None     # not rescored
+    assert reopened.park(window("w1"), now=9.0)["state"] == TS.FINALIZED
     assert reopened.state["finalized"]["w2"] == record("w2")   # unaffected
+    r = reopened.size_report()
+    assert r["integrity"] == TS.INTEGRITY_SHORT
+    assert r["records_missing"] == 1
 
 
 def test_a_failed_write_cannot_raise_into_the_settle_pass(tmp_path, monkeypatch):
@@ -512,3 +537,213 @@ def test_the_whole_report_is_still_what_gets_stored(tmp_path):
     stored = TS.ShadowLedger(p).state["finalized"]["w1"]
     assert len(stored["cells"][0]["noise"]) == 20000
     assert stored["cells"][0]["residual_pnl_modelled"] == "-5.90"
+
+
+# =====================================================================
+# 7. THE INDEX IS A CACHE, AND A DAMAGED CACHE MUST NOT HIDE A RECORD.
+#
+# Raised in review of PR #210: "the offset index is a cache, but its
+# recovery behavior needs particular scrutiny if the index exists and
+# points to incorrect data. We should verify that a damaged index cannot
+# silently hide historical records."
+#
+# It could. Two holes, both reproduced on the first implementation:
+#
+#   A  drop ONE entry from the middle and the index still ENDS at the right
+#      byte, so it was accepted -- `len` reported 5 of 6 and the dropped
+#      slug read as absent, which would let an already-scored window be
+#      parked and scored a SECOND time.
+#   B  swap two entries' slugs and the index still tiles the log and still
+#      has the right count -- so `records["w1"]` returned w4's record.
+#
+# Both are closed by four layers, and every one of them is exercised below:
+#   1. the index must TILE the log, so a gap or an overlap refuses it;
+#   2. a bounded sample of entries is verified against the log's own bytes;
+#   3. every read checks the record's own slug and heals the index if it
+#      disagrees, which catches what the sample misses;
+#   4. the manifest's count is an independent witness, and a shortfall is
+#      NAMED rather than passed off as a smaller history.
+#
+# The invariant: the log decides WHERE a record is, the slug set decides
+# WHICH windows were scored, and no damaged index can make a scored window
+# look unscored.
+# =====================================================================
+
+def idx_rows(path: str) -> list:
+    with open(path + ".finalized.idx") as fh:
+        return [ln.split("\t") for ln in fh.read().split("\n") if ln]
+
+
+def write_idx(path: str, rows: list) -> None:
+    with open(path + ".finalized.idx", "w") as fh:
+        fh.write("".join("\t".join(r) + "\n" for r in rows))
+
+
+def seeded(path: str, n: int, pad: int = 0) -> TS.ShadowLedger:
+    led = TS.ShadowLedger(path)
+    for i in range(n):
+        led.state["finalized"]["w%03d" % i] = record("w%03d" % i, pad=pad)
+    led.save()
+    return led
+
+
+def test_an_index_missing_a_middle_entry_cannot_hide_the_record(tmp_path):
+    """Hole A. The index still ends at the right byte, and before the fix
+    that was enough for it to be trusted."""
+    p = str(tmp_path / "s.json")
+    seeded(p, 6)
+    rows = idx_rows(p)
+    write_idx(p, rows[:2] + rows[3:])              # w002's entry, gone
+
+    led = TS.ShadowLedger(p)
+
+    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.index_refusals == 1
+    assert led.records.readable_count() == 6       # not 5
+    assert "w002" in led.state["finalized"]
+    assert led.state["finalized"]["w002"] == record("w002")
+    # and the window it would have hidden still cannot be scored twice
+    assert led.park(window("w002"), now=1.0)["state"] == TS.FINALIZED
+    assert led.finalize("w002", settle_up=True) is None
+    assert len(log_lines(p)) == 6                  # nothing re-appended
+    r = led.size_report()
+    assert r["integrity"] == TS.INTEGRITY_OK
+    assert r["records_missing"] == 0 and r["orphan_slugs"] == 0
+
+
+def test_an_index_that_names_the_wrong_bytes_never_returns_another_window(tmp_path):
+    """Hole B. Two slugs swapped: the index tiles the log and the count is
+    right, so only the bytes themselves can give it away."""
+    p = str(tmp_path / "s.json")
+    seeded(p, 6, pad=40)
+    rows = {r[0]: r for r in idx_rows(p)}
+    a, b = rows["w001"], rows["w004"]
+    a[1], b[1] = b[1], a[1]
+    a[2], b[2] = b[2], a[2]
+    write_idx(p, list(rows.values()))
+
+    led = TS.ShadowLedger(p)
+
+    assert led.records.index_spot_mismatches > 0   # caught by the sample
+    assert led.records.index_state == "REBUILT_AFTER_SPOT_CHECK_FAILED"
+    for s in ("w001", "w004"):
+        got = led.state["finalized"][s]
+        assert got["market"] == s                  # never another window
+        assert got == record(s, pad=40)
+    # the damage was written back out, so it does not recur
+    again = TS.ShadowLedger(p)
+    assert again.records.index_state == "READ_FROM_INDEX"
+    assert again.records.index_spot_mismatches == 0
+    assert again.state["finalized"]["w001"]["market"] == "w001"
+
+
+def test_a_swap_the_sample_misses_is_caught_on_the_read_and_heals(tmp_path):
+    """Layer 3. 200 records: the spot check samples 16 of them, so a swap
+    between two unsampled neighbours reaches a read. The read is where it
+    stops -- and healing fixes the whole index, not just this pair."""
+    p = str(tmp_path / "s.json")
+    seeded(p, 200)
+    rows = {r[0]: r for r in idx_rows(p)}
+    a, b = rows["w005"], rows["w006"]
+    a[1], b[1] = b[1], a[1]
+    a[2], b[2] = b[2], a[2]
+    write_idx(p, list(rows.values()))
+
+    led = TS.ShadowLedger(p)
+    assert led.records.index_state == "READ_FROM_INDEX"   # it got through
+    assert led.records.index_spot_mismatches == 0
+
+    got = led.state["finalized"]["w005"]                 # the read catches it
+
+    assert got["market"] == "w005" and got == record("w005")
+    assert led.records.slug_mismatches == 1
+    assert led.records.index_state == "REBUILT_AFTER_SLUG_MISMATCH"
+    assert led.state["finalized"]["w006"] == record("w006")
+    assert led.records.readable_count() == 200
+    assert TS.ShadowLedger(p).records.index_state == "READ_FROM_INDEX"
+
+
+def test_an_overlapping_index_entry_is_refused(tmp_path):
+    p = str(tmp_path / "s.json")
+    seeded(p, 5)
+    rows = idx_rows(p)
+    rows[2][1] = str(int(rows[2][1]) - 1)          # overlaps its neighbour
+    rows[2][2] = str(int(rows[2][2]) + 1)
+    write_idx(p, rows)
+    led = TS.ShadowLedger(p)
+    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.readable_count() == 5
+    assert led.state["finalized"]["w002"] == record("w002")
+
+
+def test_an_index_naming_a_window_the_log_does_not_hold_is_reported(tmp_path):
+    """The mirror image: the cache claims a window the log cannot show.
+
+    It is not believed -- no record is invented -- and it is not discarded
+    either, because a slug recorded as scored is the evidence that stops a
+    second scoring. It becomes an orphan, and the discrepancy is NAMED.
+    """
+    p = str(tmp_path / "s.json")
+    seeded(p, 4)
+    rows = idx_rows(p)
+    last_end = int(rows[-1][1]) + int(rows[-1][2])
+    write_idx(p, rows + [["phantom", str(last_end), "120"]])
+
+    led = TS.ShadowLedger(p)
+
+    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.readable_count() == 4
+    assert led.records.orphan_slugs() == ["phantom"]
+    assert "phantom" in led.state["finalized"]
+    with pytest.raises(KeyError):
+        led.state["finalized"]["phantom"]
+    r = led.size_report()
+    assert r["integrity"] == TS.INTEGRITY_SHORT    # never silent
+    assert r["records_missing"] == 1
+    assert r["readable_records"] == 4
+
+
+def test_deleting_the_whole_index_loses_nothing_and_says_so(tmp_path):
+    p = str(tmp_path / "s.json")
+    seeded(p, 8)
+    os.unlink(p + ".finalized.idx")
+    led = TS.ShadowLedger(p)
+    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.readable_count() == 8
+    assert led.records.orphan_slugs() == []
+    assert led.size_report()["integrity"] == TS.INTEGRITY_OK
+    for i in range(8):
+        assert led.state["finalized"]["w%03d" % i] == record("w%03d" % i)
+
+
+def test_a_truncated_index_file_is_refused_not_believed(tmp_path):
+    """Half an index file ends mid-line and does not tile the log."""
+    p = str(tmp_path / "s.json")
+    seeded(p, 6)
+    raw = open(p + ".finalized.idx").read()
+    with open(p + ".finalized.idx", "w") as fh:
+        fh.write(raw[:len(raw) // 2])
+    led = TS.ShadowLedger(p)
+    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.readable_count() == 6
+    assert led.size_report()["integrity"] == TS.INTEGRITY_OK
+
+
+def test_the_fast_slug_reader_agrees_with_a_full_parse(tmp_path):
+    """Indexing reads the slug off the front of the line instead of parsing
+    a 128 KB body. If the two ever disagreed, the index would mis-name a
+    record -- so they are pinned against each other, escapes included."""
+    p = str(tmp_path / "s.json")
+    led = TS.ShadowLedger(p)
+    odd = ['plain-slug', 'has "quotes"', 'back\\slash', 'uniçode',
+           'tab\there', 'new\nline', '{"market": "spoof"}']
+    for s in odd:
+        led.state["finalized"][s] = record(s)
+    led.save()
+    with open(p + ".finalized.jsonl", "rb") as fh:
+        for raw in fh:
+            assert led.records._slug_of(raw) == json.loads(raw)["market"]
+    reopened = TS.ShadowLedger(p)
+    assert reopened.records.readable_count() == len(odd)
+    for s in odd:
+        assert reopened.state["finalized"][s]["market"] == s

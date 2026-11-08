@@ -189,6 +189,85 @@ holds unchanged.
 
 ---
 
+## 4b. The index is a cache, and a damaged cache must not hide a record
+
+Raised in review of PR #210: *"the offset index is a cache, but its recovery behavior
+needs particular scrutiny if the index exists and points to incorrect data. We should
+verify that a damaged index cannot silently hide historical records."*
+
+It could. The first implementation validated only the **endpoint** — the index's last
+byte against the log's size — and two kinds of damage pass that check. Both were
+reproduced on the branch as it stood:
+
+| damage | what the first implementation did |
+|---|---|
+| drop **one entry from the middle** (index still ends at the right byte) | accepted it: `index_state: READ_FROM_INDEX`, `len` reported **5 of 6**, the dropped slug read as **absent** — so that window could be parked and scored a **second** time |
+| **swap two entries' slugs** (index still tiles the log, count still right) | accepted it: `records["w1"]` returned **w4's record** |
+
+Four layers now stand between a damaged index and a hidden record:
+
+1. **The index must tile the log.** Entries must cover it from byte 0, end to end, with
+   no gap and no overlap — which is what the writer produces. A missing entry leaves a
+   gap, a shifted one an overlap, a phantom one a collision. The arithmetic alone
+   catches what an endpoint check cannot see, and refusing sends the load to the log.
+2. **A bounded sample is verified against the log's own bytes.** Up to
+   `IDX_SPOT_CHECKS = 16` entries — always the first and last, the rest spread evenly —
+   are checked by reading the slug off the front of the line at the recorded offset.
+   The whole check costs a few hundred bytes and catches wholesale damage at load.
+3. **Every read checks the record's own slug** and, on a mismatch, rebuilds the index
+   from the log and reads again — healing every other mis-paired entry at the same
+   time. This is what catches a single swap the sample misses.
+4. **The manifest's `finalized_count` is an independent witness.** A shortfall the log
+   cannot account for is **named** — `integrity: RECORDS_MISSING_FROM_LOG` with
+   `records_missing` — never passed off as a smaller history.
+
+The invariant that falls out: **the log decides where a record is; the index's slug set
+decides which windows were scored; and no damaged index can make a scored window look
+unscored.**
+
+That second clause is a correction to my own first fix for this. Distrusting the index
+wholesale *also* threw away the only surviving evidence that a window whose record bytes
+were destroyed had been scored at all — which would have let it be scored again, and
+refusing to score twice is the half of this ledger that matters. So the two kinds of
+evidence in the index are now treated separately: the **offsets** are a cache the log
+overrules, and the **slug set** is a record of what was scored. A slug the index named
+and the log no longer yields becomes an **orphan**: still present, still unscorable,
+reads raise, and it is counted in `orphan_slugs` and `records_missing`. Fail closed, and
+loudly. A torn final line in the index file is ignored rather than harvested, so a
+half-written slug cannot invent a missing record.
+
+### What damage costs
+
+| restart | measured |
+|---|---|
+| good index (including the 16-entry spot check) | **0.0015 s** |
+| index deleted entirely → full rescan of 292.7 MB | **0.207 s** |
+| index damaged (middle entry dropped) → refused, full rescan | **0.214 s** |
+
+The rescan is cheap because indexing reads the slug off the front of each line
+(`_slug_of`) instead of parsing a 128 KB body — so the worst case of index damage is a
+fifth of a second locally, roughly a second on the volume, and it recovers **every**
+record. A test pins the fast reader against a full parse on slugs containing quotes,
+backslashes, tabs, newlines, non-ASCII and an embedded `{"market": ...}`, so the fast
+path cannot mis-name a record.
+
+Eight further tests cover this section: the dropped middle entry, the slug swap caught
+at load, a swap that escapes the sample and is caught on the read, an overlapping entry,
+a phantom window reported rather than believed, the whole index deleted, a truncated
+index file, and the fast reader's agreement with a full parse.
+
+### Per-window cost, both shapes
+
+| shape | mean | max |
+|---|---|---|
+| windows settling normally (`pending` peaks at 1, as production reports) | **4.7 ms** | 8.4 ms |
+| `pending` full — 16 parked, none settling, ~2 MB of manifest a save | **35.5 ms** | 71.3 ms |
+
+Against v1's 3.06 s a window on the same disk, the pathological shape is still 86×
+cheaper than the healthy one was.
+
+---
+
 ## 5. What this does not do
 
 * It does not touch scoring, settlement, fills, risk, accounting or the watchdog.
