@@ -196,14 +196,17 @@ Three runs on the same machine, the base in a worktree:
 |---|---|---|---|---|---|
 | `a2f653751` — what production runs | 20 | 18,080 | 27 | 1 | 14 |
 | `3c7bdb94f` — this branch before the rollback backup | 20 | 18,115 | 27 | 1 | 14 |
-| `6116675ed` — the tip | 20 | **18,118** *(expected: +3 backup tests)* | 27 | 1 | 14 |
+| `6116675ed` — the tip | 20 | **18,117** | 27 | 1 | 14 |
 
 The base figure matches what `MANIFEST_a2f65375.md` recorded for the deployed SHA, which
 is an independent check that the baseline is the one that was reviewed. For the first two
 rows the failing and erroring **ID sets are identical** — 34 IDs, `diff` clean — and the
 passed count rises by exactly the tests added (`tests/test_l5_shadow_ledger_retention.py`
-collects 37). The tip's row is the arithmetic until its own run lands; **the measured
-figure is recorded on PR #210**, and that comment is the authority, not this line.
+collects 37), and that holds for the tip too: 18,080 + 37 = 18,117, with the same 34 IDs
+and `diff` clean. All three rows are measured — the tip's row carried an arithmetic
+prediction of 18,118 before its run, which was wrong by one because two test functions
+were added and a third change modified an existing test rather than adding one. The
+measured figure is also recorded on PR #210.
 
 ## 6. What this deployment does NOT do
 
