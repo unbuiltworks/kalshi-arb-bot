@@ -159,17 +159,12 @@ def test_with_the_flag_unset_one_pinned_side_still_refuses_to_open(
     assert refuses is True
 
 
-def test_route_b_itself_is_still_default_off():
+def test_route_b_itself_is_still_default_off(monkeypatch):
     """The completion controller is inert without its own switch, so this
     commit cannot change live behaviour on a deployment that has not set
     it."""
-    import os as _os
-    was = _os.environ.pop(BC.ENABLED_ENV, None)
-    try:
-        assert BC.enabled() is False
-    finally:
-        if was is not None:
-            _os.environ[BC.ENABLED_ENV] = was
+    monkeypatch.delenv(BC.ENABLED_ENV, raising=False)
+    assert BC.enabled() is False
 
 
 def test_the_deployed_economic_constants_are_unchanged():
@@ -212,13 +207,21 @@ def test_a_venue_reported_fill_becomes_inventory_the_controller_can_see(
     assert legs["UP"] == D("0.62"), legs
 
 
-def test_the_decision_sees_the_filled_leg_and_is_not_NO_INVENTORY(tmp_path):
+def test_the_decision_is_inert_without_route_b_even_with_inventory(
+        tmp_path, monkeypatch):
+    """DEFAULT PRESERVATION, with real inventory present.
+
+    `monkeypatch.delenv` is not decoration: a full-suite run has other
+    tests that set `L5_BOOK_COMPLETION`, and the first version of this
+    test read the ambient environment and failed in the suite while
+    passing alone. A test about a DEFAULT has to establish the default.
+    """
+    monkeypatch.delenv(BC.ENABLED_ENV, raising=False)
+    assert BC.enabled() is False
     rig = Rig(tmp_path, Book("0.62", "0.63"))
     fill_first_leg(rig)
-    rec = rig.maybe_book_completion(rig.now_t)
-    # ROUTE B is default-off, so without its switch nothing is decided --
-    # which is itself the default-preservation property.
-    assert rec is None
+    assert rig.store.position(SLUG, "UP") == D("1")   # inventory IS there
+    assert rig.maybe_book_completion(rig.now_t) is None
 
 
 @pytest.fixture
