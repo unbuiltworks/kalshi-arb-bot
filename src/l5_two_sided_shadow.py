@@ -44,11 +44,14 @@ every resting modelled order on both sides.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import time
 
 from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
+from collections.abc import Mapping as _ABCMapping
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_defensive_completion as DEF
@@ -1008,6 +1011,566 @@ def bounded_hb(hb: Mapping[str, Any], *,
     return out
 
 
+# =====================================================================
+# THE DURABLE SHADOW LEDGER -- APPEND-ONLY, AND WHY (#209)
+#
+# THE HYPOTHESIS IS NO LONGER A HYPOTHESIS. The v1 `save` docstring listed
+# this file as the remaining candidate for the residual rollover cost and
+# refused to act on it until the running service reported its own number.
+# It has. Deployment 18deb02d, executor service, its own `L5_SHADOW_LEDGER`
+# line at 2026-11-08T00:06:24Z:
+#
+#   {"finalized": 2294, "pending": 0, "bytes": 292732040,
+#    "last_save_s": 6.7605, "saves_this_process": 9, "max_pending": 16}
+#
+# 2,294 scored windows, 292.7 MB, 6.76 s to write, twice a window, on a
+# network-attached volume -- and a scored report is never read back by
+# anything on the money path. Local disk at the same mean record size
+# (292732040 / 2294 = 127,608 B) reproduces the shape:
+#
+#      N | file MB | v1 save s | 2x/window | v1 load s
+#     96 |    12.2 |     0.105 |     0.209 |     0.060
+#    480 |    61.2 |     0.491 |     0.981 |     0.311
+#    960 |   122.5 |     0.637 |     1.273 |     0.460
+#   1440 |   183.7 |     0.927 |     1.854 |     0.730
+#   2294 |   292.7 |     1.772 |     3.544 |     1.428
+#
+# WHAT CHANGED. `finalized` is append-only by its own contract -- a window
+# is scored exactly once and never revised -- so it does not belong in a
+# document that is rewritten. It now lives in a log beside the manifest,
+# one JSON line per scored window, appended once:
+#
+#   <path>                   manifest: format, pending, counts. Small,
+#                            rewritten atomically; `pending` is bounded at
+#                            `max_pending`, so its size cannot grow.
+#   <path>.finalized.jsonl   append-only log, one {"market", "record"} line
+#                            per scored window. Never rewritten.
+#   <path>.finalized.idx     slug -> (offset, length). A CACHE, always
+#                            validated against the log and rebuilt from it
+#                            on any mismatch, so losing it costs a scan and
+#                            never a record.
+#
+# WHAT IS PRESERVED. Every historical record (migration reads the v1
+# document and writes each record into the log, verifies all of them are
+# present and parse, and only then replaces the manifest); restart recovery;
+# idempotency, which is now structural rather than incidental -- a slug
+# already in the log is never appended again, so a window cannot be scored
+# twice however many times `finalize` is called; and settlement scoring,
+# which is untouched.
+#
+# WHAT IT MAY NEVER DO. Block a trading decision. This is shadow telemetry:
+# `save` cannot raise, cannot refuse, and reports its own latency against
+# `SAVE_BUDGET_S` instead of enforcing anything. A failed write loses
+# modelled evidence and is counted and named; it never propagates into the
+# settle pass or the rollover.
+# =====================================================================
+
+#: on-disk manifest format. 1 is the original single-document format whose
+#: whole-file rewrite reached 6.76 s; 2 keeps `pending` in the manifest and
+#: every finalized record in the append-only log beside it.
+LEDGER_FORMAT = 2
+
+#: a save slower than this is COUNTED AND REPORTED. It is telemetry, not a
+#: limit -- nothing here may refuse to persist. The point is that the number
+#: which reached 6.76 s in production is now visible per save.
+SAVE_BUDGET_S = 0.25
+
+#: finalized records held in memory by the lazy view. The log is read by
+#: offset, so a 128 KB scored report is parsed only when something asks for
+#: it and 2,294 of them are never resident at once.
+RECORD_CACHE = 8
+
+#: index entries verified against the LOG'S OWN BYTES before the index is
+#: trusted. The index is a cache and the log is the authority, so acceptance
+#: is spot-checked rather than assumed. See `_spot_check`.
+IDX_SPOT_CHECKS = 16
+
+#: every log line is `{"market": "<slug>", "record": {...}}` and this reads
+#: the slug off the front of it, so indexing or verifying a line costs ~60
+#: bytes rather than parsing a 128 KB body.
+_MARKET_PREFIX = re.compile(br'^\{"market": "((?:[^"\\]|\\.)*)"')
+
+#: where the v1 document is kept once its records are provably in the log.
+#: It is RENAMED, not copied, so the migration costs no extra write -- and
+#: it makes a rollback to the pre-#209 code a rename back rather than a
+#: re-migration. v1 reading a v2 manifest finds no `finalized` key, starts
+#: with an empty scoring history and re-scores windows into a fresh v1
+#: document: no record is destroyed, and rolling forward recovers everything
+#: from the log, but it is not a revert. With this, it is.
+V1_BACKUP_SUFFIX = ".v1-pre209"
+
+#: `digest_state` values. The manifest carries a digest of the slug set, so
+#: the index can be checked against a file it did not write.
+DIGEST_AGREES = "SLUG_SET_AGREES_WITH_MANIFEST"
+DIGEST_REBUILT = "REBUILT_AFTER_DIGEST_MISMATCH"
+DIGEST_NONE = "NO_DIGEST_IN_MANIFEST"
+DIGEST_STALE = "MANIFEST_DIGEST_OLDER_THAN_THE_LOG"
+
+#: `integrity` values. Only the first means the log and the manifest agree.
+INTEGRITY_OK = "LOG_AGREES_WITH_MANIFEST"
+INTEGRITY_SHORT = "RECORDS_MISSING_FROM_LOG"
+INTEGRITY_UNWITNESSED = "NO_MANIFEST_COUNT_TO_CHECK_AGAINST"
+
+#: `migration_state` values.
+NATIVE = "FORMAT_2_NATIVE"
+MIGRATED = "MIGRATED_FROM_V1"
+NOT_VERIFIED = "MIGRATION_NOT_VERIFIED"
+
+
+def _fsync_dir(d: str) -> None:
+    """Make a rename durable. Best effort: some filesystems refuse it."""
+    try:
+        fd = os.open(d or ".", os.O_RDONLY)
+    except BaseException:                                      # noqa: BLE001
+        return
+    try:
+        os.fsync(fd)
+    except BaseException:                                      # noqa: BLE001
+        pass
+    finally:
+        os.close(fd)
+
+
+class FinalizedRecords(_ABCMapping):
+    """Append-only, lazily read mapping of slug -> scored report.
+
+    IT IS A MAPPING ON PURPOSE. `state["finalized"]` was a dict and the
+    ledger's own methods, the tests and the analysis tooling all read it as
+    one, so this keeps that interface and changes only where the records
+    live. `__contains__` and `__len__` answer from the offset index without
+    touching a record; `__getitem__` reads one record's bytes by offset.
+
+    `__setitem__` stages a record and `flush` appends it. A slug already in
+    the log is DROPPED rather than appended, which is what makes scoring
+    once a property of the storage and not merely of the caller's `if`.
+
+    WHEN A RECORD'S BYTES CANNOT BE READ, `__contains__` stays True and
+    `__getitem__` raises KeyError. That is deliberate: the slug WAS scored,
+    and the safety-relevant half of this ledger is refusing to score it
+    twice. Returning a fabricated record would be worse than an error.
+    """
+
+    def __init__(self, log_path: str, idx_path: str) -> None:
+        self.log_path = log_path
+        self.idx_path = idx_path
+        self._index: Dict[str, Any] = {}       # slug -> (offset, length)
+        self._dirty: Dict[str, Any] = {}       # staged, not yet appended
+        self._cache: Dict[str, Any] = {}
+        self._log_end = 0                      # after the last COMPLETE line
+        self.index_state = "EMPTY"
+        self.records_unreadable = 0
+        self.truncated_tail_bytes = 0
+        self.duplicates_dropped = 0
+        self.index_refusals = 0        # a damaged index refused at load
+        self.index_spot_mismatches = 0  # entries naming the wrong bytes
+        self.slug_mismatches = 0       # caught on a read, healed by rescan
+        #: SCORED, BUT NOT READABLE IN THE LOG. Two kinds of evidence live in
+        #: the index and they are not the same: the OFFSETS are a cache, and
+        #: the log overrules them; the SLUG SET is the record that a window
+        #: was scored at all. Rebuilding geometry from the log must not throw
+        #: that away, or a window whose bytes were destroyed would look
+        #: unscored and could be scored a second time -- and refusing to
+        #: score twice is the half of this ledger that matters. So a slug the
+        #: index named and the log no longer yields stays IN the mapping,
+        #: reads raise, and the count is reported. Fail closed, and loudly.
+        self._orphans: Dict[str, Any] = {}
+
+    # ------------------------------------------------------------ loading
+    def load(self) -> None:
+        """Index the log. Reads the small index file, or scans the log.
+
+        THE INDEX IS NEVER TRUSTED ON ITS WORD. A cache that merely ENDS at
+        the right byte can still hide a record -- drop one entry from the
+        middle and the slug it named becomes invisible, which would let an
+        already-scored window be scored again. So the index is accepted only
+        when it TILES the log (`_read_idx`) and a bounded sample of its
+        entries is verified against the log's own bytes (`_spot_check`). Any
+        failure rebuilds from the log, which is the authority, and says which
+        check refused it. A record that is on disk is never hidden by a
+        damaged index; the worst it costs is a scan.
+        """
+        self._index, self._dirty, self._cache = {}, {}, {}
+        self._log_end, self.index_state = 0, "EMPTY"
+        if not os.path.exists(self.log_path):
+            return
+        size = os.path.getsize(self.log_path)
+        idx, end = None, 0
+        try:
+            idx, end = self._read_idx()
+        except BaseException:                                  # noqa: BLE001
+            idx = None
+        if idx is None or end > size:
+            # no index, an index that does not tile the log, or one AHEAD of
+            # it: the log is the only authority, so rebuild from it.
+            self.index_refusals += 1
+            self.rescan("REBUILT_BY_SCAN", known=self._idx_slugs())
+            return
+        self._index, self._log_end = idx, end
+        bad = self._spot_check()
+        if bad:
+            # the index named bytes that are not the record it claimed.
+            self.index_spot_mismatches += bad
+            self.index_refusals += 1
+            self.rescan("REBUILT_AFTER_SPOT_CHECK_FAILED")
+            return
+        self.index_state = "READ_FROM_INDEX"
+        if end < size:
+            # records were appended and the index write was lost, or the
+            # process died mid-append. Both are read off the log itself.
+            self._scan_from(end)
+            self.index_state = "INDEX_CAUGHT_UP_WITH_LOG"
+
+    def _idx_slugs(self) -> Any:
+        """The slug column alone, geometry ignored.
+
+        A refused index is refused for its OFFSETS. The slugs it names are
+        still a record that those windows were scored, and that evidence is
+        what stops one being scored twice, so it is harvested even when the
+        arithmetic is rejected.
+        """
+        out = set()
+        try:
+            with open(self.idx_path, "r") as fh:
+                for line in fh:
+                    if not line.endswith("\n"):
+                        break        # torn by a crash: NOT an entry, and its
+                                     # slug column may be half a slug, which
+                                     # would invent a missing record
+                    parts = line[:-1].split("\t")
+                    if len(parts) != 3 or not parts[0]:
+                        continue
+                    try:
+                        int(parts[1]), int(parts[2])
+                    except BaseException:                      # noqa: BLE001
+                        continue
+                    out.add(parts[0])
+        except BaseException:                                  # noqa: BLE001
+            pass
+        return out
+
+    def rescan(self, state: str = "REBUILT_BY_SCAN", known: Any = None) -> None:
+        """Rebuild geometry from the log, KEEPING the slug set it had.
+
+        The log decides where every record is. It does not get to decide
+        which windows were scored, because a destroyed record would then
+        become a window we would score again. Slugs we knew and the log no
+        longer yields become orphans: still present, still unscorable,
+        unreadable, and counted.
+        """
+        known = set(known or ()) | set(self._index) | set(self._orphans)
+        self._index, self._cache = {}, {}
+        self._log_end = 0
+        self._scan_from(0)
+        self._orphans = {s: None for s in known if s not in self._index}
+        self.index_state = state
+        try:
+            self._write_idx()
+        except BaseException:                                  # noqa: BLE001
+            pass
+
+    def slug_digest(self) -> str:
+        """A digest of WHICH windows were scored, geometry excluded.
+
+        Written into the manifest, which is a different file written in the
+        same save, so the index can be checked against something it did not
+        produce. That is what closes the one case the tiling and the sample
+        between them cannot see: a single entry that RENAMES a slug keeps the
+        geometry and the count intact, so without an outside witness the
+        window it renamed would stay hidden until something read it.
+        """
+        h = hashlib.sha256()
+        for slug in sorted(self.keys()):
+            h.update(slug.encode("utf-8"))
+            h.update(b"\x00")
+        return h.hexdigest()
+
+    def readable_count(self) -> int:
+        """Records whose bytes are in the log, orphans excluded."""
+        extra = sum(1 for s in self._dirty if s not in self._index)
+        return len(self._index) + extra
+
+    def orphan_slugs(self) -> List[str]:
+        return sorted(self._orphans)
+
+    def _read_idx(self) -> Any:
+        """Read the index, and REFUSE it unless it tiles the log.
+
+        The entries must cover the log from byte 0, end to end, with no gap
+        and no overlap, because that is what the writer produces. A missing
+        entry leaves a gap, a shifted one leaves an overlap, and a phantom
+        one collides -- so the arithmetic alone catches the damage that an
+        endpoint check cannot see. Raising here sends `load` to the log.
+        """
+        idx: Dict[str, Any] = {}
+        spans: List[Any] = []
+        with open(self.idx_path, "r") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                slug, off, n = line.split("\t")          # ValueError -> scan
+                off, n = int(off), int(n)
+                if off < 0 or n <= 0:
+                    raise ValueError("INDEX_SPAN_NOT_POSITIVE")
+                if slug in idx:
+                    raise ValueError("INDEX_NAMES_A_SLUG_TWICE")
+                idx[slug] = (off, n)
+                spans.append((off, n))
+        cur = 0
+        for off, n in sorted(spans):
+            if off != cur:
+                raise ValueError("INDEX_DOES_NOT_TILE_THE_LOG")
+            cur = off + n
+        return idx, cur
+
+    def _slug_of(self, raw: bytes) -> str:
+        """The slug on the front of a log line, without parsing the body."""
+        m = _MARKET_PREFIX.match(raw[:512])
+        if m:
+            return str(json.loads('"' + m.group(1).decode("utf-8") + '"'))
+        return str(json.loads(raw.decode("utf-8"))["market"])
+
+    def _spot_check(self, checks: int = IDX_SPOT_CHECKS) -> int:
+        """Verify index entries against the log's bytes. Returns mismatches.
+
+        Reads the slug off the front of the line at each sampled offset, so
+        the whole check costs a few hundred bytes. The first and last entries
+        are always checked and the rest are spread evenly, which catches
+        wholesale damage at load; a single mis-paired entry that escapes the
+        sample is caught by `_read` the first time that slug is touched.
+        """
+        items = sorted(self._index.items(), key=lambda kv: kv[1][0])
+        if not items:
+            return 0
+        picks = {0, len(items) - 1}
+        step = max(1, len(items) // max(1, checks - len(picks)))
+        for i in range(0, len(items), step):
+            if len(picks) >= checks:
+                break
+            picks.add(i)
+        bad = 0
+        try:
+            with open(self.log_path, "rb") as fh:
+                for i in sorted(picks):
+                    slug, (off, n) = items[i]
+                    fh.seek(off)
+                    raw = fh.read(min(n, 512))
+                    try:
+                        if self._slug_of(raw) != slug:
+                            bad += 1
+                    except BaseException:                      # noqa: BLE001
+                        bad += 1
+        except BaseException:                                  # noqa: BLE001
+            return len(picks)                 # cannot verify -> do not trust
+        return bad
+
+    def _scan_from(self, start: int) -> None:
+        """Index the log from `start`, which must begin a line."""
+        off = start
+        tail = 0
+        with open(self.log_path, "rb") as fh:
+            fh.seek(start)
+            for raw in fh:
+                n = len(raw)
+                if not raw.endswith(b"\n"):
+                    tail = n            # a crash mid-append is NOT a record
+                    break
+                try:
+                    slug = self._slug_of(raw)
+                except BaseException:                          # noqa: BLE001
+                    self.records_unreadable += 1
+                else:
+                    if slug in self._index:
+                        self.duplicates_dropped += 1
+                    self._index.setdefault(slug, (off, n))
+                off += n
+        self._log_end = off
+        self.truncated_tail_bytes = tail
+
+    # ------------------------------------------------------------ mapping
+    def __getitem__(self, slug: str) -> Any:
+        return self._read(str(slug), healed=False)
+
+    def _read(self, slug: str, *, healed: bool) -> Any:
+        """One record, and PROOF it is the one that was asked for.
+
+        The line carries its own slug, so the index's claim is checked
+        against the record rather than believed. A mismatch means the cache
+        named the wrong bytes: the log is the authority, so the index is
+        rebuilt from it and the read is tried once more. That heals every
+        other mis-paired entry at the same time, including the ones that
+        would otherwise have made a scored window look unscored.
+        """
+        if slug in self._dirty:
+            return self._dirty[slug]
+        if slug in self._cache:
+            return self._cache[slug]
+        loc = self._index.get(slug)
+        if loc is None:
+            if slug in self._orphans:
+                self.records_unreadable += 1    # scored; bytes not in the log
+            raise KeyError(slug)
+        off, n = loc
+        try:
+            with open(self.log_path, "rb") as fh:
+                fh.seek(off)
+                raw = fh.read(n)
+            obj = json.loads(raw.decode("utf-8"))
+            got, rec = str(obj["market"]), obj["record"]
+        except BaseException:                                  # noqa: BLE001
+            self.records_unreadable += 1
+            raise KeyError(slug)
+        if got != slug:
+            self.slug_mismatches += 1
+            if healed:
+                raise KeyError(slug)
+            self.rescan("REBUILT_AFTER_SLUG_MISMATCH")
+            return self._read(slug, healed=True)
+        if len(self._cache) >= RECORD_CACHE:
+            self._cache.clear()
+        self._cache[slug] = rec
+        return rec
+
+    def __setitem__(self, slug: str, rec: Any) -> None:
+        slug = str(slug)
+        if slug in self._index or slug in self._orphans:
+            self.duplicates_dropped += 1       # scored once, by storage
+            return
+        self._dirty[slug] = rec
+
+    def __contains__(self, slug: Any) -> bool:
+        slug = str(slug)
+        return (slug in self._index or slug in self._dirty
+                or slug in self._orphans)
+
+    def __len__(self) -> int:
+        orph = sum(1 for s in self._orphans
+                   if s not in self._index and s not in self._dirty)
+        return self.readable_count() + orph
+
+    def __iter__(self) -> Any:
+        for slug in self._index:
+            yield slug
+        for slug in self._dirty:
+            if slug not in self._index:
+                yield slug
+        for slug in self._orphans:
+            if slug not in self._index and slug not in self._dirty:
+                yield slug
+
+    def __eq__(self, other: Any) -> bool:
+        """Cheap on the only comparison anything makes: `== {}`."""
+        if not isinstance(other, _ABCMapping):
+            return NotImplemented
+        if len(self) != len(other):
+            return False
+        if not len(self):
+            return True
+        return self.as_dict() == dict(other)
+
+    def __ne__(self, other: Any) -> bool:
+        eq = self.__eq__(other)
+        return eq if eq is NotImplemented else not eq
+
+    def __repr__(self) -> str:
+        return "FinalizedRecords(%d records, %s)" % (len(self),
+                                                     self.index_state)
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Every record, read back. Expensive and used only off the hot path."""
+        out: Dict[str, Any] = {}
+        for slug in self:
+            try:
+                out[slug] = self[slug]
+            except KeyError:
+                continue                       # counted in records_unreadable
+        return out
+
+    # ------------------------------------------------------------ writing
+    def absorb(self, other: Any) -> int:
+        """Stage a plain mapping someone assigned over this view."""
+        staged = 0
+        for slug, rec in dict(other or {}).items():
+            slug = str(slug)
+            if (slug in self._index or slug in self._dirty
+                    or slug in self._orphans):
+                continue
+            self._dirty[slug] = rec
+            staged += 1
+        return staged
+
+    def flush(self) -> int:
+        """Append the staged records. Returns bytes written."""
+        if not self._dirty:
+            return 0
+        pending = [(s, r) for s, r in self._dirty.items()
+                   if s not in self._index]
+        for slug in list(self._dirty):
+            if slug in self._index:
+                self._dirty.pop(slug, None)
+                self.duplicates_dropped += 1
+        if not pending:
+            return 0
+        off = self._log_end
+        added: List[Any] = []
+        written = 0
+        exists = os.path.exists(self.log_path)
+        fh = open(self.log_path, "r+b" if exists else "w+b")
+        try:
+            fh.seek(off)
+            for slug, rec in pending:
+                raw = (json.dumps({"market": slug, "record": rec},
+                                  default=str) + "\n").encode("utf-8")
+                fh.write(raw)
+                added.append((slug, off, len(raw)))
+                off += len(raw)
+                written += len(raw)
+            # anything beyond what we just wrote is a partial line from a
+            # crash mid-append. It was never acknowledged and is not a record.
+            fh.truncate()
+            fh.flush()
+            os.fsync(fh.fileno())
+        finally:
+            fh.close()
+        for slug, o, n in added:
+            self._index[slug] = (o, n)
+            self._dirty.pop(slug, None)
+        self._log_end = off
+        self.truncated_tail_bytes = 0
+        try:
+            self._write_idx()
+        except BaseException:                                  # noqa: BLE001
+            # BELT AND BRACES. The records are already appended, fsynced and
+            # indexed in memory; the index FILE is a cache whose loss costs a
+            # scan. An index failure must never be reported as a save failure.
+            pass
+        return written
+
+    def _write_idx(self) -> None:
+        """Rewrite the whole index. It is ~45 B a record: 103 KB at 2,294."""
+        tmp = self.idx_path + ".tmp"
+        try:
+            with open(tmp, "w") as fh:
+                for slug, (off, n) in self._index.items():
+                    fh.write("%s\t%d\t%d\n" % (slug, off, n))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self.idx_path)
+            _fsync_dir(os.path.dirname(self.idx_path))
+        except BaseException:                                  # noqa: BLE001
+            # the index is a cache. Losing it costs a scan, never a record.
+            try:
+                os.unlink(tmp)
+            except BaseException:                              # noqa: BLE001
+                pass
+
+    def log_bytes(self) -> Optional[int]:
+        try:
+            return os.path.getsize(self.log_path)
+        except BaseException:                                  # noqa: BLE001
+            return None
+
+
 class ShadowLedger:
     """Durable, shadow-only record of parked and finalized windows.
 
@@ -1015,69 +1578,336 @@ class ShadowLedger:
     gate, any limit or any accounting path; it exists so that scoring survives
     a restart and so that a window cannot be scored twice. It holds modelled
     numbers only.
+
+    `pending` is a small bounded map in the manifest. `finalized` is the
+    append-only log described above, reached through `FinalizedRecords`, so
+    a save costs one appended record rather than the whole history.
     """
 
     def __init__(self, path: str, *, max_pending: int = 16):
         self.path = path
         self.max_pending = int(max_pending)
-        self.state: Dict[str, Any] = {"pending": {}, "finalized": {}}
+        self.log_path = path + ".finalized.jsonl"
+        self.idx_path = path + ".finalized.idx"
+        self.format = LEDGER_FORMAT
+        self.migration_state = NATIVE
+        self.migrated_records = 0
+        self.quarantined: Optional[str] = None
+        #: the manifest's own count, an INDEPENDENT witness to how many
+        #: windows were scored. It is what makes a lost record impossible to
+        #: pass off as an empty history.
+        self.expected_finalized: Optional[int] = None
+        self.records_missing = 0
+        self.integrity = INTEGRITY_UNWITNESSED
+        self.digest_state = DIGEST_NONE
+        #: where the pre-migration v1 document was kept, so a rollback to the
+        #: pre-#209 code is a rename back and not a re-migration.
+        self.v1_backup: Optional[str] = None
+        self.v1_backup: Optional[str] = None
+        self.saves = 0
+        self.slow_saves = 0
+        self.last_save_s: Optional[float] = None
+        self.last_save_bytes: Optional[int] = None
+        self.last_save_bytes_written: Optional[int] = None
+        self.last_save_error: Optional[str] = None
+        self.load_s: Optional[float] = None
+        self._legacy_fallback = False
+        self.records = FinalizedRecords(self.log_path, self.idx_path)
+        self.state: Dict[str, Any] = {"pending": {}, "finalized": self.records}
         self.load()
 
+    # ------------------------------------------------------------- loading
     def load(self) -> None:
+        t0 = time.monotonic()
+        self.records = FinalizedRecords(self.log_path, self.idx_path)
+        self.state = {"pending": {}, "finalized": self.records}
+        try:
+            self.records.load()
+        except BaseException:                                  # noqa: BLE001
+            # a corrupt log must never stop the executor. The records that
+            # are readable are indexed; the rest are counted.
+            pass
+        got: Any = None
         try:
             with open(self.path, "r") as fh:
                 got = json.load(fh)
-            if isinstance(got, Mapping):
-                self.state = {"pending": dict(got.get("pending") or {}),
-                              "finalized": dict(got.get("finalized") or {})}
         except FileNotFoundError:
-            pass
-        except Exception:                                      # noqa: BLE001
-            # a corrupt shadow sidecar must never stop the executor; it is
-            # modelled data, and starting empty loses evidence, not money.
-            self.state = {"pending": {}, "finalized": {}}
+            got = None
+        except BaseException:                                  # noqa: BLE001
+            # a corrupt manifest is KEPT, not overwritten in place: it is the
+            # only copy of whatever it held. v1 started empty and silently
+            # left the file to be replaced by the next save.
+            self._quarantine()
+            got = None
+        if not isinstance(got, Mapping):
+            self.load_s = round(time.monotonic() - t0, 4)
+            return
+        self.state["pending"] = dict(got.get("pending") or {})
+        legacy = dict(got.get("finalized") or {})
+        fmt = got.get("format")
+        count = got.get("finalized_count")
+        digest = got.get("finalized_digest")
+        got = None                                 # release the v1 document
+        try:
+            fmt = int(fmt)
+        except BaseException:                                  # noqa: BLE001
+            fmt = 1
+        if fmt < LEDGER_FORMAT or legacy:
+            self._migrate_v1(legacy)
+        self._check_digest(digest)
+        self._check_against_manifest(count)
+        self.load_s = round(time.monotonic() - t0, 4)
 
-    def save(self) -> None:
-        """Write the ledger, and MEASURE the write.
+    def _check_digest(self, digest: Any) -> None:
+        """Check the index's slug set against the manifest's witness.
 
-        The write is instrumented because the rollover cost of issue #195
-        outlived the fix that was supposed to remove it. Bounding the log
-        line was deployed on the strength of a correlation and changed the
-        roll cost by nothing -- 6.511 s against a 6.882 s mean -- so the
-        remaining candidate is this: `finalized` is unbounded, every scored
-        report is ~156 KB, and this method rewrites the WHOLE file on every
-        park and every finalize, twice a window, on a network-attached
-        volume. That is a hypothesis and it is not being acted on until it
-        is measured, which is what these four attributes are for.
-
-        Reporting only. Nothing here changes what is written.
+        ONCE. A disagreement sends the load to the log, which is the
+        authority; if the log then still disagrees, the manifest's digest is
+        simply older than the log -- a save that appended and died before
+        rewriting the manifest -- which is benign and reported rather than
+        chased. The slug set is preserved across the rebuild, so a renamed
+        entry cannot take a scored window with it.
         """
-        tmp = self.path + ".tmp"
+        r = self.records
+        if not isinstance(r, FinalizedRecords) or not digest:
+            self.digest_state = DIGEST_NONE
+            return
+        digest = str(digest)
+        if r.slug_digest() == digest:
+            self.digest_state = DIGEST_AGREES
+            return
+        try:
+            r.rescan(DIGEST_REBUILT, known=r._idx_slugs())
+            r.index_refusals += 1
+        except BaseException:                                  # noqa: BLE001
+            pass
+        self.digest_state = (DIGEST_AGREES if r.slug_digest() == digest
+                             else DIGEST_STALE)
+
+    def _check_against_manifest(self, count: Any) -> None:
+        """Compare what the log holds against what the manifest witnessed.
+
+        A damaged index is caught by `FinalizedRecords.load`. This catches
+        the other direction -- records missing from the LOG -- and refuses to
+        let it pass silently: the log is rescanned first, because the index
+        is only a cache, and a shortfall that survives the rescan is named
+        with its size in `size_report`. Nothing is deleted and nothing is
+        repaired by guesswork; the discrepancy is reported for a human.
+        """
+        r = self.records
+        orphans = len(r.orphan_slugs()) if isinstance(r, FinalizedRecords) else 0
+        try:
+            self.expected_finalized = int(count)
+        except BaseException:                                  # noqa: BLE001
+            self.expected_finalized = None
+        exp = self.expected_finalized
+        readable = (r.readable_count() if isinstance(r, FinalizedRecords)
+                    else len(r or {}))
+        if exp is not None and readable < exp and not orphans:
+            # the log holds fewer records than the manifest witnessed and no
+            # orphan explains it. The index is only a cache, so read the log
+            # itself before believing a shortfall.
+            try:
+                r.rescan("REBUILT_FOR_COUNT_SHORTFALL")
+            except BaseException:                              # noqa: BLE001
+                pass
+            orphans = len(r.orphan_slugs())
+            readable = r.readable_count()
+        gap = 0 if exp is None else max(0, exp - readable)
+        self.records_missing = max(orphans, gap)
+        if self.records_missing:
+            self.integrity = INTEGRITY_SHORT
+        elif exp is None:
+            self.integrity = INTEGRITY_UNWITNESSED
+        else:
+            self.integrity = INTEGRITY_OK
+
+    def _quarantine(self) -> None:
+        """Move an unparseable manifest aside rather than lose it."""
+        dest = "%s.unparseable-%d" % (self.path, int(time.time()))
+        try:
+            os.replace(self.path, dest)
+            _fsync_dir(os.path.dirname(self.path))
+            self.quarantined = dest
+        except BaseException:                                  # noqa: BLE001
+            self.quarantined = None
+
+    def _migrate_v1(self, legacy: Dict[str, Any]) -> None:
+        """Move a v1 document's records into the log, then verify, then swap.
+
+        ORDER MATTERS AND IS THE WHOLE SAFETY ARGUMENT. The records are
+        written and fsynced to the log FIRST; every one of them is then read
+        back out of the log and parsed; the manifest is replaced LAST. A
+        crash at any point leaves the v1 document untouched and the migration
+        simply runs again. Nothing is deleted: the v1 document is replaced
+        only once its contents are provably readable in the log.
+        """
+        n = len(legacy)
+        slugs = set(legacy)
+        try:
+            self.records.absorb(legacy)
+            self.records.flush()
+            legacy.clear()                         # release ~1 GB of objects
+            check = FinalizedRecords(self.log_path, self.idx_path)
+            check.load()
+            missing = [s for s in slugs if s not in check]
+            unreadable = []
+            for s in slugs:
+                if s in check:
+                    try:
+                        check[s]
+                    except KeyError:
+                        unreadable.append(s)
+        except BaseException:                                  # noqa: BLE001
+            missing, unreadable = list(slugs), []
+        if missing or unreadable:
+            # DO NOT TOUCH THE V1 DOCUMENT. It is the only copy that is
+            # provably complete, and rewriting it from records we have just
+            # failed to read back would be the one way to actually lose one.
+            # Scoring carries on against the log; manifest writes are
+            # suspended, so `pending` stops being durable until a later
+            # start migrates cleanly. That is modelled evidence for one
+            # window against the whole scoring history.
+            self.migration_state = NOT_VERIFIED
+            self._legacy_fallback = True
+            self.migrated_records = 0
+            return
+        self.migration_state = MIGRATED if n else NATIVE
+        self.migrated_records = n
+        try:
+            self._write_manifest(backup=self.path + V1_BACKUP_SUFFIX if n
+                                 else None)
+        except BaseException:                                  # noqa: BLE001
+            # the log holds everything; the next save rewrites the manifest.
+            pass
+
+    # ------------------------------------------------------------- saving
+    def save(self) -> None:
+        """Append what is new. Only the small manifest is ever rewritten.
+
+        IT CANNOT RAISE AND IT CANNOT REFUSE. This is shadow telemetry on a
+        path that also rolls live windows, so a write failure is counted and
+        named in `size_report` and never propagated. Latency is measured
+        against `SAVE_BUDGET_S` and reported, not enforced.
+        """
         t0 = time.monotonic()
-        with open(tmp, "w") as fh:
-            json.dump(self.state, fh)
-        os.replace(tmp, self.path)
+        written = 0
+        err = None
+        try:
+            fin = self.state.get("finalized")
+            if fin is not self.records:
+                # someone assigned a plain mapping over the view. Take its
+                # records and put the view back, so the next save is cheap.
+                self.records.absorb(fin or {})
+                self.state["finalized"] = self.records
+            written = self.records.flush()
+            if not self._legacy_fallback:
+                written += self._write_manifest()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            err = type(exc).__name__
         self.last_save_s = round(time.monotonic() - t0, 4)
-        self.saves = int(getattr(self, "saves", 0)) + 1
+        self.last_save_bytes_written = written
+        self.last_save_error = err
+        self.saves += 1
+        if self.last_save_s > SAVE_BUDGET_S:
+            self.slow_saves += 1
         try:
             self.last_save_bytes = os.path.getsize(self.path)
         except BaseException:                                  # noqa: BLE001
             self.last_save_bytes = None
 
+    def _write_manifest(self, backup: Optional[str] = None) -> int:
+        """Write the manifest atomically; `backup` keeps what was there.
+
+        The new manifest is written and fsynced to a temp FIRST, so the
+        window in which `path` does not exist is two renames wide rather
+        than a write wide. An existing backup is never clobbered: the
+        pre-migration document is kept as it was, once.
+        """
+        doc = {
+            "format": LEDGER_FORMAT,
+            "pending": self.state.get("pending") or {},
+            "finalized_count": len(self.records),
+            "finalized_digest": self.records.slug_digest(),
+            "finalized_log": os.path.basename(self.log_path),
+            "labels": ("`finalized` lives in the append-only log named "
+                       "here, one JSON line a scored window. This manifest "
+                       "carries only `pending`, which is bounded, so a save "
+                       "costs the records it adds and not the history."),
+        }
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(doc, fh, default=str)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if backup and not os.path.exists(backup):
+            try:
+                os.replace(self.path, backup)
+                self.v1_backup = backup
+            except FileNotFoundError:
+                pass
+            except BaseException:                              # noqa: BLE001
+                # the records are already in the log and verified; a backup
+                # that cannot be taken is a convenience, not the safety net.
+                pass
+        os.replace(tmp, self.path)
+        _fsync_dir(os.path.dirname(self.path))
+        return os.path.getsize(self.path)
+
     def size_report(self) -> Dict[str, Any]:
         """What the ledger costs, for one log line per roll."""
+        r = self.records if isinstance(self.records, FinalizedRecords) else None
         return {"finalized": len(self.state.get("finalized") or {}),
                 "pending": len(self.state.get("pending") or {}),
                 "bytes": getattr(self, "last_save_bytes", None),
                 "last_save_s": getattr(self, "last_save_s", None),
                 "saves_this_process": int(getattr(self, "saves", 0)),
                 "max_pending": self.max_pending,
-                "labels": ("`finalized` has NO bound: every window ever "
-                           "scored is kept whole. Two saves a window, each "
-                           "rewriting the entire file. This line exists to "
-                           "measure whether that is the residual rollover "
-                           "cost, before anything is changed on that "
-                           "belief.")}
+                "format": self.format,
+                "log_bytes": r.log_bytes() if r is not None else None,
+                "bytes_written": self.last_save_bytes_written,
+                "save_error": self.last_save_error,
+                "slow_saves": self.slow_saves,
+                "save_budget_s": SAVE_BUDGET_S,
+                "over_budget": (self.last_save_s is not None
+                                and self.last_save_s > SAVE_BUDGET_S),
+                "load_s": self.load_s,
+                "migration_state": self.migration_state,
+                "migrated_records": self.migrated_records,
+                "manifest_writes": ("SUSPENDED_MIGRATION_NOT_VERIFIED"
+                                    if self._legacy_fallback else "ACTIVE"),
+                "pending_durable": not self._legacy_fallback,
+                "index_state": r.index_state if r is not None else None,
+                "integrity": self.integrity,
+                "digest_state": self.digest_state,
+                "expected_finalized": self.expected_finalized,
+                "records_missing": self.records_missing,
+                "index_refusals": (r.index_refusals
+                                   if r is not None else None),
+                "index_spot_mismatches": (r.index_spot_mismatches
+                                          if r is not None else None),
+                "slug_mismatches": (r.slug_mismatches
+                                    if r is not None else None),
+                "readable_records": (r.readable_count()
+                                     if r is not None else None),
+                "orphan_slugs": (len(r.orphan_slugs())
+                                 if r is not None else None),
+                "records_unreadable": (r.records_unreadable
+                                       if r is not None else None),
+                "duplicates_dropped": (r.duplicates_dropped
+                                       if r is not None else None),
+                "truncated_tail_bytes": (r.truncated_tail_bytes
+                                         if r is not None else None),
+                "quarantined": self.quarantined,
+                "v1_backup": self.v1_backup,
+                "labels": ("`finalized` is an APPEND-ONLY log, one JSON "
+                           "line a scored window, and a save appends the "
+                           "records it adds. The whole-file rewrite this "
+                           "replaced reached 292.7 MB and 6.76 s a save, "
+                           "twice a window, on the volume. `bytes` is the "
+                           "manifest; `log_bytes` is the history.")}
 
     # ------------------------------------------------------------ parking
     def park(self, report: Mapping[str, Any], *, now: float) -> Dict[str, Any]:

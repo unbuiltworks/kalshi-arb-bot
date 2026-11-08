@@ -904,6 +904,18 @@ def test_bounded_for_log_does_not_mutate_what_it_is_given():
 # slower than local disk. PLAUSIBLE IS NOT MEASURED, and the last
 # plausible hypothesis was wrong, so nothing is changed on this belief
 # until the running service reports its own number.
+#
+# IT REPORTED IT. Deployment 18deb02d, 2026-11-08T00:06:24Z:
+#
+#   L5_SHADOW_LEDGER {"finalized": 2294, "pending": 0,
+#                     "bytes": 292732040, "last_save_s": 6.7605,
+#                     "saves_this_process": 9, "max_pending": 16}
+#
+# 2,294 windows, 292.7 MB, 6.76 s a save, twice a window. The hypothesis
+# was right and the instrumentation is what established it. Issue #209
+# replaced the whole-file rewrite with an append-only log; the two tests
+# below that pinned the v1 ON-DISK FORMAT were rewritten to pin the new
+# one, and every other test in this section still holds unchanged.
 # =====================================================================
 
 def test_save_records_its_own_duration_and_size(tmp_path):
@@ -917,7 +929,10 @@ def test_save_records_its_own_duration_and_size(tmp_path):
     assert led.saves == 2
 
 
-def test_the_size_report_names_the_unbounded_half(tmp_path):
+def test_the_size_report_names_the_append_only_log(tmp_path):
+    """It used to name `finalized` as the unbounded half. It still is
+    unbounded -- nothing was deleted -- but it is no longer REWRITTEN, and
+    the line now says which file is the history and which is the manifest."""
     led = TS.ShadowLedger(str(tmp_path / "s.json"))
     led.state["finalized"] = {"w%d" % i: {"market": "w%d" % i}
                               for i in range(7)}
@@ -928,8 +943,11 @@ def test_the_size_report_names_the_unbounded_half(tmp_path):
     assert r["pending"] == 1
     assert r["max_pending"] == led.max_pending
     assert r["bytes"] == (tmp_path / "s.json").stat().st_size
+    assert r["log_bytes"] == (tmp_path / "s.json.finalized.jsonl").stat().st_size
     assert r["saves_this_process"] == 1
-    assert "NO bound" in r["labels"]
+    assert r["format"] == TS.LEDGER_FORMAT == 2
+    assert r["save_error"] is None
+    assert "APPEND-ONLY" in r["labels"]
 
 
 def test_the_size_report_works_before_any_save(tmp_path):
@@ -940,15 +958,25 @@ def test_the_size_report_works_before_any_save(tmp_path):
     assert r["saves_this_process"] == 0
 
 
-def test_the_instrumentation_changes_nothing_that_is_written(tmp_path):
-    """Reporting only: the file is byte-identical to an uninstrumented
-    dump of the same state."""
+def test_the_manifest_no_longer_carries_the_history(tmp_path):
+    """This test used to pin the v1 contract -- the file at `path` is a dump
+    of the whole state -- which is exactly the 292.7 MB that took 6.76 s to
+    write. The fix is that the history is NOT in this file any more. Every
+    record is still kept, one JSON line apiece, in the log beside it."""
     import json as _j
     led = TS.ShadowLedger(str(tmp_path / "s.json"))
     led.state["finalized"] = {"w1": {"market": "w1", "cells": [{"a": "1"}]}}
+    led.state["pending"] = {"p1": {"market": "p1"}}
     led.save()
-    on_disk = (tmp_path / "s.json").read_text()
-    assert on_disk == _j.dumps(led.state)
+    doc = _j.loads((tmp_path / "s.json").read_text())
+    assert doc["format"] == TS.LEDGER_FORMAT
+    assert doc["pending"] == {"p1": {"market": "p1"}}
+    assert "finalized" not in doc              # the history is not rewritten
+    assert doc["finalized_count"] == 1
+    log = (tmp_path / "s.json.finalized.jsonl").read_text().splitlines()
+    assert len(log) == 1
+    assert _j.loads(log[0]) == {
+        "market": "w1", "record": {"market": "w1", "cells": [{"a": "1"}]}}
 
 
 def test_the_runner_emits_the_ledger_size_once_a_settle_pass():
