@@ -2845,6 +2845,21 @@ class InventoryStore:
             "manual_unavailable_reason": manual_reason,
             "unknown_unattributed_realized": (
                 None if unreadable else str(unknown_total)),
+            # THE ACTIONABLE PART, BESIDE THE CONSERVATIVE ONE.
+            #
+            # `unknown_unattributed_realized` deliberately folds in the
+            # WHOLE pre-baseline total, because its L5 share is unknown by
+            # construction. That makes it the right number for "how much
+            # of this account can we not attribute" and the WRONG number
+            # for "how much is still fixable": read beside an
+            # L5-ledger-scoped `account_wide_realized`, the two look like
+            # an unexplained gap, and that reading cost a review cycle.
+            #
+            # So the post-baseline component is reported on its own. It is
+            # the set an attestation can still close, and it is the only
+            # one a live probe can land in.
+            "unknown_post_baseline_only": (
+                None if unreadable else str(unknown_total - (pre_dec or D(0)))),
             "unknown_detail": {
                 "post_baseline_settlements_not_attested": unattested,
                 "pre_baseline_total_l5_share_unknown": (
@@ -2852,8 +2867,22 @@ class InventoryStore:
                 "legs_priced_at_one_dollar_upper_bound": placeholder_keys,
                 "count": len(placeholder_keys),
             },
+            # THE IDENTITY HOLDS ONLY WHERE THE POPULATIONS MATCH, and
+            # it is stated with its precondition because it was stated
+            # without one and read as a balance that should tie out.
+            # `account_wide_realized` is L5-ledger-scoped;
+            # `unknown_unattributed_realized` includes pre-baseline
+            # history that is outside that scope. So the identity ties
+            # only when the pre-baseline total is zero, and
+            # `identity_holds` false below is ordinarily that, not a fault.
             "identity": ("account_wide = verified_l5 + manual + "
-                         "unknown_unattributed"),
+                         "unknown_unattributed, and ONLY where the "
+                         "pre-baseline total is zero: that total is "
+                         "inside unknown_unattributed and outside "
+                         "account_wide, so a non-zero one breaks the "
+                         "identity by construction rather than by error"),
+            "identity_precondition_met": (
+                None if unreadable else bool(pre_dec in (None, D(0)))),
             "identity_holds": bool(
                 account is not None and l5 is not None and manual is not None
                 and not unreadable and account == l5 + manual + unknown_total),
