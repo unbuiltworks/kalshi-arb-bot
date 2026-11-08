@@ -220,6 +220,19 @@ Four layers now stand between a damaged index and a hidden record:
 4. **The manifest's `finalized_count` is an independent witness.** A shortfall the log
    cannot account for is **named** — `integrity: RECORDS_MISSING_FROM_LOG` with
    `records_missing` — never passed off as a smaller history.
+5. **The manifest also carries a digest of the slug set**, which closes the one case the
+   first four cannot see between them: a single entry that **renames** a slug leaves the
+   geometry and the count intact and the 16-entry sample may not look at it, so the
+   window it renamed would stay hidden until something happened to read that slug — and
+   until then it could be parked and scored again. The manifest is a different file
+   written in the same save, so its digest is a witness the index did not produce. A
+   disagreement buys exactly **one** verification pass against the log; if the log then
+   still disagrees, the digest is simply older than the log — a save that appended and
+   died before rewriting the manifest — which is benign, reported as
+   `MANIFEST_DIGEST_OLDER_THAN_THE_LOG`, and not chased. Computing it costs **0.0005 s**
+   over 2,294 slugs, and a healthy ledger never triggers a rescan (pinned by a test, and
+   reordering the index file does not fire it either, because it witnesses the slug set
+   and not the geometry).
 
 The invariant that falls out: **the log decides where a record is; the index's slug set
 decides which windows were scored; and no damaged index can make a scored window look
@@ -243,6 +256,7 @@ half-written slug cannot invent a missing record.
 | good index (including the 16-entry spot check) | **0.0015 s** |
 | index deleted entirely → full rescan of 292.7 MB | **0.207 s** |
 | index damaged (middle entry dropped) → refused, full rescan | **0.214 s** |
+| index entry **renamed** (unsampled, at 2,294 records) → digest mismatch, rescan | **0.197 s** |
 
 The rescan is cheap because indexing reads the slug off the front of each line
 (`_slug_of`) instead of parsing a 128 KB body — so the worst case of index damage is a
@@ -251,20 +265,22 @@ record. A test pins the fast reader against a full parse on slugs containing quo
 backslashes, tabs, newlines, non-ASCII and an embedded `{"market": ...}`, so the fast
 path cannot mis-name a record.
 
-Eight further tests cover this section: the dropped middle entry, the slug swap caught
+Eleven further tests cover this section: the dropped middle entry, the slug swap caught
 at load, a swap that escapes the sample and is caught on the read, an overlapping entry,
 a phantom window reported rather than believed, the whole index deleted, a truncated
-index file, and the fast reader's agreement with a full parse.
+index file, the fast reader's agreement with a full parse, an entry that renames a slug, a stale
+manifest digest named rather than chased, and the digest staying quiet on a healthy
+ledger.
 
 ### Per-window cost, both shapes
 
 | shape | mean | max |
 |---|---|---|
-| windows settling normally (`pending` peaks at 1, as production reports) | **4.7 ms** | 8.4 ms |
+| windows settling normally (`pending` peaks at 1, as production reports) | **5.6 ms** | 10.2 ms |
 | `pending` full — 16 parked, none settling, ~2 MB of manifest a save | **35.5 ms** | 71.3 ms |
 
-Against v1's 3.06 s a window on the same disk, the pathological shape is still 86×
-cheaper than the healthy one was.
+Against v1's 3.06 s a window on the same disk, even the pathological shape is 86×
+cheaper. The healthy figure includes the slug digest written into every manifest.
 
 ---
 

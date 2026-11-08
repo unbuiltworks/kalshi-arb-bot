@@ -295,10 +295,16 @@ def test_records_appended_without_an_index_update_are_caught_up(tmp_path):
     with open(p + ".finalized.jsonl", "a") as fh:   # index write was lost
         fh.write(json.dumps({"market": "w2", "record": record("w2")}) + "\n")
     reopened = TS.ShadowLedger(p)
-    assert reopened.records.index_state == "INDEX_CAUGHT_UP_WITH_LOG"
+    # the index is caught up off the log, and then the manifest's digest --
+    # written when only w1 existed -- disagrees, which buys one verification
+    # pass against the log and is then NAMED rather than chased.
+    assert reopened.records.index_state == TS.DIGEST_REBUILT
+    assert reopened.digest_state == TS.DIGEST_STALE
     assert len(reopened.state["finalized"]) == 2
     assert reopened.state["finalized"]["w2"] == record("w2")
     assert reopened.finalize("w2", settle_up=True) is None
+    reopened.save()                                 # manifest catches up
+    assert TS.ShadowLedger(p).digest_state == TS.DIGEST_AGREES
 
 
 # =====================================================================
@@ -691,7 +697,8 @@ def test_an_index_naming_a_window_the_log_does_not_hold_is_reported(tmp_path):
 
     led = TS.ShadowLedger(p)
 
-    assert led.records.index_state == "REBUILT_BY_SCAN"
+    assert led.records.index_state == TS.DIGEST_REBUILT
+    assert led.digest_state == TS.DIGEST_STALE   # the witness disagrees too
     assert led.records.readable_count() == 4
     assert led.records.orphan_slugs() == ["phantom"]
     assert "phantom" in led.state["finalized"]
@@ -747,3 +754,60 @@ def test_the_fast_slug_reader_agrees_with_a_full_parse(tmp_path):
     assert reopened.records.readable_count() == len(odd)
     for s in odd:
         assert reopened.state["finalized"][s]["market"] == s
+
+
+def test_an_entry_that_renames_a_slug_is_caught_by_the_manifest_digest(tmp_path):
+    """THE ONE CASE TILING AND THE SAMPLE CANNOT SEE between them.
+
+    Rename a single unsampled entry and the geometry is untouched, the count
+    is untouched, and the 16-entry sample does not look at it -- so without
+    an outside witness the window it renamed would stay hidden until
+    something happened to read that slug, and until then it could be parked
+    and scored a second time. The manifest is a different file written in the
+    same save, so its digest of the slug set is that witness.
+    """
+    p = str(tmp_path / "s.json")
+    seeded(p, 200)
+    rows = idx_rows(p)
+    hidden = rows[5][0]
+    assert hidden == "w005"
+    rows[5][0] = "renamed"                         # geometry untouched
+    write_idx(p, rows)
+
+    led = TS.ShadowLedger(p)
+
+    assert led.records.index_state == TS.DIGEST_REBUILT
+    assert led.records.index_refusals == 1
+    assert "w005" in led.state["finalized"]        # NOT hidden
+    assert led.state["finalized"]["w005"] == record("w005")
+    assert led.records.readable_count() == 200
+    # and the window it would have hidden still cannot be scored twice
+    assert led.park(window("w005"), now=1.0)["state"] == TS.FINALIZED
+    assert led.finalize("w005", settle_up=True) is None
+    # the invented name is kept as an orphan and reported, never believed
+    assert led.records.orphan_slugs() == ["renamed"]
+    with pytest.raises(KeyError):
+        led.state["finalized"]["renamed"]
+    r = led.size_report()
+    assert r["integrity"] == TS.INTEGRITY_SHORT
+    assert r["records_missing"] == 1
+    assert r["digest_state"] == TS.DIGEST_STALE
+
+
+def test_the_digest_witnesses_the_slug_set_and_not_the_geometry(tmp_path):
+    """It must not fire on a healthy ledger, or it would rescan every start."""
+    p = str(tmp_path / "s.json")
+    led = seeded(p, 30)
+    assert led.records.slug_digest() == json.loads(open(p).read())["finalized_digest"]
+    for _ in range(3):
+        again = TS.ShadowLedger(p)
+        assert again.digest_state == TS.DIGEST_AGREES
+        assert again.records.index_state == "READ_FROM_INDEX"
+        assert again.records.index_refusals == 0
+        assert again.size_report()["integrity"] == TS.INTEGRITY_OK
+    # rewriting the index in a different ORDER is not a change of slug set
+    rows = idx_rows(p)
+    write_idx(p, list(reversed(rows)))
+    quiet = TS.ShadowLedger(p)
+    assert quiet.digest_state == TS.DIGEST_AGREES
+    assert quiet.records.index_state == "READ_FROM_INDEX"

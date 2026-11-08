@@ -44,6 +44,7 @@ every resting modelled order on both sides.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -1089,6 +1090,13 @@ IDX_SPOT_CHECKS = 16
 #: bytes rather than parsing a 128 KB body.
 _MARKET_PREFIX = re.compile(br'^\{"market": "((?:[^"\\]|\\.)*)"')
 
+#: `digest_state` values. The manifest carries a digest of the slug set, so
+#: the index can be checked against a file it did not write.
+DIGEST_AGREES = "SLUG_SET_AGREES_WITH_MANIFEST"
+DIGEST_REBUILT = "REBUILT_AFTER_DIGEST_MISMATCH"
+DIGEST_NONE = "NO_DIGEST_IN_MANIFEST"
+DIGEST_STALE = "MANIFEST_DIGEST_OLDER_THAN_THE_LOG"
+
 #: `integrity` values. Only the first means the log and the manifest agree.
 INTEGRITY_OK = "LOG_AGREES_WITH_MANIFEST"
 INTEGRITY_SHORT = "RECORDS_MISSING_FROM_LOG"
@@ -1250,6 +1258,22 @@ class FinalizedRecords(_ABCMapping):
             self._write_idx()
         except BaseException:                                  # noqa: BLE001
             pass
+
+    def slug_digest(self) -> str:
+        """A digest of WHICH windows were scored, geometry excluded.
+
+        Written into the manifest, which is a different file written in the
+        same save, so the index can be checked against something it did not
+        produce. That is what closes the one case the tiling and the sample
+        between them cannot see: a single entry that RENAMES a slug keeps the
+        geometry and the count intact, so without an outside witness the
+        window it renamed would stay hidden until something read it.
+        """
+        h = hashlib.sha256()
+        for slug in sorted(self.keys()):
+            h.update(slug.encode("utf-8"))
+            h.update(b"\x00")
+        return h.hexdigest()
 
     def readable_count(self) -> int:
         """Records whose bytes are in the log, orphans excluded."""
@@ -1566,6 +1590,7 @@ class ShadowLedger:
         self.expected_finalized: Optional[int] = None
         self.records_missing = 0
         self.integrity = INTEGRITY_UNWITNESSED
+        self.digest_state = DIGEST_NONE
         self.saves = 0
         self.slow_saves = 0
         self.last_save_s: Optional[float] = None
@@ -1608,6 +1633,7 @@ class ShadowLedger:
         legacy = dict(got.get("finalized") or {})
         fmt = got.get("format")
         count = got.get("finalized_count")
+        digest = got.get("finalized_digest")
         got = None                                 # release the v1 document
         try:
             fmt = int(fmt)
@@ -1615,8 +1641,35 @@ class ShadowLedger:
             fmt = 1
         if fmt < LEDGER_FORMAT or legacy:
             self._migrate_v1(legacy)
+        self._check_digest(digest)
         self._check_against_manifest(count)
         self.load_s = round(time.monotonic() - t0, 4)
+
+    def _check_digest(self, digest: Any) -> None:
+        """Check the index's slug set against the manifest's witness.
+
+        ONCE. A disagreement sends the load to the log, which is the
+        authority; if the log then still disagrees, the manifest's digest is
+        simply older than the log -- a save that appended and died before
+        rewriting the manifest -- which is benign and reported rather than
+        chased. The slug set is preserved across the rebuild, so a renamed
+        entry cannot take a scored window with it.
+        """
+        r = self.records
+        if not isinstance(r, FinalizedRecords) or not digest:
+            self.digest_state = DIGEST_NONE
+            return
+        digest = str(digest)
+        if r.slug_digest() == digest:
+            self.digest_state = DIGEST_AGREES
+            return
+        try:
+            r.rescan(DIGEST_REBUILT, known=r._idx_slugs())
+            r.index_refusals += 1
+        except BaseException:                                  # noqa: BLE001
+            pass
+        self.digest_state = (DIGEST_AGREES if r.slug_digest() == digest
+                             else DIGEST_STALE)
 
     def _check_against_manifest(self, count: Any) -> None:
         """Compare what the log holds against what the manifest witnessed.
@@ -1756,6 +1809,7 @@ class ShadowLedger:
             "format": LEDGER_FORMAT,
             "pending": self.state.get("pending") or {},
             "finalized_count": len(self.records),
+            "finalized_digest": self.records.slug_digest(),
             "finalized_log": os.path.basename(self.log_path),
             "labels": ("`finalized` lives in the append-only log named "
                        "here, one JSON line a scored window. This manifest "
@@ -1796,6 +1850,7 @@ class ShadowLedger:
                 "pending_durable": not self._legacy_fallback,
                 "index_state": r.index_state if r is not None else None,
                 "integrity": self.integrity,
+                "digest_state": self.digest_state,
                 "expected_finalized": self.expected_finalized,
                 "records_missing": self.records_missing,
                 "index_refusals": (r.index_refusals
