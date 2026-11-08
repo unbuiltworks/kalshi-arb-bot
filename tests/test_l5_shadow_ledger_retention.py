@@ -86,6 +86,14 @@ def test_a_v1_document_is_migrated_record_for_record(tmp_path):
     assert "finalized" not in doc
     assert doc["finalized_count"] == 25
     assert len(log_lines(p)) == 25
+    # THE V1 DOCUMENT IS KEPT, byte for byte, by rename rather than copy --
+    # so rolling the code back to pre-#209 is a rename back, not a
+    # re-migration. v1 reading a v2 manifest finds no `finalized` key and
+    # would start with an empty scoring history.
+    backup = p + TS.V1_BACKUP_SUFFIX
+    assert led.v1_backup == backup
+    assert json.loads(open(backup).read())["finalized"].keys() == recs.keys()
+    assert led.size_report()["v1_backup"] == backup
 
 
 def test_migration_does_not_rescore_a_migrated_window(tmp_path):
@@ -118,7 +126,7 @@ def test_the_records_reach_the_log_before_the_manifest_is_replaced(tmp_path, mon
 
     boom = {"n": 0}
 
-    def explode(self):
+    def explode(self, backup=None):
         boom["n"] += 1
         raise OSError("volume went away")
 
@@ -811,3 +819,35 @@ def test_the_digest_witnesses_the_slug_set_and_not_the_geometry(tmp_path):
     quiet = TS.ShadowLedger(p)
     assert quiet.digest_state == TS.DIGEST_AGREES
     assert quiet.records.index_state == "READ_FROM_INDEX"
+
+
+def test_the_v1_backup_is_byte_exact_and_never_clobbered(tmp_path):
+    """It is the rollback target, so it must be what was there -- and a
+    later migration must not overwrite it with something thinner."""
+    p = str(tmp_path / "s.json")
+    recs = {"w%d" % i: record("w%d" % i, pad=120) for i in range(6)}
+    v1_document(p, recs, pending={"p1": {"market": "p1", "parked_at": 2.0}})
+    original = open(p).read()
+
+    led = TS.ShadowLedger(p)
+
+    backup = p + TS.V1_BACKUP_SUFFIX
+    assert open(backup).read() == original         # byte for byte
+    assert led.pending_slugs() == ["p1"]
+    # a second v1 document appearing at `path` must not take the backup's place
+    v1_document(p, {"later": record("later")})
+    second = TS.ShadowLedger(p)
+    assert second.migration_state == TS.MIGRATED
+    assert open(backup).read() == original         # still the FIRST one
+    assert len(second.state["finalized"]) == 7
+
+
+def test_the_backup_is_a_convenience_and_not_load_bearing(tmp_path):
+    p = str(tmp_path / "s.json")
+    v1_document(p, {"w%d" % i: record("w%d" % i) for i in range(5)})
+    TS.ShadowLedger(p)
+    os.unlink(p + TS.V1_BACKUP_SUFFIX)
+    led = TS.ShadowLedger(p)
+    assert len(led.state["finalized"]) == 5
+    assert led.size_report()["integrity"] == TS.INTEGRITY_OK
+    assert led.v1_backup is None                   # nothing to report

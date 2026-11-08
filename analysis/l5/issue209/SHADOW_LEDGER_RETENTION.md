@@ -284,6 +284,39 @@ cheaper. The healthy figure includes the slug digest written into every manifest
 
 ---
 
+## 4c. Rollback is a rename, because it was not symmetric
+
+Writing the deployment manifest surfaced this. Once the migration replaces the v1
+document, rolling the code back to the pre-#209 commit leaves v1 reading a **v2**
+manifest: it finds no `finalized` key, starts with an **empty scoring history**, and
+re-scores windows into a fresh v1 document. Nothing is destroyed — the log is untouched
+and rolling forward recovers everything — but it is a re-migration, not a revert, and a
+rolled-back process would duplicate scoring in the meantime.
+
+So the migration now **renames** the v1 document aside to `…json.v1-pre209` instead of
+overwriting it. A rename costs no extra write, and it is taken only once its records are
+provably readable in the log. The new manifest is written and fsynced to a temp first, so
+the window in which the manifest path does not exist is two renames wide rather than a
+write wide, and an existing backup is never clobbered.
+
+Verified at the production record count:
+
+```
+v1 document: 292.7 MB
+migration 2.36s state=MIGRATED_FROM_V1 records=2294
+backup: two_sided_shadow.json.v1-pre209  exists: True  byte-exact: True
+
+rollback WITHOUT restoring: v1 sees finalized=0      <-- would rescore
+rollback WITH the rename:   v1 sees finalized=2294   <-- history intact
+roll forward again: MIGRATED_FROM_V1 records=2294 log_lines=2294  (no duplication)
+```
+
+The backup is a convenience, not the safety net — the log is — and a test pins that
+deleting it changes nothing. It costs 292.7 MB on a 50 GB volume holding 2.67 GB, so
+total footprint after migration is ~586 MB until someone chooses to remove it.
+
+---
+
 ## 5. What this does not do
 
 * It does not touch scoring, settlement, fills, risk, accounting or the watchdog.

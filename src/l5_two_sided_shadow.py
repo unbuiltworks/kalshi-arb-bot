@@ -1090,6 +1090,15 @@ IDX_SPOT_CHECKS = 16
 #: bytes rather than parsing a 128 KB body.
 _MARKET_PREFIX = re.compile(br'^\{"market": "((?:[^"\\]|\\.)*)"')
 
+#: where the v1 document is kept once its records are provably in the log.
+#: It is RENAMED, not copied, so the migration costs no extra write -- and
+#: it makes a rollback to the pre-#209 code a rename back rather than a
+#: re-migration. v1 reading a v2 manifest finds no `finalized` key, starts
+#: with an empty scoring history and re-scores windows into a fresh v1
+#: document: no record is destroyed, and rolling forward recovers everything
+#: from the log, but it is not a revert. With this, it is.
+V1_BACKUP_SUFFIX = ".v1-pre209"
+
 #: `digest_state` values. The manifest carries a digest of the slug set, so
 #: the index can be checked against a file it did not write.
 DIGEST_AGREES = "SLUG_SET_AGREES_WITH_MANIFEST"
@@ -1591,6 +1600,10 @@ class ShadowLedger:
         self.records_missing = 0
         self.integrity = INTEGRITY_UNWITNESSED
         self.digest_state = DIGEST_NONE
+        #: where the pre-migration v1 document was kept, so a rollback to the
+        #: pre-#209 code is a rename back and not a re-migration.
+        self.v1_backup: Optional[str] = None
+        self.v1_backup: Optional[str] = None
         self.saves = 0
         self.slow_saves = 0
         self.last_save_s: Optional[float] = None
@@ -1762,7 +1775,8 @@ class ShadowLedger:
         self.migration_state = MIGRATED if n else NATIVE
         self.migrated_records = n
         try:
-            self._write_manifest()
+            self._write_manifest(backup=self.path + V1_BACKUP_SUFFIX if n
+                                 else None)
         except BaseException:                                  # noqa: BLE001
             # the log holds everything; the next save rewrites the manifest.
             pass
@@ -1804,7 +1818,14 @@ class ShadowLedger:
         except BaseException:                                  # noqa: BLE001
             self.last_save_bytes = None
 
-    def _write_manifest(self) -> int:
+    def _write_manifest(self, backup: Optional[str] = None) -> int:
+        """Write the manifest atomically; `backup` keeps what was there.
+
+        The new manifest is written and fsynced to a temp FIRST, so the
+        window in which `path` does not exist is two renames wide rather
+        than a write wide. An existing backup is never clobbered: the
+        pre-migration document is kept as it was, once.
+        """
         doc = {
             "format": LEDGER_FORMAT,
             "pending": self.state.get("pending") or {},
@@ -1821,6 +1842,16 @@ class ShadowLedger:
             json.dump(doc, fh, default=str)
             fh.flush()
             os.fsync(fh.fileno())
+        if backup and not os.path.exists(backup):
+            try:
+                os.replace(self.path, backup)
+                self.v1_backup = backup
+            except FileNotFoundError:
+                pass
+            except BaseException:                              # noqa: BLE001
+                # the records are already in the log and verified; a backup
+                # that cannot be taken is a convenience, not the safety net.
+                pass
         os.replace(tmp, self.path)
         _fsync_dir(os.path.dirname(self.path))
         return os.path.getsize(self.path)
@@ -1870,6 +1901,7 @@ class ShadowLedger:
                 "truncated_tail_bytes": (r.truncated_tail_bytes
                                          if r is not None else None),
                 "quarantined": self.quarantined,
+                "v1_backup": self.v1_backup,
                 "labels": ("`finalized` is an APPEND-ONLY log, one JSON "
                            "line a scored window, and a save appends the "
                            "records it adds. The whole-file rewrite this "
