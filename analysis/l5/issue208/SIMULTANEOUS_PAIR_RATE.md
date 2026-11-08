@@ -203,3 +203,42 @@ Every fill above is a **queue model**, not a fill. The pessimistic arm is a
 lower bound by construction and still a model of our place in a queue the
 venue does not publish. Which arm we actually live in is exactly what one
 live window would tell us, and it is worth more than any further sweep.
+
+---
+
+# CORRECTION: depth 0 and depth 1 are not live options
+
+Checked against the **live builder** rather than the replay, on the same
+0.62/0.63 one-tick book:
+
+| depth | pair cost | `build_orders` verdict |
+|--:|--:|---|
+| 0 | 0.99 | **refused — `PAIR_COST_ABOVE_CAP`** |
+| 1 | 0.97 | **refused — `PAIR_COST_ABOVE_CAP`** |
+| **2** | **0.95** | ok, edge 0.05, `net_if_maker` 0.05584375 |
+| 3 | 0.93 | ok, edge 0.07, `net_if_maker` 0.07582875 |
+
+**So the depth-0 and depth-1 rows of the replay tables above describe
+entries the live engine would never have placed.** The 0.96 fee-safe cap
+refuses them before any order exists.
+
+This corrects two things I said:
+
+1. **"Depth 0 gives a 65% pair rate, so it is the better choice for
+   measuring pair economics"** — there is no depth-0 probe to run. The
+   comparison was between a live option and an inadmissible one.
+2. **"Depth 2 is a preference over depth 0 for pair economics"** — it is
+   not a preference. **Depth 2 is the shallowest admissible depth** under
+   a cap we already enforce. Depth 3 is the only alternative.
+
+The replay's depth-0 numbers remain useful for one thing only: they show
+what the cap is protecting us from. `mean pair cost 0.9899` is precisely
+the 0.99 the builder rejects.
+
+**What survives unchanged:** the ordering across admissible depths (d=3
+better per entry than d=2), the near-invariance of residual cost, the
+refutation of asymmetric depth, and the point that a completed pair leaves
+no inventory for the completion controller to judge. The probe-depth
+recommendation is unchanged at **2** — now for the stronger reason that it
+is the minimum the engine will accept, with depth 3 as the only variant
+worth comparing later.
