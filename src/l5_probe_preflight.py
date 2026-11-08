@@ -218,20 +218,39 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
     realized = hb.get("realized") or {}
     acct = hb.get("accounting") or {}
 
-    unknown_keys = [str(k) for k in (realized.get("unknown_basis_keys")
-                                     or [])]
-    hit = [k for k in unknown_keys
-           if any(k.startswith(m + "|") or k == m for m in want)]
-    rows.append(_row("probe_market_absent_from_unknown_basis_keys",
-                     not hit, offending=hit))
+    # ABSENT IS NOT CLEAN, and this module failed that test. An empty
+    # heartbeat has no `unknown_basis_keys`, so "not hit" was true and the
+    # audit returned MEASURED on no evidence at all -- silence read as a
+    # clean bill of health, which is the worst failure mode available to a
+    # module whose whole job is to refuse. So the ABSENCE of the field is
+    # UNKNOWN and only a field that is PRESENT AND EMPTY is a pass.
+    if "unknown_basis_keys" not in realized:
+        rows.append(_row("probe_market_absent_from_unknown_basis_keys",
+                         UNKNOWN,
+                         why="heartbeat carries no realized."
+                             "unknown_basis_keys to check against"))
+    else:
+        unknown_keys = [str(k) for k in (realized.get("unknown_basis_keys")
+                                         or [])]
+        hit = [k for k in unknown_keys
+               if any(k.startswith(m + "|") or k == m for m in want)]
+        rows.append(_row("probe_market_absent_from_unknown_basis_keys",
+                         not hit, offending=hit))
 
-    detail = (acct.get("unknown_detail") or {})
-    unattested = [dict(r) for r in
-                  (detail.get("post_baseline_settlements_not_attested")
-                   or [])]
-    bad = [r for r in unattested if str(r.get("market")) in want]
-    rows.append(_row("probe_market_not_priced_at_upper_bound", not bad,
-                     offending=bad))
+    detail = acct.get("unknown_detail")
+    if not isinstance(detail, Mapping) or (
+            "post_baseline_settlements_not_attested" not in detail):
+        rows.append(_row("probe_market_not_priced_at_upper_bound", UNKNOWN,
+                         why="heartbeat carries no accounting."
+                             "unknown_detail.post_baseline_settlements_"
+                             "not_attested to check against"))
+    else:
+        unattested = [dict(r) for r in
+                      (detail.get("post_baseline_settlements_not_attested")
+                       or [])]
+        bad = [r for r in unattested if str(r.get("market")) in want]
+        rows.append(_row("probe_market_not_priced_at_upper_bound", not bad,
+                         offending=bad))
 
     held, priced = [], []
     for m in want:
@@ -273,7 +292,14 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
 
     failed = [r for r in rows if r["ok"] is False]
     unk = [r for r in rows if r["ok"] is UNKNOWN]
-    basis_ok = all(r["ok"] is True for r in rows[:3])
+    # EVERY basis row must be a positive True. An UNKNOWN among them is
+    # not a pass, which is the fix above expressed in the verdict.
+    basis_rows = [r for r in rows if r["check"] in (
+        "probe_market_absent_from_unknown_basis_keys",
+        "probe_market_not_priced_at_upper_bound",
+        "every_filled_leg_has_a_cost_basis")]
+    basis_ok = (len(basis_rows) == 3
+                and all(r["ok"] is True for r in basis_rows))
     if not held:
         verdict = "INCOMPLETE"
     elif basis_ok:
