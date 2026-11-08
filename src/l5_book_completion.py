@@ -577,17 +577,48 @@ def decide(*, market: str, held_side: str,
             if str(r.get("side", "")).upper() == want
             and str(r.get("market") or market) == str(market)]
     if mine:
-        best = min((_d(r.get("price")) or D(9)) for r in mine)
-        if best is not None:
-            rest_own = best if want == "UP" else (D(1) - best)
-            if own >= rest_own:
-                return _no("ALREADY_RESTING_AT_OR_BETTER",
-                           resting_own=str(rest_own), quote_own=str(own),
-                           **rec)
-            rec["replaces_resting_own"] = str(rest_own)
-            return dict(rec, action="REPRICE", ok=True,
-                        reason="CHEAPER_THAN_RESTING", leg=leg,
-                        key=decision_key(market, want, need, px))
+        # AN UNREADABLE RESTING PRICE FAILS CLOSED, and it did not used to.
+        #
+        # This read was `min((_d(r.get("price")) or D(9)) for r in mine)`.
+        # The `or D(9)` sentinel was meant to stand for "so dear that ours
+        # is better", but the comparison happens in OWN terms and the
+        # conversion is side-dependent, so 9 is only dear on one side:
+        #
+        #   want UP    rest_own = 9       own >= 9 is False  -> REPRICE
+        #   want DOWN  rest_own = 1 - 9   own >= -8 is True   -> HOLD
+        #
+        # So a row whose price could not be read refused safely when we
+        # wanted DOWN and, when we wanted UP, CANCELLED AND REPLACED an
+        # order whose price was unknown -- forfeiting its queue position,
+        # possibly chasing upward, which is the one thing the downward-only
+        # rule exists to forbid, and recording `CHEAPER_THAN_RESTING` with
+        # nothing to support it. The asymmetry was an accident of the
+        # sentinel, and the safe branch was the accidental one.
+        #
+        # Declining is the safe direction here because the order ALREADY
+        # EXISTS at the venue: leaving it resting may fill, while replacing
+        # it destroys a position we cannot evaluate. It is the same
+        # fail-closed reasoning as the unreadable book age above.
+        #
+        # (`if best is not None` was unreachable under the sentinel. Had it
+        # ever been reached it would have fallen through to COMPLETE, which
+        # is a DUPLICATE order against a row we knew was resting.)
+        prices = [_d(r.get("price")) for r in mine]
+        if any(p is None for p in prices):
+            return _no("RESTING_PRICE_UNREADABLE",
+                       resting_rows=len(mine),
+                       unreadable_rows=sum(1 for p in prices if p is None),
+                       **rec)
+        best = min(prices)
+        rest_own = best if want == "UP" else (D(1) - best)
+        if own >= rest_own:
+            return _no("ALREADY_RESTING_AT_OR_BETTER",
+                       resting_own=str(rest_own), quote_own=str(own),
+                       **rec)
+        rec["replaces_resting_own"] = str(rest_own)
+        return dict(rec, action="REPRICE", ok=True,
+                    reason="CHEAPER_THAN_RESTING", leg=leg,
+                    key=decision_key(market, want, need, px))
     return dict(rec, action="COMPLETE", ok=True,
                 reason=("PAIR_BEATS_CARRY" if rec["within_preferred_target"]
                         else "RISK_REDUCING_COMPLETION"),
