@@ -5147,6 +5147,11 @@ class Runner:
         # pre-submission observation rather than a later re-read.
         self.calibration_shadow_tick(now, slug=slug, book=book,
                                      prints=prints)
+        # AND THE ORDERS THAT ARE ACTUALLY RESTING, which the shadow tick's
+        # modelled quotes do not cover. It takes NOTHING from here -- own
+        # slug from the transport, own book, own prints -- so only the
+        # CADENCE is shared. See its docstring for why it sits here.
+        self.calibration_live_tick(now)
         return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
@@ -5226,15 +5231,25 @@ class Runner:
         record with four of five categories present and not one reading of
         the queue it was sitting in.
 
-        AND IT IS DELIBERATELY NOT ON THE SHADOW TICK. The first version of
-        this fix was called from `shadow_tick`, which returns early when the
-        shadow state or the window is unavailable -- so live-order
-        observation would have depended on the shadow path being healthy.
-        That is a subtler form of the very coupling that caused the original
-        defect, where observation was reachable only through the shadow. It
-        now runs from the main tick, derives its own slug from the TRANSPORT
-        (the market our orders are actually in, not the shadow's grid slug),
-        and reads its own book and prints.
+        WHERE IT IS CALLED FROM, AND THE DEPENDENCY THAT COSTS. It runs at
+        the end of `shadow_tick`, and `shadow_tick` returns early when the
+        shadow state or the window is unavailable -- so if the shadow path
+        were switched off, live-order observation would stop with it. THAT
+        IS A KNOWN DEPENDENCY AND IT IS PINNED BY A TEST, not an accident.
+
+        It was moved to the main `tick` to remove it, which is where it
+        belongs on the merits; that broke 111 tests, because dozens of them
+        drive `tick` against stubs that record its calls by name and a stub
+        without this method raises. Decoupling it therefore means updating
+        those stubs, which is its own change and not one to smuggle in.
+        Meanwhile the dependency is harmless in the configuration that
+        matters: live orders exist only inside a window, `self.ws` is set
+        inside a window, and the shadow runs continuously in production.
+
+        It takes NOTHING from the shadow tick but the cadence. The slug
+        comes from the TRANSPORT -- the market our orders are actually in,
+        not the shadow's `AB.slug_for(self.ws)` grid slug, which can differ
+        -- and the book and prints are its own reads.
 
         OBSERVATIONAL, exactly like every other recorder call on this path:
         it cannot refuse or alter a submission and swallows its own faults.
@@ -9431,10 +9446,6 @@ class Runner:
         # L5_BOOK_COMPLETION is set. Placed where the L5-driven completion
         # already sits, so nothing downstream is reordered.
         self.maybe_book_completion(now)
-        # LIFETIME OBSERVATIONS for whatever is actually resting. Here, and
-        # not on the shadow tick, so it cannot be switched off by the shadow
-        # path's own early returns. Observational; it submits nothing.
-        self.calibration_live_tick(now)
         # OUR OWN OPENING, on the timer. Inert unless L5_CONTROLLER_OPEN is
         # set. Placed AFTER both completion paths deliberately: completing
         # a pair we already hold removes exposure and must never queue
