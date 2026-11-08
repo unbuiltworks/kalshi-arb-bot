@@ -5147,11 +5147,6 @@ class Runner:
         # pre-submission observation rather than a later re-read.
         self.calibration_shadow_tick(now, slug=slug, book=book,
                                      prints=prints)
-        # AND THE ORDERS THAT ARE ACTUALLY RESTING, which the shadow tick's
-        # modelled quotes do not cover. It takes NOTHING from here -- own
-        # slug from the transport, own book, own prints -- so only the
-        # CADENCE is shared. See its docstring for why it sits here.
-        self.calibration_live_tick(now)
         return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
@@ -5231,25 +5226,25 @@ class Runner:
         record with four of five categories present and not one reading of
         the queue it was sitting in.
 
-        WHERE IT IS CALLED FROM, AND THE DEPENDENCY THAT COSTS. It runs at
-        the end of `shadow_tick`, and `shadow_tick` returns early when the
-        shadow state or the window is unavailable -- so if the shadow path
-        were switched off, live-order observation would stop with it. THAT
-        IS A KNOWN DEPENDENCY AND IT IS PINNED BY A TEST, not an accident.
+        IT RUNS FROM THE MAIN TICK, AND THAT IS THE POINT. The first
+        version was called from `shadow_tick`, which returns early on
+        `not cs or self.ws is None`; `calibration_shadow_tick` additionally
+        bails on `_shadow_off`. Either would have stood between a live order
+        and the record of the queue it sat in -- the same shape as the
+        defect this method exists to close, where observation was reachable
+        only through the shadow.
 
-        It was moved to the main `tick` to remove it, which is where it
-        belongs on the merits; that broke 111 tests, because dozens of them
-        drive `tick` against stubs that record its calls by name and a stub
-        without this method raises. Decoupling it therefore means updating
-        those stubs, which is its own change and not one to smuggle in.
-        Meanwhile the dependency is harmless in the configuration that
-        matters: live orders exist only inside a window, `self.ws` is set
-        inside a window, and the shadow runs continuously in production.
+        I then claimed moving it here broke 111 tests and reverted it. It
+        broke NONE: both runs behind that claim were contaminated by my own
+        edits to the runner while they were in flight. A clean run of the
+        relocated tree is byte-identical to the baseline.
 
-        It takes NOTHING from the shadow tick but the cadence. The slug
-        comes from the TRANSPORT -- the market our orders are actually in,
-        not the shadow's `AB.slug_for(self.ws)` grid slug, which can differ
-        -- and the book and prints are its own reads.
+        SELF-SUFFICIENT. The slug comes from the TRANSPORT -- the market our
+        orders are actually in, not the shadow's `AB.slug_for(self.ws)` grid
+        slug, which can differ -- and the book and prints are its own reads.
+        Each guard returns before anything is read, so an object that is not
+        a fully built Runner cannot be made to raise here; about forty tests
+        invoke `tick`, and this is why they are unaffected.
 
         OBSERVATIONAL, exactly like every other recorder call on this path:
         it cannot refuse or alter a submission and swallows its own faults.
@@ -9454,6 +9449,14 @@ class Runner:
         # slot a completion needed.
         self.maybe_controller_open(now)
         _sc.mark("maybe_ts_completion")
+        # LIFETIME OBSERVATIONS FOR WHATEVER IS ACTUALLY RESTING, and here
+        # rather than on the shadow tick so that no shadow guard stands
+        # between a live order and the record of the queue it sat in. It is
+        # MARKED because this module exists for exactly that reason: the
+        # 93-second rollover hid in an unmeasured gap, so a new stage is
+        # declared and timed rather than folded into its neighbour's cost.
+        self.calibration_live_tick(now)
+        _sc.mark("calibration_live_tick")
         # AFTER the completion decision and BEFORE the terminal sweep. After,
         # because a completion that can act on the book as it stands should
         # do so rather than be cancelled first; before, because a quote the

@@ -485,31 +485,23 @@ def test_the_live_tick_runs_even_with_no_recorder_at_all(tmp_path):
     assert not r.stats
 
 
-def test_the_live_tick_runs_from_the_shadow_tick_and_this_is_a_known_cost():
-    """PINNED AS A DEPENDENCY, not left as an accident.
+def test_the_live_tick_is_independent_of_the_shadow_dispatch():
+    """IT WAS NOT, AND THE REVERT THAT MADE IT SO WAS MY MISTAKE.
 
-    `shadow_tick` returns early when the shadow state or the window is
-    unavailable, so switching the shadow path off would stop live-order
-    observation with it. Moving the call to the main `tick` removes that --
-    and broke 111 tests, because dozens drive `tick` against stubs that
-    record its calls by name and a stub without the method raises. So the
-    dependency stands, deliberately, until those stubs are updated.
+    The call sat at the end of `shadow_tick`, which returns early when the
+    shadow state or the window is unavailable. I moved it to the main
+    `tick`, claimed that broke 111 tests, and reverted it. It broke NONE:
+    both runs behind that claim were contaminated by my own edits to the
+    runner while they were in flight, and a clean run of the relocated tree
+    is byte-identical to the baseline.
 
-    It is harmless in the configuration that matters: live orders exist only
-    inside a window, `self.ws` is set inside a window, and the shadow runs
-    continuously in production.
-
-    If this is ever decoupled, this test should assert the new site rather
-    than be deleted.
+    The detailed contracts live in `test_l5_live_observer_independence.py`;
+    this keeps the wiring file honest about where the call is.
     """
     assert "self.calibration_live_tick(now)" in inspect.getsource(
-        RUN.Runner.shadow_tick)
-    assert "self.calibration_live_tick(" not in inspect.getsource(
         RUN.Runner.tick)
-    # and it takes NOTHING from the shadow tick but the cadence
-    fn = inspect.getsource(RUN.Runner.calibration_live_tick)
-    assert "self.transport" in fn and "market_slug" in fn
-    assert "self.book.snapshot(" in fn and "self.book.trades(" in fn
+    assert "calibration_live_tick" not in inspect.getsource(
+        RUN.Runner.shadow_tick)
 
 
 def test_it_takes_the_slug_from_the_transport_not_the_shadow_grid(tmp_path):
