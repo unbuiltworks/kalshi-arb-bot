@@ -311,7 +311,12 @@ def test_audit_never_returns_MEASURED_without_a_priced_filled_leg():
                        latency=LAT)
         assert out["verdict"] != "MEASURED" or not pos, (pos, legs, out)
         if out["verdict"] == "MEASURED":
-            assert out["ok"] is True
+            # `ok` additionally needs fees and restart evidence, which this
+            # minimal fixture does not supply; the BASIS is what MEASURED
+            # asserts, and that is the property under test here.
+            assert not [r for r in out["checks"]
+                        if r["ok"] is False
+                        and "basis" in r["check"]]
 
 
 def test_preflight_fails_closed_when_the_recorder_cannot_calibrate():

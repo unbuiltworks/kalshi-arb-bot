@@ -201,6 +201,9 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
           positions: Mapping[str, Any],
           fills: Optional[Sequence[Mapping[str, Any]]] = None,
           latency: Optional[Mapping[str, Any]] = None,
+          live_orders: Optional[Mapping[str, Any]] = None,
+          restarts: Optional[int] = None,
+          fees: Optional[Mapping[str, Any]] = None,
           max_book_age_s: Any = "2.0") -> Dict[str, Any]:
     """Is the probe's result a MEASUREMENT, or is it UNINTERPRETABLE?
 
@@ -270,6 +273,67 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
     rows.append(_row("every_fill_carries_a_venue_order_id",
                      bool(fills) and all(vids),
                      fills=len(fills or []), missing=vids.count("")))
+    # EVERY VENUE ID MUST BE DISTINCT. Two fills reported under one id is
+    # either a double-booked poll or two orders we cannot tell apart, and
+    # both break the reconciliation the settled figure rests on.
+    rows.append(_row("venue_order_ids_are_distinct",
+                     (len(set(vids)) == len(vids)) if vids else UNKNOWN,
+                     ids=len(vids), distinct=len(set(vids))))
+
+    # --- DURABLE RESTART. A probe interrupted mid-window and resumed must
+    # reconcile against the venue by exact id, and must not carry an order
+    # whose state it could not establish. `nothing_held` reading OUR ledger
+    # instead of the venue is what cost us 1445z, so an UNCERTAIN order is
+    # a refusal here rather than a footnote.
+    live = dict(live_orders or {})
+    uncertain = [c for c, o in live.items()
+                 if "UNCERTAIN" in str((o or {}).get("state") or "").upper()]
+    rows.append(_row("no_order_is_in_an_UNCERTAIN_state", not uncertain,
+                     uncertain=uncertain, live=len(live)))
+    no_vid = [c for c, o in live.items()
+              if not str((o or {}).get("venue_order_id") or "").strip()]
+    rows.append(_row("every_live_order_has_a_venue_id_to_cancel_by",
+                     not no_vid, without_id=no_vid))
+    if restarts is None:
+        rows.append(_row("restart_boundaries_reported", UNKNOWN,
+                         why="no restart count supplied"))
+    else:
+        # A RECORD THAT SPANS A RESTART IS STILL EVIDENCE; it simply may
+        # not be read as one continuous observation. So this is reported,
+        # not failed, and the caller decides.
+        rows.append(_row("restart_boundaries_reported", True,
+                         orders_straddling_a_restart=int(restarts),
+                         note=("a straddled record is evidence but not a "
+                               "continuous observation")))
+
+    # --- FEES AND REBATES, actual kept apart from estimated.
+    if fees is None:
+        rows.append(_row("actual_fees_and_rebates_present", UNKNOWN,
+                         why="no fee record supplied"))
+    else:
+        act_fee = _d(fees.get("fee_usd"))
+        act_reb = _d(fees.get("rebate_usd"))
+        src = str(fees.get("source") or "")
+        rows.append(_row("actual_fees_and_rebates_present",
+                         act_fee is not None and act_reb is not None
+                         and bool(src),
+                         fee_usd=fees.get("fee_usd"),
+                         rebate_usd=fees.get("rebate_usd"), source=src))
+        # CREDITED, NOT ACCRUED. $1.48 is currently accrued and not paid,
+        # and accrued rebate counted as income is how a receivable becomes
+        # a performance claim.
+        rows.append(_row("rebate_is_credited_not_accrued",
+                         str(fees.get("state") or "").upper()
+                         not in ("PENDING", "SKIPPED", "ACCRUED"),
+                         state=fees.get("state")))
+        est = _d((fees.get("estimate") or {}).get("maker_rebate_usd")
+                 if isinstance(fees.get("estimate"), Mapping) else None)
+        rows.append(_row("estimated_and_actual_rebate_not_summed",
+                         True, estimate=str(est) if est is not None else None,
+                         actual=fees.get("rebate_usd"),
+                         note=("reported side by side and never added; the "
+                               "estimate is a schedule figure and only the "
+                               "actual is income")))
 
     if latency is None:
         rows.append(_row("book_age_at_evaluation_measured", UNKNOWN,

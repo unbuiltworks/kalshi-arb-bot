@@ -205,13 +205,35 @@ def good_latency():
 
 
 def test_a_clean_probe_is_MEASURED():
+    """`verdict` and `ok` are DIFFERENT questions, deliberately.
+
+    `verdict` answers "is the cost basis sound", which is what decides
+    whether a settled figure may be quoted at all. `ok` additionally
+    requires every other check -- fees, restart evidence, reconciliation.
+    So a probe can be MEASURED while `ok` is false: the P&L is real but
+    some supporting evidence is still outstanding. Supplying the whole
+    evidence set here is what makes `ok` true.
+    """
     out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
                    leg_cost=filled_legs(), positions=filled_positions(),
                    fills=[{"venue_order_id": "V-1"},
                           {"venue_order_id": "V-2"}],
-                   latency=good_latency())
+                   latency=good_latency(), live_orders={}, restarts=0,
+                   fees={"fee_usd": "0.00", "rebate_usd": "0.00727",
+                         "source": "venue", "state": "CREDITED"})
     assert out["verdict"] == "MEASURED", (out["failed"], out["unknown"])
-    assert out["ok"] is True
+    assert out["ok"] is True, (out["failed"], out["unknown"])
+
+
+def test_a_sound_basis_with_outstanding_evidence_is_MEASURED_but_not_ok():
+    """The distinction above, as its own case: no fee record yet."""
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}],
+                   latency=good_latency())
+    assert out["verdict"] == "MEASURED"
+    assert out["ok"] is False
+    assert "actual_fees_and_rebates_present" in out["unknown"]
 
 
 def test_a_probe_in_unknown_basis_keys_is_UNINTERPRETABLE():
@@ -308,3 +330,124 @@ def test_the_legacy_unattested_set_does_not_contaminate_the_probe():
                    fills=[{"venue_order_id": "V-1"}],
                    latency=good_latency())
     assert out["verdict"] == "MEASURED"
+
+
+# ===================== durable restart and order reconciliation (P3 list)
+
+def test_an_UNCERTAIN_live_order_refuses_the_audit():
+    """`nothing_held` reading OUR ledger instead of the venue is what cost
+    us 1445z. An order whose state could not be established is a refusal,
+    not a footnote."""
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   live_orders={"l5f-a": {"state": "ORDER_STATE_UNCERTAIN",
+                                          "venue_order_id": "V-9"}})
+    assert "no_order_is_in_an_UNCERTAIN_state" in out["failed"]
+    assert out["ok"] is False
+
+
+def test_a_live_order_with_no_venue_id_refuses_because_it_cannot_be_cancelled():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   live_orders={"l5f-a": {"state": "LIVE",
+                                          "venue_order_id": ""}})
+    assert "every_live_order_has_a_venue_id_to_cancel_by" in out["failed"]
+
+
+def test_clean_live_orders_pass_reconciliation():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   live_orders={"l5f-a": {"state": "LIVE",
+                                          "venue_order_id": "V-9"}},
+                   restarts=0)
+    assert "no_order_is_in_an_UNCERTAIN_state" not in out["failed"]
+    assert "every_live_order_has_a_venue_id_to_cancel_by" not in out["failed"]
+    assert out["verdict"] == "MEASURED"
+
+
+def test_duplicate_venue_order_ids_refuse():
+    """Two fills under one id is either a double-booked poll or two orders
+    we cannot tell apart. Both break reconciliation."""
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"},
+                          {"venue_order_id": "V-1"}],
+                   latency=good_latency())
+    assert "venue_order_ids_are_distinct" in out["failed"]
+
+
+def test_a_straddled_restart_is_REPORTED_not_failed():
+    """A record spanning a restart is still evidence; it simply may not be
+    read as one continuous observation. The caller decides."""
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   restarts=2)
+    row = next(r for r in out["checks"]
+               if r["check"] == "restart_boundaries_reported")
+    assert row["ok"] is True
+    assert row["orders_straddling_a_restart"] == 2
+    assert "not a continuous observation" in row["note"]
+
+
+def test_an_unreported_restart_count_is_UNKNOWN():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency())
+    assert "restart_boundaries_reported" in out["unknown"]
+
+
+# ============================= actual fees and rebates (P3 list)
+
+def test_actual_fees_and_rebates_must_be_present_and_sourced():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   fees={"fee_usd": "0.00", "rebate_usd": "0.00727",
+                         "source": "venue", "state": "CREDITED"})
+    assert "actual_fees_and_rebates_present" not in out["failed"]
+    assert "rebate_is_credited_not_accrued" not in out["failed"]
+
+
+@pytest.mark.parametrize("state", ["PENDING", "SKIPPED", "ACCRUED"])
+def test_an_accrued_rebate_is_refused_as_income(state):
+    """$1.48 is currently accrued and not paid. An accrued rebate counted
+    as income is how a receivable becomes a performance claim."""
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   fees={"fee_usd": "0", "rebate_usd": "1.48",
+                         "source": "venue", "state": state})
+    assert "rebate_is_credited_not_accrued" in out["failed"]
+
+
+def test_a_fee_record_with_no_source_is_refused():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   fees={"fee_usd": "0", "rebate_usd": "0", "source": ""})
+    assert "actual_fees_and_rebates_present" in out["failed"]
+
+
+def test_absent_fees_are_UNKNOWN_not_zero():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency())
+    assert "actual_fees_and_rebates_present" in out["unknown"]
+
+
+def test_the_estimate_is_reported_beside_the_actual_and_never_summed():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+                   fees={"fee_usd": "0", "rebate_usd": "0.00727",
+                         "source": "venue", "state": "CREDITED",
+                         "estimate": {"maker_rebate_usd": "0.00584375"}})
+    row = next(r for r in out["checks"]
+               if r["check"] == "estimated_and_actual_rebate_not_summed")
+    assert row["estimate"] == "0.00584375"
+    assert row["actual"] == "0.00727"
+    assert "never added" in row["note"]
