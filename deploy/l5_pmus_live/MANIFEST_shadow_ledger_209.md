@@ -124,9 +124,16 @@ Railway: `list-deployments` for service `87f1834e-530e-4fc4-a310-91c8d3add196`; 
 | field | expect |
 |---|---|
 | `migration_state` | `MIGRATED_FROM_V1` |
-| `migrated_records` | `2294` |
+| `migrated_records` | the v1 document's count |
 | `v1_backup` | the `…json.v1-pre209` path |
 | `load_s` | one slow value, order 10–15 s on the volume, once |
+
+**Measured** on `4cec3f66`: `MIGRATED_FROM_V1`, `migrated_records: 2301` (the document
+had grown by 7 windows since the 00:06Z baseline), `v1_backup:
+/data/l5-live-20261012z/two_sided_shadow.json.v1-pre209`, `load_s: 13.7232` — inside the
+predicted 10–15 s and inside the watchdog's 120 s. `finalized` then read **2302**, one
+window scored after the migration, with `readable_records: 2302` and every integrity
+counter zero.
 
 `MIGRATION_NOT_VERIFIED` means the v1 document was deliberately left intact and nothing
 is lost — but it must not be left in that state; `manifest_writes` will read
@@ -134,33 +141,57 @@ is lost — but it must not be left in that state; `manifest_writes` will read
 
 ### V3 — the history is all there, and the ledger says so
 
-Same line:
+Same line. **The first start is a special case and this table was wrong about it** in the
+first version of this manifest; the correction is below the table.
 
-| field | expect |
-|---|---|
-| `finalized` | `2294`, **not fewer** |
-| `readable_records` | `2294` |
-| `integrity` | `LOG_AGREES_WITH_MANIFEST` |
-| `records_missing` | `0` |
-| `orphan_slugs` | `0` |
-| `digest_state` | `SLUG_SET_AGREES_WITH_MANIFEST` |
-| `index_refusals`, `slug_mismatches`, `index_spot_mismatches`, `records_unreadable` | `0` |
-| `save_error` | `null` |
+| field | first start (migrating) | every later start |
+|---|---|---|
+| `finalized` | the v1 document's count, **not fewer** | unchanged or higher |
+| `readable_records` | equal to `finalized` | equal to `finalized` |
+| `records_missing` | `0` | `0` |
+| `orphan_slugs` | `0` | `0` |
+| `index_refusals`, `slug_mismatches`, `index_spot_mismatches`, `records_unreadable`, `duplicates_dropped` | `0` | `0` |
+| `save_error` | `null` | `null` |
+| `integrity` | **`NO_MANIFEST_COUNT_TO_CHECK_AGAINST`** | `LOG_AGREES_WITH_MANIFEST` |
+| `digest_state` | **`NO_DIGEST_IN_MANIFEST`** | `SLUG_SET_AGREES_WITH_MANIFEST` |
+| `index_state` | **`EMPTY`** | `READ_FROM_INDEX` |
+
+**Why those three differ on the first start, and why it is not a fault.** Both witnesses
+live in the manifest, and the manifest being read on that start is the **v1** document,
+which carries neither a `finalized_count` nor a `finalized_digest`. So there is nothing
+to check against, and the ledger says exactly that rather than claiming agreement it
+cannot demonstrate. `index_state` reads `EMPTY` for the same kind of reason: the index is
+loaded *before* the migration writes the log, so at load time there genuinely was no log
+to index. All three are set once at load and are not recomputed, so they keep those
+values for the life of that process — **not** merely until the next save.
+
+The first start therefore cannot verify the cross-checks. **V9 does**, after a restart.
+Reading `NO_MANIFEST_COUNT_TO_CHECK_AGAINST` as an integrity failure is a misreading;
+reading it on a *later* start would be a real finding, because by then the manifest the
+ledger wrote itself does carry both witnesses.
 
 Any non-zero value in the integrity row is the thing this deployment exists to make
 visible. It is evidence to read, not a reason to panic: nothing is deleted, and the
 rescan paths recover from the log.
 
-### V4 — the latency actually moved, on the volume
+### V4 — the latency actually moved, on the volume — **MEASURED**
 
-`last_save_s` is the number that settles this. Expect **order 0.02 s** against 6.7605 s,
-and `over_budget: false`, `slow_saves: 0` after the first start.
+This was the one claim in the manifest that could not be settled offline. It is settled.
+Deployment `4cec3f66` at `6116675ed`, its own line at 2026-11-08T02:10:14Z:
 
-**That figure is an estimate scaled from local disk by the observed 4.4× ratio, not a
-measurement.** Local disk at 2,294 records gives save 0.0043 s, load 0.0038 s, 127,929
-bytes appended, and 5.6 ms mean / 10.2 ms max per settled window. If the volume comes
-back materially worse than ~0.02 s, that is a finding, not a failure of the fix — report
-the number rather than reinterpreting it.
+| | before (`18deb02d`) | after (`4cec3f66`) |
+|---|---|---|
+| `last_save_s` | **6.7605 s** | **0.0188 s** |
+| per window (two saves) | ~13.5 s | **~0.038 s** |
+| `bytes` (what is rewritten) | 292,732,040 | **409** |
+| `bytes_written` a save | ~585 MB of I/O | **82,975** |
+| `log_bytes` (the history) | — | 294,326,738 |
+| `over_budget` / `slow_saves` | — | `false` / `0` |
+
+**360× on the volume, and the prediction was right for the right reason.** The manifest
+expected "order 0.02 s", scaled from local disk by the observed 4.4× ratio; the volume
+returned 0.0188 s. The estimate is now superseded by the measurement — quote 0.0188 s,
+not the scaling.
 
 ### V5 — it still cannot submit
 
@@ -207,6 +238,25 @@ and `diff` clean. All three rows are measured — the tip's row carried an arith
 prediction of 18,118 before its run, which was wrong by one because two test functions
 were added and a third change modified an existing test rather than adding one. The
 measured figure is also recorded on PR #210.
+
+### V9 — the cross-checks, after one restart
+
+The first start has no witness to check against (V3). The manifest it writes does, so a
+restart is what proves the integrity machinery works on real data. Restart the service —
+or simply wait for the next one — and expect:
+
+| field | expect |
+|---|---|
+| `index_state` | `READ_FROM_INDEX` |
+| `integrity` | `LOG_AGREES_WITH_MANIFEST` |
+| `digest_state` | `SLUG_SET_AGREES_WITH_MANIFEST` |
+| `expected_finalized` | the count, no longer `null` |
+| `records_missing`, `orphan_slugs`, `index_refusals` | `0` |
+| `load_s` | milliseconds, **not** the one-time migration's seconds |
+| `migration_state` | `FORMAT_2_NATIVE` — nothing left to migrate |
+
+`load_s` dropping from seconds to milliseconds is the startup half of this change, and
+it is only observable on a start that does not migrate.
 
 ## 6. What this deployment does NOT do
 
