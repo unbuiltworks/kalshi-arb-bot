@@ -131,14 +131,37 @@ def test_an_unreadable_bid_or_ask_still_disqualifies_both_sides():
         assert LX.controller_provisional_price("DOWN", book, "0.01") is None
 
 
-def test_the_controller_refuses_only_when_BOTH_are_unreadable():
+def test_the_repaired_behaviour_is_opt_in_and_defaults_off():
+    """THE WIDENING MUST NOT RIDE INTO A PROBE DEPLOY. The fix is correct,
+    but it changes WHEN the controller opens and has never run in
+    production, and a capped probe has one opening to spend. So the
+    deployed default stays byte-identical to the observed behaviour and
+    the repair is opt-in."""
     import inspect
     from src import l5_pmus_live_runner as RUN
     src = inspect.getsource(RUN.Runner.maybe_controller_open)
-    assert "if px_up is None and px_dn is None:" in src
-    assert "if px_up is None or px_dn is None:" not in src
-    # and a forced choice is recorded rather than passed off as the cheaper
+    assert "L5_PROVISIONAL_FORCED_SIDE" in src
+    assert "not _forced_ok" in src
+    assert "_both_unreadable = px_up is None and px_dn is None" in src
+    # and when enabled, a forced choice is recorded rather than passed off
+    # as the cheaper one
     assert "PROVISIONAL_SIDE_FORCED" in src
+    assert "if _both_unreadable or (not _forced_ok" in src
+
+
+@pytest.mark.parametrize("val,enabled", [
+    (None, False), ("", False), ("no", False), ("0", False), ("off", False),
+    ("1", True), ("yes", True), ("YES", True), ("true", True), ("on", True)])
+def test_the_flag_parses_exactly_like_the_other_switches(val, enabled,
+                                                         monkeypatch):
+    import os
+    if val is None:
+        monkeypatch.delenv("L5_PROVISIONAL_FORCED_SIDE", raising=False)
+    else:
+        monkeypatch.setenv("L5_PROVISIONAL_FORCED_SIDE", val)
+    got = (os.getenv("L5_PROVISIONAL_FORCED_SIDE")
+           or "").strip().lower() in ("1", "yes", "true", "on")
+    assert got is enabled
 
 
 def test_a_forced_side_is_still_the_readable_one_not_a_guess():

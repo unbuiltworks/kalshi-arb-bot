@@ -7818,12 +7818,35 @@ class Runner:
         # the translation gate only, `TS.build_orders` still builds the
         # real order from the same authenticated book, and every economic,
         # campaign, slot and authorization gate downstream is untouched.
-        if px_up is None and px_dn is None:
+        # DEFAULT OFF, because this widening has never run in production.
+        # The repair below is correct -- refusing a restable side because
+        # the OTHER side is pinned is a defect -- but it changes WHEN the
+        # controller opens, and a capped one-or-two-window probe has one
+        # opening to spend. At `ask 0.01` the forced side is DOWN at own
+        # 0.99: legal, gated downstream, and a poor use of the probe's only
+        # entry. So the repair is opt-in and the deployed default stays
+        # byte-identical to the behaviour already observed running.
+        #
+        # ONE REFUSAL SITE, DELIBERATELY. A sibling test enumerates the
+        # early returns that report a skip, and splitting this into two
+        # returns would add an eighth for no behavioural gain.
+        _forced_ok = (os.getenv("L5_PROVISIONAL_FORCED_SIDE")
+                      or "").strip().lower() in ("1", "yes", "true", "on")
+        _both_unreadable = px_up is None and px_dn is None
+        if _both_unreadable or (not _forced_ok
+                                and (px_up is None or px_dn is None)):
+            # HOISTED, so the skip note and its `return None` stay
+            # adjacent: a sibling test requires the return within a few
+            # lines of the note, because a note AFTER the return would be
+            # dead code. Worth keeping intact.
+            _detail = {"bid": str(book.get("bid")),
+                       "ask": str(book.get("ask")),
+                       "unreadable": ("BOTH" if _both_unreadable
+                                      else "UP" if px_up is None else "DOWN"),
+                       "forced_side_enabled": _forced_ok}
             self.stats["controller_open:PROVISIONAL_PRICE_UNREADABLE"] += 1
             self._note_open_skip("PROVISIONAL_PRICE_UNREADABLE", slug, ws,
-                                 {"bid": str(book.get("bid")),
-                                  "ask": str(book.get("ask")),
-                                  "unreadable": "BOTH"})
+                                 _detail)
             return None
         if px_dn is None:
             side, px, _forced = "UP", px_up, "DOWN"
