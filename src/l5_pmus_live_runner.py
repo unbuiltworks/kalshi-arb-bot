@@ -5147,9 +5147,6 @@ class Runner:
         # pre-submission observation rather than a later re-read.
         self.calibration_shadow_tick(now, slug=slug, book=book,
                                      prints=prints)
-        # AND THE ORDERS THAT ARE ACTUALLY RESTING, which the shadow tick
-        # does not cover. Same book, same ladder, same prints, same instant.
-        self.calibration_live_tick(now, slug=slug, book=book, prints=prints)
         return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
@@ -5212,9 +5209,7 @@ class Runner:
                 self.stats["shadow_error:%s:%s"
                            % (name, type(exc).__name__)] += 1
 
-    def calibration_live_tick(self, now: float, *, slug: str,
-                              book: Any = None,
-                              prints: Any = None) -> None:
+    def calibration_live_tick(self, now: float) -> None:
         """Lifetime observations for the orders the venue is actually holding.
 
         THE GAP THIS CLOSES, and it is the whole reason a live window could
@@ -5231,11 +5226,20 @@ class Runner:
         record with four of five categories present and not one reading of
         the queue it was sitting in.
 
+        AND IT IS DELIBERATELY NOT ON THE SHADOW TICK. The first version of
+        this fix was called from `shadow_tick`, which returns early when the
+        shadow state or the window is unavailable -- so live-order
+        observation would have depended on the shadow path being healthy.
+        That is a subtler form of the very coupling that caused the original
+        defect, where observation was reachable only through the shadow. It
+        now runs from the main tick, derives its own slug from the TRANSPORT
+        (the market our orders are actually in, not the shadow's grid slug),
+        and reads its own book and prints.
+
         OBSERVATIONAL, exactly like every other recorder call on this path:
-        it holds no transport, cannot refuse or alter a submission, and
-        swallows its own faults. `observe` itself filters the coids it is
-        given to those it already knows and whose slug matches, so handing
-        it every live order is safe.
+        it cannot refuse or alter a submission and swallows its own faults.
+        `observe` itself filters the coids it is given to those it already
+        knows and whose slug matches, so handing it every live order is safe.
         """
         cal = self.fill_calibration
         if cal is None:
@@ -5248,6 +5252,20 @@ class Runner:
                     if str(c).startswith("l5f-")]
             if not live:
                 return
+            slug = getattr(self.transport, "market_slug", None)
+            if not slug:
+                return
+            book = self.book.snapshot(slug)
+            try:
+                prints = self.book.trades(slug)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # an absent print feed is recorded AS absent by `observe`,
+                # never as "no prints", so this is reported and not guessed
+                prints = None
+                self.stats["calib_live_prints_error:%s"
+                           % type(exc).__name__] += 1
             n = cal.observe(now, slug=slug, book=book,
                             ladder=self.shadow_ladder, prints=prints,
                             open_coids=live)
@@ -9413,6 +9431,10 @@ class Runner:
         # L5_BOOK_COMPLETION is set. Placed where the L5-driven completion
         # already sits, so nothing downstream is reordered.
         self.maybe_book_completion(now)
+        # LIFETIME OBSERVATIONS for whatever is actually resting. Here, and
+        # not on the shadow tick, so it cannot be switched off by the shadow
+        # path's own early returns. Observational; it submits nothing.
+        self.calibration_live_tick(now)
         # OUR OWN OPENING, on the timer. Inert unless L5_CONTROLLER_OPEN is
         # set. Placed AFTER both completion paths deliberately: completing
         # a pair we already hold removes exposure and must never queue

@@ -384,20 +384,41 @@ class FakeExecutor:
         self.store = store
 
 
-class Bare:
-    """The two attributes `calibration_live_tick` reads, and nothing else.
+class FakeBook:
+    def __init__(self, t=1000.0, prints=(), raises=False):
+        self._t, self._prints, self._raises = t, list(prints), raises
 
-    Bound as an unbound function so the method is exercised exactly as the
-    runner holds it, without constructing a Runner (which would need a
-    transport, a volume and an authorization chain).
+    def snapshot(self, slug):
+        return book(t=self._t)
+
+    def trades(self, slug):
+        if self._raises:
+            raise RuntimeError("book lock")
+        return list(self._prints)
+
+
+class FakeTransport:
+    def __init__(self, slug=SLUG):
+        self.market_slug = slug
+
+
+class Bare:
+    """Exactly the attributes `calibration_live_tick` reads, and no more.
+
+    Bound as an unbound function so the method is exercised as the runner
+    holds it, without constructing a Runner (which would need a volume and
+    an authorization chain).
     """
 
     calibration_live_tick = RUN.Runner.calibration_live_tick
 
-    def __init__(self, cal, coids, ladder):
+    def __init__(self, cal, coids, ladder, *, slug=SLUG, prints=(),
+                 book_raises=False, t=1000.0):
         self.fill_calibration = cal
         self.executor = FakeExecutor(FakeStore(coids))
         self.shadow_ladder = ladder
+        self.transport = FakeTransport(slug)
+        self.book = FakeBook(t=t, prints=prints, raises=book_raises)
         self.stats = __import__("collections").Counter()
 
 
@@ -408,12 +429,13 @@ def test_the_live_tick_observes_a_resting_order_and_completes_the_record(tmp_pat
     cal.pre_submit(COID, slug=SLUG, side="UP", own_px="0.4400", qty="1",
                    book=book(), ladder=FakeLadder(), now=1000.0)
     cal.on_ack(COID, "VENUE-ORDER-1")
-    r = Bare(cal, [COID], FakeLadder())
     for t in (1002.0, 1004.0, 1006.0):
-        r.calibration_live_tick(t, slug=SLUG, book=book(t=t),
-                                prints=[{"t": t, "px": "0.4400", "qty": "3"}])
-    assert r.stats["calib_live_observations"] == 3
+        r = Bare(cal, [COID], FakeLadder(), t=t,
+                 prints=[{"t": t, "px": "0.4400", "qty": "3"}])
+        r.calibration_live_tick(t)
+    assert r.stats["calib_live_observations"] == 1   # this tick
     assert r.stats["calib_live_orders_seen"] == 1
+    assert len(cal.record(COID)["observations"]) == 3
     assert cal.record(COID)["capture"]["lifetime_observation"] == CALIB.PRESENT
     # finish it the way the money path does
     cal.on_fill(COID, qty="1", price="0.4400", cumulative_qty="1",
@@ -431,8 +453,8 @@ def test_the_live_tick_ignores_shadow_coids(tmp_path):
     shadow = "shadow|BASELINE|%s|1" % SLUG
     cal.pre_submit(shadow, slug=SLUG, side="UP", own_px="0.4400", qty="1",
                    book=book(), ladder=FakeLadder(), now=1000.0)
-    r = Bare(cal, [shadow], FakeLadder())
-    r.calibration_live_tick(1002.0, slug=SLUG, book=book(t=1002.0), prints=[])
+    r = Bare(cal, [shadow], FakeLadder(), t=1002.0)
+    r.calibration_live_tick(1002.0)
     assert r.stats["calib_live_observations"] == 0
     assert cal.record(shadow)["observations"] == []
 
@@ -440,7 +462,7 @@ def test_the_live_tick_ignores_shadow_coids(tmp_path):
 def test_the_live_tick_does_nothing_without_live_orders(tmp_path):
     cal = recorder(tmp_path)
     r = Bare(cal, [], FakeLadder())
-    r.calibration_live_tick(1002.0, slug=SLUG, book=book(), prints=[])
+    r.calibration_live_tick(1002.0)
     assert r.stats["calib_live_observations"] == 0
     assert cal.report()["events_appended"] == 0
 
@@ -453,11 +475,61 @@ def test_a_fault_in_the_live_tick_is_counted_and_never_raised(tmp_path):
     cal = recorder(tmp_path)
     r = Bare(cal, [], FakeLadder())
     r.executor.store = Exploding()
-    r.calibration_live_tick(1002.0, slug=SLUG, book=book(), prints=[])
+    r.calibration_live_tick(1002.0)
     assert r.stats["calib_live_error:RuntimeError"] == 1
 
 
 def test_the_live_tick_runs_even_with_no_recorder_at_all(tmp_path):
     r = Bare(None, [COID], FakeLadder())
-    r.calibration_live_tick(1002.0, slug=SLUG, book=book(), prints=[])
+    r.calibration_live_tick(1002.0)
     assert not r.stats
+
+
+def test_the_live_tick_is_not_on_the_shadow_path(tmp_path):
+    """IT MUST NOT BE. `shadow_tick` returns early when the shadow state or
+    the window is unavailable, so calling it from there would make
+    live-order observation depend on the shadow path being healthy -- a
+    subtler form of the coupling that caused the original defect.
+    """
+    import re
+    src = inspect.getsource(RUN.Runner.shadow_tick)
+    assert "calibration_live_tick" not in src
+    # it runs from the main tick, beside the other per-tick maintenance
+    tick = inspect.getsource(RUN.Runner.tick)
+    assert "self.calibration_live_tick(now)" in tick
+    assert "self.maybe_book_completion(now)" in tick
+
+
+def test_it_takes_the_slug_from_the_transport_not_the_shadow_grid(tmp_path):
+    """Live orders are in the market the TRANSPORT is on. The shadow grid's
+    slug is derived from `self.ws` and can differ."""
+    cal = recorder(tmp_path)
+    cal.pre_submit(COID, slug=SLUG, side="UP", own_px="0.4400", qty="1",
+                   book=book(), ladder=FakeLadder(), now=1000.0)
+    other = Bare(cal, [COID], FakeLadder(), slug="some-other-market",
+                 t=1002.0)
+    other.calibration_live_tick(1002.0)
+    # observe() filters on the record's own slug, so nothing is recorded
+    assert cal.record(COID)["observations"] == []
+    right = Bare(cal, [COID], FakeLadder(), t=1002.0)
+    right.calibration_live_tick(1002.0)
+    assert len(cal.record(COID)["observations"]) == 1
+
+
+def test_no_slug_on_the_transport_means_no_observation(tmp_path):
+    cal = recorder(tmp_path)
+    r = Bare(cal, [COID], FakeLadder(), slug=None)
+    r.calibration_live_tick(1002.0)
+    assert r.stats["calib_live_observations"] == 0
+
+
+def test_an_unreadable_print_feed_is_reported_and_recorded_as_absent(tmp_path):
+    """Never guessed at as "no prints", which would read as a quiet level."""
+    cal = recorder(tmp_path)
+    cal.pre_submit(COID, slug=SLUG, side="UP", own_px="0.4400", qty="1",
+                   book=book(), ladder=FakeLadder(), now=1000.0)
+    r = Bare(cal, [COID], FakeLadder(), t=1002.0, book_raises=True)
+    r.calibration_live_tick(1002.0)
+    assert r.stats["calib_live_prints_error:RuntimeError"] == 1
+    obs = cal.record(COID)["observations"][-1]
+    assert obs["prints_at_our_price"]["unavailable"] is True
