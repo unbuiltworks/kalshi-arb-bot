@@ -24,4 +24,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install pytest
-      - run: python -m pytest -q tests/test_l5_second_leg_economics.py tests/test_l5_second_leg_economics_audit.py tests/test_l5_actual_quote_entry_gate.py
+      - run: python -m pytest -q tests/test_l5_second_leg_economics.py tests/test_l5_second_leg_economics_audit.py tests/test_l5_actual_quote_entry_gate.py tests/test_l5_settlement_backed_replay.py
