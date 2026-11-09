@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_campaign_approval as CA
@@ -214,6 +215,40 @@ def slug_for_window(start: dt.datetime) -> Optional[str]:
         return AB.slug_for(int(start.timestamp()))
     except BaseException:                                      # noqa: BLE001
         return None
+
+
+def variables_for(document: Mapping[str, Any]) -> Dict[str, str]:
+    """Every published value, derived from the bytes the owner HASHED.
+
+    WHY THIS IS NOT A CONVENIENCE. The approval the owner reads and the
+    digest they approve cover `document` and nothing else -- so anything
+    `apply_plan` publishes that is NOT a function of `document` is
+    published outside the approval. A prepared plan whose `variables` were
+    edited after the digest was taken would otherwise pass the digest
+    check and publish the edit, and the two names that matters most for
+    are `L5_LIVE_HALT` and `L5_SHADOW_ONLY`.
+
+    So the market slug is DERIVED from `series` + `window_starts[0]`
+    rather than carried alongside them, and `apply_plan` recomputes this
+    whole mapping from the document instead of trusting the one handed to
+    it. Returns {} when the document cannot produce a slug, which is
+    BLOCKED upstream and refused downstream.
+    """
+    try:
+        start = dt.datetime.fromisoformat(
+            str(document["window_starts"][0]).replace("Z", "+00:00"))
+    except BaseException:                                      # noqa: BLE001
+        return {}
+    slug = slug_for_window(start)
+    if not slug:
+        return {}
+    return {
+        "L5_CAMPAIGN_APPROVAL": document_line(document),
+        "L5_TS_MARKET": slug,
+        "L5_TS_EXPERIMENT_ID": str(document["nonce"]),
+        "L5_LIVE_AUTH_NOT_AFTER": str(document["expires_utc"]).replace(
+            "Z", "+00:00"),
+    }
 
 
 # ===================================================================
@@ -407,9 +442,33 @@ def prepare(*, heartbeat: Mapping[str, Any],
             sub = PF.preflight(heartbeat=heartbeat, plan=plan,
                                markets=[slug] if slug else [],
                                calibration=calibration)
-            gates.append(gate("runtime_preflight", bool(sub.get("ok")),
-                              failed=sub.get("failed"),
-                              unknown=sub.get("unknown")))
+            _failed = list(sub.get("failed") or ())
+            _unknown = list(sub.get("unknown") or ())
+            # THE ORDER PLAN IS NOT A LAUNCH PRECONDITION, and pretending
+            # otherwise makes this gate permanently UNKNOWN.
+            #
+            # `plan_admissible` judges a PRICED two-leg order plan. The
+            # executor builds that at the window, from the book as it is
+            # then -- a launcher running fifty minutes earlier has no such
+            # plan and could only invent one. So when no plan is supplied,
+            # that single row being UNKNOWN is EXPECTED and is named as
+            # tolerated; every other row must still pass, and anything
+            # failed or any OTHER unknown still BLOCKS.
+            #
+            # This is the one place a launch verdict tolerates an UNKNOWN,
+            # and it is tolerated because the thing it describes does not
+            # exist yet rather than because it could not be read.
+            _tolerated = ({"plan_admissible"} if plan is None else set())
+            _residual = [u for u in _unknown if u not in _tolerated]
+            gates.append(gate(
+                "runtime_preflight",
+                bool(not _failed and not _residual),
+                failed=_failed, unknown=_unknown,
+                tolerated_without_a_plan=sorted(_tolerated) or None,
+                note=(None if plan is not None else
+                      "an order plan is built at the window, not here; "
+                      "plan_admissible UNKNOWN is expected and every "
+                      "other row must still pass")))
         except BaseException as exc:                           # noqa: BLE001
             gates.append(gate("runtime_preflight", PF.UNKNOWN,
                               error=type(exc).__name__))
@@ -447,13 +506,7 @@ def prepare(*, heartbeat: Mapping[str, Any],
         "document": doc,
         "document_line": line,
         "document_digest": digest,
-        "variables": ({} if not (doc and slug) else {
-            "L5_CAMPAIGN_APPROVAL": line,
-            "L5_TS_MARKET": slug,
-            "L5_TS_EXPERIMENT_ID": str(doc["nonce"]),
-            "L5_LIVE_AUTH_NOT_AFTER": str(doc["expires_utc"]).replace(
-                "Z", "+00:00"),
-        }),
+        "variables": ({} if not (doc and slug) else variables_for(doc)),
         "labels": ("READ-ONLY. Writes nothing, arms nothing, reserves "
                    "nothing. UNKNOWN is never READY. A market=null "
                    "authorization verdict is never READY."),
@@ -524,9 +577,27 @@ def apply_plan(*, prepared: Mapping[str, Any],
                             "note": ("the owner approves a digest; this "
                                      "publishes only that document")})
 
-    variables = dict(prepared.get("variables") or {})
+    # THE VARIABLES ARE RE-DERIVED FROM THE HASHED DOCUMENT, never read
+    # from the plan. The digest above covers `document` alone, so a
+    # `variables` mapping edited after the owner approved the digest would
+    # otherwise publish that edit under a valid approval -- including
+    # `L5_LIVE_HALT: ""`, which would clear the halt with none of the
+    # preconditions below. Deriving closes that by construction.
+    variables = variables_for(doc)
     if not variables:
-        raise ApplyRefused("NO_VARIABLES_IN_PLAN")
+        raise ApplyRefused("DOCUMENT_YIELDS_NO_VARIABLES",
+                           {"note": ("the market slug could not be derived "
+                                     "from series + window_starts")})
+    carried = dict(prepared.get("variables") or {})
+    if carried and carried != variables:
+        raise ApplyRefused(
+            "PLAN_VARIABLES_DISAGREE_WITH_DOCUMENT",
+            {"extra_or_changed": sorted(
+                k for k in set(carried) | set(variables)
+                if carried.get(k) != variables.get(k)),
+             "note": ("the published values are a function of the hashed "
+                      "document; a plan carrying anything else is refused "
+                      "rather than silently ignored")})
 
     steps: List[Dict[str, Any]] = []
 
@@ -564,9 +635,20 @@ def apply_plan(*, prepared: Mapping[str, Any],
 
     # ---- the writable-surface check, before anything leaves
     for name in variables:
-        if name in FORBIDDEN and name != "L5_LIVE_HALT":
+        # THE HALT IS EXEMPT ONLY WHEN THIS CALL AUTHORIZED CLEARING IT.
+        # The exemption used to be unconditional, which made the name a
+        # hole in the forbidden set rather than a gated exception to it.
+        if name == "L5_LIVE_HALT":
+            if halt_reset is None:
+                raise ApplyRefused(
+                    "HALT_WRITE_WITHOUT_AUTHORIZED_RESET",
+                    {"note": ("L5_LIVE_HALT is only ever written by an "
+                              "explicitly requested reset whose every "
+                              "precondition held")})
+            continue
+        if name in FORBIDDEN:
             raise ApplyRefused("FORBIDDEN_VARIABLE", {"name": name})
-        if name not in WRITABLE and name != "L5_LIVE_HALT":
+        if name not in WRITABLE:
             raise ApplyRefused("VARIABLE_NOT_IN_WRITABLE_SET",
                                {"name": name, "writable": list(WRITABLE)})
 
@@ -688,17 +770,42 @@ def shutdown_plan(*, heartbeat: Mapping[str, Any],
     live = _get(heartbeat, "order_progress.live_orders")
     parked = _get(heartbeat, "order_progress.parked_orders")
     uncertain = _get(heartbeat, "unresolved_accounting.count")
+
+    # MISSING IS NEVER ZERO, and this reader had it the other way round.
+    #
+    # `_get` returns None for ABSENT, and the old conditions were
+    # `live not in (0, None)` -- so a heartbeat that did not report
+    # `order_progress` at all produced NO cancellation action and
+    # `outstanding_clear: True`. An unreadable count is the one case where
+    # a shutdown reporter must be most careful, because the orders it
+    # cannot see are exactly the ones nobody will cancel.
+    #
+    # So absence is UNKNOWN, unknown is not clear, and the cancellation
+    # action is emitted anyway: cancelling by exact owned id is safe when
+    # there is nothing to cancel, and skipping it is not.
+    unknown = [n for n, v in (("live_orders", live),
+                              ("parked_orders", parked),
+                              ("unresolved_accounting", uncertain))
+               if v is None]
     actions: List[Dict[str, Any]] = []
-    if live not in (0, None) or parked not in (0, None):
+    if live != 0 or parked != 0:
         actions.append({"action": "cancel_outstanding_by_exact_id",
                         "live_orders": live, "parked": parked,
+                        "counts_unreadable": [n for n in unknown
+                                              if n != "unresolved_accounting"]
+                        or None,
                         "note": ("a lock blocks submission and does NOT "
-                                 "flatten a resting order")})
+                                 "flatten a resting order; an unreadable "
+                                 "count is treated as outstanding")})
     actions.append({"action": "verify_terminal_state",
                     "note": "an unverifiable cancellation marks UNCERTAIN"})
-    if uncertain not in (0, None):
+    if uncertain != 0:
         actions.append({"action": "halt_reentry_pending_reconciliation",
-                        "unresolved": uncertain})
+                        "unresolved": uncertain,
+                        "readable": uncertain is not None,
+                        "note": (None if uncertain is not None else
+                                 "the figure could not be read, which is "
+                                 "not evidence that it is zero")})
     actions.append({"action": "restore_structural_submission_lock",
                     "variable": "L5_SHADOW_ONLY", "value": "1"})
     actions.append({"action": "emit_final_execution_report"})
@@ -709,9 +816,270 @@ def shutdown_plan(*, heartbeat: Mapping[str, Any],
                         and deadline == exp else "window_end"),
         "window_end_utc": _iso(end),
         "campaign_expiry_utc": None if exp is None else _iso(exp),
-        "outstanding_clear": (live in (0, None) and parked in (0, None)),
+        "outstanding_clear": (live == 0 and parked == 0),
+        "reconciliation_clear": uncertain == 0,
+        "counts_unreadable": unknown or None,
         "actions": actions,
         "labels": ("authorization ends at the EARLIER of the window end and "
                    "the campaign expiry. No rollover, no extension, no "
-                   "capital increase without a fresh approval."),
+                   "capital increase without a fresh approval. An "
+                   "UNREADABLE count is never reported clear: absence is "
+                   "not zero, and the cancellation sweep runs anyway."),
     }
+
+
+# ===================================================================
+# THE STATE MACHINE. It DOES the sequence; it does not describe it.
+# ===================================================================
+#: every step, in order, so a partial run says exactly how far it got.
+STEPS = ("verify_scope", "read_runtime", "prepare", "apply",
+         "await_deployment", "reread_runtime", "verify_arming",
+         "monitor", "shutdown")
+
+
+class LaunchHalted(RuntimeError):
+    """The run stopped. `at` names the step and `trail` carries the rest."""
+
+    def __init__(self, at: str, reason: str, trail: Any = None) -> None:
+        super().__init__("%s: %s" % (at, reason))
+        self.at = at
+        self.reason = reason
+        self.trail = trail or []
+
+
+def run_launch(*, client: Any,
+               expected_sha: str,
+               window_start: dt.datetime,
+               approved_digest: Optional[str] = None,
+               approved_plan: Optional[Mapping[str, Any]] = None,
+               now_fn: Callable[[], dt.datetime] = lambda: dt.datetime.now(
+                   dt.timezone.utc),
+               unlock_shadow: bool = False,
+               reset_operator_halt: Optional[str] = None,
+               halt_reset_evidence: Optional[Mapping[str, Any]] = None,
+               document_kw: Optional[Mapping[str, Any]] = None,
+               deployment_timeout_s: float = 420.0,
+               arming_timeout_s: float = 180.0,
+               arming_poll_s: float = 15.0,
+               sleeper: Callable[[float], None] = None,
+               ) -> Dict[str, Any]:
+    """Drive the whole sequence against a live runtime, failing closed.
+
+    WITHOUT `approved_digest` IT STOPS AFTER `prepare`. That is the
+    default and it is the safe one: a caller that has not been given an
+    owner approval gets a verdict and nothing else happens. There is no
+    flag that makes it proceed on its own judgement.
+
+    WHAT EACH STEP ACTUALLY DOES, as opposed to plans:
+
+      verify_scope      proves the credential covers the project and
+                        environment named, so a token for another project
+                        cannot read and write the wrong service.
+      read_runtime      reads the heartbeat, the runtime config, the
+                        market-specific authorization verdict, the venue
+                        bounds and the live variables.
+      prepare           the read-only verdict. STOPS HERE unless READY.
+      apply             publishes the owner's approved document and the
+                        bound variables, then verifies durable read-back
+                        of the digest.
+      await_deployment  a variable write redeploys the service, so this
+                        POLLS until a FRESH deployment reaches SUCCESS on
+                        the expected commit. FAILED, CRASHED and REMOVED
+                        are terminal and are not retried.
+      reread_runtime    reads the heartbeat from the NEW container, because
+                        the values only take effect there.
+      verify_arming     waits for the effective transition and refuses to
+                        call it armed on anything but the runtime's own
+                        `submission_gate`.
+      monitor           reads decisions, orders and fills for the window.
+      shutdown          what must happen at the end, and whether it is due.
+
+    IT NEVER DECIDES TO CLEAR A HALT. `reset_operator_halt` is passed
+    through to `apply_plan`, which refuses without a reason and without
+    every precondition. Absent it, the halt is untouched at every step.
+    """
+    sleep = sleeper or time.sleep
+    trail: List[Dict[str, Any]] = []
+
+    def done(step: str, **detail: Any) -> None:
+        trail.append(dict({"step": step, "ok": True}, **detail))
+
+    def stop(step: str, reason: str, **detail: Any) -> "LaunchHalted":
+        trail.append(dict({"step": step, "ok": False, "reason": reason},
+                          **detail))
+        return LaunchHalted(step, reason, trail)
+
+    # ---- verify_scope
+    try:
+        scope = client.verify_scope()
+    except BaseException as exc:                               # noqa: BLE001
+        raise stop("verify_scope", "%s: %s" % (type(exc).__name__,
+                                               str(exc)[:160]))
+    done("verify_scope", **dict(scope))
+
+    # ---- read_runtime
+    try:
+        hb = client.heartbeat() or {}
+        cfg = client.runtime_config()
+        apf = client.auth_preflight() or {}
+        deployment = client.latest_deployment()
+        variables = client.variables()
+    except BaseException as exc:                               # noqa: BLE001
+        raise stop("read_runtime", "%s: %s" % (type(exc).__name__,
+                                               str(exc)[:160]))
+    if not hb:
+        raise stop("read_runtime", "NO_HEARTBEAT",
+                   note="a runtime that is not reporting cannot be judged")
+    slug = slug_for_window(window_start)
+    # THE HALT IS READ FROM THE VARIABLE, NOT FROM THE PREFLIGHT. A
+    # deployment older than 2c7c20b7 reports a verdict with no
+    # `local_operator_halt` row at all, and trusting it is the 08:30Z
+    # failure. Any non-empty value halts.
+    halted = bool(str(variables.get("L5_LIVE_HALT") or "").strip())
+    bounds = None
+    try:
+        bounds = client.venue_window_bounds(slug) if slug else None
+    except BaseException:                                      # noqa: BLE001
+        bounds = None
+    done("read_runtime", heartbeat_utc=hb.get("utc"),
+         deployment=deployment.get("id"),
+         deployed_sha=str(deployment.get("commitHash") or "")[:12],
+         operator_halted=halted, venue_bounds_present=bool(bounds))
+
+    # ---- prepare
+    prepared = prepare(
+        heartbeat=hb, deployment=deployment, expected_sha=expected_sha,
+        window_start=window_start, now=now_fn(), auth_preflight=apf,
+        operator_halted=halted, calibration=hb.get("fill_calibration"),
+        plan=None, venue_confirmed_bounds=bounds,
+        document_kw=document_kw, runtime_config=cfg)
+    if prepared["verdict"] != READY:
+        trail.append({"step": "prepare", "ok": False,
+                      "verdict": prepared["verdict"],
+                      "blocking": prepared["blocking"]})
+        return {"verdict": prepared["verdict"], "stopped_at": "prepare",
+                "prepared": prepared, "trail": trail,
+                "labels": ("BLOCKED. Nothing was written, nothing armed, "
+                           "no order placed. Every blocker above is read "
+                           "from the accessor that enforces it.")}
+    done("prepare", digest=prepared["document_digest"],
+         market=prepared["market"])
+
+    if not approved_digest:
+        return {"verdict": READY, "stopped_at": "prepare",
+                "prepared": prepared, "trail": trail,
+                "labels": ("READY, and STOPPED. No owner approval was "
+                           "supplied, so nothing was applied. This is the "
+                           "default path.")}
+
+    # ---- apply
+    to_apply = dict(prepared)
+    if approved_plan:
+        # the artifact the owner approved, carried rather than re-derived:
+        # `issued_utc` is clock-stamped, so a regenerated document would
+        # hash differently and `apply_plan` would refuse every time.
+        for key in ("document", "document_line", "document_digest",
+                    "variables"):
+            if not approved_plan.get(key):
+                raise stop("apply", "APPROVED_PLAN_INCOMPLETE", missing=key)
+        if approved_plan.get("market") != prepared.get("market"):
+            raise stop("apply", "APPROVED_PLAN_NAMES_ANOTHER_MARKET",
+                       approved=approved_plan.get("market"),
+                       current=prepared.get("market"))
+        to_apply.update({k: approved_plan[k] for k in
+                         ("document", "document_line", "document_digest",
+                          "variables")})
+    before = str(deployment.get("createdAt") or "")
+    try:
+        applied = apply_plan(
+            prepared=to_apply, approved_digest=approved_digest,
+            set_variables=client.set_variables,
+            read_back=lambda: client.heartbeat() or {},
+            unlock_shadow=unlock_shadow,
+            reset_operator_halt=reset_operator_halt,
+            halt_reset_evidence=halt_reset_evidence)
+    except ApplyRefused as exc:
+        raise stop("apply", exc.reason, detail=exc.detail)
+    except BaseException as exc:                               # noqa: BLE001
+        raise stop("apply", "%s: %s" % (type(exc).__name__, str(exc)[:160]))
+    done("apply", digest=applied["digest"],
+         variables=applied["variables_written"],
+         shadow_unlocked=applied["shadow_unlocked"],
+         halt_reset=bool(applied["operator_halt_reset"]))
+
+    # ---- await_deployment
+    try:
+        dep2 = client.wait_for_deployment(
+            expect_sha=str(deployment.get("commitHash") or "") or None,
+            timeout_s=deployment_timeout_s, not_before=before)
+    except BaseException as exc:                               # noqa: BLE001
+        raise stop("await_deployment", "%s: %s" % (type(exc).__name__,
+                                                   str(exc)[:160]))
+    done("await_deployment", deployment=dep2.get("id"),
+         status=dep2.get("status"))
+
+    # ---- reread_runtime
+    try:
+        hb2 = client.heartbeat() or {}
+        vars2 = client.variables()
+    except BaseException as exc:                               # noqa: BLE001
+        raise stop("reread_runtime", "%s: %s" % (type(exc).__name__,
+                                                  str(exc)[:160]))
+    seen = str(_get(hb2, "campaign.document_sha256") or "")
+    if seen != applied["digest"]:
+        raise stop("reread_runtime", "NEW_CONTAINER_DIGEST_MISMATCH",
+                   expected=applied["digest"], observed=seen or None)
+    done("reread_runtime", heartbeat_utc=hb2.get("utc"),
+         approval_state=_get(hb2, "campaign.approval_state"),
+         operator_halted=bool(str(vars2.get("L5_LIVE_HALT") or "").strip()))
+
+    # ---- verify_arming
+    #
+    # ARMED IS THE RUNTIME'S WORD, NOT OURS. The only evidence accepted is
+    # the service's own `submission_gate` reporting unblocked, plus
+    # `armed`. A deployment that succeeded and a lock that was cleared are
+    # NOT arming -- that conflation is what 08:30Z looked like from the
+    # outside.
+    deadline = time.time() + float(arming_timeout_s)
+    gate: Dict[str, Any] = {}
+    while True:
+        hb3 = client.heartbeat() or {}
+        gate = dict(_get(hb3, "submission_gate") or {})
+        if gate.get("blocked") is False and gate.get("armed") is True:
+            done("verify_arming", reason=gate.get("reason"),
+                 armed=True)
+            break
+        if time.time() >= deadline:
+            trail.append({"step": "verify_arming", "ok": False,
+                          "reason": "NOT_ARMED_BEFORE_DEADLINE",
+                          "gate": {k: v for k, v in gate.items()
+                                   if k != "labels"}})
+            return {"verdict": "NOT_ARMED", "stopped_at": "verify_arming",
+                    "prepared": prepared, "applied": applied,
+                    "gate": {k: v for k, v in gate.items()
+                             if k != "labels"},
+                    "trail": trail,
+                    "labels": ("the configuration was applied and the "
+                               "runtime did NOT arm. No order was placed. "
+                               "`gate.reason` is the runtime's own word "
+                               "for why.")}
+        sleep(float(arming_poll_s))
+
+    # ---- monitor + shutdown
+    hb4 = client.heartbeat() or {}
+    report = execution_report(heartbeat=hb4, market=prepared["market"])
+    done("monitor", **{k: report[k] for k in
+                       ("orders_submitted", "venue_acknowledged",
+                        "orders_with_fills", "matched_pairs")})
+    sd = shutdown_plan(heartbeat=hb4, now=now_fn(),
+                       window_start=window_start,
+                       expires_utc=str(prepared["document"]["expires_utc"]))
+    done("shutdown", due=sd["due"], deadline=sd["deadline_utc"],
+         outstanding_clear=sd["outstanding_clear"])
+    return {"verdict": "EXECUTED", "stopped_at": None,
+            "prepared": prepared, "applied": applied,
+            "execution": report, "shutdown": sd, "trail": trail,
+            "labels": ("EXECUTED means the sequence ran, NOT that money "
+                       "was made. Read `execution` -- submitted, "
+                       "acknowledged, filled and settled are separate "
+                       "lines and a zero in any of them is a zero.")}

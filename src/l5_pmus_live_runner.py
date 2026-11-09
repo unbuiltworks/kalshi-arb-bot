@@ -1647,9 +1647,24 @@ class Runner:
         it.
         """
         out: Dict[str, Any] = {"blocked": True, "reason": "UNKNOWN",
+                               "operator_halt": None,
                                "shadow_lock": None, "halt_latch": None,
                                "owner_arm_token": None, "armed": None}
         try:
+            # THE OWNER'S KILL SWITCH, REPORTED HERE TOO.
+            #
+            # It was absent from this reader entirely, so the EFFECTIVE
+            # gate could report `blocked: false, reason: OPEN` while
+            # `L5_LIVE_HALT` was engaged. The env halt does refuse a
+            # submission -- `OPERATOR_HALT` in the intent chain, and the
+            # tick deadman disarms the transport -- but a reporter that
+            # disagrees with the refusal is how the 08:30Z window was
+            # lost: the halt was in the heartbeat and the blockers I read
+            # off this gate did not name it.
+            #
+            # Same expression as `halted()` and the authorization
+            # preflight, so the three cannot disagree.
+            out["operator_halt"] = operator_halted()
             out["shadow_lock"] = shadow_only()
             out["owner_arm_token"] = bool(Q1.armed())
             out["armed"] = bool(self.transport and self.transport.armed)
@@ -1681,7 +1696,12 @@ class Runner:
                     out["halt_latch"] = "UNREADABLE"
                     out["halt_error"] = "%s: %s" % (type(exc).__name__,
                                                     str(exc)[:80])
-            if out["shadow_lock"]:
+            if out["operator_halt"]:
+                # FIRST, ahead of the structural lock: this is the switch
+                # an operator reaches for, and it must be the reason they
+                # are shown.
+                out["reason"] = "OPERATOR_HALT"
+            elif out["shadow_lock"]:
                 out["reason"] = "SHADOW_ONLY_LOCK"
             elif out["halt_latch"] in ("HALT", "UNREADABLE", "NO_GATE"):
                 out["reason"] = "HALT_GATE:%s:%s" % (
@@ -1699,7 +1719,11 @@ class Runner:
                          "true means no order can reach the venue. An "
                          "unreadable latch is BLOCKED, as the gate itself "
                          "fails closed. Cancellation is NOT gated by any of "
-                         "these and stays available while blocked.")
+                         "these and stays available while blocked. "
+                         "operator_halt is the LOCAL L5_LIVE_HALT env "
+                         "switch; halt_latch is the INDEPENDENT durable "
+                         "latch a watchdog writes. They are separate "
+                         "mechanisms and either one alone blocks.")
         return out
 
     def effective_cash_gate(self) -> Dict[str, Any]:

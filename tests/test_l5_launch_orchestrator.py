@@ -69,6 +69,19 @@ def hb(**over):
                             verified_l5_status="UNPROVEN_LEGACY_ATTRIBUTION")
     base["pending_terminal"] = []
     base["quarantined"] = []
+    # THE RECORDER BLOCK, because the real heartbeat carries one and
+    # `run_launch` reads `hb["fill_calibration"]` rather than being handed
+    # a calibration separately. A fixture without it leaves
+    # `recorder_can_calibrate` UNKNOWN and the whole launch BLOCKED on the
+    # test's own omission. Figures are the shape production reported.
+    base["fill_calibration"] = {
+        "orders": 18593, "events_appended": 547, "errors": {},
+        "events_replayed_from_disk": 378388,
+        "readback": {"readable": True, "error": None,
+                     "events_readable": 378935, "orders_readable": 18593,
+                     "orders_with_full_capture": 0, "unreadable_lines": 0,
+                     "events_appended_this_process": 547,
+                     "events_replayed_from_disk": 378388}}
     base.update(over)
     return base
 
