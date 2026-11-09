@@ -2894,6 +2894,56 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #      run for THIS window, including venue reconciliation, the halt gate,
     #      uncertain orders and the capital envelope. A mandate only lets the
     #      next window ASK.
+    # 10c-bis. THE TRANSPORT'S OWN ARM CHECK, BEFORE ANY CLAIM IS WRITTEN.
+    #
+    # A WINDOW IS NOT SPENT ON AN ARM THAT CANNOT HAPPEN. Step 2 accepts
+    # EITHER a valid campaign approval OR the Q1 handshake, deliberately --
+    # the campaign document is an owner-held authorization in its own right
+    # and requiring the handshake on top of it "bought nothing". But
+    # `PMUSTransport.arm()` calls `_require_armed()`, which requires
+    # `Q1.armed()` ALWAYS. So a process holding a valid campaign and no
+    # handshake passes this boundary, SPENDS a window at the claim below,
+    # and is then refused by the transport.
+    #
+    # 0145z went that way: the claim was written at 01:45:01.572 and
+    # `t.arm()` raised NotArmed at 01:45:18 for the absent handshake. One of
+    # three authorized windows, consumed with no order and no possibility of
+    # one.
+    #
+    # WHY IT MOVED, AND THIS IS THE DEFECT. The check was written inside the
+    # `if mw > 1:` mandate branch, so it was evaluated for a MULTI-window
+    # mandate and skipped entirely for a ONE-window campaign -- which is the
+    # exact shape of every bounded single-window probe this programme runs,
+    # and the shape of the campaign that lost 0145z. Found by
+    # `analysis/l5/issue206/verify_arming_gates.py` while verifying the gates
+    # for a one-window approval: with `max_windows` 1, no handshake and
+    # `transport_armable` False, the boundary GRANTED the claim and wrote the
+    # lock; with `max_windows` 2 or 4 it correctly refused
+    # TRANSPORT_CANNOT_ARM. So the repair protected every case except the
+    # only one in use.
+    #
+    # It now sits before BOTH claim paths -- the mandate's two-level claim
+    # and the single-window claim at step 11 -- because the property is about
+    # the transport and not about how many windows were approved.
+    #
+    # PASSED IN AS A FACT, exactly as `halted` and `reconciled` are, so a
+    # caller that cannot establish it says so rather than omitting it. None
+    # means "not stated" and behaves exactly as before, which keeps every
+    # existing caller and test unchanged; only False refuses.
+    #
+    # THIS WIDENS NOTHING. A campaign-only process could never arm -- the
+    # transport refused it one call later -- so refusing it here changes no
+    # reachable outcome except that the window survives. The authorization
+    # scope is untouched: what may arm is still decided by step 2 and by the
+    # transport, not here.
+    if transport_armable is False:
+        raise ArmingRefusal(
+            "TRANSPORT_CANNOT_ARM",
+            {"note": "the transport's own arm check would refuse this "
+                     "process, so no window is spent on it",
+             "needs": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV],
+             "window_preserved": True})
+
     if mw > 1:
         # a campaign's own expiry, verified at step 8 above, IS the absolute
         # deadline this requires; the env one is then optional.
@@ -3000,13 +3050,6 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         # changes no reachable outcome except that the window survives. The
         # authorization scope is untouched: what may arm is still decided by
         # step 2 and by the transport, not here.
-        if transport_armable is False:
-            raise ArmingRefusal(
-                "TRANSPORT_CANNOT_ARM",
-                {"note": "the transport's own arm check would refuse this "
-                         "process, so no window is spent on it",
-                 "needs": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV],
-                 "window_preserved": True})
         # THE BUDGET, counted from the locks on the volume rather than from
         # memory, so a restart cannot buy another window.
         wkey = window_key(sid, market)
