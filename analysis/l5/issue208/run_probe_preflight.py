@@ -28,6 +28,7 @@ code is an opinion about evidence, never an authorization.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -77,8 +78,10 @@ def _plan(a: argparse.Namespace, market: str) -> Optional[Dict[str, Any]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=("preflight", "audit"))
-    ap.add_argument("--heartbeat", required=True,
+    ap.add_argument("mode", choices=("preflight", "audit", "window"))
+    ap.add_argument("--lead-min", default="10",
+                    help="window mode: minimum minutes of lead time")
+    ap.add_argument("--heartbeat",
                     help="file holding one L5_LIVE_HB line or object")
     ap.add_argument("--market", action="append", default=[],
                     help="the EXACT pre-registered slug; repeatable")
@@ -96,6 +99,59 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
+    if a.mode == "window":
+        # THE NEXT ELIGIBLE WINDOW, AND THE APPROVAL DOCUMENT FOR IT.
+        #
+        # Hand-computing a slug and an ISO timestamp under time pressure is
+        # how the wrong window gets authorized, and `window_starts` is an
+        # exact-match allowlist -- one wrong minute and every window is
+        # refused WINDOW_NOT_IN_AUTHORIZED_SET. So this emits both from one
+        # clock read. It writes nothing and approves nothing: the document
+        # is only an approval once the OWNER puts it in the store.
+        now = dt.datetime.now(dt.timezone.utc)
+        lead = dt.timedelta(minutes=float(a.lead_min))
+        start = now.replace(minute=(now.minute // 15) * 15, second=0,
+                            microsecond=0)
+        while start - now < lead:
+            start += dt.timedelta(minutes=15)
+
+        def iso(d):
+            return d.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+        slug = "cpc-btc-updown-15m-%s-%02d%02dz" % (
+            start.strftime("%Y-%m-%d"), start.hour, start.minute)
+        doc = {"approved": True,
+               "nonce": "probe-depth2-%s" % start.strftime("%Y%m%d-%H%Mz"),
+               "series": "cpc-btc-updown-15m-",
+               "issued_utc": iso(now),
+               "expires_utc": iso(start + dt.timedelta(minutes=30)),
+               "max_windows": 1,
+               "max_total_exposure_usd": "1.00",
+               "max_daily_loss_usd": "5.00",
+               "window_starts": [iso(start)]}
+        if a.json:
+            print(json.dumps({"slug": slug, "window_start_utc": iso(start),
+                              "lead_s": int((start - now).total_seconds()),
+                              "approval_document": doc}, indent=1))
+        else:
+            print("now                 %s" % iso(now))
+            print("window start (UTC)  %s" % iso(start))
+            print("lead time           %d s" % (start - now).total_seconds())
+            print("slug                %s" % slug)
+            print("\nL5_TS_MARKET=%s" % slug)
+            print("L5_TS_EXPERIMENT_ID=%s" % doc["nonce"])
+            print("\nL5_CAMPAIGN_APPROVAL (owner sets this; one line):")
+            print(json.dumps(doc, separators=(",", ":")))
+            print("\nNOTE: window_starts is an EXACT-MATCH allowlist. Any "
+                  "other window is refused\n      "
+                  "WINDOW_NOT_IN_AUTHORIZED_SET, which is the one-window "
+                  "cap enforced by the\n      authorization layer rather "
+                  "than by convention.")
+        return 0
+
+    if not a.heartbeat:
+        print("REFUSED: --heartbeat is required for preflight and audit.")
+        return 2
     hb = _load(a.heartbeat) or {}
     markets = [m for m in a.market if str(m).strip()]
     if not markets:
