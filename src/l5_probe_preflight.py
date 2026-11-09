@@ -171,7 +171,10 @@ def preflight(*, heartbeat: Mapping[str, Any],
         rows.append(_row("recorder_can_calibrate", UNKNOWN,
                          why="no calibration report supplied"))
     else:
-        orders = int(calibration.get("orders") or 0)
+        try:
+            orders = int(calibration.get("orders") or 0)
+        except (TypeError, ValueError, OverflowError):
+            orders = 0
         # Orders seen in memory do not prove that their events survived a write.
         # A missing or zero append count must fail closed before live arming.
         appended_raw = calibration.get("events_appended")
@@ -183,9 +186,12 @@ def preflight(*, heartbeat: Mapping[str, Any],
                          orders > 0 and appended is not None and appended > 0,
                          orders=orders, events_appended=appended_raw))
         errs = dict(calibration.get("errors") or {})
+        try:
+            write_failures = int(errs.get("ledger_write_failed", 0))
+        except (TypeError, ValueError, OverflowError):
+            write_failures = None
         rows.append(_row("recorder_has_no_write_failures",
-                         int(errs.get("ledger_write_failed", 0)) == 0,
-                         errors=errs))
+                         write_failures == 0, errors=errs))
 
     unknown = [r for r in rows if r["ok"] is UNKNOWN]
     failed = [r for r in rows if r["ok"] is False]
