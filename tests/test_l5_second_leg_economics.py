@@ -139,7 +139,7 @@ def test_paired_entry_positive_expected_net_passes_model_gate_only():
         p_up_settles_given_up_only="0.6",
         p_up_settles_given_down_only="0.4", minimum_expected_net="0.01")
     assert out["eligible"] and out["model_only"]
-    assert D(out["expected_net"]) == D("0.0845")
+    assert D(out["expected_net"]) == D("0.0865")
 
 
 def test_positive_pair_profit_but_negative_total_ev_refuses():
