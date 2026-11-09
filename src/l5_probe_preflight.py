@@ -118,7 +118,7 @@ def preflight(*, heartbeat: Mapping[str, Any],
     age = _d(book.get("stream_age_s"))
     rows.append(_row("authenticated_book_connected_and_fresh",
                      bool(book.get("connected")) and age is not None
-                     and age >= 0 and not book.get("gap_suspected"),
+                     and 0 <= age <= D("2") and not book.get("gap_suspected"),
                      connected=book.get("connected"),
                      stream_age_s=book.get("stream_age_s"),
                      gap_suspected=book.get("gap_suspected"),
