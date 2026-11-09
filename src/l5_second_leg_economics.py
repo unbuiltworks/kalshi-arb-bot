@@ -112,7 +112,9 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           p_down_only=None, p_neither=None,
                           p_up_settles_given_up_only=None,
                           p_up_settles_given_down_only=None, adverse_cost="0",
-                          max_combined_cost=None, minimum_expected_net="0",\n                          max_residual_probability=None,\n                          max_single_leg_loss=None):
+                          max_combined_cost=None, minimum_expected_net="0",
+                          max_residual_probability=None,
+                          max_single_leg_loss=None):
     """Read-only joint-fill paired-entry model; NEVER an order instruction.
 
     Probabilities must be externally calibrated from time-aligned order events.
@@ -150,12 +152,36 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
     down_only_net = q * (1 - settle_up_if_down) - (q * d + df + adverse)
     both_net = q - pair_cost
     expected = both * both_net + up_only * up_only_net + down_only * down_only_net
-    threshold = dec(minimum_expected_net)\n    residual_probability = up_only + down_only\n    residual_worst = min(-(q * u + uf + adverse),\n                         -(q * d + df + adverse))\n    if max_residual_probability is not None:\n        cap = dec(max_residual_probability)\n        if not D("0") <= cap <= D("1"):\n            raise ValueError("invalid residual probability limit")\n        if residual_probability > cap:\n            result.update(reason="RESIDUAL_PROBABILITY_LIMIT",\n                          expected_net=str(expected),\n                          p_any_residual=str(residual_probability),\n                          model_only=True)\n            return result\n    if max_single_leg_loss is not None:\n        limit = dec(max_single_leg_loss)\n        if limit < 0:\n            raise ValueError("negative single-leg loss limit")\n        if residual_worst < -limit:\n            result.update(reason="SINGLE_LEG_LOSS_LIMIT",\n                          expected_net=str(expected),\n                          residual_worst=str(residual_worst),\n                          model_only=True)\n            return result
+    threshold = dec(minimum_expected_net)
+    residual_probability = up_only + down_only
+    residual_worst = min(-(q * u + uf + adverse),
+                         -(q * d + df + adverse))
+    if max_residual_probability is not None:
+        cap = dec(max_residual_probability)
+        if not D("0") <= cap <= D("1"):
+            raise ValueError("invalid residual probability limit")
+        if residual_probability > cap:
+            result.update(reason="RESIDUAL_PROBABILITY_LIMIT",
+                          expected_net=str(expected),
+                          p_any_residual=str(residual_probability),
+                          model_only=True)
+            return result
+    if max_single_leg_loss is not None:
+        limit = dec(max_single_leg_loss)
+        if limit < 0:
+            raise ValueError("negative single-leg loss limit")
+        if residual_worst < -limit:
+            result.update(reason="SINGLE_LEG_LOSS_LIMIT",
+                          expected_net=str(expected),
+                          residual_worst=str(residual_worst),
+                          model_only=True)
+            return result
     result.update(eligible=(expected > threshold),
                   reason=None if expected > threshold else "NONPOSITIVE_EXPECTED_NET",
                   model_only=True,
                   expected_net=str(expected),
-                  p_any_residual=str(residual_probability),\n                  residual_worst=str(residual_worst),
+                  p_any_residual=str(residual_probability),
+                  residual_worst=str(residual_worst),
                   up_only_expected_net=str(up_only_net),
                   down_only_expected_net=str(down_only_net),
                   both_net=str(both_net),
