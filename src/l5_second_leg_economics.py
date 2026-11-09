@@ -97,11 +97,13 @@ def evaluate(inv: Inventory, candidate: Candidate, *, max_book_age_s=D("2"),
                   no_fill_worst=str(hold_worst))
     if candidate.action == "TAKER":
         result["executable_worst"] = str(worst)
+        result["execution_confirmed"] = False
     elif candidate.maker_fill_probability is not None:
         p = candidate.maker_fill_probability
         result["model_expected_worst"] = str(p * worst + (D("1") - p) * hold_worst)
         result["model_only"] = True
     else:
+        result["eligible"] = False
         result["model_expected_worst"] = None
         result["reason"] = "FILL_PROBABILITY_UNVALIDATED"
     return result
