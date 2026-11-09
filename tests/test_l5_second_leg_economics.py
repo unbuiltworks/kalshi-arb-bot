@@ -11,7 +11,7 @@ def c(action="TAKER", side="DOWN", qty="1", px="0.35", fee="0",
                      None if probability is None else D(probability))
 
 
-def test_actual_historical_one_pair_and_residual_accounting():
+def test_unequal_inventory_settlement_accounting():
     inv = Inventory(D("2"), D("1"), D("1.59"))
     assert inv.outcome_net() == (D("0.41"), D("-0.59"))
 
