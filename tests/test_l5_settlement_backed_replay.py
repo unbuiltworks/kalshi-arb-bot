@@ -16,7 +16,7 @@ def settled(fills, side="UP", redemption="0", up="0", down="0", **kw):
 def test_actual_stranded_loss_not_flat_proxy():
     row = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
     assert row["eligible"] and row["stranded"]
-    assert row["settled_net"] == "-0.308"
+    assert row["settled_net"] == "-0.3080"
 
 
 def test_sale_recovers_proceeds_but_never_assumes_fill():
@@ -30,7 +30,7 @@ def test_completed_pair_settlement_and_fees():
     row = settled([fill("UP", "BUY", "1", "0.51", fee="0.01"),
                    fill("DOWN", "BUY", "1", "0.44", fee="0.01")],
                   "DOWN", "1", "1", "1")
-    assert row["settled_net"] == "0.03"
+    assert row["settled_net"] == "0.0300"
 
 
 def test_refuse_unattested_or_unresolved():
@@ -55,7 +55,7 @@ def test_refuse_uncovered_sale_and_missing_fee():
 
 def test_aggregate_requires_all_settled():
     a = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
-    assert aggregate_confirmed_markets([a])["settled_net"] == "-0.308"
+    assert aggregate_confirmed_markets([a])["settled_net"] == "-0.3080"
     assert not aggregate_confirmed_markets([a, {"eligible": False}])["eligible"]
 
 
@@ -79,3 +79,45 @@ def test_replay_refuses_missing_or_unsettled_market():
     assert compare_settled_strategies(baseline={"a": loss},
            candidate={"a": {"eligible": False}},
            identical_market_ids=["a"])["reason"] == "UNCONFIRMED_SETTLEMENT"
+
+
+# ---------------------------------------------------------------------
+# THE PROPERTY THE INCONSISTENCY REVEALED (CI run 42669331096)
+# ---------------------------------------------------------------------
+def test_reported_money_does_not_depend_on_how_the_inputs_were_SPELLED():
+    """The same economics must report the same string.
+
+    `str(Decimal)` keeps the scale the arithmetic produced, so a fee of
+    "0.01" and a fee of "0.010000" -- identical money -- reported
+    "-0.073" and "-0.0730". Three of this file's assertions encoded the
+    former and two the latter, which is why CI split.
+    """
+    terse = settled([fill("DOWN", "BUY", "0.7", "0.44"),
+                     fill("DOWN", "SELL", "0.7", "0.35", fee="0.01")],
+                    "UP", "0", "0", "0")
+    padded = settled([fill("DOWN", "BUY", "0.70", "0.4400"),
+                      fill("DOWN", "SELL", "0.700", "0.350000",
+                           fee="0.010000")],
+                     "UP", "0", "0", "0")
+    assert terse["settled_net"] == padded["settled_net"] == "-0.0730"
+    assert terse["cash_before_redemption"] == padded["cash_before_redemption"]
+
+
+def test_every_reported_money_field_has_exactly_four_places():
+    row = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
+    for k in ("settled_net", "cash_before_redemption", "redemption"):
+        assert row[k].split(".")[-1].__len__() == 4, (k, row[k])
+
+
+def test_a_non_terminating_mean_is_still_a_four_place_string():
+    """three markets at -0.308 average to -0.102666..., which str() would
+    render at 28 significant digits."""
+    rows = [settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0",
+                    "0.7") for _ in range(3)]
+    agg = aggregate_confirmed_markets(rows)
+    assert agg["net_per_market"] == "-0.3080"
+    rows.append(settled([fill("UP", "BUY", "1", "0.51", fee="0.01"),
+                         fill("DOWN", "BUY", "1", "0.44", fee="0.01")],
+                        "DOWN", "1", "1", "1"))
+    agg2 = aggregate_confirmed_markets(rows)
+    assert len(agg2["net_per_market"].split(".")[-1]) == 4

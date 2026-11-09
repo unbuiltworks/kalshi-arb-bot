@@ -3,9 +3,29 @@
 All records must come from venue-confirmed fills, terminal inventory and
 settlement. Missing evidence refuses the market rather than filling gaps.
 """
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
 
 D = Decimal
+
+#: Money is reported at a FIXED scale, and that is a correctness property
+#: rather than cosmetics. `str(Decimal)` preserves the scale the arithmetic
+#: happened to produce, so the SAME economics reported a different string
+#: depending on how the inputs were spelled: a fee of "0.01" gave
+#: "-0.073" where "0.0100" would have given "-0.0730". Two of this
+#: module's own tests asserted the four-place form and three asserted the
+#: raw form, which is how the inconsistency surfaced -- CI run
+#: 42669331096.
+#:
+#: Four places is the finest meaningful unit here: prices are quoted in
+#: cents and quantities to a hundredth, so a price x quantity product needs
+#: four. Internal arithmetic stays EXACT; only the reported strings are
+#: quantized, so no intermediate precision is lost.
+MONEY_PLACES = D("0.0001")
+
+
+def _money(value):
+    """A money Decimal as a fixed-scale string. Banker's rounding."""
+    return str(D(value).quantize(MONEY_PLACES, rounding=ROUND_HALF_EVEN))
 
 
 def _decimal(value):
@@ -64,9 +84,9 @@ def reconcile_settled_market(*, fills, settlement_side, redemption,
         if paid != qty[settlement_side]:
             return {"eligible": False, "reason": "REDEMPTION_MISMATCH"}
         net = cash + paid
-        return {"eligible": True, "settled_net": str(net),
-                "cash_before_redemption": str(cash),
-                "redemption": str(paid),
+        return {"eligible": True, "settled_net": _money(net),
+                "cash_before_redemption": _money(cash),
+                "redemption": _money(paid),
                 "terminal_up": str(qty["UP"]), "terminal_down": str(qty["DOWN"]),
                 "had_up_fill": bought["UP"] > 0,
                 "had_down_fill": bought["DOWN"] > 0,
@@ -82,7 +102,10 @@ def aggregate_confirmed_markets(markets):
         return {"eligible": False, "reason": "INCOMPLETE_SETTLEMENT_POPULATION"}
     total = sum((_decimal(row["settled_net"]) for row in records), D("0"))
     return {"eligible": True, "market_count": len(records),
-            "settled_net": str(total), "net_per_market": str(total / len(records)),
+            "settled_net": _money(total),
+            # A DIVISION NEEDS THE QUANTIZE MOST: total/len is routinely
+            # non-terminating, and str() of that is 28 significant digits.
+            "net_per_market": _money(total / len(records)),
             "stranded_market_count": sum(bool(row["stranded"]) for row in records)}
 
 
@@ -104,9 +127,9 @@ def compare_settled_strategies(*, baseline, candidate, identical_market_ids):
         return {"eligible": False, "reason": "UNCONFIRMED_SETTLEMENT"}
     bnet, cnet = _decimal(b["settled_net"]), _decimal(c["settled_net"])
     return {"eligible": True, "market_count": len(ids),
-            "baseline_settled_net": str(bnet),
-            "candidate_settled_net": str(cnet),
-            "delta_settled_net": str(cnet - bnet),
-            "no_trade_settled_net": "0",
+            "baseline_settled_net": _money(bnet),
+            "candidate_settled_net": _money(cnet),
+            "delta_settled_net": _money(cnet - bnet),
+            "no_trade_settled_net": _money(D("0")),
             "candidate_beats_no_trade": cnet > 0,
             "candidate_beats_baseline": cnet > bnet}
