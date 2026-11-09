@@ -202,6 +202,43 @@ def preflight(*, heartbeat: Mapping[str, Any],
     }
 
 
+def exact_window_consistency(*, heartbeat: Mapping[str, Any],
+                             plan: Mapping[str, Any],
+                             market: str) -> Dict[str, Any]:
+    """Fail-closed, read-only market identity gate for a live probe.
+
+    The runner's heartbeat market is the transport's active market_slug.
+    A startup/document-only authorization verdict is not market coverage.
+    This gate must be called by the live-probe orchestrator before arming;
+    it does not itself authorize or submit anything.
+    """
+    hb = heartbeat or {}
+    wanted = str(market or "").strip()
+    active = str(hb.get("market") or "").strip()
+    planned = str((plan or {}).get("market") or "").strip()
+    verdict = hb.get("authorization_preflight") or {}
+    evaluated = str(verdict.get("evaluated_market") or "").strip()
+    camp = hb.get("campaign") or {}
+    checks = [
+        _row("exact_target_present", bool(wanted), target=wanted),
+        _row("executor_active_market_matches", bool(wanted) and active == wanted,
+             active=active, target=wanted),
+        _row("plan_market_matches_executor", bool(wanted) and planned == wanted,
+             plan_market=planned, target=wanted),
+        _row("authorization_evaluated_same_market",
+             bool(wanted) and evaluated == wanted,
+             evaluated_market=evaluated, target=wanted),
+        _row("campaign_permits_exact_window",
+             camp.get("permits_this_window") is True,
+             permits_this_window=camp.get("permits_this_window")),
+        _row("authorization_verdict_passes", verdict.get("ok") is True,
+             authorization_ok=verdict.get("ok")),
+    ]
+    return {"ok": all(row["ok"] is True for row in checks),
+            "checks": checks,
+            "failed": [row["check"] for row in checks if row["ok"] is not True]}
+
+
 # ------------------------------------------------------------------ after
 def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
           leg_cost: Mapping[str, Any],
