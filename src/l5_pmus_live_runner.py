@@ -6098,15 +6098,55 @@ class Runner:
         Reporting only -- `authorize_arming` still decides.
         """
         try:
-            pf = AUTH.authorization_preflight(
-                str(getattr(self.transport, "market_slug", "") or ""),
-                root=self.root)
+            _mkt = str(getattr(self.transport, "market_slug", "") or "")
+            pf = AUTH.authorization_preflight(_mkt, root=self.root)
+            # THE MARKET IT WAS EVALUATED AGAINST, AND WHY EACH CHECK
+            # FAILED.
+            #
+            # WHAT THIS COST. The full L5_AUTHORIZATION_PREFLIGHT line is
+            # emitted ONCE AT STARTUP, when the transport has no slug yet;
+            # `authorization_preflight` then deliberately evaluates the
+            # campaign DOCUMENT alone and reports coverage as
+            # NOT_EVALUATED, so it says campaign_approval PASS. This
+            # verdict is emitted CONTINUOUSLY, with the slug of whatever
+            # window is current -- and a campaign authorizing only the NEXT
+            # window correctly says FAIL for this one.
+            #
+            # Both are right. But `fail: ["campaign_approval"]` with no
+            # market and no reason is indistinguishable from a broken
+            # approval, and that ambiguity cost a review cycle: the two
+            # lines were compared as though they disagreed about the same
+            # question when they were answering different ones.
+            #
+            # So the market and the reasons travel with the verdict, and
+            # the one benign case -- a valid campaign whose window has not
+            # arrived -- is named outright. Reporting only: no gate, limit
+            # or decision is touched, and `authorize_arming` still decides.
+            _rows = {str(r.get("check")): r for r in (pf.get("rows") or [])
+                     if isinstance(r, Mapping)}
+            _why = {k: (_rows.get(k) or {}).get("reason")
+                    for k in (pf.get("fail") or [])
+                    if (_rows.get(k) or {}).get("reason")}
+            _camp = (_rows.get("campaign_approval") or {})
+            _awaiting = (str(_camp.get("reason") or "")
+                         == "WINDOW_NOT_IN_AUTHORIZED_SET")
             return {"ok": pf.get("ok"), "fail": pf.get("fail"),
                     "unknown": pf.get("unknown"),
+                    "evaluated_market": _mkt or None,
+                    "fail_reasons": _why or None,
+                    "awaiting_authorized_window": _awaiting,
                     "labels": ("compact verdict; full rows on the "
                                "L5_AUTHORIZATION_PREFLIGHT line. ok false "
                                "means arming WILL refuse for the named "
-                               "check, whatever the campaign says.")}
+                               "check, whatever the campaign says. "
+                               "`evaluated_market` is the window this "
+                               "verdict was computed FOR -- the startup "
+                               "line has no slug and so evaluates the "
+                               "document alone, which is why the two can "
+                               "differ without disagreeing. "
+                               "`awaiting_authorized_window` true means "
+                               "the campaign is VALID and this is simply "
+                               "not its window yet.")}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
