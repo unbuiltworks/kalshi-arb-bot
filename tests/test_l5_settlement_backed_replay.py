@@ -1,3 +1,4 @@
+from decimal import Decimal as D
 from src.l5_settlement_backed_replay import reconcile_settled_market, aggregate_confirmed_markets, compare_settled_strategies
 
 
@@ -22,7 +23,7 @@ def test_sale_recovers_proceeds_but_never_assumes_fill():
     row = settled([fill("DOWN", "BUY", "0.7", "0.44"),
                    fill("DOWN", "SELL", "0.7", "0.35", fee="0.01")],
                   "UP", "0", "0", "0")
-    assert row["settled_net"] == "-0.0730"
+    assert D(row["settled_net"]) == D("-0.0730")
 
 
 def test_completed_pair_settlement_and_fees():
@@ -67,7 +68,7 @@ def test_confirmed_same_population_vs_no_trade():
                                         candidate={"m": rescued},
                                         identical_market_ids=["m"])
     assert result["eligible"]
-    assert result["delta_settled_net"] == "0.2350"
+    assert D(result["delta_settled_net"]) == D("0.2350")
     assert not result["candidate_beats_no_trade"]
 
 
