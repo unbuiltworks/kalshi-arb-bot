@@ -105,3 +105,54 @@ def evaluate(inv: Inventory, candidate: Candidate, *, max_book_age_s=D("2"),
         result["model_expected_worst"] = None
         result["reason"] = "FILL_PROBABILITY_UNVALIDATED"
     return result
+
+
+def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
+                          down_fee="0", p_both=None, p_up_only=None,
+                          p_down_only=None, p_neither=None,
+                          p_up_settles=None, adverse_cost="0",
+                          max_combined_cost=None):
+    """Read-only joint-fill paired-entry model; NEVER an order instruction.
+
+    Probabilities must be externally calibrated from time-aligned order events.
+    A joint distribution is mandatory: assuming independent maker fills would
+    conceal trend-driven adverse selection. Settlement probability is distinct
+    from fill probability. No estimated fills are represented as executions.
+    Returns a refusal when the necessary evidence is unavailable.
+    """
+    q = dec(quantity)
+    u, d = dec(up_price), dec(down_price)
+    uf, df, adverse = dec(up_fee), dec(down_fee), dec(adverse_cost)
+    if q <= 0 or not (D("0") <= u <= D("1") and D("0") <= d <= D("1")):
+        raise ValueError("invalid quote price or quantity")
+    if min(uf, df, adverse) < 0:
+        raise ValueError("negative fee or adverse cost")
+    pair_cost = q * (u + d) + uf + df + adverse
+    result = {"eligible": False, "pair_cost": str(pair_cost),
+              "pair_net_if_both_fill": str(q - pair_cost),
+              "reason": "JOINT_FILL_OR_SETTLEMENT_UNVALIDATED"}
+    if max_combined_cost is not None and pair_cost > dec(max_combined_cost):
+        result["reason"] = "PAIR_COST_LIMIT"
+        return result
+    probs = (p_both, p_up_only, p_down_only, p_neither, p_up_settles)
+    if any(p is None for p in probs):
+        return result
+    both, up_only, down_only, neither, settle_up = map(dec, probs)
+    if any(p < 0 or p > 1 for p in (both, up_only, down_only, neither, settle_up)):
+        raise ValueError("probability outside [0,1]")
+    if sum((both, up_only, down_only, neither)) != 1:
+        raise ValueError("joint fill probabilities must sum to one")
+    # Costs are incurred only for filled legs; adverse cost is charged to
+    # both-filled paths only. Each residual is marked through settlement.
+    up_only_net = q * settle_up - (q * u + uf)
+    down_only_net = q * (1 - settle_up) - (q * d + df)
+    both_net = q - pair_cost
+    expected = both * both_net + up_only * up_only_net + down_only * down_only_net
+    result.update(eligible=True, reason=None, model_only=True,
+                  expected_net=str(expected),
+                  p_any_residual=str(up_only + down_only),
+                  up_only_expected_net=str(up_only_net),
+                  down_only_expected_net=str(down_only_net),
+                  both_net=str(both_net),
+                  no_fill_net="0")
+    return result
