@@ -12,6 +12,8 @@ on:
       - src/l5_settlement_backed_replay.py
       - tests/test_l5_settlement_backed_replay.py
       - tests/test_l5_production_entry_evidence_gate.py
+      - src/l5_two_sided_probe.py
+      - tests/test_l5_two_sided_probe.py
       - .github/workflows/l5-economics-gate.yml
 permissions:
   contents: read
