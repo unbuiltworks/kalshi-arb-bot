@@ -146,13 +146,15 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
         raise ValueError("probability outside [0,1]")
     if sum((both, up_only, down_only, neither)) != 1:
         raise ValueError("joint fill probabilities must sum to one")
-    # Costs are incurred only for filled legs; adverse cost is charged to
-    # both-filled paths only. Each residual is marked through settlement.
+    # Charge the conservative adverse-cost allowance on every filled path.
+    # Single-leg paths settle directionally; both-filled paths redeem q.
     up_only_net = q * settle_up_if_up - (q * u + uf + adverse)
     down_only_net = q * (1 - settle_up_if_down) - (q * d + df + adverse)
     both_net = q - pair_cost
     expected = both * both_net + up_only * up_only_net + down_only * down_only_net
     threshold = dec(minimum_expected_net)
+    if threshold < 0:
+        raise ValueError("negative minimum expected net")
     residual_probability = up_only + down_only
     residual_worst = min(-(q * u + uf + adverse),
                          -(q * d + df + adverse))
