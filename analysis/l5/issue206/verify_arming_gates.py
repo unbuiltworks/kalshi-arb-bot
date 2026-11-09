@@ -120,6 +120,12 @@ FIXES: Dict[str, Tuple[str, str, str]] = {
         "the window has not started -- this is TIME, not a setting"),
     "WINDOW_CLOSING": (
         "the clock", CODE, "inside the pre-close margin"),
+    "TRANSPORT_CANNOT_ARM": (
+        "PMUS_Q1_LIVE / PMUS_Q1_SESSION_ID / PMUS_Q1_ARM", OWNER,
+        "the Q1 handshake -- the transport's own arm check would refuse "
+        "this process, and NO WINDOW IS SPENT on it. This gate was found "
+        "by this tool: it was nested inside `if mw > 1:` and so was "
+        "skipped for a ONE-window campaign, the only shape in use"),
     "DEPLOYMENT_IDENTITY_UNKNOWN": (
         "RAILWAY_DEPLOYMENT_ID", SERVICE, "set the deployment id"),
 }
@@ -302,7 +308,7 @@ def _apply(state: Dict[str, Any], reason: str,
     """Set the ONE input that gate reads to its satisfied value."""
     if reason == "SHADOW_ONLY_LOCK":
         state["shadow_locked"] = False
-    elif reason == "OWNER_AUTHORIZATION_ABSENT":
+    elif reason in ("OWNER_AUTHORIZATION_ABSENT", "TRANSPORT_CANNOT_ARM"):
         state["owner_handshake"] = True
         state["transport_armable"] = True
     elif reason in ("CAMPAIGN_RUNNING_LIMITS_UNREADABLE",
