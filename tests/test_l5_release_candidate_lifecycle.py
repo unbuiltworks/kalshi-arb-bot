@@ -517,10 +517,18 @@ def test_cancellation_still_works_while_submission_is_blocked(tmp_path):
 # THE CANDIDATE'S OWN CHANGES, DEFAULT-OFF
 # =====================================================================
 
-def test_adaptive_completion_depth_is_off_by_default(monkeypatch):
-    """The candidate's adaptive retry must be inert unless switched on, so
-    that deploying it changes no decision."""
+def test_adaptive_completion_depth_is_ON_by_default_since_1530z(monkeypatch):
+    """A CORRECTION OF THIS TEST'S PREMISE, not a relaxation of it.
+
+    It asserted the adaptive retry was inert "so that deploying it changes
+    no decision". That inertness is exactly what the 2026-11-09 15:30Z
+    live window paid to discover: it ran with the retry off, completed
+    ZERO pairs from one filled leg, and settled -$0.3080 -- the shape the
+    retry's own docstring had already measured at zero pairs in 652
+    replayed entries. The default is now ON and off is an explicit act."""
     monkeypatch.delenv(BC.ADAPTIVE_ENV, raising=False)
+    assert BC.adaptive_depth_enabled() is True
+    monkeypatch.setenv(BC.ADAPTIVE_ENV, "off")
     assert BC.adaptive_depth_enabled() is False
     assert BC.adaptive_depth_candidates() == [BC.completion_depth_ticks()]
 

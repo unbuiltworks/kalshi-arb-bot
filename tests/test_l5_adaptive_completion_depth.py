@@ -48,23 +48,33 @@ def test_the_deployed_completion_depth_is_the_touch():
 
 
 # ========================================================= default OFF
-def test_adaptive_depth_is_off_unless_set(monkeypatch):
+def test_adaptive_depth_is_ON_unless_explicitly_disabled(monkeypatch):
+    """THE DEFAULT FLIPPED after the 2026-11-09 15:30Z live window ran
+    with it off and completed nothing. See `adaptive_depth_enabled`.
+    Off is now an explicit act; the property under test is that the
+    variable still governs, not which way it points by default."""
     monkeypatch.delenv(BC.ADAPTIVE_ENV, raising=False)
+    assert BC.adaptive_depth_enabled() is True
+    monkeypatch.setenv(BC.ADAPTIVE_ENV, "off")
     assert BC.adaptive_depth_enabled() is False
 
 
-def test_with_the_flag_off_the_candidate_list_is_exactly_the_deployed_depth(
+def test_with_the_flag_EXPLICITLY_off_the_list_is_exactly_the_pinned_depth(
         monkeypatch):
-    """So the wired loop runs ZERO extra decisions and the money path is
-    byte-identical to before."""
-    monkeypatch.delenv(BC.ADAPTIVE_ENV, raising=False)
+    """The escape hatch still works: an explicit false pins the depth and
+    the wired loop runs ZERO extra decisions, byte-identical to the old
+    default. What changed is only which way an ABSENT value points."""
+    monkeypatch.setenv(BC.ADAPTIVE_ENV, "0")
     assert BC.adaptive_depth_candidates() == [BC.completion_depth_ticks()]
     assert BC.adaptive_depth_candidates() == [0]
 
 
 @pytest.mark.parametrize("val,on", [
     ("1", True), ("yes", True), ("YES", True), ("true", True), ("on", True),
-    ("0", False), ("no", False), ("off", False), ("", False)])
+    ("0", False), ("no", False), ("off", False),
+    # EMPTY IS NOW ON, deliberately: an absent or blank value must not
+    # silently restore the shape that completes nothing.
+    ("", True)])
 def test_the_flag_parses_like_every_other_switch(val, on, monkeypatch):
     monkeypatch.setenv(BC.ADAPTIVE_ENV, val)
     assert BC.adaptive_depth_enabled() is on
