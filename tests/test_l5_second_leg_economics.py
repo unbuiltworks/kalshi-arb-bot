@@ -55,7 +55,8 @@ def test_capital_and_loss_limits_refuse():
 def test_maker_no_fill_is_not_assumed():
     inv = Inventory(D("1"), D("0"), D("0.62"))
     out = evaluate(inv, c(action="MAKER"))
-    assert out["eligible"] and out["model_expected_worst"] is None
+    assert not out["eligible"] and out["model_expected_worst"] is None
+    assert out["reason"] == "FILL_PROBABILITY_UNVALIDATED"
     assert out["no_fill_worst"] == "-0.62"
 
 
@@ -175,3 +176,18 @@ def test_adverse_cost_charged_when_only_one_leg_fills():
         p_up_settles_given_up_only="0.6",
         p_up_settles_given_down_only="0.4", adverse_cost="0.03")
     assert D(out["up_only_expected_net"]) == D("0.11")
+
+
+def test_taker_hypothesis_never_claims_venue_execution():
+    inv = Inventory(D("1"), D("0"), D("0.62"))
+    out = evaluate(inv, c(action="TAKER"))
+    assert out["eligible"]
+    assert out["execution_confirmed"] is False
+
+
+def test_profit_floor_must_be_nonnegative():
+    with pytest.raises(ValueError, match="negative minimum expected net"):
+        evaluate_paired_entry(up_price="0.46", down_price="0.45", quantity="1",
+            p_both="1", p_up_only="0", p_down_only="0", p_neither="0",
+            p_up_settles_given_up_only="0.5",
+            p_up_settles_given_down_only="0.5", minimum_expected_net="-0.01")
