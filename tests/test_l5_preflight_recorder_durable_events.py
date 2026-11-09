@@ -29,3 +29,16 @@ def test_recorder_rejects_events_without_orders():
 
 def test_recorder_accepts_positive_counts_for_this_check_only():
     assert _row({"orders": 1, "events_appended": 1})["ok"] is True
+
+
+def test_recorder_malformed_orders_counter_fails_closed():
+    assert _row({"orders": "invalid", "events_appended": 1})["ok"] is False
+
+
+def test_recorder_malformed_write_failure_counter_fails_closed():
+    report = preflight(heartbeat={}, plan=None, markets=[],
+                       calibration={"orders": 1, "events_appended": 1,
+                                    "errors": {"ledger_write_failed": "invalid"}})
+    row = next(x for x in report["checks"]
+               if x["check"] == "recorder_has_no_write_failures")
+    assert row["ok"] is False
