@@ -938,3 +938,36 @@ def test_complement_refuses_future_dated_book_snapshot():
     )
     assert result["ok"] is False
     assert result["reason"] == "BOOK_STALE"
+
+
+def test_optional_economics_refuses_unattested_entry(armed):
+    base = TS.build_orders(**book())
+    assert base["ok"], base
+    gated = TS.build_orders(**book(production_entry_evidence={}))
+    assert not gated["ok"]
+    assert gated["reason"] == "ENTRY_ECONOMICS_REFUSED"
+    assert gated["economics_reason"] == "CALIBRATION_OR_BOOK_ID_MISSING"
+
+
+def test_optional_economics_refuses_quote_override(armed):
+    gated = TS.build_orders(**book(production_entry_evidence={"quantity": "1000"}))
+    assert not gated["ok"]
+    assert gated["reason"] == "ENTRY_EVIDENCE_OVERRIDE"
+
+
+def test_optional_economics_refuses_stale_or_missing_joint_fills(armed):
+    evidence = {"calibration_id": "oos-verified", "book_observation_id": "venue-snapshot",
+                "up_fee": "0.01", "down_fee": "0.01",
+                "adverse_cost": "0.01", "max_single_leg_loss": "3",
+                "max_residual_probability": "0.5",
+                }
+    gated = TS.build_orders(**book(production_entry_evidence=evidence))
+    assert not gated["ok"]
+    assert gated["reason"] == "ENTRY_ECONOMICS_REFUSED"
+    assert gated["economics_reason"] == "JOINT_FILL_OR_SETTLEMENT_UNVALIDATED"
+
+
+def test_evidence_cannot_override_venue_depth(armed):
+    gated = TS.build_orders(**book(production_entry_evidence={
+        "up_depth": "1000000", "down_depth": "1000000"}))
+    assert gated["reason"] == "ENTRY_EVIDENCE_OVERRIDE"
