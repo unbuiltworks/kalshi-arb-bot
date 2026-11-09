@@ -28,7 +28,10 @@ HB = {
                             "max_worst_case_deficit_usd": "1.00",
                             "worst_case_deficit_check": "ACTIVE"},
     "day_realized": {"room_usd": "5", "halt_usd": "5", "would_halt": False},
-    "campaign": {"completion_reserve": {"may_open": True,
+    "market": MARKET,
+    "authorization_preflight": {"ok": True, "evaluated_market": MARKET},
+    "campaign": {"permits_this_window": True,
+                 "completion_reserve": {"may_open": True,
                                         "submissions_per_obligation": 2}},
     "auth_book": {"connected": True, "stream_age_s": 0.0,
                   "gap_suspected": False, "stall_reconnects": 0},
@@ -186,3 +189,30 @@ def test_the_cli_changes_nothing(tmp_path):
     for banned in ("record_submit", "apply_order_progress", "arm(",
                    ".post(", "requests.", "os.environ["):
         assert banned not in src, banned
+
+
+def test_cli_rejects_stale_executor_market(tmp_path):
+    r = run("preflight", "--heartbeat",
+            write_hb(tmp_path, market="cpc-btc-updown-15m-2026-11-08-1145z"),
+            "--market", MARKET, "--bid", "0.62", "--ask", "0.63")
+    assert r.returncode == 1
+    assert "executor_active_market_matches" in r.stdout
+
+
+def test_cli_rejects_document_only_authorization(tmp_path):
+    r = run("preflight", "--heartbeat",
+            write_hb(tmp_path, authorization_preflight={
+                "ok": True, "evaluated_market": None}),
+            "--market", MARKET, "--bid", "0.62", "--ask", "0.63")
+    assert r.returncode == 1
+    assert "authorization_evaluated_same_market" in r.stdout
+
+
+def test_cli_rejects_wrong_campaign_window(tmp_path):
+    r = run("preflight", "--heartbeat",
+            write_hb(tmp_path, campaign={
+                "permits_this_window": False,
+                "completion_reserve": {"may_open": True}}),
+            "--market", MARKET, "--bid", "0.62", "--ask", "0.63")
+    assert r.returncode == 1
+    assert "campaign_permits_exact_window" in r.stdout
