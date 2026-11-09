@@ -55,3 +55,23 @@ def test_authorization_failure_fails():
 
 def test_missing_target_fails():
     assert check(market="")["ok"] is False
+
+
+def test_book_age_policy_rejects_over_two_seconds():
+    from src.l5_probe_preflight import preflight
+    base = {"auth_book": {"connected": True, "stream_age_s": 2.01,
+                          "gap_suspected": False}}
+    report = preflight(heartbeat=base, plan=None, markets=[TARGET])
+    row = next(x for x in report["checks"]
+               if x["check"] == "authenticated_book_connected_and_fresh")
+    assert row["ok"] is False
+
+
+def test_book_age_policy_allows_two_seconds():
+    from src.l5_probe_preflight import preflight
+    base = {"auth_book": {"connected": True, "stream_age_s": 2.0,
+                          "gap_suspected": False}}
+    report = preflight(heartbeat=base, plan=None, markets=[TARGET])
+    row = next(x for x in report["checks"]
+               if x["check"] == "authenticated_book_connected_and_fresh")
+    assert row["ok"] is True
