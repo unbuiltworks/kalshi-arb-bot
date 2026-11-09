@@ -110,7 +110,7 @@ def evaluate(inv: Inventory, candidate: Candidate, *, max_book_age_s=D("2"),
 def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           down_fee="0", p_both=None, p_up_only=None,
                           p_down_only=None, p_neither=None,
-                          p_up_settles=None, adverse_cost="0",
+                          p_up_settles_given_up_only=None,\n                          p_up_settles_given_down_only=None, adverse_cost="0",
                           max_combined_cost=None):
     """Read-only joint-fill paired-entry model; NEVER an order instruction.
 
@@ -134,18 +134,18 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
     if max_combined_cost is not None and pair_cost > dec(max_combined_cost):
         result["reason"] = "PAIR_COST_LIMIT"
         return result
-    probs = (p_both, p_up_only, p_down_only, p_neither, p_up_settles)
+    probs = (p_both, p_up_only, p_down_only, p_neither,\n             p_up_settles_given_up_only, p_up_settles_given_down_only)
     if any(p is None for p in probs):
         return result
-    both, up_only, down_only, neither, settle_up = map(dec, probs)
-    if any(p < 0 or p > 1 for p in (both, up_only, down_only, neither, settle_up)):
+    both, up_only, down_only, neither, settle_up_if_up, settle_up_if_down = map(dec, probs)
+    if any(p < 0 or p > 1 for p in (both, up_only, down_only, neither, settle_up_if_up, settle_up_if_down)):
         raise ValueError("probability outside [0,1]")
     if sum((both, up_only, down_only, neither)) != 1:
         raise ValueError("joint fill probabilities must sum to one")
     # Costs are incurred only for filled legs; adverse cost is charged to
     # both-filled paths only. Each residual is marked through settlement.
-    up_only_net = q * settle_up - (q * u + uf)
-    down_only_net = q * (1 - settle_up) - (q * d + df)
+    up_only_net = q * settle_up_if_up - (q * u + uf)
+    down_only_net = q * (1 - settle_up_if_down) - (q * d + df)
     both_net = q - pair_cost
     expected = both * both_net + up_only * up_only_net + down_only * down_only_net
     result.update(eligible=True, reason=None, model_only=True,
