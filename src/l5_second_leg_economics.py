@@ -112,7 +112,7 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           p_down_only=None, p_neither=None,
                           p_up_settles_given_up_only=None,
                           p_up_settles_given_down_only=None, adverse_cost="0",
-                          max_combined_cost=None):
+                          max_combined_cost=None, minimum_expected_net="0"):
     """Read-only joint-fill paired-entry model; NEVER an order instruction.
 
     Probabilities must be externally calibrated from time-aligned order events.
@@ -150,7 +150,10 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
     down_only_net = q * (1 - settle_up_if_down) - (q * d + df)
     both_net = q - pair_cost
     expected = both * both_net + up_only * up_only_net + down_only * down_only_net
-    result.update(eligible=True, reason=None, model_only=True,
+    threshold = dec(minimum_expected_net)
+    result.update(eligible=(expected > threshold),
+                  reason=None if expected > threshold else "NONPOSITIVE_EXPECTED_NET",
+                  model_only=True,
                   expected_net=str(expected),
                   p_any_residual=str(up_only + down_only),
                   up_only_expected_net=str(up_only_net),
