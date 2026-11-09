@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import os
 from decimal import Decimal as D
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_two_sided_probe as TS
 
@@ -91,6 +91,49 @@ REDEMPTION_PAIR = D("1.00")
 #: and nothing in this module treats a resting completion as a hedge.
 COMPLETION_DEPTH_TICKS_ENV = "L5_COMPLETION_DEPTH_TICKS"
 COMPLETION_DEPTH_TICKS = 0
+
+
+#: how far outward the adaptive search may walk, in ticks. A bound, not a
+#: target: the walk stops at the FIRST admissible depth.
+ADAPTIVE_MAX_DEPTH_TICKS = 5
+ADAPTIVE_ENV = "L5_COMPLETION_ADAPTIVE_DEPTH"
+_TRUE_ADAPT = ("1", "yes", "true", "on")
+
+
+def adaptive_depth_enabled() -> bool:
+    """DEFAULT OFF. The deployed completion depth stays 0 unless set.
+
+    WHY IT EXISTS, measured. Replaying 13 out-of-sample windows, a
+    completion fixed AT THE TOUCH completes ZERO pairs in 652 entries:
+    all 311 filled first legs refuse with the pair above the cap, because
+    a touch pair is `1 - spread` -- 0.99 on a one-tick book -- and the
+    fee-safe ceiling is 0.96. The depth is not a preference there; at 0 it
+    makes completion arithmetically impossible.
+
+    Walking OUTWARD to the shallowest depth whose pair clears the cap
+    converted 12 of 66 stranded legs into pairs on the queue-independent
+    PROVEN arm -- an 18% reduction in strands, +0.0012 net per entry --
+    and a bounded taker completion recovered NONE of the remaining 54,
+    every one of which fails the cap again after fees.
+
+    DEFAULT OFF because it changes a money-path decision while #206's
+    deployment freeze stands. The ceiling, the band and every other gate
+    are untouched: this only chooses WHERE to rest a complement the
+    economics already permit.
+    """
+    return (os.getenv(ADAPTIVE_ENV) or "").strip().lower() in _TRUE_ADAPT
+
+
+def adaptive_depth_candidates() -> List[int]:
+    """The depths to try, shallowest first. Just the fixed depth when off."""
+    base = completion_depth_ticks()
+    if not adaptive_depth_enabled():
+        return [base]
+    out = [base]
+    for d in range(0, ADAPTIVE_MAX_DEPTH_TICKS + 1):
+        if d not in out:
+            out.append(d)
+    return out
 
 
 def completion_depth_ticks() -> int:

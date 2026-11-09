@@ -7397,6 +7397,52 @@ class Runner:
             last_decide_t=self._book_completion_t)
         # THE CADENCE IS STAMPED EVEN ON A REFUSAL, so a refused decision
         # cannot be retried every tick.
+        # ADAPTIVE COMPLETION DEPTH, DEFAULT OFF, AND ONLY ON A CAP REFUSAL.
+        #
+        # A completion fixed AT THE TOUCH cannot clear the fee-safe cap: a
+        # touch pair is `1 - spread`, 0.99 on a one-tick book, against the
+        # 0.96 ceiling. Replayed over 13 out-of-sample windows that shape
+        # completes ZERO pairs in 652 entries -- all 311 filled first legs
+        # refuse on the cap, which is why rescued legs never complete.
+        # Walking OUTWARD to the shallowest depth whose pair clears the cap
+        # converted 12 of 66 strands into pairs on the queue-independent
+        # PROVEN arm (+0.0012 net per entry), and a bounded taker
+        # completion recovered NONE of the remaining 54.
+        #
+        # WHAT THIS CANNOT DO. It retries ONLY a pair-cap refusal, only at
+        # depths `adaptive_depth_candidates()` offers, shallowest first,
+        # and stops on the first outcome that is not a cap refusal. It
+        # cannot relax the cap, the band, the freshness limit, a budget or
+        # any gate -- every retry is a full `BC.decide` with the same
+        # inputs and one different depth. With the flag off the candidate
+        # list is exactly the deployed depth, so this loop runs zero extra
+        # decisions and the path is byte-identical.
+        _CAP_REFUSALS = ("PAIR_ABOVE_REDEMPTION", "COMPLEMENT_PAIR_ABOVE_CAP")
+        if (not rec.get("ok")) and str(rec.get("reason")) in _CAP_REFUSALS:
+            for _d2 in BC.adaptive_depth_candidates():
+                if _d2 == BC.completion_depth_ticks():
+                    continue            # already tried, above
+                _alt = BC.decide(
+                    market=slug, held_side=held,
+                    held_qty=held_qty, held_cost_usd=legs.get(held),
+                    deficient_qty=def_qty,
+                    deficient_cost_usd=legs.get(other),
+                    book=book, now_t=now, window_start=float(ws),
+                    resting=_rows, outstanding_qty=_outstanding,
+                    tick=getattr(t, "tick_size", None) or "0.01",
+                    min_qty=getattr(t, "quantity_increment", None) or "0.01",
+                    depth_ticks=_d2,
+                    residual_budget_usd=getattr(
+                        gates, "max_worst_case_deficit_usd", None),
+                    submissions_left=AUTH.max_submissions(),
+                    last_decide_t=self._book_completion_t)
+                self.stats["book_completion:adaptive_try:d%d:%s"
+                           % (_d2, _alt.get("reason") or "OK")] += 1
+                if str(_alt.get("reason")) not in _CAP_REFUSALS:
+                    rec = dict(_alt, adaptive_depth_ticks=_d2,
+                               adaptive_from_depth=(
+                                   BC.completion_depth_ticks()))
+                    break
         if rec.get("reason") != "DECIDE_COOLDOWN":
             self._book_completion_t = now
         self.stats["book_completion:%s" % rec.get("reason")] += 1
