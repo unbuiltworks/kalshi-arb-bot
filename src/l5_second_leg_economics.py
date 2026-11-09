@@ -388,3 +388,37 @@ def actual_quote_entry_gate(*, up_price, down_price, quantity,
         **economics)
     result["actual_quote_prices_used"] = True
     return result
+
+
+def production_entry_evidence_gate(*, up_price, down_price, quantity,
+                                   up_fee=None, down_fee=None,
+                                   adverse_cost=None,
+                                   max_single_leg_loss=None,
+                                   max_residual_probability=None,
+                                   calibration_id=None,
+                                   book_observation_id=None,
+                                   **kwargs):
+    """Strict, read-only production candidate gate.
+
+    A zero fee or zero adverse cost is permissible ONLY when explicitly
+    supplied and attested by the caller. Missing calibration identifiers
+    or loss budgets must never inherit the permissive research defaults.
+    No order submission or permission to arm is provided.
+    """
+    if not calibration_id or not book_observation_id:
+        return {"eligible": False, "reason": "CALIBRATION_OR_BOOK_ID_MISSING",
+                "model_only": True}
+    if any(v is None for v in (up_fee, down_fee, adverse_cost,
+                               max_single_leg_loss,
+                               max_residual_probability)):
+        return {"eligible": False, "reason": "ECONOMIC_RISK_EVIDENCE_MISSING",
+                "model_only": True}
+    result = actual_quote_entry_gate(
+        up_price=up_price, down_price=down_price, quantity=quantity,
+        up_fee=up_fee, down_fee=down_fee, adverse_cost=adverse_cost,
+        max_single_leg_loss=max_single_leg_loss,
+        max_residual_probability=max_residual_probability, **kwargs)
+    result["calibration_id"] = calibration_id
+    result["book_observation_id"] = book_observation_id
+    result["production_authorized"] = False
+    return result
