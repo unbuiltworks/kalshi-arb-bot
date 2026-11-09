@@ -96,7 +96,8 @@ def test_profitable_matched_pair_can_still_have_negative_expectancy():
     out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
         p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
         p_up_settles_given_up_only="0.6", p_up_settles_given_down_only="0.6")
-    assert out["eligible"]
+    assert not out["eligible"]
+    assert out["reason"] == "NONPOSITIVE_EXPECTED_NET"
     assert D(out["both_net"]) == D("0.05")
     assert D(out["down_only_expected_net"]) == D("-0.04")
     assert D(out["expected_net"]) == D("-0.027")
@@ -121,7 +122,7 @@ def test_adverse_selection_conditioning_changes_expected_net():
     out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
         p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
         p_up_settles_given_up_only="0.5", p_up_settles_given_down_only="0.9")
-    assert out["eligible"]
+    assert not out["eligible"]
     assert D(out["expected_net"]) == D("-0.267")
 
 
@@ -130,3 +131,20 @@ def test_missing_conditional_settlement_probability_refuses():
         p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
         p_up_settles_given_up_only="0.5")
     assert not out["eligible"]
+
+
+def test_paired_entry_positive_expected_net_passes_model_gate_only():
+    out = evaluate_paired_entry(up_price="0.46", down_price="0.45", quantity="1",
+        p_both="0.8", p_up_only="0.05", p_down_only="0.05", p_neither="0.1",
+        p_up_settles_given_up_only="0.6",
+        p_up_settles_given_down_only="0.4", minimum_expected_net="0.01")
+    assert out["eligible"] and out["model_only"]
+    assert D(out["expected_net"]) == D("0.0845")
+
+
+def test_positive_pair_profit_but_negative_total_ev_refuses():
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
+        p_up_settles_given_up_only="0.5",
+        p_up_settles_given_down_only="0.9")
+    assert not out["eligible"] and out["reason"] == "NONPOSITIVE_EXPECTED_NET"
