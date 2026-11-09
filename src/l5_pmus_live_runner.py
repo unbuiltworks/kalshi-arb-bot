@@ -6122,12 +6122,22 @@ class Runner:
             # the one benign case -- a valid campaign whose window has not
             # arrived -- is named outright. Reporting only: no gate, limit
             # or decision is touched, and `authorize_arming` still decides.
-            _rows = {str(r.get("check")): r for r in (pf.get("rows") or [])
-                     if isinstance(r, Mapping)}
-            _why = {k: (_rows.get(k) or {}).get("reason")
-                    for k in (pf.get("fail") or [])
-                    if (_rows.get(k) or {}).get("reason")}
-            _camp = (_rows.get("campaign_approval") or {})
+            # BOUNDED. The heartbeat has a hard size budget -- it already
+            # exceeded the log transport's per-line limit once, which is
+            # why the full rows live on their own line and why `hb_reduced`
+            # exists to drop the largest field rather than truncate the
+            # safety state. So this reads the rows and embeds only a SMALL
+            # reason map: at most six entries, each reason clipped. The
+            # rows themselves are never carried.
+            _by = {str(r.get("check")): r
+                   for r in (pf.get("rows") or [])
+                   if isinstance(r, Mapping)}
+            _why = {}
+            for k in (pf.get("fail") or [])[:6]:
+                _r = str((_by.get(k) or {}).get("reason") or "")[:80]
+                if _r:
+                    _why[k] = _r
+            _camp = (_by.get("campaign_approval") or {})
             _awaiting = (str(_camp.get("reason") or "")
                          == "WINDOW_NOT_IN_AUTHORIZED_SET")
             return {"ok": pf.get("ok"), "fail": pf.get("fail"),

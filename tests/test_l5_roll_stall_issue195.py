@@ -1210,10 +1210,35 @@ def test_the_verdict_is_compact_not_the_full_rows():
     """The full rows stay on their own line; the heartbeat carries the
     verdict. A heartbeat that re-embedded every row would reintroduce the
     size problem this whole fix exists to remove."""
+    # ASSERT ON THE OUTPUT, NOT THE SOURCE TEXT. The old check grepped for
+    # '"rows"' in the source, which cannot tell READING the rows from
+    # EMBEDDING them -- and the verdict now reads them to report WHY each
+    # check failed, while carrying only a small bounded map. The property
+    # that matters is the size of what reaches the heartbeat, so that is
+    # what is measured.
+    import collections
+    import json
+    import tempfile
+
+    class _Stub:
+        authorization_preflight_verdict = \
+            RUN.Runner.authorization_preflight_verdict
+
+        def __init__(self):
+            self.transport = type("T", (), {"market_slug": ""})()
+            self.root = tempfile.mkdtemp()
+            self.stats = collections.Counter()
+
+    v = _Stub().authorization_preflight_verdict()
+    assert "rows" not in v, sorted(v)
+    for k in ("ok", "fail", "unknown"):
+        assert k in v, k
+    # the whole verdict stays small enough that it cannot be the field
+    # `hb_reduced` has to drop
+    assert len(json.dumps(v, default=str)) < 2048, len(json.dumps(v))
+    # and the reason map is bounded in both dimensions
     src = inspect.getsource(RUN.Runner.authorization_preflight_verdict)
-    assert '"rows"' not in src
-    for k in ('"ok"', '"fail"', '"unknown"'):
-        assert k in src, k
+    assert "[:6]" in src and "[:80]" in src
 
 
 def test_the_absolute_deadline_is_one_of_the_checks_it_reports():
