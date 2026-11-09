@@ -397,6 +397,46 @@ def authorization_preflight(market: str = "", *,
     except BaseException as exc:                               # noqa: BLE001
         row("shadow_lock", "UNKNOWN", error=type(exc).__name__)
 
+    # 1b. THE LOCAL OPERATOR HALT, which this preflight did not evaluate.
+    #
+    # WHAT IT COST, on 2026-11-09. `Runner.try_arm` opens with
+    #
+    #     if t is None or t.armed or self.halted(): return
+    #
+    # so the operator halt stops arming BEFORE any numbered step below is
+    # reached. This preflight checked the shadow lock, the owner token, the
+    # deadline, the campaign, the halt GATE and nine other things -- and not
+    # that one line. The owner-approved 08:30Z window therefore read
+    # `ok true`, `fail []`, campaign `approved`, shadow lock cleared, owner
+    # token valid, while all 162 decisions in the window refused
+    # `SAFETY_OVERLAY:OPERATOR_HALT`. Zero orders. The window was not
+    # consumed and exposure stayed $0 -- the engine failed CLOSED, which is
+    # right -- but a readiness verdict that cannot see a blocker is worse
+    # than no verdict, because it is believed.
+    #
+    # IT IS A DIFFERENT THING FROM `halt_gate` BELOW, and both are reported.
+    # `halt_gate` is the INDEPENDENT watchdog latch, read over HTTP from a
+    # store the executor cannot write. This is the LOCAL env halt that the
+    # operator sets on the service itself. Either one alone stops arming, so
+    # collapsing them would hide whichever was not chosen.
+    #
+    # SAME EXPRESSION, NOT A SECOND OPINION. It calls
+    # `l5_pmus_live_runner.operator_halted`, which `Runner.halted` now
+    # delegates to, so the preflight and `try_arm` cannot disagree about
+    # whether the halt is engaged. A duplicated `os.getenv` here would be
+    # exactly the divergence this repairs.
+    try:
+        from src import l5_pmus_live_runner as _R2
+        _oh = bool(_R2.operator_halted())
+        row("local_operator_halt", "FAIL" if _oh else "PASS", engaged=_oh,
+            env=_R2.LIVE_HALT_ENV,
+            blocks="Runner.try_arm returns before step 1",
+            note=("any non-empty value halts; it is a deadman, so there is "
+                  "no 'false' spelling. Distinct from the independent "
+                  "watchdog latch reported as halt_gate."))
+    except BaseException as exc:                               # noqa: BLE001
+        row("local_operator_halt", "UNKNOWN", error=type(exc).__name__)
+
     try:
         row("owner_arm_token", "PASS" if Q1.armed() else "FAIL",
             blocks="OWNER_AUTHORIZATION_ABSENT (step 11)")

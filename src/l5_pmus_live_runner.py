@@ -1579,8 +1579,13 @@ class Runner:
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
         """The LOCAL env halt only. Not the effective gate -- see
-        `submission_gate`, which is what refuses a submission."""
-        return bool(os.getenv("L5_LIVE_HALT", "").strip())
+        `submission_gate`, which is what refuses a submission.
+
+        DELEGATES to the module-level `operator_halted()` so that this and
+        the authorization preflight cannot read the halt differently. See
+        that function for why one expression matters.
+        """
+        return operator_halted()
 
     def account_exposure_lines(self) -> Dict[str, Any]:
         """Account-wide worst-case exposure and the capacity left under it.
@@ -11003,6 +11008,41 @@ def model_fills() -> bool:
 
 def shadow_only() -> bool:
     return str(os.getenv(SHADOW_ONLY_ENV, "1")).strip() != "0"
+
+
+#: the LOCAL operator halt. Any non-empty value halts: it is a deadman, so
+#: the permissive reading is the empty one and there is no "false" spelling.
+LIVE_HALT_ENV = "L5_LIVE_HALT"
+
+
+def operator_halted() -> bool:
+    """True while the local operator halt is engaged. ONE EXPRESSION.
+
+    WHY THIS IS A MODULE FUNCTION AND NOT JUST A METHOD, and it cost an
+    owner-approved live window. `Runner.try_arm` opens with
+
+        if t is None or t.armed or self.halted(): return
+
+    so the operator halt is the FIRST thing that stops arming, before any
+    numbered step of `authorize_arming` is reached. But
+    `l5_live_authorization.authorization_preflight` -- the artifact an
+    operator reads to decide whether a window is ready -- did not evaluate
+    it at all. On 2026-11-09 the 08:30Z window therefore reported
+    `authorization_preflight.ok true` with `fail []`, an approved campaign,
+    the shadow lock cleared and the owner token valid, while every tick
+    refused `SAFETY_OVERLAY:OPERATOR_HALT`. 162 refusals, zero orders, and
+    an approved window spent on a prerequisite nothing displayed.
+
+    Nothing was lost but the window -- `windows_spent` stayed 0, exposure
+    stayed $0 and the engine failed CLOSED, which is the correct direction.
+    The defect is observability: a readiness verdict that cannot see a
+    blocker is worse than no verdict, because it is believed.
+
+    So both callers now read THIS function. A preflight that duplicated the
+    `os.getenv` would be a second opinion, and a second opinion is what the
+    incident was.
+    """
+    return bool(os.getenv(LIVE_HALT_ENV, "").strip())
 
 
 #: completion repricing. DEFAULT OFF, so the code can be deployed and
