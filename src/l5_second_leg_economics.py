@@ -354,3 +354,37 @@ def admissible_pair_ceiling(*, p_both, p_up_only, p_down_only,
              - threshold)
     denom = both + (up_only + down_only) / D("2")
     return numer / denom
+
+
+
+def actual_quote_entry_gate(*, up_price, down_price, quantity,
+                            p_both=None, p_up_only=None, p_down_only=None,
+                            p_neither=None,
+                            p_up_settles_given_up_only=None,
+                            p_up_settles_given_down_only=None,
+                            book_age_s=None, up_depth=None, down_depth=None,
+                            existing_pair_ceiling="0.96", **economics):
+    """Fail-closed read-only entry gate using actual asymmetric quote prices.
+
+    This must be evaluated before any controller order instruction. Unlike
+    admissible_pair_ceiling, it never substitutes a half-pair split. Missing
+    timestamps, depth or calibrated probabilities refuse rather than infer.
+    No order submission, live fill assumption or authorization is implied.
+    """
+    if book_age_s is None or up_depth is None or down_depth is None:
+        return {"eligible": False, "reason": "BOOK_EVIDENCE_MISSING",
+                "model_only": True}
+    up, down = dec(up_price), dec(down_price)
+    if up + down > dec(existing_pair_ceiling):
+        return {"eligible": False, "reason": "EXISTING_PAIR_CEILING",
+                "model_only": True}
+    result = evaluate_paired_entry(
+        up_price=up, down_price=down, quantity=quantity,
+        p_both=p_both, p_up_only=p_up_only, p_down_only=p_down_only,
+        p_neither=p_neither,
+        p_up_settles_given_up_only=p_up_settles_given_up_only,
+        p_up_settles_given_down_only=p_up_settles_given_down_only,
+        book_age_s=book_age_s, up_depth=up_depth, down_depth=down_depth,
+        **economics)
+    result["actual_quote_prices_used"] = True
+    return result
