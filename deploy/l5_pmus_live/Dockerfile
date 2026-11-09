@@ -59,6 +59,8 @@ COPY src/l5_book_completion.py src/l5_book_completion.py
 # at module level by l5_two_sided_probe, so its absence would be a boot
 # ModuleNotFoundError rather than a degraded decision.
 COPY src/l5_second_leg_economics.py src/l5_second_leg_economics.py
+# Read-only per-window settlement observation, emitted by close_window.
+COPY src/l5_settlement_observer.py src/l5_settlement_observer.py
 COPY src/l5_completion_latency.py src/l5_completion_latency.py
 COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 # The bounded taker-completion authorization. The runner imports it

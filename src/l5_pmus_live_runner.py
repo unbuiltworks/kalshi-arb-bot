@@ -3259,6 +3259,43 @@ class Runner:
             fb = obs.get("first_book_offset_s")
             out["book_before_first_l5_action"] = (
                 fb is not None and fb <= out["first_l5_action_offset_s"])
+        # WHICH SIDE THIS WINDOW SETTLED ON, observed and never inferred.
+        #
+        # The paired-entry economics need P(UP settles | one leg filled
+        # alone) -- the adverse-selection term that decided the 15:30Z loss
+        # -- and the recorded tapes do not carry it: four of ten windows in
+        # the replay sources end between 31% and 59% of the way through, so
+        # their terminal book never shows which side won. Six determined
+        # observations put a 50% estimate at 0.19..0.81, against an entry
+        # threshold that needs +/-0.09.
+        #
+        # So this records one line per window the executor already watches.
+        # It places no order, calls no venue, computes no probability, and
+        # an early or ambiguous book is recorded UNDETERMINED with its
+        # reason rather than becoming a weak point that calibrates money.
+        #
+        # It can never interfere with closing a window: every failure is
+        # swallowed into the record itself.
+        try:
+            from src import l5_settlement_observer as SO
+            _snap = self.book.snapshot(slug) if slug else None
+            out["settlement_observed"] = SO.observe(
+                market=slug or "",
+                window_start_utc=(
+                    dt.datetime.fromtimestamp(AB.slug_start(slug),
+                                              dt.timezone.utc).isoformat()
+                    if slug and AB.slug_start(slug) is not None else ""),
+                observed_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                bid=(_snap or {}).get("bid"),
+                ask=(_snap or {}).get("ask"),
+                frames_seen=(_snap or {}).get("book_updates"))
+        except BaseException as _exc:                          # noqa: BLE001
+            if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["settlement_observed"] = {
+                "settled_side": "UNDETERMINED",
+                "reason": "OBSERVER_FAILED:%s" % type(_exc).__name__}
+
         # A final progress read BEFORE the deadman, so an order that filled
         # between the last poll and window close is recorded as a fill rather
         # than disappearing into a cancel.
