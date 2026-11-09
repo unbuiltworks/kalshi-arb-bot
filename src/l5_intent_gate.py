@@ -204,6 +204,16 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # efficiency guard, not a safety control -- it fails OPEN on a book it
     # cannot read, because every risk gate above has already run.
     "PRESEND_CROSS:PRESEND_WOULD_CROSS",
+    # the pre-send BEHIND re-check, beside the crossing one and in the same
+    # position. The guard above declines a leg the book has made too
+    # AGGRESSIVE, which the venue rejects post-only; this declines one the
+    # book has left too PASSIVE, which is perfectly placeable and never
+    # fills while holding a live-order slot for its whole TTL. Also an
+    # efficiency guard and not a safety control: it fails OPEN on an
+    # unreadable book, price or round state, and it runs ONLY while the
+    # round holds nothing, so a complement matching held inventory is never
+    # declined.
+    "PRESEND_BEHIND:PRESEND_LEFT_BEHIND",
     # the disarmed pre-check, in the same position and for the same reason
     # as PRESEND_CROSS above: the claim on the next line is never returned,
     # and a disarmed transport raises NotArmed out of submit() without
