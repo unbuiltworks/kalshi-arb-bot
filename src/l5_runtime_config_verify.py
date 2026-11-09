@@ -818,6 +818,16 @@ def verify() -> Dict[str, Any]:
             ("book_completion_depth_ticks", "BC.completion_depth_ticks()",
              lambda: __import__("src.l5_book_completion", fromlist=["x"]
                                 ).completion_depth_ticks()),
+            # THE ENTRY DEPTH, which was the one knob a reader had to
+            # INFER. `L5_TS_DEPTH_TICKS` is absent from the service, so
+            # the default applies -- but "absent, therefore 2" is two
+            # reads and an assumption, while every other row here is one
+            # accessor call. The completion depth was already reported and
+            # the ENTRY depth, which decides the pair the probe actually
+            # quotes, was not. Observed, not graded: grading it would make
+            # this fail the moment an experiment legitimately changed it.
+            ("ts_entry_depth_ticks", "TS.depth_ticks()",
+             lambda: TS.depth_ticks()),
             # THE COMPLETION CEILING AND THE COMPLEMENT'S DEPTH, both
             # observed rather than graded. 0.96 was never the completion
             # bound -- `completion_pair_rescue` enforced redemption -- so an
