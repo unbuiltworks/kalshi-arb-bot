@@ -81,3 +81,36 @@ def test_20261109_1530z_settled_residual_and_expensive_completion():
     assert D(out["fill_worst"]) == D("-0.028")
     assert D(out["worst_improvement"]) == D("0.280")
     assert D(out["fill_worst"]) < 0  # Hedging risk != a profitable pair.
+
+
+from src.l5_second_leg_economics import evaluate_paired_entry
+
+
+def test_paired_entry_requires_calibrated_joint_fills():
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1")
+    assert not out["eligible"]
+    assert out["reason"] == "JOINT_FILL_OR_SETTLEMENT_UNVALIDATED"
+
+
+def test_profitable_matched_pair_can_still_have_negative_expectancy():
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
+        p_up_settles="0.6")
+    assert out["eligible"]
+    assert D(out["both_net"]) == D("0.05")
+    assert D(out["down_only_expected_net"]) == D("-0.04")
+    assert D(out["expected_net"]) == D("-0.027")
+    assert D(out["p_any_residual"]) == D("0.8")
+
+
+def test_paired_entry_rejects_independent_unjustified_probabilities():
+    with pytest.raises(ValueError, match="sum to one"):
+        evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+            p_both="0.5", p_up_only="0.5", p_down_only="0.5",
+            p_neither="0", p_up_settles="0.6")
+
+
+def test_paired_entry_pair_cost_limit():
+    out = evaluate_paired_entry(up_price="0.60", down_price="0.44", quantity="1",
+        max_combined_cost="0.96")
+    assert not out["eligible"] and out["reason"] == "PAIR_COST_LIMIT"
