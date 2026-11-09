@@ -199,6 +199,20 @@ def filled_legs():
     return {"%s|UP" % MARKET: "0.60", "%s|DOWN" % MARKET: "0.35"}
 
 
+def basis_evidence():
+    """THE POSITIVE EVIDENCE every MEASURED verdict now requires.
+
+    `leg_cost > 0` alone is not evidence: an adopted leg is priced at
+    qty * $1.00 and would satisfy it. `fill_count` says OUR fills built
+    the leg and an empty `gross_quarantine` says adoption never replaced
+    our book. Both are read from the store's own state rather than from
+    the heartbeat, so the audit does not depend on a heartbeat field
+    having caught up.
+    """
+    return {"fill_count": {"%s|UP" % MARKET: 1, "%s|DOWN" % MARKET: 1},
+            "gross_quarantine": {}}
+
+
 def good_latency():
     return {"book_age_at_decision_s": {"n": 7, "median": 0.4, "p95": 0.9},
             "detection_to_first_decision_s": 3.2}
@@ -220,7 +234,8 @@ def test_a_clean_probe_is_MEASURED():
                           {"venue_order_id": "V-2"}],
                    latency=good_latency(), live_orders={}, restarts=0,
                    fees={"fee_usd": "0.00", "rebate_usd": "0.00727",
-                         "source": "venue", "state": "CREDITED"})
+                         "source": "venue", "state": "CREDITED"},
+                   **basis_evidence())
     assert out["verdict"] == "MEASURED", (out["failed"], out["unknown"])
     assert out["ok"] is True, (out["failed"], out["unknown"])
 
@@ -230,7 +245,7 @@ def test_a_sound_basis_with_outstanding_evidence_is_MEASURED_but_not_ok():
     out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
                    leg_cost=filled_legs(), positions=filled_positions(),
                    fills=[{"venue_order_id": "V-1"}],
-                   latency=good_latency())
+                   latency=good_latency(), **basis_evidence())
     assert out["verdict"] == "MEASURED"
     assert out["ok"] is False
     assert "actual_fees_and_rebates_present" in out["unknown"]
@@ -296,7 +311,8 @@ def test_the_pre_registered_freshness_refusal_fires_on_a_bad_p95():
     lat["book_age_at_decision_s"] = {"n": 7, "median": 0.4, "p95": 6.8}
     out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
                    leg_cost=filled_legs(), positions=filled_positions(),
-                   fills=[{"venue_order_id": "V-1"}], latency=lat)
+                   fills=[{"venue_order_id": "V-1"}], latency=lat,
+                   **basis_evidence())
     assert "p95_book_age_within_requirement" in out["failed"]
     # the basis is still fine, so the P&L is MEASURED -- the freshness
     # failure is a separate, named blocker rather than a contamination
@@ -328,7 +344,7 @@ def test_the_legacy_unattested_set_does_not_contaminate_the_probe():
     out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
                    leg_cost=filled_legs(), positions=filled_positions(),
                    fills=[{"venue_order_id": "V-1"}],
-                   latency=good_latency())
+                   latency=good_latency(), **basis_evidence())
     assert out["verdict"] == "MEASURED"
 
 
@@ -362,7 +378,7 @@ def test_clean_live_orders_pass_reconciliation():
                    fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
                    live_orders={"l5f-a": {"state": "LIVE",
                                           "venue_order_id": "V-9"}},
-                   restarts=0)
+                   restarts=0, **basis_evidence())
     assert "no_order_is_in_an_UNCERTAIN_state" not in out["failed"]
     assert "every_live_order_has_a_venue_id_to_cancel_by" not in out["failed"]
     assert out["verdict"] == "MEASURED"
@@ -451,3 +467,117 @@ def test_the_estimate_is_reported_beside_the_actual_and_never_summed():
     assert row["estimate"] == "0.00584375"
     assert row["actual"] == "0.00727"
     assert "never added" in row["note"]
+
+
+# ============ positive evidence of cost basis, not absence of a marker
+#
+# THE FAIL-OPEN THIS CLOSES, demonstrated before it was fixed:
+# `adopt_venue_position` prices an adopted leg at qty * $1.00, so the
+# placeholder had `leg_cost > 0` and PASSED `every_filled_leg_has_a_cost
+# _basis`. It was caught only by the unknown-basis-keys row, which reads a
+# heartbeat field that may not have caught up -- so an adopted leg with an
+# empty list returned verdict MEASURED. That is exactly "interpreting an
+# empty heartbeat as successful accounting".
+
+def adopted_args(**over):
+    a = dict(markets=[MARKET],
+             heartbeat={"realized": {"unknown_basis_keys": []},
+                        "accounting": {"unknown_detail": {
+                            "post_baseline_settlements_not_attested": []}}},
+             leg_cost={"%s|UP" % MARKET: "1.00"},
+             positions={"%s|UP" % MARKET: "1"},
+             fills=[{"venue_order_id": "V-1"}],
+             latency=good_latency(),
+             fill_count={"%s|UP" % MARKET: 0},
+             gross_quarantine={MARKET: {
+                 "leg_cost": {"%s|UP" % MARKET: "0.38"},
+                 "positions": {"%s|UP" % MARKET: "1"},
+                 "why": "venue net contradicts our gross"}})
+    a.update(over)
+    return a
+
+
+def test_an_adopted_placeholder_is_UNINTERPRETABLE_even_on_an_empty_list():
+    out = PF.audit(**adopted_args())
+    assert out["verdict"] == "UNINTERPRETABLE", out["checks"]
+    assert "every_held_leg_was_built_by_our_own_fills" in out["failed"]
+    assert "no_leg_is_priced_at_the_one_dollar_bound" in out["failed"]
+    assert "adoption_did_not_replace_our_book" in out["failed"]
+
+
+def test_a_leg_with_no_fills_of_ours_is_refused_on_its_own():
+    """fill_count 0 is quantity that arrived from the venue's net. This is
+    the PRIMARY evidence, so it refuses even with everything else clean."""
+    out = PF.audit(**adopted_args(leg_cost={"%s|UP" % MARKET: "0.60"},
+                                  gross_quarantine={}))
+    assert "every_held_leg_was_built_by_our_own_fills" in out["failed"]
+    assert out["verdict"] == "UNINTERPRETABLE"
+
+
+def test_the_dollar_a_share_signature_is_refused_on_its_own():
+    out = PF.audit(**adopted_args(fill_count={"%s|UP" % MARKET: 1},
+                                  gross_quarantine={}))
+    assert "no_leg_is_priced_at_the_one_dollar_bound" in out["failed"]
+    assert out["verdict"] == "UNINTERPRETABLE"
+
+
+def test_adoption_having_fired_is_refused_on_its_own():
+    out = PF.audit(**adopted_args(leg_cost={"%s|UP" % MARKET: "0.60"},
+                                  fill_count={"%s|UP" % MARKET: 1}))
+    assert "adoption_did_not_replace_our_book" in out["failed"]
+    assert out["verdict"] == "UNINTERPRETABLE"
+
+
+def test_the_quarantined_basis_is_reported_as_RECOVERABLE_not_as_truth():
+    """0230z is why: our gross was the double-booked one and the VENUE was
+    right, so the preserved basis is an input to reconciliation and never
+    a figure to quote."""
+    out = PF.audit(**adopted_args())
+    row = next(r for r in out["checks"]
+               if r["check"] == "adoption_did_not_replace_our_book")
+    assert row["recovery"][MARKET]["preserved_leg_cost"] == {
+        "%s|UP" % MARKET: "0.38"}
+    assert "not automatically the truth" in row["note"]
+    assert "do not quote either side" in row["note"]
+
+
+def test_an_absent_fill_count_is_UNKNOWN_and_blocks_MEASURED():
+    out = PF.audit(markets=[MARKET], heartbeat=live_hb(),
+                   leg_cost=filled_legs(), positions=filled_positions(),
+                   fills=[{"venue_order_id": "V-1"}],
+                   latency=good_latency())
+    assert "every_held_leg_was_built_by_our_own_fills" in out["unknown"]
+    assert out["verdict"] == "UNINTERPRETABLE"
+    assert out["ok"] is False
+
+
+def test_a_genuine_depth_2_pair_with_full_evidence_is_MEASURED_and_ok():
+    out = PF.audit(
+        markets=[MARKET], heartbeat=live_hb(),
+        leg_cost={"%s|UP" % MARKET: "0.60", "%s|DOWN" % MARKET: "0.35"},
+        positions={"%s|UP" % MARKET: "1", "%s|DOWN" % MARKET: "1"},
+        fills=[{"venue_order_id": "V-1"}, {"venue_order_id": "V-2"}],
+        latency=good_latency(),
+        fill_count={"%s|UP" % MARKET: 1, "%s|DOWN" % MARKET: 1},
+        gross_quarantine={}, live_orders={}, restarts=0,
+        fees={"fee_usd": "0.00", "rebate_usd": "0.00727",
+              "source": "venue", "state": "CREDITED"})
+    assert out["verdict"] == "MEASURED", (out["failed"], out["unknown"])
+    assert out["ok"] is True
+    # and the pair books at exactly the modelled depth-2 cost
+    assert (D("0.60") + D("0.35")) == D("0.95")
+
+
+def test_a_partial_fill_of_one_contract_is_still_positively_evidenced():
+    """A leg built by one fill of 1 at 0.60 is evidenced; the check is on
+    fills existing, not on the leg being complete."""
+    out = PF.audit(
+        markets=[MARKET], heartbeat=live_hb(),
+        leg_cost={"%s|UP" % MARKET: "0.60"},
+        positions={"%s|UP" % MARKET: "1"},
+        fills=[{"venue_order_id": "V-1"}], latency=good_latency(),
+        fill_count={"%s|UP" % MARKET: 1}, gross_quarantine={},
+        live_orders={}, restarts=0,
+        fees={"fee_usd": "0", "rebate_usd": "0", "source": "venue",
+              "state": "CREDITED"})
+    assert out["verdict"] == "MEASURED", (out["failed"], out["unknown"])

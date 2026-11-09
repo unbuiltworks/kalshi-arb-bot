@@ -131,7 +131,14 @@ def main() -> int:
             live_orders=inv.get("live_orders") or {},
             restarts=((hb.get("fill_calibration") or {})
                       .get("orders_straddling_a_restart")),
-            fees=None)
+            fees=None,
+            # POSITIVE EVIDENCE, read straight off the store's state: how
+            # many of OUR fills built each leg, and whether adoption ever
+            # replaced our book for this market. Both live in the state
+            # file, so the audit no longer depends on the heartbeat's
+            # unknown-basis list having caught up.
+            fill_count=inv.get("fill_count") or {},
+            gross_quarantine=inv.get("gross_quarantine") or {})
 
     if a.json:
         print(json.dumps(out, indent=1, default=str))

@@ -204,6 +204,8 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
           live_orders: Optional[Mapping[str, Any]] = None,
           restarts: Optional[int] = None,
           fees: Optional[Mapping[str, Any]] = None,
+          fill_count: Optional[Mapping[str, Any]] = None,
+          gross_quarantine: Optional[Mapping[str, Any]] = None,
           max_book_age_s: Any = "2.0") -> Dict[str, Any]:
     """Is the probe's result a MEASUREMENT, or is it UNINTERPRETABLE?
 
@@ -255,19 +257,76 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
         rows.append(_row("probe_market_not_priced_at_upper_bound", not bad,
                          offending=bad))
 
-    held, priced = [], []
+    # POSITIVE EVIDENCE, NOT THE ABSENCE OF A MARKER.
+    #
+    # `adopt_venue_position` prices an adopted leg at
+    # qty * UNKNOWN_PRICE_WORST_CASE -- a DOLLAR A SHARE -- so a
+    # placeholder leg has `leg_cost > 0` and passed the old check. It was
+    # caught only by the separate unknown-basis-keys row, which reads a
+    # field the heartbeat may not have caught up on yet. Demonstrated: an
+    # adopted leg with an empty `unknown_basis_keys` returned verdict
+    # MEASURED.
+    #
+    # So the basis must now be established POSITIVELY, per leg:
+    #
+    #   1. our own fills built it        -- fill_count >= 1
+    #   2. it is not priced at the bound -- leg_cost != qty * 1.00
+    #   3. adoption did not fire         -- no gross_quarantine entry
+    #
+    # (1) is the primary evidence; `fill_count` is 0 for quantity that
+    # arrived from the venue's net, which is what `book_violations` uses
+    # to tell an adopted leg from a genuine $0.00 fill. (2) is a
+    # corroborating signature and is safe for THIS probe specifically: at
+    # depth 2 under a 0.96 pair ceiling no leg can legitimately cost a
+    # dollar a share, so that price is diagnostic here even though it
+    # would not be in general.
+    held, priced, unfilled, at_bound = [], [], [], []
     for m in want:
         for side in ("UP", "DOWN"):
             k = "%s|%s" % (m, side)
             q = _d((positions or {}).get(k))
-            if q is not None and q > 0:
-                held.append(k)
-                c = _d((leg_cost or {}).get(k))
-                if c is not None and c > 0:
-                    priced.append(k)
+            if q is None or q <= 0:
+                continue
+            held.append(k)
+            c = _d((leg_cost or {}).get(k))
+            if c is not None and c > 0:
+                priced.append(k)
+            if int((fill_count or {}).get(k, 0) or 0) < 1:
+                unfilled.append(k)
+            if c is not None and q is not None and c == q * D(1):
+                at_bound.append(k)
     rows.append(_row("every_filled_leg_has_a_cost_basis",
                      set(held) == set(priced),
                      held=held, priced=priced))
+    if fill_count is None:
+        rows.append(_row("every_held_leg_was_built_by_our_own_fills",
+                         UNKNOWN, why="no fill_count supplied"))
+    else:
+        rows.append(_row("every_held_leg_was_built_by_our_own_fills",
+                         not unfilled, without_fills=unfilled,
+                         note=("fill_count 0 is quantity that arrived from "
+                               "the venue's net, not a leg we filled")))
+    rows.append(_row("no_leg_is_priced_at_the_one_dollar_bound",
+                     not at_bound, at_bound=at_bound,
+                     note=("qty * 1.00 is the adopted-placeholder "
+                           "signature; no depth-2 leg under a 0.96 pair "
+                           "ceiling can legitimately cost that")))
+    qrows = {m: (gross_quarantine or {}).get(m) for m in want}
+    fired = [m for m, v in qrows.items() if v]
+    rows.append(_row("adoption_did_not_replace_our_book", not fired,
+                     markets=fired,
+                     recovery=({m: {"preserved_leg_cost":
+                                    (qrows[m] or {}).get("leg_cost"),
+                                    "preserved_positions":
+                                    (qrows[m] or {}).get("positions"),
+                                    "why": (qrows[m] or {}).get("why")}
+                                for m in fired} or None),
+                     note=("the pre-adoption gross book is preserved "
+                           "verbatim in gross_quarantine, so the basis is "
+                           "RECOVERABLE -- but it is not automatically the "
+                           "truth: at 0230z our gross was the "
+                           "double-booked one and the venue was right. "
+                           "Reconcile; do not quote either side")))
 
     vids = [str(f.get("venue_order_id") or "") for f in (fills or [])]
     rows.append(_row("every_fill_carries_a_venue_order_id",
@@ -358,11 +417,15 @@ def audit(*, markets: Sequence[str], heartbeat: Mapping[str, Any],
     unk = [r for r in rows if r["ok"] is UNKNOWN]
     # EVERY basis row must be a positive True. An UNKNOWN among them is
     # not a pass, which is the fix above expressed in the verdict.
-    basis_rows = [r for r in rows if r["check"] in (
+    BASIS_CHECKS = (
         "probe_market_absent_from_unknown_basis_keys",
         "probe_market_not_priced_at_upper_bound",
-        "every_filled_leg_has_a_cost_basis")]
-    basis_ok = (len(basis_rows) == 3
+        "every_filled_leg_has_a_cost_basis",
+        "every_held_leg_was_built_by_our_own_fills",
+        "no_leg_is_priced_at_the_one_dollar_bound",
+        "adoption_did_not_replace_our_book")
+    basis_rows = [r for r in rows if r["check"] in BASIS_CHECKS]
+    basis_ok = (len(basis_rows) == len(BASIS_CHECKS)
                 and all(r["ok"] is True for r in basis_rows))
     if not held:
         verdict = "INCOMPLETE"

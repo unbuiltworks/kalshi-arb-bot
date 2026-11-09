@@ -142,6 +142,10 @@ def test_the_audit_mode_runs_on_a_store_state_file(tmp_path):
         "leg_cost": {"%s|UP" % MARKET: "0.60", "%s|DOWN" % MARKET: "0.35"},
         "submitted": {"l5f-a": {"market": MARKET, "venue_order_id": "V-1"},
                       "l5f-b": {"market": MARKET, "venue_order_id": "V-2"}},
+        # the POSITIVE evidence the audit now requires, read from the
+        # store's own state rather than from the heartbeat
+        "fill_count": {"%s|UP" % MARKET: 1, "%s|DOWN" % MARKET: 1},
+        "gross_quarantine": {},
         "live_orders": {}}))
     r = run("audit", "--heartbeat", write_hb(tmp_path), "--inventory",
             str(inv), "--market", MARKET)
