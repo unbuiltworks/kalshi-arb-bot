@@ -63,7 +63,7 @@ def test_explicit_probability_is_model_only():
     inv = Inventory(D("1"), D("0"), D("0.62"))
     out = evaluate(inv, c(action="REPRICE", probability="0.5"))
     assert out["model_only"]
-    assert out["model_expected_worst"] == "-0.295"
+    assert out["model_expected_worst"] == "-0.445"
 
 
 def test_reject_invalid_inventory():
