@@ -8564,6 +8564,80 @@ class FaithfulExecutor:
                         "TWO_SIDED_PROBE",
                         "DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY")
 
+            # ============== A FROZEN PLAN THE BOOK HAS LEFT IS RE-PRICED
+            #
+            # See `TS.replan_drift_ticks` for the measurement and for why
+            # this is safe. In short: `plan_executable` only notices a leg
+            # left behind past 6 ticks, and the only remedy for it is
+            # retiring the round -- which at the deployed
+            # `ts_round_allocations` of 1 ENDS THE WINDOW. So nothing
+            # re-prices a drifted plan, and the engine rests at a price the
+            # book has walked away from, where it cannot fill.
+            #
+            # THE THREE CONDITIONS, all required, all fail-closed:
+            #
+            #   * the round holds NOTHING -- no live order, nothing
+            #     fillable, no unmatched fill -- read through
+            #     `probe_round_is_safe_to_retire`, the same durable-state
+            #     predicate retirement itself uses. Any answer but None
+            #     keeps the frozen plan, so a resting or partly filled
+            #     round behaves exactly as before and leg two still
+            #     matches leg one. Nothing is cancelled here, so this
+            #     cannot churn orders: it runs only when none exist.
+            #   * the drift is at least `replan_drift_ticks()` (2), so a
+            #     plan already where the planner would price it is left
+            #     alone. An unreadable drift is not a drift.
+            #   * the fresh plan is `ok`. A plan that will not price is NOT
+            #     substituted for one that already did, so this can never
+            #     take the engine from a placeable plan to none.
+            #
+            # The replacement goes through `probe_precheck` and every gate
+            # below exactly as a first plan does. It adds no capability and
+            # moves no limit.
+            _rp_plan = self.probe_stored_plan(market, rnd)
+            if _rp_plan is not None:
+                try:
+                    _rp_blocked = self.probe_round_is_safe_to_retire(
+                        market, rnd)
+                    _rp_spent = [k for k, v in
+                                 (self.probe_legs_claimed(market, rnd)
+                                  or {}).items() if v]
+                    _rp_drift = TS.plan_drift_ticks(
+                        _rp_plan, bid=ts_book.get("bid"), ask=ts_book.get("ask"),
+                        tick=_tick, depth_ticks=_dticks,
+                        spent_sides=_rp_spent)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _rp_blocked, _rp_drift = "REPLAN_STATE_UNREADABLE", None
+                _rp_allow = TS.replan_drift_ticks()
+                if (_rp_blocked is None and _rp_drift is not None
+                        and _rp_drift >= D(_rp_allow)):
+                    _rp_fresh = self.probe_plan(market, authenticated)
+                    _rp_ok = bool(_rp_fresh.get("ok"))
+                    prov.stage("TWO_SIDED_REPLAN", {
+                        "round": rnd,
+                        "drift_ticks": str(_rp_drift),
+                        "allow_ticks": _rp_allow,
+                        "repriced": _rp_ok,
+                        "refused": (None if _rp_ok
+                                    else str(_rp_fresh.get("reason"))[:80]),
+                        "was": [{"side": str(l.get("side")),
+                                 "price": str(l.get("price"))}
+                                for l in (_rp_plan.get("legs") or ())],
+                        "now": [{"side": str(l.get("side")),
+                                 "price": str(l.get("price"))}
+                                for l in (_rp_fresh.get("legs") or ())],
+                        "labels": ("the round holds nothing, so there is no "
+                                   "sibling leg to match and no order to "
+                                   "cancel. A plan that will not price is "
+                                   "never substituted for one that did.")})
+                    if _rp_ok:
+                        # STORED, not assigned. The canonical read below is
+                        # left exactly where it was so that the atomic
+                        # re-reservation it anchors is unmoved; it simply
+                        # reads the plan this repaired.
+                        self.probe_store_plan(market, _rp_fresh, rnd)
             plan = self.probe_stored_plan(market, rnd)
             bad = None
             if plan is not None:

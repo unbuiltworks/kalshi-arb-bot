@@ -1992,6 +1992,114 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
 STALE_DRIFT_TICKS = 6
 STALE_DRIFT_ENV = "L5_TS_STALE_DRIFT_TICKS"
 
+#: HOW FAR A FROZEN PLAN MAY DRIFT BEHIND THE TOUCH BEFORE IT IS RE-PRICED.
+#
+# THE GAP THIS CLOSES, and it is a gap between two working mechanisms rather
+# than a fault in either. `plan_executable` already detects a leg left
+# behind -- `PRICE_LEFT_BEHIND` -- but only past `STALE_DRIFT_TICKS` (6),
+# and the only remedy the caller has for it is RETIRING the round. At the
+# deployed `ts_round_allocations` of 1, retiring round 0 makes
+# `probe_round` return None and the window ends on ACCUMULATION_EXHAUSTED.
+# So in production there is no path at all that re-prices a drifted plan:
+# under 6 ticks it is reused verbatim, and over 6 it costs the window.
+#
+# MEASURED ON THE REAL PATH. `tests/test_l5_release_candidate_lifecycle.py`
+# drives the executor with both legs cancelled at zero fill and the bid
+# then moving 0.42 -> 0.46. At that instant `probe_plan` prices UP at 0.44
+# from the current mirror and the engine sends UP at **0.40** -- the frozen
+# price, four ticks behind, resting six ticks off a 0.46 touch where
+# nothing fills. It does not cross, so the crossing guard never sees it,
+# and 4 < 6, so the drift guard never sees it either.
+#
+# ASYMMETRIC, WHICH IS WHY IT SURVIVED. A book moving AGAINST us makes a
+# leg cross and the plan is re-planned; a book moving IN OUR FAVOUR leaves
+# the leg far behind the touch, which is perfectly placeable and never
+# fills. Only one of those two was being repaired.
+#
+# WHY RE-PRICING IS SAFE WHERE RE-PLANNING WAS NOT. The freeze exists so
+# leg two matches leg one -- "re-planning each tick gave legs of 1.89 and
+# 0.98, which is not a matched pair". That reason applies only while a leg
+# of the round is resting or filled. The caller re-prices ONLY when
+# `probe_round_is_safe_to_retire` says the round holds nothing live and
+# nothing filled, so there is no sibling leg to mismatch and no order to
+# cancel -- which is also why this cannot cause order churn: it never runs
+# while an order is outstanding.
+REPLAN_DRIFT_TICKS = 2
+REPLAN_DRIFT_ENV = "L5_TS_REPLAN_DRIFT_TICKS"
+
+
+def replan_drift_ticks() -> int:
+    """Ticks of drift at which a plan holding nothing may be re-priced.
+
+    Clamped into 1..STALE_DRIFT_TICKS. The upper clamp matters: a value
+    above the retirement tolerance would put re-pricing BEHIND retirement
+    again and restore the gap this exists to close. The lower clamp of 1
+    keeps a plan that is exactly where the book would price it from being
+    rewritten for nothing.
+    """
+    raw = (os.getenv(REPLAN_DRIFT_ENV) or "").strip()
+    try:
+        v = int(raw) if raw else REPLAN_DRIFT_TICKS
+    except ValueError:
+        return REPLAN_DRIFT_TICKS
+    if v < 1:
+        return 1
+    return min(STALE_DRIFT_TICKS, v)
+
+
+def plan_drift_ticks(plan: Mapping[str, Any], *, bid: Any, ask: Any,
+                     tick: Any, depth_ticks: int,
+                     spent_sides: Optional[Sequence[str]] = None
+                     ) -> Optional[D]:
+    """How far the WORST unspent leg of this frozen plan is from where the
+    current book would price it, in ticks. None when it cannot be judged.
+
+    READ-ONLY, and it decides nothing. It reuses `quote_own_price` -- the
+    same function `build_orders` prices a leg with -- so the comparison is
+    against the price the planner WOULD emit now, not against a touch.
+
+    A SPENT LEG IS NOT JUDGED, for the 2215z reason `plan_executable`
+    documents at length: its price is history and will never be sent again.
+
+    None rather than zero on anything unreadable, so a caller cannot read
+    "I could not tell" as "it has not drifted".
+    """
+    tk = _d(tick)
+    b, a = _d(bid), _d(ask)
+    # NON-FINITE IS UNJUDGEABLE, AND IT IS CHECKED BEFORE ANY COMPARISON.
+    # `_d("nan")` returns Decimal("NaN"), which is not None and which
+    # RAISES InvalidOperation on `<=` -- a crash in the decision path
+    # rather than a refusal. Caught by this file's own parametrised case.
+    if tk is None or b is None or a is None:
+        return None
+    if not (tk.is_finite() and b.is_finite() and a.is_finite()):
+        return None
+    if tk <= 0 or b <= 0 or a <= 0:
+        return None
+    if a <= b:
+        return None                 # crossed or locked: no fair price to use
+    legs = list(plan.get("legs") or ())
+    if len(legs) != 2:
+        return None
+    _spent = {str(x).strip().upper() for x in (spent_sides or ())}
+    worst: Optional[D] = None
+    for leg in legs:
+        side = str(leg.get("side"))
+        if side.strip().upper() in _spent:
+            continue
+        own = _d(leg.get("price"))
+        if own is None or not own.is_finite():
+            return None
+        now_px = quote_own_price(side, bid=b, ask=a, tick=tk,
+                                 depth_ticks=depth_ticks)
+        if now_px is None or not now_px.is_finite():
+            return None
+        d = (now_px - own) / tk
+        if d < 0:
+            d = -d
+        worst = d if worst is None else max(worst, d)
+    return worst
+
 # ===================================== RECOVERING A RESTING FIRST LEG
 #
 # THE GAP THIS CLOSES, measured live. `plan_executable` detects a stale plan,

@@ -72,6 +72,31 @@ def in_band(p: D) -> bool:
     return BAND_LO <= p <= BAND_HI
 
 
+def band_refusal(up_own: D, dn_own: D, floor: Optional[D] = None
+                 ) -> Optional[str]:
+    """What the DEPLOYED gate does to a two-legged plan, and nothing more.
+
+    A CORRECTION OF THIS FILE'S FIRST VERSION. B, C and D required BOTH
+    legs in the band, which refused entries production would have taken.
+    `l5_live_execution` calls `TS.first_leg_entry_refusal` exactly once per
+    `handle`, on `nxt` -- and `nxt` is the CHEAPER leg, because `order` is
+    `sorted(legs, key=price)` and nothing is claimed on a first leg. So the
+    dear leg is never tested at entry, and the ceiling cannot bind a
+    two-legged plan at all: the cheaper of two legs summing to <= 0.96 is
+    at most 0.48.
+
+    Only the FLOOR can refuse such a plan, and it refuses exactly when the
+    book sits far enough from the middle that the cheap side is under 0.30.
+    """
+    cheap = min(up_own, dn_own)
+    lo = BAND_LO if floor is None else floor
+    if lo > 0 and cheap < lo:
+        return "first_leg_below_min"
+    if BAND_HI > 0 and cheap > BAND_HI:
+        return "first_leg_above_max"
+    return None
+
+
 def _fill(side, own, frames, i, frac, arm, ttl=None):
     o = QS.leg_outcome(side, own, frames, start=i, queue_fraction=frac,
                        own_qty=D(1), ttl_s=ttl)
@@ -108,16 +133,25 @@ def variant_A(frames, i, bid, ask, frac, arm):
     return {"state": "RESIDUAL", "legs": 1, "pair": pair}
 
 
-def variant_B(frames, i, bid, ask, frac, arm, depth=2):
+def variant_B(frames, i, bid, ask, frac, arm, depth=2,
+              floor_waiver=False, floor=None):
     """SIMULTANEOUS at depth 2, both legs from one frame, held."""
     up_own, dn_own = _own(UP, bid, ask, depth), _own(DOWN, bid, ask, depth)
     if up_own <= 0 or dn_own <= 0:
         return None
-    if not (in_band(up_own) and in_band(dn_own)):
-        return {"state": "NO_ENTRY", "why": "first_leg_band"}
     pair = up_own + dn_own
     if pair > PAIR_CAP:
         return {"state": "NO_ENTRY", "why": "pair_above_cap"}
+    _no = band_refusal(up_own, dn_own, floor=floor)
+    # THE WAIVER UNDER TEST, and it is tested only AFTER the cap. The
+    # floor's own stated premise is "a complement the 0.96 pair cap cannot
+    # reach once the cheap side gets cheaper". On a two-legged plan whose
+    # pair ALREADY clears the cap that premise is false by construction --
+    # the dear complement is priced, admissible and submitted. Whether the
+    # waiver pays is an empirical question about how often the dear leg
+    # fills, which is what this variant measures.
+    if _no is not None and not (floor_waiver and _no == "first_leg_below_min"):
+        return {"state": "NO_ENTRY", "why": _no}
     uf, _ = _fill(UP, up_own, frames, i, frac, arm)
     df, _ = _fill(DOWN, dn_own, frames, i, frac, arm)
     if uf is None or df is None:
@@ -129,14 +163,16 @@ def variant_B(frames, i, bid, ask, frac, arm, depth=2):
     return {"state": "NO_FILL"}
 
 
-def variant_C(frames, i, bid, ask, frac, arm, depth=2):
+def variant_C(frames, i, bid, ask, frac, arm, depth=2,
+              floor_waiver=False, floor=None):
     """B plus INVENTORY-AWARE completion of a stranded leg.
 
     When one leg fills alone, requote the complement at the SHALLOWEST
     depth whose pair still clears the cap -- which is the decision the
     deployed controller makes one depth at a time -- and hold it.
     """
-    base = variant_B(frames, i, bid, ask, frac, arm, depth=depth)
+    base = variant_B(frames, i, bid, ask, frac, arm, depth=depth,
+                     floor_waiver=floor_waiver, floor=floor)
     if base is None or base.get("state") != "RESIDUAL":
         return base
     up_own, dn_own = _own(UP, bid, ask, depth), _own(DOWN, bid, ask, depth)
@@ -180,10 +216,46 @@ def variant_D(frames, i, bid, ask, frac, arm, depth=2):
             "crossed": True}
 
 
+def variant_E(frames, i, bid, ask, frac, arm, depth=2):
+    """C, plus the FLOOR WAIVER on a plan whose pair already clears the cap.
+
+    This is the only variant that admits an entry the deployed gate
+    refuses, and it admits exactly one class of them: a two-legged plan
+    whose cheaper leg is under 0.30 while the PAIR is at or under 0.96.
+    The ceiling is untouched (it cannot bind a two-legged plan anyway),
+    and a strand is charged the full measured residual carry.
+    """
+    return variant_C(frames, i, bid, ask, frac, arm, depth=depth,
+                     floor_waiver=True)
+
+
+#: THE CODE'S OWN DEFAULT FLOOR. `MIN_FIRST_LEG_OWN_PRICE` is 0.20; the
+#: deployed Railway value is 0.30. On L5's own 2,216-window history the
+#: 0.2-0.3 bucket completes 80.7% (n=109) against 80.3% for 0.3-0.4
+#: (n=142) -- and against 76.2% for 0.6-0.7, which the band PERMITS.
+#: Completion only degrades below 0.20 (67.5%) and collapses below 0.10
+#: (28.4%). The six 2026-10-23 windows the 0.30 value cites opened at 0.12
+#: and 0.06, which are below 0.20, so they do not distinguish the two.
+CODE_DEFAULT_FLOOR = D("0.20")
+
+
+def variant_F(frames, i, bid, ask, frac, arm, depth=2):
+    """C at the CODE's floor of 0.20 rather than the deployed 0.30.
+
+    A narrower change than E: it still refuses the sub-0.20 legs whose
+    completion rate really does fall off, and admits only the 0.2-0.3
+    band that the history says completes as well as 0.3-0.4.
+    """
+    return variant_C(frames, i, bid, ask, frac, arm, depth=depth,
+                     floor=CODE_DEFAULT_FLOOR)
+
+
 VARIANTS = (("A_sequential_at_touch", variant_A),
             ("B_simultaneous_d2", variant_B),
             ("C_inventory_aware_completion", variant_C),
-            ("D_bounded_taker_RESEARCH", variant_D))
+            ("D_bounded_taker_RESEARCH", variant_D),
+            ("E_C_plus_floor_waiver", variant_E),
+            ("F_C_at_code_floor_0.20", variant_F))
 
 
 def score(res: Mapping[str, Any]) -> Tuple[D, D, D, int]:

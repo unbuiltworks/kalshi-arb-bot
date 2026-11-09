@@ -3584,6 +3584,11 @@ class Runner:
             # the reopening decision 1230z did not make; see
             # `probe_reopen_decision`. Carries its own break-even.
             "two_sided_reopen": rec.get("TWO_SIDED_REOPEN"),
+            # the frozen plan this tick re-priced, and the drift that
+            # justified it. Absent when nothing drifted, which is the
+            # common case; see `TS.replan_drift_ticks` for why a plan left
+            # behind the touch was invisible to both existing guards.
+            "two_sided_replan": rec.get("TWO_SIDED_REPLAN"),
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
@@ -6331,6 +6336,57 @@ class Runner:
             "frozen_rule": "030d8bf"}))
         self.emit_arm_switch_readiness()
         self.emit_two_sided_comparison()
+        self.emit_completion_latency()
+
+    def emit_completion_latency(self) -> None:
+        """The latency report on its OWN line, because the heartbeat drops it.
+
+        THE DEFECT, MEASURED ON THE RUNNING SERVICE. `bounded_hb` reduces
+        the largest field not in `HB_NEVER_REDUCE` until the line fits
+        LOG_BUDGET_BYTES, and deployment `c300a6c4` reports exactly that:
+
+            hb_reduced.fields = {"shadow_controller": 64618,
+                                 "l5_baseline": 19249,
+                                 "completion_latency": 15234}
+
+        So the one instrument built to answer "where does the time go"
+        reaches the tape as `{"_reduced": true, "bytes": 15234}` and the
+        funnel it was written to measure cannot be measured in production.
+
+        WHY NOT `HB_NEVER_REDUCE`. That list exists so the SAFETY state
+        survives, and the budget is finite: protecting 15 KB of telemetry
+        would push a safety field out instead -- the precise failure
+        `bounded_hb` was written to prevent. Telemetry does not outrank the
+        submission gate. It gets a second home instead, which is the same
+        answer the full authorization rows got on
+        `L5_AUTHORIZATION_PREFLIGHT`.
+
+        Reporting only, on the heartbeat cadence, and it cannot raise: a
+        latency line that throws would cost the heartbeat that carries the
+        safety state.
+        """
+        try:
+            rep = self._latency_report()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_line_failed:%s" % type(exc).__name__] += 1
+            return
+        if not rep:
+            return
+        try:
+            emit("L5_COMPLETION_LATENCY", {
+                "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
+                "report": rep,
+                "labels": ("the same report the heartbeat carries, on its "
+                           "own line because bounded_hb reduces it out of "
+                           "the heartbeat to protect the safety fields. "
+                           "Reporting only: no gate, limit or decision "
+                           "reads this.")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_line_failed:%s" % type(exc).__name__] += 1
 
     #: the windows the FINISHED arm worked, comma-separated, so the switch
     #: readiness can require THEIR confirmed settlement by name rather than
