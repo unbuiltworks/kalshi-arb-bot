@@ -1,4 +1,4 @@
-from src.l5_settlement_backed_replay import reconcile_settled_market, aggregate_confirmed_markets
+from src.l5_settlement_backed_replay import reconcile_settled_market, aggregate_confirmed_markets, compare_settled_strategies
 
 
 def fill(side, action, q, price, fee="0", rebate="0"):
@@ -56,3 +56,25 @@ def test_aggregate_requires_all_settled():
     a = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
     assert aggregate_confirmed_markets([a])["settled_net"] == "-0.308"
     assert not aggregate_confirmed_markets([a, {"eligible": False}])["eligible"]
+
+
+def test_confirmed_same_population_vs_no_trade():
+    loss = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
+    rescued = settled([fill("DOWN", "BUY", "0.7", "0.44"),
+                       fill("DOWN", "SELL", "0.7", "0.35", fee="0.01")],
+                      "UP", "0", "0", "0")
+    result = compare_settled_strategies(baseline={"m": loss},
+                                        candidate={"m": rescued},
+                                        identical_market_ids=["m"])
+    assert result["eligible"]
+    assert result["delta_settled_net"] == "0.2350"
+    assert not result["candidate_beats_no_trade"]
+
+
+def test_replay_refuses_missing_or_unsettled_market():
+    loss = settled([fill("DOWN", "BUY", "0.7", "0.44")], "UP", "0", "0", "0.7")
+    assert compare_settled_strategies(baseline={"a": loss},
+           candidate={}, identical_market_ids=["a"])["reason"] == "MARKET_POPULATION_MISMATCH"
+    assert compare_settled_strategies(baseline={"a": loss},
+           candidate={"a": {"eligible": False}},
+           identical_market_ids=["a"])["reason"] == "UNCONFIRMED_SETTLEMENT"
