@@ -5519,10 +5519,15 @@ class FaithfulExecutor:
         if not isinstance(counts, dict):
             counts = {"UP": 0, "DOWN": 0, "total": 0}
             self.presend_cross_skips = counts
+        return self._presend_record("PRESEND_WOULD_CROSS", side, own, wire,
+                                    bid, ask, book, counts)
+
+    def _presend_record(self, reason, side, own, wire, bid, ask, book,
+                        counts):
         counts[side] = int(counts.get(side) or 0) + 1
         counts["total"] = int(counts.get("total") or 0) + 1
         return {
-            "reason": "PRESEND_WOULD_CROSS:%s" % side,
+            "reason": "%s:%s" % (reason, side),
             "side": side,
             "own_px": str(own),
             "wire_px": None if wire is None else str(wire),
@@ -5530,12 +5535,90 @@ class FaithfulExecutor:
             "stream_age_s": (None if book.get("stream_age_s") is None
                              else str(book.get("stream_age_s"))),
             "skips": dict(counts),
-            "labels": ("a post-only leg the book has left is rejected by the "
-                       "venue and its submission claim is never returned, so "
-                       "this declines it BEFORE the claim is consumed. No "
-                       "price, size, depth, TTL or cutoff is changed; the "
-                       "order is simply not sent."),
+            "labels": ("a post-only leg the book has left, declined BEFORE "
+                       "the submission claim is consumed. No price, size, "
+                       "depth, TTL or cutoff is changed; the order is "
+                       "simply not sent, and the next tick prices a fresh "
+                       "one."),
         }
+
+    def presend_behind_refusal(self, market: str,
+                               intent: Mapping[str, Any],
+                               tr: Mapping[str, Any],
+                               rnd: Any = None
+                               ) -> Optional[Dict[str, Any]]:
+        """None to send; a record when this MAKER leg is now FAR BEHIND.
+
+        THE OTHER HALF OF `presend_cross_refusal`, and the asymmetry it
+        closes is the same one `TS.replan_drift_ticks` documents at the
+        plan. That guard declines a leg the book has made too AGGRESSIVE --
+        the venue would reject it post-only. Nothing declined a leg the
+        book has left too PASSIVE, because such a leg is perfectly
+        placeable: it rests far behind the touch, never fills, and holds
+        one of the two live-order slots for its whole TTL.
+
+        THE PLAN-LEVEL RE-PRICE DOES NOT COVER THIS. It recomputes from the
+        mirror as the plan is read; this reads the mirror again immediately
+        before the wire, which is the only snapshot that describes the book
+        the order will actually land in.
+
+        ONLY WHEN THE ROUND HOLDS NOTHING, read through
+        `probe_round_is_safe_to_retire` -- the same durable-state predicate
+        the plan-level re-price and retirement both use. A complement
+        matching a HELD leg must never be declined: declining it would
+        strand the inventory it was going to match, which is a far worse
+        outcome than a quote that fills slowly. Any answer but None sends.
+
+        FAILS OPEN ON EVERY UNKNOWN, exactly like the crossing guard, and
+        for the same reason: every risk control has already run by the call
+        site, so this can only decline an order that was not going to fill.
+        A missing book, an unreadable price, an unreadable round state or a
+        raising helper returns None and the order proceeds.
+
+        IT CHANGES NO PRICE, SIZE, DEPTH, TTL OR CUTOFF. It either lets the
+        order through untouched or does not send it.
+        """
+        if str(tr.get("mode") or "").upper() != FT.MAKER:
+            return None
+        side = str(intent.get("side") or "")
+        if side not in (UP, DOWN):
+            return None
+        own = intent.get("price")
+        if own is None:
+            return None
+        try:
+            # a round that holds anything is never declined here
+            if self.probe_round_is_safe_to_retire(
+                    market, int(rnd or 0)) is not None:
+                return None
+            book = self.ts_authenticated_book(market, {}) or {}
+            bid, ask = book.get("bid"), book.get("ask")
+            if bid is None or ask is None:
+                return None
+            drift = TS.plan_drift_ticks(
+                {"legs": [{"side": side, "price": own},
+                          {"side": (DOWN if side == UP else UP),
+                           "price": own}]},
+                bid=bid, ask=ask,
+                tick=getattr(self.transport, "tick_size", None),
+                depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")),
+                spent_sides=[(DOWN if side == UP else UP)])
+            if drift is None or drift < D(TS.replan_drift_ticks()):
+                return None
+            wire = TS.wire_price(side, own)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                      # unreadable is not a refusal
+        counts = getattr(self, "presend_behind_skips", None)
+        if not isinstance(counts, dict):
+            counts = {"UP": 0, "DOWN": 0, "total": 0}
+            self.presend_behind_skips = counts
+        rec = self._presend_record("PRESEND_LEFT_BEHIND", side, own, wire,
+                                   bid, ask, book, counts)
+        rec["drift_ticks"] = str(drift)
+        rec["allow_ticks"] = TS.replan_drift_ticks()
+        return rec
 
     def probe_plan(self, market: str,
                    authenticated: Mapping[str, Any],
@@ -9724,6 +9807,20 @@ class FaithfulExecutor:
                 prov.stage("PRESEND_CROSS", _xr)
                 return prov.refuse("PRESEND_CROSS",
                                    str(_xr.get("reason"))[:120])
+
+            # AND THE OTHER DIRECTION. The guard above declines a leg the
+            # book has made too AGGRESSIVE; this declines one it has left
+            # too PASSIVE, which is placeable, never fills, and holds a
+            # live-order slot for its whole TTL. Same fail-open discipline,
+            # and it only ever runs while the round holds nothing -- see
+            # `presend_behind_refusal`.
+            _br = self.presend_behind_refusal(
+                market, intent, tr,
+                rnd=getattr(self, "_probe_round_pending", None))
+            if _br is not None:
+                prov.stage("PRESEND_BEHIND", _br)
+                return prov.refuse("PRESEND_BEHIND",
+                                   str(_br.get("reason"))[:120])
 
             # LAST, and for the same reason PRESEND_CROSS is here: the next
             # statement consumes a claim that is never returned. A disarmed
