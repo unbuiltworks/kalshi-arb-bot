@@ -95,7 +95,7 @@ def test_paired_entry_requires_calibrated_joint_fills():
 def test_profitable_matched_pair_can_still_have_negative_expectancy():
     out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
         p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
-        p_up_settles="0.6")
+        p_up_settles_given_up_only="0.6", p_up_settles_given_down_only="0.6")
     assert out["eligible"]
     assert D(out["both_net"]) == D("0.05")
     assert D(out["down_only_expected_net"]) == D("-0.04")
@@ -107,10 +107,26 @@ def test_paired_entry_rejects_independent_unjustified_probabilities():
     with pytest.raises(ValueError, match="sum to one"):
         evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
             p_both="0.5", p_up_only="0.5", p_down_only="0.5",
-            p_neither="0", p_up_settles="0.6")
+            p_neither="0", p_up_settles_given_up_only="0.6", p_up_settles_given_down_only="0.6")
 
 
 def test_paired_entry_pair_cost_limit():
     out = evaluate_paired_entry(up_price="0.60", down_price="0.44", quantity="1",
         max_combined_cost="0.96")
     assert not out["eligible"] and out["reason"] == "PAIR_COST_LIMIT"
+
+
+def test_adverse_selection_conditioning_changes_expected_net():
+    # Same marginal quote economics; DOWN-only fills predict UP settlement.
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
+        p_up_settles_given_up_only="0.5", p_up_settles_given_down_only="0.9")
+    assert out["eligible"]
+    assert D(out["expected_net"]) == D("-0.267")
+
+
+def test_missing_conditional_settlement_probability_refuses():
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
+        p_up_settles_given_up_only="0.5")
+    assert not out["eligible"]
