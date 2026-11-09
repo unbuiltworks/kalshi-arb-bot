@@ -1448,7 +1448,8 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                  max_worst_case_loss: Any,
                  budget_headroom: Any = None,
                  book_age_s: Any = None,
-                 gap_suspected: bool = False) -> Dict[str, Any]:
+                 gap_suspected: bool = False,
+                 production_entry_evidence: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Exactly two post-only intents, or a terminal refusal.
 
     NO FALLBACK. Every failure returns ok False and nothing is submitted. The
@@ -1524,6 +1525,26 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     if pair > cap_px:
         return no("PAIR_COST_ABOVE_CAP", pair_cost=str(pair),
                   max_pair_cost=str(cap_px))
+    # Optional strict economics gate. Explicit evidence only: never synthesize
+    # joint-fill probabilities or infer fee/rebate economics from a quote.
+    # Refusal occurs before any order intent is returned.
+    if production_entry_evidence is not None:
+        try:
+            from src.l5_second_leg_economics import production_entry_evidence_gate
+            evidence = dict(production_entry_evidence)
+            # Actual quote and live-sized quantity are authoritative.
+            for forbidden in ("up_price", "down_price", "quantity",
+                              "book_age_s"):
+                if forbidden in evidence:
+                    return no("ENTRY_EVIDENCE_OVERRIDE", field=forbidden)
+            verdict = production_entry_evidence_gate(
+                up_price=str(up_px), down_price=str(dn_px),
+                quantity=str(mq), book_age_s=str(age), **evidence)
+        except (ValueError, TypeError, ArithmeticError, ImportError) as exc:
+            return no("ENTRY_ECONOMICS_ERROR", error=type(exc).__name__)
+        if not verdict.get("eligible"):
+            return no("ENTRY_ECONOMICS_REFUSED",
+                      economics_reason=verdict.get("reason"))
     floor = fee_floor(up_px, dn_px)
     edge = floor["edge"]
     if not floor["ok"]:
