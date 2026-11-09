@@ -192,6 +192,65 @@ def preflight(*, heartbeat: Mapping[str, Any],
             write_failures = None
         rows.append(_row("recorder_has_no_write_failures",
                          write_failures == 0, errors=errs))
+        # ========== DURABILITY IS A READ-BACK, NOT A COUNTER
+        #
+        # #212 closed the first half of this: `orders > 0` alone could pass
+        # with `events_appended` zero or missing. The owner named the
+        # remaining half -- "append counts alone are insufficient" -- and it
+        # is a property of the counter itself. `CalibrationRecorder.appended` is
+        # initialised to 0 in `__init__` and incremented only in `_append`,
+        # so it counts what THIS PROCESS wrote and is zeroed by every
+        # restart. It can therefore be satisfied by a process whose writes
+        # nothing has read back, and refused by a process holding a fully
+        # durable ledger it has just reloaded. Neither direction is
+        # durability.
+        #
+        # `CalibrationRecorder.verify_readback()` re-opens the file and reports
+        # what parses back, and `events_replayed_from_disk` counts events a
+        # PREVIOUS process wrote that this one recovered -- the only field
+        # in the report that cannot be true without a surviving write.
+        #
+        # ABSENT IS UNKNOWN, NOT CLEAN. A calibration report from before
+        # this field existed must not read as a pass, and must not read as
+        # a failure either: it is a report that cannot answer.
+        rb = calibration.get("readback")
+        if rb is None:
+            rows.append(_row("recorder_ledger_reads_back", UNKNOWN,
+                             why="no readback report supplied"))
+            rows.append(_row("recorder_events_survive_a_restart", UNKNOWN,
+                             why="no readback report supplied"))
+        elif not isinstance(rb, Mapping):
+            rows.append(_row("recorder_ledger_reads_back", False,
+                             why="readback report is not a mapping",
+                             got=str(type(rb).__name__)))
+            rows.append(_row("recorder_events_survive_a_restart", False,
+                             why="readback report is not a mapping"))
+        else:
+            _readable = rb.get("readable") is True
+            _ev = _int_or_none(rb.get("events_readable"))
+            _ord = _int_or_none(rb.get("orders_readable"))
+            _bad = _int_or_none(rb.get("unreadable_lines"))
+            # An UNREADABLE ledger is a refusal and never an empty one: the
+            # difference between "nothing was written" and "we cannot tell"
+            # is the whole point of this gate.
+            rows.append(_row(
+                "recorder_ledger_reads_back",
+                bool(_readable and _ev is not None and _ev > 0
+                     and _ord is not None and _ord > 0
+                     and _bad == 0),
+                readable=rb.get("readable"), error=rb.get("error"),
+                events_readable=rb.get("events_readable"),
+                orders_readable=rb.get("orders_readable"),
+                unreadable_lines=rb.get("unreadable_lines")))
+            _rep = _int_or_none(rb.get("events_replayed_from_disk"))
+            rows.append(_row(
+                "recorder_events_survive_a_restart",
+                bool(_readable and _rep is not None and _rep > 0),
+                events_replayed_from_disk=rb.get("events_replayed_from_disk"),
+                events_appended_this_process=rb.get(
+                    "events_appended_this_process"),
+                why=("a per-process append count cannot establish this; "
+                     "only events recovered from a previous process can")))
 
     unknown = [r for r in rows if r["ok"] is UNKNOWN]
     failed = [r for r in rows if r["ok"] is False]
@@ -206,6 +265,18 @@ def preflight(*, heartbeat: Mapping[str, Any],
                    "and clearing them is an owner decision. An UNKNOWN is "
                    "never a pass."),
     }
+
+
+def _int_or_none(v: Any) -> Optional[int]:
+    """An int, or None for anything that is not one. Never a silent zero:
+    a missing count and a count of zero must be distinguishable, because
+    one is "we cannot tell" and the other is "nothing is there"."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def exact_window_consistency(*, heartbeat: Mapping[str, Any],

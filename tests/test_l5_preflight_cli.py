@@ -38,8 +38,21 @@ HB = {
     "realized": {"unknown_basis_keys": []},
     "accounting": {"unknown_detail": {
         "post_baseline_settlements_not_attested": []}},
+    # the recorder report a LIVE gate may pass. The `readback` block is
+    # part of that: `events_appended` is a per-process counter zeroed by
+    # every restart and so cannot establish that order events survive one.
+    # `events_replayed_from_disk` can only be non-zero if a previous
+    # process's write came back, which is the fact the gate needs.
     "fill_calibration": {"orders": 3, "events_appended": 11, "errors": {},
-                         "orders_straddling_a_restart": 0},
+                         "orders_straddling_a_restart": 0,
+                         "events_replayed_from_disk": 11,
+                         "readback": {"readable": True, "error": None,
+                                      "events_readable": 11,
+                                      "orders_readable": 3,
+                                      "orders_with_full_capture": 3,
+                                      "unreadable_lines": 0,
+                                      "events_appended_this_process": 0,
+                                      "events_replayed_from_disk": 11}},
 }
 
 

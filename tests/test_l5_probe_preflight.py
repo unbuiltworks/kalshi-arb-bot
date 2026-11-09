@@ -65,7 +65,25 @@ def good_plan(**over):
 
 
 def calib(**over):
-    c = {"orders": 3, "events_appended": 11, "errors": {}}
+    """A recorder report that a LIVE gate may pass.
+
+    THE `readback` BLOCK IS PART OF THAT NOW, and this fixture was updated
+    rather than the gate loosened. `events_appended` is a per-process
+    counter zeroed by every restart, so it cannot establish that order
+    events survive one; `recorder_events_survive_a_restart` reads
+    `events_replayed_from_disk`, which can only be non-zero if a previous
+    process's write came back. A report without the block is UNKNOWN and
+    still blocks a pass -- see
+    `test_a_report_without_readback_no_longer_passes_a_live_gate` below.
+    """
+    c = {"orders": 3, "events_appended": 11, "errors": {},
+         "events_replayed_from_disk": 11,
+         "readback": {"readable": True, "error": None,
+                      "events_readable": 11, "orders_readable": 3,
+                      "orders_with_full_capture": 3,
+                      "unreadable_lines": 0,
+                      "events_appended_this_process": 0,
+                      "events_replayed_from_disk": 11}}
     c.update(over)
     return c
 
@@ -75,6 +93,20 @@ def test_the_live_gate_values_pass_the_preflight():
     out = PF.preflight(heartbeat=live_hb(), plan=good_plan(),
                        markets=[MARKET], calibration=calib())
     assert out["ok"] is True, (out["failed"], out["unknown"])
+
+
+def test_a_report_without_readback_no_longer_passes_a_live_gate():
+    """The counter alone is no longer enough, and its absence is UNKNOWN
+    rather than either a pass or a failure: a report from before the field
+    existed cannot answer the question."""
+    out = PF.preflight(heartbeat=live_hb(), plan=good_plan(),
+                       markets=[MARKET],
+                       calibration={"orders": 3, "events_appended": 11,
+                                    "errors": {}})
+    assert out["ok"] is False
+    assert "recorder_ledger_reads_back" in out["unknown"]
+    assert "recorder_events_survive_a_restart" in out["unknown"]
+    assert "recorder_ledger_reads_back" not in out["failed"]
 
 
 def test_an_absent_input_is_UNKNOWN_and_never_a_pass():

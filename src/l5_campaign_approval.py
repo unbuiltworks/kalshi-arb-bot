@@ -736,6 +736,35 @@ def reserve_window(market: str, *,
         return {"ok": False, "reason": "APPROVAL_NOT_VALID",
                 "detail": {"why": st.get("why")}}
     scope = dict(st.get("scope") or {})
+    # ===== THE WINDOW MUST BE IN THE GRANT BEFORE IT CAN BE SPENT
+    #
+    # THE HOLE THIS CLOSES, found by
+    # `tests/test_l5_arming_market_mismatch.py`. This function spends one
+    # of the owner's windows and it never asked whether the market it is
+    # spending it on is a window the approval covers. `opening_refusal`'s
+    # own docstring says "ONE DEFINITION, TWO CALLERS ... because 'may this
+    # window be opened' and 'may this order be sent into it' must never be
+    # able to disagree" -- and the third caller, the one that actually
+    # consumes the budget, was not asking. Called with the PREVIOUS
+    # window's slug it returned `ok: True`, `reserved_now: True`, and the
+    # owner's single authorized window was gone.
+    #
+    # NOT REACHABLE THROUGH THE RUNNER TODAY: it calls `reserve_window`
+    # only after `authorize_arming` has RETURNED, and that boundary already
+    # refuses `WINDOW_NOT_IN_AUTHORIZED_SET`. So this is a latent hole
+    # rather than a live loss -- but the protection was standing entirely
+    # on one caller's ordering, and the thing being protected is the
+    # owner's one window.
+    #
+    # THE SAME FUNCTION, so no second opinion is introduced. An unreadable
+    # window start refuses here exactly as it refuses at the claim.
+    _no = opening_refusal(scope, str(market))
+    if _no is not None:
+        return {"ok": False, "reason": str(_no.get("reason")),
+                "detail": dict(_no.get("detail") or {},
+                               note=("a window outside the grant cannot "
+                                     "spend the grant's budget")),
+                "spent": False, "reserved_now": False}
     try:
         return dict(WindowLedger(root).reserve(
             str(scope.get("nonce_sid")), str(market),
