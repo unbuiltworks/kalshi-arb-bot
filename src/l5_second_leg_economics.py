@@ -110,14 +110,15 @@ def evaluate(inv: Inventory, candidate: Candidate, *, max_book_age_s=D("2"),
 def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           down_fee="0", p_both=None, p_up_only=None,
                           p_down_only=None, p_neither=None,
-                          p_up_settles_given_up_only=None,\n                          p_up_settles_given_down_only=None, adverse_cost="0",
+                          p_up_settles_given_up_only=None,
+                          p_up_settles_given_down_only=None, adverse_cost="0",
                           max_combined_cost=None):
     """Read-only joint-fill paired-entry model; NEVER an order instruction.
 
     Probabilities must be externally calibrated from time-aligned order events.
     A joint distribution is mandatory: assuming independent maker fills would
-    conceal trend-driven adverse selection. Settlement probability is distinct
-    from fill probability. No estimated fills are represented as executions.
+    conceal trend-driven adverse selection. Settlement probability is conditional on which leg filled alone,
+    because fill-side adverse selection affects the settlement outcome. No estimated fills are represented as executions.
     Returns a refusal when the necessary evidence is unavailable.
     """
     q = dec(quantity)
@@ -134,7 +135,8 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
     if max_combined_cost is not None and pair_cost > dec(max_combined_cost):
         result["reason"] = "PAIR_COST_LIMIT"
         return result
-    probs = (p_both, p_up_only, p_down_only, p_neither,\n             p_up_settles_given_up_only, p_up_settles_given_down_only)
+    probs = (p_both, p_up_only, p_down_only, p_neither,
+             p_up_settles_given_up_only, p_up_settles_given_down_only)
     if any(p is None for p in probs):
         return result
     both, up_only, down_only, neither, settle_up_if_up, settle_up_if_down = map(dec, probs)
