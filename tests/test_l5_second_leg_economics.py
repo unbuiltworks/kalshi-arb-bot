@@ -63,9 +63,21 @@ def test_explicit_probability_is_model_only():
     inv = Inventory(D("1"), D("0"), D("0.62"))
     out = evaluate(inv, c(action="REPRICE", probability="0.5"))
     assert out["model_only"]
-    assert out["model_expected_worst"] == "-0.445"
+    assert out["model_expected_worst"] == "-0.295"
 
 
 def test_reject_invalid_inventory():
     with pytest.raises(ValueError):
         Inventory(D("-1"), D("0"), D("0"))
+
+
+def test_20261109_1530z_settled_residual_and_expensive_completion():
+    """Observed 0.7 DOWN @0.44; hypothetical UP @0.60 before fees."""
+    inv = Inventory(D("0"), D("0.7"), D("0.308"))
+    assert inv.outcome_net() == (D("-0.308"), D("0.392"))
+    out = evaluate(inv, c(side="UP", qty="0.7", px="0.60", depth="0.7"))
+    assert out["eligible"]
+    assert D(out["spend"]) == D("0.420")
+    assert D(out["fill_worst"]) == D("-0.028")
+    assert D(out["worst_improvement"]) == D("0.280")
+    assert D(out["fill_worst"]) < 0  # Hedging risk != a profitable pair.
