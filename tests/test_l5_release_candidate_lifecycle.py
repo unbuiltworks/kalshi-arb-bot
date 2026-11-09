@@ -145,16 +145,29 @@ def test_both_resting_legs_are_post_only_makers(w):
 
 
 def test_the_two_legs_price_a_pair_inside_the_fee_safe_cap(w):
-    """The economics of the pair the two legs form, from the real planner."""
+    """The economics of the pair the two legs actually form.
+
+    A CORRECTION OF THIS TEST'S FIRST VERSION, which read the pair out of
+    `rec["PLAN"]` behind an `if ... is not None` -- and `handle`'s record
+    carries no `PLAN` key at all, so the assertion never ran. It now reads
+    the two INTENTS, which is the only place the pair is observable from
+    outside, and asserts unconditionally.
+
+    `TS.build_orders` emits legs in OWN prices and the intents carry them
+    through unchanged (the wire conversion happens later, in
+    `l5_order_body.build`), so these two numbers sum to the own-terms pair:
+    0.40 + 0.54 = 0.94 on the harness's 0.42/0.44 book at depth 2, which is
+    `1 - spread - 2*depth*tick`.
+    """
     w.tick(30.0)
     w.tick(45.0)
     own = {s["side"]: D(s["price"]) for s in w.venue.sent}
-    # the ORDER carries the wire price for DOWN; the pair is in own terms
-    pair = sum(D(l["price"]) for l in w.records[0]["PLAN"]["legs"]) \
-        if (w.records and (w.records[0] or {}).get("PLAN")) else None
-    if pair is not None:
-        assert pair <= TS.max_pair_cost(), (pair, TS.max_pair_cost())
-    assert set(own) == {"UP", "DOWN"}
+    assert set(own) == {"UP", "DOWN"}, own
+    pair = own["UP"] + own["DOWN"]
+    assert pair <= TS.max_pair_cost(), (pair, TS.max_pair_cost())
+    # and it is the depth-2 arithmetic, not merely some number under the cap
+    bid, ask, tick = D("0.42"), D("0.44"), D("0.01")
+    assert pair == D(1) - (ask - bid) - 2 * 2 * tick, pair
 
 
 # =====================================================================
@@ -545,6 +558,26 @@ def test_completion_latency_is_reducible_and_that_is_deliberate(tmp_path):
     assert "completion_latency" not in TSS.HB_NEVER_REDUCE
     assert "submission_gate" in TSS.HB_NEVER_REDUCE
     assert "day_realized" in TSS.HB_NEVER_REDUCE
+
+
+def test_the_latency_line_FITS_at_the_size_that_got_it_reduced():
+    """A second home is only a fix if the line arrives. At the 15,234 bytes
+    production reported for `completion_latency`, the dedicated line is
+    about 15.5 KB -- inside the 48,000-byte heartbeat budget and well
+    inside the 81,920-byte platform limit that truncated the heartbeat in
+    the first place."""
+    import json
+    from src import l5_two_sided_shadow as TSS
+    observed = 15234                      # hb_reduced.fields on c300a6c4
+    line = len(json.dumps({
+        "utc": "2026-11-09T05:29:19+00:00", "role": "l5-pmus-live",
+        "report": "x" * observed,
+        "labels": ("the same report the heartbeat carries, on its own line "
+                   "because bounded_hb reduces it out of the heartbeat to "
+                   "protect the safety fields. Reporting only: no gate, "
+                   "limit or decision reads this.")}))
+    assert line < TSS.LOG_BUDGET_BYTES, line
+    assert line < 81920, line
 
 
 def test_the_latency_line_cannot_break_the_heartbeat(tmp_path):
