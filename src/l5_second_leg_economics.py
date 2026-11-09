@@ -272,3 +272,85 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                   probability_sum=str(total),
                   no_fill_net="0")
     return result
+
+
+#: The adverse-selection skew the entry gate assumes when none is measured.
+#:
+#: WHY NONZERO IS THE CONSERVATIVE DEFAULT. A resting two-sided quote fills
+#: on the side the market runs through, so the leg that fills ALONE is the
+#: adversely selected one: UP fills alone when the price falls through our
+#: bid (and UP then tends to settle NO), DOWN fills alone when the price
+#: rises through our ask (and UP then tends to settle YES). The skew is how
+#: far those conditional settlement probabilities sit from 0.50.
+#:
+#: Zero would assert that a single fill carries NO directional information,
+#: which the 2026-11-09 15:30Z window refutes: DOWN filled alone, the price
+#: had risen, UP settled, and the DOWN leg paid nothing. That is the x=0.50
+#: corner. One observation cannot estimate the skew, so this is set to a
+#: modest value and the gate it feeds is a REFUSAL, not a licence.
+DEFAULT_ADVERSE_SKEW = D("0.15")
+
+
+def admissible_pair_ceiling(*, p_both, p_up_only, p_down_only,
+                            adverse_skew=None, minimum_expected_net="0",
+                            quantity="1"):
+    """The dearest pair whose expected net still clears the threshold.
+
+    WHY THIS EXISTS. The deployed entry gate tests `pair <= maker_pair_ceiling`
+    with the ceiling a CONSTANT (0.96), derived from fee safety --
+    `BREAKEVEN_PAIR` is 0.9532 -- and from nothing about adverse selection.
+    Under any material skew that constant admits negative-expectancy
+    entries, which is what the 15:30Z window bought: pair 0.95, inside the
+    cap, expected net +0.0368 only if the skew is exactly zero, and
+    NEGATIVE beyond a skew of 0.0871.
+
+    So this inverts the paired-entry expectation into the same shape the
+    existing gate already uses -- one ceiling, compared against one pair
+    cost -- rather than adding a second mechanism beside it. It TIGHTENS
+    entry and can never loosen it: callers take `min(existing, this)`.
+
+    Returns the ceiling as a Decimal. Linearity in the pair cost makes the
+    inversion exact: expected net falls by exactly `p_both * dq` for each
+    unit the pair dearens, so there is no search and no tolerance.
+    """
+    q = dec(quantity)
+    both, up_only, down_only = dec(p_both), dec(p_up_only), dec(p_down_only)
+    if q <= 0:
+        raise ValueError("invalid quantity")
+    for name, v in (("p_both", both), ("p_up_only", up_only),
+                    ("p_down_only", down_only)):
+        if not (D("0") <= v <= D("1")):
+            raise ValueError("%s outside [0,1]" % name)
+    if both <= 0:
+        # NO PAIRING, NO PRICE AT WHICH ENTRY IS JUSTIFIED. A pair that
+        # never completes cannot be made attractive by being cheap.
+        raise ValueError("p_both must be positive to admit any pair")
+    skew = (DEFAULT_ADVERSE_SKEW if adverse_skew is None
+            else dec(adverse_skew))
+    if not (D("0") <= skew <= D("0.5")):
+        raise ValueError("adverse skew outside [0,0.5]")
+    threshold = dec(minimum_expected_net)
+    if threshold < 0:
+        raise ValueError("negative minimum expected net")
+
+    # The single-leg branches do not depend on the pair cost: each is its
+    # own leg's settlement less its own leg's cost. Only `both_net`
+    # (= q - pair_cost) carries it, so solve
+    #   both*(q - pair) + up_only*up_net + down_only*down_net = threshold
+    # The adverse corner is priced on each single branch: UP alone settles
+    # with probability 0.5 - skew, DOWN alone pays when UP does NOT, i.e.
+    # with probability 1 - (0.5 + skew).
+    a, b = D("0.5") - skew, D("0.5") + skew
+    # Each single branch is valued at the SAME split of the pair that the
+    # caller is testing, so the worst symmetric reading is used: each leg
+    # costs half the pair. That keeps this a function of the pair alone,
+    # which is what a one-number ceiling requires.
+    #   up_net   = q*a       - half_pair
+    #   down_net = q*(1 - b) - half_pair
+    # Substituting half_pair = pair/2 and solving for `pair`:
+    #   both*q + up_only*q*a + down_only*q*(1-b) - threshold
+    #     = pair * (both + (up_only + down_only)/2)
+    numer = (both * q + up_only * q * a + down_only * q * (D("1") - b)
+             - threshold)
+    denom = both + (up_only + down_only) / D("2")
+    return numer / denom

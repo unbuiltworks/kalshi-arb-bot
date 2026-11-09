@@ -306,3 +306,96 @@ def test_every_eligible_verdict_is_marked_model_only():
     assert out["eligible"] is True
     assert out["model_only"] is True, (
         "an eligible hypothesis must never read as a confirmed execution")
+
+
+# =====================================================================
+# THE ADVERSE-SELECTION-AWARE PAIR CEILING
+# =====================================================================
+from src.l5_second_leg_economics import (DEFAULT_ADVERSE_SKEW,
+                                         admissible_pair_ceiling)
+
+#: PROVEN conservative arm, recorded books at depth 2, out of sample.
+BOTH, SINGLE = D("0.525"), D("0.423")
+CEIL = dict(p_both=str(BOTH), p_up_only=str(SINGLE / 2),
+            p_down_only=str(SINGLE / 2))
+
+
+def test_the_default_skew_is_nonzero():
+    """Zero would assert a single fill carries no directional information,
+    which the live window refutes."""
+    assert DEFAULT_ADVERSE_SKEW > 0
+    assert DEFAULT_ADVERSE_SKEW <= D("0.5")
+
+
+def test_more_adverse_selection_demands_a_cheaper_pair():
+    prev = None
+    for x in ("0", "0.05", "0.10", "0.20", "0.30", "0.50"):
+        c = admissible_pair_ceiling(adverse_skew=x, **CEIL)
+        if prev is not None:
+            assert c < prev, x
+        prev = c
+
+
+def test_the_ceiling_reproduces_the_1530z_break_even_exactly():
+    """At the measured break-even skew the ceiling equals the pair that
+    window actually quoted, 0.95. The inversion is exact, not searched."""
+    c = admissible_pair_ceiling(adverse_skew="0.0871", **CEIL)
+    assert c.quantize(D("0.0001")) == D("0.9500")
+
+
+def test_the_1530z_pair_is_REFUSED_at_the_default_skew():
+    """THE ENTRY DEFECT. pair 0.95 sits inside the deployed 0.96 constant
+    and is admitted by it, but is above the ceiling the economics allow
+    once a single fill is treated as informative."""
+    c = admissible_pair_ceiling(**CEIL)
+    assert D("0.95") > c
+    assert c.quantize(D("0.0001")) == D("0.9138")
+
+
+def test_at_zero_skew_the_ceiling_is_LOOSER_so_callers_must_take_the_min():
+    """Pinned because it is the one case where using this ALONE would
+    widen entry. The documented contract is min(existing, this)."""
+    c = admissible_pair_ceiling(adverse_skew="0", **CEIL)
+    assert c > D("0.96")
+    assert min(D("0.96"), c) == D("0.96")
+
+
+def test_a_pair_that_never_completes_has_no_admissible_price():
+    with pytest.raises(ValueError, match="p_both must be positive"):
+        admissible_pair_ceiling(p_both="0", p_up_only="0.5",
+                                p_down_only="0.5")
+
+
+def test_a_higher_profit_threshold_demands_a_cheaper_pair():
+    base = admissible_pair_ceiling(**CEIL)
+    strict = admissible_pair_ceiling(minimum_expected_net="0.02", **CEIL)
+    assert strict < base
+
+
+@pytest.mark.parametrize("bad", ["-0.01", "0.51", "1"])
+def test_a_skew_outside_zero_to_a_half_is_refused(bad):
+    with pytest.raises(ValueError, match="adverse skew"):
+        admissible_pair_ceiling(adverse_skew=bad, **CEIL)
+
+
+def test_a_negative_profit_threshold_is_refused():
+    with pytest.raises(ValueError, match="negative minimum expected net"):
+        admissible_pair_ceiling(minimum_expected_net="-0.01", **CEIL)
+
+
+def test_the_ceiling_agrees_with_the_full_model_at_the_boundary():
+    """Cross-check: a pair AT the ceiling should price to roughly zero
+    expected net through `evaluate_paired_entry`, and a pair a cent
+    dearer should be negative."""
+    skew = D("0.15")
+    c = admissible_pair_ceiling(adverse_skew=str(skew), **CEIL)
+    a, b = D("0.5") - skew, D("0.5") + skew
+    half = (c / 2).quantize(D("0.0001"))
+    out = evaluate_paired_entry(
+        up_price=str(half), down_price=str(half), quantity="1",
+        p_both=str(BOTH), p_up_only=str(SINGLE / 2),
+        p_down_only=str(SINGLE / 2),
+        p_neither=str(D("1") - BOTH - SINGLE),
+        p_up_settles_given_up_only=str(a),
+        p_up_settles_given_down_only=str(b))
+    assert abs(D(out["expected_net"])) < D("0.001"), out["expected_net"]
