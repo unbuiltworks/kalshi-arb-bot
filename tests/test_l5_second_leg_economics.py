@@ -148,3 +148,30 @@ def test_positive_pair_profit_but_negative_total_ev_refuses():
         p_up_settles_given_up_only="0.5",
         p_up_settles_given_down_only="0.9")
     assert not out["eligible"] and out["reason"] == "NONPOSITIVE_EXPECTED_NET"
+
+
+def test_residual_probability_gate_refuses_high_single_leg_risk():
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.1", p_up_only="0", p_down_only="0.8", p_neither="0.1",
+        p_up_settles_given_up_only="0.5",
+        p_up_settles_given_down_only="0.9", max_residual_probability="0.25")
+    assert not out["eligible"]
+    assert out["reason"] == "RESIDUAL_PROBABILITY_LIMIT"
+
+
+def test_single_leg_worst_case_gate_refuses_even_with_positive_model_ev():
+    out = evaluate_paired_entry(up_price="0.46", down_price="0.45", quantity="1",
+        p_both="0.8", p_up_only="0.05", p_down_only="0.05", p_neither="0.1",
+        p_up_settles_given_up_only="0.6",
+        p_up_settles_given_down_only="0.4", max_single_leg_loss="0.40")
+    assert not out["eligible"]
+    assert out["reason"] == "SINGLE_LEG_LOSS_LIMIT"
+    assert D(out["residual_worst"]) == D("-0.46")
+
+
+def test_adverse_cost_charged_when_only_one_leg_fills():
+    out = evaluate_paired_entry(up_price="0.46", down_price="0.45", quantity="1",
+        p_both="0", p_up_only="1", p_down_only="0", p_neither="0",
+        p_up_settles_given_up_only="0.6",
+        p_up_settles_given_down_only="0.4", adverse_cost="0.03")
+    assert D(out["up_only_expected_net"]) == D("0.11")
