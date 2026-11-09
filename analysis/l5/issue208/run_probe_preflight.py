@@ -165,11 +165,19 @@ def main() -> int:
             print("REFUSED: a plan is priced for ONE market; pass a single "
                   "--market for preflight.")
             return 2
-        out = PF.preflight(heartbeat=hb, plan=_plan(a, markets[0]),
+        plan = _plan(a, markets[0])
+        out = PF.preflight(heartbeat=hb, plan=plan,
                            markets=markets,
                            calibration=cal if isinstance(cal, Mapping)
                            else None,
                            expect_depth_ticks=int(a.depth))
+        # Exact-market evidence is mandatory for a live-window GO verdict.
+        # A caller-supplied plan cannot substitute for the executor's slug.
+        window = PF.exact_window_consistency(
+            heartbeat=hb, plan=plan or {}, market=markets[0])
+        out["checks"].extend(window["checks"])
+        out["failed"].extend(window["failed"])
+        out["ok"] = out["ok"] and window["ok"]
     else:
         inv = _load(a.inventory) or {}
         lat = (hb.get("completion_latency") or {})
