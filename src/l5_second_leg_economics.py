@@ -109,6 +109,13 @@ def evaluate(inv: Inventory, candidate: Candidate, *, max_book_age_s=D("2"),
     return result
 
 
+#: tolerance on the joint-fill distribution summing to one. Calibrated
+#: frequencies are rounded, so exact Decimal equality refuses inputs that are
+#: correct to the precision they were measured at. A real mismatch still
+#: refuses -- this only stops a rounding residue from looking like one.
+PROB_SUM_TOLERANCE = D("0.0005")
+
+
 def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           down_fee="0", p_both=None, p_up_only=None,
                           p_down_only=None, p_neither=None,
@@ -116,7 +123,11 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                           p_up_settles_given_down_only=None, adverse_cost="0",
                           max_combined_cost=None, minimum_expected_net="0",
                           max_residual_probability=None,
-                          max_single_leg_loss=None):
+                          max_single_leg_loss=None,
+                          up_rebate="0", down_rebate="0", rebate_min_qty=None,
+                          up_depth=None, down_depth=None,
+                          book_age_s=None, max_book_age_s="2",
+                          up_filled_qty=None, down_filled_qty=None):
     """Read-only joint-fill paired-entry model; NEVER an order instruction.
 
     Probabilities must be externally calibrated from time-aligned order events.
@@ -132,10 +143,55 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
         raise ValueError("invalid quote price or quantity")
     if min(uf, df, adverse) < 0:
         raise ValueError("negative fee or adverse cost")
-    pair_cost = q * (u + d) + uf + df + adverse
+
+    # MAKER REBATES ARE A CREDIT, AND THEY HAVE A FLOOR.
+    #
+    # They are taken as their own non-negative inputs rather than as a
+    # negative `fee`, because a negative fee would also admit a negative
+    # ADVERSE cost -- an adverse-selection credit, which is not a thing.
+    #
+    # `rebate_min_qty` encodes the measured venue behaviour: the credited
+    # maker rebate is 0.00727/fill but earns $0.00 below a confirmed floor
+    # of 2.52 contracts, so at the deployed 1-contract clip it is ZERO.
+    # A model that credited it anyway would make the deployed configuration
+    # look better than it is, which is the specific error the programme has
+    # been warned about.
+    ur, dr = dec(up_rebate), dec(down_rebate)
+    if min(ur, dr) < 0:
+        raise ValueError("negative rebate")
+    rebate_earned = True
+    if rebate_min_qty is not None:
+        floor = dec(rebate_min_qty)
+        if floor < 0:
+            raise ValueError("negative rebate floor")
+        rebate_earned = q >= floor
+    if not rebate_earned:
+        ur = dr = D("0")
+    uf_net, df_net = uf - ur, df - dr
+
+    pair_cost = q * (u + d) + uf_net + df_net + adverse
     result = {"eligible": False, "pair_cost": str(pair_cost),
               "pair_net_if_both_fill": str(q - pair_cost),
+              "rebate_credited": str(ur + dr),
+              "rebate_earned": rebate_earned,
               "reason": "JOINT_FILL_OR_SETTLEMENT_UNVALIDATED"}
+
+    # FRESHNESS, matching `evaluate`. The paired model had no book-age gate
+    # at all, so a stale snapshot could price an entry with no refusal --
+    # and this programme's own standard is a 2 s bound that 6.4-6.9 s
+    # snapshots do not meet.
+    if book_age_s is not None and dec(book_age_s) > dec(max_book_age_s):
+        result["reason"] = "STALE_BOOK"
+        return result
+
+    # DEPTH, also matching `evaluate`. Quoting size the book cannot absorb
+    # is not an executable hypothesis.
+    for name, avail in (("up", up_depth), ("down", down_depth)):
+        if avail is not None and dec(avail) < q:
+            result["reason"] = "INSUFFICIENT_DEPTH"
+            result["insufficient_side"] = name.upper()
+            return result
+
     if max_combined_cost is not None and pair_cost > dec(max_combined_cost):
         result["reason"] = "PAIR_COST_LIMIT"
         return result
@@ -146,20 +202,43 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
     both, up_only, down_only, neither, settle_up_if_up, settle_up_if_down = map(dec, probs)
     if any(p < 0 or p > 1 for p in (both, up_only, down_only, neither, settle_up_if_up, settle_up_if_down)):
         raise ValueError("probability outside [0,1]")
-    if sum((both, up_only, down_only, neither)) != 1:
-        raise ValueError("joint fill probabilities must sum to one")
+    # A DISTRIBUTION THAT DOES NOT SUM TO ONE IS A REFUSAL, NOT A CRASH.
+    # It used to raise, so a controller asking "should I enter?" got an
+    # exception instead of "no". Fail closed, and say why.
+    total = sum((both, up_only, down_only, neither))
+    if abs(total - D("1")) > PROB_SUM_TOLERANCE:
+        result.update(reason="JOINT_FILL_DISTRIBUTION_NOT_NORMALISED",
+                      probability_sum=str(total), model_only=True)
+        return result
+
+    # PARTIAL FILLS. The joint distribution is all-or-nothing per leg, but
+    # the live 2026-11-09 15:30Z window filled 0.7 of a 1-contract DOWN
+    # order -- a partial -- so the single-leg paths take an optional filled
+    # quantity. Fees scale pro rata with the filled fraction; the quoted
+    # fee is for the quoted size.
+    uq = q if up_filled_qty is None else dec(up_filled_qty)
+    dq = q if down_filled_qty is None else dec(down_filled_qty)
+    if uq <= 0 or dq <= 0 or uq > q or dq > q:
+        raise ValueError("filled quantity must be in (0, quantity]")
+    u_frac, d_frac = uq / q, dq / q
+
     # Charge the conservative adverse-cost allowance on every filled path.
     # Single-leg paths settle directionally; both-filled paths redeem q.
-    up_only_net = q * settle_up_if_up - (q * u + uf + adverse)
-    down_only_net = q * (1 - settle_up_if_down) - (q * d + df + adverse)
+    up_only_net = uq * settle_up_if_up - (
+        uq * u + uf_net * u_frac + adverse)
+    down_only_net = dq * (1 - settle_up_if_down) - (
+        dq * d + df_net * d_frac + adverse)
     both_net = q - pair_cost
     expected = both * both_net + up_only * up_only_net + down_only * down_only_net
     threshold = dec(minimum_expected_net)
     if threshold < 0:
         raise ValueError("negative minimum expected net")
     residual_probability = up_only + down_only
-    residual_worst = min(-(q * u + uf + adverse),
-                         -(q * d + df + adverse))
+    # WORST CASE ON AN UNMATCHED LEG: the leg settles worthless and its cost
+    # is lost. Computed on the FILLED quantity and net of any earned rebate,
+    # so it tracks what is actually at risk.
+    residual_worst = min(-(uq * u + uf_net * u_frac + adverse),
+                         -(dq * d + df_net * d_frac + adverse))
     if max_residual_probability is not None:
         cap = dec(max_residual_probability)
         if not D("0") <= cap <= D("1"):
@@ -189,5 +268,7 @@ def evaluate_paired_entry(*, up_price, down_price, quantity, up_fee="0",
                   up_only_expected_net=str(up_only_net),
                   down_only_expected_net=str(down_only_net),
                   both_net=str(both_net),
+                  up_filled_qty=str(uq), down_filled_qty=str(dq),
+                  probability_sum=str(total),
                   no_fill_net="0")
     return result

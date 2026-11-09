@@ -106,10 +106,40 @@ def test_profitable_matched_pair_can_still_have_negative_expectancy():
 
 
 def test_paired_entry_rejects_independent_unjustified_probabilities():
-    with pytest.raises(ValueError, match="sum to one"):
-        evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
-            p_both="0.5", p_up_only="0.5", p_down_only="0.5",
-            p_neither="0", p_up_settles_given_up_only="0.6", p_up_settles_given_down_only="0.6")
+    """A distribution that does not sum to one is REFUSED, not raised.
+
+    This test asserted the raise. It now asserts the property -- the input
+    is rejected and nothing is eligible -- because a controller asking
+    "should I enter?" must receive "no", not an exception it has to catch.
+    Independent maker fills multiplied out to 0.5/0.5/0.5/0 still fail.
+    """
+    out = evaluate_paired_entry(up_price="0.51", down_price="0.44", quantity="1",
+        p_both="0.5", p_up_only="0.5", p_down_only="0.5",
+        p_neither="0", p_up_settles_given_up_only="0.6", p_up_settles_given_down_only="0.6")
+    assert not out["eligible"]
+    assert out["reason"] == "JOINT_FILL_DISTRIBUTION_NOT_NORMALISED"
+    assert D(out["probability_sum"]) == D("1.5")
+    assert "expected_net" not in out, (
+        "an unnormalised distribution must not yield an expected value")
+
+
+def test_a_rounding_residue_in_a_calibrated_distribution_is_tolerated():
+    """Calibrated frequencies are rounded. 0.3333 x3 + 0.0001 sums to one
+    exactly; a residue inside the tolerance must not read as a mismatch."""
+    out = evaluate_paired_entry(up_price="0.48", down_price="0.47", quantity="1",
+        p_both="0.3333", p_up_only="0.3333", p_down_only="0.3333",
+        p_neither="0.0002", p_up_settles_given_up_only="0.5",
+        p_up_settles_given_down_only="0.5")
+    assert out["reason"] != "JOINT_FILL_DISTRIBUTION_NOT_NORMALISED"
+
+
+def test_a_real_mismatch_outside_the_tolerance_still_refuses():
+    out = evaluate_paired_entry(up_price="0.48", down_price="0.47", quantity="1",
+        p_both="0.10", p_up_only="0.35", p_down_only="0.35", p_neither="0.19",
+        p_up_settles_given_up_only="0.5", p_up_settles_given_down_only="0.5")
+    assert not out["eligible"]
+    assert out["reason"] == "JOINT_FILL_DISTRIBUTION_NOT_NORMALISED"
+    assert D(out["probability_sum"]) == D("0.99")
 
 
 def test_paired_entry_pair_cost_limit():
