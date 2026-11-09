@@ -84,3 +84,29 @@ def aggregate_confirmed_markets(markets):
     return {"eligible": True, "market_count": len(records),
             "settled_net": str(total), "net_per_market": str(total / len(records)),
             "stranded_market_count": sum(bool(row["stranded"]) for row in records)}
+
+
+def compare_settled_strategies(*, baseline, candidate, identical_market_ids):
+    """Compare *confirmed* settled outcomes for the same market population.
+
+    Refuse simulated candidate fills or missing settlements. The no-trade
+    comparator is zero realized net; no counterfactual fill is manufactured.
+    Each mapping is market_id -> reconcile_settled_market result.
+    """
+    ids = list(identical_market_ids)
+    if not ids or len(ids) != len(set(ids)):
+        return {"eligible": False, "reason": "INVALID_MARKET_POPULATION"}
+    if set(baseline) != set(ids) or set(candidate) != set(ids):
+        return {"eligible": False, "reason": "MARKET_POPULATION_MISMATCH"}
+    b = aggregate_confirmed_markets([baseline[i] for i in ids])
+    c = aggregate_confirmed_markets([candidate[i] for i in ids])
+    if not b["eligible"] or not c["eligible"]:
+        return {"eligible": False, "reason": "UNCONFIRMED_SETTLEMENT"}
+    bnet, cnet = _decimal(b["settled_net"]), _decimal(c["settled_net"])
+    return {"eligible": True, "market_count": len(ids),
+            "baseline_settled_net": str(bnet),
+            "candidate_settled_net": str(cnet),
+            "delta_settled_net": str(cnet - bnet),
+            "no_trade_settled_net": "0",
+            "candidate_beats_no_trade": cnet > 0,
+            "candidate_beats_baseline": cnet > bnet}
