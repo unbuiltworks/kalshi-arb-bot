@@ -960,8 +960,14 @@ def test_optional_economics_refuses_stale_or_missing_joint_fills(armed):
                 "up_fee": "0.01", "down_fee": "0.01",
                 "adverse_cost": "0.01", "max_single_leg_loss": "3",
                 "max_residual_probability": "0.5",
-                "up_depth": "100", "down_depth": "100"}
+                }
     gated = TS.build_orders(**book(production_entry_evidence=evidence))
     assert not gated["ok"]
     assert gated["reason"] == "ENTRY_ECONOMICS_REFUSED"
     assert gated["economics_reason"] == "JOINT_FILL_OR_SETTLEMENT_UNVALIDATED"
+
+
+def test_evidence_cannot_override_venue_depth(armed):
+    gated = TS.build_orders(**book(production_entry_evidence={
+        "up_depth": "1000000", "down_depth": "1000000"}))
+    assert gated["reason"] == "ENTRY_EVIDENCE_OVERRIDE"
