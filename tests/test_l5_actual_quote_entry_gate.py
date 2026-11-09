@@ -4,8 +4,8 @@ from src.l5_second_leg_economics import actual_quote_entry_gate
 
 
 def _args():
-    return dict(quantity="1", p_both="0.525", p_up_only="0.2115",
-                p_down_only="0.2115", p_neither="0.052",
+    return dict(quantity="1", p_both="0.525", p_up_only="0.300",
+                p_down_only="0.123", p_neither="0.052",
                 p_up_settles_given_up_only="0.35",
                 p_up_settles_given_down_only="0.65",
                 book_age_s="0.5", up_depth="5", down_depth="5",
