@@ -55,6 +55,10 @@ COPY src/__init__.py src/__init__.py
 # image it raises ModuleNotFoundError on the first tick with
 # L5_BOOK_COMPLETION set.
 COPY src/l5_book_completion.py src/l5_book_completion.py
+# The paired-entry economics the opening pair ceiling consults. Imported
+# at module level by l5_two_sided_probe, so its absence would be a boot
+# ModuleNotFoundError rather than a degraded decision.
+COPY src/l5_second_leg_economics.py src/l5_second_leg_economics.py
 COPY src/l5_completion_latency.py src/l5_completion_latency.py
 COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 # The bounded taker-completion authorization. The runner imports it

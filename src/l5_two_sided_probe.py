@@ -807,6 +807,90 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
     return None
 
 
+#: THE ADVERSE-SELECTION SKEW, and it is OFF unless configured.
+#:
+#: `max_pair_cost` is a fee-safety number: 0.96 against a BREAKEVEN_PAIR of
+#: 0.9532. It says nothing about WHICH leg fills. A resting two-sided quote
+#: fills on the side the market runs THROUGH, so the leg that fills alone is
+#: the adversely selected one, and the 2026-11-09 15:30Z window is the
+#: worked example: pair 0.95, inside the cap, DOWN filled alone, the bid ran
+#: 0.53 -> 0.98, UP settled, the DOWN leg paid nothing, -$0.3080 settled.
+#:
+#: Priced through the validated paired-entry economics on the PROVEN arm of
+#: the recorded books, that entry is positive-expectancy only while the
+#: conditional settlement skew is under 0.0871. It was not.
+#:
+#: DEFAULT OFF, and deliberately. The skew has ONE live observation behind
+#: it and one observation is not an estimate, so no value is promoted here
+#: as calibrated truth. Unset leaves the deployed decision byte-identical.
+ADVERSE_SKEW_ENV = "L5_TS_ADVERSE_SKEW"
+
+#: Joint fill distribution, MEASURED: the queue-independent PROVEN arm of
+#: the recorded-book replay at depth 2, out of sample. The venue-confirmed
+#: own-order comparison is 11 rounds with a first fill, 8 paired (72.7%),
+#: so PROVEN is the conservative end of a bracket that contains our own
+#: behaviour rather than a guess.
+PROVEN_P_BOTH = D("0.525")
+PROVEN_P_SINGLE = D("0.423")
+
+
+def adverse_skew() -> Optional[D]:
+    """The configured skew, or None meaning the gate is not engaged.
+
+    UNREADABLE IS NOT ENGAGED. A typo must not silently start refusing
+    entries on a number nobody chose -- it leaves the existing ceiling in
+    force, which is the behaviour that has been regression-tested.
+    """
+    raw = (os.getenv(ADVERSE_SKEW_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return None
+    if not v.is_finite() or v < 0 or v > D("0.5"):
+        return None
+    return v
+
+
+def effective_pair_ceiling() -> Dict[str, Any]:
+    """The opening pair ceiling actually applied, and which bound set it.
+
+    `min(max_pair_cost(), admissible_pair_ceiling(...))`. It can only
+    TIGHTEN: at a skew of 0 the economics return 1.0000, looser than 0.96,
+    and the min keeps 0.96. Every existing gate -- the fee floor, the entry
+    band, exposure, loss, residual, maker-only, the locks and the watchdog
+    -- is untouched and still applies.
+
+    FAIL SAFE, NOT FAIL OPEN: if the economics cannot be imported or
+    evaluated, the existing ceiling stands and the reason is reported.
+    """
+    base = max_pair_cost()
+    skew = adverse_skew()
+    out: Dict[str, Any] = {"ceiling": base, "base": base, "skew": skew,
+                           "bound_by": "max_pair_cost", "economic": None,
+                           "error": None}
+    if skew is None:
+        return out
+    try:
+        from src import l5_second_leg_economics as SLE
+        econ = SLE.admissible_pair_ceiling(
+            p_both=str(PROVEN_P_BOTH),
+            p_up_only=str(PROVEN_P_SINGLE / D(2)),
+            p_down_only=str(PROVEN_P_SINGLE / D(2)),
+            adverse_skew=str(skew))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:80])
+        return out
+    out["economic"] = econ
+    if econ < base:
+        out["ceiling"] = econ
+        out["bound_by"] = "adverse_selection"
+    return out
+
+
 def max_pair_cost() -> D:
     """Opening pair ceiling: default 0.96, explicit override capped at 0.99."""
     raw = (os.getenv(MAX_PAIR_COST_ENV) or "").strip()
@@ -1520,10 +1604,18 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             return no("PRICE_NOT_ON_TICK", price=str(px))
 
     pair = up_px + dn_px
-    cap_px = max_pair_cost()
+    _ceil = effective_pair_ceiling()
+    cap_px = _ceil["ceiling"]
     if pair > cap_px:
         return no("PAIR_COST_ABOVE_CAP", pair_cost=str(pair),
-                  max_pair_cost=str(cap_px))
+                  max_pair_cost=str(cap_px),
+                  ceiling_bound_by=_ceil["bound_by"],
+                  base_ceiling=str(_ceil["base"]),
+                  adverse_skew=(None if _ceil["skew"] is None
+                                else str(_ceil["skew"])),
+                  economic_ceiling=(None if _ceil["economic"] is None
+                                    else str(_ceil["economic"])),
+                  ceiling_error=_ceil["error"])
     floor = fee_floor(up_px, dn_px)
     edge = floor["edge"]
     if not floor["ok"]:
