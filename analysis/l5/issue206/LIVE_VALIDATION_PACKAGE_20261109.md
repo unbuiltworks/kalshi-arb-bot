@@ -16,7 +16,7 @@ conditional on.
 | | |
 |---|---|
 | branch | `integration/l5-safe-release-candidate-20261109` |
-| candidate SHA | **`d8e75d02f`** (full SHA in the PR) |
+| candidate SHA | **`240b1faf03c109b61e0162d630ef2e970472365c`** |
 | builds from | `deploy/l5_pmus_live/Dockerfile` (51 explicit `COPY src/l5_*` lines) |
 | Railway service | `l5-pmus-live` (`87f1834e-530e-4fc4-a310-91c8d3add196`) |
 | currently deployed | `c300a6c4` / `6576964e6` — **untouched** |
@@ -134,10 +134,19 @@ them first.
 | tree | failed | passed | skipped | xfailed | errors |
 |---|--:|--:|--:|--:|--:|
 | baseline `6576964e6` | 20 | 18,540 | 28 | 1 | 14 |
-| candidate | see the PR | | | | |
+| candidate | 20 | **18,714** | 28 | 1 | 14 |
 
-Failing and erroring **ID sets compared directly by `diff`**, not by counts.
-34 baseline IDs.
+**Failing and erroring ID sets identical — 34 IDs, `diff` clean. Zero
+introduced failures.** The counts alone were not the check.
+
+**One failure WAS introduced and is fixed.** The full suite caught what the
+focused runs could not: `test_the_executor_refusal_inventory_is_still_complete`
+counts the refusal sites in `l5_live_execution.handle` and requires
+`l5_intent_gate.EXECUTOR_GATES_NOT_EVALUATED_HERE` to list every one, so the
+reviewed inventory cannot silently go stale. `PRESEND_BEHIND` was a 50th site
+against an inventory of 49. Registered with its reasoning, and the suite is
+clean at 21 → 20. This is recorded rather than quietly absorbed: the parity
+claim is only worth anything if the near-misses are reported too.
 
 Targeted suites, all green: simultaneous two-sided submission and venue
 acknowledgement; no fills / partial fills / completed pairs; stale
