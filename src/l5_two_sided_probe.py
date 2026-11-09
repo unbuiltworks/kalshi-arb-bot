@@ -1646,12 +1646,14 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             evidence = dict(production_entry_evidence)
             # Actual quote and live-sized quantity are authoritative.
             for forbidden in ("up_price", "down_price", "quantity",
-                              "book_age_s"):
+                              "book_age_s", "up_depth", "down_depth"):
                 if forbidden in evidence:
                     return no("ENTRY_EVIDENCE_OVERRIDE", field=forbidden)
             verdict = production_entry_evidence_gate(
                 up_price=str(up_px), down_price=str(dn_px),
-                quantity=str(qty), book_age_s=str(age), **evidence)
+                quantity=str(qty), book_age_s=str(age),
+                up_depth=str(bid_depth), down_depth=str(ask_depth),
+                **evidence)
         except (ValueError, TypeError, ArithmeticError, ImportError) as exc:
             return no("ENTRY_ECONOMICS_ERROR", error=type(exc).__name__)
         if not verdict.get("eligible"):
