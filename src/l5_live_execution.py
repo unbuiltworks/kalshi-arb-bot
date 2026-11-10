@@ -9256,6 +9256,16 @@ class FaithfulExecutor:
                 # leg of a pair is always "reducing" the first, and the
                 # steer could never decline it.
                 _held_red = self.portfolio_held_reducing_side(market)
+                # ...AND A HEDGE THAT IS STILL NEEDED. If resting orders
+                # already cover the filled inventory, `_reducing` -- which
+                # counts them -- is None, and another order on that side is
+                # not a hedge any more: it is the first leg of a new round,
+                # and the steer decides it like any other opening. At
+                # 21:31:42Z on 2026-11-10 that second order was placed
+                # beside a resting hedge while its pair's other leg was
+                # refused, leaving a round with one leg.
+                if _held_red is not None and _held_red != _reducing:
+                    _held_red = None
                 _wanted = [k for k in order if not claimed.get(k)
                            and self.portfolio_steer_refusal(
                                k, _held_red) is None]

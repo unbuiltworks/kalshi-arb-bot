@@ -8020,8 +8020,17 @@ class Runner:
             _step = float(_step) if _step else 0.01
         except (TypeError, ValueError):
             _step = 0.01
+        # the engine's own clip, once it has filled one: the largest
+        # single fill in this market. Unknown (0) before the first fill.
+        try:
+            _clip = float(self.store.max_clip(str(slug)) or 0)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            _clip = 0.0
         knobs = PC.with_overrides(knobs, base_qty=_step,
-                                  max_qty=max(_step, 1e6))
+                                  max_qty=max(_step, 1e6),
+                                  clip=max(0.0, _clip))
         # THE BALANCE PROFILE DOES NOT USE THE MODEL. It quotes both sides on
         # the book's own mid; the reference is still recorded beside it.
         use_model = PC.profile_uses_model()
@@ -8031,7 +8040,10 @@ class Runner:
                   else None),
             t_off=float(now) - float(ws), params=knobs,
             limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
-                             max_orders=int(max_live_orders())))
+                             max_orders=int(max_live_orders())),
+            # the MODEL's probability, for favorite accumulation only: it
+            # is used whatever belief the profile quotes pairs on
+            p_model=(ref.get("p_up") if ref.get("ok") else None))
         # the belief a withdrawal may act on: the model's when this profile
         # uses one and it is usable, else the same book belief `decide` used
         if use_model:
@@ -8039,7 +8051,9 @@ class Runner:
         else:
             p_act = (dec.get("belief") or {}).get("p_up")
         return {"port": port, "dec": dec, "ref": ref, "knobs": knobs,
-                "p_act": p_act, "profile": PC.profile()}
+                "p_act": p_act, "profile": PC.profile(),
+                "p_model": (ref.get("p_up") if ref.get("ok") else None),
+                "t_off": float(now) - float(ws)}
 
     def portfolio_steer_for_open(self, slug: Any, ws: float,
                                  book: Mapping[str, Any], tick: Any,
@@ -8127,7 +8141,9 @@ class Runner:
             # only a MODEL belief can say a quote is rich; with none, every
             # opening order is withdrawn (`withdrawals` names them all).
             named = PC.withdrawals(view["port"], p_up=view["p_act"],
-                                   params=view["knobs"])
+                                   params=view["knobs"],
+                                   t_off=view["t_off"],
+                                   p_model=view["p_model"])
             ids = [str(w["id"]) for w in named if str(w["id"]) in mine]
             if not ids:
                 return None
@@ -8218,6 +8234,8 @@ class Runner:
                 "expected_settlement": dec.get("expected_settlement"),
                 "value": dec.get("value"),
                 "quotes": dec["quotes"], "skipped": dec["skipped"],
+                "favorite": {"enabled": bool(view["knobs"].fav_enabled),
+                             "declined": dec.get("favorite_declined")},
                 "actions": PC.order_actions(dec["quotes"], port["orders"],
                                             params=view["knobs"]),
                 "labels": ("DECISION RECORD ONLY -- this stage placed and "

@@ -1214,14 +1214,37 @@ class TestBalanceFirst:
                          params=BAL, limits=LIM)
         assert over["quotes"] == []
 
-    def test_resting_openings_on_the_held_side_are_withdrawn(self):
+    def test_a_second_pair_is_kept_only_while_the_hedge_is_working(self):
+        """Two clips: one unmatched UP clip, its hedge resting, and the
+        second pair's UP leg resting beside it. That is allowed -- and the
+        moment the hedge is gone, or a third UP clip appears, it is not."""
+        def book(*orders, u=0.3):
+            return port(u=u, cu=u * 0.5, orders=[
+                {"id": i, "side": sd, "price": px, "qty": 0.3}
+                for i, sd, px in orders])
+        hedged = book(("up2", "UP", 0.49), ("dn1", "DOWN", 0.44),
+                      ("dn2", "DOWN", 0.43))
+        assert PC.withdrawals(hedged, p_up=0.53, params=BAL) == []
+        no_hedge = book(("up2", "UP", 0.49))
+        assert [(x["id"], x["reason"]) for x in PC.withdrawals(
+            no_hedge, p_up=0.53, params=BAL)] == [("up2", "BALANCE_FIRST")]
+        three = book(("up2", "UP", 0.49), ("up3", "UP", 0.48),
+                     ("dn1", "DOWN", 0.44))
+        assert {x["id"] for x in PC.withdrawals(
+            three, p_up=0.53, params=BAL)} == {"up2", "up3"}
+        two_held = book(("up3", "UP", 0.48), ("dn1", "DOWN", 0.44),
+                        ("dn2", "DOWN", 0.43), u=0.6)
+        assert [x["id"] for x in PC.withdrawals(
+            two_held, p_up=0.53, params=PC.with_overrides(
+                BAL, clip=0.3))] == ["up3"]
+
+    def test_the_strict_one_clip_cap_withdraws_as_before(self):
+        strict = PC.with_overrides(BAL, heavy_cap_clips=1.0)
         p = port(u=0.3, cu=0.15, orders=[
             {"id": "up2", "side": "UP", "price": 0.49, "qty": 0.3},
-            {"id": "dn1", "side": "DOWN", "price": 0.44, "qty": 0.3},
-            {"id": "dn2", "side": "DOWN", "price": 0.43, "qty": 0.3}])
-        w = PC.withdrawals(p, p_up=0.53, params=BAL)
-        assert [(x["id"], x["reason"]) for x in w] == [
-            ("up2", "BALANCE_FIRST")]
+            {"id": "dn1", "side": "DOWN", "price": 0.44, "qty": 0.3}])
+        assert [(x["id"], x["reason"]) for x in PC.withdrawals(
+            p, p_up=0.53, params=strict)] == [("up2", "BALANCE_FIRST")]
 
     def test_flat_nothing_is_withdrawn_on_a_book_belief(self):
         p = port(orders=[{"id": "u", "side": "UP", "price": 0.50, "qty": 1},
@@ -1263,7 +1286,7 @@ class TestBalanceFirst:
                         approved_depth_ticks=2)
         assert held["sides"][UP] == {"wanted": False,
                                      "reason": "BALANCE_FIRST"}
-        assert held["sides"][DOWN]["wanted"] is True
+        assert held["sides"][DOWN]["wanted"] is True     # hedge not resting
 
 
 class TestBalanceThroughTheRunner:
@@ -1333,8 +1356,12 @@ class TestBalanceOnTheFourOrderLadder:
         assert sorted(s for s, _p in book) == ["DOWN", "DOWN", "UP", "UP"]
         assert sum(p * q for _s, p, q in h.sent()) <= D("0.90")
 
-    def test_a_fill_withdraws_that_sides_other_order_and_keeps_the_hedges(
+    def test_one_fill_keeps_the_second_pair_and_two_fills_stop_the_side(
             self, tmp_path, monkeypatch):
+        """Two clips. After ONE UP fill the hedges are resting, so the
+        second pair's UP leg stays. After BOTH UP fills two clips are
+        unmatched: nothing is left to pull on that side, both hedges are
+        still at the venue, and no further UP order is opened."""
         h = four(tmp_path, monkeypatch)
         ups = LAD.resting_ids(h, "UP")
         downs = LAD.resting_ids(h, "DOWN")
@@ -1342,16 +1369,35 @@ class TestBalanceOnTheFourOrderLadder:
         h.venue.fill(ups[0])
         LAD.book_fills(h, 12.0)
         assert h.r.store.position(T.SLUG, "UP") > 0
-        out = h.r.maybe_portfolio_withdraw(h.r.now_t + 0.5)
-        if out is not None:                # unless the engine already had
-            assert {w["reason"] for w in out["withdrawn"]} == {
-                "BALANCE_FIRST"}
-            assert {w["side"] for w in out["withdrawn"]} == {"UP"}
-        # the second UP opening is gone; nothing on the DOWN side was pulled
-        assert ups[1] in h.venue.cancelled or ups[1] in h.venue.retired
+        assert h.r.maybe_portfolio_withdraw(h.r.now_t + 0.5) is None
+        assert ups[1] not in h.venue.cancelled
+        h.venue.fill(ups[1])
+        LAD.book_fills(h, 26.0)
+        n_up = len([x for x in h.sent() if x[0] == "UP"])
+        for off in (40.0, 43.5, 47.0, 50.5):
+            h.tick(off)
+        assert len([x for x in h.sent() if x[0] == "UP"]) == n_up
         assert not [d for d in downs if d in h.venue.cancelled
                     and d not in h.venue.full]
         assert h.r.store.orders_uncertain() is None
+
+    def test_at_one_clip_a_fill_withdraws_that_sides_other_order(
+            self, tmp_path, monkeypatch):
+        """The strict setting, kept available: `heavy_cap_clips` 1."""
+        monkeypatch.setattr(PC, "BALANCE", dict(PC.BALANCE,
+                                                heavy_cap_clips=1.0))
+        h = four(tmp_path, monkeypatch)
+        ups = LAD.resting_ids(h, "UP")
+        downs = LAD.resting_ids(h, "DOWN")
+        h.venue.fill(ups[0])
+        LAD.book_fills(h, 12.0)
+        out = h.r.maybe_portfolio_withdraw(h.r.now_t + 0.5)
+        if out is not None:
+            assert {w["reason"] for w in out["withdrawn"]} == {
+                "BALANCE_FIRST"}
+        assert ups[1] in h.venue.cancelled or ups[1] in h.venue.retired
+        assert not [d for d in downs if d in h.venue.cancelled
+                    and d not in h.venue.full]
 
     def test_no_second_opening_on_the_held_side_while_unmatched(
             self, tmp_path, monkeypatch):
@@ -1365,3 +1411,401 @@ class TestBalanceOnTheFourOrderLadder:
             h.tick(off)
         assert len([x for x in h.sent() if x[0] == "UP"]) == n_up
         assert h.r.store.position(T.SLUG, "UP") <= D("1.00")
+
+
+# ======================================================================
+# 11. TWO CLIPS, AND A HEDGE THAT IS ALREADY WORKING (live, 2026-11-10)
+# ======================================================================
+def rest(*orders, u=0.0, d=0.0, px=0.5):
+    return port(u=u, cu=u * px, d=d, cd=d * px, orders=[
+        {"id": "%s%d" % (sd, i), "side": sd, "price": pr, "qty": q}
+        for i, (sd, pr, q) in enumerate(orders)])
+
+
+class TestTwoClips:
+    def test_a_new_pair_may_open_beside_one_unmatched_clip_once_hedged(self):
+        """21:30:26Z: DOWN 0.31 filled, the UP hedge resting. The engine
+        wanted a second pair at 0.94-0.95 and the steer refused its DOWN
+        leg 87 times. With the hedge resting, both legs are wanted now."""
+        p = rest(("UP", 0.42, 0.31), d=0.31, px=0.53)
+        dec = PC.decide(p, bid=0.44, ask=0.45, t_off=90, params=BAL,
+                        limits=LIM)
+        assert set(quotes(dec)) == {UP, DOWN}
+        st = PC.steer(dec, approved_depth_ticks=2)
+        assert st["sides"][DOWN]["wanted"] and st["sides"][UP]["wanted"]
+
+    def test_not_while_the_hedge_is_not_resting(self):
+        dec = PC.decide(rest(d=0.31, px=0.53), bid=0.44, ask=0.45, t_off=90,
+                        params=BAL, limits=LIM)
+        assert why(dec, DOWN) == ["BALANCE_FIRST"]
+        part = rest(("UP", 0.42, 0.2), d=0.31, px=0.53)
+        assert why(PC.decide(part, bid=0.44, ask=0.45, t_off=90, params=BAL,
+                             limits=LIM), DOWN) == ["BALANCE_FIRST"]
+
+    def test_never_a_third_clip_on_the_held_side(self):
+        resting_second = rest(("UP", 0.42, 0.31), ("DOWN", 0.52, 0.31),
+                              d=0.31, px=0.53)
+        assert why(PC.decide(resting_second, bid=0.44, ask=0.45, t_off=90,
+                             params=BAL, limits=LIM), DOWN) == [
+            "BALANCE_FIRST"]
+        two_held = rest(("UP", 0.42, 0.62), d=0.62, px=0.53)
+        assert why(PC.decide(two_held, bid=0.44, ask=0.45, t_off=90,
+                             params=PC.with_overrides(BAL, clip=0.31),
+                             limits=LIM), DOWN) == ["BALANCE_FIRST"]
+
+    def test_the_cap_is_counted_in_the_engines_own_clip(self):
+        p = rest(("UP", 0.42, 0.31), d=0.31, px=0.53)
+        assert PC.heavy_side_allowed(p, DOWN, PC.with_overrides(BAL,
+                                                                clip=0.31))
+        assert not PC.heavy_side_allowed(p, DOWN, PC.with_overrides(
+            BAL, clip=0.31, heavy_cap_clips=1.0))
+        # an unmatched amount of two clips is at the cap already
+        p2 = rest(("UP", 0.42, 0.62), d=0.62, px=0.53)
+        assert not PC.heavy_side_allowed(p2, DOWN, PC.with_overrides(
+            BAL, clip=0.31))
+
+    def test_no_second_order_beside_a_hedge_that_is_already_working(self):
+        """21:31:42Z: a second UP order was placed beside the resting UP
+        hedge while its pair's DOWN leg was refused -- a round with one
+        leg. If the held side may not open, the deficient side does not
+        open AGAIN either."""
+        strict = PC.with_overrides(BAL, heavy_cap_clips=1.0)
+        p = rest(("UP", 0.42, 0.31), d=0.31, px=0.53)
+        st = PC.steer(PC.decide(p, bid=0.44, ask=0.45, t_off=90,
+                                params=strict, limits=LIM),
+                      approved_depth_ticks=2)
+        assert st["sides"][UP] == {"wanted": False,
+                                   "reason": "HEDGE_ALREADY_WORKING"} or (
+            st["sides"][UP]["wanted"] is False
+            and st["sides"][UP]["reason"] == "HEDGE_ALREADY_WORKING")
+        assert st["sides"][DOWN]["wanted"] is False
+        # and a hedge that is NOT resting is still wanted
+        bare = PC.steer(PC.decide(rest(d=0.31, px=0.53), bid=0.44, ask=0.45,
+                                  t_off=90, params=strict, limits=LIM),
+                        approved_depth_ticks=2)
+        assert bare["sides"][UP]["wanted"] is True
+
+    def test_the_executor_exempts_a_hedge_only_while_it_is_needed(self):
+        src = inspect.getsource(__import__(
+            "src.l5_live_execution", fromlist=["x"]).FaithfulExecutor.handle)
+        block = src[src.index("_held_red = self.portfolio_held_reducing_side"
+                              ):]
+        assert "if _held_red is not None and _held_red != _reducing:" in \
+            block[:1200]
+        assert "_held_red = None" in block[:1200]
+
+    def test_the_profile_carries_two_clips(self):
+        assert PC.BALANCE["heavy_cap_clips"] == 2.0
+        assert PC.Params().heavy_cap_clips == 1.0
+
+
+# ======================================================================
+# 12. FAVORITE ACCUMULATION: late, on the model's evidence, inside caps
+# ======================================================================
+FAV = PC.with_overrides(BAL, fav_enabled=True, fav_margin=0.08,
+                        fav_start_s=600.0, fav_max_residual=0.6,
+                        fav_risk_usd=0.50, fav_fee=0.03, clip=0.3)
+
+
+def fdec(p_model, port_=None, bid=0.70, ask=0.71, t=650.0, params=FAV):
+    return PC.decide(port_ or port(), bid=bid, ask=ask, t_off=t,
+                     params=params, limits=LIM, p_model=p_model)
+
+
+class TestFavoriteAccumulation:
+    def test_it_is_off_by_default_and_changes_nothing(self):
+        assert PC.Params().fav_enabled is False
+        assert "fav_enabled" not in PC.BALANCE
+        dec = fdec(0.95, params=BAL)
+        assert dec["quotes"] == [] and "favorite_declined" not in dec
+
+    def test_a_late_favorite_with_enough_edge_is_quoted_at_the_touch(self):
+        q = quotes(fdec(0.85))            # 0.85 - 0.70 - 0.03 = 0.12
+        assert set(q) == {UP}
+        assert q[UP]["role"] == "FAVORITE"
+        assert q[UP]["price"] == pytest.approx(0.70)
+        assert q[UP]["favorite"]["edge"] == pytest.approx(0.12)
+        assert q[UP]["qty"] == pytest.approx(0.3)      # one engine clip
+
+    def test_being_the_favorite_is_not_enough(self):
+        """The market's favorite at 70c with a model at 75c: 2c of edge
+        after the allowance. Nothing is bought on the label alone."""
+        dec = fdec(0.75)
+        assert dec["quotes"] == []
+        d = {x["side"]: x["reason"] for x in dec["favorite_declined"]}
+        assert d[UP] == "FAVORITE_EDGE_BELOW_MARGIN"
+        assert d[DOWN] == "NOT_THE_FAVORITE"
+
+    def test_the_underdog_is_never_bought_however_cheap(self):
+        dec = fdec(0.30, bid=0.10, ask=0.11)      # UP 10c, model says 30c
+        assert UP not in quotes(dec)
+        assert {x["side"]: x["reason"] for x in dec["favorite_declined"]}[
+            UP] == "NOT_THE_FAVORITE"
+
+    def test_it_needs_a_model_probability_and_the_start_time(self):
+        assert fdec(None)["quotes"] == []
+        assert fdec(0.95, t=599.0)["quotes"] == []
+        assert fdec(0.95, t=600.0)["quotes"] != []
+        assert fdec(0.95, t=841.0)["quotes"] == []
+
+    def test_the_margin_the_start_and_the_caps_are_the_owners(self):
+        assert fdec(0.85, params=PC.with_overrides(FAV, fav_margin=0.15)
+                    )["quotes"] == []
+        assert fdec(0.85, t=300.0, params=PC.with_overrides(
+            FAV, fav_start_s=200.0))["quotes"] != []
+        assert why(fdec(0.85, params=PC.with_overrides(
+            FAV, fav_max_residual=0.2)), UP) == ["FAVORITE_CAP"]
+        assert why(fdec(0.85, params=PC.with_overrides(
+            FAV, fav_risk_usd=0.15)), UP) == ["FAVORITE_CAP"]
+
+    def test_the_residual_cap_counts_held_and_resting(self):
+        held = port(u=0.3, cu=0.21)
+        assert quotes(fdec(0.85, held))[UP]["role"] == "FAVORITE"
+        full = port(u=0.6, cu=0.42)
+        dec = fdec(0.85, full)
+        assert UP not in quotes(dec) and why(dec, UP) == ["FAVORITE_CAP"]
+        working = port(u=0.3, cu=0.21, orders=[
+            {"id": "f", "side": "UP", "price": 0.70, "qty": 0.3}])
+        assert why(fdec(0.85, working), UP) == ["FAVORITE_CAP"]
+
+    def test_the_risk_allocation_counts_dollars_already_at_risk(self):
+        held = port(u=0.3, cu=0.21)                 # $0.21 at risk
+        tight = PC.with_overrides(FAV, fav_risk_usd=0.40)
+        # room = (0.40 - 0.21) / 0.70 = 0.27 contracts: under one clip
+        assert why(fdec(0.85, held, params=tight), UP) == ["FAVORITE_CAP"]
+
+    def test_pairs_come_first_a_hedge_is_never_a_favorite_order(self):
+        """Holding the UNFAVORED side: buying the favorite is the hedge,
+        placed and sized as a hedge, with no favorite caps on it."""
+        held_down = port(d=0.9, cd=0.27)
+        q = quotes(fdec(0.85, held_down, params=PC.with_overrides(
+            FAV, fav_max_residual=0.3)))
+        assert q[UP]["role"] == "HEDGE" and q[UP]["qty"] == pytest.approx(0.9)
+        # and holding the favorite, its hedge is still quoted beside it
+        held_up = port(u=0.3, cu=0.21)
+        q = quotes(fdec(0.85, held_up))
+        assert q[DOWN]["role"] == "HEDGE" and q[UP]["role"] == "FAVORITE"
+
+    def test_it_never_crosses(self):
+        rng = random.Random(12)
+        for _ in range(400):
+            bid = round(rng.uniform(0.5, 0.95), 2)
+            ask = round(bid + rng.choice((0.01, 0.02)), 2)
+            for q in fdec(rng.uniform(0.5, 0.999), bid=bid, ask=ask)[
+                    "quotes"]:
+                cross = ask if q["side"] == UP else round(1 - bid, 10)
+                assert q["price"] < cross - 1e-9
+
+    def test_the_global_limits_still_bind_a_favorite_quote(self):
+        for lim in (PC.Limits(cash_usd=0.10, exposure_usd=100, max_orders=2),
+                    PC.Limits(cash_usd=100, exposure_usd=0.10, max_orders=2),
+                    PC.Limits(cash_usd=100, exposure_usd=100, max_orders=0)):
+            dec = PC.decide(port(), bid=0.70, ask=0.71, t_off=650,
+                            params=FAV, limits=lim, p_model=0.85)
+            assert dec["quotes"] == []
+
+    # ---------------------------------------------------- a favorite flips
+    def test_a_flip_takes_the_order_down_and_stops_new_ones(self):
+        resting = port(orders=[{"id": "f", "side": "UP", "price": 0.70,
+                                "qty": 0.3}])
+        kw = dict(params=FAV, t_off=650.0)
+        assert PC.withdrawals(resting, p_up=0.705, p_model=0.85, **kw) == []
+        flipped = PC.withdrawals(resting, p_up=0.705, p_model=0.45, **kw)
+        assert [(x["id"], x["reason"], x["why"]) for x in flipped] == [
+            ("f", "FAVORITE_NO_LONGER_JUSTIFIED", "NOT_THE_FAVORITE")]
+        assert fdec(0.45)["quotes"] == []
+
+    def test_the_market_must_agree_which_side_leads(self):
+        """Model 55% DOWN, market prices DOWN at 29c: 23c of 'edge'. That
+        is a disagreement about direction, not a favorite, and it is not
+        bought."""
+        dec = fdec(0.45)
+        assert {x["side"]: x["reason"] for x in dec["favorite_declined"]}[
+            DOWN] == "NOT_THE_MARKETS_FAVORITE"
+        assert quotes(fdec(0.15, bid=0.25, ask=0.26))[DOWN]["role"] == \
+            "FAVORITE"                      # both call DOWN the favorite
+
+    def test_after_a_flip_held_favorite_inventory_is_hedged_not_added_to(
+            self):
+        held = port(u=0.3, cu=0.21)
+        dec = fdec(0.40, held, bid=0.45, ask=0.46)   # UP is no longer it
+        q = quotes(dec)
+        assert set(q) == {DOWN} and q[DOWN]["role"] == "HEDGE"
+
+    def test_a_lost_model_takes_the_order_down(self):
+        resting = port(orders=[{"id": "f", "side": "UP", "price": 0.70,
+                                "qty": 0.3}])
+        w = PC.withdrawals(resting, p_up=0.705, p_model=None, params=FAV,
+                           t_off=650.0)
+        assert w[0]["why"] == "FAVORITE_NEEDS_A_MODEL_PROBABILITY"
+
+    # ------------------------------------------------- adverse price moves
+    def test_a_falling_model_removes_the_edge_before_the_flip(self):
+        resting = port(orders=[{"id": "f", "side": "UP", "price": 0.70,
+                                "qty": 0.3}])
+        kw = dict(p_up=0.705, params=FAV, t_off=650.0)
+        # the band: kept down to margin less two ticks (0.06 of edge)
+        assert PC.withdrawals(resting, p_model=0.80, **kw) == []
+        assert PC.withdrawals(resting, p_model=0.78, **kw)[0]["why"] == \
+            "FAVORITE_EDGE_BELOW_MARGIN"
+
+    def test_a_price_that_runs_away_upward_is_not_chased(self):
+        """The touch rises to 0.80 with the model at 0.85: 2c of edge. No
+        new quote; the old order below the market is simply left."""
+        assert fdec(0.85, bid=0.80, ask=0.81)["quotes"] == []
+
+    # ----------------------------------------------- late-window repricing
+    def test_the_quote_follows_the_touch_while_the_edge_holds(self):
+        first = fdec(0.90, bid=0.70, ask=0.71)["quotes"]
+        moved = fdec(0.90, bid=0.73, ask=0.74)["quotes"]
+        assert first[0]["price"] == pytest.approx(0.70)
+        assert moved[0]["price"] == pytest.approx(0.73)
+        acts = PC.order_actions(moved, [{"id": "f", "side": "UP",
+                                         "price": 0.70, "qty": 0.3}],
+                                params=FAV)
+        assert [(a["op"], a.get("reason")) for a in acts][:1] == [
+            ("CANCEL", "REPRICE")]
+        assert acts[1]["op"] == "PLACE" and acts[1]["price"] == 0.73
+        assert acts[1]["after_cancel_confirmed"] is True
+
+    # -------------------------------------------------- settlement outcomes
+    @pytest.mark.parametrize("winner,expect", [("UP", 0.3 * (1 - 0.70)),
+                                               ("DOWN", -0.3 * 0.70)])
+    def test_what_one_favorite_clip_settles_to(self, winner, expect):
+        after = port(u=0.3, cu=0.21)
+        got = after["settles_if_up"] if winner == "UP" else \
+            after["settles_if_down"]
+        assert got == pytest.approx(expect)
+        assert after["worst_case"] == pytest.approx(-0.21)
+
+    def test_the_worst_case_of_a_full_allocation_is_the_allocation(self):
+        """Buying to the caps and losing costs at most the risk allocation
+        -- and never more than the residual cap at a dollar a contract."""
+        rng = random.Random(21)
+        for _ in range(300):
+            params = PC.with_overrides(
+                FAV, fav_max_residual=rng.choice((0.3, 0.6, 0.9)),
+                fav_risk_usd=rng.choice((0.15, 0.25, 0.50)))
+            u = cu = 0.0
+            for _step in range(6):
+                bid = round(rng.uniform(0.55, 0.9), 2)
+                dec = PC.decide(port(u=u, cu=cu), bid=bid,
+                                ask=round(bid + 0.01, 2), t_off=700.0,
+                                params=params, limits=LIM, p_model=0.99)
+                q = quotes(dec).get(UP)
+                if q is None or q["role"] != "FAVORITE":
+                    break
+                u += q["qty"]
+                cu += q["qty"] * q["price"]
+            assert u <= params.fav_max_residual + 1e-9
+            assert cu <= params.fav_risk_usd + 1e-9
+
+    # ------------------------------------------------------- configuration
+    def test_the_owners_settings_are_read_inside_hard_bounds(self,
+                                                             monkeypatch):
+        for k in ("L5_PORTFOLIO_FAVORITE", "L5_FAV_MARGIN", "L5_FAV_START_S",
+                  "L5_FAV_MAX_RESIDUAL", "L5_FAV_RISK_USD", "L5_FAV_ADVERSE"):
+            monkeypatch.delenv(k, raising=False)
+        assert PC.favorite_overrides() == {}
+        for v in ("on", "1", "YES", "ON "):
+            monkeypatch.setenv("L5_PORTFOLIO_FAVORITE", v)
+            assert PC.favorite_overrides() == {}
+        monkeypatch.setenv("L5_PORTFOLIO_FAVORITE", "ON")
+        assert PC.favorite_overrides() == {
+            "fav_enabled": True, "fav_margin": 0.08, "fav_start_s": 600.0,
+            "fav_max_residual": 0.30, "fav_risk_usd": 0.25, "fav_fee": 0.03}
+        monkeypatch.setenv("L5_FAV_MARGIN", "0.12")
+        monkeypatch.setenv("L5_FAV_START_S", "660")
+        got = PC.favorite_overrides()
+        assert got["fav_margin"] == 0.12 and got["fav_start_s"] == 660.0
+
+    @pytest.mark.parametrize("env,bad", [
+        ("L5_FAV_MARGIN", "0.001"), ("L5_FAV_MARGIN", "0.9"),
+        ("L5_FAV_MARGIN", "x"), ("L5_FAV_START_S", "900"),
+        ("L5_FAV_MAX_RESIDUAL", "5"), ("L5_FAV_RISK_USD", "2.00"),
+        ("L5_FAV_RISK_USD", "-1"), ("L5_FAV_ADVERSE", "0.5")])
+    def test_one_bad_setting_turns_the_whole_feature_off(self, monkeypatch,
+                                                         env, bad):
+        monkeypatch.setenv("L5_PORTFOLIO_FAVORITE", "ON")
+        monkeypatch.setenv(env, bad)
+        assert PC.favorite_overrides() == {}
+
+    def test_it_belongs_to_the_balance_profile_only(self, monkeypatch):
+        monkeypatch.setenv("L5_PORTFOLIO_FAVORITE", "ON")
+        monkeypatch.delenv("L5_PORTFOLIO_PROFILE", raising=False)
+        assert PC.production_params().fav_enabled is False
+        monkeypatch.setenv("L5_PORTFOLIO_PROFILE", "BALANCE")
+        pr = PC.production_params()
+        assert pr.fav_enabled and pr.fav_max_residual == 0.30
+        assert pr.fav_risk_usd <= 0.50 and pr.balance_first
+
+
+FAV_ENV = dict(STEER_ENV, L5_PORTFOLIO_PROFILE="BALANCE",
+               L5_PORTFOLIO_FAVORITE="ON", L5_FAV_MAX_RESIDUAL="1.00",
+               L5_FAV_RISK_USD="0.50")
+
+
+class TestFavoriteThroughTheRunner:
+    def fav(self, tmp_path, monkeypatch, p, **over):
+        for k in ("L5_PORTFOLIO_PROFILE", "L5_PORTFOLIO_FAVORITE",
+                  "L5_FAV_MARGIN", "L5_FAV_START_S", "L5_FAV_MAX_RESIDUAL",
+                  "L5_FAV_RISK_USD", "L5_FAV_ADVERSE"):
+            monkeypatch.delenv(k, raising=False)
+        return steered(tmp_path, monkeypatch, p, **dict(FAV_ENV, **over))
+
+    def test_the_record_shows_the_favorite_decision_and_why_not(
+            self, tmp_path, monkeypatch):
+        h = self.fav(tmp_path, monkeypatch, 0.56)
+        h.at(650.0)
+        doc = h.r.maybe_portfolio_decision(T.WS + 650.0)
+        assert doc["profile"] == "BALANCE"
+        assert doc["favorite"]["enabled"] is True
+        why_not = {x["side"]: x["reason"]
+                   for x in doc["favorite"]["declined"]}
+        assert why_not["UP"] == "FAVORITE_EDGE_BELOW_MARGIN"
+        h.r._btc_reference.p = 0.90
+        doc = h.r.maybe_portfolio_decision(T.WS + 656.0)
+        assert [(q["side"], q["role"]) for q in doc["quotes"]] == [
+            ("UP", "FAVORITE")]
+
+    def test_the_engines_own_entry_cutoff_still_refuses_a_late_opening(
+            self, tmp_path, monkeypatch):
+        """WHAT A LIVE VALIDATION WOULD NEED. The controller wants the
+        favorite at T+650 s; the engine's entry cutoff is 480 s and this
+        change does not move it. Nothing is placed."""
+        h = self.fav(tmp_path, monkeypatch, 0.90)
+        h.tick(650.0)
+        h.tick(655.0)
+        assert h.sent() == []
+        assert h.r.stats["portfolio_steer:WANTED"] >= 1
+
+    def test_a_flip_cancels_the_resting_order_by_exact_id(self, tmp_path,
+                                                          monkeypatch):
+        h = ticks(self.fav(tmp_path, monkeypatch, 0.90,
+                           L5_FAV_START_S="0"), 7.0, 8.0)
+        assert ("UP", D("0.50"), D("0.6")) in h.sent()
+        h.r._btc_reference.p = 0.30                  # UP is no longer it
+        out = h.r.maybe_portfolio_withdraw(T.WS + 500.0)
+        named = {w["side"]: w for w in out["withdrawn"]}
+        assert named["UP"]["reason"] == "FAVORITE_NO_LONGER_JUSTIFIED"
+        assert named["UP"]["why"] == "NOT_THE_FAVORITE"
+        assert h.r.store.orders_uncertain() is None
+
+    def test_a_fill_that_races_the_cancel_is_booked_not_lost(
+            self, tmp_path, monkeypatch):
+        """The venue fills the order an instant before our cancel. The
+        deadman's re-read finds it filled and books it with its cost; the
+        ledger is not left uncertain and nothing is double-counted."""
+        h = ticks(self.fav(tmp_path, monkeypatch, 0.90,
+                           L5_FAV_START_S="0"), 7.0, 8.0)
+        up = [o for o in h.venue.by_oid
+              if str(h.venue.by_oid[o]["side"]) == "UP"][0]
+        h.venue.fill(up)                             # not yet polled
+        assert h.r.store.position(T.SLUG, "UP") == 0
+        h.r._btc_reference.p = 0.30
+        out = h.r.maybe_portfolio_withdraw(T.WS + 500.0)
+        assert out is not None
+        assert h.r.store.position(T.SLUG, "UP") == D("0.6")
+        assert h.r.store.leg_cost(T.SLUG)["UP"] > 0
+        assert h.r.store.orders_uncertain() is None
+        assert up not in (h.r.store.live_orders() or {})
