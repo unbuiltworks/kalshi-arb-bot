@@ -692,6 +692,29 @@ REOPEN_SINGLE_OUTCOME_USD = D("-0.0236")
 #: is worth opening fresh exposure. One tick on a one-contract pair.
 REOPEN_MIN_EDGE_USD = D("0.01")
 
+#: THE FLOOR IS "ONE TICK ON A ONE-CONTRACT PAIR", and it was being compared
+#: with the expectancy of whatever size the round happens to be.
+#:
+#: MEASURED, 2026-11-10 2145z, round 7: qty 0.21, pair edge 0.21 * 0.05 =
+#: $0.0105, expectancy 0.727 * 0.0105 + 0.273 * (0.21 * -0.0236) = $0.0063,
+#: refused against $0.01. Per contract that is +$0.0299 -- the very figure
+#: the note above `REOPEN_SINGLE_OUTCOME_USD` says clears the floor. At the
+#: deployed d=2 and a one-tick spread the expectancy is 0.0299 a contract,
+#: so no round under 0.335 contracts can ever pass, and production clips are
+#: 0.21 to 0.31: every reopening is refused whatever the book does.
+#:
+#: Exactly "ON" compares like with like: the floor is one cent PER CONTRACT
+#: of the proposed round, so it scales down for a clip under one contract
+#: and UP for a larger one. The probabilities, the adverse-selection figure
+#: and every capacity bound are untouched, and an expectancy at or below
+#: zero still refuses at any size. Anything else is the comparison every
+#: earlier deployment made.
+REOPEN_FLOOR_PER_CONTRACT_ENV = "L5_REOPEN_FLOOR_PER_CONTRACT"
+
+
+def reopen_floor_per_contract() -> bool:
+    return str(os.getenv(REOPEN_FLOOR_PER_CONTRACT_ENV, "")).strip() == "ON"
+
 #: OUR OWN SETTLED RECORD OUTRANKS A PRIOR, ONCE THERE IS ENOUGH OF IT.
 #:
 #: The expectancy above multiplies two things this program has never
@@ -929,6 +952,10 @@ def reopen_decision(*, market: Any, rounds_used: int,
     pair_edge = q * (spread + (2 * D(d_ticks) * tk))
     single_total = q * single
     expectancy = (pp * pair_edge) + (ps * single_total)
+    _per_contract = reopen_floor_per_contract()
+    _floor_one_contract = floor
+    if _per_contract:
+        floor = floor * q
     # the number worth quoting: how cheap an unmatched leg must be for this
     # round to pay. Always reported, including on a refusal.
     breakeven = (((floor - (pp * pair_edge)) / ps) / q) if ps > 0 else None
@@ -946,6 +973,9 @@ def reopen_decision(*, market: Any, rounds_used: int,
         "worst_case_is_not_expectancy": True,
         "expectancy_usd": str(expectancy.quantize(D("0.0001"))),
         "min_edge_usd": str(floor),
+        "min_edge_basis": ("PER_CONTRACT_OF_THIS_ROUND" if _per_contract
+                           else "FIXED_DOLLARS_WHATEVER_THE_SIZE"),
+        "min_edge_one_contract_usd": str(_floor_one_contract),
         "breakeven_single_outcome_usd": (
             None if breakeven is None
             else str(breakeven.quantize(D("0.0001")))),
