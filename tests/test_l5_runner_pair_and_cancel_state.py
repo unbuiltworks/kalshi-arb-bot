@@ -191,10 +191,25 @@ class Venue:
                 "commissionNotionalTotalCollected": money}
 
     def open_orders(self):
-        return []
+        """The venue's open list. A cancelled order leaves it AT ONCE, even
+        while its own row still lags -- which is what 1300z's reconciliation
+        saw four seconds before the row said CANCELED."""
+        return [{"id": oid, "clientOrderId": i["client_order_id"],
+                 "marketSlug": SLUG, "qty": str(i["qty"]),
+                 "remainingQuantity": str(D(str(i["qty"])) - D(self.cum[oid]))}
+                for oid, i in self.by_oid.items()
+                if oid not in self.full and oid not in self.retired]
 
     def positions(self):
-        return []
+        """ONE signed row per market, as PMUS reports it: no side field."""
+        up = sum(D(self.cum[o]) for o, i in self.by_oid.items()
+                 if str(i["side"]) == "UP")
+        dn = sum(D(self.cum[o]) for o, i in self.by_oid.items()
+                 if str(i["side"]) == "DOWN")
+        if up == 0 and dn == 0:
+            return []
+        return [{"marketSlug": SLUG, "qtyBought": str(up), "qtySold": str(dn),
+                 "netPositionDecimal": str(up - dn)}]
 
 
 # ------------------------------------------------------------------ harness
@@ -274,6 +289,11 @@ class Harness:
         out["poll_orders"] = (self.r.poll_orders()
                               if poll and self.r.store.live_order_count()
                               else [])
+        # and the two reads that follow it in `Runner.tick`, in its order
+        out["resolve_pending_terminal"] = (
+            self.r.resolve_pending_terminal(self.t)
+            if self.r.store.pending_terminal() else [])
+        self.r.reconcile_if_needed(self.t)
         return out
 
     # -- reads
@@ -328,6 +348,9 @@ def cancelled_by_requote(h, lag=3):
     h.book.set("0.56", "0.57")
     up = h.venue.oid("UP")
     h.venue.lag[up] = lag
+    # the service had reconciled at 02:00:31, so the 15 s retry throttle
+    # kept the reconciliation out of the requote's own tick
+    h.r.reconciled, h.r.last_reconcile_t = True, float(WS) + 31.0
     out = h.tick(35.9, poll=False)
     rq = out["maybe_completion_requote"]
     assert rq and rq.get("act") is True, (rq, dict(h.r.stats))
@@ -342,8 +365,12 @@ def test_the_stages_are_called_in_the_order_runner_tick_calls_them():
     src = inspect.getsource(R.Runner.tick)
     at = [src.index("self.%s(" % s) for s in STAGES]
     assert at == sorted(at), dict(zip(STAGES, at))
-    # and the venue is polled AFTER the decision stages, as it is here
-    assert at[-1] < src.index("self.poll_orders()")
+    # and the venue is polled AFTER the decision stages, then parked orders
+    # are resolved, then the account is reconciled -- as it is here
+    tail = [src.index(x) for x in ("self.poll_orders()",
+                                   "self.resolve_pending_terminal(now)",
+                                   "self.reconcile_if_needed(now)")]
+    assert at[-1] < tail[0] and tail == sorted(tail), tail
 
 
 def test_the_harness_runs_production_wiring(h):
@@ -586,15 +613,20 @@ class TestTheVenuesAnswerEndsTheUncertaintyItCaused:
         assert list(h.live()) == ["UP"]
 
     def test_nothing_is_submitted_while_the_venue_still_says_live(self, h):
-        """A venue slower than every read keeps the book uncertain, and an
-        uncertain book places nothing. This is the protection, intact."""
-        _h, up, _rq = cancelled_by_requote(h, lag=50)
+        """A venue row slower than every read keeps the book uncertain, and
+        an uncertain book places nothing. This is the protection, intact.
+
+        The reconciliation that runs meanwhile parks the order -- it has left
+        the open list -- and the pre-existing rule books a parked order final
+        on any readable row. Neither shortcut in this file fires on that: a
+        row still reading NEW is the venue's lag, not its answer.
+        """
+        cancelled_by_requote(h, lag=50)
         for off in (37.3, 38.3, 43.4, 49.5):
             h.tick(off)
-            assert h.r.store.orders_uncertain() is not None
+            assert h.r.store.orders_uncertain() is not None, off
         assert len(h.venue.sent) == 2
-        assert up in [str(v.get("venue_order_id"))
-                      for v in h.r.store.live_orders().values()]
+        assert h.r.store.state.get("uncertain_resolved") in (None, [])
 
     def test_a_fill_that_beat_the_cancel_is_booked_and_not_hedged_twice(
             self, h):
@@ -618,6 +650,7 @@ class TestTheVenuesAnswerEndsTheUncertaintyItCaused:
         h.book.set("0.56", "0.57")
         up = h.venue.oid("UP")
         h.venue.read_error[up] = 3
+        h.r.reconciled, h.r.last_reconcile_t = True, float(WS) + 31.0
         h.tick(35.9, poll=False)
         why = h.r.store.orders_uncertain()
         assert why and "could not verify the cancel of %s" % up in why
@@ -763,3 +796,195 @@ def test_a_store_that_cannot_hold_a_cause_is_still_marked_uncertain():
     assert [r["venue_order_id"] for r in out["still_open"]] == ["v9"]
     assert store.marks == [
         "deadman cancelled v9 but the venue still reports it live"]
+
+
+# ======================================================================
+# 4. THE SAME DEFECT ONE WRITER OVER -- 2026-11-10 1300z, LIVE
+# ======================================================================
+#
+#   13:02:14.3  order-age deadline cancels DOWN; three re-reads still NEW
+#   13:02:14.8  SAME TICK: reconciliation finds it gone from open orders,
+#               parks it, and replaces the mark with its own
+#               "unbooked terminal orders [...]"
+#   13:02:18.3  the venue's order row: CANCELED, nothing filled
+#   13:02:29.7  the NEXT reconciliation clears the mark -- 11.4 s later
+#
+# Section 2's fix could not see it: a reconciliation's mark carried no cause.
+
+@pytest.fixture()
+def h95(tmp_path, monkeypatch):
+    """A pair that opens at 0.95, as 1300z's did (0.41 + 0.54). The resting
+    leg is then one tick inside its redemption limit, so -- as in that
+    window -- no requote is worth making and the order simply ages."""
+    for k, v in PRODUCTION.items():
+        monkeypatch.setenv(k, v)
+    for k in ABSENT:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "auth.jsonl"))
+    return Harness(tmp_path, monkeypatch, bid="0.52", ask="0.53")
+
+
+def cancelled_by_deadline(h, lag=3, fill="0"):
+    """Leg one fills and the market runs away from the other, which rests
+    past the 120 s order deadline and is cancelled -- the venue's row
+    lagging its own open list."""
+    h.at(6.5).l5_action()
+    h.tick(6.8)
+    assert h.live() == {"DOWN": D("0.45"), "UP": D("0.50")}, h.live()
+    h.venue.fill(h.venue.oid("DOWN"))
+    h.tick(13.0)
+    assert h.pos("DOWN") == D("0.6")
+    h.book.set("0.87", "0.88")          # UP now costs 0.87 against a 0.51 cap
+    up = h.venue.oid("UP")
+    h.venue.lag[up] = lag
+    if D(fill) > 0:
+        h.venue.fill(up, fill)
+    for off in (40.0, 70.0, 100.0):
+        h.tick(off)
+    assert h.venue.cancelled == [], (
+        "nothing is cancelled inside its TTL", dict(h.r.stats))
+    out = h.tick(134.3)
+    return h, up, out
+
+
+class TestAReconciliationMarkAboutParkedOrdersOnly:
+
+    def test_1300z_the_deadline_cancel_is_re_marked_by_reconciliation(
+            self, h95):
+        _h, up, out = cancelled_by_deadline(h95)
+        assert h95.venue.cancelled == [up]
+        assert out["maybe_acc_deadline"] is not None
+        why = h95.r.store.orders_uncertain()
+        assert why and "unbooked terminal orders ['l5f-" in why, why
+        assert "gross/net divergence []" in why and "incoherent book []" in why
+        cause = h95.r.store.state[E.UNCERTAIN_CAUSE]
+        assert cause["kind"] == E.RECONCILE_PENDING_ONLY
+        assert len(cause["pending"]) == 1 and cause["why"] == why
+        assert list(h95.r.store.pending_terminal()) == cause["pending"]
+
+    def test_1300z_the_venues_cancelled_row_now_ends_it(self, h95):
+        """THE DEFECT. The row said CANCELED at 13:02:18.3 and the mark
+        stood another 11.4 s."""
+        _h, up, _out = cancelled_by_deadline(h95)
+        out = h95.tick(138.3)
+        res = out["resolve_pending_terminal"]
+        assert [e.get("event") for e in res] == ["PENDING_TERMINAL_RESOLVED"]
+        assert res[0].get("state") == "ORDER_STATE_CANCELED", res
+        assert h95.r.store.orders_uncertain() is None
+        assert h95.r.store.pending_terminal() == {}
+        audit = h95.r.store.state["uncertain_resolved"][-1]
+        assert audit["kind"] == E.RECONCILE_PENDING_ONLY
+        assert len(audit["orders"]) == 1
+        assert res[0]["uncertainty_cleared"]["kind"] == \
+            E.RECONCILE_PENDING_ONLY
+
+    def test_1300z_it_did_not_need_the_next_reconciliation(self, h95):
+        """The clear is from the venue's answer, inside the 15 s retry
+        window in which no reconciliation can run."""
+        cancelled_by_deadline(h95)
+        was = h95.r.last_reconcile_t
+        h95.tick(138.3)
+        assert h95.r.store.orders_uncertain() is None
+        assert h95.r.last_reconcile_t == was, "no second reconciliation ran"
+        assert 138.3 - (was - WS) < R.RECONCILE_RETRY_S
+
+    def test_a_fill_that_arrived_with_the_cancel_waits_for_reconciliation(
+            self, h95):
+        """A fill changes the positions the reconciliation had just
+        verified, so the shortcut is forfeited and the next reconciliation
+        confirms the book -- as it always did."""
+        _h, up, _out = cancelled_by_deadline(h95)
+        # 0.2 fills in the instant between the cancel being sent and taking
+        # effect: after the reconciliation read the account, before the
+        # order row is read.
+        h95.venue.cum[up] = "0.2"
+        h95.tick(138.3)
+        assert h95.r.store.pending_terminal() == {}
+        assert h95.pos("UP") == D("0.2"), "the fill is booked from the venue"
+        assert h95.r.store.orders_uncertain() is not None
+        h95.tick(150.0)                           # >= 15 s after 134.3
+        assert h95.r.store.orders_uncertain() is None
+        assert h95.pos("UP") == D("0.2") and h95.pos("DOWN") == D("0.6")
+
+    def test_a_row_still_lagging_at_resolution_waits_for_reconciliation(
+            self, h95):
+        cancelled_by_deadline(h95, lag=4)         # one more read than 1300z
+        out = h95.tick(138.3)
+        assert out["resolve_pending_terminal"][0].get("state") == \
+            "ORDER_STATE_NEW"
+        assert h95.r.store.orders_uncertain() is not None
+        assert h95.r.store.state.get("uncertain_resolved") in (None, [])
+        h95.tick(150.0)
+        assert h95.r.store.orders_uncertain() is None
+
+    def test_a_later_mark_is_not_this_ones_to_clear(self, h95):
+        cancelled_by_deadline(h95)
+        h95.r.store.mark_uncertain("no venue progress on 1 live order(s)")
+        h95.r.last_reconcile_t = h95.t              # keep reconciliation out
+        h95.r.resolve_pending_terminal(h95.at(138.3).t)
+        assert h95.r.store.orders_uncertain() == \
+            "no venue progress on 1 live order(s)"
+
+
+def _store(tmp_path):
+    return E.InventoryStore(str(tmp_path / "inv.json"))
+
+
+def _park(st, coid, vid):
+    st.state.setdefault("pending_terminal", {})[coid] = {
+        "coid": coid, "venue_order_id": vid, "market": SLUG, "side": "UP",
+        "applied": "0", "reason": "ABSENT_FROM_VENUE_OPEN_ORDERS"}
+
+
+def _prog(state="ORDER_STATE_CANCELED", cum="0", terminal=True):
+    return {"state": state, "cum_qty": D(cum), "leaves_qty": D(0),
+            "avg_px": D("0"), "commission": D("0"), "terminal": terminal}
+
+
+class TestWhatReconciliationRecords:
+
+    def test_parked_orders_alone_record_a_cause(self, tmp_path):
+        st = _store(tmp_path)
+        _park(st, "c1", "v1")
+        st.reconcile_from_venue([], [])
+        assert st.state[E.UNCERTAIN_CAUSE]["kind"] == E.RECONCILE_PENDING_ONLY
+        assert st.state[E.UNCERTAIN_CAUSE]["pending"] == ["c1"]
+
+    def test_a_divergence_records_none_and_only_reconciliation_clears_it(
+            self, tmp_path):
+        st = _store(tmp_path)
+        st.state["positions"] = {"%s|UP" % SLUG: "0.6"}
+        _park(st, "c1", "v1")
+        st.reconcile_from_venue(
+            [{"marketSlug": SLUG, "qtyBought": "0.2", "qtySold": "0",
+              "netPositionDecimal": "0.2"}], [])
+        assert st.orders_uncertain() and st.state[E.UNCERTAIN_CAUSE] is None
+        st.resolve_pending_terminal("c1", _prog())
+        assert st.orders_uncertain() is not None
+
+    def test_a_quarantine_records_none(self, tmp_path):
+        st = _store(tmp_path)
+        _park(st, "c1", "v1")
+        st.state["quarantine"] = {"q1": {"reason": "UnknownMarket"}}
+        st.reconcile_from_venue([], [])
+        assert st.orders_uncertain() and st.state[E.UNCERTAIN_CAUSE] is None
+
+    def test_two_parked_orders_clear_only_when_BOTH_have_answered(
+            self, tmp_path):
+        st = _store(tmp_path)
+        _park(st, "c1", "v1")
+        _park(st, "c2", "v2")
+        st.reconcile_from_venue([], [])
+        st.resolve_pending_terminal("c1", _prog())
+        assert st.orders_uncertain() is not None, "one is still unanswered"
+        st.resolve_pending_terminal("c2", _prog())
+        assert st.orders_uncertain() is None
+        assert st.state["uncertain_resolved"][-1]["orders"] == ["c1", "c2"]
+
+    def test_a_clean_reconciliation_leaves_no_cause_behind(self, tmp_path):
+        st = _store(tmp_path)
+        st.mark_uncertain("x", cause={"kind": "CANCEL_STILL_OPEN",
+                                      "coid": "c", "venue_order_id": "v"})
+        st.reconcile_from_venue([], [])
+        assert st.orders_uncertain() is None
+        assert st.state[E.UNCERTAIN_CAUSE] is None

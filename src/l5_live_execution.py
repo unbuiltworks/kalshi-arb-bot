@@ -1170,6 +1170,12 @@ UNCERTAIN_CAUSE = "orders_uncertain_cause"
 #: the only causes the venue's terminal read of that order can end: both
 #: say "we cancelled it and could not see it finish".
 CANCEL_UNCERTAINTY_KINDS = ("CANCEL_STILL_OPEN", "CANCEL_UNVERIFIED")
+#: a reconciliation mark whose WHOLE content is "these orders left the
+#: venue's open list and their final fill is not booked yet". Resolving each
+#: of them from the venue's own order row answers it in full -- provided
+#: nothing was booked, so the positions that reconciliation just verified
+#: are still the positions. See `resolve_pending_uncertainty`.
+RECONCILE_PENDING_ONLY = "RECONCILE_PENDING_ONLY"
 #: audit rows kept for resolved marks. Bounded so the ledger cannot grow.
 UNCERTAIN_RESOLVED_KEEP = 50
 
@@ -4359,11 +4365,104 @@ class InventoryStore:
             self.save()
             return dict(out, coid=coid, resolved=False)
         pend.pop(coid, None)
+        _cleared = self.resolve_pending_uncertainty(
+            coid, out, venue_terminal=bool(prog.get("terminal")))
+        if _cleared is not None:
+            out = dict(out, uncertainty_cleared=_cleared)
         self.save()
         return dict(out, coid=coid, resolved=True, market=market, side=side,
                     labels=("final fill booked from the venue's own order "
                             "row; this is the reconstruction that resolves "
                             "a lost cost basis, not an assumption about it"))
+
+    def resolve_pending_uncertainty(self, coid: str,
+                                    booked: Mapping[str, Any], *,
+                                    venue_terminal: bool = False
+                                    ) -> Optional[Dict[str, Any]]:
+        """End a reconciliation mark that was ONLY about parked orders, once
+        the venue has answered for every one of them. The record, or None.
+
+        WHAT WAS WRONG, 2026-11-10 1300z, live. The order-age deadline
+        cancelled DOWN order DMSGYZH013ZD at 13:02:14.3 and the deadman's
+        re-reads still saw it working. A reconciliation ran in the SAME tick,
+        found it gone from the venue's open list, parked it, and replaced the
+        deadman's mark with its own: "unbooked terminal orders [...]". The
+        venue's order row said CANCELED, nothing filled, at 13:02:18.3 -- and
+        the mark stood until the next reconciliation at 13:02:29.7.
+
+        That is `resolve_cancel_uncertainty`'s defect one writer over: the
+        mark asked whether those orders were finished, the venue said yes,
+        and nothing listened. It was not covered there because a
+        reconciliation's mark carried no cause.
+
+        EVERY CONDITION MUST HOLD:
+
+          * the mark in force is byte-for-byte the one this cause was
+            recorded with, so anything marked since is left alone;
+          * it was about parked orders ONLY -- reconciliation records a cause
+            only when there was no divergence, no incoherent book and no
+            quarantine;
+          * the venue's OWN order row said terminal. A parked order is
+            booked as final on any readable row, because leaving the open
+            list is terminal there -- but a row still reading NEW is the
+            venue's lag, not its answer, and this shortcut waits for the
+            answer;
+          * this order is one of them, and it resolved with NOTHING BOOKED.
+            A fill that arrives here changes the positions the
+            reconciliation had just verified, so it is left for the next
+            reconciliation to confirm: that case forfeits the shortcut for
+            the whole mark;
+          * every order the mark named has now resolved that way, and
+            nothing is parked or quarantined.
+
+        The periodic reconciliation is untouched and still re-marks.
+        """
+        try:
+            cause = self.state.get(UNCERTAIN_CAUSE)
+            if not isinstance(cause, dict):
+                return None
+            if str(cause.get("kind")) != RECONCILE_PENDING_ONLY:
+                return None
+            why = self.state.get("orders_uncertain")
+            if not why or str(why) != str(cause.get("why")):
+                return None
+            named = [str(c) for c in (cause.get("pending") or [])]
+            if str(coid) not in named:
+                return None
+            delta = D(str(booked.get("filled_delta")
+                          or booked.get("delta") or 0))
+            if delta != 0 or not venue_terminal:
+                cause["fill_booked"] = True      # wait for a reconciliation
+                return None
+            if cause.get("fill_booked"):
+                return None
+            done = [str(c) for c in (cause.get("resolved_unfilled") or [])]
+            if str(coid) not in done:
+                done.append(str(coid))
+            cause["resolved_unfilled"] = done
+            if set(named) - set(done):
+                return None                      # others still unanswered
+            if (self.state.get("pending_terminal") or {}) or \
+                    (self.state.get("quarantine") or {}):
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                 # unreadable is not resolved
+        rec = {"coid": str(coid), "kind": RECONCILE_PENDING_ONLY,
+               "orders": list(named), "was": str(why),
+               "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "labels": ("cleared because every order the reconciliation "
+                          "parked has been answered by the venue's own "
+                          "order row with nothing booked, so the positions "
+                          "it verified are unchanged")}
+        self.state["orders_uncertain"] = None
+        self.state[UNCERTAIN_CAUSE] = None
+        log = self.state.setdefault("uncertain_resolved", [])
+        if isinstance(log, list):
+            log.append(rec)
+            del log[:-UNCERTAIN_RESOLVED_KEEP]
+        return rec
 
     def reconstruct_cost_basis(self, market: str, side: str, *, qty: D,
                                cost: D, source: str) -> Dict[str, Any]:
@@ -5134,12 +5233,22 @@ class InventoryStore:
         for m in list(floors):
             if m not in disputed:
                 floors.pop(m, None)
+        self.state[UNCERTAIN_CAUSE] = None
         if disputed or incoherent or pending or quarantine:
-            self.state["orders_uncertain"] = (
+            _why = (
                 "gross/net divergence %s; incoherent book %s; "
                 "unbooked terminal orders %s; quarantined orders %s"
                 % (sorted(set(disputed)), sorted(incoherent), pending,
                    quarantine))
+            self.state["orders_uncertain"] = _why
+            # WHICH ORDERS, when they are the whole of it. Evidence for
+            # `resolve_pending_uncertainty`; a divergence, an incoherent
+            # book or a quarantine records NO cause and is cleared only by
+            # the next reconciliation, exactly as before.
+            if pending and not (disputed or incoherent or quarantine):
+                self.state[UNCERTAIN_CAUSE] = {
+                    "kind": RECONCILE_PENDING_ONLY, "why": _why,
+                    "pending": list(pending), "resolved_unfilled": []}
         # THE DWELL ANCHOR IS RECONCILED HERE TOO, after the venue has
         # overwritten our positions. A stamp for a market the venue says is
         # flat is dropped; a market that holds inventory with NO stamp is
