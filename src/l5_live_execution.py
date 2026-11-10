@@ -8198,6 +8198,7 @@ class FaithfulExecutor:
         if len(legs) != 2:
             return "PROBE_PLAN_NOT_TWO_LEGS"
         both = [{"qty": D(l["qty"]), "price": D(l["price"]),
+                 "market": str(market),
                  "intent": ("ORDER_INTENT_BUY_SHORT" if l["side"] == DOWN
                             else "ORDER_INTENT_BUY_LONG")}
                 for l in legs]
@@ -8348,7 +8349,10 @@ class FaithfulExecutor:
                     o.get("side"), doing="pricing an outstanding order") == UP
             except UnknownSide:
                 is_up = False
+            # `market` lets the cash gate tell a hedge from an order in
+            # some other market. A row without one is never read as a hedge.
             out.append({"coid": coid, "qty": rem, "price": px,
+                        "market": str(o.get("market") or ""),
                         "intent": ("ORDER_INTENT_BUY_LONG" if is_up
                                    else "ORDER_INTENT_BUY_SHORT")})
         return out
