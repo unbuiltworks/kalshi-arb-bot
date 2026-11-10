@@ -390,3 +390,31 @@ def test_the_committed_result_shows_l5s_own_fills_at_break_even():
     lo, hi = a["net_per_contract_ci95"]
     assert a["windows"] == 526 and lo < 0 < hi
     assert abs(a["net_per_contract"]) < 0.005
+
+
+# ------------------------------------------------------- cancellation latency
+def test_a_cancel_in_flight_can_still_be_filled():
+    b = EC.Book("Up")
+    oid = b.place(UP, 0.50, 10.0, 0.52)
+    b.cancel(oid, at=14.0)
+    assert b.resting() == [] and len(b.resting(cancelling=True)) == 1
+    assert len(b.match(12.0, 0.48)) == 1          # before the cancel landed
+
+
+def test_a_cancel_that_has_landed_cannot_be_filled():
+    b = EC.Book("Up")
+    oid = b.place(UP, 0.50, 10.0, 0.52)
+    b.cancel(oid, at=14.0)
+    assert b.match(14.0, 0.40) == [] and b.orders == {}
+
+
+def test_an_immediate_cancel_is_unchanged_and_the_earliest_cancel_wins():
+    b = EC.Book("Up")
+    a = b.place(UP, 0.50, 10.0, 0.52)
+    b.cancel(a)
+    assert b.orders == {}
+    c = b.place(UP, 0.50, 10.0, 0.52)
+    b.cancel(c, at=20.0)
+    b.cancel(c, at=30.0)
+    assert b.orders[c]["cancel_at"] == 20.0
+    b.cancel(999, at=5.0)                         # unknown id: nothing

@@ -146,6 +146,10 @@ COPY src/l5_unmatched_disposition.py src/l5_unmatched_disposition.py
 # can trade. The runner's recorded-only stage imports it lazily, and only
 # records when the owner sets L5_PORTFOLIO_CONTROLLER=SHADOW.
 COPY src/l5_portfolio_controller.py src/l5_portfolio_controller.py
+# THE LIVE BTC REFERENCE: the venue's own settlement index and each market's
+# own strike, read from the public gateway. Read-only, no credential, and
+# inert unless the owner sets L5_BTC_REFERENCE=VENUE_INDEX.
+COPY src/l5_btc_reference.py src/l5_btc_reference.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image
 # must carry it or the entrypoint cannot start at all.

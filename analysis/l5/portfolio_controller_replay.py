@@ -244,6 +244,207 @@ def run() -> Dict[str, Any]:
     return res
 
 
+# =========================================================== the integration
+#
+# WHAT THE COMMIT ACTUALLY DOES IN STEER, replayed. The existing pair engine
+# keeps its shape -- both legs at the approved depth, the complement worked
+# to the touch under the 0.99 pair ceiling, one round a window, the 120 s
+# order life, the 480 s and 600 s cutoffs. The controller adds exactly two
+# things, as in `l5_pmus_live_runner`:
+#
+#   * `steer`        which side may OPEN, and how many extra ticks back;
+#   * `withdrawals`  an opening order it would no longer pay for is
+#                    cancelled -- and the cancel takes `latency_s` to land,
+#                    during which a print can still fill the order.
+#
+# A hedge is never vetoed and never withdrawn.
+STEER_GRID = [dict(margin=h / 2.0, adverse=h / 2.0, risk=r)
+              for h in (0.0, 0.02, 0.04, 0.06, 0.10)
+              for r in (0.0, 0.10, 0.30)]
+STEER_MIN_FILLS_PER_WINDOW = 0.3
+LATENCIES_S = (0.0, 2.0, 5.0)
+TUNE_LATENCY_S = 2.0
+
+
+def make_steered_pair(params: PC.Params, *, latency_s: float = 2.0,
+                      approved_depth: int = 2, ceiling: float = 0.99,
+                      use_model: bool = True, withdraw: bool = True
+                      ) -> EC.Strategy:
+    def strat(book: EC.Book, t: float, m: float, p: Optional[float],
+              s: Dict[str, Any]) -> None:
+        seen = s.setdefault("seen", 0)
+        cost = s.setdefault("cost", {UP: 0.0, DOWN: 0.0})
+        qty = s.setdefault("qty", {UP: 0.0, DOWN: 0.0})
+        for f in book.log[seen:]:
+            cost[f["side"]] += f["px"]
+            qty[f["side"]] += 1.0
+        s["seen"] = len(book.log)
+        belief_p = p if use_model else None
+        imb = book.imbalance()
+        if imb != 0:
+            # ---- one leg is held: the existing completion, untouched
+            held = UP if imb > 0 else DOWN
+            comp = PC.other(held)
+            for oid, _o in book.resting(held):       # no second opening
+                book.cancel(oid, at=t + latency_s)
+            if t > EC.COMPLETE_CUTOFF_S:
+                for oid, _o in book.resting(comp):
+                    book.cancel(oid)
+                return
+            first = book.open[held][0]["q"]
+            want = min(EC._down(EC._mark(comp, m) - EC.HALF),
+                       EC._down(ceiling - first + EC.EPS))
+            rest = book.resting(comp)
+            if rest and rest[0][1]["px"] >= want - EC.EPS:
+                return
+            for oid, _o in rest:
+                book.cancel(oid)
+            if want >= EC.TICK:
+                book.place(comp, want, t, m, "keep-comp")
+            return
+        if book.fills:                               # one round a window
+            return
+        resting = [{"id": oid, "side": o["side"], "price": o["px"],
+                    "qty": 1.0} for oid, o in book.resting()]
+        port = PC.portfolio(up_qty=qty[UP], up_cost=cost[UP],
+                            dn_qty=qty[DOWN], dn_cost=cost[DOWN],
+                            orders=resting)
+        if withdraw:
+            for w in PC.withdrawals(port, p_up=belief_p, params=params):
+                book.cancel(w["id"], at=t + latency_s)
+        if not (EC.OPEN_AFTER_S <= t <= EC.ENTRY_CUTOFF_S):
+            return
+        bk = book_for(m)
+        dec = PC.decide(port, bid=bk["bid"], ask=bk["ask"], p_up=belief_p,
+                        t_off=t, params=params, limits=BIG)
+        st = PC.steer(dec, approved_depth_ticks=approved_depth)
+        depth = st["plan_depth_ticks"]
+        for side in (UP, DOWN):
+            if not st["sides"][side]["wanted"]:
+                continue
+            if book.resting(side, cancelling=True):
+                continue                 # one order a side, cancels included
+            px = EC._down(EC._mark(side, m) - EC.HALF - depth * EC.TICK)
+            if px < EC.FLOOR - EC.EPS:
+                continue
+            book.place(side, px, t + latency_s, m, "leg")
+    return strat
+
+
+def run_integrated() -> Dict[str, Any]:
+    trades = FA.load_trades(FA.load_outcomes())
+    ps = PR.paths(trades)
+    model_for = EC.load_model()
+    models = {}
+    for s_, w in ps.items():
+        fn = model_for(s_, w["ws"])
+        if fn is not None:
+            models[s_] = fn
+    order = sorted(models, key=lambda s_: ps[s_]["ws"])
+    cut = int(len(order) * 0.6)
+    halves = {"IS": order[:cut], "OOS": order[cut:]}
+    wide = sorted(ps, key=lambda s_: ps[s_]["ws"])
+    wcut = int(len(wide) * 0.6)
+
+    def score(slugs, strat_for, mdl=models):
+        rs = [EC.run_window(ps[s_]["path"], ps[s_]["winner"], strat_for(),
+                            model=(mdl[s_] if mdl is not None else None))
+              for s_ in slugs]
+        summ = EC.summarise(rs)
+        summ["_nets"] = [r["net"] for r in rs]
+        summ["fills_per_window"] = summ["fills"] / max(1, len(slugs))
+        summ["windows_traded"] = sum(1 for r in rs if r["fills"])
+        return summ
+
+    def steered(kw, lat, **extra):
+        return lambda: make_steered_pair(PC.Params(**kw).checked(),
+                                         latency_s=lat, **extra)
+
+    tried = [(kw, score(halves["IS"], steered(kw, TUNE_LATENCY_S)))
+             for kw in STEER_GRID]
+    eligible = [(kw, s_) for kw, s_ in tried
+                if s_["fills_per_window"] >= STEER_MIN_FILLS_PER_WINDOW]
+    best_kw = max(eligible, key=lambda x: x[1]["net_per_window"])[0]
+    default_kw = dict(margin=PC.Params().margin, adverse=PC.Params().adverse,
+                      risk=PC.Params().risk)
+    res: Dict[str, Any] = {
+        "evidence_class": ("L5 POLYMARKET PATHS with PMUS ticks and fees, "
+                           "ONE-MINUTE Coinbase reference -- not PMUS "
+                           "fills, not our own, and NOT the live venue "
+                           "index, which has no history on these windows"),
+        "windows": {h: len(v) for h, v in halves.items()},
+        "tuned_on_IS": {"params": best_kw, "at_latency_s": TUNE_LATENCY_S,
+                        "grid": len(STEER_GRID), "eligible": len(eligible),
+                        "grid_IS_positive": sum(
+                            1 for _kw, s_ in tried
+                            if s_["net_per_window"] > 0 and s_["fills"])},
+        "default_params": default_kw, "rows": {}, "vs_pair": {}}
+    base = {h: score(sl, lambda: EC.make_pair(2)) for h, sl in halves.items()}
+    res["rows"]["PAIR (deployed, no controller)"] = base
+    cands = {}
+    for name, kw in (("STEER default", default_kw), ("STEER tuned", best_kw)):
+        for lat in LATENCIES_S:
+            cands["%s, cancel latency %gs" % (name, lat)] = steered(kw, lat)
+        cands["%s, no withdrawals" % name] = steered(
+            kw, TUNE_LATENCY_S, withdraw=False)
+    for name, sf in cands.items():
+        res["rows"][name] = {h: score(sl, sf) for h, sl in halves.items()}
+        res["vs_pair"][name] = {
+            h: EC.paired_difference(res["rows"][name][h]["_nets"],
+                                    base[h]["_nets"]) for h in halves}
+    # what production has today: no model, the book's own mid
+    res["no_reference"] = {
+        "windows": len(wide) - wcut,
+        "STEER default": score(
+            wide[wcut:], lambda: make_steered_pair(
+                PC.Params(**default_kw).checked(),
+                latency_s=TUNE_LATENCY_S, use_model=False), mdl=None),
+        "PAIR (deployed, no controller)": score(
+            wide[wcut:], lambda: EC.make_pair(2), mdl=None)}
+    for by in res["rows"].values():
+        for s_ in by.values():
+            s_.pop("_nets", None)
+    for v in res["no_reference"].values():
+        if isinstance(v, dict):
+            v.pop("_nets", None)
+    return res
+
+
+def main_integrated() -> None:
+    import json
+    import os
+    r = run_integrated()
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "integrated_replay.json"), "w") as fh:
+        json.dump(r, fh, indent=1, sort_keys=True)
+    print("evidence:", r["evidence_class"])
+    print("windows:", r["windows"], "| tuned:", r["tuned_on_IS"])
+    for half in ("OOS", "IS"):
+        print("== %s ==" % half)
+        for name, by in r["rows"].items():
+            s = by[half]
+            lo, hi = s["net_per_window_ci95"]
+            clo, chi = s["net_per_contract_ci95"]
+            print("%-42s fills %4d (%3d win) /ctr %s [%+.4f, %+.4f] /win "
+                  "%s [%+.4f, %+.4f] worst %s" % (
+                      name, s["fills"], s["windows_traded"],
+                      _f(s["net_per_contract"]), clo, chi,
+                      _f(s["net_per_window"]), lo, hi,
+                      _f(s["worst_window"], 6, 2)))
+    print("== versus the deployed pair, $ per window ==")
+    for name, by in r["vs_pair"].items():
+        print("%-42s %s" % (name, "  ".join(
+            "%s %+.4f [%+.4f, %+.4f]" % (h, by[h]["mean"], by[h]["ci95"][0],
+                                         by[h]["ci95"][1])
+            for h in ("IS", "OOS"))))
+    nr = r["no_reference"]
+    print("== no reference (BOOK belief), %d OOS windows ==" % nr["windows"])
+    for name in ("PAIR (deployed, no controller)", "STEER default"):
+        s = nr[name]
+        print("%-42s fills %4d /win %s" % (name, s["fills"],
+                                           _f(s["net_per_window"])))
+
+
 def _f(x, w=8, p=4):
     return (" " * (w - 3) + "n/a") if x is None else ("%+*.*f" % (w, p, x))
 
@@ -309,4 +510,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--integrated" in sys.argv:
+        main_integrated()
+    else:
+        main()

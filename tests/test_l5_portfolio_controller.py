@@ -584,7 +584,8 @@ class TestTheRunnerStage:
         assert sorted(o["id"] for o in doc["resting"]) == sorted(live)
         assert doc["portfolio"]["up_qty"] == 0
         assert doc["belief"]["source"] == "BOOK"
-        assert "nothing was placed" in doc["labels"]
+        assert "placed and cancelled nothing" in doc["labels"]
+        assert doc["reference"]["reason"] == "REFERENCE_DISABLED"
         assert {a["op"] for a in doc["actions"]} <= {"KEEP", "CANCEL",
                                                      "PLACE"}
 
@@ -627,12 +628,15 @@ class TestTheRunnerStage:
 # 5. THERE IS NO WAY FROM THIS MODULE TO THE VENUE
 # ======================================================================
 class TestIsolation:
-    def test_the_module_can_only_be_off_or_shadow(self, monkeypatch):
-        for val in ("ON", "LIVE", "ARMED", "1", "true", "SHADOW "):
+    def test_the_module_has_three_modes_and_no_others(self, monkeypatch):
+        for val in ("ON", "LIVE", "ARMED", "1", "true", "SHADOW ", "steer"):
             monkeypatch.setenv("L5_PORTFOLIO_CONTROLLER", val)
             assert PC.mode() == PC.OFF
-        monkeypatch.setenv("L5_PORTFOLIO_CONTROLLER", "SHADOW")
-        assert PC.mode() == PC.SHADOW
+        monkeypatch.delenv("L5_PORTFOLIO_CONTROLLER")
+        assert PC.mode() == PC.OFF
+        for val in ("SHADOW", "STEER"):
+            monkeypatch.setenv("L5_PORTFOLIO_CONTROLLER", val)
+            assert PC.mode() == val
 
     def test_the_module_imports_nothing_that_can_trade(self):
         tree = ast.parse(open(PC.__file__).read())
@@ -653,7 +657,7 @@ class TestIsolation:
                        "L5_TS_OWN_EVIDENCE_GATE"):
             assert needle not in code, needle
 
-    def test_only_the_runner_stage_and_the_replay_use_the_module(self):
+    def test_only_the_runner_uses_the_module(self):
         users = []
         for base, _d, files in os.walk(os.path.join(ROOT, "src")):
             for f in files:
@@ -663,12 +667,20 @@ class TestIsolation:
                         users.append(f)
         assert users == ["l5_pmus_live_runner.py"]
 
-    def test_the_executor_and_the_gates_were_not_touched(self):
-        for name in ("l5_live_execution.py", "l5_two_sided_probe.py",
-                     "l5_unmatched_disposition.py",
+    def test_the_gates_and_authorization_were_not_touched(self):
+        for name in ("l5_two_sided_probe.py", "l5_unmatched_disposition.py",
                      "l5_live_authorization.py"):
-            assert "portfolio_controller" not in open(
-                os.path.join(ROOT, "src", name)).read()
+            txt = open(os.path.join(ROOT, "src", name)).read()
+            assert "portfolio_controller" not in txt
+            assert "portfolio_steer" not in txt
+
+    def test_the_controller_itself_never_reaches_the_venue(self):
+        """The module decides; the runner and executor act. Nothing in the
+        module can submit, cancel or write."""
+        code = open(PC.__file__).read().split('"""', 2)[2]
+        for needle in ("submit(", ".cancel(", "deadman", "urllib", "socket",
+                       ".save(", "record_submit", "transport"):
+            assert needle not in code, needle
 
 
 def test_a_missing_module_costs_a_counter_and_never_a_tick(tmp_path,
@@ -695,3 +707,411 @@ def test_the_module_is_in_the_executor_image():
                            "Dockerfile")).read()
     assert ("COPY src/l5_portfolio_controller.py "
             "src/l5_portfolio_controller.py") in df
+
+
+# ======================================================================
+# 6. THE STEER: what the existing pair engine may be told
+# ======================================================================
+MODEL = PC.Limits(cash_usd=100.0, exposure_usd=100.0, max_orders=2)
+
+
+def steer_for(p_up, port_=None, bid=0.52, ask=0.54, approved=2, **kw):
+    pr = PC.production_params() if not kw else PC.Params(**kw)
+    dec = PC.decide(port_ or port(), bid=bid, ask=ask, p_up=p_up, t_off=60,
+                    params=pr, limits=MODEL)
+    return PC.steer(dec, approved_depth_ticks=approved)
+
+
+class TestTheSteer:
+    def test_a_strongly_favored_side_is_the_only_one_opened(self):
+        st = steer_for(0.90)
+        assert st["sides"][UP]["wanted"] is True
+        assert st["sides"][DOWN]["wanted"] is False
+        assert st["sides"][DOWN]["reason"] in ("NOT_COMPETITIVE",
+                                               "NO_POSITIVE_PRICE")
+        assert st["any_wanted"] and st["extra_depth_ticks"] == 0
+        assert st["belief"]["source"] == "MODEL"
+        mirror = steer_for(0.10)
+        assert mirror["sides"][DOWN]["wanted"] and \
+            not mirror["sides"][UP]["wanted"]
+
+    def test_without_a_clear_edge_nothing_is_opened(self):
+        for p in (0.50, 0.53, 0.60):
+            st = steer_for(p)
+            assert st["any_wanted"] is False, p
+
+    def test_without_a_reference_nothing_is_opened(self):
+        st = steer_for(None)
+        assert st["belief"]["source"] == "BOOK"
+        assert st["any_wanted"] is False
+
+    def test_it_can_deepen_the_plan_and_never_shallow_it(self):
+        rng = random.Random(6)
+        for _ in range(500):
+            approved = rng.randint(0, 4)
+            bid = round(rng.uniform(0.05, 0.9), 2)
+            st = steer_for(rng.uniform(0.02, 0.98), bid=bid,
+                           ask=round(bid + 0.02, 2), approved=approved,
+                           margin=rng.choice((0, .02, .04)),
+                           adverse=rng.choice((0, .02)),
+                           risk=rng.choice((0, .1)))
+            assert st["extra_depth_ticks"] >= 0
+            assert st["plan_depth_ticks"] >= approved
+            for v in st["sides"].values():
+                if v["wanted"] and v["role"] == "ADD":
+                    assert v["ticks_behind_touch"] <= st["plan_depth_ticks"]
+
+    def test_a_side_wanted_only_deeper_than_the_plan_is_not_opened(self):
+        # UP is worth the touch, DOWN only four ticks back: the plan sits
+        # at the approved depth and DOWN is left out of it.
+        st = steer_for(0.56, margin=0.0, adverse=0.0, risk=0.0, approved=1)
+        assert st["sides"][UP]["wanted"] is True
+        assert st["sides"][DOWN]["wanted"] is False
+        assert st["sides"][DOWN]["reason"] == \
+            "WANTED_ONLY_DEEPER_THAN_THE_PLAN"
+
+    def test_both_sides_deep_moves_the_whole_plan_back(self):
+        st = steer_for(0.53, margin=0.02, adverse=0.02, risk=0.0, approved=1)
+        assert st["extra_depth_ticks"] >= 1
+        assert st["plan_depth_ticks"] == 1 + st["extra_depth_ticks"]
+
+    def test_production_uses_the_setting_the_replay_chose(self):
+        with open(os.path.join(ROOT, "analysis", "l5",
+                               "integrated_replay.json")) as fh:
+            tuned = json.load(fh)["tuned_on_IS"]["params"]
+        assert PC.PRODUCTION == tuned
+        pr = PC.production_params("0.01")
+        assert (pr.margin, pr.adverse, pr.risk, pr.tick) == (
+            tuned["margin"], tuned["adverse"], tuned["risk"], 0.01)
+        assert PC.production_params(None).tick == 0.01
+
+
+class TestWithdrawals:
+    PR = PC.production_params()
+
+    def book(self, *orders, u=0, cu=0, d=0, cd=0):
+        return port(u, cu, d, cd, orders=[
+            {"id": i, "side": sd, "price": px, "qty": 1}
+            for i, (sd, px) in enumerate(orders)])
+
+    def test_an_order_the_portfolio_would_still_pay_for_stays(self):
+        w = PC.withdrawals(self.book((UP, 0.50)), p_up=0.90, params=self.PR)
+        assert w == []
+
+    def test_an_order_priced_above_what_it_would_pay_is_named(self):
+        w = PC.withdrawals(self.book((UP, 0.50)), p_up=0.55, params=self.PR)
+        assert [x["id"] for x in w] == [0]
+        assert w[0]["reason"] == "PRICED_ABOVE_WHAT_THE_PORTFOLIO_WOULD_PAY"
+        assert w[0]["reservation"] < 0.50
+
+    def test_the_band_stops_place_and_pull_on_one_threshold(self):
+        p = self.book((UP, 0.50))
+        res_at = lambda q: PC.reservation_price(p, side=UP, p_up=q,
+                                                params=self.PR)
+        # find the belief at which the reservation is exactly the price
+        lo, hi = 0.5, 0.99
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if res_at(mid) < 0.50 else (lo, mid)
+        just_under = lo - 0.01      # reservation a tick under the price
+        assert PC.withdrawals(p, p_up=just_under, params=self.PR) == []
+        assert PC.withdrawals(p, p_up=lo - 0.05, params=self.PR) != []
+
+    def test_a_hedge_is_never_named(self):
+        p = self.book((DOWN, 0.60), (UP, 0.50), u=2, cu=0.9)
+        for belief in (0.99, 0.50, 0.01, None):
+            named = PC.withdrawals(p, p_up=belief, params=self.PR)
+            assert all(x["side"] == UP for x in named), belief
+
+    def test_with_no_belief_every_opening_order_comes_down(self):
+        p = self.book((UP, 0.50), (DOWN, 0.44))
+        for junk in (None, 0, 1, float("nan"), "x"):
+            w = PC.withdrawals(p, p_up=junk, params=self.PR)
+            assert sorted(x["side"] for x in w) == [DOWN, UP]
+            assert {x["reason"] for x in w} == {"NO_BELIEF"}
+
+
+# ======================================================================
+# 7. THE EXECUTOR HOOK: it narrows, it never widens
+# ======================================================================
+class TestTheExecutorHook:
+    def ex(self, steer=None, residual="0"):
+        from src import l5_live_execution as E
+
+        class Store:
+            def residual(self, market):
+                if residual == "boom":
+                    raise RuntimeError("unreadable")
+                return D(residual)
+        e = E.FaithfulExecutor.__new__(E.FaithfulExecutor)
+        e.store = Store()
+        e.portfolio_steer = steer
+        return e
+
+    def test_no_steer_changes_nothing(self):
+        e = self.ex(None)
+        assert e.portfolio_steer_extra_depth() == 0
+        assert e.portfolio_steer_refusal("UP", None) is None
+        assert e.portfolio_steer_refusal("DOWN", "UP") is None
+
+    def test_the_class_default_is_no_steer(self):
+        from src import l5_live_execution as E
+        assert E.FaithfulExecutor.portfolio_steer is None
+
+    @pytest.mark.parametrize("raw,want", [
+        (0, 0), (3, 3), (-4, 0), (99, 10), ("2", 2), (None, 0), ("x", 0),
+        (2.9, 2)])
+    def test_extra_depth_only_deepens_and_is_bounded(self, raw, want):
+        e = self.ex({"extra_depth_ticks": raw, "sides": {}})
+        assert e.portfolio_steer_extra_depth() == want
+
+    def test_an_unwanted_opening_is_refused_by_name(self):
+        e = self.ex({"sides": {"UP": {"wanted": True},
+                               "DOWN": {"wanted": False}}})
+        assert e.portfolio_steer_refusal("UP", None) is None
+        assert e.portfolio_steer_refusal("DOWN", None) == \
+            "PORTFOLIO_SIDE_NOT_WANTED"
+
+    def test_a_leg_that_reduces_filled_inventory_is_never_refused(self):
+        e = self.ex({"sides": {"UP": {"wanted": False},
+                               "DOWN": {"wanted": False}}})
+        assert e.portfolio_steer_refusal("DOWN", "DOWN") is None
+        assert e.portfolio_steer_refusal("UP", "DOWN") == \
+            "PORTFOLIO_SIDE_NOT_WANTED"
+
+    @pytest.mark.parametrize("steer", [
+        {}, {"sides": None}, {"sides": {"UP": None}}, {"sides": {}},
+        {"sides": {"UP": {"wanted": "yes"}}}])
+    def test_an_unreadable_steer_is_not_permission(self, steer):
+        e = self.ex(steer)
+        assert e.portfolio_steer_refusal("UP", None) in (
+            "PORTFOLIO_STEER_UNREADABLE", "PORTFOLIO_SIDE_NOT_WANTED")
+
+    def test_only_filled_inventory_makes_a_hedge(self):
+        assert self.ex(residual="0").portfolio_held_reducing_side("m") is None
+        assert self.ex(residual="0.6").portfolio_held_reducing_side("m") \
+            == "DOWN"
+        assert self.ex(residual="-0.6").portfolio_held_reducing_side("m") \
+            == "UP"
+        assert self.ex(residual="boom").portfolio_held_reducing_side("m") \
+            is None
+
+
+# ======================================================================
+# 8. STEER THROUGH THE REAL RUNNER AND EXECUTOR
+# ======================================================================
+STEER_ENV = {"L5_PORTFOLIO_CONTROLLER": "STEER",
+             "L5_BTC_REFERENCE": "VENUE_INDEX"}
+
+
+class Feed:
+    """Stands in for `l5_btc_reference.Reference`: no thread, no network."""
+
+    def __init__(self, p):
+        self.p, self.calls = p, 0
+
+    def estimate(self, slug, ws, now=None):
+        self.calls += 1
+        if self.p is None:
+            return {"ok": False, "p_up": None, "reason": "INDEX_STALE",
+                    "decision_t": now, "index_age_s": 9.0}
+        return {"ok": True, "p_up": self.p, "reason": None,
+                "decision_t": now, "index_age_s": 0.4, "seconds_left": 800.0,
+                "distance": 50.0, "bucket_t": int(now) - 1}
+
+
+def steered(tmp_path, monkeypatch, p, **env):
+    for k in ("L5_PORTFOLIO_CONTROLLER", "L5_BTC_REFERENCE"):
+        monkeypatch.delenv(k, raising=False)
+    h = harness(tmp_path, monkeypatch, **env)
+    h.r._btc_reference = Feed(p)
+    return h
+
+
+def ticks(h, *offs):
+    for off in offs:
+        h.tick(off)
+    return h
+
+
+class TestSteerThroughTheRunner:
+    def test_unset_the_engine_opens_exactly_as_before(self, tmp_path,
+                                                      monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90), 7.0, 8.0, 9.0)
+        assert sorted(h.sent()) == [("DOWN", D("0.44"), D("0.6")),
+                                    ("UP", D("0.50"), D("0.6"))]
+        assert h.r._btc_reference.calls == 0
+        assert not [k for k in h.r.stats if "portfolio" in k.lower()]
+
+    def test_the_favored_side_opens_alone_at_the_approved_depth(
+            self, tmp_path, monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV),
+                  7.0, 8.0, 9.0, 10.0)
+        assert h.sent() == [("UP", D("0.50"), D("0.6"))]
+        assert h.r.stats[
+            "controller_open:pass2:PORTFOLIO_SIDE_NOT_WANTED"] == 1
+        h2 = ticks(steered(tmp_path / "b", monkeypatch, 0.10, **STEER_ENV),
+                   7.0, 8.0, 9.0, 10.0)
+        assert h2.sent() == [("DOWN", D("0.44"), D("0.6"))]
+
+    @pytest.mark.parametrize("p", [0.50, 0.53, 0.60])
+    def test_without_a_clear_edge_nothing_is_opened(self, tmp_path,
+                                                    monkeypatch, p):
+        h = ticks(steered(tmp_path, monkeypatch, p, **STEER_ENV), 7.0, 8.0)
+        assert h.sent() == []
+        assert h.r.stats["controller_open:PORTFOLIO_NOTHING_WANTED"] == 2
+
+    def test_a_stale_reference_opens_nothing(self, tmp_path, monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, None, **STEER_ENV),
+                  7.0, 8.0)
+        assert h.sent() == []
+
+    def test_steer_without_a_reference_opens_nothing(self, tmp_path,
+                                                     monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90,
+                          L5_PORTFOLIO_CONTROLLER="STEER"), 7.0, 8.0)
+        assert h.sent() == []
+        assert h.r._btc_reference.calls == 0
+
+    def test_an_unreadable_portfolio_opens_nothing(self, tmp_path,
+                                                   monkeypatch):
+        h = steered(tmp_path, monkeypatch, 0.90, **STEER_ENV)
+
+        def boom(*a, **k):
+            raise RuntimeError("ledger unreadable")
+        monkeypatch.setattr(h.r.store, "leg_cost", boom)
+        ticks(h, 7.0, 8.0)
+        assert h.sent() == []
+        assert h.r.stats["portfolio_steer_error:RuntimeError"] >= 2
+
+    def test_the_steer_exists_for_one_call_only(self, tmp_path, monkeypatch):
+        h = steered(tmp_path, monkeypatch, 0.90, **STEER_ENV)
+        seen = []
+        real = h.r.executor.handle
+
+        def spy(*a, **k):
+            seen.append(h.r.executor.portfolio_steer is not None)
+            return real(*a, **k)
+        monkeypatch.setattr(h.r.executor, "handle", spy)
+        ticks(h, 7.0, 8.0)
+        assert seen and all(seen)
+        assert h.r.executor.portfolio_steer is None
+        # and an L5 action afterwards is not steered
+        h.at(11.0).l5_action()
+        assert seen[-1] is False
+
+    def test_the_steer_is_cleared_even_if_the_executor_raises(
+            self, tmp_path, monkeypatch):
+        h = steered(tmp_path, monkeypatch, 0.90, **STEER_ENV)
+
+        def boom(*a, **k):
+            raise RuntimeError("executor failed")
+        monkeypatch.setattr(h.r.executor, "handle", boom)
+        with pytest.raises(RuntimeError):
+            h.r.maybe_controller_open(T.WS + 7.0)
+        assert h.r.executor.portfolio_steer is None
+
+    def test_a_filled_leg_is_still_hedged_when_nothing_is_wanted(
+            self, tmp_path, monkeypatch):
+        """The favored UP leg fills; the belief then goes flat, so the
+        controller wants no opening -- and the DOWN hedge is placed all the
+        same, because a hedge is never the steer's to stop."""
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV), 7.0)
+        assert h.sent() == [("UP", D("0.50"), D("0.6"))]
+        oid = [o for o in h.venue.by_oid][0]
+        h.venue.fill(oid)
+        h.r._btc_reference.p = 0.52
+        for off in (10.5, 14.0, 17.5, 21.0, 24.5, 28.0):
+            h.tick(off)
+        assert h.r.store.position(T.SLUG, "UP") == D("0.6")
+        downs = [x for x in h.sent() if x[0] == "DOWN"]
+        assert downs, (h.sent(), dict(h.r.stats))
+
+    def test_the_decision_record_carries_the_reference_and_its_clocks(
+            self, tmp_path, monkeypatch):
+        h = steered(tmp_path, monkeypatch, 0.90, **STEER_ENV)
+        h.at(30.0)
+        doc = h.r.maybe_portfolio_decision(T.WS + 30.0)
+        assert doc["mode"] == "STEER"
+        assert doc["belief"] == {"p_up": 0.90, "source": "MODEL"}
+        ref = doc["reference"]
+        assert ref["ok"] and ref["decision_t"] == T.WS + 30.0
+        assert ref["index_age_s"] == 0.4 and ref["bucket_t"] == int(
+            T.WS + 30.0) - 1
+        h.r._btc_reference.p = None
+        doc = h.r.maybe_portfolio_decision(T.WS + 36.0)
+        assert doc["belief"]["source"] == "BOOK"
+        assert doc["reference"]["reason"] == "INDEX_STALE"
+
+
+class TestTheWithdrawStage:
+    def test_it_does_nothing_outside_steer(self, tmp_path, monkeypatch):
+        for env in ({}, {"L5_PORTFOLIO_CONTROLLER": "SHADOW",
+                         "L5_BTC_REFERENCE": "VENUE_INDEX"}):
+            h = steered(tmp_path / str(len(env)), monkeypatch, 0.5, **env)
+            T.opened(h)
+            assert h.r.maybe_portfolio_withdraw(h.r.now_t + 1) is None
+            assert h.venue.cancelled == []
+
+    def test_an_opening_the_reference_turned_against_is_cancelled_by_id(
+            self, tmp_path, monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV), 7.0)
+        assert h.sent() == [("UP", D("0.50"), D("0.6"))]
+        assert h.r.maybe_portfolio_withdraw(T.WS + 8.0) is None   # still good
+        assert h.venue.cancelled == []
+        h.r._btc_reference.p = 0.50
+        out = h.r.maybe_portfolio_withdraw(T.WS + 9.0)
+        assert out is not None and len(h.venue.cancelled) == 1
+        assert [w["side"] for w in out["withdrawn"]] == ["UP"]
+        assert out["withdrawn"][0]["reason"] == \
+            "PRICED_ABOVE_WHAT_THE_PORTFOLIO_WOULD_PAY"
+        rec = [r for label, r in h.emitted
+               if label == "L5_PORTFOLIO_WITHDRAW"]
+        assert len(rec) == 1 and "CANCELLATION" in rec[0]["labels"]
+        assert h.r.store.live_orders() == {}
+
+    def test_a_lost_reference_takes_the_opening_down(self, tmp_path,
+                                                     monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV), 7.0)
+        h.r._btc_reference.p = None
+        out = h.r.maybe_portfolio_withdraw(T.WS + 9.0)
+        assert out["withdrawn"][0]["reason"] == "NO_BELIEF"
+        assert len(h.venue.cancelled) == 1
+
+    def test_a_hedge_is_never_withdrawn(self, tmp_path, monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV), 7.0)
+        h.venue.fill([o for o in h.venue.by_oid][0])
+        h.r._btc_reference.p = 0.52
+        for off in (10.5, 14.0, 17.5, 21.0, 24.5, 28.0):
+            h.tick(off)
+        assert [x for x in h.sent() if x[0] == "DOWN"]
+        before = list(h.venue.cancelled)
+        h.r._btc_reference.p = None                 # the worst belief
+        assert h.r.maybe_portfolio_withdraw(T.WS + 30.0) is None
+        assert h.venue.cancelled == before
+
+    def test_a_failure_is_a_counter_and_no_cancellation(self, tmp_path,
+                                                        monkeypatch):
+        h = ticks(steered(tmp_path, monkeypatch, 0.90, **STEER_ENV), 7.0)
+
+        def boom(*a, **k):
+            raise RuntimeError("ledger unreadable")
+        monkeypatch.setattr(h.r.store, "leg_cost", boom)
+        assert h.r.maybe_portfolio_withdraw(T.WS + 9.0) is None
+        assert h.venue.cancelled == []
+        assert h.r.stats["portfolio_withdraw_error:RuntimeError"] == 1
+
+    def test_it_cancels_through_the_existing_deadman_and_nothing_else(self):
+        src = inspect.getsource(R.Runner.maybe_portfolio_withdraw)
+        code = src.split('"""', 2)[2]
+        assert code.count("LX.deadman(") == 1 and "only=ids" in code
+        for needle in (".handle(", "submit", "record_submit", "apply_fill",
+                       "L5_LIVE_HALT", "L5_SHADOW_ONLY",
+                       "L5_TS_OWN_EVIDENCE_GATE"):
+            assert needle not in code, needle
+
+    def test_the_tick_calls_it_after_the_decision_record(self):
+        src = inspect.getsource(R.Runner.tick)
+        assert src.count("self.maybe_portfolio_withdraw(now)") == 1
+        assert src.index("self.maybe_portfolio_decision(now)") < \
+            src.index("self.maybe_portfolio_withdraw(now)")

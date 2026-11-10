@@ -134,14 +134,24 @@ class Book:
                                  "m_place": _mark(side, m), "tag": tag}
         return self._id
 
-    def cancel(self, oid: int) -> None:
-        self.orders.pop(oid, None)
+    def cancel(self, oid: int, at: Optional[float] = None) -> None:
+        """Cancel now, or -- with `at` -- only from that time on: until then
+        the order is still at the venue and a print can still fill it."""
+        if at is None:
+            self.orders.pop(oid, None)
+        elif oid in self.orders:
+            cur = self.orders[oid].get("cancel_at")
+            self.orders[oid]["cancel_at"] = at if cur is None else min(cur, at)
 
-    def resting(self, side: Optional[str] = None, tag: Optional[str] = None
+    def resting(self, side: Optional[str] = None, tag: Optional[str] = None,
+                cancelling: bool = False
                 ) -> List[Tuple[int, Dict[str, Any]]]:
+        """Orders still wanted. One whose cancel is in flight is left out
+        unless `cancelling` asks for it."""
         return [(i, o) for i, o in self.orders.items()
                 if (side is None or o["side"] == side)
-                and (tag is None or o["tag"] == tag)]
+                and (tag is None or o["tag"] == tag)
+                and (cancelling or o.get("cancel_at") is None)]
 
     def imbalance(self) -> float:
         """Unmatched contracts: + is UP-heavy, - is DOWN-heavy."""
@@ -152,6 +162,9 @@ class Book:
         """Fill every order this print trades through. Returns the fills."""
         done = []
         for oid, o in sorted(self.orders.items()):
+            if o.get("cancel_at") is not None and t >= o["cancel_at"]:
+                self.orders.pop(oid, None)       # the cancel had landed
+                continue
             if t <= o["t"]:
                 continue
             if _mark(o["side"], m) <= o["px"] - self.thr + EPS:

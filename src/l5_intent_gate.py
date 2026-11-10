@@ -142,6 +142,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # reduces the residual. Like the two rules below and above it, an ENTRY
     # rule -- it can never refuse a completion.
     "TWO_SIDED_PROBE:PAST_ENTRY_CUTOFF_NOT_A_COMPLETION",
+    # the portfolio controller's steer, present only in
+    # L5_PORTFOLIO_CONTROLLER=STEER: an opening leg it does not want is
+    # refused by name (or PORTFOLIO_STEER_UNREADABLE). It can only narrow a
+    # choice the executor already made, and never refuses a leg that
+    # reduces filled inventory.
+    "TWO_SIDED_PROBE:PORTFOLIO_SIDE_NOT_WANTED",
     # the two refusals `Verify the complement before adopting it` added to
     # `handle`: a complement priced from another market's book, and one on
     # the side we already hold. Registered here because that commit added

@@ -7965,6 +7965,159 @@ class Runner:
     #: seconds between portfolio decision records for one market.
     PORTFOLIO_DECISION_EVERY_S = 5.0
 
+    def _portfolio_view(self, slug: Any, ws: float, book: Mapping[str, Any],
+                        tick: Any, now: float) -> Dict[str, Any]:
+        """The portfolio controller's decision on THIS ledger, book and
+        reference. Reads only; raises on anything unreadable.
+
+        THE BELIEF. With L5_BTC_REFERENCE=VENUE_INDEX the probability comes
+        from the venue's own settlement index and this market's own strike
+        (`l5_btc_reference`), started lazily on its own thread so a slow
+        gateway can never hold a tick. A stale index, a misaligned strike
+        or a clock that disagrees returns NO probability, and the controller
+        falls back to the book's mid -- labelled BOOK -- under which it can
+        pair and hedge and cannot favor a side.
+        """
+        from src import l5_portfolio_controller as PC
+        from src import l5_btc_reference as BR
+        port = PC.from_store(self.store, str(slug))
+        ref: Dict[str, Any] = {"ok": False, "p_up": None,
+                               "reason": "REFERENCE_DISABLED",
+                               "decision_t": float(now)}
+        if BR.enabled():
+            feed = getattr(self, "_btc_reference", None)
+            if feed is None:
+                feed = self._btc_reference = BR.Reference()
+                feed.start()
+            ref = feed.estimate(str(slug), float(ws), now=float(now))
+        ex = getattr(self, "executor", None)
+        cash = exposure = None
+        if ex is not None:
+            _c = ex.probe_cash_envelope()
+            cash = float(_c) if _c is not None else None
+            _e = getattr(ex.limits, "max_total_exposure_usd", None)
+            exposure = float(_e) if _e is not None else None
+        knobs = PC.production_params(tick)
+        dec = PC.decide(
+            port, bid=book.get("bid"), ask=book.get("ask"),
+            p_up=(ref.get("p_up") if ref.get("ok") else None),
+            t_off=float(now) - float(ws), params=knobs,
+            limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
+                             max_orders=int(max_live_orders())))
+        return {"port": port, "dec": dec, "ref": ref, "knobs": knobs}
+
+    def portfolio_steer_for_open(self, slug: Any, ws: float,
+                                 book: Mapping[str, Any], tick: Any,
+                                 now: float) -> Optional[Dict[str, Any]]:
+        """The steer for ONE timer-path opening, or None when not steering.
+
+        None means L5_PORTFOLIO_CONTROLLER is not STEER and the opening
+        proceeds exactly as it always has. In STEER a steer is ALWAYS
+        returned: if the ledger, the book or the controller cannot be read
+        it is a steer that wants nothing, with the reason, so an unreadable
+        portfolio stops the opening instead of waving it through.
+        """
+        try:
+            from src import l5_portfolio_controller as PC
+            from src import l5_two_sided_probe as TSP
+            if PC.mode() != PC.STEER:
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_steer_error:%s" % type(exc).__name__] += 1
+            return None
+        try:
+            view = self._portfolio_view(slug, ws, book, tick, now)
+            st = PC.steer(view["dec"],
+                          approved_depth_ticks=TSP.depth_ticks())
+            st["flat_and_empty"] = (
+                abs(view["port"]["unmatched"]) < 1e-9
+                and not view["port"]["orders"])
+            st["reference"] = {k: view["ref"].get(k) for k in (
+                "ok", "reason", "p_up", "index_age_s", "seconds_left",
+                "distance", "decision_t", "bucket_t")}
+            self.stats["portfolio_steer:%s" % (
+                "WANTED" if st["any_wanted"] else "NOTHING_WANTED")] += 1
+            return st
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_steer_error:%s" % type(exc).__name__] += 1
+            return {"sides": {}, "extra_depth_ticks": 0, "any_wanted": False,
+                    "unavailable": type(exc).__name__}
+
+    def maybe_portfolio_withdraw(self, now: float) -> Optional[Dict[str, Any]]:
+        """Withdraw a resting OPENING order the controller would no longer
+        pay for. STEER only; a cancellation, never a submission.
+
+        WHY. A maker bid is filled when the market moves through it. The
+        steer on the opening path decides whether a quote goes up; this is
+        what takes it down again when the reference moves against it --
+        without it the quote simply waits out its time-to-live and is
+        filled by exactly the move it should have avoided.
+
+        HOW, and it is all existing machinery. The order is cancelled by
+        its exact id through `LX.deadman(only=[...])`: by venue id, proved
+        by re-read, any fill found while cancelling booked with its cost
+        basis, and an ambiguous outcome marks the ledger uncertain so
+        nothing new is submitted until reconciliation agrees.
+
+        WHAT IT WILL NOT DO. It never names an order that reduces a held
+        residual, it never runs outside STEER, and a failure anywhere is a
+        counter and no cancellation.
+        """
+        try:
+            from src import l5_portfolio_controller as PC
+            if PC.mode() != PC.STEER:
+                return None
+            t = self.transport
+            slug = getattr(t, "market_slug", None) if t is not None else None
+            if not slug:
+                return None
+            mine = [c for c, o in (self.store.live_orders() or {}).items()
+                    if str((o or {}).get("market")) == str(slug)]
+            if not mine:
+                return None
+            ws = AB.slug_start(slug)
+            if ws is None:
+                return None
+            book = self.book.snapshot(slug) if self.book is not None else None
+            if not isinstance(book, Mapping) or not book:
+                self.stats["portfolio_withdraw:NO_AUTHENTICATED_BOOK"] += 1
+                return None
+            view = self._portfolio_view(
+                slug, float(ws), book, getattr(t, "tick_size", None), now)
+            ref = view["ref"]
+            # only a MODEL belief can say a quote is rich; with none, every
+            # opening order is withdrawn (`withdrawals` names them all).
+            named = PC.withdrawals(
+                view["port"],
+                p_up=(ref.get("p_up") if ref.get("ok") else None),
+                params=view["knobs"])
+            ids = [str(w["id"]) for w in named if str(w["id"]) in mine]
+            if not ids:
+                return None
+            res = LX.deadman(self.store, t, reason="portfolio_steer_withdraw",
+                             only=ids)
+            out = {"market": str(slug), "t_off": float(now) - float(ws),
+                   "withdrawn": named, "result": res,
+                   "reference": {k: ref.get(k) for k in (
+                       "ok", "reason", "p_up", "index_age_s", "seconds_left",
+                       "distance", "decision_t", "bucket_t")},
+                   "labels": ("a CANCELLATION of an opening order by exact "
+                              "id, with the venue's own re-read as proof. "
+                              "Not a submission; a hedge is never named.")}
+            emit("L5_PORTFOLIO_WITHDRAW", out)
+            self.stats["portfolio_withdraw:CANCELLED"] += len(ids)
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_withdraw_error:%s"
+                       % type(exc).__name__] += 1
+            return None
+
     def maybe_portfolio_decision(self, now: float) -> Optional[Dict[str, Any]]:
         """What the portfolio controller would quote now. RECORDED, NOT ACTED ON.
 
@@ -7978,21 +8131,21 @@ class Runner:
 
         IT PLACES AND CANCELS NOTHING. It calls no executor method that can
         submit, it writes nothing to the ledger, and its output is a log
-        line. It is off unless L5_PORTFOLIO_CONTROLLER is exactly SHADOW,
-        and there is no value of that variable that makes it trade.
+        line. It records in SHADOW and in STEER; the steering itself
+        happens on the opening path, not here.
 
         IT CANNOT DISTURB THE TICK. Every failure is swallowed into a
         counter: an unreadable ledger or book yields no record.
 
-        NO PROBABILITY IS SUPPLIED HERE. This process has no spot-and-strike
-        feed, so the belief is the book's own mid, labelled BOOK. The
-        controller then pairs and hedges and cannot favor a side.
+        THE RECORD CARRIES ITS OWN CLOCKS: when the decision was taken,
+        which index second it used, how old that second was and how long
+        the fetch took -- or the reason there was no usable reference.
         """
         try:
             # INSIDE the guard: a module missing from the image must cost a
             # counter, never a tick.
             from src import l5_portfolio_controller as PC
-            if PC.mode() != PC.SHADOW:
+            if PC.mode() == PC.OFF:
                 return None
             t = self.transport
             slug = getattr(t, "market_slug", None) if t is not None else None
@@ -8010,29 +8163,18 @@ class Runner:
             if not isinstance(book, Mapping) or not book:
                 self.stats["portfolio_decision:NO_AUTHENTICATED_BOOK"] += 1
                 return None
-            port = PC.from_store(self.store, str(slug))
-            ex = getattr(self, "executor", None)
-            cash = exposure = None
-            if ex is not None:
-                _c = ex.probe_cash_envelope()
-                cash = float(_c) if _c is not None else None
-                _e = getattr(ex.limits, "max_total_exposure_usd", None)
-                exposure = float(_e) if _e is not None else None
-            tick = getattr(t, "tick_size", None)
-            params = PC.Params(tick=float(tick) if tick else 0.01)
-            dec = PC.decide(
-                port, bid=book.get("bid"), ask=book.get("ask"), p_up=None,
-                t_off=float(now) - float(ws), params=params,
-                limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
-                                 max_orders=int(max_live_orders())))
+            view = self._portfolio_view(
+                slug, float(ws), book, getattr(t, "tick_size", None), now)
+            port, dec, ref = view["port"], view["dec"], view["ref"]
             doc = {
                 "market": str(slug), "window_start": float(ws),
                 "t_off": float(now) - float(ws),
-                "mode": PC.SHADOW,
+                "mode": PC.mode(),
                 "book": {"bid": str(book.get("bid")),
                          "ask": str(book.get("ask")),
                          "stream_age_s": str(book.get("stream_age_s"))},
                 "belief": dec.get("belief"),
+                "reference": ref,
                 "portfolio": {k: port[k] for k in (
                     "up_qty", "dn_qty", "up_cost", "dn_cost", "matched_pairs",
                     "pair_cost", "locked_pair_pnl", "unmatched",
@@ -8044,10 +8186,11 @@ class Runner:
                 "value": dec.get("value"),
                 "quotes": dec["quotes"], "skipped": dec["skipped"],
                 "actions": PC.order_actions(dec["quotes"], port["orders"],
-                                            params=params),
-                "labels": ("SHADOW DECISION ONLY -- nothing was placed or "
-                           "cancelled; not a fill, not realized. The "
-                           "belief is the book's mid unless stated."),
+                                            params=view["knobs"]),
+                "labels": ("DECISION RECORD ONLY -- this stage placed and "
+                           "cancelled nothing; not a fill, not realized. "
+                           "belief.source says whether the probability is "
+                           "the venue index MODEL or the BOOK's own mid."),
             }
             emit("L5_PORTFOLIO_DECISION", doc)
             self.stats["portfolio_decision:RECORDED"] += 1
@@ -8325,6 +8468,22 @@ class Runner:
                        "that is actually placed, and every existing gate, "
                        "claim and limit applies unchanged."),
         })
+        # THE PORTFOLIO CONTROLLER MAY STEER THIS OPENING. None unless the
+        # owner set L5_PORTFOLIO_CONTROLLER=STEER, and then nothing below
+        # changes. A steer that wants no side opened ends the tick here,
+        # by name, before the executor is asked for anything.
+        _steer = self.portfolio_steer_for_open(slug, float(ws), book, tick,
+                                               now)
+        # ...but ONLY while flat with nothing resting. With inventory or a
+        # resting leg the call goes through, because the next leg may be a
+        # hedge and a hedge is never the steer's to stop; the executor
+        # refuses any non-reducing leg the steer does not want.
+        if _steer is not None and not _steer.get("any_wanted") \
+                and _steer.get("flat_and_empty") is not False:
+            self.stats["controller_open:PORTFOLIO_NOTHING_WANTED"] += 1
+            self._note_open_skip("PORTFOLIO_NOTHING_WANTED", slug, ws,
+                                 {"portfolio_steer": _steer})
+            return None
         self.stats["controller_open:ENTERED"] += 1
 
         # ============ BOTH LEGS IN ONE PASS, AND NOTHING ELSE CHANGES.
@@ -8384,17 +8543,27 @@ class Runner:
                     self.stats["controller_open:PASS2_LEDGER_UNREADABLE:%s"
                                % type(exc).__name__] += 1
                     break
-            rec = self.executor.handle(
-                None, book, market=str(slug), window=str(ws),
-                controller={"provenance": LX.CONTROLLER_GENERATED,
-                            "decision": dec,
-                            # NO REPLAY CLASSIFICATION EXISTS FOR AN ORDER
-                            # THAT HAS NOT BEEN PLACED. The L5 path is handed
-                            # `{}` here too and lands on the same
-                            # T_UNEVALUABLE, which MAKER_TREATMENT answers;
-                            # passing a class we do not have would be
-                            # inventing evidence.
-                            "maker_class": None})
+            # the steer exists for THIS call and no other: set here,
+            # cleared in the `finally`, so no completion, requote or L5
+            # action can ever see it.
+            if _steer is not None:
+                self.executor.portfolio_steer = _steer
+            try:
+                rec = self.executor.handle(
+                    None, book, market=str(slug), window=str(ws),
+                    controller={"provenance": LX.CONTROLLER_GENERATED,
+                                "decision": dec,
+                                # NO REPLAY CLASSIFICATION EXISTS FOR AN
+                                # ORDER THAT HAS NOT BEEN PLACED. The L5
+                                # path is handed `{}` here too and lands on
+                                # the same T_UNEVALUABLE, which
+                                # MAKER_TREATMENT answers; passing a class
+                                # we do not have would be inventing
+                                # evidence.
+                                "maker_class": None})
+            finally:
+                if _steer is not None:
+                    self.executor.portfolio_steer = None
             self.stats["controller_open:%s%s" % (
                 ("pass2:" if _p else ""),
                 str((rec or {}).get("refused_reason") or "NOT_REFUSED"))] += 1
@@ -10158,6 +10327,11 @@ class Runner:
         # L5_PORTFOLIO_CONTROLLER=SHADOW; it can place and cancel nothing.
         self.maybe_portfolio_decision(now)
         _sc.mark("maybe_portfolio_decision")
+        # STEER ONLY: take down an opening quote the controller would no
+        # longer pay for. A cancellation by exact id through the existing
+        # deadman; inert in every other mode.
+        self.maybe_portfolio_withdraw(now)
+        _sc.mark("maybe_portfolio_withdraw")
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.

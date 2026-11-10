@@ -69,16 +69,22 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 UP, DOWN = "UP", "DOWN"
 SIDES = (UP, DOWN)
 MODE_ENV = "L5_PORTFOLIO_CONTROLLER"
-OFF, SHADOW = "OFF", "SHADOW"
+OFF, SHADOW, STEER = "OFF", "SHADOW", "STEER"
 EPS = 1e-9
 
 
 def mode() -> str:
-    """OFF unless the owner sets the variable to exactly SHADOW.
+    """OFF unless the owner sets the variable to exactly SHADOW or STEER.
 
-    There is deliberately no value that lets this module's output reach the
-    venue: SHADOW records what it would quote and nothing else."""
-    return SHADOW if os.getenv(MODE_ENV, "") == SHADOW else OFF
+    SHADOW records what the controller would quote and nothing else.
+
+    STEER also lets it steer the EXISTING pair engine's openings -- which
+    side may open and how far behind the touch -- and nothing more. It does
+    not submit, it cannot open what that engine could not, and it grants no
+    permission: the locks, the window authorization, every limit and the
+    own-settled-evidence gate decide whether anything is placed at all."""
+    v = os.getenv(MODE_ENV, "")
+    return v if v in (SHADOW, STEER) else OFF
 
 
 def other(side: str) -> str:
@@ -474,6 +480,99 @@ def order_actions(quotes: Sequence[Mapping[str, Any]],
                      "after_cancel_confirmed": side in cancelling,
                      "value_change": q["value_change"]})
     return acts
+
+
+def steer(dec: Mapping[str, Any], *, approved_depth_ticks: int,
+          max_extra_ticks: int = 10) -> Dict[str, Any]:
+    """What the existing pair engine may be told, from one decision.
+
+    The pair engine prices both legs at ONE depth behind their touches and
+    places one leg at a time. So the steer is two things and no more:
+
+      * which sides may OPEN now -- a side the controller does not quote is
+        not opened, and a side it wants only deeper than the plan's depth
+        is not opened either;
+      * how many EXTRA ticks behind the owner's approved depth the plan
+        should sit: never fewer. The steer can make an opening more
+        patient than the approved configuration, never more aggressive.
+
+    It says nothing about hedges: reducing an unmatched position is never
+    the steer's to refuse (the executor enforces that too).
+    """
+    approved = max(0, int(approved_depth_ticks))
+    sides: Dict[str, Dict[str, Any]] = {}
+    for side in SIDES:
+        why = [x.get("reason") for x in dec.get("skipped", ())
+               if x.get("side") == side]
+        sides[side] = {"wanted": False,
+                       "reason": (why[0] if why else "NOT_QUOTED")}
+    for q in dec.get("quotes", ()):
+        sides[q["side"]] = {
+            "wanted": True, "role": q["role"],
+            "ticks_behind_touch": int(q["ticks_behind_touch"]),
+            "value_change": q["value_change"], "qty": q["qty"]}
+    adds = [v for v in sides.values() if v["wanted"] and v["role"] == "ADD"]
+    extra = min((max(0, v["ticks_behind_touch"] - approved) for v in adds),
+                default=0)
+    extra = max(0, min(int(extra), int(max_extra_ticks)))
+    plan_depth = approved + extra
+    for v in sides.values():
+        if v["wanted"] and v["role"] == "ADD" and \
+                v["ticks_behind_touch"] > plan_depth:
+            v["wanted"] = False
+            v["reason"] = "WANTED_ONLY_DEEPER_THAN_THE_PLAN"
+    return {"sides": sides, "extra_depth_ticks": extra,
+            "approved_depth_ticks": approved, "plan_depth_ticks": plan_depth,
+            "any_wanted": any(v["wanted"] for v in sides.values()),
+            "belief": dict(dec.get("belief") or {})}
+
+
+def withdrawals(port: Mapping[str, Any], *, p_up: Any, params: Params,
+                hysteresis_ticks: int = 2) -> List[Dict[str, Any]]:
+    """Resting OPENING orders the controller would no longer pay for.
+
+    This is the lever that decides fill selection: a maker bid is filled
+    when the market moves through it, so the only defence is not to be
+    there. An order is named here when its own price sits more than
+    ``hysteresis_ticks`` above what the controller would now pay for that
+    side -- the band is what stops a quote being placed and pulled on the
+    same threshold.
+
+    A HEDGE IS NEVER NAMED. An order that reduces the unmatched position is
+    left alone whatever the belief says. With no belief at all (``p_up``
+    None) every opening order is named: no reference, no opening quote.
+    """
+    params = params.checked()
+    p = _num(p_up)
+    out: List[Dict[str, Any]] = []
+    unm = port["unmatched"]
+    for o in port.get("orders", ()):
+        side = o["side"]
+        hedge = (unm > EPS and side == DOWN) or (unm < -EPS and side == UP)
+        if hedge:
+            continue
+        if p is None or not (0.0 < p < 1.0):
+            out.append({"id": o.get("id"), "side": side, "price": o["price"],
+                        "reservation": None, "reason": "NO_BELIEF"})
+            continue
+        res = reservation_price(port, side=side, p_up=p, params=params)
+        if o["price"] > res + hysteresis_ticks * params.tick + EPS:
+            out.append({"id": o.get("id"), "side": side, "price": o["price"],
+                        "reservation": res,
+                        "reason": "PRICED_ABOVE_WHAT_THE_PORTFOLIO_WOULD_PAY"})
+    return out
+
+
+#: WHAT THE RUNNER USES. Chosen on the FIRST part of the integrated replay
+#: only (the `--integrated` run under analysis/l5) and scored on the
+#: second: a six-cent haircut on every opening and a heavy
+#: charge for unmatched inventory. A test pins this to the committed result.
+PRODUCTION = {"margin": 0.03, "adverse": 0.03, "risk": 0.30}
+
+
+def production_params(tick: Any = None) -> Params:
+    t = _num(tick)
+    return Params(tick=(t if t and t > 0 else 0.01), **PRODUCTION).checked()
 
 
 def with_overrides(params: Params, **kw: Any) -> Params:

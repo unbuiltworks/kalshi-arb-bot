@@ -213,3 +213,73 @@ beliefs, which by the result above cannot favor a side.
 - The model panel is four days (2026-08-28 to 08-31), one regime.
 - One contract per order; no capacity effects.
 - TUNED's out-of-sample result rests on 123 fills.
+
+---
+
+# Addendum 2026-11-10: the controller steers the executor, on the live index
+
+## What is connected now
+
+| piece | state |
+|---|---|
+| exact strike | the venue's own `assetPriceTerms.priceToBeat` for the market, refused unless slug, index (BRTI), market type and both window bounds match |
+| live reference | the venue's own settlement series, `GET /v1/asset-prices/history` at one-second buckets: already the 60-second average the market settles on. Free, unauthenticated, same gateway the engine already reads |
+| probability | from index, strike distance, time left and the index's own volatility, allowing for the 60-second averaging; volatility inflated 1.25x toward 0.5 |
+| rejection | stale index (> 3 s), clock disagreement (> 2 s), index gap, under five minutes of history, strike for another window: no probability, reason recorded |
+| latency, measured | newest bucket available 0.2 to 0.9 s after it ends; fetch round trip 0.13 to 0.44 s |
+| calibration | 192 windows of the venue's own history (48 h): forecast 0.30 -> realised 0.25, 0.50 -> 0.54, 0.71 -> 0.83 at T+600 s; 98% directional accuracy 60 s before the end. Slightly under-confident by construction |
+| cost | $0. No new service, vendor or host; one daemon thread, about one request a second |
+
+## What STEER does (`L5_PORTFOLIO_CONTROLLER=STEER`, off by default)
+
+The existing pair engine keeps its shape and every gate. The controller adds
+three things and can only narrow what that engine would do:
+
+1. **Which side may open.** A side the controller would not pay for is not
+   opened; with no clear edge, or no usable reference, nothing opens.
+2. **How deep.** It can move the plan further behind the touch than the
+   approved depth, never closer.
+3. **Withdrawal.** A resting opening order priced more than two ticks above
+   what the controller would now pay is cancelled by exact id through the
+   existing deadman (venue re-read as proof, fills found while cancelling
+   booked, ambiguity marks the ledger uncertain).
+
+A leg or order that reduces **filled** inventory is never vetoed and never
+withdrawn. The steer exists for one placement call and is cleared in a
+`finally`. Authorization, both locks, cash, exposure, order count, daily
+loss and the own-settled-evidence gate are untouched.
+
+## The integrated replay
+
+`PYTHONPATH=. python3 analysis/l5/portfolio_controller_replay.py --integrated`
+(20 s). The deployed pair engine with the steer and withdrawals exactly as
+built, one round a window, order and cancel latency applied. Tuned on the
+first 187 windows at 2 s latency; scored on the last 125.
+
+**Evidence class: L5's Polymarket path with a ONE-MINUTE Coinbase reference.
+The live venue index has no history on these windows, so this replay cannot
+show what the one-second reference adds.**
+
+| out of sample, 125 windows | fills | windows traded | net / contract | net / window | 95% interval |
+|---|---|---|---|---|---|
+| deployed pair, no controller | 222 | 121 | -0.029 | -0.051 | [-0.085, -0.018] |
+| steer, production setting, 0 s latency | 80 | 45 | -0.014 | -0.009 | [-0.029, +0.011] |
+| steer, production setting, 2 s latency | 79 | 45 | -0.019 | -0.012 | [-0.033, +0.009] |
+| steer, production setting, 5 s latency | 84 | 48 | -0.026 | -0.017 | [-0.041, +0.006] |
+| steer, production setting, no withdrawals | 127 | 71 | -0.021 | -0.021 | [-0.049, +0.007] |
+
+Against the deployed pair, per window: +$0.039 [+0.001, +0.078] at 2 s,
++$0.034 [-0.007, +0.074] at 5 s. No setting of the 15 tried was positive
+even in sample. Without a reference the steered engine places nothing.
+
+**Conservative net expectancy is not positive.** The steer cuts the loss to
+about a quarter of the baseline by trading in a third of the windows;
+withdrawals and low cancel latency each help; the lower bound is still
+below zero and so is the mean.
+
+## What is not done
+
+- The live index has never been tested against fills: that needs the
+  recorded-only stage running with `L5_BTC_REFERENCE=VENUE_INDEX`.
+- Sizes are not steered (production clip is already at the minimum).
+- Further rounds in a window remain behind the own-settled-evidence gate.

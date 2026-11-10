@@ -5936,13 +5936,74 @@ class FaithfulExecutor:
         too: the level is a price choice, and the gates that bound the order
         -- pair ceiling, cash, exposure, order count -- do not depend on it.
         """
+        extra = self.portfolio_steer_extra_depth()
         try:
             return int(TS.level_offset_ticks(
-                self.probe_resting_in_market(market)))
+                self.probe_resting_in_market(market))) + extra
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
+            return extra
+
+    #: THE PORTFOLIO CONTROLLER'S STEER, for ONE timer-path placement. The
+    #: runner sets it immediately before that `handle` call and clears it
+    #: in a `finally` immediately after, so it exists for no other call --
+    #: not an L5 action, not a completion, not a requote. None, which is
+    #: what it is in every configuration that does not set
+    #: L5_PORTFOLIO_CONTROLLER=STEER, leaves every path byte-for-byte as it
+    #: was.
+    portfolio_steer: Optional[Mapping[str, Any]] = None
+    PORTFOLIO_STEER_MAX_EXTRA_TICKS = 10
+
+    def portfolio_steer_extra_depth(self) -> int:
+        """Extra opening depth the steer asks for: zero or more, bounded.
+
+        IT CAN ONLY DEEPEN. A negative or unreadable value is zero, so the
+        steer can make an opening more patient than the owner's approved
+        depth and never more aggressive."""
+        st = self.portfolio_steer
+        if not isinstance(st, Mapping):
             return 0
+        try:
+            n = int(st.get("extra_depth_ticks") or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, min(n, self.PORTFOLIO_STEER_MAX_EXTRA_TICKS))
+
+    def portfolio_held_reducing_side(self, market: str) -> Optional[str]:
+        """The side that reduces FILLED inventory, or None when there is
+        none -- or when the ledger cannot say. Resting orders do not count:
+        an order that has not filled is not a position to hedge."""
+        try:
+            held = D(str(self.store.residual(market)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if held == 0:
+            return None
+        return DOWN if held > 0 else UP
+
+    def portfolio_steer_refusal(self, side: str,
+                                reducing: Optional[str]) -> Optional[str]:
+        """Why the steer does not want this leg OPENED, or None.
+
+        A LEG THAT REDUCES A HELD RESIDUAL IS NEVER REFUSED HERE. The steer
+        chooses which exposure to take on; it has no say over taking
+        exposure off. And an unreadable steer refuses, because a steer that
+        cannot be read is not permission to open."""
+        st = self.portfolio_steer
+        if st is None:
+            return None
+        if reducing is not None and str(side) == str(reducing):
+            return None
+        try:
+            wanted = st["sides"][str(side)].get("wanted") is True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "PORTFOLIO_STEER_UNREADABLE"
+        return None if wanted else "PORTFOLIO_SIDE_NOT_WANTED"
 
     def probe_cash_envelope(self) -> Optional[D]:
         vg = self.validation_gates
@@ -9179,6 +9240,38 @@ class FaithfulExecutor:
                 # probe_round only returns an INCOMPLETE round, so this is
                 # unreachable unless the claim state changed underneath us.
                 return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
+            # ============ THE PORTFOLIO CONTROLLER'S STEER, IF THERE IS ONE
+            #
+            # Absent -- every configuration that does not set
+            # L5_PORTFOLIO_CONTROLLER=STEER -- this block does not run. When
+            # present it can only NARROW the choice already made: among the
+            # legs this round has not claimed it prefers one the controller
+            # wants opened, and if it wants none of them the placement is
+            # refused by name. It never offers a leg the order above did not
+            # contain, and a reducing leg is never the steer's to refuse.
+            if self.portfolio_steer is not None:
+                # A HEDGE MEANS FILLED INVENTORY. `_reducing` counts a
+                # RESTING order as though it had filled, which is right for
+                # choosing the next leg and wrong here: under it the second
+                # leg of a pair is always "reducing" the first, and the
+                # steer could never decline it.
+                _held_red = self.portfolio_held_reducing_side(market)
+                _wanted = [k for k in order if not claimed.get(k)
+                           and self.portfolio_steer_refusal(
+                               k, _held_red) is None]
+                if not _wanted:
+                    _why = (self.portfolio_steer_refusal(nxt, _held_red)
+                            or "PORTFOLIO_SIDE_NOT_WANTED")
+                    prov.stage("TWO_SIDED_PROBE", {
+                        "refused": _why, "leg_to_place": nxt,
+                        "reducing_side": _held_red,
+                        "labels": ("the portfolio controller does not want "
+                                   "this side opened on this book and "
+                                   "inventory. Not a limit and not a "
+                                   "fault: an opening it judged not worth "
+                                   "its risk.")})
+                    return prov.refuse("TWO_SIDED_PROBE", _why)
+                nxt = _wanted[0]
             # PAST THE ENTRY CUTOFF, ONLY A COMPLETION. `_entry_shut` means
             # `may_enter` has closed and we are here on the completion
             # deadline instead; the one leg that may be placed is the

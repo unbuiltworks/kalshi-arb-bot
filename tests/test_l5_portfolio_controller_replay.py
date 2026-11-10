@@ -290,3 +290,108 @@ def test_committed_the_best_setting_is_not_distinguishable_from_zero():
     assert v["IS"]["ci95"][0] > 0 and v["OOS"]["mean"] > 0
     # without a model nothing in the grid is positive even in sample
     assert r["panels"]["wide"]["grid_IS_positive"] == 0
+
+
+# ============================================ the integration, as it is built
+def steered(latency=2.0, withdraw=True, **kw):
+    kw = kw or PC.PRODUCTION
+    return PR.make_steered_pair(PC.Params(**kw).checked(),
+                                latency_s=latency, withdraw=withdraw)
+
+
+def test_the_steered_pair_opens_only_the_side_the_model_favors():
+    p = path((10, 0.50), (20, 0.50), (40, 0.45), (60, 0.44))
+    r = EC.run_window(p, "Up", steered(), model=lambda t: 0.90)
+    assert r["log"] and r["log"][0]["side"] == UP
+    assert r["log"][0]["px"] == pytest.approx(0.47)      # approved depth 2
+    r = EC.run_window(p, "Up", steered(), model=lambda t: 0.10)
+    assert all(f["side"] != UP or f["role"] == "COMPLETE" for f in r["log"])
+
+
+def test_the_steered_pair_opens_nothing_without_an_edge_or_a_model():
+    for seed in range(8):
+        assert EC.run_window(random_path(seed), "Up", steered(),
+                             model=lambda t: 0.5)["fills"] == 0
+        assert EC.run_window(random_path(seed), "Up", steered(),
+                             model=lambda t: None)["fills"] == 0
+
+
+def test_a_filled_leg_is_hedged_by_the_existing_completion():
+    p = path((10, 0.50), (20, 0.50), (40, 0.44), (60, 0.58), (80, 0.60))
+    r = EC.run_window(p, "Down", steered(), model=lambda t: 0.90)
+    assert [(f["side"], f["role"]) for f in r["log"]] == [
+        (UP, "OPEN"), (DOWN, "COMPLETE")]
+    assert r["pair_costs"][0] <= 0.99 + 1e-9
+
+
+def test_a_withdrawal_takes_latency_to_land():
+    """The model turns at t=30. With no latency the quote is gone before
+    the print at t=31; with five seconds it is still there and is filled."""
+    p = path((10, 0.50), (20, 0.50), (30, 0.50), (31, 0.44), (60, 0.44))
+    model = lambda t: 0.90 if t < 30 else 0.50
+    fast = EC.run_window(p, "Up", steered(latency=0.0), model=model)
+    slow = EC.run_window(p, "Up", steered(latency=5.0), model=model)
+    assert fast["fills"] == 0
+    assert slow["fills"] == 1 and slow["log"][0]["side"] == UP
+
+
+def test_without_withdrawals_the_quote_waits_to_be_hit():
+    p = path((10, 0.50), (20, 0.50), (30, 0.50), (31, 0.44), (60, 0.44))
+    model = lambda t: 0.90 if t < 30 else 0.50
+    r = EC.run_window(p, "Up", steered(latency=0.0, withdraw=False),
+                      model=model)
+    assert r["fills"] == 1
+
+
+def test_a_placement_takes_latency_too():
+    """An order sent at t=10 is not at the venue for the dip at t=11."""
+    p = path((10, 0.50), (11, 0.44), (13, 0.50), (60, 0.50))
+    assert EC.run_window(p, "Up", steered(latency=5.0),
+                         model=lambda t: 0.90)["fills"] == 0
+    got = EC.run_window(p, "Up", steered(latency=0.0), model=lambda t: 0.90)
+    assert got["log"][0]["side"] == UP and got["log"][0]["t"] == 11.0
+
+
+@pytest.mark.parametrize("seed", range(10))
+@pytest.mark.parametrize("latency", [0.0, 2.0, 5.0])
+def test_the_steered_pair_is_one_round_and_its_parts_add_up(seed, latency):
+    r = EC.run_window(random_path(seed), "Up" if seed % 2 else "Down",
+                      steered(latency=latency),
+                      model=lambda t: 0.5 + 0.4 * ((seed % 3) - 1))
+    cash = sum(1.0 - c for c in r["pair_costs"]) + sum(r["unmatched_results"])
+    assert r["net"] == pytest.approx(cash, abs=1e-9)
+    assert r["pairs"] <= 1 and r["max_unmatched"] <= 1.0
+    assert all(c <= 0.99 + 1e-9 for c in r["pair_costs"])
+
+
+def test_the_integration_is_tuned_on_the_first_part_only():
+    src = inspect.getsource(PR.run_integrated)
+    tuning = src[src.index("tried = ["):src.index("default_kw = ")]
+    assert 'halves["IS"]' in tuning and "OOS" not in tuning
+    assert "TUNE_LATENCY_S" in tuning
+    assert PR.STEER_MIN_FILLS_PER_WINDOW > 0
+
+
+def test_committed_integrated_result():
+    """The one integrated replay. If a rerun changes the verdict, change
+    this by hand, with the evidence."""
+    r = _json("integrated_replay.json")
+    assert "NOT the live venue index" in r["evidence_class"]
+    assert r["windows"] == {"IS": 187, "OOS": 125}
+    assert r["tuned_on_IS"]["params"] == PC.PRODUCTION
+    assert r["tuned_on_IS"]["grid_IS_positive"] == 0
+    base = r["rows"]["PAIR (deployed, no controller)"]["OOS"]
+    tuned = r["rows"]["STEER tuned, cancel latency 2s"]["OOS"]
+    # better than the deployed pair...
+    assert tuned["net_per_window"] > base["net_per_window"]
+    assert r["vs_pair"]["STEER tuned, cancel latency 2s"]["OOS"]["mean"] > 0
+    # ...and still not positive: the mean is below zero and the interval
+    # contains it
+    assert tuned["net_per_window"] < 0
+    lo, hi = tuned["net_per_window_ci95"]
+    assert lo < 0 < hi
+    for lat in ("0s", "2s", "5s"):
+        row = r["rows"]["STEER tuned, cancel latency %s" % lat]["OOS"]
+        assert row["net_per_window"] < 0, lat
+    # without a reference the steered engine does not trade at all
+    assert r["no_reference"]["STEER default"]["fills"] == 0

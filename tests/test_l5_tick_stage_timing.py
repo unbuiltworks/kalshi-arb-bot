@@ -148,6 +148,10 @@ def test_every_pre_preflight_call_has_a_mark():
     marked = set(re.findall(r'_sc\.mark\("([a-z_]+)"\)', head))
     assert marked == {
         "maybe_portfolio_decision",
+        # the nineteenth: the steer's withdrawal of an opening quote. It
+        # reads the ledger and the book and can call the deadman, so it is
+        # marked like every other stage that can.
+        "maybe_portfolio_withdraw",
         "roll", "maybe_halt_deadman", "maybe_expire_authorization",
         "maybe_cancel_orphans", "maybe_qm_deadline", "maybe_acc_deadline",
         "sample_residual_book", "maybe_ts_completion",
