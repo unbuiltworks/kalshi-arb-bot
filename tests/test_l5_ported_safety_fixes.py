@@ -99,6 +99,7 @@ class TestTheCashCapIsAggregate:
         ex.validation_gates = self.gates()
         assert ex.outstanding_for_gates() == [
             {"coid": "c1", "qty": D("2"), "price": D("0.45"),
+             "market": st.live_orders()["c1"]["market"],
              "intent": "ORDER_INTENT_BUY_LONG"}]
         rec = ex.handle(row(), {}, market=MARKET, window="16:15")
         assert rec["refused_by_layer"] == "VALIDATION_GATES"

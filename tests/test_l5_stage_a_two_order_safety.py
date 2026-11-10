@@ -11,6 +11,7 @@ The six checks the owner named, one class each.
 """
 from decimal import Decimal as D
 
+import os
 import pytest
 
 from src import l5_live_authorization as AUTH
@@ -162,10 +163,36 @@ class TestBothRestingOrdersCountTowardTheLimits:
         """Buying NO is implemented as selling YES, so the cash gate charges
         the quantity and not quantity x price. Pinned because sizing a pair
         against q*px for both legs would understate the DOWN leg."""
+        # The arithmetic moved from `refuse` into `reserved_cash` on
+        # 2026-11-10 so resting orders and the proposed one are priced from
+        # one snapshot. The property is pinned on behaviour now, and on both
+        # settings of the hedge switch: a DOWN order that hedges nothing is
+        # reserved at its full quantity either way.
         import inspect
+        from src import l5_live_validation_gates as VGM
         s = inspect.getsource(ValidationGates.refuse)
-        assert 'this_order = (q if str(order_intent or "").upper()' in s
-        assert '.endswith("BUY_SHORT") else q * px)' in s
+        assert "self.reserved_cash(" in s
+        gt = ValidationGates()
+        flat = {"market": "m", "up_qty": D("1"), "dn_qty": D("1")}
+        for flag in ("", "ON"):
+            os.environ[VGM.HEDGE_CASH_ENV] = flag
+            try:
+                for inv in (None, flat):
+                    r = gt.reserved_cash(
+                        outstanding=[{"qty": D("3"), "price": D("0.40"),
+                                      "market": "m",
+                                      "intent": "ORDER_INTENT_BUY_SHORT"}],
+                        order_qty=D("2"), order_price=D("0.40"),
+                        order_intent="ORDER_INTENT_BUY_SHORT", inventory=inv)
+                    assert r["this_order"] == D("2")       # not 2 * 0.40
+                    assert r["resting"] == D("3")
+                    up = gt.reserved_cash(
+                        outstanding=[], order_qty=D("2"),
+                        order_price=D("0.40"),
+                        order_intent="ORDER_INTENT_BUY_LONG", inventory=inv)
+                    assert up["this_order"] == D("0.80")
+            finally:
+                os.environ.pop(VGM.HEDGE_CASH_ENV, None)
 
     def test_the_deficit_ceiling_is_the_owner_number_not_a_code_constant(
             self, probe, tmp_path):
