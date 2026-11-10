@@ -1157,3 +1157,211 @@ def test_the_portfolio_stages_run_before_the_slow_diagnostics():
     assert src.index("self.maybe_portfolio_withdraw(now)") < diag
     assert src.index("self.maybe_controller_open(now)") < src.index(
         "self.maybe_portfolio_decision(now)")
+
+
+# ======================================================================
+# 9. BALANCE FIRST, from L5's venue-confirmed fill stream
+# ======================================================================
+BAL = PC.Params(**PC.BALANCE).checked()
+
+
+class TestBalanceFirst:
+    def test_flat_both_sides_are_quoted_at_the_touch(self):
+        q = quotes(PC.decide(port(), bid=0.52, ask=0.54, t_off=60,
+                             params=BAL, limits=LIM))
+        assert q[UP]["price"] == pytest.approx(0.52)
+        assert q[DOWN]["price"] == pytest.approx(0.46)
+        assert q[UP]["ticks_behind_touch"] == q[DOWN][
+            "ticks_behind_touch"] == 0
+
+    def test_with_anything_unmatched_only_the_deficient_side_is_quoted(self):
+        for held in (0.2, 0.6, 2.0):
+            dec = PC.decide(port(u=held, cu=held * 0.5), bid=0.52, ask=0.54,
+                            t_off=60, params=BAL, limits=LIM)
+            assert set(quotes(dec)) == {DOWN}, held
+            assert why(dec, UP) == ["BALANCE_FIRST"]
+            assert quotes(dec)[DOWN]["role"] == "HEDGE"
+
+    def test_once_matched_both_sides_are_quoted_again(self):
+        dec = PC.decide(port(u=0.6, cu=0.3, d=0.6, cd=0.29), bid=0.52,
+                        ask=0.54, t_off=120, params=BAL, limits=LIM)
+        assert set(quotes(dec)) == {UP, DOWN}
+
+    def test_no_new_exposure_under_thirty_cents(self):
+        dec = PC.decide(port(), bid=0.25, ask=0.26, t_off=60, params=BAL,
+                        limits=LIM)
+        assert set(quotes(dec)) == {DOWN}          # 0.74 is above the floor
+        assert why(dec, UP) == ["BELOW_ADD_FLOOR"]
+
+    def test_a_hedge_is_never_refused_for_being_cheap_or_dear(self):
+        # holding DOWN; the UP hedge is at 0.12, under the floor
+        dec = PC.decide(port(d=0.6, cd=0.5), bid=0.12, ask=0.13, t_off=60,
+                        params=BAL, limits=LIM)
+        assert quotes(dec)[UP]["price"] == pytest.approx(0.12)
+        # holding UP at 0.60; the DOWN hedge costs 0.70 -- a 1.30 pair
+        dec = PC.decide(port(u=0.6, cu=0.36), bid=0.29, ask=0.30, t_off=60,
+                        params=BAL, limits=LIM)
+        assert quotes(dec)[DOWN]["price"] == pytest.approx(0.70)
+
+    def test_a_hedge_is_quoted_late_and_an_add_is_not(self):
+        late = PC.decide(port(u=0.6, cu=0.3), bid=0.52, ask=0.54, t_off=800,
+                         params=BAL, limits=LIM)
+        assert set(quotes(late)) == {DOWN}
+        flat_late = PC.decide(port(), bid=0.52, ask=0.54, t_off=500,
+                              params=BAL, limits=LIM)
+        assert flat_late["quotes"] == []
+        over = PC.decide(port(u=0.6, cu=0.3), bid=0.52, ask=0.54, t_off=850,
+                         params=BAL, limits=LIM)
+        assert over["quotes"] == []
+
+    def test_resting_openings_on_the_held_side_are_withdrawn(self):
+        p = port(u=0.3, cu=0.15, orders=[
+            {"id": "up2", "side": "UP", "price": 0.49, "qty": 0.3},
+            {"id": "dn1", "side": "DOWN", "price": 0.44, "qty": 0.3},
+            {"id": "dn2", "side": "DOWN", "price": 0.43, "qty": 0.3}])
+        w = PC.withdrawals(p, p_up=0.53, params=BAL)
+        assert [(x["id"], x["reason"]) for x in w] == [
+            ("up2", "BALANCE_FIRST")]
+
+    def test_flat_nothing_is_withdrawn_on_a_book_belief(self):
+        p = port(orders=[{"id": "u", "side": "UP", "price": 0.50, "qty": 1},
+                         {"id": "d", "side": "DOWN", "price": 0.44,
+                          "qty": 1}])
+        assert PC.withdrawals(p, p_up=0.53, params=BAL) == []
+
+    def test_the_default_parameters_are_unchanged(self):
+        assert PC.Params().balance_first is False
+        assert PC.Params().add_floor == 0.0
+        assert PC.PRODUCTION == {"margin": 0.03, "adverse": 0.03,
+                                 "risk": 0.30}
+        dec = PC.decide(port(u=1, cu=0.45), bid=0.49, ask=0.51, t_off=60,
+                        params=ZERO, limits=LIM)
+        assert set(quotes(dec)) == {UP, DOWN}       # as before
+
+    def test_the_profile_is_named_exactly_or_it_is_the_current_one(
+            self, monkeypatch):
+        monkeypatch.delenv("L5_PORTFOLIO_PROFILE", raising=False)
+        assert PC.profile() == "MODEL_EDGE" and PC.profile_uses_model()
+        assert PC.production_params().risk == 0.30
+        for v in ("balance", "BALANCE ", "ON", "1"):
+            monkeypatch.setenv("L5_PORTFOLIO_PROFILE", v)
+            assert PC.profile() == "MODEL_EDGE"
+        monkeypatch.setenv("L5_PORTFOLIO_PROFILE", "BALANCE")
+        assert PC.profile() == "BALANCE" and not PC.profile_uses_model()
+        pr = PC.production_params("0.01")
+        assert pr.balance_first and pr.add_floor == 0.30
+        assert pr.complete_cutoff_s == 840.0 and pr.pair_ceiling is None
+
+    def test_the_steer_opens_both_flat_and_only_the_hedge_side_after(self):
+        flat = PC.steer(PC.decide(port(), bid=0.52, ask=0.54, t_off=60,
+                                  params=BAL, limits=LIM),
+                        approved_depth_ticks=2)
+        assert flat["sides"][UP]["wanted"] and flat["sides"][DOWN]["wanted"]
+        assert flat["extra_depth_ticks"] == 0
+        held = PC.steer(PC.decide(port(u=0.3, cu=0.15), bid=0.52, ask=0.54,
+                                  t_off=60, params=BAL, limits=LIM),
+                        approved_depth_ticks=2)
+        assert held["sides"][UP] == {"wanted": False,
+                                     "reason": "BALANCE_FIRST"}
+        assert held["sides"][DOWN]["wanted"] is True
+
+
+class TestBalanceThroughTheRunner:
+    ENV = {"L5_PORTFOLIO_CONTROLLER": "STEER",
+           "L5_PORTFOLIO_PROFILE": "BALANCE"}
+
+    def test_flat_the_pair_opens_exactly_as_the_engine_opens_it(
+            self, tmp_path, monkeypatch):
+        monkeypatch.delenv("L5_PORTFOLIO_PROFILE", raising=False)
+        h = ticks(steered(tmp_path, monkeypatch, 0.5, **self.ENV),
+                  7.0, 8.0, 9.0)
+        assert sorted(h.sent()) == [("DOWN", D("0.44"), D("0.6")),
+                                    ("UP", D("0.50"), D("0.6"))]
+        assert h.r._btc_reference.calls == 0       # this profile uses none
+
+    def test_after_a_fill_the_held_side_is_not_reopened_and_the_hedge_is(
+            self, tmp_path, monkeypatch):
+        monkeypatch.delenv("L5_PORTFOLIO_PROFILE", raising=False)
+        h = ticks(steered(tmp_path, monkeypatch, 0.5, **self.ENV), 7.0, 8.0)
+        up = [o for o in h.venue.by_oid
+              if str(h.venue.by_oid[o]["side"]) == "UP"][0]
+        h.venue.fill(up)
+        for off in (10.5, 14.0, 17.5, 21.0, 24.5, 28.0, 31.5):
+            h.tick(off)
+        assert h.r.store.position(T.SLUG, "UP") == D("0.6")
+        ups = [x for x in h.sent() if x[0] == "UP"]
+        assert len(ups) == 1                       # never a second UP
+        assert [x for x in h.sent() if x[0] == "DOWN"]
+
+    def test_the_decision_record_names_the_profile(self, tmp_path,
+                                                   monkeypatch):
+        monkeypatch.delenv("L5_PORTFOLIO_PROFILE", raising=False)
+        h = steered(tmp_path, monkeypatch, 0.9, **self.ENV)
+        h.at(30.0)
+        doc = h.r.maybe_portfolio_decision(T.WS + 30.0)
+        assert doc["profile"] == "BALANCE"
+        assert doc["belief"]["source"] == "BOOK"
+        assert {q["side"] for q in doc["quotes"]} == {"UP", "DOWN"}
+
+
+# ======================================================================
+# 10. BALANCE ON THE FOUR-ORDER LADDER, through the real runner
+# ======================================================================
+import tests.test_l5_ladder_runner as LAD        # noqa: E402
+
+#: the owner-approved four-order shape inside the approved $0.90 -- plus
+#: the evidence-gate waiver, which is NOT approved and is here only
+#: because without it the second level never opens and there is no
+#: four-order book to exercise. Mechanism, not permission.
+FOUR = dict(LAD.LADDER, L5_TS_CONCURRENT_ROUNDS="2", L5_MAX_LIVE_ORDERS="4",
+            L5_TS_ROUND_ALLOCATIONS="2", L5_MAX_CASH_DEPLOYED_USD="0.90",
+            L5_PORTFOLIO_CONTROLLER="STEER", L5_PORTFOLIO_PROFILE="BALANCE")
+
+
+def four(tmp_path, monkeypatch, **over):
+    for k in ("L5_PORTFOLIO_CONTROLLER", "L5_PORTFOLIO_PROFILE",
+              "L5_BTC_REFERENCE"):
+        monkeypatch.delenv(k, raising=False)
+    return LAD.build(LAD.harness(tmp_path, monkeypatch, **dict(FOUR, **over)))
+
+
+class TestBalanceOnTheFourOrderLadder:
+    def test_four_orders_rest_two_a_side_inside_the_approved_cash(
+            self, tmp_path, monkeypatch):
+        h = four(tmp_path, monkeypatch)
+        book = LAD.resting(h)
+        assert sorted(s for s, _p in book) == ["DOWN", "DOWN", "UP", "UP"]
+        assert sum(p * q for _s, p, q in h.sent()) <= D("0.90")
+
+    def test_a_fill_withdraws_that_sides_other_order_and_keeps_the_hedges(
+            self, tmp_path, monkeypatch):
+        h = four(tmp_path, monkeypatch)
+        ups = LAD.resting_ids(h, "UP")
+        downs = LAD.resting_ids(h, "DOWN")
+        assert len(ups) == 2 and len(downs) == 2
+        h.venue.fill(ups[0])
+        LAD.book_fills(h, 12.0)
+        assert h.r.store.position(T.SLUG, "UP") > 0
+        out = h.r.maybe_portfolio_withdraw(h.r.now_t + 0.5)
+        if out is not None:                # unless the engine already had
+            assert {w["reason"] for w in out["withdrawn"]} == {
+                "BALANCE_FIRST"}
+            assert {w["side"] for w in out["withdrawn"]} == {"UP"}
+        # the second UP opening is gone; nothing on the DOWN side was pulled
+        assert ups[1] in h.venue.cancelled or ups[1] in h.venue.retired
+        assert not [d for d in downs if d in h.venue.cancelled
+                    and d not in h.venue.full]
+        assert h.r.store.orders_uncertain() is None
+
+    def test_no_second_opening_on_the_held_side_while_unmatched(
+            self, tmp_path, monkeypatch):
+        h = four(tmp_path, monkeypatch)
+        ups = LAD.resting_ids(h, "UP")
+        h.venue.fill(ups[0])
+        LAD.book_fills(h, 12.0)
+        h.r.maybe_portfolio_withdraw(h.r.now_t + 0.5)
+        n_up = len([x for x in h.sent() if x[0] == "UP"])
+        for off in (30.0, 33.5, 37.0, 40.5, 44.0, 47.5):
+            h.tick(off)
+        assert len([x for x in h.sent() if x[0] == "UP"]) == n_up
+        assert h.r.store.position(T.SLUG, "UP") <= D("1.00")

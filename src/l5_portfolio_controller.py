@@ -109,10 +109,17 @@ class Params:
     complete_cutoff_s: float = 600.0  # nothing at all after this
     tick: float = 0.01
     pair_ceiling: Optional[float] = None   # cap on a hedge: avg cost + price
+    #: BALANCE FIRST. While ANY inventory is unmatched, the side already
+    #: held is not added to and its resting openings are withdrawn; only
+    #: the deficient side is quoted until the book is flat again.
+    balance_first: bool = False
+    #: no new exposure (an ADD) is quoted below this own price. Hedges are
+    #: exempt: taking risk off is never refused for being cheap.
+    add_floor: float = 0.0
 
     def checked(self) -> "Params":
         for name in ("margin", "adverse", "risk", "base_qty", "max_qty",
-                     "size_per_cent", "max_unmatched", "tick"):
+                     "size_per_cent", "max_unmatched", "tick", "add_floor"):
             v = getattr(self, name)
             if not (isinstance(v, (int, float)) and math.isfinite(v)
                     and v >= 0):
@@ -365,6 +372,9 @@ def decide(port: Mapping[str, Any], *, bid: Any, ask: Any, p_up: Any = None,
         if heavy and abs(unm) >= params.max_unmatched - EPS:
             skip("UNMATCHED_CAP", unmatched=unm)
             continue
+        if heavy and params.balance_first:
+            skip("BALANCE_FIRST", unmatched=unm)
+            continue
         # the side's own best bid and the price that would cross
         touch = b if side == UP else round(1.0 - a, 10)
         cross = a if side == UP else round(1.0 - b, 10)
@@ -381,6 +391,9 @@ def decide(port: Mapping[str, Any], *, bid: Any, ask: Any, p_up: Any = None,
         if px < tick - EPS:
             skip("NO_POSITIVE_PRICE", reservation=res)
             continue
+        if not hedge and px < params.add_floor - EPS:
+            skip("BELOW_ADD_FLOOR", price=px, floor=params.add_floor)
+            continue
         # a HEDGE may wait far behind the touch -- that is patience, and a
         # resting hedge is the only thing that can complete a pair. An ADD
         # that far back is only an order slot spent on nothing.
@@ -391,7 +404,9 @@ def decide(port: Mapping[str, Any], *, bid: Any, ask: Any, p_up: Any = None,
             - params.adverse - px
         qty = params.base_qty + params.size_per_cent * max(0.0, per) * 100.0
         if hedge:
-            qty = max(qty, min(abs(unm), params.max_qty))
+            # exactly the imbalance, up to the order cap: a hedge sized
+            # past what is unmatched is a new position on the other side
+            qty = min(abs(unm), params.max_qty)
         qty = min(qty, params.max_qty)
         if not hedge:
             room = params.max_unmatched - (abs(unm) if heavy else 0.0)
@@ -551,6 +566,13 @@ def withdrawals(port: Mapping[str, Any], *, p_up: Any, params: Params,
         hedge = (unm > EPS and side == DOWN) or (unm < -EPS and side == UP)
         if hedge:
             continue
+        heavy = (unm > EPS and side == UP) or (unm < -EPS and side == DOWN)
+        if heavy and params.balance_first:
+            # inventory is unmatched and this order would add to it: a
+            # second fill here is a second stranded leg, not a pair
+            out.append({"id": o.get("id"), "side": side, "price": o["price"],
+                        "reservation": None, "reason": "BALANCE_FIRST"})
+            continue
         if p is None or not (0.0 < p < 1.0):
             out.append({"id": o.get("id"), "side": side, "price": o["price"],
                         "reservation": None, "reason": "NO_BELIEF"})
@@ -570,9 +592,35 @@ def withdrawals(port: Mapping[str, Any], *, p_up: Any, params: Params,
 PRODUCTION = {"margin": 0.03, "adverse": 0.03, "risk": 0.30}
 
 
+#: INVENTORY BALANCING, from L5's own venue-confirmed fills. Over his 118
+#: settled BTC15m windows of 2026-11-09/10, taking his fills only while they
+#: kept unmatched inventory to about one clip earned +0.52c a contract
+#: [+0.17, +0.87] against +0.75c [-0.09, +1.63] as traded, with the worst
+#: window cut from -$119 to -$39; refusing new exposure under 30c raised it
+#: further. Capping a hedge by pair cost made it WORSE, so hedges carry no
+#: pair ceiling here. Both sides are quoted at the touch on the book's own
+#: mid: the live index showed no ability to pick a side, so it is not used.
+#: See analysis/l5/L5_STREAM_REPLAY.md. A test pins this to that result.
+BALANCE = {"margin": 0.0, "adverse": 0.0, "risk": 0.0, "balance_first": True,
+           "add_floor": 0.30, "complete_cutoff_s": 840.0}
+PROFILE_ENV = "L5_PORTFOLIO_PROFILE"
+MODEL_EDGE_PROFILE, BALANCE_PROFILE = "MODEL_EDGE", "BALANCE"
+
+
+def profile() -> str:
+    """BALANCE only when the owner names it exactly; otherwise unchanged."""
+    return (BALANCE_PROFILE if os.getenv(PROFILE_ENV, "") == BALANCE_PROFILE
+            else MODEL_EDGE_PROFILE)
+
+
+def profile_uses_model() -> bool:
+    return profile() != BALANCE_PROFILE
+
+
 def production_params(tick: Any = None) -> Params:
     t = _num(tick)
-    return Params(tick=(t if t and t > 0 else 0.01), **PRODUCTION).checked()
+    knobs = BALANCE if profile() == BALANCE_PROFILE else PRODUCTION
+    return Params(tick=(t if t and t > 0 else 0.01), **knobs).checked()
 
 
 def with_overrides(params: Params, **kw: Any) -> Params:

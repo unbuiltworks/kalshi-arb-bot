@@ -8009,13 +8009,37 @@ class Runner:
             _e = getattr(ex.limits, "max_total_exposure_usd", None)
             exposure = float(_e) if _e is not None else None
         knobs = PC.production_params(tick)
+        # THE CONTROLLER DOES NOT SIZE ORDERS HERE; the engine does, under
+        # its own cash, exposure and residual gates. So the size it reasons
+        # with is the venue's smallest step: with a notional one-contract
+        # clip the two opening quotes together overran the $0.90 cash
+        # envelope and it wanted only one side of a pair the engine can
+        # perfectly well afford at its real 0.6.
+        _step = getattr(self.transport, "quantity_increment", None)
+        try:
+            _step = float(_step) if _step else 0.01
+        except (TypeError, ValueError):
+            _step = 0.01
+        knobs = PC.with_overrides(knobs, base_qty=_step,
+                                  max_qty=max(_step, 1e6))
+        # THE BALANCE PROFILE DOES NOT USE THE MODEL. It quotes both sides on
+        # the book's own mid; the reference is still recorded beside it.
+        use_model = PC.profile_uses_model()
         dec = PC.decide(
             port, bid=book.get("bid"), ask=book.get("ask"),
-            p_up=(ref.get("p_up") if ref.get("ok") else None),
+            p_up=(ref.get("p_up") if (use_model and ref.get("ok"))
+                  else None),
             t_off=float(now) - float(ws), params=knobs,
             limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
                              max_orders=int(max_live_orders())))
-        return {"port": port, "dec": dec, "ref": ref, "knobs": knobs}
+        # the belief a withdrawal may act on: the model's when this profile
+        # uses one and it is usable, else the same book belief `decide` used
+        if use_model:
+            p_act = ref.get("p_up") if ref.get("ok") else None
+        else:
+            p_act = (dec.get("belief") or {}).get("p_up")
+        return {"port": port, "dec": dec, "ref": ref, "knobs": knobs,
+                "p_act": p_act, "profile": PC.profile()}
 
     def portfolio_steer_for_open(self, slug: Any, ws: float,
                                  book: Mapping[str, Any], tick: Any,
@@ -8102,10 +8126,8 @@ class Runner:
             ref = view["ref"]
             # only a MODEL belief can say a quote is rich; with none, every
             # opening order is withdrawn (`withdrawals` names them all).
-            named = PC.withdrawals(
-                view["port"],
-                p_up=(ref.get("p_up") if ref.get("ok") else None),
-                params=view["knobs"])
+            named = PC.withdrawals(view["port"], p_up=view["p_act"],
+                                   params=view["knobs"])
             ids = [str(w["id"]) for w in named if str(w["id"]) in mine]
             if not ids:
                 return None
@@ -8180,7 +8202,7 @@ class Runner:
             doc = {
                 "market": str(slug), "window_start": float(ws),
                 "t_off": float(now) - float(ws),
-                "mode": PC.mode(),
+                "mode": PC.mode(), "profile": view["profile"],
                 "book": {"bid": str(book.get("bid")),
                          "ask": str(book.get("ask")),
                          "stream_age_s": str(book.get("stream_age_s"))},

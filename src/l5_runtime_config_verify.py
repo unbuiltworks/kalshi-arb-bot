@@ -120,7 +120,16 @@ APPROVED: Dict[str, Any] = {
     # FILL_CONTINGENT_WORST_CASE basis that refuses to net the opposite side,
     # so two same-side resting legs are refused at ANY slot count. Pinned in
     # tests/test_l5_two_order_slot_safety.py.
-    "max_live_orders": 2,
+    # RAISED 2 -> 4 BY OWNER DECISION, 2026-11-10: "I approve preparing the
+    # four-order configuration and deploying it disarmed after regression
+    # tests. This does not authorize live trading or waive the
+    # profitability gate." Four slots are two price levels a side
+    # (L5_TS_CONCURRENT_ROUNDS=2). STILL AN EXACT MATCH, for the reason
+    # above: a typo of 40 is caught here. Cash, exposure and the daily halt
+    # are unchanged, the second level opens only when the own-settled-
+    # evidence gate allows it, and the same-side worst-case basis described
+    # above still prices every resting order as though it fills alone.
+    "max_live_orders": 4,
     "window_strategy": "TWO_SIDED",
     "campaign_duration_ceiling_s": 14400.0,
     # RAISED 5 -> 20 by owner decision for the eight-window sequential
