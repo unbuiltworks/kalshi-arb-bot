@@ -691,6 +691,34 @@ REOPEN_SINGLE_OUTCOME_USD = D("-0.0236")
 #: is worth opening fresh exposure. One tick on a one-contract pair.
 REOPEN_MIN_EDGE_USD = D("0.01")
 
+#: OUR OWN SETTLED RECORD OUTRANKS A PRIOR, ONCE THERE IS ENOUGH OF IT.
+#:
+#: The expectancy above multiplies two things this program has never
+#: measured on its own money: `pair_edge` is the PLANNED edge, 1 minus the
+#: pair cost the legs were quoted at, and the single-leg figure is L5's
+#: residual. Three independent records now disagree with both, in the same
+#: direction (`analysis/l5/PAIR_COMPLETION_REPLAY.md`):
+#:
+#:   * every pair this engine has completed since the pair ceiling settled
+#:     at 0.96 -- 2015z, 0200z, 1300z -- completed at 0.987-0.99, not 0.95;
+#:   * a path replay over 526 settled windows puts the median completed pair
+#:     at 0.99, 7% of pairs at plan, 25% of first fills stranded at -0.33,
+#:     and the result at -0.073 per first fill, negative in every month,
+#:     at every depth and for every completion ceiling;
+#:   * the shadow controller on live PMUS books measured -0.083 per filled
+#:     contract over 956 fills, 92% of them adverse.
+#:
+#: The mechanism is one sentence: a resting leg fills when the market trades
+#: THROUGH it, so it is already under water at the fill (4.5 cents, mean),
+#: and the complement is then only reachable near redemption.
+#:
+#: So a further round must ALSO clear what the ledger says rounds have
+#: actually paid, per contract that took a first fill. This can only REFUSE:
+#: a favourable record never rescues a round the arithmetic above declined.
+#: Below this many settled windows the record is too thin to listen to and
+#: the decision stands on its priors, exactly as before.
+OWN_EVIDENCE_MIN_WINDOWS = 20
+
 #: A round needs time to place two legs, see one fill, and work the other.
 #: Below this the second leg cannot realistically be completed.
 REOPEN_MIN_RUNWAY_S = 180.0
@@ -709,7 +737,9 @@ def reopen_decision(*, market: Any, rounds_used: int,
                     depth_ticks: Optional[int] = None,
                     p_pair: Any = None, p_single: Any = None,
                     single_outcome_usd: Any = None,
-                    min_edge_usd: Any = None) -> Dict[str, Any]:
+                    min_edge_usd: Any = None,
+                    own_evidence: Optional[Mapping[str, Any]] = None
+                    ) -> Dict[str, Any]:
     """Is ANOTHER opening round economically justified? Read-only.
 
     Returns `{"reopen": bool, "reason": str, ...}`. `reopen` is True only
@@ -905,7 +935,52 @@ def reopen_decision(*, market: Any, rounds_used: int,
     })
     if expectancy <= floor:
         return no("INCREMENTAL_EXPECTANCY_BELOW_FLOOR", **rec)
+
+    # ---- 3. OUR OWN SETTLED RECORD, when there is enough of it. Reached
+    #         only by a round the priors already permitted, so it can only
+    #         refuse. See OWN_EVIDENCE_MIN_WINDOWS.
+    own = own_settled_verdict(own_evidence, qty=q, floor=floor)
+    rec["own_settled_evidence"] = own
+    if own["usable"] and not own["clears_floor"]:
+        return no("OWN_SETTLED_EXPECTANCY_BELOW_FLOOR", **rec)
     return dict(rec, reopen=True, reason=None)
+
+
+def own_settled_verdict(own_evidence: Optional[Mapping[str, Any]], *,
+                        qty: Any, floor: Any) -> Dict[str, Any]:
+    """What our settled windows say one more round of `qty` is worth.
+
+    `usable` is False -- and the caller ignores this -- when no record was
+    supplied, when it holds fewer than OWN_EVIDENCE_MIN_WINDOWS windows, or
+    when any figure in it is unreadable. An unreadable record is NOT read as
+    a favourable one: it simply does not vote, and the priors' verdict
+    stands on its own.
+    """
+    out: Dict[str, Any] = {"usable": False, "clears_floor": None,
+                           "min_windows": OWN_EVIDENCE_MIN_WINDOWS,
+                           "windows": None, "net_per_contract": None,
+                           "expectancy_usd": None, "why_not_used": None}
+    if not isinstance(own_evidence, Mapping):
+        return dict(out, why_not_used="NO_RECORD_SUPPLIED")
+    try:
+        n = int(own_evidence.get("windows"))
+    except (TypeError, ValueError):
+        return dict(out, why_not_used="WINDOW_COUNT_UNREADABLE")
+    out["windows"] = n
+    if n < OWN_EVIDENCE_MIN_WINDOWS:
+        return dict(out, why_not_used="TOO_FEW_SETTLED_WINDOWS")
+    per, q, fl = _d(own_evidence.get("net_per_contract")), _d(qty), _d(floor)
+    if per is None or q is None or fl is None:
+        return dict(out, why_not_used="RECORD_UNREADABLE")
+    e = q * per
+    return dict(out, usable=True, why_not_used=None,
+                net_per_contract=str(per),
+                expectancy_usd=str(e.quantize(D("0.0001"))),
+                clears_floor=bool(e > fl),
+                windows_with_a_pair=own_evidence.get("windows_with_a_pair"),
+                windows_with_a_stranded_leg=own_evidence.get(
+                    "windows_with_a_stranded_leg"),
+                span=[own_evidence.get("from"), own_evidence.get("to")])
 
 
 # ============================================ UNEQUAL INVENTORY, PRICED

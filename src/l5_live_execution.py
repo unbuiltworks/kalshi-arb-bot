@@ -4464,6 +4464,73 @@ class InventoryStore:
             del log[:-UNCERTAIN_RESOLVED_KEEP]
         return rec
 
+    def own_settled_round_evidence(self, *,
+                                   series: str = "cpc-btc-updown-15m-",
+                                   last_n: int = 50) -> Dict[str, Any]:
+        """What OUR OWN venue-settled windows actually paid, per contract.
+
+        Read-only, and the only inputs are rows this ledger wrote when the
+        venue settled a market: quantities, cost and redemption. One window
+        is one observation. The figure is
+
+            sum(settlement_pnl) / sum(max(up_qty, dn_qty))
+
+        over the last `last_n` settled windows of this series -- the realized
+        result per contract that took a FIRST fill, pairs and stranded legs
+        together, which is what one more round buys.
+
+        ONLY ROWS WHOSE MONEY IS KNOWN. A row settled at the venue's own
+        price with every cost basis verified is counted; one carrying
+        `unverified_cost_basis_keys`, another resolution source or an
+        unreadable number is skipped and reported, never estimated.
+
+        It is evidence, not a forecast: it mixes whatever configurations
+        produced those windows, and a small sample is a wide interval. The
+        caller decides how many windows it needs before listening.
+        """
+        used: List[Tuple[str, D, D, D, D]] = []
+        skipped = 0
+        for mkt, row in (self.state.get("retired_markets") or {}).items():
+            try:
+                if not str(mkt).startswith(series):
+                    continue
+                if str(row.get("resolution_source")) != "VENUE_SETTLEMENT_PX" \
+                        or row.get("unverified_cost_basis_keys"):
+                    skipped += 1
+                    continue
+                up, dn = D(str(row["up_qty"])), D(str(row["dn_qty"]))
+                pnl = D(str(row["settlement_pnl"]))
+                if up < 0 or dn < 0 or max(up, dn) <= 0:
+                    skipped += 1
+                    continue
+                used.append((str(row.get("t") or ""), up, dn, pnl,
+                             max(up, dn)))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                skipped += 1
+        used.sort(key=lambda r: r[0])
+        used = used[-max(1, int(last_n)):]
+        units = sum((r[4] for r in used), D(0))
+        net = sum((r[3] for r in used), D(0))
+        return {
+            "windows": len(used), "skipped": skipped,
+            "contracts": str(units), "net_usd": str(net),
+            "net_per_contract": (None if units <= 0
+                                 else str((net / units).quantize(
+                                     D("0.0001")))),
+            "windows_with_a_pair": sum(1 for r in used
+                                       if min(r[1], r[2]) > 0),
+            "windows_with_a_stranded_leg": sum(1 for r in used
+                                               if r[1] != r[2]),
+            "from": (used[0][0] if used else None),
+            "to": (used[-1][0] if used else None),
+            "series": series, "last_n": int(last_n),
+            "labels": ("venue-settled, cost basis verified, realized. "
+                       "Net per contract that took a first fill; pairs and "
+                       "stranded legs together."),
+        }
+
     def reconstruct_cost_basis(self, market: str, side: str, *, qty: D,
                                cost: D, source: str) -> Dict[str, Any]:
         """Attest a leg's quantity and cost together, from named evidence.
@@ -6496,6 +6563,20 @@ class FaithfulExecutor:
             locked = None
 
         from src import l5_unmatched_disposition as UDP
+        # WHAT OUR OWN SETTLED WINDOWS PAID. A ledger with no such reader
+        # (a double, an older store) contributes nothing and the decision
+        # stands on its priors as before; a reader that RAISES is an
+        # unreadable record, and an unreadable record does not open a round.
+        own_evidence = None
+        _own = getattr(self.store, "own_settled_round_evidence", None)
+        if callable(_own):
+            try:
+                own_evidence = _own()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return no("OWN_SETTLED_EVIDENCE_UNREADABLE",
+                          detail=type(exc).__name__)
         try:
             return dict(UDP.reopen_decision(
                 market=market, rounds_used=used,
@@ -6505,7 +6586,8 @@ class FaithfulExecutor:
                 now_s=now_s, window_end_s=window_end_s,
                 exposure_headroom_usd=bound,
                 outstanding_worst_case_usd=outstanding * worst_px,
-                daily_loss_room_usd=ceil), round=rnd)
+                daily_loss_room_usd=ceil,
+                own_evidence=own_evidence), round=rnd)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
