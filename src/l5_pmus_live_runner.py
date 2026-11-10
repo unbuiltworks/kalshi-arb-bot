@@ -7962,6 +7962,103 @@ class Runner:
                 raise
             return "CONCURRENT_SLOT_UNREADABLE:%s" % type(exc).__name__
 
+    #: seconds between portfolio decision records for one market.
+    PORTFOLIO_DECISION_EVERY_S = 5.0
+
+    def maybe_portfolio_decision(self, now: float) -> Optional[Dict[str, Any]]:
+        """What the portfolio controller would quote now. RECORDED, NOT ACTED ON.
+
+        One controller looks at the whole window -- every contract held on
+        each side at its exact cost, the pairs that makes, what is
+        unmatched, every maker order still resting -- and says what should
+        be quoted on each side, at what price and size, and what each quote
+        would do to the portfolio's settlement. This stage reads the SAME
+        ledger and the SAME authenticated book the executor uses, so the
+        record is about the real inventory, not a model of it.
+
+        IT PLACES AND CANCELS NOTHING. It calls no executor method that can
+        submit, it writes nothing to the ledger, and its output is a log
+        line. It is off unless L5_PORTFOLIO_CONTROLLER is exactly SHADOW,
+        and there is no value of that variable that makes it trade.
+
+        IT CANNOT DISTURB THE TICK. Every failure is swallowed into a
+        counter: an unreadable ledger or book yields no record.
+
+        NO PROBABILITY IS SUPPLIED HERE. This process has no spot-and-strike
+        feed, so the belief is the book's own mid, labelled BOOK. The
+        controller then pairs and hedges and cannot favor a side.
+        """
+        try:
+            # INSIDE the guard: a module missing from the image must cost a
+            # counter, never a tick.
+            from src import l5_portfolio_controller as PC
+            if PC.mode() != PC.SHADOW:
+                return None
+            t = self.transport
+            slug = getattr(t, "market_slug", None) if t is not None else None
+            if not slug:
+                return None
+            ws = AB.slug_start(slug)
+            if ws is None:
+                return None
+            last = getattr(self, "_portfolio_decision_t", None)
+            if last is not None and \
+                    float(now) - float(last) < self.PORTFOLIO_DECISION_EVERY_S:
+                return None
+            self._portfolio_decision_t = float(now)
+            book = self.book.snapshot(slug) if self.book is not None else None
+            if not isinstance(book, Mapping) or not book:
+                self.stats["portfolio_decision:NO_AUTHENTICATED_BOOK"] += 1
+                return None
+            port = PC.from_store(self.store, str(slug))
+            ex = getattr(self, "executor", None)
+            cash = exposure = None
+            if ex is not None:
+                _c = ex.probe_cash_envelope()
+                cash = float(_c) if _c is not None else None
+                _e = getattr(ex.limits, "max_total_exposure_usd", None)
+                exposure = float(_e) if _e is not None else None
+            tick = getattr(t, "tick_size", None)
+            params = PC.Params(tick=float(tick) if tick else 0.01)
+            dec = PC.decide(
+                port, bid=book.get("bid"), ask=book.get("ask"), p_up=None,
+                t_off=float(now) - float(ws), params=params,
+                limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
+                                 max_orders=int(max_live_orders())))
+            doc = {
+                "market": str(slug), "window_start": float(ws),
+                "t_off": float(now) - float(ws),
+                "mode": PC.SHADOW,
+                "book": {"bid": str(book.get("bid")),
+                         "ask": str(book.get("ask")),
+                         "stream_age_s": str(book.get("stream_age_s"))},
+                "belief": dec.get("belief"),
+                "portfolio": {k: port[k] for k in (
+                    "up_qty", "dn_qty", "up_cost", "dn_cost", "matched_pairs",
+                    "pair_cost", "locked_pair_pnl", "unmatched",
+                    "unmatched_cost", "settles_if_up", "settles_if_down",
+                    "worst_case", "worst_case_with_resting",
+                    "committed_usd")},
+                "resting": port["orders"],
+                "expected_settlement": dec.get("expected_settlement"),
+                "value": dec.get("value"),
+                "quotes": dec["quotes"], "skipped": dec["skipped"],
+                "actions": PC.order_actions(dec["quotes"], port["orders"],
+                                            params=params),
+                "labels": ("SHADOW DECISION ONLY -- nothing was placed or "
+                           "cancelled; not a fill, not realized. The "
+                           "belief is the book's mid unless stated."),
+            }
+            emit("L5_PORTFOLIO_DECISION", doc)
+            self.stats["portfolio_decision:RECORDED"] += 1
+            return doc
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_decision_error:%s"
+                       % type(exc).__name__] += 1
+            return None
+
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
 
@@ -10056,6 +10153,11 @@ class Runner:
         _sc.mark("roll_diagnostics")
         self.maybe_ts_deadline(now)
         _sc.mark("maybe_ts_deadline")
+        # RECORDED ONLY: what the one portfolio controller would quote on
+        # this book and this inventory. Off unless the owner sets
+        # L5_PORTFOLIO_CONTROLLER=SHADOW; it can place and cancel nothing.
+        self.maybe_portfolio_decision(now)
+        _sc.mark("maybe_portfolio_decision")
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.

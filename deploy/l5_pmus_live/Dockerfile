@@ -142,6 +142,10 @@ COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # the residual would go back to settling with no decision record at all --
 # which is the exact silence the module exists to end.
 COPY src/l5_unmatched_disposition.py src/l5_unmatched_disposition.py
+# THE PORTFOLIO CONTROLLER'S DECISION MODULE. Pure: it imports nothing that
+# can trade. The runner's recorded-only stage imports it lazily, and only
+# records when the owner sets L5_PORTFOLIO_CONTROLLER=SHADOW.
+COPY src/l5_portfolio_controller.py src/l5_portfolio_controller.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image
 # must carry it or the entrypoint cannot start at all.

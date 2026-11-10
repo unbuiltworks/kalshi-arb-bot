@@ -135,12 +135,19 @@ def test_every_pre_preflight_call_has_a_mark():
     inside `roll` and held it for 93 seconds on every window (issue #195).
     It is marked for precisely the reason this test exists: the cost moved,
     so the measurement has to move with it, or the next regression hides in
-    an unmeasured gap exactly as the last one did."""
+    an unmeasured gap exactly as the last one did.
+
+    `maybe_portfolio_decision` is the eighteenth: the portfolio
+    controller's read-only decision record, off unless the owner sets
+    L5_PORTFOLIO_CONTROLLER=SHADOW. It is marked because it reads the
+    ledger and the book on the tick, and a stage that does that must be
+    visible in the timing even when it places nothing."""
     import inspect
     src = inspect.getsource(R.Runner.tick)
     head = src[:src.index("self.maybe_preflight(now)")]
     marked = set(re.findall(r'_sc\.mark\("([a-z_]+)"\)', head))
     assert marked == {
+        "maybe_portfolio_decision",
         "roll", "maybe_halt_deadman", "maybe_expire_authorization",
         "maybe_cancel_orphans", "maybe_qm_deadline", "maybe_acc_deadline",
         "sample_residual_book", "maybe_ts_completion",
