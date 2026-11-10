@@ -519,6 +519,29 @@ ACC_MAX_ROUNDS_DEFAULT = 8
 #: no configuration may exceed this, whatever the environment says
 ACC_MAX_ROUNDS_HARD_CAP = 64
 
+#: A ROUND IS SPENT BY AN ORDER, NOT BY A PROPOSAL (owner decision 2026-11-10).
+#:
+#: MEASURED, 2026-11-10 2145z, eight rounds permitted. Round 0 was retired at
+#: 21:45:10 before any order existed (`LEG_WOULD_CROSS:DOWN`). Rounds 1 and 2
+#: traded and matched. Rounds 3 to 7 were then spent in about 100 seconds
+#: without one order: each reopening was refused on its economics, its plan
+#: stayed frozen, the book moved, the frozen plan stopped being placeable and
+#: the round was retired for it. From 21:47:53 the window answered
+#: ACCUMULATION_EXHAUSTED 223 times.
+#:
+#: The freeze exists so leg two matches leg one. A round in which no leg was
+#: ever submitted has no leg one. With this set, such a round's stored plan
+#: is dropped and the pair is priced again from the current book, in the
+#: SAME round, every time it is considered -- so it can neither go stale nor
+#: be retired, and the round count advances only past rounds that submitted.
+#:
+#: Exactly "ON". Anything else is the behaviour every earlier deployment had.
+ROUND_ON_SUBMISSION_ENV = "L5_TS_ROUND_CHARGED_ON_SUBMISSION"
+
+
+def round_charged_on_submission() -> bool:
+    return str(os.getenv(ROUND_ON_SUBMISSION_ENV, "")).strip() == "ON"
+
 
 def client_order_id(action_key: str, attempt: int = 0) -> str:
     """DERIVED, never random: the same action always yields the same id.
@@ -6143,6 +6166,104 @@ class FaithfulExecutor:
         plans[self.probe_plan_key(market, rnd)] = dict(plan)
         self.store.save()
 
+    def probe_round_never_placed(self, market: str, rnd: int) -> bool:
+        """True only when NO order was ever submitted in this round.
+
+        Read from the claim files on disk -- the same durable record
+        `probe_legs_claimed` reads. A claim is taken BEFORE the order is
+        sent, so a claim that exists means an order may exist, whatever
+        became of it; and a later attempt is only ever claimed after
+        attempt zero. No claim on either leg therefore means no order, no
+        fill and nothing to match. Unreadable is False: a round we cannot
+        prove empty keeps its frozen plan.
+        """
+        from src import l5_live_authorization as AUTH
+        try:
+            if not str(market):
+                return False
+            for leg in AUTH.PROBE_LEGS:
+                if AUTH.claim_held(AUTH.accumulation_sid(
+                        AUTH.experiment_id(), str(market), int(rnd), leg)):
+                    return False
+            return True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def round_lifecycle(self, market: str) -> Dict[str, Any]:
+        """Rounds SPENT against orders SUBMITTED, for one market. Read-only.
+
+        Everything here is read from the durable claim files and the
+        retirement register, so it survives a restart and cannot disagree
+        with what `probe_round` will do next. An unreadable claim counts as
+        a submission, which is the reading that under-states what is left.
+        """
+        from src import l5_live_authorization as AUTH
+        out: Dict[str, Any] = {
+            "market": str(market),
+            "charged_on_submission": round_charged_on_submission(),
+            "rounds_permitted": None}
+        try:
+            n = int(self.acc_max_rounds())
+            legs = 0
+            with_order, retired_no_order, retired_with_order = [], [], []
+            for r in range(n):
+                held = 0
+                for leg in AUTH.PROBE_LEGS:
+                    try:
+                        held += bool(AUTH.claim_held(AUTH.accumulation_sid(
+                            AUTH.experiment_id(), str(market), r, leg)))
+                    except BaseException as exc:               # noqa: BLE001
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        held += 1
+                legs += held
+                ret = self.probe_round_retired(market, r)
+                if held:
+                    with_order.append(r)
+                    if ret:
+                        retired_with_order.append(r)
+                elif ret:
+                    retired_no_order.append(r)
+            spent = len(set(with_order) | set(retired_no_order))
+            out.update({
+                "rounds_permitted": n,
+                "rounds_with_a_submitted_order": len(with_order),
+                "legs_submitted": legs,
+                "rounds_retired_without_an_order": len(retired_no_order),
+                "rounds_retired_after_an_order": len(retired_with_order),
+                "rounds_spent": spent,
+                "rounds_left": max(0, n - spent),
+                "next_round": self.probe_round(market),
+                "proposals_repriced_since_start": int(
+                    (self.__dict__.get("round_repriced") or {}
+                     ).get(str(market), 0)),
+                "labels": ("rounds_spent counts a round an order was "
+                           "submitted in, plus any round retired without "
+                           "one. With charged_on_submission true the second "
+                           "kind cannot occur for a round that never "
+                           "submitted; a proposal priced again is counted "
+                           "in proposals_repriced_since_start and spends "
+                           "nothing.")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+        return out
+
+    def probe_discard_plan(self, market: str, rnd: int) -> bool:
+        """Drop a stored plan that was never acted on. Deletes nothing else.
+
+        Not saved here: the plan that replaces it is saved by
+        `probe_store_plan`, and if none does, a restart finds the same
+        never-placed round and drops the same plan again.
+        """
+        plans = self.store.state.get("probe_plans")
+        if not isinstance(plans, dict):
+            return False
+        return plans.pop(self.probe_plan_key(market, rnd), None) is not None
+
     def probe_legs_claimed(self, market: str = "", rnd: int = 0
                            ) -> Dict[str, bool]:
         """Which legs of THIS round this market has already spent, from DISK.
@@ -8920,6 +9041,33 @@ class FaithfulExecutor:
             if rnd is None:
                 return prov.refuse("TWO_SIDED_PROBE",
                                    "ACCUMULATION_EXHAUSTED")
+
+            # A ROUND NOBODY HAS PLACED AN ORDER IN IS PRICED FROM THE BOOK
+            # AS IT IS NOW. See ROUND_ON_SUBMISSION_ENV. Its stored plan is
+            # dropped here, so nothing below can find it stale, retire the
+            # round for it, or re-propose prices the market has left; the
+            # planning loop prices the pair afresh and every gate that ran
+            # on the old plan runs again on the new one. A round with a
+            # claim on either leg is untouched, and so is everything when
+            # the switch is not exactly ON.
+            if round_charged_on_submission():
+                try:
+                    if (self.probe_round_never_placed(market, rnd)
+                            and self.probe_discard_plan(market, rnd)):
+                        # telemetry only: proposals priced again, per
+                        # market, since this process started
+                        _rr = self.__dict__.setdefault("round_repriced", {})
+                        _rr[str(market)] = _rr.get(str(market), 0) + 1
+                        prov.stage("TWO_SIDED_ROUND_REPRICED", {
+                            "round": rnd,
+                            "labels": ("no order was ever submitted in this "
+                                       "round, so its plan is priced again "
+                                       "from the current book and the round "
+                                       "is not spent")})
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    # unreadable: the frozen plan stands, as before
 
             # RETIRE A ROUND THE MARKET HAS LEFT BEHIND, and only then.
             #

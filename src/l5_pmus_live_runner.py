@@ -1747,6 +1747,13 @@ class Runner:
             "max_unmatched_contracts": str(getattr(
                 vg, "max_unmatched_contracts", "") or ""),
             "max_usd_per_market": str(self.limits.max_usd_per_market),
+            # WHAT THIS PROCESS READ, not what the dashboard holds: true
+            # only when a hedging DOWN order is reserved at its limit cost
+            # plus fee rather than $1 a share. The ceiling above is the same
+            # either way.
+            "hedge_cash_at_limit": bool(
+                __import__("src.l5_live_validation_gates", fromlist=["x"]
+                           ).hedge_cash_at_limit()),
             # THE WORST-CASE DEFICIT BOUND, REPORTED EVEN WHEN ABSENT.
             #
             # This line used to omit it entirely, and that omission is how
@@ -3243,6 +3250,116 @@ class Runner:
                 emit("L5_LIVE_DISARMED", {"market": t.market_slug,
                                           "why": str(exc)[:300]})
 
+    def _note_cycle_peaks(self, slug: str, port: Mapping[str, Any]) -> None:
+        """Remember the most that rested at once in this window. Telemetry.
+
+        Sampled where the portfolio is already assembled (every few
+        seconds), from the ledger's own live orders -- so a peak here is a
+        lower bound on the true one, never an invention. Never raises.
+        """
+        try:
+            peaks = getattr(self, "_cycle_peaks", None)
+            if peaks is None:
+                peaks = self._cycle_peaks = {}
+            pk = peaks.setdefault(slug, {
+                "samples": 0, "peak_resting_orders": 0,
+                "peak_resting_up": 0, "peak_resting_down": 0,
+                "samples_with_both_sides_resting": 0,
+                "peak_committed_usd": "0",
+                "peak_worst_case_with_resting_usd": "0"})
+            if len(peaks) > 8:                      # a few windows, no more
+                for k in sorted(peaks)[:-8]:
+                    peaks.pop(k, None)
+            orders = list(port.get("orders") or ())
+            up = sum(1 for o in orders if str(o.get("side")).upper() == "UP")
+            dn = len(orders) - up
+            pk["samples"] += 1
+            pk["peak_resting_orders"] = max(pk["peak_resting_orders"],
+                                            len(orders))
+            pk["peak_resting_up"] = max(pk["peak_resting_up"], up)
+            pk["peak_resting_down"] = max(pk["peak_resting_down"], dn)
+            if up and dn:
+                pk["samples_with_both_sides_resting"] += 1
+            for key, src in (("peak_committed_usd", "committed_usd"),
+                             ("peak_worst_case_with_resting_usd",
+                              "worst_case_with_resting")):
+                try:
+                    v = D(str(port.get(src)))
+                    # worst case is a P&L: the peak LOSS is the most negative
+                    v = -v if src == "worst_case_with_resting" else v
+                    if v.is_finite() and v > D(pk[key]):
+                        pk[key] = str(v)
+                except (ArithmeticError, ValueError, TypeError):
+                    pass
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["cycle_peaks_error:%s" % type(exc).__name__] += 1
+
+    def cycle_report(self, slug: Any, brief: bool = False) -> Dict[str, Any]:
+        """One window's trading cycle, from the ledger. Read-only telemetry.
+
+        WHAT THE NEXT LIVE WINDOW HAS TO SHOW, in one record: orders
+        submitted against rounds spent, proposals priced again rather than
+        charged, how many orders rested together, how many pairs were
+        opened after the first, what cash and exposure the book reserved,
+        and what the matched and unmatched inventory cost. Rebates are not
+        here: only a venue cash credit confirms one.
+        """
+        if not slug:
+            return {"market": None}
+        out: Dict[str, Any] = {"market": str(slug)}
+        try:
+            ex = self.executor
+            rl = ex.round_lifecycle(str(slug))
+            out["rounds"] = rl
+            if brief:
+                return out
+            st = self.store
+            up, dn = st.position(str(slug), "UP"), st.position(str(slug), "DOWN")
+            lc = st.leg_cost(str(slug))
+            uc, dc = D(str(lc.get("UP", 0))), D(str(lc.get("DOWN", 0)))
+            matched = min(up, dn)
+            pair = ((uc / up) + (dc / dn)) if up > 0 and dn > 0 else None
+            out["inventory"] = {
+                "up_qty": str(up), "dn_qty": str(dn),
+                "up_cost_usd": str(uc), "dn_cost_usd": str(dc),
+                "matched_contracts": str(matched),
+                "average_pair_cost": None if pair is None else str(pair),
+                "locked_pair_pnl_usd": (None if pair is None
+                                        else str(matched * (D(1) - pair))),
+                "unmatched_contracts": str(abs(up - dn)),
+                "unmatched_side": ("UP" if up > dn else
+                                   "DOWN" if dn > up else None),
+                "labels": ("ledger quantities and what fills charged. The "
+                           "residual's P&L is known only at settlement.")}
+            n_orders = int(rl.get("rounds_with_a_submitted_order") or 0)
+            out["pairs_opened_after_the_first"] = max(0, n_orders - 1)
+            vg = getattr(ex, "validation_gates", None)
+            if vg is not None:
+                held = vg.cash_committed(ex.cash_legs_for_gates())
+                rest = ex.outstanding_for_gates()
+                rsv = vg.reserved_cash(
+                    outstanding=rest, order_qty=D(0), order_price=D(0),
+                    order_intent="ORDER_INTENT_BUY_LONG",
+                    inventory=ex.inventory_for_gates(str(slug)))
+                out["reservations"] = {
+                    "cash_held_in_fills_usd": str(held),
+                    "cash_reserved_for_resting_usd": str(rsv["resting"]),
+                    "basis": rsv["basis"],
+                    "hedged_resting_contracts": str(rsv["hedged_resting"]),
+                    "max_cash_deployed_usd": str(vg.max_cash_deployed_usd),
+                    "exposure_worst_case_usd": str(
+                        st.risk_exposure_usd(str(slug)))}
+            out["resting_peaks"] = dict(
+                (getattr(self, "_cycle_peaks", None) or {}).get(str(slug))
+                or {"samples": 0})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+        return out
+
     def close_window(self) -> None:
         t = self.transport
         slug = t.market_slug if t else None
@@ -3251,6 +3368,7 @@ class Runner:
             "preflight": self.preflight_status,
             "armed": bool(t and t.armed),
             "observability": self.book.window_report(slug) if slug else None,
+            "cycle": self.cycle_report(slug),
         }
         if slug and self.first_action_t is not None:
             obs = out["observability"]
@@ -3655,6 +3773,7 @@ class Runner:
             # common case; see `TS.replan_drift_ticks` for why a plan left
             # behind the touch was invisible to both existing guards.
             "two_sided_replan": rec.get("TWO_SIDED_REPLAN"),
+            "two_sided_round_repriced": rec.get("TWO_SIDED_ROUND_REPRICED"),
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
@@ -6373,6 +6492,10 @@ class Runner:
             # OBJECT THAT ENFORCES IT, never from the environment, so a
             # heartbeat cannot claim a bound the decision path is not using.
             "effective_cash_gate": self.effective_cash_gate(),
+            # ROUNDS SPENT AGAINST ORDERS SUBMITTED, this market, and whether
+            # THIS PROCESS charges a round only when an order goes out.
+            "round_lifecycle": self.cycle_report(
+                getattr(self.transport, "market_slug", None), brief=True),
             "lambda": str(self.lam),
             # WHICH POLICY RAN. k is echoed from the executor that is
             # actually wired, not from the environment, so a heartbeat can
@@ -8215,6 +8338,7 @@ class Runner:
             view = self._portfolio_view(
                 slug, float(ws), book, getattr(t, "tick_size", None), now)
             port, dec, ref = view["port"], view["dec"], view["ref"]
+            self._note_cycle_peaks(str(slug), port)
             doc = {
                 "market": str(slug), "window_start": float(ws),
                 "t_off": float(now) - float(ws),
