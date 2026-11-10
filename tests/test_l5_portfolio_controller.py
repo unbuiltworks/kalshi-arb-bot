@@ -1035,9 +1035,14 @@ class TestSteerThroughTheRunner:
         assert doc["mode"] == "STEER"
         assert doc["belief"] == {"p_up": 0.90, "source": "MODEL"}
         ref = doc["reference"]
-        assert ref["ok"] and ref["decision_t"] == T.WS + 30.0
-        assert ref["index_age_s"] == 0.4 and ref["bucket_t"] == int(
-            T.WS + 30.0) - 1
+        # the estimate is stamped with the WALL clock at the instant it is
+        # used, not the tick's `now`, and the gap between them is recorded
+        import time
+        assert ref["ok"] and abs(ref["decision_t"] - time.time()) < 5.0
+        assert ref["tick_now"] == T.WS + 30.0
+        assert ref["tick_lag_s"] == pytest.approx(
+            ref["decision_t"] - (T.WS + 30.0))
+        assert ref["index_age_s"] == 0.4
         h.r._btc_reference.p = None
         doc = h.r.maybe_portfolio_decision(T.WS + 36.0)
         assert doc["belief"]["source"] == "BOOK"
@@ -1115,3 +1120,40 @@ class TestTheWithdrawStage:
         assert src.count("self.maybe_portfolio_withdraw(now)") == 1
         assert src.index("self.maybe_portfolio_decision(now)") < \
             src.index("self.maybe_portfolio_withdraw(now)")
+
+
+def test_the_estimate_is_never_stamped_with_the_ticks_stale_clock(
+        tmp_path, monkeypatch):
+    """REGRESSION, production 2026-11-10 19:22Z. The stage ran 5.4 s after
+    the tick captured `now`; stamping the estimate with `now` made the
+    newest index second look 5.1 s in the future and every estimate was
+    refused CLOCK_MISALIGNED. The real feed must be asked with the wall
+    clock."""
+    import time
+    from src import l5_btc_reference as BR
+    h = steered(tmp_path, monkeypatch, 0.90, **STEER_ENV)
+    asked = []
+
+    class Real:
+        def estimate(self, slug, ws, now=None):
+            asked.append(now)
+            series = [(int(now) - 1200 + i, 73000.0) for i in range(1200)]
+            return BR.probability_up(series=series, strike=72950.0,
+                                     window_end=now + 500.0, now=now)
+    h.r._btc_reference = Real()
+    h.at(30.0)
+    stale_tick_clock = T.WS + 30.0          # far from the wall clock
+    doc = h.r.maybe_portfolio_decision(stale_tick_clock)
+    assert abs(asked[0] - time.time()) < 5.0
+    assert doc["reference"]["ok"] is True
+    assert doc["reference"]["reason"] is None
+    assert doc["belief"]["source"] == "MODEL"
+
+
+def test_the_portfolio_stages_run_before_the_slow_diagnostics():
+    src = inspect.getsource(R.Runner.tick)
+    diag = src.index("self.drain_roll_diagnostics(now)")
+    assert src.index("self.maybe_portfolio_decision(now)") < diag
+    assert src.index("self.maybe_portfolio_withdraw(now)") < diag
+    assert src.index("self.maybe_controller_open(now)") < src.index(
+        "self.maybe_portfolio_decision(now)")

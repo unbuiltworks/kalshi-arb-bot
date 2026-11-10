@@ -7989,7 +7989,18 @@ class Runner:
             if feed is None:
                 feed = self._btc_reference = BR.Reference()
                 feed.start()
-            ref = feed.estimate(str(slug), float(ws), now=float(now))
+            # THE WALL CLOCK, NOT THE TICK'S `now`. `now` is taken when the
+            # tick starts and this stage runs seconds later; the feed's
+            # thread has moved on meanwhile, so stamping the estimate with
+            # `now` makes the newest index second look like it is in the
+            # future. On 2026-11-10 19:22Z that was 5.1 s, every estimate
+            # was refused CLOCK_MISALIGNED and the belief fell back to the
+            # book. The estimate is taken at the instant it is actually
+            # used, and the gap to the tick's clock is recorded beside it.
+            wall = time.time()
+            ref = feed.estimate(str(slug), float(ws), now=wall)
+            ref["tick_now"] = float(now)
+            ref["tick_lag_s"] = wall - float(now)
         ex = getattr(self, "executor", None)
         cash = exposure = None
         if ex is not None:
@@ -10310,6 +10321,19 @@ class Runner:
         # remains. Inert unless L5_COMPLETION_REQUOTE is set.
         self.maybe_completion_requote(now)
         _sc.mark("maybe_completion_requote")
+        # THE PORTFOLIO CONTROLLER, AHEAD OF THE DIAGNOSTICS BELOW. The
+        # deferred diagnostic has a five-second budget and uses it: on
+        # 2026-11-10 19:2xZ these two stages sat behind it and every
+        # decision was taken 5.4 s after the tick's own clock. A withdrawal
+        # that waits five seconds behind a read-only job has not withdrawn
+        # anything. First the record (SHADOW and STEER; places and cancels
+        # nothing), then, in STEER only, taking down an opening quote the
+        # controller would no longer pay for -- a cancellation by exact id
+        # through the existing deadman.
+        self.maybe_portfolio_decision(now)
+        _sc.mark("maybe_portfolio_decision")
+        self.maybe_portfolio_withdraw(now)
+        _sc.mark("maybe_portfolio_withdraw")
         # THE DEFERRED READ-ONLY DIAGNOSTICS, and their position in this list
         # is the fix. They used to run inside `roll`, which is the FIRST call
         # in the tick, so their cost came out of the window's opening -- 93
@@ -10322,16 +10346,6 @@ class Runner:
         _sc.mark("roll_diagnostics")
         self.maybe_ts_deadline(now)
         _sc.mark("maybe_ts_deadline")
-        # RECORDED ONLY: what the one portfolio controller would quote on
-        # this book and this inventory. Off unless the owner sets
-        # L5_PORTFOLIO_CONTROLLER=SHADOW; it can place and cancel nothing.
-        self.maybe_portfolio_decision(now)
-        _sc.mark("maybe_portfolio_decision")
-        # STEER ONLY: take down an opening quote the controller would no
-        # longer pay for. A cancellation by exact id through the existing
-        # deadman; inert in every other mode.
-        self.maybe_portfolio_withdraw(now)
-        _sc.mark("maybe_portfolio_withdraw")
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.
