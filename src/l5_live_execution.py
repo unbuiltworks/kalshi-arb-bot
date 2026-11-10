@@ -1164,6 +1164,14 @@ OWNED_COID_BOOKS = ("live_orders", "pending_terminal", "quarantine",
 #: order the first one's record is gone from every row-book and the
 #: duplicate guard has nothing to compare. This map outlives the order.
 VENUE_ORDER_LINK = "venue_order_ids"
+#: which ORDER an `orders_uncertain` mark is about, when it is about one.
+#: Evidence for `resolve_cancel_uncertainty`; never read as permission.
+UNCERTAIN_CAUSE = "orders_uncertain_cause"
+#: the only causes the venue's terminal read of that order can end: both
+#: say "we cancelled it and could not see it finish".
+CANCEL_UNCERTAINTY_KINDS = ("CANCEL_STILL_OPEN", "CANCEL_UNVERIFIED")
+#: audit rows kept for resolved marks. Bounded so the ledger cannot grow.
+UNCERTAIN_RESOLVED_KEEP = 50
 
 
 def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
@@ -2060,9 +2068,101 @@ class InventoryStore:
         """
         return self.state.get("orders_uncertain") or None
 
-    def mark_uncertain(self, why: str) -> None:
+    def mark_uncertain(self, why: str, *,
+                       cause: Optional[Mapping[str, Any]] = None) -> None:
+        """Record that the book is uncertain, and optionally WHICH ORDER.
+
+        `cause` is evidence, not permission. It names the one order whose
+        unknown state IS the uncertainty, so that the venue's own later
+        answer about that same order can end it (see
+        `resolve_cancel_uncertainty`). A mark without a cause -- every caller
+        but the deadman's two cancel branches -- is cleared only by a full
+        reconciliation, exactly as before, and any later mark replaces the
+        cause along with the reason.
+        """
         self.state["orders_uncertain"] = str(why)
+        self.state[UNCERTAIN_CAUSE] = (
+            dict(cause, why=str(why)) if isinstance(cause, Mapping) else None)
         self.save()
+
+    def resolve_cancel_uncertainty(self, coid: str, prog: Mapping[str, Any]
+                                   ) -> Optional[Dict[str, Any]]:
+        """End an uncertainty that ONE cancelled order caused, on the venue's
+        own word that the order is finished. Returns the record, or None.
+
+        WHAT WAS WRONG, 2026-11-10 0200z. The requote cancelled UP order
+        DMG2WQZG344P at 02:00:35.9. The deadman's three re-reads (0.6 s in
+        all) still saw it working, so it marked the store uncertain:
+        "deadman cancelled DMG2WQZG344P but the venue still reports it live".
+        The order poll read it CANCELED 0.3 s later and booked that -- and
+        the mark stayed, because only a full account reconciliation cleared
+        it. Every submission was refused BOOK_UNCERTAIN until 02:00:48 while
+        0.6 DOWN sat unhedged, and the replacement landed at 0.55 where pairs
+        at 0.94-0.95 had been on the book.
+
+        The question the mark asks -- "is that order still resting?" -- had
+        been answered by the venue. Waiting for a reconciliation to repeat
+        the answer bought nothing and cost the complement.
+
+        EVERY CONDITION MUST HOLD, and failing any one leaves the mark alone:
+
+          * the venue reports THIS order terminal;
+          * the mark carries a cause, of a cancel kind, naming this client
+            order id and the venue id this ledger linked to it;
+          * the reason in force is BYTE-FOR-BYTE the one that cause was
+            recorded with. Any later uncertainty, from any writer, changes
+            the reason and is not this function's to clear;
+          * the order is no longer live here, and nothing is parked in
+            `pending_terminal` or quarantined -- those are uncertainties of
+            their own that a reconciliation would re-raise.
+
+        IT CLEARS ONLY WHAT IT CAN PROVE. The periodic reconciliation still
+        runs, still compares the whole account, and still re-marks on any
+        divergence. This never clears a mark it did not see the cause of.
+        """
+        try:
+            if not bool(prog.get("terminal")):
+                return None
+            cause = self.state.get(UNCERTAIN_CAUSE)
+            if not isinstance(cause, Mapping):
+                return None
+            if str(cause.get("kind")) not in CANCEL_UNCERTAINTY_KINDS:
+                return None
+            if str(cause.get("coid") or "") != str(coid):
+                return None
+            why = self.state.get("orders_uncertain")
+            if not why or str(why) != str(cause.get("why")):
+                return None
+            vid = str(cause.get("venue_order_id") or "")
+            linked = str((self.state.get(VENUE_ORDER_LINK) or {}).get(coid)
+                         or "")
+            if not vid or vid != linked:
+                return None
+            if coid in (self.state.get("live_orders") or {}):
+                return None
+            if (self.state.get("pending_terminal") or {}) or \
+                    (self.state.get("quarantine") or {}):
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                 # unreadable is not resolved
+        rec = {"coid": str(coid), "venue_order_id": vid,
+               "kind": str(cause.get("kind")),
+               "venue_state": prog.get("state"),
+               "cum_qty": str(prog.get("cum_qty")),
+               "was": str(why),
+               "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "labels": ("cleared by the venue's terminal read of the SAME "
+                          "order whose unknown state was the uncertainty; "
+                          "the periodic reconciliation is unchanged")}
+        self.state["orders_uncertain"] = None
+        self.state[UNCERTAIN_CAUSE] = None
+        log = self.state.setdefault("uncertain_resolved", [])
+        if isinstance(log, list):
+            log.append(rec)
+            del log[:-UNCERTAIN_RESOLVED_KEEP]
+        return rec
 
     # ------------------------------------------- the defensive loss budget
 
@@ -3994,6 +4094,11 @@ class InventoryStore:
                              state=str(prog.get("state") or "TERMINAL"),
                              reason="venue_order_progress",
                              venue_confirmed=True)
+            # AFTER the fill is booked and the row released, never before:
+            # the venue has now answered for this order in full.
+            _cleared = self.resolve_cancel_uncertainty(coid, prog)
+            if _cleared is not None:
+                out["uncertainty_cleared"] = _cleared
         self.save()
         return out
 
@@ -10293,6 +10398,24 @@ def _verify_cancelled(transport: Any, vid: str, *,
             "terminal": bool(prog is not None and prog.get("terminal"))}
 
 
+def _mark_cancel_uncertain(store: Any, why: str, *, kind: str, coid: Any,
+                           vid: Any) -> None:
+    """Mark the book uncertain, and name the order IF the store can hold it.
+
+    THE MARK IS THE SAFETY CONTROL; THE CAUSE IS A CONVENIENCE. A store that
+    does not accept a cause -- an older ledger, a test double -- must still
+    be marked, so a refused keyword falls back to the bare mark instead of
+    propagating. Losing the cause only means this uncertainty waits for a
+    full reconciliation, as every uncertainty did before; losing the MARK
+    would let a replacement race an order that may still be resting.
+    """
+    try:
+        store.mark_uncertain(why, cause={"kind": str(kind), "coid": str(coid),
+                                         "venue_order_id": str(vid)})
+    except TypeError:
+        store.mark_uncertain(why)
+
+
 def deadman(store: InventoryStore, transport: Any, *,
             reason: str, only: Optional[Iterable[str]] = None,
             verify_attempts: int = VERIFY_ATTEMPTS,
@@ -10394,9 +10517,11 @@ def deadman(store: InventoryStore, transport: Any, *,
                                       "verify_error": (ver["errors"] or [None])[0],
                                       "verify_attempts": ver["attempts"],
                                       "verify_errors": list(ver["errors"])})
-            store.mark_uncertain(
+            _mark_cancel_uncertain(
+                store,
                 "deadman could not verify the cancel of %s (%s, %d attempts)"
-                % (vid, (ver["errors"] or ["?"])[0], ver["attempts"]))
+                % (vid, (ver["errors"] or ["?"])[0], ver["attempts"]),
+                kind="CANCEL_UNVERIFIED", coid=coid, vid=vid)
             continue
         res = store.apply_order_progress(coid, prog, market=market, side=side)
         booked = D(str(res.get("filled_delta") or res.get("delta") or 0))
@@ -10425,9 +10550,11 @@ def deadman(store: InventoryStore, transport: Any, *,
             # that must never read as success: an unmanaged resting order is
             # exactly what a deadman exists to prevent.
             out["still_open"].append(rec)
-            store.mark_uncertain(
+            _mark_cancel_uncertain(
+                store,
                 "deadman cancelled %s but the venue still reports it live"
-                % vid)
+                % vid,
+                kind="CANCEL_STILL_OPEN", coid=coid, vid=vid)
         if ack_error:
             out["errors"].append({"client_order_id": coid,
                                   "venue_order_id": vid, "error": ack_error,

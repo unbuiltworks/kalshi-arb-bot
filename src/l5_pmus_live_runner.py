@@ -7879,6 +7879,56 @@ class Runner:
                 raise
             self.stats["open_skip_emit_failed:%s" % type(exc).__name__] += 1
 
+    def pair_complement_slot_refusal(self, slug: Any, resting: Any
+                                     ) -> Optional[str]:
+        """None if the timer may place the COMPLEMENT of a half-placed pair.
+
+        Otherwise the named reason, and the caller keeps its lockout. Read
+        only: it places nothing and grants no allowance of its own -- it
+        decides whether one tick may reach `executor.handle`, where the
+        executor repeats this test (`PAIR_SECOND_SLOT`) and runs every gate.
+
+        EVERY CONDITION MUST HOLD:
+
+          * exactly ONE order is still fillable, account-wide. Zero is an
+            ordinary opening and never reaches here; two is the pair already
+            resting; a parked or quarantined order counts and refuses;
+          * a second slot is AUTHORIZED: `max_live_orders()` is above one;
+          * the owner set `L5_TS_TWO_ORDER_PAIR`;
+          * this market's current round has exactly one leg claimed;
+          * and `TS.second_leg_slot_refusal` -- the executor's own test --
+            agrees the resting order is that claimed leg, in this market, on
+            the opposite side.
+
+        FAIL CLOSED. An unreadable ledger, claim file or executor refuses by
+        name; nothing here is ever read as permission.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            if int(resting) != 1:
+                return "NOT_EXACTLY_ONE_ORDER_RESTING"
+            if int(max_live_orders()) < 2:
+                return "NO_AUTHORIZED_SECOND_SLOT"
+            if not TSP.two_order_pair_enabled():
+                return "TWO_ORDER_PAIR_DISABLED"
+            ex = self.executor
+            rnd = ex.probe_round(str(slug))
+            if rnd is None:
+                return "NO_OPEN_ROUND"
+            claimed = dict(ex.probe_legs_claimed(str(slug), rnd) or {})
+            unplaced = sorted(str(k).strip().upper()
+                              for k, v in claimed.items() if not bool(v))
+            if len(claimed) != 2 or len(unplaced) != 1:
+                return "ROUND_IS_NOT_HALF_PLACED"
+            return TSP.second_leg_slot_refusal(
+                market=str(slug), side=unplaced[0],
+                live_orders=self.store.live_orders(),
+                legs_claimed=claimed)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "PAIR_SLOT_UNREADABLE:%s" % type(exc).__name__
+
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
 
@@ -7951,11 +8001,41 @@ class Runner:
         # (OPEN 3/4) and why it produced three fills. With the fidelity mode
         # off the ceiling is 1 and `resting >= 1` IS `if resting:`.
         # Aliased FID, not FM: `FM` is already l5_maker_fill_model here.
+        _pair_complement = False
         if resting >= int(FID.ceiling("concurrent_opening_orders")):
-            self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
-            self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
-                                 {"still_fillable_orders": int(resting)})
-            return None
+            # THE COMPLEMENT OF A HALF-PLACED PAIR IS NOT A NEW OPENING.
+            #
+            # 2026-11-10 0200z, venue-confirmed. An L5 action placed the DOWN
+            # leg of a priced pair at 02:00:06 through `handle(row)`, which
+            # places ONE leg per call. The complement was this method's to
+            # place, and on the next three ticks (02:00:06.8, 09.4, 12.9) it
+            # returned here with ORDER_ALREADY_RESTING -- refusing the second
+            # leg BECAUSE the first leg was resting. DOWN filled alone at
+            # 02:00:13 and UP was not posted until 02:00:18. The two legs of
+            # the pair never rested together, and the pass loop below, which
+            # exists to place both, was never reached.
+            #
+            # THE EXECUTOR ALREADY DECIDES THIS, with evidence:
+            # `TS.second_leg_slot_refusal` grants the second maker slot only
+            # to the OPPOSITE side of the SAME round in the SAME market as
+            # the one order live. This gate asks the same function the same
+            # question instead of answering a coarser one. It can let the
+            # tick REACH the executor; it places nothing, and every gate in
+            # `handle` -- the pair precheck, the claim, MAX_LIVE_ORDERS, the
+            # cash and exposure overlays, the residual cap -- still runs.
+            #
+            # OFF UNLESS THE OWNER SET THE SECOND SLOT. With
+            # L5_TS_TWO_ORDER_PAIR unset the refusal is
+            # TWO_ORDER_PAIR_DISABLED and this is the lockout it always was.
+            _pair_why = self.pair_complement_slot_refusal(slug, resting)
+            if _pair_why is not None:
+                self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
+                self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
+                                     {"still_fillable_orders": int(resting),
+                                      "pair_complement_slot": str(_pair_why)})
+                return None
+            _pair_complement = True
+            self.stats["controller_open:PAIR_COMPLEMENT_SLOT"] += 1
         # ============ AND, WHEN REPLENISHMENT IS ON, A RE-OPEN NEEDS AN
         # EVENT BEHIND IT.
         #
@@ -7984,7 +8064,10 @@ class Runner:
         # `L5_DUAL_REPLENISH` at their exact tokens; production holds
         # `L5_DUAL_REPLENISH=OFF`, so the ledger is not consulted at all and
         # this method behaves exactly as it does today.
-        if DQ.replenish_enabled(ws):
+        # A PAIR'S COMPLEMENT IS NOT A RE-OPEN, so it is not charged a
+        # replenishment credit to be ALLOWED -- exactly as pass two of the
+        # loop below is not. The attempt is still spent afterwards.
+        if DQ.replenish_enabled(ws) and not _pair_complement:
             _led = self.replenish()
             if not _led.may_open(ws):
                 # ONE LITERAL REASON, with the specific cause in the detail.
