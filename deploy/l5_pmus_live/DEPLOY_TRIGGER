@@ -3634,3 +3634,30 @@ Trading stays halted: L5_LIVE_HALT untouched and still asserted.
 # and no order can be submitted by this deployment. Minting the three-window
 # campaign approval is the owner's next and separate action.
 deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
+#
+# 2026-11-10 WINDOW-OWNER BINDING GATE (#195, #217).
+#
+# THE 20:00Z WINDOW ON 4aa0d9244 ARMED AND SUBMITTED NOTHING. 61 decisions,
+# 61 refusals: 34 SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER, 18
+# STRATEGY_EXCLUSIVE_TWO_SIDED, 9 VALIDATION_GATES:CASH_COMMITMENT. All three
+# refusals were CORRECT. The defect was upstream: L5_WINDOW_STRATEGY=TWO_SIDED
+# named the window's owner while L5_TS_MARKET still named the 1530z market,
+# so the owning strategy was inactive for 2000z and every other path was
+# (rightly) excluded. Arming never asked whether the owner could act, and the
+# single authorized window was spent on a process that could only refuse.
+#
+# WHAT THIS DEPLOYS. One REFUSAL at the arming boundary, before any claim:
+# authorize_arming step 1a raises WINDOW_OWNER_INACTIVE_FOR_MARKET (or
+# _UNRECOGNISED / _UNVERIFIABLE, fail closed), and authorization_preflight
+# gains the row window_owner_active. No safeguard is relaxed: maker-only, the
+# cash envelope, the exposure cap, strategy exclusivity and the authorization
+# chain are untouched. Also in the image since 4aa0d9244: adaptive completion
+# depth default, the adverse-selection entry ceiling (default OFF), and the
+# read-only settlement observer.
+#
+# BOTH TRADING LOCKS STAY ON. L5_LIVE_HALT=1 and L5_SHADOW_ONLY=1 are
+# environment variables and survive this deploy; a fresh container starts
+# armed=false; the installed approval is approval_stale (spent on 2000z) and
+# is NOT being replaced. No order can be submitted by this deployment. A new
+# window needs a new owner approval naming the exact window and this SHA.
+deploy: 2026-11-10 window-owner binding gate, halted and disarmed
