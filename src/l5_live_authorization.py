@@ -346,6 +346,32 @@ def not_after_status(now: Optional[dt.datetime] = None) -> Dict[str, Any]:
 DEFICIT_LIMIT_ENV = "L5_MAX_WORST_CASE_DEFICIT_USD"
 
 
+def window_owner_refusal(market: Any) -> Optional[Dict[str, Any]]:
+    """`l5_two_sided_probe.window_owner_refusal`, imported where it is used.
+
+    LOCAL IMPORT, for the reason every other strategy import in this module
+    is local: this file ships in images that do not carry the strategy.
+
+    FAIL CLOSED WHEN AN OWNER IS NAMED AND CANNOT BE CHECKED. If
+    `L5_WINDOW_STRATEGY` is set and the strategy module will not import or
+    evaluate, the window's owner is unverifiable and arming refuses by name.
+    With no owner named there is nothing to verify and nothing is refused,
+    so an image without the strategy is unaffected.
+    """
+    named = str(os.getenv("L5_WINDOW_STRATEGY", "")).strip()
+    try:
+        from src import l5_two_sided_probe as _TSW
+        return _TSW.window_owner_refusal(str(market or ""))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        if not named:
+            return None
+        return {"reason": "WINDOW_OWNER_UNVERIFIABLE", "owner": named[:40],
+                "error": type(exc).__name__,
+                "note": "an owner is named and could not be checked"}
+
+
 def authorization_preflight(market: str = "", *,
                             now: Optional[dt.datetime] = None,
                             root: Optional[str] = None) -> Dict[str, Any]:
@@ -436,6 +462,28 @@ def authorization_preflight(market: str = "", *,
                   "watchdog latch reported as halt_gate."))
     except BaseException as exc:                               # noqa: BLE001
         row("local_operator_halt", "UNKNOWN", error=type(exc).__name__)
+
+    # 1c. THE WINDOW'S OWNER, which this preflight did not evaluate either.
+    #
+    # Reported whether or not it refuses, so its absence can never be read
+    # as a pass. WITHOUT A MARKET the binding cannot be judged -- an exact
+    # slug either matches a window or does not -- so the startup line says
+    # NOT_EVALUATED rather than guessing in either direction; the
+    # market-specific verdict on the heartbeat is the one that counts.
+    try:
+        if not market and str(os.getenv("L5_WINDOW_STRATEGY", "")).strip():
+            row("window_owner_active", "NOT_EVALUATED",
+                owner=str(os.getenv("L5_WINDOW_STRATEGY", "")).strip()[:40],
+                note="needs the market slug; evaluated per window")
+        else:
+            _wo = window_owner_refusal(market)
+            row("window_owner_active", "PASS" if _wo is None else "FAIL",
+                owner=(str(os.getenv("L5_WINDOW_STRATEGY", "")).strip()[:40]
+                       or None),
+                blocks="authorize_arming step 1a",
+                detail=_wo)
+    except BaseException as exc:                               # noqa: BLE001
+        row("window_owner_active", "UNKNOWN", error=type(exc).__name__)
 
     try:
         row("owner_arm_token", "PASS" if Q1.armed() else "FAIL",
@@ -2270,6 +2318,18 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         raise ArmingRefusal("SHADOW_ONLY_LOCK",
                             {"note": "submit() is structurally blocked; "
                                      "arming would change nothing"})
+    # 1a. THE STRATEGY THAT OWNS THIS WINDOW MUST BE ABLE TO ACT IN IT.
+    #
+    #     HERE, before the signature, the campaign and above all before the
+    #     claim: this is a statement about configuration, it is cheap, and a
+    #     refusal must cost the owner NOTHING. On 2026-11-09 20:00Z arming
+    #     passed every check below, claimed the single authorized window,
+    #     and then placed no order, because the window was exclusive to a
+    #     two-sided engine still bound to the 15:30Z market. See
+    #     `l5_two_sided_probe.window_owner_refusal`.
+    _wor = window_owner_refusal(market)
+    if _wor is not None:
+        raise ArmingRefusal(str(_wor.get("reason")), _wor)
     # 1b. THE OWNER'S SIGNATURE, and it is the control the campaign document
     #     is not. `l5_campaign_approval` says Claude cannot write its
     #     document; `l5_mandate_signature` records that this is false in

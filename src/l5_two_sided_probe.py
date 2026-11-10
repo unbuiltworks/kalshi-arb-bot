@@ -1102,6 +1102,81 @@ def active(market: Optional[str] = None) -> bool:
     return market_authorized(market)
 
 
+#: The variable that NAMES the owner of a window. `l5_live_execution` reads
+#: it to exclude the non-owning strategy; the arming boundary reads it here
+#: to refuse a window whose owner cannot act.
+WINDOW_STRATEGY_ENV = "L5_WINDOW_STRATEGY"
+WINDOW_OWNER_INACTIVE = "WINDOW_OWNER_INACTIVE_FOR_MARKET"
+
+
+def window_strategy() -> str:
+    return str(os.getenv(WINDOW_STRATEGY_ENV, "")).strip().upper()
+
+
+def window_owner_refusal(market: Optional[str]) -> Optional[Dict[str, Any]]:
+    """None when the strategy that owns the window can act in `market`.
+
+    THE 2026-11-09 20:00Z WINDOW, AND IT COST AN OWNER AUTHORIZATION. The
+    campaign approval named `...-2000z`, the preflight PASSED, the executor
+    ARMED and claimed the one authorized window -- and then refused all 61
+    decisions and placed nothing:
+
+        34  SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER
+        18  STRATEGY_EXCLUSIVE_TWO_SIDED
+         9  VALIDATION_GATES:CASH_COMMITMENT (1.12 / 1.25 / 1.35 > 0.90)
+
+    Every one of those refusals was CORRECT. `L5_WINDOW_STRATEGY=TWO_SIDED`
+    names the two-sided engine as the only strategy allowed to submit, and
+    `L5_TS_MARKET` still named `...-1530z`, so `active("...-2000z")` was
+    False and the engine that owned the window never ran -- `two_sided` is
+    null on all 61 decision lines. What remained was the L5-following path,
+    which exclusivity bars, whose taker translations maker-only bars, and
+    whose unclipped sizes the cash envelope bars.
+
+    So nothing was wrong with any gate. What was wrong is that ARMING DID
+    NOT ASK whether the window's owner could act, and a window was spent on
+    a configuration in which no order was possible. Same class as the
+    08:30Z operator halt: a prerequisite the readiness verdict never read.
+
+    This is that question, in one expression, for the arming boundary and
+    the preflight to share. It refuses ONLY the inert-owner case:
+
+      * no owner named            -> None. Nothing is exclusive, and the
+                                     pre-existing behaviour is unchanged.
+      * owner is L5_FOLLOWING     -> None. That path needs no market binding.
+      * owner is TWO_SIDED and the engine is active for this market -> None.
+      * owner is TWO_SIDED and it is NOT -> the refusal, with what it read.
+
+    An unrecognised owner value is refused too: `l5_live_execution` treats
+    only the two exact tokens as meaningful, so a typo names an owner that
+    enforces nothing while the operator believes it does.
+    """
+    owner = window_strategy()
+    if not owner or owner == "L5_FOLLOWING":
+        return None
+    if owner != "TWO_SIDED":
+        return {"reason": "WINDOW_OWNER_UNRECOGNISED", "owner": owner[:40],
+                "env": WINDOW_STRATEGY_ENV,
+                "recognised": ["TWO_SIDED", "L5_FOLLOWING"]}
+    if market and active(str(market)):
+        return None
+    return {
+        "reason": WINDOW_OWNER_INACTIVE,
+        "owner": owner,
+        "market": (str(market) if market else None),
+        "named_market": named_market() or None,
+        "experiment_named": bool(experiment_id()),
+        "env": {"owner": WINDOW_STRATEGY_ENV, "market": MARKET_ENV,
+                "experiment": EXPERIMENT_ENV},
+        "note": ("the window is exclusive to the two-sided engine and that "
+                 "engine is not active for this market, so no order can be "
+                 "placed in it. Arming would spend the window and buy "
+                 "nothing. Bind %s to this market (the launcher derives it "
+                 "from the approval document) or name another owner."
+                 % MARKET_ENV),
+    }
+
+
 # --------------------------------------------------------------- timing
 
 #: THE TWO ECONOMIC CUTOFFS, replacing one arbitrary placement band.
