@@ -5882,7 +5882,8 @@ class FaithfulExecutor:
                            "price": own}]},
                 bid=bid, ask=ask,
                 tick=getattr(self.transport, "tick_size", None),
-                depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")),
+                depth_ticks=(int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                             + self.probe_level_offset(market)),
                 spent_sides=[(DOWN if side == UP else UP)])
             if drift is None or drift < D(TS.replan_drift_ticks()):
                 return None
@@ -5913,13 +5914,35 @@ class FaithfulExecutor:
             ask_depth=authenticated.get("ask_shares"),
             tick=getattr(self.transport, "tick_size", None),
             min_qty=getattr(self.transport, "quantity_increment", None),
-            depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")),
+            depth_ticks=(int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                         + self.probe_level_offset(market)),
             cash_envelope=self.probe_cash_envelope(),
             max_worst_case_loss=(self.probe_loss_ceiling()
                                  if loss_ceiling is None else loss_ceiling),
             budget_headroom=self.probe_budget_headroom(),
             book_age_s=authenticated.get("stream_age_s"),
             gap_suspected=bool(authenticated.get("gap_suspected")))
+
+    def probe_resting_in_market(self, market: str) -> int:
+        """Orders of THIS market still on the ledger's live map."""
+        return sum(1 for o in (self.store.live_orders() or {}).values()
+                   if str((o or {}).get("market") or "") == str(market))
+
+    def probe_level_offset(self, market: str) -> int:
+        """Extra opening depth for a pair laddered behind resting ones.
+
+        Zero unless `L5_TS_CONCURRENT_ROUNDS` is above one, so every existing
+        configuration prices exactly as it did. An unreadable ledger is zero
+        too: the level is a price choice, and the gates that bound the order
+        -- pair ceiling, cash, exposure, order count -- do not depend on it.
+        """
+        try:
+            return int(TS.level_offset_ticks(
+                self.probe_resting_in_market(market)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return 0
 
     def probe_cash_envelope(self) -> Optional[D]:
         vg = self.validation_gates
@@ -6562,6 +6585,48 @@ class FaithfulExecutor:
                 raise
             locked = None
 
+        # ---- A PAIR OPENED BESIDE RESTING ONES IS A LADDER LEVEL, and it
+        #      needs a free level and room for BOTH legs. This is the same
+        #      test the runner's timer path asks, repeated here because an
+        #      L5 action reaches this method without passing through it.
+        #
+        #      AT THE ORDER CAP IT SAYS NOTHING. A fresh round with no order
+        #      slot left is stopped by MAX_LIVE_ORDERS further down, by that
+        #      name, and four existing suites and the dashboards read that
+        #      name. My first version ran this unconditionally and renamed
+        #      the refusal -- same outcome, different string -- which the
+        #      full suite caught.
+        #
+        #      WITH A SLOT FREE AND THE LADDER OFF IT REFUSES, and that is a
+        #      tightening the runner harness found: once the owner's order
+        #      limit is above two, the pass loop's second call opened the
+        #      first leg of a NEW round beside a resting pair, and nothing
+        #      could then place its complement. A pair that can only have
+        #      one leg is not opened.
+        concurrent = False
+        ladder_on = TS.concurrent_rounds() > 1
+        try:
+            resting_here = self.probe_resting_in_market(market)
+            slot_free = (int(self.store.still_fillable_order_count())
+                         < int(self.limits.max_live_orders))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            if ladder_on:
+                return no("LIVE_ORDERS_UNREADABLE",
+                          detail=type(exc).__name__)
+            resting_here, slot_free = 0, False
+        if resting_here > 0 and (ladder_on or slot_free):
+            concurrent = ladder_on
+            _lane = TS.concurrent_round_slot_refusal(
+                market=market, live_orders=self.store.live_orders(),
+                max_live_orders=self.limits.max_live_orders)
+            if _lane is not None:
+                return no("CONCURRENT_ROUND_REFUSED:%s" % _lane,
+                          resting_in_market=resting_here,
+                          concurrent_rounds=TS.concurrent_rounds(),
+                          max_live_orders=self.limits.max_live_orders)
+
         from src import l5_unmatched_disposition as UDP
         # WHAT OUR OWN SETTLED WINDOWS PAID. A ledger with no such reader
         # (a double, an older store) contributes nothing and the decision
@@ -6587,7 +6652,8 @@ class FaithfulExecutor:
                 exposure_headroom_usd=bound,
                 outstanding_worst_case_usd=outstanding * worst_px,
                 daily_loss_room_usd=ceil,
-                own_evidence=own_evidence), round=rnd)
+                own_evidence=own_evidence, concurrent=concurrent),
+                round=rnd, concurrent=concurrent)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -8742,7 +8808,8 @@ class FaithfulExecutor:
             # lifecycle below. `authenticated` is deliberately NOT reassigned.
             ts_book = self.ts_authenticated_book(market, authenticated)
             _tick = getattr(self.transport, "tick_size", None)
-            _dticks = int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+            _dticks = (int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                       + self.probe_level_offset(market))
             # ============ THE COMPLEMENT'S OWN DEPTH, NOT THE OPENING'S
             #
             # THE DEFECT, from the venue record of 2026-11-02 2245z. At

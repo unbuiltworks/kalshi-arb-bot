@@ -60,6 +60,7 @@ from __future__ import annotations
 
 from decimal import Decimal as D
 from decimal import InvalidOperation
+import os
 from typing import Any, Dict, List, Mapping, Optional
 
 from src import l5_two_sided_probe as TS
@@ -719,6 +720,29 @@ REOPEN_MIN_EDGE_USD = D("0.01")
 #: the decision stands on its priors, exactly as before.
 OWN_EVIDENCE_MIN_WINDOWS = 20
 
+#: A PAIR LADDERED BESIDE RESTING ONES NEEDS THE RECORD TO SAY YES.
+#:
+#: A further round opened one at a time is refused by a losing record and
+#: allowed by a thin one. A CONCURRENT round is held to more: it multiplies
+#: the orders exposed to the same move, so it opens only when the ledger's
+#: own settled record is usable AND clears the floor. No record is not
+#: permission to ladder.
+#:
+#: THE OWNER MAY WAIVE THE RECORD, and only the owner, by setting this to
+#: the exact token below -- for a bounded validation of the mechanism, with
+#: the expected value stated. It waives this stage alone: the arithmetic
+#: above, the capacity test and every limit still bind, and every decision
+#: made under it says so.
+OWN_EVIDENCE_GATE_ENV = "L5_TS_OWN_EVIDENCE_GATE"
+OWN_EVIDENCE_WAIVER_TOKEN = "WAIVED_BY_OWNER"
+
+
+def own_evidence_gate_waived() -> bool:
+    """True only for the exact token. A typo leaves the gate enforced."""
+    return (os.getenv(OWN_EVIDENCE_GATE_ENV) or "").strip() == \
+        OWN_EVIDENCE_WAIVER_TOKEN
+
+
 #: A round needs time to place two legs, see one fill, and work the other.
 #: Below this the second leg cannot realistically be completed.
 REOPEN_MIN_RUNWAY_S = 180.0
@@ -738,8 +762,8 @@ def reopen_decision(*, market: Any, rounds_used: int,
                     p_pair: Any = None, p_single: Any = None,
                     single_outcome_usd: Any = None,
                     min_edge_usd: Any = None,
-                    own_evidence: Optional[Mapping[str, Any]] = None
-                    ) -> Dict[str, Any]:
+                    own_evidence: Optional[Mapping[str, Any]] = None,
+                    concurrent: bool = False) -> Dict[str, Any]:
     """Is ANOTHER opening round economically justified? Read-only.
 
     Returns `{"reopen": bool, "reason": str, ...}`. `reopen` is True only
@@ -940,9 +964,15 @@ def reopen_decision(*, market: Any, rounds_used: int,
     #         only by a round the priors already permitted, so it can only
     #         refuse. See OWN_EVIDENCE_MIN_WINDOWS.
     own = own_settled_verdict(own_evidence, qty=q, floor=floor)
+    waived = own_evidence_gate_waived()
     rec["own_settled_evidence"] = own
-    if own["usable"] and not own["clears_floor"]:
-        return no("OWN_SETTLED_EXPECTANCY_BELOW_FLOOR", **rec)
+    rec["own_evidence_gate"] = ("WAIVED_BY_OWNER" if waived else "ENFORCED")
+    rec["concurrent_round"] = bool(concurrent)
+    if not waived:
+        if own["usable"] and not own["clears_floor"]:
+            return no("OWN_SETTLED_EXPECTANCY_BELOW_FLOOR", **rec)
+        if concurrent and not own["usable"]:
+            return no("CONCURRENT_ROUND_NEEDS_OWN_SETTLED_EVIDENCE", **rec)
     return dict(rec, reopen=True, reason=None)
 
 

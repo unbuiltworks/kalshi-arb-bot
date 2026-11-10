@@ -706,6 +706,173 @@ def second_leg_slot_refusal(*, market: Any, side: str,
     return None
 
 
+# ============================================ SEVERAL PAIRS RESTING AT ONCE
+#
+# WHAT WAS MISSING. Rounds already repeat, and `probe_round` already walks
+# past a round whose two legs are both placed -- so nothing in the round
+# model says "one pair at a time". What says it is the ORDER COUNT: the
+# runner's timer path refuses any tick while an order rests, and the owner's
+# `max_live_orders` is 2. A window therefore holds one pair, waits for it,
+# and opens the next.
+#
+# WHAT THIS ADDS: a bounded LADDER. Up to `concurrent_rounds()` pairs may
+# rest together, each one `level_step_ticks()` further behind the touch than
+# the last, so they are different price levels and not the same quote twice.
+#
+# WHAT IT DOES NOT ADD. Not a slot: every order still counts against the
+# owner's `max_live_orders`, and a ladder of K pairs needs that limit to be
+# at least 2K -- the owner raises it or the ladder stays one pair deep. Not
+# headroom: each resting order is still priced as though it fills in full by
+# the cash, exposure, residual and loss gates. Not a decision to trade:
+# every round after the first is still priced by `reopen_decision`.
+#
+# DEFAULT 1, which is exactly today's behaviour.
+CONCURRENT_ROUNDS_ENV = "L5_TS_CONCURRENT_ROUNDS"
+#: the most price levels a side may hold, whatever the environment says.
+MAX_CONCURRENT_ROUNDS = 6
+LEVEL_STEP_ENV = "L5_TS_LEVEL_STEP_TICKS"
+MAX_LEVEL_STEP_TICKS = 5
+
+
+def concurrent_rounds() -> int:
+    """How many pairs may rest at once. 1 unless the owner set more.
+
+    Unset, blank, unreadable or below one is ONE -- the tightest reading --
+    and anything above the ceiling is the ceiling.
+    """
+    raw = (os.getenv(CONCURRENT_ROUNDS_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        return 1
+    return max(1, min(n, MAX_CONCURRENT_ROUNDS))
+
+
+def level_step_ticks() -> int:
+    """Ticks between one resting pair and the next one out. Default 1."""
+    raw = (os.getenv(LEVEL_STEP_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        return 1
+    return max(1, min(n, MAX_LEVEL_STEP_TICKS))
+
+
+def level_offset_ticks(resting_in_market: Any) -> int:
+    """Extra depth for a pair opened while `resting_in_market` orders rest.
+
+    Whole pairs already resting set the level, so both legs of one pair are
+    priced at the SAME level: with 2 resting the first leg of the next pair
+    sees 2 and its complement sees 3, and both read level 1. Zero when the
+    ladder is off, so an unset environment prices exactly as before.
+    """
+    k = concurrent_rounds()
+    if k <= 1:
+        return 0
+    try:
+        n = max(0, int(resting_in_market))
+    except (TypeError, ValueError):
+        return 0
+    return min(k - 1, n // 2) * level_step_ticks()
+
+
+def concurrent_round_slot_refusal(*, market: Any,
+                                  live_orders: Optional[Mapping[str, Any]],
+                                  max_live_orders: Any) -> Optional[str]:
+    """None if a NEW pair may be opened beside the ones resting, else why.
+
+    It decides one thing: whether the ladder has a free level and the
+    owner's order limit has room for BOTH legs. It places nothing and says
+    nothing about whether the pair is worth opening.
+
+      * the ladder is on (`concurrent_rounds()` above one) and the second
+        maker slot is on -- a pair needs both;
+      * every resting order is in THIS market. Another market's order is
+        another strategy's exposure and is never laddered onto;
+      * neither side already holds `concurrent_rounds()` resting orders:
+        that is the bound on price levels;
+      * and there is room under `max_live_orders` for two more. A pair that
+        can only place one leg is a stranded leg by construction.
+
+    FAIL CLOSED on an unreadable ledger, row or limit.
+    """
+    k = concurrent_rounds()
+    if k <= 1:
+        return "CONCURRENT_ROUNDS_DISABLED"
+    if not two_order_pair_enabled():
+        return "TWO_ORDER_PAIR_DISABLED"
+    if live_orders is None:
+        return "LIVE_ORDERS_UNREADABLE"
+    try:
+        rows = list(live_orders.values())
+        limit = int(max_live_orders)
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDERS_UNREADABLE"
+    up = dn = 0
+    for row in rows:
+        try:
+            r_market = str(row.get("market") or "")
+            r_side = str(row.get("side") or "").strip().upper()
+        except BaseException:                                  # noqa: BLE001
+            return "LIVE_ORDER_ROW_UNREADABLE"
+        if not r_market or r_market != str(market):
+            return "RESTING_ORDER_IS_ANOTHER_MARKET"
+        if r_side == UP:
+            up += 1
+        elif r_side == DOWN:
+            dn += 1
+        else:
+            return "RESTING_ORDER_SIDE_UNREADABLE"
+    if max(up, dn) >= k:
+        return "PRICE_LEVELS_FULL"
+    if len(rows) + 2 > limit:
+        return "NO_ORDER_SLOTS_FOR_A_PAIR"
+    return None
+
+
+def ladder_complement_refusal(*, market: Any,
+                              live_orders: Optional[Mapping[str, Any]],
+                              max_live_orders: Any) -> Optional[str]:
+    """None if a HALF-PLACED pair may have its other leg while a ladder
+    rests, else why not.
+
+    `second_leg_slot_refusal` answers this for one resting order. With
+    several pairs resting it cannot -- it refuses anything but exactly one
+    row -- and the complement of the newest pair would wait behind the
+    ladder, which is a stranded first leg by construction.
+
+    The caller has already established that the current round has exactly
+    one leg placed. What is left to decide is narrow: the ladder is on,
+    every resting order is in this market, and the owner's order limit has
+    room for ONE more. Whether that first leg is still resting or has
+    already filled does not matter: either way the missing leg is the one
+    that REDUCES what is open.
+
+    FAIL CLOSED on an unreadable ledger, row or limit.
+    """
+    if concurrent_rounds() <= 1:
+        return "CONCURRENT_ROUNDS_DISABLED"
+    if not two_order_pair_enabled():
+        return "TWO_ORDER_PAIR_DISABLED"
+    if live_orders is None:
+        return "LIVE_ORDERS_UNREADABLE"
+    try:
+        rows = list(live_orders.values())
+        limit = int(max_live_orders)
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDERS_UNREADABLE"
+    for row in rows:
+        try:
+            r_market = str(row.get("market") or "")
+        except BaseException:                                  # noqa: BLE001
+            return "LIVE_ORDER_ROW_UNREADABLE"
+        if not r_market or r_market != str(market):
+            return "RESTING_ORDER_IS_ANOTHER_MARKET"
+    if len(rows) + 1 > limit:
+        return "NO_ORDER_SLOT_FOR_THE_COMPLEMENT"
+    return None
+
+
 def first_leg_entry_refusal(*, side: str, own_px: Any,
                             legs_claimed: Optional[Mapping[str, Any]] = None,
                             held_up: Any = 0,

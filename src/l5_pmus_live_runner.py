@@ -7905,7 +7905,13 @@ class Runner:
         """
         from src import l5_two_sided_probe as TSP
         try:
-            if int(resting) != 1:
+            # WITH A LADDER RESTING, "exactly one" is the wrong question: the
+            # newest pair's first leg sits beside the older pairs' orders.
+            # Found by driving three levels through this runner -- the third
+            # pair's complement was refused here and the leg stood alone.
+            # Off unless L5_TS_CONCURRENT_ROUNDS is above one.
+            ladder = TSP.concurrent_rounds() > 1 and int(resting) > 1
+            if int(resting) != 1 and not ladder:
                 return "NOT_EXACTLY_ONE_ORDER_RESTING"
             if int(max_live_orders()) < 2:
                 return "NO_AUTHORIZED_SECOND_SLOT"
@@ -7920,6 +7926,13 @@ class Runner:
                               for k, v in claimed.items() if not bool(v))
             if len(claimed) != 2 or len(unplaced) != 1:
                 return "ROUND_IS_NOT_HALF_PLACED"
+            if ladder:
+                if self.store.pending_terminal() or \
+                        (self.store.state.get("quarantine") or {}):
+                    return "ORDER_STATE_UNRESOLVED"
+                return TSP.ladder_complement_refusal(
+                    market=str(slug), live_orders=self.store.live_orders(),
+                    max_live_orders=max_live_orders())
             return TSP.second_leg_slot_refusal(
                 market=str(slug), side=unplaced[0],
                 live_orders=self.store.live_orders(),
@@ -7928,6 +7941,26 @@ class Runner:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             return "PAIR_SLOT_UNREADABLE:%s" % type(exc).__name__
+
+    def concurrent_round_slot_refusal(self, slug: Any) -> Optional[str]:
+        """None if the timer may open ANOTHER pair beside the resting ones.
+
+        The probe module's own test, on this runner's ledger and the owner's
+        order limit. Read-only and fail-closed: a parked or quarantined
+        order, an unreadable ledger or an unreadable limit all refuse.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            if self.store.pending_terminal() or \
+                    (self.store.state.get("quarantine") or {}):
+                return "ORDER_STATE_UNRESOLVED"
+            return TSP.concurrent_round_slot_refusal(
+                market=str(slug), live_orders=self.store.live_orders(),
+                max_live_orders=max_live_orders())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "CONCURRENT_SLOT_UNREADABLE:%s" % type(exc).__name__
 
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
@@ -8028,14 +8061,27 @@ class Runner:
             # L5_TS_TWO_ORDER_PAIR unset the refusal is
             # TWO_ORDER_PAIR_DISABLED and this is the lockout it always was.
             _pair_why = self.pair_complement_slot_refusal(slug, resting)
-            if _pair_why is not None:
+            # ...AND NEITHER IS THE NEXT LEVEL OF A LADDER. With
+            # L5_TS_CONCURRENT_ROUNDS above one, a new pair may be opened
+            # beside the resting ones when a price level is free and the
+            # owner's order limit has room for both legs. Asked only when
+            # the tick is not a complement, and -- like the complement slot
+            # -- it lets the tick reach the executor and decides nothing
+            # else: `probe_reopen_decision` repeats the test and prices the
+            # round. Off by default, which is the lockout as it was.
+            _lane_why = (None if _pair_why is None
+                         else self.concurrent_round_slot_refusal(slug))
+            if _pair_why is not None and _lane_why is not None:
                 self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
                 self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
                                      {"still_fillable_orders": int(resting),
-                                      "pair_complement_slot": str(_pair_why)})
+                                      "pair_complement_slot": str(_pair_why),
+                                      "concurrent_round_slot": str(_lane_why)})
                 return None
-            _pair_complement = True
-            self.stats["controller_open:PAIR_COMPLEMENT_SLOT"] += 1
+            _pair_complement = _pair_why is None
+            self.stats["controller_open:%s" % (
+                "PAIR_COMPLEMENT_SLOT" if _pair_complement
+                else "CONCURRENT_ROUND_SLOT")] += 1
         # ============ AND, WHEN REPLENISHMENT IS ON, A RE-OPEN NEEDS AN
         # EVENT BEHIND IT.
         #
@@ -9407,6 +9453,39 @@ class Runner:
         return controller_preserves(self, slug, now)
 
 
+    def _requote_ladder_pick(self, slug: Any,
+                             live: Mapping[str, Any]) -> Optional[str]:
+        """Which resting order a requote may move when several rest.
+
+        The client order id of the REDUCING-side order with the highest own
+        price -- the one nearest its touch -- or None, which declines. None
+        when the ladder is off, when nothing is held unmatched, when no
+        reducing-side order rests, or when anything needed to tell cannot be
+        read. An order the venue cannot name is never picked.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            if TSP.concurrent_rounds() <= 1:
+                return None
+            realised = D(str(self.store.residual(str(slug))))
+            if realised == 0:
+                return None
+            reducing = "DOWN" if realised > 0 else "UP"
+            best = None
+            for coid, row in live.items():
+                if str((row or {}).get("side") or "") != reducing:
+                    continue
+                if not str(row.get("venue_order_id") or "").strip():
+                    continue
+                px = D(str(row.get("price")))
+                if best is None or px > best[0]:
+                    best = (px, str(coid))
+            return None if best is None else best[1]
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
     def maybe_completion_requote(self, now: float
                                  ) -> Optional[Dict[str, Any]]:
         """Cancel a completion that has drifted off the touch, so the
@@ -9460,10 +9539,22 @@ class Runner:
                 # the same blindness as `ingest:FEED_FAILED` carrying no
                 # status. The two flags are safe together and mutually
                 # exclusive per market; this is what makes that visible.
-                self.stats["requote_refused:%s" % (
-                    "NO_RESTING_ORDER" if not live
-                    else "MULTIPLE_RESTING_ORDERS_IN_MARKET")] += 1
-                return None
+                #
+                # WITH A LADDER RESTING THERE IS NO GUESS TO MAKE. The order
+                # to move is the one that reduces what is held and sits
+                # nearest its touch: it is the next to fill, so it is the
+                # one whose price decides the pair. Everything else stays
+                # where it is. Off unless L5_TS_CONCURRENT_ROUNDS is above
+                # one, so the two-order case declines exactly as before.
+                _pick = (self._requote_ladder_pick(slug, live)
+                         if live else None)
+                if _pick is None:
+                    self.stats["requote_refused:%s" % (
+                        "NO_RESTING_ORDER" if not live
+                        else "MULTIPLE_RESTING_ORDERS_IN_MARKET")] += 1
+                    return None
+                live = {_pick: live[_pick]}
+                self.stats["requote_ladder_pick"] += 1
             coid, row = next(iter(live.items()))
             if not str(row.get("venue_order_id") or "").strip():
                 # cannot cancel what the venue cannot name, so do not start
