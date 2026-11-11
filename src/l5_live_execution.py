@@ -1225,6 +1225,44 @@ def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
     return None
 
 
+#: ANOTHER STRATEGY'S ORDERS ON THE SAME VENUE ACCOUNT ARE NOT OURS.
+#:
+#: Reconciliation rebuilds `live_orders` from the venue's open list, and it
+#: adopts every row it finds -- that is right for an order of ours the file
+#: lost, and wrong for an order a second strategy placed. Run beside the
+#: BTC 5m adapter, a reconciliation adopted its resting `b5m-` order:
+#: `owns_venue_order_id` then answered True for it, it counted against the
+#: live-order ceiling, and the terminal sweep CANCELLED it
+#: (tests/test_l5_btc5m_btc15m_isolation.py records this).
+#:
+#: A comma-separated list of client-order-id prefixes that belong to other
+#: strategies. Unset is today's behaviour exactly. Our own prefix can never
+#: be named foreign, and a token that is not a short lowercase prefix ending
+#: in "-" is ignored. Such orders are listed in `foreign_orders` and are
+#: never adopted, never counted as ours and never cancelled by us. POSITIONS
+#: are untouched by this: a foreign market's position is still adopted at
+#: its upper bound, so account-wide exposure and loss limits still see it.
+FOREIGN_COID_PREFIXES_ENV = "L5_FOREIGN_COID_PREFIXES"
+OWN_COID_PREFIX = "l5f-"
+_FOREIGN_PREFIX_RE = re.compile(r"[a-z0-9]{2,8}-")
+
+
+def foreign_coid_prefixes() -> Tuple[str, ...]:
+    out: List[str] = []
+    for tok in (os.getenv(FOREIGN_COID_PREFIXES_ENV) or "").split(","):
+        tok = tok.strip()
+        if _FOREIGN_PREFIX_RE.fullmatch(tok) and tok != OWN_COID_PREFIX \
+                and tok not in out:
+            out.append(tok)
+    return tuple(out)
+
+
+def is_foreign_coid(coid: Any) -> bool:
+    c = str(coid or "")
+    return bool(c) and not c.startswith(OWN_COID_PREFIX) and any(
+        c.startswith(p) for p in foreign_coid_prefixes())
+
+
 def tracked_coid_for_venue_order(venue_order_id: Optional[str],
                                  state: Mapping[str, Any]) -> Optional[str]:
     """Which of OUR client order ids already owns this venue order, or None.
@@ -5377,10 +5415,26 @@ class InventoryStore:
         ours = dict(self.state.get("live_orders") or {})
         rebuilt: Dict[str, Any] = {}
         quarantined_now: Dict[str, Any] = {}
+        foreign_now: Dict[str, Any] = {}
+        self.state["foreign_orders"] = foreign_now
         for o in open_orders:
             coid = str(o.get("client_order_id") or o.get("clientOrderId")
                        or o.get("order_id") or o.get("id") or "")
             if not coid:
+                continue
+            # NOT OURS, BY NAME. Decided on the venue's own client id, before
+            # any mapping back to a tracked order, and never for an id our
+            # file already holds. See `FOREIGN_COID_PREFIXES_ENV`.
+            if is_foreign_coid(coid) and coid not in ours:
+                foreign_now[coid] = {
+                    "venue_order_id": str(o.get("id") or o.get("order_id")
+                                          or ""),
+                    "market": (o.get("marketSlug") or o.get("market_slug")
+                               or o.get("market")),
+                    "remaining": str(o.get("remaining_qty", o.get(
+                        "remainingQuantity", o.get("qty", "")))),
+                    "labels": "another strategy's order: listed, never "
+                              "adopted, counted or cancelled by this one"}
                 continue
             # OUR ORDER, UNDER OUR OWN KEY. A venue row that states no client
             # order id falls through to the venue's id above, and keying it
