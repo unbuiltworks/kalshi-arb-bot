@@ -8443,11 +8443,83 @@ class FaithfulExecutor:
         """
         retired = self.store.state.get("retired_markets") or {}
         legs: List[Dict[str, Any]] = []
+        recycle = self.cash_recycles_completed_pairs()
         for mkt, usd in sorted(self.store.committed().items()):
             legs.append({"market": mkt, "cash_out": usd,
                          "settled": mkt in retired,
                          "closing": False})
+            if not recycle or mkt in retired:
+                continue
+            # A COMPLETED PAIR'S CASH, RETURNED WHEN THE VENUE RETURNS IT.
+            # See `matched_pair_cost`. A credit leg, so the cash gate's own
+            # policy switch decides whether it counts; never more than the
+            # market was charged, and nothing at all when the matched cost
+            # cannot be vouched for.
+            credit = self.matched_pair_cost(mkt)
+            if credit is not None and credit > 0:
+                legs.append({"market": mkt, "cash_out": -min(credit, usd),
+                             "settled": False, "closing": True,
+                             "basis": "VENUE_NETS_A_COMPLETED_PAIR"})
         return legs
+
+    def cash_recycles_completed_pairs(self) -> bool:
+        """Is the cash gate's policy RECYCLE_ON_COMPLETE? Off otherwise."""
+        try:
+            from src import l5_live_validation_gates as _VG
+            return (getattr(self.validation_gates, "cash_policy", None)
+                    == _VG.RECYCLE_ON_COMPLETE)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def matched_pair_cost(self, market: str) -> Optional[D]:
+        """What the MATCHED part of this market's inventory cost, or None.
+
+        WHY THIS MAY LEAVE THE CASH FIGURE. On this venue DOWN is a sale of
+        the same contract UP buys, so equal UP and DOWN quantity is a FLAT
+        position and the venue holds no cash against it. Observed on the
+        venue's own balance, four times out of four:
+
+          2026-11-11 0030z  340.42775 -> 340.33975 on the UP fill (-0.0880)
+                            -> 340.43375 on the DOWN fill, 14 minutes before
+                            settlement: all of it back, plus the pair's 0.6c.
+          2026-11-11 0045z  340.43375 -> 340.34375 -> 340.44375, the same.
+          2026-11-10 2145z  both pairs' cash and profit were in the balance
+                            at 21:59:20, before the 22:00 settlement.
+
+        The ledger's `committed` keeps the full cost until settlement, which
+        is right for accounting and wrong as a measure of cash deployed.
+
+        ONLY THE MATCHED QUANTITY, at each side's average cost, and only
+        when both sides' cost basis is attested. The unmatched remainder
+        keeps its full charge. Unreadable, unattested or incoherent is None,
+        which releases nothing.
+        """
+        try:
+            up = self.store.position(market, UP)
+            dn = self.store.position(market, DOWN)
+            if up is None or dn is None:
+                return None
+            up, dn = D(str(up)), D(str(dn))
+            if not (up.is_finite() and dn.is_finite()) or up < 0 or dn < 0:
+                return None
+            m = min(up, dn)
+            if m <= 0:
+                return D(0)
+            for side in (UP, DOWN):
+                if not (self.store.basis_attestation(market, side)
+                        or {}).get("ok"):
+                    return None
+            lc = self.store.leg_cost(market)
+            uc, dc = D(str(lc.get("UP"))), D(str(lc.get("DOWN")))
+            if not (uc.is_finite() and dc.is_finite()) or uc < 0 or dc < 0:
+                return None
+            return (uc * m / up) + (dc * m / dn)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
 
     def outstanding_for_gates(self) -> List[Dict[str, Any]]:
         """Every live order's still-fillable obligation, account-wide.

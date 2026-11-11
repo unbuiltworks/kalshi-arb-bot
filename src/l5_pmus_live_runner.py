@@ -11935,7 +11935,13 @@ def validation_gates():
             # does: it cannot raise, and its error case is already fail-closed.
             campaign_baseline=CBL.CampaignBaseline(),
             max_campaign_additional_loss_usd=CBL.limit_from_env(),
-            cash_policy=VG.NO_RECYCLING)
+            # NO_RECYCLING unless the owner's variable says, exactly,
+            # RECYCLE_ON_COMPLETE (2026-11-11): the venue's own balance
+            # returns a completed pair's cash at completion, not at
+            # settlement -- see FaithfulExecutor.matched_pair_cost.
+            cash_policy=(VG.RECYCLE_ON_COMPLETE
+                         if (os.getenv("L5_CASH_POLICY") or "").strip()
+                         == VG.RECYCLE_ON_COMPLETE else VG.NO_RECYCLING))
     except Exception as exc:                                   # noqa: BLE001
         # ============ A GATE WE CANNOT BUILD REFUSES. IT DOES NOT VANISH.
         #
