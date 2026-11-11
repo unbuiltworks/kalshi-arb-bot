@@ -1269,6 +1269,15 @@ def claim_class_ticket(path: str, experiment: str, klass: str
                    "note": "every index inside the budget is already held"})
 
 
+#: A risk-reducing re-placement may be charged to the COMPLETE budget once
+#: the REPLACE budget is spent. Exactly "ON" or it is off.
+REDUCING_REPLACE_USES_COMPLETE_ENV = "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE"
+
+
+def reducing_replace_uses_complete() -> bool:
+    return (os.getenv(REDUCING_REPLACE_USES_COMPLETE_ENV) or "") == "ON"
+
+
 def class_claim_or_refuse(path: str, experiment: str,
                           klass: Any,
                           reducing: bool = False
@@ -1296,6 +1305,32 @@ def class_claim_or_refuse(path: str, experiment: str,
         short = completion_capacity_refusal(path, experiment)
         if short:
             raise Refused(str(short["reason"]), short)
+    # A RE-PLACED COMPLETION IS STILL A COMPLETION. Every re-placement is
+    # classed REPLACE whatever its direction, so once the REPLACE tickets
+    # were gone a leg that only REDUCES unmatched inventory could not be
+    # sent again -- while the COMPLETE budget, which exists for exactly
+    # that order, sat unused. Nine settled windows show it line by line
+    # (2026-10-30 to 2026-11-04: one first leg filled, the completing leg
+    # refused REPLACE_BUDGET_EXHAUSTED 1,058 times with a pair of 0.95 or
+    # less planned, COMPLETE_BUDGET_EXHAUSTED never logged), and all nine
+    # settled unmatched (analysis/l5/completion_decline_20261111.py). With
+    # the owner's
+    # switch such an order is charged to COMPLETE instead: one ticket, from
+    # a budget that is configured and has room, or it is refused exactly as
+    # before. No budget is raised and none is shared in the other
+    # direction; an order that is not risk-reducing never takes this path.
+    if k == "REPLACE" and bool(reducing) and reducing_replace_uses_complete():
+        try:
+            return claim_class_ticket(path, experiment, "REPLACE")
+        except Refused as exc:
+            if not (exc.args and exc.args[0] == "REPLACE_BUDGET_EXHAUSTED") \
+                    or max_of_class("COMPLETE") is None:
+                raise
+            ticket = claim_class_ticket(path, experiment, "COMPLETE")
+            if ticket is None:
+                raise
+            return dict(ticket, charged_to="COMPLETE",
+                        because="REPLACE_BUDGET_EXHAUSTED_AND_RISK_REDUCING")
     return claim_class_ticket(path, experiment, k)
 
 

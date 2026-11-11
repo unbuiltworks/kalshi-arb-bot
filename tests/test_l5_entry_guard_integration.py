@@ -231,7 +231,8 @@ NEW_SWITCHES = [
     TS.COMPLETION_RESTS_AT_CEILING_ENV, TS.PARTIAL_COMPLETION_BASIS_ENV,
     TS.INVENTORY_RECOVERY_ENV, E.REQUOTE_KEEPS_ROUND_ENV,
     UD.FIRST_OPENING_PRICED_ENV, PC.BALANCE_ADD_FLOOR_ENV,
-    "L5_COST_RESTATEMENT_APPROVED", "L5_FAVONLY_MIN_PRICE"]
+    "L5_COST_RESTATEMENT_APPROVED", "L5_FAVONLY_MIN_PRICE",
+    "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE"]
 
 
 class TestTheReleaseIsOffByDefault:
@@ -246,6 +247,10 @@ class TestTheReleaseIsOffByDefault:
         assert TS.reprice_missing_leg_on_fill() is False
         assert E.requote_keeps_round() is False
         assert UD.first_opening_priced() is False
+        from src import l5_live_authorization as AUTH
+        assert AUTH.reducing_replace_uses_complete() is False
+        assert (AUTH.REDUCING_REPLACE_USES_COMPLETE_ENV
+                == "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE")
         assert PC.favorite_only() is False
         assert PC.balance_add_floor() == float(PC.BALANCE["add_floor"])
         assert TS.completion_pair_ceiling() == D("1.00")
