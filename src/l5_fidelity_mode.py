@@ -56,7 +56,10 @@ POLICY: Dict[str, Tuple[Any, Any, str]] = {
     "opening_leg_max_contracts":  (D("3"), D("10"), "contracts per opening"),
     "order_ttl_s":                (120.0, 300.0, "how long a quote rests"),
     "concurrent_opening_orders":  (1, 2, "controller opening slots"),
-    "round_allocations_max":      (4, 12, "openings per window"),
+    # 4 -> 12 outside fidelity mode too (2026-11-11): the divisor only makes
+    # clips SMALLER, and a value above the ceiling falls back to one
+    # allocation -- the largest clip -- which is the unsafe direction.
+    "round_allocations_max":      (12, 12, "openings per window"),
 }
 
 #: Controls that may NEVER be widened through this module. Listed by name so

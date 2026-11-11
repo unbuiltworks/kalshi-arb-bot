@@ -54,7 +54,7 @@ class TestDefaultOneIsCurrentBehaviour:
     def test_the_accessor_defaults_to_one(self):
         assert TS.round_allocations() == 1
 
-    @pytest.mark.parametrize("raw", ["", "0", "-1", "5", "99", "two",
+    @pytest.mark.parametrize("raw", ["", "0", "-1", "13", "99", "two",
                                      "1.5", "nan", "}{"])
     def test_anything_malformed_or_out_of_range_reads_as_one(self,
                                                              monkeypatch, raw):
@@ -63,7 +63,7 @@ class TestDefaultOneIsCurrentBehaviour:
         monkeypatch.setenv("L5_TS_ROUND_ALLOCATIONS", raw)
         assert TS.round_allocations() == 1
 
-    @pytest.mark.parametrize("n", [1, 2, 3, 4])
+    @pytest.mark.parametrize("n", [1, 2, 3, 4, 5, 8, 12])
     def test_the_permitted_range_is_honoured(self, monkeypatch, n):
         monkeypatch.setenv("L5_TS_ROUND_ALLOCATIONS", str(n))
         assert TS.round_allocations() == n

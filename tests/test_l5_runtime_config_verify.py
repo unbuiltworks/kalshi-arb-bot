@@ -702,3 +702,22 @@ def test_a_budget_above_the_ceiling_is_clamped_to_it_not_honoured(approved):
     approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", "25")
     r = row(V.verify(), "campaign_additional_loss_usd")
     assert D(r["effective"]) == D("10.00") and r["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# THE ORDER LIMIT: THE APPROVED FOUR, OR THE PREPARED EIGHT (2026-11-11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value,ok", [("4", True), ("8", True), ("2", False),
+                                      ("6", False), ("9", False),
+                                      ("eight", False)])
+def test_the_order_limit_passes_at_four_or_eight_and_nothing_else(
+        approved, value, ok):
+    approved.setenv("L5_MAX_LIVE_ORDERS", value)
+    r = row(V.verify(), "max_live_orders")
+    assert r["ok"] is ok, r
+
+
+def test_the_approved_order_limit_is_still_recorded_as_four():
+    assert V.APPROVED["max_live_orders"] == 4
+    assert V.MAX_LIVE_ORDERS_PREPARED == 8

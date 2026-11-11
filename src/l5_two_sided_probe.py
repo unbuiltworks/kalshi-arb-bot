@@ -270,7 +270,15 @@ ROUND_ALLOCATIONS = 1
 ROUND_ALLOCATIONS_ENV = "L5_TS_ROUND_ALLOCATIONS"
 #: a divisor beyond this would size rounds below anything the venue grid can
 #: express at our clip, so it is refused rather than silently floored to zero.
-ROUND_ALLOCATIONS_MAX = 4
+#:
+#: RAISED 4 -> 12 (2026-11-11) so a larger cash envelope can be split into
+#: clips small enough for several rounds to rest at once inside the
+#: worst-case deficit bound: $10 in 12 parts is a 0.56-contract clip at an
+#: even book. The danger this removes is in the fallback, not the size: a
+#: value above the maximum reads as ONE allocation -- the LARGEST clip the
+#: envelope can fund -- so "12" on the old bound would have sized twelve
+#: times what was asked for.
+ROUND_ALLOCATIONS_MAX = 12
 
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"

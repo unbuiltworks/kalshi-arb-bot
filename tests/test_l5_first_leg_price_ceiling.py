@@ -412,8 +412,10 @@ class TestNothingElseMoved:
         dropped."""
         assert LX.ABS_RESIDUAL_CAP_CONTRACTS == D("5")
 
-    def test_the_round_allocation_cap_is_unchanged(self):
-        assert TS.ROUND_ALLOCATIONS_MAX == 4
+    def test_the_round_allocation_cap_is_the_prepared_twelve(self):
+        """4 until 2026-11-11. A larger divisor only makes clips smaller;
+        the cap exists so a typo cannot floor a clip to nothing."""
+        assert TS.ROUND_ALLOCATIONS_MAX == 12
 
     def test_the_predicate_holds_no_transport_and_submits_nothing(self):
         tree = ast.parse(textwrap.dedent(

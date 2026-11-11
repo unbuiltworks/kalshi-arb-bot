@@ -161,6 +161,11 @@ APPROVED: Dict[str, Any] = {
 WINDOW_S = 900.0
 
 
+#: An order limit the configuration has been made ready for and the owner
+#: has NOT yet activated. See the `max_live_orders` row.
+MAX_LIVE_ORDERS_PREPARED = 8
+
+
 def _row(name: str, source: str, read: Callable[[], Any],
          required: Any, *, compare: Optional[Callable[[Any, Any], bool]] = None
          ) -> Dict[str, Any]:
@@ -578,8 +583,15 @@ def verify() -> Dict[str, Any]:
         _row("daily_realized_loss_halt_usd",
              "R.daily_realized_loss_halt()",
              R.daily_realized_loss_halt, daily_usd),
+        # THE APPROVED NUMBER, OR THE PREPARED CEILING (2026-11-11). Four is
+        # what the owner approved; eight is the limit the four-concurrent-
+        # round configuration needs and was asked to be made READY, not
+        # active. The row passes at either and at nothing else, so a typo
+        # still fails; which of the two is running is the owner's variable,
+        # written only under an explicit authorization.
         _row("max_live_orders", "R.max_live_orders()",
-             R.max_live_orders, A["max_live_orders"]),
+             R.max_live_orders, A["max_live_orders"],
+             compare=lambda got, req: got in (req, MAX_LIVE_ORDERS_PREPARED)),
 
         # ------------------------------------------------- pair ceilings
         _row("maker_pair_ceiling", "TS.max_pair_cost()",
