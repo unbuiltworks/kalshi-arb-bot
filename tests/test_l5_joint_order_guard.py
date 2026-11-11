@@ -49,3 +49,28 @@ def test_strategy_cap_and_duplicate_reservations():
         authorize_new_buy(**base)
     with pytest.raises(UnsafeOrderAction, match="duplicate"):
         authorize_new_buy(**{**base, "pending_orders": base["pending_orders"] * 2})
+
+
+def test_ambiguous_risk_flags_are_rejected():
+    base = dict(actor_strategy="btc5m", actor_market="5m", pending_orders=[],
+                filled_cost_by_strategy={}, shared_cap_usd="5", strategy_cap_usd="2",
+                price="0.50", qty="1", halt=False, reconciliation_clean=True)
+    for changes in ({"halt": "false"}, {"halt": 0},
+                    {"reconciliation_clean": "true"},
+                    {"reconciliation_clean": 1},
+                    {"actor_strategy": 5}, {"actor_market": 5}):
+        with pytest.raises(UnsafeOrderAction):
+            authorize_new_buy(**{**base, **changes})
+
+
+def test_pending_replacement_must_count_both_reservations():
+    base = dict(actor_strategy="btc5m", actor_market="5m",
+                pending_orders=[
+                    {"id": "old", "strategy": "btc5m", "market": "5m", "reserved_usd": "0.8"},
+                    {"id": "new", "strategy": "btc5m", "market": "5m", "reserved_usd": "0.8"},
+                ],
+                filled_cost_by_strategy={"btc15m": "1.0"},
+                shared_cap_usd="2.0", strategy_cap_usd="2.0",
+                price="0.5", qty="0.1", halt=False, reconciliation_clean=True)
+    with pytest.raises(UnsafeOrderAction, match="shared account cap"):
+        authorize_new_buy(**base)
