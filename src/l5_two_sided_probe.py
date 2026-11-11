@@ -3256,7 +3256,34 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     if px is None:
         return no("PRICE_UNDERIVABLE")
     if px < MIN_PRICE or px > MAX_PRICE:
-        return no("PRICE_OUT_OF_BAND", price=str(px))
+        # A TOUCH ABOVE THE BAND IS NOT A REASON TO REST NOTHING. The band
+        # is a bound on the price WE quote. With completions resting at
+        # their target, the price we would quote is the target, not the
+        # touch -- yet this test was applied to the touch, so once the
+        # other side traded above 0.95 the completion was refused outright
+        # and nothing rested. Live, 2026-11-11 19:00Z: holding UP at 0.47,
+        # the DOWN touch reached 0.97-0.99 and the completion (0.51, well
+        # inside the band) was not re-placed for the last 66 seconds
+        # before the cancel time. It could not have filled there; the
+        # point is that the refusal named the wrong price.
+        #
+        # ONLY UPWARD, ONLY WHEN RESTING IS ON, and only when the target
+        # itself is a valid in-band price: `rest_at_ceiling_price` returns
+        # None otherwise and the refusal stands exactly as before. A touch
+        # BELOW the band is still refused -- there the touch is the price
+        # we would pay.
+        _rest_px = None
+        if px > MAX_PRICE and ceil is not None and paid is not None \
+                and completion_rests_at_ceiling():
+            try:
+                _rest_px = rest_at_ceiling_price(
+                    min(ceil, maker_completion_target() - paid), px, tk)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _rest_px = None
+        if _rest_px is None:
+            return no("PRICE_OUT_OF_BAND", price=str(px))
     if (px / tk) != (px / tk).to_integral_value():
         return no("PRICE_NOT_ON_TICK", price=str(px))
     if leg_crosses(side, px, bid=b, ask=a):

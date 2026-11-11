@@ -245,9 +245,17 @@ def test_a_restart_cannot_resubmit_through_the_real_executor(tmp_path,
 #: path at all (see l5_pmus_transport._require_within_order_cap, which
 #: anticipates exactly that caller). It is a real second route, so it carries
 #: a real claim.
+#:
+#: The third entry is the BTC 5-minute adapter. It was kept OUT of src/ for
+#: as long as it had no claim (this list is what refused it). By owner
+#: decision of 2026-11-11 the existing mechanism was extended to explicitly
+#: approved 5-minute markets, and the adapter now spends
+#: `claim_btc5m_submission` -- built from the same approval gate, window
+#: ledger, budgets and O_EXCL lock -- immediately before its one submit.
 SUBMIT_SITES = {
     "l5_live_execution.py": "claim_submission",
     "l5_cancel_mechanism.py": "claim_submission",
+    "l5_btc5m_execution.py": "claim_btc5m_submission",
 }
 
 
