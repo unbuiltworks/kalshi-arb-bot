@@ -4608,8 +4608,24 @@ class InventoryStore:
                 if up < 0 or dn < 0 or max(up, dn) <= 0:
                     skipped += 1
                     continue
+                # THE SAME WINDOW, SPLIT: what its pairs paid and what its
+                # unmatched leg paid. Absent or unreadable on a row is None,
+                # and one None makes the whole split unknown below -- never
+                # a smaller sample that happens to read better.
+                try:
+                    split = (D(str(row["matched_qty"])),
+                             D(str(row["matched_pnl"])),
+                             D(str(row["residual_qty"])),
+                             D(str(row["residual_pnl"])))
+                    if not all(x.is_finite() for x in split) \
+                            or split[0] < 0 or split[2] < 0:
+                        split = None
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    split = None
                 used.append((str(row.get("t") or ""), up, dn, pnl,
-                             max(up, dn)))
+                             max(up, dn), split))
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
@@ -4618,7 +4634,38 @@ class InventoryStore:
         used = used[-max(1, int(last_n)):]
         units = sum((r[4] for r in used), D(0))
         net = sum((r[3] for r in used), D(0))
+        # WHAT A FIRST FILL BECAME ON THIS VENUE: how often it paired, what
+        # a pair paid and what an unmatched contract paid. Reported only
+        # when EVERY window in the sample states its split and both kinds
+        # occurred; otherwise the reason, and no figure.
+        cond: Dict[str, Any] = {"status": "UNKNOWN"}
+        if not used:
+            cond["reason"] = "NO_SETTLED_WINDOWS"
+        elif any(r[5] is None for r in used):
+            cond["reason"] = "A_WINDOW_DOES_NOT_STATE_ITS_SPLIT"
+        else:
+            m = sum((r[5][0] for r in used), D(0))
+            mp = sum((r[5][1] for r in used), D(0))
+            u = sum((r[5][2] for r in used), D(0))
+            rp = sum((r[5][3] for r in used), D(0))
+            if m <= 0 or u <= 0:
+                cond["reason"] = ("NO_PAIR_IN_THE_SAMPLE" if m <= 0
+                                  else "NO_UNMATCHED_LEG_IN_THE_SAMPLE")
+            else:
+                cond = {
+                    "status": "MEASURED",
+                    "first_leg_contracts": str(m + u),
+                    "p_pair_given_first_fill": str(
+                        (m / (m + u)).quantize(D("0.0001"))),
+                    "pair_net_per_contract": str(
+                        (mp / m).quantize(D("0.0001"))),
+                    "unmatched_net_per_contract": str(
+                        (rp / u).quantize(D("0.0001"))),
+                    "labels": ("this venue's settled windows only. A "
+                               "pairing rate GIVEN a first fill; it says "
+                               "nothing about how often an order fills.")}
         return {
+            "conditional": cond,
             "windows": len(used), "skipped": skipped,
             "contracts": str(units), "net_usd": str(net),
             "net_per_contract": (None if units <= 0

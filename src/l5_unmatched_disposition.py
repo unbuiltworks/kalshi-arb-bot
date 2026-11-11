@@ -1036,6 +1036,40 @@ def reopen_decision(*, market: Any, rounds_used: int,
     return dict(rec, reopen=True, reason=None)
 
 
+def entry_economics(own_evidence: Optional[Mapping[str, Any]], *,
+                    floor_per_contract: Any) -> Dict[str, Any]:
+    """This venue's conditional opening economics, or UNKNOWN. Read-only.
+
+    Feeds `l5_entry_economics.evaluate_opening` with the three figures the
+    settled record states -- P(pair | first fill), pair net and unmatched
+    net, per contract -- and nothing else. No book, no queue position, no
+    fill model, no fee or rebate beyond what the venue settled. UNKNOWN
+    when the record does not state them; never a default.
+    """
+    try:
+        from src import l5_entry_economics as EE
+        c = (own_evidence or {}).get("conditional")
+        if not isinstance(c, Mapping) or c.get("status") != "MEASURED":
+            return {"status": "UNKNOWN",
+                    "reason": ("RECORD_DOES_NOT_STATE_THE_SPLIT:%s" % (
+                        (c or {}).get("reason") if isinstance(c, Mapping)
+                        else "ABSENT"))[:120]}
+        out = dict(EE.evaluate_opening(
+            completed_net_per_contract=c.get("pair_net_per_contract"),
+            residual_net_per_contract=c.get("unmatched_net_per_contract"),
+            completion_probability_given_first_fill=c.get(
+                "p_pair_given_first_fill"),
+            minimum_net_edge_per_contract=floor_per_contract))
+        out["source"] = "OWN_VENUE_SETTLED_WINDOWS"
+        out["first_leg_contracts"] = c.get("first_leg_contracts")
+        return out
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"status": "UNKNOWN",
+                "reason": "ENTRY_ECONOMICS_RAISED:%s" % type(exc).__name__}
+
+
 def own_settled_verdict(own_evidence: Optional[Mapping[str, Any]], *,
                         qty: Any, floor: Any) -> Dict[str, Any]:
     """What our settled windows say one more round of `qty` is worth.
@@ -1063,10 +1097,25 @@ def own_settled_verdict(own_evidence: Optional[Mapping[str, Any]], *,
     if per is None or q is None or fl is None:
         return dict(out, why_not_used="RECORD_UNREADABLE")
     e = q * per
+    clears = bool(e > fl)
+    # THE SAME RECORD, STATED AS CONDITIONAL ECONOMICS, by the independent
+    # calculator of PR #220: how often a first fill paired on this venue,
+    # what a pair and an unmatched contract paid, and the pairing rate at
+    # which an opening breaks even. It can only AGREE or REFUSE: when it
+    # can compute a figure and that figure does not clear the floor, the
+    # opening is not cleared whatever the aggregate says; when it cannot
+    # (the record does not state the split), it does not vote. Its own
+    # `admissible` is never read -- nothing here authorizes an order.
+    entry = entry_economics(own_evidence, floor_per_contract=(
+        fl / q if q > 0 else None))
+    if entry.get("status") == "SCENARIO_ONLY" and \
+            entry.get("scenario_clears_edge") is not True:
+        clears = False
     return dict(out, usable=True, why_not_used=None,
                 net_per_contract=str(per),
                 expectancy_usd=str(e.quantize(D("0.0001"))),
-                clears_floor=bool(e > fl),
+                clears_floor=clears,
+                entry_economics=entry,
                 windows_with_a_pair=own_evidence.get("windows_with_a_pair"),
                 windows_with_a_stranded_leg=own_evidence.get(
                     "windows_with_a_stranded_leg"),

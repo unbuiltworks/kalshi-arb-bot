@@ -142,6 +142,7 @@ COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # the residual would go back to settling with no decision record at all --
 # which is the exact silence the module exists to end.
 COPY src/l5_unmatched_disposition.py src/l5_unmatched_disposition.py
+COPY src/l5_entry_economics.py src/l5_entry_economics.py
 # THE PORTFOLIO CONTROLLER'S DECISION MODULE. Pure: it imports nothing that
 # can trade. The runner's recorded-only stage imports it lazily, and only
 # records when the owner sets L5_PORTFOLIO_CONTROLLER=SHADOW.
