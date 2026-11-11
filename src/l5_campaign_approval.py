@@ -66,7 +66,43 @@ MAX_WINDOWS = 8
 MAX_CAMPAIGN_S = 4 * 3600.0
 #: instrument families an approval may name. Not a pattern the document
 #: supplies -- an allowlist the code holds.
-ALLOWED_SERIES = ("cpc-btc-updown-15m-",)
+#:
+#: THE 5-MINUTE SERIES JOINED THIS LIST BY OWNER DECISION, 2026-11-11: "extend
+#: the existing single-use authorization mechanism to recognize explicitly
+#: approved BTC5m markets. Do not create a second, weaker authorization
+#: path." So it is the SAME document, the same nonce, the same window ledger
+#: and the same durable claims -- one more series name here, and nothing
+#: that existed for the 15-minute series is loosened by it.
+#:
+#: ONE DOCUMENT NAMES ONE SERIES, so an approval for one strategy can never
+#: authorize the other: `authorize_window`, `reserve_window` and every
+#: pre-wire claim refuse a market outside the document's own series.
+BTC15M_SERIES = "cpc-btc-updown-15m-"
+BTC5M_SERIES = "cpc-btc-updown-5m-"
+ALLOWED_SERIES = (BTC15M_SERIES, BTC5M_SERIES)
+#: which strategy a series belongs to. A series with no entry has no
+#: strategy and nothing may be claimed for it.
+SERIES_STRATEGY = {BTC15M_SERIES: "BTC15M", BTC5M_SERIES: "BTC5M"}
+#: how long one window of the series lasts, in seconds
+SERIES_WINDOW_S = {BTC15M_SERIES: 900.0, BTC5M_SERIES: 300.0}
+#: PER-SERIES ceilings, each TIGHTER than the general one above and never
+#: looser. The 5-minute strategy was approved for preparation at $5 of
+#: exposure; a document asking for more gets $5.
+SERIES_MAX_TOTAL_EXPOSURE_USD = {BTC5M_SERIES: D("5")}
+
+
+def series_of(market: Any) -> Optional[str]:
+    """The allowed series this market slug belongs to, or None."""
+    m = str(market or "")
+    for s in ALLOWED_SERIES:
+        if m.startswith(s):
+            return s
+    return None
+
+
+def strategy_of(market: Any) -> Optional[str]:
+    """BTC15M or BTC5M for a slug in an allowed series, else None."""
+    return SERIES_STRATEGY.get(series_of(market) or "")
 #: a document older than this is stale even if its campaign has not expired,
 #: so a forgotten endpoint cannot keep authorizing.
 DEFAULT_MAX_AGE_S = 3600.0
@@ -254,7 +290,9 @@ class ApprovalGate:
             return no("approval_start_after_expiry")
 
         eff_w = min(want_w, MAX_WINDOWS)
-        eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD)
+        eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD,
+                      SERIES_MAX_TOTAL_EXPOSURE_USD.get(
+                          series, MAX_TOTAL_EXPOSURE_USD))
         eff_loss = min(want_loss, MAX_DAILY_LOSS_USD)
         eff_expires = min(expires, issued + dt.timedelta(seconds=MAX_CAMPAIGN_S))
         if (eff_expires - now).total_seconds() <= 0:
@@ -736,6 +774,16 @@ def reserve_window(market: str, *,
         return {"ok": False, "reason": "APPROVAL_NOT_VALID",
                 "detail": {"why": st.get("why")}}
     scope = dict(st.get("scope") or {})
+    # THE DOCUMENT'S OWN SERIES, before anything is spent. Two series can
+    # share a window start (15:00Z opens a 15-minute and a 5-minute window),
+    # so the start alone cannot say which strategy's window this is.
+    _series = str(scope.get("series") or "")
+    if not _series or not str(market).startswith(_series):
+        return {"ok": False, "reason": "CAMPAIGN_SERIES_MISMATCH",
+                "detail": {"series": _series, "attempted": str(market)[:80],
+                           "note": "a window of another series cannot "
+                                   "spend this approval's budget"},
+                "spent": False, "reserved_now": False}
     # ===== THE WINDOW MUST BE IN THE GRANT BEFORE IT CAN BE SPENT
     #
     # THE HOLE THIS CLOSES, found by
