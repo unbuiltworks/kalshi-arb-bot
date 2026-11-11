@@ -1244,6 +1244,20 @@ def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
 #: with no variable that has to be set for it to hold and none that can turn
 #: it off. The variable below can only ADD further prefixes.
 #:
+#: THE VENUE DOES NOT ECHO OUR CLIENT IDS, so the prefix alone is not
+#: enough. `l5_order_body.build` -- the body actually posted -- carries no
+#: client order id at all: the id lives in each strategy's own ledger, and a
+#: real `/v1/orders/open` row names only the venue's id and the market. A
+#: rule that needs the prefix on the row therefore holds against a test
+#: double that echoes it and NOT against the venue. What every real row
+#: does carry is `marketSlug`, and the registered strategies trade disjoint
+#: series. So an order this ledger does not already track, resting in a
+#: market of ANOTHER registered strategy's series, is foreign too -- decided
+#: on the venue's own field. (An untracked order in OUR OWN series is still
+#: adopted, as before: this ledger cannot tell a hand-placed order there
+#: from one of its own that its file lost, and losing track of its own
+#: order is the worse error.)
+#:
 #: Our own prefix can never be named foreign, and a token that is not a
 #: short lowercase prefix ending in "-" is ignored. Foreign orders are
 #: listed in `foreign_orders` with their origin and are never adopted, never
@@ -5537,14 +5551,26 @@ class InventoryStore:
             # NOT OURS, BY NAME. Decided on the venue's own client id, before
             # any mapping back to a tracked order, and never for an id our
             # file already holds. See `FOREIGN_COID_PREFIXES_ENV`.
-            if is_foreign_coid(coid) and coid not in ours:
+            _f_market = (o.get("marketSlug") or o.get("market_slug")
+                         or o.get("market"))
+            _f_series = ORIGIN.strategy_of_market(_f_market)
+            _f_by_series = (_f_series is not None
+                            and _f_series != OWN_STRATEGY)
+            _f_tracked = coid in ours or bool(tracked_coid_for_venue_order(
+                o.get("id") or o.get("order_id"), self.state))
+            if not _f_tracked and (is_foreign_coid(coid) or _f_by_series):
                 _f_origin = ORIGIN.origin_of_coid(coid)
-                _f_market = (o.get("marketSlug") or o.get("market_slug")
-                             or o.get("market"))
                 foreign_now[coid] = {
                     "venue_order_id": str(o.get("id") or o.get("order_id")
                                           or ""),
+                    # by the id's prefix when the row carries one; a real
+                    # venue row does not, and then WHOSE it is stays
+                    # UNKNOWN -- only that it is not ours is established
                     "origin": _f_origin,
+                    "series_strategy": _f_series,
+                    "foreign_because": ("CLIENT_ID_PREFIX"
+                                        if is_foreign_coid(coid)
+                                        else "MARKET_SERIES"),
                     "market": _f_market,
                     "remaining": str(o.get("remaining_qty", o.get(
                         "remainingQuantity", o.get("qty", "")))),

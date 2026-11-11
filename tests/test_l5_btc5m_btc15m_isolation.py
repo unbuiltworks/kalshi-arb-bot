@@ -59,6 +59,9 @@ class SharedVenue(T.Venue):
     """The stock scripted venue, with every row under its order's market."""
 
     rows_state_side = False
+    #: False is the REAL venue: the posted order body carries no client
+    #: order id (`l5_order_body.build`), so an open-order row cannot echo one
+    rows_carry_client_id = True
 
     def __init__(self):
         super().__init__()
@@ -80,6 +83,8 @@ class SharedVenue(T.Venue):
             if self.rows_state_side:
                 row["outcomeSide"] = ("OUTCOME_SIDE_YES" if i["side"] == "UP"
                                       else "OUTCOME_SIDE_NO")
+            if not self.rows_carry_client_id:
+                del row["clientOrderId"]
             rows.append(row)
         return rows
 
@@ -721,3 +726,136 @@ class TestForeignOrdersAreNeverAdopted:
         risk = st.account_wide_risk_by_market()
         assert risk["ok"] is False
         assert risk["reason"].startswith("FOREIGN_ORDER_UNREADABLE:")
+
+
+# ======================================================================
+# I. THE SAME, WITH ROWS SHAPED LIKE THE REAL VENUE'S: no client order id.
+#    The posted order body carries none, so the venue cannot echo one. A
+#    rule that needs the prefix on the row would pass every test above and
+#    fail on the venue. These rows carry only what a real row carries: the
+#    venue's id, the market, the side and the quantities.
+# ======================================================================
+class TestIsolationOnRowsWithoutClientIds:
+
+    @pytest.fixture(autouse=True)
+    def real_rows(self, both):
+        both.venue.rows_carry_client_id = False
+        both.venue.rows_state_side = True
+
+    def test_the_posted_order_body_carries_no_client_order_id(self):
+        """Why this section exists, pinned: if the body ever gains one, the
+        prefix becomes available on the venue and this can be revisited."""
+        from src import l5_order_body as OB
+        body = OB.from_intent({"client_order_id": "l5f-" + "0" * 24,
+                               "market": M15, "side": "UP", "price": "0.50",
+                               "qty": "0.6", "mode": "MAKER"}, M15)
+        assert not any("client" in k.lower() for k in body)
+        assert "l5f-" not in str(body)
+
+    def test_a_5m_order_is_foreign_by_its_market_and_is_never_swept(self, both):
+        h, st = both.h, both.store15()
+        both.open15()
+        v5 = both.open5()
+        h.r.reconciled = False                    # e.g. a 15m process restart
+        h.tick(30.0)
+        live = st.live_orders()
+        assert all(c.startswith("l5f-") for c in live) and len(live) == 2
+        assert all(o["market"] == M15 for o in live.values())
+        assert st.owns_venue_order_id(v5) is False
+        assert st.still_fillable_order_count() == 2
+        (frow,) = st.state["foreign_orders"].values()
+        assert frow["venue_order_id"] == v5 and frow["market"] == M5
+        assert frow["foreign_because"] == "MARKET_SERIES"
+        assert frow["series_strategy"] == "BTC5M"
+        # whose it is cannot be read off a row with no id: only "not ours"
+        assert frow["origin"] == "UNKNOWN"
+        for off in (134.3, 300.0, 500.0, 584.0, 586.0, 590.0):
+            h.tick(off)
+        assert v5 not in both.venue.cancelled
+        assert both.venue.cancelled and all(
+            both.venue.by_oid[o]["market"] == M15
+            for o in both.venue.cancelled)
+        both.ex.poll()
+        (row5,) = both.ex.orders().values()
+        assert row5["state"] != X.CANCELLED
+
+    def test_it_is_still_counted_in_account_exposure(self, both):
+        h, st = both.h, both.store15()
+        both.open5()
+        h.r.reconciled = False
+        h.tick(30.0)
+        risk = st.account_wide_risk_by_market()
+        assert risk["ok"] and risk["foreign_orders_usd"] == "0.17"
+        assert risk["foreign_orders_usd_by_origin"] == {"UNKNOWN": "0.17"}
+        assert risk["risk_by_market"][M5] == D("0.17")
+
+    def test_our_own_orders_are_still_ours_by_their_venue_ids(self, both):
+        h, st = both.h, both.store15()
+        both.open15()
+        mine = sorted(str(o["venue_order_id"])
+                      for o in st.live_orders().values())
+        h.r.reconciled = False
+        h.tick(30.0)
+        live = st.live_orders()
+        assert sorted(str(o["venue_order_id"]) for o in live.values()) == mine
+        assert all(c.startswith("l5f-") for c in live)
+        assert not any(o.get("adopted") for o in live.values())
+        assert st.state["foreign_orders"] == {}
+
+    def test_an_untracked_order_in_our_own_series_is_adopted_as_before(
+            self, both):
+        """UNCHANGED, and stated so nobody reads more into the rule than it
+        does: a row in a 15-minute market that this ledger does not track
+        -- one of its own that the file lost, or one placed by hand -- is
+        still adopted. The ledger cannot tell those two apart, and losing
+        track of its own order is the worse error."""
+        h, st = both.h, both.store15()
+        both.open15()
+        mine = sorted(str(o["venue_order_id"])
+                      for o in st.live_orders().values())
+        st.state["live_orders"] = {}               # the file lost them
+        st.state.pop(E.VENUE_ORDER_LINK, None)
+        st.state["submitted"] = {}
+        h.r.reconciled = False
+        h.tick(30.0)
+        got = {str(o["venue_order_id"]): o for o in st.live_orders().values()}
+        assert set(mine) <= set(got)
+        assert all(got[v]["adopted"] for v in mine)
+        assert st.state["foreign_orders"] == {}
+
+    def test_a_5m_fill_reaches_the_15m_ledger_as_an_unknown_position(
+            self, both):
+        """What the 15-minute service's report will actually show in
+        production: with no id on the row there is no evidence of whose the
+        position is, so it is UNKNOWN at the $1 bound -- counted, never
+        attributed. The 5-minute result is the 5-minute ledger's to state."""
+        h, st = both.h, both.store15()
+        v5 = both.open5()
+        h.r.reconciled = False
+        h.tick(30.0)
+        assert st.state.get("foreign_orders_seen") in (None, {})
+        both.venue.fill(v5)
+        both.ex.poll()
+        h.r.reconciled = False
+        h.at(40.0 + R.RECONCILE_RETRY_S + 1.0)
+        h.r.reconcile_if_needed(h.t)
+        key = "%s|UP" % M5
+        assert st.state["positions"][key] == "0.17"
+        leg = st.position_origins()["legs"][key]
+        assert leg["origin"] == "UNKNOWN"
+        assert leg["cost_basis"] == "UPPER_BOUND_1USD_PER_CONTRACT"
+        assert both.ex.inventory(M5)["UP"] == {"qty": D("0.17"),
+                                              "cost": FIRST_5M_COST}
+
+    def test_the_5m_adapter_never_touches_a_15m_order_either(self, both):
+        h = both.h
+        both.open15()
+        both.open5()
+        for _ in range(3):
+            both.ex.poll()
+        rep = both.ex.end_of_window(M5)
+        assert [c["market"] for c in rep["cancelled"]] == [M5]
+        assert all(both.venue.by_oid[o]["market"] == M5
+                   for o in both.venue.cancelled)
+        acct = both.ex.account_exposure()
+        assert acct["unknown"] is False
