@@ -3027,6 +3027,34 @@ BREAKEVEN_PAIR = D("0.9532")
 COMPLETION_CEILINGS_IN_FORCE = ("improves", "within_budget")
 
 
+#: REST THE MISSING LEG AT THE CEILING instead of refusing it when the
+#: touch is dearer than the ceiling permits. Exactly "ON" or it is off.
+#: It moves no ceiling: the resting price is the dearest one that
+#: `completion_ceiling` and the owner's `completion_pair_ceiling` both
+#: already permit, and the submission gate still judges the order.
+COMPLETION_RESTS_AT_CEILING_ENV = "L5_TS_COMPLETION_RESTS_AT_CEILING"
+
+
+def completion_rests_at_ceiling() -> bool:
+    return (os.getenv(COMPLETION_RESTS_AT_CEILING_ENV) or "") == "ON"
+
+
+def rest_at_ceiling_price(ceil: Any, quoted: Any, tick: Any) -> Optional[D]:
+    """The dearest on-grid price at or below `ceil`, or None.
+
+    None when there is no ceiling, when that price is not strictly cheaper
+    than the quote it replaces (nothing to rest behind), or when it falls
+    outside the engine's price band. Rounds DOWN: never a tick dearer than
+    the ceiling."""
+    c, q0, tk = _d(ceil), _d(quoted), _d(tick)
+    if c is None or q0 is None or tk is None or tk <= 0:
+        return None
+    px = (c / tk).to_integral_value(rounding="ROUND_FLOOR") * tk
+    if px >= q0 or px < MIN_PRICE or px > MAX_PRICE:
+        return None
+    return px
+
+
 def completion_ceiling(**kw: Any) -> Optional[D]:
     """The dearest own price at which completing is permissible, or None.
 
@@ -3245,13 +3273,45 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     # inside the ceiling at the TAKER coefficient, the worst case should no
     # maker rebate be credited.
     judged = "OPENING"
+    rested_ticks = None
     if opening_no is not None:
-        if ceil is None or px > ceil:
+        # THE TOUCH IS DEARER THAN THE COMPLETION CEILINGS PERMIT. Without
+        # the switch this either refuses here (`px > ceil`) or returns a
+        # touch-priced leg that the submission gate then refuses for a pair
+        # above the owner's completion pair ceiling -- and either way the
+        # controller has no permitted order for as long as the price stays
+        # away: 462 s in each of the two windows of 2026-11-11 04:00Z, 365
+        # refusals, not one resting quote. With the owner's switch ON the
+        # missing leg RESTS at the dearest price both ceilings permit --
+        # behind the touch, so it cannot cross, and never dearer than a
+        # completion the gate accepts today. It moves no ceiling. OFF, no
+        # inventory context, or anything unreadable is today's behaviour.
+        rest = None
+        if completion_rests_at_ceiling() and ceil is not None:
+            try:
+                rest = rest_at_ceiling_price(
+                    min(ceil, completion_pair_ceiling() - paid), px, tk)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                rest = None
+        if rest is not None:
+            rested_ticks = int(((px - rest) / tk).to_integral_value(
+                rounding="ROUND_FLOOR"))
+            px = rest
+            up_px, dn_px = ((paid, px) if side == DOWN else (px, paid))
+            floor = fee_floor(up_px, dn_px)
+            pair = up_px + dn_px
+            econ = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
+                                  dn_price=dn_px, theta=MAKER_THETA)
+            judged = "COMPLETION_RESTING_AT_CEILING"
+        elif ceil is None or px > ceil:
             return dict(opening_no,
                         completion_ceiling=(None if ceil is None
                                             else str(ceil)),
                         completion_rescue_available=False)
-        judged = "COMPLETION"
+        else:
+            judged = "COMPLETION"
     econ_taker = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
                                 dn_price=dn_px, theta=TAKER_THETA)
     return {"ok": True, "provenance": "DERIVED_FROM_CURRENT_BOOK",
@@ -3277,6 +3337,10 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
             # are reported either way, so a completion that would ALSO have
             # cleared the opening tests is visible as such.
             "judged_as": judged,
+            # how far behind the price the engine would otherwise have
+            # quoted this leg rests; None unless it was rested at the
+            # ceiling because that price was not permitted.
+            "rested_behind_quote_ticks": rested_ticks,
             "completion_ceiling": (None if ceil is None else str(ceil)),
             "clears_opening_pair_cap": bool(pair <= cap_px),
             "edge_per_contract": str(floor["edge"]),

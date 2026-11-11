@@ -190,6 +190,10 @@ VARIANTS = [
     ("first-leg floor 0.05", dict(floor=D("0.05"))),
     ("entry until minute 13", dict(entry_cutoff=780.0, terminal=840.0)),
     ("hedge left resting at the $1.00 ceiling", dict(rest_hedge=True)),
+    ("resting hedge, completion open to minute 14", dict(
+        rest_hedge=True, terminal=840.0)),
+    ("resting hedge at a 0.96 pair, open to minute 14", dict(
+        rest_hedge=True, terminal=840.0, complete_ceiling=D("0.96"))),
     ("15 s + resting hedge", dict(life=15.0, rest_hedge=True)),
     ("all four", dict(life=15.0, floor=D("0.05"), entry_cutoff=780.0,
                       terminal=840.0, rest_hedge=True)),
