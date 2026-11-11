@@ -1,0 +1,31 @@
+[Unit]
+Description=L5 PMUS 24x7 q1 supervisor (DISARMED by default)
+After=network-online.target l5-pmus-recorder.service
+Wants=network-online.target l5-pmus-recorder.service
+
+[Service]
+Type=simple
+User=ssm-user
+Group=ssm-user
+WorkingDirectory=/home/ssm-user/l5-pmus-engine
+EnvironmentFile=/home/ssm-user/l5-pmus-q1-credentials.env
+Environment=PYTHONPATH=/home/ssm-user/l5-pmus-engine
+Environment=PMUS_Q1_STATE_DIR=/home/ssm-user/l5-pmus-q1-state
+Environment=PMUS_Q1_FIRST_WAIT_SECONDS=180
+Environment=PMUS_Q1_DEADLINE_SECONDS=300
+Environment=PMUS_Q1_RESIDUAL_ACTION=hold
+Environment=PMUS_SUPERVISOR_ROOT=/home/ssm-user/l5-pmus-supervisor-state
+Environment=PMUS_SUPERVISOR_RECORDER_LOG=/home/ssm-user/l5-pmus-ws-state/recorder.log
+Environment=PMUS_SUPERVISOR_LOOP_SECONDS=2
+Environment=PMUS_SUPERVISOR_MAX_STATUS_AGE_SECONDS=90
+Environment=PMUS_SUPERVISOR_LIVE=NO
+ExecStart=/home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_aws_supervisor
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=append:/home/ssm-user/l5-pmus-supervisor-state/supervisor.log
+StandardError=append:/home/ssm-user/l5-pmus-supervisor-state/supervisor.err.log
+
+[Install]
+WantedBy=multi-user.target

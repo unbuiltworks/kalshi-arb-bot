@@ -1,0 +1,50 @@
+{
+ "generated_utc": "2026-09-02T17:58:07.400427+00:00",
+ "labeling": "ALL THEORETICAL; conservative(strict) tier gates decisions per frozen criteria (commit cba870a4)",
+ "per_100_slots_strict": {
+  "gemini_btc5m": {
+   "matched": 13.3,
+   "one_sided_holds": 16.8,
+   "hold_ev_usd_per_hold": -0.31,
+   "hold_ev_note": "9/10 settled holds LOST; NO-side 0/10 won",
+   "sample": "113 campaigns, 4 days, tier-1 quote+print"
+  },
+  "mlb_moneyline": {
+   "matched": 25.1,
+   "one_sided_holds": 26.0,
+   "hold_ev_usd_per_hold": 0.047,
+   "hold_ev_note": "CI crosses zero (~+4.7c +/- ~6.5c, 150 holds)",
+   "sample": "577 slots, 15 games, 48.7 game-hours, print-only"
+  },
+  "epl_moneyline": {
+   "matched": 29.5,
+   "one_sided_holds": 6.4,
+   "hold_ev_usd_per_hold": 0.19,
+   "hold_ev_note": "tiny sample (78 slots, 3 games)",
+   "sample": "print-only"
+  },
+  "tennis_moneyline": {
+   "matched": 2.7,
+   "note": "flow too thin (15.1% two-sided)"
+  },
+  "soccer_totals_spreads_wnba": {
+   "note": "negative or negligible; see per-family artifact"
+  }
+ },
+ "frozen_criteria_evaluation": {
+  "gemini_btc5m_current_config": {
+   "net_theoretical_ev": "NEGATIVE: -$2.45 (optimistic) / -$2.91 (strict) over 113 q=1 campaigns (~9.4 engine-hours); -29c to -31c per settled hold vs +1c per match; breakeven needs ~29 matches per hold, observed ~0.8",
+   "verdict": "current 1c-min-edge q=1 config is not scalable-positive without change (hold handling, higher edge, or venue incentives)"
+  },
+  "flow_gate_30s": "FAIL: avoids 79-84% of holds but loses 86-88% of matches (frozen bar: <=25% match loss)",
+  "flow_gate_60s": "FAIL: 74-79% holds avoided, 77-80% matches lost",
+  "flow_gate_120s": "FAIL: 68-74% holds avoided, 53% matches lost",
+  "mlb_moneyline_go": "NOT YET by the letter: 1.89x per-slot matched rate (bar: 2x), hold RATE 1.55x (bar: 1.25x) though hold EV is ~neutral vs Gemini's sharply negative; needs 3-7 more days incl. NFL/CFB weekend"
+ },
+ "flow_ceilings": {
+  "gemini_btc5m_week": "58.3% two-sided (1,945 windows Aug27-Sep2; daily range 46.5-71.5%); 12.9% empty",
+  "mlb_moneyline": "82.5%",
+  "epl_moneyline": "89.7%",
+  "tennis": "15.1%"
+ }
+}

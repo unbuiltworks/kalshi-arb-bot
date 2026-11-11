@@ -1,0 +1,16 @@
+{"kind": "PLACE", "slot": 0, "t": 1790080245.4850996, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-yes-48101daf", "leg": "YES", "price": "0.54", "qty": "1"}
+{"kind": "RESOLVE", "slot": 0, "t": 1790080245.5198514, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352172409"}
+{"kind": "PLACE", "slot": 1, "t": 1790080245.524632, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-no-0528941f", "leg": "NO", "price": "0.40", "qty": "1"}
+{"kind": "RESOLVE", "slot": 1, "t": 1790080245.5612202, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352172413"}
+{"kind": "PLACE", "slot": 2, "t": 1790080254.6454878, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-no-9dd67a5d", "leg": "NO", "price": "0.30", "qty": "1"}
+{"kind": "RESOLVE", "slot": 2, "t": 1790080254.6805098, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352173752"}
+{"kind": "PLACE", "slot": 3, "t": 1790080425.811946, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-yes-9cd857f8", "leg": "YES", "price": "0.46", "qty": "1"}
+{"kind": "RESOLVE", "slot": 3, "t": 1790080425.84784, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352226483"}
+{"kind": "PLACE", "slot": 4, "t": 1790080473.7960427, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-yes-83fc7f6b", "leg": "YES", "price": "0.40", "qty": "1"}
+{"kind": "RESOLVE", "slot": 4, "t": 1790080473.8344235, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352236479"}
+{"kind": "PLACE", "slot": 5, "t": 1790080490.3616812, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-yes-df299c6c", "leg": "YES", "price": "0.40", "qty": "1"}
+{"kind": "RESOLVE", "slot": 5, "t": 1790080490.3982334, "outcome": "ACCEPTED", "status": 200, "orderId": "145828836352239120"}
+{"kind": "CANCEL", "slot": 6, "t": 1790081021.478352, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-no-9dd67a5d", "orderId": "145828836352173752"}
+{"kind": "RESOLVE", "slot": 6, "t": 1790081021.5173779, "outcome": "ACCEPTED", "status": 200, "cancel_confirmed": false}
+{"kind": "CLEANUP_CANCEL", "slot": 7, "t": 1790081021.5222633, "auth_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2", "symbol": "GEMI-BTC15M2609221245-UP", "outcome": "ATTEMPTED", "client_order_id": "l5cp-owner-2026-no-9dd67a5d", "orderId": "145828836352173752"}
+{"kind": "RESOLVE", "slot": 7, "t": 1790081021.5573666, "outcome": "ACCEPTED", "status": 200}

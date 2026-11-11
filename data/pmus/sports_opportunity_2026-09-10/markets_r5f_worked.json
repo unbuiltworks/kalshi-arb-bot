@@ -1,0 +1,182 @@
+{
+ "aec-atp-enrval-stetra-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "1799744.6400",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-county-not-ham-2026-09-08": {
+  "state": "MARKET_STATE_OPEN",
+  "notional": null,
+  "shares": "121870.8700",
+  "oi": "25355.5200",
+  "bid": "0.7600",
+  "ask": "0.8400",
+  "bidDepth": 16,
+  "askDepth": 16
+ },
+ "aec-cs2-bbp-wbta-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "23464.0100",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-cs2-ica-ff-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "63911.5600",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-cs2-mel-falf-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "39408.4000",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-cs2-nip-ice-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "60897.0400",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-dota2-gl-ks-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "15050.1300",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfme-dannun-andsou-2026-09-09": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "78473.7000",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfwo-anamon-isaagu-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "365402.9500",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfwo-aragarmergar-lucllojoeste-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "45414.5500",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfwo-frajor-katkuz-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "329726.6500",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfwo-jimgon-louaya-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "93309.1200",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-itfwo-olidrovikvel-origniannlaz-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "17545.4500",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-setkamecz-bertad-hantom-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "100361.3600",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-setkamecz-krajan-svoluk-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "55899.3200",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-setkamecz-mulpat-holtom-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "42432.5000",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-setkamecz-rejste-svoluk-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "107747.3400",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ },
+ "aec-setkamecz-soumil-hantom-2026-09-10": {
+  "state": "MARKET_STATE_EXPIRED",
+  "notional": null,
+  "shares": "53942.8800",
+  "oi": "",
+  "bid": null,
+  "ask": null,
+  "bidDepth": 0,
+  "askDepth": 0
+ }
+}

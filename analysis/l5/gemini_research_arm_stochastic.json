@@ -1,0 +1,48 @@
+{
+ "_sha256_16": "40e28081226917a9",
+ "applies_to_windows_with_entry_t_at_or_after_utc": "2026-09-05T23:43:19+00:00",
+ "arm": "reprice_180s:stochastic",
+ "fail": {
+  "after_windows": 300,
+  "net_after_fees_usd_at_or_below": -1.0,
+  "relation_l1_distance_above": 0.2,
+  "two_sided_completions_below": 5
+ },
+ "fill_definition": "STRICT only; at-price fills labeled optimistic_unknown and never counted",
+ "frozen_utc": "2026-09-05T23:43:19+00:00",
+ "no_tuning_rule": "frozen at commit; any change is a new file with a new freeze time and a fresh window count",
+ "policy": {
+  "cap_fallback": "NONE (not declared)",
+  "conditioning": "base state = price band | TTE bucket | behavioral imbalance; plus last_rel and last_size=q<5 (q=1 unit); side by the shared cheaper-touch convention; size q=1 unit; complement price = min(pair<=0.98 target, >=1c after Gemini ceil-cent maker fees, opposite ask - tick)",
+  "first_action": "OPEN when flat (the model predicts a relation, never a side)",
+  "relation_draw": "inverse-CDF sample over the v2 relation masses relation_ranked (pmus_l5_fidelity_live.sample_relation) -- the SAME conditional distribution the modal arm reads",
+  "rng": "deterministic, persisted: seed = sha256(f'{symbol}|{decision_idx}|{model_sha256_16}'), u = int(seed[:8],16)/2**32; model sha bbb55bf90638d2bd; replayable from records",
+  "safety_filters_unchanged": [
+   "maker/post-only, never at/through the opposite ask",
+   "rest 180s, cancel on touch move, re-join the new touch (reprice_180s shell)",
+   "residual cap 3 units -> HOLD",
+   "off-distribution state -> HOLD",
+   "sell -> no-op",
+   "band 0.20..0.80",
+   "6 decisions per window"
+  ]
+ },
+ "separation": "evaluated only on windows entered at/after applies_to_windows_with_entry_t_at_or_after_utc; never pooled with the primary modal gate sample or the two-sided-flow hypothesis; verdicts written to research_arm_stochastic in every rolling report",
+ "success": {
+  "calibration": {
+   "max_post_fill_complete_freq_abs_gap_pp": 10.0,
+   "max_relation_l1_distance_sampled_vs_model": 0.1,
+   "min_scored_decisions": 200
+  },
+  "max_adverse_selection_30s_pct": 50.0,
+  "max_off_distribution_rate_pct": 5.0,
+  "max_one_sided_hold_rate_pct": 30.0,
+  "min_completion_days": 4,
+  "min_days": 5,
+  "min_net_after_known_fees_usd": 0.0,
+  "min_non_negative_days": 3,
+  "min_two_sided_completions": 15,
+  "min_windows": 300
+ },
+ "workstream": "OWNER 5555481658 item 2 -- PREDECLARED stochastic OOS research arm; not a change to the frozen 036556ad transfer gate"
+}

@@ -1,0 +1,556 @@
+"""Fail-closed transfer: sports shadow candidate -> spring preflight.
+
+Issue #167 comment 5540937360. The sports decision layer emits a
+`preflight_candidate`; the spring probe entry guard consumes a strict
+evidence payload. Those are NOT the same thing, and this module exists
+so nobody has to take a string like `execution_path_if_approved` on
+faith. It answers one binary question with named blockers:
+
+    SPRING_READY_FOR_REVIEW = true | false
+
+THE THREE STATE DIRECTORIES ARE DISTINCT — no hand-waving (item 1):
+
+* ``/state/pmus-sports`` — the KEYLESS forward collector's tape and
+  status report. Public gateway GETs only. Trade direction here is
+  INFERRED (volume delta + lastTradePx vs BBO), never observed.
+* ``/state/pmus-ws`` — the AUTHENTICATED WS recorder's evidence. Real
+  book/trade stream; this is the source the spring entry guard was
+  designed around (``entry.evidence_from_status`` reads recorder status
+  rows).
+* ``/state/pmus-spring`` — the probe's OWN durable ledger. Neither of
+  the above. It must be a real writable mount before anything arms, so
+  the ledger and cumulative-notional state survive container
+  replacement.
+
+What this module does: recompute the canonical strict spring replay
+(``pmus_spring_shadow_replay``) and the canonical category bar over
+SPORTS collector rows, compose them into the exact schema the spring
+entry guard validates, then run the guard's own predicate. Every field
+carries provenance. Because the sports source infers trade direction
+rather than observing it, provenance is `inferred` and that alone is a
+blocker for arming — a fresh sports candidate can reach
+`SHADOW_PREFLIGHT_CANDIDATE`, never `SPRING_READY_FOR_REVIEW`, until
+the SAME market is corroborated by the authenticated recorder.
+
+Structurally incapable of arming: no credentials, no transport, no
+order path, and it never calls the spring session or executor.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from pathlib import Path
+from typing import Any, Mapping, Optional
+
+from src import pmus_status_report as st
+from src import pmus_spring_shadow_replay as replay
+from src import pmus_sports_l5_decision as l5d
+from src import pmus_spring_l5_probe_entry as entry
+from src import pmus_spring_l5_session as session
+
+SOURCE_SPORTS = ("pmus-sports-forward-collector:/state/pmus-sports "
+                 "(keyless public GET; trade direction INFERRED from "
+                 "lastTradePx vs BBO, never observed)")
+SOURCE_RECORDER = ("pmus-ws-evidence-recorder:/state/pmus-ws "
+                   "(authenticated stream; observed trades)")
+SPRING_STATE_DIR = "/state/pmus-spring"
+PROVENANCE_INFERRED = "inferred"
+PROVENANCE_AUTHENTICATED = "authenticated"
+
+LAYER_REPLICATION = "REPLICATION_EVIDENCE"
+LAYER_ECONOMICS = "EXECUTABLE_ECONOMICS"
+LAYER_PROVENANCE = "EVIDENCE_PROVENANCE"
+LAYER_OPERATIONAL = "OPERATIONAL"
+
+LABELS = ("READ-ONLY preflight reconciliation; DISARMED; no credentials, "
+          "transport, or order path; SHADOW_PREFLIGHT_CANDIDATE never "
+          "implies SPRING_READY_FOR_REVIEW")
+
+
+def replay_state_from_sports(obs: list) -> dict:
+    """Sports collector rows -> the {trades, bbo_history} shape the
+    canonical strict spring replay consumes. Direction stays whatever
+    the collector could infer; unknown stays unknown."""
+    rows = sorted((o for o in obs if st._ts(o) is not None),
+                  key=lambda o: st._ts(o))
+    trades = [{"t": t["t"], "px": str(t["px"]), "dir": t["dir_inferred"]}
+              for t in st.infer_trades(rows) if t.get("t")]
+    history = [{"t": st._ts(o), "bid": o.get("bid"), "ask": o.get("ask"),
+                "ask_book_missing": bool(o.get("ask_book_missing", True))}
+               for o in rows]
+    return {"trades": trades, "bbo_history": history}
+
+
+def strict_rows_from_sports(by_slug: Mapping[str, list],
+                            now: float) -> dict:
+    """Canonical strict spring replay per market, over the sports tape."""
+    out: dict[str, dict] = {}
+    for slug, obs in by_slug.items():
+        out[slug] = replay.summarize_state(
+            replay_state_from_sports(obs), now)
+    return out
+
+
+def _verdict(action: Optional[Mapping[str, Any]]) -> Optional[bool]:
+    action = action or {}
+    if action.get("reason") == "v2_off_distribution":
+        return True
+    if action.get("decision") == "quote":
+        return False
+    return None
+
+
+def off_distribution_of(row: Optional[Mapping[str, Any]]) -> Optional[bool]:
+    """Read the persistence-v2 distribution verdict out of a decision row.
+
+    Reads `probe_entry_action` first, then falls back to `next_action`.
+    Unknown stays None so the entry guard fails closed on it.
+
+    The ordering matters and is the same correction made to preflight
+    SELECTION in 64ec032c. `next_action` continues the REPLAYED inventory,
+    so it can come back `no_action` for reasons that say nothing about the
+    model's distribution — `residual_cap:3>=3` being the live case: that is
+    a risk limit on a hypothetical position, not a statement that v2 never
+    visited this state, yet it was being reported as "distribution
+    unknown" and failing the guard. A first bounded probe holds no
+    position, so the action whose distribution actually governs admission
+    is the one planned from flat.
+
+    This does not soften the gate. `v2_off_distribution` from either
+    action still returns True and still blocks, and a genuinely unknown or
+    stale book still returns None and still fails closed.
+    """
+    if not row:
+        return None
+    probe = _verdict(row.get("probe_entry_action"))
+    return probe if probe is not None else _verdict(row.get("next_action"))
+
+
+def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
+                     model_sha: Optional[str] = None,
+                     off_distribution: Optional[bool] = None) -> Optional[dict]:
+    """Build the spring entry guard's evidence payload for one sports
+    market, preserving provenance, age, category semantics and the
+    action-model SHA. Missing inputs stay missing so the guard fails
+    closed rather than inventing an admission."""
+    obs = by_slug.get(slug)
+    if not obs:
+        return None
+    if off_distribution is None:
+        # Do NOT inherit "unknown" from the caller's slate: slate_decisions
+        # truncates to MAX_DECISION_ROWS, so a perfectly good candidate
+        # drops out of the rows list purely because OTHER markets got
+        # busier, and its distribution verdict then reads unknown and
+        # fails the guard. Whether v2 has visited this market's state is a
+        # property of this market, not of how many others outrank it, so
+        # plan this slug's entry action directly. Still fails closed: a
+        # stale book or an off-distribution state yields None/True.
+        try:
+            off_distribution = off_distribution_of(
+                l5d.decide_market(slug, obs, now, l5d.pv2.load_v2()))
+        except Exception:
+            off_distribution = None
+    strict_rows = strict_rows_from_sports(by_slug, now)
+    cats = replay.category_spring_evidence(strict_rows, now)
+    mine = strict_rows.get(slug) or {}
+    cat_key = replay.slug_category(slug)
+    cat_ev = cats.get(cat_key) or {"completions_60m": 0,
+                                   "distinct_markets_60m": 0,
+                                   "markets": [], "bar_met": False}
+    fresh = st.analyze_market(obs, now, 900.0)
+    last = sorted(obs, key=lambda o: st._ts(o) or 0)[-1]
+    row = {
+        "slug": slug,
+        "evidence_t": st._ts(last),
+        "bid": last.get("bid"),
+        "trades_1h": fresh.get("inferred_trades"),
+        "two_sided_trades": fresh.get("two_sided_inferred_flow"),
+        # the sports path has no persistence-v2 distribution check of its
+        # own; the decision layer supplies it and absence stays unknown
+        "off_distribution": off_distribution,
+        "spring_pair_target": mine.get("spring_pair_target"),
+        "spring_matched_slots": mine.get("spring_matched_slots"),
+        "spring_repeated_completion": mine.get("spring_repeated_completion"),
+        "spring_slot_counts_theoretical":
+            mine.get("spring_slot_counts_theoretical"),
+        "spring_evaluable_slots": mine.get("spring_evaluable_slots"),
+        "spring_matched_fraction": mine.get("spring_matched_fraction"),
+        "spring_pair_costs": mine.get("spring_pair_costs") or [],
+        "spring_fee_safe_completions":
+            mine.get("spring_fee_safe_completions"),
+        "spring_evidence_missing": mine.get("spring_evidence_missing") or [],
+        "spring_category": cat_key,
+        "spring_category_evidence": cat_ev,
+        "spring_category_bar_met": bool(cat_ev.get("bar_met")),
+        "evidence_provenance": PROVENANCE_INFERRED,
+        "evidence_source": SOURCE_SPORTS,
+        "action_model_sha": model_sha,
+        "labels": "SHADOW/THEORETICAL strict replay recomputed over the "
+                  "keyless sports tape; NOT authenticated recorder evidence",
+    }
+    row["probe_evidence"] = _probe_evidence(row)
+    return row
+
+
+def compose_evidence_from_recorder(status: Mapping[str, Any], slug: str,
+                                   now: float,
+                                   model_sha: Optional[str] = None
+                                   ) -> Optional[dict]:
+    """Build the guard's evidence payload from the AUTHENTICATED recorder's
+    own status document.
+
+    This is the ONLY path allowed to claim authenticated provenance, and it
+    claims it for exactly one reason: the recorder observes trade direction
+    on the authenticated stream instead of inferring it from lastTradePx vs
+    BBO. Nothing here relabels a sports payload — the caller must hand in a
+    recorder status, and every other field still comes from the recorder's
+    own row via the guard's canonical reader, so the strict predicate,
+    freshness, band, category bar and fee-safety gates all apply unchanged.
+    """
+    row = entry.evidence_from_status(status, slug)
+    if not row:
+        return None
+    row = dict(row)
+    row["evidence_provenance"] = PROVENANCE_AUTHENTICATED
+    row["evidence_source"] = SOURCE_RECORDER
+    if row.get("action_model_sha") is None:
+        row["action_model_sha"] = model_sha
+    row["labels"] = ("OBSERVED authenticated recorder evidence; trade "
+                     "direction observed on the authenticated stream, "
+                     "not inferred")
+    row["probe_evidence"] = _probe_evidence(
+        row, source_label="recorder-sourced, authenticated provenance")
+    return row
+
+
+def diagnose_missing_slug(status: Mapping[str, Any], slug: str) -> str:
+    """Say WHY a slug is absent from the recorder's spring_watch.
+
+    A bare ``no_rows_for_slug`` reads as "the pin did not take", which
+    sends the operator back to Railway when the pin is usually fine and
+    the price simply moved: spring_watch admits an INCLUSIVE 0.35-0.65
+    band, so a candidate parked on the ceiling drops out the moment it
+    ticks to 0.66. Distinguish that from a seating failure, using only
+    the status document already in hand -- no recorder change and no
+    redeploy, so this works against the recorder that is running now.
+    """
+    for key in ("spring_watch", "eligible_markets", "top_markets"):
+        for row in status.get(key) or []:
+            if not isinstance(row, Mapping) or row.get("slug") != slug:
+                continue
+            bid = row.get("bid")
+            try:
+                b = float(bid)
+            except (TypeError, ValueError):
+                return (f"observed in {key} but carries no usable bid "
+                        f"({bid!r}); spring_watch needs a priced book")
+            if not (0.35 <= b <= 0.65):
+                return (f"observed in {key} at bid {b}, OUTSIDE the "
+                        "inclusive 0.35-0.65 spring_watch band -- the pin "
+                        "is fine, the price moved; re-run when it is back "
+                        "in band rather than re-pinning")
+            if not row.get("both_sides_served"):
+                return (f"observed in {key} at bid {b} but both_sides_served "
+                        "is false; spring_watch needs a two-sided book")
+            return (f"observed in {key} at bid {b}, in band -- ranked below "
+                    "the spring_watch limit rather than filtered out")
+    seating = [d for d in
+               ((status.get("diagnostics") or {}).get("spring_pinned") or [])
+               if isinstance(d, Mapping) and d.get("slug") == slug]
+    if seating:
+        return ("not in any evidence list; recorder seating says "
+                + "; ".join(str(d.get("reason")) for d in seating))
+    return ("absent from this recorder's status entirely -- the pin has "
+            "not been picked up by the RUNNING deployment (check that the "
+            "deployment carrying PMUS_WS_PIN_SLUGS actually built)")
+
+
+def load_recorder_status(path: Path) -> dict:
+    """Read the authenticated recorder's status document from disk."""
+    return parse_recorder_status(Path(path).read_text(encoding="utf-8"),
+                                 str(path))
+
+
+def parse_recorder_status(text: str, origin: str = "<text>") -> dict:
+    """Parse the recorder's status document.
+
+    Accepts either the status JSON itself or a JSONL stream whose last
+    parseable object is the newest status, which is how the recorder
+    writes its durable heartbeat. Shared by the file path and the
+    recorder's read-only HTTP handoff so both parse identically.
+    """
+    path = origin
+    text = (text or "").strip()
+    if not text:
+        raise ValueError(f"empty recorder status: {path}")
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, Mapping):
+            return dict(obj)
+    except json.JSONDecodeError:
+        pass
+    newest = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cand = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(cand, Mapping):
+            newest = cand
+    if newest is None:
+        raise ValueError(f"no JSON object in recorder status: {path}")
+    return dict(newest)
+
+
+def _probe_evidence(row: Mapping[str, Any],
+                    source_label: str = "sports-sourced, inferred "
+                                        "provenance") -> dict:
+    """Advisory READY_FOR_REVIEW verdict in the recorder's own shape, so
+    the entry guard can validate a sports-sourced payload unchanged."""
+    import os
+    floor = max(replay.CATEGORY_BAR_COMPLETIONS,
+                int(os.getenv("PMUS_SPRING_PROBE_MIN_COMPLETIONS", "3")))
+    reasons: list[str] = []
+    trades = row.get("trades_1h")
+    if trades is None or int(trades) < session.SPRING_MIN_TRADES_1H:
+        reasons.append(f"thin_flow:{trades}")
+    if row.get("two_sided_trades") is not True:
+        reasons.append("one_directional_flow")
+    reasons.extend(row.get("spring_evidence_missing") or [])
+    cat = row.get("spring_category_evidence") or {}
+    if not cat.get("bar_met"):
+        reasons.append(
+            f"category_bar_not_met:{cat.get('completions_60m', 0)}"
+            f"completions/{cat.get('distinct_markets_60m', 0)}markets"
+            f"<{replay.CATEGORY_BAR_COMPLETIONS}/"
+            f"{replay.CATEGORY_BAR_DISTINCT_MARKETS}")
+    n_cat = int(cat.get("completions_60m") or 0)
+    if n_cat < floor:
+        reasons.append(f"insufficient_category_completions:{n_cat}<{floor}")
+    return {"status": ("READY_FOR_REVIEW" if not reasons
+                       else "INSUFFICIENT_EVIDENCE"),
+            "reasons": reasons, "min_completions_required": floor,
+            "labels": f"ADVISORY; {source_label}"}
+
+
+def _gate(layer: str, name: str, blocker: Optional[str]) -> dict:
+    return {"layer": layer, "gate": name, "ok": blocker is None,
+            "blocker": blocker}
+
+
+def spring_readiness(by_slug: Mapping[str, list], slug: str,
+                     now: Optional[float] = None,
+                     model_sha: Optional[str] = None,
+                     durable_reason=None,
+                     off_distribution: Optional[bool] = None,
+                     evidence: Optional[Mapping[str, Any]] = None) -> dict:
+    """The binary answer, with every blocker named.
+
+    `evidence` lets a caller supply an already-composed payload — the
+    authenticated recorder path uses it. When omitted the payload is
+    composed from the keyless sports tape, which is permanently
+    `inferred` and therefore permanently blocked at the provenance gate.
+    Every other gate runs identically on either payload.
+    """
+    now = time.time() if now is None else now
+    gates: list[dict] = []
+    if evidence is None:
+        evidence = compose_evidence(slug, by_slug, now, model_sha=model_sha,
+                                    off_distribution=off_distribution)
+
+    gates.append(_gate(LAYER_REPLICATION, "evidence_rows_present",
+                       None if evidence else f"no_rows_for_slug:{slug}"))
+    if evidence:
+        gates.append(_gate(
+            LAYER_REPLICATION, "spring_entry_guard_predicate",
+            entry.strict_evidence_reason(slug, evidence, now=now)))
+        fee_safe = evidence.get("spring_fee_safe_completions")
+        gates.append(_gate(
+            LAYER_ECONOMICS, "fee_safe_completion_observed",
+            None if (fee_safe or 0) >= 1 else
+            f"no_fee_safe_completion_in_window:{fee_safe}"))
+        try:
+            pt_ok = evidence.get("spring_pair_target") is not None and \
+                replay.D(str(evidence["spring_pair_target"])) <= \
+                session.SPRING_PAIR_TARGET
+        except Exception:
+            pt_ok = False
+        gates.append(_gate(
+            LAYER_ECONOMICS, "observation_cap_within_owner_decision",
+            None if pt_ok else
+            f"pair_target_invalid:{evidence.get('spring_pair_target')}"))
+        # PROVENANCE: inferred direction is not an authenticated fill
+        # record. This gate is why a sports candidate cannot arm alone.
+        gates.append(_gate(
+            LAYER_PROVENANCE, "authenticated_source_required",
+            None if evidence.get("evidence_provenance") ==
+            PROVENANCE_AUTHENTICATED else
+            (f"evidence_provenance_{PROVENANCE_INFERRED}: the spring "
+             f"entry guard admits {SOURCE_RECORDER}; this payload came "
+             f"from {SOURCE_SPORTS}. Corroborate the SAME slug in the "
+             "authenticated recorder's spring_watch before arming.")))
+
+    reason = (durable_reason() if durable_reason
+              else entry.durable_state_reason())
+
+    # ARM-TIME control, deliberately NOT a readiness blocker. Readiness
+    # means "an owner may now review and decide"; the dual key is what
+    # the owner supplies AFTER deciding. Counting it here would make
+    # SPRING_READY_FOR_REVIEW unreachable while DISARMED, which is the
+    # exact state the review is supposed to happen in. The key still
+    # gates actual arming inside the session and entry guard, untouched.
+    arming = [] if session.armed() else [
+        "isolated_dual_key: PMUS_SPRING_LIVE/SESSION_ID/ARM absent "
+        "(expected while DISARMED; operator-held, supplied only at arm "
+        "time after approval)"]
+    # The durable mount is an ARM-TIME precondition on the probe host,
+    # exactly like the dual key above, so it belongs here rather than in
+    # blockers. This readiness report is routinely run OFF that host --
+    # from a repo checkout against a dumped recorder status -- where
+    # PMUS_Q1_STATE_DIR is the q1 default and the answer says nothing
+    # about the probe service. Reporting it as a readiness blocker there
+    # was simply wrong, and the owner has since verified the isolated
+    # volume IS mounted on the probe service.
+    #
+    # This removes nothing: the probe entry guard calls
+    # durable_state_reason() itself on the arming path and returns
+    # DURABLE_STATE_REQUIRED before any credential, transport or network
+    # use, so an armed probe on container-layer storage still cannot
+    # place an order. Verified by test below.
+    if reason:
+        arming.append(
+            f"durable_spring_state: {reason} (evaluated HERE, not on the "
+            f"probe host; authoritative only when run on the service that "
+            f"mounts {SPRING_STATE_DIR}. Enforced independently at arm "
+            f"time by the probe entry guard.)")
+
+    blockers = [f"{g['gate']}: {g['blocker']}" for g in gates
+                if not g["ok"]]
+    layers = {}
+    for layer in (LAYER_REPLICATION, LAYER_ECONOMICS, LAYER_PROVENANCE,
+                  LAYER_OPERATIONAL):
+        rows = [g for g in gates if g["layer"] == layer]
+        layers[layer] = {
+            "ok": bool(rows) and all(g["ok"] for g in rows),
+            "blockers": [f"{g['gate']}: {g['blocker']}" for g in rows
+                         if not g["ok"]],
+        }
+    return {
+        "slug": slug,
+        "SPRING_READY_FOR_REVIEW": not blockers,
+        "blockers": blockers,
+        "arming_prerequisites": arming,
+        "layers": layers,
+        "gates": gates,
+        "evidence": evidence,
+        "required_mount": SPRING_STATE_DIR,
+        "order_entry": False, "realized_pnl": None, "labels": LABELS,
+    }
+
+
+def reconcile(by_slug: Mapping[str, list],
+              now: Optional[float] = None) -> dict:
+    """Full picture: the shadow's own preflight candidate alongside the
+    spring service's binary verdict on that same market. The two are
+    reported separately BY CONSTRUCTION (item 3)."""
+    now = time.time() if now is None else now
+    decisions = l5d.slate_decisions(by_slug, now=now)
+    cand = decisions.get("preflight_candidate")
+    slug = cand["slug"] if cand else None
+    row = next((r for r in decisions.get("rows") or []
+                if r.get("slug") == slug), None)
+    readiness = (spring_readiness(by_slug, slug, now=now,
+                                  model_sha=decisions.get("model_sha"),
+                                  off_distribution=off_distribution_of(row))
+                 if slug else None)
+    return {
+        "kind": "PMUS_SPRING_PREFLIGHT_RECONCILE",
+        "t": now,
+        "SHADOW_PREFLIGHT_CANDIDATE": cand,
+        "SPRING_READY_FOR_REVIEW": bool(
+            readiness and readiness["SPRING_READY_FOR_REVIEW"]),
+        "spring_readiness": readiness,
+        "candidates_evaluated": decisions.get("candidates_evaluated"),
+        "note": ("SHADOW_PREFLIGHT_CANDIDATE means the sports shadow "
+                 "found a fresh actionable market. It does NOT mean the "
+                 "spring probe would accept it; only "
+                 "SPRING_READY_FOR_REVIEW=true means that, and it "
+                 "additionally requires authenticated provenance, a "
+                 f"durable {SPRING_STATE_DIR} mount, and the "
+                 "operator-held dual key."),
+        "order_entry": False, "realized_pnl": None, "labels": LABELS,
+    }
+
+
+def load_collector_rows(root: Path, hours: float = 2.0,
+                        now: Optional[float] = None) -> dict:
+    """Read bbo_book rows per slug from the collector's durable tape."""
+    from datetime import datetime, timezone
+    now = time.time() if now is None else now
+    since = datetime.fromtimestamp(now - hours * 3600, timezone.utc)
+    by_slug: dict[str, list] = {}
+    for r in st.load_tape(root, since):
+        if r.get("kind") == "bbo_book" and r.get("slug"):
+            by_slug.setdefault(r["slug"], []).append(r)
+    return by_slug
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--collector-root", default="/state/pmus-sports",
+                    help="durable root of the keyless sports collector")
+    ap.add_argument("--slug", default="",
+                    help="market to test; default = freshest shadow "
+                         "preflight candidate")
+    ap.add_argument("--hours", type=float, default=2.0)
+    ap.add_argument("--recorder-status", default="",
+                    help="path to the AUTHENTICATED recorder's status "
+                         "document (e.g. /state/pmus-ws/status.json). "
+                         "Requires --slug. This is the only mode that can "
+                         "satisfy the provenance gate: the keyless "
+                         "collector infers trade direction, so a "
+                         "--collector-root run is permanently blocked at "
+                         "EVIDENCE_PROVENANCE no matter how strong the "
+                         "market evidence gets.")
+    args = ap.parse_args()
+    if args.recorder_status:
+        if not args.slug:
+            ap.error("--recorder-status requires --slug")
+        now = time.time()
+        status = load_recorder_status(Path(args.recorder_status))
+        evidence = compose_evidence_from_recorder(status, args.slug, now)
+        readiness = spring_readiness({}, args.slug, now=now,
+                                     evidence=evidence)
+        if evidence is None:
+            why = diagnose_missing_slug(status, args.slug)
+            readiness["blockers"] = [
+                (f"evidence_rows_present: no_rows_for_slug:{args.slug} "
+                 f"-- {why}") if b.startswith("evidence_rows_present") else b
+                for b in readiness["blockers"]]
+            readiness["missing_slug_diagnosis"] = why
+        out = {"kind": "PMUS_SPRING_PREFLIGHT_RECONCILE",
+               "SHADOW_PREFLIGHT_CANDIDATE": None,
+               "SPRING_READY_FOR_REVIEW":
+                   readiness["SPRING_READY_FOR_REVIEW"],
+               "spring_readiness": readiness, "labels": LABELS}
+        print(json.dumps(out, indent=1, default=str))
+        return 0
+    by_slug = load_collector_rows(Path(args.collector_root), args.hours)
+    if args.slug:
+        out = spring_readiness(by_slug, args.slug)
+        out = {"kind": "PMUS_SPRING_PREFLIGHT_RECONCILE",
+               "SHADOW_PREFLIGHT_CANDIDATE": None,
+               "SPRING_READY_FOR_REVIEW": out["SPRING_READY_FOR_REVIEW"],
+               "spring_readiness": out, "labels": LABELS}
+    else:
+        out = reconcile(by_slug)
+    print(json.dumps(out, indent=1, default=str))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,429 @@
+{
+  "n_parents": 1130,
+  "executed_qty_modes": [
+    [
+      100.0,
+      225
+    ],
+    [
+      5.0,
+      34
+    ],
+    [
+      20.0,
+      25
+    ],
+    [
+      10.0,
+      25
+    ],
+    [
+      80.0,
+      25
+    ],
+    [
+      30.0,
+      15
+    ],
+    [
+      99.99,
+      13
+    ],
+    [
+      15.0,
+      12
+    ],
+    [
+      25.0,
+      12
+    ],
+    [
+      35.0,
+      9
+    ],
+    [
+      6.0,
+      9
+    ],
+    [
+      95.0,
+      8
+    ]
+  ],
+  "share_exactly_100": 0.1894,
+  "is_100_a_base_lot_or_a_regime": {
+    "share_100_by_probability": {
+      "0.10-0.30": 0.1593,
+      "0.30-0.50": 0.1864,
+      "<=0.10": 0.2511,
+      "0.50-0.70": 0.1357,
+      "0.70-0.90": 0.1269,
+      ">0.90": 0.3404
+    },
+    "reads": "a base lot appears at a similar rate in EVERY probability regime; a regime artifact concentrates"
+  },
+  "multiples_of_base_unit": {
+    "1": 0.508,
+    "5": 0.3708,
+    "10": 0.2912,
+    "20": 0.2425,
+    "25": 0.208,
+    "50": 0.1956,
+    "100": 0.1894
+  },
+  "executed_qty_by_probability": {
+    "0.10-0.30": {
+      "n": 295,
+      "median": 30.4545,
+      "mean": 43.25,
+      "modes": [
+        [
+          100.0,
+          52
+        ],
+        [
+          5.0,
+          8
+        ],
+        [
+          10.0,
+          8
+        ],
+        [
+          20.0,
+          6
+        ],
+        [
+          99.99,
+          6
+        ]
+      ]
+    },
+    "0.30-0.50": {
+      "n": 177,
+      "median": 25.0,
+      "mean": 41.37,
+      "modes": [
+        [
+          100.0,
+          34
+        ],
+        [
+          20.0,
+          7
+        ],
+        [
+          25.0,
+          6
+        ],
+        [
+          80.0,
+          6
+        ],
+        [
+          5.0,
+          5
+        ]
+      ]
+    },
+    "<=0.10": {
+      "n": 231,
+      "median": 59.0,
+      "mean": 58.14,
+      "modes": [
+        [
+          100.0,
+          61
+        ],
+        [
+          99.99,
+          6
+        ],
+        [
+          30.0,
+          5
+        ],
+        [
+          10.0,
+          4
+        ],
+        [
+          35.0,
+          4
+        ]
+      ]
+    },
+    "0.50-0.70": {
+      "n": 199,
+      "median": 23.2727,
+      "mean": 37.78,
+      "modes": [
+        [
+          100.0,
+          28
+        ],
+        [
+          5.0,
+          11
+        ],
+        [
+          10.0,
+          7
+        ],
+        [
+          80.0,
+          4
+        ],
+        [
+          6.0,
+          3
+        ]
+      ]
+    },
+    "0.70-0.90": {
+      "n": 134,
+      "median": 26.7185,
+      "mean": 38.76,
+      "modes": [
+        [
+          100.0,
+          17
+        ],
+        [
+          5.0,
+          5
+        ],
+        [
+          20.0,
+          5
+        ],
+        [
+          4.0,
+          4
+        ],
+        [
+          80.0,
+          4
+        ]
+      ]
+    },
+    ">0.90": {
+      "n": 94,
+      "median": 67.0,
+      "mean": 60.15,
+      "modes": [
+        [
+          100.0,
+          33
+        ],
+        [
+          80.0,
+          4
+        ],
+        [
+          5.0,
+          3
+        ],
+        [
+          10.0,
+          2
+        ],
+        [
+          20.0,
+          2
+        ]
+      ]
+    }
+  },
+  "executed_qty_by_inventory_before": {
+    "100-400": {
+      "n": 176,
+      "median": 28.0,
+      "mean": 40.64,
+      "modes": [
+        [
+          100.0,
+          27
+        ],
+        [
+          5.0,
+          7
+        ],
+        [
+          20.0,
+          5
+        ],
+        [
+          15.0,
+          4
+        ],
+        [
+          35.0,
+          3
+        ]
+      ]
+    },
+    ">400": {
+      "n": 789,
+      "median": 37.03,
+      "mean": 48.31,
+      "modes": [
+        [
+          100.0,
+          179
+        ],
+        [
+          5.0,
+          22
+        ],
+        [
+          10.0,
+          22
+        ],
+        [
+          99.99,
+          13
+        ],
+        [
+          30.0,
+          11
+        ]
+      ]
+    },
+    "0": {
+      "n": 75,
+      "median": 37.28,
+      "mean": 44.14,
+      "modes": [
+        [
+          80.0,
+          14
+        ],
+        [
+          20.0,
+          8
+        ],
+        [
+          100.0,
+          8
+        ],
+        [
+          5.0,
+          3
+        ],
+        [
+          8.0,
+          2
+        ]
+      ]
+    },
+    "<=25": {
+      "n": 24,
+      "median": 23.4783,
+      "mean": 27.64,
+      "modes": [
+        [
+          1.0,
+          2
+        ],
+        [
+          6.0,
+          2
+        ],
+        [
+          10.0,
+          2
+        ],
+        [
+          80.0,
+          2
+        ],
+        [
+          5.0,
+          1
+        ]
+      ]
+    },
+    "25-100": {
+      "n": 66,
+      "median": 25.641,
+      "mean": 39.91,
+      "modes": [
+        [
+          100.0,
+          10
+        ],
+        [
+          80.0,
+          7
+        ],
+        [
+          15.0,
+          4
+        ],
+        [
+          20.0,
+          2
+        ],
+        [
+          0.43,
+          1
+        ]
+      ]
+    }
+  },
+  "parent_arrival_gap_s": {
+    "n": 1060,
+    "median": 8,
+    "p25": 3,
+    "p75": 21,
+    "share_within_1s": 0.1604,
+    "share_within_5s": 0.384
+  },
+  "price_ladders_within_5s": {
+    "n": 290,
+    "tick_gap_modes": [
+      [
+        1.0,
+        113
+      ],
+      [
+        2.0,
+        57
+      ],
+      [
+        3.0,
+        37
+      ],
+      [
+        0.0,
+        16
+      ],
+      [
+        4.0,
+        16
+      ],
+      [
+        6.0,
+        8
+      ]
+    ],
+    "median_dt_s": 3
+  },
+  "opposite_outcome_parents_within_5s": {
+    "n": 271,
+    "median_implied_pair_cost": 0.99,
+    "share_pair_below_1": 0.679
+  },
+  "repeated_same_qty_same_price": 23,
+  "execution_lifetime_lower_bound_s": {
+    "note": "NOT order lifetime -- says nothing about submission or cancellation",
+    "share_multi_timestamp": 0.1115,
+    "p50": 2
+  },
+  "labels": "executed_qty is a LOWER BOUND on order size: OrderFilled reports what MATCHED, so an order for 200 that filled 100 and was cancelled is indistinguishable from an order for 100.",
+  "label": "PARENT_ORDER_SURFACE_GEOMETRY_V1",
+  "n_public_fills": 3000,
+  "tx_attempted": 1600,
+  "tx_missing": 0
+}

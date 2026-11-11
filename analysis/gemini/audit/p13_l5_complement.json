@@ -1,0 +1,187 @@
+{
+  "label": "P13_L5_COMPLEMENT_V1",
+  "n_windows": 13592,
+  "source": [
+    "data/l5/raw/activity.jsonl",
+    "data/l5/raw/activity_gap.jsonl.gz"
+  ],
+  "by_family": {
+    "btc-updown-5m": {
+      "n_windows": 8089,
+      "n_ever_two_sided": 5501,
+      "frac_ever_two_sided": 0.6801,
+      "same_side_fills_before_first_opposite": {
+        "n": 5501,
+        "mean": 2.301,
+        "min": 1,
+        "max": 18,
+        "p10": 1,
+        "p25": 1,
+        "p50": 2,
+        "p75": 3,
+        "p90": 5
+      },
+      "latency_s_to_first_opposite": {
+        "n": 5501,
+        "mean": 82.3494,
+        "min": 0,
+        "max": 277,
+        "p10": 14,
+        "p25": 31,
+        "p50": 66,
+        "p75": 122,
+        "p90": 177
+      },
+      "imbalance_before_first_opposite": {
+        "n": 5501,
+        "mean": 89.2274,
+        "min": 0.01,
+        "max": 682.6499,
+        "p10": 23.51,
+        "p25": 50.0,
+        "p50": 74.67,
+        "p75": 110.0646,
+        "p90": 180.0
+      },
+      "pair_cost_after_first_opposite": {
+        "n": 5501,
+        "mean": 0.9944,
+        "min": 0.17,
+        "max": 1.89,
+        "p10": 0.7369,
+        "p25": 0.8574,
+        "p50": 0.98,
+        "p75": 1.1265,
+        "p90": 1.28
+      },
+      "frac_pair_cost_after_first_opposite_gt": {
+        "1.00": 0.4477,
+        "1.05": 0.3614,
+        "1.10": 0.2798
+      },
+      "pair_cost_min_after": {
+        "n": 5501,
+        "mean": 0.9168,
+        "min": 0.17,
+        "max": 1.89,
+        "p10": 0.6879,
+        "p25": 0.7951,
+        "p50": 0.9085,
+        "p75": 1.02,
+        "p90": 1.1626
+      },
+      "pair_cost_final": {
+        "n": 5501,
+        "mean": 0.9751,
+        "min": 0.17,
+        "max": 1.89,
+        "p10": 0.7391,
+        "p25": 0.8554,
+        "p50": 0.9643,
+        "p75": 1.0861,
+        "p90": 1.2313
+      },
+      "frac_inventory_crossed_zero": 0.5228,
+      "n_fills_per_window": {
+        "n": 8089,
+        "mean": 6.4045,
+        "min": 1,
+        "max": 69,
+        "p10": 1,
+        "p25": 3,
+        "p50": 5,
+        "p75": 9,
+        "p90": 13
+      }
+    },
+    "btc-updown-15m": {
+      "n_windows": 5503,
+      "n_ever_two_sided": 5461,
+      "frac_ever_two_sided": 0.9924,
+      "same_side_fills_before_first_opposite": {
+        "n": 5461,
+        "mean": 4.5523,
+        "min": 1,
+        "max": 45,
+        "p10": 1,
+        "p25": 2,
+        "p50": 3,
+        "p75": 6,
+        "p90": 10
+      },
+      "latency_s_to_first_opposite": {
+        "n": 5461,
+        "mean": 44.8742,
+        "min": 0,
+        "max": 666,
+        "p10": 3,
+        "p25": 10,
+        "p50": 26,
+        "p75": 59,
+        "p90": 109
+      },
+      "imbalance_before_first_opposite": {
+        "n": 5461,
+        "mean": 85.1296,
+        "min": 0.01,
+        "max": 620.5483,
+        "p10": 16.7879,
+        "p25": 30.0,
+        "p50": 62.1253,
+        "p75": 117.0819,
+        "p90": 183.6022
+      },
+      "pair_cost_after_first_opposite": {
+        "n": 5461,
+        "mean": 0.9862,
+        "min": 0.5637,
+        "max": 1.5237,
+        "p10": 0.8935,
+        "p25": 0.945,
+        "p50": 0.9879,
+        "p75": 1.0228,
+        "p90": 1.08
+      },
+      "frac_pair_cost_after_first_opposite_gt": {
+        "1.00": 0.3745,
+        "1.05": 0.1611,
+        "1.10": 0.0685
+      },
+      "pair_cost_min_after": {
+        "n": 5461,
+        "mean": 0.8994,
+        "min": 0.5581,
+        "max": 1.208,
+        "p10": 0.8167,
+        "p25": 0.8636,
+        "p50": 0.9057,
+        "p75": 0.9422,
+        "p90": 0.9711
+      },
+      "pair_cost_final": {
+        "n": 5461,
+        "mean": 0.9666,
+        "min": 0.5897,
+        "max": 1.2951,
+        "p10": 0.8988,
+        "p25": 0.9367,
+        "p50": 0.9684,
+        "p75": 0.9984,
+        "p90": 1.0304
+      },
+      "frac_inventory_crossed_zero": 0.8843,
+      "n_fills_per_window": {
+        "n": 5503,
+        "mean": 126.0509,
+        "min": 1,
+        "max": 756,
+        "p10": 44,
+        "p25": 71,
+        "p50": 110,
+        "p75": 163,
+        "p90": 228
+      }
+    }
+  },
+  "labels": "FILLS ONLY. Resting orders, cancels, reprices and maker/taker role are not in this feed and are not inferred. `pair_cost` is the size-weighted average price of the Up leg plus that of the Down leg, i.e. what a matched pair cost on average -- not a P&L."
+}

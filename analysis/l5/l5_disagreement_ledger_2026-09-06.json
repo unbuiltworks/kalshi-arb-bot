@@ -1,0 +1,57 @@
+{
+  "workstream": "OWNER 5558072959 item 1 -- counterfactual disagreement ledger over the recorded live decisions (read-only; no policy, cap, gate or model change)",
+  "built_utc": "2026-09-06T08:50:00+00:00",
+  "source": "probe deployment 41c26cec session_end records 02:29:02Z-04:02:53Z (67 sessions, 240 of the ledger's 252 decisions -- the last 8 per session are logged; 12 truncated), 80 submitted orders; market aec-mlb-wsh-lad-2026-09-05 held residual -0.03 (YES deficit) after the 11 maker fills of 02:10-02:21Z",
+  "cause_classes": ["behavioral_model_mismatch", "implementation_defect", "venue_execution_constraint", "explicit_safety_override", "data_observability_limitation", "unresolved"],
+  "dimensions": {
+    "relation_side": {
+      "frozen_l5": "state p25-45c|tte>10m|imb1-10 x last_rel complete: complete 0.757 / extend 0.243 / open 0",
+      "policy_draw": "stochastic: complete 160 / extend 80 -- but only 6 distinct seeds over 240 decisions (decision_idx restarted per resumed session), i.e. one 6-draw sequence replayed 40 times",
+      "recorded_acted": "complete 160 / extend 80 (record field)",
+      "actually_submitted": "80 COMPLETE orders (YES @0.420 x78, YES @0.225 x2); 0 EXTEND orders; 160 decisions submitted nothing",
+      "decomposition_of_the_160_no_op_rows": {
+        "108": "COMPLETE with no fee-safe / legal maker price (YES book at 0.04-0.18 after the market collapsed; surplus-side avg cost 0.557 -> hard bound / venue MIN_PRICE) -- recorded as acted=complete, refusal=None",
+        "26": "EXTEND draw converted to COMPLETE by the $0.05 spend cap (divergence recorded, acted left as extend) and then submitted as COMPLETE orders (these ARE among the 80 orders)",
+        "54": "EXTEND draw stopped by the q1 entry band (bid 0.04-0.175 < MIN_PRICE 0.20) -- recorded as acted=extend, divergence none:stochastic_draw_executed"
+      },
+      "cause": "implementation_defect (evidence record): no-op decisions written as executed actions; spend-cap conversion did not update the executed relation. FIXED at the source: mark_noop() records HOLD + named refusal + attempted relation; spend cap writes acted=executed relation and acted_draw. Evaluator reports acted_without_order_rows on pre-fix rows.",
+      "secondary_cause": "implementation_defect (seed restart) -> the relation L1 0.18 on these rows is a replayed draw, not 240 independent draws; FIXED f465fbc9; seed_provenance reported",
+      "residual_behavioral_question": "none measurable from these rows; re-measure on post-fix decisions"
+    },
+    "target_price_aggressiveness": {
+      "frozen_l5": "COMPLETE joins the deficit-side touch (bid); p_taker 0.025 in tte>10m",
+      "clone_behavioral_target": "same touch (recorded per COMPLETE since f569203f as counterfactual_l5_price.l5_touch_px)",
+      "executed_resting_price": "fee-safe bound min(0.98 - surplus_avg, hard >=1c-after-fees bound, opp_ask - tick) = 0.420 on 78 orders; 0.225 on 2 (rejected as post-only cross while the book collapsed)",
+      "touch_bbo_at_decision": "NOT in the pre-f569203f records (data_observability_limitation for these 80 orders); recorded from now on",
+      "effective_pair_economics": "pair at executed price 0.557 + 0.420 = 0.977 <= 0.98 target; pair at L5 touch unknown for these rows",
+      "transformations": ["L5 touch (bid of deficit side)", "-> min(spring 0.98 - surplus_avg, hard bound, opp_ask - tick) [explicit_safety_override: owner fee-safe rule]", "-> floor to tick", "-> post-only, 30 s maximum rest [owner execution policy, class (b) in execution_constraints.json]"],
+      "cause": "explicit_safety_override (fee-safe complement bound) for the price level; data_observability_limitation for the touch delta on these rows; 0/80 fills at 0.420 while the YES book sat far below (0.04-0.18) -> the resting price was never near the touch: venue_execution_constraint on top of the override",
+      "quantification": "behavioral target differs from L5: 0 of 80 (target == L5 touch by construction); execution/safety adaptation creates the difference: 80 of 80"
+    },
+    "size": {
+      "frozen_l5": "state|relation p50 10 shares (p25 4.5 / p75 19)",
+      "clone_behavioral_target": "10 shares (the frozen artifact's p50; recorded on every decision)",
+      "executable": "0.01-0.02 contracts (owner $0.05/market cap + venue minimum); ratio 0.001",
+      "cause": "explicit_safety_override -- reported separately from behavioral size fidelity (size_transformations on every decision since this build); never scored as L5 behavior"
+    },
+    "timing_cadence": {
+      "frozen_l5_unit": "gap between consecutive L5 FILLS in one window (public activity carries fills only): modal bucket per state -> next_reevaluation_s (2 s here)",
+      "historical_decomposition": "analysis/l5/l5_cadence_behavioral_unit.json: trade-to-trade median 2 s; 29% of transitions are partial fills of the SAME resting order (same outcome/side/price; 43% of the <2 s transitions); collapsing those, ORDER-EPISODE gaps are median 3 s / p75 12 s / p90 26 s (complete 4 s, extend 3 s); 78% of episodes are a single fill, 91% last < 2 s",
+      "live_clone": "decision-to-decision median 25.6 s overall; 2.1 s after a no-op COMPLETE (no order), 31.4-31.8 s after a submitted order (30 s maximum rest + poll)",
+      "interpretation": "the frozen 2 s is a FILL-ARRIVAL cadence on continuously resting L5 quotes, measured on the L5 side only when flow hits; the clone's interval is a DECISION cadence gated by a 30 s rest of ONE order. Neither number measures the other's unit. L5's fresh-order cadence (3 s median at the episode level) is still far below 30 s, so the mismatch is real at the order level too -- but its cause is the 30 s single-order rest policy (owner execution policy, class (b)), not a model deficiency and not a collector/decision-loop bottleneck (no-op decisions re-evaluate at 2.1 s).",
+      "cause": "venue_execution_constraint + explicit owner execution policy (30 s maker rest, one outstanding order) for the live number; data_observability_limitation for L5's own placement cadence (unobservable from fills); behavioral_model_mismatch NOT established",
+      "not_done": "the live executor was NOT sped up to 2 s (owner instruction); the read-only 2 s counterfactual (counterfactual_2s) records what the policy would do at that cadence while orders rest"
+    },
+    "inventory_trajectory": {
+      "recorded": "residual -0.03 (1.5 units) held across all 240 decisions; L5 imbalanced share 0.99 vs live 1.0 (gap 0.009); max 1.5 units < 3 cap",
+      "cause": "no disagreement; residual cap never bound on these rows"
+    },
+    "maker_taker": {
+      "recorded": "100% maker (80/80 post-only); L5 maker share 0.975 in this tte bucket",
+      "cause": "explicit_safety_override (taker disabled) -- gap 0.025, reported"
+    }
+  },
+  "verdict_inputs_affected": "the pre-fix 252-row acted view (action_distribution_relation, post_fill_complete_gap) overstates executed actions by 160 rows; the evaluator now reports acted_without_order_rows and seed_provenance beside those dimensions; no dimension is relabeled",
+  "fixes_landed": ["mark_noop(): no-op decisions -> HOLD + named refusal + attempted relation", "spend-cap conversion updates acted, keeps acted_draw", "size_transformations on every decision", "evaluator: acted_without_order_rows", "evaluator: seed_provenance (41b02894)"],
+  "owner_decisions_not_taken_here": ["measuring cadence on the same unit (clone fill-to-fill vs L5 fill-to-fill, or clone order-episode vs L5 order-episode) would be a spec change to the frozen gate", "any change to the 30 s single-order rest"]
+}

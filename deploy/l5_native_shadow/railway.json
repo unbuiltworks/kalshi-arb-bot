@@ -1,0 +1,30 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_service": "l5-native-shadow",
+  "_role": "L5's OWN engine on L5's OWN markets, 24/7, READ-ONLY. Runs the frozen action model (sha bbb55bf90638d2bd) against live btc-updown-15m / eth-updown-15m books and reports, per market per cycle, the modal L5 action and EXACTLY ONE primary blocker plus the full blocker set. This is the 'rawest safe L5 clone' of issue #167 comments 5594284979 / 5594313563.",
+  "_credentials": "NONE. Unauthenticated GETs to gamma-api.polymarket.com and clob.polymarket.com only. This service holds no exchange key, no wallet key and no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret, and there is NO ORDER PATH in the image -- a test parses the module AST and fails on any post/delete/create_order call.",
+  "_no_live_money": "Shadow only. order_entry=false travels on every emission. It cannot place an order even if armed, because no order transport is copied into the image.",
+  "_barriers_removed": "spring admission, gate-evidence string, 0.35-0.65 entry band, 0.98 fee-safe ceiling, 30s maker rest, reject-streak breaker, MAX_ACTIONS, MIN_REEVAL, complement-acceptance proof, sports discovery filters, event-progress clock translation. A test parses this module's AST (docstring stripped) and fails if any of them reappear.",
+  "_barriers_kept": "the money bounds ($0.05 per-market cap, the tripped daily loss stop), off_distribution because it IS L5 evidence, and maker-only because L5 is 77.3% maker. These are REPORTED as blockers, not bypassed.",
+  "_clock": "btc/eth-updown-15m serve a real endDate, so time-to-expiry is a fact here. No sports event-progress mapping is applied and none is present in the image.",
+  "_volume": "NONE. This service is stateless; it holds no tape and writes no durable state, so it cannot fill a volume the way the recorder did on 2026-09-08.",
+  "_pin": "Set RAILWAY_DOCKERFILE_PATH=/deploy/l5_native_shadow/Dockerfile so a branch push can never cross-build it with another service.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_native_shadow/Dockerfile",
+    "watchPatterns": [
+      "src/l5_native_shadow.py",
+      "src/l5_barrier_inventory.py",
+      "deploy/l5_native_shadow/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_native_shadow",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 10
+  },
+  "_env": {
+    "L5_NATIVE_INTERVAL_S": "30",
+    "_note": "default baked into src/l5_native_shadow.py; set here only to override."
+  }
+}

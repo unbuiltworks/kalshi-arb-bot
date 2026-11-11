@@ -1,0 +1,90 @@
+{
+ "n_switches": 21699,
+ "n_usable": 21699,
+ "n_train": 17343,
+ "n_valid": 4356,
+ "arm": 0.97,
+ "holdout_epoch": 1788134400,
+ "base_rate_le_097": 0.4554587769021614,
+ "identity_max_abs_residual": 2.220446049250313e-16,
+ "freeze_last_pair_rate": 0.40407392045716395,
+ "freeze_gain_rate": 0.2699202728236324,
+ "auc_single": {
+  "gain_per_unit (post-entry accumulation)": 0.9512783230006376,
+  "move_since_entry (post-entry movement)": 0.8860439184840426,
+  "entry_price (ENTRY-TIME ONLY)": 0.4973310575644314,
+  "held_side_drift_during_run": 0.6138117772111086,
+  "tte_s": 0.45129208420990036,
+  "run_length": 0.42923836339471066,
+  "last_same_side_price": 0.8914949715325367
+ },
+ "by_tte": {
+  "tte<30s": {
+   "n": 181,
+   "rate": 0.5082872928176796
+  },
+  "tte30-120s": {
+   "n": 2997,
+   "rate": 0.5198531865198532
+  },
+  "tte2-5m": {
+   "n": 6021,
+   "rate": 0.4678624813153961
+  },
+  "tte5-10m": {
+   "n": 6604,
+   "rate": 0.46698970321017563
+  },
+  "tte>10m": {
+   "n": 5896,
+   "rate": 0.39552238805970147
+  }
+ },
+ "flat_run_rate": 0.47469111199681147,
+ "drift_p50": 0.0,
+ "gain_p50": 0.0,
+ "auc_oos": {
+  "gain_per_unit": {
+   "train": 0.9510408678342935,
+   "holdout": 0.9524173027989822
+  },
+  "move_since_entry": {
+   "train": 0.8857841348624462,
+   "holdout": 0.8874162332666072
+  },
+  "last_same_side_price": {
+   "train": 0.890613777961506,
+   "holdout": 0.895260428472761
+  },
+  "avg_cost_held": {
+   "train": 0.7277745900788118,
+   "holdout": 0.7421461736814156
+  },
+  "held_side_drift_during_run": {
+   "train": 0.6145476612734105,
+   "holdout": 0.6111422925027377
+  },
+  "run_length": {
+   "train": 0.4287551112430262,
+   "holdout": 0.43117298435715784
+  },
+  "tte_s": {
+   "train": 0.45232476384264975,
+   "holdout": 0.44732068837444916
+  },
+  "residual_qty_signed": {
+   "train": 0.4541970248093355,
+   "holdout": 0.44172570378955006
+  },
+  "switches_so_far": {
+   "train": 0.5273953715236345,
+   "holdout": 0.5206880551857421
+  }
+ },
+ "oos_threshold": {
+  "thr": 0.0,
+  "above_rate": 0.8499005964214712,
+  "below_rate": 0.10878839590443685,
+  "base": 0.4511019283746556
+ }
+}

@@ -1,0 +1,1654 @@
+{
+  "coverage": {
+    "first_trade_ts": 1750000030.0,
+    "last_trade_ts": 1750000900.0,
+    "n_trades": 5,
+    "n_windows": 2,
+    "windows_by_asset": {
+      "BTC": 1,
+      "ETH": 1
+    },
+    "windows_by_length": {
+      "15": 1,
+      "5": 1
+    },
+    "windows_by_window_source": {
+      "both_agree": 2
+    },
+    "windows_with_any_pnl": 2,
+    "windows_with_resolution": 2
+  },
+  "q1_size_vs_price": {
+    "n_buy_fills": 5,
+    "per_price_band": {
+      "50_59": {
+        "dollars": {
+          "max": 110.0,
+          "mean": 80.0,
+          "median": 80.0,
+          "min": 50.0,
+          "n": 2,
+          "p25": 65.0,
+          "p75": 95.0,
+          "stdev": 42.42640687119285
+        },
+        "n_fills": 2,
+        "shares": {
+          "max": 200.0,
+          "mean": 150.0,
+          "median": 150.0,
+          "min": 100.0,
+          "n": 2,
+          "p25": 125.0,
+          "p75": 175.0,
+          "stdev": 70.71067811865476
+        }
+      },
+      "60_69": {
+        "dollars": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "n_fills": 0,
+        "shares": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        }
+      },
+      "70_79": {
+        "dollars": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "n_fills": 0,
+        "shares": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        }
+      },
+      "80_89": {
+        "dollars": {
+          "max": 41.0,
+          "mean": 41.0,
+          "median": 41.0,
+          "min": 41.0,
+          "n": 1,
+          "p25": 41.0,
+          "p75": 41.0,
+          "stdev": null
+        },
+        "n_fills": 1,
+        "shares": {
+          "max": 50.0,
+          "mean": 50.0,
+          "median": 50.0,
+          "min": 50.0,
+          "n": 1,
+          "p25": 50.0,
+          "p75": 50.0,
+          "stdev": null
+        }
+      },
+      "90_plus": {
+        "dollars": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "n_fills": 0,
+        "shares": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        }
+      },
+      "lt50": {
+        "dollars": {
+          "max": 80.0,
+          "mean": 62.5,
+          "median": 62.5,
+          "min": 45.0,
+          "n": 2,
+          "p25": 53.75,
+          "p75": 71.25,
+          "stdev": 24.748737341529164
+        },
+        "n_fills": 2,
+        "shares": {
+          "max": 200.0,
+          "mean": 150.0,
+          "median": 150.0,
+          "min": 100.0,
+          "n": 2,
+          "p25": 125.0,
+          "p75": 175.0,
+          "stdev": 70.71067811865476
+        }
+      }
+    },
+    "question": "Does position size increase at 70c / 80c / 90c?",
+    "spearman_price_vs_dollars": {
+      "n": 5,
+      "p_value": 0.5859565771946524,
+      "rho": -0.3
+    },
+    "spearman_price_vs_shares": {
+      "n": 5,
+      "p_value": 0.28274545993277456,
+      "rho": -0.5270462766947299
+    },
+    "threshold_tests": {
+      "ge_70c": {
+        "confidence": "insufficient-data",
+        "dollars_rank_sum": {
+          "median1": 41.0,
+          "median2": 65.0,
+          "n1": 1,
+          "n2": 4,
+          "p_value": 0.15729920705028522,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 4.0,
+          "z": -1.414213562373095
+        },
+        "shares_rank_sum": {
+          "median1": 50.0,
+          "median2": 150.0,
+          "n1": 1,
+          "n2": 4,
+          "p_value": 0.1360371281141437,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 4.0,
+          "z": -1.4907119849998598
+        }
+      },
+      "ge_80c": {
+        "confidence": "insufficient-data",
+        "dollars_rank_sum": {
+          "median1": 41.0,
+          "median2": 65.0,
+          "n1": 1,
+          "n2": 4,
+          "p_value": 0.15729920705028522,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 4.0,
+          "z": -1.414213562373095
+        },
+        "shares_rank_sum": {
+          "median1": 50.0,
+          "median2": 150.0,
+          "n1": 1,
+          "n2": 4,
+          "p_value": 0.1360371281141437,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 4.0,
+          "z": -1.4907119849998598
+        }
+      },
+      "ge_90c": {
+        "confidence": "insufficient-data",
+        "dollars_rank_sum": {
+          "median1": null,
+          "median2": 50.0,
+          "n1": 0,
+          "n2": 5,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        },
+        "shares_rank_sum": {
+          "median1": null,
+          "median2": 100.0,
+          "n1": 0,
+          "n2": 5,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      }
+    }
+  },
+  "q2_window_length": {
+    "group_a": "5m",
+    "group_b": "15m",
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.45,
+          "mean": 0.45,
+          "median": 0.45,
+          "min": 0.45,
+          "n": 1,
+          "p25": 0.45,
+          "p75": 0.45,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.4,
+          "mean": 0.4,
+          "median": 0.4,
+          "min": 0.4,
+          "n": 1,
+          "p25": 0.4,
+          "p75": 0.4,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.45,
+          "median2": 0.4,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "first_trade_seconds_from_start": {
+        "a": {
+          "max": 30.0,
+          "mean": 30.0,
+          "median": 30.0,
+          "min": 30.0,
+          "n": 1,
+          "p25": 30.0,
+          "p75": 30.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 60.0,
+          "mean": 60.0,
+          "median": 60.0,
+          "min": 60.0,
+          "n": 1,
+          "p25": 60.0,
+          "p75": 60.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 30.0,
+          "median2": 60.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "matched_pair_unit_cost": {
+        "a": {
+          "max": 1.073333,
+          "mean": 1.073333,
+          "median": 1.073333,
+          "min": 1.073333,
+          "n": 1,
+          "p25": 1.073333,
+          "p75": 1.073333,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.95,
+          "mean": 0.95,
+          "median": 0.95,
+          "min": 0.95,
+          "n": 1,
+          "p25": 0.95,
+          "p75": 0.95,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 1.073333,
+          "median2": 0.95,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "matched_qty": {
+        "a": {
+          "max": 100.0,
+          "mean": 100.0,
+          "median": 100.0,
+          "min": 100.0,
+          "n": 1,
+          "p25": 100.0,
+          "p75": 100.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 200.0,
+          "mean": 200.0,
+          "median": 200.0,
+          "min": 200.0,
+          "n": 1,
+          "p25": 200.0,
+          "p75": 200.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 100.0,
+          "median2": 200.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.82,
+          "mean": 0.82,
+          "median": 0.82,
+          "min": 0.82,
+          "n": 1,
+          "p25": 0.82,
+          "p75": 0.82,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.55,
+          "mean": 0.55,
+          "median": 0.55,
+          "min": 0.55,
+          "n": 1,
+          "p25": 0.55,
+          "p75": 0.55,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.82,
+          "median2": 0.55,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "residual_qty_abs": {
+        "a": {
+          "max": 50.0,
+          "mean": 50.0,
+          "median": 50.0,
+          "min": 50.0,
+          "n": 1,
+          "p25": 50.0,
+          "p75": 50.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "p25": 0.0,
+          "p75": 0.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 50.0,
+          "median2": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "seconds_first_to_opposite_side": {
+        "a": {
+          "max": 60.0,
+          "mean": 60.0,
+          "median": 60.0,
+          "min": 60.0,
+          "n": 1,
+          "p25": 60.0,
+          "p75": 60.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 240.0,
+          "mean": 240.0,
+          "median": 240.0,
+          "min": 240.0,
+          "n": 1,
+          "p25": 240.0,
+          "p75": 240.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 60.0,
+          "median2": 240.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 136.0,
+          "mean": 136.0,
+          "median": 136.0,
+          "min": 136.0,
+          "n": 1,
+          "p25": 136.0,
+          "p75": 136.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 190.0,
+          "mean": 190.0,
+          "median": 190.0,
+          "min": 190.0,
+          "n": 1,
+          "p25": 190.0,
+          "p75": 190.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 136.0,
+          "median2": 190.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "total_trades": {
+        "a": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 1,
+          "p25": 3.0,
+          "p75": 3.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 2.0,
+          "mean": 2.0,
+          "median": 2.0,
+          "min": 2.0,
+          "n": 1,
+          "p25": 2.0,
+          "p75": 2.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 3.0,
+          "median2": 2.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      }
+    },
+    "n_a": 1,
+    "n_b": 1,
+    "question": "Does behaviour differ between 5m and 15m windows?",
+    "rates": {
+      "any_buy_ge_80c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 1.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 0.0,
+          "p_value": 0.15729920705028522,
+          "x1": 1,
+          "x2": 0,
+          "z": 1.414213562373095
+        }
+      },
+      "any_buy_ge_90c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 0.0,
+          "p2": 0.0,
+          "p_value": null,
+          "x1": 0,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "balanced_at_end": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": -1.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 0.0,
+          "p2": 1.0,
+          "p_value": 0.15729920705028522,
+          "x1": 0,
+          "x2": 1,
+          "z": -1.414213562373095
+        }
+      },
+      "cheaper_side_first": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 1.0,
+          "p_value": null,
+          "x1": 1,
+          "x2": 1,
+          "z": null
+        }
+      },
+      "opposite_side_ever_bought": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 1.0,
+          "p_value": null,
+          "x1": 1,
+          "x2": 1,
+          "z": null
+        }
+      }
+    }
+  },
+  "q3_asset": {
+    "group_a": "BTC",
+    "group_b": "ETH",
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.45,
+          "mean": 0.45,
+          "median": 0.45,
+          "min": 0.45,
+          "n": 1,
+          "p25": 0.45,
+          "p75": 0.45,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.4,
+          "mean": 0.4,
+          "median": 0.4,
+          "min": 0.4,
+          "n": 1,
+          "p25": 0.4,
+          "p75": 0.4,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.45,
+          "median2": 0.4,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "first_trade_seconds_from_start": {
+        "a": {
+          "max": 30.0,
+          "mean": 30.0,
+          "median": 30.0,
+          "min": 30.0,
+          "n": 1,
+          "p25": 30.0,
+          "p75": 30.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 60.0,
+          "mean": 60.0,
+          "median": 60.0,
+          "min": 60.0,
+          "n": 1,
+          "p25": 60.0,
+          "p75": 60.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 30.0,
+          "median2": 60.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "matched_pair_unit_cost": {
+        "a": {
+          "max": 1.073333,
+          "mean": 1.073333,
+          "median": 1.073333,
+          "min": 1.073333,
+          "n": 1,
+          "p25": 1.073333,
+          "p75": 1.073333,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.95,
+          "mean": 0.95,
+          "median": 0.95,
+          "min": 0.95,
+          "n": 1,
+          "p25": 0.95,
+          "p75": 0.95,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 1.073333,
+          "median2": 0.95,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "matched_qty": {
+        "a": {
+          "max": 100.0,
+          "mean": 100.0,
+          "median": 100.0,
+          "min": 100.0,
+          "n": 1,
+          "p25": 100.0,
+          "p75": 100.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 200.0,
+          "mean": 200.0,
+          "median": 200.0,
+          "min": 200.0,
+          "n": 1,
+          "p25": 200.0,
+          "p75": 200.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 100.0,
+          "median2": 200.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.82,
+          "mean": 0.82,
+          "median": 0.82,
+          "min": 0.82,
+          "n": 1,
+          "p25": 0.82,
+          "p75": 0.82,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.55,
+          "mean": 0.55,
+          "median": 0.55,
+          "min": 0.55,
+          "n": 1,
+          "p25": 0.55,
+          "p75": 0.55,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.82,
+          "median2": 0.55,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "residual_qty_abs": {
+        "a": {
+          "max": 50.0,
+          "mean": 50.0,
+          "median": 50.0,
+          "min": 50.0,
+          "n": 1,
+          "p25": 50.0,
+          "p75": 50.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "p25": 0.0,
+          "p75": 0.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 50.0,
+          "median2": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      },
+      "seconds_first_to_opposite_side": {
+        "a": {
+          "max": 60.0,
+          "mean": 60.0,
+          "median": 60.0,
+          "min": 60.0,
+          "n": 1,
+          "p25": 60.0,
+          "p75": 60.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 240.0,
+          "mean": 240.0,
+          "median": 240.0,
+          "min": 240.0,
+          "n": 1,
+          "p25": 240.0,
+          "p75": 240.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 60.0,
+          "median2": 240.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 136.0,
+          "mean": 136.0,
+          "median": 136.0,
+          "min": 136.0,
+          "n": 1,
+          "p25": 136.0,
+          "p75": 136.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 190.0,
+          "mean": 190.0,
+          "median": 190.0,
+          "min": 190.0,
+          "n": 1,
+          "p25": 190.0,
+          "p75": 190.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 136.0,
+          "median2": 190.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "u1": 0.0,
+          "u2": 1.0,
+          "z": -1.0
+        }
+      },
+      "total_trades": {
+        "a": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 1,
+          "p25": 3.0,
+          "p75": 3.0,
+          "stdev": null
+        },
+        "b": {
+          "max": 2.0,
+          "mean": 2.0,
+          "median": 2.0,
+          "min": 2.0,
+          "n": 1,
+          "p25": 2.0,
+          "p75": 2.0,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 3.0,
+          "median2": 2.0,
+          "n1": 1,
+          "n2": 1,
+          "p_value": 0.31731050786291415,
+          "rank_biserial": 1.0,
+          "u": 0.0,
+          "u1": 1.0,
+          "u2": 0.0,
+          "z": 1.0
+        }
+      }
+    },
+    "n_a": 1,
+    "n_b": 1,
+    "question": "Does behaviour differ between BTC and ETH?",
+    "rates": {
+      "any_buy_ge_80c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 1.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 0.0,
+          "p_value": 0.15729920705028522,
+          "x1": 1,
+          "x2": 0,
+          "z": 1.414213562373095
+        }
+      },
+      "any_buy_ge_90c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 0.0,
+          "p2": 0.0,
+          "p_value": null,
+          "x1": 0,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "balanced_at_end": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": -1.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 0.0,
+          "p2": 1.0,
+          "p_value": 0.15729920705028522,
+          "x1": 0,
+          "x2": 1,
+          "z": -1.414213562373095
+        }
+      },
+      "cheaper_side_first": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 1.0,
+          "p_value": null,
+          "x1": 1,
+          "x2": 1,
+          "z": null
+        }
+      },
+      "opposite_side_ever_bought": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": 0.0,
+          "n1": 1,
+          "n2": 1,
+          "p1": 1.0,
+          "p2": 1.0,
+          "p_value": null,
+          "x1": 1,
+          "x2": 1,
+          "z": null
+        }
+      }
+    }
+  },
+  "q4_cheaper_side": {
+    "all_buys_below_50c": {
+      "ci95": [
+        0.11762077420017036,
+        0.7692757187795287
+      ],
+      "n": 5,
+      "p0": 0.5,
+      "p_hat": 0.4,
+      "p_value": 0.6547208460185772,
+      "successes": 2,
+      "z": -0.44721359549995787
+    },
+    "all_buys_confidence": "insufficient-data",
+    "first_buy_cheaper_side": {
+      "ci95": [
+        0.3423802274009781,
+        1.0
+      ],
+      "n": 2,
+      "p0": 0.5,
+      "p_hat": 1.0,
+      "p_value": 0.15729920705028522,
+      "successes": 2,
+      "z": 1.414213562373095
+    },
+    "first_buy_confidence": "insufficient-data",
+    "first_price_distribution": {
+      "max": 0.45,
+      "mean": 0.42500000000000004,
+      "median": 0.42500000000000004,
+      "min": 0.4,
+      "n": 2,
+      "p25": 0.41250000000000003,
+      "p75": 0.4375,
+      "stdev": 0.03535533905932737
+    },
+    "note": "On a binary Up/Down market the two sides price to ~$1.00, so 'cheaper side' is equivalent to a fill below $0.50 at that moment.",
+    "question": "Does he systematically buy the cheaper side (first / overall)?"
+  },
+  "q5_opposite_latency": {
+    "by_asset": {
+      "BTC": {
+        "max": 60.0,
+        "mean": 60.0,
+        "median": 60.0,
+        "min": 60.0,
+        "n": 1,
+        "p25": 60.0,
+        "p75": 60.0,
+        "stdev": null
+      },
+      "ETH": {
+        "max": 240.0,
+        "mean": 240.0,
+        "median": 240.0,
+        "min": 240.0,
+        "n": 1,
+        "p25": 240.0,
+        "p75": 240.0,
+        "stdev": null
+      }
+    },
+    "by_window_minutes": {
+      "15m": {
+        "max": 240.0,
+        "mean": 240.0,
+        "median": 240.0,
+        "min": 240.0,
+        "n": 1,
+        "p25": 240.0,
+        "p75": 240.0,
+        "stdev": null
+      },
+      "5m": {
+        "max": 60.0,
+        "mean": 60.0,
+        "median": 60.0,
+        "min": 60.0,
+        "n": 1,
+        "p25": 60.0,
+        "p75": 60.0,
+        "stdev": null
+      }
+    },
+    "latency_as_fraction_of_window": {
+      "max": 0.26666666666666666,
+      "mean": 0.23333333333333334,
+      "median": 0.23333333333333334,
+      "min": 0.2,
+      "n": 2,
+      "p25": 0.21666666666666667,
+      "p75": 0.25,
+      "stdev": 0.04714045207910316
+    },
+    "latency_median_ci95": null,
+    "latency_seconds": {
+      "max": 240.0,
+      "mean": 150.0,
+      "median": 150.0,
+      "min": 60.0,
+      "n": 2,
+      "p25": 105.0,
+      "p75": 195.0,
+      "stdev": 127.27922061357856
+    },
+    "n_windows": 2,
+    "n_windows_with_opposite_buy": 2,
+    "question": "After buying the favoured side, how quickly is the opposite side bought?",
+    "share_with_opposite_buy": 1.0
+  },
+  "q6_pair_cost_threshold": {
+    "confidence": "insufficient-data",
+    "cumulative_share_at_or_below": {
+      "<= 0.90": 0.0,
+      "<= 0.91": 0.0,
+      "<= 0.92": 0.0,
+      "<= 0.93": 0.0,
+      "<= 0.94": 0.0,
+      "<= 0.95": 0.5,
+      "<= 0.96": 0.5,
+      "<= 0.97": 0.5,
+      "<= 0.98": 0.5,
+      "<= 0.99": 0.5,
+      "<= 1.00": 0.5,
+      "<= 1.01": 0.5,
+      "<= 1.02": 0.5,
+      "<= 1.03": 0.5,
+      "<= 1.04": 0.5,
+      "<= 1.05": 0.5
+    },
+    "interpretation": "A matched Up+Down pair pays exactly $1.00 at resolution. A unit cost clustered just below $1.00 is consistent with a pair-cost target; a wide, unimodal-at-nothing spread is not.",
+    "iqr_width": 0.06166650000000018,
+    "n_windows_with_pairs": 2,
+    "question": "Does he target a combined Up+Down acquisition-cost threshold?",
+    "share_below_1_00": 0.5,
+    "share_within_1c_of_median": 0.0,
+    "share_within_2c_of_median": 0.0,
+    "unit_cost": {
+      "max": 1.073333,
+      "mean": 1.0116665,
+      "median": 1.0116665,
+      "min": 0.95,
+      "n": 2,
+      "p25": 0.98083325,
+      "p75": 1.0424997500000002,
+      "stdev": 0.08720960064408056
+    },
+    "unit_cost_median_ci95": null
+  },
+  "q7_balanced_finish": {
+    "balanced_test_vs_50pct": {
+      "ci95": [
+        0.09453120570165269,
+        0.9054687942983473
+      ],
+      "n": 2,
+      "p0": 0.5,
+      "p_hat": 0.5,
+      "p_value": 1.0,
+      "successes": 1,
+      "z": 0.0
+    },
+    "balanced_windows": 1,
+    "by_group": {
+      "asset=BTC": {
+        "balanced": 0,
+        "n": 1,
+        "share": 0.0
+      },
+      "asset=ETH": {
+        "balanced": 1,
+        "n": 1,
+        "share": 1.0
+      },
+      "window_minutes=15": {
+        "balanced": 1,
+        "n": 1,
+        "share": 1.0
+      },
+      "window_minutes=5": {
+        "balanced": 0,
+        "n": 1,
+        "share": 0.0
+      }
+    },
+    "confidence": "insufficient-data",
+    "definition": "balanced = residual <= 1.0 share or <= 1% of the larger leg",
+    "n_windows": 2,
+    "question": "How often does he finish balanced vs directional?",
+    "residual_qty_abs": {
+      "max": 50.0,
+      "mean": 25.0,
+      "median": 25.0,
+      "min": 0.0,
+      "n": 2,
+      "p25": 12.5,
+      "p75": 37.5,
+      "stdev": 35.35533905932738
+    },
+    "residual_share_of_larger_leg": {
+      "max": 0.3333333333333333,
+      "mean": 0.16666666666666666,
+      "median": 0.16666666666666666,
+      "min": 0.0,
+      "n": 2,
+      "p25": 0.08333333333333333,
+      "p75": 0.25,
+      "stdev": 0.23570226039551584
+    }
+  },
+  "q8_profit_vs_loss": {
+    "caveat": "Trading P&L only. Maker rebates, liquidity-incentive payouts and gas are NOT included and must not be assumed to be.",
+    "group_a": "profitable",
+    "group_b": "losing",
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.45,
+          "mean": 0.42500000000000004,
+          "median": 0.42500000000000004,
+          "min": 0.4,
+          "n": 2,
+          "p25": 0.41250000000000003,
+          "p75": 0.4375,
+          "stdev": 0.03535533905932737
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.42500000000000004,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "first_trade_seconds_from_start": {
+        "a": {
+          "max": 60.0,
+          "mean": 45.0,
+          "median": 45.0,
+          "min": 30.0,
+          "n": 2,
+          "p25": 37.5,
+          "p75": 52.5,
+          "stdev": 21.213203435596427
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 45.0,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "matched_pair_unit_cost": {
+        "a": {
+          "max": 1.073333,
+          "mean": 1.0116665,
+          "median": 1.0116665,
+          "min": 0.95,
+          "n": 2,
+          "p25": 0.98083325,
+          "p75": 1.0424997500000002,
+          "stdev": 0.08720960064408056
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 1.0116665,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "matched_qty": {
+        "a": {
+          "max": 200.0,
+          "mean": 150.0,
+          "median": 150.0,
+          "min": 100.0,
+          "n": 2,
+          "p25": 125.0,
+          "p75": 175.0,
+          "stdev": 70.71067811865476
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 150.0,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.82,
+          "mean": 0.685,
+          "median": 0.685,
+          "min": 0.55,
+          "n": 2,
+          "p25": 0.6175,
+          "p75": 0.7525,
+          "stdev": 0.19091883092036777
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 0.685,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "residual_qty_abs": {
+        "a": {
+          "max": 50.0,
+          "mean": 25.0,
+          "median": 25.0,
+          "min": 0.0,
+          "n": 2,
+          "p25": 12.5,
+          "p75": 37.5,
+          "stdev": 35.35533905932738
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 25.0,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "seconds_first_to_opposite_side": {
+        "a": {
+          "max": 240.0,
+          "mean": 150.0,
+          "median": 150.0,
+          "min": 60.0,
+          "n": 2,
+          "p25": 105.0,
+          "p75": 195.0,
+          "stdev": 127.27922061357856
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 150.0,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 190.0,
+          "mean": 163.0,
+          "median": 163.0,
+          "min": 136.0,
+          "n": 2,
+          "p25": 149.5,
+          "p75": 176.5,
+          "stdev": 38.18376618407357
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 163.0,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      },
+      "total_trades": {
+        "a": {
+          "max": 3.0,
+          "mean": 2.5,
+          "median": 2.5,
+          "min": 2.0,
+          "n": 2,
+          "p25": 2.25,
+          "p75": 2.75,
+          "stdev": 0.7071067811865476
+        },
+        "b": {
+          "max": null,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "n": 0,
+          "p25": null,
+          "p75": null,
+          "stdev": null
+        },
+        "confidence": "insufficient-data",
+        "rank_sum": {
+          "median1": 2.5,
+          "median2": null,
+          "n1": 2,
+          "n2": 0,
+          "p_value": null,
+          "rank_biserial": null,
+          "u": null,
+          "z": null
+        }
+      }
+    },
+    "n_a": 2,
+    "n_b": 0,
+    "n_flat": 0,
+    "n_losing": 0,
+    "n_profitable": 2,
+    "n_windows_with_pnl": 2,
+    "pnl_distribution": {
+      "max": 14.0,
+      "mean": 12.0,
+      "median": 12.0,
+      "min": 10.0,
+      "n": 2,
+      "p25": 11.0,
+      "p75": 13.0,
+      "stdev": 2.8284271247461903
+    },
+    "pnl_sources": {
+      "derived_resolution": 2
+    },
+    "question": "How do profitable and losing windows differ?",
+    "rates": {
+      "any_buy_ge_80c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": null,
+          "n1": 2,
+          "n2": 0,
+          "p1": 0.5,
+          "p2": null,
+          "p_value": null,
+          "x1": 1,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "any_buy_ge_90c": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": null,
+          "n1": 2,
+          "n2": 0,
+          "p1": 0.0,
+          "p2": null,
+          "p_value": null,
+          "x1": 0,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "balanced_at_end": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": null,
+          "n1": 2,
+          "n2": 0,
+          "p1": 0.5,
+          "p2": null,
+          "p_value": null,
+          "x1": 1,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "cheaper_side_first": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": null,
+          "n1": 2,
+          "n2": 0,
+          "p1": 1.0,
+          "p2": null,
+          "p_value": null,
+          "x1": 2,
+          "x2": 0,
+          "z": null
+        }
+      },
+      "opposite_side_ever_bought": {
+        "confidence": "insufficient-data",
+        "test": {
+          "diff": null,
+          "n1": 2,
+          "n2": 0,
+          "p1": 1.0,
+          "p2": null,
+          "p_value": null,
+          "x1": 2,
+          "x2": 0,
+          "z": null
+        }
+      }
+    },
+    "total_pnl": 24.0
+  }
+}

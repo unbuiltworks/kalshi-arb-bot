@@ -1,0 +1,416 @@
+{
+ "campaign_window": {
+  "hours": 10.671,
+  "t0": "2026-09-07T08:09:54Z",
+  "t1": "2026-09-07T11:37:18Z"
+ },
+ "capacity_foregone_in_bottleneck_hours": {
+  "labels": "capacity foregone, not P&L; the sign of the per-market net is not established",
+  "markets_at_r4_pace_ESTIMATE": 9.94,
+  "turnover_usd_ESTIMATE": 68.3
+ },
+ "examined_not_acted": [
+  {
+   "sessions": 1,
+   "slug": "aec-atpcq-donkim-grilom-2026-09-07",
+   "statuses": [
+    "SPRING_SKIP_NOT_QUALIFYING"
+   ]
+  }
+ ],
+ "expected_economics": {
+  "l5_completed_share_of_bought_usd": {
+   "complete": 0.9883,
+   "extend": 0.7986,
+   "open": 0.7176
+  },
+  "l5_net_per_usd_by_relation": {
+   "complete": 0.0201,
+   "extend": 0.0037,
+   "open": 0.0269
+  },
+  "l5_time_to_complement_p50_s_by_tte": {
+   "tte1-3m": 24,
+   "tte3-10m": 52,
+   "tte<60s": 13,
+   "tte>10m": 56
+  },
+  "labels": "ESTIMATES; not realized; L5 priors from its own history, ours from settled markets",
+  "our_at_size_net_per_turnover": -0.02494,
+  "our_r4_capital_hours_per_market": 5.516,
+  "our_r4_net_per_turnover": 0.0074,
+  "our_r4_turnover_per_market_usd": 6.869
+ },
+ "funnel_last": {
+  "admitted": 5,
+  "cycles": 500,
+  "filled": 5,
+  "in_distribution": 39840,
+  "kind": "funnel",
+  "not_started": {
+   "no_candidate": 497
+  },
+  "refusals": {
+   "cooldown_until": 1,
+   "strict_evidence_market_closed": 36732,
+   "strict_evidence_off_distribution_or_unknown": 9,
+   "strict_evidence_thin_flow": 3093
+  },
+  "selection_skipped_position_held": 24,
+  "selection_skipped_rung_reached": 0,
+  "sessions": 2,
+  "submitted": 37,
+  "universe_rows": 39840
+ },
+ "hours_by_kind": {
+  "ACTIVE": 1.864,
+  "FLAT_WAIT": 0.36,
+  "IDLE": 8.031,
+  "STRANDED": 0.416
+ },
+ "intervals": [
+  {
+   "gate": null,
+   "hours": 0.761,
+   "kind": "ACTIVE",
+   "pool": null,
+   "slug": "aec-atpcq-aleher-tundur-2026-09-07",
+   "t0": "2026-09-07T08:09:54Z",
+   "t1": "2026-09-07T08:55:33Z",
+   "verdict": "in market"
+  },
+  {
+   "gate": "HOLD residual to settlement (owner rule); residual held until the venue resolved",
+   "hours": 0.137,
+   "kind": "STRANDED",
+   "pool": {
+    "nearest_before": null,
+    "samples_in_interval": 0
+   },
+   "slug": "aec-atpcq-aleher-tundur-2026-09-07",
+   "t0": "2026-09-07T08:55:33Z",
+   "t1": "2026-09-07T09:03:44Z",
+   "verdict": "residual held by design; rotation blocked by concurrency 1, an owner parameter"
+  },
+  {
+   "gate": "strict-evidence refusals",
+   "hours": 0.046,
+   "kind": "IDLE",
+   "pool": {
+    "nearest_before": null,
+    "samples_in_interval": 0
+   },
+   "slug": null,
+   "t0": "2026-09-07T09:03:44Z",
+   "t1": "2026-09-07T09:06:31Z",
+   "verdict": "pool had live rows refused on evidence; see reasons"
+  },
+  {
+   "gate": null,
+   "hours": 0.309,
+   "kind": "ACTIVE",
+   "pool": null,
+   "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "t0": "2026-09-07T09:06:31Z",
+   "t1": "2026-09-07T09:25:02Z",
+   "verdict": "in market"
+  },
+  {
+   "gate": "CAMPAIGN_HOLD:POSITION_HELD (one market at a time; the campaign waits for settlement even with a flat account)",
+   "hours": 0.36,
+   "kind": "FLAT_WAIT",
+   "pool": {
+    "admitted_total": 0,
+    "closed_range": [
+     71,
+     71
+    ],
+    "first": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 71,
+     "live_events": 59,
+     "markets_with_progress": 143,
+     "n_rows": 80,
+     "other": 0,
+     "reasons": {
+      "strict_evidence_market_closed": 71,
+      "strict_evidence_thin_flow": 9
+     },
+     "t": "2026-09-07T09:46:06.127661+00:00",
+     "thin_flow": 9,
+     "thin_flow_slugs": [
+      "aec-atpcq-norgom-ollwal-2026-09-07",
+      "aec-atpcq-radalb-radtur-2026-09-07",
+      "aec-itfme-riclog-gabpia-2026-09-07",
+      "aec-itfme-geoisr-filcal-2026-09-07",
+      "aec-atpcq-alikac-gabghe-2026-09-07",
+      "aec-itfwo-celfau-nikmul-2026-09-07",
+      "aec-atpcq-santav-izaval-2026-09-08",
+      "aec-wta-radzel-zhikul-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0"
+     ]
+    },
+    "last": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 71,
+     "live_events": 59,
+     "markets_with_progress": 143,
+     "n_rows": 80,
+     "other": 0,
+     "reasons": {
+      "strict_evidence_market_closed": 71,
+      "strict_evidence_thin_flow": 9
+     },
+     "t": "2026-09-07T09:46:06.127661+00:00",
+     "thin_flow": 9,
+     "thin_flow_slugs": [
+      "aec-atpcq-norgom-ollwal-2026-09-07",
+      "aec-atpcq-radalb-radtur-2026-09-07",
+      "aec-itfme-riclog-gabpia-2026-09-07",
+      "aec-itfme-geoisr-filcal-2026-09-07",
+      "aec-atpcq-alikac-gabghe-2026-09-07",
+      "aec-itfwo-celfau-nikmul-2026-09-07",
+      "aec-atpcq-santav-izaval-2026-09-08",
+      "aec-wta-radzel-zhikul-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0"
+     ]
+    },
+    "live_events_range": [
+     59,
+     59
+    ],
+    "pool_rows_range": [
+     80,
+     80
+    ],
+    "samples_in_interval": 1,
+    "thin_flow_range": [
+     9,
+     9
+    ],
+    "thin_flow_slugs_seen": [
+     "aec-atpcq-alikac-gabghe-2026-09-07",
+     "aec-atpcq-norgom-ollwal-2026-09-07",
+     "aec-atpcq-radalb-radtur-2026-09-07",
+     "aec-atpcq-santav-izaval-2026-09-08",
+     "aec-itfme-geoisr-filcal-2026-09-07",
+     "aec-itfme-riclog-gabpia-2026-09-07",
+     "aec-itfwo-celfau-nikmul-2026-09-07",
+     "aec-wta-radzel-zhikul-2026-09-07",
+     "astatc-atp-alezve-lucdar-2026-09-07-es-3-0"
+    ]
+   },
+   "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "t0": "2026-09-07T09:25:02Z",
+   "t1": "2026-09-07T09:46:40Z",
+   "verdict": "flat account but no rotation until settlement: an implementation gate, not an L5 behaviour (L5 re-enters within 60 s of settlement 77% of the time, never before)"
+  },
+  {
+   "gate": "recorder pool composition (strict_evidence_market_closed / strict_evidence_thin_flow on every row) -> CAMPAIGN_NO_CANDIDATE",
+   "hours": 7.985,
+   "kind": "IDLE",
+   "pool": {
+    "admitted_total": 0,
+    "closed_range": [
+     71,
+     78
+    ],
+    "first": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 71,
+     "live_events": 59,
+     "markets_with_progress": 143,
+     "n_rows": 80,
+     "other": 0,
+     "reasons": {
+      "strict_evidence_market_closed": 71,
+      "strict_evidence_thin_flow": 9
+     },
+     "t": "2026-09-07T09:46:06.127661+00:00",
+     "thin_flow": 9,
+     "thin_flow_slugs": [
+      "aec-atpcq-norgom-ollwal-2026-09-07",
+      "aec-atpcq-radalb-radtur-2026-09-07",
+      "aec-itfme-riclog-gabpia-2026-09-07",
+      "aec-itfme-geoisr-filcal-2026-09-07",
+      "aec-atpcq-alikac-gabghe-2026-09-07",
+      "aec-itfwo-celfau-nikmul-2026-09-07",
+      "aec-atpcq-santav-izaval-2026-09-08",
+      "aec-wta-radzel-zhikul-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0"
+     ]
+    },
+    "last": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 75,
+     "live_events": 49,
+     "markets_with_progress": 139,
+     "n_rows": 80,
+     "other": 0,
+     "t": "2026-09-07T12:16:22.711239+00:00",
+     "thin_flow": 5,
+     "thin_flow_slugs": [
+      "aec-atp-gabpir-kilfel-2026-09-07",
+      "aec-atp-margen-chrlan-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0",
+      "astatc-wta-igaswi-qinzhe-2026-09-06-es-2-0"
+     ]
+    },
+    "live_events_range": [
+     47,
+     59
+    ],
+    "pool_rows_range": [
+     80,
+     80
+    ],
+    "samples_in_interval": 41,
+    "thin_flow_range": [
+     2,
+     9
+    ],
+    "thin_flow_slugs_seen": [
+     "aec-atp-gabpir-kilfel-2026-09-07",
+     "aec-atp-linxia-kaiuch-2026-09-06",
+     "aec-atp-margen-chrlan-2026-09-07",
+     "aec-atp-yoswat-marsha-2026-09-06",
+     "aec-atpcq-alikac-gabghe-2026-09-07",
+     "aec-atpcq-norgom-ollwal-2026-09-07",
+     "aec-atpcq-radalb-radtur-2026-09-07",
+     "aec-atpcq-santav-izaval-2026-09-08",
+     "aec-itfme-geoisr-filcal-2026-09-07",
+     "aec-itfme-riclog-gabpia-2026-09-07",
+     "aec-itfwo-celfau-nikmul-2026-09-07",
+     "aec-wta-radzel-zhikul-2026-09-07",
+     "astatc-atp-alezve-lucdar-2026-09-07-es-3-0",
+     "astatc-wta-igaswi-qinzhe-2026-09-06-es-2-0"
+    ]
+   },
+   "slug": null,
+   "t0": "2026-09-07T09:46:40Z",
+   "t1": "2026-09-07T17:45:46Z",
+   "verdict": "selection/coverage bottleneck: the recorder pool (80 rows) held 75 resolved markets and 5 thin-flow ones, nothing live and evidenced, while the public gateway showed 257 in-distribution live markets (95 executable on public features, 14 of them live). The strict-evidence gate could not admit what the recorder was not serving."
+  },
+  {
+   "gate": null,
+   "hours": 0.794,
+   "kind": "ACTIVE",
+   "pool": null,
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "t0": "2026-09-07T17:45:46Z",
+   "t1": "2026-09-07T18:33:26Z",
+   "verdict": "in market"
+  },
+  {
+   "gate": "HOLD residual to settlement (owner rule); residual held until the venue resolved",
+   "hours": 0.279,
+   "kind": "STRANDED",
+   "pool": {
+    "nearest_before": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 75,
+     "live_events": 49,
+     "markets_with_progress": 139,
+     "n_rows": 80,
+     "other": 0,
+     "t": "2026-09-07T12:16:22.711239+00:00",
+     "thin_flow": 5,
+     "thin_flow_slugs": [
+      "aec-atp-gabpir-kilfel-2026-09-07",
+      "aec-atp-margen-chrlan-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0",
+      "astatc-wta-igaswi-qinzhe-2026-09-06-es-2-0"
+     ]
+    },
+    "samples_in_interval": 0
+   },
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "t0": "2026-09-07T18:33:26Z",
+   "t1": "2026-09-07T18:50:09Z",
+   "verdict": "residual held by design; rotation blocked by concurrency 1, an owner parameter"
+  }
+ ],
+ "labels": "read-only; the gate names are the probe's own; the public-universe view is one snapshot (2026-09-07T11:09:22Z) applied to the intervals around it; nothing here admits a market, changes the recorder, the selector, a cap or a rung",
+ "markets": [
+  {
+   "first_session": "2026-09-07T08:09:54Z",
+   "flat_from": "2026-09-07T08:10:00Z",
+   "last_acting_session": "2026-09-07T08:55:33Z",
+   "sessions": 20,
+   "settled": "2026-09-07T09:03:44Z",
+   "slug": "aec-atpcq-aleher-tundur-2026-09-07",
+   "statuses": {
+    "SPRING_MATCHED": 1,
+    "SPRING_RESIDUAL_HOLD": 17,
+    "SPRING_SKIP_NOT_QUALIFYING": 2
+   }
+  },
+  {
+   "first_session": "2026-09-07T09:06:31Z",
+   "flat_from": "2026-09-07T09:25:02Z",
+   "last_acting_session": "2026-09-07T09:25:02Z",
+   "sessions": 11,
+   "settled": "2026-09-07T09:46:40Z",
+   "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "statuses": {
+    "SPRING_MATCHED": 1,
+    "SPRING_RESIDUAL_HOLD": 10
+   }
+  },
+  {
+   "first_session": "2026-09-07T17:45:46Z",
+   "flat_from": null,
+   "last_acting_session": "2026-09-07T18:33:26Z",
+   "sessions": 48,
+   "settled": "2026-09-07T18:50:09Z",
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "statuses": {
+    "SPRING_RESIDUAL_HOLD": 40,
+    "SPRING_SKIP_NOT_QUALIFYING": 8
+   }
+  }
+ ],
+ "opportunity_utilization": {
+  "active_share": 0.1747,
+  "definition": "active hours / campaign hours; bottleneck = idle while the public universe held executable on-distribution live markets the recorder pool did not serve",
+  "idle_bottleneck_hours": 7.985,
+  "idle_bottleneck_share": 0.7483
+ },
+ "owner_direction": "#167 5570474405 (opportunity_utilization); 5570456323",
+ "universe_at_snapshot": {
+  "cards": 352,
+  "depth_ok": 221,
+  "executable_on_distribution_depth_two_sided": 95,
+  "executable_slugs_live": [
+   "aec-atpcq-deipal-henber-2026-09-07",
+   "aec-atp-linxia-kaiuch-2026-09-06",
+   "aec-wta-soflan-aurzan-2026-09-07",
+   "aec-atpcq-tiaper-pavlag-2026-09-07",
+   "aec-atp-yoswat-marsha-2026-09-06",
+   "aec-atpcq-carjov-pedmar-2026-09-07",
+   "aec-itfme-marmes-ivamar-2026-09-07",
+   "aec-itfme-amasid-vicgal-2026-09-07",
+   "astatc-lol-blg-al-2026-09-07-game3",
+   "aec-itfwo-gabpau-kathui-2026-09-07",
+   "aec-itfwo-sopgre-rebmal-2026-09-07",
+   "aec-r6-cs-ep-2026-09-07",
+   "aec-cs2-biga-vexar-2026-09-07",
+   "tsc-lol-blg-al-2026-09-07-tot-3pt5"
+  ],
+  "in_distribution": 257,
+  "live_events": 50,
+  "of_which_live": 14,
+  "of_which_rebate_eligible_at_price": 14,
+  "on_distribution": 114,
+  "scored": 352,
+  "snapshot_utc": "2026-09-07T11:09:22Z",
+  "top_missing_from_pool": 24,
+  "two_sided_in_band_0_35_0_65": 100,
+  "universe_markets": 1021
+ }
+}

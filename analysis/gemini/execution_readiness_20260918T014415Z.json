@@ -1,0 +1,366 @@
+{
+  "label": "GEMINI_EXECUTION_READINESS_V2",
+  "gates": {
+    "preflight_ok": false,
+    "VENUE_WRITE_PATH": "PROVEN",
+    "armed": false,
+    "authorization_unconsumed": true,
+    "instrument_metadata_readable": false,
+    "contract_tradeable": false,
+    "quantity_valid": false,
+    "price_valid": false,
+    "terms_accepted": true,
+    "request_transport_accepted": true,
+    "order_payload_valid": false,
+    "terminal_resolution_readable": true
+  },
+  "instrument_metadata": {
+    "readable": false,
+    "why": "no eligible instrument"
+  },
+  "smallest_valid_quantity": null,
+  "quantity_check": {
+    "valid": null
+  },
+  "price_check": {
+    "valid": null
+  },
+  "max_cash_exposure_usd": null,
+  "order_payload": {
+    "why": "no eligible instrument"
+  },
+  "terminal_resolution": {
+    "quoted_instrument": {
+      "verdict": "UNREADABLE",
+      "why": "no eligible instrument"
+    },
+    "most_recent_settled": {
+      "readable": true,
+      "verdict": "SETTLED",
+      "instrumentSymbol": "GEMI-BTC05M2609180140-UP",
+      "ticker": "BTC05M2609180140",
+      "status": "settled",
+      "resolutionSide": "yes",
+      "resolvedAt": "2026-09-18T01:40:06.801Z",
+      "settlementValue": "76577.29766666667",
+      "marketState": "closed",
+      "expiryDate": "2026-09-18T01:40:00.000Z",
+      "event_status": "settled",
+      "is_terminal": true,
+      "expired": true,
+      "reads": 3,
+      "reads_readable": 3,
+      "reads_settled": 1,
+      "distinct_readings": [
+        "active/None",
+        "settled/yes"
+      ],
+      "flapped": true,
+      "observations": [
+        {
+          "readable": true,
+          "status": "active",
+          "resolutionSide": null,
+          "resolvedAt": null,
+          "settlementValue": null,
+          "marketState": "open",
+          "expiryDate": "2026-09-18T01:40:00.000Z",
+          "event_status": "active"
+        },
+        {
+          "readable": true,
+          "status": "active",
+          "resolutionSide": null,
+          "resolvedAt": null,
+          "settlementValue": null,
+          "marketState": "open",
+          "expiryDate": "2026-09-18T01:40:00.000Z",
+          "event_status": "active"
+        },
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "yes",
+          "resolvedAt": "2026-09-18T01:40:06.801Z",
+          "settlementValue": "76577.29766666667",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T01:40:00.000Z",
+          "event_status": "settled"
+        }
+      ],
+      "missing_fields": [],
+      "strike_check": {
+        "available": true,
+        "agrees": true,
+        "published_resolutionSide": "yes",
+        "implied_by_strike": "yes",
+        "settlementValue": "76577.29766666667",
+        "strike": "76538.73",
+        "rule": "UP resolves yes when settlementValue >= strike.value"
+      },
+      "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+      "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred.",
+      "windows_tried": [
+        {
+          "symbol": "GEMI-BTC05M2609180140-UP",
+          "verdict": "SETTLED",
+          "flapped": true
+        }
+      ]
+    },
+    "labels": "the OUTCOME leg. A settled contract never states what our account received, so nothing here is realized P&L."
+  },
+  "account_order_history": {
+    "readable": true,
+    "verdict": "ORDERS_FOUND",
+    "path": "/v1/prediction-markets/orders/history",
+    "window_ms": [
+      1785807861522,
+      1789695921522
+    ],
+    "window_utc": [
+      "2026-08-04T01:44:21.522000+00:00",
+      "2026-09-18T01:45:21.522000+00:00"
+    ],
+    "symbol": null,
+    "total_rows": 105,
+    "per_status": [
+      {
+        "status_filter": "filled",
+        "http": 200,
+        "attempts": [
+          {
+            "limit": 100,
+            "http": 503
+          },
+          {
+            "limit": 5,
+            "http": 200
+          }
+        ],
+        "rows": 5,
+        "page_is_full": false,
+        "pagination": {
+          "limit": 5,
+          "offset": 0,
+          "count": 5
+        },
+        "body_keys": [
+          "orders",
+          "pagination"
+        ],
+        "sample": {
+          "orderId": 145828835409069189,
+          "globalOrderId": "145828835409069189",
+          "clientOrderId": "mlbgkm-sup-0819-233943-15-g",
+          "symbol": "GEMI-MLB-2608192240-STL-CIN-PPHITS-NCHURCHO1",
+          "side": "buy",
+          "outcome": "no",
+          "orderType": "limit",
+          "timeInForce": "fill-or-kill",
+          "price": "0.64",
+          "quantity": "1",
+          "filledQuantity": "1",
+          "remainingQuantity": "0",
+          "status": "filled",
+          "createdAt": "2026-08-19T23:42:58.121Z",
+          "updatedAt": "2026-08-19T23:42:58.121Z"
+        },
+        "row_keys": [
+          "avgExecutionPrice",
+          "clientOrderId",
+          "createdAt",
+          "filledQuantity",
+          "globalOrderId",
+          "hashOrderId",
+          "orderId",
+          "orderType",
+          "outcome",
+          "price",
+          "quantity",
+          "remainingQuantity",
+          "side",
+          "status",
+          "symbol",
+          "timeInForce",
+          "updatedAt"
+        ]
+      },
+      {
+        "status_filter": "cancelled",
+        "http": 200,
+        "attempts": [
+          {
+            "limit": 100,
+            "http": 200
+          }
+        ],
+        "rows": 100,
+        "page_is_full": true,
+        "pagination": {
+          "limit": 100,
+          "offset": 0,
+          "count": 100
+        },
+        "body_keys": [
+          "orders",
+          "pagination"
+        ],
+        "sample": {
+          "orderId": 145828835580744767,
+          "globalOrderId": "145828835580744767",
+          "clientOrderId": "recover-gk-0824-234316-13-sno",
+          "symbol": "GEMI-MLB-2608242240-BOS-MIA-PPHITS-CDURBINO0",
+          "side": "sell",
+          "outcome": "no",
+          "orderType": "limit",
+          "timeInForce": "fill-or-kill",
+          "price": "0.42",
+          "quantity": "1",
+          "filledQuantity": "0",
+          "remainingQuantity": "1",
+          "status": "cancelled",
+          "createdAt": "2026-08-25T00:04:10.901Z",
+          "updatedAt": "2026-08-25T00:04:10.901Z",
+          "cancelledAt": "2026-08-25T00:04:10.901Z"
+        },
+        "row_keys": [
+          "cancelledAt",
+          "clientOrderId",
+          "contractMetadata",
+          "createdAt",
+          "filledQuantity",
+          "globalOrderId",
+          "hashOrderId",
+          "orderId",
+          "orderType",
+          "outcome",
+          "price",
+          "quantity",
+          "remainingQuantity",
+          "side",
+          "status",
+          "symbol",
+          "timeInForce",
+          "updatedAt"
+        ]
+      }
+    ],
+    "unreadable_statuses": [],
+    "labels": "NO_ORDERS_ON_RECORD is a statement about THESE credentials in THIS window, never about other accounts or hosts. UNREADABLE is not an empty history."
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "latest_terms_version": {
+    "readable": true,
+    "version": 1,
+    "termsType": "PREDICTIONS_MARKET",
+    "updatedAt": "2025-12-14T01:56:34Z"
+  },
+  "request_transport": {
+    "path": "/v1/prediction-markets/metrics/volume",
+    "ticker_a": "BTC05M2609180145",
+    "ticker_b": "BTC05M2609180140",
+    "json_a": {
+      "status": 200,
+      "classification": "ACCEPTED",
+      "error": null
+    },
+    "json_b": {
+      "status": 200,
+      "classification": "ACCEPTED",
+      "error": null
+    },
+    "header_a": {
+      "status": 200,
+      "classification": "ACCEPTED",
+      "error": null
+    },
+    "field_is_honoured": true,
+    "verdict": "HEADER_PAYLOAD_ALSO_READ",
+    "why": "the venue read eventTicker out of the signed header, so an empty body does NOT by itself explain the 400"
+  },
+  "blocking": [
+    "preflight_ok",
+    "armed",
+    "instrument_metadata_readable",
+    "contract_tradeable",
+    "quantity_valid",
+    "price_valid",
+    "order_payload_valid"
+  ],
+  "venue_write_path": {
+    "VENUE_WRITE_PATH": "PROVEN",
+    "place": "/v1/prediction-markets/order",
+    "cancel": "/v1/prediction-markets/order/cancel",
+    "reconcile": "/v1/prediction-markets/orders/active",
+    "maker_protection": "makerOrCancel: true (a boolean, per the API)",
+    "order_type": "limit",
+    "arm_gated": true,
+    "verified_against": "developer.gemini.com, 2026-09-17. NOT inferred from the PMUS executor or older Gemini code: the prediction-market schema takes quantity, outcome and a BOOLEAN makerOrCancel, where spot takes amount and an options array.",
+    "exercised_against_the_venue": false,
+    "caveat": "the request is constructed and unit-proven. Venue acceptance, and maker-only rejection behaviour, stay UNCLAIMED until the canary actually runs. The API exposes no preview or sandbox for this path, so there is no way to prove venue behaviour without placing one."
+  },
+  "arming": {
+    "armed": false,
+    "live_flag": false,
+    "auth_id_present": false,
+    "auth_id_matches": false,
+    "expiry_supplied": false,
+    "expired": null,
+    "expected_auth_id": "OWNER-2026-09-17-GEMINI-CANARY-1",
+    "why_not": "GEMINI_CANARY_LIVE is not YES"
+  },
+  "latch": null,
+  "preflight": {
+    "label": "GEMINI_CANARY_PREFLIGHT_V1",
+    "ok": false,
+    "verdict": "NO_ELIGIBLE_WINDOW",
+    "rejected": [
+      {
+        "symbol": "GEMI-BTC05M2609180145-UP",
+        "tte_s": 44.5,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180150-UP",
+        "tte_s": 344.5,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180155-UP",
+        "tte_s": 644.5,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180200-UP",
+        "tte_s": 944.5,
+        "why": "TTE outside [60.0, 300.0]"
+      }
+    ],
+    "why": "no live window met the envelope",
+    "authorization": "NOT GRANTED. Nothing is submitted."
+  },
+  "verdict": "SPECIFIC_FIX_REQUIRED",
+  "authorization": "NOT GRANTED by this report. Readiness is a statement about capability and gates, never an authorization to submit."
+}

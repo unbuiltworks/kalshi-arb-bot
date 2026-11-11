@@ -1,0 +1,52 @@
+========================================================================
+cpc-btc-updown-15m-2026-10-28-1215z
+  samples with a residual        57
+  realised basis of held leg     0.3693
+  completion ceiling             0.95   (opening cap 0.96)
+  own touch range                0.4400 .. 0.9700
+  -- the order the engine RESTED at own 0.47
+     ticks behind the touch       min -3  median 12  max 50
+     level reached during its life          True (8 samples)
+     level reached any time after placement True
+  -- quote ELIGIBILITY over the residual's life
+     two-ticks-behind permitted by opening cap  30/57
+     AT THE TOUCH permitted by opening cap      29/57
+     AT THE TOUCH permitted by completion ceil  56/57
+========================================================================
+cpc-btc-updown-15m-2026-10-28-1245z
+  samples with a residual        88
+  realised basis of held leg     0.3200
+  completion ceiling             0.95   (opening cap 0.96)
+  own touch range                0.5900 .. 0.9800
+  -- the order the engine RESTED at own 0.63
+     ticks behind the touch       min -4  median 18  max 35
+     level reached during its life          False (3 samples)
+     level reached any time after placement False
+  -- quote ELIGIBILITY over the residual's life
+     two-ticks-behind permitted by opening cap  10/88
+     AT THE TOUCH permitted by opening cap      5/88
+     AT THE TOUCH permitted by completion ceil  78/88
+
+########################################################################
+POLICY SIMULATION -- marketable time, not fills
+########################################################################
+------------------------------------------------------------------------
+cpc-btc-updown-15m-2026-10-28-1215z
+  samples                                   57
+  CURRENT  quote frozen at own 0.47
+           samples AT the touch (marketable)  5/57  (9%)
+  PROPOSED requote toward the touch
+           samples AT the touch (marketable)  36/57  (63%)
+           requotes issued                    1
+           final quote own px                 0.63
+  touch above the OPENING cap in             28/57 samples
+------------------------------------------------------------------------
+cpc-btc-updown-15m-2026-10-28-1245z
+  samples                                   88
+  CURRENT  quote frozen at own 0.63
+           samples AT the touch (marketable)  3/88  (3%)
+  PROPOSED requote toward the touch
+           samples AT the touch (marketable)  12/88  (14%)
+           requotes issued                    1
+           final quote own px                 0.68
+  touch above the OPENING cap in             83/88 samples

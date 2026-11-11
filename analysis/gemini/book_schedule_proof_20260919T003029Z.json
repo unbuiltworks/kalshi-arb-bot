@@ -1,0 +1,199 @@
+{
+  "label": "GEMINI_BOOK_AND_SCHEDULE_PROOF_V1",
+  "utc": "2026-09-19T00:26:37.416811+00:00",
+  "credentials_used": false,
+  "orders_sent": 0,
+  "note": "PUBLIC READS ONLY. No session, no signer, no order path is reachable from anything called here.",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      240.0,
+      280.0
+    ],
+    "waited_s": 224.98,
+    "polls": 24,
+    "entered_tte_s": 278.45046973228455,
+    "observed": [
+      {
+        "waited_s": 169.92,
+        "tte_s": [
+          35.94485330581665,
+          -264.05514669418335,
+          -564.0551466941833,
+          -864.0551466941833
+        ]
+      },
+      {
+        "waited_s": 178.53,
+        "tte_s": [
+          27.66080331802368,
+          -272.3391966819763,
+          -572.3391966819763,
+          -872.3391966819763
+        ]
+      },
+      {
+        "waited_s": 187.55,
+        "tte_s": [
+          19.04644751548767,
+          -280.95355248451233,
+          -580.9535524845123,
+          -880.9535524845123
+        ]
+      },
+      {
+        "waited_s": 196.02,
+        "tte_s": [
+          10.031109094619751,
+          -289.96889090538025,
+          -589.9688909053802,
+          -889.9688909053802
+        ]
+      },
+      {
+        "waited_s": 205.55,
+        "tte_s": [
+          1.5569126605987549,
+          -298.44308733940125,
+          -598.4430873394012,
+          -898.4430873394012
+        ]
+      },
+      {
+        "waited_s": 219.13,
+        "tte_s": [
+          292.0246629714966,
+          -7.975337028503418,
+          -307.9753370285034,
+          -607.9753370285034
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it.",
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609190035-UP",
+      "tte_s": 278.45046973228455,
+      "contract_status": "active",
+      "market_state": "open"
+    }
+  },
+  "book_state": {
+    "presented": {
+      "present": true,
+      "t_utc": 1789777828.9109817,
+      "tte_s": 278.45046973228455,
+      "state_id": "GEMI-BTC05M2609190035-UP@1789777828",
+      "inventory_known": true,
+      "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+      "readable": true,
+      "identity_consistent": true,
+      "complement_identity": {
+        "no_bid_vs_1_minus_yes_ask": "0.0",
+        "no_ask_vs_1_minus_yes_bid": "0.00"
+      },
+      "yes": {
+        "bid": "0.56",
+        "ask": "0.8",
+        "spread": "0.24",
+        "qty": null
+      },
+      "no": {
+        "bid": "0.2",
+        "ask": "0.44",
+        "spread": "0.24",
+        "qty": null
+      },
+      "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+      "passive_pair_cost": "0.76",
+      "crossing_pair_cost": "1.24",
+      "last_trade_price": "0.48",
+      "tick": "0.01"
+    },
+    "depth": {
+      "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+      "instrumentSymbol": "GEMI-BTC05M2609190035-UP",
+      "read_utc": "2026-09-19T00:30:28.910999+00:00",
+      "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+      "rtt_s": 0.243,
+      "readable": true,
+      "bids": {
+        "levels": [
+          {
+            "price": "0.56",
+            "qty": "10.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.52",
+            "qty": "5.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.48",
+            "qty": "312.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.36",
+            "qty": "45.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.01",
+            "qty": "10.0",
+            "venue_ts": "1789777829"
+          }
+        ],
+        "n_levels": 5,
+        "best": "0.56",
+        "best_qty": "10.0",
+        "qty_shown": "382.0"
+      },
+      "asks": {
+        "levels": [
+          {
+            "price": "0.8",
+            "qty": "760.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.91",
+            "qty": "5.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.96",
+            "qty": "45.0",
+            "venue_ts": "1789777829"
+          },
+          {
+            "price": "0.99",
+            "qty": "10.0",
+            "venue_ts": "1789777829"
+          }
+        ],
+        "n_levels": 4,
+        "best": "0.8",
+        "best_qty": "760.0",
+        "qty_shown": "820.0"
+      },
+      "levels_requested": 5,
+      "venue_ts": "1789777829",
+      "snapshot_age_s": -0.089,
+      "no_side_depth": null,
+      "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here"
+    },
+    "agreement": {
+      "checked": true,
+      "bid_agrees": true,
+      "ask_agrees": true,
+      "agrees": true,
+      "ladder_best_bid": "0.56",
+      "presented_yes_bid": "0.56",
+      "ladder_best_ask": "0.8",
+      "presented_yes_ask": "0.8",
+      "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+    },
+    "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+  }
+}

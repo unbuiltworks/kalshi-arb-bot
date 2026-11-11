@@ -1,0 +1,3004 @@
+{
+ "kind": "l5_lookup_v4_forward_validation",
+ "utc": "2026-09-08T01:03:13Z",
+ "labels": "STRICT FORWARD VALIDATION of the shadow loop's lookup-v4 candidate; read-only; the frozen model/lookup/spec are never written; the verdict is a RECOMMENDATION -- promotion requires an owner decision",
+ "owner_directive": "issue #167 comment 5577286614 item 4",
+ "frozen_v3_identity": {
+  "model_path": "analysis/l5/l5_action_model_v2.json",
+  "model_sha256_16": "bbb55bf90638d2bd",
+  "lookup_version": 3,
+  "spec_path": "analysis/l5/l5_fidelity_gate.json",
+  "spec_sha256_16": "fd03cb21a66dd025",
+  "spec_frozen_utc": "2026-09-06T02:10:00+00:00",
+  "frozen_paths": [
+   "analysis/l5/l5_action_model.json",
+   "analysis/l5/l5_action_model_v2.json",
+   "analysis/l5/l5_behavior.json",
+   "analysis/l5/l5_canonical_sequence.csv.gz",
+   "analysis/l5/l5_canonical_sequence.meta.json",
+   "analysis/l5/l5_fidelity_gate.json",
+   "analysis/l5/l5_model_drift_check.json"
+  ],
+  "model_sha256_16_loaded": "bbb55bf90638d2bd",
+  "n_transitions": 69646,
+  "n_full_states": 988,
+  "generated_utc": "2026-09-03T04:19:16.377699+00:00"
+ },
+ "reproduced_proposal": {
+  "path": "/tmp/claude-0/-home-user-kalshi-arb-bot/8c34d955-4313-5061-8a7e-36a12fdf396d/scratchpad/l5_shadow_local/proposals/lookup_v4_proposal_20260908T004257Z.json",
+  "verdict": "CANDIDATE_NOT_BETTER",
+  "candidate_sha256_16": "e86f907507fdec84",
+  "train": 2654,
+  "holdout": 1140,
+  "holdout_cut_utc": "2026-09-07T23:50:03Z",
+  "holdout_rule": "time_quantile_0.7 (window too short/lopsided for the day rule)",
+  "rows_in_window": 3794,
+  "frozen_on_holdout": {
+   "n": 1140,
+   "mean_prob_of_observed_action": 0.1682,
+   "relation_agreement": 0.7175,
+   "exact_agreement": 0.3061,
+   "off_distribution_pct": 0.0,
+   "failing": []
+  },
+  "candidate_on_holdout": {
+   "n": 1140,
+   "mean_prob_of_observed_action": 0.1678,
+   "relation_agreement": 0.7035,
+   "exact_agreement": 0.3061,
+   "off_distribution_pct": 0.0,
+   "failing": []
+  }
+ },
+ "data": {
+  "loop_day_file_fills": 3911,
+  "windowed_fetch_fills": 109485,
+  "merged_unique_fills": 109485,
+  "ingest": {
+   "fills": 109485,
+   "decisions": 106063,
+   "skipped": 0,
+   "evicted": 0
+  },
+  "decision_rows_all": 106063,
+  "decision_rows": 102372,
+  "span_utc": [
+   "2026-09-01T01:12:06Z",
+   "2026-09-08T00:57:46Z"
+  ],
+  "windows": 2658,
+  "fetch": {
+   "attempted": true,
+   "reused_from_cache": true,
+   "url": "https://data-api.polymarket.com/activity",
+   "tag": "activity",
+   "mode": "windowed_desc",
+   "windows": 25,
+   "pages": 225,
+   "items": 112500,
+   "oldest_ts": 1788201483,
+   "newest_ts": 1788829066,
+   "stopped_because": "reached_stop_ts",
+   "elapsed_s": 122.1,
+   "cache_dir": "/tmp/claude-0/-home-user-kalshi-arb-bot/8c34d955-4313-5061-8a7e-36a12fdf396d/scratchpad/l5_v4_fetch_cache",
+   "fetched_utc": "2026-09-08T01:02:23Z"
+  },
+  "network_fetch_worked": true,
+  "clean_cohort_rule": "windows starting at/after 2026-09-01T00:00Z (the frozen model's canonical history ends 2026-08-31T23:11Z)",
+  "first_second_after_frozen_history_utc": "2026-09-01T00:00:00Z",
+  "rows_dropped_overlapping_frozen_history": 3691
+ },
+ "cuts": [
+  {
+   "cut": "loop",
+   "rule": "loop proposal lookup_v4_proposal_20260908T004257Z.json: time_quantile_0.7 (window too short/lopsided for the day rule); that cut TIME applied to this deeper cohort (the loop's own candidate saw only 2654 train / 1140 holdout rows of its collector window)",
+   "split_mode": "row",
+   "cut_ts": 1788825003.0,
+   "cut_utc": "2026-09-07T23:50:03Z",
+   "train_rows": 101163,
+   "holdout_rows": 1209,
+   "dropped_straddling_rows": 0,
+   "train_span_utc": [
+    "2026-09-01T01:12:06Z",
+    "2026-09-07T23:49:57Z"
+   ],
+   "holdout_span_utc": [
+    "2026-09-07T23:50:03Z",
+    "2026-09-08T00:57:46Z"
+   ],
+   "holdout_windows": 15,
+   "train_windows": 2644,
+   "candidate": {
+    "n_transitions": 170809,
+    "n_full_states": 1062,
+    "states_touched": 1021,
+    "states_new_to_model": 74,
+    "modal_action_changes": 340,
+    "sha256_16": "94a8a1155c586005",
+    "sha_note": "sha of the candidate's count tables (full/base/marginal), independent of generation time"
+   },
+   "frozen_v3_on_holdout": {
+    "n": 1209,
+    "relation": {
+     "observed_freq": {
+      "open": 0.0025,
+      "extend": 0.517,
+      "complete": 0.4806,
+      "sell": 0.0
+     },
+     "expected_freq": {
+      "open": 0.0022,
+      "extend": 0.511,
+      "complete": 0.4868,
+      "sell": 0.0
+     },
+     "l1_observed_vs_expected": 0.0125,
+     "state_weighted_l1": 0.1369,
+     "top1_agreement": 0.7171,
+     "exact_action_agreement": 0.3052,
+     "mean_p_observed_action": 0.1688,
+     "mean_p_observed_relation": 0.586,
+     "off_distribution_pct": 0.0
+    },
+    "side": {
+     "open_n": 3,
+     "open_cheaper_touch_agreement": 0.6667,
+     "post_fill_n": 1206,
+     "post_fill_side_agreement": 0.7164,
+     "note": "the lookup predicts a relation, never a side: post-fill side = the side the recommended relation buys (complete -> deficit side, extend -> surplus side), so post-fill side agreement equals post-fill relation agreement; the OPEN side follows the shared cheaper-touch convention (observed fill price <= 0.50) and is identical under both lookups"
+    },
+    "size": {
+     "observed_freq": {
+      "q<5": 0.1447,
+      "q5-15": 0.2399,
+      "q15-40": 0.2341,
+      "q>40": 0.3813
+     },
+     "expected_freq": {
+      "q<5": 0.2204,
+      "q5-15": 0.3112,
+      "q15-40": 0.2083,
+      "q>40": 0.2601
+     },
+     "l1_observed_vs_expected": 0.294,
+     "top1_agreement": 0.3879,
+     "conditional_on_observed_relation": {
+      "open": {
+       "n": 3,
+       "observed": {
+        "q<5": 0.0,
+        "q5-15": 0.6667,
+        "q15-40": 0.3333,
+        "q>40": 0.0
+       },
+       "expected": {
+        "q<5": 0.1747,
+        "q5-15": 0.3228,
+        "q15-40": 0.2047,
+        "q>40": 0.2978
+       },
+       "l1": 0.9451
+      },
+      "extend": {
+       "n": 625,
+       "observed": {
+        "q<5": 0.1664,
+        "q5-15": 0.2544,
+        "q15-40": 0.2176,
+        "q>40": 0.3616
+       },
+       "expected": {
+        "q<5": 0.2351,
+        "q5-15": 0.3109,
+        "q15-40": 0.2047,
+        "q>40": 0.2493
+       },
+       "l1": 0.2505
+      },
+      "complete": {
+       "n": 581,
+       "observed": {
+        "q<5": 0.1222,
+        "q5-15": 0.222,
+        "q15-40": 0.2513,
+        "q>40": 0.4045
+       },
+       "expected": {
+        "q<5": 0.1978,
+        "q5-15": 0.3047,
+        "q15-40": 0.2102,
+        "q>40": 0.2874
+       },
+       "l1": 0.3165
+      }
+     }
+    },
+    "timing": {
+     "observed_gap_freq": {
+      "gap<2s": 0.7146,
+      "gap2-10": 0.2341,
+      "gap10-30": 0.0347,
+      "gap>30": 0.0165
+     },
+     "cadence_modal_scored": 1209,
+     "cadence_modal_agreement": 0.6237,
+     "note": "cadence_modal is copied unchanged from frozen v3 into the candidate by the loop's builder, so timing is identical under both lookups"
+    },
+    "inventory": {
+     "n": 1209,
+     "observed_resid_after_freq": {
+      "flat": 0.0025,
+      "imb1-10": 0.0182,
+      "imb10-50": 0.0604,
+      "imb>50": 0.9189
+     },
+     "expected_resid_after_freq": {
+      "flat": 0.0014,
+      "imb1-10": 0.0193,
+      "imb10-50": 0.0625,
+      "imb>50": 0.9167
+     },
+     "l1_observed_vs_expected": 0.0065,
+     "imbalanced_after_observed": 0.9975,
+     "imbalanced_after_expected": 0.9986,
+     "size_representatives_shares": {
+      "q<5": 2.0,
+      "q5-15": 7.7,
+      "q15-40": 23.8255,
+      "q>40": 50.0
+     }
+    },
+    "complete": {
+     "post_fill_n": 1206,
+     "p_complete_observed": 0.4818,
+     "p_complete_expected": 0.4878,
+     "gap_pp": -0.61,
+     "persistence": {
+      "extend": {
+       "n": 614,
+       "observed_p_same": 0.7313,
+       "expected_p_same": 0.6707
+      },
+      "complete": {
+       "n": 575,
+       "observed_p_same": 0.7183,
+       "expected_p_same": 0.6597
+      }
+     },
+     "pair_cost_at_complete": {
+      "n": 581,
+      "freq": {
+       "pc<0.90": 0.012,
+       "pc0.90-0.95": 0.0551,
+       "pc0.95-0.98": 0.0706,
+       "pc0.98-1.00": 0.6386,
+       "pc>=1.00": 0.2238
+      },
+      "median": 0.9899,
+      "note": "observed only (matched pair unit cost after each COMPLETE fill); neither lookup predicts price, so this is identical under both"
+     }
+    },
+    "price_aggressiveness": {
+     "status": "UNMEASURED",
+     "maker_taker_known_rows": 0,
+     "observed_price_band_freq": {
+      "p<10c": 0.0232,
+      "p10-25c": 0.3011,
+      "p25-45c": 0.1927,
+      "p45-55c": 0.0976,
+      "p55-75c": 0.1993,
+      "p75-90c": 0.1679,
+      "p>90c": 0.0182
+     },
+     "note": "the public activity fills carry no maker/taker flag (the collector marks every realtime row 'unknown'; 'maker' is asserted only inside the takerOnly feed coverage of the canonical history) and no book, so touch-join and taker share are not derivable here; neither lookup predicts them -- the aggressiveness policy comes from the fidelity artifact and is shared"
+    }
+   },
+   "candidate_v4_on_holdout": {
+    "n": 1209,
+    "relation": {
+     "observed_freq": {
+      "open": 0.0025,
+      "extend": 0.517,
+      "complete": 0.4806,
+      "sell": 0.0
+     },
+     "expected_freq": {
+      "open": 0.0024,
+      "extend": 0.5142,
+      "complete": 0.4835,
+      "sell": 0.0
+     },
+     "l1_observed_vs_expected": 0.0058,
+     "state_weighted_l1": 0.139,
+     "top1_agreement": 0.7022,
+     "exact_action_agreement": 0.3052,
+     "mean_p_observed_action": 0.1686,
+     "mean_p_observed_relation": 0.585,
+     "off_distribution_pct": 0.0
+    },
+    "side": {
+     "open_n": 3,
+     "open_cheaper_touch_agreement": 0.6667,
+     "post_fill_n": 1206,
+     "post_fill_side_agreement": 0.7015,
+     "note": "the lookup predicts a relation, never a side: post-fill side = the side the recommended relation buys (complete -> deficit side, extend -> surplus side), so post-fill side agreement equals post-fill relation agreement; the OPEN side follows the shared cheaper-touch convention (observed fill price <= 0.50) and is identical under both lookups"
+    },
+    "size": {
+     "observed_freq": {
+      "q<5": 0.1447,
+      "q5-15": 0.2399,
+      "q15-40": 0.2341,
+      "q>40": 0.3813
+     },
+     "expected_freq": {
+      "q<5": 0.2119,
+      "q5-15": 0.3121,
+      "q15-40": 0.2045,
+      "q>40": 0.2715
+     },
+     "l1_observed_vs_expected": 0.2788,
+     "top1_agreement": 0.3755,
+     "conditional_on_observed_relation": {
+      "open": {
+       "n": 3,
+       "observed": {
+        "q<5": 0.0,
+        "q5-15": 0.6667,
+        "q15-40": 0.3333,
+        "q>40": 0.0
+       },
+       "expected": {
+        "q<5": 0.2154,
+        "q5-15": 0.3282,
+        "q15-40": 0.1772,
+        "q>40": 0.2791
+       },
+       "l1": 0.9891
+      },
+      "extend": {
+       "n": 625,
+       "observed": {
+        "q<5": 0.1664,
+        "q5-15": 0.2544,
+        "q15-40": 0.2176,
+        "q>40": 0.3616
+       },
+       "expected": {
+        "q<5": 0.2258,
+        "q5-15": 0.3127,
+        "q15-40": 0.2025,
+        "q>40": 0.2589
+       },
+       "l1": 0.2354
+      },
+      "complete": {
+       "n": 581,
+       "observed": {
+        "q<5": 0.1222,
+        "q5-15": 0.222,
+        "q15-40": 0.2513,
+        "q>40": 0.4045
+       },
+       "expected": {
+        "q<5": 0.1905,
+        "q5-15": 0.3065,
+        "q15-40": 0.2054,
+        "q>40": 0.2975
+       },
+       "l1": 0.3057
+      }
+     }
+    },
+    "timing": {
+     "observed_gap_freq": {
+      "gap<2s": 0.7146,
+      "gap2-10": 0.2341,
+      "gap10-30": 0.0347,
+      "gap>30": 0.0165
+     },
+     "cadence_modal_scored": 1209,
+     "cadence_modal_agreement": 0.6237,
+     "note": "cadence_modal is copied unchanged from frozen v3 into the candidate by the loop's builder, so timing is identical under both lookups"
+    },
+    "inventory": {
+     "n": 1209,
+     "observed_resid_after_freq": {
+      "flat": 0.0025,
+      "imb1-10": 0.0182,
+      "imb10-50": 0.0604,
+      "imb>50": 0.9189
+     },
+     "expected_resid_after_freq": {
+      "flat": 0.0013,
+      "imb1-10": 0.019,
+      "imb10-50": 0.0626,
+      "imb>50": 0.9171
+     },
+     "l1_observed_vs_expected": 0.0061,
+     "imbalanced_after_observed": 0.9975,
+     "imbalanced_after_expected": 0.9987,
+     "size_representatives_shares": {
+      "q<5": 2.0,
+      "q5-15": 7.7,
+      "q15-40": 23.8255,
+      "q>40": 50.0
+     }
+    },
+    "complete": {
+     "post_fill_n": 1206,
+     "p_complete_observed": 0.4818,
+     "p_complete_expected": 0.4846,
+     "gap_pp": -0.28,
+     "persistence": {
+      "extend": {
+       "n": 614,
+       "observed_p_same": 0.7313,
+       "expected_p_same": 0.6696
+      },
+      "complete": {
+       "n": 575,
+       "observed_p_same": 0.7183,
+       "expected_p_same": 0.6526
+      }
+     },
+     "pair_cost_at_complete": {
+      "n": 581,
+      "freq": {
+       "pc<0.90": 0.012,
+       "pc0.90-0.95": 0.0551,
+       "pc0.95-0.98": 0.0706,
+       "pc0.98-1.00": 0.6386,
+       "pc>=1.00": 0.2238
+      },
+      "median": 0.9899,
+      "note": "observed only (matched pair unit cost after each COMPLETE fill); neither lookup predicts price, so this is identical under both"
+     }
+    },
+    "price_aggressiveness": {
+     "status": "UNMEASURED",
+     "maker_taker_known_rows": 0,
+     "observed_price_band_freq": {
+      "p<10c": 0.0232,
+      "p10-25c": 0.3011,
+      "p25-45c": 0.1927,
+      "p45-55c": 0.0976,
+      "p55-75c": 0.1993,
+      "p75-90c": 0.1679,
+      "p>90c": 0.0182
+     },
+     "note": "the public activity fills carry no maker/taker flag (the collector marks every realtime row 'unknown'; 'maker' is asserted only inside the takerOnly feed coverage of the canonical history) and no book, so touch-join and taker share are not derivable here; neither lookup predicts them -- the aggressiveness policy comes from the fidelity artifact and is shared"
+    }
+   },
+   "paired": {
+    "n": 1209,
+    "bootstrap_resamples": 1000,
+    "seed": 7,
+    "ci_level": 0.95,
+    "agreement_delta": -0.01489,
+    "agreement_delta_ci": [
+     -0.0306,
+     0.0
+    ],
+    "mean_p_action_delta": -0.00025,
+    "mean_p_action_delta_ci": [
+     -0.00157,
+     0.00105
+    ],
+    "mean_p_relation_delta": -0.00103,
+    "mean_p_relation_delta_ci": [
+     -0.00259,
+     0.00065
+    ],
+    "discordant": {
+     "candidate_only_right": 37,
+     "frozen_only_right": 55,
+     "both_right": 812,
+     "both_wrong": 305
+    },
+    "mcnemar_exact_p_two_sided": 0.0757602358
+   },
+   "frozen_spec_view": {
+    "frozen_v3": {
+     "action_distribution_relation": {
+      "status": "PASS",
+      "value": {
+       "l1_sampled_vs_l5": 0.0125,
+       "sampled": {
+        "complete": 0.4806,
+        "extend": 0.517,
+        "open": 0.0025
+       },
+       "expected_l5": {
+        "complete": 0.4868,
+        "extend": 0.511,
+        "open": 0.0022
+       }
+      },
+      "threshold": {
+       "l1_sampled_vs_l5_max": 0.1
+      },
+      "n": 1209
+     },
+     "post_fill_complete_gap": {
+      "status": "PASS",
+      "value": {
+       "gap_pp_sampled": -0.6
+      },
+      "threshold": {
+       "abs_gap_pp_max_sampled": 10.0
+      },
+      "n": 1206
+     },
+     "off_distribution_rate": {
+      "status": "PASS",
+      "value": 0.0,
+      "threshold": {
+       "max_pct": 5.0
+      },
+      "n": 1209
+     }
+    },
+    "candidate_v4": {
+     "action_distribution_relation": {
+      "status": "PASS",
+      "value": {
+       "l1_sampled_vs_l5": 0.0058,
+       "sampled": {
+        "complete": 0.4806,
+        "extend": 0.517,
+        "open": 0.0025
+       },
+       "expected_l5": {
+        "complete": 0.4835,
+        "extend": 0.5142,
+        "open": 0.0024
+       }
+      },
+      "threshold": {
+       "l1_sampled_vs_l5_max": 0.1
+      },
+      "n": 1209
+     },
+     "post_fill_complete_gap": {
+      "status": "PASS",
+      "value": {
+       "gap_pp_sampled": -0.3
+      },
+      "threshold": {
+       "abs_gap_pp_max_sampled": 10.0
+      },
+      "n": 1206
+     },
+     "off_distribution_rate": {
+      "status": "PASS",
+      "value": 0.0,
+      "threshold": {
+       "max_pct": 5.0
+      },
+      "n": 1209
+     }
+    },
+    "loop_score_frozen": {
+     "n": 1209,
+     "mean_prob_of_observed_action": 0.1688,
+     "relation_agreement": 0.7171,
+     "exact_agreement": 0.3052,
+     "off_distribution_pct": 0.0
+    },
+    "loop_score_candidate": {
+     "n": 1209,
+     "mean_prob_of_observed_action": 0.1686,
+     "relation_agreement": 0.7022,
+     "exact_agreement": 0.3052,
+     "off_distribution_pct": 0.0
+    }
+   },
+   "by_state_top": [
+    {
+     "state": "p10-25c|tte5-10m|imb>50",
+     "n": 211,
+     "frozen": {
+      "agreement": 0.8199,
+      "mean_p_action": 0.1902,
+      "relation_l1": 0.054,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6493,
+       "complete": 0.3507,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6223,
+       "complete": 0.3777,
+       "sell": 0.0
+      },
+      "post_fill_n": 211,
+      "post_fill_complete_observed": 0.3507,
+      "post_fill_complete_expected": 0.3777
+     },
+     "candidate": {
+      "agreement": 0.8199,
+      "mean_p_action": 0.19,
+      "relation_l1": 0.0582,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6202,
+       "complete": 0.3798,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3798
+     }
+    },
+    {
+     "state": "p55-75c|tte5-10m|imb>50",
+     "n": 135,
+     "frozen": {
+      "agreement": 0.6815,
+      "mean_p_action": 0.1615,
+      "relation_l1": 0.0862,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4,
+       "complete": 0.6,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4431,
+       "complete": 0.5569,
+       "sell": 0.0
+      },
+      "post_fill_n": 135,
+      "post_fill_complete_observed": 0.6,
+      "post_fill_complete_expected": 0.5569
+     },
+     "candidate": {
+      "agreement": 0.6741,
+      "mean_p_action": 0.1594,
+      "relation_l1": 0.0822,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4411,
+       "complete": 0.5589,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5589
+     }
+    },
+    {
+     "state": "p25-45c|tte5-10m|imb>50",
+     "n": 118,
+     "frozen": {
+      "agreement": 0.7542,
+      "mean_p_action": 0.1646,
+      "relation_l1": 0.0798,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3305,
+       "complete": 0.6695,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3704,
+       "complete": 0.6296,
+       "sell": 0.0
+      },
+      "post_fill_n": 118,
+      "post_fill_complete_observed": 0.6695,
+      "post_fill_complete_expected": 0.6296
+     },
+     "candidate": {
+      "agreement": 0.7542,
+      "mean_p_action": 0.1626,
+      "relation_l1": 0.0998,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3804,
+       "complete": 0.6196,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.6196
+     }
+    },
+    {
+     "state": "p75-90c|tte5-10m|imb>50",
+     "n": 109,
+     "frozen": {
+      "agreement": 0.7248,
+      "mean_p_action": 0.1679,
+      "relation_l1": 0.0374,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4404,
+       "complete": 0.5596,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4591,
+       "complete": 0.5409,
+       "sell": 0.0
+      },
+      "post_fill_n": 109,
+      "post_fill_complete_observed": 0.5596,
+      "post_fill_complete_expected": 0.5409
+     },
+     "candidate": {
+      "agreement": 0.5688,
+      "mean_p_action": 0.1557,
+      "relation_l1": 0.051,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4659,
+       "complete": 0.5341,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5341
+     }
+    },
+    {
+     "state": "p10-25c|tte2-5m|imb>50",
+     "n": 93,
+     "frozen": {
+      "agreement": 0.7419,
+      "mean_p_action": 0.1573,
+      "relation_l1": 0.0198,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6022,
+       "complete": 0.3978,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6121,
+       "complete": 0.3879,
+       "sell": 0.0
+      },
+      "post_fill_n": 93,
+      "post_fill_complete_observed": 0.3978,
+      "post_fill_complete_expected": 0.3879
+     },
+     "candidate": {
+      "agreement": 0.7419,
+      "mean_p_action": 0.1655,
+      "relation_l1": 0.036,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6202,
+       "complete": 0.3798,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3798
+     }
+    },
+    {
+     "state": "p45-55c|tte>10m|imb>50",
+     "n": 70,
+     "frozen": {
+      "agreement": 0.6,
+      "mean_p_action": 0.1531,
+      "relation_l1": 0.21,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5429,
+       "complete": 0.4571,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4379,
+       "complete": 0.5621,
+       "sell": 0.0
+      },
+      "post_fill_n": 70,
+      "post_fill_complete_observed": 0.4571,
+      "post_fill_complete_expected": 0.5621
+     },
+     "candidate": {
+      "agreement": 0.6,
+      "mean_p_action": 0.148,
+      "relation_l1": 0.1852,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4503,
+       "complete": 0.5497,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5497
+     }
+    },
+    {
+     "state": "p25-45c|tte>10m|imb>50",
+     "n": 67,
+     "frozen": {
+      "agreement": 0.806,
+      "mean_p_action": 0.1709,
+      "relation_l1": 0.1608,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.7463,
+       "complete": 0.2537,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6659,
+       "complete": 0.3341,
+       "sell": 0.0
+      },
+      "post_fill_n": 67,
+      "post_fill_complete_observed": 0.2537,
+      "post_fill_complete_expected": 0.3341
+     },
+     "candidate": {
+      "agreement": 0.806,
+      "mean_p_action": 0.1678,
+      "relation_l1": 0.1616,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6655,
+       "complete": 0.3345,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3345
+     }
+    },
+    {
+     "state": "p75-90c|tte2-5m|imb>50",
+     "n": 63,
+     "frozen": {
+      "agreement": 0.6508,
+      "mean_p_action": 0.1664,
+      "relation_l1": 0.2102,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3016,
+       "complete": 0.6984,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4067,
+       "complete": 0.5933,
+       "sell": 0.0
+      },
+      "post_fill_n": 63,
+      "post_fill_complete_observed": 0.6984,
+      "post_fill_complete_expected": 0.5933
+     },
+     "candidate": {
+      "agreement": 0.6508,
+      "mean_p_action": 0.1713,
+      "relation_l1": 0.1786,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3909,
+       "complete": 0.6091,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.6091
+     }
+    },
+    {
+     "state": "p55-75c|tte>10m|imb>50",
+     "n": 49,
+     "frozen": {
+      "agreement": 0.7551,
+      "mean_p_action": 0.1649,
+      "relation_l1": 0.1006,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4694,
+       "complete": 0.5306,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4191,
+       "complete": 0.5809,
+       "sell": 0.0
+      },
+      "post_fill_n": 49,
+      "post_fill_complete_observed": 0.5306,
+      "post_fill_complete_expected": 0.5809
+     },
+     "candidate": {
+      "agreement": 0.7551,
+      "mean_p_action": 0.1699,
+      "relation_l1": 0.1042,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4173,
+       "complete": 0.5827,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5827
+     }
+    },
+    {
+     "state": "p45-55c|tte2-5m|imb>50",
+     "n": 24,
+     "frozen": {
+      "agreement": 0.75,
+      "mean_p_action": 0.1892,
+      "relation_l1": 0.136,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4583,
+       "complete": 0.5417,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5263,
+       "complete": 0.4737,
+       "sell": 0.0
+      },
+      "post_fill_n": 24,
+      "post_fill_complete_observed": 0.5417,
+      "post_fill_complete_expected": 0.4737
+     },
+     "candidate": {
+      "agreement": 0.75,
+      "mean_p_action": 0.1904,
+      "relation_l1": 0.1214,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.519,
+       "complete": 0.481,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.481
+     }
+    },
+    {
+     "state": "p25-45c|tte30-120s|imb>50",
+     "n": 23,
+     "frozen": {
+      "agreement": 0.7826,
+      "mean_p_action": 0.1358,
+      "relation_l1": 0.0334,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.2174,
+       "complete": 0.7826,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.2341,
+       "complete": 0.7659,
+       "sell": 0.0
+      },
+      "post_fill_n": 23,
+      "post_fill_complete_observed": 0.7826,
+      "post_fill_complete_expected": 0.7659
+     },
+     "candidate": {
+      "agreement": 0.7826,
+      "mean_p_action": 0.1269,
+      "relation_l1": 0.1594,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.2971,
+       "complete": 0.7029,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.7029
+     }
+    },
+    {
+     "state": "p55-75c|tte2-5m|imb>50",
+     "n": 21,
+     "frozen": {
+      "agreement": 0.7143,
+      "mean_p_action": 0.1919,
+      "relation_l1": 0.2674,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.7143,
+       "complete": 0.2857,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5806,
+       "complete": 0.4194,
+       "sell": 0.0
+      },
+      "post_fill_n": 21,
+      "post_fill_complete_observed": 0.2857,
+      "post_fill_complete_expected": 0.4194
+     },
+     "candidate": {
+      "agreement": 0.7143,
+      "mean_p_action": 0.2097,
+      "relation_l1": 0.1928,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6179,
+       "complete": 0.3821,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3821
+     }
+    },
+    {
+     "state": "p10-25c|tte>10m|imb>50",
+     "n": 21,
+     "frozen": {
+      "agreement": 0.9524,
+      "mean_p_action": 0.1765,
+      "relation_l1": 0.3354,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.8571,
+       "complete": 0.1429,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6894,
+       "complete": 0.3106,
+       "sell": 0.0
+      },
+      "post_fill_n": 21,
+      "post_fill_complete_observed": 0.1429,
+      "post_fill_complete_expected": 0.3106
+     },
+     "candidate": {
+      "agreement": 0.8095,
+      "mean_p_action": 0.1764,
+      "relation_l1": 0.3258,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6942,
+       "complete": 0.3058,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3058
+     }
+    },
+    {
+     "state": "p45-55c|tte30-120s|imb>50",
+     "n": 16,
+     "frozen": {
+      "agreement": 0.8125,
+      "mean_p_action": 0.2694,
+      "relation_l1": 0.0951,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6875,
+       "complete": 0.3125,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6399,
+       "complete": 0.36,
+       "sell": 0.0
+      },
+      "post_fill_n": 16,
+      "post_fill_complete_observed": 0.3125,
+      "post_fill_complete_expected": 0.36
+     },
+     "candidate": {
+      "agreement": 0.8125,
+      "mean_p_action": 0.2667,
+      "relation_l1": 0.0618,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6566,
+       "complete": 0.3434,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3434
+     }
+    },
+    {
+     "state": "p10-25c|tte2-5m|imb10-50",
+     "n": 13,
+     "frozen": {
+      "agreement": 0.6923,
+      "mean_p_action": 0.1351,
+      "relation_l1": 0.0358,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5385,
+       "complete": 0.4615,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5564,
+       "complete": 0.4436,
+       "sell": 0.0
+      },
+      "post_fill_n": 13,
+      "post_fill_complete_observed": 0.4615,
+      "post_fill_complete_expected": 0.4436
+     },
+     "candidate": {
+      "agreement": 0.6923,
+      "mean_p_action": 0.1409,
+      "relation_l1": 0.0652,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5711,
+       "complete": 0.4289,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4289
+     }
+    },
+    {
+     "state": "p<10c|tte2-5m|imb>50",
+     "n": 13,
+     "frozen": {
+      "agreement": 0.4615,
+      "mean_p_action": 0.1658,
+      "relation_l1": 0.2244,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5385,
+       "complete": 0.4615,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6507,
+       "complete": 0.3493,
+       "sell": 0.0
+      },
+      "post_fill_n": 13,
+      "post_fill_complete_observed": 0.4615,
+      "post_fill_complete_expected": 0.3493
+     },
+     "candidate": {
+      "agreement": 0.4615,
+      "mean_p_action": 0.1681,
+      "relation_l1": 0.192,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6345,
+       "complete": 0.3655,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3655
+     }
+    },
+    {
+     "state": "p55-75c|tte5-10m|imb10-50",
+     "n": 12,
+     "frozen": {
+      "agreement": 0.5833,
+      "mean_p_action": 0.1373,
+      "relation_l1": 0.1284,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5,
+       "complete": 0.5,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4358,
+       "complete": 0.5642,
+       "sell": 0.0
+      },
+      "post_fill_n": 12,
+      "post_fill_complete_observed": 0.5,
+      "post_fill_complete_expected": 0.5642
+     },
+     "candidate": {
+      "agreement": 0.75,
+      "mean_p_action": 0.1417,
+      "relation_l1": 0.0784,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4608,
+       "complete": 0.5392,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5392
+     }
+    },
+    {
+     "state": "p55-75c|tte30-120s|imb>50",
+     "n": 11,
+     "frozen": {
+      "agreement": 0.6364,
+      "mean_p_action": 0.1605,
+      "relation_l1": 0.0058,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6364,
+       "complete": 0.3636,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6393,
+       "complete": 0.3607,
+       "sell": 0.0
+      },
+      "post_fill_n": 11,
+      "post_fill_complete_observed": 0.3636,
+      "post_fill_complete_expected": 0.3607
+     },
+     "candidate": {
+      "agreement": 0.6364,
+      "mean_p_action": 0.1581,
+      "relation_l1": 0.0196,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6266,
+       "complete": 0.3734,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3734
+     }
+    },
+    {
+     "state": "p>90c|tte2-5m|imb>50",
+     "n": 11,
+     "frozen": {
+      "agreement": 0.4545,
+      "mean_p_action": 0.1745,
+      "relation_l1": 0.2658,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5455,
+       "complete": 0.4545,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4126,
+       "complete": 0.5874,
+       "sell": 0.0
+      },
+      "post_fill_n": 11,
+      "post_fill_complete_observed": 0.4545,
+      "post_fill_complete_expected": 0.5874
+     },
+     "candidate": {
+      "agreement": 0.4545,
+      "mean_p_action": 0.1761,
+      "relation_l1": 0.2176,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4367,
+       "complete": 0.5633,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5633
+     }
+    },
+    {
+     "state": "p<10c|tte30-120s|imb>50",
+     "n": 11,
+     "frozen": {
+      "agreement": 0.7273,
+      "mean_p_action": 0.2,
+      "relation_l1": 0.0078,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.7273,
+       "complete": 0.2727,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.7234,
+       "complete": 0.2766,
+       "sell": 0.0
+      },
+      "post_fill_n": 11,
+      "post_fill_complete_observed": 0.2727,
+      "post_fill_complete_expected": 0.2766
+     },
+     "candidate": {
+      "agreement": 0.7273,
+      "mean_p_action": 0.2059,
+      "relation_l1": 0.0276,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.7135,
+       "complete": 0.2865,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.2865
+     }
+    },
+    {
+     "state": "p75-90c|tte5-10m|imb10-50",
+     "n": 9,
+     "frozen": {
+      "agreement": 0.6667,
+      "mean_p_action": 0.1778,
+      "relation_l1": 0.1164,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5556,
+       "complete": 0.4444,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4974,
+       "complete": 0.5026,
+       "sell": 0.0
+      },
+      "post_fill_n": 9,
+      "post_fill_complete_observed": 0.4444,
+      "post_fill_complete_expected": 0.5026
+     },
+     "candidate": {
+      "agreement": 0.7778,
+      "mean_p_action": 0.1967,
+      "relation_l1": 0.1044,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5034,
+       "complete": 0.4966,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4966
+     }
+    },
+    {
+     "state": "p25-45c|tte2-5m|imb>50",
+     "n": 9,
+     "frozen": {
+      "agreement": 0.3333,
+      "mean_p_action": 0.1369,
+      "relation_l1": 0.6882,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6667,
+       "complete": 0.3333,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3226,
+       "complete": 0.6774,
+       "sell": 0.0
+      },
+      "post_fill_n": 9,
+      "post_fill_complete_observed": 0.3333,
+      "post_fill_complete_expected": 0.6774
+     },
+     "candidate": {
+      "agreement": 0.3333,
+      "mean_p_action": 0.1216,
+      "relation_l1": 0.6336,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.3499,
+       "complete": 0.6501,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.6501
+     }
+    },
+    {
+     "state": "p10-25c|tte5-10m|imb10-50",
+     "n": 8,
+     "frozen": {
+      "agreement": 0.375,
+      "mean_p_action": 0.1199,
+      "relation_l1": 0.631,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.25,
+       "complete": 0.75,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5655,
+       "complete": 0.4345,
+       "sell": 0.0
+      },
+      "post_fill_n": 8,
+      "post_fill_complete_observed": 0.75,
+      "post_fill_complete_expected": 0.4345
+     },
+     "candidate": {
+      "agreement": 0.875,
+      "mean_p_action": 0.1228,
+      "relation_l1": 0.66,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.58,
+       "complete": 0.42,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.42
+     }
+    },
+    {
+     "state": "p75-90c|tte2-5m|imb10-50",
+     "n": 8,
+     "frozen": {
+      "agreement": 0.5,
+      "mean_p_action": 0.1423,
+      "relation_l1": 0.0888,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.625,
+       "complete": 0.375,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5806,
+       "complete": 0.4194,
+       "sell": 0.0
+      },
+      "post_fill_n": 8,
+      "post_fill_complete_observed": 0.375,
+      "post_fill_complete_expected": 0.4194
+     },
+     "candidate": {
+      "agreement": 0.375,
+      "mean_p_action": 0.1432,
+      "relation_l1": 0.1918,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5291,
+       "complete": 0.4709,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4709
+     }
+    },
+    {
+     "state": "p>90c|tte30-120s|imb>50",
+     "n": 8,
+     "frozen": {
+      "agreement": 0.25,
+      "mean_p_action": 0.2179,
+      "relation_l1": 0.5134,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.25,
+       "complete": 0.75,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5067,
+       "complete": 0.4933,
+       "sell": 0.0
+      },
+      "post_fill_n": 8,
+      "post_fill_complete_observed": 0.75,
+      "post_fill_complete_expected": 0.4933
+     },
+     "candidate": {
+      "agreement": 0.375,
+      "mean_p_action": 0.2009,
+      "relation_l1": 0.5622,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5311,
+       "complete": 0.4689,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4689
+     }
+    }
+   ],
+   "verdict": {
+    "verdict": "NOT_YET",
+    "reason": "insufficient forward evidence",
+    "checks": {
+     "holdout_rows": 1209,
+     "train_rows": 101163,
+     "holdout_windows": 15,
+     "minimums": {
+      "min_holdout_rows": 200,
+      "min_train_rows": 200,
+      "min_holdout_windows": 30
+     }
+    }
+   }
+  },
+  {
+   "cut": "strict",
+   "rule": "last 3 days of observed activity; window-level split",
+   "split_mode": "window",
+   "cut_ts": 1788569866.0,
+   "cut_utc": "2026-09-05T00:57:46Z",
+   "train_rows": 60792,
+   "holdout_rows": 41356,
+   "dropped_straddling_rows": 224,
+   "train_span_utc": [
+    "2026-09-01T01:12:06Z",
+    "2026-09-05T00:53:55Z"
+   ],
+   "holdout_span_utc": [
+    "2026-09-05T01:01:22Z",
+    "2026-09-08T00:57:46Z"
+   ],
+   "holdout_windows": 1002,
+   "train_windows": 1654,
+   "candidate": {
+    "n_transitions": 130438,
+    "n_full_states": 1051,
+    "states_touched": 982,
+    "states_new_to_model": 63,
+    "modal_action_changes": 277,
+    "sha256_16": "dd8329b0a7fe9c54",
+    "sha_note": "sha of the candidate's count tables (full/base/marginal), independent of generation time"
+   },
+   "frozen_v3_on_holdout": {
+    "n": 41356,
+    "relation": {
+     "observed_freq": {
+      "open": 0.0052,
+      "extend": 0.5207,
+      "complete": 0.4741,
+      "sell": 0.0
+     },
+     "expected_freq": {
+      "open": 0.0043,
+      "extend": 0.5067,
+      "complete": 0.4891,
+      "sell": 0.0
+     },
+     "l1_observed_vs_expected": 0.0299,
+     "state_weighted_l1": 0.054,
+     "top1_agreement": 0.6936,
+     "exact_action_agreement": 0.2721,
+     "mean_p_observed_action": 0.1731,
+     "mean_p_observed_relation": 0.5909,
+     "off_distribution_pct": 0.11
+    },
+    "side": {
+     "open_n": 217,
+     "open_cheaper_touch_agreement": 0.5346,
+     "post_fill_n": 41139,
+     "post_fill_side_agreement": 0.6921,
+     "note": "the lookup predicts a relation, never a side: post-fill side = the side the recommended relation buys (complete -> deficit side, extend -> surplus side), so post-fill side agreement equals post-fill relation agreement; the OPEN side follows the shared cheaper-touch convention (observed fill price <= 0.50) and is identical under both lookups"
+    },
+    "size": {
+     "observed_freq": {
+      "q<5": 0.1934,
+      "q5-15": 0.3286,
+      "q15-40": 0.2203,
+      "q>40": 0.2576
+     },
+     "expected_freq": {
+      "q<5": 0.1972,
+      "q5-15": 0.3302,
+      "q15-40": 0.2159,
+      "q>40": 0.2567
+     },
+     "l1_observed_vs_expected": 0.0106,
+     "top1_agreement": 0.3656,
+     "conditional_on_observed_relation": {
+      "open": {
+       "n": 217,
+       "observed": {
+        "q<5": 0.1797,
+        "q5-15": 0.318,
+        "q15-40": 0.2074,
+        "q>40": 0.2949
+       },
+       "expected": {
+        "q<5": 0.113,
+        "q5-15": 0.3934,
+        "q15-40": 0.1963,
+        "q>40": 0.2973
+       },
+       "l1": 0.1556
+      },
+      "extend": {
+       "n": 21534,
+       "observed": {
+        "q<5": 0.1932,
+        "q5-15": 0.3354,
+        "q15-40": 0.2269,
+        "q>40": 0.2444
+       },
+       "expected": {
+        "q<5": 0.1974,
+        "q5-15": 0.3366,
+        "q15-40": 0.22,
+        "q>40": 0.246
+       },
+       "l1": 0.0139
+      },
+      "complete": {
+       "n": 19605,
+       "observed": {
+        "q<5": 0.1938,
+        "q5-15": 0.3212,
+        "q15-40": 0.2132,
+        "q>40": 0.2717
+       },
+       "expected": {
+        "q<5": 0.1991,
+        "q5-15": 0.3244,
+        "q15-40": 0.2115,
+        "q>40": 0.265
+       },
+       "l1": 0.0169
+      }
+     }
+    },
+    "timing": {
+     "observed_gap_freq": {
+      "gap<2s": 0.4985,
+      "gap2-10": 0.3246,
+      "gap10-30": 0.1208,
+      "gap>30": 0.0562
+     },
+     "cadence_modal_scored": 41309,
+     "cadence_modal_agreement": 0.4745,
+     "note": "cadence_modal is copied unchanged from frozen v3 into the candidate by the loop's builder, so timing is identical under both lookups"
+    },
+    "inventory": {
+     "n": 41356,
+     "observed_resid_after_freq": {
+      "flat": 0.0056,
+      "imb1-10": 0.0375,
+      "imb10-50": 0.1579,
+      "imb>50": 0.7991
+     },
+     "expected_resid_after_freq": {
+      "flat": 0.0061,
+      "imb1-10": 0.0392,
+      "imb10-50": 0.159,
+      "imb>50": 0.7958
+     },
+     "l1_observed_vs_expected": 0.0066,
+     "imbalanced_after_observed": 0.9944,
+     "imbalanced_after_expected": 0.9939,
+     "size_representatives_shares": {
+      "q<5": 2.0,
+      "q5-15": 7.6291,
+      "q15-40": 23.68,
+      "q>40": 50.0
+     }
+    },
+    "complete": {
+     "post_fill_n": 41139,
+     "p_complete_observed": 0.4766,
+     "p_complete_expected": 0.4912,
+     "gap_pp": -1.46,
+     "persistence": {
+      "extend": {
+       "n": 20940,
+       "observed_p_same": 0.7061,
+       "expected_p_same": 0.6708
+      },
+      "complete": {
+       "n": 19028,
+       "observed_p_same": 0.6878,
+       "expected_p_same": 0.675
+      }
+     },
+     "pair_cost_at_complete": {
+      "n": 19605,
+      "freq": {
+       "pc<0.90": 0.036,
+       "pc0.90-0.95": 0.1387,
+       "pc0.95-0.98": 0.2146,
+       "pc0.98-1.00": 0.218,
+       "pc>=1.00": 0.3927
+      },
+      "median": 0.9896,
+      "note": "observed only (matched pair unit cost after each COMPLETE fill); neither lookup predicts price, so this is identical under both"
+     }
+    },
+    "price_aggressiveness": {
+     "status": "UNMEASURED",
+     "maker_taker_known_rows": 0,
+     "observed_price_band_freq": {
+      "p<10c": 0.1104,
+      "p10-25c": 0.1866,
+      "p25-45c": 0.2117,
+      "p45-55c": 0.1018,
+      "p55-75c": 0.2169,
+      "p75-90c": 0.1147,
+      "p>90c": 0.0579
+     },
+     "note": "the public activity fills carry no maker/taker flag (the collector marks every realtime row 'unknown'; 'maker' is asserted only inside the takerOnly feed coverage of the canonical history) and no book, so touch-join and taker share are not derivable here; neither lookup predicts them -- the aggressiveness policy comes from the fidelity artifact and is shared"
+    }
+   },
+   "candidate_v4_on_holdout": {
+    "n": 41356,
+    "relation": {
+     "observed_freq": {
+      "open": 0.0052,
+      "extend": 0.5207,
+      "complete": 0.4741,
+      "sell": 0.0
+     },
+     "expected_freq": {
+      "open": 0.0047,
+      "extend": 0.5053,
+      "complete": 0.49,
+      "sell": 0.0
+     },
+     "l1_observed_vs_expected": 0.0318,
+     "state_weighted_l1": 0.0521,
+     "top1_agreement": 0.6931,
+     "exact_action_agreement": 0.2783,
+     "mean_p_observed_action": 0.1743,
+     "mean_p_observed_relation": 0.5917,
+     "off_distribution_pct": 0.04
+    },
+    "side": {
+     "open_n": 217,
+     "open_cheaper_touch_agreement": 0.5346,
+     "post_fill_n": 41139,
+     "post_fill_side_agreement": 0.6916,
+     "note": "the lookup predicts a relation, never a side: post-fill side = the side the recommended relation buys (complete -> deficit side, extend -> surplus side), so post-fill side agreement equals post-fill relation agreement; the OPEN side follows the shared cheaper-touch convention (observed fill price <= 0.50) and is identical under both lookups"
+    },
+    "size": {
+     "observed_freq": {
+      "q<5": 0.1934,
+      "q5-15": 0.3286,
+      "q15-40": 0.2203,
+      "q>40": 0.2576
+     },
+     "expected_freq": {
+      "q<5": 0.192,
+      "q5-15": 0.327,
+      "q15-40": 0.2108,
+      "q>40": 0.2702
+     },
+     "l1_observed_vs_expected": 0.0252,
+     "top1_agreement": 0.3707,
+     "conditional_on_observed_relation": {
+      "open": {
+       "n": 217,
+       "observed": {
+        "q<5": 0.1797,
+        "q5-15": 0.318,
+        "q15-40": 0.2074,
+        "q>40": 0.2949
+       },
+       "expected": {
+        "q<5": 0.1264,
+        "q5-15": 0.3581,
+        "q15-40": 0.1934,
+        "q>40": 0.3222
+       },
+       "l1": 0.1346
+      },
+      "extend": {
+       "n": 21534,
+       "observed": {
+        "q<5": 0.1932,
+        "q5-15": 0.3354,
+        "q15-40": 0.2269,
+        "q>40": 0.2444
+       },
+       "expected": {
+        "q<5": 0.1924,
+        "q5-15": 0.3324,
+        "q15-40": 0.2152,
+        "q>40": 0.26
+       },
+       "l1": 0.0312
+      },
+      "complete": {
+       "n": 19605,
+       "observed": {
+        "q<5": 0.1938,
+        "q5-15": 0.3212,
+        "q15-40": 0.2132,
+        "q>40": 0.2717
+       },
+       "expected": {
+        "q<5": 0.1939,
+        "q5-15": 0.3229,
+        "q15-40": 0.2062,
+        "q>40": 0.277
+       },
+       "l1": 0.0141
+      }
+     }
+    },
+    "timing": {
+     "observed_gap_freq": {
+      "gap<2s": 0.4985,
+      "gap2-10": 0.3246,
+      "gap10-30": 0.1208,
+      "gap>30": 0.0562
+     },
+     "cadence_modal_scored": 41309,
+     "cadence_modal_agreement": 0.4745,
+     "note": "cadence_modal is copied unchanged from frozen v3 into the candidate by the loop's builder, so timing is identical under both lookups"
+    },
+    "inventory": {
+     "n": 41356,
+     "observed_resid_after_freq": {
+      "flat": 0.0056,
+      "imb1-10": 0.0375,
+      "imb10-50": 0.1579,
+      "imb>50": 0.7991
+     },
+     "expected_resid_after_freq": {
+      "flat": 0.006,
+      "imb1-10": 0.0386,
+      "imb10-50": 0.1588,
+      "imb>50": 0.7966
+     },
+     "l1_observed_vs_expected": 0.005,
+     "imbalanced_after_observed": 0.9944,
+     "imbalanced_after_expected": 0.994,
+     "size_representatives_shares": {
+      "q<5": 2.0,
+      "q5-15": 7.6291,
+      "q15-40": 23.68,
+      "q>40": 50.0
+     }
+    },
+    "complete": {
+     "post_fill_n": 41139,
+     "p_complete_observed": 0.4766,
+     "p_complete_expected": 0.4923,
+     "gap_pp": -1.57,
+     "persistence": {
+      "extend": {
+       "n": 20940,
+       "observed_p_same": 0.7061,
+       "expected_p_same": 0.6667
+      },
+      "complete": {
+       "n": 19028,
+       "observed_p_same": 0.6878,
+       "expected_p_same": 0.6737
+      }
+     },
+     "pair_cost_at_complete": {
+      "n": 19605,
+      "freq": {
+       "pc<0.90": 0.036,
+       "pc0.90-0.95": 0.1387,
+       "pc0.95-0.98": 0.2146,
+       "pc0.98-1.00": 0.218,
+       "pc>=1.00": 0.3927
+      },
+      "median": 0.9896,
+      "note": "observed only (matched pair unit cost after each COMPLETE fill); neither lookup predicts price, so this is identical under both"
+     }
+    },
+    "price_aggressiveness": {
+     "status": "UNMEASURED",
+     "maker_taker_known_rows": 0,
+     "observed_price_band_freq": {
+      "p<10c": 0.1104,
+      "p10-25c": 0.1866,
+      "p25-45c": 0.2117,
+      "p45-55c": 0.1018,
+      "p55-75c": 0.2169,
+      "p75-90c": 0.1147,
+      "p>90c": 0.0579
+     },
+     "note": "the public activity fills carry no maker/taker flag (the collector marks every realtime row 'unknown'; 'maker' is asserted only inside the takerOnly feed coverage of the canonical history) and no book, so touch-join and taker share are not derivable here; neither lookup predicts them -- the aggressiveness policy comes from the fidelity artifact and is shared"
+    }
+   },
+   "paired": {
+    "n": 41356,
+    "bootstrap_resamples": 1000,
+    "seed": 7,
+    "ci_level": 0.95,
+    "agreement_delta": -0.00051,
+    "agreement_delta_ci": [
+     -0.003,
+     0.00184
+    ],
+    "mean_p_action_delta": 0.00118,
+    "mean_p_action_delta_ci": [
+     0.00094,
+     0.00142
+    ],
+    "mean_p_relation_delta": 0.00076,
+    "mean_p_relation_delta_ci": [
+     0.00045,
+     0.00105
+    ],
+    "discordant": {
+     "candidate_only_right": 1342,
+     "frozen_only_right": 1363,
+     "both_right": 27321,
+     "both_wrong": 11330
+    },
+    "mcnemar_exact_p_two_sided": 0.7005825651
+   },
+   "frozen_spec_view": {
+    "frozen_v3": {
+     "action_distribution_relation": {
+      "status": "PASS",
+      "value": {
+       "l1_sampled_vs_l5": 0.0299,
+       "sampled": {
+        "complete": 0.4741,
+        "extend": 0.5207,
+        "open": 0.0052
+       },
+       "expected_l5": {
+        "complete": 0.4891,
+        "extend": 0.5067,
+        "open": 0.0043
+       }
+      },
+      "threshold": {
+       "l1_sampled_vs_l5_max": 0.1
+      },
+      "n": 41356
+     },
+     "post_fill_complete_gap": {
+      "status": "PASS",
+      "value": {
+       "gap_pp_sampled": -1.5
+      },
+      "threshold": {
+       "abs_gap_pp_max_sampled": 10.0
+      },
+      "n": 41139
+     },
+     "off_distribution_rate": {
+      "status": "PASS",
+      "value": 0.11,
+      "threshold": {
+       "max_pct": 5.0
+      },
+      "n": 41356
+     }
+    },
+    "candidate_v4": {
+     "action_distribution_relation": {
+      "status": "PASS",
+      "value": {
+       "l1_sampled_vs_l5": 0.0318,
+       "sampled": {
+        "complete": 0.4741,
+        "extend": 0.5207,
+        "open": 0.0052
+       },
+       "expected_l5": {
+        "complete": 0.49,
+        "extend": 0.5053,
+        "open": 0.0047
+       }
+      },
+      "threshold": {
+       "l1_sampled_vs_l5_max": 0.1
+      },
+      "n": 41356
+     },
+     "post_fill_complete_gap": {
+      "status": "PASS",
+      "value": {
+       "gap_pp_sampled": -1.6
+      },
+      "threshold": {
+       "abs_gap_pp_max_sampled": 10.0
+      },
+      "n": 41139
+     },
+     "off_distribution_rate": {
+      "status": "PASS",
+      "value": 0.04,
+      "threshold": {
+       "max_pct": 5.0
+      },
+      "n": 41356
+     }
+    },
+    "loop_score_frozen": {
+     "n": 41356,
+     "mean_prob_of_observed_action": 0.1731,
+     "relation_agreement": 0.6936,
+     "exact_agreement": 0.2721,
+     "off_distribution_pct": 0.11
+    },
+    "loop_score_candidate": {
+     "n": 41356,
+     "mean_prob_of_observed_action": 0.1743,
+     "relation_agreement": 0.6931,
+     "exact_agreement": 0.2783,
+     "off_distribution_pct": 0.04
+    }
+   },
+   "by_state_top": [
+    {
+     "state": "p10-25c|tte5-10m|imb>50",
+     "n": 2781,
+     "frozen": {
+      "agreement": 0.8012,
+      "mean_p_action": 0.2053,
+      "relation_l1": 0.0568,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.548,
+       "complete": 0.452,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5196,
+       "complete": 0.4804,
+       "sell": 0.0
+      },
+      "post_fill_n": 2781,
+      "post_fill_complete_observed": 0.452,
+      "post_fill_complete_expected": 0.4804
+     },
+     "candidate": {
+      "agreement": 0.8012,
+      "mean_p_action": 0.2027,
+      "relation_l1": 0.0684,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5138,
+       "complete": 0.4862,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4862
+     }
+    },
+    {
+     "state": "p25-45c|tte5-10m|imb>50",
+     "n": 2503,
+     "frozen": {
+      "agreement": 0.7343,
+      "mean_p_action": 0.1806,
+      "relation_l1": 0.0098,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5082,
+       "complete": 0.4918,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5131,
+       "complete": 0.4869,
+       "sell": 0.0
+      },
+      "post_fill_n": 2503,
+      "post_fill_complete_observed": 0.4918,
+      "post_fill_complete_expected": 0.4869
+     },
+     "candidate": {
+      "agreement": 0.7343,
+      "mean_p_action": 0.1807,
+      "relation_l1": 0.0004,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5084,
+       "complete": 0.4916,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4916
+     }
+    },
+    {
+     "state": "p55-75c|tte>10m|imb>50",
+     "n": 2113,
+     "frozen": {
+      "agreement": 0.6985,
+      "mean_p_action": 0.166,
+      "relation_l1": 0.0506,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5703,
+       "complete": 0.4297,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.545,
+       "complete": 0.455,
+       "sell": 0.0
+      },
+      "post_fill_n": 2113,
+      "post_fill_complete_observed": 0.4297,
+      "post_fill_complete_expected": 0.455
+     },
+     "candidate": {
+      "agreement": 0.6985,
+      "mean_p_action": 0.167,
+      "relation_l1": 0.0482,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5462,
+       "complete": 0.4538,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4538
+     }
+    },
+    {
+     "state": "p25-45c|tte>10m|imb>50",
+     "n": 2049,
+     "frozen": {
+      "agreement": 0.7194,
+      "mean_p_action": 0.1787,
+      "relation_l1": 0.014,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4636,
+       "complete": 0.5364,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4706,
+       "complete": 0.5294,
+       "sell": 0.0
+      },
+      "post_fill_n": 2049,
+      "post_fill_complete_observed": 0.5364,
+      "post_fill_complete_expected": 0.5294
+     },
+     "candidate": {
+      "agreement": 0.7145,
+      "mean_p_action": 0.1782,
+      "relation_l1": 0.016,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4716,
+       "complete": 0.5284,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5284
+     }
+    },
+    {
+     "state": "p55-75c|tte5-10m|imb>50",
+     "n": 2021,
+     "frozen": {
+      "agreement": 0.6551,
+      "mean_p_action": 0.1565,
+      "relation_l1": 0.022,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4735,
+       "complete": 0.5265,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4625,
+       "complete": 0.5375,
+       "sell": 0.0
+      },
+      "post_fill_n": 2021,
+      "post_fill_complete_observed": 0.5265,
+      "post_fill_complete_expected": 0.5375
+     },
+     "candidate": {
+      "agreement": 0.6507,
+      "mean_p_action": 0.1574,
+      "relation_l1": 0.0274,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4598,
+       "complete": 0.5402,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5402
+     }
+    },
+    {
+     "state": "p10-25c|tte2-5m|imb>50",
+     "n": 1845,
+     "frozen": {
+      "agreement": 0.7648,
+      "mean_p_action": 0.1715,
+      "relation_l1": 0.0514,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.568,
+       "complete": 0.432,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5423,
+       "complete": 0.4577,
+       "sell": 0.0
+      },
+      "post_fill_n": 1845,
+      "post_fill_complete_observed": 0.432,
+      "post_fill_complete_expected": 0.4577
+     },
+     "candidate": {
+      "agreement": 0.7648,
+      "mean_p_action": 0.1718,
+      "relation_l1": 0.0628,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5366,
+       "complete": 0.4634,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4634
+     }
+    },
+    {
+     "state": "p55-75c|tte2-5m|imb>50",
+     "n": 1810,
+     "frozen": {
+      "agreement": 0.7033,
+      "mean_p_action": 0.177,
+      "relation_l1": 0.1164,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5271,
+       "complete": 0.4729,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4689,
+       "complete": 0.5311,
+       "sell": 0.0
+      },
+      "post_fill_n": 1810,
+      "post_fill_complete_observed": 0.4729,
+      "post_fill_complete_expected": 0.5311
+     },
+     "candidate": {
+      "agreement": 0.7033,
+      "mean_p_action": 0.1823,
+      "relation_l1": 0.0714,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4914,
+       "complete": 0.5086,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5086
+     }
+    },
+    {
+     "state": "p25-45c|tte2-5m|imb>50",
+     "n": 1496,
+     "frozen": {
+      "agreement": 0.6852,
+      "mean_p_action": 0.1673,
+      "relation_l1": 0.0478,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5187,
+       "complete": 0.4813,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4948,
+       "complete": 0.5052,
+       "sell": 0.0
+      },
+      "post_fill_n": 1496,
+      "post_fill_complete_observed": 0.4813,
+      "post_fill_complete_expected": 0.5052
+     },
+     "candidate": {
+      "agreement": 0.6852,
+      "mean_p_action": 0.1713,
+      "relation_l1": 0.026,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5057,
+       "complete": 0.4943,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4943
+     }
+    },
+    {
+     "state": "p<10c|tte30-120s|imb>50",
+     "n": 1376,
+     "frozen": {
+      "agreement": 0.7776,
+      "mean_p_action": 0.1935,
+      "relation_l1": 0.0294,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6228,
+       "complete": 0.3772,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6081,
+       "complete": 0.3919,
+       "sell": 0.0
+      },
+      "post_fill_n": 1376,
+      "post_fill_complete_observed": 0.3772,
+      "post_fill_complete_expected": 0.3919
+     },
+     "candidate": {
+      "agreement": 0.7776,
+      "mean_p_action": 0.1945,
+      "relation_l1": 0.0756,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.585,
+       "complete": 0.415,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.415
+     }
+    },
+    {
+     "state": "p<10c|tte2-5m|imb>50",
+     "n": 1351,
+     "frozen": {
+      "agreement": 0.7461,
+      "mean_p_action": 0.1832,
+      "relation_l1": 0.0032,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6321,
+       "complete": 0.3679,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6337,
+       "complete": 0.3663,
+       "sell": 0.0
+      },
+      "post_fill_n": 1351,
+      "post_fill_complete_observed": 0.3679,
+      "post_fill_complete_expected": 0.3663
+     },
+     "candidate": {
+      "agreement": 0.7461,
+      "mean_p_action": 0.1821,
+      "relation_l1": 0.028,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.6181,
+       "complete": 0.3819,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.3819
+     }
+    },
+    {
+     "state": "p75-90c|tte2-5m|imb>50",
+     "n": 1312,
+     "frozen": {
+      "agreement": 0.6585,
+      "mean_p_action": 0.1622,
+      "relation_l1": 0.0604,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4634,
+       "complete": 0.5366,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4936,
+       "complete": 0.5064,
+       "sell": 0.0
+      },
+      "post_fill_n": 1312,
+      "post_fill_complete_observed": 0.5366,
+      "post_fill_complete_expected": 0.5064
+     },
+     "candidate": {
+      "agreement": 0.6585,
+      "mean_p_action": 0.1645,
+      "relation_l1": 0.0676,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4972,
+       "complete": 0.5028,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5028
+     }
+    },
+    {
+     "state": "p75-90c|tte5-10m|imb>50",
+     "n": 1302,
+     "frozen": {
+      "agreement": 0.6229,
+      "mean_p_action": 0.1464,
+      "relation_l1": 0.0844,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5346,
+       "complete": 0.4654,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4924,
+       "complete": 0.5076,
+       "sell": 0.0
+      },
+      "post_fill_n": 1302,
+      "post_fill_complete_observed": 0.4654,
+      "post_fill_complete_expected": 0.5076
+     },
+     "candidate": {
+      "agreement": 0.5568,
+      "mean_p_action": 0.1448,
+      "relation_l1": 0.0892,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.49,
+       "complete": 0.51,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.51
+     }
+    },
+    {
+     "state": "p10-25c|tte30-120s|imb>50",
+     "n": 1161,
+     "frozen": {
+      "agreement": 0.733,
+      "mean_p_action": 0.1983,
+      "relation_l1": 0.0,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.503,
+       "complete": 0.497,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.503,
+       "complete": 0.497,
+       "sell": 0.0
+      },
+      "post_fill_n": 1161,
+      "post_fill_complete_observed": 0.497,
+      "post_fill_complete_expected": 0.497
+     },
+     "candidate": {
+      "agreement": 0.733,
+      "mean_p_action": 0.2073,
+      "relation_l1": 0.0252,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4904,
+       "complete": 0.5096,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5096
+     }
+    },
+    {
+     "state": "p45-55c|tte>10m|imb>50",
+     "n": 1062,
+     "frozen": {
+      "agreement": 0.6798,
+      "mean_p_action": 0.1696,
+      "relation_l1": 0.015,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4492,
+       "complete": 0.5508,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4417,
+       "complete": 0.5583,
+       "sell": 0.0
+      },
+      "post_fill_n": 1062,
+      "post_fill_complete_observed": 0.5508,
+      "post_fill_complete_expected": 0.5583
+     },
+     "candidate": {
+      "agreement": 0.6798,
+      "mean_p_action": 0.1678,
+      "relation_l1": 0.0074,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4455,
+       "complete": 0.5545,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5545
+     }
+    },
+    {
+     "state": "p55-75c|tte30-120s|imb>50",
+     "n": 985,
+     "frozen": {
+      "agreement": 0.6772,
+      "mean_p_action": 0.1811,
+      "relation_l1": 0.039,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4802,
+       "complete": 0.5198,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4997,
+       "complete": 0.5003,
+       "sell": 0.0
+      },
+      "post_fill_n": 985,
+      "post_fill_complete_observed": 0.5198,
+      "post_fill_complete_expected": 0.5003
+     },
+     "candidate": {
+      "agreement": 0.6721,
+      "mean_p_action": 0.1787,
+      "relation_l1": 0.01,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4852,
+       "complete": 0.5148,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5148
+     }
+    },
+    {
+     "state": "p45-55c|tte5-10m|imb>50",
+     "n": 861,
+     "frozen": {
+      "agreement": 0.6655,
+      "mean_p_action": 0.1555,
+      "relation_l1": 0.0144,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4518,
+       "complete": 0.5482,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4446,
+       "complete": 0.5554,
+       "sell": 0.0
+      },
+      "post_fill_n": 861,
+      "post_fill_complete_observed": 0.5482,
+      "post_fill_complete_expected": 0.5554
+     },
+     "candidate": {
+      "agreement": 0.6655,
+      "mean_p_action": 0.1576,
+      "relation_l1": 0.006,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4488,
+       "complete": 0.5512,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5512
+     }
+    },
+    {
+     "state": "p75-90c|tte30-120s|imb>50",
+     "n": 801,
+     "frozen": {
+      "agreement": 0.6117,
+      "mean_p_action": 0.159,
+      "relation_l1": 0.0071,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5293,
+       "complete": 0.4707,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5328,
+       "complete": 0.4671,
+       "sell": 0.0
+      },
+      "post_fill_n": 801,
+      "post_fill_complete_observed": 0.4707,
+      "post_fill_complete_expected": 0.4671
+     },
+     "candidate": {
+      "agreement": 0.6117,
+      "mean_p_action": 0.1608,
+      "relation_l1": 0.0004,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5295,
+       "complete": 0.4705,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4705
+     }
+    },
+    {
+     "state": "p45-55c|tte2-5m|imb>50",
+     "n": 770,
+     "frozen": {
+      "agreement": 0.7052,
+      "mean_p_action": 0.171,
+      "relation_l1": 0.026,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.539,
+       "complete": 0.461,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.526,
+       "complete": 0.474,
+       "sell": 0.0
+      },
+      "post_fill_n": 770,
+      "post_fill_complete_observed": 0.461,
+      "post_fill_complete_expected": 0.474
+     },
+     "candidate": {
+      "agreement": 0.7052,
+      "mean_p_action": 0.1711,
+      "relation_l1": 0.0684,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5048,
+       "complete": 0.4952,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4952
+     }
+    },
+    {
+     "state": "p>90c|tte2-5m|imb>50",
+     "n": 767,
+     "frozen": {
+      "agreement": 0.5332,
+      "mean_p_action": 0.152,
+      "relation_l1": 0.1158,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5215,
+       "complete": 0.4785,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4636,
+       "complete": 0.5364,
+       "sell": 0.0
+      },
+      "post_fill_n": 767,
+      "post_fill_complete_observed": 0.4785,
+      "post_fill_complete_expected": 0.5364
+     },
+     "candidate": {
+      "agreement": 0.5854,
+      "mean_p_action": 0.1512,
+      "relation_l1": 0.0972,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4729,
+       "complete": 0.5271,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5271
+     }
+    },
+    {
+     "state": "p55-75c|tte>10m|imb10-50",
+     "n": 754,
+     "frozen": {
+      "agreement": 0.7175,
+      "mean_p_action": 0.1688,
+      "relation_l1": 0.0339,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5756,
+       "complete": 0.4244,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5586,
+       "complete": 0.4413,
+       "sell": 0.0
+      },
+      "post_fill_n": 754,
+      "post_fill_complete_observed": 0.4244,
+      "post_fill_complete_expected": 0.4413
+     },
+     "candidate": {
+      "agreement": 0.7162,
+      "mean_p_action": 0.1715,
+      "relation_l1": 0.0384,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5564,
+       "complete": 0.4436,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4436
+     }
+    },
+    {
+     "state": "p25-45c|tte30-120s|imb>50",
+     "n": 721,
+     "frozen": {
+      "agreement": 0.6976,
+      "mean_p_action": 0.1962,
+      "relation_l1": 0.0324,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4924,
+       "complete": 0.5076,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4762,
+       "complete": 0.5238,
+       "sell": 0.0
+      },
+      "post_fill_n": 721,
+      "post_fill_complete_observed": 0.5076,
+      "post_fill_complete_expected": 0.5238
+     },
+     "candidate": {
+      "agreement": 0.6976,
+      "mean_p_action": 0.1974,
+      "relation_l1": 0.0148,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.485,
+       "complete": 0.515,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.515
+     }
+    },
+    {
+     "state": "p25-45c|tte>10m|imb10-50",
+     "n": 706,
+     "frozen": {
+      "agreement": 0.7167,
+      "mean_p_action": 0.1777,
+      "relation_l1": 0.0522,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5397,
+       "complete": 0.4603,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5136,
+       "complete": 0.4864,
+       "sell": 0.0
+      },
+      "post_fill_n": 706,
+      "post_fill_complete_observed": 0.4603,
+      "post_fill_complete_expected": 0.4864
+     },
+     "candidate": {
+      "agreement": 0.7096,
+      "mean_p_action": 0.1789,
+      "relation_l1": 0.041,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5192,
+       "complete": 0.4808,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.4808
+     }
+    },
+    {
+     "state": "p<10c|tte5-10m|imb>50",
+     "n": 698,
+     "frozen": {
+      "agreement": 0.7493,
+      "mean_p_action": 0.1802,
+      "relation_l1": 0.0298,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4656,
+       "complete": 0.5344,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4805,
+       "complete": 0.5195,
+       "sell": 0.0
+      },
+      "post_fill_n": 698,
+      "post_fill_complete_observed": 0.5344,
+      "post_fill_complete_expected": 0.5195
+     },
+     "candidate": {
+      "agreement": 0.7493,
+      "mean_p_action": 0.1786,
+      "relation_l1": 0.0046,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4679,
+       "complete": 0.5321,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5321
+     }
+    },
+    {
+     "state": "p>90c|tte30-120s|imb>50",
+     "n": 650,
+     "frozen": {
+      "agreement": 0.5462,
+      "mean_p_action": 0.154,
+      "relation_l1": 0.0702,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5354,
+       "complete": 0.4646,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.5003,
+       "complete": 0.4997,
+       "sell": 0.0
+      },
+      "post_fill_n": 650,
+      "post_fill_complete_observed": 0.4646,
+      "post_fill_complete_expected": 0.4997
+     },
+     "candidate": {
+      "agreement": 0.5092,
+      "mean_p_action": 0.1512,
+      "relation_l1": 0.1106,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4801,
+       "complete": 0.5199,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5199
+     }
+    },
+    {
+     "state": "p10-25c|tte>10m|imb>50",
+     "n": 633,
+     "frozen": {
+      "agreement": 0.7299,
+      "mean_p_action": 0.1773,
+      "relation_l1": 0.0246,
+      "observed_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4739,
+       "complete": 0.5261,
+       "sell": 0.0
+      },
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4616,
+       "complete": 0.5384,
+       "sell": 0.0
+      },
+      "post_fill_n": 633,
+      "post_fill_complete_observed": 0.5261,
+      "post_fill_complete_expected": 0.5384
+     },
+     "candidate": {
+      "agreement": 0.7188,
+      "mean_p_action": 0.176,
+      "relation_l1": 0.0194,
+      "expected_relation_freq": {
+       "open": 0.0,
+       "extend": 0.4642,
+       "complete": 0.5358,
+       "sell": 0.0
+      },
+      "post_fill_complete_expected": 0.5358
+     }
+    }
+   ],
+   "verdict": {
+    "verdict": "NOT_YET",
+    "reason": "no material forward improvement: the gain is below the bar or its CI includes zero",
+    "checks": {
+     "agreement_delta_pp": -0.051,
+     "agreement_delta_ci": [
+      -0.003,
+      0.00184
+     ],
+     "agreement_gain_material": false,
+     "mean_p_delta": 0.00118,
+     "mean_p_delta_ci": [
+      0.00094,
+      0.00142
+     ],
+     "mean_p_gain_material": false,
+     "relation_l1_delta": 0.0019,
+     "relation_l1_ok": true,
+     "off_distribution_delta_pp": -0.07,
+     "off_distribution_ok": true,
+     "complete_gap_abs_delta_pp": 0.11,
+     "complete_gap_ok": true,
+     "frozen_spec_fail_candidate": [],
+     "frozen_spec_fail_frozen": [],
+     "spec_ok": true
+    },
+    "material_definition": {
+     "min_holdout_rows": 200,
+     "min_train_rows": 200,
+     "min_holdout_windows": 30,
+     "agreement_gain_pp": 2.0,
+     "mean_p_gain": 0.01,
+     "ci_level": 0.95,
+     "max_relation_l1_worsening": 0.02,
+     "max_complete_gap_worsening_pp": 2.0,
+     "max_off_distribution_worsening_pp": 0.0,
+     "reject_agreement_loss_pp": 1.0,
+     "reject_mean_p_loss": 0.005
+    }
+   }
+  }
+ ],
+ "verdict": {
+  "verdict": "NOT_YET",
+  "reason": "no material forward improvement: the gain is below the bar or its CI includes zero",
+  "checks": {
+   "agreement_delta_pp": -0.051,
+   "agreement_delta_ci": [
+    -0.003,
+    0.00184
+   ],
+   "agreement_gain_material": false,
+   "mean_p_delta": 0.00118,
+   "mean_p_delta_ci": [
+    0.00094,
+    0.00142
+   ],
+   "mean_p_gain_material": false,
+   "relation_l1_delta": 0.0019,
+   "relation_l1_ok": true,
+   "off_distribution_delta_pp": -0.07,
+   "off_distribution_ok": true,
+   "complete_gap_abs_delta_pp": 0.11,
+   "complete_gap_ok": true,
+   "frozen_spec_fail_candidate": [],
+   "frozen_spec_fail_frozen": [],
+   "spec_ok": true
+  },
+  "material_definition": {
+   "min_holdout_rows": 200,
+   "min_train_rows": 200,
+   "min_holdout_windows": 30,
+   "agreement_gain_pp": 2.0,
+   "mean_p_gain": 0.01,
+   "ci_level": 0.95,
+   "max_relation_l1_worsening": 0.02,
+   "max_complete_gap_worsening_pp": 2.0,
+   "max_off_distribution_worsening_pp": 0.0,
+   "reject_agreement_loss_pp": 1.0,
+   "reject_mean_p_loss": 0.005
+  },
+  "rests_on": "strict cut",
+  "loop_cut_verdict": "NOT_YET",
+  "promotion": "REQUIRES_OWNER_DECISION"
+ }
+}

@@ -1,0 +1,514 @@
+{
+ "assumptions": {
+  "arm_s": 60.0,
+  "cross_price": "our side's price minus one tick (the bid)",
+  "dwell_s": 30.0,
+  "evaluation_cadence": "the tape's own ticks, irregular",
+  "lookahead": "side, size and cost basis are as-of-tick; only the settlement outcome comes from window end",
+  "maker_ceiling": "0.96",
+  "maker_credit_theta": "0.0125",
+  "min_exec_s": 15.0,
+  "pair_ceiling": "1.20",
+  "path_source": "L5 Polymarket window corpus (same instrument family); fees/ceilings/ticks are PMUS's",
+  "rebate_assumed_on_cross": false,
+  "taker_theta": "0.0695"
+ },
+ "btc15m_like": {
+  "eligibility": "a leg became unmatched and the profitable completion was not already reachable at that moment",
+  "minutes": "15",
+  "oos_eligible": 167,
+  "splits": {
+   "oos": {
+    "ARM": {
+     "ci95": [
+      -0.11173,
+      -0.01368
+     ],
+     "exit_rate": 0.2754,
+     "exits_where_maker_became_reachable_later": 0.4348,
+     "frac_below_-0.30": 0.2096,
+     "mean_net_per_unit": -0.06271,
+     "mean_opportunity_cost": 0.03481,
+     "median": -0.15054,
+     "n": 167,
+     "p05": -0.50876,
+     "worst": -0.82
+    },
+    "ARM_C": {
+     "ci95": [
+      -0.11008,
+      -0.01227
+     ],
+     "exit_rate": 0.2814,
+     "exits_where_maker_became_reachable_later": 0.4255,
+     "frac_below_-0.30": 0.2036,
+     "mean_net_per_unit": -0.06117,
+     "mean_opportunity_cost": 0.03481,
+     "median": -0.14664,
+     "n": 167,
+     "p05": -0.50876,
+     "worst": -0.82
+    },
+    "DWELL": {
+     "ci95": [
+      -0.06493,
+      -0.02905
+     ],
+     "exit_rate": 0.9281,
+     "exits_where_maker_became_reachable_later": 0.8839,
+     "frac_below_-0.30": 0.018,
+     "mean_net_per_unit": -0.04699,
+     "mean_opportunity_cost": 0.14218,
+     "median": -0.03231,
+     "n": 167,
+     "p05": -0.13972,
+     "worst": -0.82
+    },
+    "HOLD": {
+     "ci95": [
+      -0.12362,
+      -0.01061
+     ],
+     "exit_rate": 0.0,
+     "exits_where_maker_became_reachable_later": null,
+     "frac_below_-0.30": 0.2994,
+     "mean_net_per_unit": -0.06711,
+     "mean_opportunity_cost": 0.0,
+     "median": -0.1974,
+     "n": 167,
+     "p05": -0.59632,
+     "worst": -0.82
+    },
+    "paired": {
+     "ARM_C_minus_ARM": {
+      "better_in_frac": 0.006,
+      "ci95": [
+       -0.00147,
+       0.00454
+      ],
+      "mean": 0.00153,
+      "n": 167,
+      "significant_at_95": false,
+      "t": 1.0
+     },
+     "ARM_minus_HOLD": {
+      "better_in_frac": 0.1856,
+      "ci95": [
+       -0.02399,
+       0.0328
+      ],
+      "mean": 0.00441,
+      "n": 167,
+      "significant_at_95": false,
+      "t": 0.304
+     },
+     "DWELL_minus_ARM": {
+      "better_in_frac": 0.5749,
+      "ci95": [
+       -0.03011,
+       0.06155
+      ],
+      "mean": 0.01572,
+      "n": 167,
+      "significant_at_95": false,
+      "t": 0.672
+     },
+     "DWELL_minus_ARM_C": {
+      "better_in_frac": 0.5749,
+      "ci95": [
+       -0.03148,
+       0.05985
+      ],
+      "mean": 0.01418,
+      "n": 167,
+      "significant_at_95": false,
+      "t": 0.609
+     },
+     "DWELL_minus_HOLD": {
+      "better_in_frac": 0.5689,
+      "ci95": [
+       -0.0339,
+       0.07415
+      ],
+      "mean": 0.02012,
+      "n": 167,
+      "significant_at_95": false,
+      "t": 0.73
+     }
+    }
+   },
+   "train": {
+    "ARM": {
+     "ci95": [
+      -0.10241,
+      -0.04347
+     ],
+     "exit_rate": 0.3402,
+     "exits_where_maker_became_reachable_later": 0.3939,
+     "frac_below_-0.30": 0.1959,
+     "mean_net_per_unit": -0.07294,
+     "mean_opportunity_cost": 0.0633,
+     "median": -0.14897,
+     "n": 388,
+     "p05": -0.50067,
+     "worst": -0.70343
+    },
+    "ARM_C": {
+     "ci95": [
+      -0.10578,
+      -0.04754
+     ],
+     "exit_rate": 0.3531,
+     "exits_where_maker_became_reachable_later": 0.4015,
+     "frac_below_-0.30": 0.1933,
+     "mean_net_per_unit": -0.07666,
+     "mean_opportunity_cost": 0.06815,
+     "median": -0.14924,
+     "n": 388,
+     "p05": -0.50067,
+     "worst": -0.70343
+    },
+    "DWELL": {
+     "ci95": [
+      -0.05078,
+      -0.02515
+     ],
+     "exit_rate": 0.9253,
+     "exits_where_maker_became_reachable_later": 0.9025,
+     "frac_below_-0.30": 0.0155,
+     "mean_net_per_unit": -0.03797,
+     "mean_opportunity_cost": 0.14372,
+     "median": -0.03228,
+     "n": 388,
+     "p05": -0.1545,
+     "worst": -0.82555
+    },
+    "HOLD": {
+     "ci95": [
+      -0.09003,
+      -0.01538
+     ],
+     "exit_rate": 0.0,
+     "exits_where_maker_became_reachable_later": null,
+     "frac_below_-0.30": 0.2938,
+     "mean_net_per_unit": -0.05271,
+     "mean_opportunity_cost": 0.0,
+     "median": -0.18153,
+     "n": 388,
+     "p05": -0.57399,
+     "worst": -0.82555
+    },
+    "paired": {
+     "ARM_C_minus_ARM": {
+      "better_in_frac": 0.0052,
+      "ci95": [
+       -0.00945,
+       0.002
+      ],
+      "mean": -0.00372,
+      "n": 388,
+      "significant_at_95": false,
+      "t": -1.274
+     },
+     "ARM_minus_HOLD": {
+      "better_in_frac": 0.2088,
+      "ci95": [
+       -0.044,
+       0.00353
+      ],
+      "mean": -0.02023,
+      "n": 388,
+      "significant_at_95": false,
+      "t": -1.669
+     },
+     "DWELL_minus_ARM": {
+      "better_in_frac": 0.6289,
+      "ci95": [
+       0.00645,
+       0.0635
+      ],
+      "mean": 0.03497,
+      "n": 388,
+      "significant_at_95": true,
+      "t": 2.403
+     },
+     "DWELL_minus_ARM_C": {
+      "better_in_frac": 0.634,
+      "ci95": [
+       0.01052,
+       0.06687
+      ],
+      "mean": 0.0387,
+      "n": 388,
+      "significant_at_95": true,
+      "t": 2.692
+     },
+     "DWELL_minus_HOLD": {
+      "better_in_frac": 0.5696,
+      "ci95": [
+       -0.02078,
+       0.05027
+      ],
+      "mean": 0.01474,
+      "n": 388,
+      "significant_at_95": false,
+      "t": 0.813
+     }
+    }
+   }
+  },
+  "terminal_s": 780.0,
+  "train_eligible": 388,
+  "windows_eligible": 555,
+  "windows_total": 556
+ },
+ "btc5m_like": {
+  "eligibility": "a leg became unmatched and the profitable completion was not already reachable at that moment",
+  "minutes": "5",
+  "oos_eligible": 496,
+  "splits": {
+   "oos": {
+    "ARM": {
+     "ci95": [
+      -0.01733,
+      0.03336
+     ],
+     "exit_rate": 0.3286,
+     "exits_where_maker_became_reachable_later": 0.2883,
+     "frac_below_-0.30": 0.123,
+     "mean_net_per_unit": 0.00802,
+     "mean_opportunity_cost": 0.0381,
+     "median": -0.01599,
+     "n": 496,
+     "p05": -0.58716,
+     "worst": -0.9063
+    },
+    "ARM_C": {
+     "ci95": [
+      -0.0172,
+      0.03336
+     ],
+     "exit_rate": 0.3347,
+     "exits_where_maker_became_reachable_later": 0.2892,
+     "frac_below_-0.30": 0.121,
+     "mean_net_per_unit": 0.00808,
+     "mean_opportunity_cost": 0.0387,
+     "median": -0.01599,
+     "n": 496,
+     "p05": -0.58716,
+     "worst": -0.9063
+    },
+    "DWELL": {
+     "ci95": [
+      -0.02952,
+      0.01237
+     ],
+     "exit_rate": 0.5685,
+     "exits_where_maker_became_reachable_later": 0.4752,
+     "frac_below_-0.30": 0.0746,
+     "mean_net_per_unit": -0.00858,
+     "mean_opportunity_cost": 0.08271,
+     "median": -0.03568,
+     "n": 496,
+     "p05": -0.45725,
+     "worst": -0.9063
+    },
+    "HOLD": {
+     "ci95": [
+      -0.0215,
+      0.0384
+     ],
+     "exit_rate": 0.0,
+     "exits_where_maker_became_reachable_later": null,
+     "frac_below_-0.30": 0.1915,
+     "mean_net_per_unit": 0.00845,
+     "mean_opportunity_cost": 0.0,
+     "median": 0.09737,
+     "n": 496,
+     "p05": -0.63649,
+     "worst": -0.9063
+    },
+    "paired": {
+     "ARM_C_minus_ARM": {
+      "better_in_frac": 0.004,
+      "ci95": [
+       -0.00168,
+       0.00182
+      ],
+      "mean": 7e-05,
+      "n": 496,
+      "significant_at_95": false,
+      "t": 0.077
+     },
+     "ARM_minus_HOLD": {
+      "better_in_frac": 0.1976,
+      "ci95": [
+       -0.01618,
+       0.01531
+      ],
+      "mean": -0.00043,
+      "n": 496,
+      "significant_at_95": false,
+      "t": -0.054
+     },
+     "DWELL_minus_ARM": {
+      "better_in_frac": 0.2339,
+      "ci95": [
+       -0.03342,
+       0.00023
+      ],
+      "mean": -0.01659,
+      "n": 496,
+      "significant_at_95": false,
+      "t": -1.933
+     },
+     "DWELL_minus_ARM_C": {
+      "better_in_frac": 0.2298,
+      "ci95": [
+       -0.03339,
+       7e-05
+      ],
+      "mean": -0.01666,
+      "n": 496,
+      "significant_at_95": false,
+      "t": -1.951
+     },
+     "DWELL_minus_HOLD": {
+      "better_in_frac": 0.2883,
+      "ci95": [
+       -0.03851,
+       0.00447
+      ],
+      "mean": -0.01702,
+      "n": 496,
+      "significant_at_95": false,
+      "t": -1.552
+     }
+    }
+   },
+   "train": {
+    "ARM": {
+     "ci95": [
+      -0.00493,
+      0.02735
+     ],
+     "exit_rate": 0.3235,
+     "exits_where_maker_became_reachable_later": 0.3048,
+     "frac_below_-0.30": 0.1159,
+     "mean_net_per_unit": 0.01121,
+     "mean_opportunity_cost": 0.04831,
+     "median": -0.01423,
+     "n": 1156,
+     "p05": -0.54495,
+     "worst": -0.91573
+    },
+    "ARM_C": {
+     "ci95": [
+      -0.00545,
+      0.02667
+     ],
+     "exit_rate": 0.3313,
+     "exits_where_maker_became_reachable_later": 0.3003,
+     "frac_below_-0.30": 0.1142,
+     "mean_net_per_unit": 0.01061,
+     "mean_opportunity_cost": 0.04953,
+     "median": -0.01471,
+     "n": 1156,
+     "p05": -0.54495,
+     "worst": -0.91573
+    },
+    "DWELL": {
+     "ci95": [
+      -0.01782,
+      0.01076
+     ],
+     "exit_rate": 0.5234,
+     "exits_where_maker_became_reachable_later": 0.4777,
+     "frac_below_-0.30": 0.0804,
+     "mean_net_per_unit": -0.00353,
+     "mean_opportunity_cost": 0.08376,
+     "median": -0.02716,
+     "n": 1156,
+     "p05": -0.48744,
+     "worst": -0.91573
+    },
+    "HOLD": {
+     "ci95": [
+      0.00558,
+      0.04453
+     ],
+     "exit_rate": 0.0,
+     "exits_where_maker_became_reachable_later": null,
+     "frac_below_-0.30": 0.1773,
+     "mean_net_per_unit": 0.02506,
+     "mean_opportunity_cost": 0.0,
+     "median": 0.1006,
+     "n": 1156,
+     "p05": -0.61186,
+     "worst": -0.91573
+    },
+    "paired": {
+     "ARM_C_minus_ARM": {
+      "better_in_frac": 0.0043,
+      "ci95": [
+       -0.00222,
+       0.00102
+      ],
+      "mean": -0.0006,
+      "n": 1156,
+      "significant_at_95": false,
+      "t": -0.73
+     },
+     "ARM_minus_HOLD": {
+      "better_in_frac": 0.1678,
+      "ci95": [
+       -0.02513,
+       -0.00255
+      ],
+      "mean": -0.01384,
+      "n": 1156,
+      "significant_at_95": true,
+      "t": -2.403
+     },
+     "DWELL_minus_ARM": {
+      "better_in_frac": 0.2379,
+      "ci95": [
+       -0.02631,
+       -0.00318
+      ],
+      "mean": -0.01474,
+      "n": 1156,
+      "significant_at_95": true,
+      "t": -2.499
+     },
+     "DWELL_minus_ARM_C": {
+      "better_in_frac": 0.2396,
+      "ci95": [
+       -0.02581,
+       -0.00247
+      ],
+      "mean": -0.01414,
+      "n": 1156,
+      "significant_at_95": true,
+      "t": -2.375
+     },
+     "DWELL_minus_HOLD": {
+      "better_in_frac": 0.2457,
+      "ci95": [
+       -0.04248,
+       -0.01469
+      ],
+      "mean": -0.02859,
+      "n": 1156,
+      "significant_at_95": true,
+      "t": -4.032
+     }
+    }
+   }
+  },
+  "terminal_s": 270.0,
+  "train_eligible": 1156,
+  "windows_eligible": 1652,
+  "windows_total": 1660
+ }
+}

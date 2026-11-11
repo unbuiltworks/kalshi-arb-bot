@@ -1,0 +1,44 @@
+{
+  "label": "L5_WINDOW_FORENSICS_V1_INCIDENT",
+  "schema": "l5_window_forensics_incident/v1",
+  "written_at": 1789668878.2880483,
+  "incident": "CONTAINER_KILL",
+  "sequence_position": "THIRD container-level kill of the session on 2026-09-17: 17:16Z, 17:37Z, and this one",
+  "what_died": [
+    "src.l5_window_forensics",
+    "src.l5_book_context",
+    "src.gemini_l5_surface_shadow"
+  ],
+  "detected_at_utc": 1789669025.0,
+  "detected_how": "ps showed zero python processes and the window tape stopped advancing at 18:10:56Z",
+  "tape": {
+    "path": "data/l5_window_forensics/window_1789668000.jsonl",
+    "bytes": 420645,
+    "sha256": "95b8d9e484b117e0e8649418e6bc13e79efc275f1030f4da74cf1ba4bc31c0f2",
+    "well_formed_rows": 159,
+    "unparseable_rows": 0,
+    "last_good_row_utc": 1789668656.2829099,
+    "kinds": {
+      "preregistration": 1,
+      "market_resolved": 1,
+      "book_full_joint": 80,
+      "surface_prediction": 42,
+      "print_tape": 3,
+      "l5_parent_execution": 23,
+      "activity_read_failed": 9
+    }
+  },
+  "window": {
+    "window_start": 1789668000,
+    "window_end": 1789668900,
+    "capture_should_have_run_to": 1789669200,
+    "capture_actually_reached": 1789668656.2829099,
+    "shortfall_s": 543.7
+  },
+  "disposition": "WINDOW_1_TRUNCATED_NOT_SCORABLE_AS_A_COMPLETE_WINDOW",
+  "labels": [
+    "The capture died 11 minutes into a 20-minute capture, BEFORE the window closed and before any recycling could be observed. The preregistered primary test needs the pre-first-execution book, which this tape does have, but the window is not complete and is not presented as one.",
+    "The tape is INTACT: 159 rows, 0 unparseable, final newline present, last line parses. It stops cleanly rather than mid-write. Nothing is repaired, completed or backfilled regardless.",
+    "Windows 2 and 3 of the frozen run never started. The frozen PROCEDURE is unchanged and was not edited; only its process was killed."
+  ]
+}

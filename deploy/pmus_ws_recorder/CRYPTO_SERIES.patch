@@ -1,0 +1,124 @@
+Subject: [PMUS WS recorder] roll a recurring crypto series through discovery
+
+WHY THIS IS A PATCH FILE AND NOT A COMMIT.
+
+The service `pmus-ws-evidence-recorder` builds from `feature/l5-transfer-backtest`.
+That branch and `claude/gemini-btc-economic-viability-h3u7zl` have NO MERGE BASE
+-- 894 commits one way, 267 the other, unrelated histories -- so the change
+cannot be merged, and repointing the service's source branch would replace 894
+commits of deployed work with an unrelated tree. Neither is a safe unilateral
+act, so the change is delivered as a patch for the owner to apply on the branch
+the service actually builds.
+
+WHAT IT DOES. `discover_universe()` gains one branch: when PMUS_WS_SERIES names
+a recurring series, the universe becomes the window of that series which is
+trading now (plus one about to open), re-resolved on every rediscovery. A
+static PMUS_WS_MARKETS list cannot do this: each 15-minute window is its own
+market and the previous one has expired, so a fixed list goes dead within
+fifteen minutes and takes the sports slate down with it while it lives.
+
+WHAT IT DELIBERATELY DOES NOT DO.
+  * It adds no new module to the image. `series_slugs` is inlined because
+    `src/pmus_book_tape.py` is not in this image's COPY set, and changing the
+    image manifest is a bigger change than the one being made.
+  * It sends no new frame kind. OUTBOUND_FRAME_KEYS is untouched, so the
+    recorder stays structurally mutation-incapable: subscribe, unsubscribe and
+    heartbeat remain the only frames that can leave the process.
+  * It changes nothing when PMUS_WS_SERIES is unset. Sports discovery is the
+    default and is byte-identical.
+
+TO APPLY, on feature/l5-transfer-backtest:
+    git apply deploy/pmus_ws_recorder/CRYPTO_SERIES.patch
+then set on the service:  PMUS_WS_SERIES=btc-updown-15m
+and (recommended)         PMUS_WS_DISCOVERY_SECONDS=45
+Leaving PMUS_WS_SERIES unset reverts to sports with no redeploy.
+
+--- a/src/pmus_ws_evidence_recorder.py
++++ b/src/pmus_ws_evidence_recorder.py
+@@
+ MARKETS_ENV = "PMUS_WS_MARKETS"
++SERIES_ENV = "PMUS_WS_SERIES"        # recurring series slugs, rolled per window
++SERIES_LEAD_S = 60.0                 # admit the next window this early
++
++
++def series_slugs(series_slug: str) -> list[str]:
++    """The window of a recurring series that is trading now, plus the next.
++
++    A recurring 15-minute series creates every window hours ahead and expires
++    each one on a hard clock, so "which market is this series right now" is a
++    wall-clock question. Closed windows are excluded; a window whose start is
++    within SERIES_LEAD_S is admitted so its first seconds are not lost.
++
++    Inlined rather than imported: `src/pmus_book_tape.py` is not in this
++    image's COPY set and this needs no dependency the recorder lacks.
++    """
++    from datetime import datetime, timedelta, timezone
++    from src import pmus_sports_collector as col
++    now = datetime.now(timezone.utc)
++    try:
++        sid = None
++        off = 0
++        while off < 2000 and sid is None:
++            d = col.http_get_json("/v1/series?limit=100&offset=%d" % off) or {}
++            rows = d.get("series") or []
++            if not rows:
++                break
++            for r in rows:
++                if str(r.get("slug")) == series_slug:
++                    sid = str(r.get("id"))
++                    break
++            off += len(rows)
++        if sid is None:
++            return []
++        evs, off = [], 0
++        while off < 4000:
++            d = col.http_get_json(
++                "/v1/events?series_id=%s&limit=100&offset=%d" % (sid, off)) or {}
++            rows = d.get("events") or []
++            if not rows:
++                break
++            evs += rows
++            off += len(rows)
++            if len(rows) < 100:
++                break
++    except Exception:                                    # noqa: BLE001
++        return []
++    live = []
++    for e in evs:
++        if e.get("closed"):
++            continue
++        try:
++            start = datetime.fromisoformat(
++                str(e.get("startTime")).replace("Z", "+00:00"))
++        except (TypeError, ValueError):
++            continue
++        live.append((start, e))
++    live.sort(key=lambda r: r[0])
++    out = []
++    for start, e in live:
++        if start > now + timedelta(seconds=SERIES_LEAD_S):
++            break
++        for m in (e.get("markets") or []):
++            if m.get("slug"):
++                out.append(str(m["slug"]))
++    return out
+ 
+@@
+     explicit = [s.strip() for s in os.getenv(MARKETS_ENV, "").split(",")
+                 if s.strip()]
+     if explicit:
+         return [{"slug": s, "league": None, "why": "explicit_env",
+                  "event_state": None, "prop": False, "market_meta": {}}
+                 for s in explicit]
++    series = [s.strip() for s in os.getenv(SERIES_ENV, "").split(",")
++              if s.strip()]
++    if series:
++        out = []
++        for name in series:
++            for slug in series_slugs(name):
++                out.append({"slug": slug, "league": None,
++                            "why": "series:%s" % name,
++                            "event_state": None, "prop": False,
++                            "market_meta": {"series": name}})
++        return out
+     from src import pmus_sports_collector as col

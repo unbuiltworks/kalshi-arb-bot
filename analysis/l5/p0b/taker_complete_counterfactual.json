@@ -1,0 +1,292 @@
+{
+ "sessions": 220,
+ "complete_attempts": 263,
+ "labels": {
+  "fees": "NOT modelled. The venue reports no per-fill fee on these rows; feeCoefficient 0.06 exists on market metadata but its application rule is not source-confirmed. All profit figures are PRE-FEE and net is UNKNOWN.",
+  "depth": "NOT modelled. No ask size on these rows, so full-clip fills are not established -- these are OPPORTUNITY counts, not guaranteed fills.",
+  "strict": "placement-time ask, authenticated_age_s <= 5 s only",
+  "rest_window": "best ask observed during our own rest; an UPPER BOUND on what taking could have achieved"
+ },
+ "strict": {
+  "attempts_with_usable_ask": 41,
+  "markets": 9,
+  "pair_taker_distribution": {
+   "min": "0.7740515222482435597189695550",
+   "median": "1.0000",
+   "max": "1.295986928104575163398692810",
+   "share_le_1_00": 0.6585,
+   "share_le_0_98": 0.4634
+  },
+  "grid": {
+   "pair<=0.97|edge>=0.005": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.97|edge>=0.01": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.97|edge>=0.02": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.97|edge>=0.03": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.98|edge>=0.005": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.98|edge>=0.01": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.98|edge>=0.02": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.98|edge>=0.03": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.99|edge>=0.005": {
+    "opportunities": 20,
+    "capital_required_usd": "18.718600",
+    "matched_profit_usd_PRE_FEE": "1.854299144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 4
+   },
+   "pair<=0.99|edge>=0.01": {
+    "opportunities": 20,
+    "capital_required_usd": "18.718600",
+    "matched_profit_usd_PRE_FEE": "1.854299144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 4
+   },
+   "pair<=0.99|edge>=0.02": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=0.99|edge>=0.03": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=1.00|edge>=0.005": {
+    "opportunities": 20,
+    "capital_required_usd": "18.718600",
+    "matched_profit_usd_PRE_FEE": "1.854299144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 4
+   },
+   "pair<=1.00|edge>=0.01": {
+    "opportunities": 20,
+    "capital_required_usd": "18.718600",
+    "matched_profit_usd_PRE_FEE": "1.854299144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 4
+   },
+   "pair<=1.00|edge>=0.02": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   },
+   "pair<=1.00|edge>=0.03": {
+    "opportunities": 19,
+    "capital_required_usd": "17.546800",
+    "matched_profit_usd_PRE_FEE": "1.832599144059190483098795881",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 3
+   }
+  }
+ },
+ "rest_window": {
+  "attempts_with_usable_ask": 218,
+  "markets": 12,
+  "pair_taker_distribution": {
+   "min": "0.5372486772486772486772486772",
+   "median": "1.135229166666666666666666667",
+   "max": "1.522883295194508009153318078",
+   "share_le_1_00": 0.2752,
+   "share_le_0_98": 0.1927
+  },
+  "grid": {
+   "pair<=0.97|edge>=0.005": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=0.97|edge>=0.01": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=0.97|edge>=0.02": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=0.97|edge>=0.03": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=0.98|edge>=0.005": {
+    "opportunities": 42,
+    "capital_required_usd": "29.126400",
+    "matched_profit_usd_PRE_FEE": "9.046956789636240665231094809",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.98|edge>=0.01": {
+    "opportunities": 42,
+    "capital_required_usd": "29.126400",
+    "matched_profit_usd_PRE_FEE": "9.046956789636240665231094809",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.98|edge>=0.02": {
+    "opportunities": 42,
+    "capital_required_usd": "29.126400",
+    "matched_profit_usd_PRE_FEE": "9.046956789636240665231094809",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.98|edge>=0.03": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=0.99|edge>=0.005": {
+    "opportunities": 44,
+    "capital_required_usd": "31.313000",
+    "matched_profit_usd_PRE_FEE": "9.091317107096558125548555126",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.99|edge>=0.01": {
+    "opportunities": 44,
+    "capital_required_usd": "31.313000",
+    "matched_profit_usd_PRE_FEE": "9.091317107096558125548555126",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.99|edge>=0.02": {
+    "opportunities": 42,
+    "capital_required_usd": "29.126400",
+    "matched_profit_usd_PRE_FEE": "9.046956789636240665231094809",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=0.99|edge>=0.03": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   },
+   "pair<=1.00|edge>=0.005": {
+    "opportunities": 44,
+    "capital_required_usd": "31.313000",
+    "matched_profit_usd_PRE_FEE": "9.091317107096558125548555126",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=1.00|edge>=0.01": {
+    "opportunities": 44,
+    "capital_required_usd": "31.313000",
+    "matched_profit_usd_PRE_FEE": "9.091317107096558125548555126",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=1.00|edge>=0.02": {
+    "opportunities": 42,
+    "capital_required_usd": "29.126400",
+    "matched_profit_usd_PRE_FEE": "9.046956789636240665231094809",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 7
+   },
+   "pair<=1.00|edge>=0.03": {
+    "opportunities": 30,
+    "capital_required_usd": "16.536000",
+    "matched_profit_usd_PRE_FEE": "8.587476212486652914936630733",
+    "fees_usd": "unknown_venue_does_not_report",
+    "net_usd": "UNKNOWN_until_fees_are_source_confirmed",
+    "markets": 6
+   }
+  }
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "schema_version": "1",
+ "columns": [
+  "schema_version",
+  "window_id",
+  "market_slug",
+  "asset",
+  "duration_minutes",
+  "trade_seq",
+  "timestamp",
+  "datetime_utc",
+  "seconds_from_window_start",
+  "seconds_to_settlement",
+  "outcome",
+  "side",
+  "price",
+  "quantity",
+  "dollars",
+  "maker_taker",
+  "cum_up_qty",
+  "cum_up_spend",
+  "cum_down_qty",
+  "cum_down_spend",
+  "matched_qty",
+  "matched_pair_unit_cost",
+  "residual_qty_signed",
+  "residual_side",
+  "settlement_outcome",
+  "resolution_source",
+  "source",
+  "transaction_hash"
+ ],
+ "rows": 71984,
+ "maker_taker_counts": {
+  "taker": 11068,
+  "maker": 55647,
+  "unknown": 5269
+ },
+ "takeronly_coverage_span_epoch": [
+  1787875677,
+  1788217879
+ ],
+ "settlement_labelled_rows": 71984,
+ "content_sha256_16": "3b98847233684612",
+ "sources": [
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+  "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+ ],
+ "note": "'maker' asserted only inside takerOnly feed coverage; 'unknown' outside it. Never treat unknown as maker."
+}

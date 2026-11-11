@@ -1,0 +1,154 @@
+[
+ {
+  "category": "Weather",
+  "subcategory": "Daily Temperature",
+  "quoted": 99,
+  "median_spread": 0.04,
+  "p25": 0.03,
+  "p75": 0.07
+ },
+ {
+  "category": "Sports",
+  "subcategory": "College Football",
+  "quoted": 503,
+  "median_spread": 0.04,
+  "p25": 0.03,
+  "p75": 0.04
+ },
+ {
+  "category": "Sports",
+  "subcategory": "Pro Football",
+  "quoted": 24,
+  "median_spread": 0.03,
+  "p25": 0.01,
+  "p75": 0.03
+ },
+ {
+  "category": "Politics",
+  "subcategory": "House",
+  "quoted": 219,
+  "median_spread": 0.03,
+  "p25": 0.02,
+  "p75": 0.07
+ },
+ {
+  "category": "Crypto",
+  "subcategory": "XRP",
+  "quoted": 45,
+  "median_spread": 0.03,
+  "p25": 0.01,
+  "p75": 0.03
+ },
+ {
+  "category": "Crypto",
+  "subcategory": "Solana",
+  "quoted": 45,
+  "median_spread": 0.03,
+  "p25": 0.01,
+  "p75": 0.04
+ },
+ {
+  "category": "Crypto",
+  "subcategory": "Bitcoin",
+  "quoted": 57,
+  "median_spread": 0.03,
+  "p25": 0.01,
+  "p75": 0.04
+ },
+ {
+  "category": "Sports",
+  "subcategory": "Pro Baseball",
+  "quoted": 322,
+  "median_spread": 0.02,
+  "p25": 0.01,
+  "p75": 0.03
+ },
+ {
+  "category": "Sports",
+  "subcategory": "MMA",
+  "quoted": 10,
+  "median_spread": 0.02,
+  "p25": 0.02,
+  "p75": 0.02
+ },
+ {
+  "category": "Sports",
+  "subcategory": "MLS",
+  "quoted": 13,
+  "median_spread": 0.02,
+  "p25": 0.02,
+  "p75": 0.03
+ },
+ {
+  "category": "Crypto",
+  "subcategory": "Zcash",
+  "quoted": 76,
+  "median_spread": 0.02,
+  "p25": 0.02,
+  "p75": 0.03
+ },
+ {
+  "category": "Sports",
+  "subcategory": "Pro Basketball (W)",
+  "quoted": 12,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.02
+ },
+ {
+  "category": "Politics",
+  "subcategory": "Senate",
+  "quoted": 81,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.01
+ },
+ {
+  "category": "Politics",
+  "subcategory": "Presidential",
+  "quoted": 77,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.01
+ },
+ {
+  "category": "Politics",
+  "subcategory": "International",
+  "quoted": 41,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.01
+ },
+ {
+  "category": "Politics",
+  "subcategory": "Governor",
+  "quoted": 69,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.03
+ },
+ {
+  "category": "Economics",
+  "subcategory": "Macro Indicators",
+  "quoted": 11,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.01
+ },
+ {
+  "category": "Economics",
+  "subcategory": "Economics",
+  "quoted": 43,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.01
+ },
+ {
+  "category": "Crypto",
+  "subcategory": "Ether",
+  "quoted": 33,
+  "median_spread": 0.01,
+  "p25": 0.01,
+  "p75": 0.03
+ }
+]

@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "state": "ENVELOPE_REFUSED",
+  "why": "preflight did not pass: NO_ELIGIBLE_WINDOW"
+}

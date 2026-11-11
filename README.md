@@ -81,3 +81,17 @@ Logs go to `arb_bot.log` and stdout. Key things to watch:
 - Fill rate on maker legs
 - Legging incidents (should be near zero)
 - Realized edge vs. theoretical edge
+
+## Polymarket L5 window study (read-only, separate from the bot)
+
+A standalone, read-only exporter/analyzer for Polymarket user
+`0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68` in BTC/ETH 5m and 15m Up/Down
+markets. It uses public APIs only, places no orders, and shares nothing with the
+Kalshi bot or the SOL executor.
+
+```bash
+python -m src.polymarket_l5.cli all     # fetch -> build -> analyze -> report
+```
+
+See `README_FOR_ANALYSIS.md` for method, schemas and limitations, and
+`L5_STRATEGY_FINDINGS.md` for the generated findings.

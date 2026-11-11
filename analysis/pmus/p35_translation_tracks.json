@@ -1,0 +1,1060 @@
+{
+ "label": "L5_EXECUTION_TRANSLATION_TRACKS_V1",
+ "phase": "PHASE_1_SHADOW_COUNTERFACTUAL_ONLY",
+ "lambda_ref": "0.04429678848283498857628502997",
+ "lambda_definition": "1 / median(l5_size) over the preserved corpus, so the median L5 action maps to 1 share. Computed from L5 sizes ONLY -- no price, fill, outcome or P&L enters it.",
+ "crossing_rule": "the PMUS touch observed AT OUR RECEIPT timestamp only; UP crosses at ask, DOWN at 1-bid; capped at the displayed size; taker fee charged; used ONLY where maker reproduction is impossible",
+ "actions_with_authenticated_class": 284,
+ "windows": {
+  "16:15": {
+   "L5_NATIVE": {
+    "actions": 49,
+    "up": 37,
+    "dn": 12,
+    "longest_same_side_run": 14,
+    "opposite_acquired": true,
+    "inventory_crossed_zero": false,
+    "overshoot_past_zero": 0,
+    "max_abs_imbalance": 25,
+    "terminal_matched": 12,
+    "terminal_residual": 25,
+    "l5_shares_up": 1241.66,
+    "l5_shares_dn": 756.94,
+    "l5_shares_residual": 484.72
+   },
+   "settlement_yes_value": "0.0000",
+   "tracks": {
+    "T1_q1_maker": {
+     "l5_actions": 49,
+     "reproduced": 0,
+     "reproduction_rate_pct": 0.0,
+     "by_how": {},
+     "blocked": {
+      "QUEUE_AMBIGUOUS": 3,
+      "REQUIRES_CROSSING": 10,
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "OTHER": 17,
+      "NO_BOOK": 6
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "NO_BOOK": 6
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": null,
+      "native_longest_run": 14,
+      "track_longest_run": 0,
+      "native_up": 37,
+      "native_dn": 12,
+      "track_up": 0,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 0.0,
+     "matched_final": 0.0,
+     "residual_final": 0.0,
+     "residual_direction": "FLAT",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 0.0,
+     "residual_pnl_usd": 0.0,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 0.0,
+     "total_settlement_implied_shadow_usd": 0.0,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T2_q1_cross": {
+     "l5_actions": 49,
+     "reproduced": 10,
+     "reproduction_rate_pct": 20.4,
+     "by_how": {
+      "CROSS": 10
+     },
+     "blocked": {
+      "QUEUE_AMBIGUOUS": 3,
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "OTHER": 17,
+      "NO_BOOK": 6
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "NO_BOOK": 6
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 14,
+      "track_longest_run": 8,
+      "native_up": 37,
+      "native_dn": 12,
+      "track_up": 8,
+      "track_dn": 2
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 6.0,
+     "max_abs_imbalance": 6.0,
+     "matched_final": 2.0,
+     "residual_final": 6.0,
+     "residual_direction": "UP",
+     "pair_cost_max": 0.95,
+     "pair_cost_min": 0.805,
+     "pair_cost_final": 0.805,
+     "matched_pair_pnl_usd": 0.39,
+     "residual_cost_basis_usd": 1.83,
+     "residual_pnl_usd": -1.83,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.1505,
+     "capital_committed_usd": 3.44,
+     "total_settlement_implied_shadow_usd": -1.5905,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T3_prop_maker": {
+     "l5_actions": 49,
+     "reproduced": 0,
+     "reproduction_rate_pct": 0.0,
+     "by_how": {},
+     "blocked": {
+      "QUEUE_AMBIGUOUS": 3,
+      "REQUIRES_CROSSING": 10,
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "OTHER": 17,
+      "NO_BOOK": 6
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "NO_BOOK": 6
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": null,
+      "native_longest_run": 14,
+      "track_longest_run": 0,
+      "native_up": 37,
+      "native_dn": 12,
+      "track_up": 0,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 0.0,
+     "matched_final": 0.0,
+     "residual_final": 0.0,
+     "residual_direction": "FLAT",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 0.0,
+     "residual_pnl_usd": 0.0,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 0.0,
+     "total_settlement_implied_shadow_usd": 0.0,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T4_prop_cross": {
+     "l5_actions": 49,
+     "reproduced": 10,
+     "reproduction_rate_pct": 20.4,
+     "by_how": {
+      "CROSS": 10
+     },
+     "blocked": {
+      "QUEUE_AMBIGUOUS": 3,
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "OTHER": 17,
+      "NO_BOOK": 6
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 13,
+      "NO_BOOK": 6
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 14,
+      "track_longest_run": 8,
+      "native_up": 37,
+      "native_dn": 12,
+      "track_up": 8,
+      "track_dn": 2
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 2.9991,
+     "max_abs_imbalance": 6.6445,
+     "matched_final": 6.644518272425248,
+     "residual_final": 2.999054573643412,
+     "residual_direction": "UP",
+     "pair_cost_max": 0.95,
+     "pair_cost_min": 0.803,
+     "pair_cost_final": 0.803,
+     "matched_pair_pnl_usd": 1.3087,
+     "residual_cost_basis_usd": 0.9088,
+     "residual_pnl_usd": -0.9088,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.2544,
+     "capital_committed_usd": 6.2446,
+     "total_settlement_implied_shadow_usd": 0.1455,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    }
+   }
+  },
+  "16:30": {
+   "L5_NATIVE": {
+    "actions": 91,
+    "up": 71,
+    "dn": 20,
+    "longest_same_side_run": 35,
+    "opposite_acquired": true,
+    "inventory_crossed_zero": false,
+    "overshoot_past_zero": 0,
+    "max_abs_imbalance": 56,
+    "terminal_matched": 20,
+    "terminal_residual": 51,
+    "l5_shares_up": 2165.74,
+    "l5_shares_dn": 1217.21,
+    "l5_shares_residual": 948.53
+   },
+   "settlement_yes_value": "0.0000",
+   "tracks": {
+    "T1_q1_maker": {
+     "l5_actions": 91,
+     "reproduced": 4,
+     "reproduction_rate_pct": 4.4,
+     "by_how": {
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 17,
+      "REQUIRES_CROSSING": 19,
+      "NO_SUBSEQUENT_INTERACTION": 15,
+      "OTHER": 36
+     },
+     "habitat_failures": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 35,
+      "track_longest_run": 4,
+      "native_up": 71,
+      "native_dn": 20,
+      "track_up": 4,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 4.0,
+     "matched_final": 0.0,
+     "residual_final": 4.0,
+     "residual_direction": "UP",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 2.52,
+     "residual_pnl_usd": -2.52,
+     "maker_rebate_accrual_usd": 0.0116,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 2.52,
+     "total_settlement_implied_shadow_usd": -2.5084,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T2_q1_cross": {
+     "l5_actions": 91,
+     "reproduced": 23,
+     "reproduction_rate_pct": 25.3,
+     "by_how": {
+      "CROSS": 19,
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15,
+      "OTHER": 36
+     },
+     "habitat_failures": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 35,
+      "track_longest_run": 10,
+      "native_up": 71,
+      "native_dn": 20,
+      "track_up": 17,
+      "track_dn": 6
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 11.0,
+     "matched_final": 6.0,
+     "residual_final": 11.0,
+     "residual_direction": "UP",
+     "pair_cost_max": 1.1995,
+     "pair_cost_min": 0.939,
+     "pair_cost_final": 0.939,
+     "matched_pair_pnl_usd": 0.3659,
+     "residual_cost_basis_usd": 4.0959,
+     "residual_pnl_usd": -4.0959,
+     "maker_rebate_accrual_usd": 0.0116,
+     "taker_fees_usd": 0.2552,
+     "capital_committed_usd": 9.73,
+     "total_settlement_implied_shadow_usd": -3.9736,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T3_prop_maker": {
+     "l5_actions": 91,
+     "reproduced": 4,
+     "reproduction_rate_pct": 4.4,
+     "by_how": {
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 17,
+      "REQUIRES_CROSSING": 19,
+      "NO_SUBSEQUENT_INTERACTION": 15,
+      "OTHER": 36
+     },
+     "habitat_failures": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 35,
+      "track_longest_run": 4,
+      "native_up": 71,
+      "native_dn": 20,
+      "track_up": 4,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 0.8378,
+     "matched_final": 0.0,
+     "residual_final": 0.8378318936877075,
+     "residual_direction": "UP",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 0.5278,
+     "residual_pnl_usd": -0.5278,
+     "maker_rebate_accrual_usd": 0.0024,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 0.5278,
+     "total_settlement_implied_shadow_usd": -0.5254,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T4_prop_cross": {
+     "l5_actions": 91,
+     "reproduced": 23,
+     "reproduction_rate_pct": 25.3,
+     "by_how": {
+      "CROSS": 19,
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15,
+      "OTHER": 36
+     },
+     "habitat_failures": {
+      "NO_BOOK": 17,
+      "NO_SUBSEQUENT_INTERACTION": 15
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 35,
+      "track_longest_run": 10,
+      "native_up": 71,
+      "native_dn": 20,
+      "track_up": 17,
+      "track_dn": 6
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 7.4934,
+     "max_abs_imbalance": 7.4934,
+     "matched_final": 14.548509678848282,
+     "residual_final": 5.795058117386488,
+     "residual_direction": "UP",
+     "pair_cost_max": 1.2099,
+     "pair_cost_min": 0.9049,
+     "pair_cost_final": 0.9049,
+     "matched_pair_pnl_usd": 1.383,
+     "residual_cost_basis_usd": 1.9428,
+     "residual_pnl_usd": -1.9428,
+     "maker_rebate_accrual_usd": 0.0024,
+     "taker_fees_usd": 0.4757,
+     "capital_committed_usd": 15.1082,
+     "total_settlement_implied_shadow_usd": -1.033,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    }
+   }
+  },
+  "16:45": {
+   "L5_NATIVE": {
+    "actions": 49,
+    "up": 31,
+    "dn": 18,
+    "longest_same_side_run": 12,
+    "opposite_acquired": true,
+    "inventory_crossed_zero": false,
+    "overshoot_past_zero": 0,
+    "max_abs_imbalance": 17,
+    "terminal_matched": 18,
+    "terminal_residual": 13,
+    "l5_shares_up": 1063.05,
+    "l5_shares_dn": 1061.51,
+    "l5_shares_residual": 1.54
+   },
+   "settlement_yes_value": "0.0000",
+   "tracks": {
+    "T1_q1_maker": {
+     "l5_actions": 49,
+     "reproduced": 3,
+     "reproduction_rate_pct": 6.1,
+     "by_how": {
+      "MAKER": 3
+     },
+     "blocked": {
+      "NO_BOOK": 4,
+      "QUEUE_AMBIGUOUS": 10,
+      "REQUIRES_CROSSING": 23,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "habitat_failures": {
+      "NO_BOOK": 4,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 12,
+      "track_longest_run": 2,
+      "native_up": 31,
+      "native_dn": 18,
+      "track_up": 2,
+      "track_dn": 1
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 1.0,
+     "max_abs_imbalance": 1.0,
+     "matched_final": 1.0,
+     "residual_final": 1.0,
+     "residual_direction": "UP",
+     "pair_cost_max": 0.975,
+     "pair_cost_min": 0.96,
+     "pair_cost_final": 0.975,
+     "matched_pair_pnl_usd": 0.025,
+     "residual_cost_basis_usd": 0.075,
+     "residual_pnl_usd": -0.075,
+     "maker_rebate_accrual_usd": 0.0028,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 1.05,
+     "total_settlement_implied_shadow_usd": -0.0472,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T2_q1_cross": {
+     "l5_actions": 49,
+     "reproduced": 26,
+     "reproduction_rate_pct": 53.1,
+     "by_how": {
+      "CROSS": 23,
+      "MAKER": 3
+     },
+     "blocked": {
+      "NO_BOOK": 4,
+      "QUEUE_AMBIGUOUS": 10,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "habitat_failures": {
+      "NO_BOOK": 4,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 12,
+      "track_longest_run": 7,
+      "native_up": 31,
+      "native_dn": 18,
+      "track_up": 22,
+      "track_dn": 4
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 19.0,
+     "matched_final": 4.0,
+     "residual_final": 18.0,
+     "residual_direction": "UP",
+     "pair_cost_max": 1.04,
+     "pair_cost_min": 0.98,
+     "pair_cost_final": 1.0068,
+     "matched_pair_pnl_usd": -0.0273,
+     "residual_cost_basis_usd": 2.1927,
+     "residual_pnl_usd": -2.1927,
+     "maker_rebate_accrual_usd": 0.0028,
+     "taker_fees_usd": 0.1623,
+     "capital_committed_usd": 6.22,
+     "total_settlement_implied_shadow_usd": -2.3795,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T3_prop_maker": {
+     "l5_actions": 49,
+     "reproduced": 3,
+     "reproduction_rate_pct": 6.1,
+     "by_how": {
+      "MAKER": 3
+     },
+     "blocked": {
+      "NO_BOOK": 4,
+      "QUEUE_AMBIGUOUS": 10,
+      "REQUIRES_CROSSING": 23,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "habitat_failures": {
+      "NO_BOOK": 4,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 12,
+      "track_longest_run": 2,
+      "native_up": 31,
+      "native_dn": 18,
+      "track_up": 2,
+      "track_dn": 1
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 3.5177,
+     "max_abs_imbalance": 3.5177,
+     "matched_final": 0.9200442967884828,
+     "residual_final": 3.517748217054263,
+     "residual_direction": "UP",
+     "pair_cost_max": 0.9651,
+     "pair_cost_min": 0.96,
+     "pair_cost_final": 0.9651,
+     "matched_pair_pnl_usd": 0.0321,
+     "residual_cost_basis_usd": 0.229,
+     "residual_pnl_usd": -0.229,
+     "maker_rebate_accrual_usd": 0.0044,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 1.117,
+     "total_settlement_implied_shadow_usd": -0.1925,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T4_prop_cross": {
+     "l5_actions": 49,
+     "reproduced": 26,
+     "reproduction_rate_pct": 53.1,
+     "by_how": {
+      "CROSS": 23,
+      "MAKER": 3
+     },
+     "blocked": {
+      "NO_BOOK": 4,
+      "QUEUE_AMBIGUOUS": 10,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "habitat_failures": {
+      "NO_BOOK": 4,
+      "NO_SUBSEQUENT_INTERACTION": 9
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 12,
+      "track_longest_run": 7,
+      "native_up": 31,
+      "native_dn": 18,
+      "track_up": 22,
+      "track_dn": 4
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 28.3175,
+     "matched_final": 8.618826135105204,
+     "residual_final": 25.26989510520487,
+     "residual_direction": "UP",
+     "pair_cost_max": 1.03,
+     "pair_cost_min": 0.9042,
+     "pair_cost_final": 0.9555,
+     "matched_pair_pnl_usd": 0.3833,
+     "residual_cost_basis_usd": 2.5083,
+     "residual_pnl_usd": -2.5083,
+     "maker_rebate_accrual_usd": 0.0044,
+     "taker_fees_usd": 0.2418,
+     "capital_committed_usd": 10.7438,
+     "total_settlement_implied_shadow_usd": -2.3624,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    }
+   }
+  },
+  "17:30": {
+   "L5_NATIVE": {
+    "actions": 68,
+    "up": 42,
+    "dn": 26,
+    "longest_same_side_run": 21,
+    "opposite_acquired": true,
+    "inventory_crossed_zero": false,
+    "overshoot_past_zero": 0,
+    "max_abs_imbalance": 28,
+    "terminal_matched": 26,
+    "terminal_residual": 16,
+    "l5_shares_up": 1081.37,
+    "l5_shares_dn": 1209.45,
+    "l5_shares_residual": -128.08
+   },
+   "settlement_yes_value": "1.0000",
+   "tracks": {
+    "T1_q1_maker": {
+     "l5_actions": 68,
+     "reproduced": 4,
+     "reproduction_rate_pct": 5.9,
+     "by_how": {
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27,
+      "REQUIRES_CROSSING": 25,
+      "QUEUE_AMBIGUOUS": 7
+     },
+     "habitat_failures": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 21,
+      "track_longest_run": 3,
+      "native_up": 42,
+      "native_dn": 26,
+      "track_up": 1,
+      "track_dn": 3
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 3.0,
+     "matched_final": 1.0,
+     "residual_final": -2.0,
+     "residual_direction": "DOWN",
+     "pair_cost_max": 1.1267,
+     "pair_cost_min": 1.1267,
+     "pair_cost_final": 1.1267,
+     "matched_pair_pnl_usd": -0.1267,
+     "residual_cost_basis_usd": 0.2933,
+     "residual_pnl_usd": -0.2933,
+     "maker_rebate_accrual_usd": 0.0049,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 1.42,
+     "total_settlement_implied_shadow_usd": -0.4151,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T2_q1_cross": {
+     "l5_actions": 68,
+     "reproduced": 29,
+     "reproduction_rate_pct": 42.6,
+     "by_how": {
+      "CROSS": 25,
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27,
+      "QUEUE_AMBIGUOUS": 7
+     },
+     "habitat_failures": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 21,
+      "track_longest_run": 11,
+      "native_up": 42,
+      "native_dn": 26,
+      "track_up": 15,
+      "track_dn": 14
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 11.0,
+     "matched_final": 14.0,
+     "residual_final": 1.0,
+     "residual_direction": "UP",
+     "pair_cost_max": 1.0056,
+     "pair_cost_min": 0.7229,
+     "pair_cost_final": 0.7461,
+     "matched_pair_pnl_usd": 3.5547,
+     "residual_cost_basis_usd": 0.6547,
+     "residual_pnl_usd": 0.3453,
+     "maker_rebate_accrual_usd": 0.0049,
+     "taker_fees_usd": 0.2483,
+     "capital_committed_usd": 11.1,
+     "total_settlement_implied_shadow_usd": 3.6566,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T3_prop_maker": {
+     "l5_actions": 68,
+     "reproduced": 4,
+     "reproduction_rate_pct": 5.9,
+     "by_how": {
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27,
+      "REQUIRES_CROSSING": 25,
+      "QUEUE_AMBIGUOUS": 7
+     },
+     "habitat_failures": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "DOWN",
+      "native_longest_run": 21,
+      "track_longest_run": 3,
+      "native_up": 42,
+      "native_dn": 26,
+      "track_up": 1,
+      "track_dn": 3
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 8.6822,
+     "matched_final": 4.429678848283499,
+     "residual_final": -4.252491694352159,
+     "residual_direction": "DOWN",
+     "pair_cost_max": 1.1251,
+     "pair_cost_min": 1.1251,
+     "pair_cost_final": 1.1251,
+     "matched_pair_pnl_usd": -0.5542,
+     "residual_cost_basis_usd": 0.617,
+     "residual_pnl_usd": -0.617,
+     "maker_rebate_accrual_usd": 0.0146,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 5.6009,
+     "total_settlement_implied_shadow_usd": -1.1566,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T4_prop_cross": {
+     "l5_actions": 68,
+     "reproduced": 29,
+     "reproduction_rate_pct": 42.6,
+     "by_how": {
+      "CROSS": 25,
+      "MAKER": 4
+     },
+     "blocked": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27,
+      "QUEUE_AMBIGUOUS": 7
+     },
+     "habitat_failures": {
+      "NO_BOOK": 5,
+      "NO_SUBSEQUENT_INTERACTION": 27
+     },
+     "side_sequence": {
+      "native_first_side": "UP",
+      "track_first_side": "UP",
+      "native_longest_run": 21,
+      "track_longest_run": 11,
+      "native_up": 42,
+      "native_dn": 26,
+      "track_up": 15,
+      "track_dn": 14
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": true,
+     "overshoot_past_zero": 8.5658,
+     "max_abs_imbalance": 12.6945,
+     "matched_final": 21.798408283499445,
+     "residual_final": -4.136124606866001,
+     "residual_direction": "DOWN",
+     "pair_cost_max": 1.0528,
+     "pair_cost_min": 0.7319,
+     "pair_cost_final": 0.7984,
+     "matched_pair_pnl_usd": 4.3946,
+     "residual_cost_basis_usd": 0.3266,
+     "residual_pnl_usd": -0.3266,
+     "maker_rebate_accrual_usd": 0.0146,
+     "taker_fees_usd": 0.2949,
+     "capital_committed_usd": 17.7304,
+     "total_settlement_implied_shadow_usd": 3.7877,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    }
+   }
+  },
+  "19:30": {
+   "L5_NATIVE": {
+    "actions": 27,
+    "up": 13,
+    "dn": 14,
+    "longest_same_side_run": 11,
+    "opposite_acquired": true,
+    "inventory_crossed_zero": true,
+    "overshoot_past_zero": 1,
+    "max_abs_imbalance": 10,
+    "terminal_matched": 13,
+    "terminal_residual": -1,
+    "l5_shares_up": 702.98,
+    "l5_shares_dn": 709.02,
+    "l5_shares_residual": -6.04
+   },
+   "settlement_yes_value": "1.0000",
+   "tracks": {
+    "T1_q1_maker": {
+     "l5_actions": 27,
+     "reproduced": 0,
+     "reproduction_rate_pct": 0.0,
+     "by_how": {},
+     "blocked": {
+      "REQUIRES_CROSSING": 15,
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "side_sequence": {
+      "native_first_side": "DOWN",
+      "track_first_side": null,
+      "native_longest_run": 11,
+      "track_longest_run": 0,
+      "native_up": 13,
+      "native_dn": 14,
+      "track_up": 0,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 0.0,
+     "matched_final": 0.0,
+     "residual_final": 0.0,
+     "residual_direction": "FLAT",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 0.0,
+     "residual_pnl_usd": 0.0,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 0.0,
+     "total_settlement_implied_shadow_usd": 0.0,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T2_q1_cross": {
+     "l5_actions": 27,
+     "reproduced": 15,
+     "reproduction_rate_pct": 55.6,
+     "by_how": {
+      "CROSS": 15
+     },
+     "blocked": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "side_sequence": {
+      "native_first_side": "DOWN",
+      "track_first_side": "DOWN",
+      "native_longest_run": 11,
+      "track_longest_run": 12,
+      "native_up": 13,
+      "native_dn": 14,
+      "track_up": 3,
+      "track_dn": 12
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 12.0,
+     "matched_final": 3.0,
+     "residual_final": -9.0,
+     "residual_direction": "DOWN",
+     "pair_cost_max": 0.87,
+     "pair_cost_min": 0.87,
+     "pair_cost_final": 0.87,
+     "matched_pair_pnl_usd": 0.39,
+     "residual_cost_basis_usd": 0.81,
+     "residual_pnl_usd": -0.81,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.1026,
+     "capital_committed_usd": 3.42,
+     "total_settlement_implied_shadow_usd": -0.5226,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T3_prop_maker": {
+     "l5_actions": 27,
+     "reproduced": 0,
+     "reproduction_rate_pct": 0.0,
+     "by_how": {},
+     "blocked": {
+      "REQUIRES_CROSSING": 15,
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "side_sequence": {
+      "native_first_side": "DOWN",
+      "track_first_side": null,
+      "native_longest_run": 11,
+      "track_longest_run": 0,
+      "native_up": 13,
+      "native_dn": 14,
+      "track_up": 0,
+      "track_dn": 0
+     },
+     "opposite_acquired": false,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 0.0,
+     "matched_final": 0.0,
+     "residual_final": 0.0,
+     "residual_direction": "FLAT",
+     "pair_cost_max": null,
+     "pair_cost_min": null,
+     "pair_cost_final": null,
+     "matched_pair_pnl_usd": 0.0,
+     "residual_cost_basis_usd": 0.0,
+     "residual_pnl_usd": 0.0,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.0,
+     "capital_committed_usd": 0.0,
+     "total_settlement_implied_shadow_usd": 0.0,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    },
+    "T4_prop_cross": {
+     "l5_actions": 27,
+     "reproduced": 15,
+     "reproduction_rate_pct": 55.6,
+     "by_how": {
+      "CROSS": 15
+     },
+     "blocked": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "habitat_failures": {
+      "NO_SUBSEQUENT_INTERACTION": 9,
+      "NO_BOOK": 3
+     },
+     "side_sequence": {
+      "native_first_side": "DOWN",
+      "track_first_side": "DOWN",
+      "native_longest_run": 11,
+      "track_longest_run": 12,
+      "native_up": 13,
+      "native_dn": 14,
+      "track_up": 3,
+      "track_dn": 12
+     },
+     "opposite_acquired": true,
+     "inventory_crossed_zero": false,
+     "overshoot_past_zero": 0.0,
+     "max_abs_imbalance": 26.9777,
+     "matched_final": 4.429678848283499,
+     "residual_final": -22.54806365448505,
+     "residual_direction": "DOWN",
+     "pair_cost_max": 0.8542,
+     "pair_cost_min": 0.8542,
+     "pair_cost_final": 0.8542,
+     "matched_pair_pnl_usd": 0.6459,
+     "residual_cost_basis_usd": 1.673,
+     "residual_pnl_usd": -1.673,
+     "maker_rebate_accrual_usd": 0.0,
+     "taker_fees_usd": 0.1792,
+     "capital_committed_usd": 5.4568,
+     "total_settlement_implied_shadow_usd": -1.2064,
+     "labels": "SHADOW COUNTERFACTUAL. No order exists. Nothing here is submitted, filled, settled or realized."
+    }
+   }
+  }
+ },
+ "aggregate": {
+  "T1_q1_maker": {
+   "reproduced": 11,
+   "l5_actions": 284,
+   "reproduction_rate_pct": 3.9,
+   "total_settlement_implied_shadow_usd": -2.9707,
+   "habitat_failures": {
+    "NO_SUBSEQUENT_INTERACTION": 73,
+    "NO_BOOK": 35
+   }
+  },
+  "T2_q1_cross": {
+   "reproduced": 103,
+   "l5_actions": 284,
+   "reproduction_rate_pct": 36.3,
+   "total_settlement_implied_shadow_usd": -4.8096,
+   "habitat_failures": {
+    "NO_SUBSEQUENT_INTERACTION": 73,
+    "NO_BOOK": 35
+   }
+  },
+  "T3_prop_maker": {
+   "reproduced": 11,
+   "l5_actions": 284,
+   "reproduction_rate_pct": 3.9,
+   "total_settlement_implied_shadow_usd": -1.8745,
+   "habitat_failures": {
+    "NO_SUBSEQUENT_INTERACTION": 73,
+    "NO_BOOK": 35
+   }
+  },
+  "T4_prop_cross": {
+   "reproduced": 103,
+   "l5_actions": 284,
+   "reproduction_rate_pct": 36.3,
+   "total_settlement_implied_shadow_usd": -0.6686,
+   "habitat_failures": {
+    "NO_SUBSEQUENT_INTERACTION": 73,
+    "NO_BOOK": 35
+   }
+  }
+ }
+}

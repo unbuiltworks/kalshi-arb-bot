@@ -1,0 +1,711 @@
+{
+ "l5_days": {
+  "2026-03-19": {
+   "action_usd": {
+    "mean": 0.683,
+    "n": 3,
+    "p25": 0.05,
+    "p50": 1.0,
+    "p75": 1.0
+   },
+   "actions": 3,
+   "lanes": {
+    "BTC-15m": 1,
+    "BTC-5m": 2
+   },
+   "net_usd": 0.74706697,
+   "pair_completion_share": 0.0,
+   "pair_pnl_usd": 0.0,
+   "residual_pnl_usd": 0.74706697,
+   "residual_share_of_bought": 1.000000014634175,
+   "span_hours": 0.82,
+   "turnover_usd": 2.049996,
+   "windows": 3
+  },
+  "2026-03-25": {
+   "action_usd": {
+    "mean": 1.0,
+    "n": 4,
+    "p25": 1.0,
+    "p50": 1.0,
+    "p75": 1.0
+   },
+   "actions": 4,
+   "lanes": {
+    "BTC-15m": 4
+   },
+   "net_usd": 1.91919222,
+   "pair_completion_share": 0.0,
+   "pair_pnl_usd": 0.0,
+   "residual_pnl_usd": 1.91919222,
+   "residual_share_of_bought": 1.0000001950010238,
+   "span_hours": 3.04,
+   "turnover_usd": 3.999979,
+   "windows": 4
+  },
+  "2026-03-26": {
+   "action_usd": {
+    "mean": 2.253,
+    "n": 128,
+    "p25": 1.75,
+    "p50": 2.25,
+    "p75": 2.8
+   },
+   "actions": 128,
+   "lanes": {
+    "BTC-15m": 8
+   },
+   "net_usd": 31.32161889,
+   "pair_completion_share": 0.6978555230979657,
+   "pair_pnl_usd": 30.09309259,
+   "residual_pnl_usd": 1.2285263,
+   "residual_share_of_bought": 0.30214416372007125,
+   "span_hours": 4.99,
+   "turnover_usd": 288.330781,
+   "windows": 8
+  },
+  "2026-03-27": {
+   "action_usd": {
+    "mean": 3.651,
+    "n": 864,
+    "p25": 2.25,
+    "p50": 3.25,
+    "p75": 4.9
+   },
+   "actions": 864,
+   "lanes": {
+    "BTC-15m": 28
+   },
+   "net_usd": 230.1628973292,
+   "pair_completion_share": 0.7751729940299203,
+   "pair_pnl_usd": 277.1405209696,
+   "residual_pnl_usd": -46.9776236404,
+   "residual_share_of_bought": 0.22482731752661336,
+   "span_hours": 13.35,
+   "turnover_usd": 3154.107501,
+   "windows": 28
+  },
+  "2026-03-28": {
+   "action_usd": {
+    "mean": 4.529,
+    "n": 285,
+    "p25": 3.3,
+    "p50": 4.4,
+    "p75": 5.7
+   },
+   "actions": 285,
+   "lanes": {
+    "BTC-15m": 15
+   },
+   "net_usd": -76.5068173883,
+   "pair_completion_share": 0.8262644495177317,
+   "pair_pnl_usd": -18.6811433648,
+   "residual_pnl_usd": -57.8256740235,
+   "residual_share_of_bought": 0.17373536334655917,
+   "span_hours": 10.65,
+   "turnover_usd": 1290.66655,
+   "windows": 15
+  },
+  "2026-03-30": {
+   "action_usd": {
+    "mean": 4.737,
+    "n": 448,
+    "p25": 3.096,
+    "p50": 4.5,
+    "p75": 6.1
+   },
+   "actions": 448,
+   "lanes": {
+    "BTC-15m": 20
+   },
+   "net_usd": -121.8629656078,
+   "pair_completion_share": 0.8771735115922107,
+   "pair_pnl_usd": -60.5662416478,
+   "residual_pnl_usd": -61.29672396,
+   "residual_share_of_bought": 0.12282646377286473,
+   "span_hours": 6.64,
+   "turnover_usd": 2122.113256,
+   "windows": 20
+  },
+  "2026-03-31": {
+   "action_usd": {
+    "mean": 4.71,
+    "n": 197,
+    "p25": 3.1,
+    "p50": 4.6,
+    "p75": 6.3
+   },
+   "actions": 197,
+   "lanes": {
+    "BTC-15m": 10
+   },
+   "net_usd": 66.05369067,
+   "pair_completion_share": 0.8752553406325798,
+   "pair_pnl_usd": 35.21003286,
+   "residual_pnl_usd": 30.84365781,
+   "residual_share_of_bought": 0.12474471990738989,
+   "span_hours": 8.04,
+   "turnover_usd": 927.95058,
+   "windows": 10
+  },
+  "2026-04-01": {
+   "action_usd": {
+    "mean": 5.008,
+    "n": 85,
+    "p25": 3.1,
+    "p50": 4.6,
+    "p75": 6.7
+   },
+   "actions": 85,
+   "lanes": {
+    "BTC-15m": 4
+   },
+   "net_usd": -35.95182831,
+   "pair_completion_share": 0.9235214599794426,
+   "pair_pnl_usd": -31.97779556,
+   "residual_pnl_usd": -3.97403275,
+   "residual_share_of_bought": 0.07647838203179974,
+   "span_hours": 0.74,
+   "turnover_usd": 425.663199,
+   "windows": 4
+  },
+  "2026-04-02": {
+   "action_usd": {
+    "mean": 4.829,
+    "n": 150,
+    "p25": 2.95,
+    "p50": 4.9,
+    "p75": 6.6
+   },
+   "actions": 150,
+   "lanes": {
+    "BTC-15m": 9
+   },
+   "net_usd": 18.05807507,
+   "pair_completion_share": 0.8683074216053155,
+   "pair_pnl_usd": 11.9645128,
+   "residual_pnl_usd": 6.09356227,
+   "residual_share_of_bought": 0.13169285387482363,
+   "span_hours": 2.72,
+   "turnover_usd": 724.317189,
+   "windows": 9
+  },
+  "2026-04-06": {
+   "action_usd": {
+    "mean": 4.638,
+    "n": 41,
+    "p25": 3.739,
+    "p50": 4.7,
+    "p75": 5.5
+   },
+   "actions": 41,
+   "lanes": {
+    "BTC-15m": 5
+   },
+   "net_usd": 2.25729416,
+   "pair_completion_share": 0.716376645515258,
+   "pair_pnl_usd": -2.1949893,
+   "residual_pnl_usd": 4.45228346,
+   "residual_share_of_bought": 0.2836228380106134,
+   "span_hours": 0.93,
+   "turnover_usd": 190.174095,
+   "windows": 5
+  },
+  "2026-04-09": {
+   "action_usd": {
+    "mean": 4.436,
+    "n": 299,
+    "p25": 2.4,
+    "p50": 4.5,
+    "p75": 6.0
+   },
+   "actions": 299,
+   "lanes": {
+    "BTC-15m": 16
+   },
+   "net_usd": 178.1034634112,
+   "pair_completion_share": 0.8419782188138459,
+   "pair_pnl_usd": 159.6357425128,
+   "residual_pnl_usd": 18.4677208984,
+   "residual_share_of_bought": 0.1580218685982877,
+   "span_hours": 6.76,
+   "turnover_usd": 1326.357054,
+   "windows": 16
+  },
+  "2026-04-10": {
+   "action_usd": {
+    "mean": 4.654,
+    "n": 106,
+    "p25": 2.5,
+    "p50": 4.48,
+    "p75": 7.3
+   },
+   "actions": 106,
+   "lanes": {
+    "BTC-15m": 9
+   },
+   "net_usd": 57.90228767,
+   "pair_completion_share": 0.7724018927393212,
+   "pair_pnl_usd": 31.756764,
+   "residual_pnl_usd": 26.14552367,
+   "residual_share_of_bought": 0.2275992469480412,
+   "span_hours": 5.13,
+   "turnover_usd": 493.282297,
+   "windows": 9
+  },
+  "2026-04-13": {
+   "action_usd": {
+    "mean": 6.268,
+    "n": 337,
+    "p25": 3.0,
+    "p50": 6.3,
+    "p75": 9.0
+   },
+   "actions": 337,
+   "lanes": {
+    "BTC-15m": 19
+   },
+   "net_usd": -33.588813145,
+   "pair_completion_share": 0.8627319721393271,
+   "pair_pnl_usd": -23.6191485688,
+   "residual_pnl_usd": -9.9696645762,
+   "residual_share_of_bought": 0.13726760159813775,
+   "span_hours": 10.37,
+   "turnover_usd": 2112.369082,
+   "windows": 19
+  },
+  "2026-04-14": {
+   "action_usd": {
+    "mean": 8.351,
+    "n": 433,
+    "p25": 4.57,
+    "p50": 8.2,
+    "p75": 11.8
+   },
+   "actions": 433,
+   "lanes": {
+    "BTC-15m": 21
+   },
+   "net_usd": 199.5166721528,
+   "pair_completion_share": 0.8731852863369158,
+   "pair_pnl_usd": 274.134472792,
+   "residual_pnl_usd": -74.6178006392,
+   "residual_share_of_bought": 0.12681446618260506,
+   "span_hours": 7.89,
+   "turnover_usd": 3616.110665,
+   "windows": 21
+  },
+  "2026-04-15": {
+   "action_usd": {
+    "mean": 7.704,
+    "n": 112,
+    "p25": 2.8,
+    "p50": 7.2,
+    "p75": 13.0
+   },
+   "actions": 112,
+   "lanes": {
+    "BTC-15m": 6
+   },
+   "net_usd": 44.5453255779,
+   "pair_completion_share": 0.8919911755999361,
+   "pair_pnl_usd": 81.5131960966,
+   "residual_pnl_usd": -36.9678705187,
+   "residual_share_of_bought": 0.10800885537404921,
+   "span_hours": 4.89,
+   "turnover_usd": 862.872495,
+   "windows": 6
+  },
+  "2026-04-17": {
+   "action_usd": {
+    "mean": 6.143,
+    "n": 118,
+    "p25": 1.75,
+    "p50": 3.75,
+    "p75": 9.8
+   },
+   "actions": 118,
+   "lanes": {
+    "BTC-15m": 9
+   },
+   "net_usd": 26.413198828,
+   "pair_completion_share": 0.9423865138390817,
+   "pair_pnl_usd": 37.628698738,
+   "residual_pnl_usd": -11.21549991,
+   "residual_share_of_bought": 0.05761339222452868,
+   "span_hours": 8.65,
+   "turnover_usd": 724.852214,
+   "windows": 9
+  },
+  "2026-04-20": {
+   "action_usd": {
+    "mean": 6.962,
+    "n": 1416,
+    "p25": 1.628,
+    "p50": 5.6,
+    "p75": 11.119
+   },
+   "actions": 1416,
+   "lanes": {
+    "BTC-15m": 25
+   },
+   "net_usd": 434.364735746,
+   "pair_completion_share": 0.963550297516943,
+   "pair_pnl_usd": 456.828816816,
+   "residual_pnl_usd": -22.46408107,
+   "residual_share_of_bought": 0.03644981223582713,
+   "span_hours": 7.79,
+   "turnover_usd": 9858.326121,
+   "windows": 25
+  },
+  "2026-04-21": {
+   "action_usd": {
+    "mean": 7.697,
+    "n": 241,
+    "p25": 1.5,
+    "p50": 5.7,
+    "p75": 12.0
+   },
+   "actions": 241,
+   "lanes": {
+    "BTC-15m": 5
+   },
+   "net_usd": 74.0114478932,
+   "pair_completion_share": 0.9514459178180663,
+   "pair_pnl_usd": 129.6774689832,
+   "residual_pnl_usd": -55.66602109,
+   "residual_share_of_bought": 0.04855391228397553,
+   "span_hours": 1.23,
+   "turnover_usd": 1855.077621,
+   "windows": 5
+  },
+  "2026-08-28": {
+   "action_usd": {
+    "mean": 10.996,
+    "n": 12325,
+    "p25": 1.228,
+    "p50": 4.44,
+    "p75": 15.99
+   },
+   "actions": 12325,
+   "lanes": {
+    "BTC-15m": 63,
+    "BTC-5m": 187,
+    "ETH-15m": 12,
+    "ETH-5m": 139
+   },
+   "net_usd": -529.4542465304,
+   "pair_completion_share": 0.8794373923359794,
+   "pair_pnl_usd": 725.8077566832,
+   "residual_pnl_usd": -1255.2620032136,
+   "residual_share_of_bought": 0.11884043252296009,
+   "span_hours": 16.22,
+   "turnover_usd": 135524.58438,
+   "windows": 401
+  },
+  "2026-08-29": {
+   "action_usd": {
+    "mean": 10.456,
+    "n": 20026,
+    "p25": 1.035,
+    "p50": 4.369,
+    "p75": 15.5
+   },
+   "actions": 20026,
+   "lanes": {
+    "BTC-15m": 87,
+    "BTC-5m": 277,
+    "ETH-5m": 203
+   },
+   "net_usd": 3420.0945344177,
+   "pair_completion_share": 0.8908023143976899,
+   "pair_pnl_usd": 3596.6906817988,
+   "residual_pnl_usd": -176.5961473811,
+   "residual_share_of_bought": 0.10767198411710145,
+   "span_hours": 23.99,
+   "turnover_usd": 209385.454631,
+   "windows": 567
+  },
+  "2026-08-30": {
+   "action_usd": {
+    "mean": 10.483,
+    "n": 19460,
+    "p25": 1.278,
+    "p50": 4.7,
+    "p75": 15.3
+   },
+   "actions": 19460,
+   "lanes": {
+    "BTC-15m": 89,
+    "BTC-5m": 277,
+    "ETH-5m": 192
+   },
+   "net_usd": 297.3433504856,
+   "pair_completion_share": 0.8726967217390685,
+   "pair_pnl_usd": 2824.437115808,
+   "residual_pnl_usd": -2527.0937653224,
+   "residual_share_of_bought": 0.12572434060850712,
+   "span_hours": 23.88,
+   "turnover_usd": 203991.413828,
+   "windows": 558
+  },
+  "2026-08-31": {
+   "action_usd": {
+    "mean": 10.039,
+    "n": 14904,
+    "p25": 1.154,
+    "p50": 4.383,
+    "p75": 14.474
+   },
+   "actions": 14904,
+   "lanes": {
+    "BTC-15m": 74,
+    "BTC-5m": 214,
+    "ETH-15m": 17,
+    "ETH-5m": 169
+   },
+   "net_usd": 4945.1600934721,
+   "pair_completion_share": 0.8938782682182664,
+   "pair_pnl_usd": 4446.6047627396,
+   "residual_pnl_usd": 498.5553307325,
+   "residual_share_of_bought": 0.10456442879412765,
+   "span_hours": 23.19,
+   "turnover_usd": 149622.001475,
+   "windows": 474
+  }
+ },
+ "l5_early": {
+  "action_usd_p50_of_day_medians": 3.25,
+  "actions_per_day": 275.6,
+  "concurrency": "1 market per lane at a time (0 of 2,201 transitions entered the next window before settlement)",
+  "days": 7,
+  "first_day": "2026-03-19",
+  "label": "L5 first 7 covered days",
+  "lanes": {
+   "BTC-15m": 86,
+   "BTC-5m": 2
+  },
+  "last_day": "2026-03-31",
+  "maker_taker_mix": "unknown from public prints",
+  "net_per_turnover": 0.01693,
+  "net_usd": 131.83,
+  "pair_completion_share": 0.8199,
+  "pair_pnl_usd": 263.2,
+  "residual_pnl_usd": -131.36,
+  "residual_share_of_bought": 0.1801,
+  "turnover_per_day_usd": 1112.75,
+  "turnover_usd": 7789.22,
+  "windows_per_day": 12.6
+ },
+ "l5_first_month": {
+  "action_usd_p50_of_day_medians": 3.25,
+  "actions_per_day": 275.6,
+  "concurrency": "1 market per lane at a time (0 of 2,201 transitions entered the next window before settlement)",
+  "days": 7,
+  "first_day": "2026-03-19",
+  "label": "L5 2026-03",
+  "lanes": {
+   "BTC-15m": 86,
+   "BTC-5m": 2
+  },
+  "last_day": "2026-03-31",
+  "maker_taker_mix": "unknown from public prints",
+  "net_per_turnover": 0.01693,
+  "net_usd": 131.83,
+  "pair_completion_share": 0.8199,
+  "pair_pnl_usd": 263.2,
+  "residual_pnl_usd": -131.36,
+  "residual_share_of_bought": 0.1801,
+  "turnover_per_day_usd": 1112.75,
+  "turnover_usd": 7789.22,
+  "windows_per_day": 12.6
+ },
+ "l5_mature": {
+  "action_usd_p50_of_day_medians": 4.383,
+  "actions_per_day": 5370.6,
+  "concurrency": "1 market per lane at a time (0 of 2,201 transitions entered the next window before settlement)",
+  "days": 13,
+  "first_day": "2026-04-06",
+  "label": "L5 mature (2026-04-06 onward)",
+  "lanes": {
+   "BTC-15m": 428,
+   "BTC-5m": 955,
+   "ETH-15m": 29,
+   "ETH-5m": 703
+  },
+  "last_day": "2026-08-31",
+  "maker_taker_mix": "unknown from public prints",
+  "net_per_turnover": 0.01267,
+  "net_usd": 9116.67,
+  "pair_completion_share": 0.885,
+  "pair_pnl_usd": 12738.9,
+  "residual_pnl_usd": -3622.23,
+  "residual_share_of_bought": 0.1135,
+  "turnover_per_day_usd": 55350.99,
+  "turnover_usd": 719562.88,
+  "windows_per_day": 162.7
+ },
+ "labels": "L5 from canonical prints (FIFO lots; maker/taker unknown); ours from the economic scoreboard and the recycling study; turnover per day over each cohort's own wall-clock span; read-only",
+ "ours_by_cohort": {
+  "R1": {
+   "action_usd": "0.01-0.02 shares (~$0.005-0.01)",
+   "concurrency": 1,
+   "hours_per_deployed_dollar_p50": null,
+   "label": "R1",
+   "maker_taker_mix": "100% maker (post-only)",
+   "markets": 11,
+   "net_per_turnover": -0.0261,
+   "net_usd": -0.0115,
+   "pair_completion_share": 0.8454,
+   "pair_contribution_usd": 0.0316,
+   "rebates_credited_usd": 0.0,
+   "residual_contribution_usd": -0.0622,
+   "residual_share_of_bought": 0.1546,
+   "selection": {
+    "match_winner/baseball": 1,
+    "match_winner/esports": 2,
+    "match_winner/tennis": 5,
+    "spread/football": 1,
+    "three_way/soccer": 1,
+    "total/baseball": 1
+   },
+   "span_hours": 6.97,
+   "turnover_by_calendar_day_usd": {
+    "2026-09-06": 0.37
+   },
+   "turnover_per_day_labels": "rate over the cohort's own span (hours), not a calendar day",
+   "turnover_per_day_usd": 1.52,
+   "turnover_usd": 0.4406
+  },
+  "R2C": {
+   "action_usd": "0.01-0.02 shares (~$0.005-0.01)",
+   "concurrency": 1,
+   "hours_per_deployed_dollar_p50": null,
+   "label": "R2C",
+   "maker_taker_mix": "100% maker (post-only)",
+   "markets": 6,
+   "net_per_turnover": -0.10293,
+   "net_usd": -0.0218,
+   "pair_completion_share": 0.7917,
+   "pair_contribution_usd": 0.0132,
+   "rebates_credited_usd": 0.0,
+   "residual_contribution_usd": -0.035,
+   "residual_share_of_bought": 0.2083,
+   "selection": {
+    "match_winner/baseball": 1,
+    "match_winner/tennis": 1,
+    "spread/baseball": 1,
+    "three_way/soccer": 1,
+    "total/baseball": 1,
+    "total/football": 1
+   },
+   "span_hours": 3.96,
+   "turnover_by_calendar_day_usd": {
+    "2026-09-06": 0.21
+   },
+   "turnover_per_day_labels": "rate over the cohort's own span (hours), not a calendar day",
+   "turnover_per_day_usd": 1.29,
+   "turnover_usd": 0.2118
+  },
+  "R2C2": {
+   "action_usd": "0.01-0.02 shares (~$0.005-0.01)",
+   "concurrency": 1,
+   "hours_per_deployed_dollar_p50": null,
+   "label": "R2C2",
+   "maker_taker_mix": "100% maker (post-only)",
+   "markets": 3,
+   "net_per_turnover": -0.36709,
+   "net_usd": -0.058,
+   "pair_completion_share": 0.5,
+   "pair_contribution_usd": 0.0082,
+   "rebates_credited_usd": 0.0,
+   "residual_contribution_usd": -0.0662,
+   "residual_share_of_bought": 0.5,
+   "selection": {
+    "match_winner/baseball": 1,
+    "three_way/soccer": 2
+   },
+   "span_hours": 1.78,
+   "turnover_by_calendar_day_usd": {
+    "2026-09-06": 0.07,
+    "2026-09-07": 0.09
+   },
+   "turnover_per_day_labels": "rate over the cohort's own span (hours), not a calendar day",
+   "turnover_per_day_usd": 2.13,
+   "turnover_usd": 0.158
+  },
+  "R3L": {
+   "action_usd": "~2.50 (5 shares)",
+   "concurrency": 1,
+   "hours_per_deployed_dollar_p50": 0.114,
+   "label": "R3L",
+   "maker_taker_mix": "100% maker (post-only)",
+   "markets": 3,
+   "net_per_turnover": -0.04417,
+   "net_usd": -1.5302,
+   "pair_completion_share": 0.7731,
+   "pair_contribution_usd": 4.4753,
+   "rebates_credited_usd": 0.28,
+   "residual_contribution_usd": -6.2855,
+   "residual_share_of_bought": 0.2269,
+   "selection": {
+    "spread/football": 2,
+    "total/football": 1
+   },
+   "span_hours": 2.72,
+   "turnover_by_calendar_day_usd": {
+    "2026-09-07": 34.64
+   },
+   "turnover_per_day_labels": "rate over the cohort's own span (hours), not a calendar day",
+   "turnover_per_day_usd": 305.5,
+   "turnover_usd": 34.6402
+  },
+  "R4": {
+   "action_usd": "~2.50 (5 shares)",
+   "concurrency": 1,
+   "hours_per_deployed_dollar_p50": 0.206,
+   "label": "R4",
+   "maker_taker_mix": "100% maker (post-only)",
+   "markets": 2,
+   "net_per_turnover": 0.11515,
+   "net_usd": 2.1437,
+   "pair_completion_share": 0.9528,
+   "pair_contribution_usd": 1.0361,
+   "rebates_credited_usd": 0.14,
+   "residual_contribution_usd": 0.9676,
+   "residual_share_of_bought": 0.0472,
+   "selection": {
+    "match_winner/tennis": 2
+   },
+   "span_hours": 1.63,
+   "turnover_by_calendar_day_usd": {
+    "2026-09-07": 18.62
+   },
+   "turnover_per_day_labels": "rate over the cohort's own span (hours), not a calendar day",
+   "turnover_per_day_usd": 273.93,
+   "turnover_usd": 18.6163
+  }
+ },
+ "owner_direction": "#167 5570456323 (early ramp comparison)",
+ "reproducibility": {
+  "bankroll_usd": 109.0,
+  "calendar_day_ratio_ours_at_size_over_l5_early": 0.0479,
+  "l5_early_action_usd_p50": 3.25,
+  "l5_early_turnover_per_day_usd": 1112.75,
+  "labels": "what the ~$109 bankroll can reproduce is the per-market L5 process at ~1 action unit; what it cannot yet reproduce is L5's turnover, which is a market-duration and rotation property, not a capital property",
+  "not_reproducible_yet": [
+   "turnover per day: L5's is set by 5/15-minute windows that settle in minutes and re-enter within a minute; our sports markets settle ~1.2 h after the first fill and the campaign waits for settlement before rotating (FLAT_WAIT) -- the ratio above is the gap",
+   "residual share: L5 runs a residual several actions deep (peak p50 3.5 units); R4 caps it at one action, which refuses ~98% of L5-style EXTENDs -- a translation choice, not a bankroll limit",
+   "market/window selection: L5's lanes are two assets x two durations; ours is a sports universe served by a recorder whose pool held only resolved markets for 2.5 h (opportunity_utilization)"
+  ],
+  "our_at_size_calendar_day_usd": 53.26,
+  "our_r4_action_usd": 2.5,
+  "our_r4_turnover_per_day_usd": 273.93,
+  "reproducible_now": [
+   "action size: L5's early day-median action (see l5_early_action_usd_p50) is within reach of the R4 $2.50 action; the 10-13 share median is a later-era number",
+   "pair completion: our at-size completion share is in L5's range (see the table); the complement step is not the gap",
+   "maker-only, one market at a time: matches L5's observed concurrency"
+  ],
+  "turnover_rate_ratio_ours_r4_over_l5_early": 0.246
+ }
+}

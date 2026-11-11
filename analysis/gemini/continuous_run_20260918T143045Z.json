@@ -1,0 +1,435 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-18T14:30:45.228762+00:00",
+  "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+  "driver_executable_sha": "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609181435-UP",
+      "tte_s": 254.77089166641235,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "tte_s": 254.77089166641235,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "authorization": {
+    "authorized": true,
+    "required_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+    "authorized_sha": "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d",
+    "executable_sha": "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d",
+    "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "arming": {
+      "armed": true,
+      "live_flag": true,
+      "auth_id_present": true,
+      "auth_id_matches": true,
+      "expiry_supplied": true,
+      "expired": false,
+      "expected_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+      "why_not": null
+    },
+    "why_not": [],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "latch": {
+    "consumed": true,
+    "intent_id": "cont-20260918T143048Z",
+    "state": "INTENT_PERSISTED",
+    "when": "BEFORE the session connected"
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "session": "connected",
+  "window": {
+    "label": "GEMINI_L5_WS_CONTINUOUS_V1",
+    "symbol": "GEMI-BTC05M2609181435-UP",
+    "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+    "started": 1789741855.716595,
+    "cycles": 2,
+    "turns": [
+      {
+        "cycle": 1,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 0,
+          "mutations": 2
+        },
+        "budget_left": 12
+      },
+      {
+        "cycle": 2,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "budget_left": 10
+      }
+    ],
+    "preflight": {
+      "preflight": {
+        "label": "GEMINI_L5_CONTINUOUS_PREFLIGHT_V1",
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "t": 1789741855.716602,
+        "readable": true,
+        "quantityMinimum": "0.01",
+        "quantityIncrement": "0.01",
+        "priceMinimum": "0.01",
+        "priceIncrement": "0.01",
+        "contract_status": "active",
+        "market_state": "open",
+        "expiry": "2026-09-18T14:35:00.000Z",
+        "maker_tif": "MOC",
+        "terms_accepted": true,
+        "terms_version": 1,
+        "book": {
+          "readable": true,
+          "ticker": "BTC05M2609181435",
+          "instrumentSymbol": "GEMI-BTC05M2609181435-UP",
+          "yes": {
+            "bid": "0.03",
+            "ask": "0.33"
+          },
+          "no": {
+            "bid": "0.67",
+            "ask": "0.97"
+          },
+          "passive_pair_cost": "0.70",
+          "crossing_pair_cost": "1.30",
+          "last_trade_price": "0.48",
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "identity_consistent": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "labels": "a resting BUY joins the outcome's SELL side, so the passive pair cost is what a maker surface can reach. It is a cost basis, never a realized profit."
+        },
+        "frozen_comparison": {
+          "verdict": "AGREES",
+          "discrepancies": [],
+          "labels": "a preflight that merely SUCCEEDS is not the same claim as one that AGREES; only the second licenses the envelope"
+        }
+      },
+      "agrees": true,
+      "discrepancies": []
+    },
+    "authorization": {
+      "authorized": true,
+      "required_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+      "authorized_sha": "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d",
+      "executable_sha": "2793c4cda4577debb00b3c3a04120138d8f78c8b38f057497105024a4cdc8d5d",
+      "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "arming": {
+        "armed": true,
+        "live_flag": true,
+        "auth_id_present": true,
+        "auth_id_matches": true,
+        "expiry_supplied": true,
+        "expired": false,
+        "expected_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+        "why_not": null
+      },
+      "why_not": [],
+      "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+    },
+    "recovery": {
+      "recovered": true,
+      "inventory": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working": "venue authoritative: 0 resting (+none / -none)",
+      "budget_consumed": 0,
+      "budget_note": "max(ledger 0, venue 0): a disagreement is always read upward",
+      "budget_left": 12
+    },
+    "binding": {
+      "bound": true,
+      "symbol": "GEMI-BTC05M2609181435-UP",
+      "actions_taken": 0
+    },
+    "state": "SUBMISSION_UNKNOWN_RECONCILE_REQUIRED",
+    "why": "cancel of l5cp-owner-2026-yes-774c492b was not acknowledged OK",
+    "budget_consumed": 3,
+    "budget_left": 9,
+    "max_actions": 12,
+    "working_orders": [
+      {
+        "client_order_id": "l5cp-owner-2026-yes-774c492b",
+        "leg": "YES",
+        "price": "0.03",
+        "qty": "0.01",
+        "resting_since": 1789741860.501923,
+        "venue_order_id": null
+      },
+      {
+        "client_order_id": "l5cp-owner-2026-no-4ac75a39",
+        "leg": "NO",
+        "price": "0.68",
+        "qty": "0.01",
+        "resting_since": 1789741860.5408635,
+        "venue_order_id": null
+      }
+    ],
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "residual_note": "any residual is CARRIED directional exposure, reconciled through settlement. No taker cross was introduced to flatten it.",
+    "realized": null,
+    "realized_note": "REALIZED stays null until a venue-confirmed cash movement is read back. settlement_report keeps matched-pair and directional-residual apart."
+  },
+  "after": {
+    "symbol": "GEMI-BTC05M2609181435-UP",
+    "fills": [],
+    "orders_seen": [],
+    "order_history_raw": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "open_orders": [
+      {
+        "orderId": 145828836242288483,
+        "hashOrderId": "RXmwpwBOKoLR",
+        "clientOrderId": "l5cp-owner-2026-no-4ac75a39",
+        "globalOrderId": "145828836242288483",
+        "status": "open",
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.68",
+        "createdAt": "2026-09-18T14:31:00.522Z",
+        "updatedAt": "2026-09-18T14:31:00.522Z",
+        "contractMetadata": {
+          "contractId": "642211",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609181435",
+          "eventName": "BTC price today at 10:35am EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609181435-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-18T14:35:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 10:35am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-18T14:30:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "80738.75",
+            "availableAt": "2026-09-18T14:30:00.000Z"
+          }
+        },
+        "fundsOnHold": "0.0068"
+      },
+      {
+        "orderId": 145828836242288478,
+        "hashOrderId": "AzQ7a7YpBdeP",
+        "clientOrderId": "l5cp-owner-2026-yes-774c492b",
+        "globalOrderId": "145828836242288478",
+        "status": "open",
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "side": "buy",
+        "outcome": "yes",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.03",
+        "createdAt": "2026-09-18T14:31:00.483Z",
+        "updatedAt": "2026-09-18T14:31:00.483Z",
+        "contractMetadata": {
+          "contractId": "642211",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609181435",
+          "eventName": "BTC price today at 10:35am EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609181435-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-18T14:35:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 10:35am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-18T14:30:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "80738.75",
+            "availableAt": "2026-09-18T14:30:00.000Z"
+          }
+        },
+        "fundsOnHold": "0.0003"
+      }
+    ],
+    "active_raw": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "resolution": {
+    "readable": true,
+    "verdict": "PENDING",
+    "instrumentSymbol": "GEMI-BTC05M2609181435-UP",
+    "ticker": "BTC05M2609181435",
+    "status": "active",
+    "resolutionSide": null,
+    "resolvedAt": null,
+    "settlementValue": null,
+    "marketState": "open",
+    "expiryDate": "2026-09-18T14:35:00.000Z",
+    "event_status": "active",
+    "is_terminal": false,
+    "expired": false,
+    "reads": 3,
+    "reads_readable": 3,
+    "reads_settled": 0,
+    "distinct_readings": [
+      "active/None"
+    ],
+    "flapped": false,
+    "observations": [
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T14:35:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T14:35:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-18T14:35:00.000Z",
+        "event_status": "active"
+      }
+    ],
+    "missing_fields": [
+      "resolutionSide",
+      "resolvedAt",
+      "settlementValue"
+    ],
+    "strike_check": {
+      "available": false,
+      "why": "not settled yet, or no strike published"
+    },
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+  },
+  "finished_utc": "2026-09-18T14:31:11.940995+00:00"
+}

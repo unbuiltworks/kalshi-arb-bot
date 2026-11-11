@@ -1,0 +1,167 @@
+{
+ "label": "L5_PERSISTENT_SURFACE_TEST_V1",
+ "source": "data/l5/raw/activity.jsonl",
+ "n_trade_rows_deduped": 71984,
+ "timestamp_resolution": {
+  "n": 71984,
+  "all_integer_seconds": true,
+  "n_integer": 71984,
+  "distinct_fractional_parts": 1,
+  "implication": "timestamps are whole seconds: inter-fill gaps below 1s are NOT measurable here, and rows sharing a second are NOT evidence of simultaneity"
+ },
+ "per_family": {
+  "BTC15m": {
+   "n_rows": 63569,
+   "n_transactions": 60132,
+   "rows_per_tx": {
+    "1": 56696,
+    "2": 3435,
+    "3": 1
+   },
+   "distinct_price_levels_per_tx": {
+    "1": 56698,
+    "2": 3433,
+    "3": 1
+   },
+   "n_pure_fragmentation_tx": 2,
+   "n_tx_multi_price_same_side": 3434,
+   "max_levels_one_side_one_tx": 3,
+   "n_tx_both_outcomes": 0,
+   "examples_multi_price": [
+    {
+     "tx": "0x4276b1444727320452781e4191b91ba47e6e6a8791c996cb98fc4cc14f9663c3",
+     "outcome": "Up",
+     "n_levels": 2,
+     "prices": [
+      0.69,
+      0.7
+     ],
+     "family": "BTC15m",
+     "slug": "btc-updown-15m-1787903100",
+     "timestamp": 1787903205,
+     "total_size": 100.0
+    },
+    {
+     "tx": "0x3523e8ba5900896c23ea12f335106c36906ddf6a218e1ad78ddfd15d0b2d3ec6",
+     "outcome": "Up",
+     "n_levels": 2,
+     "prices": [
+      0.68,
+      0.69
+     ],
+     "family": "BTC15m",
+     "slug": "btc-updown-15m-1787903100",
+     "timestamp": 1787903716,
+     "total_size": 26.8406
+    },
+    {
+     "tx": "0x8d4e40a9d496379b17e09abc49a548483797342ef075d2ec49cf2f60530be102",
+     "outcome": "Down",
+     "n_levels": 2,
+     "prices": [
+      0.28,
+      0.29
+     ],
+     "family": "BTC15m",
+     "slug": "btc-updown-15m-1787903100",
+     "timestamp": 1787903719,
+     "total_size": 100.0
+    },
+    {
+     "tx": "0x3258c67dcf8d71291d51d5804b927f65df71aa16d2d8d91d31f3b00a5c3c83d7",
+     "outcome": "Up",
+     "n_levels": 2,
+     "prices": [
+      0.77,
+      0.78
+     ],
+     "family": "BTC15m",
+     "slug": "btc-updown-15m-1787903100",
+     "timestamp": 1787903757,
+     "total_size": 50.0
+    },
+    {
+     "tx": "0x84e3c87e06915f7d07f81220133cf92709af9966a60a9308d526a4f01864d47b",
+     "outcome": "Down",
+     "n_levels": 2,
+     "prices": [
+      0.2,
+      0.21
+     ],
+     "family": "BTC15m",
+     "slug": "btc-updown-15m-1787903100",
+     "timestamp": 1787903766,
+     "total_size": 100.0
+    }
+   ],
+   "examples_both_outcomes": []
+  },
+  "BTC5m": {
+   "n_rows": 6229,
+   "n_transactions": 6229,
+   "rows_per_tx": {
+    "1": 6229
+   },
+   "distinct_price_levels_per_tx": {
+    "1": 6229
+   },
+   "n_pure_fragmentation_tx": 0,
+   "n_tx_multi_price_same_side": 0,
+   "max_levels_one_side_one_tx": 0,
+   "n_tx_both_outcomes": 0,
+   "examples_multi_price": [],
+   "examples_both_outcomes": []
+  },
+  "ETH15m": {
+   "n_rows": 117,
+   "n_transactions": 117,
+   "rows_per_tx": {
+    "1": 117
+   },
+   "distinct_price_levels_per_tx": {
+    "1": 117
+   },
+   "n_pure_fragmentation_tx": 0,
+   "n_tx_multi_price_same_side": 0,
+   "max_levels_one_side_one_tx": 0,
+   "n_tx_both_outcomes": 0,
+   "examples_multi_price": [],
+   "examples_both_outcomes": []
+  },
+  "ETH5m": {
+   "n_rows": 2069,
+   "n_transactions": 2069,
+   "rows_per_tx": {
+    "1": 2069
+   },
+   "distinct_price_levels_per_tx": {
+    "1": 2069
+   },
+   "n_pure_fragmentation_tx": 0,
+   "n_tx_multi_price_same_side": 0,
+   "max_levels_one_side_one_tx": 0,
+   "n_tx_both_outcomes": 0,
+   "examples_multi_price": [],
+   "examples_both_outcomes": []
+  }
+ },
+ "second_level_cooccurrence": {
+  "n_second_buckets_with_multiple_rows": 13718,
+  "n_such_buckets_with_both_outcomes": 2921,
+  "distinct_transactions_within_those_buckets": {
+   "1": 1546,
+   "2": 7827,
+   "3": 2359,
+   "4": 990,
+   "5": 429,
+   "6": 255,
+   "7": 123,
+   "8": 68
+  },
+  "label": "UPPER BOUND ONLY. A shared whole second is not simultaneity at this clock resolution; where the rows also share ONE transactionHash they are one taker action, and where they are several transactions they may be up to a second apart."
+ },
+ "what_this_can_and_cannot_answer": {
+  "cannot": "any sub-second timing distribution, because the source clock is whole seconds",
+  "can": "minimum simultaneous resting orders, because one transactionHash consuming two distinct prices on one outcome proves two orders were resting at that instant"
+ }
+}

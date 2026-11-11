@@ -1,0 +1,214 @@
+{
+ "source": "analysis/l5/l5_canonical_sequence.csv.gz",
+ "rows": 71984,
+ "buy_fills": 71982,
+ "reconstructed_orders": 61931,
+ "venue": {
+  "order_min_size": "5",
+  "tick": "0.01",
+  "read": "live from both crypto cohorts 2026-09-15"
+ },
+ "per_fill": {
+  "n": 71982,
+  "below_min": 14110,
+  "below_min_frac": 0.196,
+  "qty_total": "1520945.435205",
+  "qty_below_min": "29551.976807",
+  "volume_frac_below_min": 0.0194,
+  "median": "12.5",
+  "p10": "2",
+  "p90": "50",
+  "min": "0.002829",
+  "max": "250",
+  "histogram": {
+   "1-5": 11799,
+   "5-20": 28164,
+   "<1": 2311,
+   "20-100": 29537,
+   "100+": 171
+  }
+ },
+ "per_fill_economics": {
+  "actions": 71982,
+  "actions_below_min": 14110,
+  "notional_total": "728502.07",
+  "notional_below_min": "11247.54",
+  "notional_frac_below_min": 0.0154,
+  "mean_price_below_min": "0.3601",
+  "mean_price_at_or_above": "0.4645"
+ },
+ "per_order": {
+  "n": 61931,
+  "below_min": 10051,
+  "below_min_frac": 0.1623,
+  "qty_total": "1520945.435205",
+  "qty_below_min": "22166.011194",
+  "volume_frac_below_min": 0.0146,
+  "median": "18.181817",
+  "p10": "2.229884",
+  "p90": "50",
+  "min": "0.002829",
+  "max": "250",
+  "histogram": {
+   "1-5": 8561,
+   "5-20": 21774,
+   "<1": 1490,
+   "20-100": 29695,
+   "100+": 411
+  }
+ },
+ "per_order_economics": {
+  "actions": 61931,
+  "actions_below_min": 10051,
+  "notional_total": "728502.07",
+  "notional_below_min": "8691.16",
+  "notional_frac_below_min": 0.0119,
+  "mean_price_below_min": "0.3754",
+  "mean_price_at_or_above": "0.4714"
+ },
+ "aggregation_L5_ADAPTED": {
+  "reached": 7150,
+  "never_reached": 2901,
+  "side_changed": 2796,
+  "price_exceeded_first": 2950,
+  "outlived_intent": 156,
+  "label": "L5_ADAPTED",
+  "notional_recovered": "5859.81",
+  "extra_cost_paid": "135.21",
+  "cost_per_dollar_recovered": 0.0231,
+  "l5_drag_per_dollar": 0.00037,
+  "cost_vs_l5_edge_x": 62.4,
+  "extra_cost_if_charged_on_whole_order": "305.75",
+  "median_wait_s": 3.0,
+  "p90_wait_s": 13.0,
+  "median_extra_cost_per_share": 0.01,
+  "labels": "aggregating to the venue minimum is an ADAPTATION, never fidelity: it changes when we act, what price is left, and -- where the side changed first -- what we would hold. `never_reached` actions cannot be placed at all."
+ },
+ "by_cohort": {
+  "BTC15m": {
+   "orders": {
+    "n": 53701,
+    "below_min": 9730,
+    "below_min_frac": 0.1812,
+    "qty_total": "1216312.474979",
+    "qty_below_min": "21257.694131",
+    "volume_frac_below_min": 0.0175,
+    "median": "15",
+    "p10": "2",
+    "p90": "50",
+    "min": "0.002829",
+    "max": "170",
+    "histogram": {
+     "5-20": 19779,
+     "1-5": 8289,
+     "<1": 1441,
+     "20-100": 23980,
+     "100+": 212
+    }
+   },
+   "economics": {
+    "actions": 53701,
+    "actions_below_min": 9730,
+    "notional_total": "573704.72",
+    "notional_below_min": "8086.36",
+    "notional_frac_below_min": 0.0141,
+    "mean_price_below_min": "0.3662",
+    "mean_price_at_or_above": "0.4623"
+   }
+  },
+  "BTC5m": {
+   "orders": {
+    "n": 6081,
+    "below_min": 133,
+    "below_min_frac": 0.0219,
+    "qty_total": "257691.245807",
+    "qty_below_min": "341.417063",
+    "volume_frac_below_min": 0.0013,
+    "median": "50",
+    "p10": "10",
+    "p90": "59.302324",
+    "min": "0.16",
+    "max": "250",
+    "histogram": {
+     "1-5": 110,
+     "20-100": 4796,
+     "5-20": 979,
+     "<1": 23,
+     "100+": 173
+    }
+   },
+   "economics": {
+    "actions": 6081,
+    "actions_below_min": 133,
+    "notional_total": "129037.45",
+    "notional_below_min": "226.28",
+    "notional_frac_below_min": 0.0018,
+    "mean_price_below_min": "0.6475",
+    "mean_price_at_or_above": "0.5115"
+   }
+  },
+  "ETH15m": {
+   "orders": {
+    "n": 115,
+    "below_min": 16,
+    "below_min_frac": 0.1391,
+    "qty_total": "1564.533130",
+    "qty_below_min": "40.03",
+    "volume_frac_below_min": 0.0256,
+    "median": "14.15",
+    "p10": "3.52",
+    "p90": "20",
+    "min": "0.36",
+    "max": "26.08",
+    "histogram": {
+     "20-100": 47,
+     "5-20": 52,
+     "1-5": 12,
+     "<1": 4
+    }
+   },
+   "economics": {
+    "actions": 115,
+    "actions_below_min": 16,
+    "notional_total": "1041.76",
+    "notional_below_min": "30.06",
+    "notional_frac_below_min": 0.0289,
+    "mean_price_below_min": "0.6925",
+    "mean_price_at_or_above": "0.6374"
+   }
+  },
+  "ETH5m": {
+   "orders": {
+    "n": 2034,
+    "below_min": 172,
+    "below_min_frac": 0.0846,
+    "qty_total": "45377.181289",
+    "qty_below_min": "526.87",
+    "volume_frac_below_min": 0.0116,
+    "median": "15",
+    "p10": "5",
+    "p90": "50",
+    "min": "0.01",
+    "max": "102.409634",
+    "histogram": {
+     "20-100": 872,
+     "100+": 26,
+     "5-20": 964,
+     "1-5": 150,
+     "<1": 22
+    }
+   },
+   "economics": {
+    "actions": 2034,
+    "actions_below_min": 172,
+    "notional_total": "24718.14",
+    "notional_below_min": "348.46",
+    "notional_frac_below_min": 0.0141,
+    "mean_price_below_min": "0.6536",
+    "mean_price_at_or_above": "0.5491"
+   }
+  }
+ },
+ "model_intent_note": "the MODEL (FIDELITY v0.2) intent hardcodes incremental_qty=1 in service.py, which is below the venue minimum unconditionally: every MODEL intent is unplaceable on Polymarket as it stands, independently of anything in L5's distribution",
+ "labels": "per_fill is what the REPLAY intent uses today; per_order is the statement about L5. Where they disagree, the constraint is partly an artifact of our own intent construction. Nothing here is a fill, a shadow result or realized P&L -- it is a placeability census over history."
+}

@@ -1,0 +1,318 @@
+{
+  "assumptions": {
+    "hedge_fill": "the full hedged fraction is ASSUMED to fill at the bid; clip-size effects on fill probability are NOT modelled and no claim is made about them",
+    "inherited_from": "analysis/l5/residual_exit/dwell_validation.py",
+    "linearity": "net is linear in f by construction, so the mean is maximised at f=0 or f=1; an interior f trades mean for tail",
+    "lookahead": "side, size and cost basis are as-of-tick; only the settlement outcome comes from window end",
+    "payoff": "net(f) = f*(bid - cost - taker_fee) + (1-f)*(settle - cost)",
+    "split": "chronological, 70/30, never shuffled",
+    "trigger": "DWELL (30s after the leg went off flat, to the terminal)"
+  },
+  "btc15m_like": {
+    "eligibility": "inherited verbatim from dwell_validation.eligible: a leg became unmatched and the profitable completion was not already reachable at that moment",
+    "fractions": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "minutes": "15",
+    "oos_eligible": 167,
+    "splits": {
+      "oos": {
+        "0.0": {
+          "ci95": [
+            -0.12362,
+            -0.01061
+          ],
+          "frac_below_-0.15": 0.5808,
+          "frac_below_-0.30": 0.2994,
+          "mean_net_per_unit": -0.06711,
+          "mean_opportunity_cost": 0.0,
+          "median": -0.1974,
+          "n": 167,
+          "p05": -0.59632,
+          "stdev": 0.37146,
+          "worst": -0.82
+        },
+        "0.25": {
+          "ci95": [
+            -0.10599,
+            -0.01817
+          ],
+          "frac_below_-0.15": 0.5389,
+          "frac_below_-0.30": 0.1856,
+          "mean_net_per_unit": -0.06208,
+          "mean_opportunity_cost": 0.03555,
+          "median": -0.15756,
+          "n": 167,
+          "p05": -0.45235,
+          "stdev": 0.28865,
+          "worst": -0.82
+        },
+        "0.5": {
+          "ci95": [
+            -0.08911,
+            -0.02499
+          ],
+          "frac_below_-0.15": 0.3952,
+          "frac_below_-0.30": 0.0599,
+          "mean_net_per_unit": -0.05705,
+          "mean_opportunity_cost": 0.07109,
+          "median": -0.12071,
+          "n": 167,
+          "p05": -0.31753,
+          "stdev": 0.21075,
+          "worst": -0.82
+        },
+        "0.75": {
+          "ci95": [
+            -0.07421,
+            -0.02983
+          ],
+          "frac_below_-0.15": 0.1377,
+          "frac_below_-0.30": 0.018,
+          "mean_net_per_unit": -0.05202,
+          "mean_opportunity_cost": 0.10664,
+          "median": -0.07496,
+          "n": 167,
+          "p05": -0.18951,
+          "stdev": 0.14587,
+          "worst": -0.82
+        },
+        "1.0": {
+          "ci95": [
+            -0.06493,
+            -0.02905
+          ],
+          "frac_below_-0.15": 0.0299,
+          "frac_below_-0.30": 0.018,
+          "mean_net_per_unit": -0.04699,
+          "mean_opportunity_cost": 0.14218,
+          "median": -0.03231,
+          "n": 167,
+          "p05": -0.13972,
+          "stdev": 0.11792,
+          "worst": -0.82
+        },
+        "linearity_check": {
+          "0.0": {
+            "observed": -0.06711,
+            "predicted_linear": -0.06711
+          },
+          "0.25": {
+            "observed": -0.06208,
+            "predicted_linear": -0.06208
+          },
+          "0.5": {
+            "observed": -0.05705,
+            "predicted_linear": -0.05705
+          },
+          "0.75": {
+            "observed": -0.05202,
+            "predicted_linear": -0.05202
+          },
+          "1.0": {
+            "observed": -0.04699,
+            "predicted_linear": -0.04699
+          }
+        },
+        "paired_vs_hold": {
+          "0.25": {
+            "better_in_frac": 0.5689,
+            "ci95": [
+              -0.00847,
+              0.01854
+            ],
+            "mean": 0.00503,
+            "n": 167,
+            "significant_at_95": false,
+            "t": 0.732
+          },
+          "0.5": {
+            "better_in_frac": 0.5689,
+            "ci95": [
+              -0.01695,
+              0.03707
+            ],
+            "mean": 0.01006,
+            "n": 167,
+            "significant_at_95": false,
+            "t": 0.732
+          },
+          "0.75": {
+            "better_in_frac": 0.5689,
+            "ci95": [
+              -0.02542,
+              0.05561
+            ],
+            "mean": 0.01509,
+            "n": 167,
+            "significant_at_95": false,
+            "t": 0.732
+          },
+          "1.0": {
+            "better_in_frac": 0.5689,
+            "ci95": [
+              -0.0339,
+              0.07415
+            ],
+            "mean": 0.02012,
+            "n": 167,
+            "significant_at_95": false,
+            "t": 0.732
+          }
+        }
+      },
+      "train": {
+        "0.0": {
+          "ci95": [
+            -0.09003,
+            -0.01538
+          ],
+          "frac_below_-0.15": 0.5619,
+          "frac_below_-0.30": 0.2938,
+          "mean_net_per_unit": -0.05271,
+          "mean_opportunity_cost": 0.0,
+          "median": -0.18153,
+          "n": 388,
+          "p05": -0.57399,
+          "stdev": 0.37463,
+          "worst": -0.82555
+        },
+        "0.25": {
+          "ci95": [
+            -0.07816,
+            -0.01988
+          ],
+          "frac_below_-0.15": 0.5077,
+          "frac_below_-0.30": 0.1933,
+          "mean_net_per_unit": -0.04902,
+          "mean_opportunity_cost": 0.03593,
+          "median": -0.15258,
+          "n": 388,
+          "p05": -0.44764,
+          "stdev": 0.2925,
+          "worst": -0.82555
+        },
+        "0.5": {
+          "ci95": [
+            -0.06686,
+            -0.02382
+          ],
+          "frac_below_-0.15": 0.3866,
+          "frac_below_-0.30": 0.0567,
+          "mean_net_per_unit": -0.04534,
+          "mean_opportunity_cost": 0.07186,
+          "median": -0.11605,
+          "n": 388,
+          "p05": -0.32236,
+          "stdev": 0.216,
+          "worst": -0.82555
+        },
+        "0.75": {
+          "ci95": [
+            -0.05697,
+            -0.02633
+          ],
+          "frac_below_-0.15": 0.1546,
+          "frac_below_-0.30": 0.0155,
+          "mean_net_per_unit": -0.04165,
+          "mean_opportunity_cost": 0.10779,
+          "median": -0.06955,
+          "n": 388,
+          "p05": -0.20088,
+          "stdev": 0.15379,
+          "worst": -0.82555
+        },
+        "1.0": {
+          "ci95": [
+            -0.05078,
+            -0.02515
+          ],
+          "frac_below_-0.15": 0.0541,
+          "frac_below_-0.30": 0.0155,
+          "mean_net_per_unit": -0.03797,
+          "mean_opportunity_cost": 0.14372,
+          "median": -0.03228,
+          "n": 388,
+          "p05": -0.1545,
+          "stdev": 0.1286,
+          "worst": -0.82555
+        },
+        "linearity_check": {
+          "0.0": {
+            "observed": -0.05271,
+            "predicted_linear": -0.05271
+          },
+          "0.25": {
+            "observed": -0.04902,
+            "predicted_linear": -0.04902
+          },
+          "0.5": {
+            "observed": -0.04534,
+            "predicted_linear": -0.04534
+          },
+          "0.75": {
+            "observed": -0.04165,
+            "predicted_linear": -0.04165
+          },
+          "1.0": {
+            "observed": -0.03797,
+            "predicted_linear": -0.03797
+          }
+        },
+        "paired_vs_hold": {
+          "0.25": {
+            "better_in_frac": 0.5696,
+            "ci95": [
+              -0.0052,
+              0.01257
+            ],
+            "mean": 0.00369,
+            "n": 388,
+            "significant_at_95": false,
+            "t": 0.814
+          },
+          "0.5": {
+            "better_in_frac": 0.5696,
+            "ci95": [
+              -0.01039,
+              0.02513
+            ],
+            "mean": 0.00737,
+            "n": 388,
+            "significant_at_95": false,
+            "t": 0.814
+          },
+          "0.75": {
+            "better_in_frac": 0.5696,
+            "ci95": [
+              -0.01559,
+              0.0377
+            ],
+            "mean": 0.01106,
+            "n": 388,
+            "significant_at_95": false,
+            "t": 0.814
+          },
+          "1.0": {
+            "better_in_frac": 0.5696,
+            "ci95": [
+              -0.02078,
+              0.05027
+            ],
+            "mean": 0.01474,
+            "n": 388,
+            "significant_at_95": false,
+            "t": 0.814
+          }
+        }
+      }
+    },
+    "terminal_s": 780.0,
+    "train_eligible": 388,
+    "windows_eligible": 555
+  }
+}

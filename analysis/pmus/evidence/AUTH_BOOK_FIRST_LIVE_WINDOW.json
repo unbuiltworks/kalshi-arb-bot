@@ -1,0 +1,31 @@
+{
+  "label": "FIRST_AUTHENTICATED_LIVE_WINDOW_2026-09-23",
+  "market": "cpc-btc-updown-15m-2026-09-23-2230z",
+  "window_start_utc": "2026-09-23T22:30:00+00:00",
+  "recorder_deployment": "278b870f-f0f6-40f0-9271-dd4a735b9366",
+  "observed_book_states": [
+    {"t": 1790203029.4362383, "offset_s": 429.4, "bid": "0.1700", "ask": "0.1800",
+     "bid_qty": "208.0000", "ask_qty": "50.0000", "status": "OK"},
+    {"t": 1790203136.9826562, "offset_s": 537.0, "bid": "0.1700", "ask": "0.1800",
+     "bid_qty": "698.3600", "ask_qty": "50.0000", "status": "OK"},
+    {"t": 1790203194.3608086, "offset_s": 594.4, "bid": "0.1600", "ask": "0.1700",
+     "bid_qty": "207.1000", "ask_qty": "1.0000", "status": "OK"}
+  ],
+  "what_this_establishes": [
+    "The AUTHENTICATED path returns a two-sided BTC15m book with real depth on both sides, including per-state ask_qty, which is what the frozen rule needs to cap a crossing.",
+    "The public gateway 404s this market for the first minutes of its own window, so this is strictly more than the old path could see."
+  ],
+  "what_this_does_NOT_establish": [
+    "first-book latency from window open. The earliest state held is +429.4s, which is when the book EMISSION cadence first ran after the 22:27:39Z container start -- not when the venue first quoted. The recorder held only ONE bbo_history entry for this market at that point, so there was no earlier state to emit.",
+    "first-trade latency. The trade tape produced ZERO rows on this deployment and the recorder reports trades_1h 0."
+  ],
+  "recorder_status_at_22:44Z": {
+    "conn": "connected", "auth": "ok",
+    "messages_received": 2022070,
+    "subscribed_markets": 0,
+    "trades_1h": 0,
+    "two_sided_trades": false
+  },
+  "open_defect": "The watch list is saturated with EXPIRED BTC15m windows (2026-09-22-1545z, 2026-09-23-0445z and dozens more), each carrying book_updates 1 and no trades. PMUS_WS_MAX_MARKETS is 64. Dead windows appear to be consuming the subscription budget, which would explain one book update per market and a silent trade tape while the live window still quotes.",
+  "labels": "OBSERVED authenticated book states only. Nothing derived from trades, interpolated or backfilled. No orders, nothing armed."
+}

@@ -1,0 +1,52 @@
+{
+  "orders_total": 1258,
+  "outcomes_by_relation": {
+    "complete": {
+      "orders": 666,
+      "filled": 91,
+      "no_fill_cancelled": 456,
+      "rejected": 119,
+      "fill_rate": 0.1366,
+      "no_fill_share": 0.6847,
+      "rejected_share": 0.1787
+    },
+    "open": {
+      "orders": 409,
+      "filled": 55,
+      "no_fill_cancelled": 267,
+      "rejected": 87,
+      "fill_rate": 0.1345,
+      "no_fill_share": 0.6528,
+      "rejected_share": 0.2127
+    },
+    "extend": {
+      "orders": 183,
+      "filled": 46,
+      "no_fill_cancelled": 74,
+      "rejected": 63,
+      "fill_rate": 0.2514,
+      "no_fill_share": 0.4044,
+      "rejected_share": 0.3443
+    }
+  },
+  "complete_fill_profile": {
+    "relation": "complete",
+    "orders": 547,
+    "filled": {
+      "n": 91,
+      "median_rest_s": 8.61,
+      "median_px": 0.555
+    },
+    "no_fill_cancelled": {
+      "n": 456,
+      "median_rest_s": 30.85,
+      "median_px": 0.6
+    }
+  },
+  "complete_distance_from_touch": {
+    "available": false,
+    "reason": "no accepted order carries fresh_opp_ask yet; the control snapshot has not accumulated. Answering from rejection rows would be the selection bias this module refuses.",
+    "orders_with_a_touch": 0
+  },
+  "why_this_denominator": "Computed over ALL orders of a relation. Reading the composition of rejections as the composition of completion failures said rejection was the problem; on this denominator 68.5% of completes die unfilled and 17.9% are rejected."
+}

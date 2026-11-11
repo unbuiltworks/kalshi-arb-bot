@@ -1,0 +1,78 @@
+{
+ "bounds_mirrored_from_production": {
+  "bbo_history_count_bound": 2000,
+  "seats_protected_at_every_cap": 160,
+  "trades_count_bound": 500
+ },
+ "caveat": "synthetic entries are uniform; real markets vary in history depth, so these are per-entry slopes, not a forecast of the live process",
+ "history_depth_arms_at_cap_1500": [
+  {
+   "bbo_entries": 2000,
+   "heap_mb": 815.7,
+   "heap_saved_vs_2000_entries_mb": 20.4,
+   "kb_per_market": 556.9,
+   "markets": 1500,
+   "trades": 500
+  },
+  {
+   "bbo_entries": 400,
+   "heap_mb": 160.3,
+   "heap_saved_vs_2000_entries_mb": 675.8,
+   "kb_per_market": 109.4,
+   "markets": 1500,
+   "trades": 100
+  },
+  {
+   "bbo_entries": 100,
+   "heap_mb": 39.7,
+   "heap_saved_vs_2000_entries_mb": 796.4,
+   "kb_per_market": 27.1,
+   "markets": 1500,
+   "trades": 25
+  }
+ ],
+ "market_count_arms": [
+  {
+   "bbo_entries": 2000,
+   "heap_mb": 836.1,
+   "heap_saved_vs_1500_mb": 0.0,
+   "kb_per_market": 570.8,
+   "markets": 1500,
+   "non_protected_slots": 1340,
+   "seats_protected": 160,
+   "trades": 500
+  },
+  {
+   "bbo_entries": 2000,
+   "heap_mb": 537.1,
+   "heap_saved_vs_1500_mb": 299.0,
+   "kb_per_market": 550.0,
+   "markets": 1000,
+   "non_protected_slots": 840,
+   "seats_protected": 160,
+   "trades": 500
+  },
+  {
+   "bbo_entries": 2000,
+   "heap_mb": 401.7,
+   "heap_saved_vs_1500_mb": 434.4,
+   "kb_per_market": 548.5,
+   "markets": 750,
+   "non_protected_slots": 590,
+   "seats_protected": 160,
+   "trades": 500
+  },
+  {
+   "bbo_entries": 2000,
+   "heap_mb": 267.3,
+   "heap_saved_vs_1500_mb": 568.8,
+   "kb_per_market": 547.4,
+   "markets": 500,
+   "non_protected_slots": 340,
+   "seats_protected": 160,
+   "trades": 500
+  }
+ ],
+ "reading": "heap is linear in BOTH market count and retained history depth; at cap 1500 the depth lever is the larger of the two and costs no market coverage",
+ "what_this_measures": "CPython heap cost of the recorder's per-market state shape, measured locally; NOT container memory and NOT page cache"
+}

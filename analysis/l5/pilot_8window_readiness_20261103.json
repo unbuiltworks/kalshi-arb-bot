@@ -1,0 +1,259 @@
+{
+ "artifact": "analysis/l5/pilot_8window_readiness_20261103.json",
+ "generated_utc": "2026-11-03T15:48:01.918203+00:00",
+ "verdict": "PREFLIGHT FAIL -- three authorizations outstanding; every computed limit PASSES",
+ "item1_leg_by_leg_reconciliation": {
+  "method": "joined the ledger's 17 placeholder-basis BTC15m windows to the venue cost-basis audit by market|side. Acquisition cost, settlement cashflow and realized P&L are kept separate throughout: realized = redemption received MINUS true acquisition cost.",
+  "reconciled": 14,
+  "of": 17,
+  "acquisition_cost": {
+   "placeholder_usd": "60.6900",
+   "actual_venue_usd": "13.1275",
+   "overstated_usd": "47.5625"
+  },
+  "settlement_cashflow": {
+   "redemptions_received_usd": "12.48"
+  },
+  "realized_pnl": {
+   "reported_usd": "-48.21",
+   "measured_true_usd": "-0.6475",
+   "overstatement_of_loss_usd": "47.5625"
+  },
+  "consistency_check": {
+   "ledgers_prior_bound": [
+    "-24.880000",
+    "1.360000"
+   ],
+   "measured": "-0.6475",
+   "inside_bound": true
+  },
+  "worst_single_leg": {
+   "slug": "cpc-btc-updown-15m-2026-10-16-0000z",
+   "side": "DOWN",
+   "qty": "31.3300",
+   "placeholder_cost_usd": "31.3300",
+   "actual_cost_usd": "0.9399",
+   "reported_pnl_usd": "-31.33",
+   "true_pnl_usd": "-0.9399",
+   "overstatement_factor": "33x"
+  },
+  "three_legs_not_reconciled": [
+   {
+    "leg": "cpc-btc-updown-15m-2026-10-15-1930z|UP",
+    "reported": "-1.00",
+    "why": "one of the audit's 2 UNESTABLISHED legs -- no venue evidence"
+   },
+   {
+    "leg": "cpc-btc-updown-15m-2026-10-15-1945z|(residual_side null)",
+    "reported": "-0.46",
+    "why": "ledger row carries no residual side, so no market|side key exists to join on"
+   },
+   {
+    "leg": "cpc-btc-updown-15m-2026-10-30-0230z|DOWN",
+    "reported": "-1.91",
+    "why": "settled 2026-10-30, OUTSIDE the audit's walk; needs a fresh audit run"
+   }
+  ],
+  "unreconciled_total_usd": "-3.37",
+  "arithmetic_closes": "reported over the 14 (-48.21) plus the 3 unreconciled (-3.37) = -51.58, exactly the ledger's placeholder slice",
+  "account_total": {
+   "usable_basis_measured_usd": "-1.6874",
+   "placeholder_slice_measured_14_of_17_usd": "-0.6475",
+   "placeholder_slice_still_at_upper_bound_usd": "-3.37",
+   "account_realized_range_usd": {
+    "best": "-2.3349",
+    "worst": "-5.7049"
+   },
+   "previously_reported_single_figure_usd": "-53.2674",
+   "reading": "the account's measured realized loss is between $2.33 and $5.70, not $53.27. The $53.27 summed a measured -1.6874 with a $1/share UPPER BOUND and reported the sum as realized."
+  }
+ },
+ "item2_ownership_attribution": {
+  "instruction": "treat UNKNOWN_OWNER as unresolved, not proof of external origin",
+  "finding": "THE OWNER IS RIGHT, and the evidence is conclusive",
+  "why": "all 74 fills across the 49 audit legs carry client_order_id NULL AND order_id NULL. The audit knows 123 of our own client order ids, but no fill row in this per-leg view carries ANY coid, so our ids could never match and EVERY leg would classify UNKNOWN_OWNER regardless of who placed it. The classification is uninformative on these rows.",
+  "and_the_linkage_exists_elsewhere": "execution_field_inventory reports fill_rows_with_execution_objects 2038, whose key set includes `order` and `tradeId`. So order linkage IS present on 2,038 rows while the per-leg fill view nulls it out. Ownership is likely establishable by re-walking and joining on execution.order -- which this audit's leg view does not do.",
+  "corroborating_engine_provenance": "14 of the 17 BTC15m placeholder legs have measured fill prices inside the engine's own first-leg band [0.20,0.60] or below it, and the ledger's own bound_method note says the band applies to engine-placed legs. That is consistent with engine origin, and it is CORROBORATION not proof.",
+  "conclusion": "UNKNOWN_OWNER here means the feed row lacked an identity field, not that the trade was external. I do not claim these are external and I do not claim they are ours.",
+  "smallest_next_step": "re-run the audit joining on execution.order rather than client_order_id. Read-only, same L5_COST_BASIS_AUDIT=YES path, no new code if the raw rows are re-walked"
+ },
+ "item3_ledger_preserved": {
+  "ledger_rewritten": false,
+  "losses_reset": false,
+  "halt_relaxed": false,
+  "cumulative_controls_bypassed": false,
+  "note": "every figure above is computed in an analysis artifact. The STORE on the Railway volume is untouched and still holds the uncorrected figure, which is why item 4 uses it"
+ },
+ "item4_effective_headroom": {
+  "gate": "campaign_used = max(0, -cumulative_realized) + cash_committed + pending_obligation",
+  "reads": "store.realized_today(), the LIFETIME account-wide figure",
+  "consumed_usd": "53.2674",
+  "ceiling_usd": "100",
+  "EFFECTIVE_HEADROOM_USD": "46.7326",
+  "computed_on_the_UNCORRECTED_figure": true,
+  "why": "the gate reads the store, nothing was applied, and I will not reset it. So the pilot is sized against $46.73, not $100 and not the corrected $2.33-$5.70",
+  "verdict": "the historical-loss gate does NOT block an 8-window clip-1 pilot"
+ },
+ "item5_pilot_commitment_and_minimums": {
+  "per_open_cycle_usd": {
+   "filled_leg_at_band_max": "0.60",
+   "outstanding_completion_order": "0.99",
+   "peak": "1.59"
+  },
+  "per_completed_pair_usd": "1.00 (locked until settlement)",
+  "peak_cash_8_windows_all_unsettled": {
+   "1_cycle_per_window": "8.00",
+   "2_cycles_per_window": "16.00",
+   "3_cycles_per_window": "24.00"
+  },
+  "BINDING_CONSTRAINT_FOUND": {
+   "L5_MAX_CASH_DEPLOYED_USD": "12 (observed live as cash_headroom 12.00)",
+   "consequence": "run-scoped cash is $12, NOT $100. 1 cycle/window across 8 unsettled windows is $8 and fits; 2 cycles/window is $16 and would BREACH the cash gate. In practice each BTC15m window settles so they do not accumulate, but the binding number is $12 and must be stated",
+   "options": [
+    "keep 1 cycle/window",
+    "raise L5_MAX_CASH_DEPLOYED_USD to ~20"
+   ]
+  },
+  "worst_case_loss_vs_5_dollar_halt": {
+   "8_stranded_at_band_max_0_60": "4.80 -- inside the $5 halt, 96% of it",
+   "8_stranded_at_campaign_mean_0_38": "3.04 -- inside",
+   "4_stranded_at_band_max": "2.40 -- inside"
+  },
+  "worst_case_deficit_gate": {
+   "deployed": "1.50",
+   "clip_1_need": "0.60 -- PASSES",
+   "note": "clip 3 would need 1.80 and BREACH it; clip 1 is what makes this fit"
+  },
+  "venue_minimums": {
+   "smallest_executed_quantity": "0.0100",
+   "smallest_executed_notional_usd": "0.00080000",
+   "quantity_increment": "0.01",
+   "our_clip": "1 contract",
+   "verdict": "PASS -- 100x the observed minimum, exact multiple of the increment"
+  },
+  "rebate_correction": {
+   "rebates_ever_credited": true,
+   "negative_commissions": 831,
+   "zero": 1102,
+   "positive": 105,
+   "commission_sum_usd": "-5.8800",
+   "note": "corrects my earlier 'no rebate verified', which was true only of the 4 campaign fills. Account-wide, rebates HAVE been credited 831 times. At clip 1 the per-fill rebate still rounds to $0.00 because the confirmed floor is 2.52 contracts"
+  }
+ },
+ "item6_running_process_verified": {
+  "deployed_sha": "9c732c6e",
+  "deployment": "8d33d287 SUCCESS",
+  "verified_utc": "2026-11-03T15:46:13.680Z",
+  "market": "cpc-btc-updown-15m-2026-11-03-1545z",
+  "armed": false,
+  "up_qty": "0",
+  "dn_qty": "0",
+  "still_fillable_orders": 0,
+  "HALT": "ACTIVE -- taker_policy reason HALTED",
+  "cash_headroom_usd": "12.00",
+  "worst_case_ceiling_usd": "1.50",
+  "maker_pair_ceiling": "0.96",
+  "completion_pair_ceiling": "1.00",
+  "ts_completion_at_touch": "false",
+  "book_completion_depth_ticks": 0,
+  "cancel_margin_s": 300.0,
+  "max_live_orders": 1,
+  "signing_key_absent_from_runtime": true,
+  "EFFECTIVE_CUTOFFS_STILL_DEPLOYED": {
+   "entry_cutoff_s": 600.0,
+   "complete_cutoff_s": 720.0,
+   "dedicated_runway_s": 60,
+   "status": "the 480/600 variables are NOT set -- awaiting authorization"
+  }
+ },
+ "item7_windows_and_authorizations": {
+  "windows_utc": [
+   {
+    "n": 1,
+    "start": "2026-11-03T17:00:00Z",
+    "arm": "control (two-tick)"
+   },
+   {
+    "n": 2,
+    "start": "2026-11-03T17:15:00Z",
+    "arm": "experimental (at-touch)"
+   },
+   {
+    "n": 3,
+    "start": "2026-11-03T17:30:00Z",
+    "arm": "control (two-tick)"
+   },
+   {
+    "n": 4,
+    "start": "2026-11-03T17:45:00Z",
+    "arm": "experimental (at-touch)"
+   },
+   {
+    "n": 5,
+    "start": "2026-11-03T18:00:00Z",
+    "arm": "control (two-tick)"
+   },
+   {
+    "n": 6,
+    "start": "2026-11-03T18:15:00Z",
+    "arm": "experimental (at-touch)"
+   },
+   {
+    "n": 7,
+    "start": "2026-11-03T18:30:00Z",
+    "arm": "control (two-tick)"
+   },
+   {
+    "n": 8,
+    "start": "2026-11-03T18:45:00Z",
+    "arm": "experimental (at-touch)"
+   }
+  ],
+  "span": "17:00:00Z to 19:00:00Z = 7200s, inside CA.MAX_CAMPAIGN_S 14400",
+  "window_count": "8, exactly CA.MAX_WINDOWS -- no constant raised",
+  "preflight": {
+   "PASS": [
+    "parity 80 / eb672d14b4baf439",
+    "deployed SHA 9c732c6e verified",
+    "armed false",
+    "HALT active (taker_policy HALTED)",
+    "zero open orders",
+    "flat inventory",
+    "opening cap 0.96",
+    "completion ceiling 1.00",
+    "at-touch off",
+    "cancel margin 300s",
+    "venue minimums (clip 1 = 100x)",
+    "worst-case deficit 1.50 vs clip-1 need 0.60",
+    "headroom $46.73 vs pilot peak $8",
+    "8 windows inside both code limits",
+    "worst-case loss $4.80 inside the $5 halt",
+    "basis attestation and defensive-unwind safeguards deployed"
+   ],
+   "FAIL": [
+    "L5_TS_ENTRY_CUTOFF_S=480 NOT set -- runway is still 60s not 120s",
+    "L5_TS_COMPLETE_CUTOFF_S=600 NOT set",
+    "campaign approval absent -- 8 graded rows read NO_APPROVAL_IN_FORCE"
+   ],
+   "CONDITIONAL": [
+    "L5_MAX_CASH_DEPLOYED_USD is 12; fine at 1 cycle/window, breaches at 2 or more across unsettled windows"
+   ]
+  },
+  "authorizations_required": [
+   "set L5_TS_ENTRY_CUTOFF_S=480 and L5_TS_COMPLETE_CUTOFF_S=600 (both earlier-only, no code change)",
+   "set L5_TS_OPENING_LEG_MAX_CONTRACTS=1 and PMUS_RESIDUAL_CAP_K=1",
+   "issue the campaign approval for 8 windows with the stated limits",
+   "decide whether to keep 1 cycle/window or raise L5_MAX_CASH_DEPLOYED_USD to ~20",
+   "explicit arming authorization -- NOT requested in this message"
+  ]
+ },
+ "safety": {
+  "armed": false,
+  "orders_submitted": 0,
+  "ledger_written": false,
+  "halt_relaxed": false,
+  "new_services": 0,
+  "fader_repo_untouched": true,
+  "unrelated_changes_deployed": false
+ }
+}

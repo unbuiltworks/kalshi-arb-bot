@@ -1,0 +1,747 @@
+{
+ "generated_utc": "2026-09-01T15:15:04.171823+00:00",
+ "sources": [
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_ledger_windows.csv.gz",
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_ledger.json",
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_canonical_sequence.csv.gz"
+ ],
+ "income_note": "income_rows sum $68208 vs income_total $68208 \u2014 rows are the source-dated stream",
+ "maker_taker_caveat": "takerOnly coverage is Aug 28-31 only; maker/taker is UNKNOWN for Mar-May",
+ "weekly_cohorts": {
+  "2026-03-16..2026-03-22": {
+   "n_windows": 3,
+   "n_days_active": 1,
+   "windows_per_active_day": 3.0,
+   "n_fills": 5,
+   "fills_per_window_median": 2.0,
+   "turnover_usdc": 2.05,
+   "window_buy_usdc_median": 1.0,
+   "window_buy_usdc_p90": 1.0,
+   "both_sides_pct": 0.0,
+   "matched_pct_qty": 0.0,
+   "pair_cost_median": null,
+   "pair_cost_p25": null,
+   "pair_cost_p75": null,
+   "opposite_gap_s_median": null,
+   "first_price_median": 0.64,
+   "first_tte_s_median": 81.0,
+   "net_trading_cash": 0.13,
+   "pair_locked": 0.0,
+   "residual_and_timing": 0.13,
+   "incentives_usdc": {},
+   "incentives_total": 0,
+   "incentive_cents_per_turnover_dollar": 0.0,
+   "trading_cents_per_turnover_dollar": 6.147,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 66.7
+  },
+  "2026-03-23..2026-03-29": {
+   "n_windows": 55,
+   "n_days_active": 4,
+   "windows_per_active_day": 13.8,
+   "n_fills": 1281,
+   "fills_per_window_median": 21.0,
+   "turnover_usdc": 4737.1,
+   "window_buy_usdc_median": 75.904,
+   "window_buy_usdc_p90": 182.9945,
+   "both_sides_pct": 83.6,
+   "matched_pct_qty": 0.7797,
+   "pair_cost_median": 0.9654,
+   "pair_cost_p25": 0.9214,
+   "pair_cost_p75": 1.0117,
+   "opposite_gap_s_median": 56.0,
+   "first_price_median": 0.49,
+   "first_tte_s_median": 809.0,
+   "net_trading_cash": -17.31,
+   "pair_locked": 153.22,
+   "residual_and_timing": -170.54,
+   "incentives_usdc": {},
+   "incentives_total": 0,
+   "incentive_cents_per_turnover_dollar": 0.0,
+   "trading_cents_per_turnover_dollar": -0.365,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-03-30..2026-04-05": {
+   "n_windows": 43,
+   "n_days_active": 4,
+   "windows_per_active_day": 10.8,
+   "n_fills": 880,
+   "fills_per_window_median": 19.0,
+   "turnover_usdc": 4200.04,
+   "window_buy_usdc_median": 95.4564,
+   "window_buy_usdc_p90": 164.1795,
+   "both_sides_pct": 90.7,
+   "matched_pct_qty": 0.8675,
+   "pair_cost_median": 0.9992,
+   "pair_cost_p25": 0.934,
+   "pair_cost_p75": 1.0554,
+   "opposite_gap_s_median": 38.0,
+   "first_price_median": 0.5,
+   "first_tte_s_median": 853.0,
+   "net_trading_cash": -140.62,
+   "pair_locked": 21.42,
+   "residual_and_timing": -162.04,
+   "incentives_usdc": {},
+   "incentives_total": 0,
+   "incentive_cents_per_turnover_dollar": 0.0,
+   "trading_cents_per_turnover_dollar": -3.348,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-04-06..2026-04-12": {
+   "n_windows": 30,
+   "n_days_active": 3,
+   "windows_per_active_day": 10.0,
+   "n_fills": 446,
+   "fills_per_window_median": 15.0,
+   "turnover_usdc": 2009.81,
+   "window_buy_usdc_median": 61.9342,
+   "window_buy_usdc_p90": 120.8,
+   "both_sides_pct": 93.3,
+   "matched_pct_qty": 0.821,
+   "pair_cost_median": 0.923,
+   "pair_cost_p25": 0.8983,
+   "pair_cost_p75": 0.9846,
+   "opposite_gap_s_median": 116.0,
+   "first_price_median": 0.5,
+   "first_tte_s_median": 861.0,
+   "net_trading_cash": 75.58,
+   "pair_locked": 96.45,
+   "residual_and_timing": -20.87,
+   "incentives_usdc": {},
+   "incentives_total": 0,
+   "incentive_cents_per_turnover_dollar": 0.0,
+   "trading_cents_per_turnover_dollar": 3.761,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-04-13..2026-04-19": {
+   "n_windows": 55,
+   "n_days_active": 4,
+   "windows_per_active_day": 13.8,
+   "n_fills": 1000,
+   "fills_per_window_median": 18.0,
+   "turnover_usdc": 7316.2,
+   "window_buy_usdc_median": 112.6049,
+   "window_buy_usdc_p90": 251.4282,
+   "both_sides_pct": 90.9,
+   "matched_pct_qty": 0.859,
+   "pair_cost_median": 0.9467,
+   "pair_cost_p25": 0.8878,
+   "pair_cost_p75": 1.0256,
+   "opposite_gap_s_median": 68.0,
+   "first_price_median": 0.47,
+   "first_tte_s_median": 835.0,
+   "net_trading_cash": -169.79,
+   "pair_locked": 268.14,
+   "residual_and_timing": -437.93,
+   "incentives_usdc": {},
+   "incentives_total": 0,
+   "incentive_cents_per_turnover_dollar": 0.0,
+   "trading_cents_per_turnover_dollar": -2.321,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-04-20..2026-04-26": {
+   "n_windows": 246,
+   "n_days_active": 7,
+   "windows_per_active_day": 35.1,
+   "n_fills": 15582,
+   "fills_per_window_median": 54.0,
+   "turnover_usdc": 134390.87,
+   "window_buy_usdc_median": 463.7981,
+   "window_buy_usdc_p90": 966.8549,
+   "both_sides_pct": 98.8,
+   "matched_pct_qty": 0.916,
+   "pair_cost_median": 0.9574,
+   "pair_cost_p25": 0.9257,
+   "pair_cost_p75": 0.994,
+   "opposite_gap_s_median": 38.0,
+   "first_price_median": 0.49,
+   "first_tte_s_median": 868.0,
+   "net_trading_cash": 1735.13,
+   "pair_locked": 5673.33,
+   "residual_and_timing": -3938.2,
+   "incentives_usdc": {
+    "MAKER_REBATE": 476.49
+   },
+   "incentives_total": 476.49,
+   "incentive_cents_per_turnover_dollar": 0.355,
+   "trading_cents_per_turnover_dollar": 1.291,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-04-27..2026-05-03": {
+   "n_windows": 313,
+   "n_days_active": 7,
+   "windows_per_active_day": 44.7,
+   "n_fills": 27278,
+   "fills_per_window_median": 75.0,
+   "turnover_usdc": 275141.78,
+   "window_buy_usdc_median": 758.4265,
+   "window_buy_usdc_p90": 1562.5833,
+   "both_sides_pct": 99.4,
+   "matched_pct_qty": 0.8663,
+   "pair_cost_median": 0.9627,
+   "pair_cost_p25": 0.9184,
+   "pair_cost_p75": 1.0077,
+   "opposite_gap_s_median": 36.0,
+   "first_price_median": 0.5,
+   "first_tte_s_median": 862.0,
+   "net_trading_cash": 1946.89,
+   "pair_locked": 9810.92,
+   "residual_and_timing": -7864.03,
+   "incentives_usdc": {
+    "MAKER_REBATE": 877.87
+   },
+   "incentives_total": 877.87,
+   "incentive_cents_per_turnover_dollar": 0.319,
+   "trading_cents_per_turnover_dollar": 0.708,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-05-04..2026-05-10": {
+   "n_windows": 231,
+   "n_days_active": 7,
+   "windows_per_active_day": 33.0,
+   "n_fills": 20513,
+   "fills_per_window_median": 84.0,
+   "turnover_usdc": 206700.28,
+   "window_buy_usdc_median": 769.0116,
+   "window_buy_usdc_p90": 1767.3303,
+   "both_sides_pct": 98.3,
+   "matched_pct_qty": 0.9011,
+   "pair_cost_median": 0.9906,
+   "pair_cost_p25": 0.9602,
+   "pair_cost_p75": 1.0279,
+   "opposite_gap_s_median": 36.0,
+   "first_price_median": 0.49,
+   "first_tte_s_median": 853.0,
+   "net_trading_cash": -2415.6,
+   "pair_locked": 973.78,
+   "residual_and_timing": -3389.38,
+   "incentives_usdc": {
+    "MAKER_REBATE": 620.4
+   },
+   "incentives_total": 620.4,
+   "incentive_cents_per_turnover_dollar": 0.3,
+   "trading_cents_per_turnover_dollar": -1.169,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-05-11..2026-05-17": {
+   "n_windows": 185,
+   "n_days_active": 5,
+   "windows_per_active_day": 37.0,
+   "n_fills": 16365,
+   "fills_per_window_median": 83.0,
+   "turnover_usdc": 113108.68,
+   "window_buy_usdc_median": 573.8616,
+   "window_buy_usdc_p90": 1021.5841,
+   "both_sides_pct": 99.5,
+   "matched_pct_qty": 0.9078,
+   "pair_cost_median": 0.9746,
+   "pair_cost_p25": 0.9369,
+   "pair_cost_p75": 1.0095,
+   "opposite_gap_s_median": 24.0,
+   "first_price_median": 0.49,
+   "first_tte_s_median": 856.0,
+   "net_trading_cash": 1096.13,
+   "pair_locked": 2759.22,
+   "residual_and_timing": -1663.09,
+   "incentives_usdc": {
+    "MAKER_REBATE": 313.33
+   },
+   "incentives_total": 313.33,
+   "incentive_cents_per_turnover_dollar": 0.277,
+   "trading_cents_per_turnover_dollar": 0.969,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-05-18..2026-05-24": {
+   "n_windows": 212,
+   "n_days_active": 7,
+   "windows_per_active_day": 30.3,
+   "n_fills": 22736,
+   "fills_per_window_median": 107.0,
+   "turnover_usdc": 156401.68,
+   "window_buy_usdc_median": 717.6278,
+   "window_buy_usdc_p90": 1163.3843,
+   "both_sides_pct": 99.5,
+   "matched_pct_qty": 0.9136,
+   "pair_cost_median": 0.9728,
+   "pair_cost_p25": 0.9378,
+   "pair_cost_p75": 1.0033,
+   "opposite_gap_s_median": 26.0,
+   "first_price_median": 0.51,
+   "first_tte_s_median": 874.0,
+   "net_trading_cash": 1121.51,
+   "pair_locked": 4700.61,
+   "residual_and_timing": -3579.1,
+   "incentives_usdc": {
+    "MAKER_REBATE": 355.42
+   },
+   "incentives_total": 355.42,
+   "incentive_cents_per_turnover_dollar": 0.227,
+   "trading_cents_per_turnover_dollar": 0.717,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  },
+  "2026-05-25..2026-05-31": {
+   "n_windows": 182,
+   "n_days_active": 5,
+   "windows_per_active_day": 36.4,
+   "n_fills": 19191,
+   "fills_per_window_median": 103.0,
+   "turnover_usdc": 129085.9,
+   "window_buy_usdc_median": 693.2442,
+   "window_buy_usdc_p90": 1084.3902,
+   "both_sides_pct": 99.5,
+   "matched_pct_qty": 0.8975,
+   "pair_cost_median": 0.9543,
+   "pair_cost_p25": 0.9252,
+   "pair_cost_p75": 0.9838,
+   "opposite_gap_s_median": 27.0,
+   "first_price_median": 0.5,
+   "first_tte_s_median": 865.0,
+   "net_trading_cash": 1262.37,
+   "pair_locked": 6065.87,
+   "residual_and_timing": -4803.51,
+   "incentives_usdc": {
+    "MAKER_REBATE": 278.24
+   },
+   "incentives_total": 278.24,
+   "incentive_cents_per_turnover_dollar": 0.216,
+   "trading_cents_per_turnover_dollar": 0.978,
+   "btc_share_windows": 100.0,
+   "m5_share_windows": 0.0
+  }
+ },
+ "three_era": {
+  "pre_transition": {
+   "span": "2026-03-19..2026-03-25",
+   "ledger": {
+    "n_windows": 7,
+    "n_days_active": 2,
+    "windows_per_active_day": 3.5,
+    "n_fills": 9,
+    "fills_per_window_median": 1.0,
+    "turnover_usdc": 6.05,
+    "window_buy_usdc_median": 1.0,
+    "window_buy_usdc_p90": 1.0,
+    "both_sides_pct": 0.0,
+    "matched_pct_qty": 0.0,
+    "pair_cost_median": null,
+    "pair_cost_p25": null,
+    "pair_cost_p75": null,
+    "opposite_gap_s_median": null,
+    "first_price_median": 0.73,
+    "first_tte_s_median": 319.0,
+    "net_trading_cash": 2.01,
+    "pair_locked": 0.0,
+    "residual_and_timing": 2.01,
+    "incentives_usdc": {},
+    "incentives_total": 0,
+    "incentive_cents_per_turnover_dollar": 0.0,
+    "trading_cents_per_turnover_dollar": 33.206,
+    "btc_share_windows": 100.0,
+    "m5_share_windows": 28.6
+   },
+   "sequence": {
+    "n_windows": 7,
+    "fills_per_window_median": 1,
+    "both_sides_pct": 0.0,
+    "first_price_median": 0.73,
+    "first_tte_s_median": 319.0,
+    "opposite_gap_s": {
+     "median": null,
+     "p25": null,
+     "p75": null,
+     "p90": null
+    },
+    "pair_cost_trajectory_median": {
+     "q25": null,
+     "q50": null,
+     "q75": null,
+     "final": null
+    },
+    "fill_size_median": 1.3699,
+    "residual_share_of_qty_median": 1.0,
+    "residual_on_winner_pct": 71.4,
+    "residual_labelled_windows": 7,
+    "price_band_fill_mix_pct": {
+     "15-85c": 55.6,
+     ">95c": 22.2,
+     "85-95c": 11.1,
+     "<5c": 11.1
+    },
+    "top_activity_hours_utc": [
+     10,
+     12,
+     15
+    ],
+    "maker_taker": "UNKNOWN for this span (takerOnly feed covers Aug 28-31 only)"
+   }
+  },
+  "transition": {
+   "span": "2026-03-26..2026-03-26",
+   "ledger": {
+    "n_windows": 8,
+    "n_days_active": 1,
+    "windows_per_active_day": 8.0,
+    "n_fills": 128,
+    "fills_per_window_median": 12.0,
+    "turnover_usdc": 288.33,
+    "window_buy_usdc_median": 26.3332,
+    "window_buy_usdc_p90": 125.6088,
+    "both_sides_pct": 50.0,
+    "matched_pct_qty": 0.6847,
+    "pair_cost_median": 0.9536,
+    "pair_cost_p25": 0.9425,
+    "pair_cost_p75": 0.9652,
+    "opposite_gap_s_median": 112.0,
+    "first_price_median": 0.49,
+    "first_tte_s_median": 849.0,
+    "net_trading_cash": 12.06,
+    "pair_locked": 13.71,
+    "residual_and_timing": -1.65,
+    "incentives_usdc": {},
+    "incentives_total": 0,
+    "incentive_cents_per_turnover_dollar": 0.0,
+    "trading_cents_per_turnover_dollar": 4.183,
+    "btc_share_windows": 100.0,
+    "m5_share_windows": 0.0
+   },
+   "sequence": {
+    "n_windows": 8,
+    "fills_per_window_median": 12,
+    "both_sides_pct": 50.0,
+    "first_price_median": 0.49,
+    "first_tte_s_median": 849.0,
+    "opposite_gap_s": {
+     "median": 112.0,
+     "p25": 64.0,
+     "p75": 154.0,
+     "p90": 154.0
+    },
+    "pair_cost_trajectory_median": {
+     "q25": 0.9301,
+     "q50": 0.9971,
+     "q75": 0.9734,
+     "final": 0.9536
+    },
+    "fill_size_median": 5.0,
+    "residual_share_of_qty_median": 1.0,
+    "residual_on_winner_pct": 50.0,
+    "residual_labelled_windows": 8,
+    "price_band_fill_mix_pct": {
+     "15-85c": 99.2,
+     "85-95c": 0.8
+    },
+    "top_activity_hours_utc": [
+     12,
+     16,
+     15
+    ],
+    "maker_taker": "UNKNOWN for this span (takerOnly feed covers Aug 28-31 only)"
+   }
+  },
+  "systematic": {
+   "span": "2026-03-27..2026-04-25",
+   "ledger": {
+    "n_windows": 398,
+    "n_days_active": 19,
+    "windows_per_active_day": 20.9,
+    "n_fills": 17522,
+    "fills_per_window_median": 32.0,
+    "turnover_usdc": 139384.6,
+    "window_buy_usdc_median": 227.4277,
+    "window_buy_usdc_p90": 759.9708,
+    "both_sides_pct": 96.2,
+    "matched_pct_qty": 0.904,
+    "pair_cost_median": 0.9601,
+    "pair_cost_p25": 0.9217,
+    "pair_cost_p75": 1.0119,
+    "opposite_gap_s_median": 44.0,
+    "first_price_median": 0.49,
+    "first_tte_s_median": 860.0,
+    "net_trading_cash": 1266.33,
+    "pair_locked": 5503.23,
+    "residual_and_timing": -4236.9,
+    "incentives_usdc": {
+     "MAKER_REBATE": 407.49
+    },
+    "incentives_total": 407.49,
+    "incentive_cents_per_turnover_dollar": 0.292,
+    "trading_cents_per_turnover_dollar": 0.909,
+    "btc_share_windows": 100.0,
+    "m5_share_windows": 0.0
+   },
+   "sequence": {
+    "n_windows": 201,
+    "fills_per_window_median": 21,
+    "both_sides_pct": 94.0,
+    "first_price_median": 0.49,
+    "first_tte_s_median": 847.0,
+    "opposite_gap_s": {
+     "median": 56.0,
+     "p25": 26.0,
+     "p75": 104.0,
+     "p90": 174.0
+    },
+    "pair_cost_trajectory_median": {
+     "q25": 0.9867,
+     "q50": 0.9701,
+     "q75": 0.959,
+     "final": 0.9592
+    },
+    "fill_size_median": 10.0,
+    "residual_share_of_qty_median": 0.1429,
+    "residual_on_winner_pct": 42.3,
+    "residual_labelled_windows": 201,
+    "price_band_fill_mix_pct": {
+     "15-85c": 80.2,
+     "5-15c": 8.4,
+     "85-95c": 6.0,
+     ">95c": 3.2,
+     "<5c": 2.2
+    },
+    "top_activity_hours_utc": [
+     14,
+     17,
+     18,
+     19,
+     20,
+     13
+    ],
+    "maker_taker": "UNKNOWN for this span (takerOnly feed covers Aug 28-31 only)"
+   }
+  }
+ },
+ "regime_similarity": {
+  "cohorts": {
+   "mar19_26": {
+    "decisions": 122,
+    "relation_mix": {
+     "extend": 0.582,
+     "complete": 0.361,
+     "open": 0.041,
+     "sell": 0.016
+    }
+   },
+   "mar27_apr4": {
+    "decisions": 1943,
+    "relation_mix": {
+     "extend": 0.486,
+     "complete": 0.458,
+     "open": 0.056
+    }
+   },
+   "apr5_25": {
+    "decisions": 2988,
+    "relation_mix": {
+     "complete": 0.535,
+     "extend": 0.43,
+     "open": 0.035
+    }
+   },
+   "aug28_sep1": {
+    "decisions": 64715,
+    "relation_mix": {
+     "extend": 0.511,
+     "complete": 0.483,
+     "open": 0.007
+    }
+   }
+  },
+  "pairwise_distance": {
+   "mar19_26__vs__mar27_apr4": {
+    "tv_states": 0.3503,
+    "tv_relations": 0.1125
+   },
+   "mar19_26__vs__apr5_25": {
+    "tv_states": 0.5131,
+    "tv_relations": 0.1745
+   },
+   "mar19_26__vs__aug28_sep1": {
+    "tv_states": 0.6856,
+    "tv_relations": 0.122
+   },
+   "mar27_apr4__vs__apr5_25": {
+    "tv_states": 0.2725,
+    "tv_relations": 0.0771
+   },
+   "mar27_apr4__vs__aug28_sep1": {
+    "tv_states": 0.655,
+    "tv_relations": 0.0495
+   },
+   "apr5_25__vs__aug28_sep1": {
+    "tv_states": 0.5418,
+    "tv_relations": 0.0807
+   }
+  },
+  "metric": "total variation (0=identical, 1=disjoint)"
+ },
+ "scaling_decomposition": {
+  "early_cohort": "2026-03-27..2026-04-10",
+  "late_cohort": "2026-05-11..2026-05-31",
+  "windows_per_day_ratio": 2.64,
+  "window_notional_ratio": 8.13,
+  "turnover_ratio": 37.41,
+  "matched_pct_early_late": [
+   0.8245,
+   0.9067
+  ],
+  "pair_cost_median_early_late": [
+   0.9704,
+   0.9657
+  ],
+  "incentive_cents_per_dollar_early_late": [
+   0.0,
+   0.238
+  ],
+  "trading_cents_per_dollar_early_late": [
+   -0.904,
+   0.873
+  ]
+ },
+ "refinement": {
+  "mar30_apr2": {
+   "span": "2026-03-30..2026-04-02",
+   "ledger": {
+    "n_windows": 43,
+    "n_days_active": 4,
+    "windows_per_active_day": 10.8,
+    "n_fills": 880,
+    "fills_per_window_median": 19.0,
+    "turnover_usdc": 4200.04,
+    "window_buy_usdc_median": 95.4564,
+    "window_buy_usdc_p90": 164.1795,
+    "both_sides_pct": 90.7,
+    "matched_pct_qty": 0.8675,
+    "pair_cost_median": 0.9992,
+    "pair_cost_p25": 0.934,
+    "pair_cost_p75": 1.0554,
+    "opposite_gap_s_median": 38.0,
+    "first_price_median": 0.5,
+    "first_tte_s_median": 853.0,
+    "net_trading_cash": -140.62,
+    "pair_locked": 21.42,
+    "residual_and_timing": -162.04,
+    "incentives_usdc": {},
+    "incentives_total": 0,
+    "incentive_cents_per_turnover_dollar": 0.0,
+    "trading_cents_per_turnover_dollar": -3.348,
+    "btc_share_windows": 100.0,
+    "m5_share_windows": 0.0
+   },
+   "sequence": {
+    "n_windows": 43,
+    "fills_per_window_median": 19,
+    "both_sides_pct": 90.7,
+    "first_price_median": 0.5,
+    "first_tte_s_median": 853.0,
+    "opposite_gap_s": {
+     "median": 38.0,
+     "p25": 20.0,
+     "p75": 102.0,
+     "p90": 210.0
+    },
+    "pair_cost_trajectory_median": {
+     "q25": 0.985,
+     "q50": 0.9811,
+     "q75": 0.9744,
+     "final": 0.9992
+    },
+    "fill_size_median": 10.0,
+    "residual_share_of_qty_median": 0.1064,
+    "residual_on_winner_pct": 46.5,
+    "residual_labelled_windows": 43,
+    "price_band_fill_mix_pct": {
+     "15-85c": 82.7,
+     "5-15c": 8.0,
+     "85-95c": 5.7,
+     ">95c": 3.6
+    },
+    "top_activity_hours_utc": [
+     17,
+     19,
+     18,
+     16,
+     21,
+     22
+    ],
+    "maker_taker": "UNKNOWN for this span (takerOnly feed covers Aug 28-31 only)"
+   }
+  },
+  "apr6_10": {
+   "span": "2026-04-06..2026-04-10",
+   "ledger": {
+    "n_windows": 30,
+    "n_days_active": 3,
+    "windows_per_active_day": 10.0,
+    "n_fills": 446,
+    "fills_per_window_median": 15.0,
+    "turnover_usdc": 2009.81,
+    "window_buy_usdc_median": 61.9342,
+    "window_buy_usdc_p90": 120.8,
+    "both_sides_pct": 93.3,
+    "matched_pct_qty": 0.821,
+    "pair_cost_median": 0.923,
+    "pair_cost_p25": 0.8983,
+    "pair_cost_p75": 0.9846,
+    "opposite_gap_s_median": 116.0,
+    "first_price_median": 0.5,
+    "first_tte_s_median": 861.0,
+    "net_trading_cash": 75.58,
+    "pair_locked": 96.45,
+    "residual_and_timing": -20.87,
+    "incentives_usdc": {},
+    "incentives_total": 0,
+    "incentive_cents_per_turnover_dollar": 0.0,
+    "trading_cents_per_turnover_dollar": 3.761,
+    "btc_share_windows": 100.0,
+    "m5_share_windows": 0.0
+   },
+   "sequence": {
+    "n_windows": 30,
+    "fills_per_window_median": 15,
+    "both_sides_pct": 93.3,
+    "first_price_median": 0.5,
+    "first_tte_s_median": 861.0,
+    "opposite_gap_s": {
+     "median": 116.0,
+     "p25": 36.0,
+     "p75": 224.0,
+     "p90": 290.0
+    },
+    "pair_cost_trajectory_median": {
+     "q25": 0.9687,
+     "q50": 0.9461,
+     "q75": 0.9387,
+     "final": 0.923
+    },
+    "fill_size_median": 10.0,
+    "residual_share_of_qty_median": 0.1971,
+    "residual_on_winner_pct": 53.3,
+    "residual_labelled_windows": 30,
+    "price_band_fill_mix_pct": {
+     "15-85c": 87.2,
+     "5-15c": 7.0,
+     "85-95c": 4.9,
+     ">95c": 0.9
+    },
+    "top_activity_hours_utc": [
+     14,
+     15,
+     20,
+     13,
+     16,
+     18
+    ],
+    "maker_taker": "UNKNOWN for this span (takerOnly feed covers Aug 28-31 only)"
+   }
+  }
+ }
+}
