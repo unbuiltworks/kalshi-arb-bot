@@ -1,0 +1,558 @@
+{
+ "comparison": {
+  "l5_follow_on_prints_after_30s_share": 0.0185,
+  "l5_follow_on_usd_after_30s_share": 0.0329,
+  "l5_multi_print_clusters_longer_than_30s_share": 0.0418,
+  "l5_reprice_abs_step_p50_c": 2,
+  "l5_reprices_within_30s_share": 0.8349,
+  "l5_same_level_follow_on_gap_p50_s": 1,
+  "l5_same_level_follow_on_gap_p90_s": 7,
+  "l5_time_to_reprice_p50_s": 6,
+  "our_deadline_cancels": 23,
+  "our_fill_share": 0.2,
+  "our_reprices": 3,
+  "our_time_to_fill_max_s": 24.453,
+  "our_time_to_fill_p50_s": 11.65,
+  "reading": "L5 is not patient at a level: 75.1% of its price clusters are a single print, a follow-on print at the same level arrives p50 1 s / p90 7 s after the previous one, and only 1.8% of follow-on prints (3.3% of follow-on dollars) arrive more than 30 s later. L5's NEXT print is at a different price after a median 6 s (p75 20 s, p90 47 s) with a median step of 2 c (22151 paid more, 23187 paid less); 83.5% of those reprices happen inside our 30 s deadline. Ours: 9 of 45 orders filled (time to fill p50 11.65 s, max 24.453 s), 23 cancelled untouched at the 30 s deadline, 3 repriced, 10 post-only rejects. The mismatch is therefore NOT rest length: L5 would rarely have rested 30 s at one price. It is reprice cadence -- L5 moves its price within seconds when the touch moves, while we hold one price for the full deadline, cancel, and only re-decide on the next cycle (23 of our 45 orders ended that way). Executable lever: a touch-following reprice inside the rest window (the 'repriced:touch_moved' path exists and fired 3 times); the 30 s deadline itself is a frozen rung parameter. Reported, not changed."
+ },
+ "l5": {
+  "by_lane": {
+   "BTC-15m": {
+    "clusters": 41221,
+    "multi_print_cluster_duration_s": {
+     "max": 384,
+     "mean": 5.9143,
+     "n": 11807,
+     "p10": 0,
+     "p25": 0,
+     "p50": 2,
+     "p75": 6,
+     "p90": 15
+    },
+    "multi_print_clusters_longer_than_our_deadline_share": 0.0389,
+    "prints": 63569,
+    "prints_per_cluster": {
+     "max": 24,
+     "mean": 1.5422,
+     "n": 41221,
+     "p10": 1,
+     "p25": 1,
+     "p50": 1,
+     "p75": 2,
+     "p90": 3
+    },
+    "reprice_abs_step_cents": {
+     "max": 89,
+     "mean": 4.1151,
+     "n": 40188,
+     "p10": 1,
+     "p25": 1,
+     "p50": 2,
+     "p75": 5,
+     "p90": 10
+    },
+    "reprice_direction": {
+     "paid_less": 20653,
+     "paid_more": 19535
+    },
+    "reprice_step_cents": {
+     "max": 83,
+     "mean": -0.0024,
+     "n": 40188,
+     "p10": -6,
+     "p25": -2,
+     "p50": -1,
+     "p75": 2,
+     "p90": 6
+    },
+    "reprices": 40188,
+    "reprices_within_our_deadline_share": 0.8679,
+    "same_level_follow_on_after_our_deadline": {
+     "prints": 372,
+     "share_of_follow_on_prints": 0.0166,
+     "share_of_follow_on_usd": 0.0284,
+     "usd": 3543.68
+    },
+    "same_level_follow_on_gap_buckets": {
+     "0-1s": 11159,
+     "1-5s": 7624,
+     "120-300s": 18,
+     "15-30s": 603,
+     "30-60s": 287,
+     "5-15s": 2561,
+     "60-120s": 95,
+     ">=300s": 1
+    },
+    "same_level_follow_on_gap_s": {
+     "max": 384,
+     "mean": 3.1247,
+     "n": 22348,
+     "p10": 0,
+     "p25": 0,
+     "p50": 1,
+     "p75": 3,
+     "p90": 7
+    },
+    "single_print_clusters_share": 0.7136,
+    "time_to_reprice_s": {
+     "max": 716,
+     "mean": 14.7379,
+     "n": 40188,
+     "p10": 0,
+     "p25": 1,
+     "p50": 6,
+     "p75": 16,
+     "p90": 38
+    }
+   },
+   "BTC-5m": {
+    "clusters": 5829,
+    "multi_print_cluster_duration_s": {
+     "max": 138,
+     "mean": 10.7963,
+     "n": 383,
+     "p10": 0,
+     "p25": 0,
+     "p50": 1,
+     "p75": 11,
+     "p90": 37
+    },
+    "multi_print_clusters_longer_than_our_deadline_share": 0.1227,
+    "prints": 6227,
+    "prints_per_cluster": {
+     "max": 4,
+     "mean": 1.0683,
+     "n": 5829,
+     "p10": 1,
+     "p25": 1,
+     "p50": 1,
+     "p75": 1,
+     "p90": 1
+    },
+    "reprice_abs_step_cents": {
+     "max": 94,
+     "mean": 14.6988,
+     "n": 4077,
+     "p10": 1,
+     "p25": 3,
+     "p50": 8,
+     "p75": 21,
+     "p90": 38
+    },
+    "reprice_direction": {
+     "paid_less": 2049,
+     "paid_more": 2028
+    },
+    "reprice_step_cents": {
+     "max": 92,
+     "mean": -0.7591,
+     "n": 4077,
+     "p10": -27,
+     "p25": -8,
+     "p50": -1,
+     "p75": 8,
+     "p90": 24
+    },
+    "reprices": 4077,
+    "reprices_within_our_deadline_share": 0.5661,
+    "same_level_follow_on_after_our_deadline": {
+     "prints": 45,
+     "share_of_follow_on_prints": 0.1131,
+     "share_of_follow_on_usd": 0.0942,
+     "usd": 835.67
+    },
+    "same_level_follow_on_gap_buckets": {
+     "0-1s": 179,
+     "1-5s": 95,
+     "120-300s": 5,
+     "15-30s": 26,
+     "30-60s": 33,
+     "5-15s": 48,
+     "60-120s": 12
+    },
+    "same_level_follow_on_gap_s": {
+     "max": 138,
+     "mean": 10.3894,
+     "n": 398,
+     "p10": 0,
+     "p25": 0,
+     "p50": 1,
+     "p75": 10,
+     "p90": 36
+    },
+    "single_print_clusters_share": 0.9343,
+    "time_to_reprice_s": {
+     "max": 277,
+     "mean": 40.2688,
+     "n": 4077,
+     "p10": 1,
+     "p25": 9,
+     "p50": 25,
+     "p75": 57,
+     "p90": 102
+    }
+   },
+   "ETH-15m": {
+    "clusters": 112,
+    "multi_print_cluster_duration_s": {
+     "max": 26,
+     "mean": 11.25,
+     "n": 4,
+     "p10": 0,
+     "p25": 0,
+     "p50": 19,
+     "p75": 26,
+     "p90": 26
+    },
+    "multi_print_clusters_longer_than_our_deadline_share": 0.0,
+    "prints": 117,
+    "prints_per_cluster": {
+     "max": 3,
+     "mean": 1.0446,
+     "n": 112,
+     "p10": 1,
+     "p25": 1,
+     "p50": 1,
+     "p75": 1,
+     "p90": 1
+    },
+    "reprice_abs_step_cents": {
+     "max": 60,
+     "mean": 15.4571,
+     "n": 70,
+     "p10": 1,
+     "p25": 4,
+     "p50": 10,
+     "p75": 22,
+     "p90": 42
+    },
+    "reprice_direction": {
+     "paid_less": 32,
+     "paid_more": 38
+    },
+    "reprice_step_cents": {
+     "max": 58,
+     "mean": 0.6571,
+     "n": 70,
+     "p10": -24,
+     "p25": -10,
+     "p50": 1,
+     "p75": 10,
+     "p90": 28
+    },
+    "reprices": 70,
+    "reprices_within_our_deadline_share": 0.4286,
+    "same_level_follow_on_after_our_deadline": {
+     "prints": 0,
+     "share_of_follow_on_prints": 0.0,
+     "share_of_follow_on_usd": 0.0,
+     "usd": 0
+    },
+    "same_level_follow_on_gap_buckets": {
+     "0-1s": 2,
+     "1-5s": 1,
+     "15-30s": 2
+    },
+    "same_level_follow_on_gap_s": {
+     "max": 24,
+     "mean": 9.0,
+     "n": 5,
+     "p10": 0,
+     "p25": 0,
+     "p50": 2,
+     "p75": 19,
+     "p90": 24
+    },
+    "single_print_clusters_share": 0.9643,
+    "time_to_reprice_s": {
+     "max": 736,
+     "mean": 120.2571,
+     "n": 70,
+     "p10": 4,
+     "p25": 18,
+     "p50": 45,
+     "p75": 124,
+     "p90": 433
+    }
+   },
+   "ETH-5m": {
+    "clusters": 2002,
+    "multi_print_cluster_duration_s": {
+     "max": 144,
+     "mean": 9.8485,
+     "n": 66,
+     "p10": 0,
+     "p25": 0,
+     "p50": 1,
+     "p75": 6,
+     "p90": 30
+    },
+    "multi_print_clusters_longer_than_our_deadline_share": 0.0909,
+    "prints": 2069,
+    "prints_per_cluster": {
+     "max": 3,
+     "mean": 1.0335,
+     "n": 2002,
+     "p10": 1,
+     "p25": 1,
+     "p50": 1,
+     "p75": 1,
+     "p90": 1
+    },
+    "reprice_abs_step_cents": {
+     "max": 93,
+     "mean": 14.8295,
+     "n": 1003,
+     "p10": 1,
+     "p25": 2,
+     "p50": 8,
+     "p75": 20,
+     "p90": 41
+    },
+    "reprice_direction": {
+     "paid_less": 453,
+     "paid_more": 550
+    },
+    "reprice_step_cents": {
+     "max": 78,
+     "mean": -1.338,
+     "n": 1003,
+     "p10": -33,
+     "p25": -7,
+     "p50": 1,
+     "p75": 9,
+     "p90": 21
+    },
+    "reprices": 1003,
+    "reprices_within_our_deadline_share": 0.6351,
+    "same_level_follow_on_after_our_deadline": {
+     "prints": 6,
+     "share_of_follow_on_prints": 0.0896,
+     "share_of_follow_on_usd": 0.046,
+     "usd": 44.81
+    },
+    "same_level_follow_on_gap_buckets": {
+     "0-1s": 31,
+     "1-5s": 19,
+     "120-300s": 1,
+     "15-30s": 1,
+     "30-60s": 3,
+     "5-15s": 9,
+     "60-120s": 3
+    },
+    "same_level_follow_on_gap_s": {
+     "max": 144,
+     "mean": 9.7015,
+     "n": 67,
+     "p10": 0,
+     "p25": 0,
+     "p50": 1,
+     "p75": 6,
+     "p90": 30
+    },
+    "single_print_clusters_share": 0.967,
+    "time_to_reprice_s": {
+     "max": 280,
+     "mean": 38.9422,
+     "n": 1003,
+     "p10": 0,
+     "p25": 2,
+     "p50": 15,
+     "p75": 58,
+     "p90": 118
+    }
+   }
+  },
+  "first_print_seconds_from_window_start": {
+   "max": 819,
+   "mean": 85.6494,
+   "n": 2216,
+   "p10": 6,
+   "p25": 10,
+   "p50": 57,
+   "p75": 132,
+   "p90": 199
+  },
+  "labels": "public prints only: a cluster is consecutive same-side BUY prints at one price, its duration a LOWER bound on time at that level (a re-post at the same price is indistinguishable); a reprice is the next same-side print at a different price; timestamps are 1 s resolution",
+  "last_print_seconds_to_settlement": {
+   "max": 894,
+   "mean": 116.8078,
+   "n": 2216,
+   "p10": 24,
+   "p25": 47,
+   "p50": 83,
+   "p75": 150,
+   "p90": 258
+  },
+  "overall": {
+   "clusters": 49164,
+   "multi_print_cluster_duration_s": {
+    "max": 384,
+    "mean": 6.0897,
+    "n": 12260,
+    "p10": 0,
+    "p25": 0,
+    "p50": 2,
+    "p75": 6,
+    "p90": 15
+   },
+   "multi_print_clusters_longer_than_our_deadline_share": 0.0418,
+   "prints": 71982,
+   "prints_per_cluster": {
+    "max": 24,
+    "mean": 1.4641,
+    "n": 49164,
+    "p10": 1,
+    "p25": 1,
+    "p50": 1,
+    "p75": 1,
+    "p90": 3
+   },
+   "reprice_abs_step_cents": {
+    "max": 94,
+    "mean": 5.3214,
+    "n": 45338,
+    "p10": 1,
+    "p25": 1,
+    "p50": 2,
+    "p75": 6,
+    "p90": 13
+   },
+   "reprice_direction": {
+    "paid_less": 23187,
+    "paid_more": 22151
+   },
+   "reprice_step_cents": {
+    "max": 92,
+    "mean": -0.099,
+    "n": 45338,
+    "p10": -7,
+    "p25": -2,
+    "p50": -1,
+    "p75": 2,
+    "p90": 7
+   },
+   "reprices": 45338,
+   "reprices_within_our_deadline_share": 0.8349,
+   "same_level_follow_on_after_our_deadline": {
+    "prints": 423,
+    "share_of_follow_on_prints": 0.0185,
+    "share_of_follow_on_usd": 0.0329,
+    "usd": 4424.16
+   },
+   "same_level_follow_on_gap_buckets": {
+    "0-1s": 11371,
+    "1-5s": 7739,
+    "120-300s": 24,
+    "15-30s": 632,
+    "30-60s": 323,
+    "5-15s": 2618,
+    "60-120s": 110,
+    ">=300s": 1
+   },
+   "same_level_follow_on_gap_s": {
+    "max": 384,
+    "mean": 3.272,
+    "n": 22818,
+    "p10": 0,
+    "p25": 0,
+    "p50": 1,
+    "p75": 3,
+    "p90": 7
+   },
+   "single_print_clusters_share": 0.7506,
+   "time_to_reprice_s": {
+    "max": 736,
+    "mean": 17.7321,
+    "n": 45338,
+    "p10": 0,
+    "p25": 1,
+    "p50": 6,
+    "p75": 20,
+    "p90": 47
+   }
+  },
+  "windows": 2216
+ },
+ "labels": "read-only; the rest deadline is a frozen rung parameter and is not changed here",
+ "ours": {
+  "deadline_cancels": 23,
+  "deadline_rest_s": {
+   "max": 32.602,
+   "mean": 31.4914,
+   "n": 23,
+   "p10": 31.067,
+   "p25": 31.187,
+   "p50": 31.461,
+   "p75": 31.685,
+   "p90": 31.945
+  },
+  "deadline_s": 30.0,
+  "fill_share": 0.2,
+  "filled": 9,
+  "fills_after_20s_share": 0.2222,
+  "labels": "R4 order records: rest_s is submit-to-terminal; a reprice is our own cancel when the touch moved",
+  "orders": 45,
+  "post_only_rejects": 10,
+  "reject_rest_s": {
+   "max": 0.876,
+   "mean": 0.7011,
+   "n": 10,
+   "p10": 0.36,
+   "p25": 0.396,
+   "p50": 0.835,
+   "p75": 0.864,
+   "p90": 0.876
+  },
+  "reprice_step_cents": [
+   1,
+   1,
+   2
+  ],
+  "reprices": 3,
+  "rest_s_all": {
+   "max": 32.602,
+   "mean": 20.8614,
+   "n": 45,
+   "p10": 0.832,
+   "p25": 6.389,
+   "p50": 30.858,
+   "p75": 31.461,
+   "p90": 31.734
+  },
+  "time_to_fill_s": {
+   "max": 24.453,
+   "mean": 13.0592,
+   "n": 9,
+   "p10": 2.936,
+   "p25": 8.3,
+   "p50": 11.65,
+   "p75": 17.027,
+   "p90": 24.453
+  }
+ },
+ "owner_direction": "#167 5569709706 item 2",
+ "provenance": {
+  "content_sha256_16": "3b98847233684612",
+  "limits": [
+   "derived from EXECUTED TRADES on the public activity feed: a fill is not a quote",
+   "concurrency here is FILL concurrency, a lower bound on quoting concurrency",
+   "'unknown' maker_taker is outside takerOnly coverage and is never treated as maker"
+  ],
+  "maker_taker_counts": {
+   "maker": 55647,
+   "taker": 11068,
+   "unknown": 5269
+  },
+  "meta_rows": 71984,
+  "rows_read": 71984,
+  "source_file": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "source_meta": "analysis/l5/l5_canonical_sequence.meta.json",
+  "upstream_sources": [
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+   "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+  ]
+ }
+}

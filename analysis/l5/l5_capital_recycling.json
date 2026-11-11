@@ -1,0 +1,306 @@
+{
+ "l5": {
+  "by_lane": {
+   "BTC-15m": {
+    "capital_hours_total": 5355.08,
+    "deployed_usd": 573704.72,
+    "first_fill_to_first_complement_s": {
+     "mean": 46.883,
+     "n": 506,
+     "p10": 3,
+     "p25": 9,
+     "p50": 26,
+     "p75": 58,
+     "p90": 120
+    },
+    "first_fill_to_settlement_s": {
+     "mean": 838.844,
+     "n": 527,
+     "p10": 741,
+     "p25": 853,
+     "p50": 885,
+     "p75": 893,
+     "p90": 894
+    },
+    "hours_per_deployed_dollar": {
+     "mean": 0.024,
+     "n": 527,
+     "p10": 0.003,
+     "p25": 0.005,
+     "p50": 0.011,
+     "p75": 0.025,
+     "p90": 0.056
+    },
+    "released_at_complement_share": 0.9607,
+    "turnover_per_capital_hour_aggregate": 107.133,
+    "windows": 527,
+    "windows_never_completed_share": 0.0398
+   },
+   "BTC-5m": {
+    "capital_hours_total": 2416.03,
+    "deployed_usd": 129037.45,
+    "first_fill_to_first_complement_s": {
+     "mean": 79.531,
+     "n": 795,
+     "p10": 14,
+     "p25": 33,
+     "p50": 66,
+     "p75": 117,
+     "p90": 166
+    },
+    "first_fill_to_settlement_s": {
+     "mean": 231.803,
+     "n": 957,
+     "p10": 146,
+     "p25": 195,
+     "p50": 243,
+     "p75": 287,
+     "p90": 294
+    },
+    "hours_per_deployed_dollar": {
+     "mean": 0.023,
+     "n": 957,
+     "p10": 0.004,
+     "p25": 0.009,
+     "p50": 0.017,
+     "p75": 0.032,
+     "p90": 0.05
+    },
+    "released_at_complement_share": 0.6464,
+    "turnover_per_capital_hour_aggregate": 53.409,
+    "windows": 957,
+    "windows_never_completed_share": 0.1693
+   },
+   "ETH-15m": {
+    "capital_hours_total": 59.11,
+    "deployed_usd": 1041.76,
+    "first_fill_to_first_complement_s": {
+     "mean": 344.692,
+     "n": 13,
+     "p10": 58,
+     "p25": 164,
+     "p50": 318,
+     "p75": 460,
+     "p90": 733
+    },
+    "first_fill_to_settlement_s": {
+     "mean": 559.483,
+     "n": 29,
+     "p10": 162,
+     "p25": 291,
+     "p50": 605,
+     "p75": 816,
+     "p90": 890
+    },
+    "hours_per_deployed_dollar": {
+     "mean": 0.083,
+     "n": 29,
+     "p10": 0.014,
+     "p25": 0.034,
+     "p50": 0.056,
+     "p75": 0.106,
+     "p90": 0.225
+    },
+    "released_at_complement_share": 0.4262,
+    "turnover_per_capital_hour_aggregate": 17.624,
+    "windows": 29,
+    "windows_never_completed_share": 0.5517
+   },
+   "ETH-5m": {
+    "capital_hours_total": 678.3,
+    "deployed_usd": 24718.14,
+    "first_fill_to_first_complement_s": {
+     "mean": 85.378,
+     "n": 296,
+     "p10": 11,
+     "p25": 26,
+     "p50": 70,
+     "p75": 131,
+     "p90": 190
+    },
+    "first_fill_to_settlement_s": {
+     "mean": 182.771,
+     "n": 703,
+     "p10": 65,
+     "p25": 113,
+     "p50": 183,
+     "p75": 257,
+     "p90": 293
+    },
+    "hours_per_deployed_dollar": {
+     "mean": 0.035,
+     "n": 703,
+     "p10": 0.007,
+     "p25": 0.015,
+     "p50": 0.029,
+     "p75": 0.053,
+     "p90": 0.075
+    },
+    "released_at_complement_share": 0.3728,
+    "turnover_per_capital_hour_aggregate": 36.441,
+    "windows": 703,
+    "windows_never_completed_share": 0.5789
+   }
+  },
+  "overall": {
+   "capital_hours_total": 8508.51,
+   "deployed_usd": 728502.07,
+   "first_fill_to_first_complement_s": {
+    "mean": 72.486,
+    "n": 1610,
+    "p10": 7,
+    "p25": 21,
+    "p50": 54,
+    "p75": 107,
+    "p90": 166
+   },
+   "first_fill_to_settlement_s": {
+    "mean": 364.9,
+    "n": 2216,
+    "p10": 114,
+    "p25": 183,
+    "p50": 261,
+    "p75": 296,
+    "p90": 888
+   },
+   "hours_per_deployed_dollar": {
+    "mean": 0.028,
+    "n": 2216,
+    "p10": 0.004,
+    "p25": 0.009,
+    "p50": 0.019,
+    "p75": 0.038,
+    "p90": 0.065
+   },
+   "released_at_complement_share": 0.8843,
+   "turnover_per_capital_hour_aggregate": 85.62,
+   "windows": 2216,
+   "windows_never_completed_share": 0.2735
+  }
+ },
+ "labels": "capital released at the complement for the matched part (venue nets pairs to cash) and at settlement for the residual; L5 settlement = last print time + its seconds_to_settlement; ours from the scoreboard's resolution time; our R4 fill times are the session row times (a first-fill-to-complement of 0 s means both filled inside one ~30 s session); read-only",
+ "ours": {
+  "overall": {
+   "capital_hours_total": 14.35,
+   "deployed_usd": 55.25,
+   "first_fill_to_first_complement_s": {
+    "mean": 438.766,
+    "n": 4,
+    "p10": 0.0,
+    "p25": 191.064,
+    "p50": 269.0,
+    "p75": 1295.0,
+    "p90": 1295.0
+   },
+   "first_fill_to_settlement_s": {
+    "mean": 5353.569,
+    "n": 6,
+    "p10": 2391.873,
+    "p25": 3154.976,
+    "p50": 4402.0,
+    "p75": 8589.0,
+    "p90": 9771.0
+   },
+   "hours_per_deployed_dollar": {
+    "mean": 0.45,
+    "n": 6,
+    "p10": 0.049,
+    "p25": 0.06,
+    "p50": 0.206,
+    "p75": 1.059,
+    "p90": 1.212
+   },
+   "markets": 6,
+   "released_at_complement_share": 0.8337,
+   "turnover_per_capital_hour_aggregate": 3.849
+  },
+  "per_market": {
+   "aec-atp-petbru-alecan-2026-09-07": {
+    "capital_hours": 2.1087711009633807,
+    "cohort": "R4",
+    "deployed_usd": 1.9912,
+    "first_fill_to_first_complement_s": null,
+    "first_fill_to_settlement_s": 3812.56326007843,
+    "hours_per_deployed_dollar": 1.0590453500217862,
+    "lots": 1,
+    "released_at_complement_share": 0.0,
+    "released_at_complement_usd": 0.0,
+    "released_at_settlement_usd": 1.9912,
+    "settlement_utc": "2026-09-07T18:49:19Z",
+    "turnover_per_capital_hour": 0.9442466273794871
+   },
+   "aec-atpcq-aleher-tundur-2026-09-07": {
+    "capital_hours": 1.7350821491912927,
+    "cohort": "R4",
+    "deployed_usd": 8.4145,
+    "first_fill_to_first_complement_s": 0.0,
+    "first_fill_to_settlement_s": 3154.9762139320374,
+    "hours_per_deployed_dollar": 0.2062014557242014,
+    "lots": 5,
+    "released_at_complement_share": 0.8916887159070652,
+    "released_at_complement_usd": 7.5031147,
+    "released_at_settlement_usd": 0.9113853,
+    "settlement_utc": "2026-09-07T09:02:29Z",
+    "turnover_per_capital_hour": 4.849626286525931
+   },
+   "aec-atpcq-norgom-ollwal-2026-09-07": {
+    "capital_hours": 0.49900190488902724,
+    "cohort": "R4",
+    "deployed_usd": 10.2018,
+    "first_fill_to_first_complement_s": 191.06371307373047,
+    "first_fill_to_settlement_s": 2391.8731920719147,
+    "hours_per_deployed_dollar": 0.04891312365357361,
+    "lots": 4,
+    "released_at_complement_share": 1.0,
+    "released_at_complement_usd": 10.2018,
+    "released_at_settlement_usd": 0.0,
+    "settlement_utc": "2026-09-07T09:46:23Z",
+    "turnover_per_capital_hour": 20.444410933198284
+   },
+   "asc-cfb-lou-miss-2026-09-06-pos-6pt5": {
+    "capital_hours": 0.9289150833333333,
+    "cohort": "R3L",
+    "deployed_usd": 15.4575,
+    "first_fill_to_first_complement_s": 1295.0,
+    "first_fill_to_settlement_s": 9771.0,
+    "hours_per_deployed_dollar": 0.06009478138983233,
+    "lots": 7,
+    "released_at_complement_share": 1.0,
+    "released_at_complement_usd": 15.4575,
+    "released_at_settlement_usd": 0.0,
+    "settlement_utc": "2026-09-07T04:05:29Z",
+    "turnover_per_capital_hour": 16.640380027560827
+   },
+   "asc-cfb-wisc-nd-2026-09-06-pos-10pt5": {
+    "capital_hours": 7.615590555555555,
+    "cohort": "R3L",
+    "deployed_usd": 6.2855,
+    "first_fill_to_first_complement_s": null,
+    "first_fill_to_settlement_s": 4402.0,
+    "hours_per_deployed_dollar": 1.2116125297200788,
+    "lots": 4,
+    "released_at_complement_share": 0.0,
+    "released_at_complement_usd": 0.0,
+    "released_at_settlement_usd": 6.2855,
+    "settlement_utc": "2026-09-07T03:09:59Z",
+    "turnover_per_capital_hour": 0.825346367316812
+   },
+   "tsc-cfb-lou-miss-2026-09-06-total-41pt5": {
+    "capital_hours": 1.4667636666666666,
+    "cohort": "R3L",
+    "deployed_usd": 12.8972,
+    "first_fill_to_first_complement_s": 269.0,
+    "first_fill_to_settlement_s": 8589.0,
+    "hours_per_deployed_dollar": 0.11372729481334448,
+    "lots": 8,
+    "released_at_complement_share": 1.0,
+    "released_at_complement_usd": 12.8972,
+    "released_at_settlement_usd": 0.0,
+    "settlement_utc": "2026-09-07T04:05:55Z",
+    "turnover_per_capital_hour": 8.792963919886208
+   }
+  }
+ },
+ "owner_direction": "#167 5570456323 (capital recycling)",
+ "reading": "L5 releases 88% of deployed dollars at the complement, first complement p50 54 s after the first fill (p90 166 s), and its capital sits 0.019 h per deployed dollar (p50) because its windows settle in minutes (first fill to settlement p50 261 s). Ours: 83% released at the complement, first complement p50 269.0 s (p90 1295.0 s) -- the complement step itself is L5-like -- but 0.206 h per deployed dollar (p50) because sports markets settle hours later (first fill to settlement p50 4402.0 s) and the residual, plus the flat-account wait, sits until then. Recycling is bounded by market duration and the settlement wait, not by the pairing step."
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_pmus_observer/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_pmus_realtime_observer --minutes 0 --interval 10",
+    "restartPolicyType": "ALWAYS"
+  }
+}

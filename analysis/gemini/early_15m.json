@@ -1,0 +1,2164 @@
+{
+  "utc": "2026-09-19T18:58:04.009306+00:00",
+  "census": {
+    "label": "EARLY_15M_ADAPTATION",
+    "contracts_replayed": 96,
+    "computable": 91,
+    "with_a_first_fill": 91,
+    "with_opposite_flow_after_fill": 48,
+    "flow_reached_a_fee_safe_complement": 48,
+    "reach_rate": 0.5275,
+    "median_seconds_to_complete": 133.8,
+    "constructed_basis_values": [
+      "0.99"
+    ],
+    "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+    "extends_suppressed": 211,
+    "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+  },
+  "rows": [
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191845-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.65",
+        "tte_s": 814.9,
+        "utc_ms": "1789842685125"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191830-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.48",
+        "tte_s": 801.5,
+        "utc_ms": "1789841798520"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191815-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.38",
+        "tte_s": 714.3,
+        "utc_ms": "1789840985658"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.61",
+        "tte_s": 308.6,
+        "utc_ms": "1789841391435",
+        "seconds_after_first_fill": 405.8
+      },
+      "extends_suppressed": 3,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191800-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.40",
+        "tte_s": 656.4,
+        "utc_ms": "1789840143610"
+      },
+      "opposite_flow_after_fill": 3,
+      "complete": {
+        "leg": "YES",
+        "price": "0.59",
+        "tte_s": 386.3,
+        "utc_ms": "1789840413740",
+        "seconds_after_first_fill": 270.1
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191745-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.69",
+        "tte_s": 868.9,
+        "utc_ms": "1789839031052"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 5,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191730-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.57",
+        "tte_s": 735.6,
+        "utc_ms": "1789838264437"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.42",
+        "tte_s": 469.7,
+        "utc_ms": "1789838530290",
+        "seconds_after_first_fill": 265.9
+      },
+      "extends_suppressed": 3,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191715-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.62",
+        "tte_s": 896.4,
+        "utc_ms": "1789837203608"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 6,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191700-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.37",
+        "tte_s": 778.5,
+        "utc_ms": "1789836421499"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.62",
+        "tte_s": 491.3,
+        "utc_ms": "1789836708666",
+        "seconds_after_first_fill": 287.2
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191645-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.36",
+        "tte_s": 762.0,
+        "utc_ms": "1789835538030"
+      },
+      "opposite_flow_after_fill": 9,
+      "complete": {
+        "leg": "YES",
+        "price": "0.63",
+        "tte_s": 505.3,
+        "utc_ms": "1789835794717",
+        "seconds_after_first_fill": 256.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191630-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 6,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.59",
+        "tte_s": 861.1,
+        "utc_ms": "1789834538938"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191615-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 10,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.29",
+        "tte_s": 696.0,
+        "utc_ms": "1789833803972"
+      },
+      "opposite_flow_after_fill": 5,
+      "complete": {
+        "leg": "NO",
+        "price": "0.70",
+        "tte_s": 690.4,
+        "utc_ms": "1789833809616",
+        "seconds_after_first_fill": 5.6
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": false,
+      "symbol": "GEMI-BTC15M2609191600-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "why": "fewer than two prints in the early interval",
+      "prints": 0
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191545-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.61",
+        "tte_s": 835.3,
+        "utc_ms": "1789831864733"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191530-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.55",
+        "tte_s": 766.1,
+        "utc_ms": "1789831033887"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191515-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.74",
+        "tte_s": 775.4,
+        "utc_ms": "1789830124553"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.25",
+        "tte_s": 650.8,
+        "utc_ms": "1789830249200",
+        "seconds_after_first_fill": 124.6
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191500-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 5,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.73",
+        "tte_s": 839.9,
+        "utc_ms": "1789829160081"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191445-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 9,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.54",
+        "tte_s": 837.4,
+        "utc_ms": "1789828262611"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.45",
+        "tte_s": 311.5,
+        "utc_ms": "1789828788464",
+        "seconds_after_first_fill": 525.9
+      },
+      "extends_suppressed": 5,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191430-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 11,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.32",
+        "tte_s": 823.3,
+        "utc_ms": "1789827376668"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.67",
+        "tte_s": 784.8,
+        "utc_ms": "1789827415250",
+        "seconds_after_first_fill": 38.6
+      },
+      "extends_suppressed": 5,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191415-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 13,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.44",
+        "tte_s": 803.8,
+        "utc_ms": "1789826496198"
+      },
+      "opposite_flow_after_fill": 9,
+      "complete": {
+        "leg": "NO",
+        "price": "0.55",
+        "tte_s": 690.5,
+        "utc_ms": "1789826609530",
+        "seconds_after_first_fill": 113.3
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191400-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 10,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.55",
+        "tte_s": 788.3,
+        "utc_ms": "1789825611709"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 4,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191345-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 6,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.31",
+        "tte_s": 782.3,
+        "utc_ms": "1789824717745"
+      },
+      "opposite_flow_after_fill": 3,
+      "complete": {
+        "leg": "YES",
+        "price": "0.68",
+        "tte_s": 781.5,
+        "utc_ms": "1789824718468",
+        "seconds_after_first_fill": 0.7
+      },
+      "extends_suppressed": 1,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191330-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 16,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.31",
+        "tte_s": 782.5,
+        "utc_ms": "1789823817504"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.68",
+        "tte_s": 335.2,
+        "utc_ms": "1789824264838",
+        "seconds_after_first_fill": 447.3
+      },
+      "extends_suppressed": 9,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191315-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 12,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.61",
+        "tte_s": 775.3,
+        "utc_ms": "1789822924680"
+      },
+      "opposite_flow_after_fill": 6,
+      "complete": {
+        "leg": "YES",
+        "price": "0.38",
+        "tte_s": 479.2,
+        "utc_ms": "1789823220786",
+        "seconds_after_first_fill": 296.1
+      },
+      "extends_suppressed": 1,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191300-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 11,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.39",
+        "tte_s": 851.5,
+        "utc_ms": "1789821948494"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.60",
+        "tte_s": 717.7,
+        "utc_ms": "1789822082298",
+        "seconds_after_first_fill": 133.8
+      },
+      "extends_suppressed": 7,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191245-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.49",
+        "tte_s": 892.4,
+        "utc_ms": "1789821007647"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191230-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.45",
+        "tte_s": 864.7,
+        "utc_ms": "1789820135337"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.54",
+        "tte_s": 845.1,
+        "utc_ms": "1789820154851",
+        "seconds_after_first_fill": 19.5
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191215-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.56",
+        "tte_s": 785.2,
+        "utc_ms": "1789819314830"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "NO",
+        "price": "0.43",
+        "tte_s": 544.1,
+        "utc_ms": "1789819555884",
+        "seconds_after_first_fill": 241.1
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191200-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.57",
+        "tte_s": 786.0,
+        "utc_ms": "1789818414020"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.42",
+        "tte_s": 486.2,
+        "utc_ms": "1789818713763",
+        "seconds_after_first_fill": 299.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191145-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.56",
+        "tte_s": 804.2,
+        "utc_ms": "1789817495847"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191130-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.49",
+        "tte_s": 856.5,
+        "utc_ms": "1789816543491"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191115-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.39",
+        "tte_s": 812.9,
+        "utc_ms": "1789815687072"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 3,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191100-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.69",
+        "tte_s": 801.9,
+        "utc_ms": "1789814798090"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191045-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 12,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.36",
+        "tte_s": 836.1,
+        "utc_ms": "1789813863859"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 9,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191030-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 9,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.71",
+        "tte_s": 650.1,
+        "utc_ms": "1789813149872"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 6,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609191015-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.24",
+        "tte_s": 640.5,
+        "utc_ms": "1789812259513"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": false,
+      "symbol": "GEMI-BTC15M2609191000-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "why": "fewer than two prints in the early interval",
+      "prints": 0
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190945-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.92",
+        "tte_s": 642.8,
+        "utc_ms": "1789810457213"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190930-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.29",
+        "tte_s": 529.0,
+        "utc_ms": "1789809671001"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.70",
+        "tte_s": 422.9,
+        "utc_ms": "1789809777068",
+        "seconds_after_first_fill": 106.1
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190915-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 11,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.33",
+        "tte_s": 693.6,
+        "utc_ms": "1789808606435"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 8,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190900-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.15",
+        "tte_s": 431.2,
+        "utc_ms": "1789807968803"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "YES",
+        "price": "0.84",
+        "tte_s": 351.5,
+        "utc_ms": "1789808048490",
+        "seconds_after_first_fill": 79.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190845-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.73",
+        "tte_s": 609.2,
+        "utc_ms": "1789806890806"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190830-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 20,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.57",
+        "tte_s": 709.6,
+        "utc_ms": "1789805890364"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 14,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190815-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.68",
+        "tte_s": 600.8,
+        "utc_ms": "1789805099242"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 5,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190800-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 18,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.54",
+        "tte_s": 898.2,
+        "utc_ms": "1789803901820"
+      },
+      "opposite_flow_after_fill": 7,
+      "complete": {
+        "leg": "NO",
+        "price": "0.45",
+        "tte_s": 408.9,
+        "utc_ms": "1789804391077",
+        "seconds_after_first_fill": 489.3
+      },
+      "extends_suppressed": 1,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190745-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.34",
+        "tte_s": 750.2,
+        "utc_ms": "1789803149816"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.65",
+        "tte_s": 720.4,
+        "utc_ms": "1789803179641",
+        "seconds_after_first_fill": 29.8
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190730-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 5,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.73",
+        "tte_s": 829.9,
+        "utc_ms": "1789802170108"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "NO",
+        "price": "0.26",
+        "tte_s": 540.8,
+        "utc_ms": "1789802459160",
+        "seconds_after_first_fill": 289.1
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190715-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.64",
+        "tte_s": 787.2,
+        "utc_ms": "1789801312815"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.35",
+        "tte_s": 384.5,
+        "utc_ms": "1789801715483",
+        "seconds_after_first_fill": 402.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190700-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.45",
+        "tte_s": 644.0,
+        "utc_ms": "1789800555960"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "NO",
+        "price": "0.54",
+        "tte_s": 644.0,
+        "utc_ms": "1789800555980",
+        "seconds_after_first_fill": 0.0
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190645-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 14,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.67",
+        "tte_s": 839.8,
+        "utc_ms": "1789799460207"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 5,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190630-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.60",
+        "tte_s": 737.1,
+        "utc_ms": "1789798662935"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190615-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.44",
+        "tte_s": 781.6,
+        "utc_ms": "1789797718448"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 3,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190600-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 22,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.47",
+        "tte_s": 800.2,
+        "utc_ms": "1789796799754"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 12,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190545-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 18,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.64",
+        "tte_s": 872.8,
+        "utc_ms": "1789795827243"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 9,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190530-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.69",
+        "tte_s": 466.4,
+        "utc_ms": "1789795333579"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 3,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190515-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.32",
+        "tte_s": 702.1,
+        "utc_ms": "1789794197922"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190500-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 12,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.46",
+        "tte_s": 887.5,
+        "utc_ms": "1789793112497"
+      },
+      "opposite_flow_after_fill": 5,
+      "complete": {
+        "leg": "YES",
+        "price": "0.53",
+        "tte_s": 883.0,
+        "utc_ms": "1789793117048",
+        "seconds_after_first_fill": 4.6
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190445-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.66",
+        "tte_s": 844.6,
+        "utc_ms": "1789792255408"
+      },
+      "opposite_flow_after_fill": 9,
+      "complete": {
+        "leg": "YES",
+        "price": "0.33",
+        "tte_s": 843.0,
+        "utc_ms": "1789792256971",
+        "seconds_after_first_fill": 1.6
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190430-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 17,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.35",
+        "tte_s": 765.3,
+        "utc_ms": "1789791434652"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.64",
+        "tte_s": 761.5,
+        "utc_ms": "1789791438513",
+        "seconds_after_first_fill": 3.9
+      },
+      "extends_suppressed": 12,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190415-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.51",
+        "tte_s": 753.0,
+        "utc_ms": "1789790546967"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.48",
+        "tte_s": 691.8,
+        "utc_ms": "1789790608201",
+        "seconds_after_first_fill": 61.2
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190400-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 13,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.54",
+        "tte_s": 717.8,
+        "utc_ms": "1789789682157"
+      },
+      "opposite_flow_after_fill": 7,
+      "complete": {
+        "leg": "NO",
+        "price": "0.45",
+        "tte_s": 344.2,
+        "utc_ms": "1789790055812",
+        "seconds_after_first_fill": 373.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190345-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 5,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.41",
+        "tte_s": 791.5,
+        "utc_ms": "1789788708466"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190330-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 12,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.63",
+        "tte_s": 846.6,
+        "utc_ms": "1789787753445"
+      },
+      "opposite_flow_after_fill": 3,
+      "complete": {
+        "leg": "YES",
+        "price": "0.36",
+        "tte_s": 711.5,
+        "utc_ms": "1789787888495",
+        "seconds_after_first_fill": 135.1
+      },
+      "extends_suppressed": 3,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190315-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.26",
+        "tte_s": 754.1,
+        "utc_ms": "1789786945889"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "YES",
+        "price": "0.73",
+        "tte_s": 696.3,
+        "utc_ms": "1789787003656",
+        "seconds_after_first_fill": 57.8
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190300-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.55",
+        "tte_s": 775.4,
+        "utc_ms": "1789786024586"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.44",
+        "tte_s": 411.8,
+        "utc_ms": "1789786388239",
+        "seconds_after_first_fill": 363.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190245-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.48",
+        "tte_s": 863.2,
+        "utc_ms": "1789785036847"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.51",
+        "tte_s": 589.5,
+        "utc_ms": "1789785310546",
+        "seconds_after_first_fill": 273.7
+      },
+      "extends_suppressed": 8,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190230-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 13,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.63",
+        "tte_s": 789.4,
+        "utc_ms": "1789784210632"
+      },
+      "opposite_flow_after_fill": 8,
+      "complete": {
+        "leg": "YES",
+        "price": "0.36",
+        "tte_s": 419.4,
+        "utc_ms": "1789784580594",
+        "seconds_after_first_fill": 370.0
+      },
+      "extends_suppressed": 1,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190215-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 2,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.44",
+        "tte_s": 798.3,
+        "utc_ms": "1789783301729"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": false,
+      "symbol": "GEMI-BTC15M2609190200-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "why": "fewer than two prints in the early interval",
+      "prints": 0
+    },
+    {
+      "computable": false,
+      "symbol": "GEMI-BTC15M2609190145-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "why": "fewer than two prints in the early interval",
+      "prints": 0
+    },
+    {
+      "computable": false,
+      "symbol": "GEMI-BTC15M2609190130-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "why": "fewer than two prints in the early interval",
+      "prints": 1
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190115-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.53",
+        "tte_s": 765.7,
+        "utc_ms": "1789779734265"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190100-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 4,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.45",
+        "tte_s": 838.7,
+        "utc_ms": "1789778761288"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 2,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190045-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.33",
+        "tte_s": 826.4,
+        "utc_ms": "1789777873564"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190030-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 9,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.29",
+        "tte_s": 803.1,
+        "utc_ms": "1789776996907"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.70",
+        "tte_s": 718.8,
+        "utc_ms": "1789777081172",
+        "seconds_after_first_fill": 84.3
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190015-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.40",
+        "tte_s": 734.8,
+        "utc_ms": "1789776165246"
+      },
+      "opposite_flow_after_fill": 3,
+      "complete": {
+        "leg": "NO",
+        "price": "0.59",
+        "tte_s": 656.3,
+        "utc_ms": "1789776243726",
+        "seconds_after_first_fill": 78.5
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609190000-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 10,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.39",
+        "tte_s": 778.3,
+        "utc_ms": "1789775221678"
+      },
+      "opposite_flow_after_fill": 6,
+      "complete": {
+        "leg": "NO",
+        "price": "0.60",
+        "tte_s": 761.3,
+        "utc_ms": "1789775238666",
+        "seconds_after_first_fill": 17.0
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182345-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 17,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.65",
+        "tte_s": 869.0,
+        "utc_ms": "1789774231044"
+      },
+      "opposite_flow_after_fill": 8,
+      "complete": {
+        "leg": "YES",
+        "price": "0.34",
+        "tte_s": 734.2,
+        "utc_ms": "1789774365771",
+        "seconds_after_first_fill": 134.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182330-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.55",
+        "tte_s": 824.0,
+        "utc_ms": "1789773375980"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 6,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182315-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 9,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.42",
+        "tte_s": 660.6,
+        "utc_ms": "1789772639361"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182300-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 12,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.48",
+        "tte_s": 804.8,
+        "utc_ms": "1789771595229"
+      },
+      "opposite_flow_after_fill": 7,
+      "complete": {
+        "leg": "YES",
+        "price": "0.51",
+        "tte_s": 626.2,
+        "utc_ms": "1789771773788",
+        "seconds_after_first_fill": 178.6
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182245-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.69",
+        "tte_s": 718.6,
+        "utc_ms": "1789770781379"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182230-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 15,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.21",
+        "tte_s": 654.7,
+        "utc_ms": "1789769945273"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "YES",
+        "price": "0.78",
+        "tte_s": 654.0,
+        "utc_ms": "1789769945988",
+        "seconds_after_first_fill": 0.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182215-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 11,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.59",
+        "tte_s": 697.5,
+        "utc_ms": "1789769002479"
+      },
+      "opposite_flow_after_fill": 6,
+      "complete": {
+        "leg": "NO",
+        "price": "0.40",
+        "tte_s": 458.7,
+        "utc_ms": "1789769241277",
+        "seconds_after_first_fill": 238.8
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182200-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.71",
+        "tte_s": 744.0,
+        "utc_ms": "1789768055950"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 3,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182145-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.46",
+        "tte_s": 836.3,
+        "utc_ms": "1789767063730"
+      },
+      "opposite_flow_after_fill": 2,
+      "complete": {
+        "leg": "NO",
+        "price": "0.53",
+        "tte_s": 453.5,
+        "utc_ms": "1789767446544",
+        "seconds_after_first_fill": 382.8
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182130-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 11,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.42",
+        "tte_s": 885.3,
+        "utc_ms": "1789766114745"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 9,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182115-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.65",
+        "tte_s": 829.1,
+        "utc_ms": "1789765270913"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "NO",
+        "price": "0.34",
+        "tte_s": 721.9,
+        "utc_ms": "1789765378052",
+        "seconds_after_first_fill": 107.1
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182100-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 16,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.38",
+        "tte_s": 719.0,
+        "utc_ms": "1789764481042"
+      },
+      "opposite_flow_after_fill": 14,
+      "complete": {
+        "leg": "YES",
+        "price": "0.61",
+        "tte_s": 718.1,
+        "utc_ms": "1789764481948",
+        "seconds_after_first_fill": 0.9
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182045-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 9,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.58",
+        "tte_s": 784.1,
+        "utc_ms": "1789763515941"
+      },
+      "opposite_flow_after_fill": 3,
+      "complete": {
+        "leg": "NO",
+        "price": "0.41",
+        "tte_s": 781.3,
+        "utc_ms": "1789763518659",
+        "seconds_after_first_fill": 2.7
+      },
+      "extends_suppressed": 0,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182030-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 3,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.44",
+        "tte_s": 789.9,
+        "utc_ms": "1789762610132"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182015-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 14,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.78",
+        "tte_s": 822.3,
+        "utc_ms": "1789761677734"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 8,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609182000-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.28",
+        "tte_s": 737.6,
+        "utc_ms": "1789760862399"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.71",
+        "tte_s": 338.3,
+        "utc_ms": "1789761261707",
+        "seconds_after_first_fill": 399.3
+      },
+      "extends_suppressed": 1,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609181945-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 7,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.71",
+        "tte_s": 800.2,
+        "utc_ms": "1789759899795"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 0,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609181930-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 19,
+      "first_fill": {
+        "leg": "YES",
+        "price": "0.77",
+        "tte_s": 829.8,
+        "utc_ms": "1789758970165"
+      },
+      "opposite_flow_after_fill": 8,
+      "complete": {
+        "leg": "NO",
+        "price": "0.22",
+        "tte_s": 826.9,
+        "utc_ms": "1789758973099",
+        "seconds_after_first_fill": 2.9
+      },
+      "extends_suppressed": 2,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609181915-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 13,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.47",
+        "tte_s": 868.3,
+        "utc_ms": "1789758031730"
+      },
+      "opposite_flow_after_fill": 1,
+      "complete": {
+        "leg": "YES",
+        "price": "0.52",
+        "tte_s": 803.4,
+        "utc_ms": "1789758096605",
+        "seconds_after_first_fill": 64.9
+      },
+      "extends_suppressed": 3,
+      "matched": true,
+      "constructed_pair_basis": "0.99",
+      "flow_reached_a_fee_safe_complement": true,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    },
+    {
+      "computable": true,
+      "symbol": "GEMI-BTC15M2609181900-UP",
+      "label": "EARLY_15M_ADAPTATION",
+      "prints_in_early_interval": 8,
+      "first_fill": {
+        "leg": "NO",
+        "price": "0.45",
+        "tte_s": 791.8,
+        "utc_ms": "1789757208201"
+      },
+      "opposite_flow_after_fill": 0,
+      "complete": null,
+      "extends_suppressed": 1,
+      "matched": false,
+      "constructed_pair_basis": null,
+      "flow_reached_a_fee_safe_complement": false,
+      "basis_is_constructed": "the complement is quoted at 1 - held - tick, so the pair basis is 0.99 BY CONSTRUCTION on every match. The finding is that external flow REACHED that price, not that the pair happened to cost 0.99.",
+      "caveat": "EARLY_15M_ADAPTATION. Model B research, offline. The frozen policy's quote_between_tte_s is UNCHANGED and the running lanes are untouched. Gemini serves no book history, so this prices from the TAPE rather than a book, and treats queue position as zero. Every figure is an UPPER BOUND on what the early interval could support, not an estimate of what it would deliver."
+    }
+  ]
+}

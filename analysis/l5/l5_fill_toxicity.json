@@ -1,0 +1,650 @@
+{
+ "aggregate": {
+  "maker": {
+   "dollars": 366894.31,
+   "modeled_maker_rebate": 2641.64,
+   "n": 40455,
+   "pnl": -2816.3,
+   "pnl_per_dollar": -0.00768
+  },
+  "taker": {
+   "dollars": 146433.28,
+   "modeled_maker_rebate": 1054.32,
+   "n": 8056,
+   "pnl": 311.96,
+   "pnl_per_dollar": 0.00213
+  }
+ },
+ "by_duration": {
+  "15m": {
+   "maker": {
+    "dollars": 366819.52,
+    "modeled_maker_rebate": 2641.1,
+    "n": 40447,
+    "pnl": -2837.74,
+    "pnl_per_dollar": -0.00774
+   },
+   "taker": {
+    "dollars": 28941.14,
+    "modeled_maker_rebate": 208.38,
+    "n": 1924,
+    "pnl": 401.3,
+    "pnl_per_dollar": 0.01387
+   }
+  },
+  "5m": {
+   "maker": {
+    "dollars": 74.79,
+    "modeled_maker_rebate": 0.54,
+    "n": 8,
+    "pnl": 21.44,
+    "pnl_per_dollar": 0.2867
+   },
+   "taker": {
+    "dollars": 117492.15,
+    "modeled_maker_rebate": 845.94,
+    "n": 6132,
+    "pnl": -89.34,
+    "pnl_per_dollar": -0.00076
+   }
+  }
+ },
+ "counts": {
+  "fills": 48511,
+  "maker": 40455,
+  "maker_share_fills": 0.8339,
+  "taker": 8056
+ },
+ "era_start_ts": 1787903127,
+ "label_note": "",
+ "maker_features": {
+  "burst_count": {
+   "0..1": {
+    "train": {
+     "dollars": 181718.65,
+     "modeled_maker_rebate": 1308.37,
+     "n": 17549,
+     "pnl": -754.54,
+     "pnl_per_dollar": -0.00415
+    },
+    "validate": {
+     "dollars": 120116.0,
+     "modeled_maker_rebate": 864.84,
+     "n": 11972,
+     "pnl": -830.37,
+     "pnl_per_dollar": -0.00691
+    }
+   },
+   "1..3": {
+    "train": {
+     "dollars": 36136.02,
+     "modeled_maker_rebate": 260.18,
+     "n": 5565,
+     "pnl": -746.64,
+     "pnl_per_dollar": -0.02066
+    },
+    "validate": {
+     "dollars": 22052.93,
+     "modeled_maker_rebate": 158.78,
+     "n": 3582,
+     "pnl": -359.18,
+     "pnl_per_dollar": -0.01629
+    }
+   },
+   "3..6": {
+    "train": {
+     "dollars": 3741.74,
+     "modeled_maker_rebate": 26.94,
+     "n": 978,
+     "pnl": 39.25,
+     "pnl_per_dollar": 0.01049
+    },
+    "validate": {
+     "dollars": 2524.35,
+     "modeled_maker_rebate": 18.18,
+     "n": 564,
+     "pnl": -348.78,
+     "pnl_per_dollar": -0.13817
+    }
+   },
+   "6..10000": {
+    "train": {
+     "dollars": 470.65,
+     "modeled_maker_rebate": 3.39,
+     "n": 181,
+     "pnl": 146.85,
+     "pnl_per_dollar": 0.31202
+    },
+    "validate": {
+     "dollars": 133.97,
+     "modeled_maker_rebate": 0.96,
+     "n": 64,
+     "pnl": 37.11,
+     "pnl_per_dollar": 0.27696
+    }
+   }
+  },
+  "frac_elapsed": {
+   "0..0.25": {
+    "train": {
+     "dollars": 49589.86,
+     "modeled_maker_rebate": 357.05,
+     "n": 5009,
+     "pnl": -411.25,
+     "pnl_per_dollar": -0.00829
+    },
+    "validate": {
+     "dollars": 36588.31,
+     "modeled_maker_rebate": 263.44,
+     "n": 3758,
+     "pnl": -251.39,
+     "pnl_per_dollar": -0.00687
+    }
+   },
+   "0.25..0.5": {
+    "train": {
+     "dollars": 53177.38,
+     "modeled_maker_rebate": 382.88,
+     "n": 6167,
+     "pnl": -276.87,
+     "pnl_per_dollar": -0.00521
+    },
+    "validate": {
+     "dollars": 38897.42,
+     "modeled_maker_rebate": 280.06,
+     "n": 4335,
+     "pnl": -651.02,
+     "pnl_per_dollar": -0.01674
+    }
+   },
+   "0.5..0.75": {
+    "train": {
+     "dollars": 60391.7,
+     "modeled_maker_rebate": 434.82,
+     "n": 6829,
+     "pnl": 15.47,
+     "pnl_per_dollar": 0.00026
+    },
+    "validate": {
+     "dollars": 37429.92,
+     "modeled_maker_rebate": 269.5,
+     "n": 4557,
+     "pnl": -615.34,
+     "pnl_per_dollar": -0.01644
+    }
+   },
+   "0.75..1.01": {
+    "train": {
+     "dollars": 58908.12,
+     "modeled_maker_rebate": 424.14,
+     "n": 6268,
+     "pnl": -642.43,
+     "pnl_per_dollar": -0.01091
+    },
+    "validate": {
+     "dollars": 31911.6,
+     "modeled_maker_rebate": 229.76,
+     "n": 3532,
+     "pnl": 16.53,
+     "pnl_per_dollar": 0.00052
+    }
+   }
+  },
+  "imbalance_toward_fill": {
+   "-0.1..0.1": {
+    "train": {
+     "dollars": 125854.35,
+     "modeled_maker_rebate": 906.15,
+     "n": 13366,
+     "pnl": -1452.58,
+     "pnl_per_dollar": -0.01154
+    },
+    "validate": {
+     "dollars": 82317.89,
+     "modeled_maker_rebate": 592.69,
+     "n": 9036,
+     "pnl": -140.75,
+     "pnl_per_dollar": -0.00171
+    }
+   },
+   "-0.5..-0.1": {
+    "train": {
+     "dollars": 45743.76,
+     "modeled_maker_rebate": 329.36,
+     "n": 4794,
+     "pnl": 2598.99,
+     "pnl_per_dollar": 0.05682
+    },
+    "validate": {
+     "dollars": 29715.45,
+     "modeled_maker_rebate": 213.95,
+     "n": 3072,
+     "pnl": 1800.85,
+     "pnl_per_dollar": 0.0606
+    }
+   },
+   "-1.01..-0.5": {
+    "train": {
+     "dollars": 5099.76,
+     "modeled_maker_rebate": 36.72,
+     "n": 459,
+     "pnl": -167.29,
+     "pnl_per_dollar": -0.0328
+    },
+    "validate": {
+     "dollars": 3269.88,
+     "modeled_maker_rebate": 23.54,
+     "n": 366,
+     "pnl": 497.25,
+     "pnl_per_dollar": 0.15207
+    }
+   },
+   "0.1..0.5": {
+    "train": {
+     "dollars": 38275.22,
+     "modeled_maker_rebate": 275.58,
+     "n": 4866,
+     "pnl": -1951.42,
+     "pnl_per_dollar": -0.05098
+    },
+    "validate": {
+     "dollars": 23753.74,
+     "modeled_maker_rebate": 171.03,
+     "n": 3200,
+     "pnl": -2847.54,
+     "pnl_per_dollar": -0.11988
+    }
+   },
+   "0.5..1.01": {
+    "train": {
+     "dollars": 7093.97,
+     "modeled_maker_rebate": 51.08,
+     "n": 788,
+     "pnl": -342.78,
+     "pnl_per_dollar": -0.04832
+    },
+    "validate": {
+     "dollars": 5770.29,
+     "modeled_maker_rebate": 41.55,
+     "n": 508,
+     "pnl": -811.03,
+     "pnl_per_dollar": -0.14055
+    }
+   }
+  },
+  "market": {
+   "BTC": {
+    "train": {
+     "dollars": 222067.06,
+     "modeled_maker_rebate": 1598.88,
+     "n": 24273,
+     "pnl": -1315.08,
+     "pnl_per_dollar": -0.00592
+    },
+    "validate": {
+     "dollars": 144756.52,
+     "modeled_maker_rebate": 1042.25,
+     "n": 16177,
+     "pnl": -1476.73,
+     "pnl_per_dollar": -0.0102
+    }
+   },
+   "ETH": {
+    "validate": {
+     "dollars": 70.73,
+     "modeled_maker_rebate": 0.51,
+     "n": 5,
+     "pnl": -24.5,
+     "pnl_per_dollar": -0.34636
+    }
+   }
+  },
+  "price": {
+   "0..0.3": {
+    "train": {
+     "dollars": 24233.22,
+     "modeled_maker_rebate": 174.48,
+     "n": 10597,
+     "pnl": -1693.25,
+     "pnl_per_dollar": -0.06987
+    },
+    "validate": {
+     "dollars": 15175.05,
+     "modeled_maker_rebate": 109.26,
+     "n": 6621,
+     "pnl": -4217.94,
+     "pnl_per_dollar": -0.27795
+    }
+   },
+   "0.3..0.5": {
+    "train": {
+     "dollars": 31054.65,
+     "modeled_maker_rebate": 223.59,
+     "n": 4032,
+     "pnl": -2731.53,
+     "pnl_per_dollar": -0.08796
+    },
+    "validate": {
+     "dollars": 22563.79,
+     "modeled_maker_rebate": 162.46,
+     "n": 3176,
+     "pnl": -595.08,
+     "pnl_per_dollar": -0.02637
+    }
+   },
+   "0.5..0.7": {
+    "train": {
+     "dollars": 56119.47,
+     "modeled_maker_rebate": 404.06,
+     "n": 4229,
+     "pnl": 350.86,
+     "pnl_per_dollar": 0.00625
+    },
+    "validate": {
+     "dollars": 37642.8,
+     "modeled_maker_rebate": 271.03,
+     "n": 2832,
+     "pnl": -751.52,
+     "pnl_per_dollar": -0.01996
+    }
+   },
+   "0.7..0.9": {
+    "train": {
+     "dollars": 77827.42,
+     "modeled_maker_rebate": 560.36,
+     "n": 4176,
+     "pnl": 1565.16,
+     "pnl_per_dollar": 0.02011
+    },
+    "validate": {
+     "dollars": 46622.58,
+     "modeled_maker_rebate": 335.68,
+     "n": 2615,
+     "pnl": 3100.01,
+     "pnl_per_dollar": 0.06649
+    }
+   },
+   "0.9..1.01": {
+    "train": {
+     "dollars": 32832.29,
+     "modeled_maker_rebate": 236.39,
+     "n": 1239,
+     "pnl": 1193.69,
+     "pnl_per_dollar": 0.03636
+    },
+    "validate": {
+     "dollars": 22823.02,
+     "modeled_maker_rebate": 164.33,
+     "n": 938,
+     "pnl": 963.31,
+     "pnl_per_dollar": 0.04221
+    }
+   }
+  },
+  "reduces_residual": {
+   "False": {
+    "train": {
+     "dollars": 115344.17,
+     "modeled_maker_rebate": 830.48,
+     "n": 12991,
+     "pnl": -6841.9,
+     "pnl_per_dollar": -0.05932
+    },
+    "validate": {
+     "dollars": 77633.02,
+     "modeled_maker_rebate": 558.96,
+     "n": 8572,
+     "pnl": -2327.16,
+     "pnl_per_dollar": -0.02998
+    }
+   },
+   "True": {
+    "train": {
+     "dollars": 106722.89,
+     "modeled_maker_rebate": 768.4,
+     "n": 11282,
+     "pnl": 5526.82,
+     "pnl_per_dollar": 0.05179
+    },
+    "validate": {
+     "dollars": 67194.23,
+     "modeled_maker_rebate": 483.8,
+     "n": 7610,
+     "pnl": 825.93,
+     "pnl_per_dollar": 0.01229
+    }
+   }
+  },
+  "streak_len_same_side": {
+   "0..1": {
+    "train": {
+     "dollars": 81745.25,
+     "modeled_maker_rebate": 588.57,
+     "n": 6883,
+     "pnl": 1643.58,
+     "pnl_per_dollar": 0.02011
+    },
+    "validate": {
+     "dollars": 55295.02,
+     "modeled_maker_rebate": 398.12,
+     "n": 4832,
+     "pnl": 667.02,
+     "pnl_per_dollar": 0.01206
+    }
+   },
+   "1..3": {
+    "train": {
+     "dollars": 79575.66,
+     "modeled_maker_rebate": 572.94,
+     "n": 7402,
+     "pnl": 423.45,
+     "pnl_per_dollar": 0.00532
+    },
+    "validate": {
+     "dollars": 50016.58,
+     "modeled_maker_rebate": 360.12,
+     "n": 5076,
+     "pnl": -732.6,
+     "pnl_per_dollar": -0.01465
+    }
+   },
+   "3..6": {
+    "train": {
+     "dollars": 36761.32,
+     "modeled_maker_rebate": 264.68,
+     "n": 4840,
+     "pnl": -990.81,
+     "pnl_per_dollar": -0.02695
+    },
+    "validate": {
+     "dollars": 23303.08,
+     "modeled_maker_rebate": 167.78,
+     "n": 3228,
+     "pnl": -972.76,
+     "pnl_per_dollar": -0.04174
+    }
+   },
+   "6..10000": {
+    "train": {
+     "dollars": 23984.82,
+     "modeled_maker_rebate": 172.69,
+     "n": 5148,
+     "pnl": -2391.3,
+     "pnl_per_dollar": -0.0997
+    },
+    "validate": {
+     "dollars": 16212.57,
+     "modeled_maker_rebate": 116.73,
+     "n": 3046,
+     "pnl": -462.89,
+     "pnl_per_dollar": -0.02855
+    }
+   }
+  },
+  "window_minutes": {
+   "15": {
+    "train": {
+     "dollars": 222067.06,
+     "modeled_maker_rebate": 1598.88,
+     "n": 24273,
+     "pnl": -1315.08,
+     "pnl_per_dollar": -0.00592
+    },
+    "validate": {
+     "dollars": 144752.46,
+     "modeled_maker_rebate": 1042.22,
+     "n": 16174,
+     "pnl": -1522.67,
+     "pnl_per_dollar": -0.01052
+    }
+   },
+   "5": {
+    "validate": {
+     "dollars": 74.79,
+     "modeled_maker_rebate": 0.54,
+     "n": 8,
+     "pnl": 21.44,
+     "pnl_per_dollar": 0.2867
+    }
+   }
+  }
+ },
+ "policy_evaluation": [
+  {
+   "rule": "baseline_all_maker_fills",
+   "train": {
+    "dollars": 222067.06,
+    "kept_share_dollars": 1.0,
+    "modeled_maker_rebate": 1598.88,
+    "n": 24273,
+    "pnl": -1315.08,
+    "pnl_per_dollar": -0.00592,
+    "pnl_plus_modeled_rebate": 283.8
+   },
+   "validate": {
+    "dollars": 144827.25,
+    "kept_share_dollars": 1.0,
+    "modeled_maker_rebate": 1042.76,
+    "n": 16182,
+    "pnl": -1501.22,
+    "pnl_per_dollar": -0.01037,
+    "pnl_plus_modeled_rebate": -458.46
+   }
+  },
+  {
+   "rule": "A_inventory_aware(reduces_residual or imbalance_toward_fill<-0.1)",
+   "train": {
+    "dollars": 107281.69,
+    "kept_share_dollars": 0.4831,
+    "modeled_maker_rebate": 772.43,
+    "n": 11307,
+    "pnl": 5642.56,
+    "pnl_per_dollar": 0.0526,
+    "pnl_plus_modeled_rebate": 6414.99
+   },
+   "validate": {
+    "dollars": 67647.55,
+    "kept_share_dollars": 0.4671,
+    "modeled_maker_rebate": 487.06,
+    "n": 7631,
+    "pnl": 875.96,
+    "pnl_per_dollar": 0.01295,
+    "pnl_plus_modeled_rebate": 1363.02
+   }
+  },
+  {
+   "rule": "B_A_and_price>=0.30",
+   "train": {
+    "dollars": 95103.49,
+    "kept_share_dollars": 0.4283,
+    "modeled_maker_rebate": 684.75,
+    "n": 6455,
+    "pnl": 4030.83,
+    "pnl_per_dollar": 0.04238,
+    "pnl_plus_modeled_rebate": 4715.58
+   },
+   "validate": {
+    "dollars": 60382.13,
+    "kept_share_dollars": 0.4169,
+    "modeled_maker_rebate": 434.75,
+    "n": 4530,
+    "pnl": 3776.06,
+    "pnl_per_dollar": 0.06254,
+    "pnl_plus_modeled_rebate": 4210.81
+   }
+  },
+  {
+   "rule": "C_B_and_streak<3",
+   "train": {
+    "dollars": 75691.54,
+    "kept_share_dollars": 0.3408,
+    "modeled_maker_rebate": 544.98,
+    "n": 4727,
+    "pnl": 4006.74,
+    "pnl_per_dollar": 0.05294,
+    "pnl_plus_modeled_rebate": 4551.72
+   },
+   "validate": {
+    "dollars": 48061.14,
+    "kept_share_dollars": 0.3319,
+    "modeled_maker_rebate": 346.04,
+    "n": 3344,
+    "pnl": 2829.51,
+    "pnl_per_dollar": 0.05887,
+    "pnl_plus_modeled_rebate": 3175.55
+   }
+  }
+ ],
+ "rebate_model": {
+  "basis": "empirical aggregate of observed rebate rows / observed volume; program formula unverified",
+  "maker_rebate_per_dollar": 0.0072,
+  "taker_rebate_per_dollar": 0.0025
+ },
+ "stability": {
+  "burst_count": {
+   "0..1": "stable_negative",
+   "1..3": "stable_negative",
+   "3..6": "unstable",
+   "6..10000": "stable_positive"
+  },
+  "frac_elapsed": {
+   "0..0.25": "stable_negative",
+   "0.25..0.5": "stable_negative",
+   "0.5..0.75": "unstable",
+   "0.75..1.01": "unstable"
+  },
+  "imbalance_toward_fill": {
+   "-0.1..0.1": "stable_negative",
+   "-0.5..-0.1": "stable_positive",
+   "-1.01..-0.5": "unstable",
+   "0.1..0.5": "stable_negative",
+   "0.5..1.01": "stable_negative"
+  },
+  "market": {
+   "BTC": "stable_negative",
+   "ETH": "insufficient"
+  },
+  "price": {
+   "0..0.3": "stable_negative",
+   "0.3..0.5": "stable_negative",
+   "0.5..0.7": "unstable",
+   "0.7..0.9": "stable_positive",
+   "0.9..1.01": "stable_positive"
+  },
+  "reduces_residual": {
+   "False": "stable_negative",
+   "True": "stable_positive"
+  },
+  "streak_len_same_side": {
+   "0..1": "stable_positive",
+   "1..3": "unstable",
+   "3..6": "stable_negative",
+   "6..10000": "stable_negative"
+  },
+  "window_minutes": {
+   "15": "stable_negative",
+   "5": "insufficient"
+  }
+ },
+ "train_fraction": 0.6
+}

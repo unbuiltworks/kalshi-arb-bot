@@ -1,0 +1,32 @@
+{
+  "source": "frozen journal /state/pmus-ws/l5_probe08b_journal.jsonl sha256 e8e5dd6cf994a2b68543320f297b8a0b972a26c6bbb1b0359657a467d8cfb95e (223207 bytes), extracted read-only by deployment 98d39cae; venue order states from L5_ORDER_ROW in the same run",
+  "market": "cpc-btc-updown-15m-2026-09-26-1130z",
+  "session": "l5probe-20260926-btc15m-08b",
+  "settlement": {"state": "MARKET_STATE_EXPIRED", "settlement_px": "1.0000", "winner": "UP"},
+  "note": "l5_price is L5's price on HIS side; wire/avg_fill_px is the venue's YES-convention price. A DOWN buy at NO price p wires 1-p.",
+  "orders": [
+    {"seq": 1, "l5_ts": 1790422239, "side": "DOWN", "inventory_class": "FLAT_OPEN", "residual_before": "0", "l5_price": "0.4100000102", "own_price": "0.41", "wire": "0.59", "qty": "1.68", "venue_order_id": "CQRVN9G7YYCA", "venue_state": "ORDER_STATE_FILLED", "cum_qty": "1.68", "commission": "-0.0100"},
+    {"seq": 2, "l5_ts": 1790422316, "side": "DOWN", "inventory_class": "FLAT_OPEN", "residual_before": "0", "l5_price": "0.47", "own_price": "0.47", "wire": "0.53", "qty": "2.25", "venue_order_id": "CQRW0EPNYYAQ", "venue_state": "ORDER_STATE_FILLED", "cum_qty": "2.25", "commission": "-0.0100"},
+    {"seq": 3, "l5_ts": 1790422404, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.56", "own_price": "0.56", "wire": "0.56", "qty": "0.42", "venue_order_id": "CQRWQDCFCYAQ", "venue_state": "ORDER_STATE_NEW", "cum_qty": "0", "commission": "0.0000"},
+    {"seq": 4, "l5_ts": 1790422506, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.6", "own_price": "0.6", "wire": "0.6", "qty": "2.25", "venue_order_id": "CQRY0XM72YCD", "venue_state": "ORDER_STATE_NEW", "cum_qty": "0", "commission": "0.0000"},
+    {"seq": 5, "l5_ts": 1790422506, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.61", "own_price": "0.61", "wire": "0.61", "qty": "2.25", "venue_order_id": "CQRXK8DM6YCC", "venue_state": "ORDER_STATE_NEW", "cum_qty": "0", "commission": "0.0000"},
+    {"seq": 6, "l5_ts": 1790422602, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.75", "own_price": "0.75", "wire": "0.75", "qty": "2.25", "venue_order_id": "CQRYMZE1AYCD", "venue_state": "ORDER_STATE_FILLED", "cum_qty": "2.25", "commission": "-0.0100"},
+    {"seq": 7, "l5_ts": 1790422602, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.76", "own_price": "0.76", "wire": "0.76", "qty": "2.25", "venue_order_id": "CQRYBHN0CYC6", "venue_state": "ORDER_STATE_FILLED", "cum_qty": "2.25", "commission": "-0.0100"},
+    {"seq": 8, "l5_ts": 1790422839, "side": "UP", "inventory_class": "REDUCE_RESIDUAL", "residual_before": "-3.93", "l5_price": "0.8", "own_price": "0.8", "wire": "0.8", "qty": "0.22", "venue_order_id": "CQS032WZ0YBQ", "venue_state": "ORDER_STATE_FILLED", "cum_qty": "0.22", "commission": "0.0000"}
+  ],
+  "refused_reduce_residual_max_usd": [
+    {"l5_ts": 1790422758, "side": "UP", "l5_price": "0.9100000009", "l5_size": "22.777778", "reason": "MAX_USD_PER_MARKET"},
+    {"l5_ts": 1790422838, "side": "UP", "l5_price": "0.79", "l5_size": "50", "reason": "MAX_USD_PER_MARKET"},
+    {"l5_ts": 1790422838, "side": "UP", "l5_price": "0.8200000021", "l5_size": "38.380556", "reason": "MAX_USD_PER_MARKET"}
+  ],
+  "action_summary": {
+    "actions": 53,
+    "by_inventory_class": {
+      "FLAT_OPEN": {"actions": 2, "submitted": 2, "suppressed": 0},
+      "REDUCE_RESIDUAL": {"actions": 9, "submitted": 6, "suppressed": 0},
+      "INCREASE_RESIDUAL": {"actions": 8, "submitted": 0, "suppressed": 8},
+      "UNCLASSIFIED": {"actions": 34, "submitted": 0, "suppressed": 0}
+    },
+    "by_refusal": {"MAKER_ONLY_NO_TAKER": 34, "IMBALANCE_INCREASE_SUPPRESSED": 8, "MAX_USD_PER_MARKET": 3}
+  }
+}

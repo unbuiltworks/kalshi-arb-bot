@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "ONE-SHOT ADMIN ENTRYPOINT for the owner-gated HALT reset. It is NOT a service: nothing runs it continuously, and it exists only to be pointed at the l5-halt-watchdog service for the duration of one reset and then pointed away. The halt latch is a file on that service's volume and a Railway volume mounts to exactly one service, so the reset must run there; this manifest is what keeps that temporary swap explicit rather than improvised. Auto-redeploy is disabled by a watch pattern that matches nothing -- deploying this is an owner action, exactly as for pmus_ws_book_diag. restartPolicyType NEVER because the script EXITS by design; ALWAYS would loop it and leave the watchdog not sweeping for longer. The image holds signing and a GET-only transport (pmus_auth.ReadOnlyTransport) and no order-placing code, so it cannot place or cancel anything at the venue; its only write is the halt object, and only after four fail-closed gates. L5_HALT_RESET_INSPECT=YES is the image default, so a bare boot performs the READ-ONLY dry run and writes nothing. Credentials are TEMPORARY and are removed immediately after; the credential-free watchdog image is never modified (OWNER 2026-10-14, preserved).",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_halt_reset/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_halt_reset/ENABLE_REDEPLOY_BY_OWNER_ONLY/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.l5_halt_reset",
+    "restartPolicyType": "NEVER"
+  }
+}

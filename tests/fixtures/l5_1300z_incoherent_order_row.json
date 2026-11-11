@@ -1,0 +1,47 @@
+{
+  "captured_utc": "2026-09-27T13:11:16Z",
+  "source": "executor PENDING_TERMINAL_RESOLVED vs read-only recovery /v1/order/{id}",
+  "note": "The first row is what the venue served while the order was already filled; the second is what the same endpoint served later. The first must NOT resolve; the second must.",
+  "incoherent_as_served_at_1311z": {
+    "id": "CREX7ZDP2YC6",
+    "marketSlug": "cpc-btc-updown-15m-2026-09-27-1300z",
+    "side": "ORDER_SIDE_BUY",
+    "outcomeSide": "OUTCOME_SIDE_YES",
+    "state": "ORDER_STATE_NEW",
+    "price": {"value": "0.31", "currency": "USD"},
+    "quantity": 0.9,
+    "cumQuantity": 0,
+    "leavesQuantity": 0,
+    "avgPx": {"value": "0.0000", "currency": "USD"},
+    "commissionNotionalTotalCollected": {"value": "0.0000", "currency": "USD"}
+  },
+  "authoritative_as_served_later": {
+    "id": "CREX7ZDP2YC6",
+    "marketSlug": "cpc-btc-updown-15m-2026-09-27-1300z",
+    "side": "ORDER_SIDE_BUY",
+    "outcomeSide": "OUTCOME_SIDE_YES",
+    "state": "ORDER_STATE_FILLED",
+    "price": {"value": "0.31", "currency": "USD"},
+    "quantity": 0.9,
+    "cumQuantity": 0.9,
+    "leavesQuantity": 0,
+    "avgPx": {"value": "0.3100", "currency": "USD"},
+    "commissionNotionalTotalCollected": {"value": "0.0000", "currency": "USD"},
+    "insertTime": "2026-09-27T13:08:36.301298458Z",
+    "lastTransactTime": "2026-09-27T13:09:06.690007382Z"
+  },
+  "second_order_authoritative": {
+    "id": "CREWYQ75RYCA",
+    "marketSlug": "cpc-btc-updown-15m-2026-09-27-1300z",
+    "side": "ORDER_SIDE_BUY",
+    "outcomeSide": "OUTCOME_SIDE_YES",
+    "state": "ORDER_STATE_FILLED",
+    "price": {"value": "0.29", "currency": "USD"},
+    "quantity": 0.9,
+    "cumQuantity": 0.9,
+    "leavesQuantity": 0,
+    "avgPx": {"value": "0.2900", "currency": "USD"},
+    "commissionNotionalTotalCollected": {"value": "0.0000", "currency": "USD"},
+    "lastTransactTime": "2026-09-27T13:09:27.182498760Z"
+  }
+}

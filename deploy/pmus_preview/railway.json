@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "ONE-SHOT. Previews an order; contains no path that can submit, cancel, modify or close. Runs once and exits; never restarts.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_preview/Dockerfile",
+    "watchPatterns": ["deploy/pmus_preview/ENABLE_RUN_BY_OWNER_ONLY/**"]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.pmus_preview_oneshot",
+    "restartPolicyType": "NEVER"
+  }
+}

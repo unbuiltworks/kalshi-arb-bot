@@ -1,0 +1,1020 @@
+{
+  "question": "does the live universe contain a band x spread cell whose spread pays for the observed one-sided-fill risk?",
+  "prereg": "analysis/l5/BAND_SPREAD_PREREGISTRATION.md",
+  "coverage": {
+    "admitted_observations": 5381,
+    "distinct_markets": 376,
+    "excluded": "refused candidates: the strict evidence gate could not price them, so their books are not comparable"
+  },
+  "constants": {
+    "stranded_cost_usd": "1.9120",
+    "observed_residual_incidence": 0.2821,
+    "source": "measured R5F settled cohort; scales the bar, not fitted"
+  },
+  "required_spread_by_size": {
+    "10.3": 0.0729,
+    "5.75": 0.1307,
+    "20.0": 0.0376
+  },
+  "grids": {
+    "10.3": {
+      "45-55": {
+        "all": {
+          "observations": 1705,
+          "markets": 210,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 3474.74,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.103,
+          "break_even_incidence": 0.0511,
+          "clears": false,
+          "spread_shortfall_x": 7.29
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 1214,
+            "markets": 144,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 8724.310000000001,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.103,
+            "break_even_incidence": 0.0511,
+            "clears": false,
+            "spread_shortfall_x": 7.29
+          },
+          "b 0.01-0.02": {
+            "observations": 258,
+            "markets": 81,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.206,
+            "break_even_incidence": 0.0973,
+            "clears": false,
+            "spread_shortfall_x": 3.65
+          },
+          "c 0.02-0.03": {
+            "observations": 101,
+            "markets": 40,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 830.18,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.309,
+            "break_even_incidence": 0.1391,
+            "clears": false,
+            "spread_shortfall_x": 2.43
+          },
+          "d 0.03-0.05": {
+            "observations": 68,
+            "markets": 30,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 82.89,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.412,
+            "break_even_incidence": 0.1773,
+            "clears": false,
+            "spread_shortfall_x": 1.82
+          },
+          "e >0.05": {
+            "observations": 64,
+            "markets": 30,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 80.5,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.824,
+            "break_even_incidence": 0.3012,
+            "clears": true,
+            "spread_shortfall_x": 0.91
+          }
+        }
+      },
+      "40-60": {
+        "all": {
+          "observations": 3560,
+          "markets": 288,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.103,
+          "break_even_incidence": 0.0511,
+          "clears": false,
+          "spread_shortfall_x": 7.29
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 2482,
+            "markets": 219,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.103,
+            "break_even_incidence": 0.0511,
+            "clears": false,
+            "spread_shortfall_x": 7.29
+          },
+          "b 0.01-0.02": {
+            "observations": 575,
+            "markets": 112,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.206,
+            "break_even_incidence": 0.0973,
+            "clears": false,
+            "spread_shortfall_x": 3.65
+          },
+          "c 0.02-0.03": {
+            "observations": 219,
+            "markets": 69,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 828.05,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.309,
+            "break_even_incidence": 0.1391,
+            "clears": false,
+            "spread_shortfall_x": 2.43
+          },
+          "d 0.03-0.05": {
+            "observations": 175,
+            "markets": 52,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 126.32,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.412,
+            "break_even_incidence": 0.1773,
+            "clears": false,
+            "spread_shortfall_x": 1.82
+          },
+          "e >0.05": {
+            "observations": 109,
+            "markets": 45,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 78.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.824,
+            "break_even_incidence": 0.3012,
+            "clears": true,
+            "spread_shortfall_x": 0.91
+          }
+        }
+      },
+      "35-65": {
+        "all": {
+          "observations": 5151,
+          "markets": 367,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2125.82,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.103,
+          "break_even_incidence": 0.0511,
+          "clears": false,
+          "spread_shortfall_x": 7.29
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3578,
+            "markets": 286,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.103,
+            "break_even_incidence": 0.0511,
+            "clears": false,
+            "spread_shortfall_x": 7.29
+          },
+          "b 0.01-0.02": {
+            "observations": 863,
+            "markets": 139,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 810.4,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.206,
+            "break_even_incidence": 0.0973,
+            "clears": false,
+            "spread_shortfall_x": 3.65
+          },
+          "c 0.02-0.03": {
+            "observations": 336,
+            "markets": 91,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 821.29,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.309,
+            "break_even_incidence": 0.1391,
+            "clears": false,
+            "spread_shortfall_x": 2.43
+          },
+          "d 0.03-0.05": {
+            "observations": 226,
+            "markets": 63,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 127.685,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.412,
+            "break_even_incidence": 0.1773,
+            "clears": false,
+            "spread_shortfall_x": 1.82
+          },
+          "e >0.05": {
+            "observations": 148,
+            "markets": 54,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.824,
+            "break_even_incidence": 0.3012,
+            "clears": true,
+            "spread_shortfall_x": 0.91
+          }
+        }
+      },
+      "30-70": {
+        "all": {
+          "observations": 5375,
+          "markets": 375,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.103,
+          "break_even_incidence": 0.0511,
+          "clears": false,
+          "spread_shortfall_x": 7.29
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3667,
+            "markets": 291,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7530.97,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.103,
+            "break_even_incidence": 0.0511,
+            "clears": false,
+            "spread_shortfall_x": 7.29
+          },
+          "b 0.01-0.02": {
+            "observations": 878,
+            "markets": 140,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 794.5699999999999,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.206,
+            "break_even_incidence": 0.0973,
+            "clears": false,
+            "spread_shortfall_x": 3.65
+          },
+          "c 0.02-0.03": {
+            "observations": 380,
+            "markets": 96,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 823.48,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.309,
+            "break_even_incidence": 0.1391,
+            "clears": false,
+            "spread_shortfall_x": 2.43
+          },
+          "d 0.03-0.05": {
+            "observations": 240,
+            "markets": 67,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 122.5,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.412,
+            "break_even_incidence": 0.1773,
+            "clears": false,
+            "spread_shortfall_x": 1.82
+          },
+          "e >0.05": {
+            "observations": 210,
+            "markets": 68,
+            "median_spread": 0.07,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.93,
+            "attainable_edge_usd": 0.721,
+            "break_even_incidence": 0.2738,
+            "clears": false,
+            "spread_shortfall_x": 1.04
+          }
+        }
+      }
+    },
+    "5.75": {
+      "45-55": {
+        "all": {
+          "observations": 1705,
+          "markets": 210,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 3474.74,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.0575,
+          "break_even_incidence": 0.0292,
+          "clears": false,
+          "spread_shortfall_x": 13.07
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 1214,
+            "markets": 144,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 8724.310000000001,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.0575,
+            "break_even_incidence": 0.0292,
+            "clears": false,
+            "spread_shortfall_x": 13.07
+          },
+          "b 0.01-0.02": {
+            "observations": 258,
+            "markets": 81,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.115,
+            "break_even_incidence": 0.0567,
+            "clears": false,
+            "spread_shortfall_x": 6.53
+          },
+          "c 0.02-0.03": {
+            "observations": 101,
+            "markets": 40,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 830.18,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.1725,
+            "break_even_incidence": 0.0828,
+            "clears": false,
+            "spread_shortfall_x": 4.36
+          },
+          "d 0.03-0.05": {
+            "observations": 68,
+            "markets": 30,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 82.89,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.23,
+            "break_even_incidence": 0.1074,
+            "clears": false,
+            "spread_shortfall_x": 3.27
+          },
+          "e >0.05": {
+            "observations": 64,
+            "markets": 30,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 80.5,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.46,
+            "break_even_incidence": 0.1939,
+            "clears": false,
+            "spread_shortfall_x": 1.63
+          }
+        }
+      },
+      "40-60": {
+        "all": {
+          "observations": 3560,
+          "markets": 288,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.0575,
+          "break_even_incidence": 0.0292,
+          "clears": false,
+          "spread_shortfall_x": 13.07
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 2482,
+            "markets": 219,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.0575,
+            "break_even_incidence": 0.0292,
+            "clears": false,
+            "spread_shortfall_x": 13.07
+          },
+          "b 0.01-0.02": {
+            "observations": 575,
+            "markets": 112,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.115,
+            "break_even_incidence": 0.0567,
+            "clears": false,
+            "spread_shortfall_x": 6.53
+          },
+          "c 0.02-0.03": {
+            "observations": 219,
+            "markets": 69,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 828.05,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.1725,
+            "break_even_incidence": 0.0828,
+            "clears": false,
+            "spread_shortfall_x": 4.36
+          },
+          "d 0.03-0.05": {
+            "observations": 175,
+            "markets": 52,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 126.32,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.23,
+            "break_even_incidence": 0.1074,
+            "clears": false,
+            "spread_shortfall_x": 3.27
+          },
+          "e >0.05": {
+            "observations": 109,
+            "markets": 45,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 78.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.46,
+            "break_even_incidence": 0.1939,
+            "clears": false,
+            "spread_shortfall_x": 1.63
+          }
+        }
+      },
+      "35-65": {
+        "all": {
+          "observations": 5151,
+          "markets": 367,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2125.82,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.0575,
+          "break_even_incidence": 0.0292,
+          "clears": false,
+          "spread_shortfall_x": 13.07
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3578,
+            "markets": 286,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.0575,
+            "break_even_incidence": 0.0292,
+            "clears": false,
+            "spread_shortfall_x": 13.07
+          },
+          "b 0.01-0.02": {
+            "observations": 863,
+            "markets": 139,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 810.4,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.115,
+            "break_even_incidence": 0.0567,
+            "clears": false,
+            "spread_shortfall_x": 6.53
+          },
+          "c 0.02-0.03": {
+            "observations": 336,
+            "markets": 91,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 821.29,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.1725,
+            "break_even_incidence": 0.0828,
+            "clears": false,
+            "spread_shortfall_x": 4.36
+          },
+          "d 0.03-0.05": {
+            "observations": 226,
+            "markets": 63,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 127.685,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.23,
+            "break_even_incidence": 0.1074,
+            "clears": false,
+            "spread_shortfall_x": 3.27
+          },
+          "e >0.05": {
+            "observations": 148,
+            "markets": 54,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 0.46,
+            "break_even_incidence": 0.1939,
+            "clears": false,
+            "spread_shortfall_x": 1.63
+          }
+        }
+      },
+      "30-70": {
+        "all": {
+          "observations": 5375,
+          "markets": 375,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.0575,
+          "break_even_incidence": 0.0292,
+          "clears": false,
+          "spread_shortfall_x": 13.07
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3667,
+            "markets": 291,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7530.97,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.0575,
+            "break_even_incidence": 0.0292,
+            "clears": false,
+            "spread_shortfall_x": 13.07
+          },
+          "b 0.01-0.02": {
+            "observations": 878,
+            "markets": 140,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 794.5699999999999,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.115,
+            "break_even_incidence": 0.0567,
+            "clears": false,
+            "spread_shortfall_x": 6.53
+          },
+          "c 0.02-0.03": {
+            "observations": 380,
+            "markets": 96,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 823.48,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.1725,
+            "break_even_incidence": 0.0828,
+            "clears": false,
+            "spread_shortfall_x": 4.36
+          },
+          "d 0.03-0.05": {
+            "observations": 240,
+            "markets": 67,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 122.5,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.23,
+            "break_even_incidence": 0.1074,
+            "clears": false,
+            "spread_shortfall_x": 3.27
+          },
+          "e >0.05": {
+            "observations": 210,
+            "markets": 68,
+            "median_spread": 0.07,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.93,
+            "attainable_edge_usd": 0.4025,
+            "break_even_incidence": 0.1739,
+            "clears": false,
+            "spread_shortfall_x": 1.87
+          }
+        }
+      }
+    },
+    "20.0": {
+      "45-55": {
+        "all": {
+          "observations": 1705,
+          "markets": 210,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 3474.74,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.2,
+          "break_even_incidence": 0.0947,
+          "clears": false,
+          "spread_shortfall_x": 3.76
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 1214,
+            "markets": 144,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 8724.310000000001,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.2,
+            "break_even_incidence": 0.0947,
+            "clears": false,
+            "spread_shortfall_x": 3.76
+          },
+          "b 0.01-0.02": {
+            "observations": 258,
+            "markets": 81,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.4,
+            "break_even_incidence": 0.173,
+            "clears": false,
+            "spread_shortfall_x": 1.88
+          },
+          "c 0.02-0.03": {
+            "observations": 101,
+            "markets": 40,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 830.18,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.6,
+            "break_even_incidence": 0.2389,
+            "clears": false,
+            "spread_shortfall_x": 1.25
+          },
+          "d 0.03-0.05": {
+            "observations": 68,
+            "markets": 30,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 82.89,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.8,
+            "break_even_incidence": 0.295,
+            "clears": true,
+            "spread_shortfall_x": 0.94
+          },
+          "e >0.05": {
+            "observations": 64,
+            "markets": 30,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 80.5,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 1.6,
+            "break_even_incidence": 0.4556,
+            "clears": true,
+            "spread_shortfall_x": 0.47
+          }
+        }
+      },
+      "40-60": {
+        "all": {
+          "observations": 3560,
+          "markets": 288,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.2,
+          "break_even_incidence": 0.0947,
+          "clears": false,
+          "spread_shortfall_x": 3.76
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 2482,
+            "markets": 219,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.2,
+            "break_even_incidence": 0.0947,
+            "clears": false,
+            "spread_shortfall_x": 3.76
+          },
+          "b 0.01-0.02": {
+            "observations": 575,
+            "markets": 112,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 711.11,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.4,
+            "break_even_incidence": 0.173,
+            "clears": false,
+            "spread_shortfall_x": 1.88
+          },
+          "c 0.02-0.03": {
+            "observations": 219,
+            "markets": 69,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 828.05,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.6,
+            "break_even_incidence": 0.2389,
+            "clears": false,
+            "spread_shortfall_x": 1.25
+          },
+          "d 0.03-0.05": {
+            "observations": 175,
+            "markets": 52,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 126.32,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.8,
+            "break_even_incidence": 0.295,
+            "clears": true,
+            "spread_shortfall_x": 0.94
+          },
+          "e >0.05": {
+            "observations": 109,
+            "markets": 45,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 78.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 1.6,
+            "break_even_incidence": 0.4556,
+            "clears": true,
+            "spread_shortfall_x": 0.47
+          }
+        }
+      },
+      "35-65": {
+        "all": {
+          "observations": 5151,
+          "markets": 367,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2125.82,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.2,
+          "break_even_incidence": 0.0947,
+          "clears": false,
+          "spread_shortfall_x": 3.76
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3578,
+            "markets": 286,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7500.0,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.2,
+            "break_even_incidence": 0.0947,
+            "clears": false,
+            "spread_shortfall_x": 3.76
+          },
+          "b 0.01-0.02": {
+            "observations": 863,
+            "markets": 139,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 810.4,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.4,
+            "break_even_incidence": 0.173,
+            "clears": false,
+            "spread_shortfall_x": 1.88
+          },
+          "c 0.02-0.03": {
+            "observations": 336,
+            "markets": 91,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 821.29,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.6,
+            "break_even_incidence": 0.2389,
+            "clears": false,
+            "spread_shortfall_x": 1.25
+          },
+          "d 0.03-0.05": {
+            "observations": 226,
+            "markets": 63,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 127.685,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.8,
+            "break_even_incidence": 0.295,
+            "clears": true,
+            "spread_shortfall_x": 0.94
+          },
+          "e >0.05": {
+            "observations": 148,
+            "markets": 54,
+            "median_spread": 0.08,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.92,
+            "attainable_edge_usd": 1.6,
+            "break_even_incidence": 0.4556,
+            "clears": true,
+            "spread_shortfall_x": 0.47
+          }
+        }
+      },
+      "30-70": {
+        "all": {
+          "observations": 5375,
+          "markets": 375,
+          "median_spread": 0.01,
+          "median_bid_touch_qty": 2057.0,
+          "best_pair_cost": 0.99,
+          "attainable_edge_usd": 0.2,
+          "break_even_incidence": 0.0947,
+          "clears": false,
+          "spread_shortfall_x": 3.76
+        },
+        "by_spread": {
+          "a <=0.01": {
+            "observations": 3667,
+            "markets": 291,
+            "median_spread": 0.01,
+            "median_bid_touch_qty": 7530.97,
+            "best_pair_cost": 0.99,
+            "attainable_edge_usd": 0.2,
+            "break_even_incidence": 0.0947,
+            "clears": false,
+            "spread_shortfall_x": 3.76
+          },
+          "b 0.01-0.02": {
+            "observations": 878,
+            "markets": 140,
+            "median_spread": 0.02,
+            "median_bid_touch_qty": 794.5699999999999,
+            "best_pair_cost": 0.98,
+            "attainable_edge_usd": 0.4,
+            "break_even_incidence": 0.173,
+            "clears": false,
+            "spread_shortfall_x": 1.88
+          },
+          "c 0.02-0.03": {
+            "observations": 380,
+            "markets": 96,
+            "median_spread": 0.03,
+            "median_bid_touch_qty": 823.48,
+            "best_pair_cost": 0.97,
+            "attainable_edge_usd": 0.6,
+            "break_even_incidence": 0.2389,
+            "clears": false,
+            "spread_shortfall_x": 1.25
+          },
+          "d 0.03-0.05": {
+            "observations": 240,
+            "markets": 67,
+            "median_spread": 0.04,
+            "median_bid_touch_qty": 122.5,
+            "best_pair_cost": 0.96,
+            "attainable_edge_usd": 0.8,
+            "break_even_incidence": 0.295,
+            "clears": true,
+            "spread_shortfall_x": 0.94
+          },
+          "e >0.05": {
+            "observations": 210,
+            "markets": 68,
+            "median_spread": 0.07,
+            "median_bid_touch_qty": 91.0,
+            "best_pair_cost": 0.93,
+            "attainable_edge_usd": 1.4,
+            "break_even_incidence": 0.4227,
+            "clears": true,
+            "spread_shortfall_x": 0.54
+          }
+        }
+      }
+    }
+  },
+  "clearing_cells": {
+    "10.3": [
+      {
+        "band": "45-55",
+        "spread_bucket": "e >0.05",
+        "observations": 64,
+        "markets": 30,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 80.5,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 0.824,
+        "break_even_incidence": 0.3012,
+        "clears": true,
+        "spread_shortfall_x": 0.91
+      },
+      {
+        "band": "40-60",
+        "spread_bucket": "e >0.05",
+        "observations": 109,
+        "markets": 45,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 78.0,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 0.824,
+        "break_even_incidence": 0.3012,
+        "clears": true,
+        "spread_shortfall_x": 0.91
+      },
+      {
+        "band": "35-65",
+        "spread_bucket": "e >0.05",
+        "observations": 148,
+        "markets": 54,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 91.0,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 0.824,
+        "break_even_incidence": 0.3012,
+        "clears": true,
+        "spread_shortfall_x": 0.91
+      }
+    ],
+    "5.75": [],
+    "20.0": [
+      {
+        "band": "45-55",
+        "spread_bucket": "d 0.03-0.05",
+        "observations": 68,
+        "markets": 30,
+        "median_spread": 0.04,
+        "median_bid_touch_qty": 82.89,
+        "best_pair_cost": 0.96,
+        "attainable_edge_usd": 0.8,
+        "break_even_incidence": 0.295,
+        "clears": true,
+        "spread_shortfall_x": 0.94
+      },
+      {
+        "band": "45-55",
+        "spread_bucket": "e >0.05",
+        "observations": 64,
+        "markets": 30,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 80.5,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 1.6,
+        "break_even_incidence": 0.4556,
+        "clears": true,
+        "spread_shortfall_x": 0.47
+      },
+      {
+        "band": "40-60",
+        "spread_bucket": "d 0.03-0.05",
+        "observations": 175,
+        "markets": 52,
+        "median_spread": 0.04,
+        "median_bid_touch_qty": 126.32,
+        "best_pair_cost": 0.96,
+        "attainable_edge_usd": 0.8,
+        "break_even_incidence": 0.295,
+        "clears": true,
+        "spread_shortfall_x": 0.94
+      },
+      {
+        "band": "40-60",
+        "spread_bucket": "e >0.05",
+        "observations": 109,
+        "markets": 45,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 78.0,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 1.6,
+        "break_even_incidence": 0.4556,
+        "clears": true,
+        "spread_shortfall_x": 0.47
+      },
+      {
+        "band": "35-65",
+        "spread_bucket": "d 0.03-0.05",
+        "observations": 226,
+        "markets": 63,
+        "median_spread": 0.04,
+        "median_bid_touch_qty": 127.685,
+        "best_pair_cost": 0.96,
+        "attainable_edge_usd": 0.8,
+        "break_even_incidence": 0.295,
+        "clears": true,
+        "spread_shortfall_x": 0.94
+      },
+      {
+        "band": "35-65",
+        "spread_bucket": "e >0.05",
+        "observations": 148,
+        "markets": 54,
+        "median_spread": 0.08,
+        "median_bid_touch_qty": 91.0,
+        "best_pair_cost": 0.92,
+        "attainable_edge_usd": 1.6,
+        "break_even_incidence": 0.4556,
+        "clears": true,
+        "spread_shortfall_x": 0.47
+      },
+      {
+        "band": "30-70",
+        "spread_bucket": "d 0.03-0.05",
+        "observations": 240,
+        "markets": 67,
+        "median_spread": 0.04,
+        "median_bid_touch_qty": 122.5,
+        "best_pair_cost": 0.96,
+        "attainable_edge_usd": 0.8,
+        "break_even_incidence": 0.295,
+        "clears": true,
+        "spread_shortfall_x": 0.94
+      },
+      {
+        "band": "30-70",
+        "spread_bucket": "e >0.05",
+        "observations": 210,
+        "markets": 68,
+        "median_spread": 0.07,
+        "median_bid_touch_qty": 91.0,
+        "best_pair_cost": 0.93,
+        "attainable_edge_usd": 1.4,
+        "break_even_incidence": 0.4227,
+        "clears": true,
+        "spread_shortfall_x": 0.54
+      }
+    ]
+  },
+  "not_computed": {
+    "both_fill_rate": "NOT OBSERVABLE. We have never quoted both sides at once, so there is no tape of it. The only route to a number is the product of two one-sided fill rates, and independence is exactly what the two-sided-flow hypothesis denies -- so that number would assume away the question being asked."
+  }
+}

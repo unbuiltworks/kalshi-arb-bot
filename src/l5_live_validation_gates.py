@@ -1,0 +1,1072 @@
+"""The three gates the bounded live BTC15m validation needs, and nothing else.
+
+ADDITIVE BY DESIGN. The deployed executor (77939fe2) already carries
+`SafetyLimits` with max_usd_per_market, max_abs_residual,
+max_total_exposure_usd, max_concurrent_markets, max_live_orders and
+daily_realized_loss_halt_usd, plus reconciliation. Neither branch is a
+superset of the other -- my branch has the halt gate and the deployed one has
+the cash_deployed reporting -- so this adds gates ALONGSIDE the deployed
+limits instead of replacing a file and silently regressing one of them.
+
+Nothing here can weaken an existing limit. Every gate is a pure refusal
+predicate: it can only ever turn an allowed action into a refused one.
+
+WHY THESE THREE
+
+1. CASH IS NOT GATED TODAY. The deployed heartbeat says so verbatim:
+   "cash_deployed is reported, NOT gated." The risk gate measures worst-case
+   LOSS, which a completed pair takes to zero -- correctly, and that is
+   exactly why it does not restrain how much CASH repeated cycling pushes
+   out. Simulated at 5 contracts: four cycles push out $9.80 and nine push
+   out $22.05, both while the loss gate reads $0.
+
+2. THE UNMATCHED CAP IS NOT ENFORCED AT 5. RESIDUAL_CAP_k2 with k=2 on a
+   5-contract clip permits |residual| up to 10, and max_abs_residual is 10.
+   The mandate is 5.
+
+3. THERE IS NO CUMULATIVE TEST LIMIT. The daily halt is $5 realized and
+   resets daily; a multi-day validation needs a run-scoped ceiling that
+   counts conservative unrealized loss too.
+
+CASH RECYCLING IS UNVERIFIED, SO IT IS NOT ASSUMED. Position and worst-case
+loss release are established (venue positions {}, unsettledFunds 0,
+risk_exposure -> 0), but no authoritative before/after balance pair exists
+and the live `cash_anchor` is empty. `NO_RECYCLING` is therefore the default
+and the conservative reading: cash is treated as committed until SETTLEMENT
+is confirmed, not when a closing leg fills.
+"""
+from __future__ import annotations
+
+import os
+from decimal import Decimal as D, ROUND_CEILING, InvalidOperation
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+#: cash is released only by confirmed settlement, never by a closing fill
+NO_RECYCLING = "NO_RECYCLING"
+#: available only once a before/after balance pair proves cash returns
+RECYCLE_ON_COMPLETE = "RECYCLE_ON_COMPLETE"
+
+
+def _d(v: Any) -> D:
+    if isinstance(v, D):
+        return v
+    if v is None:
+        return D(0)
+    return D(str(v))
+
+
+HEDGE_CASH_ENV = "L5_HEDGE_CASH_AT_LIMIT"
+
+
+def hedge_cash_at_limit() -> bool:
+    """Is a hedging DOWN order reserved at its limit cost, not $1 a share?
+
+    Exactly "ON" and nothing else. Unset, misspelt or any other value is
+    the $1-a-share reading every earlier deployment had.
+    """
+    return str(os.getenv(HEDGE_CASH_ENV, "")).strip() == "ON"
+
+
+#: set-but-invalid is a CONFIGURATION ERROR, never a silent disable
+class DeficitBoundInvalid(ValueError):
+    """The deficit bound was explicitly configured and cannot be used."""
+
+
+def parse_deficit_bound(raw: Optional[str]) -> Optional[D]:
+    """Runtime value -> the bound, or None when genuinely unset.
+
+    FAIL CLOSED ON A BAD VALUE. Unset and blank mean "not configured", which
+    leaves the gate disabled and changes nothing. But a value that was typed
+    and cannot be used is an operator who believes a bound is in force when
+    it is not, so it raises instead of falling back to None. The caller must
+    not run unprotected on the strength of a typo.
+    """
+    if raw is None:
+        return None
+    txt = str(raw).strip()
+    if not txt:
+        return None
+    try:
+        v = D(txt)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        raise DeficitBoundInvalid(
+            "not a number: %r" % (txt[:40],))
+    if not v.is_finite():
+        raise DeficitBoundInvalid("not finite: %r" % (txt[:40],))
+    # a NEGATIVE bound is legitimate and strict: it demands the book be
+    # profitable on both outcomes. An absurd magnitude is a typo, not a
+    # policy, and a bound above the whole mandate protects nothing.
+    if v > D("1000") or v < D("-1000"):
+        raise DeficitBoundInvalid("implausible magnitude: %s" % v)
+    return v
+
+
+#: a commitment figure no envelope can accommodate, used by RefuseAllGates
+#: so that any arithmetic which does run on it cannot find headroom. Far
+#: above any configured ceiling, and finite so it never produces a NaN.
+UNREADABLE_COMMITMENT_USD = D("1e9")
+
+
+class ValidationGates:
+    """Run-scoped gates for one bounded validation. Refuse-only."""
+
+    def __init__(self,
+                 max_cash_deployed_usd: D = D("10"),
+                 max_unmatched_contracts: D = D("5"),
+                 max_cumulative_loss_usd: D = D("20"),
+                 cash_policy: str = NO_RECYCLING,
+                 max_windows: int = 20,
+                 campaign_budget: Any = None,
+                 campaign_id: Optional[str] = None,
+                 max_worst_case_deficit_usd: Optional[D] = None,
+                 fee_theta_worst: D = D("0.0695"),
+                 fee_extra_per_order_usd: D = D("0.01"),
+                 max_strategy_loss_usd: Optional[D] = None,
+                 max_l5_daily_loss_usd: Optional[D] = None,
+                 max_l5_cumulative_loss_usd: Optional[D] = None,
+                 max_unresolved_unknown_usd: Optional[D] = None,
+                 max_account_wide_delta_loss_usd: Optional[D] = None,
+                 campaign_baseline: Any = None,
+                 max_campaign_additional_loss_usd: Optional[D] = None
+                 ) -> None:
+        if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
+            raise ValueError("unknown cash policy: %r" % cash_policy)
+        if cash_policy == RECYCLE_ON_COMPLETE:
+            # not a style choice: recycling has never been verified against an
+            # authoritative balance pair, so enabling it must be deliberate.
+            pass
+        self.max_cash_deployed_usd = _d(max_cash_deployed_usd)
+        self.max_unmatched_contracts = _d(max_unmatched_contracts)
+        self.max_cumulative_loss_usd = _d(max_cumulative_loss_usd)
+        #: THE CAMPAIGN WORST-CASE BUDGET. None leaves every existing
+        #: behaviour byte-for-byte unchanged, which is why it defaults to
+        #: None rather than to a number: a gate that switches itself on is a
+        #: gate nobody approved. Configured, it can only ADD a refusal.
+        self.campaign_budget = campaign_budget
+        self.campaign_id = str(campaign_id or "").strip() or None
+        # Separate verified L5 net loss cap. None leaves old behaviour
+        # unchanged; explicit config requires an independently audited net.
+        self.max_strategy_loss_usd = (
+            None if max_strategy_loss_usd is None else _d(max_strategy_loss_usd))
+        #: L5-SCOPED ceilings, measured from the verified baseline epoch and
+        #: NEVER a replacement for the account-wide realized-loss check above
+        #: them. Both are the owner's existing figures (5 and 20); rescoping
+        #: changes WHAT is measured, not the limit.
+        self.max_l5_daily_loss_usd = (
+            None if max_l5_daily_loss_usd is None
+            else _d(max_l5_daily_loss_usd))
+        self.max_l5_cumulative_loss_usd = (
+            None if max_l5_cumulative_loss_usd is None
+            else _d(max_l5_cumulative_loss_usd))
+        #: THE INDEPENDENT ACCOUNT-WIDE BACKSTOP (OWNER 2026-10-16).
+        #:
+        #: WHAT IT IS FOR. An L5-scoped realized ceiling measures only
+        #: ATTESTED L5 settlements. On this account that figure is 0 -- not
+        #: because L5 broke even, but because nothing has ever been attested
+        #: -- while $294.09 of the account's realized total rests on $1/share
+        #: upper-bound placeholders whose cost AND ownership are unknown. So
+        #: an L5-scoped ceiling on its own would permit trading with material
+        #: account-wide losses entirely unresolved. That is exactly the
+        #: weakening the safety classifier refused, and it was right to.
+        #:
+        #: This bound is the backstop that must hold IN ADDITION. It is
+        #: purely ADDITIVE -- it can only ever add a refusal, never remove
+        #: one -- and it is independent of who owned the activity and of what
+        #: it cost, because both are the things that are unknown.
+        self.max_account_wide_delta_loss_usd = (
+            None if max_account_wide_delta_loss_usd is None
+            else _d(max_account_wide_delta_loss_usd))
+        self.max_unresolved_unknown_usd = (
+            None if max_unresolved_unknown_usd is None
+            else _d(max_unresolved_unknown_usd))
+        #: THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND (OWNER 2026-10-24),
+        #: measured from a persisted starting point rather than from account
+        #: inception.
+        #:
+        #: WHY IT IS NOT THE LIFETIME CEILING. That one measures
+        #: `max(0, -account_wide_realized) + unrealized` against $20 from the
+        #: beginning of the account, and that figure was already -$11.6213 --
+        #: so it permitted $8.3787 more, a number nobody chose and one that
+        #: moves on every settlement in either direction. "How much may THIS
+        #: campaign lose" had no stable answer. The campaign worst-case
+        #: budget cannot answer it either, because its input is the same
+        #: all-time figure, which is why that budget has to sit at $29.30 to
+        #: clear history at all.
+        #:
+        #: ADDITIVE, and the ordering below makes that structural: every
+        #: existing ceiling has already run and already returned if breached,
+        #: so this can only ADD a refusal. None leaves behaviour unchanged.
+        self.campaign_baseline = campaign_baseline
+        self.max_campaign_additional_loss_usd = (
+            None if max_campaign_additional_loss_usd is None
+            else _d(max_campaign_additional_loss_usd))
+        if (self.max_strategy_loss_usd is not None and
+                (not self.max_strategy_loss_usd.is_finite() or
+                 self.max_strategy_loss_usd <= 0)):
+            raise ValueError("strategy loss ceiling must be positive and finite")
+        self.cash_policy = cash_policy
+        self.max_windows = int(max_windows)
+        # DEFAULT DISABLED. None means the gate is not configured and never
+        # refuses, so adding it changes no existing behaviour until an owner
+        # sets a number.
+        self.max_worst_case_deficit_usd = (
+            None if max_worst_case_deficit_usd is None
+            else _d(max_worst_case_deficit_usd))
+        # the TAKER coefficient, always. The maker rebate is a credit this
+        # accounting has never been entitled to assume, so the worst case is
+        # priced as if every leg paid the taker fee.
+        self.fee_theta_worst = _d(fee_theta_worst)
+        # ONE CENT PER ORDER, AND IT IS LOAD-BEARING. Cent rounding breaks
+        # the convexity the four-corner search relies on: a SMALL partial
+        # fill on an expensive leg is net harmful, because the whole cent of
+        # rounding outweighs the (1 - price) benefit of the quantity it adds.
+        # Brute force over partial fills found exactly that, understating a
+        # case by $0.0016. The harm per order from this effect cannot exceed
+        # the rounding itself, since the quantity benefit is never negative,
+        # so a flat cent per order dominates it and restores the corner
+        # search to an upper bound. Verified by
+        # test_the_four_corners_equal_the_exhaustive_worst_case.
+        self.fee_extra_per_order_usd = _d(fee_extra_per_order_usd)
+
+    def as_dict(self, realized_usd: Any = None) -> Dict[str, Any]:
+        """`realized_usd` is optional and reporting only. Supplying it makes
+        the campaign block carry `incremental_room_usd` -- budget minus the
+        account's standing realized LOSS, which is the figure the planner
+        actually sizes against. No gate reads it."""
+        return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
+                "max_unmatched_contracts": str(self.max_unmatched_contracts),
+                "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
+                "campaign_budget": (None if self.campaign_budget is None
+                                    else self.campaign_budget.telemetry(
+                                        campaign_id=self.campaign_id or "",
+                                        realized_usd=realized_usd)),
+                "campaign_id": self.campaign_id,
+                "max_strategy_loss_usd": (None if self.max_strategy_loss_usd
+                                          is None else str(self.max_strategy_loss_usd)),
+                "max_l5_daily_loss_usd": (None if self.max_l5_daily_loss_usd
+                                          is None
+                                          else str(self.max_l5_daily_loss_usd)),
+                "max_l5_cumulative_loss_usd": (
+                    None if self.max_l5_cumulative_loss_usd is None
+                    else str(self.max_l5_cumulative_loss_usd)),
+                "cash_policy": self.cash_policy,
+                "max_windows": self.max_windows,
+                "max_worst_case_deficit_usd": (
+                    None if self.max_worst_case_deficit_usd is None
+                    else str(self.max_worst_case_deficit_usd)),
+                "hedge_cash_at_limit": hedge_cash_at_limit(),
+                "fee_theta_worst": str(self.fee_theta_worst),
+                "fee_extra_per_order_usd": str(self.fee_extra_per_order_usd),
+                "fee_model": ("taker Theta, rounded UP to the cent once per "
+                              "ORDER. Per-FILL rounding is not modelled and "
+                              "is bounded by the live order count; see "
+                              "fee_extra_per_order_usd."),
+                "worst_case_deficit_basis": (
+                    "C - min(up_qty, dn_qty), where C is confirmed "
+                    "acquisition cost plus this order plus the worst "
+                    "subset of still-fillable outstanding orders, with "
+                    "the TAKER fee charged on every leg. Below zero the "
+                    "book pays out on BOTH settlement outcomes."),
+                "cash_basis": ("filled (unreleased) + still-fillable "
+                               "outstanding + the proposed order, "
+                               "ACCOUNT-WIDE. Exposure adopted from the "
+                               "venue counts: the account is shared and the "
+                               "safe direction is to count it."),
+                "fails_closed_on": "an unconfirmed or disputed ledger",
+                "labels": ("ADDITIVE to the deployed SafetyLimits. These can "
+                           "only refuse; they never raise an existing limit.")}
+
+    # ------------------------------------------------------------- cash
+
+    def cash_committed(self, legs: Iterable[Mapping[str, Any]]) -> D:
+        """Cash out, under the configured recycling policy.
+
+        A leg is {'cash_out': D, 'settled': bool, 'closing': bool}. `cash_out`
+        is positive for cash LEAVING the account. Under NO_RECYCLING a closing
+        leg's proceeds do not reduce the committed figure until the market
+        settles -- which is the whole point of the conservative reading.
+        """
+        total = D(0)
+        for leg in legs:
+            if bool(leg.get("settled")):
+                continue
+            out = _d(leg.get("cash_out"))
+            if out > 0:
+                total += out
+                continue
+            # a credit (closing leg). Only recognised when the policy allows.
+            if self.cash_policy == RECYCLE_ON_COMPLETE:
+                total += out          # out is negative: reduces the total
+        return total
+
+    def pending_obligation(self,
+                           outstanding: Iterable[Mapping[str, Any]]) -> D:
+        """Worst-case cash a RESTING order can still take.
+
+        An order that might fill is cash that might leave, so it is counted
+        at its full limit price. A resting SHORT owes up to $1 a share if YES
+        settles 1, so its worst case is qty dollars, not qty * price.
+        """
+        total = D(0)
+        for o in outstanding:
+            qty = _d(o.get("qty"))
+            px = _d(o.get("price"))
+            if str(o.get("intent") or "").upper().endswith("BUY_SHORT"):
+                total += qty
+            else:
+                total += qty * px
+        return total
+
+    def hedge_allowance(self, inventory: Any) -> Optional[D]:
+        """Venue-confirmed UNMATCHED UP quantity a DOWN order can still hedge.
+
+        None when the ledger cannot say -- no inventory, no market, a
+        quantity that is not a finite non-negative number. None is never an
+        allowance: the caller keeps the $1-a-share reading.
+        """
+        if not isinstance(inventory, Mapping):
+            return None
+        if not str(inventory.get("market") or "").strip():
+            return None
+        try:
+            up = _d(inventory.get("up_qty"))
+            dn = _d(inventory.get("dn_qty"))
+        except (ValueError, ArithmeticError, TypeError):
+            return None
+        if inventory.get("up_qty") is None or inventory.get("dn_qty") is None:
+            return None
+        if not (up.is_finite() and dn.is_finite()) or up < 0 or dn < 0:
+            return None
+        return max(D(0), up - dn)
+
+    def reserved_cash(self, *,
+                      outstanding: Sequence[Mapping[str, Any]],
+                      order_qty: Any, order_price: Any, order_intent: str,
+                      inventory: Any = None) -> Dict[str, Any]:
+        """Cash every still-fillable order can take, ONE snapshot, one pass.
+
+        The resting orders and the proposed one are priced together from the
+        same inventory, as if ALL of them fill in full -- so two orders can
+        never each be given headroom only one of them can use.
+
+        WHAT CHANGES (owner decision 2026-11-10, `L5_HEDGE_CASH_AT_LIMIT=ON`;
+        anything else is the reading below, unchanged). A DOWN order was
+        always reserved at $1 a share. A DOWN buy at own price `p` can take
+        at most `qty * p` plus its fee -- the venue books exactly that, and
+        `cash_committed` already charges a FILLED DOWN leg that way. So the
+        part of a DOWN order that offsets venue-confirmed unmatched UP
+        inventory in the SAME market is reserved at its limit-price cost
+        plus the worst-case (taker) fee, rounded up.
+
+        WHAT DOES NOT. Only the hedged quantity. A DOWN order with nothing
+        unmatched behind it, the part of one beyond the imbalance, an order
+        in another market, an order with an unreadable price, and every UP
+        order are reserved exactly as before. The ceiling is not touched.
+
+        ONE ALLOWANCE, SPENT ONCE. The unmatched quantity is shared by every
+        DOWN order in that market, resting and proposed, and handed out
+        highest limit price first -- the allocation that saves least -- so
+        the total is the most those orders can cost whichever of them the
+        imbalance ends up absorbing. A resting hedge whose cancellation the
+        venue has not confirmed is still in `outstanding`, still holds its
+        share and still holds its reservation: a replacement placed beside
+        it finds the allowance already spent and is charged $1 a share.
+        """
+        q = _d(order_qty)
+        px = _d(order_price)
+        short = str(order_intent or "").upper().endswith("BUY_SHORT")
+        this_order = q if short else q * px
+        resting = self.pending_obligation(outstanding)
+        out: Dict[str, Any] = {"resting": resting, "this_order": this_order,
+                               "basis": "DOLLAR_A_SHARE",
+                               "hedge_allowance": None,
+                               "hedged_resting": D(0), "hedged_this": D(0)}
+        if not hedge_cash_at_limit():
+            return out
+        allowance = self.hedge_allowance(inventory)
+        out["hedge_allowance"] = allowance
+        if allowance is None:
+            out["basis"] = "DOLLAR_A_SHARE:INVENTORY_UNREADABLE"
+            return out
+        if allowance <= 0:
+            out["basis"] = "DOLLAR_A_SHARE:NOTHING_UNMATCHED_TO_HEDGE"
+            return out
+        mkt = str(inventory.get("market")).strip()
+
+        def usable(qty: D, p: D) -> bool:
+            return (qty.is_finite() and p.is_finite() and qty > 0
+                    and D(0) < p < D(1))
+
+        cands = []                       # (price, qty, is_this, position)
+        for i, o in enumerate(outstanding):
+            if not str(o.get("intent") or "").upper().endswith("BUY_SHORT"):
+                continue
+            if str(o.get("market") or "").strip() != mkt:
+                continue                 # another market, or not stated
+            try:
+                oq = _d(o.get("qty")); op = _d(o.get("price"))
+            except (ValueError, ArithmeticError, TypeError):
+                continue
+            if usable(oq, op):
+                cands.append((op, oq, False, i))
+        if short and usable(q, px):
+            cands.append((px, q, True, len(cands)))
+        cands.sort(key=lambda c: (-c[0], c[2], c[3]))
+        left = allowance
+        for p, qty, is_this, _i in cands:
+            if left <= 0:
+                break
+            h = min(qty, left)
+            left -= h
+            at_limit = h * p + max(D(0), self.fee_worst(h, p))
+            # was reserved `h` dollars; is now reserved `at_limit`
+            if is_this:
+                this_order += at_limit - h
+                out["hedged_this"] += h
+            else:
+                resting += at_limit - h
+                out["hedged_resting"] += h
+        out["resting"] = resting
+        out["this_order"] = this_order
+        out["basis"] = "HEDGE_AT_LIMIT_PLUS_FEE"
+        return out
+
+    # ------------------------------------------- worst-case settlement
+
+    #: an unreadable price is charged at the most a share can cost
+    UNKNOWN_PRICE_WORST_CASE = D("1")
+
+    def fee_worst(self, qty: D, price: D) -> D:
+        """Conservative fee on one leg: Theta * C * p * (1-p), TAKER Theta.
+
+        The maker rebate is NEVER netted here. A credit we are not
+        guaranteed, applied to a worst case, is not a worst case.
+        """
+        q = _d(qty); p = _d(price)
+        if p < 0 or p > 1:
+            p = self.UNKNOWN_PRICE_WORST_CASE
+        raw = self.fee_theta_worst * q * p * (D(1) - p)
+        if raw <= 0:
+            return raw
+        # ROUNDED UP TO THE CENT, ONCE PER ORDER. The venue bills commission
+        # in whole cents -- our own records show -0.0300 and +0.2400, never a
+        # fraction of one -- so an exact-Decimal fee can sit just under the
+        # cent actually taken, and a sub-cent fee on a tiny clip reads as
+        # very nearly free. Rounding up is the only safe direction.
+        #
+        # THE LIMIT OF THIS MODEL, STATED. Cent rounding is super-additive:
+        # if the venue rounds per FILL rather than per order, an order that
+        # fills in n pieces pays up to (n-1) extra cents, and no usefully
+        # tight bound dominates that -- a 2.84-contract order could in
+        # principle fill in 284 pieces of the 0.01 minimum and pay $2.84.
+        # The per-order model is what our own commission records show, and
+        # the exposure is bounded instead by the order count: with
+        # max_live_orders at 2 the worst unmodelled rounding is a few cents.
+        # `fee_extra_per_order_usd` exists to carry that allowance when an
+        # owner wants it priced rather than argued.
+        return (raw.quantize(D("0.01"), rounding=ROUND_CEILING)
+                + self.fee_extra_per_order_usd)
+
+    def worst_case_deficit(self, *,
+                           up_qty: Any, dn_qty: Any,
+                           up_cost: Any, dn_cost: Any,
+                           order_side: str,
+                           order_qty: Any, order_price: Any,
+                           outstanding: Sequence[Mapping[str, Any]] = (),
+                           ) -> Dict[str, Any]:
+        """`C - min(up, dn)` for the book this order would create, maximised
+        over which outstanding orders fill.
+
+        WHY THIS QUANTITY. A book holding `a` UP and `b` DOWN for total
+        executed cost `C` pays `a` if UP settles and `b` if DOWN settles, so
+        its worst outcome is `min(a, b) - C`. The deficit is the negative of
+        that. Strictly below zero, the book is profitable on BOTH outcomes
+        and carries no directional risk at all; at `x` above zero, `x` is the
+        most the book can lose however the window resolves.
+
+        THE PROPOSED ORDER IS ASSUMED TO FILL. That is the question being
+        asked -- what would this order leave us holding -- so a completing
+        order is NOT exempt and is not special-cased: it is priced exactly
+        like an opening one and simply happens to reduce the deficit.
+
+        OUTSTANDING ORDERS ARE AN ADVERSARY, NOT AN ASSUMPTION. Each may or
+        may not fill. Filling adds its cost AND its quantity, so it raises
+        the deficit when its side is not the binding minimum and lowers it
+        when it is. Within one side the choice is all-or-nothing -- adding
+        more of a side that does not lift the minimum only ever costs -- so
+        the maximum over every subset is attained at one of four corners:
+        nothing fills, only UP fills, only DOWN fills, everything fills.
+        All four are evaluated and the WORST is returned, which is exact
+        rather than merely conservative.
+
+        Returns {'ok': bool, 'deficit': D, 'scenario': str, 'scenarios': ...}
+        or {'ok': False, 'reason': ...} when the state cannot be read. An
+        unreadable input is never silently treated as zero.
+        """
+        side = str(order_side or "").upper()
+        if side not in ("UP", "DOWN"):
+            return {"ok": False, "reason": "DEFICIT_ORDER_SIDE_UNKNOWN"}
+        try:
+            a0 = _d(up_qty); b0 = _d(dn_qty)
+            cu = _d(up_cost); cd = _d(dn_cost)
+            oq = _d(order_qty); op = _d(order_price)
+        except Exception:                                  # noqa: BLE001
+            return {"ok": False, "reason": "DEFICIT_INVENTORY_UNREADABLE"}
+        if a0 < 0 or b0 < 0 or cu < 0 or cd < 0 or oq <= 0:
+            return {"ok": False, "reason": "DEFICIT_INVENTORY_IMPLAUSIBLE"}
+        # QUANTITY WITHOUT COST is an incoherent book, not a free position.
+        if (a0 > 0 and cu <= 0) or (b0 > 0 and cd <= 0):
+            return {"ok": False, "reason": "DEFICIT_QUANTITY_WITHOUT_COST"}
+        if op <= 0 or op > 1:
+            op = self.UNKNOWN_PRICE_WORST_CASE
+
+        # the book this order would create, before any outstanding order
+        base_a = a0 + (oq if side == "UP" else D(0))
+        base_b = b0 + (oq if side == "DOWN" else D(0))
+        base_c = cu + cd + oq * op + self.fee_worst(oq, op)
+
+        # each outstanding leg, bucketed by side; an unreadable one fails closed
+        add = {"UP": [D(0), D(0)], "DOWN": [D(0), D(0)]}   # qty, cost
+        for o in outstanding:
+            q = _d(o.get("qty"))
+            if q <= 0:
+                continue
+            px = o.get("price")
+            px = self.UNKNOWN_PRICE_WORST_CASE if px is None else _d(px)
+            if px <= 0 or px > 1:
+                px = self.UNKNOWN_PRICE_WORST_CASE
+            intent = str(o.get("intent") or o.get("side") or "").upper()
+            if intent.endswith("BUY_SHORT") or intent == "DOWN":
+                s2 = "DOWN"
+            elif intent.endswith("BUY_LONG") or intent == "UP":
+                s2 = "UP"
+            else:
+                return {"ok": False, "reason": "DEFICIT_OUTSTANDING_SIDE_UNKNOWN"}
+            add[s2][0] += q
+            add[s2][1] += q * px + self.fee_worst(q, px)
+
+        corners = {
+            "none": (D(0), D(0), D(0), D(0)),
+            "up_only": (add["UP"][0], add["UP"][1], D(0), D(0)),
+            "dn_only": (D(0), D(0), add["DOWN"][0], add["DOWN"][1]),
+            "all": (add["UP"][0], add["UP"][1],
+                    add["DOWN"][0], add["DOWN"][1]),
+        }
+        out: Dict[str, str] = {}
+        worst = None; worst_name = ""
+        for name, (ua, uc, da, dc) in corners.items():
+            a = base_a + ua; b = base_b + da
+            c = base_c + uc + dc
+            d = c - min(a, b)
+            out[name] = str(d)
+            if worst is None or d > worst:
+                worst = d; worst_name = name
+
+        # THE NON-CONVEXITY ALLOWANCE, and it is why the corner search is
+        # sound. With linear fees the deficit is convex in the fill
+        # fractions, so its maximum sits at a vertex and four corners
+        # suffice. Cent rounding breaks that: a SMALL partial fill on an
+        # expensive leg is net harmful, because a whole cent of rounding
+        # outweighs the (1 - price) benefit of the quantity it adds, and the
+        # `none` corner charges no fee at all for an order a partial fill
+        # does charge. Brute force over partial fills found exactly that.
+        # The excess of any partial arrangement over the corner maximum is
+        # bounded, per order, by the rounding granularity it can introduce --
+        # one cent plus the per-order allowance -- so charging that much per
+        # still-fillable order restores the corner maximum to a genuine
+        # upper bound. Pinned by
+        # test_the_four_corners_equal_the_exhaustive_worst_case.
+        n_out = sum(1 for o in outstanding if _d(o.get("qty")) > 0)
+        slack = (D("0.01") + self.fee_extra_per_order_usd) * D(n_out)
+        worst = worst + slack
+        out["rounding_slack"] = str(slack)
+        return {"ok": True, "deficit": worst, "scenario": worst_name,
+                "scenarios": out,
+                "book": {"up_qty": str(base_a), "dn_qty": str(base_b),
+                         "cost": str(base_c)},
+                "labels": ("deficit = cost - min(up, dn), maximised over "
+                           "which outstanding orders fill. Negative means "
+                           "the book pays on BOTH outcomes.")}
+
+    # -------------------------------------------------------- refusal
+
+    def refuse(self, *,
+               order_qty: D,
+               order_price: D,
+               order_intent: str,
+               filled_legs: Sequence[Mapping[str, Any]] = (),
+               outstanding: Sequence[Mapping[str, Any]] = (),
+               unmatched_after: D = D(0),
+               cumulative_realized: D = D(0),
+               verified_strategy_net: Optional[D] = None,
+               l5_scoped_realized: Optional[D] = None,
+               l5_scoped_realized_today: Optional[D] = None,
+               account_wide_delta_usd: Any = None,
+               unresolved_unknown_usd: Optional[D] = None,
+               cumulative_unrealized_loss: Optional[D] = D(0),
+               windows_used: int = 0,
+               book_uncertain: Optional[str] = None,
+               available_cash_usd: Optional[D] = None,
+               inventory: Optional[Mapping[str, Any]] = None
+               ) -> Optional[str]:
+        """None to allow, else the reason. Never raises on ordinary input."""
+        q = _d(order_qty)
+        px = _d(order_price)
+
+        # 0. THE BOOK ITSELF, BEFORE ANY FIGURE COMPUTED FROM IT. Every cash
+        #    and inventory number below is read out of the ledger, so a
+        #    ledger the venue has not confirmed makes all of them
+        #    unauthoritative. Refusing here rather than relying on the
+        #    deployed ORDER_STATE_UNCERTAIN one layer down keeps this gate
+        #    honest about its own inputs: an incomplete or disputed
+        #    reconciliation is not a small cash figure, it is an unknown one.
+        if book_uncertain:
+            return "BOOK_UNCERTAIN:%s" % str(book_uncertain)[:160]
+
+        # 1. unmatched directional inventory
+        if abs(_d(unmatched_after)) > self.max_unmatched_contracts:
+            return ("UNMATCHED_CONTRACTS:%s>%s"
+                    % (abs(_d(unmatched_after)), self.max_unmatched_contracts))
+
+        # 2. cumulative loss for the whole run, realized PLUS a conservative
+        #    unrealized mark. A loss is a NEGATIVE realized figure.
+        #
+        #    MISSING IS NOT ZERO WHEN PROTECTION DEPENDS ON IT. The unrealized
+        #    term used to default to 0 and was never supplied by the caller,
+        #    so the run-scoped ceiling counted only SETTLED losses and an open
+        #    book about to lose could not trip it. It is now required whenever
+        #    this ceiling is the live protection: None is a refusal, not a
+        #    zero. The caller computes it from the reconciled book, and the
+        #    deficit helper below is exactly the conservative figure -- the
+        #    most the book can lose on either outcome.
+        if cumulative_unrealized_loss is None:
+            return "CUMULATIVE_UNREALIZED_UNAVAILABLE"
+        loss = max(D(0), -_d(cumulative_realized)) + max(
+            D(0), _d(cumulative_unrealized_loss))
+        if loss >= self.max_cumulative_loss_usd:
+            return ("CUMULATIVE_LOSS_LIMIT:%s>=%s"
+                    % (loss, self.max_cumulative_loss_usd))
+
+        # THE ACCOUNT-WIDE DELTA CEILING, measured from the immutable
+        # baseline epoch. ADDITIVE: the lifetime account-wide check above has
+        # already run and already returned if breached, so this can only ever
+        # ADD a refusal. It does NOT replace that check and does not relax it;
+        # removing it is a separate, explicit owner decision and is
+        # deliberately not available here.
+        #
+        # IT IS ACCOUNT-WIDE, NOT L5-ATTRIBUTED. Every post-T settlement
+        # counts whoever placed it, because what is being bounded is what the
+        # account can still lose, and an unattributable loss is still a loss.
+        #
+        # UNREALIZED IS INCLUDED, the same way the lifetime check includes it:
+        # a book about to lose must be able to trip this, not only a book that
+        # already has.
+        #
+        # MISSING IS NOT ZERO. No baseline, an unreadable anchor, or a
+        # correction record whose period cannot be determined all arrive here
+        # as None, and None REFUSES.
+        if self.max_account_wide_delta_loss_usd is not None:
+            if account_wide_delta_usd is None:
+                return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            try:
+                dlt = _d(account_wide_delta_usd)
+                if not dlt.is_finite():
+                    return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            delta_loss = max(D(0), -dlt) + max(
+                D(0), _d(cumulative_unrealized_loss))
+            if delta_loss >= self.max_account_wide_delta_loss_usd:
+                return ("ACCOUNT_WIDE_DELTA_LOSS_LIMIT:%s>=%s"
+                        % (delta_loss, self.max_account_wide_delta_loss_usd))
+
+        # L5-SCOPED CEILINGS, measured from the verified baseline epoch.
+        #
+        # THEY DO NOT REPLACE THE ACCOUNT-WIDE CHECK ABOVE, which has already
+        # run and already returned if it was breached. Removing that check is
+        # a separate, explicit owner decision and is deliberately not
+        # available here (OWNER 2026-10-16: "do not silently replace or
+        # remove an account-wide realized-loss control").
+        #
+        # MISSING IS NOT ZERO. A configured L5 ceiling with no baseline-scoped
+        # figure refuses L5_SCOPED_REALIZED_UNAVAILABLE. The caller supplies 0
+        # only when a verified baseline EXISTS and no attested L5 settlement
+        # has occurred since it -- which is a counted fact, not an inference
+        # from absent history.
+        if (self.max_l5_daily_loss_usd is not None
+                or self.max_l5_cumulative_loss_usd is not None):
+            if l5_scoped_realized is None:
+                return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            try:
+                l5r = _d(l5_scoped_realized)
+                if not l5r.is_finite():
+                    return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            # TWO BUDGETS, TWO MEASURES. Until 2026-10-25 both ceilings read the
+            # SAME post-baseline cumulative figure, so the ceiling named DAILY
+            # was in fact a cumulative budget that never reset. The owner
+            # approved $20 as a DAILY limit, so the daily ceiling now reads a
+            # UTC-day figure and the cumulative ceiling keeps reading the
+            # post-baseline total.
+            #
+            # NOTHING IS RESET OR WEAKENED BY THIS. The cumulative ceiling and
+            # the figure it reads are untouched, so every historical loss still
+            # counts against it and it still refuses independently. The change
+            # only stops a cumulative quantity being reported under a daily
+            # name, which is what made $20 ambiguous.
+            #
+            # MISSING IS NOT ZERO, here as everywhere else in this gate: a
+            # configured daily ceiling with no day-scoped figure REFUSES
+            # rather than reading an absent number as no loss.
+            l5_cum_loss = max(D(0), -l5r) + max(D(0), _d(cumulative_unrealized_loss))
+            # ABSENT IS NOT ZERO, AND IT IS NOT A REFUSAL EITHER: it falls back
+            # to the cumulative measure, which is the stricter of the two
+            # (today's loss is a subset of the post-baseline total). So a
+            # caller that supplies no day figure keeps exactly the behaviour it
+            # had before this change, and no caller can obtain a LAXER daily
+            # gate by omitting an input.
+            l5_day_loss = l5_cum_loss
+            if l5_scoped_realized_today is not None:
+                try:
+                    l5d = _d(l5_scoped_realized_today)
+                except (ValueError, ArithmeticError):
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
+                if not l5d.is_finite():
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
+                l5_day_loss = (max(D(0), -l5d)
+                               + max(D(0), _d(cumulative_unrealized_loss)))
+            if (self.max_l5_daily_loss_usd is not None
+                    and l5_day_loss >= self.max_l5_daily_loss_usd):
+                return ("L5_DAILY_LOSS_LIMIT:%s>=%s"
+                        % (l5_day_loss, self.max_l5_daily_loss_usd))
+            if (self.max_l5_cumulative_loss_usd is not None
+                    and l5_cum_loss >= self.max_l5_cumulative_loss_usd):
+                return ("L5_CUMULATIVE_LOSS_LIMIT:%s>=%s"
+                        % (l5_cum_loss, self.max_l5_cumulative_loss_usd))
+
+        # THE UNRESOLVED-UNKNOWN BACKSTOP. Additive by construction: every
+        # check above has already run and already returned if breached, so
+        # this can only ever REFUSE something the others permitted.
+        #
+        # It is the precondition any future L5-scoped rescoping must satisfy.
+        # Rescoping the realized ceiling to the verified-L5 population WOULD
+        # permit trading while material account-wide losses are unresolved --
+        # that is a factual answer, not a judgement -- so the rescoping is
+        # only defensible with this bound satisfied alongside it.
+        #
+        # MISSING IS NOT ZERO, and here that matters more than anywhere else:
+        # the whole point is that the unknown is unknown. An unreadable figure
+        # is the maximum possible unknown, not the minimum, so it REFUSES.
+        if self.max_unresolved_unknown_usd is not None:
+            if unresolved_unknown_usd is None:
+                return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            try:
+                u = _d(unresolved_unknown_usd)
+                if not u.is_finite():
+                    return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            # magnitude, either sign: an unexplained CREDIT is as much an
+            # unreconciled book as an unexplained debit.
+            if abs(u) > self.max_unresolved_unknown_usd:
+                return ("UNRESOLVED_UNKNOWN_EXCEEDED:%s>%s"
+                        % (abs(u), self.max_unresolved_unknown_usd))
+
+        # Independent strategy budget, NEVER substituted for the conservative
+        # account-wide gate above. No verified after-fee net is a refusal.
+        if self.max_strategy_loss_usd is not None:
+            if verified_strategy_net is None:
+                return "STRATEGY_NET_UNVERIFIED"
+            try:
+                snet = _d(verified_strategy_net)
+                if not snet.is_finite():
+                    return "STRATEGY_NET_UNVERIFIED"
+            except (ValueError, ArithmeticError):
+                return "STRATEGY_NET_UNVERIFIED"
+            strategy_loss = max(D(0), -snet) + max(
+                D(0), _d(cumulative_unrealized_loss))
+            if strategy_loss >= self.max_strategy_loss_usd:
+                return ("STRATEGY_LOSS_LIMIT:%s>=%s" %
+                        (strategy_loss, self.max_strategy_loss_usd))
+
+        # 3. cash commitment, including this order as if it filled in full
+        #    ONE RESERVATION for the resting orders and this one, priced
+        #    together from the same inventory (see `reserved_cash`). With
+        #    L5_HEDGE_CASH_AT_LIMIT unset these are exactly the two figures
+        #    that stood here before: `pending_obligation(outstanding)` and
+        #    the order at qty * price, or qty for a short.
+        _rsv = self.reserved_cash(
+            outstanding=outstanding, order_qty=q, order_price=px,
+            order_intent=order_intent, inventory=inventory)
+        this_order = _rsv["this_order"]
+        _pending = _rsv["resting"]
+        committed = self.cash_committed(filled_legs) + _pending + this_order
+        if committed > self.max_cash_deployed_usd:
+            return ("CASH_COMMITMENT:%s>%s"
+                    % (committed, self.max_cash_deployed_usd))
+        # 3b. THE CAMPAIGN WORST-CASE BUDGET, spanning windows rather than
+        #     instants. Deliberately placed HERE, sharing `cash_committed`
+        #     and `pending_obligation` with the cash gate above, so the
+        #     campaign cannot be evaded by the three routes that would
+        #     otherwise be open: a CONCURRENT order is counted because
+        #     `outstanding` is counted at its full worst case; a PENDING
+        #     commitment is counted because `cash_committed` counts an
+        #     unsettled leg in full and skips only SETTLED ones; and RESIDUAL
+        #     exposure is counted for exactly the same reason -- an unmatched
+        #     leg is simply a leg that has not settled. Realized losses are
+        #     added on top and never net against open risk.
+        if self.campaign_budget is not None:
+            # A MISSING CAMPAIGN ID IS NOT PERMISSION TO SKIP THE BUDGET.
+            # This read `and self.campaign_id`, so an approval that had gone
+            # stale, expired, absent or unreadable produced a None id and
+            # this entire gate was bypassed -- the owner's $29.30
+            # worst-case ceiling stopped applying precisely when the
+            # authorization behind it became doubtful. A budget was
+            # configured; an identity we cannot establish is a refusal.
+            if not self.campaign_id:
+                return "CAMPAIGN_IDENTITY_UNAVAILABLE"
+            # CAMPAIGN-SCOPED, NOT LIFETIME, and this is the 2026-11-04
+            # correction. This term was `max(0, -cumulative_realized)` --
+            # the account's LIFETIME realized loss. Against a $5 campaign
+            # budget and a standing account loss of $10.62, the budget was
+            # spent before a single order existed: `refuse_arming` refused
+            # every window with CAMPAIGN_WORST_CASE_EXHAUSTED:11.3369>=5 and
+            # an authorized four-window campaign submitted nothing. A
+            # per-campaign budget that counts history it did not cause is
+            # not a campaign budget.
+            #
+            # The baseline machinery for this already existed and was
+            # already wired here for `max_campaign_additional_loss_usd`; it
+            # is simply used at this gate too, so BOTH campaign gates now
+            # measure the same campaign-scoped quantity through the same
+            # tested function rather than two opinions of it.
+            #
+            # NOTHING IS WRITTEN DOWN. `cumulative_realized` is still the
+            # full lifetime figure and every independent account-wide,
+            # lifetime and daily control still reads it unchanged; only the
+            # ZERO POINT this campaign is measured from moves, and that
+            # point is owner-gated -- the baseline is keyed on the approval
+            # nonce, which this executor cannot write, and `capture` is
+            # idempotent so a restart or re-arm cannot move it.
+            #
+            # A GAIN CREATES NO ROOM: the delta is `max(0, base - now)`.
+            if self.campaign_baseline is None:
+                # A budget was configured and its basis cannot be
+                # established. That is a refusal, never a pass, and never a
+                # silent fall back to the lifetime figure.
+                return "CAMPAIGN_BASELINE_UNAVAILABLE"
+            _cs = self.campaign_baseline.additional_loss_usd(
+                self.campaign_id,
+                account_wide_realized=cumulative_realized,
+                open_worst_case_usd=(self.cash_committed(filled_legs)
+                                     + _pending))
+            if not _cs.get("ok"):
+                return str(_cs.get("reason") or "CAMPAIGN_BASELINE_UNKNOWN")
+            campaign_used = _d(_cs.get("additional_loss_usd"))
+            try:
+                why = self.campaign_budget.refuse_amount(
+                    campaign_id=self.campaign_id,
+                    used_usd=campaign_used,
+                    new_order_cost_usd=this_order)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # A budget that cannot answer is a refusal, never a pass.
+                return "CAMPAIGN_BUDGET_ERROR:%s" % type(exc).__name__
+            if why:
+                return why
+        # 4. WORST-CASE SETTLEMENT DEFICIT. Default disabled; when an owner
+        #    configures it, no order may leave the book able to lose more
+        #    than the bound on EITHER outcome. This is the only gate that
+        #    knows a two-sided book can be safe at a cost the cash gate
+        #    would otherwise treat as pure exposure.
+        if self.max_worst_case_deficit_usd is not None:
+            if not isinstance(inventory, Mapping):
+                # FAIL CLOSED. Configured and un-evaluable is a refusal: the
+                # bound exists precisely for the states we cannot see.
+                return "WORST_CASE_DEFICIT_NO_INVENTORY"
+            wc = self.worst_case_deficit(
+                up_qty=inventory.get("up_qty"),
+                dn_qty=inventory.get("dn_qty"),
+                up_cost=inventory.get("up_cost"),
+                dn_cost=inventory.get("dn_cost"),
+                order_side=("DOWN" if str(order_intent or "").upper()
+                            .endswith("BUY_SHORT") else "UP"),
+                order_qty=q, order_price=px, outstanding=outstanding)
+            if not wc.get("ok"):
+                return "WORST_CASE_DEFICIT:%s" % wc.get("reason")
+            if _d(wc["deficit"]) > self.max_worst_case_deficit_usd:
+                return ("WORST_CASE_DEFICIT:%s>%s:%s"
+                        % (wc["deficit"], self.max_worst_case_deficit_usd,
+                           wc["scenario"]))
+
+        # 4b. THE CAMPAIGN'S ADDITIONAL LOSS, FROM ITS OWN STARTING POINT.
+        #
+        #     Placed HERE, after every account-wide and L5-scoped ceiling has
+        #     already run and already returned, so it is additive by
+        #     construction: it can only refuse an order the others allowed.
+        #
+        #     IT COMPUTES ITS OWN WORST CASE rather than reusing the $2 gate's
+        #     result, and that duplication is deliberate. The owner's
+        #     instruction was not to assume an existing gate supplies this
+        #     bound, and a gate that only worked when ANOTHER optional gate
+        #     happened to be configured would be exactly that assumption.
+        #     `worst_case_deficit` is a pure function of its arguments, so
+        #     calling it twice costs arithmetic and buys independence.
+        #
+        #     THE DEFICIT IS THE RIGHT OPEN-BOOK TERM, not the gross cost. It
+        #     is `C - min(up, dn)`, so a completing leg that matches inventory
+        #     contributes its real worst case -- which is negative for a pair
+        #     that pays on both outcomes. Using gross cost here would make the
+        #     bound refuse the completions that REDUCE risk, which is the one
+        #     behaviour a loss ceiling must never have.
+        #
+        #     FAIL CLOSED: no baseline, a baseline belonging to another
+        #     campaign, no campaign id, an unreadable figure or an
+        #     uncomputable book all refuse inside the helper.
+        if self.max_campaign_additional_loss_usd is not None:
+            if self.campaign_baseline is None:
+                return "CAMPAIGN_BASELINE_UNCONFIGURED"
+            if not isinstance(inventory, Mapping):
+                return "CAMPAIGN_ADDITIONAL_LOSS_NO_INVENTORY"
+            wcb = self.worst_case_deficit(
+                up_qty=inventory.get("up_qty"),
+                dn_qty=inventory.get("dn_qty"),
+                up_cost=inventory.get("up_cost"),
+                dn_cost=inventory.get("dn_cost"),
+                order_side=("DOWN" if str(order_intent or "").upper()
+                            .endswith("BUY_SHORT") else "UP"),
+                order_qty=q, order_price=px, outstanding=outstanding)
+            if not wcb.get("ok"):
+                return ("CAMPAIGN_ADDITIONAL_LOSS_DEFICIT:%s"
+                        % wcb.get("reason"))
+            try:
+                why = self.campaign_baseline.refuse(
+                    self.campaign_id,
+                    account_wide_realized=cumulative_realized,
+                    open_worst_case_usd=wcb["deficit"],
+                    limit_usd=self.max_campaign_additional_loss_usd)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # a bound that cannot answer is a refusal, never a pass
+                return ("CAMPAIGN_ADDITIONAL_LOSS_ERROR:%s"
+                        % type(exc).__name__)
+            if why:
+                return why
+
+        # an authoritative balance, when we have one, binds too. Absent is
+        # NOT treated as unlimited -- see require_cash_evidence().
+        if available_cash_usd is not None and committed > _d(
+                available_cash_usd):
+            return ("INSUFFICIENT_AVAILABLE_CASH:%s>%s"
+                    % (committed, _d(available_cash_usd)))
+
+        # 4. run scope
+        if int(windows_used) >= self.max_windows:
+            return "WINDOW_BUDGET_EXHAUSTED:%d>=%d" % (int(windows_used),
+                                                       self.max_windows)
+        return None
+
+    # -------------------------------------------------- evidence gate
+
+    def require_cash_evidence(self,
+                              balance_reading: Optional[Mapping[str, Any]]
+                              ) -> Optional[str]:
+        """Refuse to arm without an authoritative balance reading.
+
+        An absent balance is not an unlimited one. The live heartbeat's
+        `cash_anchor` is empty `{}`, so this currently refuses -- which is the
+        correct state until one authenticated /v1/account/balances read lands.
+        """
+        if not balance_reading:
+            return "NO_AUTHORITATIVE_CASH_READING"
+        for key in ("available", "availableCash", "cash", "balance"):
+            if key in balance_reading:
+                try:
+                    if _d(balance_reading[key]) <= 0:
+                        return "NON_POSITIVE_AVAILABLE_CASH"
+                except Exception:                              # noqa: BLE001
+                    return "UNREADABLE_AVAILABLE_CASH"
+                return None
+        return "BALANCE_READING_HAS_NO_AVAILABLE_FIELD"
+
+
+def combined_refusal(deployed_refusal: Optional[str],
+                     validation_refusal: Optional[str]) -> Optional[str]:
+    """The deployed limits decide FIRST; these gates can only add a refusal.
+
+    Order matters for provenance, not for strictness: whichever refuses, the
+    action is refused, and the deployed reason is reported ahead of ours so a
+    pre-existing limit is never masked by a validation-scoped one.
+    """
+    return deployed_refusal or validation_refusal
+
+
+class RefuseAllGates:
+    """The gates when REQUIRED risk configuration could not be parsed.
+
+    THE FAIL-OPEN THIS EXISTS TO CLOSE. `l5_pmus_live_runner.validation_gates`
+    used to return None when construction raised, and the submission path
+    reads `if vg is not None:` -- so one malformed value among ten env reads
+    silently dropped the entire additive layer: the $20 cumulative loss halt,
+    the $1.65 cash envelope, the 5-contract unmatched cap and the campaign
+    budget, while the operator believed all four were in force.
+    `max_cumulative_loss_usd` defaults to 20, so it is always requested and
+    can never correctly be absent.
+
+    This stands in its place and REFUSES EVERY SUBMISSION by name. It is not
+    a degraded gate: it carries no limits, so it cannot be mistaken for one,
+    and every accessor the money path reads either refuses or reports the
+    most conservative answer there is.
+
+    WHAT IT DELIBERATELY DOES NOT BLOCK. Cancellation, reconciliation, the
+    watchdog and the deadman never consult these gates, so an unparseable
+    limit stops new risk without stranding exposure already taken. That is
+    the same asymmetry every other fail-closed path in this system uses.
+    """
+
+    #: so `if vg is not None` sees an object, and a reader can tell at a
+    #: glance that this is not a configured gate set.
+    configured = False
+
+    def __init__(self, error: str) -> None:
+        self.error = str(error)[:200]
+        #: None is "not established" everywhere in this codebase, and every
+        #: consumer of these already treats None as a refusal rather than a
+        #: default. Naming them explicitly keeps attribute access safe.
+        self.max_cash_deployed_usd = None
+        self.max_cumulative_loss_usd = None
+        self.max_worst_case_deficit_usd = None
+        self.campaign_budget = None
+        self.campaign_id = None
+
+    def refuse(self, **_kw: Any) -> str:
+        """Always a refusal, whatever it is asked."""
+        return "REQUIRED_RISK_CONFIG_UNREADABLE"
+
+    def cash_committed(self, legs: Iterable[Mapping[str, Any]]) -> D:
+        """The most conservative answer: nothing is known to be free.
+
+        A caller that reaches this is already being refused by `refuse`; a
+        huge figure here means that if any arithmetic DOES run on it, it
+        cannot conclude there is headroom.
+        """
+        return UNREADABLE_COMMITMENT_USD
+
+    def pending_obligation(self, outstanding: Iterable[Mapping[str, Any]]
+                           ) -> D:
+        return UNREADABLE_COMMITMENT_USD
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "configured": False,
+            "refusing": "REQUIRED_RISK_CONFIG_UNREADABLE",
+            "error": self.error,
+            "labels": ("REQUIRED risk configuration could not be parsed. "
+                       "Every live submission refuses. The $20 cumulative "
+                       "halt, the cash envelope and the unmatched cap are "
+                       "not evaluable, and an unevaluable limit is never "
+                       "permission to trade."),
+        }

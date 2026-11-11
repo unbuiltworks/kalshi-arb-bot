@@ -1,0 +1,808 @@
+{
+ "counterfactual_decomposition": {
+  "A_entry_state_price": {
+   "key": "price_band",
+   "labels": "COUNTERFACTUAL composition shift, associational only; not a causal effect and not additive with other reweightings",
+   "observed_mean": -0.1352,
+   "reweighted_mean": -0.1174,
+   "shift": 0.0178,
+   "strata_observed": 3,
+   "target_mass_covered": 0.484,
+   "target_mass_dropped_unobserved": 0.516,
+   "value": "excess_pair"
+  },
+  "D_shell_divergence": {
+   "gain_per_unit_when_differs": {
+    "label": "",
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "n": 1,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0
+   },
+   "gain_per_unit_when_equal": {
+    "label": "",
+    "max": 0.1928,
+    "mean": -0.0187,
+    "min": -0.1534,
+    "n": 34,
+    "p10": -0.1534,
+    "p25": -0.0222,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0371
+   },
+   "sampled_differs_from_acted": 1,
+   "sampled_equals_acted": 43,
+   "states_with_both_labels": 44,
+   "structural_note": "L5 HAS NO SHELL, so this component exists on one side only and can never be a like-for-like contribution to the gap. It is reported as a within-PMUS association."
+  },
+  "E_inventory_cycles": {
+   "l5_fills_per_episode_p50": 6,
+   "l5_switches_per_episode_p50": 2,
+   "labels": "reported as a composition difference; PMUS has too few episodes with >1 switch to reweight excess_pair by cycle count without the estimate being driven by single episodes",
+   "pmus_fills_per_episode_p50": 4,
+   "pmus_switches_per_episode_p50": 1
+  },
+  "F_gain_state": {
+   "unavailable": "no shared gain_bucket strata carry an excess_pair"
+  },
+  "F_tte_regime": {
+   "unavailable": "no shared strata"
+  }
+ },
+ "gemini": {
+  "gemini_15m": {
+   "matched_campaigns": 0,
+   "rows": 174,
+   "rows_with_a_fill": 4,
+   "source": "analysis/l5/gemini_counterfactual_15m_rows.jsonl",
+   "state_distributions": "UNAVAILABLE",
+   "status_mix": {
+    "NO_FILL": 170,
+    "RESIDUAL_HOLD": 4
+   },
+   "total_fills": 6,
+   "why": "6 fills across 174 rows and zero matched inventory. No pair was ever formed."
+  },
+  "gemini_5m": {
+   "arms": {
+    "modal:optimistic": {
+     "campaigns": 118,
+     "complement_fills": 0,
+     "complement_orders": 0,
+     "first_leg_fills": 27,
+     "fully_matched_campaigns": 0,
+     "median_pair_cost_after_fees": null
+    },
+    "modal:strict": {
+     "campaigns": 118,
+     "complement_fills": 0,
+     "complement_orders": 0,
+     "first_leg_fills": 8,
+     "fully_matched_campaigns": 0,
+     "median_pair_cost_after_fees": null
+    },
+    "stochastic:optimistic": {
+     "campaigns": 118,
+     "complement_fills": 2,
+     "complement_orders": 18,
+     "first_leg_fills": 23,
+     "fully_matched_campaigns": 2,
+     "median_pair_cost_after_fees": 0.99
+    },
+    "stochastic:strict": {
+     "campaigns": 118,
+     "complement_fills": 1,
+     "complement_orders": 8,
+     "first_leg_fills": 6,
+     "fully_matched_campaigns": 1,
+     "median_pair_cost_after_fees": 0.99
+    }
+   },
+   "best_arm_complement_fills": 2,
+   "best_arm_matched_campaigns": 2,
+   "labels": "THEORETICAL Gemini shadow/replay; zero orders; fills assumed from public prints (queue position unobservable); settlement by mid proxy; nothing realized; nothing armed",
+   "source": "analysis/l5/gemini_l5_shadow_v2.json",
+   "state_distributions": "UNAVAILABLE",
+   "underlying": "BTC 5m (gemini_bbo_btc05m / gemini_prints_btc05m)",
+   "why": "gain_per_unit needs a running average over repeated same-side fills and a pair needs a completion. The best arm has 2 complement fills and 2 matched campaigns out of 118; three of the four arms have ZERO. n=2 cannot carry a distribution."
+  },
+  "verdict": "Gemini is NOT more L5-like on these distributions -- it has essentially no pair formation at all. This is an availability finding, not a performance comparison, and it must not be read as either."
+ },
+ "gemini_required_schema": {
+  "minimum_to_be_usable": {
+   "complement_fills": ">= 30",
+   "matched_campaigns": ">= 30 with a formed pair",
+   "reason": "below that the gain_per_unit and pair-cost distributions cannot be compared to L5's 21,739 switches at any useful resolution"
+  },
+  "must_not_be_sent": [
+   "assumed or imputed fills of any kind",
+   "mid-proxy settlements presented as realized",
+   "aggregates in place of the fill stream"
+  ],
+  "purpose": "one row PER FILL, chronological within an episode, so src/l5_state_trajectory.walk can build the identical states for Gemini that it builds for L5 and PMUS. Return fills, not summaries: every distribution in this study is rebuilt from the fill stream and cannot be recovered from aggregates.",
+  "query_shape": "SELECT episode_id, venue_duration, seq, t, side, price, qty, tte_s, maker_taker, sampled, acted, refusal FROM fills WHERE filled = true ORDER BY episode_id, seq",
+  "required_fields": {
+   "episode_id": "str -- one market window / campaign",
+   "maker_taker": "'maker' | 'taker' | 'unknown'",
+   "price": "float in (0,1)",
+   "qty": "float contracts filled",
+   "seq": "int -- 1-based order within the episode",
+   "side": "'up' | 'dn' -- the OUTCOME bought, not BUY/SELL",
+   "t": "float epoch seconds of the FILL (not the order)",
+   "tte_s": "float seconds to settlement AT THE FILL",
+   "venue_duration": "str -- '5m' | '15m'"
+  },
+  "required_if_a_shell_selected_the_action": {
+   "acted": "the action actually taken",
+   "refusal": "the gate that changed it, or null",
+   "sampled": "the action the model drew, before any shell gate"
+  },
+  "required_per_episode": {
+   "realized_usd": "venue-confirmed, or null -- never a proxy",
+   "settlement_outcome": "'up' | 'dn' | null if unsettled",
+   "terminal_dn": "float",
+   "terminal_up": "float"
+  }
+ },
+ "method": {
+  "alignment": "episodes aligned at the FIRST FILL",
+  "l5_non_buy_prints_dropped": 2,
+  "no_lookahead": "every state is built from fills strictly before it plus the action being taken",
+  "one_walker": "both venues are reconstructed by src/l5_state_trajectory.walk from a common fill record, so the comparison cannot measure two different reconstructions",
+  "pmus_cadence_is_an_upper_bound": "a fill is stamped with the decision that OBSERVED it",
+  "pmus_fill_recovery": "from the engine's own inventory ledger between TIMESTAMPED decisions; 44 fills recovered against 45 order rows with filled_qty>0 -- the one difference is a fill with no subsequent decision to observe it",
+  "pmus_unrecovered_fills": 0
+ },
+ "observed_decomposition": {
+  "B_market_move": {
+   "l5": 0.0103,
+   "pmus": -0.1317
+  },
+  "C_own_fills": {
+   "l5": -0.0059,
+   "pmus": -0.0036
+  },
+  "dB": -0.142,
+  "dC": 0.0023,
+  "dC_plus_dB": -0.1397,
+  "gap": -0.1397,
+  "identity": "excess_pair = C + B exactly; the gap in excess_pair is therefore exactly the sum of the gaps in C and B",
+  "l5_mean_excess_pair": 0.0045,
+  "max_identity_residual": 2.220446049250313e-16,
+  "n": {
+   "l5_switches_with_a_pair": 13048,
+   "pmus_switches_with_a_pair": 9
+  },
+  "pmus_mean_excess_pair": -0.1352
+ },
+ "scope": "READ-ONLY. No production change, no persistence deployment, no taker, no cap/band/admission/sizing/concurrency change; 392b5c0e remains deferred.",
+ "venues": {
+  "L5_canonical": {
+   "B_market_move": {
+    "label": "paid - (1 - entry)",
+    "max": 0.87,
+    "mean": 0.0103,
+    "min": -0.95,
+    "n": 13048,
+    "p10": -0.36,
+    "p25": -0.21,
+    "p50": -0.01,
+    "p75": 0.25,
+    "p90": 0.42
+   },
+   "C_own_fills": {
+    "label": "held_avg - entry",
+    "max": 0.895,
+    "mean": -0.0059,
+    "min": -0.8833,
+    "n": 13048,
+    "p10": -0.2463,
+    "p25": -0.1175,
+    "p50": 0.0,
+    "p75": 0.1054,
+    "p90": 0.2194
+   },
+   "attainable_pair_cost": {
+    "label": "attainable pair",
+    "max": 1.8269,
+    "mean": 1.0052,
+    "min": 0.101,
+    "n": 64824,
+    "p10": 0.7954,
+    "p25": 0.8877,
+    "p50": 1.0,
+    "p75": 1.122,
+    "p90": 1.2284
+   },
+   "clip_normalised": true,
+   "degeneracy": {
+    "gain_exactly_zero": 2789,
+    "gain_exactly_zero_share": 0.0401,
+    "meaning": "a gain of exactly zero means the held side's last price IS its average -- typically a position built from one fill. A high share means the venue is not cycling inventory, NOT that its positions are flat to market.",
+    "states_with_a_gain": 69558,
+    "states_with_a_held_side": 69558
+   },
+   "entry_price": {
+    "label": "entry price",
+    "max": 0.98,
+    "mean": 0.5235,
+    "min": 0.01,
+    "n": 71982,
+    "p10": 0.41,
+    "p25": 0.47,
+    "p50": 0.52,
+    "p75": 0.57,
+    "p90": 0.63
+   },
+   "episodes": 2216,
+   "excess_pair": {
+    "label": "pair - 1.00",
+    "max": 0.7651,
+    "mean": 0.0045,
+    "min": -0.849,
+    "n": 13048,
+    "p10": -0.2185,
+    "p25": -0.1168,
+    "p50": -0.003,
+    "p75": 0.1257,
+    "p90": 0.243
+   },
+   "fills": 71982,
+   "fills_per_episode": {
+    "label": "fills/episode",
+    "max": 461,
+    "mean": 32.4829,
+    "min": 1,
+    "n": 2216,
+    "p10": 1,
+    "p25": 3,
+    "p50": 6,
+    "p75": 12,
+    "p90": 138
+   },
+   "gain_bucket_mix": {
+    "+1.5..+5c": 0.0752,
+    "-1.5..0c": 0.0421,
+    "-10..-5c": 0.0973,
+    "-20..-10c": 0.1764,
+    "-5..-1.5c": 0.0717,
+    "0..+1.5c": 0.0826,
+    "<-20c": 0.1473,
+    ">+5c": 0.3074
+   },
+   "gain_per_unit": {
+    "label": "gain_per_unit",
+    "max": 0.7482,
+    "mean": -0.0284,
+    "min": -0.7331,
+    "n": 69558,
+    "p10": -0.2448,
+    "p25": -0.1385,
+    "p50": -0.0113,
+    "p75": 0.0791,
+    "p90": 0.1732
+   },
+   "matched_fraction_terminal": {
+    "label": "terminal matched frac",
+    "max": 0.5,
+    "mean": 0.2612,
+    "min": 0.0,
+    "n": 2216,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.3112,
+    "p75": 0.4402,
+    "p90": 0.479
+   },
+   "median_clip_contracts": 12.5,
+   "price_band_mix": {
+    "p10-25c": 0.2017,
+    "p25-45c": 0.1908,
+    "p45-55c": 0.0971,
+    "p55-75c": 0.1934,
+    "p75-90c": 0.1272,
+    "p<10c": 0.1233,
+    "p>90c": 0.0665
+   },
+   "realised_pair_cost": {
+    "label": "pair at a switch",
+    "max": 1.7651,
+    "mean": 1.0045,
+    "min": 0.151,
+    "n": 13048,
+    "p10": 0.7815,
+    "p25": 0.8832,
+    "p50": 0.997,
+    "p75": 1.1257,
+    "p90": 1.243
+   },
+   "residual_trajectory_clips": {
+    "label": "|residual| at every state, in clips",
+    "max": 94.4266,
+    "mean": 11.6395,
+    "min": 0.0,
+    "n": 71982,
+    "p10": 0.9008,
+    "p25": 3.3616,
+    "p50": 8.7873,
+    "p75": 16.9514,
+    "p90": 25.1756
+   },
+   "seconds_between_fills": {
+    "label": "fill cadence",
+    "max": 736.0,
+    "mean": 7.88,
+    "min": 0.0,
+    "n": 69766,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 2.0,
+    "p75": 8.0,
+    "p90": 20.0
+   },
+   "seconds_between_switches": {
+    "label": "switch cadence",
+    "max": 708.0,
+    "mean": 18.9121,
+    "min": 0.0,
+    "n": 20129,
+    "p10": 0.0,
+    "p25": 3.0,
+    "p50": 9.0,
+    "p75": 23.0,
+    "p90": 48.0
+   },
+   "switches": 21739,
+   "switches_per_episode": {
+    "label": "switches/episode",
+    "max": 155,
+    "mean": 9.81,
+    "min": 0,
+    "n": 2216,
+    "p10": 0,
+    "p25": 0,
+    "p50": 2,
+    "p75": 5,
+    "p90": 39
+   },
+   "terminal_residual_clips": {
+    "label": "terminal |residual| in clips",
+    "max": 93.4746,
+    "mean": 8.1192,
+    "min": 0.0,
+    "n": 2216,
+    "p10": 0.6352,
+    "p25": 1.7904,
+    "p50": 4.4,
+    "p75": 10.0,
+    "p90": 19.0294
+   },
+   "tte_bucket_mix": {
+    "tte2-5m": 0.2649,
+    "tte30-120s": 0.149,
+    "tte5-10m": 0.3154,
+    "tte<30s": 0.0119,
+    "tte>10m": 0.2588
+   },
+   "tte_s": {
+    "label": "TTE",
+    "max": 896.0,
+    "mean": 405.3647,
+    "min": -5.0,
+    "n": 71982,
+    "p10": 84.0,
+    "p25": 179.0,
+    "p50": 377.0,
+    "p75": 611.0,
+    "p90": 782.0
+   },
+   "venue": "L5_canonical"
+  },
+  "PMUS_perfect_conversion_CF": {
+   "B_market_move": {
+    "label": "paid - (1 - entry)",
+    "max": 0.21,
+    "mean": -0.0535,
+    "min": -0.4,
+    "n": 24,
+    "p10": -0.16,
+    "p25": -0.12,
+    "p50": -0.04,
+    "p75": -0.005,
+    "p90": 0.05
+   },
+   "C_own_fills": {
+    "label": "held_avg - entry",
+    "max": 0.42,
+    "mean": 0.0116,
+    "min": -0.2271,
+    "n": 24,
+    "p10": -0.0533,
+    "p25": -0.0215,
+    "p50": -0.0,
+    "p75": 0.0104,
+    "p90": 0.0771
+   },
+   "attainable_pair_cost": {
+    "label": "attainable pair",
+    "max": 1.141,
+    "mean": 0.9218,
+    "min": 0.4367,
+    "n": 37,
+    "p10": 0.6296,
+    "p25": 0.925,
+    "p50": 0.9571,
+    "p75": 0.9967,
+    "p90": 1.0285
+   },
+   "clip_normalised": true,
+   "degeneracy": {
+    "gain_exactly_zero": 14,
+    "gain_exactly_zero_share": 0.2917,
+    "meaning": "a gain of exactly zero means the held side's last price IS its average -- typically a position built from one fill. A high share means the venue is not cycling inventory, NOT that its positions are flat to market.",
+    "states_with_a_gain": 48,
+    "states_with_a_held_side": 48
+   },
+   "entry_price": {
+    "label": "entry price",
+    "max": 0.58,
+    "mean": 0.4193,
+    "min": 0.23,
+    "n": 74,
+    "p10": 0.23,
+    "p25": 0.375,
+    "p50": 0.45,
+    "p75": 0.475,
+    "p90": 0.475
+   },
+   "episodes": 9,
+   "excess_pair": {
+    "label": "pair - 1.00",
+    "max": 0.141,
+    "mean": -0.0419,
+    "min": -0.4116,
+    "n": 24,
+    "p10": -0.1157,
+    "p25": -0.0714,
+    "p50": -0.0303,
+    "p75": -0.0059,
+    "p90": 0.019
+   },
+   "fills": 74,
+   "fills_per_episode": {
+    "label": "fills/episode",
+    "max": 19,
+    "mean": 8.2222,
+    "min": 1,
+    "n": 9,
+    "p10": 1,
+    "p25": 6,
+    "p50": 8,
+    "p75": 9,
+    "p90": 12
+   },
+   "gain_bucket_mix": {
+    "+1.5..+5c": 0.0625,
+    "-1.5..0c": 0.0833,
+    "-10..-5c": 0.0625,
+    "-20..-10c": 0.1458,
+    "-5..-1.5c": 0.125,
+    "0..+1.5c": 0.3125,
+    "<-20c": 0.0625,
+    ">+5c": 0.1458
+   },
+   "gain_per_unit": {
+    "label": "gain_per_unit",
+    "max": 0.1014,
+    "mean": -0.0392,
+    "min": -0.4393,
+    "n": 48,
+    "p10": -0.1534,
+    "p25": -0.0917,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0532
+   },
+   "imputation": {
+    "dropped_flat": 166,
+    "imputed": 29,
+    "imputed_contracts": 38.8,
+    "labels": "COUNTERFACTUAL state distribution only. Every imputed fill is capped by the residual standing in front of it. No P&L, realized figure or fill-rate claim may be taken from this column.",
+    "trimmed": 12
+   },
+   "matched_fraction_terminal": {
+    "label": "terminal matched frac",
+    "max": 0.5,
+    "mean": 0.3744,
+    "min": 0.0,
+    "n": 9,
+    "p10": 0.0,
+    "p25": 0.3632,
+    "p50": 0.4081,
+    "p75": 0.4416,
+    "p90": 0.4935
+   },
+   "median_clip_contracts": 1.66,
+   "price_band_mix": {
+    "p10-25c": 0.0405,
+    "p25-45c": 0.3108,
+    "p45-55c": 0.1892,
+    "p55-75c": 0.3919,
+    "p<10c": 0.0676
+   },
+   "realised_pair_cost": {
+    "label": "pair at a switch",
+    "max": 1.141,
+    "mean": 0.9581,
+    "min": 0.5884,
+    "n": 24,
+    "p10": 0.8843,
+    "p25": 0.9286,
+    "p50": 0.9697,
+    "p75": 0.9941,
+    "p90": 1.019
+   },
+   "residual_trajectory_clips": {
+    "label": "|residual| at every state, in clips",
+    "max": 2.9518,
+    "mean": 0.6855,
+    "min": 0.0,
+    "n": 74,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.6205,
+    "p75": 1.1145,
+    "p90": 1.4759
+   },
+   "seconds_between_fills": {
+    "label": "fill cadence",
+    "n": 0
+   },
+   "seconds_between_switches": {
+    "label": "switch cadence",
+    "n": 0
+   },
+   "switches": 35,
+   "switches_per_episode": {
+    "label": "switches/episode",
+    "max": 7,
+    "mean": 3.8889,
+    "min": 0,
+    "n": 9,
+    "p10": 0,
+    "p25": 2,
+    "p50": 5,
+    "p75": 5,
+    "p90": 7
+   },
+   "terminal_residual_clips": {
+    "label": "terminal |residual| in clips",
+    "max": 2.747,
+    "mean": 1.2276,
+    "min": 0.0,
+    "n": 9,
+    "p10": 0.0,
+    "p25": 1.0,
+    "p50": 1.1205,
+    "p75": 1.3072,
+    "p90": 2.5723
+   },
+   "tte_bucket_mix": {},
+   "tte_s": {
+    "label": "TTE",
+    "n": 0
+   },
+   "venue": "PMUS_perfect_COMPLETE_conversion_COUNTERFACTUAL"
+  },
+  "PMUS_sports": {
+   "B_market_move": {
+    "label": "paid - (1 - entry)",
+    "max": 0.02,
+    "mean": -0.1317,
+    "min": -0.51,
+    "n": 9,
+    "p10": -0.51,
+    "p25": -0.23,
+    "p50": -0.04,
+    "p75": -0.03,
+    "p90": -0.005
+   },
+   "C_own_fills": {
+    "label": "held_avg - entry",
+    "max": 0.0472,
+    "mean": -0.0036,
+    "min": -0.0766,
+    "n": 9,
+    "p10": -0.0766,
+    "p25": -0.0159,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0429
+   },
+   "attainable_pair_cost": {
+    "label": "attainable pair",
+    "max": 0.97,
+    "mean": 0.7891,
+    "min": 0.4134,
+    "n": 13,
+    "p10": 0.4134,
+    "p25": 0.7541,
+    "p50": 0.9329,
+    "p75": 0.96,
+    "p90": 0.96
+   },
+   "clip_normalised": true,
+   "degeneracy": {
+    "gain_exactly_zero": 16,
+    "gain_exactly_zero_share": 0.4571,
+    "meaning": "a gain of exactly zero means the held side's last price IS its average -- typically a position built from one fill. A high share means the venue is not cycling inventory, NOT that its positions are flat to market.",
+    "states_with_a_gain": 35,
+    "states_with_a_held_side": 35
+   },
+   "entry_price": {
+    "label": "entry price",
+    "max": 0.475,
+    "mean": 0.4199,
+    "min": 0.31,
+    "n": 44,
+    "p10": 0.365,
+    "p25": 0.37,
+    "p50": 0.45,
+    "p75": 0.47,
+    "p90": 0.475
+   },
+   "episodes": 9,
+   "excess_pair": {
+    "label": "pair - 1.00",
+    "max": -0.005,
+    "mean": -0.1352,
+    "min": -0.5866,
+    "n": 9,
+    "p10": -0.5866,
+    "p25": -0.1928,
+    "p50": -0.04,
+    "p75": -0.03,
+    "p90": -0.0096
+   },
+   "fills": 44,
+   "fills_per_episode": {
+    "label": "fills/episode",
+    "max": 11,
+    "mean": 4.8889,
+    "min": 1,
+    "n": 9,
+    "p10": 1,
+    "p25": 4,
+    "p50": 4,
+    "p75": 6,
+    "p90": 6
+   },
+   "gain_bucket_mix": {
+    "+1.5..+5c": 0.0857,
+    "-1.5..0c": 0.1714,
+    "-10..-5c": 0.0286,
+    "-20..-10c": 0.1714,
+    "-5..-1.5c": 0.0857,
+    "0..+1.5c": 0.4,
+    ">+5c": 0.0571
+   },
+   "gain_per_unit": {
+    "label": "gain_per_unit",
+    "max": 0.1928,
+    "mean": -0.0182,
+    "min": -0.1534,
+    "n": 35,
+    "p10": -0.1534,
+    "p25": -0.0222,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0371
+   },
+   "matched_fraction_terminal": {
+    "label": "terminal matched frac",
+    "max": 0.5,
+    "mean": 0.2897,
+    "min": 0.0,
+    "n": 9,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.3751,
+    "p75": 0.4827,
+    "p90": 0.4903
+   },
+   "median_clip_contracts": 1.72,
+   "price_band_mix": {
+    "p10-25c": 0.0455,
+    "p25-45c": 0.5,
+    "p45-55c": 0.1818,
+    "p55-75c": 0.1818,
+    "p<10c": 0.0909
+   },
+   "realised_pair_cost": {
+    "label": "pair at a switch",
+    "max": 0.995,
+    "mean": 0.8648,
+    "min": 0.4134,
+    "n": 9,
+    "p10": 0.4134,
+    "p25": 0.8072,
+    "p50": 0.96,
+    "p75": 0.97,
+    "p90": 0.9904
+   },
+   "residual_trajectory_clips": {
+    "label": "|residual| at every state, in clips",
+    "max": 5.8895,
+    "mean": 1.8552,
+    "min": 0.0,
+    "n": 44,
+    "p10": 0.0,
+    "p25": 0.8663,
+    "p50": 1.4244,
+    "p75": 2.8488,
+    "p90": 4.1221
+   },
+   "seconds_between_fills": {
+    "label": "fill cadence",
+    "max": 7309.6087,
+    "mean": 499.5175,
+    "min": 1.5425,
+    "n": 35,
+    "p10": 3.8174,
+    "p25": 9.7722,
+    "p50": 116.8594,
+    "p75": 329.9031,
+    "p90": 868.2574
+   },
+   "seconds_between_switches": {
+    "label": "switch cadence",
+    "max": 1693.2017,
+    "mean": 380.7989,
+    "min": 6.1602,
+    "n": 6,
+    "p10": 6.1602,
+    "p25": 41.1659,
+    "p50": 116.8594,
+    "p75": 187.1039,
+    "p90": 240.3023
+   },
+   "switches": 12,
+   "switches_per_episode": {
+    "label": "switches/episode",
+    "max": 3,
+    "mean": 1.3333,
+    "min": 0,
+    "n": 9,
+    "p10": 0,
+    "p25": 0,
+    "p50": 1,
+    "p75": 3,
+    "p90": 3
+   },
+   "terminal_residual_clips": {
+    "label": "terminal |residual| in clips",
+    "max": 4.9884,
+    "mean": 1.6873,
+    "min": 0.0,
+    "n": 9,
+    "p10": 0.0,
+    "p25": 0.1628,
+    "p50": 1.093,
+    "p75": 2.3547,
+    "p90": 3.843
+   },
+   "tte_bucket_mix": {},
+   "tte_s": {
+    "label": "TTE",
+    "n": 0
+   },
+   "venue": "PMUS_sports"
+  }
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "gemini_15m": {
+  "audit": {
+   "rows_dropped_outside_window": 19423,
+   "rows_without_expiry": 0,
+   "scored": 59,
+   "skipped": {
+    "too_short": 3,
+    "unusable": 0
+   },
+   "symbols_seen": 62,
+   "symbols_with_dropped_rows": 128
+  },
+  "coverage_p50": 1.0,
+  "discounted_p50": 0.2706,
+  "n": 59,
+  "score_p25": 0.2122,
+  "score_p50": 0.2706,
+  "score_p75": 0.3064,
+  "unknown_features": []
+ },
+ "gemini_5m": {
+  "audit": {
+   "rows_dropped_outside_window": 58661,
+   "rows_without_expiry": 0,
+   "scored": 97,
+   "skipped": {
+    "too_short": 23,
+    "unusable": 0
+   },
+   "symbols_seen": 120,
+   "symbols_with_dropped_rows": 397
+  },
+  "coverage_p50": 1.0,
+  "discounted_p50": 0.3944,
+  "n": 97,
+  "score_p25": 0.3305,
+  "score_p50": 0.3944,
+  "score_p75": 0.4584,
+  "unknown_features": []
+ }
+}

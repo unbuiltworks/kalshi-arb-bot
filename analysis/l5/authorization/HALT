@@ -1,0 +1,46 @@
+HALTED 2026-09-18 — the authorization EXPIRED. Nothing failed, and nothing ran
+after it did.
+
+THIS HALT RESTORES A CONSISTENCY THE FILES HAD LOST, IT DOES NOT RESPOND TO A
+DEFECT. `tests/test_live_mandate_deployment.py::test_the_halt_and_the_
+authorization_are_consistent` was RED on this branch with:
+
+    HALT removed without a valid authorization: mandate_expired:2026-09-18T00:41:20Z
+
+That invariant says un-halting requires a committed, parseable, UNEXPIRED
+mandate naming this service. HALT was removed on 2026-09-17 while the mandate
+was live; the mandate then expired at 00:41:20Z and nobody put HALT back, so
+the committed state read "un-halted, no valid authorization" for 11.3 hours.
+The test caught exactly what it exists to catch.
+
+WHAT THE RUNTIME ACTUALLY DID, from Railway rather than from these files:
+
+  deployment   490ce8ac-4a73-4776-b7fa-0a5608f8d285, commit 64909c5cb0b6
+  ended        2026-09-17T13:36:57Z, CAMPAIGN_STOP:HALT
+  sessions     21, filled_markets 0, settled 10, pending 1
+  realized     -$0.0832, realized_confirmed_by_venue true
+  next         "none: this status is an owner decision or a stop, and is
+                never auto-restarted"
+  restart      restartPolicyType NEVER
+
+So the executor stopped ~11 hours BEFORE the mandate expired and has not run
+since. No order was placed under an expired mandate, and none could have been:
+an expired mandate is NO_MANDATE at the wire, which is the same refusal as an
+absent one. This halt is therefore belt to that existing brace, not a repair.
+
+WHY HALT ANYWAY, WITH THE PROCESS ALREADY STOPPED. The serving image carries
+no HALT and `PMUS_SPRING_LIVE` / `PMUS_SPRING_ARM` are still set on the
+service. The process is gone, but a redeploy or a manual restart is not, and
+the standing discipline is that a money-moving bounded session does NOT
+automatically repeat after a completed or expired probe. Halting is always the
+fail-closed direction, and it costs nothing here because there is nothing
+authorized to run.
+
+RE-ARMING REQUIRES A NEW OWNER AUTHORIZATION. The expired mandate cannot be
+extended, refreshed or reinterpreted: a new authorization means a new
+`live_mandate.json` with its own `authorization_id`, `authorized_at` and
+`expiry`, committed by a human, and the removal of this file in the same
+reviewed change. Nothing in a session, a restart, a settlement or an
+`advance_gate` may do either.
+
+Nothing here clears a latch, restarts R1 or revives the retired rung program.

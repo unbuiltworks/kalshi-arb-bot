@@ -1,0 +1,96 @@
+{
+ "schema": "completion_requote_shadow/1",
+ "generated_utc": "2026-11-03T18:00:00Z",
+ "verdict": "NO-GO for a live validation of the requoter on this evidence.",
+ "runtime_check": {
+  "question": "does the runtime contain e1758566?",
+  "answer": "NO. The latest SUCCESS deployment is 9dcf862f on SHA 2a545a9d, created 2026-11-03T03:26:26Z. Every commit since (01825692, df8d8953, f2ad5c69, 289959f4, 2c3ecd61, d29a4bf7, 6db8e9d9, e1758566) was SKIPPED because Railway watchPatterns is deploy/l5_pmus_live/DEPLOY_TRIGGER and none of them touched it.",
+  "consequence": "the cancel-verification retry fix is NOT in production. The runtime still has the single-attempt verify that lost seven of ten requotes. Any live validation of the requoter MUST deploy e1758566 first, or it would re-run the original incident."
+ },
+ "demonstration": {
+  "method": "READ-ONLY. Drives the real l5_two_sided_probe.completion_requote -- the deployed function, not a reimplementation -- over VENUE-CONFIRMED inventory against the harvested books of those windows. Submits nothing, cancels nothing, contacts no venue.",
+  "real_inputs": "the four 2026-11-02 fills: qty, own cost basis, fill time, venue order id; and the two-sided BBO tape of each window",
+  "reconstructed_inputs": "the resting complement price, taken as the engine's own first eligible quote in that window",
+  "path_is_evaluated_not_skipped": true,
+  "decisions_evaluated": 50,
+  "act_would_reprice": 38,
+  "refusal_reasons": {
+   "ACT": 38,
+   "PAST_COMPLETE_CUTOFF": 11,
+   "ALREADY_NEAR_TOUCH": 1
+  },
+  "book_freshness": "book_age_s 0.1 supplied on every call; MAX_BOOK_AGE_S never breached in this reconstruction, so no BOOK_STALE refusals appeared. On the live feed staleness was measured at <100ms (~8 updates/sec), so this is representative rather than optimistic.",
+  "queue_evidence": "NONE. queue_ahead was not supplied, exactly as the live caller never supplied it -- all ten requotes of the original incident logged queue_ahead_at_target: null and acted anyway. require_queue_evidence is available and unused.",
+  "opportunities_lost_to_uncertainty": 0,
+  "uncertainty_note": "zero in THIS reconstruction because orders_uncertain and cancel_unresolved were passed as None. In the real incident they were the whole story: 7 unverified + 3 still_open, and each marks the book uncertain, which then refuses every later submission. That is what e1758566 fixes."
+ },
+ "the_ceiling_question": {
+  "owner_asked": "verify every proposed completion respects the fee-inclusive $0.96 ceiling",
+  "finding": "THE PREMISE DOES NOT MATCH THE ENGINE, BY DESIGN. COMPLETION_CEILINGS_IN_FORCE is ('improves','within_budget') and DELIBERATELY EXCLUDES pair_cap. The source states why: pair_cap is the OPENING discipline; on the four windows of 2026-10-28 it bound in every case while improves permitted the whole grid, and 1245z stranded 2.27 UP for -$0.7264 where a 0.97 pair would have left the book near flat.",
+  "where_the_hard_limit_actually_is": "pair_cost_refusal at the SUBMISSION boundary. Openings answer to 0.96 (TS.max_pair_cost()). A completion of confirmed residual inventory answers to completion_pair_rescue, which requires ALL THREE: it must reduce an unmatched position (held[other] > held[side]); it must not cross zero (after[side] <= held[other]); and eff <= 1.00. A defensive mandate has its own looser 1.20 ceiling for the exact order it names.",
+  "so_a_0_99_cap_is_largely_ALREADY_IMPLEMENTED": "completion_pair_rescue's eff <= 1.00, gated on reduce-not-cross, is a stranded-only ceiling that is structurally tighter than a flat 0.99 because it also forbids crossing zero and increasing exposure.",
+  "measured_against_the_boundary": {
+   "proposals": 38,
+   "survive_eff_le_1_00": 0,
+   "refused_eff_gt_1_00": 38,
+   "worked_example": "2230z held UP 2.04 at 0.9588 (0.47/unit). The complement DOWN's own touch walked 0.62 -> 0.91 as DOWN became likely, so every proposed reprice implies eff 1.09 to 1.45 -- a certain loss, correctly refused."
+  }
+ },
+ "what_enabling_it_would_actually_do": {
+  "ordering": "maybe_completion_requote CANCELS ONLY and submits nothing. The replacement is placed by the ordinary complement path on a later tick, where acc_leg_attempt charges the REPLACE budget and refuses outright while any order is live -- which is what makes two competing completion orders structurally impossible.",
+  "net_effect_on_the_four_real_windows": "38 cancel requests, 0 admissible replacements, and the resting complement lost. The window ends with NO resting completion where it previously had one.",
+  "but_it_costs_nothing_economically_here": "on 2230z the resting complement sat at own 0.47 and would only have filled if DOWN's own price FELL back to 0.47. It rose to 0.91 and the window settled DOWN, so that order was never going to fill. Cancelling it loses nothing REAL in these windows -- it simply adds 38 cancel requests for no completion.",
+  "which_is_the_owner_s_own_stated_anti_goal": "the objective is not more cancel requests; it is more safely confirmed, profitable pair completions. On this evidence the requoter delivers the former and none of the latter."
+ },
+ "why_the_disabled_switch_was_NOT_the_blocker": "the hypothesis was that L5_COMPLETION_REQUOTE being off is what cost us the pairs. On the four venue-confirmed states it would have changed no economic outcome: every reprice it proposes is refused at submission for buying a certain loss, because the book had already walked past the point where any pair under $1.00 existed. The blocker was the adverse first-leg fill, not the frozen complement.",
+ "go_no_go": {
+  "decision": "NO-GO",
+  "reasons": [
+   "every one of the 38 proposed reprices is refused at the submission boundary for eff > 1.00",
+   "the only effect would be cancel traffic plus the loss of a resting order",
+   "the runtime does not contain the cancel-verify fix, so a validation today would re-run the original incident",
+   "no queue evidence is supplied, so a reprice cannot be shown to improve fill probability rather than merely surrender queue position -- and a requote goes to the BACK of the target price's queue"
+  ],
+  "what_would_change_it": [
+   "venue-confirmed inventory where a sub-$1.00 completion is still reachable after the drift, which none of the four windows provides",
+   "queue_ahead supplied and require_queue_evidence enabled, so a reprice is justified by fill probability rather than by price alone",
+   "e1758566 actually deployed, verified by the completion_requote_enabled telemetry row shipped in d29a4bf7"
+  ]
+ },
+ "authorization_scope_that_would_be_needed": {
+  "note": "stated for completeness; I am NOT requesting it, because the decision above is NO-GO.",
+  "preconditions": [
+   "deploy e1758566 disarmed and confirm the running SHA",
+   "confirm completion_requote_enabled reads true in L5_EFFECTIVE_RUNTIME_CONFIG",
+   "zero open orders and no reconciliation uncertainty at arm time"
+  ],
+  "scope": {
+   "windows": 4,
+   "markets": "cpc-btc-updown-15m only",
+   "max_exposure_usd": 20,
+   "cash_usd": 12,
+   "daily_loss_halt_usd": 5,
+   "worst_case_deficit_usd": 1.5,
+   "residual_cap_contracts": 5,
+   "max_live_orders": 1,
+   "execution": "maker-only",
+   "cap": "0.96 opening / eff<=1.00 completion",
+   "cancel_margin_s": 300,
+   "requote_cap": "a bounded number of reprices per window, which does not currently exist as a limit and would have to be added"
+  },
+  "explicitly_excluded": [
+   "the 0.99 cap",
+   "any change to the 300s margin",
+   "both continuous-inventory flags",
+   "any risk-limit increase"
+  ]
+ },
+ "safety": {
+  "submissions": "disabled throughout",
+  "halt": "active",
+  "cancel_margin_s": 300,
+  "armed": false,
+  "venue_contacts_made_by_this_demonstration": 0,
+  "simulated_vs_confirmed": "EVERY cancellation recovery in this demonstration is SIMULATED. No venue-confirmed cancellation recovery exists yet -- the only venue record of the recovery path is the original incident's 7 unverified and 3 still_open, all failures. The retry fix is proven by 19 deterministic tests and by NO venue evidence."
+ }
+}

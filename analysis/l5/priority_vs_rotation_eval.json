@@ -1,0 +1,81 @@
+{
+ "labels": "SYNTHETIC activity tape (150 markets x 200 cycles, cap 40); pass --tape-root on the durable host for the real tape; observation quality only \u2014 no P&L claim",
+ "results": [
+  {
+   "planner": "rotation",
+   "qualifying_windows": 23,
+   "qualifying_detected": 23,
+   "qualifying_detected_slugs": [
+    "syn-000",
+    "syn-001",
+    "syn-002",
+    "syn-003",
+    "syn-004",
+    "syn-005",
+    "syn-006",
+    "syn-007",
+    "syn-020",
+    "syn-021",
+    "syn-022",
+    "syn-023",
+    "syn-024",
+    "syn-025",
+    "syn-026",
+    "syn-027",
+    "syn-028",
+    "syn-029",
+    "syn-030",
+    "syn-031",
+    "syn-032",
+    "syn-033",
+    "syn-034"
+   ],
+   "time_to_observe_median_cycles": 0,
+   "q1_compatible_state_cycles_observed": 338,
+   "completion_evidence_cycles_captured": 255,
+   "coverage_latency_median_cycles": 4.0,
+   "coverage_latency_p95_cycles": 11.0,
+   "slot_utilization_pct": 53.2
+  },
+  {
+   "planner": "priority",
+   "qualifying_windows": 23,
+   "qualifying_detected": 23,
+   "qualifying_detected_slugs": [
+    "syn-000",
+    "syn-001",
+    "syn-002",
+    "syn-003",
+    "syn-004",
+    "syn-005",
+    "syn-006",
+    "syn-007",
+    "syn-020",
+    "syn-021",
+    "syn-022",
+    "syn-023",
+    "syn-024",
+    "syn-025",
+    "syn-026",
+    "syn-027",
+    "syn-028",
+    "syn-029",
+    "syn-030",
+    "syn-031",
+    "syn-032",
+    "syn-033",
+    "syn-034"
+   ],
+   "time_to_observe_median_cycles": 1,
+   "q1_compatible_state_cycles_observed": 298,
+   "completion_evidence_cycles_captured": 215,
+   "coverage_latency_median_cycles": 3.0,
+   "coverage_latency_p95_cycles": 9.0,
+   "slot_utilization_pct": 52.0
+  }
+ ],
+ "detection_diff": {
+  "rotation_only": [],
+  "priority_only": []
+ }
+}

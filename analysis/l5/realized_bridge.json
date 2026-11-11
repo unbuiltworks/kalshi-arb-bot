@@ -1,0 +1,56 @@
+{
+  "bridge": {
+    "A_settlement_or_trading_pnl_usd": "-12.5082",
+    "B_confirmed_maker_rebates_usd": "2.1300",
+    "C_confirmed_liquidity_rewards_usd": "0",
+    "D_fees_usd": "0",
+    "actual_realized_net_usd": "-10.3782",
+    "refused": null,
+    "memo_not_performance": {
+      "non_trading_credits_usd": "10",
+      "rewards_accrued_not_credited_usd": "1.48"
+    },
+    "double_count_test": {
+      "markets_tested": 3,
+      "markets_reproducing_exactly": 3,
+      "failures": [],
+      "safe_to_add_credits": true,
+      "meaning": "The venue's realizedPnl is pure settlement cashflow (payout - cost_basis), carrying no rebate and no fee, so credits are additive to it rather than already inside it. A failure here means the venue changed that and the bridge would double-count; it refuses instead."
+    }
+  },
+  "rewards": {
+    "credited_usd": "0",
+    "accrued_but_not_credited_usd": "1.48",
+    "by_status": {
+      "PENDING": {
+        "n": 1,
+        "usd": "0.40"
+      },
+      "SKIPPED": {
+        "n": 1,
+        "usd": "1.08"
+      }
+    },
+    "credited_statuses": [
+      "PAID",
+      "CREDITED",
+      "COMPLETED",
+      "SETTLED",
+      "DISTRIBUTED"
+    ],
+    "note": "Only a status the venue uses for money paid counts. An unrecognised status is an accrual until it is understood, never income."
+  },
+  "non_trading": {
+    "non_trading_credit_usd": "10",
+    "unclassified_credit_usd": "0",
+    "rows": [
+      {
+        "usd": "10",
+        "kind": "remediation",
+        "type": "ACTIVITY_TYPE_TRANSFER",
+        "time": "2026-09-06T18:06:46Z"
+      }
+    ],
+    "note": "Held OUT of the bridge on purpose: it is in the balance and it is not trading income."
+  }
+}

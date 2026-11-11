@@ -1,0 +1,150 @@
+{
+  "artifact": "pilot_4window_final_preflight_20261103",
+  "running": {
+    "commit": "214a941bb73f78284f4759f97c736bb3de608096",
+    "deployment": "fd4cb519-d93b-4bdc-ae4f-6f7b590844f3",
+    "status": "SUCCESS",
+    "verified_at": "2026-11-03T17:18:10Z",
+    "strategy_config_digest": "c2e1889b6535f92c",
+    "digest_unchanged_since": "2026-11-03T16:20:53Z -- the audit work touched no strategy knob"
+  },
+  "final_preflight": {
+    "verdict": "FAIL",
+    "ok": false,
+    "fail": ["absolute_deadline", "campaign_approval"],
+    "unknown": [],
+    "not_evaluated_by_design": ["window_bounds", "order_state_and_reconciliation",
+                                "claim_held_and_scope_digest"],
+    "both_blockers_are_owner_artifacts": true,
+    "absolute_deadline": {
+      "state": "EXPIRED", "expires_in_s": -64990.0,
+      "env": "L5_LIVE_AUTH_NOT_AFTER",
+      "blocks": "AUTHORIZATION_EXPIRED (step 26)"
+    },
+    "campaign_approval": {
+      "state": "approval_stale",
+      "document_sha256": "6177a46f852aabd32eef9863f3c25e35646189fa7f9fe814de0ddd657603bc3f",
+      "reserved_nothing": true
+    },
+    "passing": ["shadow_lock", "owner_arm_token", "claim_ttl_s", "market_series",
+                "role_binding", "session_id", "window_budget_env",
+                "halt_gate", "residual_ceiling"],
+    "halt_gate": {"verdict": "PASS", "permitted": true},
+    "window_budget_env": {"max_windows_env": 4},
+    "residual_ceiling": {
+      "k": "1", "absolute_cap_contracts": "5",
+      "applied_cap_at_opening_clip": "1",
+      "largest_recorded_clip": "37.73 (account-wide, one XRP market on 2026-10-16)",
+      "effective_cap_contracts": "5 (the HISTORICAL worst case, not what binds)",
+      "note": "the applied cap is computed PER MARKET; a BTC15m window that has never filled has clip 0"
+    }
+  },
+  "runtime_config_verify": {
+    "PASS": false,
+    "checked": 26,
+    "failed": ["submission_budget_open", "submission_budget_complete",
+               "submission_budget_replace", "submission_backstop",
+               "aggregate_exposure_usd", "aggregate_exposure_in_force_usd",
+               "daily_realized_loss_halt_usd", "max_windows_authorization"],
+    "every_failure_reads_the_same_required_value": "NO_APPROVAL_IN_FORCE",
+    "interpretation": "these 8 are not independent defects. They are the campaign_approval blocker seen from the other side: each grades an effective value against an approval that does not exist yet. They clear when the approval is issued, not by any code change.",
+    "confirmed_in_force": {
+      "ts_entry_cutoff_s": 480.0,
+      "ts_complete_cutoff_s": 600.0,
+      "completion_collapsed_onto_entry_cutoff": false,
+      "ts_opening_leg_max_contracts": "1",
+      "cancel_margin_s": 300.0,
+      "maker_pair_ceiling": "0.96",
+      "completion_pair_ceiling": "1.00",
+      "ts_completion_at_touch": "false",
+      "book_completion_depth_ticks": 0,
+      "max_live_orders": 1,
+      "daily_realized_loss_halt_usd": "5",
+      "campaign_additional_loss_usd": "10",
+      "max_worst_case_deficit_usd": "1.50",
+      "opening_notional_budget_usd": "3.00",
+      "ts_min_first_leg_own_price": "0.20",
+      "ts_max_first_leg_own_price": "0.60",
+      "series_allowlist": ["cpc-btc-updown-15m-"]
+    },
+    "two_observations_worth_the_owner_knowing": {
+      "complete_cutoff_reachable": "FALSE -- COMPLETE_CUTOFF_S 600 is not strictly inside cancel_cutoff(900) = 600; it sits exactly ON it. The binding completion deadline is min(600, 600) = 600, so the 120s dedicated completion runway (t+480 to t+600) is the MAXIMUM available under a 300s cancellation margin, and raising L5_TS_COMPLETE_CUTOFF_S further would have no effect.",
+      "mandate_not_enforcing": "mandate_verdict MANDATE_NO_TRUSTED_KEY, mandate_enforcing false, promotion_gate_binds false -- MS.MANDATE_PUBKEYS is empty, so the signed-mandate path and the promotion gate are both inert. Arming is gated by the owner arm token and the campaign approval instead, not by a signed mandate."
+    }
+  },
+  "timing_envelope_per_window": {
+    "window_s": 900,
+    "claim_by": "t+180 (MIN_ENTRY_RUNWAY_S 300 gates CLAIMING, and a claim is irreversible)",
+    "entry_allowed": "[t+0, t+480)",
+    "place_floor_s": "0.0 (L5_TS_PLACE_FLOOR_S unset; PLACE_OFFSET_S 480 is a different quantity and does NOT collapse entry)",
+    "completion_runway": "t+480 to t+600, 120s dedicated",
+    "defensive_guard_opens": "t+540",
+    "defensive_last_actionable": "t+585",
+    "all_orders_withdrawn_by": "t+600",
+    "settlement": "t+900",
+    "order_ttl_s": 120.0
+  },
+  "q1_enforced_cash_maximum": {
+    "question": "Is the $5.59 maximum cash commitment actually enforced, or does it assume only one inventory cycle per window?",
+    "answer": "NOT ENFORCED. It assumed one cycle per window and nothing enforces that.",
+    "enforced_bound": "max_cash_deployed_usd = $12.00, cash_policy NO_RECYCLING",
+    "gate": "cash_committed(filled_legs) + pending_obligation(outstanding) + this_order > 12",
+    "pending_obligation_charges": "a resting BUY_SHORT at QTY DOLLARS ($1.00/contract), not qty * price",
+    "scope_correction": "LEDGER-scoped, not run-scoped. cash_legs_for_gates reads store.committed() -- a durable store key -- filtered by retired_markets. A restart does NOT reset it; cash is released only by retire_settled_market after a CONFIRMED settlement (a venue-terminal state WITH a final settlement price).",
+    "consequence_for_the_blocked_arm_restart": "the $12 bounds the WHOLE pilot across the restart, not $12 per arm",
+    "enforceable_maximum_across_repeated_cycles": "$12 gross cash out, roughly 12 unsettled 1-contract pairs, accumulating until settlement",
+    "to_bind_near_5_59": "set L5_MAX_CASH_DEPLOYED_USD=6",
+    "loss_is_bounded_separately": "daily_realized_loss_halt_usd $5 and campaign_additional_loss_usd $10; the $12 is a GROSS CASH OUT mandate, not a loss ceiling"
+  },
+  "q2_safe_alternation": {
+    "question": "How will control and at-touch configurations alternate safely? Prove no orders or unresolved execution state can cross a configuration switch.",
+    "answer": "INTERLEAVED ALTERNATION IS IMPOSSIBLE without a restart per switch.",
+    "proof": "L5_TS_COMPLETION_AT_TOUCH is read once via os.getenv at src/l5_live_execution.py:7303. No in-process os.environ mutation of it exists anywhere in the tree. A Railway variable change therefore takes effect only after restart, and skipDeploys:true never reaches the process.",
+    "only_safe_shape": "BLOCKED ARMS with ONE controlled restart between them",
+    "restart_gate": ["HALT asserted", "zero live orders", "orders_uncertain false",
+                     "zero residual", "previous window retired"],
+    "gate_exercised_on_this_cycle": {
+      "at": "2026-11-03T16:37:52Z",
+      "armed": false, "halt": true,
+      "submission_gate": "blocked, reason NOT_ARMED", "halt_latch": "CLEAR",
+      "live_orders": 0, "cash_deployed": [],
+      "outstanding_legs": "present but labelled MODELLED hypothetical legs, never submitted",
+      "verdict": "four controlled restarts were taken under this state with no order or unresolved execution state crossing any of them"
+    },
+    "runtime_control_precedent": "L5_HALT_URL is the only knob that changes behaviour without a restart, and it covers HALT alone"
+  },
+  "proposed_future_utc_windows": {
+    "rule": "two control windows, then ONE controlled restart to flip L5_TS_COMPLETION_AT_TOUCH, then two at-touch windows. One full 15-minute window is SKIPPED between the arms so the second control window can settle (t+900) and retire before the restart. The skipped window is never claimed, so max_windows 4 is exact.",
+    "none_reused": "all strictly future as of 2026-11-03T17:25Z; the prior campaign used 2026-11-02 2215/2230/2245/2300z",
+    "set_1_today": {
+      "control": ["2026-11-03T19:00Z", "2026-11-03T19:15Z"],
+      "skipped_for_settlement_and_restart": "2026-11-03T19:30Z",
+      "at_touch": ["2026-11-03T19:45Z", "2026-11-03T20:00Z"],
+      "L5_LIVE_AUTH_NOT_AFTER": "2026-11-03T20:20:00Z"
+    },
+    "set_2_today_later": {
+      "control": ["2026-11-03T21:00Z", "2026-11-03T21:15Z"],
+      "skipped_for_settlement_and_restart": "2026-11-03T21:30Z",
+      "at_touch": ["2026-11-03T21:45Z", "2026-11-03T22:00Z"],
+      "L5_LIVE_AUTH_NOT_AFTER": "2026-11-03T22:20:00Z"
+    },
+    "set_3_tomorrow": {
+      "control": ["2026-11-04T13:30Z", "2026-11-04T13:45Z"],
+      "skipped_for_settlement_and_restart": "2026-11-04T14:00Z",
+      "at_touch": ["2026-11-04T14:15Z", "2026-11-04T14:30Z"],
+      "L5_LIVE_AUTH_NOT_AFTER": "2026-11-04T14:50:00Z"
+    }
+  },
+  "what_this_pilot_can_and_cannot_establish": {
+    "can": "EXECUTABILITY, as a yes/no. Does an at-touch maker complement actually fill inside the 120s completion runway, where the two-tick complement provably could not (the 1445z defect: own 0.6000 posted into a 0.6200 bid, behind the entire visible queue, unfillable by construction)?",
+    "cannot": "PROFITABILITY. Four windows at a 1-contract clip is at most 4 completed pairs. The established loss driver is FIRST-LEG ADVERSE SELECTION -- 4 of 4 prior windows, complement monotonically dearer (0.78->0.99, 0.60->0.92, 0.55->0.96, 0.77->0.94) -- and at-touch completion does not address it. This pilot has essentially no power to separate the two policies on P&L.",
+    "do_not_expect": "any movement toward the $480/day target from four 1-contract windows. Maximum gross cash at risk is bounded at $12 and realized loss at $5.",
+    "honest_framing": "an executability probe, not a profitability test. Worth running for the yes/no; not worth reading as evidence about expectancy."
+  },
+  "not_done_and_not_authorized": [
+    "nothing armed", "no orders submitted", "HALT active throughout",
+    "at-touch remains OFF (ts_completion_at_touch false)",
+    "no historical accounting modified", "no cumulative-loss control relaxed",
+    "the $242.9466 overstatement correction NOT applied"
+  ]
+}

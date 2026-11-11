@@ -1,0 +1,75 @@
+{
+  "label": "GEMINI_L5_PREMUTATION_PROBE_V1",
+  "utc": "2026-09-21T18:33:31.720132+00:00",
+  "driver_executable_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+  "driver_envelope_sha": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+  "envelope": {
+    "max_actions": "12",
+    "action_size": "0.01",
+    "max_total_spend_usd": "0.15",
+    "max_residual": "0.04",
+    "max_imbalance": "0.04",
+    "max_yes": "0.10",
+    "max_no": "0.10",
+    "no_new_open_extend_tte_s": "60.0",
+    "withdraw_all_tte_s": "30.0",
+    "cohort_prefixes": "GEMI-BTC05M,GEMI-BTC15M",
+    "default_cohort_prefix": "GEMI-BTC05M",
+    "maker_tif": "MOC",
+    "envelopes": "{\"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"4.00\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"4.00\", \"max_working_orders\": \"4\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\", \"worst_case_loss_usd\": \"4.00\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"4.00\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"4\", \"max_no_contracts\": \"4\", \"max_residual_contracts\": \"4\", \"max_residual_usd\": \"4.00\", \"max_same_side_run\": \"4\", \"max_total_spend_usd\": \"4.00\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"4\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\", \"worst_case_loss_usd\": \"4.00\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC15M\", \"max_actions\": \"12\", \"max_committed_usd\": \"2.50\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"2.50\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\", \"worst_case_loss_usd\": \"2.50\"}, \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\": {\"action_size\": \"1\", \"cohort_prefix\": \"GEMI-BTC05M\", \"max_actions\": \"12\", \"max_committed_usd\": \"2.50\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"2\", \"max_no_contracts\": \"2\", \"max_residual_contracts\": \"2\", \"max_residual_usd\": \"2.00\", \"max_same_side_run\": \"2\", \"max_total_spend_usd\": \"2.50\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"2\", \"name\": \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\", \"worst_case_loss_usd\": \"2.50\"}, \"GEMINI_L5_SHADOW_ENVELOPE_Q001\": {\"action_size\": \"0.01\", \"cohort_prefix\": \"GEMI-BTC05M\", \"max_actions\": \"12\", \"max_committed_usd\": \"0.15\", \"max_concurrent_markets\": \"1\", \"max_imbalance_contracts\": \"0.04\", \"max_no_contracts\": \"0.10\", \"max_residual_contracts\": \"0.04\", \"max_residual_usd\": \"0.04\", \"max_same_side_run\": \"4\", \"max_total_spend_usd\": \"0.15\", \"max_working_orders\": \"2\", \"max_yes_contracts\": \"0.10\", \"name\": \"GEMINI_L5_SHADOW_ENVELOPE_Q001\", \"worst_case_loss_usd\": \"0.15\"}}",
+    "envelope_shas": "{\"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_2LVL_V1\": \"7a50d56ee10594327f5cf3e0afb960f6e9269b0294fe31ee246b30fd1d457d28\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_CAP4_V1\": \"3aed2098fe0290b7ad8a16cdc053eae7cfcc07b02cbae6b8299eae28da3f6c6b\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1\": \"0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3\", \"GEMINI_L5_LIVE_ENVELOPE_Q1_V1\": \"4e2818d53735999cda6c3de439f4a9e87a3cb2a98f9e7c10c2af125e145ed6b5\", \"GEMINI_L5_SHADOW_ENVELOPE_Q001\": \"c5e88347601e24885e8cdb3cfb5b7a803b0b872948cce896c80a60023da51887\"}"
+  },
+  "gates": [
+    {
+      "gate": "symbol_selected",
+      "ok": false,
+      "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+    }
+  ],
+  "frames_sent": 0,
+  "latch_consumed": false,
+  "symbol_selection": {
+    "eligible": false,
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609211835-UP",
+        "tte_s": 88.27713918685913,
+        "contract_status": "active",
+        "market_state": "open",
+        "why": "tte 88.27713918685913 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211830-UP",
+        "tte_s": -211.72286081314087,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -211.72286081314087 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211825-UP",
+        "tte_s": -511.72286081314087,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -511.72286081314087 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211820-UP",
+        "tte_s": -811.7228608131409,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -811.7228608131409 outside [90.0, 300.0]"
+      }
+    ],
+    "band": [
+      90.0,
+      300.0
+    ],
+    "cohort": "BTC5m",
+    "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+  },
+  "failed_gates": [
+    "symbol_selected"
+  ],
+  "verdict": "BLOCKED_BEFORE_THE_BOUNDARY",
+  "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+}

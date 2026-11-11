@@ -1,0 +1,79 @@
+# Read-only Gemini subsidy evidence.
+#
+# WHY THIS AND NOT AWS. The Gemini live stack ran on a credentialed AWS box
+# (container arb-gemini-btc-dual-hour-v2-live, secrets injected via
+# `docker run --env-file /opt/arb/secrets/gemini-short-crypto.env`). That
+# host is NOT used here: this repo already holds Gemini credentials as
+# Actions secrets, which is an established credential-bearing mechanism that
+# needs no SSH, no aws CLI, and none of the unidentified AWS credentials.
+# There is deliberately NO AWS fallback -- if this fails, it fails.
+#
+# It answers one question: what did Gemini actually pay us?
+name: Gemini Subsidy Verify (read-only)
+
+on:
+  workflow_dispatch:
+
+# One at a time. A second run could commit evidence over the first.
+concurrency:
+  group: gemini-subsidy-verify
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/l5-transfer-backtest
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The guard runs BEFORE any credential is in scope: if the read-only
+      # contract is broken, the job dies without ever holding a secret.
+      - name: Structural guard -- no order transport
+        run: python -m pytest tests/test_gemini_subsidy_readonly.py -q
+
+      - name: Subsidy verify (read-only; no order transport)
+        id: verify
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        run: |
+          set -o pipefail
+          # stdout carries a summary only; the module never prints secrets.
+          python -m src.gemini_maker.subsidy_verify | tee /tmp/summary.json
+          # fail closed: NO_CREDENTIALS is a real answer, not a silent zero,
+          # and we do NOT fall back to another credential source.
+          if grep -q '"verdict": *"NO_CREDENTIALS"' /tmp/summary.json; then
+            echo "::error::Gemini secrets absent or invalid -- failing closed."
+            exit 1
+          fi
+
+      - name: Commit ONLY the evidence artifact
+        run: |
+          git config user.name  "gemini-subsidy-verify[bot]"
+          git config user.email "gemini-subsidy-verify@users.noreply.github.com"
+          # analysis/gemini/ ONLY. No source, config or live-service change
+          # may originate from this runtime job.
+          git add -- 'analysis/gemini/subsidy_verify_*.json'
+          if git diff --cached --quiet; then
+            echo "no new evidence artifact"; exit 0
+          fi
+          if ! git diff --cached --name-only | grep -qvE '^analysis/gemini/subsidy_verify_[0-9]+\.json$'; then
+            # [skip ci] so the evidence commit cannot re-trigger anything
+            git commit -m "evidence(gemini): read-only subsidy verify [skip ci]"
+            git push origin HEAD:feature/l5-transfer-backtest
+          else
+            echo "::error::refusing to commit files outside analysis/gemini/"
+            git diff --cached --name-only; exit 1
+          fi

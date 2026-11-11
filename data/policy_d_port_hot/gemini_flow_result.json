@@ -1,0 +1,287 @@
+{
+  "hot": {
+    "span_minutes": 84.8,
+    "series": {
+      "BTC05M": {
+        "windows": 18,
+        "bbo_rows": 5478,
+        "prints": 67,
+        "trades_per_min": 0.7903,
+        "prints_per_active_window": 3.94,
+        "windows_with_any_trade": 17,
+        "pct_windows_zero_trades": 5.6,
+        "pct_windows_ge_1": 94.4,
+        "pct_windows_ge_2": 88.9,
+        "pct_windows_ge_5": 11.1,
+        "pct_windows_ge_10": 5.6,
+        "spread_median": 0.22,
+        "spread_p25": 0.16,
+        "depth_bid_median": 10.0,
+        "depth_ask_median": 10.0,
+        "two_sided_uptime_pct": 69.4,
+        "bbo_mean_abs_move": 0.02862,
+        "trade_size_median": 5.0,
+        "trade_size_max": 254.0,
+        "maker_opportunities_bid_side": 35,
+        "maker_opportunities_ask_side": 32,
+        "plausible_sequences_upper_bound": 16,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "BTC15M": {
+        "windows": 6,
+        "bbo_rows": 1691,
+        "prints": 3,
+        "trades_per_min": 0.0354,
+        "prints_per_active_window": 1.5,
+        "windows_with_any_trade": 2,
+        "pct_windows_zero_trades": 66.7,
+        "pct_windows_ge_1": 33.3,
+        "pct_windows_ge_2": 16.7,
+        "pct_windows_ge_5": 0.0,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.08,
+        "spread_p25": 0.06,
+        "depth_bid_median": 500.0,
+        "depth_ask_median": 500.0,
+        "two_sided_uptime_pct": 59.3,
+        "bbo_mean_abs_move": 0.01342,
+        "trade_size_median": 170.29,
+        "trade_size_max": 217.83,
+        "maker_opportunities_bid_side": 2,
+        "maker_opportunities_ask_side": 1,
+        "plausible_sequences_upper_bound": 0,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "ETH05M": {
+        "windows": 18,
+        "bbo_rows": 5482,
+        "prints": 21,
+        "trades_per_min": 0.2477,
+        "prints_per_active_window": 3,
+        "windows_with_any_trade": 7,
+        "pct_windows_zero_trades": 61.1,
+        "pct_windows_ge_1": 38.9,
+        "pct_windows_ge_2": 33.3,
+        "pct_windows_ge_5": 11.1,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.29,
+        "spread_p25": 0.27,
+        "depth_bid_median": 306.0,
+        "depth_ask_median": 267.0,
+        "two_sided_uptime_pct": 52.1,
+        "bbo_mean_abs_move": 0.01426,
+        "trade_size_median": 5.0,
+        "trade_size_max": 197.0,
+        "maker_opportunities_bid_side": 9,
+        "maker_opportunities_ask_side": 12,
+        "plausible_sequences_upper_bound": 4,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "ETH15M": {
+        "windows": 6,
+        "bbo_rows": 1695,
+        "prints": 1,
+        "trades_per_min": 0.0118,
+        "prints_per_active_window": 1,
+        "windows_with_any_trade": 1,
+        "pct_windows_zero_trades": 83.3,
+        "pct_windows_ge_1": 16.7,
+        "pct_windows_ge_2": 0.0,
+        "pct_windows_ge_5": 0.0,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.09,
+        "spread_p25": 0.09,
+        "depth_bid_median": 100.0,
+        "depth_ask_median": 100.0,
+        "two_sided_uptime_pct": 36.6,
+        "bbo_mean_abs_move": 0.01953,
+        "trade_size_median": 82.37,
+        "trade_size_max": 82.37,
+        "maker_opportunities_bid_side": 0,
+        "maker_opportunities_ask_side": 1,
+        "plausible_sequences_upper_bound": 0,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      }
+    }
+  },
+  "overnight_baseline": {
+    "span_minutes": 411.6,
+    "series": {
+      "BTC05M": {
+        "windows": 96,
+        "bbo_rows": 16438,
+        "prints": 117,
+        "trades_per_min": 0.2843,
+        "prints_per_active_window": 5.09,
+        "windows_with_any_trade": 23,
+        "pct_windows_zero_trades": 76.0,
+        "pct_windows_ge_1": 24.0,
+        "pct_windows_ge_2": 19.8,
+        "pct_windows_ge_5": 12.5,
+        "pct_windows_ge_10": 3.1,
+        "spread_median": 0.02,
+        "spread_p25": 0.02,
+        "depth_bid_median": 500.0,
+        "depth_ask_median": 500.0,
+        "two_sided_uptime_pct": 54.2,
+        "bbo_mean_abs_move": 0.02216,
+        "trade_size_median": 75.0,
+        "trade_size_max": 714.0,
+        "maker_opportunities_bid_side": 75,
+        "maker_opportunities_ask_side": 42,
+        "plausible_sequences_upper_bound": 31,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "BTC15M": {
+        "windows": 32,
+        "bbo_rows": 6106,
+        "prints": 16,
+        "trades_per_min": 0.0389,
+        "prints_per_active_window": 2.67,
+        "windows_with_any_trade": 6,
+        "pct_windows_zero_trades": 81.2,
+        "pct_windows_ge_1": 18.8,
+        "pct_windows_ge_2": 15.6,
+        "pct_windows_ge_5": 0.0,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.02,
+        "spread_p25": 0.02,
+        "depth_bid_median": 500.0,
+        "depth_ask_median": 500.0,
+        "two_sided_uptime_pct": 54.4,
+        "bbo_mean_abs_move": 0.08132,
+        "trade_size_median": 11.46,
+        "trade_size_max": 84.0,
+        "maker_opportunities_bid_side": 7,
+        "maker_opportunities_ask_side": 9,
+        "plausible_sequences_upper_bound": 3,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "ETH05M": {
+        "windows": 96,
+        "bbo_rows": 16457,
+        "prints": 7,
+        "trades_per_min": 0.017,
+        "prints_per_active_window": 1.4,
+        "windows_with_any_trade": 5,
+        "pct_windows_zero_trades": 94.8,
+        "pct_windows_ge_1": 5.2,
+        "pct_windows_ge_2": 1.0,
+        "pct_windows_ge_5": 0.0,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.02,
+        "spread_p25": 0.02,
+        "depth_bid_median": 500.0,
+        "depth_ask_median": 500.0,
+        "two_sided_uptime_pct": 53.1,
+        "bbo_mean_abs_move": 0.0166,
+        "trade_size_median": 1.0,
+        "trade_size_max": 176.14,
+        "maker_opportunities_bid_side": 2,
+        "maker_opportunities_ask_side": 5,
+        "plausible_sequences_upper_bound": 1,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      },
+      "ETH15M": {
+        "windows": 32,
+        "bbo_rows": 6114,
+        "prints": 1,
+        "trades_per_min": 0.0024,
+        "prints_per_active_window": 1,
+        "windows_with_any_trade": 1,
+        "pct_windows_zero_trades": 96.9,
+        "pct_windows_ge_1": 3.1,
+        "pct_windows_ge_2": 0.0,
+        "pct_windows_ge_5": 0.0,
+        "pct_windows_ge_10": 0.0,
+        "spread_median": 0.02,
+        "spread_p25": 0.02,
+        "depth_bid_median": 500.0,
+        "depth_ask_median": 500.0,
+        "two_sided_uptime_pct": 56.3,
+        "bbo_mean_abs_move": 0.08369,
+        "trade_size_median": 14.41,
+        "trade_size_max": 14.41,
+        "maker_opportunities_bid_side": 0,
+        "maker_opportunities_ask_side": 1,
+        "plausible_sequences_upper_bound": 0,
+        "labels": "venue evidence only: bbo = book served, print = trade that happened. No queue model, no fills. Maker opportunities are moments a resting maker COULD have been hit, never fills we would have won."
+      }
+    }
+  },
+  "comparison": {
+    "per_series": {
+      "BTC05M": {
+        "hot_trades_per_min": 0.7903,
+        "overnight_trades_per_min": 0.2843,
+        "hot_pct_zero_trade_windows": 5.6,
+        "overnight_pct_zero_trade_windows": 76.0,
+        "hot_sequences_upper_bound": 16
+      },
+      "BTC15M": {
+        "hot_trades_per_min": 0.0354,
+        "overnight_trades_per_min": 0.0389,
+        "hot_pct_zero_trade_windows": 66.7,
+        "overnight_pct_zero_trade_windows": 81.2,
+        "hot_sequences_upper_bound": 0
+      },
+      "ETH05M": {
+        "hot_trades_per_min": 0.2477,
+        "overnight_trades_per_min": 0.017,
+        "hot_pct_zero_trade_windows": 61.1,
+        "overnight_pct_zero_trade_windows": 94.8,
+        "hot_sequences_upper_bound": 4
+      },
+      "ETH15M": {
+        "hot_trades_per_min": 0.0118,
+        "overnight_trades_per_min": 0.0024,
+        "hot_pct_zero_trade_windows": 83.3,
+        "overnight_pct_zero_trade_windows": 96.9,
+        "hot_sequences_upper_bound": 0
+      }
+    },
+    "labels": "hot and overnight reported side by side, never averaged"
+  },
+  "verdict": {
+    "overall": "VIABLE_FOR_NEXT_L5_STAGE",
+    "per_series": {
+      "BTC05M": {
+        "verdict": "VIABLE_FOR_NEXT_L5_STAGE",
+        "sequences_per_hour_upper_bound": 11.32,
+        "trades_per_min": 0.7903,
+        "against": {
+          "min_sequences_per_hour": 2.0,
+          "min_trades_per_min": 0.5
+        }
+      },
+      "BTC15M": {
+        "verdict": "INSUFFICIENT_OBSERVED_FLOW",
+        "sequences_per_hour_upper_bound": 0.0,
+        "trades_per_min": 0.0354,
+        "against": {
+          "min_sequences_per_hour": 2.0,
+          "min_trades_per_min": 0.5
+        }
+      },
+      "ETH05M": {
+        "verdict": "INSUFFICIENT_OBSERVED_FLOW",
+        "sequences_per_hour_upper_bound": 2.83,
+        "trades_per_min": 0.2477,
+        "against": {
+          "min_sequences_per_hour": 2.0,
+          "min_trades_per_min": 0.5
+        }
+      },
+      "ETH15M": {
+        "verdict": "INSUFFICIENT_OBSERVED_FLOW",
+        "sequences_per_hour_upper_bound": 0.0,
+        "trades_per_min": 0.0118,
+        "against": {
+          "min_sequences_per_hour": 2.0,
+          "min_trades_per_min": 0.5
+        }
+      }
+    },
+    "labels": "sequence counts are UPPER BOUNDS that assume we win every print; the real figure is lower. A verdict of VIABLE means the venue clears the floor, never that the strategy is profitable there."
+  }
+}

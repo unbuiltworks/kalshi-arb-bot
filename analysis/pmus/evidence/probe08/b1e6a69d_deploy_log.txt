@@ -1,0 +1,41 @@
+# Probe 08 (08b) live deployment log — captured verbatim 2026-09-26T12:0xZ
+# deployment b1e6a69d-8a0f-437b-8c28-85422f5c5d83  commit 46a71b1
+# service   84aa9999-6d7a-4980-9a87-96694d8178dd   env f3642d27-26dc-4e21-9170-bc76290c076f
+# status at capture: CRASHED
+#
+# Captured locally because Railway had already purged Probe 07's deployment
+# logs by the time they were needed. This file is the third frozen artifact
+# beside the journal and the inventory.
+#
+# The deployment emitted THREE lines before the window and then the
+# traceback. The live probe writes per-action records to the journal on the
+# volume and prints only its report at close-out, so the silence between
+# 11:05:06 and 11:43:33 is by design, not loss.
+
+2026-09-26T11:05:05.746282067Z info  Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/2f7be590-2d85-4914-8544-8f6fb1376f43/vol_rkz2fj1g66byw2dy
+2026-09-26T11:05:05.746346022Z info  Starting Container
+2026-09-26T11:05:06.175647201Z info  L5_MODE {"mode": "LIVE_PROBE", "observe_only": "", "recover_only": "", "market_pin": "cpc-btc-updown-15m-2026-09-26-1130z", "recover_market": "", "maker_treatment": true, "maker_only": true, "imbalance_suppress": true, "treatment": "IMBALANCE_INCREASE_SUPPRESSED", "session": "l5probe-20260926-btc15m-08b", "armed": "l5probe-20260926-btc15m-08b", "live": "YES"}
+
+# --- crash, 11:43:33.747Z. Railway interleaves stderr, so the lines below are
+# --- in emission order as served; the frames reassemble as:
+#       main() -> run() [line 568] -> probe.report(close) [line 446]
+#       -> InventoryStore.outstanding_by_market [l5_live_execution.py:594]
+2026-09-26T11:43:33.747090931Z error      rep = probe.report(close)
+2026-09-26T11:43:33.747103021Z error  Traceback (most recent call last):
+2026-09-26T11:43:33.747103982Z error            ^^^^^^^^^^^^^^^^^^^
+2026-09-26T11:43:33.747112092Z error    File "<frozen runpy>", line 198, in _run_module_as_main
+2026-09-26T11:43:33.747112272Z error    File "/app/scripts/l5_pmus_live_oneshot.py", line 446, in report
+2026-09-26T11:43:33.747120583Z error    File "<frozen runpy>", line 88, in _run_code
+2026-09-26T11:43:33.747121946Z error      self.store.outstanding_by_market().get(self.market, D(0))),
+2026-09-26T11:43:33.747127777Z error    File "/app/scripts/l5_pmus_live_oneshot.py", line 1207, in <module>
+2026-09-26T11:43:33.747133529Z error      raise SystemExit(main())
+2026-09-26T11:43:33.747139249Z error                       ^^^^^^
+2026-09-26T11:43:33.747145162Z error    File "/app/scripts/l5_pmus_live_oneshot.py", line 1200, in main
+2026-09-26T11:43:33.747150310Z error      rep = run()
+2026-09-26T11:43:33.747156461Z error            ^^^^^
+2026-09-26T11:43:33.747162793Z error    File "/app/scripts/l5_pmus_live_oneshot.py", line 568, in run
+2026-09-26T11:43:33.747669502Z error      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-09-26T11:43:33.747674777Z error    File "/app/src/l5_live_execution.py", line 594, in outstanding_by_market
+2026-09-26T11:43:33.747678943Z error      out[m] = out.get(m, D(0)) + D(str(o.get("price") or 0)) * rem
+2026-09-26T11:43:33.747683528Z error                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-09-26T11:43:33.747687377Z error  decimal.InvalidOperation: [<class 'decimal.ConversionSyntax'>]

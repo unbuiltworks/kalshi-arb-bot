@@ -1,0 +1,79 @@
+# 24/7 READ-ONLY L5 research operations (issue #167).
+#
+# Runs the incremental collector + shadow comparison on a schedule, and a
+# daily full regression check, committing the durable state/raw/shadow
+# artifacts back to the branch so no agent session needs to stay open.
+#
+# ACTIVATION NOTE (deliberate): GitHub only runs `schedule:` triggers from
+# the DEFAULT branch, and merging this file to main is NOT the activation
+# path — main/.github/workflows/deploy.yml redeploys the Railway trading
+# service on every main push, so the merge itself would violate isolation.
+# The approved activation design is the ISOLATED research service described
+# in docs/L5_OPS_DEPLOYMENT.md (scripts/l5_ops_runner.sh +
+# research/Dockerfile). This workflow remains only as a manual
+# workflow_dispatch fallback against the research branch.
+#
+# SAFETY: read-only public HTTP only. No exchange credentials are used or
+# available to this workflow; it cannot place orders. It does not touch the
+# Railway deploy workflow (push-to-main) or any AWS service.
+
+name: l5-ops
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch holding the ops state/data to update"
+        required: false
+        default: "feature/l5-canonical"
+  schedule:
+    - cron: "*/30 * * * *"    # collect+shadow every 30 min (inert off-main)
+    - cron: "17 6 * * *"      # daily regression
+
+permissions:
+  contents: write
+
+concurrency:
+  group: l5-ops
+  cancel-in-progress: false
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || 'feature/l5-canonical' }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test deps
+        run: pip install --quiet pytest
+
+      - name: Collect (incremental, idempotent)
+        run: python3 -m src.polymarket_l5.ops collect
+
+      - name: Shadow comparison (incremental)
+        run: python3 -m src.polymarket_l5.ops shadow
+
+      - name: Regression (daily schedule or manual run)
+        if: github.event.schedule == '17 6 * * *' || github.event_name == 'workflow_dispatch'
+        run: python3 -m src.polymarket_l5.ops regression
+
+      - name: Status + heartbeat to job summary
+        if: always()
+        run: python3 -m src.polymarket_l5.ops status | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit durable artifacts
+        if: always()
+        run: |
+          git config user.name "l5-ops[bot]"
+          git config user.email "l5-ops@users.noreply.github.com"
+          git add data/l5/ops
+          git diff --cached --quiet && exit 0
+          git commit -m "l5-ops: collector/shadow artifacts $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase origin "${{ github.event.inputs.branch || 'feature/l5-canonical' }}"
+          git push origin HEAD:"${{ github.event.inputs.branch || 'feature/l5-canonical' }}"

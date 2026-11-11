@@ -1,0 +1,50 @@
+{
+ "tape": "data/l5/exante/exante_20260901T195728Z.jsonl",
+ "method": "whole-window clustered bootstrap, percentile CIs; off-distribution rows excluded (there were none)",
+ "full_sample": {
+  "label": "full",
+  "windows": 58,
+  "n_decisions": 1932,
+  "n_boot": 10000,
+  "seed": 20260902,
+  "delta_logp": {
+   "point": 0.0492,
+   "ci95": [
+    0.0205,
+    0.0987
+   ],
+   "p_le_zero": 0.0002
+  },
+  "delta_relation_pp": {
+   "point": 2.8986,
+   "ci95": [
+    -1.1687,
+    6.0623
+   ],
+   "p_le_zero": 0.0788
+  }
+ },
+ "strict_temporal_subset": {
+  "label": "strict",
+  "windows": 53,
+  "n_decisions": 437,
+  "n_boot": 10000,
+  "seed": 20260902,
+  "delta_logp": {
+   "point": 0.096,
+   "ci95": [
+    0.0473,
+    0.1679
+   ],
+   "p_le_zero": 0.0
+  },
+  "delta_relation_pp": {
+   "point": 7.3227,
+   "ci95": [
+    1.5576,
+    12.5475
+   ],
+   "p_le_zero": 0.0083
+  }
+ }
+}

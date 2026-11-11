@@ -1,0 +1,2436 @@
+{
+ "n_measurable_resting_bid_fills": 2154,
+ "lead_s": 5,
+ "correlation_own_side_imbalance_vs_offset": 0.01,
+ "by_own_side_imbalance": {
+  "<=-0.20": {
+   "n": 127,
+   "median_offset_ticks": 2.0,
+   "mean_offset_ticks": 2.591
+  },
+  "-0.20..-0.05": {
+   "n": 297,
+   "median_offset_ticks": 2.0,
+   "mean_offset_ticks": 2.7
+  },
+  "-0.05..0.05": {
+   "n": 1217,
+   "median_offset_ticks": 2.0,
+   "mean_offset_ticks": 4.067
+  },
+  "0.05..0.20": {
+   "n": 310,
+   "median_offset_ticks": 3.0,
+   "mean_offset_ticks": 4.052
+  },
+  ">=0.20": {
+   "n": 203,
+   "median_offset_ticks": 3.0,
+   "mean_offset_ticks": 3.074
+  }
+ },
+ "reads": "H2 predicts a POSITIVE correlation: the longer he already is of a side, the deeper below the touch his further fills on that side should sit. A flat profile is evidence against inventory-skewed quoting.",
+ "never": "eventual FILL PRICE relative to a PRIOR BBO. No anonymous book size is attributed to L5 or anyone else; mint fills are excluded because they have no measurable depth.",
+ "rows": [
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 40.0
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 40.02
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 83.98
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 119.0
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 158.66
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": 1.0,
+   "tot_qty": 158.68
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": -1.0,
+   "own_side_imbalance": -1.0,
+   "tot_qty": 160.76
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.9889,
+   "own_side_imbalance": -0.9889,
+   "tot_qty": 161.66
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.3718,
+   "own_side_imbalance": 0.3718,
+   "tot_qty": 234.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.3718,
+   "own_side_imbalance": 0.3718,
+   "tot_qty": 234.4
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.521,
+   "own_side_imbalance": 0.521,
+   "tot_qty": 307.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.5761,
+   "own_side_imbalance": -0.5761,
+   "tot_qty": 347.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.576,
+   "own_side_imbalance": -0.576,
+   "tot_qty": 347.4
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.4942,
+   "own_side_imbalance": -0.4942,
+   "tot_qty": 366.44
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.4859,
+   "own_side_imbalance": -0.4859,
+   "tot_qty": 368.48
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.4668,
+   "own_side_imbalance": -0.4668,
+   "tot_qty": 373.28
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.4481,
+   "own_side_imbalance": 0.4481,
+   "tot_qty": 378.09
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.4537,
+   "own_side_imbalance": 0.4537,
+   "tot_qty": 381.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.4809,
+   "own_side_imbalance": 0.4809,
+   "tot_qty": 401.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.5502,
+   "own_side_imbalance": 0.5502,
+   "tot_qty": 463.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.5503,
+   "own_side_imbalance": 0.5503,
+   "tot_qty": 463.98
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.5715,
+   "own_side_imbalance": 0.5715,
+   "tot_qty": 486.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.5964,
+   "own_side_imbalance": 0.5964,
+   "tot_qty": 516.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.6331,
+   "own_side_imbalance": -0.6331,
+   "tot_qty": 568.8
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.6189,
+   "own_side_imbalance": 0.6189,
+   "tot_qty": 573.8
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.6249,
+   "own_side_imbalance": -0.6249,
+   "tot_qty": 583.01
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.4476,
+   "own_side_imbalance": 0.4476,
+   "tot_qty": 654.43
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.4831,
+   "own_side_imbalance": 0.4831,
+   "tot_qty": 699.43
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.4927,
+   "own_side_imbalance": 0.4927,
+   "tot_qty": 712.59
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.4936,
+   "own_side_imbalance": 0.4936,
+   "tot_qty": 713.91
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.5267,
+   "own_side_imbalance": 0.5267,
+   "tot_qty": 763.91
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.5575,
+   "own_side_imbalance": 0.5575,
+   "tot_qty": 816.91
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.5602,
+   "own_side_imbalance": 0.5602,
+   "tot_qty": 821.97
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.5602,
+   "own_side_imbalance": 0.5602,
+   "tot_qty": 821.99
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.563,
+   "own_side_imbalance": 0.563,
+   "tot_qty": 827.23
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.563,
+   "own_side_imbalance": 0.563,
+   "tot_qty": 827.25
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.5726,
+   "own_side_imbalance": 0.5726,
+   "tot_qty": 845.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": -0.5751,
+   "own_side_imbalance": 0.5751,
+   "tot_qty": 850.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.591,
+   "own_side_imbalance": 0.591,
+   "tot_qty": 883.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.5559,
+   "own_side_imbalance": -0.5559,
+   "tot_qty": 949.18
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.493,
+   "own_side_imbalance": 0.493,
+   "tot_qty": 989.18
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.4936,
+   "own_side_imbalance": 0.4936,
+   "tot_qty": 990.35
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.4942,
+   "own_side_imbalance": 0.4942,
+   "tot_qty": 991.51
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.4948,
+   "own_side_imbalance": 0.4948,
+   "tot_qty": 992.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.4954,
+   "own_side_imbalance": 0.4954,
+   "tot_qty": 993.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.5106,
+   "own_side_imbalance": -0.5106,
+   "tot_qty": 1024.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.509,
+   "own_side_imbalance": -0.509,
+   "tot_qty": 1054.08
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.4026,
+   "own_side_imbalance": -0.4026,
+   "tot_qty": 1134.08
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.4017,
+   "own_side_imbalance": 0.4017,
+   "tot_qty": 1134.79
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.424,
+   "own_side_imbalance": -0.424,
+   "tot_qty": 1178.78
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.4057,
+   "own_side_imbalance": -0.4057,
+   "tot_qty": 1194.16
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.3996,
+   "own_side_imbalance": -0.3996,
+   "tot_qty": 1199.34
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.3152,
+   "own_side_imbalance": -0.3152,
+   "tot_qty": 1276.34
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.3152,
+   "own_side_imbalance": -0.3152,
+   "tot_qty": 1276.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.31,
+   "own_side_imbalance": -0.31,
+   "tot_qty": 1281.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.2608,
+   "own_side_imbalance": -0.2608,
+   "tot_qty": 1331.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.233,
+   "own_side_imbalance": -0.233,
+   "tot_qty": 1361.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.2276,
+   "own_side_imbalance": -0.2276,
+   "tot_qty": 1367.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.1646,
+   "own_side_imbalance": -0.1646,
+   "tot_qty": 1441.36
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.1646,
+   "own_side_imbalance": -0.1646,
+   "tot_qty": 1441.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.1055,
+   "own_side_imbalance": -0.1055,
+   "tot_qty": 1518.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0522,
+   "own_side_imbalance": -0.0522,
+   "tot_qty": 1595.38
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0469,
+   "own_side_imbalance": -0.0469,
+   "tot_qty": 1603.42
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0449,
+   "own_side_imbalance": -0.0449,
+   "tot_qty": 1606.42
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0449,
+   "own_side_imbalance": -0.0449,
+   "tot_qty": 1606.44
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0396,
+   "own_side_imbalance": -0.0396,
+   "tot_qty": 1614.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0312,
+   "own_side_imbalance": -0.0312,
+   "tot_qty": 1627.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0312,
+   "own_side_imbalance": -0.0312,
+   "tot_qty": 1627.77
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0024,
+   "own_side_imbalance": 0.0024,
+   "tot_qty": 1682.62
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0042,
+   "own_side_imbalance": 0.0042,
+   "tot_qty": 1685.62
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0066,
+   "own_side_imbalance": 0.0066,
+   "tot_qty": 1689.76
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0066,
+   "own_side_imbalance": -0.0066,
+   "tot_qty": 1689.78
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0099,
+   "own_side_imbalance": 0.0099,
+   "tot_qty": 1717.94
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0099,
+   "own_side_imbalance": 0.0099,
+   "tot_qty": 1717.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0156,
+   "own_side_imbalance": 0.0156,
+   "tot_qty": 1727.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0185,
+   "own_side_imbalance": 0.0185,
+   "tot_qty": 1732.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0481,
+   "own_side_imbalance": 0.0481,
+   "tot_qty": 1786.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0539,
+   "own_side_imbalance": 0.0539,
+   "tot_qty": 1797.94
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0635,
+   "own_side_imbalance": 0.0635,
+   "tot_qty": 1816.22
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0905,
+   "own_side_imbalance": 0.0905,
+   "tot_qty": 1870.22
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1051,
+   "own_side_imbalance": 0.1051,
+   "tot_qty": 1900.62
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1097,
+   "own_side_imbalance": 0.1097,
+   "tot_qty": 1910.62
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.113,
+   "own_side_imbalance": 0.113,
+   "tot_qty": 1917.62
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1295,
+   "own_side_imbalance": 0.1295,
+   "tot_qty": 1953.93
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1337,
+   "own_side_imbalance": 0.1337,
+   "tot_qty": 1963.55
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1337,
+   "own_side_imbalance": 0.1337,
+   "tot_qty": 1963.57
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1375,
+   "own_side_imbalance": 0.1375,
+   "tot_qty": 1972.09
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.1412,
+   "own_side_imbalance": 0.1412,
+   "tot_qty": 1980.61
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.1473,
+   "own_side_imbalance": 0.1473,
+   "tot_qty": 1994.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.1681,
+   "own_side_imbalance": -0.1681,
+   "tot_qty": 2044.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1642,
+   "own_side_imbalance": -0.1642,
+   "tot_qty": 2051.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1617,
+   "own_side_imbalance": -0.1617,
+   "tot_qty": 2056.16
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1205,
+   "own_side_imbalance": -0.1205,
+   "tot_qty": 2131.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.077,
+   "own_side_imbalance": 0.077,
+   "tot_qty": 2217.75
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0855,
+   "own_side_imbalance": 0.0855,
+   "tot_qty": 2238.23
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.086,
+   "own_side_imbalance": 0.086,
+   "tot_qty": 2239.57
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.0981,
+   "own_side_imbalance": 0.0981,
+   "tot_qty": 2269.57
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": -0.102,
+   "own_side_imbalance": 0.102,
+   "tot_qty": 2279.57
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": -0.1021,
+   "own_side_imbalance": 0.1021,
+   "tot_qty": 2279.59
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0954,
+   "own_side_imbalance": 0.0954,
+   "tot_qty": 2439.63
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.1241,
+   "own_side_imbalance": -0.1241,
+   "tot_qty": 2519.63
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.109,
+   "own_side_imbalance": 0.109,
+   "tot_qty": 2553.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1104,
+   "own_side_imbalance": 0.1104,
+   "tot_qty": 2557.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1207,
+   "own_side_imbalance": 0.1207,
+   "tot_qty": 2587.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1241,
+   "own_side_imbalance": 0.1241,
+   "tot_qty": 2597.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.1261,
+   "own_side_imbalance": 0.1261,
+   "tot_qty": 2603.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1294,
+   "own_side_imbalance": 0.1294,
+   "tot_qty": 2613.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.14,
+   "own_side_imbalance": 0.14,
+   "tot_qty": 2645.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1521,
+   "own_side_imbalance": 0.1521,
+   "tot_qty": 2683.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.1553,
+   "own_side_imbalance": 0.1553,
+   "tot_qty": 2693.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.1797,
+   "own_side_imbalance": 0.1797,
+   "tot_qty": 2773.96
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.1968,
+   "own_side_imbalance": 0.1968,
+   "tot_qty": 2833.23
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.2098,
+   "own_side_imbalance": 0.2098,
+   "tot_qty": 2879.71
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.2117,
+   "own_side_imbalance": 0.2117,
+   "tot_qty": 2886.78
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.2167,
+   "own_side_imbalance": 0.2167,
+   "tot_qty": 2905.22
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.2281,
+   "own_side_imbalance": -0.2281,
+   "tot_qty": 2948.22
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2273,
+   "own_side_imbalance": -0.2273,
+   "tot_qty": 2950.22
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2189,
+   "own_side_imbalance": -0.2189,
+   "tot_qty": 2970.55
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.213,
+   "own_side_imbalance": -0.213,
+   "tot_qty": 2985.12
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.2085,
+   "own_side_imbalance": -0.2085,
+   "tot_qty": 2996.24
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.2028,
+   "own_side_imbalance": -0.2028,
+   "tot_qty": 3010.24
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.1989,
+   "own_side_imbalance": 0.1989,
+   "tot_qty": 3020.24
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2038,
+   "own_side_imbalance": 0.2038,
+   "tot_qty": 3140.73
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2232,
+   "own_side_imbalance": 0.2232,
+   "tot_qty": 3219.27
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2236,
+   "own_side_imbalance": 0.2236,
+   "tot_qty": 3220.73
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2387,
+   "own_side_imbalance": 0.2387,
+   "tot_qty": 3284.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2551,
+   "own_side_imbalance": -0.2551,
+   "tot_qty": 3356.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2259,
+   "own_side_imbalance": 0.2259,
+   "tot_qty": 3436.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2435,
+   "own_side_imbalance": 0.2435,
+   "tot_qty": 3516.89
+  },
+  {
+   "slug": "btc-updown-15m-1787274000",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.2553,
+   "own_side_imbalance": -0.2553,
+   "tot_qty": 3572.73
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.4146,
+   "own_side_imbalance": -0.4146,
+   "tot_qty": 256.23
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.4789,
+   "own_side_imbalance": 0.4789,
+   "tot_qty": 368.42
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.4953,
+   "own_side_imbalance": -0.4953,
+   "tot_qty": 380.42
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.3094,
+   "own_side_imbalance": -0.3094,
+   "tot_qty": 434.42
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.2355,
+   "own_side_imbalance": 0.2355,
+   "tot_qty": 460.42
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.2399,
+   "own_side_imbalance": 0.2399,
+   "tot_qty": 463.12
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.2443,
+   "own_side_imbalance": 0.2443,
+   "tot_qty": 465.82
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.2772,
+   "own_side_imbalance": 0.2772,
+   "tot_qty": 486.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.3057,
+   "own_side_imbalance": 0.3057,
+   "tot_qty": 506.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.3111,
+   "own_side_imbalance": -0.3111,
+   "tot_qty": 510.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.2018,
+   "own_side_imbalance": -0.2018,
+   "tot_qty": 648.17
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0786,
+   "own_side_imbalance": -0.0786,
+   "tot_qty": 722.18
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0712,
+   "own_side_imbalance": -0.0712,
+   "tot_qty": 727.18
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0712,
+   "own_side_imbalance": -0.0712,
+   "tot_qty": 727.2
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0516,
+   "own_side_imbalance": -0.0516,
+   "tot_qty": 740.77
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0478,
+   "own_side_imbalance": -0.0478,
+   "tot_qty": 743.4
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": 0.0533,
+   "own_side_imbalance": -0.0533,
+   "tot_qty": 822.82
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.0518,
+   "own_side_imbalance": -0.0518,
+   "tot_qty": 823.98
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0483,
+   "own_side_imbalance": -0.0483,
+   "tot_qty": 826.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.042,
+   "own_side_imbalance": -0.042,
+   "tot_qty": 831.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0419,
+   "own_side_imbalance": -0.0419,
+   "tot_qty": 831.78
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0387,
+   "own_side_imbalance": -0.0387,
+   "tot_qty": 834.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0363,
+   "own_side_imbalance": -0.0363,
+   "tot_qty": 836.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0521,
+   "own_side_imbalance": -0.0521,
+   "tot_qty": 914.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0441,
+   "own_side_imbalance": -0.0441,
+   "tot_qty": 921.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0329,
+   "own_side_imbalance": -0.0329,
+   "tot_qty": 931.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0218,
+   "own_side_imbalance": -0.0218,
+   "tot_qty": 941.49
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.0111,
+   "own_side_imbalance": -0.0111,
+   "tot_qty": 951.49
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0673,
+   "own_side_imbalance": 0.0673,
+   "tot_qty": 1031.49
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.0352,
+   "own_side_imbalance": -0.0352,
+   "tot_qty": 1218.09
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.022,
+   "own_side_imbalance": 0.022,
+   "tot_qty": 1233.78
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0184,
+   "own_side_imbalance": -0.0184,
+   "tot_qty": 1306.54
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0132,
+   "own_side_imbalance": -0.0132,
+   "tot_qty": 1313.21
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0449,
+   "own_side_imbalance": 0.0449,
+   "tot_qty": 1393.21
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0329,
+   "own_side_imbalance": 0.0329,
+   "tot_qty": 1422.32
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.016,
+   "own_side_imbalance": 0.016,
+   "tot_qty": 1449.75
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0213,
+   "own_side_imbalance": 0.0213,
+   "tot_qty": 1457.71
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0223,
+   "own_side_imbalance": 0.0223,
+   "tot_qty": 1459.16
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0276,
+   "own_side_imbalance": 0.0276,
+   "tot_qty": 1467.12
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.0362,
+   "own_side_imbalance": -0.0362,
+   "tot_qty": 1480.12
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0002,
+   "own_side_imbalance": -0.0002,
+   "tot_qty": 1534.03
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0031,
+   "own_side_imbalance": 0.0031,
+   "tot_qty": 1539.22
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0031,
+   "own_side_imbalance": 0.0031,
+   "tot_qty": 1539.24
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0035,
+   "own_side_imbalance": 0.0035,
+   "tot_qty": 1539.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0125,
+   "own_side_imbalance": 0.0125,
+   "tot_qty": 1553.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0408,
+   "own_side_imbalance": 0.0408,
+   "tot_qty": 1599.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0524,
+   "own_side_imbalance": 0.0524,
+   "tot_qty": 1619.22
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0532,
+   "own_side_imbalance": 0.0532,
+   "tot_qty": 1620.63
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0484,
+   "own_side_imbalance": 0.0484,
+   "tot_qty": 1638.53
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0461,
+   "own_side_imbalance": 0.0461,
+   "tot_qty": 1657.57
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0469,
+   "own_side_imbalance": 0.0469,
+   "tot_qty": 1658.9
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.047,
+   "own_side_imbalance": 0.047,
+   "tot_qty": 1659.1
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0478,
+   "own_side_imbalance": 0.0478,
+   "tot_qty": 1660.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0193,
+   "own_side_imbalance": 0.0193,
+   "tot_qty": 1757.02
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0218,
+   "own_side_imbalance": 0.0218,
+   "tot_qty": 1761.55
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": 0.0393,
+   "own_side_imbalance": -0.0393,
+   "tot_qty": 1793.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": 0.0312,
+   "own_side_imbalance": -0.0312,
+   "tot_qty": 1807.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": 0.0284,
+   "own_side_imbalance": -0.0284,
+   "tot_qty": 1812.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": 0.0253,
+   "own_side_imbalance": -0.0253,
+   "tot_qty": 1817.91
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": 0.0076,
+   "own_side_imbalance": -0.0076,
+   "tot_qty": 1849.91
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.0005,
+   "own_side_imbalance": 0.0005,
+   "tot_qty": 1864.91
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.0034,
+   "own_side_imbalance": 0.0034,
+   "tot_qty": 1870.33
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.005,
+   "own_side_imbalance": 0.005,
+   "tot_qty": 1873.33
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.005,
+   "own_side_imbalance": 0.005,
+   "tot_qty": 1873.35
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 10,
+   "signed_imbalance": -0.0069,
+   "own_side_imbalance": 0.0069,
+   "tot_qty": 1877.02
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 10,
+   "signed_imbalance": -0.007,
+   "own_side_imbalance": 0.007,
+   "tot_qty": 1877.04
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0347,
+   "own_side_imbalance": 0.0347,
+   "tot_qty": 1931.04
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0567,
+   "own_side_imbalance": 0.0567,
+   "tot_qty": 1976.04
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.068,
+   "own_side_imbalance": 0.068,
+   "tot_qty": 1999.91
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0835,
+   "own_side_imbalance": 0.0835,
+   "tot_qty": 2033.73
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0842,
+   "own_side_imbalance": 0.0842,
+   "tot_qty": 2047.01
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0511,
+   "own_side_imbalance": 0.0511,
+   "tot_qty": 2133.05
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0565,
+   "own_side_imbalance": 0.0565,
+   "tot_qty": 2145.3
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 14,
+   "signed_imbalance": -0.0574,
+   "own_side_imbalance": 0.0574,
+   "tot_qty": 2147.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 14,
+   "signed_imbalance": -0.0575,
+   "own_side_imbalance": 0.0575,
+   "tot_qty": 2147.36
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 14,
+   "signed_imbalance": -0.0605,
+   "own_side_imbalance": 0.0605,
+   "tot_qty": 2154.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.0751,
+   "own_side_imbalance": 0.0751,
+   "tot_qty": 2188.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.0764,
+   "own_side_imbalance": 0.0764,
+   "tot_qty": 2191.32
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.0764,
+   "own_side_imbalance": 0.0764,
+   "tot_qty": 2191.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0522,
+   "own_side_imbalance": 0.0522,
+   "tot_qty": 2302.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.0538,
+   "own_side_imbalance": 0.0538,
+   "tot_qty": 2306.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0807,
+   "own_side_imbalance": -0.0807,
+   "tot_qty": 2373.79
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0679,
+   "own_side_imbalance": -0.0679,
+   "tot_qty": 2402.19
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.067,
+   "own_side_imbalance": -0.067,
+   "tot_qty": 2404.27
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 17,
+   "signed_imbalance": -0.0481,
+   "own_side_imbalance": -0.0481,
+   "tot_qty": 2447.46
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 17,
+   "signed_imbalance": -0.0392,
+   "own_side_imbalance": -0.0392,
+   "tot_qty": 2468.46
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 17,
+   "signed_imbalance": -0.0202,
+   "own_side_imbalance": -0.0202,
+   "tot_qty": 2514.46
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.015,
+   "own_side_imbalance": 0.015,
+   "tot_qty": 2527.46
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.0122,
+   "own_side_imbalance": -0.0122,
+   "tot_qty": 2659.89
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.012,
+   "own_side_imbalance": 0.012,
+   "tot_qty": 2660.5
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.0408,
+   "own_side_imbalance": 0.0408,
+   "tot_qty": 2740.5
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0522,
+   "own_side_imbalance": -0.0522,
+   "tot_qty": 2785.43
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0522,
+   "own_side_imbalance": -0.0522,
+   "tot_qty": 2785.45
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": 0.0503,
+   "own_side_imbalance": -0.0503,
+   "tot_qty": 2790.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": 0.021,
+   "own_side_imbalance": -0.021,
+   "tot_qty": 2870.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0067,
+   "own_side_imbalance": 0.0067,
+   "tot_qty": 2950.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0112,
+   "own_side_imbalance": 0.0112,
+   "tot_qty": 3095.62
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": 0.0041,
+   "own_side_imbalance": -0.0041,
+   "tot_qty": 3149.94
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0039,
+   "own_side_imbalance": -0.0039,
+   "tot_qty": 3150.77
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0032,
+   "own_side_imbalance": -0.0032,
+   "tot_qty": 3152.81
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 6,
+   "signed_imbalance": 0.0022,
+   "own_side_imbalance": -0.0022,
+   "tot_qty": 3155.88
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0216,
+   "own_side_imbalance": -0.0216,
+   "tot_qty": 3232.81
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": 0.0031,
+   "own_side_imbalance": 0.0031,
+   "tot_qty": 3312.81
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0061,
+   "own_side_imbalance": -0.0061,
+   "tot_qty": 3322.81
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 5,
+   "signed_imbalance": -0.0153,
+   "own_side_imbalance": -0.0153,
+   "tot_qty": 3394.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 7,
+   "signed_imbalance": -0.0085,
+   "own_side_imbalance": -0.0085,
+   "tot_qty": 3417.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0003,
+   "own_side_imbalance": 0.0003,
+   "tot_qty": 3447.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0005,
+   "own_side_imbalance": 0.0005,
+   "tot_qty": 3448.74
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 5,
+   "signed_imbalance": 0.029,
+   "own_side_imbalance": -0.029,
+   "tot_qty": 3549.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0337,
+   "own_side_imbalance": -0.0337,
+   "tot_qty": 3579.9
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": 0.0111,
+   "own_side_imbalance": -0.0111,
+   "tot_qty": 3659.9
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": 0.0104,
+   "own_side_imbalance": -0.0104,
+   "tot_qty": 3662.51
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": 0.0086,
+   "own_side_imbalance": -0.0086,
+   "tot_qty": 3668.99
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.0129,
+   "own_side_imbalance": 0.0129,
+   "tot_qty": 3748.99
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 8,
+   "signed_imbalance": -0.016,
+   "own_side_imbalance": 0.016,
+   "tot_qty": 3760.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.0365,
+   "own_side_imbalance": 0.0365,
+   "tot_qty": 3840.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 9,
+   "signed_imbalance": -0.039,
+   "own_side_imbalance": 0.039,
+   "tot_qty": 3850.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 10,
+   "signed_imbalance": -0.0447,
+   "own_side_imbalance": 0.0447,
+   "tot_qty": 3873.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0467,
+   "own_side_imbalance": 0.0467,
+   "tot_qty": 3881.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 11,
+   "signed_imbalance": -0.0495,
+   "own_side_imbalance": 0.0495,
+   "tot_qty": 3893.16
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0449,
+   "own_side_imbalance": 0.0449,
+   "tot_qty": 3915.84
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0451,
+   "own_side_imbalance": 0.0451,
+   "tot_qty": 3916.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0581,
+   "own_side_imbalance": 0.0581,
+   "tot_qty": 3970.34
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0388,
+   "own_side_imbalance": -0.0388,
+   "tot_qty": 4061.09
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0338,
+   "own_side_imbalance": 0.0338,
+   "tot_qty": 4080.86
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0328,
+   "own_side_imbalance": 0.0328,
+   "tot_qty": 4087.37
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0239,
+   "own_side_imbalance": -0.0239,
+   "tot_qty": 4244.87
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0019,
+   "own_side_imbalance": -0.0019,
+   "tot_qty": 4471.87
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0157,
+   "own_side_imbalance": -0.0157,
+   "tot_qty": 4551.87
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0112,
+   "own_side_imbalance": -0.0112,
+   "tot_qty": 4571.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0066,
+   "own_side_imbalance": -0.0066,
+   "tot_qty": 4592.96
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0066,
+   "own_side_imbalance": -0.0066,
+   "tot_qty": 4592.98
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0044,
+   "own_side_imbalance": -0.0044,
+   "tot_qty": 4602.98
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.003,
+   "own_side_imbalance": -0.003,
+   "tot_qty": 4609.77
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0003,
+   "own_side_imbalance": 0.0003,
+   "tot_qty": 4624.77
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0051,
+   "own_side_imbalance": 0.0051,
+   "tot_qty": 4647.03
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.007,
+   "own_side_imbalance": 0.007,
+   "tot_qty": 4656.1
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0073,
+   "own_side_imbalance": 0.0073,
+   "tot_qty": 4657.29
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0108,
+   "own_side_imbalance": 0.0108,
+   "tot_qty": 4673.67
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0166,
+   "own_side_imbalance": 0.0166,
+   "tot_qty": 4701.67
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0178,
+   "own_side_imbalance": 0.0178,
+   "tot_qty": 4706.94
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.018,
+   "own_side_imbalance": 0.018,
+   "tot_qty": 4708.05
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0182,
+   "own_side_imbalance": 0.0182,
+   "tot_qty": 4709.17
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0189,
+   "own_side_imbalance": 0.0189,
+   "tot_qty": 4712.5
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0193,
+   "own_side_imbalance": 0.0193,
+   "tot_qty": 4714.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0204,
+   "own_side_imbalance": 0.0204,
+   "tot_qty": 4719.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0314,
+   "own_side_imbalance": 0.0314,
+   "tot_qty": 4773.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0315,
+   "own_side_imbalance": 0.0315,
+   "tot_qty": 4773.54
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Down",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0357,
+   "own_side_imbalance": 0.0357,
+   "tot_qty": 4794.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0353,
+   "own_side_imbalance": -0.0353,
+   "tot_qty": 5124.52
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0271,
+   "own_side_imbalance": -0.0271,
+   "tot_qty": 5165.72
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0271,
+   "own_side_imbalance": -0.0271,
+   "tot_qty": 5165.74
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 4,
+   "signed_imbalance": -0.0248,
+   "own_side_imbalance": -0.0248,
+   "tot_qty": 5190.74
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 1,
+   "signed_imbalance": -0.0238,
+   "own_side_imbalance": -0.0238,
+   "tot_qty": 5195.74
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": -0.0199,
+   "own_side_imbalance": -0.0199,
+   "tot_qty": 5215.74
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0199,
+   "own_side_imbalance": -0.0199,
+   "tot_qty": 5215.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 0,
+   "signed_imbalance": -0.0125,
+   "own_side_imbalance": -0.0125,
+   "tot_qty": 5253.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0045,
+   "own_side_imbalance": -0.0045,
+   "tot_qty": 5295.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": -0.0038,
+   "own_side_imbalance": -0.0038,
+   "tot_qty": 5299.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0,
+   "own_side_imbalance": 0.0,
+   "tot_qty": 5479.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0068,
+   "own_side_imbalance": 0.0068,
+   "tot_qty": 5517.26
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 3,
+   "signed_imbalance": 0.0144,
+   "own_side_imbalance": 0.0144,
+   "tot_qty": 5569.76
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0151,
+   "own_side_imbalance": 0.0151,
+   "tot_qty": 5573.58
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0175,
+   "own_side_imbalance": 0.0175,
+   "tot_qty": 5587.25
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 2,
+   "signed_imbalance": 0.0187,
+   "own_side_imbalance": 0.0187,
+   "tot_qty": 5594.13
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 8,
+   "signed_imbalance": 0.0207,
+   "own_side_imbalance": 0.0207,
+   "tot_qty": 5717.83
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 10,
+   "signed_imbalance": 0.0207,
+   "own_side_imbalance": 0.0207,
+   "tot_qty": 5717.85
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 10,
+   "signed_imbalance": 0.0226,
+   "own_side_imbalance": 0.0226,
+   "tot_qty": 5729.14
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 10,
+   "signed_imbalance": 0.0247,
+   "own_side_imbalance": 0.0247,
+   "tot_qty": 5741.56
+  },
+  {
+   "slug": "btc-updown-15m-1787290200",
+   "outcome": "Up",
+   "offset_ticks": 10,
+   "signed_imbalance": 0.0258,
+   "own_side_imbalance": 0.0258,
+   "tot_qty": 5747.73
+  }
+ ]
+}

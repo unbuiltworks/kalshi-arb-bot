@@ -1,0 +1,20 @@
+{
+  "source": "PMUS_ORDER lines, readonly-recovery service 247304c7-972d-45b4-a308-46ba708dd4d6, deployment ce3238b7-9109-413e-96f1-6977657d59a4, emitted 2026-09-25T21:12:00Z",
+  "method": "GET /v1/order/{id} per venue order id recovered from the Probe 07 session journal",
+  "market": "cpc-btc-updown-15m-2026-09-25-1945z",
+  "session": "l5probe-20260925-btc15m-07",
+  "account": "d51b44a3fa83",
+  "settlementPx": "1.0000",
+  "price_convention": "price/avgPx is ALWAYS the long (YES) wire price; BUY_SHORT at wire p == buy NO at (1-p)",
+  "orders": [
+    {"id":"CQBEBQJZEYB5","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.75","quantity":0.29,"cumQuantity":0.29,"leavesQuantity":0,"avgPx":"0.7500","commission":"0.0000","insertTime":"2026-09-25T19:46:29.348650355Z","lastTransactTime":"2026-09-25T19:47:04.499260776Z"},
+    {"id":"CQBEPBYTMYC6","side":"ORDER_SIDE_BUY","outcomeSide":"OUTCOME_SIDE_YES","intent":"ORDER_INTENT_BUY_LONG","state":"ORDER_STATE_FILLED","price":"0.71","quantity":1.71,"cumQuantity":1.71,"leavesQuantity":0,"avgPx":"0.7100","commission":"0.0000","insertTime":"2026-09-25T19:47:00.598533313Z","lastTransactTime":"2026-09-25T19:47:22.576528517Z"},
+    {"id":"CQBENSJMGYBQ","side":"ORDER_SIDE_BUY","outcomeSide":"OUTCOME_SIDE_YES","intent":"ORDER_INTENT_BUY_LONG","state":"ORDER_STATE_FILLED","price":"0.71","quantity":0.54,"cumQuantity":0.54,"leavesQuantity":0,"avgPx":"0.7100","commission":"0.0000","insertTime":"2026-09-25T19:47:00.728995335Z","lastTransactTime":"2026-09-25T19:47:22.576528517Z"},
+    {"id":"CQBENSV4CYBQ","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.77","quantity":2.25,"cumQuantity":2.25,"leavesQuantity":0,"avgPx":"0.7700","commission":"0.0000","insertTime":"2026-09-25T19:47:32.141312755Z","lastTransactTime":"2026-09-25T19:50:56.892949788Z"},
+    {"id":"CQBFDTWFPYBE","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.67","quantity":0.22,"cumQuantity":0.22,"leavesQuantity":0,"avgPx":"0.6700","commission":"0.0000","insertTime":"2026-09-25T19:49:05.119983932Z","lastTransactTime":"2026-09-25T19:49:55.547195679Z"},
+    {"id":"CQBFGRWHAYBQ","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.69","quantity":0.05,"cumQuantity":0.05,"leavesQuantity":0,"avgPx":"0.6900","commission":"0.0000","insertTime":"2026-09-25T19:50:07.720741413Z","lastTransactTime":"2026-09-25T19:50:10.896071875Z"},
+    {"id":"CQBFN89G8YB5","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.67","quantity":0.22,"cumQuantity":0.22,"leavesQuantity":0,"avgPx":"0.6700","commission":"0.0000","insertTime":"2026-09-25T19:50:07.814293717Z","lastTransactTime":"2026-09-25T19:50:09.354876148Z"},
+    {"id":"CQBFN89JEYB5","side":"ORDER_SIDE_BUY","outcomeSide":"OUTCOME_SIDE_YES","intent":"ORDER_INTENT_BUY_LONG","state":"ORDER_STATE_FILLED","price":"0.63","quantity":0.22,"cumQuantity":0.22,"leavesQuantity":0,"avgPx":"0.6300","commission":"0.0000","insertTime":"2026-09-25T19:50:07.955656019Z","lastTransactTime":"2026-09-25T19:50:15.348459255Z"},
+    {"id":"CQBG0G16WYC6","side":"ORDER_SIDE_SELL","outcomeSide":"OUTCOME_SIDE_NO","intent":"ORDER_INTENT_BUY_SHORT","state":"ORDER_STATE_FILLED","price":"0.66","quantity":2.25,"cumQuantity":2.25,"leavesQuantity":0,"avgPx":"0.6600","commission":"-0.0100","insertTime":"2026-09-25T19:50:39.321816043Z","lastTransactTime":"2026-09-25T19:50:45.573823246Z"}
+  ]
+}

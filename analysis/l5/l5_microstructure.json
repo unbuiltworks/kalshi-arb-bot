@@ -1,0 +1,224 @@
+{
+ "generated_utc": "2026-09-01T15:16:54.533647+00:00",
+ "source": "/home/user/kalshi-arb-bot/analysis/l5/l5_canonical_sequence.csv.gz",
+ "size_by_price_and_role": {
+  "15-30c|completion": {
+   "n": 7244,
+   "qty_median": 8.038,
+   "usd_median": 1.73
+  },
+  "15-30c|extension": {
+   "n": 5899,
+   "qty_median": 8.5,
+   "usd_median": 1.7514
+  },
+  "15-30c|open": {
+   "n": 190,
+   "qty_median": 29.84,
+   "usd_median": 6.1878
+  },
+  "30-50c|completion": {
+   "n": 7202,
+   "qty_median": 10.86,
+   "usd_median": 4.5
+  },
+  "30-50c|extension": {
+   "n": 5503,
+   "qty_median": 10.0,
+   "usd_median": 4.2957
+  },
+  "30-50c|open": {
+   "n": 498,
+   "qty_median": 20.0,
+   "usd_median": 9.2
+  },
+  "5-15c|completion": {
+   "n": 4408,
+   "qty_median": 10.0,
+   "usd_median": 0.9592
+  },
+  "5-15c|extension": {
+   "n": 5881,
+   "qty_median": 10.0,
+   "usd_median": 0.8141
+  },
+  "5-15c|open": {
+   "n": 110,
+   "qty_median": 36.28,
+   "usd_median": 2.9213
+  },
+  "50-70c|completion": {
+   "n": 5814,
+   "qty_median": 14.35,
+   "usd_median": 8.4247
+  },
+  "50-70c|extension": {
+   "n": 7341,
+   "qty_median": 14.58,
+   "usd_median": 8.5806
+  },
+  "50-70c|open": {
+   "n": 960,
+   "qty_median": 20.98,
+   "usd_median": 13.0391
+  },
+  "70-85c|completion": {
+   "n": 4121,
+   "qty_median": 18.0,
+   "usd_median": 13.52
+  },
+  "70-85c|extension": {
+   "n": 5199,
+   "qty_median": 17.0741,
+   "usd_median": 13.1949
+  },
+  "70-85c|open": {
+   "n": 396,
+   "qty_median": 23.01,
+   "usd_median": 17.812
+  },
+  "85-95c|completion": {
+   "n": 2818,
+   "qty_median": 24.0,
+   "usd_median": 21.0618
+  },
+  "85-95c|extension": {
+   "n": 2646,
+   "qty_median": 20.0,
+   "usd_median": 18.6
+  },
+  "85-95c|open": {
+   "n": 181,
+   "qty_median": 32.43,
+   "usd_median": 28.9713
+  },
+  "<5c|completion": {
+   "n": 1187,
+   "qty_median": 34.88,
+   "usd_median": 0.7482
+  },
+  "<5c|extension": {
+   "n": 2355,
+   "qty_median": 20.0,
+   "usd_median": 0.4794
+  },
+  "<5c|open": {
+   "n": 61,
+   "qty_median": 50.0,
+   "usd_median": 1.0686
+  },
+  ">95c|completion": {
+   "n": 1187,
+   "qty_median": 27.38,
+   "usd_median": 26.5586
+  },
+  ">95c|extension": {
+   "n": 752,
+   "qty_median": 20.0,
+   "usd_median": 19.4407
+  },
+  ">95c|open": {
+   "n": 29,
+   "qty_median": 30.0,
+   "usd_median": 28.8806
+  }
+ },
+ "completion_tendency": {
+  "note": "given a deficit of the bucketed size existed before the fill, share of next buys per role",
+  "by_deficit": {
+   "1-10sh": {
+    "n": 3578,
+    "completion_pct": 47.7,
+    "extension_pct": 52.3
+   },
+   "10-50sh": {
+    "n": 13982,
+    "completion_pct": 48.9,
+    "extension_pct": 51.1
+   },
+   ">50sh": {
+    "n": 51558,
+    "completion_pct": 48.9,
+    "extension_pct": 51.1
+   },
+   "none": {
+    "n": 439,
+    "completion_pct": 49.2,
+    "extension_pct": 50.8
+   }
+  },
+  "sub_dollar_incremental_pairs": {
+   "checked": 33981,
+   "sub_1_dollar_pct": 57.1
+  }
+ },
+ "fragmentation": {
+  "runs_ge2_same_price_same_side": 11080,
+  "run_length_median": 2.0,
+  "run_length_max": 24,
+  "fills_in_runs_maker_taker_verified": {
+   "maker": 18372,
+   "taker": 712
+  },
+  "note": "consecutive same-side fills at identical price \u2014 the resting-order-fragment signature the UI shows; maker/taker verified only inside Aug 28-31 coverage"
+ },
+ "pair_cost_trajectory": {
+  "q25": {
+   "median": 1.0017,
+   "p25": 0.952,
+   "n": 929
+  },
+  "q50": {
+   "median": 1.0018,
+   "p25": 0.9322,
+   "n": 1417
+  },
+  "q75": {
+   "median": 0.9865,
+   "p25": 0.9128,
+   "n": 1580
+  },
+  "final": {
+   "median": 0.9705,
+   "p25": 0.9008,
+   "n": 1610
+  }
+ },
+ "extreme_bands": {
+  "5-15c": {
+   "n": 10399,
+   "completion_pct": 42.4,
+   "extension_pct": 56.6,
+   "open_pct": 1.1
+  },
+  "85-95c": {
+   "n": 5645,
+   "completion_pct": 49.9,
+   "extension_pct": 46.9,
+   "open_pct": 3.2
+  },
+  "<5c": {
+   "n": 3603,
+   "completion_pct": 32.9,
+   "extension_pct": 65.4,
+   "open_pct": 1.7
+  },
+  ">95c": {
+   "n": 1968,
+   "completion_pct": 60.3,
+   "extension_pct": 38.2,
+   "open_pct": 1.5
+  }
+ },
+ "concurrency": {
+  "windows": 2216,
+  "entries_while_another_window_live_pct": 73.9,
+  "window_usd_median_solo": 255.6379,
+  "window_usd_median_concurrent": 67.175,
+  "max_concurrent_live": 4
+ },
+ "interpretation": {
+  "cheap_fills": "measured below: whether <5c/5-15c buys are predominantly completion legs (pre-fill deficit on that side) \u2014 inference about intent stays out of the numbers",
+  "ui_check": "UI-observed patterns (dense ladders, complementary prices, big cheap fills / small expensive fills) are validated only where these frequencies support them"
+ }
+}

@@ -1,0 +1,958 @@
+{
+ "kind": "KALSHI_LEG_RANKING",
+ "unit_of_decision": "leg",
+ "legs": [
+  {
+   "leg": "KXETH15M",
+   "observations": 192,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.001",
+   "pair_cost_p90": "1.02",
+   "yes_bid_median": "0.39",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008455",
+   "headline_reward_usd": null,
+   "target_size": null,
+   "reward_density_per_capital_dollar": null,
+   "band_min_side_depth_median": {
+    "1": "60.71",
+    "2": "299.0",
+    "5": "1533.6699999999998",
+    "10": "3392.0400000000004"
+   },
+   "share_curve": {
+    "1": "0.6442",
+    "2": "0.2688",
+    "5": "0.0669",
+    "10": "0.0314"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 1
+  },
+  {
+   "leg": "KXWTI15M",
+   "observations": 196,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.002",
+   "pair_cost_p90": "1.02",
+   "yes_bid_median": "0.6",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008455",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.066007",
+   "band_min_side_depth_median": {
+    "1": "136.0",
+    "2": "1471.35",
+    "5": "5082.0",
+    "10": "6469.5"
+   },
+   "share_curve": {
+    "1": "0.4469",
+    "2": "0.0695",
+    "5": "0.0212",
+    "10": "0.0167"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 2
+  },
+  {
+   "leg": "KXSILVER15M",
+   "observations": 197,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.001",
+   "pair_cost_p90": "1.02",
+   "yes_bid_median": "0.45",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008778",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.066007",
+   "band_min_side_depth_median": {
+    "1": "456.29",
+    "2": "1852.4699999999998",
+    "5": "4291.7",
+    "10": "4700.5"
+   },
+   "share_curve": {
+    "1": "0.1941",
+    "2": "0.0560",
+    "5": "0.0250",
+    "10": "0.0228"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 3
+  },
+  {
+   "leg": "KXGOLD15M",
+   "observations": 195,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.001",
+   "pair_cost_p90": "1.01",
+   "yes_bid_median": "0.53",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008798",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.066007",
+   "band_min_side_depth_median": {
+    "1": "1502.9",
+    "2": "4292.75",
+    "5": "8586.32",
+    "10": "9002.47"
+   },
+   "share_curve": {
+    "1": "0.0681",
+    "2": "0.0250",
+    "5": "0.0126",
+    "10": "0.0121"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 4
+  },
+  {
+   "leg": "KXBTC15M",
+   "observations": 191,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.002",
+   "pair_cost_p90": "1.01",
+   "yes_bid_median": "0.48",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008838",
+   "headline_reward_usd": null,
+   "target_size": null,
+   "reward_density_per_capital_dollar": null,
+   "band_min_side_depth_median": {
+    "1": "2515.06",
+    "2": "4075.05",
+    "5": "8461.38",
+    "10": "15535.199999999999"
+   },
+   "share_curve": {
+    "1": "0.0419",
+    "2": "0.0263",
+    "5": "0.0128",
+    "10": "0.0070"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 5
+  },
+  {
+   "leg": "KXNATGAS15M",
+   "observations": 178,
+   "pair_cost_median": "1.02",
+   "pair_cost_p10": "1.01",
+   "pair_cost_p90": "1.05",
+   "yes_bid_median": "0.25",
+   "drag_per_dollar": "-0.019608",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.006878",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.065359",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "57.0",
+    "5": "136.67000000000002",
+    "10": "246.0"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "0.6563",
+    "5": "0.4433",
+    "10": "0.3067"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 6
+  },
+  {
+   "leg": "KXCOPPER15M",
+   "observations": 185,
+   "pair_cost_median": "1.02",
+   "pair_cost_p10": "1.01",
+   "pair_cost_p90": "1.03",
+   "yes_bid_median": "0.37",
+   "drag_per_dollar": "-0.019608",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008418",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.065359",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "77.0",
+    "5": "284.14",
+    "10": "595.3499999999999"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "0.5856",
+    "5": "0.2769",
+    "10": "0.1545"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 7
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:XRP",
+   "observations": 180,
+   "pair_cost_median": "1.04",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.11",
+   "yes_bid_median": "0.05",
+   "drag_per_dollar": "-0.038462",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.002375",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.019231",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0",
+    "5": "120.0",
+    "10": "1244.0"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "1.0000",
+    "5": "0.4707",
+    "10": "0.0790"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 8
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:SOL",
+   "observations": 190,
+   "pair_cost_median": "1.04",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.09",
+   "yes_bid_median": "0.08",
+   "drag_per_dollar": "-0.038462",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.003271",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.019231",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0.01",
+    "5": "124.01",
+    "10": "531.01"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "0.9999",
+    "5": "0.4626",
+    "10": "0.1674"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 9
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:ETH",
+   "observations": 190,
+   "pair_cost_median": "1.05",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.12",
+   "yes_bid_median": "0.1",
+   "drag_per_dollar": "-0.047619",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.004021",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.019048",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0",
+    "5": "48.0",
+    "10": "505.01"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "1.0000",
+    "5": "0.6877",
+    "10": "0.1731"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 10
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:BTC",
+   "observations": 189,
+   "pair_cost_median": "1.07",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.11",
+   "yes_bid_median": "0.12",
+   "drag_per_dollar": "-0.065421",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.004892",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.018692",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0",
+    "5": "26.0",
+    "10": "627.0"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "1.0000",
+    "5": "0.7996",
+    "10": "0.1420"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 11
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:HYPE",
+   "observations": 186,
+   "pair_cost_median": "1.09",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.13",
+   "yes_bid_median": "0.2",
+   "drag_per_dollar": "-0.082569",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.007044",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.018349",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0",
+    "5": "4.0",
+    "10": "503.0"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "1.0000",
+    "5": "0.9622",
+    "10": "0.1684"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 12
+  }
+ ],
+ "ranked_on": "drag_per_dollar - maker fee (both legs fill), the two terms that are measured. Reward density is shown beside the rank, never inside it.",
+ "fee_status": "DERIVED FROM VENUE METADATA, not from a paid invoice. GET /series/{ticker} declares fee_type=quadratic and fee_multiplier=1 for all eight series, identical to the certified KXBTC15M/KXETH15M pair.",
+ "fee_vs_reward_asymmetry": "A STRUCTURAL ASYMMETRY THAT THE EQUATION HIDES. The maker fee is charged per contract EXECUTED. The liquidity reward is scored on orders RESTING, with no fill required. So the fee term and the incentive term are not incurred by the same event: an order that rests and is never hit earns reward and pays nothing. The fee figure below therefore belongs to the PAIR-MANUFACTURING business (both legs fill), not to the pure liquidity-provision business, and a leg can rank differently under the two. We cannot yet price the second because share of score is unknown.",
+ "residual_note": "UNMEASURED on this venue -- we hold no fills here. It is not zero, and it is the term that actually sank PMUS: -6.458%/$ came from unpaired inventory, not pair cost.",
+ "share_dominance": {
+  "basis": "less competing near-mid depth at EVERY measured band => larger share under ANY non-increasing proximity weighting",
+  "dominates": {
+   "KXCOPPER15M": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXCRYPTOLEAD15M:BTC": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXCRYPTOLEAD15M:ETH": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXCRYPTOLEAD15M:HYPE": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXCRYPTOLEAD15M:SOL": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXCRYPTOLEAD15M:XRP": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXETH15M": [
+    "KXBTC15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXNATGAS15M": [
+    "KXBTC15M",
+    "KXETH15M",
+    "KXGOLD15M",
+    "KXSILVER15M",
+    "KXWTI15M"
+   ],
+   "KXSILVER15M": [
+    "KXBTC15M",
+    "KXGOLD15M"
+   ],
+   "KXWTI15M": [
+    "KXBTC15M",
+    "KXGOLD15M"
+   ]
+  },
+  "ordering_depends_on_the_unknown_rule": [
+   [
+    "KXBTC15M",
+    "KXGOLD15M"
+   ],
+   [
+    "KXCOPPER15M",
+    "KXCRYPTOLEAD15M:BTC"
+   ],
+   [
+    "KXCOPPER15M",
+    "KXCRYPTOLEAD15M:XRP"
+   ],
+   [
+    "KXCRYPTOLEAD15M:BTC",
+    "KXCRYPTOLEAD15M:ETH"
+   ],
+   [
+    "KXCRYPTOLEAD15M:BTC",
+    "KXCRYPTOLEAD15M:SOL"
+   ],
+   [
+    "KXCRYPTOLEAD15M:BTC",
+    "KXNATGAS15M"
+   ],
+   [
+    "KXCRYPTOLEAD15M:ETH",
+    "KXNATGAS15M"
+   ],
+   [
+    "KXCRYPTOLEAD15M:HYPE",
+    "KXNATGAS15M"
+   ],
+   [
+    "KXCRYPTOLEAD15M:SOL",
+    "KXCRYPTOLEAD15M:XRP"
+   ],
+   [
+    "KXCRYPTOLEAD15M:SOL",
+    "KXNATGAS15M"
+   ],
+   [
+    "KXCRYPTOLEAD15M:XRP",
+    "KXNATGAS15M"
+   ],
+   [
+    "KXSILVER15M",
+    "KXWTI15M"
+   ]
+  ],
+  "what_this_does_not_give": "a share MAGNITUDE. Only the ordering is rule-independent; how much of the pool that ordering is worth is not."
+ },
+ "frontier": [
+  {
+   "leg": "KXETH15M",
+   "cost_per_dollar": "0.018356",
+   "competing_depth": "299.0",
+   "headline_reward_usd": null,
+   "on_frontier": true
+  },
+  {
+   "leg": "KXWTI15M",
+   "cost_per_dollar": "0.018356",
+   "competing_depth": "1471.35",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  },
+  {
+   "leg": "KXSILVER15M",
+   "cost_per_dollar": "0.018679",
+   "competing_depth": "1852.4699999999998",
+   "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
+   "leg": "KXGOLD15M",
+   "cost_per_dollar": "0.018699",
+   "competing_depth": "4292.75",
+   "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
+   "leg": "KXBTC15M",
+   "cost_per_dollar": "0.018739",
+   "competing_depth": "4075.05",
+   "headline_reward_usd": null,
+   "on_frontier": false
+  },
+  {
+   "leg": "KXNATGAS15M",
+   "cost_per_dollar": "0.026486",
+   "competing_depth": "57.0",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  },
+  {
+   "leg": "KXCOPPER15M",
+   "cost_per_dollar": "0.028026",
+   "competing_depth": "77.0",
+   "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:XRP",
+   "cost_per_dollar": "0.040837",
+   "competing_depth": "0",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:SOL",
+   "cost_per_dollar": "0.041733",
+   "competing_depth": "0.01",
+   "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:ETH",
+   "cost_per_dollar": "0.051640",
+   "competing_depth": "0",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:BTC",
+   "cost_per_dollar": "0.070313",
+   "competing_depth": "0",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:HYPE",
+   "cost_per_dollar": "0.089613",
+   "competing_depth": "0",
+   "headline_reward_usd": "20",
+   "on_frontier": true
+  }
+ ],
+ "the_tension": "DRAG AND SHARE PULL IN OPPOSITE DIRECTIONS ACROSS LEGS, and this is the reason a series average is worse than useless here. The legs with the CHEAPEST books carry the THICKEST competition near the mid, because cheap books are cheap precisely because many makers are already standing there. The legs with almost no near-mid competition are wide, and you pay that width on every pair you manufacture.\n\nSo there is no leg that is simply 'best'. There is a frontier, and where you want to sit on it depends on which business you are in: pair manufacturing is punished by width, pure liquidity provision is punished by crowding, and the fee falls only on the first of those. Any single ranking that hides this frontier is selling one number where the decision needs two.",
+ "share_denominator": "reported as a curve over band width; the venue's proximity rule is unknown to us",
+ "shadow_only": true,
+ "order_entry": false,
+ "realized_pnl": null,
+ "payout_floor": {
+  "KXCRYPTOLEAD15M:XRP": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.4707",
+     "gross_usd": "9.4148",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.0790",
+     "gross_usd": "1.5803",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0257",
+     "gross_usd": "0.5145",
+     "paid": false,
+     "forfeited_usd": "0.5145"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXCRYPTOLEAD15M:SOL": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.9999",
+     "gross_usd": "19.9981",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.4626",
+     "gross_usd": "9.2511",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.1674",
+     "gross_usd": "3.3472",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0311",
+     "gross_usd": "0.6222",
+     "paid": false,
+     "forfeited_usd": "0.6222"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXCRYPTOLEAD15M:HYPE": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.9622",
+     "gross_usd": "19.2441",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.1684",
+     "gross_usd": "3.3674",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0260",
+     "gross_usd": "0.5191",
+     "paid": false,
+     "forfeited_usd": "0.5191"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXCRYPTOLEAD15M:ETH": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.6877",
+     "gross_usd": "13.7546",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.1731",
+     "gross_usd": "3.4619",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0277",
+     "gross_usd": "0.5544",
+     "paid": false,
+     "forfeited_usd": "0.5544"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXCRYPTOLEAD15M:BTC": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.7996",
+     "gross_usd": "15.9919",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.1420",
+     "gross_usd": "2.8393",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0241",
+     "gross_usd": "0.4816",
+     "paid": false,
+     "forfeited_usd": "0.4816"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXGOLD15M": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "0.0681",
+     "gross_usd": "1.3629",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.0250",
+     "gross_usd": "0.4992",
+     "paid": false,
+     "forfeited_usd": "0.4992"
+    },
+    "5": {
+     "share": "0.0126",
+     "gross_usd": "0.2528",
+     "paid": false,
+     "forfeited_usd": "0.2528"
+    },
+    "10": {
+     "share": "0.0121",
+     "gross_usd": "0.2412",
+     "paid": false,
+     "forfeited_usd": "0.2412"
+    },
+    "full": {
+     "share": "0.0004",
+     "gross_usd": "0.0089",
+     "paid": false,
+     "forfeited_usd": "0.0089"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXWTI15M": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "0.4469",
+     "gross_usd": "8.9386",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.0695",
+     "gross_usd": "1.3901",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.0212",
+     "gross_usd": "0.4234",
+     "paid": false,
+     "forfeited_usd": "0.4234"
+    },
+    "10": {
+     "share": "0.0167",
+     "gross_usd": "0.3341",
+     "paid": false,
+     "forfeited_usd": "0.3341"
+    },
+    "full": {
+     "share": "0.0011",
+     "gross_usd": "0.0211",
+     "paid": false,
+     "forfeited_usd": "0.0211"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXSILVER15M": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "0.1941",
+     "gross_usd": "3.8821",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.0560",
+     "gross_usd": "1.1201",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.0250",
+     "gross_usd": "0.4994",
+     "paid": false,
+     "forfeited_usd": "0.4994"
+    },
+    "10": {
+     "share": "0.0228",
+     "gross_usd": "0.4569",
+     "paid": false,
+     "forfeited_usd": "0.4569"
+    },
+    "full": {
+     "share": "0.0012",
+     "gross_usd": "0.0246",
+     "paid": false,
+     "forfeited_usd": "0.0246"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXNATGAS15M": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.6563",
+     "gross_usd": "13.1252",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.4433",
+     "gross_usd": "8.8657",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.3067",
+     "gross_usd": "6.1340",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0103",
+     "gross_usd": "0.2067",
+     "paid": false,
+     "forfeited_usd": "0.2067"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  },
+  "KXCOPPER15M": {
+   "share_needed_for_any_payout": "0.0500",
+   "by_denominator": {
+    "1": {
+     "share": "1.0000",
+     "gross_usd": "20.0000",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "2": {
+     "share": "0.5856",
+     "gross_usd": "11.7126",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "5": {
+     "share": "0.2769",
+     "gross_usd": "5.5386",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "10": {
+     "share": "0.1545",
+     "gross_usd": "3.0908",
+     "paid": true,
+     "forfeited_usd": "0"
+    },
+    "full": {
+     "share": "0.0102",
+     "gross_usd": "0.2037",
+     "paid": false,
+     "forfeited_usd": "0.2037"
+    }
+   },
+   "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
+  }
+ },
+ "leg_verdict": {
+  "best_drag_with_meaningful_reward_density": [
+   "KXCOPPER15M",
+   "KXNATGAS15M"
+  ],
+  "why": "they sit in the MIDDLE of the cost table (natgas -2.51%/$, copper -2.79%/$) but at the TOP of the reward-density table (0.0654 per capital dollar, 3.4x the KXCRYPTOLEAD15M legs, because the same $20 pool sits against target size 300 rather than 1000) and near the BOTTOM of the competition table (58.6 and 78.5 contracts within 2c of mid, against 1,976 on WTI and 4,424 on gold). And per the complete venue census they are ranks 1-5 of 300 active series on reward density, 444x the venue median",
+  "cheapest_execution_but_crowded": [
+   "KXWTI15M",
+   "KXGOLD15M",
+   "KXSILVER15M"
+  ],
+  "emptiest_books_but_expensive_and_third_the_density": [
+   "KXCRYPTOLEAD15M:BTC",
+   "KXCRYPTOLEAD15M:HYPE",
+   "KXCRYPTOLEAD15M:ETH",
+   "KXCRYPTOLEAD15M:SOL",
+   "KXCRYPTOLEAD15M:XRP"
+  ],
+  "the_irony": "the two cheapest legs of all, KXBTC15M and KXETH15M at -1.75%/$ and -1.68%/$, pay NOTHING. Their programs were withdrawn on 2026-05-12. The best execution on the venue is the part of it that stopped paying."
+ },
+ "stability": {
+  "finding": "THE COMMODITY LEGS HOLD THEIR PRICE; THE CRYPTO LEGS DO NOT. Splitting a 2,234-snapshot / 81-minute window in half and comparing median pair cost early vs late: gold, WTI, copper, KXBTC15M and KXETH15M all moved 0.000, silver -0.001, natgas +0.010 -- while every KXCRYPTOLEAD15M leg moved 0.010 to 0.020, with SOL +0.020 and HYPE -0.020.",
+  "why_it_matters": "a 15-minute market must be re-quoted about a hundred times a day. A leg whose pair cost wanders two cents between quotes prices differently every time you touch it, and the drag figure that ranked it is then a average over a moving target rather than a property you can plan against.",
+  "effect_on_the_verdict": "it STRENGTHENS copper and natgas rather than changing the ordering. They were chosen on cost and competition; stability is a third axis they also win, and the legs they beat are the unstable ones.",
+  "caveat": "81 minutes, all inside 00:16-01:37Z. This is NOT the off-hours test: it does not cross the CME maintenance break or reach Asian hours, and commodity 15m books could behave differently there. Do not read it as a 24-hour claim."
+ },
+ "payout_floor_verdict": {
+  "finding": "UNDER THE FULL-BOOK DENOMINATOR, EVERY LEG PAYS ZERO. Our $111 earns a gross of $0.0094 to $0.6407 per period across all ten incentivised legs -- every one of them under the $1.00 minimum, so every one is forfeited in full, not paid small.",
+  "under_narrow_bands": "at a 2c band eight of ten legs clear the floor, and at 5c six do",
+  "consequence": "the unknown denominator is not an accuracy problem, it is a BINARY one. The two readings of the qualifying rule disagree about whether we are paid AT ALL, and the gap between them is the whole result.",
+  "what_settles_it": "one credited payout on a funded account. No volume of public book data can substitute, because the quantity we are missing -- our own score against everyone else's -- is never published.",
+  "note_on_capital": "this is a property of OUR bankroll, not of the venue. The floor is $1 against a $20 pool, so it binds until our share reaches 5%."
+ },
+ "p0_answer": "KXCOPPER15M and KXNATGAS15M are the legs that minimise trading drag while retaining meaningful reward density. But the ranking does not settle the venue: under the conservative denominator our capital is below the payout floor on every leg, and no public data closes that.",
+ "tape": {
+  "rows": 2269,
+  "legs": 12,
+  "window": "2026-09-09T00:16-01:37Z",
+  "cadence_s": 30
+ }
+}

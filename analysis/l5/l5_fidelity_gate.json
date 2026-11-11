@@ -1,0 +1,73 @@
+{
+  "workstream": "OWNER 5556232035 item 5 -- L5 FIDELITY GATE for declaring Phase 1 (L5 replication) operational. Phase order: REPLICATE L5 -> PROVE FIDELITY -> RUN L5 -> MEASURE REALIZED RESULTS -> THEN OPTIMIZE PROFITABILITY.",
+  "frozen_utc": "2026-09-06T02:10:00+00:00",
+  "no_tuning_rule": "frozen at commit; any change is a new file with a new freeze time; P&L is never an input to this gate",
+  "reference_policy": {
+    "model": "analysis/l5/l5_action_model_v2.json (sha256_16 bbb55bf90638d2bd)",
+    "fidelity_artifact": "analysis/l5/l5_fidelity_pass.json (size / aggressiveness policies, holdout)",
+    "action": "reconstructed L5 sequential policy: relation (open/extend/complete/sell) at state = price band | TTE bucket | behavioral imbalance, conditioned on last_rel and last_size; side by the shared cheaper-touch convention; size and taker share from the fidelity artifact"
+  },
+  "labels": {
+    "until_met": "L5 replication in validation",
+    "when_met": "L5 operational",
+    "rule": "the label is decided by this gate only; realized P&L never changes it"
+  },
+  "evidence_sources": {
+    "historical_holdout": "held-out L5 transitions (l5_fidelity_pass.json valid_transitions): model vs L5 on the same states",
+    "realtime_shadow": "Gemini shadow rolling_report action_scoring_untouched / research_arm_stochastic (untouched windows only)",
+    "bounded_live": "PMUS spring session decision records (decisions[] with state, v2_recommended, acted, refusal, shadow.stochastic.sampled, inventory_before, shadow.l5_target_size, shadow.l5_target_aggressiveness, t_utc)"
+  },
+  "minimum_evidence": {
+    "live_scored_decisions": 200,
+    "live_markets": 5,
+    "live_post_fill_decisions": 50,
+    "live_timed_intervals": 50,
+    "shadow_windows": 300
+  },
+  "dimensions": {
+    "action_distribution_relation": {
+      "metric": "L1 distance between relation frequencies and the model's expected conditional masses on the same decisions; POLICY view = stochastic draw (sampled), EXECUTED view = acted (HOLD is not an L5 relation and counts as disagreement)",
+      "pass": {"l1_sampled_vs_l5_max": 0.10, "l1_acted_vs_l5_max": 0.20},
+      "override_allowed": "safety refusals (residual_cap, off_distribution_hold, spend_cap, complement_*) are logged per decision; they still count against the EXECUTED view -- an override is visible, not excused"
+    },
+    "action_distribution_side": {
+      "metric": "share of OPEN decisions whose executed side equals the shared cheaper-touch convention side the historical model was fitted with (live); historical holdout side agreement where L5's side is observable",
+      "pass": {"live_side_convention_agreement_min": 0.95, "holdout_side_agreement_min": 0.80},
+      "note": "the frozen model predicts a relation, never a side; side fidelity is the convention's fidelity"
+    },
+    "post_fill_complete_gap": {
+      "metric": "percentage-point gap between the COMPLETE frequency after a fill (imbalance >= 1 unit) and L5's expected COMPLETE mass in the same states; sampled and acted views",
+      "pass": {"abs_gap_pp_max_sampled": 10.0, "abs_gap_pp_max_acted": 15.0}
+    },
+    "price_aggressiveness": {
+      "metric": "share of executed orders placed AT the touch of their side (L5 joins the touch; the shell never crosses) and the taker share vs L5's p_taker for the TTE bucket",
+      "pass": {"touch_join_rate_min": 0.90, "taker_share_abs_gap_max": 0.10},
+      "declared_override": "taker disabled by owner rule (maker/post-only only): the taker-share check is REPORTED and marked override:taker_disabled; it does not block the gate while that rule stands"
+    },
+    "size": {
+      "metric": "median executed size / L5 p50 size for the same state|relation (shadow.l5_target_size), in shares and USD",
+      "pass": {"median_size_ratio_min": 0.50},
+      "declared_override": "$0.05 per-market cap and venue-minimum sizing (rung R1): REPORTED and marked override:size_cap; does not block the gate while the cap stands"
+    },
+    "timing_cadence": {
+      "metric": "median seconds between consecutive decisions on a market vs the model's next_reevaluation_s (cadence_modal) for the same state; ratio within [0.5, 2.0]",
+      "pass": {"cadence_ratio_min": 0.5, "cadence_ratio_max": 2.0},
+      "note": "requires t_utc on decision records (added 2026-09-06); earlier records are not scoreable"
+    },
+    "inventory_trajectory": {
+      "metric": "share of decisions taken with |imbalance| >= 1 behavioral unit vs L5's share of transitions from imbalanced states in the model base; max |imbalance units| observed vs the 3-unit cap",
+      "pass": {"imbalanced_share_abs_gap_max": 0.15, "max_imbalance_units_max": 3.0},
+      "declared_override": "residual cap 3 units: the cap itself is an owner safety rule; the share gap is what is scored"
+    },
+    "maker_taker": {
+      "metric": "maker share of executed orders vs L5's maker share (1 - p_taker) in the same TTE buckets",
+      "pass": {"maker_share_abs_gap_max": 0.10},
+      "declared_override": "taker disabled: REPORTED, override:taker_disabled"
+    },
+    "off_distribution_rate": {
+      "metric": "share of live decisions in states the model never saw (backed off)",
+      "pass": {"max_pct": 5.0}
+    }
+  },
+  "verdict_rule": "L5 operational only when every dimension without a declared override passes at or above minimum_evidence on live AND shadow evidence, and the declared overrides are each logged; otherwise 'L5 replication in validation' with every failing / unmeasured dimension named"
+}

@@ -1,0 +1,25 @@
+{
+  "label": "gemini_hot_20260917",
+  "closed_utc": "2026-09-17T15:38:20.941359+00:00",
+  "files": [
+    {
+      "raw": "data/policy_d_port_hot/tape_20260917T141146Z.jsonl",
+      "raw_sha256": "165ad3f13e31f262dafd2d5b563876dc4f93d543e110560d4477b386fa9c9d4f",
+      "raw_bytes": 1063000,
+      "raw_rows": 5802,
+      "gz": "data/policy_d_port_hot/tape_20260917T141146Z.jsonl.gz",
+      "gz_sha256": "7ac40b291c53b49228cf7f63cb29c812edbd4db655a7615233d5d5241e8b920b",
+      "gz_bytes": 65563
+    },
+    {
+      "raw": "data/policy_d_port_hot/tape_20260917T144533Z.jsonl",
+      "raw_sha256": "07838ee21ce12e6a0ae9b8df2c1da034f3f77a15da8fb84b5cbadb0151e36453",
+      "raw_bytes": 1803498,
+      "raw_rows": 9418,
+      "gz": "data/policy_d_port_hot/tape_20260917T144533Z.jsonl.gz",
+      "gz_sha256": "12750588b2b53fb36ff85b7f3de3cf0e0ef4f92675393c71b2c6154abe58d2e5",
+      "gz_bytes": 117596
+    }
+  ],
+  "labels": "raw tape preserved in place; .gz is an additional artifact; both hashed so the analysed file is provably the collected file"
+}

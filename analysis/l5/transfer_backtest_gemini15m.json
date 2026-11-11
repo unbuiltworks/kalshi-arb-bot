@@ -1,0 +1,76 @@
+{
+ "labeling": "THEORETICAL tier-1 quote+print replay, BTC-15M, entry at TTE 105-300s (same mechanics as 5m)",
+ "tier1_windows": 29,
+ "tier1_optimistic": {
+  "windows_considered": 29,
+  "v1_abstain": 0,
+  "no_fee_safe": 13,
+  "qualifying_campaigns": 16,
+  "distinct_days": [
+   "260831",
+   "260901",
+   "260902"
+  ],
+  "qualifying_per_day": 5.33,
+  "first_leg_fill_rate": 0.125,
+  "p_complement_given_first_fill": 0.5,
+  "one_sided_hold_rate": 0.0625,
+  "matched_completions": 1,
+  "matched_per_day": 0.33,
+  "median_pair_cost_after_fees": "0.9900",
+  "mean_time_to_complement_s": 36.0,
+  "mean_residual_duration_s": 274.8,
+  "pair_pnl_theoretical_total": "0.0100",
+  "hold_pnl_theoretical_total": "0.5700",
+  "hold_pnl_ambiguous_outcomes_excluded": 0,
+  "holds_residual_won": 1,
+  "holds_residual_lost": 0,
+  "adverse_selection_by_side": {
+   "YES": {
+    "holds": 0,
+    "won": 0
+   },
+   "NO": {
+    "holds": 1,
+    "won": 1
+   }
+  },
+  "net_theoretical_total": "0.5800"
+ },
+ "tier1_strict": {
+  "windows_considered": 29,
+  "v1_abstain": 0,
+  "no_fee_safe": 13,
+  "qualifying_campaigns": 16,
+  "distinct_days": [
+   "260831",
+   "260901",
+   "260902"
+  ],
+  "qualifying_per_day": 5.33,
+  "first_leg_fill_rate": 0.125,
+  "p_complement_given_first_fill": 0.5,
+  "one_sided_hold_rate": 0.0625,
+  "matched_completions": 1,
+  "matched_per_day": 0.33,
+  "median_pair_cost_after_fees": "0.9900",
+  "mean_time_to_complement_s": 36.0,
+  "mean_residual_duration_s": 274.8,
+  "pair_pnl_theoretical_total": "0.0100",
+  "hold_pnl_theoretical_total": "0.5700",
+  "hold_pnl_ambiguous_outcomes_excluded": 0,
+  "holds_residual_won": 1,
+  "holds_residual_lost": 0,
+  "adverse_selection_by_side": {
+   "YES": {
+    "holds": 0,
+    "won": 0
+   },
+   "NO": {
+    "holds": 1,
+    "won": 1
+   }
+  },
+  "net_theoretical_total": "0.5800"
+ }
+}

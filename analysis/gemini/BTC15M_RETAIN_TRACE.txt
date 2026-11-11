@@ -1,0 +1,43 @@
+frozen minimum_rest_time = 30.0s
+_leg_slots BTC15M=2  BTC05M=1
+
+================================================================
+FAMILY GEMI-BTC15M
+================================================================
+t=0s   desired YES@0.50 NO@0.47 (flat)
+   PLACE   leg=YES px=0.50  qty=1  
+   PLACE   leg=NO  px=0.47  qty=1  
+   mutations=2  leg_caps={'YES': 1, 'NO': 1}  resting=2
+
+t=12s  YES desired 0.50 -> 0.51  (age 12s < 30s)
+   KEEP    leg=NO  px=0.47  qty=1  
+   RETAIN  leg=YES px=0.50  qty=1    age=12.0s
+   HOLD    leg=YES px=0.51  qty=1    held_by=LIFECYCLE
+   mutations=0  leg_caps={'YES': 1, 'NO': 1}  resting=2
+
+t=31s  same desire, floor now passed
+   KEEP    leg=NO  px=0.47  qty=1  
+   PLACE   leg=YES px=0.51  qty=1  
+   CANCEL  leg=YES px=0.50  qty=1    age=31.0s
+   mutations=2  leg_caps={'YES': 1, 'NO': 1}  resting=2
+
+================================================================
+FAMILY GEMI-BTC05M
+================================================================
+t=0s   desired YES@0.50 NO@0.47 (flat)
+   PLACE   leg=YES px=0.50  qty=1  
+   PLACE   leg=NO  px=0.47  qty=1  
+   mutations=2  leg_caps={'YES': 1, 'NO': 1}  resting=2
+
+t=12s  YES desired 0.50 -> 0.51  (age 12s < 30s)
+   KEEP    leg=NO  px=0.47  qty=1  
+   RETAIN  leg=YES px=0.50  qty=1    age=12.0s
+   HOLD    leg=YES px=0.51  qty=1    held_by=LIFECYCLE
+   mutations=0  leg_caps={'YES': 1, 'NO': 1}  resting=2
+
+t=31s  same desire, floor now passed
+   KEEP    leg=NO  px=0.47  qty=1  
+   PLACE   leg=YES px=0.51  qty=1  
+   CANCEL  leg=YES px=0.50  qty=1    age=31.0s
+   mutations=2  leg_caps={'YES': 1, 'NO': 1}  resting=2
+

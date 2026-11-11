@@ -1,0 +1,165 @@
+# THE MONEY-PATH GATE. Existing tests only, grouped by the seven things that
+# must hold before one real order rests at the venue. No new test
+# infrastructure: this file names what already exists so the gate is runnable
+# and reviewable as one command rather than remembered.
+#
+#   python3 -m pytest $(grep -v '^#' tests/MONEY_PATH_GATE.txt) -q
+#
+# A failure here is a live-safety question. A failure elsewhere in the suite is
+# not necessarily one -- see MONEY_PATH_GATE.md for the 46 known-failing
+# selections that predate this work.
+
+# 1. SUBMISSION AUTHORIZATION
+tests/test_l5_live_validation_gates.py
+tests/test_l5_window_bound_authorization.py
+tests/test_l5_arming_boundary.py
+tests/test_l5_arm_retry.py
+tests/test_l5_outside_claim_adjudication.py
+tests/test_live_mandate_adversarial.py
+tests/test_live_mandate_deployment.py
+tests/test_l5_stage_b_mandate.py
+tests/test_authenticated_book_submission_gate.py
+tests/test_l5_one_order_limit.py
+tests/test_l5_one_submission_claim.py
+tests/test_l5_queue_measurement.py
+tests/test_l5_concurrency_gate.py
+
+# 2. EFFECTIVE CASH LIMITS
+tests/test_l5_available_cash_wiring.py
+tests/test_combined_loss_gate_wiring.py
+tests/test_pmus_matched_pair_ceiling_halt.py
+tests/test_l5_measurement_readiness.py
+
+# 3. EXACT-ORDER CANCELLATION WHILE DISARMED
+tests/test_l5_disarmed_cancellation.py
+tests/test_l5_deadman_exact_cancel.py
+tests/test_l5_orphan_cancellation.py
+tests/test_l5_disarmed_shadow_integration.py
+tests/test_gemini_cancel_order_id_type.py
+tests/test_gemini_cancel_seam_real_shapes.py
+tests/test_spring_cancel_race.py
+tests/test_l5_watchdog_ownership.py
+
+# 4. PARTIAL FILLS
+tests/test_pending_qty_reconciliation.py
+tests/test_fill_reconciliation.py
+tests/test_l5_order_lifecycle.py
+tests/test_gemini_order_lifecycle.py
+tests/test_working_order_age.py
+tests/test_l5_order_identity.py
+tests/test_order_provenance.py
+tests/test_l5_incoherent_order_row.py
+
+# 5. RESTART RECOVERY
+tests/test_gemini_outstanding_ledger_restart.py
+tests/test_l5_authoritative_ledger_repair.py
+tests/test_l5_recovery_mode.py
+tests/test_l5_uncertainty_recovery.py
+tests/test_shutdown_settlement_reconcile.py
+
+# 6. RECONCILIATION AND SETTLEMENT TRUTH
+tests/test_canonical_terminal_reconciliation.py
+tests/test_reconciliation_scope.py
+tests/test_l5_venue_position_authority.py
+tests/test_l5_binary_settlement.py
+tests/test_l5_settlement_retirement.py
+tests/test_l5_stage_a_settlement_correction.py
+tests/test_l5_two_sided_shadow.py
+
+# 7. WATCHDOG HALT ENFORCEMENT
+tests/test_l5_halt_gate.py
+tests/test_l5_watchdog.py
+tests/test_l5_watchdog_credential_free.py
+tests/test_l5_watchdog_halt_end_to_end.py
+
+# 8. THE IMAGE ACTUALLY SHIPS WHAT THE TESTS TESTED
+tests/test_l5_pmus_live_image_closure.py
+tests/test_l5_pmus_live_wiring.py
+
+9. WORST-CASE SETTLEMENT DEFICIT (default disabled; fail-closed when set)
+   tests/test_l5_worst_case_deficit.py
+   deficit = cost - min(up, dn), maximised over which outstanding orders
+   fill. Below zero the book pays out on BOTH settlement outcomes. No order
+   is exempt: a completing order is priced exactly like an opening one.
+
+10. TWO-SIDED ONE-WINDOW PROBE (experiment-gated; inert by default)
+    tests/test_l5_two_sided_probe.py
+    Generates exactly two post-only intents or a terminal refusal. Owns no
+    transport, ledger, cancellation or gate. Refuses a pair whose edge does
+    not clear the worst-case fee on both legs, which is what resting AT the
+    touch on a one-tick book always is.
+
+11. TRADE-THROUGH OBSERVER (additive, read-only, not a fill model)
+    tests/test_l5_trade_through_observer.py
+    Records never_reached / touched / traded_through per leg with
+    timestamps, queue-ahead bands and the cancellation deadline. A touch is
+    never a fill and trade-through is never a confirmed fill. The existing
+    two-sided collector's API and outputs are untouched.
+
+12. TWO-SIDED PROBE WIRING (experiment-gated; inert by default)
+    tests/test_l5_two_sided_wiring.py
+    Both legs reach the transport through the ordinary path with
+    participateDontInitiate true, the PAIR is gated before either leg is
+    claimed, each leg holds its own one-shot durable claim, and a refusal
+    anywhere submits nothing rather than falling back to the L5 intent.
+
+13. PROBE TERMINAL DEADLINE BOUNDARIES (real runner method)
+    tests/test_l5_ts_deadline_boundaries.py
+    cancel_cutoff takes the window END and slug_start gives the START.
+    Passing the start gave start-180: a deadline expired before the window
+    opened. Boundaries at +0/+300/+719/+720/+721s, cancellation by exact
+    venue id proved by re-read, and a caller audit for the whole class.
+
+14. PATIENT OPPOSITE-SIDE COMPLETION (economics-driven; crossing is a
+    SEPARATE authorization)
+    tests/test_l5_patient_completion.py
+    tests/test_l5_completion_wiring.py
+    completion_decision takes NO clock, so the deadline can never be the
+    reason to cross. It crosses only when the worst of the two settlement
+    outcomes strictly improves by MORE than the taker fee that bought the
+    improvement, and only inside the cash headroom and worst-case ceiling
+    already in force. Worst-case improvement ALONE is measured to be nearly
+    vacuous once a book is one-sided -- it passes at every price up to 0.95
+    -- which is why the fee bar exists. Unattested cost basis, a stale book,
+    absent depth and unreadable exposure each refuse rather than default.
+
+15. DEPTH COMPARISON (read-only; refuses to conclude without a sample)
+    tests/test_l5_depth_comparison.py
+    1 tick vs 2 ticks decided on realized edge TIMES the measured both-leg
+    fill rate, from actual order and fill records. A deeper quote always
+    shows a larger QUOTED edge, so the quoted edge is never used as a
+    substitute; below the sample thresholds no rate and no verdict is
+    reported, and a missing commission withholds the realized edge rather
+    than reading as zero.
+
+16. FOUR-BUCKET REALIZED ACCOUNTING (account-wide / verified L5 / manual /
+    unknown, never collapsed)
+    tests/test_l5_four_bucket_accounting.py
+    account_wide = verified_l5 + manual + unknown_unattributed, with unknown
+    absorbing everything unattributable so no bucket is guessed. manual is a
+    RESIDUAL and is None while anything is unattributable, because this
+    account is SHARED and the venue does not say who placed a historical
+    fill. gate_input(bucket) is the only sanctioned way to feed a limit and
+    returns None -- never zero -- for an unknown. It changes NO policy: a
+    test asserts the three protected call sites still read realized_today.
+
+17. INDEPENDENT ACCOUNT-WIDE BACKSTOP (additive; never a substitution)
+    tests/test_l5_unresolved_unknown_backstop.py
+    max_unresolved_unknown_usd refuses when the unattributable magnitude
+    exceeds its bound, either sign, and refuses UNRESOLVED_UNKNOWN_UNAVAILABLE
+    when the figure is absent or non-finite -- an unreadable unknown is the
+    MAXIMUM possible unknown, not the minimum. It runs AFTER the account-wide
+    and L5 checks in source order, so it can only ever add a refusal. A test
+    asserts the three protected call sites are still unchanged.
+
+18. EMERGENCY CANCELLATION PROOF (exact venue id, every trigger)
+    tests/test_l5_emergency_cancellation_proof.py
+    HALT, terminal deadline, window end, uncertain reconciliation and
+    shutdown all reach the same route, which cancels by VENUE id and never by
+    client order id, then re-reads every id because an ack is not proof. A
+    cancel that returned 200 but reads back WORKING is still_open and marks
+    the book UNCERTAIN, which SafetyLimits then refuses on. A cancel that
+    raised but reads back terminal IS cancelled, with the error recorded.
+    Both failing leaves UNCERTAIN. A fresh store recovers the live orders
+    from disk and cancels them, which is the state a crash leaves. The shadow
+    lock blocks submit and never cancel.

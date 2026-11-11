@@ -1,0 +1,405 @@
+{
+ "events": [
+  {
+   "window": "0400z",
+   "held": "DOWN",
+   "qty": "1.18",
+   "avg_cost": "0.4668",
+   "filled_by_s": 25.0,
+   "after": {
+    "+10s": {
+     "cheapest_completion_pair": "1.046779661016949152542372881",
+     "held_leg_mark_minus_cost": "-0.042"
+    },
+    "+30s": {
+     "cheapest_completion_pair": "0.9767796610169491525423728814",
+     "held_leg_mark_minus_cost": "-0.012"
+    },
+    "+60s": {
+     "cheapest_completion_pair": "0.9767796610169491525423728814",
+     "held_leg_mark_minus_cost": "-0.012"
+    },
+    "+120s": {
+     "cheapest_completion_pair": "0.9767796610169491525423728814",
+     "held_leg_mark_minus_cost": "-0.182"
+    },
+    "+300s": {
+     "cheapest_completion_pair": "0.9767796610169491525423728814",
+     "held_leg_mark_minus_cost": "-0.302"
+    },
+    "to_T+600": {
+     "cheapest_completion_pair": "0.9767796610169491525423728814"
+    },
+    "to_T+840": {
+     "cheapest_completion_pair": "0.4967796610169491525423728814"
+    }
+   },
+   "first_pair_at_or_under_1.00_s": 50.0,
+   "first_pair_at_or_under_0.96_s": 753.0
+  },
+  {
+   "window": "0415z",
+   "held": "UP",
+   "qty": "0.44",
+   "avg_cost": "0.3200",
+   "filled_by_s": 22.0,
+   "after": {
+    "+10s": {
+     "cheapest_completion_pair": "1.0700",
+     "held_leg_mark_minus_cost": "-0.085"
+    },
+    "+30s": {
+     "cheapest_completion_pair": "1.0700",
+     "held_leg_mark_minus_cost": "-0.155"
+    },
+    "+60s": {
+     "cheapest_completion_pair": "1.0700",
+     "held_leg_mark_minus_cost": "-0.125"
+    },
+    "+120s": {
+     "cheapest_completion_pair": "1.0700",
+     "held_leg_mark_minus_cost": "-0.185"
+    },
+    "+300s": {
+     "cheapest_completion_pair": "1.0700",
+     "held_leg_mark_minus_cost": "-0.255"
+    },
+    "to_T+600": {
+     "cheapest_completion_pair": "1.0700"
+    },
+    "to_T+840": {
+     "cheapest_completion_pair": "0.9300"
+    }
+   },
+   "first_pair_at_or_under_1.00_s": 805.0,
+   "first_pair_at_or_under_0.96_s": 805.0
+  }
+ ],
+ "recoveries": [
+  {
+   "window": "0400z",
+   "held": "DOWN",
+   "qty": "1.18",
+   "held_to_settlement_tonight": "0.6292",
+   "held_on_own_record": "-0.2189",
+   "variants": {
+    "$1.00 ceiling, today's clocks": {
+     "completed_at_s": 50.0,
+     "seconds_unmatched": 24.0,
+     "price": "0.53",
+     "pair_cost": "0.9967796610169491525423728814",
+     "locked_usd": "0.0038"
+    },
+    "$1.00 ceiling, new quote 6 s late": {
+     "completed_at_s": 78.0,
+     "seconds_unmatched": 54.0,
+     "price": "0.53",
+     "pair_cost": "0.9967796610169491525423728814",
+     "locked_usd": "0.0038"
+    },
+    "0.98 pair, today's clocks": {
+     "completed_at_s": 50.0,
+     "seconds_unmatched": 24.0,
+     "price": "0.51",
+     "pair_cost": "0.9767796610169491525423728814",
+     "locked_usd": "0.0274"
+    },
+    "0.96 pair, today's clocks": {
+     "completed_at_s": null,
+     "seconds_unmatched": 575.0,
+     "price": "0.49",
+     "pair_cost": null,
+     "locked_usd": null
+    },
+    "$1.00 ceiling, open to minute 14": {
+     "completed_at_s": 50.0,
+     "seconds_unmatched": 24.0,
+     "price": "0.53",
+     "pair_cost": "0.9967796610169491525423728814",
+     "locked_usd": "0.0038"
+    },
+    "0.96 pair, open to minute 14": {
+     "completed_at_s": 753.0,
+     "seconds_unmatched": 728.0,
+     "price": "0.49",
+     "pair_cost": "0.9567796610169491525423728814",
+     "locked_usd": "0.0510"
+    }
+   }
+  },
+  {
+   "window": "0415z",
+   "held": "UP",
+   "qty": "0.44",
+   "held_to_settlement_tonight": "-0.1408",
+   "held_on_own_record": "-0.0816",
+   "variants": {
+    "$1.00 ceiling, today's clocks": {
+     "completed_at_s": null,
+     "seconds_unmatched": 578.0,
+     "price": "0.68",
+     "pair_cost": null,
+     "locked_usd": null
+    },
+    "$1.00 ceiling, new quote 6 s late": {
+     "completed_at_s": null,
+     "seconds_unmatched": 578.0,
+     "price": "0.68",
+     "pair_cost": null,
+     "locked_usd": null
+    },
+    "0.98 pair, today's clocks": {
+     "completed_at_s": null,
+     "seconds_unmatched": 578.0,
+     "price": "0.66",
+     "pair_cost": null,
+     "locked_usd": null
+    },
+    "0.96 pair, today's clocks": {
+     "completed_at_s": null,
+     "seconds_unmatched": 578.0,
+     "price": "0.64",
+     "pair_cost": null,
+     "locked_usd": null
+    },
+    "$1.00 ceiling, open to minute 14": {
+     "completed_at_s": 805.0,
+     "seconds_unmatched": 783.0,
+     "price": "0.68",
+     "pair_cost": "1.00",
+     "locked_usd": "0.0000"
+    },
+    "0.96 pair, open to minute 14": {
+     "completed_at_s": 805.0,
+     "seconds_unmatched": 783.0,
+     "price": "0.64",
+     "pair_cost": "0.96",
+     "locked_usd": "0.0176"
+    }
+   }
+  }
+ ],
+ "policies": [
+  {
+   "policy": "as run: 120 s quotes, no repricing",
+   "orders": 14,
+   "fills": 7,
+   "pairs_contracts": "0",
+   "pair_costs": [
+    null,
+    null
+   ],
+   "unmatched_contracts": "2.90",
+   "seconds_unmatched": [
+    580.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0",
+   "settled_tonight": [
+    "0.834900",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.415800",
+   "expected_on_own_record": "-0.537950"
+  },
+  {
+   "policy": "15 s quotes, 16 re-placements",
+   "orders": 21,
+   "fills": 9,
+   "pairs_contracts": "0.80",
+   "pair_costs": [
+    "0.9999",
+    null
+   ],
+   "unmatched_contracts": "2.10",
+   "seconds_unmatched": [
+    580.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.000075471698113207547169811360",
+   "settled_tonight": [
+    "0.414900",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "-0.004200",
+   "expected_on_own_record": "-0.3894745283018867924528301886"
+  },
+  {
+   "policy": "15 s, a cancel takes one sample to land",
+   "orders": 20,
+   "fills": 9,
+   "pairs_contracts": "0.80",
+   "pair_costs": [
+    "0.9999",
+    null
+   ],
+   "unmatched_contracts": "2.10",
+   "seconds_unmatched": [
+    580.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.000075471698113207547169811360",
+   "settled_tonight": [
+    "0.414900",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "-0.004200",
+   "expected_on_own_record": "-0.3894745283018867924528301886"
+  },
+  {
+   "policy": "controller: reprice the missing leg on fill, at the touch, inside $1.00",
+   "orders": 73,
+   "fills": 23,
+   "pairs_contracts": "3.16",
+   "pair_costs": [
+    "0.9901",
+    null
+   ],
+   "unmatched_contracts": "2.86",
+   "seconds_unmatched": [
+    561.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.03126518046709129511677282378",
+   "settled_tonight": [
+    "0.875900",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.456800",
+   "expected_on_own_record": "-0.4992648195329087048832271762"
+  },
+  {
+   "policy": "controller + 15 s quotes",
+   "orders": 148,
+   "fills": 19,
+   "pairs_contracts": "2.37",
+   "pair_costs": [
+    "0.9655",
+    null
+   ],
+   "unmatched_contracts": "2.88",
+   "seconds_unmatched": [
+    549.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.08185736040609137055837563449",
+   "settled_tonight": [
+    "0.965600",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.546500",
+   "expected_on_own_record": "-0.4523826395939086294416243655"
+  },
+  {
+   "policy": "controller + 15 s, cancel takes one sample",
+   "orders": 143,
+   "fills": 23,
+   "pairs_contracts": "3.16",
+   "pair_costs": [
+    "0.9824",
+    null
+   ],
+   "unmatched_contracts": "2.84",
+   "seconds_unmatched": [
+    556.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.05551215351812366737739872090",
+   "settled_tonight": [
+    "0.899100",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.480000",
+   "expected_on_own_record": "-0.4713078464818763326226012791"
+  },
+  {
+   "policy": "controller + 15 s, one round at a time",
+   "orders": 42,
+   "fills": 6,
+   "pairs_contracts": "0.78",
+   "pair_costs": [
+    "0.9902",
+    null
+   ],
+   "unmatched_contracts": "0.81",
+   "seconds_unmatched": [
+    561.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.007665517241379310344827586180",
+   "settled_tonight": [
+    "0.209000",
+    "-0.141900"
+   ],
+   "settled_tonight_both": "0.067100",
+   "expected_on_own_record": "-0.1425894827586206896551724138"
+  },
+  {
+   "policy": "controller + 15 s, a new pair may open beside one hedged strand",
+   "orders": 157,
+   "fills": 25,
+   "pairs_contracts": "3.54",
+   "pair_costs": [
+    "0.9793",
+    null
+   ],
+   "unmatched_contracts": "2.88",
+   "seconds_unmatched": [
+    549.0,
+    574.0
+   ],
+   "locked_pair_pnl": "0.07331154598825831702544031307",
+   "settled_tonight": [
+    "0.965600",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.546500",
+   "expected_on_own_record": "-0.4609284540117416829745596869"
+  },
+  {
+   "policy": "controller + 15 s, completion open to minute 14",
+   "orders": 148,
+   "fills": 19,
+   "pairs_contracts": "2.37",
+   "pair_costs": [
+    "0.9655",
+    null
+   ],
+   "unmatched_contracts": "2.88",
+   "seconds_unmatched": [
+    785.0,
+    818.0
+   ],
+   "locked_pair_pnl": "0.08185736040609137055837563449",
+   "settled_tonight": [
+    "0.965600",
+    "-0.419100"
+   ],
+   "settled_tonight_both": "0.546500",
+   "expected_on_own_record": "-0.4523826395939086294416243655"
+  },
+  {
+   "policy": "controller + 15 s, one round, completion open to minute 14",
+   "orders": 42,
+   "fills": 6,
+   "pairs_contracts": "0.78",
+   "pair_costs": [
+    "0.9902",
+    null
+   ],
+   "unmatched_contracts": "0.81",
+   "seconds_unmatched": [
+    798.0,
+    818.0
+   ],
+   "locked_pair_pnl": "0.007665517241379310344827586180",
+   "settled_tonight": [
+    "0.209000",
+    "-0.141900"
+   ],
+   "settled_tonight_both": "0.067100",
+   "expected_on_own_record": "-0.1425894827586206896551724138"
+  }
+ ],
+ "own_record_per_unmatched_contract": "-0.1855"
+}
