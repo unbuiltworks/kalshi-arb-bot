@@ -16,7 +16,7 @@
  "variants": [
   {
    "label": "as run tonight (120 s, floor 0.30, cutoff 480 s)",
-   "total_pnl": "0.415800",
+   "total_pnl": "0.4158000000",
    "windows": [
     {
      "window": "0400z",
@@ -31,8 +31,10 @@
      "pair_cost": null,
      "unmatched": "1.59",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "0.755100",
-     "pnl": "0.834900",
+     "pnl": "0.8349000000",
      "fill_log": [
       [
        18.3,
@@ -73,8 +75,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -100,7 +104,7 @@
   },
   {
    "label": "quote lifetime 15 s",
-   "total_pnl": "-0.004200",
+   "total_pnl": "-0.0042000000",
    "windows": [
     {
      "window": "0400z",
@@ -115,8 +119,10 @@
      "pair_cost": "0.9999056603773584905660377358",
      "unmatched": "0.79",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.175100",
-     "pnl": "0.414900",
+     "pnl": "0.4149000000",
      "fill_log": [
       [
        18.3,
@@ -169,8 +175,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -196,7 +204,7 @@
   },
   {
    "label": "first-leg floor 0.05",
-   "total_pnl": "0.415800",
+   "total_pnl": "0.4158000000",
    "windows": [
     {
      "window": "0400z",
@@ -211,8 +219,10 @@
      "pair_cost": null,
      "unmatched": "1.59",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "0.755100",
-     "pnl": "0.834900",
+     "pnl": "0.8349000000",
      "fill_log": [
       [
        18.3,
@@ -253,8 +263,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -280,7 +292,7 @@
   },
   {
    "label": "entry until minute 13",
-   "total_pnl": "-0.228000",
+   "total_pnl": "-0.2280000000",
    "windows": [
     {
      "window": "0400z",
@@ -295,8 +307,10 @@
      "pair_cost": "0.8798113207547169811320754716",
      "unmatched": "0.00",
      "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.398900",
-     "pnl": "0.191100",
+     "pnl": "0.1911000000",
      "fill_log": [
       [
        18.3,
@@ -361,8 +375,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -388,7 +404,7 @@
   },
   {
    "label": "hedge left resting at the $1.00 ceiling",
-   "total_pnl": "0.415800",
+   "total_pnl": "0.4158000000",
    "windows": [
     {
      "window": "0400z",
@@ -403,8 +419,10 @@
      "pair_cost": null,
      "unmatched": "1.59",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "0.755100",
-     "pnl": "0.834900",
+     "pnl": "0.8349000000",
      "fill_log": [
       [
        18.3,
@@ -445,8 +463,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -472,7 +492,7 @@
   },
   {
    "label": "resting hedge, completion open to minute 14",
-   "total_pnl": "0.000000",
+   "total_pnl": "0E-10",
    "windows": [
     {
      "window": "0400z",
@@ -487,8 +507,10 @@
      "pair_cost": "1.000000000000000000000000000",
      "unmatched": "0.00",
      "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.590000",
-     "pnl": "0.000000",
+     "pnl": "0E-10",
      "fill_log": [
       [
        18.3,
@@ -553,8 +575,10 @@
      "pair_cost": "1.000000000000000000000000000",
      "unmatched": "0.00",
      "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "1.310000",
-     "pnl": "0.000000",
+     "pnl": "0E-10",
      "fill_log": [
       [
        21.5,
@@ -598,7 +622,7 @@
   },
   {
    "label": "resting hedge at a 0.96 pair, open to minute 14",
-   "total_pnl": "0.116000",
+   "total_pnl": "0.1160000000",
    "windows": [
     {
      "window": "0400z",
@@ -613,8 +637,10 @@
      "pair_cost": "0.9600000000000000000000000000",
      "unmatched": "0.00",
      "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.526400",
-     "pnl": "0.063600",
+     "pnl": "0.0636000000",
      "fill_log": [
       [
        18.3,
@@ -679,8 +705,10 @@
      "pair_cost": "0.9600000000000000000000000000",
      "unmatched": "0.00",
      "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "1.257600",
-     "pnl": "0.052400",
+     "pnl": "0.0524000000",
      "fill_log": [
       [
        21.5,
@@ -724,7 +752,7 @@
   },
   {
    "label": "15 s + resting hedge",
-   "total_pnl": "0.006200",
+   "total_pnl": "0.0062000000",
    "windows": [
     {
      "window": "0400z",
@@ -739,8 +767,10 @@
      "pair_cost": "0.9917084627020141708462702014",
      "unmatched": "0.78",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.944700",
-     "pnl": "0.425300",
+     "pnl": "0.4253000000",
      "fill_log": [
       [
        18.3,
@@ -817,8 +847,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -844,7 +876,7 @@
   },
   {
    "label": "all four",
-   "total_pnl": "0.006200",
+   "total_pnl": "0.0062000000",
    "windows": [
     {
      "window": "0400z",
@@ -859,8 +891,10 @@
      "pair_cost": "0.9917084627020141708462702014",
      "unmatched": "0.78",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
      "spent": "1.944700",
-     "pnl": "0.425300",
+     "pnl": "0.4253000000",
      "fill_log": [
       [
        18.3,
@@ -937,8 +971,10 @@
      "pair_cost": null,
      "unmatched": "1.31",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
      "spent": "0.419100",
-     "pnl": "-0.419100",
+     "pnl": "-0.4191000000",
      "fill_log": [
       [
        21.5,
@@ -964,7 +1000,7 @@
   },
   {
    "label": "all four, one round at a time",
-   "total_pnl": "0.064800",
+   "total_pnl": "0.0648000000",
    "windows": [
     {
      "window": "0400z",
@@ -979,8 +1015,10 @@
      "pair_cost": "0.9900",
      "unmatched": "0.39",
      "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.191100",
      "spent": "0.573300",
-     "pnl": "0.206700",
+     "pnl": "0.2067000000",
      "fill_log": [
       [
        18.3,
@@ -1015,8 +1053,10 @@
      "pair_cost": null,
      "unmatched": "0.43",
      "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.141900",
      "spent": "0.141900",
-     "pnl": "-0.141900",
+     "pnl": "-0.1419000000",
      "fill_log": [
       [
        21.5,

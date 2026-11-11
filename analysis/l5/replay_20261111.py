@@ -68,7 +68,16 @@ BASE = dict(life=120.0, floor=D("0.30"), entry_cutoff=480.0, terminal=600.0,
             hedge_depth=None,
             #: clips that may be unmatched while a NEW pair opens beside
             #: them, provided every unmatched clip has its hedge resting
-            heavy_cap=1)
+            heavy_cap=1,
+            #: a bid fills only when the offer trades THROUGH it (the
+            #: pessimistic queue), instead of when the offer reaches it
+            through_only=False,
+            #: charged on every fill as coefficient x p x (1 - p); every
+            #: venue-confirmed fill of ours was charged 0.0000
+            fee_coefficient=D(0),
+            #: open a round only when the bid has moved no more than
+            #: `calm_ticks` over the last `calm_s` seconds (0 = no filter)
+            calm_s=0.0, calm_ticks=0)
 #: what one unmatched contract has settled at on our OWN record: 81.40
 #: unmatched units over 89 usable settled markets lost $15.0963 (see
 #: `BREAKEVEN_PAIR` in src/l5_two_sided_probe.py). Used ONLY to state an
@@ -93,7 +102,14 @@ def offer(side: str, bid: D, ask: D) -> D:
 
 def run(name: str, **over: Any) -> Dict[str, Any]:
     p = dict(BASE, **over)
-    path, winner = load(name), WINDOWS[name][1]
+    # a recorded window by name, or any (path, winner) pair
+    if isinstance(name, str):
+        path, winner = load(name), WINDOWS[name][1]
+    else:
+        path, winner = name
+        name = None
+    fee_total = D(0)
+    max_at_risk = D(0)
     pos = {"UP": D(0), "DOWN": D(0)}
     cost = {"UP": D(0), "DOWN": D(0)}
     rounds: List[Dict[str, Any]] = []        # each: legs {side: order|None}
@@ -135,10 +151,14 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
         #    is being cancelled is still fillable until the cancel lands.
         for r in rounds:
             for s, o in list(r["legs"].items()):
-                if o and o.get("live_at", 0) <= t and \
-                        offer(s, bid, ask) <= o["px"]:
+                if o and o.get("live_at", 0) <= t and (
+                        offer(s, bid, ask) < o["px"]
+                        if p["through_only"]
+                        else offer(s, bid, ask) <= o["px"]):
                     pos[s] += o["qty"]
                     cost[s] += o["qty"] * o["px"]
+                    fee_total += (p["fee_coefficient"] * o["px"]
+                                  * (D(1) - o["px"]) * o["qty"])
                     fills.append((round(t, 1), s, str(o["px"]), str(o["qty"])))
                     if first_fill_t is None:
                         first_fill_t = float(t)
@@ -149,6 +169,8 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
                     if p["reprice_on_fill"] and sib and \
                             "dead_at" not in sib:
                         sib["dead_at"] = float(t) + lat
+        max_at_risk = max(max_at_risk,
+                          cost["UP"] + cost["DOWN"] - min(pos.values()))
         # 2. lifetimes and the terminal
         for r in rounds:
             for s, o in list(r["legs"].items()):
@@ -205,6 +227,12 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
             if not (p["open_after"] <= t <= p["entry_cutoff"]
                     and room and resting < p["concurrent"]):
                 break
+            if p["calm_s"] > 0:
+                past = [b0 for t0_, b0, _a0 in path
+                        if t - p["calm_s"] <= t0_ <= t]
+                if len(past) < 3 or (max(past) - min(past)
+                                     > TICK * p["calm_ticks"]):
+                    break
             level = resting
             up = bid - TICK * (p["depth"] + level)
             dn = (D(1) - ask) - TICK * (p["depth"] + level)
@@ -236,7 +264,9 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
             "pair_cost": pair_cost, "unmatched": abs(unmatched()),
             "unmatched_side": ("UP" if unmatched() > 0 else
                                "DOWN" if unmatched() < 0 else None),
-            "spent": spent, "pnl": pos[winner] - spent, "fill_log": fills}
+            "fees": fee_total, "max_at_risk": max_at_risk,
+            "spent": spent, "pnl": pos[winner] - spent - fee_total,
+            "fill_log": fills}
 
 
 VARIANTS = [
