@@ -3045,11 +3045,41 @@ PARTIAL_COMPLETION_BASIS_ENV = "L5_PARTIAL_COMPLETION_BASIS"
 
 
 def partial_completion_per_contract() -> bool:
-    return (os.getenv(PARTIAL_COMPLETION_BASIS_ENV) or "") == "PER_CONTRACT"
+    return ((os.getenv(PARTIAL_COMPLETION_BASIS_ENV) or "") == "PER_CONTRACT"
+            or inventory_recovery())
+
+
+#: INVENTORY RECOVERY, ONE SWITCH. Exactly "ON" turns on the three parts of
+#: the existing completion path that recover an unmatched leg -- the
+#: missing leg rests at the maker target instead of being refused, a
+#: one-clip completion is priced per contract, and a stale opening quote
+#: is re-priced the moment its other leg fills. Each of the first two also
+#: has its own variable; this names them together. It moves no ceiling and
+#: no limit.
+INVENTORY_RECOVERY_ENV = "L5_INVENTORY_RECOVERY"
+
+
+def inventory_recovery() -> bool:
+    return (os.getenv(INVENTORY_RECOVERY_ENV) or "") == "ON"
 
 
 def completion_rests_at_ceiling() -> bool:
-    return (os.getenv(COMPLETION_RESTS_AT_CEILING_ENV) or "") == "ON"
+    return ((os.getenv(COMPLETION_RESTS_AT_CEILING_ENV) or "") == "ON"
+            or inventory_recovery())
+
+
+def reprice_missing_leg_on_fill() -> bool:
+    """May a quote placed as an OPENING leg be re-priced as a completion
+    at once when its other leg fills, without the minimum rest a
+    completion quote otherwise serves? Only with the recovery switch."""
+    return inventory_recovery()
+
+
+def maker_completion_target() -> D:
+    """The pair cost a RESTING completion is priced to: the owner's maker
+    target (`L5_TS_COMPLETION_MAX_PAIR`, the opening ceiling when unset),
+    never above the hard completion pair ceiling."""
+    return min(completion_pair_ceiling(), completion_max_pair())
 
 
 def rest_at_ceiling_price(ceil: Any, quoted: Any, tick: Any) -> Optional[D]:
@@ -3307,15 +3337,16 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
         # controller has no permitted order for as long as the price stays
         # away: 462 s in each of the two windows of 2026-11-11 04:00Z, 365
         # refusals, not one resting quote. With the owner's switch ON the
-        # missing leg RESTS at the dearest price both ceilings permit --
-        # behind the touch, so it cannot cross, and never dearer than a
-        # completion the gate accepts today. It moves no ceiling. OFF, no
-        # inventory context, or anything unreadable is today's behaviour.
+        # missing leg RESTS at the owner's MAKER TARGET (never above the
+        # hard completion pair ceiling) -- behind the touch, so it cannot
+        # cross, and never dearer than a completion the gate accepts
+        # today. It moves no ceiling. OFF, no inventory context, or
+        # anything unreadable is today's behaviour.
         rest = None
         if completion_rests_at_ceiling() and ceil is not None:
             try:
                 rest = rest_at_ceiling_price(
-                    min(ceil, completion_pair_ceiling() - paid), px, tk)
+                    min(ceil, maker_completion_target() - paid), px, tk)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise

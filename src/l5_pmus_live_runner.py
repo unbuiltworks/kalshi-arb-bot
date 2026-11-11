@@ -10265,6 +10265,26 @@ class Runner:
                 _rest_s = None
             if _rest_s is None:
                 self.stats["requote_without_resting_age"] += 1
+            # A QUOTE PLACED AS AN OPENING LEG IS NOT A COMPLETION QUOTE
+            # THAT HAS HAD ITS CHANCE. The minimum rest exists so a
+            # completion placed near the touch is given time to fill before
+            # it is moved again. A quote sent BEFORE this market went
+            # unmatched was priced as the other half of an opening, two or
+            # more ticks behind; on 0400z three of them sat 6 to 25 ticks
+            # behind for 120 s while a 0.977 pair came and went. With the
+            # recovery switch such a quote is re-priced at once. Its
+            # replacement is sent after the fill, so it serves the minimum
+            # rest like any other completion quote.
+            try:
+                if _rest_s is not None and TSP.reprice_missing_leg_on_fill():
+                    _since = self.store.stranded_since(str(slug))
+                    if _since is not None and \
+                            (float(now) - _rest_s) < float(_since):
+                        _rest_s = None
+                        self.stats["requote_opening_leg_repriced_on_fill"] += 1
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
             res = TSP.completion_requote(
                 resting_rest_s=_rest_s,
                 side=side, resting_own_px=row.get("price"),

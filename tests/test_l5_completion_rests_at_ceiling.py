@@ -13,9 +13,15 @@ at the dearest price the EXISTING ceilings permit: the completion ceiling
 (`L5_COMPLETION_PAIR_CEILING`, 1.00). It moves neither. It cannot cross,
 because the resting price is strictly cheaper than a quote that did not.
 
+THE PRICE IT RESTS AT IS THE OWNER'S MAKER TARGET
+(`L5_TS_COMPLETION_MAX_PAIR`, the 0.96 opening ceiling when unset; the
+owner chose 0.98 on 2026-11-11), never above the hard completion pair
+ceiling of $1.00.
+
 These tests pin: off is today's behaviour exactly; on never prices a pair
-above the owner's ceiling; and the real runner goes from no order to one
-resting hedge that completes the pair when the market comes back.
+above the target or the hard ceiling; and the real runner goes from no
+order to one resting hedge that completes the pair when the market comes
+back.
 """
 from decimal import Decimal as D
 
@@ -26,6 +32,7 @@ import tests.test_l5_ladder_runner as LAD
 from src import l5_two_sided_probe as TS
 
 ENV = TS.COMPLETION_RESTS_AT_CEILING_ENV
+TARGET = TS.COMPLETION_MAX_PAIR_ENV
 TICK = D("0.01")
 
 
@@ -74,8 +81,9 @@ class TestOffChangesNothing:
         assert r["rested_behind_quote_ticks"] is None
         assert D(r["pair_cost"]) > D("1.00")      # what the gate refused
 
-    def test_off_and_on_agree_wherever_the_touch_is_permitted(
+    def test_off_and_on_agree_wherever_the_touch_is_inside_the_target(
             self, monkeypatch):
+        monkeypatch.setenv(TARGET, "1.00")
         seen = 0
         for bid in ("0.30", "0.40", "0.48", "0.52"):
             ask = str(D(bid) + TICK)
@@ -93,9 +101,9 @@ class TestOffChangesNothing:
 # ======================================================================
 class TestOnRestsAtTheCeiling:
 
-    def test_0400z_the_up_leg_rests_where_the_pair_is_one_dollar(
-            self, monkeypatch):
+    def test_0400z_at_a_one_dollar_target(self, monkeypatch):
         monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "1.00")
         r = comp(*W0400)
         assert r["ok"] and r["judged_as"] == "COMPLETION_RESTING_AT_CEILING"
         assert r["leg"]["price"] == "0.53"        # 1.00 - 0.4668, rounded down
@@ -104,17 +112,49 @@ class TestOnRestsAtTheCeiling:
         assert D("0.99") < D(r["pair_cost"]) <= D("1.00")
         assert D(r["up_pnl"]) >= 0 and D(r["dn_pnl"]) >= 0
 
-    def test_0415z_the_down_leg_rests_where_the_pair_is_one_dollar(
-            self, monkeypatch):
+    def test_0415z_at_a_one_dollar_target(self, monkeypatch):
         monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "1.00")
         r = comp(*W0415)
         assert r["ok"] and r["leg"]["side"] == "DOWN"
         assert r["leg"]["price"] == "0.68" and D(r["pair_cost"]) == D("1.00")
         assert r["leg"]["wire_price"] == "0.32"   # a YES offer above the ask
 
-    def test_the_owners_tighter_pair_ceiling_is_the_one_it_rests_at(
+    def test_the_owners_target_of_98_cents(self, monkeypatch):
+        """OWNER, 2026-11-11: 0.98 for maker completion, $1.00 the hard
+        ceiling."""
+        monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "0.98")
+        assert TS.maker_completion_target() == D("0.98")
+        assert TS.completion_pair_ceiling() == D("1.00")
+        a, b = comp(*W0400), comp(*W0415)
+        assert a["leg"]["price"] == "0.51" and D(a["pair_cost"]) <= D("0.98")
+        assert b["leg"]["price"] == "0.66" and D(b["pair_cost"]) == D("0.98")
+
+    def test_with_no_target_named_it_is_the_opening_ceiling(
             self, monkeypatch):
         monkeypatch.setenv(ENV, "ON")
+        monkeypatch.delenv(TARGET, raising=False)
+        assert TS.maker_completion_target() == D("0.96")
+        r = comp(*W0400)
+        assert r["leg"]["price"] == "0.49" and D(r["pair_cost"]) <= D("0.96")
+
+    def test_a_touch_between_the_target_and_one_dollar_rests_at_the_target(
+            self, monkeypatch):
+        """UP offered where the pair would be 0.9968: inside the hard
+        ceiling, above the maker target. The quote rests at the target."""
+        monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "0.98")
+        r = comp("UP", "DOWN", "1.18", "0.5508", "0.53", "0.54")
+        assert r["leg"]["price"] == "0.51"
+        assert r["judged_as"] == "COMPLETION_RESTING_AT_CEILING"
+        monkeypatch.delenv(ENV, raising=False)
+        off = comp("UP", "DOWN", "1.18", "0.5508", "0.53", "0.54")
+        assert off["leg"]["price"] == "0.53"      # today: at the touch
+
+    def test_the_hard_ceiling_caps_the_target(self, monkeypatch):
+        monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "1.00")
         monkeypatch.setenv(TS.COMPLETION_PAIR_CEILING_ENV, "0.98")
         r = comp(*W0400)
         assert r["leg"]["price"] == "0.51"
@@ -122,14 +162,24 @@ class TestOnRestsAtTheCeiling:
 
     def test_it_cannot_be_set_above_one_dollar(self, monkeypatch):
         monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "1.05")
         monkeypatch.setenv(TS.COMPLETION_PAIR_CEILING_ENV, "1.05")
         r = comp(*W0400)
         assert D(r["pair_cost"]) <= D("1.00")
+
+    def test_the_one_recovery_switch_turns_it_on_too(self, monkeypatch):
+        monkeypatch.delenv(ENV, raising=False)
+        monkeypatch.setenv(TS.INVENTORY_RECOVERY_ENV, "ON")
+        monkeypatch.setenv(TARGET, "0.98")
+        assert TS.completion_rests_at_ceiling() is True
+        assert comp(*W0400)["leg"]["price"] == "0.51"
 
     def test_never_a_pair_above_the_ceiling_and_never_a_crossing_price(
             self, monkeypatch):
         """Every first-leg cost against every book, both sides."""
         monkeypatch.setenv(ENV, "ON")
+        monkeypatch.setenv(TARGET, "0.98")
+        tgt = TS.maker_completion_target()
         n = rested = 0
         for paid_c in range(6, 95, 4):
             paid = D(paid_c) / 100
@@ -148,9 +198,9 @@ class TestOnRestsAtTheCeiling:
                     if r["judged_as"] == "COMPLETION_RESTING_AT_CEILING":
                         rested += 1
                         assert px < touch
-                        assert paid + px <= TS.completion_pair_ceiling()
-                        # and one tick dearer would have broken a ceiling
-                        assert paid + px + TICK > TS.completion_pair_ceiling() \
+                        assert paid + px <= tgt <= TS.completion_pair_ceiling()
+                        # and one tick dearer would have passed the target
+                        assert paid + px + TICK > tgt \
                             or px + TICK > D(r["completion_ceiling"])
                     else:
                         # the touch itself was permitted: nothing moved
@@ -201,6 +251,8 @@ class TestOnRestsAtTheCeiling:
 # 3. THE REAL RUNNER: FROM NO ORDER TO ONE WORKING HEDGE
 # ======================================================================
 CFG = dict(CC.FOUR, PMUS_RESIDUAL_CAP_K="4", **CC.STEER)
+CFG[TARGET] = "0.98"                      # the owner's maker target
+T98 = D("0.98")
 
 
 def stranded(tmp_path, monkeypatch, on, away=("0.88", "0.89"),
@@ -250,8 +302,8 @@ class TestInTheRunner:
         after = h.sent()[n0:]
         assert after and all(s == "UP" for s, _p, _q in after)
         for _s, p, q in after:
-            assert avg + p <= D("1.00")            # never a pair above $1
-            assert avg + p + TICK > D("1.00")      # and the dearest such
+            assert avg + p <= T98                  # the owner's target
+            assert avg + p + TICK > T98            # and the dearest such
             assert q == held                       # exactly the imbalance
             assert p < D("0.88")                   # behind the touch
         assert len(LAD.resting_ids(h, "UP")) == 1  # one hedge, not a stack
@@ -269,7 +321,7 @@ class TestInTheRunner:
         h.tick(off + 3.0)
         assert h.pos("UP") == h.pos("DOWN") > D("1.5")
         lc = h.r.store.leg_cost(CC.SLUG)
-        assert (lc["UP"] + lc["DOWN"]) / h.pos("UP") <= D("1.00")
+        assert (lc["UP"] + lc["DOWN"]) / h.pos("UP") <= T98
         assert h.r.store.orders_uncertain() is None
 
     def test_on_the_mirror_a_stranded_up_leg_gets_a_down_hedge(
@@ -281,7 +333,7 @@ class TestInTheRunner:
         after = h.sent()[n0:]
         assert after and all(s == "DOWN" for s, _p, _q in after)
         for _s, p, _q in after:
-            assert avg + p <= D("1.00") and p < D("0.87")
+            assert avg + p <= T98 and p < D("0.87")
         assert len(LAD.resting_ids(h, "DOWN")) == 1
 
     def test_on_the_hedge_is_cancelled_with_everything_else_at_the_terminal(

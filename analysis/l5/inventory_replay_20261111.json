@@ -179,6 +179,371 @@
    }
   }
  ],
+ "one_round": [
+  {
+   "policy": "deployed: sibling left 120 s, then touch inside $1.00",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "0.208000",
+     "expected": "-0.074200"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.000000",
+   "locked": "0",
+   "tonight": "0.067200",
+   "expected": "-0.155820"
+  },
+  {
+   "policy": "recovery, 0.98 target",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "0.208000",
+     "expected": "-0.074200"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.000000",
+   "locked": "0",
+   "tonight": "0.067200",
+   "expected": "-0.155820"
+  },
+  {
+   "policy": "recovery, 0.98, cancel 6 s late",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "0.208000",
+     "expected": "-0.074200"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.000000",
+   "locked": "0",
+   "tonight": "0.067200",
+   "expected": "-0.155820"
+  },
+  {
+   "policy": "recovery, 0.98, half fills at a touch",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "0.208000",
+     "expected": "-0.074200"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.000000",
+   "locked": "0",
+   "tonight": "0.067200",
+   "expected": "-0.155820"
+  },
+  {
+   "policy": "recovery, 0.98, must trade through",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "0.208000",
+     "expected": "-0.074200"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.000000",
+   "locked": "0",
+   "tonight": "0.067200",
+   "expected": "-0.155820"
+  },
+  {
+   "policy": "recovery, 0.98, fees charged at the venue coefficient",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.009484800",
+     "locked": "0",
+     "tonight": "0.198515200",
+     "expected": "-0.083684800"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.009095680",
+     "locked": "0",
+     "tonight": "-0.149895680",
+     "expected": "-0.090715680"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.018580480",
+   "locked": "0",
+   "tonight": "0.048619520",
+   "expected": "-0.174400480"
+  },
+  {
+   "policy": "recovery, 0.98, late + through + fees",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.40",
+     "seconds_unmatched": "575.0",
+     "fees": "0.009484800",
+     "locked": "0",
+     "tonight": "0.198515200",
+     "expected": "-0.083684800"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.009095680",
+     "locked": "0",
+     "tonight": "-0.149895680",
+     "expected": "-0.090715680"
+    }
+   ],
+   "pairs": "0",
+   "unmatched": "0.84",
+   "fees": "0.018580480",
+   "locked": "0",
+   "tonight": "0.048619520",
+   "expected": "-0.174400480"
+  },
+  {
+   "policy": "recovery, 0.98, open to minute 14",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0.40",
+     "pair_cost": "0.98",
+     "unmatched": "0.00",
+     "seconds_unmatched": "728.0",
+     "fees": "0.000000",
+     "locked": "0.0080",
+     "tonight": "0.008000",
+     "expected": "0.008000"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0.44",
+     "pair_cost": "0.98",
+     "unmatched": "0.00",
+     "seconds_unmatched": "783.0",
+     "fees": "0.000000",
+     "locked": "0.0088",
+     "tonight": "0.008800",
+     "expected": "0.008800"
+    }
+   ],
+   "pairs": "0.84",
+   "unmatched": "0.00",
+   "fees": "0.000000",
+   "locked": "0.0168",
+   "tonight": "0.016800",
+   "expected": "0.016800"
+  },
+  {
+   "policy": "recovery, $1.00 target",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0.40",
+     "pair_cost": "1.00",
+     "unmatched": "0.00",
+     "seconds_unmatched": "24.0",
+     "fees": "0.000000",
+     "locked": "0.0000",
+     "tonight": "0.000000",
+     "expected": "0.000000"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.000000",
+     "locked": "0",
+     "tonight": "-0.140800",
+     "expected": "-0.081620"
+    }
+   ],
+   "pairs": "0.40",
+   "unmatched": "0.44",
+   "fees": "0.000000",
+   "locked": "0.0000",
+   "tonight": "-0.140800",
+   "expected": "-0.081620"
+  },
+  {
+   "policy": "recovery, $1.00, late + through + fees",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0.40",
+     "pair_cost": "1.00",
+     "unmatched": "0.00",
+     "seconds_unmatched": "24.0",
+     "fees": "0.018969600",
+     "locked": "0.0000",
+     "tonight": "-0.018969600",
+     "expected": "-0.018969600"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0",
+     "pair_cost": null,
+     "unmatched": "0.44",
+     "seconds_unmatched": "578.0",
+     "fees": "0.009095680",
+     "locked": "0",
+     "tonight": "-0.149895680",
+     "expected": "-0.090715680"
+    }
+   ],
+   "pairs": "0.40",
+   "unmatched": "0.44",
+   "fees": "0.028065280",
+   "locked": "0.0000",
+   "tonight": "-0.168865280",
+   "expected": "-0.109685280"
+  },
+  {
+   "policy": "recovery, $1.00, open to minute 14",
+   "windows": [
+    {
+     "window": "0400z",
+     "pairs": "0.40",
+     "pair_cost": "1.00",
+     "unmatched": "0.00",
+     "seconds_unmatched": "24.0",
+     "fees": "0.000000",
+     "locked": "0.0000",
+     "tonight": "0.000000",
+     "expected": "0.000000"
+    },
+    {
+     "window": "0415z",
+     "pairs": "0.44",
+     "pair_cost": "1.00",
+     "unmatched": "0.00",
+     "seconds_unmatched": "783.0",
+     "fees": "0.000000",
+     "locked": "0.0000",
+     "tonight": "0.000000",
+     "expected": "0.000000"
+    }
+   ],
+   "pairs": "0.84",
+   "unmatched": "0.00",
+   "fees": "0.000000",
+   "locked": "0.0000",
+   "tonight": "0.000000",
+   "expected": "0.000000"
+  }
+ ],
  "policies": [
   {
    "policy": "as run: 120 s quotes, no repricing",

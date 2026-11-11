@@ -1624,6 +1624,19 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 #: unknown price as free.
 UNKNOWN_PRICE_WORST_CASE = D(1)
 
+#: A RE-QUOTE KEEPS ITS ROUND. Exactly "ON" or it is off. See `probe_round`.
+REQUOTE_KEEPS_ROUND_ENV = "L5_TS_REQUOTE_KEEPS_ROUND"
+#: at most this many unfilled re-quotes are walked past per permitted round,
+#: and never more than the hard cap in all: the walk is bounded whatever
+#: the market does, and the submission budgets bound the orders themselves.
+ACC_REQUOTES_PER_ROUND = 16
+ACC_ROUND_INDEX_HARD_CAP = 512
+
+
+def requote_keeps_round() -> bool:
+    return (os.getenv(REQUOTE_KEEPS_ROUND_ENV) or "") == "ON"
+
+
 #: THE FAVORITE-ONLY TEST, as the portfolio controller names it. Read here
 #: as a variable so the submission gate needs no import of that module.
 FAVORITE_ONLY_PROFILE_ENV = "L5_PORTFOLIO_PROFILE"
@@ -6391,7 +6404,9 @@ class FaithfulExecutor:
             n = int(self.acc_max_rounds())
             legs = 0
             with_order, retired_no_order, retired_with_order = [], [], []
-            for r in range(n):
+            _keep = requote_keeps_round()
+            requoted: List[int] = []
+            for r in range(self.probe_round_index_cap() if _keep else n):
                 held = 0
                 for leg in AUTH.PROBE_LEGS:
                     try:
@@ -6403,13 +6418,20 @@ class FaithfulExecutor:
                         held += 1
                 legs += held
                 ret = self.probe_round_retired(market, r)
+                if _keep and (ret or held >= len(AUTH.PROBE_LEGS)) and \
+                        self.probe_round_never_filled(market, r):
+                    requoted.append(r)
                 if held:
                     with_order.append(r)
                     if ret:
                         retired_with_order.append(r)
                 elif ret:
                     retired_no_order.append(r)
-            spent = len(set(with_order) | set(retired_no_order))
+            spent = len((set(with_order) | set(retired_no_order))
+                        - set(requoted))
+            if _keep:
+                out["requote_keeps_round"] = True
+                out["rounds_requoted_without_a_fill"] = len(requoted)
             out.update({
                 "rounds_permitted": n,
                 "rounds_with_a_submitted_order": len(with_order),
@@ -6699,6 +6721,43 @@ class FaithfulExecutor:
             return qty
         return min(qty, abs(signed))
 
+    def probe_round_never_filled(self, market: str, rnd: int) -> bool:
+        """Did every order this round ever sent end with nothing booked?
+
+        True only when the round's orders are ON RECORD, every one of them
+        is finished at the venue, and each booked zero. A round with no
+        record -- one from before the record existed, or one whose record
+        cannot be read -- is NOT known to be unfilled and answers False,
+        which is the reading that charges it.
+        """
+        try:
+            coids = (self.store.state.get("probe_round_orders") or {}).get(
+                "%s|%d" % (str(market), int(rnd)))
+            if not coids:
+                return False
+            working = set(self.store.state.get("live_orders") or {}) | set(
+                self.store.state.get("pending_terminal") or {})
+            for c in coids:
+                # AN ORDER STILL AT THE VENUE, or one that has left it and
+                # still owes its final read, may yet turn out to have
+                # filled. Only an order that is finished AND booked nothing
+                # counts as a quote that came to nothing.
+                if str(c) in working:
+                    return False
+                if self.store.applied_fill_qty(str(c)) != D(0):
+                    return False
+            return True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def probe_round_index_cap(self) -> int:
+        """How far the round walk may go when a re-quote keeps its round."""
+        n = int(self.acc_max_rounds())
+        return max(n, min(ACC_ROUND_INDEX_HARD_CAP,
+                          n * (1 + ACC_REQUOTES_PER_ROUND)))
+
     def probe_round(self, market: str) -> Optional[int]:
         """The first round of this market with a leg still unspent, or None.
 
@@ -6707,13 +6766,44 @@ class FaithfulExecutor:
         is started -- the opposite leg of an existing position always takes
         priority over opening another. None means every permitted round for
         this market is spent, and the caller refuses.
+
+        A RE-QUOTE IS NOT AN OPENING. A round abandoned because the book
+        left its plan, whose orders were all cancelled with nothing filled,
+        took no exposure: it was one opening, quoted again. Counting each
+        re-quote against `L5_ACC_MAX_ROUNDS` spent 16 rounds in about four
+        minutes at a 15-second quote and then stopped the engine. With the
+        owner's switch such a round is walked past WITHOUT being charged;
+        a round that filled anything, or that is still working, is charged
+        exactly as before. The walk itself is bounded, and every order
+        still passes the submission budgets and every other gate.
         """
-        for r in range(self.acc_max_rounds()):
+        budget = int(self.acc_max_rounds())
+        if not requote_keeps_round():
+            for r in range(budget):
+                if self.probe_round_retired(market, r):
+                    continue       # abandoned: its plan is not coming back
+                claimed = self.probe_legs_claimed(market, r)
+                if not all(claimed.values()):
+                    return r
+            return None
+        charged = 0
+        for r in range(self.probe_round_index_cap()):
             if self.probe_round_retired(market, r):
-                continue           # abandoned: its plan is not coming back
+                if not self.probe_round_never_filled(market, r):
+                    charged += 1
+                continue
+            if charged >= budget:
+                return None
             claimed = self.probe_legs_claimed(market, r)
             if not all(claimed.values()):
                 return r
+            # BOTH LEGS SPENT. If every order they sent was cancelled with
+            # nothing filled, this round was a quote that came to nothing
+            # -- with rounds resting side by side the attempt axis cannot
+            # re-place a leg, so each re-quote arrives here as a whole
+            # round -- and it is not charged. Anything else is.
+            if not self.probe_round_never_filled(market, r):
+                charged += 1
         return None
 
     def probe_reopen_decision(self, market: str, rnd: int, plan: Any, *,
@@ -10878,6 +10968,21 @@ class FaithfulExecutor:
         # the send and the ack, the order may still be live at the venue, and
         # a store that never recorded it would hand the whole envelope to the
         # next decision.
+        # WHICH ROUND THIS ORDER BELONGS TO, on the durable record, so a
+        # round whose orders all end unfilled can later be told apart from
+        # one that took exposure. Written with the submission record and
+        # read by `probe_round_never_filled`; an order with no round (every
+        # non-accumulation path) records nothing.
+        try:
+            _rp = getattr(self, "_probe_round_pending", None)
+            if TS.active(market) and _rp is not None:
+                self.store.state.setdefault("probe_round_orders", {}
+                    ).setdefault("%s|%d" % (str(market), int(_rp)), []
+                    ).append(str(coid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # unrecorded: the round then reads as charged, never as free
         self.store.record_submit(
             coid, intent,
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,

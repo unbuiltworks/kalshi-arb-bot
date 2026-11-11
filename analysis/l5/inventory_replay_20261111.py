@@ -135,6 +135,150 @@ def recoveries() -> List[Dict[str, Any]]:
     return out
 
 
+# ------------------------------------------------------------------
+# C. ONE ROUND AT A TIME, FROM THE REAL FIRST FILL OF EACH WINDOW
+#
+# With one round open, the real event in each window is its FIRST fill and
+# the quote resting opposite it. Venue-confirmed: 0400z order DN6CYDFG14EX,
+# DOWN 0.40 at 0.48, its sibling UP resting at 0.47; 0415z order
+# DN6KVVR0144P, UP 0.44 at 0.32, its sibling DOWN resting at 0.63.
+#: (window, held side, contracts, price paid, filled by s, sibling price,
+#:  sibling placed at s)
+FIRST = [("0400z", "DOWN", D("0.40"), D("0.48"), 25.0, D("0.47"), 10.0),
+         ("0415z", "UP", D("0.44"), D("0.32"), 22.0, D("0.63"), 18.0)]
+#: the venue's published coefficient; every fill of ours was charged 0.0000
+VENUE_FEE_COEFFICIENT = D("0.095")
+
+
+def _floor(x: D) -> D:
+    return (x / RP.TICK).to_integral_value(rounding="ROUND_FLOOR") * RP.TICK
+
+
+def one_round(name: str, side: str, qty: D, px0: D, t0: float, sib_px: D,
+              sib_t: float, *, policy: str, target: D = D("0.98"),
+              delay: float = 8.0, latency: float = 0.0,
+              touch_fill: D = D("1"), fee: D = D("0"),
+              terminal: float = 600.0, life: float = 120.0
+              ) -> Dict[str, Any]:
+    """The missing leg after one real fill, on the recorded book.
+
+    `policy` DEPLOYED: the sibling stays at its opening price until its
+    120 s lifetime ends, then a completion is quoted at the touch whenever
+    that pair is at or under $1.00. RECOVERY: the sibling is withdrawn
+    `delay` seconds after the fill (8 s measured in the runner) and the
+    missing leg rests at the dearer of nothing and min(touch, target -
+    paid). `latency` keeps a withdrawn quote fillable and delays its
+    replacement. `touch_fill` is the share that fills when the offer only
+    REACHES our price (1 = all of it, 0 = it must trade through).
+    """
+    path = RP.load(name)
+    other = "UP" if side == "DOWN" else "DOWN"
+    cap = _floor((target if policy == "RECOVERY" else D("1.00")) - px0)
+    remaining, got, spent, touched = qty, D(0), D(0), set()
+    done_t = None
+    resting = None                    # a quote of ours that is already live
+    for t, b, a in path:
+        if not (D(0) < b <= a < D(1)) or t <= t0:
+            continue
+        if t >= terminal or remaining <= 0:
+            break
+        tch, off = RP.touch(other, b, a), RP.offer(other, b, a)
+        quotes = []
+        sib_live = t < (t0 + delay + latency if policy == "RECOVERY"
+                        else sib_t + life)
+        if sib_live:
+            quotes.append(sib_px)
+        else:
+            # A RESTING QUOTE STAYS WHERE IT IS. It is checked against this
+            # sample's offer at the price it already had, and only then
+            # moved: up toward the touch (never past the cap, never onto
+            # the offer), and never down -- a bid the market has come back
+            # to is the best bid, not a stale one.
+            if resting is not None:
+                quotes.append(resting)
+            want = None
+            if policy == "RECOVERY":
+                want = min(tch, cap)
+            elif tch <= cap:
+                want = tch
+            if want is not None and want > 0:
+                want = min(want, off - RP.TICK)
+                if resting is None or want > resting:
+                    resting = want
+        for q in quotes:
+            if q <= 0:
+                continue
+            if off < q:
+                fill = remaining
+            elif off == q and (q, "t") not in touched:
+                fill = (remaining * touch_fill).quantize(
+                    RP.TICK, rounding="ROUND_FLOOR")
+                touched.add((q, "t"))
+            else:
+                fill = D(0)
+            if fill > 0:
+                got += fill
+                spent += fill * q
+                remaining -= fill
+                if remaining <= 0:
+                    done_t = float(t)
+    def fee_of(px: D, n: D) -> D:
+        return fee * px * (D(1) - px) * n
+    fees = fee_of(px0, qty) + (fee_of(spent / got, got) if got > 0 else D(0))
+    pair = (px0 + spent / got) if got > 0 else None
+    locked = (got * (D(1) - px0) - spent) if got > 0 else D(0)
+    won = RP.WINDOWS[name][1] == side
+    tonight = locked + remaining * ((D(1) if won else D(0)) - px0) - fees
+    expect = locked + remaining * RP.OWN_RECORD_PER_UNMATCHED - fees
+    return {"window": name, "pairs": got, "pair_cost": pair,
+            "unmatched": remaining,
+            "seconds_unmatched": round((done_t or terminal) - t0, 0),
+            "fees": fees, "locked": locked, "tonight": tonight,
+            "expected": expect}
+
+
+ONE_ROUND = [
+    ("deployed: sibling left 120 s, then touch inside $1.00",
+     dict(policy="DEPLOYED")),
+    ("recovery, 0.98 target", dict(policy="RECOVERY")),
+    ("recovery, 0.98, cancel 6 s late", dict(policy="RECOVERY", latency=6.0)),
+    ("recovery, 0.98, half fills at a touch",
+     dict(policy="RECOVERY", touch_fill=D("0.5"))),
+    ("recovery, 0.98, must trade through",
+     dict(policy="RECOVERY", touch_fill=D("0"))),
+    ("recovery, 0.98, fees charged at the venue coefficient",
+     dict(policy="RECOVERY", fee=VENUE_FEE_COEFFICIENT)),
+    ("recovery, 0.98, late + through + fees",
+     dict(policy="RECOVERY", latency=6.0, touch_fill=D("0"),
+          fee=VENUE_FEE_COEFFICIENT)),
+    ("recovery, 0.98, open to minute 14",
+     dict(policy="RECOVERY", terminal=840.0)),
+    ("recovery, $1.00 target", dict(policy="RECOVERY", target=D("1.00"))),
+    ("recovery, $1.00, late + through + fees",
+     dict(policy="RECOVERY", target=D("1.00"), latency=6.0,
+          touch_fill=D("0"), fee=VENUE_FEE_COEFFICIENT)),
+    ("recovery, $1.00, open to minute 14",
+     dict(policy="RECOVERY", target=D("1.00"), terminal=840.0)),
+]
+
+
+def one_round_table() -> List[Dict[str, Any]]:
+    out = []
+    for label, kw in ONE_ROUND:
+        rows = [one_round(*ev, **kw) for ev in FIRST]
+        out.append({
+            "policy": label,
+            "windows": [{k: (None if v is None else str(v))
+                         for k, v in r.items()} for r in rows],
+            "pairs": str(sum(r["pairs"] for r in rows)),
+            "unmatched": str(sum(r["unmatched"] for r in rows)),
+            "fees": str(sum(r["fees"] for r in rows)),
+            "locked": str(sum(r["locked"] for r in rows)),
+            "tonight": str(sum(r["tonight"] for r in rows)),
+            "expected": str(sum(r["expected"] for r in rows))})
+    return out
+
+
 FAST = dict(life=15.0, attempts=16)
 POLICIES = [
     ("as run: 120 s quotes, no repricing", {}),
@@ -224,8 +368,23 @@ def main() -> None:
             "/".join("%d" % x for x in r["seconds_unmatched"]),
             D(r["locked_pair_pnl"]), D(r["settled_tonight_both"]),
             D(r["expected_on_own_record"])))
+    one = one_round_table()
+    print("C. ONE ROUND AT A TIME, FROM THE REAL FIRST FILL (0400z DOWN 0.40 "
+          "@ 0.48; 0415z UP 0.44 @ 0.32)")
+    print("  %-52s %-11s %-13s %-9s %-11s %7s %8s %8s %8s" % (
+        "policy", "pairs", "pair cost", "unmatched", "s unmatched", "fees",
+        "locked", "tonight", "expect"))
+    for r in one:
+        w = r["windows"]
+        print("  %-52s %-11s %-13s %-9s %-11s %7.4f %+8.4f %+8.4f %+8.4f" % (
+            r["policy"][:52], "/".join(x["pairs"] for x in w),
+            "/".join((x["pair_cost"] or "-")[:6] for x in w),
+            "/".join(x["unmatched"] for x in w),
+            "/".join(x["seconds_unmatched"][:-2] for x in w),
+            D(r["fees"]), D(r["locked"]), D(r["tonight"]), D(r["expected"])))
     with open(os.path.join(HERE, "inventory_replay_20261111.json"), "w") as f:
-        json.dump({"events": ev, "recoveries": rec, "policies": pol,
+        json.dump({"events": ev, "recoveries": rec, "one_round": one,
+                   "policies": pol,
                    "own_record_per_unmatched_contract":
                    str(RP.OWN_RECORD_PER_UNMATCHED)}, f, indent=1)
 
