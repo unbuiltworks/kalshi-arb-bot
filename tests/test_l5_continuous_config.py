@@ -696,3 +696,67 @@ class TestTheResidualCapDecidesHowManyRoundsRest:
         assert rl["rounds_with_a_submitted_order"] >= 10, rl
         assert h.pos("UP") == h.pos("DOWN") > D("3")
         assert peak_loss <= D("0.20")
+
+
+# ======================================================================
+# 11. QUOTES THAT MOVE: A 15-SECOND LIFETIME, SIXTEEN RE-PLACEMENTS A LEG
+# ======================================================================
+
+class TestQuotesFollowTheBook:
+    """OWNER, 2026-11-11: "Rest orders 2 ticks below the bid. Move it
+    constantly." Both knobs already exist: `L5_TS_ORDER_TTL_S` (shorter
+    only) and `L5_ACC_MAX_ATTEMPTS` (1 to 16). On 2026-11-11 0400z three UP
+    quotes sat at 0.45 to 0.47 for 120 seconds while the bid went to 0.71."""
+    MOVING = dict(PROPOSED, L5_MAX_CASH_DEPLOYED_USD="0.90",
+                  L5_TS_ROUND_ALLOCATIONS="3", L5_TS_CONCURRENT_ROUNDS="1",
+                  L5_MAX_LIVE_ORDERS="4", L5_TS_ORDER_TTL_S="15",
+                  L5_ACC_MAX_ATTEMPTS="16")
+
+    def drift(self, h, ticks=110):
+        """Nothing fills; the bid rises a cent every fifteen seconds."""
+        h.at(6.5).l5_action()
+        off, bid, trail = 6.8, D("0.50"), []
+        for i in range(ticks):
+            if i % 5 == 4:
+                bid += D("0.01")
+                h.book.set(str(bid), str(bid + D("0.01")))
+            off += 3.0
+            h.tick(off)
+            for s, p in LAD.resting(h, "UP"):
+                trail.append((bid, p))
+        return bid, trail
+
+    def test_an_unfilled_quote_is_cancelled_and_re_placed_at_the_book(
+            self, tmp_path, monkeypatch):
+        h = harness(tmp_path, monkeypatch, self.MOVING)
+        bid, trail = self.drift(h)
+        ups = [p for s, p, _q in h.sent() if s == "UP"]
+        assert ups[0] == D("0.48") and max(ups) >= bid - D("0.06")
+        assert ups == sorted(ups)                       # it only follows up
+        # a resting UP quote is never more than a few ticks behind the bid
+        assert max(b - p for b, p in trail) <= D("0.08")
+        assert len(h.venue.cancelled) >= 20
+        assert len(h.venue.sent) - len(h.venue.cancelled) == len(
+            LAD.resting_ids(h))
+        assert h.r.store.orders_uncertain() is None
+        assert h.pos("UP") == h.pos("DOWN") == 0
+
+    def test_at_the_default_lifetime_the_quote_is_left_behind(
+            self, tmp_path, monkeypatch):
+        slow = dict(self.MOVING)
+        slow.pop("L5_TS_ORDER_TTL_S")
+        slow.pop("L5_ACC_MAX_ATTEMPTS")
+        h = harness(tmp_path, monkeypatch, slow)
+        bid, trail = self.drift(h, ticks=38)            # under 120 seconds
+        assert [p for s, p, _q in h.sent() if s == "UP"] == [D("0.48")]
+        assert max(b - p for b, p in trail) >= D("0.09")
+
+    def test_every_re_placement_is_a_fresh_exact_id(self, tmp_path,
+                                                    monkeypatch):
+        h = harness(tmp_path, monkeypatch, self.MOVING)
+        self.drift(h)
+        coids = [s["client_order_id"] for s in h.venue.sent]
+        assert len(coids) == len(set(coids)) > 20
+        rl = h.r.executor.round_lifecycle(SLUG)
+        assert rl["rounds_retired_without_an_order"] == 0
+        assert rl["rounds_with_a_submitted_order"] <= 32

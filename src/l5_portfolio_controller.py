@@ -828,10 +828,33 @@ def profile_uses_model() -> bool:
     return profile() != BALANCE_PROFILE
 
 
+#: THE BALANCE PROFILE'S FLOOR ON NEW EXPOSURE, the owner's variable.
+#:
+#: 0.30 unless this names a price from 0.05 to 0.50. It bounds only an ADD
+#: -- the first leg of new exposure -- and never a hedge, exactly as
+#: `add_floor` always did. Lowering it lets the controller quote a pair
+#: whose cheap leg is under 30 cents (a 0.90 / 0.06 pair late in a window),
+#: which the 0.96 opening ceiling still has to admit. Unset, unreadable or
+#: out of range is 0.30: a typo cannot remove the floor.
+BALANCE_ADD_FLOOR_ENV = "L5_BALANCE_ADD_FLOOR"
+
+
+def balance_add_floor() -> float:
+    raw = (os.getenv(BALANCE_ADD_FLOOR_ENV) or "").strip()
+    default = float(BALANCE["add_floor"])
+    if not raw:
+        return default
+    v = _num(raw)
+    if v is None or not (0.05 - EPS <= v <= 0.50 + EPS):
+        return default
+    return float(v)
+
+
 def production_params(tick: Any = None) -> Params:
     t = _num(tick)
     if profile() == BALANCE_PROFILE:
         knobs = dict(BALANCE, **favorite_overrides())
+        knobs["add_floor"] = balance_add_floor()
     else:
         knobs = dict(PRODUCTION)
     return Params(tick=(t if t and t > 0 else 0.01), **knobs).checked()
