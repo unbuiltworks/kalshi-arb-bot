@@ -662,3 +662,43 @@ def test_a_tighter_ceiling_than_the_code_constant_still_passes(approved):
     assert out["PASS"] is True, out["failed"]
     assert row(out, "aggregate_exposure_usd")["effective"] == "5"
     assert row(out, "approval_exposure_ceiling_usd")["effective"] == "20"
+
+
+# ---------------------------------------------------------------------------
+# A TIGHTER CAMPAIGN LOSS BUDGET IS INSIDE THE APPROVAL (2026-11-11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", ["0.30", "0.01", "5.00", "10.00"])
+def test_a_campaign_loss_budget_at_or_below_the_ceiling_passes(approved,
+                                                               value):
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", value)
+    out = V.verify()
+    r = row(out, "campaign_additional_loss_usd")
+    assert r["ok"] is True, r
+    assert D(r["effective"]) == D(value)
+    assert "campaign_additional_loss_usd" not in out["failed"]
+
+
+def test_an_unset_campaign_loss_budget_still_fails(approved):
+    approved.delenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", raising=False)
+    out = V.verify()
+    assert row(out, "campaign_additional_loss_usd")["ok"] is False
+    assert out["PASS"] is False
+
+
+@pytest.mark.parametrize("value", ["0", "zero", "-1"])
+def test_a_zero_or_unreadable_campaign_loss_budget_still_fails(approved,
+                                                               value):
+    """Unreadable reads as $0, the bound that refuses every order. That is
+    a broken configuration, not a tight one."""
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", value)
+    out = V.verify()
+    r = row(out, "campaign_additional_loss_usd")
+    assert r["ok"] is False, r
+    assert D(r["effective"]) == 0
+
+
+def test_a_budget_above_the_ceiling_is_clamped_to_it_not_honoured(approved):
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", "25")
+    r = row(V.verify(), "campaign_additional_loss_usd")
+    assert D(r["effective"]) == D("10.00") and r["ok"] is True

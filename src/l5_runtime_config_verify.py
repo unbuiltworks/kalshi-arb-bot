@@ -551,10 +551,20 @@ def verify() -> Dict[str, Any]:
         _row("aggregate_exposure_usd",
              "R.max_total_exposure_usd() (the variable)",
              lambda: R.max_total_exposure_usd(), exp_usd),
+        # AT OR BELOW THE APPROVED CEILING, AND ABOVE ZERO (2026-11-11).
+        # This row demanded exactly the approved $10.00, so an owner who
+        # set a TIGHTER budget for one bounded test -- which the gate
+        # enforces as written -- would have read as a failing
+        # configuration. A smaller loss bound is inside the approval, not a
+        # departure from it. Unset (None) still fails: the bound would be
+        # inert. Zero still fails: that is the fail-closed value an
+        # unreadable setting produces, and it refuses every order.
         _row("campaign_additional_loss_usd",
              "CBL.limit_from_env() clamped by CBL.MAX_ADDITIONAL_LOSS_USD",
              lambda: CBL.limit_from_env(),
-             A["campaign_additional_loss_usd"]),
+             A["campaign_additional_loss_usd"],
+             compare=lambda got, req: (got is not None
+                                       and D(0) < got <= req)),
         _row("opening_notional_budget_usd",
              "TS.opening_notional_budget_usd() clamped by "
              "TS.OPENING_NOTIONAL_MAX_USD",
