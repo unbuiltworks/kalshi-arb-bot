@@ -756,6 +756,32 @@ OWN_EVIDENCE_MIN_WINDOWS = 20
 #: the expected value stated. It waives this stage alone: the arithmetic
 #: above, the capacity test and every limit still bind, and every decision
 #: made under it says so.
+#: THE FIRST OPENING OF A WINDOW IS PRICED LIKE EVERY OTHER. Exactly "ON" or
+#: it is off.
+#:
+#: `probe_reopen_decision` returned `reopen: True` for the first
+#: exposure-taking round before any economics were consulted, so the one
+#: order every window always sent was the one order nothing had priced:
+#: not the capacity test, not the expectancy floor, and not what our own
+#: settled windows on this venue have paid. On 108 settled markets with a
+#: measured cost (2026-10-25 to 11-11) a first-leg contract paired 62% of
+#: the time for +5.6c and stranded 38% of the time for -7.0c -- +0.8c a
+#: contract overall, -2.4c over the later half -- and each window opened
+#: regardless.
+#:
+#: With the switch the first round goes through `reopen_decision` exactly
+#: as a later round does, so it must clear the same three tests, and the
+#: owner's `L5_TS_OWN_EVIDENCE_GATE=WAIVED_BY_OWNER` applies to it exactly
+#: as it does to them. It can only REFUSE an opening: a leg already claimed
+#: is a completion and is never priced here, and nothing about inventory
+#: already held changes.
+FIRST_OPENING_PRICED_ENV = "L5_TS_FIRST_OPENING_PRICED"
+
+
+def first_opening_priced() -> bool:
+    return (os.getenv(FIRST_OPENING_PRICED_ENV) or "") == "ON"
+
+
 OWN_EVIDENCE_GATE_ENV = "L5_TS_OWN_EVIDENCE_GATE"
 OWN_EVIDENCE_WAIVER_TOKEN = "WAIVED_BY_OWNER"
 
@@ -876,7 +902,11 @@ def reopen_decision(*, market: Any, rounds_used: int,
     #      it. Gating round 0 would turn the strategy off, which is not what
     #      "decide whether to reopen" asks for, and the executor's own cash,
     #      deficit and exposure gates already own the first leg.
-    if used_rounds <= 0:
+    # WITH `L5_TS_FIRST_OPENING_PRICED=ON` IT IS PRICED BELOW LIKE ANY OTHER
+    # ROUND. That can turn the strategy off, and it should when the tests
+    # below say an opening is not worth making: the first round is the one
+    # exposure every window takes, and it was the only one nothing priced.
+    if used_rounds <= 0 and not first_opening_priced():
         return dict(reopen=True, reason="FIRST_ROUND_NOT_A_REOPENING",
                     market=(None if market is None else str(market)),
                     rounds_used=used_rounds,

@@ -6860,7 +6860,16 @@ class FaithfulExecutor:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             used = rnd_i          # unreadable: judge it as a reopening
-        if used <= 0:
+        # THE FIRST ROUND WAS NEVER PRICED. With the owner's switch it is
+        # priced below like any other; without it, nothing changes.
+        try:
+            from src import l5_unmatched_disposition as _UDP0
+            _first_priced = bool(_UDP0.first_opening_priced())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("FIRST_OPENING_SWITCH_UNREADABLE")
+        if used <= 0 and not _first_priced:
             return {"reopen": True,
                     "reason": "FIRST_EXPOSURE_TAKING_ROUND_NOT_A_REOPENING",
                     "market": str(market), "round": rnd,
