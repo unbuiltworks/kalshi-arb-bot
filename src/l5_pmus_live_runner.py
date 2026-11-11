@@ -11547,6 +11547,78 @@ COST_BASIS_RESTATEMENTS = [
 ]
 
 
+#: RESTATEMENTS THAT WAIT FOR THE OWNER. Deploying this file applies none of
+#: them. One is applied only when `L5_COST_RESTATEMENT_APPROVED` names its
+#: id exactly (comma-separated for more than one), and then through the same
+#: verb and the same guards as the list above: the stored row must match
+#: `expect` field for field, the cost is re-derived from the named venue
+#: fill, the original row is preserved verbatim in `cost_superseded`, and it
+#: is applied once.
+COST_RESTATEMENT_APPROVAL_ENV = "L5_COST_RESTATEMENT_APPROVED"
+COST_BASIS_RESTATEMENTS_AWAITING_OWNER = [
+    {
+        "id": "0415z-position-before-fill-2026-11-11",
+        "market": "cpc-btc-updown-15m-2026-11-11-0415z",
+        "side": "UP",
+        # the stored row as L5_LIVE_SETTLED logged it at 04:30:32.690
+        "expect": {
+            "yes_value": "0.0000",
+            "up_qty": "0.4400",
+            "dn_qty": "0",
+            "cost_total": "0.4400",
+            "redemption_total": "0E-8",
+            "settlement_pnl": "-0.44000000",
+            "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND",
+        },
+        "measured_cost": D("0.1408"),
+        "measured_fees": D("0.0000"),
+        "evidence": {
+            "source": "/v1/order via the live transport and "
+                      "/v1/account/balances, both recorded in this service's "
+                      "own deploy log (deployment ddfa5c0d)",
+            # the venue ORDER id: one order, one execution of its whole
+            # quantity (cumQuantity 0.44 of 0.44), so it identifies the fill
+            "per_fill": [{"trade_id": "DN6KVVR0144P", "qty": "0.44",
+                          "price": "0.3200", "fee": "0.0000"}],
+            "activity_walk": {"complete": True, "pages": 0,
+                              "ended": "SINGLE_ORDER_READ",
+                              "basis": "one full execution of one order"},
+            "detail": ("DN6KVVR0144P ORDER_STATE_FILLED avg_px 0.3200 "
+                       "cum_qty 0.44 commission 0.0000, side UP. 0.44 "
+                       "shares at 0.32 cost 0.1408; the settlement line "
+                       "itself reports committed_released 0.140800"),
+            "cash": ("available_cash_usd 339.89295 at 04:14:01, 340.93215 "
+                     "at 04:16:05 after window 0400z paid 1.18 and this "
+                     "fill took 0.1408 (339.89295 + 1.18 - 0.1408), and "
+                     "340.93215 unchanged at 04:32:11 after settlement"),
+            "what_went_wrong": (
+                "the venue's position showed the 0.44 at 04:15:20.831, "
+                "before the order read that prices it. It was adopted at "
+                "the $1/share bound; PENDING_TERMINAL_RESOLVED at "
+                "04:15:22.507 then added the fill on top (0.88 against the "
+                "venue's 0.44), the reconciliation at 04:15:33.527 adopted "
+                "again, and settlement priced the bound"),
+            "before": ("retired_markets cost_total 0.4400, settlement_pnl "
+                       "-0.44000000; all-time realized -15.82160000"),
+            "after": ("cost_total 0.1408, settlement_pnl -0.14080000; "
+                      "all-time realized -15.52240000. The original row is "
+                      "preserved verbatim in cost_superseded; every limit "
+                      "is untouched"),
+            "fix": ("fills_in_flight and absorb_into_adopted, shipped with "
+                    "this entry: a position our own unbooked order explains "
+                    "is not adopted, and a fill the adopted quantity "
+                    "already contains replaces the bound"),
+        },
+    },
+]
+
+
+def approved_cost_restatements() -> List[str]:
+    """Ids the owner has approved, exactly as written. Unset is none."""
+    raw = os.getenv(COST_RESTATEMENT_APPROVAL_ENV) or ""
+    return [x for x in (p.strip() for p in raw.split(",")) if x]
+
+
 def apply_cost_basis_restatements(store) -> Optional[Dict[str, Any]]:
     """Replace a retired market's $1/share placeholder with a measured cost.
 
@@ -11556,7 +11628,19 @@ def apply_cost_basis_restatements(store) -> Optional[Dict[str, Any]]:
     guard, so a restart cannot apply one twice.
     """
     applied: List[Dict[str, Any]] = []
-    for c in COST_BASIS_RESTATEMENTS:
+    approved = approved_cost_restatements()
+    todo = list(COST_BASIS_RESTATEMENTS)
+    for c in COST_BASIS_RESTATEMENTS_AWAITING_OWNER:
+        if c["id"] in approved:
+            todo.append(c)
+        else:
+            emit("L5_LIVE_COST_RESTATE_AWAITING_OWNER", {
+                "id": c["id"], "market": c["market"], "side": c["side"],
+                "measured_cost": str(c["measured_cost"]),
+                "approve_with": "%s=%s" % (COST_RESTATEMENT_APPROVAL_ENV,
+                                           c["id"]),
+                "labels": "nothing was written"})
+    for c in todo:
         before = store.realized_lines()
         out = store.correct_cost_basis(
             c["market"], c["side"],

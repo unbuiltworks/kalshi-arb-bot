@@ -1624,6 +1624,12 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 #: unknown price as free.
 UNKNOWN_PRICE_WORST_CASE = D(1)
 
+#: how many consecutive reconciliations a difference that our own unbooked
+#: fills can explain is left for the order read to book before the venue's
+#: position is adopted at the bound anyway. Reconciliations are about 13 s
+#: apart in production; the order read that resolved 0415z took 1.7 s.
+FILL_IN_FLIGHT_MAX_DEFERRALS = 2
+
 
 class UnknownMarket(RuntimeError):
     """A market identity no financial state is allowed to accept.
@@ -3593,8 +3599,18 @@ class InventoryStore:
         # somewhere else. `apply_fill` is the single writer of `positions`
         # on the fill path, which is why this belongs here and nowhere else.
         _res_before = self.residual(own_market)
+        # THE POSITION UPDATE CAN ARRIVE BEFORE THE FILL. 0415z, 2026-11-11:
+        # the venue's position showed our 0.44 UP at 04:15:20.8, the order
+        # row that prices it at 0.32 was read at 04:15:22.5. In between the
+        # 0.44 was adopted at the $1/share bound; the fill was then ADDED to
+        # it (0.88 against the venue's 0.44), the next reconciliation
+        # adopted again, and settlement priced the bound: -$0.4400 booked
+        # against -$0.1408 paid. `absorbed` is the part of this fill the
+        # adopted quantity already contains: it replaces that much of the
+        # bound with the measured cost and adds no quantity.
+        absorbed = self.absorb_into_adopted(k, qty, own, coid)
         self.state["positions"][k] = str(
-            D(str(self.state["positions"].get(k, 0))) + qty)
+            D(str(self.state["positions"].get(k, 0))) + qty - absorbed)
         self._note_stranding(own_market, _res_before,
                              self.residual(own_market))
         # both of these are CASH OUT in the leg's own terms now. They used to
@@ -3602,7 +3618,8 @@ class InventoryStore:
         self.state["committed"][own_market] = str(
             D(str(self.state["committed"].get(own_market, 0))) + own * qty)
         lc = self.state.setdefault("leg_cost", {})
-        lc[k] = str(D(str(lc.get(k, 0))) + own * qty)
+        lc[k] = str(D(str(lc.get(k, 0))) + own * qty
+                    - absorbed * UNKNOWN_PRICE_WORST_CASE)
         # HOW MANY FILLS BUILT THIS LEG. A leg with shares and no cost is
         # either a genuine fill at $0.00 -- rare but real, and attested by
         # this counter -- or quantity that arrived from the venue's net
@@ -3632,6 +3649,53 @@ class InventoryStore:
                 o["state"] = "PARTIALLY_FILLED"
         self.save()
 
+
+    def absorb_into_adopted(self, key: str, qty: D, own_px: D,
+                            coid: Optional[str]) -> D:
+        """How much of this fill the ADOPTED position already contains.
+
+        Zero unless the leg was adopted from the venue's position with no
+        cost basis and this is a fill of an order WE track -- an anonymous
+        fill proves nothing about what the venue's number was made of. The
+        absorbed quantity comes off `adopted_unattributed`; when none is
+        left the leg is no longer listed in `leg_cost_basis_unknown`,
+        because every share of it now has a measured cost. Each absorption
+        is appended to `adoption_attributions`, so the bound that was
+        replaced, and by which order, stays on the record.
+
+        IF IT IS WRONG IT IS WRONG IN THE SAFE DIRECTION. A fill that
+        happened AFTER the adopted read is not in the adopted quantity;
+        absorbing it leaves our book short of the venue's, the next
+        reconciliation sees that and adopts at the bound again.
+        """
+        if not coid:
+            return D(0)
+        book = self.state.get("adopted_unattributed") or {}
+        if key not in book:
+            return D(0)
+        try:
+            have = D(str(book.get(key) or 0))
+        except Exception:                                      # noqa: BLE001
+            return D(0)
+        take = min(D(str(qty)), have)
+        if take <= 0:
+            return D(0)
+        left = have - take
+        if left > 0:
+            book[key] = str(left)
+        else:
+            book.pop(key, None)
+            unknown = self.state.get("leg_cost_basis_unknown") or []
+            if key in unknown:
+                unknown.remove(key)
+        self.state.setdefault("adoption_attributions", []).append({
+            "key": key, "coid": str(coid), "qty": str(take),
+            "own_price": str(own_px),
+            "bound_replaced_usd": str(take * UNKNOWN_PRICE_WORST_CASE),
+            "measured_usd": str(take * D(str(own_px))),
+            "still_at_the_bound": str(max(left, D(0))),
+            "at": dt.datetime.now(dt.timezone.utc).isoformat()})
+        return take
 
     def leg_cost(self, market: str) -> Dict[str, D]:
         market = canonical_market(market, doing="reading leg cost")
@@ -5037,11 +5101,20 @@ class InventoryStore:
             pos.pop(k, None)
             lc.pop(k, None)
         unknown = self.state.setdefault("leg_cost_basis_unknown", [])
+        # HOW MUCH OF EACH LEG IS STILL PRICED AT THE BOUND. `apply_fill`
+        # reads this: a fill of OUR OWN order that is read after the venue's
+        # position already contained it replaces that much of the bound with
+        # the measured cost instead of being added on top. See
+        # `absorb_into_adopted`.
+        unattributed = self.state.setdefault("adopted_unattributed", {})
+        for k in keys:
+            unattributed.pop(k, None)
         for k, v in rows.items():
             if k.rsplit("|", 1)[0] != market:
                 continue
             pos[k] = str(v)
             lc[k] = str(D(str(v)) * UNKNOWN_PRICE_WORST_CASE)
+            unattributed[k] = str(v)
             if k not in unknown:
                 unknown.append(k)
         new_risk: Optional[D] = None
@@ -5052,6 +5125,78 @@ class InventoryStore:
         floor = max([r for r in (prior_risk, new_risk) if r is not None]
                     or [D(0)])
         self.state.setdefault("risk_floor_usd", {})[market] = str(floor)
+
+    def fills_in_flight(self, gross: Mapping[str, Mapping[str, D]],
+                        net: Mapping[str, D],
+                        open_orders: Sequence[Mapping[str, Any]]
+                        ) -> Dict[str, Dict[str, Any]]:
+        """Markets whose whole difference our own unbooked fills can explain.
+
+        For every order we track with a venue id -- live, or absent from the
+        venue's open orders and awaiting its final read -- the most it can
+        have filled without our having booked it is:
+
+            still open at the venue   qty - venue remaining - booked
+            no longer open            qty - booked
+
+        A market qualifies when the venue's net differs from ours and the
+        difference lies inside what those orders could add on that side.
+        An order with no venue id, an unreadable quantity or an unknown side
+        contributes NOTHING, so anything we cannot account for exactly is
+        still adopted at the bound.
+        """
+        open_rem: Dict[str, D] = {}
+        for o in open_orders or ():
+            vid = str(o.get("id") or o.get("order_id") or "").strip()
+            rem = o.get("remaining_qty", o.get("remainingQuantity"))
+            try:
+                if vid and rem is not None:
+                    open_rem[vid] = D(str(rem))
+            except Exception:                                  # noqa: BLE001
+                continue
+        cap: Dict[str, Dict[str, Any]] = {}
+        submitted = self.state.get("submitted") or {}
+        seen = set()
+        for book in ("live_orders", "pending_terminal"):
+            for coid, o in (self.state.get(book) or {}).items():
+                if coid in seen or not isinstance(o, Mapping):
+                    continue
+                seen.add(coid)
+                vid = str(o.get("venue_order_id") or "").strip()
+                side = venue_side(o.get("side"))
+                market = o.get("market")
+                sub = submitted.get(coid) or {}
+                try:
+                    qty = D(str(o.get("qty") if o.get("qty") is not None
+                                else sub.get("qty")))
+                    done = self.applied_fill_qty(coid)
+                except Exception:                              # noqa: BLE001
+                    continue
+                if not vid or side is None or not market or qty <= 0:
+                    continue
+                if book == "live_orders" and vid in open_rem:
+                    could = qty - open_rem[vid] - done
+                else:
+                    could = qty - done
+                if could <= 0:
+                    continue
+                c = cap.setdefault(str(market), {UP: D(0), DOWN: D(0),
+                                                 "orders": []})
+                c[side] += could
+                c["orders"].append({"coid": str(coid), "venue_order_id": vid,
+                                    "side": side, "unbooked_at_most":
+                                    str(could)})
+        out: Dict[str, Dict[str, Any]] = {}
+        for m, c in cap.items():
+            if m not in net:
+                continue
+            ours = (gross.get(m) or {}).get("net", D(0))
+            diff = net[m] - ours
+            if diff == 0 or not (-c[DOWN] <= diff <= c[UP]):
+                continue
+            out[m] = {"venue_net": str(net[m]), "our_net": str(ours),
+                      "difference": str(diff), "orders": c["orders"]}
+        return out
 
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]
@@ -5111,12 +5256,38 @@ class InventoryStore:
         # THE VENUE'S ROWS BECOME THE POSITION OF RECORD. This is the line the
         # docstring always promised and did not do; see adopt_venue_position
         # for what is preserved and what is bounded.
+        # A FILL OF OUR OWN ORDER THAT WE HAVE NOT READ YET IS NOT A
+        # CONTRADICTION. The venue updates the position the instant an
+        # order trades; we learn the price only when we read the order.
+        # Adopting in between throws away the book -- matched pairs
+        # included -- for a difference the next order read explains in
+        # full. Where the whole difference fits inside what our own tracked
+        # orders could have filled and not yet booked, the book is LEFT
+        # ALONE for a bounded number of reconciliations and the order read
+        # books the fill at its real price. Past the bound it is adopted
+        # exactly as before.
+        flight = self.fills_in_flight(gross, net, open_orders)
+        fstate = self.state.setdefault("fill_in_flight", {})
+        deferred: List[str] = []
+        for m in sorted(flight):
+            n = int((fstate.get(m) or {}).get("deferrals") or 0)
+            if n >= FILL_IN_FLIGHT_MAX_DEFERRALS:
+                continue
+            fstate[m] = dict(
+                flight[m], deferrals=n + 1,
+                first_seen=((fstate.get(m) or {}).get("first_seen")
+                            or dt.datetime.now(dt.timezone.utc).isoformat()))
+            deferred.append(m)
+        for m in list(fstate):
+            if m not in deferred and m not in flight:
+                fstate.pop(m, None)
+        disputed = [m for m in disputed if m not in deferred]
         for m in list(disputed):
             self.adopt_venue_position(
                 m, after, why="venue net contradicts our gross")
         for k, v in after.items():
             m = k.rsplit("|", 1)[0]
-            if m in agrees:
+            if m in agrees or m in deferred:
                 continue
             # a market the venue holds and we have never booked: adopt it the
             # same way, so risk sees the shares AND can price them, rather
@@ -5283,6 +5454,10 @@ class InventoryStore:
                 "venue_order_id": was.get("venue_order_id"),
                 "market": was.get("market"),
                 "side": was.get("side"),
+                # what it was FOR, kept so `fills_in_flight` can bound what
+                # this order may have filled once it is off the live map
+                "qty": (was.get("qty") if was.get("qty") is not None
+                        else prior.get("qty")),
                 "session_id": was.get("session_id"),
                 "applied": str(self.applied_fill_qty(coid)),
                 "first_seen_missing": prior.get("first_seen_missing")
@@ -5354,7 +5529,10 @@ class InventoryStore:
                 "venue_net": {m: str(v) for m, v in net.items()},
                 "gross_net_agrees": agrees,
                 "gross_detail_lost": sorted(m for m, ok in agrees.items()
-                                            if not ok),
+                                            if not ok and m not in deferred),
+                # our own unbooked fills explain these; nothing was adopted
+                "fills_in_flight_deferred": {
+                    m: dict(fstate.get(m) or {}) for m in deferred},
                 "labels_inventory": (
                     "the venue reports a NET position; our book is GROSS. "
                     "Where they agree the matched pair is preserved. Where "
