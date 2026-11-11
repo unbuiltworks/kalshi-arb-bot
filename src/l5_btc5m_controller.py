@@ -73,6 +73,12 @@ class Params:
     tick: Decimal = D("0.01")
     min_qty: Decimal = D("0.01")
     clip_usd: Decimal = D("0.10")             # dollars per entry
+    #: SHARES per entry, when the owner means a share count rather than a
+    #: dollar amount. None (the default) sizes by `clip_usd`. The owner's
+    #: manual orders were 0.10 SHARES (about $0.06-$0.09 each); the pilot
+    #: brief says about $0.10 per order. They are different sizes and the
+    #: choice has to be stated, so both exist and neither is inferred.
+    clip_shares: Optional[Decimal] = None
     max_exposure_usd: Decimal = D("5.00")     # filled cost + resting notional
     hedge_reserve_usd: Decimal = D("1.50")    # part of the cap entries may not use
     min_edge_per_share: Decimal = D("0.01")
@@ -446,7 +452,13 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
 
     # 8. Open or add to the favorite. Entries may not touch the hedge reserve.
     kind = ADD_FAVORITE if inv[fav][0] > 0 else OPEN_FAVORITE
-    e_qty = _floor_qty(params.clip_usd / target, params) if target > 0 else D("0.00")
+    if params.clip_shares is not None:
+        _cs = _dec(params.clip_shares)
+        e_qty = (_floor_qty(_cs, params)
+                 if _cs is not None and _cs > 0 else D("0.00"))
+    else:
+        e_qty = (_floor_qty(params.clip_usd / target, params)
+                 if target > 0 else D("0.00"))
     notional = target * e_qty
     entry_cap = params.max_exposure_usd - params.hedge_reserve_usd
     entry = {"kind": kind, "side": fav, "fav_bid": fav_bid, "price": target,
