@@ -34,16 +34,8 @@ import pytest
 import tests.test_l5_ladder_runner as LR
 import tests.test_l5_runner_pair_and_cancel_state as T
 from src import l5_btc5m_controller as C
-import importlib.util as _ilu
-import pathlib as _pl
-
-# the adapter is a PROTOTYPE outside src/ (see prototypes/README.md)
-_spec = _ilu.spec_from_file_location(
-    "l5_btc5m_execution_prototype",
-    _pl.Path(__file__).resolve().parents[1] / "prototypes"
-    / "l5_btc5m_execution.py")
-X = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(X)
+from src import l5_btc5m_execution as X
+from tests import test_l5_btc5m_execution as T5
 from src import l5_live_execution as E
 from src import l5_pmus_live_runner as R
 
@@ -122,6 +114,7 @@ class Both:
         LR.apply_limits(self.h)
         for k, v in ENV_5M.items():
             monkeypatch.setenv(k, v)
+        self._mp, self._tmp = monkeypatch, tmp_path
         self.ex = X.Btc5mExecutor(
             self.venue, str(tmp_path / "btc5m" / "ledger.json"),
             now_fn=lambda: dt.datetime.fromtimestamp(self.h.t, dt.timezone.utc))
@@ -143,11 +136,27 @@ class Both:
 
     # -- the 5m side
     def step5(self, bid="0.60", ask="0.62", p_up="0.75", at=None):
+        """One step of the 5m adapter, UNDER THE 5m SERVICE'S OWN
+        ENVIRONMENT. In production the two strategies are two services and
+        each reads its own approval document; in this one process they
+        share `os.environ`, so the 5-minute service's authorization is
+        applied for the length of its own step and removed again. Outside
+        this block the 15m harness sees exactly what it always saw -- in
+        particular, no 5-minute approval, which would (correctly) refuse
+        every 15-minute claim."""
         if at is not None:
             self.h.at(at)
-        return self.ex.step(
-            market=M5, book={"bid": bid, "ask": ask, "age_s": 0.1},
-            t_in_window_s=self.h.t - float(T.WS), p_up=p_up, p_source="TEST")
+        with self._mp.context() as m:
+            T5.authorize_5m(
+                m, self._tmp,
+                now_fn=lambda: dt.datetime.fromtimestamp(
+                    self.h.t, dt.timezone.utc),
+                starts=(dt.datetime.fromtimestamp(T.WS, dt.timezone.utc),),
+                release_locks=False)
+            return self.ex.step(
+                market=M5, book={"bid": bid, "ask": ask, "age_s": 0.1},
+                t_in_window_s=self.h.t - float(T.WS), p_up=p_up,
+                p_source="TEST")
 
     def open5(self, at=8.0):
         rep = self.step5(at=at)

@@ -22,16 +22,9 @@ from decimal import Decimal as D
 import pytest
 
 from src import l5_btc5m_controller as C
-import importlib.util as _ilu
-import pathlib as _pl
-
-# the adapter is a PROTOTYPE outside src/ (see prototypes/README.md)
-_spec = _ilu.spec_from_file_location(
-    "l5_btc5m_execution_prototype",
-    _pl.Path(__file__).resolve().parents[1] / "prototypes"
-    / "l5_btc5m_execution.py")
-X = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(X)
+from src import l5_btc5m_execution as X
+from src import l5_campaign_approval as CA
+from src import l5_live_authorization as AUTH
 
 UTC = dt.timezone.utc
 MARKET = "cpc-btc-updown-5m-2026-11-11-1200z"
@@ -41,7 +34,55 @@ T0 = dt.datetime(2026, 11, 11, 12, 0, 30, tzinfo=UTC)
 NOT_AFTER = "2026-11-11T12:05:00Z"
 
 ENV = (C.CONTROLLER_ENV, X.LIVE_ENV, X.MARKET_ENV, X.NOT_AFTER_ENV,
-       X.HALT_ENV, X.SHADOW_ONLY_ENV, X.ACCOUNT_CAP_ENV)
+       X.HALT_ENV, X.SHADOW_ONLY_ENV, X.ACCOUNT_CAP_ENV,
+       CA.APPROVAL_ENV, CA.ROOT_ENV, AUTH.EXPERIMENT_ENV,
+       AUTH.MAX_SUBMISSIONS_ENV, AUTH.SUBMIT_PAUSE_ENV, AUTH.OWNER_ROLE_ENV,
+       AUTH.SERVICE_ROLE_ENV, AUTH.LEDGER_ENV,
+       *AUTH.CLASS_BUDGET_ENV.values())
+W_1200 = dt.datetime(2026, 11, 11, 12, 0, 0, tzinfo=UTC)
+W_1205 = dt.datetime(2026, 11, 11, 12, 5, 0, tzinfo=UTC)
+
+
+def approval_document(starts, **over):
+    """An owner approval for the 5-minute series naming exactly `starts`."""
+    starts = sorted(starts)
+    doc = {"approved": True, "nonce": "t" * 32,
+           "series": CA.BTC5M_SERIES,
+           "issued_utc": (starts[0] - dt.timedelta(minutes=5)).isoformat(),
+           "expires_utc": (starts[-1] + dt.timedelta(minutes=30)).isoformat(),
+           "max_windows": len(starts),
+           "max_total_exposure_usd": "5", "max_daily_loss_usd": "5",
+           "window_starts": [t.isoformat() for t in starts]}
+    doc.update(over)
+    return doc
+
+
+def authorize_5m(mp, tmp_path, *, now_fn, starts, max_submissions="200",
+                 release_locks=True, **doc_over):
+    """Everything the OWNER has to have in place for the adapter's claim to
+    pass: the approval document for these windows, the named experiment,
+    the submission total, both shared locks released, and this process
+    declared the holder on durable storage. The claim, the approval gate,
+    the window ledger and the locks are all the real ones; only the gate's
+    clock and the mount lookup are pointed at the test's."""
+    mp.setattr(CA, "approval_gate", lambda: CA.ApprovalGate(
+        CA.EnvApprovalStore(), max_age_s=CA.MAX_CAMPAIGN_S, now_fn=now_fn))
+    mp.setattr(AUTH, "nearest_mount", lambda path: "/state")
+    mp.setenv(CA.APPROVAL_ENV, json.dumps(
+        approval_document(starts, **doc_over)))
+    mp.setenv(CA.ROOT_ENV, str(tmp_path / "auth_root"))
+    mp.setenv(AUTH.LEDGER_ENV, str(tmp_path / "auth" / "auth.jsonl"))
+    mp.setenv(AUTH.EXPERIMENT_ENV, "B5M-TEST")
+    mp.setenv(AUTH.MAX_SUBMISSIONS_ENV, str(max_submissions))
+    mp.setenv(AUTH.OWNER_ROLE_ENV, "l5-btc5m-live")
+    mp.setenv(AUTH.SERVICE_ROLE_ENV, "l5-btc5m-live")
+    if release_locks:
+        # the two SHARED locks and the drain. A caller that shares an
+        # environment with the 15-minute harness leaves them exactly as
+        # they are: they are shared on purpose.
+        mp.setenv(X.SHADOW_ONLY_ENV, "0")
+        mp.delenv(X.HALT_ENV, raising=False)
+        mp.delenv(AUTH.SUBMIT_PAUSE_ENV, raising=False)
 ARMED = {C.CONTROLLER_ENV: "ON", X.LIVE_ENV: X.ARM_TOKEN,
          X.MARKET_ENV: MARKET, X.NOT_AFTER_ENV: NOT_AFTER,
          X.SHADOW_ONLY_ENV: "0", X.ACCOUNT_CAP_ENV: "10"}
@@ -196,7 +237,10 @@ def clean_env(monkeypatch):
 
 
 @pytest.fixture
-def armed(monkeypatch):
+def armed(monkeypatch, tmp_path):
+    """Owner-approved for the 12:00Z and 12:05Z windows, and locally armed."""
+    authorize_5m(monkeypatch, tmp_path, now_fn=lambda: T0,
+                 starts=(W_1200, W_1205))
     for k, v in ARMED.items():
         monkeypatch.setenv(k, v)
 
@@ -420,23 +464,45 @@ class TestArmedPlacement:
         assert rep["halted_reason"] is None and len(rig.venue.sent) == 1
 
     def test_a_failed_ledger_write_sends_nothing(self, rig, armed, monkeypatch):
+        """The order of the three steps is claim, ledger row, wire. Here the
+        ledger row cannot be written: nothing is sent, and the claim that
+        was already taken stays spent -- the conservative direction, the
+        same one the 15-minute executor takes."""
+        real = X.os.replace
+
+        def broken(src, dst, *a, **k):
+            if str(dst) == rig.path:
+                raise OSError("disk full")
+            return real(src, dst, *a, **k)
+        with monkeypatch.context() as m:
+            m.setattr(X.os, "replace", broken)
+            rep = rig.step()
+            assert rig.venue.sent == []
+            assert reasons(rep) == ["LEDGER_WRITE_FAILED"]
+            assert rep["halted_reason"].startswith("LEDGER_WRITE_FAILED")
+            assert rig.ex.orders() == {}
+            rep = rig.tick().step()                  # still failing: still off
+            assert rig.venue.sent == []
+            assert rep["arming_refusal"].startswith(
+                "LEDGER_HALTED:LEDGER_WRITE")
+        # once a write succeeds memory and disk agree again, and it resumes.
+        # The SAME order is not sent: its claim was spent when the write
+        # failed. A different order (the book has moved a tick) is.
+        rep = rig.tick().step()
+        assert rep["halted_reason"] is None and rig.venue.sent == []
+        assert reasons(rep) == ["AUTHORIZATION:AUTHORIZATION_ALREADY_USED"]
+        rep = rig.tick().step(bid="0.61", ask="0.63")
+        assert rig.sent() == [("UP", D("0.59"), D("0.16"))], rep
+        assert rig.disk()["halted_reason"] is None
+
+    def test_a_disk_that_cannot_hold_the_claim_sends_nothing(
+            self, rig, armed, monkeypatch):
         def broken(*a, **k):
             raise OSError("disk full")
         monkeypatch.setattr(X.os, "replace", broken)
         rep = rig.step()
-        assert rig.venue.sent == [] and reasons(rep) == ["LEDGER_WRITE_FAILED"]
-        assert rep["halted_reason"].startswith("LEDGER_WRITE_FAILED")
-        assert rig.ex.orders() == {}
-        rep = rig.tick().step()                      # still failing: still off
-        assert rig.venue.sent == []
-        assert rep["arming_refusal"].startswith("LEDGER_HALTED:LEDGER_WRITE")
-        # once a write succeeds memory and disk agree again, and it resumes
-        monkeypatch.undo()
-        for k, v in ARMED.items():
-            monkeypatch.setenv(k, v)
-        rep = rig.tick().step()
-        assert rep["halted_reason"] is None and rig.sent() == [FIRST]
-        assert rig.disk()["halted_reason"] is None
+        assert rig.venue.sent == [] and rig.ex.orders() == {}
+        assert reasons(rep) == ["AUTHORIZATION:WINDOW_RESERVE_FAILED"]
 
     def test_a_failed_write_after_a_fill_keeps_the_fill_and_stops_new_orders(
             self, rig, armed, monkeypatch):
@@ -919,6 +985,11 @@ class TestEndOfWindowAndSettle:
         assert early["provisional"] is True and len(early["unresolved_orders"]) == 1
         assert MARKET not in rig.disk()["settled"]
         rig.ex.end_of_window(MARKET)
+        # what the other outcome WOULD pay: arithmetic, recorded nowhere
+        lost = rig.ex.settlement_arithmetic(MARKET, False)
+        assert lost["redemption_total"] == D("0.10")
+        assert lost["settlement_pnl"] == D("-0.0336")
+        assert MARKET not in rig.disk()["settled"]
         won = rig.ex.settle(MARKET, True)
         assert won["provisional"] is False
         assert won["matched_qty"] == D("0.10") and won["pair_cost"] == D("0.93")
@@ -926,10 +997,21 @@ class TestEndOfWindowAndSettle:
         assert won["cost_total"] == D("0.1336")           # 0.0986 + 0.035
         assert won["redemption_total"] == D("0.17")
         assert won["settlement_pnl"] == D("0.0364")
-        lost = rig.ex.settle(MARKET, False)
-        assert lost["redemption_total"] == D("0.10")
-        assert lost["settlement_pnl"] == D("-0.0336")
+        assert won["origin"] == "BTC5M"
+        assert won["cost_basis"] == "AUTHENTICATED_FILLS"
         assert "realized only when the venue credits" in won["label"]
+        # RECORDED ONCE. The same outcome again writes nothing new; the
+        # other outcome is refused -- a settlement is not reversible here.
+        first = rig.disk()["settled"][MARKET]
+        again = rig.ex.settle(MARKET, True)
+        assert again["already_settled"] is True
+        assert again["settlement_pnl"] == D("0.0364")
+        assert rig.disk()["settled"][MARKET] == first
+        with pytest.raises(ValueError):
+            rig.ex.settle(MARKET, False)
+        assert rig.disk()["settled"][MARKET] == first
+        # and it is this strategy's settled result for the day
+        assert rig.ex.day_settled_pnl() == D("0.0364")
         # a settled market stops counting as our exposure
         assert rig.ex.account_exposure()["own_usd"] == 0
         assert MARKET in rig.restart()._ledger["settled"]
@@ -958,8 +1040,12 @@ class TestIsolationOfTheModule:
         mods = set(re.findall(r"^(?:from|import)\s+([\w.]+)", src, re.M))
         assert mods == {"__future__", "datetime", "hashlib", "json", "os",
                         "decimal", "typing", "src"}
+        # the pure controller, the authorization claim it must spend before
+        # every submit, and the registry of strategy ids. Nothing that
+        # holds a credential or builds a transport.
         assert re.findall(r"^from src import (.+)$", src, re.M) == [
-            "l5_btc5m_controller as C"]
+            "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
+            "l5_origin as ORIGIN"]
 
     def test_it_calls_only_the_five_transport_methods(self):
         src = inspect.getsource(X)
@@ -981,3 +1067,204 @@ class TestIsolationOfTheModule:
         rig.ex.end_of_window(MARKET)
         rig.ex.settle(MARKET, True)
         assert set(vars(rig.venue)) == before and rig.venue.armed is True
+
+
+# ======================================================================
+# 8. THE AUTHORIZATION CLAIM IS THE ONLY WAY AN ORDER LEAVES
+#    (owner decision 2026-11-11: the same mechanism as the 15-minute
+#    strategy, and no second, weaker path)
+# ======================================================================
+def claim_locks(tmp_path):
+    d = tmp_path / "auth"
+    return sorted(p.name for p in d.glob("l5_auth_claim_b5m1.*.lock")) \
+        if d.is_dir() else []
+
+
+def locally_armed_only(monkeypatch):
+    for k, v in ARMED.items():
+        monkeypatch.setenv(k, v)
+
+
+class TestTheClaimGatesEverySubmit:
+
+    def test_the_local_switches_alone_send_nothing(self, rig, monkeypatch,
+                                                   tmp_path):
+        """Every local switch on, an armed transport, and NO owner approval."""
+        locally_armed_only(monkeypatch)
+        rep = rig.step()
+        assert rig.venue.sent == [] and rig.ex.orders() == {}
+        assert rep["arming_refusal"] is None          # the local lock is open
+        (r,) = rep["refused"]
+        assert r["reason"].startswith("AUTHORIZATION:")
+        assert claim_locks(tmp_path) == []
+
+    @pytest.mark.parametrize("change,reason", [
+        (lambda mp: mp.delenv(CA.APPROVAL_ENV), "BTC5M_APPROVAL_ABSENT"),
+        (lambda mp: mp.setenv(CA.APPROVAL_ENV, json.dumps(approval_document(
+            (W_1200,), series=CA.BTC15M_SERIES))), "CAMPAIGN_SERIES_MISMATCH"),
+        (lambda mp: mp.setenv(CA.APPROVAL_ENV, json.dumps(approval_document(
+            (W_1205,), issued_utc=(W_1200 - dt.timedelta(minutes=5)
+                                   ).isoformat()))),
+         "WINDOW_NOT_IN_AUTHORIZED_SET"),
+        (lambda mp: mp.setenv(CA.APPROVAL_ENV, json.dumps(approval_document(
+            (W_1200,), approved=False))), "APPROVAL_NOT_VALID"),
+        (lambda mp: mp.delenv(AUTH.EXPERIMENT_ENV),
+         "BTC5M_CLAIM_NO_EXPERIMENT"),
+        (lambda mp: mp.delenv(AUTH.MAX_SUBMISSIONS_ENV),
+         "BTC5M_SUBMISSION_BUDGET_NOT_SET"),
+        (lambda mp: mp.setenv(AUTH.SERVICE_ROLE_ENV, "l5-pmus-live"),
+         "NOT_THE_AUTHORIZATION_HOLDER"),
+        (lambda mp: mp.setenv(AUTH.SUBMIT_PAUSE_ENV, "1"),
+         "SUBMISSION_PAUSED_FOR_DEPLOY"),
+        (lambda mp: mp.setattr(AUTH, "nearest_mount", lambda p: "/"),
+         "AUTHORIZATION_LEDGER_NOT_DURABLE"),
+    ])
+    def test_each_missing_authorization_sends_nothing(
+            self, rig, armed, monkeypatch, tmp_path, change, reason):
+        change(monkeypatch)
+        rep = rig.step()
+        assert rig.venue.sent == [] and rig.ex.orders() == {}
+        assert reasons(rep) == ["AUTHORIZATION:%s" % reason]
+        assert claim_locks(tmp_path) == []
+        assert not rig.venue.cancelled
+
+    def test_the_claim_is_on_disk_before_submit_is_called(self, rig, armed,
+                                                          tmp_path):
+        seen = {}
+
+        def at_the_wire(intent):
+            seen["locks"] = claim_locks(tmp_path)
+            seen["coid"] = intent["client_order_id"]
+        rig.venue.before_submit = at_the_wire
+        opened(rig)
+        (lock,) = seen["locks"]
+        assert lock.endswith("%s.lock" % seen["coid"])
+        body = json.loads((tmp_path / "auth" / lock).read_text())
+        assert body["kind"] == "btc5m_submission_claim"
+        assert body["market"] == MARKET and body["klass"] == "OPEN"
+        assert body["client_order_id"] == seen["coid"]
+        assert D(body["worst_case_usd"]) == FIRST_COST
+        (row,) = rig.ex.orders().values()
+        assert row["claim_sid"] == body["sid"] and row["klass"] == "OPEN"
+
+    def test_one_claim_per_order_and_never_one_more(self, rig, armed, tmp_path):
+        opened(rig)
+        rig.venue.fill("v1")
+        rig.tick().step(bid="0.63", ask="0.65")          # the hedge
+        rig.tick(30).step(bid="0.66", ask="0.68", p_up="0.80")
+        sent = [s["client_order_id"] for s in rig.venue.sent]
+        assert len(sent) == len(set(sent)) == len(claim_locks(tmp_path))
+        for coid in sent:
+            assert AUTH.claim_held(AUTH.btc5m_sid(AUTH.experiment_id(), coid))
+
+    def test_a_claim_spent_on_a_submit_that_raised_is_not_returned(
+            self, rig, armed, tmp_path):
+        rig.venue.submit_error = ConnectionError("no answer")
+        rep = rig.step()
+        assert reasons(rep) == ["SUBMIT_UNCERTAIN"]
+        assert len(claim_locks(tmp_path)) == 1
+        rig.venue.submit_error = None
+        rig.tick().step()
+        assert rig.venue.sent == [] and len(claim_locks(tmp_path)) == 1
+
+    def test_each_order_is_charged_to_the_class_of_what_it_does(
+            self, rig, armed, tmp_path):
+        opened(rig)                                      # first leg: OPEN
+        rig.venue.fill("v1", "0.05")
+        rig.tick(5).step(t=35.0)                         # hedge: COMPLETE
+        rig.tick(5).step(bid="0.62", ask="0.64", p_up="0.78", t=40.0)
+        rig.tick(5).step(bid="0.62", ask="0.64", p_up="0.78", t=45.0)
+        got = [(r["side"], r["klass"]) for r in sorted(
+            rig.ex.orders().values(), key=lambda r: r["created_at"])]
+        assert got == [("UP", "OPEN"), ("DOWN", "COMPLETE"),
+                       ("UP", "REPLACE"), ("DOWN", "COMPLETE")]
+        bodies = [json.loads((tmp_path / "auth" / n).read_text())
+                  for n in claim_locks(tmp_path)]
+        assert sorted((b["klass"], b["reducing"]) for b in bodies) == [
+            ("COMPLETE", True), ("COMPLETE", True), ("OPEN", False),
+            ("REPLACE", False)]
+
+    def test_exposure_above_the_owners_approval_is_refused_at_the_claim(
+            self, rig, monkeypatch, tmp_path):
+        """The adapter's own cap is $5; the owner approved $0.05."""
+        authorize_5m(monkeypatch, tmp_path, now_fn=lambda: T0,
+                     starts=(W_1200, W_1205), max_total_exposure_usd="0.05")
+        locally_armed_only(monkeypatch)
+        rep = rig.step()
+        assert rig.venue.sent == []
+        (r,) = rep["refused"]
+        assert r["reason"] == "AUTHORIZATION:BTC5M_EXPOSURE_ABOVE_APPROVED"
+        assert r["detail"] == {"worst_case_usd": "0.0986",
+                               "approved_usd": "0.05"}
+
+    def test_the_days_settled_loss_stops_new_orders_at_the_approved_limit(
+            self, rig, monkeypatch, tmp_path):
+        authorize_5m(monkeypatch, tmp_path, now_fn=lambda: T0,
+                     starts=(W_1200, W_1205), max_daily_loss_usd="0.09")
+        locally_armed_only(monkeypatch)
+        opened(rig)
+        rig.venue.fill("v1")
+        rig.ex.poll()
+        rig.ex.end_of_window(MARKET)
+        lost = rig.ex.settle(MARKET, False)              # UP 0.17 @ 0.58 lost
+        assert lost["settlement_pnl"] == D("-0.0986")
+        assert rig.ex.day_settled_pnl() == D("-0.0986")
+        monkeypatch.setenv(X.MARKET_ENV, OTHER_5M)
+        monkeypatch.setenv(X.NOT_AFTER_ENV, "2026-11-11T12:10:00Z")
+        rig.now = W_1205 + dt.timedelta(seconds=30)
+        rep = rig.step(market=OTHER_5M)
+        assert len(rig.venue.sent) == 1                  # nothing new
+        (r,) = rep["refused"]
+        assert r["reason"] == "AUTHORIZATION:BTC5M_DAILY_LOSS_LIMIT"
+
+    def test_a_settled_row_that_cannot_be_read_refuses_rather_than_reads_zero(
+            self, rig, armed):
+        rig.ex._ledger["settled"]["some-market"] = {"settlement_pnl": "-1"}
+        assert rig.ex.day_settled_pnl() is None          # no settled_at
+        rep = rig.step()
+        assert rig.venue.sent == []
+        assert reasons(rep) == ["AUTHORIZATION:BTC5M_DAY_RESULT_UNREADABLE"]
+
+    def test_the_shared_total_binds_and_leaves_room_to_close(
+            self, rig, monkeypatch, tmp_path):
+        """With a total of 3: one OPEN (1 + the reserve of 2), then no
+        second OPEN -- but the hedge that reduces exposure still goes."""
+        authorize_5m(monkeypatch, tmp_path, now_fn=lambda: T0,
+                     starts=(W_1200, W_1205), max_submissions="3")
+        locally_armed_only(monkeypatch)
+        opened(rig)
+        rig.venue.fill("v1")
+        rep = rig.tick().step(bid="0.63", ask="0.65")
+        assert rep["action"] == C.HEDGE_UNDERDOG and len(rig.venue.sent) == 2
+        rig.venue.fill("v2")
+        rep = rig.tick().step(bid="0.63", ask="0.65")    # wants to add
+        assert len(rig.venue.sent) == 2
+        assert reasons(rep) == [
+            "AUTHORIZATION:NO_COMPLETION_CAPACITY_RESERVED"]
+
+    def test_a_window_the_owner_did_not_list_cannot_be_traded(
+            self, rig, armed, monkeypatch):
+        later = "cpc-btc-updown-5m-2026-11-11-1210z"
+        monkeypatch.setenv(X.MARKET_ENV, later)
+        monkeypatch.setenv(X.NOT_AFTER_ENV, "2026-11-11T12:15:00Z")
+        rig.now = dt.datetime(2026, 11, 11, 12, 10, 30, tzinfo=UTC)
+        rep = rig.step(market=later)
+        assert rig.venue.sent == []
+        assert reasons(rep) == ["AUTHORIZATION:WINDOW_NOT_IN_AUTHORIZED_SET"]
+
+    def test_ownership_by_venue_order_id(self, rig, armed):
+        assert rig.ex.owns_venue_order_id("v1") is False
+        opened(rig)
+        assert rig.ex.owns_venue_order_id("v1") is True
+        for other in ("v2", "", None, 1, "V1"):
+            assert rig.ex.owns_venue_order_id(other) is False
+        assert rig.restart().owns_venue_order_id("v1") is True
+
+    def test_the_only_claim_this_module_can_spend_is_the_5m_one(self):
+        src = inspect.getsource(X)
+        assert set(re.findall(r"AUTH\.(\w+)", src)) == {
+            "claim_btc5m_submission", "Refused"}
+        i = src.index("AUTH.claim_btc5m_submission(")
+        assert i < src.index("self.transport.submit(")
+        # nothing between the claim and the wire can skip the wire's gate
+        assert len(re.findall(r"\btransport\.submit\(", src)) == 1

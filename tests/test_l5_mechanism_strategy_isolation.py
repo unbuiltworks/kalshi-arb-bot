@@ -236,9 +236,17 @@ def test_the_two_ticks_differ_only_by_the_strategy_being_absent(
 # ------------------------------------- the mechanism is the only submitter
 
 def test_the_mechanism_is_the_only_submit_call_site_reachable_in_this_mode():
-    """Source-level companion to the behavioural tests: exactly two call
-    sites exist in src/, and in mechanism mode only the mechanism's is
-    reachable because mechanism_tick never calls handle."""
+    """Source-level companion to the behavioural tests: the call sites in
+    src/ are enumerated, and in mechanism mode only the mechanism's is
+    reachable -- `mechanism_tick` never calls `handle`, and the third site
+    is not in this service at all.
+
+    THE THIRD SITE is the BTC 5-minute adapter, moved into src/ once it
+    spent its own authorization claim (owner decision, 2026-11-11). It is a
+    different strategy for a different service: this runner does not import
+    it and this service's image does not ship it, and both are asserted
+    here so that "not reachable in this mode" stays a checked fact rather
+    than a count that happened to be two."""
     import pathlib
     import re
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -247,8 +255,15 @@ def test_the_mechanism_is_the_only_submit_call_site_reachable_in_this_mode():
         for n, line in enumerate(py.read_text().splitlines(), 1):
             if re.search(r"\btransport\.submit\(", line):
                 sites.append(py.name)
-    assert sorted(set(sites)) == ["l5_cancel_mechanism.py",
+    assert sorted(set(sites)) == ["l5_btc5m_execution.py",
+                                 "l5_cancel_mechanism.py",
                                  "l5_live_execution.py"], sites
+    # the 5-minute adapter is unreachable from the 15-minute service
+    for name in ("l5_pmus_live_runner.py", "l5_live_execution.py",
+                 "l5_cancel_mechanism.py", "l5_pmus_transport.py"):
+        assert "l5_btc5m_execution" not in (root / "src" / name).read_text(), name
+    image = (root / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
+    assert "l5_btc5m_execution" not in image
 
 
 def test_mechanism_tick_does_not_mention_poll(tmp_path):

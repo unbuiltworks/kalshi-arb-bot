@@ -1,20 +1,26 @@
-"""PROTOTYPE, deliberately OUTSIDE src/. Default-off execution adapter for
-PMUS BTC 5-minute up/down.
+"""Default-off execution adapter for PMUS BTC 5-minute up/down.
 
-WHY IT IS NOT IN src/. It calls `transport.submit` without spending the
-single-use authorization claim (`l5_live_authorization`). Two guards in
-this repository require every submission path in src/ to spend that claim
-in its own module (`tests/test_l5_one_submission_claim.py`,
-`tests/test_l5_mechanism_strategy_isolation.py`). They rejected this file,
-correctly, and they have not been changed. No image copies `prototypes/`,
-so nothing here can be deployed.
+AUTHORIZED BY THE SAME MECHANISM AS THE 15-MINUTE STRATEGY. Every order
+spends `l5_live_authorization.claim_btc5m_submission` immediately before
+`submit`: the owner's approval document must name the 5-minute series and
+enumerate this window, the strategy's exposure and settled day result must
+be inside that document's limits, the shared submission budgets must have
+room, and the order's own single-use lock is created and fsynced before the
+wire. There is no other way for this module to send an order (owner
+decision, 2026-11-11: "do not create a second, weaker authorization path").
+The local switches below (`L5_BTC5M_LIVE`, `L5_BTC5M_MARKET`,
+`L5_BTC5M_NOT_AFTER`) are an ADDITIONAL lock in front of that claim; they
+authorize nothing on their own.
 
-WHAT IT NEEDS BEFORE IT CAN MOVE INTO src/: every PLACE must first spend
-that claim, which means the approval layer has to be able to authorize a
-5-minute market at all (`l5_campaign_approval.ALLOWED_SERIES` is the
-15-minute series only). That is an architecture and authorization decision,
-not an implementation detail, and it has not been made.
+It was a prototype outside src/ until that claim existed. The guards that
+kept it out (`tests/test_l5_one_submission_claim.py`) now list it as a
+submission site with its claim, and still fail for any path without one.
 
+NOT YET A SERVICE. Nothing imports this module and no image copies it: it
+needs a runner that builds a venue transport for the window, installs
+`owns_venue_order_id` as that transport's cancel-ownership test, supplies
+an INDEPENDENT probability (the controller places nothing on the book mid
+alone), and calls `settle` with the venue's own settlement.
 
 `Btc5mExecutor` carries the decisions of the pure controller
 (`l5_btc5m_controller.decide`) to a transport for ONE exactly named
@@ -64,13 +70,17 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_btc5m_controller as C
+from src import l5_live_authorization as AUTH
+from src import l5_origin as ORIGIN
 
 D = Decimal
 ZERO = D("0")
 CENT = D("0.01")
 
-COID_PREFIX = "b5m-"
-MARKET_PREFIX = "cpc-btc-updown-5m-"
+#: this strategy's id prefix and series, from the one registry
+STRATEGY = ORIGIN.BTC5M
+COID_PREFIX = ORIGIN.STRATEGY_COID_PREFIX[STRATEGY]
+MARKET_PREFIX = ORIGIN.STRATEGY_SERIES[STRATEGY]
 LIVE_ENV = "L5_BTC5M_LIVE"
 ARM_TOKEN = "ARMED_BY_OWNER"
 MARKET_ENV = "L5_BTC5M_MARKET"
@@ -300,6 +310,17 @@ class Btc5mExecutor:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, self.ledger_path)
+        # the RENAME has to be durable too: the row written before a submit
+        # is what says an order may exist, and a rename that a crash undoes
+        # would leave a resting order this ledger never heard of
+        try:
+            dfd = os.open(folder, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass                    # the file itself is already fsynced
         self._on_disk = text
 
     def _save_or_halt(self) -> bool:
@@ -338,6 +359,61 @@ class Btc5mExecutor:
         return (isinstance(client_order_id, str)
                 and client_order_id.startswith(COID_PREFIX)
                 and client_order_id in self._ledger["orders"])
+
+    def owns_venue_order_id(self, venue_order_id: Any) -> bool:
+        """Is this VENUE order id one this ledger recorded for its own
+        order? The venue's rows carry no client order id, so this -- not a
+        prefix -- is what proves an order on the venue is ours. A runner
+        installs it as the transport's cancel-ownership test."""
+        if not self._ledger_ok or not isinstance(venue_order_id, str) \
+                or not venue_order_id:
+            return False
+        return any(r.get("venue_order_id") == venue_order_id
+                   for r in self._ledger["orders"].values())
+
+    def day_settled_pnl(self, now: Any = None) -> Optional[Decimal]:
+        """This strategy's settled result for the UTC day of `now`, from its
+        own settlement records. None when it cannot be established: an
+        unreadable ledger, an unreadable clock, or a settled row whose time
+        or amount cannot be read. None refuses a submission; it is never
+        read as zero."""
+        at = _utc(now) if now is not None else self._now()
+        if at is None or not self._ledger_ok:
+            return None
+        total = ZERO
+        for rec in self._ledger["settled"].values():
+            when = _parse_utc(rec.get("settled_at")) \
+                if isinstance(rec, Mapping) else None
+            pnl = _dec(rec.get("settlement_pnl")) \
+                if isinstance(rec, Mapping) else None
+            if when is None or pnl is None:
+                return None
+            if when.date() == at.date():
+                total += pnl
+        return total
+
+    def _order_class(self, market: str, side: str, qty: Decimal) -> tuple:
+        """(class, reducing) for the shared submission budgets.
+
+        COMPLETE and reducing: the order buys the side we are SHORT of and,
+        with what is already working on that side, does not exceed the
+        unmatched quantity -- it can only reduce it. REPLACE: an order of
+        ours on this side in this market was cancelled before. OPEN:
+        everything else, the only class that adds exposure.
+        """
+        legs = self.inventory(market)
+        other = C.DOWN if side == C.UP else C.UP
+        unmatched = legs[other]["qty"] - legs[side]["qty"]
+        working = sum((D(r["qty"]) - D(r["filled_qty"])
+                       for r in self._ledger["orders"].values()
+                       if r["market"] == market and r["side"] == side
+                       and r["state"] in OPEN), ZERO)
+        if unmatched > 0 and qty + working <= unmatched:
+            return "COMPLETE", True
+        replaced = any(r["market"] == market and r["side"] == side
+                       and r["state"] == CANCELLED
+                       for r in self._ledger["orders"].values())
+        return ("REPLACE" if replaced else "OPEN"), False
 
     def inventory(self, market: str) -> Dict[str, Dict[str, Decimal]]:
         """{side: {"qty", "cost"}} for one market, from OUR fills only."""
@@ -541,8 +617,10 @@ class Btc5mExecutor:
         if cum is None or cum < booked or cum > qty:
             return bad("ORDER_ROW_INCOHERENT")
         word = str(got.get("state") or "").upper()
-        ended = (any(w in word for w in ("CANCEL", "EXPIRED", "REJECTED"))
-                 or ("FILLED" in word and "PARTIAL" not in word))
+        # a PENDING cancel has not ended anything yet
+        ended = "PENDING" not in word and (
+            any(w in word for w in ("CANCEL", "EXPIRED", "REJECTED"))
+            or ("FILLED" in word and "PARTIAL" not in word))
         if got.get("leavesQuantity") is not None:
             leaves = _dec(got.get("leavesQuantity"))
             if leaves is None or leaves < 0:
@@ -731,13 +809,36 @@ class Btc5mExecutor:
         if acct["total_usd"] + notional > cap:
             return refuse("ACCOUNT_EXPOSURE_CAP", total_usd=acct["total_usd"],
                           other_usd=acct["other_usd"], cap_usd=cap)
-        # THE LEDGER FIRST. If this write fails nothing is sent.
+        # THE AUTHORIZATION CLAIM. The owner's approval for THIS 5-minute
+        # window, the strategy's own exposure and day-result limits from
+        # that approval, the shared submission budgets, and this order's
+        # single-use lock -- created and fsynced before anything is sent,
+        # and never returned by a cancel, a fill, a restart or a rejection.
+        # A refusal sends nothing and writes no order row.
+        klass, reducing = self._order_class(market, side, qty)
+        try:
+            claim = AUTH.claim_btc5m_submission(
+                market, coid,
+                {"side": side, "price": _s(price), "qty": _s(qty),
+                 "reason": order.get("reason")},
+                worst_case_usd=exp["total_exposure_usd"] + notional,
+                day_realized_usd=self.day_settled_pnl(now),
+                klass=klass, reducing=reducing, now=now)
+        except AUTH.Refused as exc:
+            return refuse("AUTHORIZATION:%s" % exc.reason,
+                          client_order_id=coid, klass=klass,
+                          detail=exc.detail)
+        except Exception as exc:                               # noqa: BLE001
+            return refuse("AUTHORIZATION_UNAVAILABLE", client_order_id=coid,
+                          detail=type(exc).__name__)
+        # THE LEDGER NEXT. If this write fails nothing is sent.
         self._ledger["orders"][coid] = {
             "client_order_id": coid, "market": market, "side": side,
             "price": _s(price), "qty": _s(qty), "venue_order_id": None,
             "state": NEW, "filled_qty": "0", "filled_cost": "0",
             "created_at": now.isoformat() if now is not None else None,
-            "reason": order.get("reason")}
+            "reason": order.get("reason"),
+            "klass": klass, "claim_sid": claim.get("sid")}
         if not self._save_or_halt():
             del self._ledger["orders"][coid]
             return refuse("LEDGER_WRITE_FAILED")
@@ -863,13 +964,13 @@ class Btc5mExecutor:
 
     # ---------------------------------------------------------- settlement
 
-    def settle(self, market: str, up_won: bool) -> Dict[str, Any]:
-        """Settlement arithmetic for `market` from OUR booked fills only.
+    def settlement_arithmetic(self, market: str, up_won: bool
+                              ) -> Dict[str, Any]:
+        """What `market` would settle to from OUR booked fills. READ-ONLY.
 
         Each winning share redeems $1, each losing share nothing. This is
         arithmetic, not a credit: label it realized only once the venue has
-        paid. With an order still unresolved the result is provisional and
-        the market keeps counting as exposure.
+        paid. With an order still unresolved the result is provisional.
         """
         if not isinstance(up_won, bool):
             raise ValueError("up_won must be True or False")
@@ -888,16 +989,38 @@ class Btc5mExecutor:
         redemption = up["qty"] if up_won else down["qty"]
         unresolved = sorted(c for c, r in self._ledger["orders"].items()
                             if r["market"] == market and r["state"] in OPEN)
-        out = {"market": market, "up_won": up_won, "matched_qty": matched,
-               "pair_cost": pair, "residual_side": residual_side,
-               "residual_qty": residual, "cost_total": cost,
-               "redemption_total": redemption,
-               "settlement_pnl": redemption - cost,
-               "unresolved_orders": unresolved,
-               "provisional": bool(unresolved),
-               "label": ("settlement arithmetic from booked fills; realized "
-                         "only when the venue credits the redemption")}
-        if self._ledger_ok and not unresolved:
+        return {"market": market, "up_won": up_won, "matched_qty": matched,
+                "pair_cost": pair, "residual_side": residual_side,
+                "residual_qty": residual, "cost_total": cost,
+                "redemption_total": redemption,
+                "settlement_pnl": redemption - cost,
+                "unresolved_orders": unresolved,
+                "provisional": bool(unresolved),
+                "origin": STRATEGY,
+                "cost_basis": ORIGIN.BASIS_AUTHENTICATED,
+                "label": ("settlement arithmetic from booked fills; realized "
+                          "only when the venue credits the redemption")}
+
+    def settle(self, market: str, up_won: bool) -> Dict[str, Any]:
+        """Record the settlement of `market`, ONCE. `up_won` must be the
+        venue's own settlement, never a mark or a guess.
+
+        With an order still unresolved nothing is recorded and the market
+        keeps counting as exposure. Once recorded, the same outcome returns
+        the same figures and writes nothing; the OTHER outcome raises --
+        a settled result is not something a later call may reverse.
+        """
+        out = self.settlement_arithmetic(market, up_won)
+        prior = self._ledger["settled"].get(market)
+        if prior is not None:
+            if prior.get("up_won") is not up_won:
+                raise ValueError("%s is already settled with the other "
+                                 "outcome" % market)
+            return dict(out, already_settled=True,
+                        settled_at=prior.get("settled_at"))
+        if self._ledger_ok and not out["provisional"]:
+            now = self._now()
+            out["settled_at"] = now.isoformat() if now is not None else None
             self._ledger["settled"][market] = {
                 k: (_s(v) if isinstance(v, Decimal) else v)
                 for k, v in out.items()}
