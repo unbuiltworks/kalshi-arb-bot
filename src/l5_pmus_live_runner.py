@@ -3354,6 +3354,20 @@ class Runner:
             out["resting_peaks"] = dict(
                 (getattr(self, "_cycle_peaks", None) or {}).get(str(slug))
                 or {"samples": 0})
+            # what the venue's buying power has confirmed returned, and how
+            # each balance read was judged. Counts are since process start.
+            _anchor = getattr(self, "_bp_anchor", None)
+            out["recycling"] = {
+                "policy": str(getattr(vg, "cash_policy", None) or ""),
+                "anchor_usd": None if _anchor is None else str(_anchor),
+                "confirmed_matched": {
+                    m: str((v or {}).get("matched")) for m, v in
+                    (ex.__dict__.get("recycle_confirmed") or {}).items()},
+                "confirmed_share_this_market": str(
+                    ex.recycle_confirmed_share(str(slug))),
+                "checks": {k.split(":", 1)[1]: v
+                           for k, v in self.stats.items()
+                           if k.startswith("recycle_check:") and v}}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -4340,7 +4354,8 @@ class Runner:
         Read-only throughout. No order path, no credential handling here.
         """
         if (self.available_cash_t is not None
-                and now - self.available_cash_t < CASH_REFRESH_S):
+                and now - self.available_cash_t < CASH_REFRESH_S
+                and not self.recycle_wants_fresh_cash(now)):
             return                     # the reading in hand is still fresh
         value = None
         err = None
@@ -4357,6 +4372,7 @@ class Runner:
         if self.executor is not None:
             # None means "no authoritative reading", never "unlimited"
             self.executor.available_cash_usd = value
+        self.confirm_recycled_cash(value, now)
         emit("L5_LIVE_CASH", {
             "available_cash_usd": (None if value is None else str(value)),
             "source": "/v1/account/balances via transport.account()",
@@ -4366,6 +4382,176 @@ class Runner:
             "labels": ("authoritative buying power. None is NOT unlimited: "
                        "the cash gate then binds on its configured ceiling "
                        "alone and require_cash_evidence() refuses to arm.")})
+
+    # ============== RECYCLED CASH MUST AGREE WITH THE VENUE'S BUYING POWER
+    #
+    # OWNER, 2026-11-11: "prove that recycled capital agrees with
+    # venue-confirmed buying power and that partial fills, stale order
+    # states, restarts, and reconciliation uncertainty cannot release
+    # unearned cash."
+    #
+    # THE RULE. A completed pair's cost leaves the cash figure only for the
+    # matched quantity that a balance read TAKEN AFTERWARDS has confirmed.
+    # The read is compared with an ANCHOR -- buying power the last time the
+    # account held nothing and had nothing at the venue -- moved by what
+    # each settlement since has paid:
+    #
+    #     buying power  >=  anchor - cost of UNMATCHED inventory - a cent
+    #
+    # If the venue had kept a pair's cash, buying power would sit below that
+    # line by the pair's whole cost, and nothing is confirmed.
+    #
+    # WHEN NOTHING IS CONFIRMED, by construction:
+    #   * no anchor: a restart, or a process that has not yet seen the
+    #     account flat. Memory only, never persisted, so a restart starts
+    #     from "nothing confirmed";
+    #   * an order is at the venue, or parked, or quarantined: it may hold
+    #     buying power, so the reading is not comparable and adds nothing;
+    #   * the ledger is uncertain: every confirmation is dropped;
+    #   * the balance is unreadable: nothing new is confirmed;
+    #   * buying power is below the line -- a fill the ledger has not booked
+    #     yet, a stale order state, a venue that did not net: every
+    #     confirmation is dropped.
+    # A partial fill changes the matched quantity; only the quantity that
+    # was confirmed keeps its credit until a later read confirms the rest.
+
+    RECYCLE_CONFIRM_MIN_S = 3.0
+    RECYCLE_TOLERANCE_USD = D("0.01")
+
+    def _recycle_book(self) -> Dict[str, Any]:
+        """Unmatched cost and matched quantity per unsettled market."""
+        ex, st = self.executor, self.store
+        retired = st.state.get("retired_markets") or {}
+        out = {"unmatched_cost": D(0), "locked_loss": D(0), "matched": {},
+               "any_position": False}
+        for m, c in st.committed().items():
+            if m in retired:
+                continue
+            up = D(str(st.position(m, "UP")))
+            dn = D(str(st.position(m, "DOWN")))
+            if up != 0 or dn != 0:
+                out["any_position"] = True
+            mc = ex.matched_pair_cost(m)
+            if mc is None:                # unvouched: all of it is at risk
+                out["unmatched_cost"] += c
+                continue
+            mq = min(up, dn)
+            out["unmatched_cost"] += max(D(0), c - mc)
+            out["locked_loss"] += max(D(0), mc - mq)
+            if mq > 0:
+                out["matched"][m] = mq
+        return out
+
+    def recycle_wants_fresh_cash(self, now: float) -> bool:
+        """Has quantity matched that no balance read has confirmed yet?
+        Then the next read should not wait out the minute. Rate-limited."""
+        try:
+            ex = self.executor
+            if ex is None or not ex.cash_recycles_completed_pairs():
+                return False
+            last = getattr(self, "_recycle_forced_t", None)
+            if last is not None and now - last < self.RECYCLE_CONFIRM_MIN_S:
+                return False
+            conf = ex.__dict__.get("recycle_confirmed") or {}
+            for m, mq in self._recycle_book()["matched"].items():
+                have = D(str((conf.get(m) or {}).get("matched", 0)))
+                if mq > have:
+                    self._recycle_forced_t = now
+                    return True
+            return False
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def confirm_recycled_cash(self, value: Any, now: float
+                              ) -> Optional[Dict[str, Any]]:
+        """Record which matched quantity this balance read confirms.
+
+        Read-only towards the venue and the ledger; it writes one in-memory
+        dict on the executor. Never raises: any failure confirms nothing.
+        """
+        ex = self.executor
+        if ex is None:
+            return None
+        try:
+            if not ex.cash_recycles_completed_pairs():
+                return None
+            conf = ex.__dict__.setdefault("recycle_confirmed", {})
+            st = self.store
+            rec: Dict[str, Any] = {
+                "buying_power_usd": None if value is None else str(value)}
+
+            def done(verdict: str) -> Dict[str, Any]:
+                rec.update(verdict=verdict, confirmed={
+                    m: str(v.get("matched")) for m, v in conf.items()})
+                key = (verdict, tuple(sorted(rec["confirmed"].items())))
+                if key != getattr(self, "_recycle_last", None):
+                    self._recycle_last = key
+                    emit("L5_RECYCLE_CHECK", rec)
+                self.stats["recycle_check:%s" % verdict] += 1
+                return rec
+
+            if st.orders_uncertain():
+                conf.clear()
+                return done("LEDGER_UNCERTAIN_NOTHING_CONFIRMED")
+            # a settlement moves buying power by exactly what it paid
+            retired = st.state.get("retired_markets") or {}
+            seen = getattr(self, "_recycle_retired_seen", None)
+            if seen is None:
+                seen = self._recycle_retired_seen = set(retired)
+            for m in [k for k in retired if k not in seen]:
+                conf.pop(m, None)
+                anchor = getattr(self, "_bp_anchor", None)
+                try:
+                    pnl = D(str(retired[m].get("settlement_pnl")))
+                    self._bp_anchor = (None if anchor is None
+                                       or not pnl.is_finite()
+                                       else anchor + pnl)
+                except (ArithmeticError, ValueError, TypeError,
+                        AttributeError):
+                    self._bp_anchor = None
+                seen.add(m)
+            if value is None:
+                return done("BUYING_POWER_UNREADABLE_NOTHING_NEW")
+            bp = D(str(value))
+            book = self._recycle_book()
+            quiet = st.still_fillable_order_count() == 0
+            if quiet and not book["any_position"]:
+                self._bp_anchor = bp          # flat and empty: the anchor
+            anchor = getattr(self, "_bp_anchor", None)
+            rec.update(anchor_usd=None if anchor is None else str(anchor),
+                       unmatched_cost_usd=str(book["unmatched_cost"]),
+                       matched={m: str(q) for m, q in
+                                book["matched"].items()})
+            if not book["matched"]:
+                return done("NOTHING_MATCHED")
+            if anchor is None:
+                return done("NO_ANCHOR_NOTHING_CONFIRMED")
+            if not quiet:
+                return done("ORDERS_AT_THE_VENUE_NOTHING_NEW")
+            floor = (anchor - book["unmatched_cost"] - book["locked_loss"]
+                     - self.RECYCLE_TOLERANCE_USD)
+            rec["expected_at_least_usd"] = str(floor)
+            if bp < floor:
+                conf.clear()
+                return done("BUYING_POWER_BELOW_EXPECTED_NOTHING_CONFIRMED")
+            for m, mq in book["matched"].items():
+                conf[m] = {"matched": str(mq), "buying_power_usd": str(bp),
+                           "t": now}
+            return done("CONFIRMED")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # the failure path confirms nothing and cannot itself fail
+            try:
+                ex.__dict__.setdefault("recycle_confirmed", {}).clear()
+                self.stats["recycle_check_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException as exc2:                      # noqa: BLE001
+                if isinstance(exc2, (KeyboardInterrupt, SystemExit)):
+                    raise
+            return None
 
     def orders_stalled_for_s(self, now: float) -> float:
         """How long our live orders have gone without any venue progress.

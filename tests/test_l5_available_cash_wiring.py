@@ -56,6 +56,11 @@ def _runner(ex=None):
         if isinstance(obj, type) and hasattr(obj, "refresh_available_cash"):
             r.refresh_available_cash = types.MethodType(
                 obj.refresh_available_cash, r)
+            # the two hooks the refresh calls since 2026-11-11. Both are
+            # inert here: this executor has no cash policy, so nothing is
+            # recycled and nothing is confirmed.
+            for hook in ("recycle_wants_fresh_cash", "confirm_recycled_cash"):
+                setattr(r, hook, types.MethodType(getattr(obj, hook), r))
             return r
     raise AssertionError("refresh_available_cash not found on any runner class")
 

@@ -33,6 +33,7 @@ from decimal import Decimal as D
 
 import pytest
 
+import tests.test_l5_cash_recycle_on_pair as RC
 import tests.test_l5_ladder_runner as LAD
 import tests.test_l5_runner_pair_and_cancel_state as T
 import tests.test_l5_ten_dollar_campaign_bound as CB
@@ -71,7 +72,9 @@ def harness(tmp_path, monkeypatch, env=PROPOSED, **over):
     h = limits(LAD.harness(tmp_path, monkeypatch, **dict(env, **over)))
     LAD.seed(h, 30, D("-0.02"))           # a losing record; the gate waived
     h.book.set("0.50", "0.51")
-    return h
+    # a venue balance that nets completed pairs, read after every tick --
+    # recycled cash is credited only once such a read confirms it
+    return RC.with_venue_cash(h)
 
 
 def rest(h, ticks=14):
@@ -256,8 +259,9 @@ class TestReplenishment:
         assert h.pos("UP") == h.pos("DOWN") > D("5")
         assert len(h.venue.sent) == 2 * rl["rounds_with_a_submitted_order"]
         assert rl["rounds_retired_without_an_order"] == 0
-        # completed pairs gave their cash back; the cap never bound
-        assert refusals(h, "CASH_COMMITMENT") == 0
+        # completed pairs gave their cash back -- once a balance read had
+        # confirmed it. Until then the cap binds, which is the point.
+        assert h.r.stats["recycle_check:CONFIRMED"] > 0
         assert peak_cash <= D("10") and peak_loss <= DEFICIT + CENT
 
     def test_every_pair_cleared_the_opening_ceiling(self, tmp_path,

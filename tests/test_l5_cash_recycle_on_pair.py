@@ -40,12 +40,64 @@ BASE = {"L5_MAX_CASH_DEPLOYED_USD": "0.90", "L5_TS_ROUND_ALLOCATIONS": "3",
 RECYCLE = {"L5_CASH_POLICY": "RECYCLE_ON_COMPLETE"}
 
 
-def harness(tmp_path, monkeypatch, **env):
+class VenueCash:
+    """The venue's buying power, computed from the VENUE'S OWN fills.
+
+    `nets=True` is what the venue was observed to do: a DOWN fill against
+    UP inventory closes it, so matched quantity pays its dollar at once.
+    `nets=False` is a venue that keeps every fill's cash until settlement.
+    """
+
+    def __init__(self, h, start="340.44375", nets=True):
+        self.h, self.start, self.nets = h, D(start), nets
+        self.unreadable = False
+
+    def value(self):
+        q = {"UP": D(0), "DOWN": D(0)}
+        c = D(0)
+        for oid, i in self.h.venue.by_oid.items():
+            f = D(str(self.h.venue.cum[oid]))
+            q[str(i["side"])] += f
+            c += f * D(str(i["price"]))
+        return self.start - c + (min(q.values()) if self.nets else D(0))
+
+    def account(self):
+        if self.unreadable:
+            raise ConnectionError("balances unavailable")
+        return {"balances": [{"buyingPower": str(self.value())}]}
+
+
+def with_venue_cash(h, nets=True):
+    """Give the harness venue a balance and read it where the main loop
+    does: after every tick, self-throttled by the runner."""
+    h.cash = VenueCash(h, nets=nets)
+    h.venue.account = h.cash.account
+    base = h.tick
+
+    def tick(offset_s, poll=True):
+        out = base(offset_s, poll)
+        h.r.refresh_available_cash(h.r.transport, h.t)
+        return out
+    h.tick = tick
+    # the process runs between windows too: a reading taken while the
+    # account is flat and nothing is at the venue is the anchor
+    h.at(1.0)
+    h.r.refresh_available_cash(h.r.transport, h.t)
+    return h
+
+
+def harness(tmp_path, monkeypatch, nets=True, **env):
     monkeypatch.delenv("L5_CASH_POLICY", raising=False)
     h = LAD.harness(tmp_path, monkeypatch, **dict(BASE, **env))
     LAD.seed(h, 30, D("-0.02"))          # the losing record; the gate waived
     h.book.set("0.50", "0.51")
-    return h
+    return with_venue_cash(h, nets)
+
+
+def read_cash(h):
+    """One fresh balance read, as the main loop would take it."""
+    h.r.available_cash_t = None
+    h.r.refresh_available_cash(h.r.transport, h.t)
 
 
 def held(h):
@@ -125,25 +177,34 @@ class TestOnlyTheMatchedPart:
     def test_a_completed_pair_releases_its_whole_cost(self, tmp_path,
                                                       monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        h.at(6.5).l5_action()
-        for off in (6.8, 7.8, 8.8):
-            h.tick(off)
+        h.at(6.5)
+        read_cash(h)                                # flat: the anchor
         st = h.r.store
         st.apply_fill(SLUG, "UP", D("0.20"), D("0.48"), basis="OWN")
         st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
         ex = h.r.executor
         assert ex.matched_pair_cost(SLUG) == D("0.190")
+        assert held(h) == D("0.190")                # not yet confirmed
+        read_cash(h)
         assert held(h) == 0
         credit = [l for l in ex.cash_legs_for_gates() if l["closing"]]
         assert [l["cash_out"] for l in credit] == [D("-0.190")]
-        assert credit[0]["basis"] == "VENUE_NETS_A_COMPLETED_PAIR"
+        assert credit[0]["basis"] == "VENUE_BUYING_POWER_CONFIRMED_PAIR"
+
+    def ledger(self, h, up="0.20", dn="0.20"):
+        """Anchor while flat, then book fills straight into the ledger."""
+        h.at(6.5)
+        read_cash(h)
+        st = h.r.store
+        st.apply_fill(SLUG, "UP", D(up), D("0.48"), basis="OWN")
+        st.apply_fill(SLUG, "DOWN", D(dn), D("0.47"), basis="OWN")
+        return st
 
     def test_the_unmatched_remainder_keeps_its_full_charge(self, tmp_path,
                                                            monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        st = h.r.store
-        st.apply_fill(SLUG, "UP", D("0.50"), D("0.48"), basis="OWN")
-        st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
+        self.ledger(h, up="0.50")
+        read_cash(h)
         # matched 0.20: 0.20 * 0.48 + 0.20 * 0.47; unmatched UP 0.30 * 0.48
         assert h.r.executor.matched_pair_cost(SLUG) == D("0.190")
         assert held(h) == D("0.30") * D("0.48")
@@ -151,42 +212,42 @@ class TestOnlyTheMatchedPart:
     def test_an_unattested_basis_releases_nothing(self, tmp_path,
                                                   monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        st = h.r.store
-        st.apply_fill(SLUG, "UP", D("0.20"), D("0.48"), basis="OWN")
-        st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
+        st = self.ledger(h)
         monkeypatch.setattr(type(st), "basis_attestation",
                             lambda self, m, s: {"ok": s != "DOWN"})
+        read_cash(h)
         assert h.r.executor.matched_pair_cost(SLUG) is None
         assert held(h) == D("0.190")
 
     def test_an_unreadable_position_releases_nothing(self, tmp_path,
                                                      monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        st = h.r.store
-        st.apply_fill(SLUG, "UP", D("0.20"), D("0.48"), basis="OWN")
-        st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
+        st = self.ledger(h)
+        read_cash(h)
+        assert held(h) == 0
 
         def boom(self, m, s):
             raise OSError("ledger unreadable")
         monkeypatch.setattr(type(st), "position", boom)
         assert h.r.executor.matched_pair_cost(SLUG) is None
+        assert h.r.executor.recycle_confirmed_share(SLUG) == 0
+        assert held(h) == D("0.190")
 
     def test_the_credit_never_exceeds_what_the_market_was_charged(
             self, tmp_path, monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        st = h.r.store
-        st.apply_fill(SLUG, "UP", D("0.20"), D("0.48"), basis="OWN")
-        st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
+        st = self.ledger(h)
         st.state["committed"][SLUG] = "0.05"        # a smaller charge
+        read_cash(h)
         assert held(h) == 0                         # clamped, not negative
 
     def test_a_settled_market_is_not_released_twice(self, tmp_path,
                                                     monkeypatch):
         h = harness(tmp_path, monkeypatch, **RECYCLE)
-        st = h.r.store
-        st.apply_fill(SLUG, "UP", D("0.20"), D("0.48"), basis="OWN")
-        st.apply_fill(SLUG, "DOWN", D("0.20"), D("0.47"), basis="OWN")
-        st.state.setdefault("retired_markets", {})[SLUG] = {"t": "x"}
+        st = self.ledger(h)
+        read_cash(h)
+        st.state.setdefault("retired_markets", {})[SLUG] = {
+            "t": "x", "settlement_pnl": "0.01"}
         legs = h.r.executor.cash_legs_for_gates()
         assert [l for l in legs if l.get("market") == SLUG and l["closing"]
                 ] == []

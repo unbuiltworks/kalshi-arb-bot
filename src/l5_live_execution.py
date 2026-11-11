@@ -8456,11 +8456,41 @@ class FaithfulExecutor:
             # market was charged, and nothing at all when the matched cost
             # cannot be vouched for.
             credit = self.matched_pair_cost(mkt)
-            if credit is not None and credit > 0:
-                legs.append({"market": mkt, "cash_out": -min(credit, usd),
-                             "settled": False, "closing": True,
-                             "basis": "VENUE_NETS_A_COMPLETED_PAIR"})
+            if credit is None or credit <= 0:
+                continue
+            # ONLY WHAT THE VENUE'S BUYING POWER HAS CONFIRMED. The runner
+            # records, per market, the matched quantity for which a fresh
+            # balance read showed the cash back (`confirm_recycled_cash`).
+            # Quantity matched since then earns nothing until the next read
+            # agrees; nothing recorded -- a restart, an uncertain ledger, a
+            # reading that disagreed -- earns nothing at all.
+            share = self.recycle_confirmed_share(mkt)
+            if share <= 0:
+                continue
+            legs.append({"market": mkt,
+                         "cash_out": -min(credit * share, usd),
+                         "settled": False, "closing": True,
+                         "basis": "VENUE_BUYING_POWER_CONFIRMED_PAIR"})
         return legs
+
+    def recycle_confirmed_share(self, market: str) -> D:
+        """The fraction of this market's matched quantity the venue's
+        buying power has confirmed returned: 0 to 1, and 0 on any doubt."""
+        try:
+            rec = (self.__dict__.get("recycle_confirmed") or {}).get(market)
+            if not isinstance(rec, Mapping):
+                return D(0)
+            conf = D(str(rec.get("matched")))
+            m = min(D(str(self.store.position(market, UP))),
+                    D(str(self.store.position(market, DOWN))))
+            if not (conf.is_finite() and m.is_finite()) or conf <= 0 \
+                    or m <= 0:
+                return D(0)
+            return min(conf, m) / m
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return D(0)
 
     def cash_recycles_completed_pairs(self) -> bool:
         """Is the cash gate's policy RECYCLE_ON_COMPLETE? Off otherwise."""
