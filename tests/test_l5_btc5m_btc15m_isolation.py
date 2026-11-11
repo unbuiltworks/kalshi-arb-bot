@@ -503,6 +503,12 @@ class TestCharacterise15mReconciliationOfForeign5mState:
         assert st.state["leg_cost"] == {key: "0.17"}                 # $1/share
         assert D(st.state["leg_cost"][key]) == D("0.17") * E.UNKNOWN_PRICE_WORST_CASE
         assert st.state["leg_cost_basis_unknown"] == [key]
+        # labelled from evidence only. The 5m order filled before this
+        # reconciliation ever saw it, so nothing here proves whose it was:
+        # the position is UNKNOWN, at the bound, and still counted.
+        leg = st.position_origins()["legs"][key]
+        assert leg["origin"] == "UNKNOWN"
+        assert leg["cost_basis"] == "UPPER_BOUND_1USD_PER_CONTRACT"
         assert st.state["risk_floor_usd"] == {M5: "0.17"}
         assert st.position(M5, "UP") == D("0.17")
         assert st.risk_exposure_usd(M5) == D("0.17")
@@ -531,116 +537,36 @@ class TestCharacterise15mReconciliationOfForeign5mState:
         assert both.ex.inventory(M5)["UP"] == {"qty": D("0.17"),
                                               "cost": FIRST_5M_COST}
 
-    def test_a_resting_5m_order_whose_row_states_no_side_stops_15m(self, both):
-        """OBSERVED with the stock double's row shape (no side on the row).
-        The 15m reconciliation tries to adopt the b5m order, cannot read a
-        side, raises `UnknownSide`, and the 15m book stays uncertain: every
-        15m submission is refused for as long as a 5m order is resting. The
-        5m order itself is neither adopted nor cancelled."""
+    def test_a_resting_5m_order_whose_row_states_no_side_no_longer_stops_15m(
+            self, both):
+        """WAS: with the stock double's row shape (no side on the row) the
+        15m reconciliation tried to adopt the b5m order, raised
+        `UnknownSide`, and every 15m submission was refused for as long as a
+        5m order was resting. NOW, with nothing configured: the order is
+        foreign by its id, is never read as one of ours, and 15m carries
+        on. The 5m order is neither adopted nor cancelled."""
         h, st = both.h, both.store15()
         v5 = both.open5(at=5.0)
+        (coid5,) = both.ex.orders()
         h.at(6.0)
         h.r.reconcile_if_needed(h.t)
-        assert st.orders_uncertain() == "reconcile raised UnknownSide"
-        assert h.r.reconciled is False
+        assert st.orders_uncertain() is None
+        assert h.r.reconciled is True
         assert st.live_orders() == {}
+        assert list(st.state["foreign_orders"]) == [coid5]
+        assert st.state["foreign_orders"][coid5]["origin"] == "BTC5M"
         h.at(6.5).l5_action()
-        assert both.venue.ids("l5f-") == []                 # 15m is stopped
-        h.at(6.0 + R.RECONCILE_RETRY_S + 1.0)
-        h.r.reconcile_if_needed(h.t)
-        assert st.orders_uncertain() == "reconcile raised UnknownSide"
+        assert len(both.venue.ids("l5f-")) == 1            # 15m is NOT stopped
         assert both.venue.cancelled == []
         assert both.venue.order(v5)["state"] == "ORDER_STATE_NEW"
 
-    def test_a_resting_5m_order_whose_row_states_its_side_is_adopted_and_swept(
-            self, both):
-        """OBSERVED with rows that state the side, as real PMUS rows do.
-        A 15m reconciliation that runs while a b5m order rests ADOPTS it
-        into the 15m `live_orders` (`adopted: True`). From then on the 15m
-        store answers `owns_venue_order_id` True for it, counts it against
-        its own live-order ceiling, and the unscoped terminal sweep
-        (`maybe_ts_deadline` -> `deadman`) CANCELS it. So the property in
-        section C does not survive a 15m reconciliation: the 15m runner can
-        cancel a 5m order."""
-        both.venue.rows_state_side = True
-        h, st = both.h, both.store15()
-        both.open15()
-        v5 = both.open5()
-        (coid5,) = both.ex.orders()
-        h.r.reconciled = False                    # e.g. a 15m process restart
-        h.tick(30.0)
-        live = st.live_orders()
-        assert coid5 in live and live[coid5]["adopted"] is True
-        assert live[coid5]["market"] == M5
-        assert st.owns_venue_order_id(v5) is True
-        assert st.still_fillable_order_count() == 3      # 2 of its own + ours
-        assert both.venue.cancelled == []
-        # the per-order deadline is scoped to the 15m market: it spares it
-        h.tick(134.3)
-        assert both.venue.cancelled == ["v1", "v2"]
-        # the terminal sweep is not scoped: it takes the 5m order
-        for off in (300.0, 500.0, 584.0, 586.0, 590.0):
-            h.tick(off)
-        assert v5 in both.venue.cancelled
-        swept = [rec for label, rec in h.emitted if label == "L5_TS_DEADLINE"]
-        assert [c["client_order_id"] for c in swept[-1]["result"]["cancelled"]
-                ] == [coid5]
-        # the 5m ledger finds out only by reading its own order
-        both.ex.poll()
-        assert both.ex.orders()[coid5]["state"] == X.CANCELLED
-
-    def test_an_adopted_5m_order_that_fills_is_booked_by_both_ledgers(self, both):
-        """OBSERVED with rows that state the side. Once adopted, the 15m
-        poll reads the b5m order like one of its own and books its fill at
-        the venue's price into the 15m store, under the 5m market. The 5m
-        ledger books the same fill. One 0.17 UP fill, two ledgers."""
-        both.venue.rows_state_side = True
-        h, st = both.h, both.store15()
-        both.open15()
-        v5 = both.open5()
-        h.r.reconciled = False
-        h.tick(30.0)
-        both.venue.fill(v5)
-        LR.book_fills(h, 33.5)
-        key = "%s|UP" % M5
-        assert st.position(M5, "UP") == D("0.17")
-        assert D(str(st.state["leg_cost"][key])) == FIRST_5M_COST
-        both.ex.poll()
-        assert both.ex.inventory(M5)["UP"] == {"qty": D("0.17"),
-                                              "cost": FIRST_5M_COST}
-
-
-# ======================================================================
-# H. THE FIX FOR WHAT SECTION G RECORDS: another strategy's orders are
-#    named foreign and are never adopted. Default off.
-# ======================================================================
-from src import l5_live_execution as _E15
-
-
-class TestForeignOrdersAreNotAdoptedWhenNamed:
-
-    @pytest.mark.parametrize("raw,want", [
-        (None, ()), ("", ()), ("b5m-", ("b5m-",)),
-        (" b5m- , x9- ", ("b5m-", "x9-")),
-        ("l5f-", ()),                      # our own prefix is never foreign
-        ("b5m-,l5f-,b5m-", ("b5m-",)),
-        ("B5M-", ()), ("b5m", ()), ("-", ()), ("a-", ()),
-        ("muchtoolongprefix-", ()), ("b5m-*", ()),
-    ])
-    def test_only_well_formed_prefixes_other_than_our_own_count(
-            self, monkeypatch, raw, want):
-        if raw is None:
-            monkeypatch.delenv(_E15.FOREIGN_COID_PREFIXES_ENV, raising=False)
-        else:
-            monkeypatch.setenv(_E15.FOREIGN_COID_PREFIXES_ENV, raw)
-        assert _E15.foreign_coid_prefixes() == want
-        assert _E15.is_foreign_coid("l5f-" + "0" * 24) is False
-        assert _E15.is_foreign_coid("") is False
-
-    def test_named_foreign_the_5m_order_is_listed_not_adopted_and_not_swept(
-            self, both, monkeypatch):
-        """The scenario of section G, with the 5m prefix named."""
-        monkeypatch.setenv(_E15.FOREIGN_COID_PREFIXES_ENV, "b5m-")
+    def test_a_resting_5m_order_is_never_adopted_and_never_swept(self, both):
+        """WAS: with rows that state the side, as real PMUS rows do, a 15m
+        reconciliation ADOPTED the b5m order, counted it against its own
+        live-order ceiling, and the unscoped terminal sweep CANCELLED it.
+        NOW, with nothing configured: listed as foreign, never adopted,
+        never counted as ours, never cancelled -- through the per-order
+        deadline and the terminal sweep alike."""
         both.venue.rows_state_side = True
         h, st = both.h, both.store15()
         both.open15()
@@ -653,20 +579,92 @@ class TestForeignOrdersAreNotAdoptedWhenNamed:
         assert all(c.startswith("l5f-") for c in live)
         assert st.owns_venue_order_id(v5) is False
         assert st.still_fillable_order_count() == 2          # its own two
-        assert coid5 in (st.state.get("foreign_orders") or {})
-        # its own deadline and its terminal sweep both leave the 5m order
+        assert st.state["foreign_orders"][coid5]["origin"] == "BTC5M"
         for off in (134.3, 300.0, 500.0, 584.0, 586.0, 590.0):
             h.tick(off)
         assert v5 not in both.venue.cancelled
-        assert both.venue.cancelled            # it did cancel its own
+        assert both.venue.cancelled                 # it did cancel its own
         assert all(str(both.venue.by_oid[o]["client_order_id"]
                        ).startswith("l5f-") for o in both.venue.cancelled)
         both.ex.poll()
         assert both.ex.orders()[coid5]["state"] != X.CANCELLED
 
-    def test_named_foreign_a_side_less_5m_row_no_longer_stops_15m(
-            self, both, monkeypatch):
-        monkeypatch.setenv(_E15.FOREIGN_COID_PREFIXES_ENV, "b5m-")
+    def test_a_5m_fill_is_booked_at_its_price_by_the_5m_ledger_only(self, both):
+        """WAS: once adopted, the 15m poll read the b5m order like one of
+        its own and booked its fill into the 15m store too -- one fill, two
+        ledgers at the fill price. NOW: the 15m poll never reads the order.
+        The 5m ledger books the fill at its price. The 15m ledger, which is
+        also the account-wide one, sees only the venue's POSITION on its
+        next reconciliation and holds it at the $1 bound, labelled BTC5M
+        from the order the venue had listed there."""
+        both.venue.rows_state_side = True
+        h, st = both.h, both.store15()
+        both.open15()
+        v5 = both.open5()
+        h.r.reconciled = False
+        h.tick(30.0)
+        assert st.state["foreign_orders_seen"] == {M5: "BTC5M"}
+        both.venue.fill(v5)
+        LR.book_fills(h, 33.5)
+        assert st.position(M5, "UP") == D(0)        # not booked by the 15m poll
+        both.ex.poll()
+        assert both.ex.inventory(M5)["UP"] == {"qty": D("0.17"),
+                                              "cost": FIRST_5M_COST}
+        # the account-wide view: adopted from the venue's position, at $1
+        h.r.reconciled = False
+        h.at(40.0 + R.RECONCILE_RETRY_S + 1.0)
+        h.r.reconcile_if_needed(h.t)
+        key = "%s|UP" % M5
+        assert st.state["positions"][key] == "0.17"
+        assert D(st.state["leg_cost"][key]) == D("0.17")
+        leg = st.position_origins()["legs"][key]
+        assert leg["origin"] == "BTC5M"
+        assert leg["cost_basis"] == "UPPER_BOUND_1USD_PER_CONTRACT"
+        assert leg["evidence"] == "THAT_STRATEGYS_ORDER_LISTED_BY_VENUE_IN_MARKET"
+
+
+# ======================================================================
+# H. THE RULE IS MANDATORY: another registered strategy's orders are foreign
+#    by a code registry. No variable has to be set for it to hold, and none
+#    can turn it off (owner decision, 2026-11-11).
+# ======================================================================
+from src import l5_live_execution as _E15
+from src import l5_origin as _OG
+
+
+class TestForeignOrdersAreNeverAdopted:
+
+    @pytest.mark.parametrize("raw,want", [
+        (None, ("b5m-",)), ("", ("b5m-",)), ("b5m-", ("b5m-",)),
+        (" b5m- , x9- ", ("b5m-", "x9-")),         # the variable can only ADD
+        ("x9-", ("b5m-", "x9-")),
+        ("l5f-", ("b5m-",)),               # our own prefix is never foreign
+        ("b5m-,l5f-,b5m-", ("b5m-",)),
+        ("B5M-", ("b5m-",)), ("b5m", ("b5m-",)), ("-", ("b5m-",)),
+        ("a-", ("b5m-",)), ("muchtoolongprefix-", ("b5m-",)),
+        ("b5m-*", ("b5m-",)), ("0", ("b5m-",)), ("off", ("b5m-",)),
+    ])
+    def test_the_registry_always_applies_and_the_variable_only_adds(
+            self, monkeypatch, raw, want):
+        if raw is None:
+            monkeypatch.delenv(_E15.FOREIGN_COID_PREFIXES_ENV, raising=False)
+        else:
+            monkeypatch.setenv(_E15.FOREIGN_COID_PREFIXES_ENV, raw)
+        assert _E15.foreign_coid_prefixes() == want
+        assert _E15.is_foreign_coid("b5m-" + "0" * 24) is True
+        assert _E15.is_foreign_coid("l5f-" + "0" * 24) is False
+        assert _E15.is_foreign_coid("") is False
+        assert _E15.is_foreign_coid("manual-1") is False
+
+    def test_the_registry_is_the_one_in_l5_origin(self):
+        assert _E15.OWN_STRATEGY == _OG.BTC15M
+        assert _E15.OWN_COID_PREFIX == _OG.STRATEGY_COID_PREFIX[_OG.BTC15M] \
+            == "l5f-"
+        assert X.COID_PREFIX == _OG.STRATEGY_COID_PREFIX[_OG.BTC5M] == "b5m-"
+        assert _E15.OWN_COID_PREFIX not in _E15.foreign_coid_prefixes()
+        assert X.COID_PREFIX in _E15.foreign_coid_prefixes()
+
+    def test_a_side_less_5m_row_does_not_stop_15m(self, both):
         both.venue.rows_state_side = False
         h, st = both.h, both.store15()
         both.open15()
@@ -676,10 +674,9 @@ class TestForeignOrdersAreNotAdoptedWhenNamed:
         assert all(c.startswith("l5f-") for c in st.live_orders())
         assert st.still_fillable_order_count() == 2
 
-    def test_an_order_of_our_own_is_still_adopted(self, both, monkeypatch):
+    def test_an_order_of_our_own_is_still_adopted(self, both):
         """The rule is by name: a 15m order the file lost is recovered as
         before."""
-        monkeypatch.setenv(_E15.FOREIGN_COID_PREFIXES_ENV, "b5m-")
         both.venue.rows_state_side = True
         h, st = both.h, both.store15()
         both.open15()
@@ -690,3 +687,37 @@ class TestForeignOrdersAreNotAdoptedWhenNamed:
         h.tick(30.0)
         assert all(st.owns_venue_order_id(v) for v in mine)
         assert all(c.startswith("l5f-") for c in st.live_orders())
+
+    def test_a_foreign_resting_order_is_counted_in_account_exposure(
+            self, both):
+        """Not adopted is not the same as not counted. The 5m order's 0.17
+        remaining contracts are charged at $1 each in the 15m service's
+        account-wide figure, under their own market."""
+        both.venue.rows_state_side = True
+        h, st = both.h, both.store15()
+        both.open5()
+        h.r.reconciled = False
+        h.tick(30.0)
+        risk = st.account_wide_risk_by_market()
+        assert risk["ok"] is True
+        assert risk["foreign_orders_usd"] == "0.17"
+        assert risk["foreign_orders_usd_by_origin"] == {"BTC5M": "0.17"}
+        assert risk["risk_by_market"][M5] == D("0.17")
+        assert D(risk["total_usd"]) == D("0.17")
+        # and a 15m order priced on top of it sees less room, not the same
+        more = st.account_wide_risk_by_market(
+            extra_market=M15, extra_side="UP", extra_qty=D("0.6"),
+            extra_price=D("0.50"))
+        assert more["risk_by_market"][M15] > 0
+        assert D(more["total_usd"]) == D("0.17") + more["risk_by_market"][M15]
+
+    @pytest.mark.parametrize("remaining", [None, "", "x", "-1", "NaN"])
+    def test_a_foreign_order_we_cannot_size_makes_exposure_unknown(
+            self, both, remaining):
+        st = both.store15()
+        st.state["foreign_orders"] = {
+            "b5m-" + "9" * 24: {"origin": "BTC5M", "market": M5,
+                                "remaining": remaining}}
+        risk = st.account_wide_risk_by_market()
+        assert risk["ok"] is False
+        assert risk["reason"].startswith("FOREIGN_ORDER_UNREADABLE:")

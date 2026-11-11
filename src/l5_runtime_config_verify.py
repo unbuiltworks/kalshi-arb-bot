@@ -650,8 +650,14 @@ def verify() -> Dict[str, Any]:
         _row("window_strategy", "env L5_WINDOW_STRATEGY",
              lambda: str(os.getenv("L5_WINDOW_STRATEGY", "")).strip().upper(),
              A["window_strategy"]),
+        # TWO SERIES since the owner's decision of 2026-11-11 to authorize
+        # the 5-minute strategy through this same mechanism. Still a code
+        # constant, still graded exactly: a third name here, or a missing
+        # one, fails. One approval document names ONE of them, and every
+        # claim refuses a market outside the document's own series.
         _row("series_allowlist", "CA.ALLOWED_SERIES (code constant)",
-             lambda: list(CA.ALLOWED_SERIES), ["cpc-btc-updown-15m-"]),
+             lambda: list(CA.ALLOWED_SERIES),
+             ["cpc-btc-updown-15m-", "cpc-btc-updown-5m-"]),
     ]
 
     # REPORTED, NOT REQUIRED. These are the activation switches: they are

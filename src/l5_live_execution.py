@@ -59,6 +59,7 @@ from src import l5_defensive_completion as DEF
 from src import l5_taker_completion_policy as TCP
 from src import l5_two_sided_probe as TS
 from src import l5_execution_translations as X
+from src import l5_origin as ORIGIN
 
 #: the pipeline, in order. A record names the furthest stage it reached.
 STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
@@ -1235,20 +1236,34 @@ def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
 #: live-order ceiling, and the terminal sweep CANCELLED it
 #: (tests/test_l5_btc5m_btc15m_isolation.py records this).
 #:
-#: A comma-separated list of client-order-id prefixes that belong to other
-#: strategies. Unset is today's behaviour exactly. Our own prefix can never
-#: be named foreign, and a token that is not a short lowercase prefix ending
-#: in "-" is ignored. Such orders are listed in `foreign_orders` and are
-#: never adopted, never counted as ours and never cancelled by us. POSITIONS
-#: are untouched by this: a foreign market's position is still adopted at
-#: its upper bound, so account-wide exposure and loss limits still see it.
+#: MANDATORY, BY OWNER DECISION (2026-11-11): "Make the BTC15m ownership
+#: filter mandatory before simultaneous execution, not an optional feature.
+#: Neither strategy should adopt, cancel, or settle another strategy's
+#: orders." So the prefixes of every OTHER registered strategy
+#: (`l5_origin.STRATEGY_COID_PREFIX`) are foreign ALWAYS -- a code registry,
+#: with no variable that has to be set for it to hold and none that can turn
+#: it off. The variable below can only ADD further prefixes.
+#:
+#: Our own prefix can never be named foreign, and a token that is not a
+#: short lowercase prefix ending in "-" is ignored. Foreign orders are
+#: listed in `foreign_orders` with their origin and are never adopted, never
+#: counted against OUR order ceiling and never cancelled by us. They ARE
+#: counted in account-wide exposure, at $1 a contract -- see
+#: `account_wide_risk_by_market`. POSITIONS are a separate matter: a market
+#: this ledger did not trade is still adopted at its upper bound, so the
+#: account-wide exposure and loss limits still see it.
 FOREIGN_COID_PREFIXES_ENV = "L5_FOREIGN_COID_PREFIXES"
-OWN_COID_PREFIX = "l5f-"
+OWN_STRATEGY = ORIGIN.BTC15M
+OWN_COID_PREFIX = ORIGIN.STRATEGY_COID_PREFIX[OWN_STRATEGY]
 _FOREIGN_PREFIX_RE = re.compile(r"[a-z0-9]{2,8}-")
+#: how many markets `foreign_orders_seen` remembers. It is evidence for a
+#: label on a later settlement, so it only has to outlive a window or two.
+FOREIGN_SEEN_KEEP = 64
 
 
 def foreign_coid_prefixes() -> Tuple[str, ...]:
-    out: List[str] = []
+    out: List[str] = [p for p in ORIGIN.other_strategy_prefixes(OWN_STRATEGY)
+                      if p != OWN_COID_PREFIX]
     for tok in (os.getenv(FOREIGN_COID_PREFIXES_ENV) or "").split(","):
         tok = tok.strip()
         if _FOREIGN_PREFIX_RE.fullmatch(tok) and tok != OWN_COID_PREFIX \
@@ -3142,6 +3157,57 @@ class InventoryStore:
                        "either. A zero commission is NOT a rebate."),
         }
 
+    def realized_by_origin(self) -> Dict[str, Any]:
+        """Settled results split BTC15M / BTC5M / MANUAL / UNKNOWN, beside
+        the account-wide lines exactly as `realized_lines` reports them.
+
+        READ-ONLY. The split is over the `retired_markets` rows this ledger
+        still holds; the account-wide figures are the ledger's own and are
+        what every loss limit reads. Nothing here feeds a gate.
+        """
+        out = ORIGIN.realized_by_origin(
+            self.state.get("retired_markets") or {}, own=OWN_STRATEGY,
+            seen=self.state.get("foreign_orders_seen") or {})
+        out["account_wide"] = {
+            "realized_attributed": str(
+                D(str(self.state.get("realized_attributed") or 0))),
+            "realized_unattributed": str(
+                D(str(self.state.get("realized_unattributed") or 0))),
+            "labels": ("the account-wide lines, unchanged by the split "
+                       "above. The loss limits read these.")}
+        return out
+
+    def position_origins(self) -> Dict[str, Any]:
+        """Every held position leg with its origin and cost-basis kind.
+
+        READ-ONLY. A leg this ledger booked from its own order fills is
+        this strategy's at an authenticated cost. A leg in
+        `adopted_unattributed` came from the venue's position list with no
+        price, is held at $1 a contract, and is labelled from evidence only:
+        the owner's attestation, or a registered strategy's order the venue
+        listed in that market. Otherwise UNKNOWN.
+        """
+        unattributed = self.state.get("adopted_unattributed") or {}
+        unknown = set(str(k) for k in
+                      (self.state.get("leg_cost_basis_unknown") or []))
+        seen = self.state.get("foreign_orders_seen") or {}
+        lc = self.state.get("leg_cost") or {}
+        legs: Dict[str, Any] = {}
+        for key, qty in sorted((self.state.get("positions") or {}).items()):
+            market = str(key).rsplit("|", 1)[0]
+            own = str(key) not in unattributed and str(key) not in unknown
+            got = ORIGIN.origin_of_position(
+                market, own=OWN_STRATEGY, booked_by_own_fills=own,
+                other_strategy_order_seen=seen.get(market))
+            legs[str(key)] = dict(got, qty=str(qty),
+                                  booked_cost_usd=(None if key not in lc
+                                                   else str(lc.get(key))))
+        return {"legs": legs,
+                "labels": ("booked_cost_usd of an UPPER_BOUND leg is $1 a "
+                           "contract, a bound and not a cost. Every leg "
+                           "here is in account-wide exposure whatever its "
+                           "label.")}
+
     def rebase_session_accounting(self, *, attributed: D, cash_delta: D,
                                   anchor: Mapping[str, Any],
                                   reason: str) -> Dict[str, Any]:
@@ -4890,8 +4956,41 @@ class InventoryStore:
                 return {"ok": False,
                         "reason": "EXPOSURE_UNREADABLE:%s:%s"
                         % (m, type(exc).__name__)}
+        # ANOTHER STRATEGY'S RESTING ORDERS ARE ACCOUNT EXPOSURE TOO.
+        #
+        # They are deliberately not in `live_orders` -- this strategy must
+        # never adopt, poll or cancel them -- so the per-market figure above
+        # does not see them. But they can fill, and the account-wide ceiling
+        # is about the account. Their price is the other strategy's
+        # business and is not read here: each remaining contract is charged
+        # at $1, the most a contract can cost, which is the same bound an
+        # unreadable price gets everywhere else in this module.
+        #
+        # FAILS CLOSED like everything above: a foreign order whose
+        # remaining quantity cannot be read makes the whole figure
+        # unavailable. Reading it as zero would understate the account.
+        foreign_usd = D(0)
+        foreign_by_origin: Dict[str, D] = {}
+        for _fc, _fo in (self.state.get("foreign_orders") or {}).items():
+            _rem = venue_decimal((_fo or {}).get("remaining")) \
+                if isinstance(_fo, Mapping) else None
+            if _rem is None or not _rem.is_finite() or _rem < 0:
+                return {"ok": False,
+                        "reason": "FOREIGN_ORDER_UNREADABLE:%s"
+                        % str(_fc)[:40]}
+            _charge = _rem * UNKNOWN_PRICE_WORST_CASE
+            _fm = str((_fo or {}).get("market") or "").strip() \
+                or "FOREIGN_ORDERS_MARKET_UNSTATED"
+            out[_fm] = out.get(_fm, D(0)) + _charge
+            markets.add(_fm)
+            foreign_usd += _charge
+            _og = str((_fo or {}).get("origin") or ORIGIN.UNKNOWN)
+            foreign_by_origin[_og] = foreign_by_origin.get(_og, D(0)) + _charge
         return {"ok": True, "risk_by_market": out,
                 "markets": sorted(markets),
+                "foreign_orders_usd": str(foreign_usd),
+                "foreign_orders_usd_by_origin": {
+                    k: str(v) for k, v in sorted(foreign_by_origin.items())},
                 "total_usd": str(sum(out.values(), D(0)))}
 
     def markets_with_exposure(self) -> List[str]:
@@ -5091,7 +5190,20 @@ class InventoryStore:
         # keep the legacy scalar moving too, for anything still reading it
         self.state["realized_today"] = str(
             D(str(self.state.get("realized_today") or 0)) + pnl)
+        # WHOSE RESULT THIS IS. A LABEL ON THE ROW, and nothing else: the
+        # account-wide lines above have just been moved by the full amount
+        # and the label does not touch them. Written here, inside the one
+        # writer of `retired_markets`, so there is still exactly one. See
+        # `l5_origin` and `realized_by_origin`.
+        _og = ORIGIN.origin_of_settlement(
+            market, own=OWN_STRATEGY, verified_own=bool(verified_l5),
+            unknown_basis=bool(unknown_basis_at_settlement),
+            other_strategy_order_seen=(
+                self.state.get("foreign_orders_seen") or {}).get(market))
         self.state.setdefault("retired_markets", {})[market] = {
+            "origin": _og["origin"],
+            "origin_cost_basis": _og["cost_basis"],
+            "origin_evidence": _og["evidence"],
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "yes_value": str(v), "settlement_pnl": str(pnl),
             "resolution_source": (dict(resolution).get("source")
@@ -5426,15 +5538,30 @@ class InventoryStore:
             # any mapping back to a tracked order, and never for an id our
             # file already holds. See `FOREIGN_COID_PREFIXES_ENV`.
             if is_foreign_coid(coid) and coid not in ours:
+                _f_origin = ORIGIN.origin_of_coid(coid)
+                _f_market = (o.get("marketSlug") or o.get("market_slug")
+                             or o.get("market"))
                 foreign_now[coid] = {
                     "venue_order_id": str(o.get("id") or o.get("order_id")
                                           or ""),
-                    "market": (o.get("marketSlug") or o.get("market_slug")
-                               or o.get("market")),
+                    "origin": _f_origin,
+                    "market": _f_market,
                     "remaining": str(o.get("remaining_qty", o.get(
                         "remainingQuantity", o.get("qty", "")))),
                     "labels": "another strategy's order: listed, never "
-                              "adopted, counted or cancelled by this one"}
+                              "adopted, never cancelled and never counted "
+                              "against this strategy's own order ceiling. "
+                              "Its remaining quantity IS counted in "
+                              "account-wide exposure at $1 a contract."}
+                # EVIDENCE FOR A LATER LABEL, not a claim about a position:
+                # the venue listed a registered strategy's order in this
+                # market. Bounded, oldest dropped first.
+                if _f_market and _f_origin in ORIGIN.STRATEGY_COID_PREFIX:
+                    _seen = self.state.setdefault("foreign_orders_seen", {})
+                    _seen.pop(str(_f_market), None)
+                    _seen[str(_f_market)] = _f_origin
+                    while len(_seen) > FOREIGN_SEEN_KEEP:
+                        _seen.pop(next(iter(_seen)))
                 continue
             # OUR ORDER, UNDER OUR OWN KEY. A venue row that states no client
             # order id falls through to the venue's id above, and keying it

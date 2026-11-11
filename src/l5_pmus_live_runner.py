@@ -1587,6 +1587,26 @@ class Runner:
         """
         return operator_halted()
 
+    def origin_line(self) -> Dict[str, Any]:
+        """Settled results and held legs split BTC15M / BTC5M / MANUAL /
+        UNKNOWN. READ-ONLY, reported for verification; a failure to compute
+        it is reported as such and changes nothing else."""
+        try:
+            return {"ok": True,
+                    "realized": self.store.realized_by_origin(),
+                    "positions": self.store.position_origins(),
+                    "foreign_orders": {
+                        c: {"origin": (o or {}).get("origin"),
+                            "market": (o or {}).get("market"),
+                            "remaining": (o or {}).get("remaining")}
+                        for c, o in (self.store.state.get("foreign_orders")
+                                     or {}).items()}}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False,
+                    "reason": "ORIGIN_REPORT_FAILED:%s" % type(exc).__name__}
+
     def account_exposure_lines(self) -> Dict[str, Any]:
         """Account-wide worst-case exposure and the capacity left under it.
 
@@ -6581,6 +6601,9 @@ class Runner:
             # an operator cannot see is one nobody notices binding.
             "campaign": self.campaign_telemetry(),
             "day_realized": self.day_realized_line(),
+            # WHOSE RESULT IS WHOSE. A report beside the account-wide lines
+            # above, never instead of them: no gate reads it.
+            "origin": self.origin_line(),
             "auth_book": self.book.status(),
             "fill_calibration": (None if self.fill_calibration is None
                                  else self.fill_calibration.report()),
