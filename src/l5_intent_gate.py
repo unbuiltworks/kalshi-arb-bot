@@ -169,6 +169,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # a pair cost judged on venue-confirmed fills, and one strategy per
     # authorized window so two of them cannot share one cash envelope.
     "PAIR_COST_CEILING",
+    # THE OWNER'S FAVORITE-ONLY TEST, 2026-11-11, at the same boundary and
+    # immediately before the ceiling. Off unless L5_PORTFOLIO_PROFILE is
+    # exactly FAVORITE_ONLY; then every order that is not the favorite the
+    # steer wants at that moment is refused -- second legs, hedges and
+    # every completion route included. It only ever refuses.
+    "FAVORITE_ONLY",
     # ADDED WITH THE GUARD, and this inventory is where that is
     # reviewed. PAIR_COST_CEILING is judged on CONFIRMED FILLS and so
     # never engages while both legs are merely submitted;

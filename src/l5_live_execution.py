@@ -1624,6 +1624,11 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 #: unknown price as free.
 UNKNOWN_PRICE_WORST_CASE = D(1)
 
+#: THE FAVORITE-ONLY TEST, as the portfolio controller names it. Read here
+#: as a variable so the submission gate needs no import of that module.
+FAVORITE_ONLY_PROFILE_ENV = "L5_PORTFOLIO_PROFILE"
+FAVORITE_ONLY_PROFILE = "FAVORITE_ONLY"
+
 #: how many consecutive reconciliations a difference that our own unbooked
 #: fills can explain is left for the order read to book before the venue's
 #: position is adopted at the bound anyway. Reconciliations are about 13 s
@@ -8267,6 +8272,38 @@ class FaithfulExecutor:
                            "it costs. Resting orders are counted as "
                            "potential exposure and never as protection.")}
 
+    def favorite_only_refusal(self, dec: Mapping[str, Any]
+                              ) -> Optional[Dict[str, Any]]:
+        """None unless the favorite-only test is on and this order is not
+        the favorite the steer wants RIGHT NOW.
+
+        FAILS CLOSED. In the test, an order with no steer behind it -- every
+        completion, requote and defensive route, which run with none -- is
+        refused, and so is one whose steer cannot be read or does not name
+        this side as the FAVORITE.
+        """
+        # THE VARIABLE, NOT THE CONTROLLER MODULE. This file does not import
+        # the portfolio controller, by design; the profile's name is one
+        # exact token and a test pins that both files read the same one.
+        if os.getenv(FAVORITE_ONLY_PROFILE_ENV, "") != FAVORITE_ONLY_PROFILE:
+            return None
+        side = str(dec.get("side") or "")
+        st = self.portfolio_steer
+        if not isinstance(st, Mapping):
+            return {"why": "FAVORITE_ONLY_NO_STEER", "side": side}
+        try:
+            v = (st.get("sides") or {}).get(side) or {}
+            ok = v.get("wanted") is True and v.get("role") == "FAVORITE"
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "FAVORITE_ONLY_STEER_UNREADABLE", "side": side}
+        if not ok:
+            return {"why": "FAVORITE_ONLY_NOT_THE_FAVORITE", "side": side,
+                    "steer": {k: (x or {}).get("reason") or (x or {}).get(
+                        "role") for k, x in (st.get("sides") or {}).items()}}
+        return None
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -10547,6 +10584,21 @@ class FaithfulExecutor:
             #
             # A submitted order is never a hedge. Only `leg_cost`, which is
             # written from venue-confirmed fills, counts here.
+            # THE FAVORITE-ONLY TEST ADMITS ONE KIND OF ORDER. Checked here,
+            # at the one boundary every order passes, so no completion,
+            # requote or defensive route can hedge a favorite that the
+            # owner's test holds to settlement. Off unless the profile is
+            # named exactly; then it only ever refuses.
+            _fav_bad = self.favorite_only_refusal(dec)
+            if _fav_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "FAVORITE_ONLY", "detail": _fav_bad,
+                    "labels": ("the favorite-only test submits the market's "
+                               "favorite and nothing else: no second leg, "
+                               "no hedge, no pair.")})
+                return prov.refuse("FAVORITE_ONLY",
+                                   str(_fav_bad.get("why"))[:120])
             _pair_bad = self.pair_cost_refusal(market, dec, tr)
             if _pair_bad:
                 prov.stage("ORDER", {

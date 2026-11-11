@@ -131,6 +131,14 @@ class Params:
     fav_max_residual: float = 0.0   # contracts on the favorite, held+resting
     fav_risk_usd: float = 0.0       # dollars at risk on the favorite
     fav_fee: float = 0.0            # fee per contract, charged to the edge
+    # ---- FAVORITE ONLY: the owner's live test, a profile of its own. One
+    # order a window on the side the MARKET prices at or above
+    # `fav_only_min_price`, not before `fav_only_start_s`; nothing else is
+    # ever wanted and nothing is hedged. Off unless the profile names it.
+    fav_only: bool = False
+    fav_only_min_price: float = 0.75
+    fav_only_max_price: float = 0.93
+    fav_only_start_s: float = 450.0
 
     def checked(self) -> "Params":
         for name in ("margin", "adverse", "risk", "base_qty", "max_qty",
@@ -458,6 +466,36 @@ def decide(port: Mapping[str, Any], *, bid: Any, ask: Any, p_up: Any = None,
         # the side's own best bid and the price that would cross
         touch = b if side == UP else round(1.0 - a, 10)
         cross = a if side == UP else round(1.0 - b, 10)
+        # ============ FAVORITE ONLY. The whole decision for this profile:
+        # the market's own favorite, once, from the halfway point, while
+        # the book is flat and empty. No model, no pair, no hedge. Nothing
+        # here assumes the favorite is worth its price.
+        if params.fav_only:
+            if t_off < params.fav_only_start_s - EPS:
+                skip("FAVORITE_NOT_YET", starts_s=params.fav_only_start_s)
+            elif t_off > params.entry_cutoff_s:
+                skip("AFTER_ENTRY_CUTOFF")
+            elif abs(unm) > EPS or port["matched_pairs"] > EPS:
+                skip("FAVORITE_ALREADY_HELD")
+            elif (port["resting"][UP]["qty"]
+                    + port["resting"][DOWN]["qty"]) > EPS:
+                skip("FAVORITE_ALREADY_RESTING")
+            elif touch < params.fav_only_min_price - EPS:
+                skip("NOT_THE_FAVORITE", touch=touch,
+                     min_price=params.fav_only_min_price)
+            elif touch > params.fav_only_max_price + EPS:
+                skip("FAVORITE_TOO_DEAR", touch=touch,
+                     max_price=params.fav_only_max_price)
+            else:
+                eff = action_effect(port, side=side, price=touch,
+                                    qty=params.base_qty, p_up=p,
+                                    params=params)
+                cands.append(dict(eff, role="FAVORITE", reservation=touch,
+                                  touch=touch, ticks_behind_touch=0,
+                                  favorite={"market_price": touch,
+                                            "min_price":
+                                            params.fav_only_min_price}))
+            continue
         # ============ FAVORITE ACCUMULATION, late, and only on evidence.
         # A hedge is never a favorite order: completing a pair comes first
         # and is handled below exactly as it always was. This branch is
@@ -709,6 +747,10 @@ def withdrawals(port: Mapping[str, Any], *, p_up: Any, params: Params,
         hedge = (unm > EPS and side == DOWN) or (unm < -EPS and side == UP)
         if hedge:
             continue
+        if params.fav_only:
+            # the one favorite order rests until it fills, expires or the
+            # terminal cancels it; this profile withdraws nothing
+            continue
         heavy = (unm > EPS and side == UP) or (unm < -EPS and side == DOWN)
         # ---- a late FAVORITE order: kept while it is still justified and
         # inside its caps, named the moment it is not. An opening order
@@ -816,16 +858,54 @@ def favorite_overrides() -> Dict[str, Any]:
     return got
 PROFILE_ENV = "L5_PORTFOLIO_PROFILE"
 MODEL_EDGE_PROFILE, BALANCE_PROFILE = "MODEL_EDGE", "BALANCE"
+FAVORITE_ONLY_PROFILE = "FAVORITE_ONLY"
 
 
 def profile() -> str:
-    """BALANCE only when the owner names it exactly; otherwise unchanged."""
-    return (BALANCE_PROFILE if os.getenv(PROFILE_ENV, "") == BALANCE_PROFILE
-            else MODEL_EDGE_PROFILE)
+    """BALANCE or FAVORITE_ONLY only when the owner names it exactly;
+    otherwise unchanged."""
+    raw = os.getenv(PROFILE_ENV, "")
+    if raw in (BALANCE_PROFILE, FAVORITE_ONLY_PROFILE):
+        return raw
+    return MODEL_EDGE_PROFILE
 
 
 def profile_uses_model() -> bool:
-    return profile() != BALANCE_PROFILE
+    return profile() == MODEL_EDGE_PROFILE
+
+
+def favorite_only() -> bool:
+    """Is this process in the owner's favorite-only test? Read by the
+    executor's submission gate as well as here, so the two cannot disagree
+    about whether anything but the favorite may be ordered."""
+    return profile() == FAVORITE_ONLY_PROFILE
+
+
+#: FAVORITE ONLY. Every number is the owner's, inside hard bounds, and ONE
+#: unreadable or out-of-range value makes the profile want nothing at all.
+FAVORITE_ONLY_KNOBS = {
+    # env name: (parameter, default, lowest, highest)
+    "L5_FAVONLY_MIN_PRICE": ("fav_only_min_price", 0.75, 0.60, 0.93),
+    "L5_FAVONLY_MAX_PRICE": ("fav_only_max_price", 0.93, 0.60, 0.93),
+    "L5_FAVONLY_START_S": ("fav_only_start_s", 450.0, 300.0, 780.0),
+}
+FAVORITE_ONLY = {"margin": 0.0, "adverse": 0.0, "risk": 0.0,
+                 "fav_only": True}
+
+
+def favorite_only_overrides() -> Dict[str, Any]:
+    """The profile's numbers, or a profile that can never want an order."""
+    got: Dict[str, Any] = {}
+    for env, (name, default, lo, hi) in FAVORITE_ONLY_KNOBS.items():
+        raw = (os.getenv(env) or "").strip()
+        v = default if not raw else _num(raw)
+        if v is None or not (lo - EPS <= v <= hi + EPS):
+            # refuse everything: a start that never comes
+            return {"fav_only_start_s": float("inf")}
+        got[name] = float(v)
+    if got["fav_only_max_price"] < got["fav_only_min_price"] - EPS:
+        return {"fav_only_start_s": float("inf")}
+    return got
 
 
 #: THE BALANCE PROFILE'S FLOOR ON NEW EXPOSURE, the owner's variable.
@@ -855,6 +935,8 @@ def production_params(tick: Any = None) -> Params:
     if profile() == BALANCE_PROFILE:
         knobs = dict(BALANCE, **favorite_overrides())
         knobs["add_floor"] = balance_add_floor()
+    elif profile() == FAVORITE_ONLY_PROFILE:
+        knobs = dict(FAVORITE_ONLY, **favorite_only_overrides())
     else:
         knobs = dict(PRODUCTION)
     return Params(tick=(t if t and t > 0 else 0.01), **knobs).checked()
