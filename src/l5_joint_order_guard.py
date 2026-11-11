@@ -51,11 +51,11 @@ def authorize_new_buy(*, actor_strategy: str, actor_market: str,
     Callers must atomically reserve the returned notional before submission;
     this check alone is NOT a cross-process lock or a trading authorization.
     """
-    if not actor_strategy or not actor_market or halt or not reconciliation_clean:
+    if type(halt) is not bool or type(reconciliation_clean) is not bool:\n        raise UnsafeOrderAction("ambiguous risk state")\n    if not actor_strategy or not actor_market or halt or not reconciliation_clean:
         raise UnsafeOrderAction("halt, uncertain reconciliation or missing actor")
     if not isinstance(pending_orders, (list, tuple)) or not isinstance(filled_cost_by_strategy, Mapping):
         raise UnsafeOrderAction("incomplete account exposure")
-    cap, own_cap = _money(shared_cap_usd), _money(strategy_cap_usd)
+    if not isinstance(actor_strategy, str) or not isinstance(actor_market, str):\n        raise UnsafeOrderAction("invalid actor")\n    cap, own_cap = _money(shared_cap_usd), _money(strategy_cap_usd)
     px, quantity = _money(price), _money(qty)
     if not Decimal("0") < px < Decimal("1") or quantity <= 0:
         raise UnsafeOrderAction("invalid buy")
