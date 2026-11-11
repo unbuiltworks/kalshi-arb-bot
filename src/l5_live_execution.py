@@ -8450,6 +8450,60 @@ class FaithfulExecutor:
                         "role") for k, x in (st.get("sides") or {}).items()}}
         return None
 
+    def held_side_add_refusal(self, market: str, dec: Mapping[str, Any]
+                              ) -> Optional[Dict[str, Any]]:
+        """None unless completions rest at their target (inventory recovery,
+        or L5_TS_COMPLETION_RESTS_AT_CEILING alone) and this order would BUY
+        MORE of the side already held unmatched, with no steer asking for it.
+
+        WHAT IT CLOSES, found by replaying recorded venue books through the
+        runner. With recovery on, a completion rests for as long as inventory
+        is unmatched. The controller's opening path read that resting
+        completion as the first leg of a new pair and granted the "complement"
+        its slot -- on the side ALREADY HELD. 2026-11-03 00:30Z book: holding
+        0.62 DOWN bought at 0.50 with UP resting at 0.48 and the market at
+        0.79/0.80, it posted DOWN at 0.18, which filled. The two orders were
+        never a pair (UP was 31 ticks from the touch); the DOWN order was a
+        directional add to a losing position that nothing had decided to make.
+
+        Without recovery the same tick is refused upstream, because the
+        opening pair is priced at the touch and fails the opening ceiling;
+        resting the completion at its target is what let it through.
+
+        A deliberate add still has a route: the portfolio controller's steer
+        names the side it wants, and an order it wants is not refused here.
+        FAILS CLOSED: unreadable inventory refuses.
+        """
+        # keyed on RESTING, which is what creates the opening: the master
+        # switch turns it on, and so does its own switch alone
+        if not TS.completion_rests_at_ceiling():
+            return None
+        side = str(dec.get("side") or "")
+        try:
+            realised = D(str(self.store.residual(str(market))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "HELD_SIDE_ADD_INVENTORY_UNREADABLE", "side": side}
+        if not realised.is_finite():
+            return {"why": "HELD_SIDE_ADD_INVENTORY_UNREADABLE", "side": side}
+        if realised == 0:
+            return None
+        held = "UP" if realised > 0 else "DOWN"
+        if side != held:
+            return None
+        st = self.portfolio_steer
+        try:
+            if isinstance(st, Mapping) and (
+                    (st.get("sides") or {}).get(side) or {}
+                    ).get("wanted") is True:
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+        return {"why": "HELD_SIDE_ADD_WHILE_UNMATCHED", "side": side,
+                "unmatched_contracts": str(abs(realised))}
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -10764,6 +10818,20 @@ class FaithfulExecutor:
                                "no hedge, no pair.")})
                 return prov.refuse("FAVORITE_ONLY",
                                    str(_fav_bad.get("why"))[:120])
+            # NO ACCIDENTAL ADD TO THE SIDE ALREADY HELD. Inert unless
+            # completions rest at their target; then it only ever refuses. See
+            # `held_side_add_refusal`.
+            _add_bad = self.held_side_add_refusal(market, dec)
+            if _add_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "HELD_SIDE_ADD", "detail": _add_bad,
+                    "labels": ("with unmatched inventory held, recovery "
+                               "works the completing side only; buying more "
+                               "of the held side needs the portfolio "
+                               "controller to ask for it.")})
+                return prov.refuse("HELD_SIDE_ADD",
+                                   str(_add_bad.get("why"))[:120])
             _pair_bad = self.pair_cost_refusal(market, dec, tr)
             if _pair_bad:
                 prov.stage("ORDER", {

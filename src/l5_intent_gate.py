@@ -175,6 +175,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # steer wants at that moment is refused -- second legs, hedges and
     # every completion route included. It only ever refuses.
     "FAVORITE_ONLY",
+    # INVENTORY RECOVERY'S OWN GUARD, 2026-11-11, at the same boundary.
+    # Off unless completions rest at their target (L5_INVENTORY_RECOVERY or
+    # L5_TS_COMPLETION_RESTS_AT_CEILING); then an order that would buy
+    # more of the side already held unmatched is refused unless the
+    # portfolio controller's steer wants that side. It only ever refuses.
+    "HELD_SIDE_ADD",
     # ADDED WITH THE GUARD, and this inventory is where that is
     # reviewed. PAIR_COST_CEILING is judged on CONFIRMED FILLS and so
     # never engages while both legs are merely submitted;
