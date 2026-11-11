@@ -12,6 +12,45 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## BTC5m authorization, mandatory isolation and origin labels (2026-11-11, late)
+
+**Production is unchanged and DISARMED.** `l5-pmus-live` runs `ff4b5291a`
+with `L5_LIVE_HALT=1` and `L5_SHADOW_ONLY=1`, 0 live orders; the watchdog
+sees 0 venue orders. Nothing below is deployed.
+
+Owner decisions of 2026-11-11, implemented on
+`work/l5-inventory-controller-20261111` (PR #221):
+
+| decision | what exists now |
+|---|---|
+| extend the existing single-use authorization to BTC5m; no second path | `cpc-btc-updown-5m-` is an allowed approval series with a $5 exposure ceiling; `claim_btc5m_submission` is built from the same approval gate, window ledger, budgets and O_EXCL lock; one document names one series and no claim spends another series' approval |
+| isolation mandatory | another registered strategy's orders are foreign by a code registry and, because **the venue's rows carry no client order id**, by the market's series; never adopted or cancelled; counted in account-wide exposure at $1 a contract |
+| label positions and fills | settled rows and held legs carry BTC15M / BTC5M / MANUAL / UNKNOWN; MANUAL needs the owner's attestation, BTC5M needs evidence, otherwise UNKNOWN; only a position booked from the ledger's own fills is an authenticated cost |
+| keep the account-wide halt | untouched: the per-origin report sits beside the account-wide lines and feeds no gate |
+| review the adapter, then move it into `src/` | done: every order spends the claim before the wire; five defects fixed in review; still imported by nothing and shipped by no image |
+
+**Economics: NO PROMOTION for either strategy.**
+- BTC15m: every recovery configuration is negative in the 380-window
+  real-runner replay (about -4.2c/window, hypothetical fills). Last
+  automated live window: 2026-11-11 19:00Z, settled **-$0.1410**.
+- BTC5m, 42 recorded windows, hypothetical fills: negative with the book
+  mid and with the independent index probability
+  (`analysis/l5/btc5m_reference_replay.py`): -1.0c/window at the default
+  allowance, -3.8c with none. That probability is well calibrated, and
+  where it disagrees with the book the book was right. BLOCKED on a missing
+  mechanism: nothing here knows more than the book or fills better than it.
+
+**Settled realized P&L:** L5-verified -$3.3220; account-wide -$21.0406
+(includes the manual 19:15Z position at its $5.00 bound; cash-estimated
+about -$2.42; restating it needs the venue trade export). The daily and
+lifetime halts are engaged and were not touched.
+
+**What blocks simultaneous execution** (see
+`analysis/l5/DEPLOY_PACKAGE_20261111.md`): the account-wide ledger cannot
+see a 5-minute fill's price, so it books 5-minute pairs at the $1 bound;
+the lifetime limit is already exceeded; neither strategy is positive in
+replay; the watchdog covers one service; no BTC5m runner or service exists.
+
 ## Stage A campaign closed, and the bounded taker policy (2026-10-30)
 
 **The executor is DISARMED.** `PMUS_Q1_LIVE=NO`, `PMUS_Q1_ARM` cleared,
