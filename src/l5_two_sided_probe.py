@@ -3034,6 +3034,19 @@ COMPLETION_CEILINGS_IN_FORCE = ("improves", "within_budget")
 #: already permit, and the submission gate still judges the order.
 COMPLETION_RESTS_AT_CEILING_ENV = "L5_TS_COMPLETION_RESTS_AT_CEILING"
 
+#: PRICE A PARTIAL COMPLETION PER CONTRACT. Completing q contracts of a held
+#: leg at price p creates q pairs that each cost (average held cost + p)
+#: and each redeem $1.00. The engine divided the WHOLE leg's cost by the q
+#: pairs instead, so one clip of a three-clip leg read as a pair of 1.9 at
+#: any price and could never be completed. Exactly "PER_CONTRACT" or it is
+#: off. The ceilings themselves -- 0.96 opening, the owner's completion
+#: pair ceiling -- are not moved; only what is divided by what.
+PARTIAL_COMPLETION_BASIS_ENV = "L5_PARTIAL_COMPLETION_BASIS"
+
+
+def partial_completion_per_contract() -> bool:
+    return (os.getenv(PARTIAL_COMPLETION_BASIS_ENV) or "") == "PER_CONTRACT"
+
 
 def completion_rests_at_ceiling() -> bool:
     return (os.getenv(COMPLETION_RESTS_AT_CEILING_ENV) or "") == "ON"
@@ -3071,7 +3084,19 @@ def completion_ceiling(**kw: Any) -> Optional[D]:
             raise
         return None
     if not rep.get("ok"):
-        return None
+        # `ok` means EVERY test passed at some price, including the two
+        # that are not in force. For a PARTIAL completion -- one clip of a
+        # leg that holds several -- `positive_both` can never pass, because
+        # the rest of the leg is still unmatched afterwards, so `ok` was
+        # false and this returned None although both ceilings in force
+        # were satisfiable. On 2026-11-11 0400z that refused every
+        # one-clip completion of a three-clip leg, 68 requotes and 154
+        # complements. With the owner's switch the ceilings in force are
+        # read on their own, which is what this function always said it
+        # did; any other failure is still None.
+        if not (partial_completion_per_contract()
+                and rep.get("reason") == "NO_PERMISSIBLE_PRICE"):
+            return None
     ceilings = rep.get("ceilings") or {}
     vals = []
     for name in COMPLETION_CEILINGS_IN_FORCE:

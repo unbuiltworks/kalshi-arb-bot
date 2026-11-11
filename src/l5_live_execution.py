@@ -8452,6 +8452,25 @@ class FaithfulExecutor:
                                "at all.")}
         cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
         eff = cost_after / matched_after
+        # A PARTIAL COMPLETION, PER CONTRACT. `cost_after / matched_after`
+        # charges the pairs this order creates with the cost of the part of
+        # the held leg that stays unmatched, so one clip of a several-clip
+        # leg can never clear any ceiling. With the owner's switch, and only
+        # for an order that reduces an unmatched leg without reaching past
+        # it, each side is taken at its own average: what the matched
+        # contracts cost, which is what they redeem $1.00 against. A full
+        # completion is the same number either way.
+        try:
+            if (TS.partial_completion_per_contract()
+                    and held[other] > held[side]
+                    and after[side] < held[other]
+                    and (lc.get(other) is not None)):
+                eff = (((lc.get(side) or D(0)) + px * qty) / after[side]
+                       + D(str(lc.get(other))) / held[other])
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # unreadable: keep the stricter whole-cost figure
         # THE DEFENSIVE CEILING IS SEPARATE AND LOOSER, AND ONLY HERE.
         # Normal completion stays capped at 0.96: a pair above $1.00 buys a
         # certain loss and is never an edge. Unwinding a leg that would

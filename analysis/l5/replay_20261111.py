@@ -56,7 +56,24 @@ BASE = dict(life=120.0, floor=D("0.30"), entry_cutoff=480.0, terminal=600.0,
             deficit=D("1.00"), rest_hedge=False, attempts=16,
             #: the engine's first orders went out 9 s (0400z) and 17 s (0415z)
             #: after the open; nothing is quoted before this
-            open_after=9.0)
+            open_after=9.0,
+            #: seconds a cancelled quote stays fillable at the venue, and
+            #: before its replacement is live. 0 = instant (the first runs).
+            cancel_latency=0.0,
+            #: when one leg of a round fills, withdraw the other leg's stale
+            #: quote at once and re-place it as a completion
+            reprice_on_fill=False,
+            #: ticks behind the touch for a completion; None = the opening
+            #: depth, as the first runs priced it. The engine uses 0.
+            hedge_depth=None,
+            #: clips that may be unmatched while a NEW pair opens beside
+            #: them, provided every unmatched clip has its hedge resting
+            heavy_cap=1)
+#: what one unmatched contract has settled at on our OWN record: 81.40
+#: unmatched units over 89 usable settled markets lost $15.0963 (see
+#: `BREAKEVEN_PAIR` in src/l5_two_sided_probe.py). Used ONLY to state an
+#: expectation beside tonight's realized figure; it is not a forecast.
+OWN_RECORD_PER_UNMATCHED = D("-0.1855")
 
 
 def load(name: str) -> List[Any]:
@@ -104,22 +121,44 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
             out = max(out, c - min(q.values()))
         return out
 
+    lat = float(p["cancel_latency"])
+    unmatched_s = 0.0
+    last_t = None
+    first_fill_t = None
     for t, bid, ask in path:
         if not (D(0) < bid < ask < D(1)) and not (D(0) < bid <= ask < D(1)):
             continue
-        # 1. fills: the book's offer is at or through our bid
+        if last_t is not None and unmatched() != 0 and t <= p["terminal"]:
+            unmatched_s += float(t) - float(last_t)
+        last_t = t
+        # 1. fills: the book's offer is at or through our bid. A quote that
+        #    is being cancelled is still fillable until the cancel lands.
         for r in rounds:
             for s, o in list(r["legs"].items()):
-                if o and offer(s, bid, ask) <= o["px"]:
+                if o and o.get("live_at", 0) <= t and \
+                        offer(s, bid, ask) <= o["px"]:
                     pos[s] += o["qty"]
                     cost[s] += o["qty"] * o["px"]
                     fills.append((round(t, 1), s, str(o["px"]), str(o["qty"])))
+                    if first_fill_t is None:
+                        first_fill_t = float(t)
                     r["filled"][s] = o
                     r["legs"][s] = None
+                    other = "DOWN" if s == "UP" else "UP"
+                    sib = r["legs"].get(other)
+                    if p["reprice_on_fill"] and sib and \
+                            "dead_at" not in sib:
+                        sib["dead_at"] = float(t) + lat
         # 2. lifetimes and the terminal
         for r in rounds:
             for s, o in list(r["legs"].items()):
-                if o and (t - o["t"] >= p["life"] or t >= p["terminal"]):
+                if not o:
+                    continue
+                if "dead_at" not in o and (t - o["t"] >= p["life"]
+                                           or t >= p["terminal"]):
+                    o["dead_at"] = float(t) + (0.0 if t >= p["terminal"]
+                                               else lat)
+                if "dead_at" in o and t >= o["dead_at"]:
                     r["legs"][s] = None
                     cancelled += 1
         # 3. re-place what a round is still owed
@@ -133,6 +172,8 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
                     other = "DOWN" if s == "UP" else "UP"
                     px = touch(s, bid, ask) - TICK * (p["depth"] + r["level"])
                     if other in r["filled"]:                   # the hedge
+                        if p["hedge_depth"] is not None:
+                            px = touch(s, bid, ask) - TICK * p["hedge_depth"]
                         cap = p["complete_ceiling"] - r["filled"][other]["px"]
                         if px > cap:
                             if not p["rest_hedge"]:
@@ -145,7 +186,8 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
                             continue
                     if px < TICK:
                         continue
-                    r["legs"][s] = {"px": px, "qty": r["qty"], "t": t}
+                    r["legs"][s] = {"px": px, "qty": r["qty"], "t": t,
+                                    "live_at": float(t) + lat}
                     r["attempts"][s] += 1
                     sent += 1
         # 4. open a new round
@@ -153,8 +195,15 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
         #  five to seven seconds, so every free slot is filled at one sample)
         while True:
             resting = sum(1 for r in rounds if any(r["legs"].values()))
+            # a strand is "hedged" when the round that holds it has its
+            # other leg resting
+            strands = [r for r in rounds if len(r["filled"]) == 1]
+            hedged = all(any(r["legs"].values()) for r in strands)
+            room = (unmatched() == 0
+                    or (p["heavy_cap"] > 1 and hedged
+                        and len(strands) < p["heavy_cap"]))
             if not (p["open_after"] <= t <= p["entry_cutoff"]
-                    and unmatched() == 0 and resting < p["concurrent"]):
+                    and room and resting < p["concurrent"]):
                 break
             level = resting
             up = bid - TICK * (p["depth"] + level)
@@ -176,7 +225,13 @@ def run(name: str, **over: Any) -> Dict[str, Any]:
     spent = cost["UP"] + cost["DOWN"]
     pair_cost = ((cost["UP"] / pos["UP"]) + (cost["DOWN"] / pos["DOWN"])
                  if matched > 0 else None)
+    resid = abs(unmatched())
+    locked = (matched * (D(1) - pair_cost)) if matched > 0 else D(0)
     return {"window": name, "orders": sent, "fills": len(fills),
+            "seconds_unmatched": round(unmatched_s, 0),
+            "first_fill_t": first_fill_t,
+            "locked_pair_pnl": locked,
+            "expected_on_own_record": locked + resid * OWN_RECORD_PER_UNMATCHED,
             "cancelled": cancelled, "pairs_contracts": matched,
             "pair_cost": pair_cost, "unmatched": abs(unmatched()),
             "unmatched_side": ("UP" if unmatched() > 0 else
