@@ -55,6 +55,10 @@ def campaign_cap(slug):
     if not c.get("owner_approved"): return None, "CAMPAIGN_NOT_APPROVED"
     if slug not in c["windows"]: return None, "SLUG_NOT_IN_CAMPAIGN"
     if slug in c.get("results", {}): return None, "WINDOW_ALREADY_RUN"
+    for w in c.get("predecessor_must_settle", ()):
+        r = c.get("predecessor_results", {}).get(w)
+        if not r or r.get("status") != "SETTLED" or not r.get("flat_and_no_open_orders"):
+            return None, "PREDECESSOR_UNRECONCILED:%s" % w
     net = D(0)
     for w in c["windows"]:
         if w == slug: break
@@ -95,6 +99,8 @@ def restore():
     print(b5(write=vals).set_variables(vals)); return 0
 
 def arm_campaign(slug):
+    global SHA
+    SHA = campaign()["approved_sha"]   # start SHA, or a verified successor recorded here
     cap, why = campaign_cap(slug); print(json.dumps({"campaign_cap": str(cap), "why": why}))
     if cap is None:
         print("NOT ARMED (campaign)"); return 1

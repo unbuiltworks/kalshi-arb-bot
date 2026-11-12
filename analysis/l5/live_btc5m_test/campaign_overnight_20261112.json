@@ -1,6 +1,6 @@
 {
  "campaign": "btc5m-overnight-20261112",
- "owner_approved": false,
+ "owner_approved": true,
  "windows": [
   "cpc-btc-updown-5m-2026-11-12-0500z",
   "cpc-btc-updown-5m-2026-11-12-0630z",
@@ -11,5 +11,11 @@
  "fee_reserve_usd": "0.02",
  "min_window_cap_usd": "0.10",
  "approved_sha": "9de1e1189a4f158a2cacccd8ef596112bab86da5",
- "results": {}
+ "results": {},
+ "approved_utc": "2026-11-12T03:25:11.695949+00:00",
+ "approval_terms": "Option B. At most three maker-only windows 0500z/0630z/0800z on l5-btc5m-live; start SHA 9de1e1189; successor SHA only if it changes BTC5m controller/execution logic only (not authorization, limits, halts, watchdog, account-risk), passes targeted regressions and full-suite baseline parity, deployed disarmed and verified before arming. Per window <=$0.45 exposure, <=20 orders (OPEN 4/COMPLETE 8/REPLACE 6), taker disabled. Campaign realized net-loss limit $1.35 incl fees; cap reduced to remaining budget with $0.02 fee reserve; fail closed if anything unreconciled. Account $5 daily / $25 lifetime unchanged; watchdog required; BTC15m disarmed; no overlap; skipped windows not replaced; no unchanged configuration repeated after evidence it is economically unsound.",
+ "predecessor_must_settle": [
+  "cpc-btc-updown-5m-2026-11-12-0345z"
+ ],
+ "predecessor_results": {}
 }
