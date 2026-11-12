@@ -74,7 +74,8 @@ def books():
     return _BOOKS
 
 
-def replay(rows, env, *, step=2.0, start=7.0, end=600.0, on_submit=None):
+def replay(rows, env, *, step=2.0, start=7.0, end=600.0, on_submit=None,
+           limits=None):
     """One window. `rows` is [(seconds, bid, ask), ...] of the YES book.
 
     Returns the per-tick log, the orders sent, the venue's filled quantity
@@ -98,9 +99,15 @@ def replay(rows, env, *, step=2.0, start=7.0, end=600.0, on_submit=None):
         LAD.seed(h, 30, D("-0.02"))
         b = book_at(start)
         h.book.set(b[1], b[2])
+        if limits is not None:
+            limits(h)               # e.g. the wider, NOT APPROVED test limits
         if env.get("L5_CASH_POLICY"):
             import tests.test_l5_cash_recycle_on_pair as RC
             h = RC.with_venue_cash(h)
+        if env.get("L5_PORTFOLIO_CONTROLLER") == "STEER":
+            # production's tick also runs the controller's withdraw stage
+            import tests.test_l5_continuous_config as CC
+            h = CC.steered(h)
         if on_submit is not None:
             _submit = h.venue.submit
 

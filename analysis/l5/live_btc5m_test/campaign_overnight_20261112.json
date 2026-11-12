@@ -1,0 +1,121 @@
+{
+ "campaign": "btc5m-overnight-20261112",
+ "owner_approved": true,
+ "windows": [
+  "cpc-btc-updown-5m-2026-11-12-0500z",
+  "cpc-btc-updown-5m-2026-11-12-0630z",
+  "cpc-btc-updown-5m-2026-11-12-0800z"
+ ],
+ "max_window_exposure_usd": "0.45",
+ "max_campaign_loss_usd": "1.35",
+ "fee_reserve_usd": "0.02",
+ "min_window_cap_usd": "0.10",
+ "approved_sha": "ee5f4e8027cedfe5cb6301711e215f3397a42ee4",
+ "results": {
+  "cpc-btc-updown-5m-2026-11-12-0500z": {
+   "status": "SETTLED",
+   "settled_net_usd": "0.0000",
+   "submitted": 1,
+   "filled_orders": 0,
+   "fills_cost_usd": "0",
+   "fees_usd": "0.0000",
+   "settlement_px": "0.0000",
+   "transport_armed": true,
+   "flat_and_no_open_orders": true,
+   "watchdog": {
+    "as_of_utc": "2026-11-12T05:06:16.508778+00:00",
+    "age_s": 23.0,
+    "open_orders": 0,
+    "cancel_enabled": true,
+    "emergency_cancel": false,
+    "read_error": null,
+    "halted": null
+   },
+   "recorded_utc": "2026-11-12T05:06:39.533534+00:00"
+  },
+  "cpc-btc-updown-5m-2026-11-12-0630z": {
+   "status": "SETTLED",
+   "settled_net_usd": "0",
+   "submitted": 0,
+   "filled_orders": 0,
+   "fills_cost_usd": "0",
+   "fees_usd": "0",
+   "settlement_px": "0.0000",
+   "transport_armed": true,
+   "flat_and_no_open_orders": true,
+   "watchdog": {
+    "as_of_utc": "2026-11-12T06:37:39.317253+00:00",
+    "age_s": 10.2,
+    "open_orders": 0,
+    "cancel_enabled": true,
+    "emergency_cancel": false,
+    "read_error": null,
+    "halted": null
+   },
+   "recorded_utc": "2026-11-12T06:37:49.496638+00:00"
+  },
+  "cpc-btc-updown-5m-2026-11-12-0800z": {
+   "status": "SETTLED",
+   "settled_net_usd": "0",
+   "submitted": 0,
+   "filled_orders": 0,
+   "fills_cost_usd": "0",
+   "fees_usd": "0",
+   "settlement_px": "1.0000",
+   "transport_armed": true,
+   "flat_and_no_open_orders": true,
+   "watchdog": {
+    "as_of_utc": "2026-11-12T08:05:43.660057+00:00",
+    "age_s": 12.1,
+    "open_orders": 0,
+    "cancel_enabled": true,
+    "emergency_cancel": false,
+    "read_error": null,
+    "halted": null
+   },
+   "recorded_utc": "2026-11-12T08:05:55.736262+00:00"
+  }
+ },
+ "approved_utc": "2026-11-12T03:25:11.695949+00:00",
+ "approval_terms": "Option B. At most three maker-only windows 0500z/0630z/0800z on l5-btc5m-live; start SHA 9de1e1189; successor SHA only if it changes BTC5m controller/execution logic only (not authorization, limits, halts, watchdog, account-risk), passes targeted regressions and full-suite baseline parity, deployed disarmed and verified before arming. Per window <=$0.45 exposure, <=20 orders (OPEN 4/COMPLETE 8/REPLACE 6), taker disabled. Campaign realized net-loss limit $1.35 incl fees; cap reduced to remaining budget with $0.02 fee reserve; fail closed if anything unreconciled. Account $5 daily / $25 lifetime unchanged; watchdog required; BTC15m disarmed; no overlap; skipped windows not replaced; no unchanged configuration repeated after evidence it is economically unsound.",
+ "predecessor_must_settle": [
+  "cpc-btc-updown-5m-2026-11-12-0345z"
+ ],
+ "predecessor_results": {
+  "cpc-btc-updown-5m-2026-11-12-0345z": {
+   "status": "SETTLED",
+   "settled_net_usd": "0",
+   "submitted": 0,
+   "filled_orders": 0,
+   "fills_cost_usd": "0",
+   "fees_usd": "0",
+   "settlement_px": null,
+   "transport_armed": false,
+   "flat_and_no_open_orders": true,
+   "watchdog": {
+    "as_of_utc": "2026-11-12T04:23:26.589548+00:00",
+    "age_s": 21.8,
+    "open_orders": 0,
+    "cancel_enabled": true,
+    "emergency_cancel": false,
+    "read_error": null,
+    "halted": null
+   },
+   "recorded_utc": "2026-11-12T04:23:48.377961+00:00"
+  }
+ },
+ "successor_sha_log": [
+  {
+   "sha": "ee5f4e8027cedfe5cb6301711e215f3397a42ee4",
+   "prs": [
+    227,
+    228
+   ],
+   "scope": "BTC5m controller/execution + BTC5m image deps; no authorization/limit/halt/watchdog/account-risk change",
+   "targeted_tests": "476 BTC5m + 4 image-deps pass",
+   "full_suite_parity": "identical 34 baseline IDs on d23d05560 and e426650cc (trees identical to merges 9068aaa02/ee5f4e802)",
+   "disarmed_deploy": "7b1a591a SUCCESS 04:42Z; locks on; idle; watchdog 0; BTC15m disarmed",
+   "verified_utc": "2026-11-12T04:42:28.495356+00:00"
+  }
+ ]
+}

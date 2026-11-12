@@ -78,12 +78,16 @@ def load():
 def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
         simultaneous, replenish, max_subs,
         entry_cut=ENTRY_CUT, complete_cut=COMPLETE_CUT, rounds=None,
-        slots=1, paired=False):
+        slots=1, paired=False, skew=0):
     """One window.
 
     simultaneous  True  = quote BOTH sides whenever inventory permits
                   False = one resting order at a time (today's engine)
     replenish     after a fill, immediately re-quote that side
+    skew          inventory-skewed quoting (default 0 = off, unchanged):
+                  per contract of imbalance, the HEAVY side rests `skew`
+                  ticks deeper and the LIGHT side `skew` ticks shallower
+                  (never above the reference print)
     """
     qty = {"UP": D(0), "DOWN": D(0)}; cost = {"UP": D(0), "DOWN": D(0)}
     rest = {"UP": None, "DOWN": None}
@@ -133,7 +137,10 @@ def sim(w, *, k, clip, depth, band_lo, band_hi, comp_cap,
             live = sum(1 for z in ("UP", "DOWN") if rest[z] is not None)
             if not simultaneous and live >= slots:
                 ref_ct["ONE_ORDER_SLOT"] += 1; continue
-            want = ref[s] - depth * TICK
+            heavy = (resid() > 0 and s == "UP") or (resid() < 0 and s == "DOWN")
+            shift = D(skew) * abs(resid()) / D(clip)
+            eff = (D(depth) + shift) if heavy else max(D(0), D(depth) - shift)
+            want = ref[s] - (eff * TICK).quantize(TICK)
             reduces = (resid() > 0 and s == "DOWN") or (resid() < 0 and s == "UP")
             after = resid() + (D(clip) if s == "UP" else -D(clip))
             if abs(after) > D(k):

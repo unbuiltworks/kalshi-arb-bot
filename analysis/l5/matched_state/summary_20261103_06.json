@@ -1,0 +1,57 @@
+{
+ "label": "L5 = Polymarket international venue fills (activity feed), trading P&L only; ours = REPLAY hypothetical fills on PMUS books; matched-state is a CROSS-VENUE PROXY",
+ "windows": 293,
+ "settled_windows": 292,
+ "winner_sources": {
+  "L5_REDEEM": 292,
+  "null": 1
+ },
+ "l5_trading_pnl": {
+  "n": 292,
+  "sum": -308.0851,
+  "mean": -1.0551,
+  "median": -0.1704
+ },
+ "l5_matched_pnl": {
+  "n": 292,
+  "sum": 7900.0401,
+  "mean": 27.0549,
+  "median": 25.2837
+ },
+ "l5_residual_pnl": {
+  "n": 292,
+  "sum": -8208.1257,
+  "mean": -28.11,
+  "median": -23.1334
+ },
+ "l5_contracts_bought": 360742.1,
+ "l5_pnl_per_contract": -0.00085,
+ "l5_two_sided_share": 1.0,
+ "l5_pair_cost_median": 0.94695,
+ "l5_residual_over_bought_median": 0.10349718908624453,
+ "l5_fills_per_window_median": 64.0,
+ "l5_t_first_opposite_median": 18.5,
+ "incentive_rows_usd": {
+  "TAKER_REBATE": 277.5489,
+  "MAKER_REBATE": 966.3303
+ },
+ "fills_vs_pmus": {
+  "n": 6386,
+  "price_minus_pmus_own_bid_median": 0.0,
+  "markout_30_mean": 0.0108,
+  "markout_120_mean": 0.0111,
+  "markout_30_size_weighted": 0.0034
+ },
+ "same_windows_ours": {
+  "n": 70,
+  "sum": -1.2096,
+  "mean": -0.0173,
+  "median": 0.0117
+ },
+ "same_windows_l5": {
+  "n": 70,
+  "sum": -1210.2263,
+  "mean": -17.2889,
+  "median": -8.1561
+ }
+}

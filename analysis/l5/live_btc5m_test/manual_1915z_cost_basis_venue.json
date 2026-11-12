@@ -1,0 +1,65 @@
+{
+ "activity_rows": 2753,
+ "finding": {
+  "actual_cost_usd": "2.10",
+  "booked_cost_usd": "5.00",
+  "booked_settlement_pnl_usd": "-5.00",
+  "fees_usd": "0.00",
+  "overstatement_usd": "2.90",
+  "own_price": "0.4200",
+  "qty": "5.0000",
+  "side": "DOWN",
+  "venue_settlement_pnl_usd": "-2.10"
+ },
+ "leg": {
+  "basis": {
+   "actual_cost_usd": "2.10000000",
+   "avg_price": "0.4200",
+   "crosscheck_worst_gap_usd": "0E-8",
+   "established": true,
+   "fees_usd": "0.0000",
+   "labels": "actual_cost_usd EXCLUDES fees and is side-aware. venue_cost_total_usd is the venue's own fee-INCLUSIVE figure over the fills that carry one, and is a cross-check, not the basis.",
+   "qty": "5.0000",
+   "side": "DOWN",
+   "venue_cost_fills_absent": 0,
+   "venue_cost_fills_checked": 1,
+   "venue_cost_total_usd": "2.1"
+  },
+  "fills": [
+   {
+    "client_order_id": null,
+    "cost": "2.1",
+    "cost_basis": null,
+    "fee": "0.0000",
+    "order_id": null,
+    "owner": "UNKNOWN_OWNER",
+    "owner_evidence": "venue_order_id_not_ours_but_flag_uncalibrated",
+    "price": "0.5800",
+    "qty": "5.0000",
+    "realized_pnl": null,
+    "t": "2026-11-11T19:24:37.409803394Z",
+    "trade_id": "DNKM4580F3YF",
+    "venue_order_id": "DNKM2BVG13YB"
+   }
+  ],
+  "key": "cpc-btc-updown-15m-2026-11-11-1915z|DOWN",
+  "l5_owned_fills": 0,
+  "ledger_qty": "5.0000",
+  "market": "cpc-btc-updown-15m-2026-11-11-1915z",
+  "owner_manual_fills": 0,
+  "owners": [
+   "UNKNOWN_OWNER"
+  ],
+  "placeholder_cost_usd": "5.0000",
+  "qty_source": "retired_markets",
+  "side": "DOWN",
+  "unknown_owner_fills": 1
+ },
+ "not_applied": "a restatement is a ledger write and needs the owner's explicit approval; the ledger still books -$5.00",
+ "source": "L5_COST_BASIS_AUDIT on l5-pmus-live deployment e9e9df5b (commit 8a17b720c), 2026-11-12T00:50:48Z; authenticated walk of /v1/portfolio/activities, 138 pages, complete; writes NONE (inspect mode)",
+ "walk": {
+  "complete": true,
+  "ended": "eof",
+  "pages": 138
+ }
+}

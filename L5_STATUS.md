@@ -12,6 +12,113 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## BTC5m overnight campaign COMPLETE (2026-11-12 08:08Z)
+
+**Running state.** `l5-btc5m-live` on `ee5f4e802` (PR #227 + #228 merged into
+`integration/l5-safe-release-candidate-20261109`), DISARMED: `L5_SHADOW_ONLY=1`,
+`L5_LIVE_HALT=1`, no market/approval, owner arm-token references deleted;
+watchdog 0 open orders. `l5-pmus-live` (BTC15m) unchanged on `9de1e1189`, disarmed.
+
+**Owner-approved campaign** (Option B; `analysis/l5/live_btc5m_test/campaign_overnight_20261112.json`):
+0500z / 0630z / 0800z, $0.45 per window, $1.35 campaign realized-loss limit incl. fees,
+20 orders per window, maker-only, account $5 daily / $25 lifetime unchanged.
+
+| window | result (venue-confirmed) |
+|---|---|
+| 0345z (separately approved) | NEVER ARMED, 0 orders. Image had no `cryptography`: every authenticated call raised ModuleNotFoundError; preflight ran once at +0.6 ms. Flat, net $0 |
+| 0500z | ARMED (preflight PASSED at +3.4 s). 1 maker order DOWN 0.11 @ 0.87 accepted (`DNVWAARG13ZK`), cancelled by exact id after the price left the band; 0 fills; venue fee $0; venue settlement 0 (DOWN won); reconcile agrees; settled net **$0.00** |
+| 0630z | ARMED (+3.7 s). 0 orders: EV_BELOW_MIN 21 / OUT_OF_BAND 16 / BOOK_UNUSABLE 16; index rated UP above the book, DOWN won (settlement 0). Net **$0** |
+| 0800z | ARMED after the preflight retry (attempt 1 failed `book_readable` at +3.7 s, attempt 2 passed at +6.9 s). 0 orders: EV_BELOW_MIN 38 / OUT_OF_BAND 8 / BOOK_UNUSABLE 6; book led the index, UP won (settlement 1). Net **$0** |
+
+**Defects fixed tonight** (all BTC5m controller/execution/image; full-suite parity identical to the 34-ID baseline each time):
+1. BTC5m image installed no packages (`cryptography`, `websockets`) and did not ship `l5_mandate_signature` / `l5_promotion_gate`, which `authorize_arming` imports lazily (PR #228; guard test walks lazy imports).
+2. One preflight at the window start raced the venue's CLOSED→OPEN flip (measured at 0350z: CLOSED at -1.95 s, OPEN at +0.125 s). Now retried 3/6/12/24 s until 90 s; failing checks are named (PR #227).
+3. Controller planned against its $5 default under a $0.45 account cap, so entries could starve the completion. Now plans against the binding ceiling with a completion reserve (PR #227).
+
+**Economics.** REPLAY only (42 windows, $0.45 cap, hypothetical fills): every policy negative; the effective-cap fix removes cap-refused completions (6 -> 0) and is within noise of the old wiring; simultaneous two-sided quoting is clearly worse (about -$1.60 vs about -$0.40). The binding loss is residual favorite inventory after adverse moves. Live campaign total: 3 windows armed, 1 order submitted (accepted, cancelled), 0 fills, $0 realized; campaign loss used $0 of $1.35. No realized profit claimed. Bottleneck: participation -- the favorite controller's EV gate (index probability minus a 6c adverse allowance) never cleared on windows that resolved early, and where the index disagreed with the book the book was right (3/3 tonight).
+
+## Manual 19:15Z trade restated to its venue-verified cost (2026-11-12 02:08Z)
+
+Owner-approved. PR #226 merged as `f58fdfe0e` and deployed to `l5-pmus-live`
+(deployment `ba17e229`). The service's own apply ran with batch
+`cb-20261112-manual1915z-2.90` and a one-leg `KEYS_ONLY` manifest, and
+reported APPLIED: 1 leg, 0 refused, batch check ok, delta +$2.90. The other
+three legs the walk planned were left OUT_OF_BATCH_SCOPE and unchanged. The
+row keeps the original $5.00 in `cost_superseded`, and the correction is
+recorded under id `cb-20261112-manual1915z-2.90|cpc-btc-updown-15m-2026-11-11-1915z|DOWN`.
+
+Afterwards `L5_COST_BASIS_APPLY` was set back to INSPECT (deployment
+`76aeac4c`, `f58fdfe0e`). Verified on its heartbeat:
+- all-time realized **-$18.1406** (was -$21.0406); UTC day $0;
+- `L5_LIVE_HALT=1`, `L5_SHADOW_ONLY=1`, gate `OPERATOR_HALT`, not armed;
+- 0 orders, $0 exposure, limits unchanged; watchdog 0 orders.
+
+**Lifetime loss room:** $18.6325 - $18.1406 = **$0.4919**. The ceiling was not
+changed.
+
+## PR #224 deployed DISARMED; BTC5m arming wired; manual cost verified (2026-11-12 01:00Z)
+
+**Running:** `l5-pmus-live` deployment `e9e9df5b` on `8a17b720c` (merge of
+PR #224), SUCCESS. `L5_LIVE_HALT=1`, `L5_SHADOW_ONLY=1`, gate blocked
+`OPERATOR_HALT`, not armed, 0 live orders, $0 exposure, limits and realized
+lines unchanged, no alarm, watchdog 0 orders and not halted. Order registry
+serving on 8081 (now with `account_risk`). Rollback: deploy `ff4b5291a`.
+No BTC5m service exists.
+
+**Tests:** candidate `7a045e8ad` (= merged tree): 21,074 passed, 20 failed,
+14 errors; the 34 failing IDs are identical to the pre-existing set on
+`ff4b5291a`.
+
+**Verified cost basis (authenticated venue activity, inspect mode):** the
+manual 15m 19:15Z leg is 5.00 DOWN at 0.42 = **$2.10**, fee $0.00, one fill
+(`DNKM4580F3YF`). The ledger books **$5.00**. Not restated (owner decision).
+
+**Lifetime loss budget** (`L5_MAX_CUMULATIVE_LOSS_USD` = 18.6325): as booked
+-$21.0406, **$2.41 over**; with the verified manual cost restated, -$18.1406,
+**$0.49 of room**. Settled realized P&L is unchanged.
+
+**BTC5m:** the session arms only through `authorize_arming`; candidate
+`9660592ca` (PR #225), not deployed.
+
+## BTC5m authorization, mandatory isolation and origin labels (2026-11-11, late)
+
+**Production is unchanged and DISARMED.** `l5-pmus-live` runs `ff4b5291a`
+with `L5_LIVE_HALT=1` and `L5_SHADOW_ONLY=1`, 0 live orders; the watchdog
+sees 0 venue orders. Nothing below is deployed.
+
+Owner decisions of 2026-11-11, implemented on
+`work/l5-inventory-controller-20261111` (PR #221):
+
+| decision | what exists now |
+|---|---|
+| extend the existing single-use authorization to BTC5m; no second path | `cpc-btc-updown-5m-` is an allowed approval series with a $5 exposure ceiling; `claim_btc5m_submission` is built from the same approval gate, window ledger, budgets and O_EXCL lock; one document names one series and no claim spends another series' approval |
+| isolation mandatory | another registered strategy's orders are foreign by a code registry and, because **the venue's rows carry no client order id**, by the market's series; never adopted or cancelled; counted in account-wide exposure at $1 a contract |
+| label positions and fills | settled rows and held legs carry BTC15M / BTC5M / MANUAL / UNKNOWN; MANUAL needs the owner's attestation, BTC5M needs evidence, otherwise UNKNOWN; only a position booked from the ledger's own fills is an authenticated cost |
+| keep the account-wide halt | untouched: the per-origin report sits beside the account-wide lines and feeds no gate |
+| review the adapter, then move it into `src/` | done: every order spends the claim before the wire; five defects fixed in review; still imported by nothing and shipped by no image |
+
+**Economics: NO PROMOTION for either strategy.**
+- BTC15m: every recovery configuration is negative in the 380-window
+  real-runner replay (about -4.2c/window, hypothetical fills). Last
+  automated live window: 2026-11-11 19:00Z, settled **-$0.1410**.
+- BTC5m, 42 recorded windows, hypothetical fills: negative with the book
+  mid and with the independent index probability
+  (`analysis/l5/btc5m_reference_replay.py`): -1.0c/window at the default
+  allowance, -3.8c with none. That probability is well calibrated, and
+  where it disagrees with the book the book was right. BLOCKED on a missing
+  mechanism: nothing here knows more than the book or fills better than it.
+
+**Settled realized P&L:** L5-verified -$3.3220; account-wide -$21.0406
+(includes the manual 19:15Z position at its $5.00 bound; cash-estimated
+about -$2.42; restating it needs the venue trade export). The daily and
+lifetime halts are engaged and were not touched.
+
+**What blocks simultaneous execution** (see
+`analysis/l5/DEPLOY_PACKAGE_20261111.md`): the account-wide ledger cannot
+see a 5-minute fill's price, so it books 5-minute pairs at the $1 bound;
+the lifetime limit is already exceeded; neither strategy is positive in
+replay; the watchdog covers one service; no BTC5m runner or service exists.
+
 ## Stage A campaign closed, and the bounded taker policy (2026-10-30)
 
 **The executor is DISARMED.** `PMUS_Q1_LIVE=NO`, `PMUS_Q1_ARM` cleared,

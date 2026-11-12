@@ -1,0 +1,81 @@
+{
+ "label": "L5 venue fills only (Polymarket international); resting/cancelled orders unobserved",
+ "windows": 272,
+ "summary": {
+  "fills": {
+   "p10": 31,
+   "median": 64,
+   "p90": 124
+  },
+  "first_t": {
+   "p10": -51,
+   "median": -17,
+   "p90": 10
+  },
+  "last_t": {
+   "p10": 546,
+   "median": 787,
+   "p90": 864
+  },
+  "gap_median": {
+   "p10": 1,
+   "median": 3.5,
+   "p90": 9
+  },
+  "t_first_opp": {
+   "p10": 7,
+   "median": 47,
+   "p90": 171
+  },
+  "alternation": {
+   "p10": 0.14545454545454545,
+   "median": 0.24193548387096775,
+   "p90": 0.3404255319148936
+  },
+  "run_len_mean": {
+   "p10": 2.84,
+   "median": 3.9423076923076925,
+   "p90": 6.222222222222222
+  },
+  "imb_max_frac": {
+   "p10": 0.5,
+   "median": 1.0,
+   "p90": 1.0
+  },
+  "imb_time_frac": {
+   "p10": 0.1571,
+   "median": 0.2798,
+   "p90": 0.5123
+  },
+  "cycles": {
+   "p10": 0,
+   "median": 4,
+   "p90": 7
+  },
+  "median_fill_size": {
+   "p10": 10.0,
+   "median": 16.079286,
+   "p90": 26.97611
+  },
+  "bought": {
+   "p10": 542.459335,
+   "median": 1082.9254150000002,
+   "p90": 2125.089502
+  },
+  "matched": {
+   "p10": 220.98895199999998,
+   "median": 458.28535999999997,
+   "p90": 981.23632
+  },
+  "residual_frac": {
+   "p10": 0.021002078009504915,
+   "median": 0.10445807224882732,
+   "p90": 0.3053942528089208
+  }
+ },
+ "same_side_repeat_price_vs_previous": {
+  "below": 9107,
+  "above": 7018,
+  "share_below": 0.565
+ }
+}
