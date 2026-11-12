@@ -36,19 +36,30 @@ def _rows():
     ]
 
 
-def test_collect_is_idempotent_and_restart_safe(ops_dirs, monkeypatch):
-    calls = {"n": 0}
+def _v2(rows):
+    """A Data API v2 page: snake_case rows under "data", cursor paging."""
+    snake = {v: k for k, v in ops.V2_FIELDS.items()}
+    return {"data": [{snake.get(k, k): v for k, v in r.items()} for r in rows],
+            "pagination": {"limit": 500, "has_more": False, "next_cursor": None}}
 
+
+def _feed(rows):
+    """Serve `rows` filtered by the request's start/end, one page."""
     def fake_fetch(url, retries=3):
-        calls["n"] += 1
-        return _rows() if "offset=0" in url else []
+        q = dict(p.split("=", 1) for p in url.split("?", 1)[1].split("&"))
+        lo, hi = int(q["start"]), int(q["end"])
+        return _v2([r for r in rows if lo <= r["timestamp"] <= hi])
+    return fake_fetch
 
-    monkeypatch.setattr(ops, "_fetch", fake_fetch)
+
+def test_collect_is_idempotent_and_restart_safe(ops_dirs, monkeypatch):
+    monkeypatch.setattr(ops, "_fetch", _feed(_rows()))
+    monkeypatch.setattr(ops.time, "time", lambda: 1000070.0 + 60)
     r1 = ops.run_collect("polymarket", "0xwallet")
-    assert r1["rows_new"] == 3 and r1["cursor_ts"] == 1000070
-    # second run: same feed -> zero new rows, cursor unchanged
+    assert r1["rows_new"] == 3 and r1["cursor_ts"] == 1000130.0
+    # second run: same feed -> zero new rows
     r2 = ops.run_collect("polymarket", "0xwallet")
-    assert r2["rows_new"] == 0 and r2["cursor_ts"] == 1000070
+    assert r2["rows_new"] == 0
     # state survives "restart" (fresh read from disk)
     assert ops._read_state()["rows_collected_total"] == 3
     day_files = list(ops_dirs.glob("activity_*.jsonl"))
@@ -63,11 +74,10 @@ def test_collect_is_idempotent_and_restart_safe(ops_dirs, monkeypatch):
 
 
 def test_shadow_scores_new_fills_against_baselines(ops_dirs, monkeypatch):
-    monkeypatch.setattr(ops, "_fetch",
-                        lambda url, retries=3: _rows() if "offset=0" in url else [])
-    ops.run_collect("polymarket", "0xwallet")
+    monkeypatch.setattr(ops, "_fetch", _feed(_rows()))
     # freeze "now" near the synthetic timestamps so day files are found
     monkeypatch.setattr(ops.time, "time", lambda: 1000070.0 + 60)
+    ops.run_collect("polymarket", "0xwallet")
     report = ops.run_shadow("polymarket")
     # the will-x-happen row is filtered by the adapter; 2 canonical fills
     assert report["fills_processed"] == 2 and report["windows"] == 1
@@ -162,3 +172,71 @@ def test_exante_summarize_predeclared_comparison(tmp_path):
     assert a["mean_logp_conditional"] > a["mean_logp_marginal"]
     assert a["exact_top1_pct_conditional"] == 60.0
     assert s["strict_temporal_subset"]["n_scored"] == 10
+
+
+# ---------- Data API v2 (v1 retired 2026-11-02) ----------
+
+def test_v2_rows_are_normalized_to_the_v1_field_names():
+    r = ops.normalize_v2({"proxy_wallet": "0xw", "usdc_size": "14.25",
+                          "transaction_hash": "0xt", "outcome_index": 1,
+                          "token_id": "123", "price": "0.56", "size": 25.4,
+                          "event_slug": "btc-updown-15m-1"})
+    assert r["proxyWallet"] == "0xw" and r["transactionHash"] == "0xt"
+    assert r["outcomeIndex"] == 1 and r["asset"] == "123"
+    assert r["usdcSize"] == 14.25 and r["price"] == 0.56
+    assert r["eventSlug"] == "btc-updown-15m-1"
+
+
+def test_a_retired_api_is_an_error_not_zero_rows(ops_dirs, monkeypatch):
+    gone = {"error": "Data API v1 has been retired"}
+    monkeypatch.setattr(ops, "_fetch", lambda url, retries=3: gone)
+    monkeypatch.setattr(ops.time, "time", lambda: 1000070.0)
+    before = ops._read_state()
+    with pytest.raises(ops.CollectError):
+        ops.run_collect("polymarket", "0xwallet")
+    assert ops._read_state() == before                   # cursor not moved
+    assert not list(ops_dirs.glob("activity_*.jsonl"))
+    monkeypatch.setattr(ops.sys, "argv", ["ops", "collect"])
+    assert ops.main() != 0
+    hb = json.loads((ops_dirs / "heartbeat.json").read_text())
+    assert hb["status"] == "error"
+
+
+def test_a_capped_backfill_resumes_without_a_gap(ops_dirs, monkeypatch):
+    """Rows every 10 minutes over two days; a run may read only a few
+    pages. Successive runs must collect every row exactly once."""
+    t0 = 2_000_000
+    rows = [{"type": "TRADE", "timestamp": t0 + 600 * i, "outcome": "Up",
+             "side": "BUY", "price": 0.5, "size": 1, "usdcSize": 0.5,
+             "slug": "btc-updown-15m-%d" % (t0 + 600 * i),
+             "transactionHash": "0x%d" % i} for i in range(288)]
+    now = t0 + 600 * 288
+    ops._write_json(ops.STATE, {"last_ts": t0 - 1, "rows_collected_total": 0,
+                                "runs": 0})
+    monkeypatch.setattr(ops.time, "time", lambda: float(now))
+    monkeypatch.setattr(ops, "MAX_COLLECT_PAGES", 3)
+    monkeypatch.setattr(ops, "_fetch", _feed(rows))
+    for _ in range(20):
+        rep = ops.run_collect("polymarket", "0xwallet")
+        if rep["backfill_remaining_s"] == 0:
+            break
+    assert rep["backfill_remaining_s"] == 0
+    got = []
+    for f in sorted(ops_dirs.glob("activity_*.jsonl")):
+        got += [json.loads(l)["timestamp"] for l in f.read_text().splitlines()]
+    assert sorted(got) == [r["timestamp"] for r in rows]   # all, once
+
+
+def test_a_slice_cut_short_does_not_advance_the_cursor(ops_dirs, monkeypatch):
+    calls = {"n": 0}
+
+    def paged(url, retries=3):
+        calls["n"] += 1
+        return {"data": [], "pagination": {"next_cursor": "more"}}
+    ops._write_json(ops.STATE, {"last_ts": 1_000_000, "rows_collected_total": 0,
+                                "runs": 0})
+    monkeypatch.setattr(ops.time, "time", lambda: 1_100_000.0)
+    monkeypatch.setattr(ops, "MAX_COLLECT_PAGES", 2)
+    monkeypatch.setattr(ops, "_fetch", paged)
+    rep = ops.run_collect("polymarket", "0xwallet")
+    assert calls["n"] == 2 and rep["cursor_ts"] == 1_000_000
