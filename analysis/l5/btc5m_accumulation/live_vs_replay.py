@@ -16,7 +16,7 @@ excluded rather than counted as a flat.
 Commission was read back as 0.0000 on every order, consistent with the
 maker fee of zero the replay already assumes.
 
-WHAT THE COMPARISON CAN AND CANNOT SHOW. Two windows is a tiny sample
+WHAT THE COMPARISON CAN AND CANNOT SHOW. Five windows is still a tiny sample
 against a per-window standard deviation of 0.22, so this test has almost
 no power to detect a small bias -- it can only catch a GROSS mismatch. A
 pass here is weak confirmation; a failure would have been strong
@@ -37,6 +37,15 @@ LIVE = [
     {"window": "16:25z", "submitted": 4, "filled": 4, "qty": 0.58,
      "cost": 0.3902, "net": -0.3902,
      "note": "pure directional DOWN; UP won; the whole stake lost"},
+    {"window": "16:45z", "submitted": 4, "filled": 3, "qty": 0.53,
+     "cost": 0.2886, "net": -0.2886,
+     "note": "pure directional DOWN; UP won; the whole stake lost"},
+    {"window": "16:50z", "submitted": 9, "filled": 4, "qty": 0.56,
+     "cost": 0.3897, "net": +0.1703,
+     "note": "pure directional UP; UP won; the only winning window so far"},
+    {"window": "16:55z", "submitted": 10, "filled": 4, "qty": 0.64,
+     "cost": 0.3897, "net": -0.0797,
+     "note": "matched 0.31 at a realized pair cost of 1.2197, above par"},
 ]
 
 #: the replay's own ADVERSE-tier figures on the 189-window tape (187
@@ -107,7 +116,7 @@ def main() -> int:
               % n)
         print("  survives its first contact with settled money.")
         print()
-        print("  Read this as the WEAK claim it is: two windows cannot")
+        print("  Read this as the WEAK claim it is: %d windows cannot" % n)
         print("  confirm a model, they can only fail to break it. What they")
         print("  do rule out is the hopeful reading -- that live fills would")
         print("  behave better than the replay's ADVERSE tier. They did not;")

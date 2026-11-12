@@ -349,28 +349,43 @@ replay, so if the replay does not describe reality, none of it stands. On
 time, which makes the model falsifiable against settled cashflows instead
 of only against itself.
 
-Two windows filled and settled (16:15z placed nothing — preflight failed —
-so it is excluded rather than counted as a flat). Commission read back as
-0.0000 on every order, consistent with the zero maker fee the replay
-already assumes.
+Five windows filled and settled. Windows that placed nothing are excluded
+rather than counted as flats: 16:15z (preflight failed) and 17:00z /
+17:05z / 17:10z, which submitted nothing because the campaign's **OPEN
+budget was exhausted** (max 8 per campaign, spent 8 by 17:00z) — a budget
+limit, not a decision not to trade. Commission read back as 0.0000 on
+every order, consistent with the zero maker fee the replay already
+assumes.
+
+| window | fills | qty | cost | settled net |
+|---|---|---|---|---|
+| 16:20z | 4 | 0.66 | 0.3830 | −0.0930 |
+| 16:25z | 4 | 0.58 | 0.3902 | −0.3902 |
+| 16:45z | 3 | 0.53 | 0.2886 | −0.2886 |
+| 16:50z | 4 | 0.56 | 0.3897 | **+0.1703** |
+| 16:55z | 4 | 0.64 | 0.3897 | −0.0797 |
 
 | | replay | live |
 |---|---|---|
-| net per window | −0.0286 | −0.2416 |
-| net per share | −0.0487 | −0.3897 |
+| net per window | −0.0286 | −0.1362 |
+| net per share | −0.0487 | −0.2294 |
 
-15 orders, 8 fills (53%), 1.24 contracts, $0.7732 deployed, **−$0.4832
-settled**.
+19 fills, 2.97 contracts, $1.8412 deployed, **−$0.6812 settled**.
 
-At the replay's own per-window sd of 0.2206, a 2-window mean has
-se = 0.1560, so live sits **−1.37 se** from the prediction. The worst live
+At the replay's own per-window sd of 0.2206, a 5-window mean has
+se = 0.0987, so live sits **−1.09 se** from the prediction. The worst live
 window (−0.3902) is inside the replay's observed range (−0.3964 to
 +0.3111). **Not rejected.**
 
-This is deliberately the weak claim: two windows cannot confirm a model,
+This is deliberately the weak claim: five windows cannot confirm a model,
 only fail to break it. What they do kill is the hopeful reading — that
 real fills would behave better than the replay's ADVERSE tier. They did
 not. Live came in *below* the prediction, not above.
+
+Two of the five formed matched pairs **above par** — 1.1759 at 16:20z and
+1.2197 at 16:55z — which is the structural flip result confirmed again in
+live money: both legs of a $0.51–$0.90 favorite cost more than $1.00
+together, so completing a flipped position locks a loss.
 
 The sign is unchanged in both: negative live, negative in replay, and
 no-trade still dominates every arm tested.
