@@ -19,3 +19,6 @@ deploy of a money-capable service.
                    b5m-3be5b845f2887719f24b807a for 15:40/45/50/55Z.
                    L5_LIVE_AUTH_MAX_OPEN raised to 8 at the owner's
                    instruction; REPLACE 24, COMPLETE 8.
+
+2026-11-12T15:45Z  redeploy: campaign names its window in the executor
+                   market lock (MARKET_NOT_CONFIGURED fix).
