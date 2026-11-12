@@ -1,0 +1,215 @@
+{
+ "label": "REPLAY, queue-aware vs L5 prints; trading net excludes rebates",
+ "windows": 522,
+ "days": [
+  "2026-03-26",
+  "2026-08-31"
+ ],
+ "oos_from": "2026-04-13",
+ "base": {
+  "k": "1",
+  "clip": "1",
+  "band_lo": "0.05",
+  "band_hi": "0.95",
+  "comp_cap": "0.96",
+  "max_subs": "40"
+ },
+ "results": {
+  "deployed_d2": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.0828,
+    "trading_net_se": 0.0302,
+    "matched_pnl_per_window": 0.0791,
+    "residual_pnl_per_window": -0.1619,
+    "fills_per_window": 2.05,
+    "contracts_per_window": 2.05,
+    "windows_with_pair": 65,
+    "residual_qty_per_window": 0.526,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1351,
+    "trading_net_se": 0.0157,
+    "matched_pnl_per_window": 0.0945,
+    "residual_pnl_per_window": -0.2297,
+    "fills_per_window": 2.91,
+    "contracts_per_window": 2.91,
+    "windows_with_pair": 259,
+    "residual_qty_per_window": 0.63,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d1": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.1009,
+    "trading_net_se": 0.0313,
+    "matched_pnl_per_window": 0.0702,
+    "residual_pnl_per_window": -0.1711,
+    "fills_per_window": 2.16,
+    "contracts_per_window": 2.16,
+    "windows_with_pair": 68,
+    "residual_qty_per_window": 0.579,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1486,
+    "trading_net_se": 0.016,
+    "matched_pnl_per_window": 0.0902,
+    "residual_pnl_per_window": -0.2388,
+    "fills_per_window": 3.22,
+    "contracts_per_window": 3.22,
+    "windows_with_pair": 264,
+    "residual_qty_per_window": 0.635,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d0": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.0916,
+    "trading_net_se": 0.0325,
+    "matched_pnl_per_window": 0.0638,
+    "residual_pnl_per_window": -0.1554,
+    "fills_per_window": 2.35,
+    "contracts_per_window": 2.35,
+    "windows_with_pair": 67,
+    "residual_qty_per_window": 0.596,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1519,
+    "trading_net_se": 0.0162,
+    "matched_pnl_per_window": 0.0867,
+    "residual_pnl_per_window": -0.2386,
+    "fills_per_window": 3.95,
+    "contracts_per_window": 3.95,
+    "windows_with_pair": 279,
+    "residual_qty_per_window": 0.625,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d2_replenish": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.0649,
+    "trading_net_se": 0.0314,
+    "matched_pnl_per_window": 0.093,
+    "residual_pnl_per_window": -0.1579,
+    "fills_per_window": 2.18,
+    "contracts_per_window": 2.18,
+    "windows_with_pair": 65,
+    "residual_qty_per_window": 0.535,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1354,
+    "trading_net_se": 0.0161,
+    "matched_pnl_per_window": 0.1027,
+    "residual_pnl_per_window": -0.2381,
+    "fills_per_window": 2.87,
+    "contracts_per_window": 2.87,
+    "windows_with_pair": 259,
+    "residual_qty_per_window": 0.652,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d0_replenish": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.0983,
+    "trading_net_se": 0.0334,
+    "matched_pnl_per_window": 0.0763,
+    "residual_pnl_per_window": -0.1747,
+    "fills_per_window": 2.41,
+    "contracts_per_window": 2.41,
+    "windows_with_pair": 67,
+    "residual_qty_per_window": 0.64,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1479,
+    "trading_net_se": 0.0165,
+    "matched_pnl_per_window": 0.0979,
+    "residual_pnl_per_window": -0.2458,
+    "fills_per_window": 3.87,
+    "contracts_per_window": 3.87,
+    "windows_with_pair": 279,
+    "residual_qty_per_window": 0.645,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d1_replenish": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.08,
+    "trading_net_se": 0.0324,
+    "matched_pnl_per_window": 0.0827,
+    "residual_pnl_per_window": -0.1627,
+    "fills_per_window": 2.3,
+    "contracts_per_window": 2.3,
+    "windows_with_pair": 68,
+    "residual_qty_per_window": 0.579,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.1516,
+    "trading_net_se": 0.0162,
+    "matched_pnl_per_window": 0.0957,
+    "residual_pnl_per_window": -0.2473,
+    "fills_per_window": 3.15,
+    "contracts_per_window": 3.15,
+    "windows_with_pair": 264,
+    "residual_qty_per_window": 0.657,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  },
+  "d2_sequential": {
+   "IS": {
+    "windows": 114,
+    "trading_net_per_window": -0.0524,
+    "trading_net_se": 0.0322,
+    "matched_pnl_per_window": 0.0531,
+    "residual_pnl_per_window": -0.1055,
+    "fills_per_window": 1.53,
+    "contracts_per_window": 1.53,
+    "windows_with_pair": 44,
+    "residual_qty_per_window": 0.544,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   },
+   "OOS": {
+    "windows": 408,
+    "trading_net_per_window": -0.0868,
+    "trading_net_se": 0.0169,
+    "matched_pnl_per_window": 0.0714,
+    "residual_pnl_per_window": -0.1582,
+    "fills_per_window": 1.98,
+    "contracts_per_window": 1.98,
+    "windows_with_pair": 197,
+    "residual_qty_per_window": 0.578,
+    "rebate_tier1_per_window": 0.0,
+    "rebate_ref_0p0125_per_window": 0.0
+   }
+  }
+ }
+}
