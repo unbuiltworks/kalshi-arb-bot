@@ -222,13 +222,28 @@ def straddle_price(default: Decimal = D("0")) -> Decimal:
     return raw
 
 
-def clip_usd(default: Decimal = D("0.10")) -> Decimal:
+#: Per-entry clip ceilings, PER MODE. The directional modes keep the
+#: original $0.45 -- one clip was the whole early exposure ceiling, and
+#: their worst case is the ceiling itself.
+#:
+#: STRADDLE gets its own, higher bound by owner decision 2026-11-12,
+#: because its risk shape is different: the worst case is exactly 2 x clip
+#: whatever the ladder's width, and it is bounded further by the approved
+#: cap. At $2.25 that is $4.50 a window, against roughly $45 of daily loss
+#: room. Raising the shared bound instead would have widened favorite
+#: accumulation by 5x as a side effect, which nobody asked for.
+CLIP_MAX_USD = D("0.45")
+STRADDLE_CLIP_MAX_USD = D("2.25")
+
+
+def clip_usd(default: Decimal = D("0.10"),
+             max_usd: Decimal = CLIP_MAX_USD) -> Decimal:
     """Dollars per entry. An unreadable or out-of-range value keeps the
     default: a typo must never widen the size this strategy trades in. The
-    band is $0.02 (two cents buys at least one share at any eligible price)
-    to $0.45 (the whole ceiling in one clip)."""
+    floor is $0.02 (two cents buys at least one share at any eligible
+    price); the ceiling is `max_usd`, which is per mode."""
     raw = _dec(os.environ.get(CLIP_USD_ENV))
-    if raw is None or not (D("0.02") <= raw <= D("0.45")):
+    if raw is None or not (D("0.02") <= raw <= max_usd):
         return default
     return raw
 
@@ -1047,7 +1062,8 @@ class Btc5mExecutor:
                             self.params.straddle_price),
                         straddle_rungs=straddle_rungs(
                             self.params.straddle_rungs),
-                        clip_usd=clip_usd(self.params.clip_usd))
+                        clip_usd=clip_usd(self.params.clip_usd,
+                                          STRADDLE_CLIP_MAX_USD))
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))
