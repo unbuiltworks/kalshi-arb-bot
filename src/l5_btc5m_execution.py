@@ -106,6 +106,9 @@ MAX_RESTING_ENV = "L5_BTC5M_MAX_RESTING_ENTRIES"
 CLIP_USD_ENV = "L5_BTC5M_CLIP_USD"
 #: STRADDLE only; see `straddle_price`. Absent means the mode cannot trade.
 STRADDLE_PRICE_ENV = "L5_BTC5M_STRADDLE_PRICE"
+#: STRADDLE only: a comma-separated ladder, e.g. "0.05,0.06,0.07". Absent
+#: means the single `STRADDLE_PRICE_ENV` rung.
+STRADDLE_RUNGS_ENV = "L5_BTC5M_STRADDLE_RUNGS"
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
@@ -228,6 +231,30 @@ def clip_usd(default: Decimal = D("0.10")) -> Decimal:
     if raw is None or not (D("0.02") <= raw <= D("0.45")):
         return default
     return raw
+
+
+def straddle_rungs(default: tuple = ()) -> tuple:
+    """STRADDLE only: the ladder, as a comma-separated list of prices.
+
+    EVERY rung must parse and sit inside (0, 0.50); one bad entry returns
+    the default rather than silently dropping it, because a ladder that was
+    not specified correctly must not half-trade. The controller applies the
+    same bound again and refuses outright, so this is belt and braces.
+
+    A LADDER IS LEVERAGE, NOT DIVERSIFICATION -- see `Params.straddle_rungs`
+    for the measured economics. Sizing keeps one side's whole ladder at
+    `clip_usd`, so widening it does not widen the worst case.
+    """
+    raw = (os.environ.get(STRADDLE_RUNGS_ENV) or "").strip()
+    if not raw:
+        return default
+    out = []
+    for part in raw.split(","):
+        v = _dec(part.strip())
+        if v is None or not (D("0") < v < D("0.50")):
+            return default
+        out.append(v)
+    return tuple(sorted(set(out)))
 
 
 def max_resting_entries(default: int = 4) -> int:
@@ -1018,6 +1045,8 @@ class Btc5mExecutor:
                         reserve_mode="NONE",
                         straddle_price=straddle_price(
                             self.params.straddle_price),
+                        straddle_rungs=straddle_rungs(
+                            self.params.straddle_rungs),
                         clip_usd=clip_usd(self.params.clip_usd))
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")

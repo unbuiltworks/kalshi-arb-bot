@@ -316,3 +316,30 @@ class TestTheLadder:
                      max_exposure_usd=D("0.20"))
         spent = sum(o["price"] * o["qty"] for o in out["orders"])
         assert spent <= D("0.20")
+
+
+# ======================================================================
+class TestTheLadderEnv:
+
+    def test_a_ladder_parses(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.05,0.06,0.07")
+        assert X.straddle_rungs() == (D("0.05"), D("0.06"), D("0.07"))
+
+    def test_it_sorts_and_deduplicates(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, " 0.10 , 0.05 ,0.10 ")
+        assert X.straddle_rungs() == (D("0.05"), D("0.10"))
+
+    @pytest.mark.parametrize("raw", ["0.05,0.50", "0.05,0.9", "0.05,abc",
+                                     "0.05,0", "0.05,-0.02", "0.05,,0.06"])
+    def test_one_bad_rung_rejects_the_whole_ladder(self, monkeypatch, raw):
+        """A ladder specified wrongly must not half-trade."""
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, raw)
+        assert X.straddle_rungs() == ()
+
+    def test_absent_is_the_single_rung(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.delenv(X.STRADDLE_RUNGS_ENV, raising=False)
+        assert X.straddle_rungs() == ()
