@@ -599,7 +599,10 @@ def decide_pass(*, market: str, bid: Any, ask: Any, tick: Any,
                 traded_before: bool = False,
                 orders_uncertain: Optional[str] = None,
                 cash_cost: Any = None,
-                slots_left: Optional[Mapping[str, Any]] = None
+                slots_left: Optional[Mapping[str, Any]] = None,
+                bid_shares: Any = None, ask_shares: Any = None,
+                haircut_ticks: int = 1,
+                pair_still_valid_only: bool = True
                 ) -> Dict[str, Any]:
     """The whole pass, recomputed from the current book and inventory.
 
@@ -845,6 +848,14 @@ def decide_pass(*, market: str, bid: Any, ask: Any, tick: Any,
             # the pair it was priced for.
             behind = (w["price"] - r["price"]) >= thr
             ahead = (r["price"] - w["price"]) >= thr
+            # an opening leg the book came TO is cancelled only once it is
+            # no longer valid: its pair with the other side's current quote
+            # breaches the opening ceiling. A still-valid order is kept.
+            if ahead and w["intent"] != COMPLETE and pair_still_valid_only:
+                o_s = DOWN if s == UP else UP
+                o_px = own(o_s, depth_ticks)
+                ahead = o_px is None or (r["price"] + o_px + 2 * fee
+                                         > ceiling)
             moved = behind or (ahead and w["intent"] != COMPLETE)
             left = _slots(s)
             spare = left is None or left >= (1 if w["intent"] == COMPLETE
@@ -972,6 +983,159 @@ def decide_pass(*, market: str, bid: Any, ask: Any, tick: Any,
     for s in (UP, DOWN):
         if s not in holds and not any(a["side"] == s for a in actions):
             holds[s] = "NOTHING_WANTED"
+    # ------------------------------ every disposition, scored and recorded
+    if heavy is not None:
+        rl = by_side[light][0] if len(by_side[light]) == 1 else None
+        mk = next((a for a in actions if a.get("kind") == PLACE
+                   and a.get("side") == light), None)
+        cx = next((a for a in actions if a.get("kind") == CANCEL
+                   and a.get("side") == light), None)
+        sc = score_alternatives(
+            up_q=up_q, dn_q=dn_q, up_cost=up_cost, dn_cost=dn_cost,
+            bid=bid, ask=ask, tick=tk, bid_shares=bid_shares,
+            ask_shares=ask_shares, fee=fee,
+            resting=(None if rl is None or cx is not None
+                     else (rl["price"], rl["remaining"])),
+            maker=(None if (mk or wanted.get(light)) is None
+                   else (D((mk or wanted[light])["price"]),
+                         D((mk or wanted[light])["qty"]))),
+            reprice=cx is not None, haircut_ticks=haircut_ticks)
+        sc["chosen"] = ("MAKER_REPRICE" if cx is not None
+                        else "MAKER_COMPLETE" if mk is not None
+                        else "KEEP_RESTING" if rl is not None else "HOLD")
+        sc["reason"] = (cx or {}).get("reason") or holds.get(light) \
+            or (mk or {}).get("intent")
+        out["evaluated"]["alternatives"] = sc
     out["actions"] = actions
     out["holds"] = holds
     return out
+
+
+# ====================================================================
+# EVERY DISPOSITION OF AN IMBALANCE, SCORED THE SAME WAY (issue #233 A)
+#
+# The measure is the INCREMENTAL WORST-CASE SETTLED P&L: the worse of the
+# two settlements of the whole market position after the alternative, minus
+# the same figure for holding, computed from the ledger's ACTUAL fill cost
+# (never a $1 placeholder, never a mid). Prices are EXECUTABLE: a maker
+# completion at our own resting/quoted price, a taker completion at the
+# own-side ASK (UP: the YES ask; DOWN: 1 - YES bid) sized to the DISPLAYED
+# depth there, a sale at the own-side BID sized to its depth. Taker fees use
+# the PMUS formula at the larger of `pmus_fees`' coefficient and the
+# owner-stated Tier-1 0.095; no maker rebate is credited anywhere. Every
+# maker alternative carries a latency / cancellation haircut of
+# `haircut_ticks` per contract; the taker and the sale carry one tick of
+# slippage. Only maker alternatives are ever AUTHORIZED: taker and sale
+# rows are evaluated and recorded, never placed.
+# ====================================================================
+
+TIER1_TAKER_THETA = D("0.095")
+
+
+def tier1_taker_fee(price: D, qty: D) -> D:
+    """theta * q * p * (1 - p), theta = max(pmus_fees, owner Tier-1 0.095)."""
+    from src import pmus_fees as _PF
+    theta = max(_PF.taker_theta(), TIER1_TAKER_THETA)
+    p, q = D(price), D(qty)
+    return (theta * q * p * (D(1) - p)).quantize(D("0.0001"))
+
+
+def worst_settled(up_q: D, dn_q: D, cost: D) -> D:
+    """The worse of the two settled outcomes of the whole position."""
+    return min(D(up_q) - D(cost), D(dn_q) - D(cost))
+
+
+def score_alternatives(*, up_q: D, dn_q: D, up_cost: D, dn_cost: D,
+                       bid: Any, ask: Any, tick: D, bid_shares: Any = None,
+                       ask_shares: Any = None, fee: D = D(0),
+                       resting: Any = None, maker: Any = None,
+                       reprice: bool = False, haircut_ticks: int = 1
+                       ) -> Dict[str, Any]:
+    """Score keep / maker complete / maker reprice / taker / sale / hold."""
+    up_q, dn_q = D(up_q), D(dn_q)
+    cost = D(up_cost) + D(dn_cost)
+    resid = up_q - dn_q
+    heavy = UP if resid > 0 else DOWN
+    light = DOWN if heavy == UP else UP
+    need = abs(resid)
+    w0 = worst_settled(up_q, dn_q, cost)
+    hc = D(int(haircut_ticks)) * D(tick)
+
+    def _d(v: Any) -> Optional[D]:
+        try:
+            x = D(str(v))
+            return x if x.is_finite() else None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
+    b, a = _d(bid), _d(ask)
+    bs, as_ = _d(bid_shares), _d(ask_shares)
+
+    def buy(side: str, px: D, q: D, extra: D) -> Dict[str, Any]:
+        u = up_q + (q if side == UP else 0)
+        d = dn_q + (q if side == DOWN else 0)
+        w1 = worst_settled(u, d, cost + px * q + extra)
+        return {"side": side, "price": str(px), "qty": str(q),
+                "worst_settled_after": str(w1),
+                "incremental_worst_case": str(w1 - w0)}
+
+    rows: Dict[str, Any] = {"HOLD": {"incremental_worst_case": "0",
+                                     "worst_settled_after": str(w0),
+                                     "authorized": True}}
+    if resting is not None:
+        px, rem = D(resting[0]), min(D(resting[1]), need)
+        r = buy(light, px, rem, fee * rem + hc * rem)
+        r.update(authorized=True, if_unfilled="0",
+                 haircut=str(hc * rem),
+                 note="worst case over fill/no-fill is min(0, if filled)")
+        rows["KEEP_RESTING"] = r
+    if maker is not None:
+        px, q = D(maker[0]), min(D(maker[1]), need)
+        r = buy(light, px, q, fee * q + hc * q)
+        r.update(authorized=True, haircut=str(hc * q),
+                 queue_ahead_displayed=str(bs if light == UP else as_))
+        rows["MAKER_REPRICE" if reprice else "MAKER_COMPLETE"] = r
+    # taker completion: evaluated only, never placed
+    if b is not None and a is not None:
+        tpx = a if light == UP else D(1) - b
+        depth = as_ if light == UP else bs
+        tq = need if depth is None else min(need, depth)
+        if tq > 0 and D(0) < tpx < D(1):
+            f = tier1_taker_fee(tpx, tq)
+            r = buy(light, tpx, tq, f + hc * tq)
+            r.update(authorized=False, taker_fee=str(f),
+                     executable_depth=None if depth is None else str(depth),
+                     note="TAKER IS NOT AUTHORIZED: evaluated only")
+            rows["TAKER_COMPLETE"] = r
+        # risk-reducing sale of the excess: evaluated only, never placed
+        spx = b if heavy == UP else D(1) - a
+        sdepth = bs if heavy == UP else as_
+        sq = need if sdepth is None else min(need, sdepth)
+        hq = up_q if heavy == UP else dn_q
+        hcost = D(up_cost) if heavy == UP else D(dn_cost)
+        if sq > 0 and D(0) < spx < D(1) and hq > 0:
+            f = tier1_taker_fee(spx, sq)
+            u = up_q - (sq if heavy == UP else 0)
+            d = dn_q - (sq if heavy == DOWN else 0)
+            w1 = worst_settled(u, d, cost - (spx - hc) * sq + f)
+            rows["SELL_REDUCE"] = {
+                "side": heavy, "price": str(spx), "qty": str(sq),
+                "basis": str(hcost / hq), "taker_fee": str(f),
+                "executable_depth": None if sdepth is None else str(sdepth),
+                "worst_settled_after": str(w1),
+                "incremental_worst_case": str(w1 - w0),
+                "realized_vs_basis": str(sq * (spx - hcost / hq) - f),
+                "authorized": False,
+                "note": "SELLING IS NOT AUTHORIZED: evaluated only; never "
+                        "assumed profitable"}
+    best = max(rows, key=lambda k: D(rows[k]["incremental_worst_case"]))
+    best_auth = max((k for k in rows if rows[k].get("authorized")),
+                    key=lambda k: D(rows[k]["incremental_worst_case"]))
+    return {"basis": "INCREMENTAL_WORST_CASE_SETTLED_PNL",
+            "worst_settled_now": str(w0), "residual_side": heavy,
+            "residual_qty": str(need), "alternatives": rows,
+            "best_any": best, "best_authorized": best_auth,
+            "labels": ("executable prices and displayed depth only; never "
+                       "mid_up + mid_down. No rebate credited.")}

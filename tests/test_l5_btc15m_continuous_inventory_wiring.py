@@ -648,3 +648,144 @@ def test_reduce_by_selling_is_evaluated_and_never_sent(tmp_path, monkeypatch):
     for s in h.venue.sent:
         assert str(s["mode"]).upper() == "MAKER"
         assert "SELL" not in json.dumps(s, default=str).upper()
+
+
+# ======================================================================
+# 13. ISSUE #233 TRACK A: SCORED DISPOSITIONS, LIFECYCLE, HARD STOPS
+# ======================================================================
+def test_every_imbalance_decision_scores_all_dispositions(tmp_path,
+                                                          monkeypatch):
+    h = opened(rig(tmp_path, monkeypatch))
+    tb = fill_and_book(h, oid_of(h, "UP"), 10.0)
+    n = len(passes(h))
+    h.tick(tb + 3.5)
+    sc = passes(h)[n]["evaluated"]["alternatives"]
+    rows = sc["alternatives"]
+    assert sc["basis"] == "INCREMENTAL_WORST_CASE_SETTLED_PNL"
+    assert {"HOLD", "TAKER_COMPLETE", "SELL_REDUCE"} <= set(rows)
+    assert rows["TAKER_COMPLETE"]["authorized"] is False
+    assert rows["SELL_REDUCE"]["authorized"] is False
+    assert sc["chosen"] in ("MAKER_REPRICE", "MAKER_COMPLETE",
+                            "KEEP_RESTING", "HOLD")
+    # UP is the residual, so every completion buys DOWN at an EXECUTABLE
+    # price: the taker at 1 - YES bid, not at any mid
+    assert rows["TAKER_COMPLETE"]["side"] == "DOWN"
+    assert D(rows["TAKER_COMPLETE"]["price"]) == D(1) - D("0.52")
+    assert rows["SELL_REDUCE"]["side"] == "UP"
+    assert D(rows["SELL_REDUCE"]["price"]) == D("0.52")
+    # and nothing that was evaluated-only reached the venue
+    for s in h.venue.sent:
+        assert str(s["mode"]).upper() == "MAKER"
+    d = passes(h)[n]["decision"]
+    for k in ("matched", "residual_qty", "residual_basis",
+              "worst_outcome_pnl", "decision", "reason", "time_left_s",
+              "order_states"):
+        assert k in d, k
+
+
+def test_scoring_uses_fill_cost_tier1_fee_and_no_rebate():
+    sc = CI.score_alternatives(
+        up_q=D(1), dn_q=D(0), up_cost=D("0.47"), dn_cost=D(0), bid="0.50",
+        ask="0.52", tick=D("0.01"), bid_shares="0.4", ask_shares="10",
+        maker=(D("0.48"), D(1)), haircut_ticks=1)
+    r = sc["alternatives"]
+    # held UP at 0.47: the losing-side worst case is -0.47
+    assert D(sc["worst_settled_now"]) == D("-0.47")
+    # maker completion of 1 DOWN at 0.48, one-tick haircut, no rebate:
+    # worst after = 1 - 0.47 - 0.48 - 0.01 = 0.04
+    assert D(r["MAKER_COMPLETE"]["worst_settled_after"]) == D("0.04")
+    # the taker is depth-limited to the displayed 0.4 at 1 - bid = 0.50
+    t = r["TAKER_COMPLETE"]
+    assert D(t["qty"]) == D("0.4") and D(t["price"]) == D("0.50")
+    assert D(t["taker_fee"]) == (D("0.095") * D("0.4") * D("0.5")
+                                 * D("0.5")).quantize(D("0.0001"))
+
+
+def test_operator_halt_places_nothing(tmp_path, monkeypatch):
+    h = rig(tmp_path, monkeypatch)
+    monkeypatch.setenv(R.LIVE_HALT_ENV, "1")
+    h.at(6.5).l5_action()
+    h.tick(6.8)
+    assert h.venue.sent == []
+    assert h.r.stats["continuous:OPERATOR_HALT"] >= 1
+
+
+def test_watchdog_halt_gate_refuses_every_placement(tmp_path, monkeypatch):
+    class Latched:
+        def submissions_permitted(self):
+            return False
+
+        def refuse_reason(self):
+            return "halt_asserted"
+
+        def state(self):
+            return {"record": {"reason": "watchdog"}}
+
+    h = rig(tmp_path, monkeypatch)
+    h.r.executor.halt_gate = Latched()
+    h.at(6.5).l5_action()
+    h.tick(6.8)
+    assert h.venue.sent == []
+    assert any(k.startswith("continuous:place:OPEN:") and "HALT" in k.upper()
+               for k in h.r.stats), dict(h.r.stats)
+
+
+def test_order_limit_is_a_hard_cap(tmp_path, monkeypatch):
+    h = opened(rig(tmp_path, monkeypatch, L5_MAX_LIVE_ORDERS="1"))
+    assert len(h.r.store.live_orders()) <= 1
+    for t in (9.0, 12.0, 15.0):
+        h.tick(t)
+        assert len(h.r.store.live_orders()) <= 1
+
+
+def test_window_rollover_places_nothing_and_summarises(tmp_path,
+                                                       monkeypatch):
+    h = opened(rig(tmp_path, monkeypatch))
+    n = len(h.venue.sent)
+    # past the window's terminal: nothing may be placed in it
+    h.tick(905.0)
+    assert len(h.venue.sent) == n
+    # the transport moves to the next window, which this experiment does
+    # not name: the controller does not own it and places nothing
+    nxt = "cpc-btc-updown-15m-2026-11-10-0215z"
+    h.venue.market_slug = nxt
+    assert R.Runner.continuous_owns(h.r, nxt) is False
+    h.r.maybe_controller_open(h.t)
+    assert len(h.venue.sent) == n
+    # and on a window change the previous window gets exactly one summary
+    h.r._ci_window_slug = SLUG
+    h.r._ci_window_rollover(nxt, h.t)
+    h.r._ci_window_rollover(nxt, h.t)
+    s = [r for label, r in h.emitted if label == "L5_CI_WINDOW_SUMMARY"]
+    assert len(s) == 1 and s[0]["market"] == SLUG
+    assert s[0]["status"] in ("SETTLED", "UNSETTLED")
+
+
+def test_order_lifecycle_is_recorded_with_measured_latencies(tmp_path,
+                                                             monkeypatch):
+    h = opened(rig(tmp_path, monkeypatch))
+    tb = fill_and_book(h, oid_of(h, "UP"), 10.0)
+    h.tick(tb + 3.5)
+    h.tick(tb + 7.0)
+    lc = [r for label, r in h.emitted if label == "L5_CI_ORDER_LIFECYCLE"]
+    assert lc, "the filled UP and the cancelled DOWN both left the ledger"
+    for r in lc:
+        assert "submit_ack_latency_s" in r and "decision_t" in r
+        assert r["terminal_observed_t"] >= r["resting_observed_t"]
+    assert any("cancel_ack_latency_s" in r for r in lc)
+
+
+def test_a_still_valid_opening_leg_is_never_cancelled():
+    """The book comes TO a resting opening leg, but its pair with the other
+    side's current quote is still inside 0.96: it is kept."""
+    p = CI.decide_pass(
+        market="m", bid="0.50", ask="0.52", tick="0.01", now_s=100.0,
+        resting=[{"coid": "u", "side": "UP", "price": "0.50",
+                  "remaining": "0.6", "submitted_s": 10.0},
+                 {"coid": "d", "side": "DOWN", "price": "0.44",
+                  "remaining": "0.6", "submitted_s": 10.0}],
+        pair_ceiling=D("0.96"), cash_cap=D(5), max_worst_loss=D(5),
+        residual_k=None, reprice_min_rest_s=14.0)
+    # UP wanted 0.48, resting 0.50 (ahead); 0.50 + DOWN 0.46 = 0.96: valid
+    assert not [a for a in p["actions"] if a["kind"] == "CANCEL"
+                and a["side"] == "UP"]

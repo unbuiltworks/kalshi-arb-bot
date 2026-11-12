@@ -8711,6 +8711,7 @@ class Runner:
     CONTINUOUS_SKEW_ENV = "L5_CI_SKEW_TICKS"
     CONTINUOUS_REPRICE_TICKS_ENV = "L5_CI_REPRICE_TICKS"
     CONTINUOUS_ADD_BAND_ENV = "L5_CI_ADD_BAND_CONTRACTS"
+    CONTINUOUS_HAIRCUT_ENV = "L5_CI_HAIRCUT_TICKS"
 
     def continuous_owns(self, slug: Any) -> bool:
         """Does the continuous controller own this market's order flow?"""
@@ -8838,7 +8839,10 @@ class Runner:
             traded_before=bool(up_q > 0 or dn_q > 0),
             orders_uncertain=st.orders_uncertain(),
             slots_left={s: self.executor.continuous_slots_left(slug, s)
-                        for s in ("UP", "DOWN")})
+                        for s in ("UP", "DOWN")},
+            bid_shares=book.get("bid_shares"),
+            ask_shares=book.get("ask_shares"),
+            haircut_ticks=self._env_int(self.CONTINUOUS_HAIRCUT_ENV, 1, 0, 20))
 
     def maybe_continuous_inventory(self, now: float
                                    ) -> Optional[Dict[str, Any]]:
@@ -8857,10 +8861,18 @@ class Runner:
         if not self.continuous_owns(slug):
             return None
         slug = str(slug)
+        # THE OPERATOR HALT, read here as well: the tick's own halt branch
+        # disarms the transport, and this makes the pass place nothing in
+        # the same tick rather than relying on that ordering.
+        if self.halted():
+            self.stats["continuous:OPERATOR_HALT"] += 1
+            return None
         ws = AB.slug_start(slug)
         if ws is None:
             self.stats["continuous:WINDOW_START_UNKNOWN"] += 1
             return None
+        self._ci_window_rollover(slug, now)
+        self._ci_observe_orders(slug, now)
         plan: Optional[Dict[str, Any]] = None
         repriced: Set[str] = set()
         for _iter in range(2):
@@ -8883,6 +8895,7 @@ class Runner:
             emit("L5_CONTINUOUS_INVENTORY", {
                 "market": slug, "window_start": float(ws), "iteration": _iter,
                 "phase": plan.get("phase"),
+                "decision": self._ci_decision_line(plan, ws, now),
                 "actions": [{k: str(v) for k, v in a.items()}
                             for a in plan.get("actions") or ()],
                 "holds": plan.get("holds"), "evaluated": plan.get("evaluated"),
@@ -8898,10 +8911,20 @@ class Runner:
                     self.stats["continuous:CANCEL_SKIPPED_NOT_LIVE"] += 1
                     return plan
                 for a in cancels:
+                    _t0 = time.time()
+                    self._ci_note(str(a["coid"]), "cancel_decision_t", now)
                     out = LX.deadman(self.store, t,
                                      reason="continuous_%s"
                                      % str(a.get("reason")).lower(),
                                      only=[str(a["coid"])])
+                    self._ci_note(str(a["coid"]), "cancel_ack_latency_s",
+                                  round(time.time() - _t0, 4))
+                    self._ci_note(str(a["coid"]), "cancel_outcome", (
+                        "CONFIRMED" if str(a["coid"]) in {
+                            str((r or {}).get("client_order_id"))
+                            for r in ((out or {}).get("cancelled") or [])
+                            if isinstance(r, Mapping)}
+                        else "NOT_CONFIRMED"))
                     self._requote_note_cancel_outcome(
                         str(a["coid"]), out if isinstance(out, Mapping)
                         else {})
@@ -8911,6 +8934,110 @@ class Runner:
             self._continuous_place(plan, slug, ws, repriced)
             break
         return plan
+
+    # ------------------------------------------- cheap lifecycle telemetry
+    #
+    # Per order: decision time, submit-ack and cancel-ack latencies (wall
+    # clock around the call, MEASURED), first observed resting, partial and
+    # full fill observation times, terminal state. One small dict per order,
+    # emitted once when the order leaves the ledger; nothing is written on
+    # every tick and nothing heavy runs at a window rollover.
+
+    def _ci_note(self, coid: str, key: str, val: Any) -> None:
+        lc = self.__dict__.setdefault("_ci_lifecycle", {})
+        lc.setdefault(str(coid), {})[key] = val
+
+    def _ci_observe_orders(self, slug: str, now: float) -> None:
+        try:
+            lc = self.__dict__.setdefault("_ci_lifecycle", {})
+            live = {str(c): o for c, o in (self.store.live_orders() or {}
+                                           ).items()
+                    if str((o or {}).get("market") or "") == slug}
+            for c, o in live.items():
+                rec = lc.setdefault(c, {})
+                rec.setdefault("resting_observed_t", float(now))
+                rem = LX.InventoryStore.worst_case_remaining(o)
+                q = LX.venue_decimal(o.get("qty"))
+                if q is not None and rem < q and "partial_fill_t" not in rec:
+                    rec["partial_fill_t"] = float(now)
+            for c in [c for c in lc if c not in live
+                      and "resting_observed_t" in lc[c]]:
+                rec = lc.pop(c)
+                rec["terminal_observed_t"] = float(now)
+                for k in ("decision_t", "resting_observed_t",
+                          "partial_fill_t"):
+                    if isinstance(rec.get(k), (int, float)):
+                        rec[k + "_to_terminal_s"] = round(
+                            float(now) - float(rec[k]), 3)
+                emit("L5_CI_ORDER_LIFECYCLE", dict(
+                    rec, client_order_id=c, market=slug,
+                    labels=("measured: *_latency_s are wall-clock around the "
+                            "call; *_t are tick-clock observations, so a "
+                            "fill time is when the poll SAW it")))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["continuous:lifecycle_error:%s"
+                       % type(exc).__name__] += 1
+
+    def _ci_window_rollover(self, slug: str, now: float) -> None:
+        """One line per finished window: its settled result if the ledger
+        has settled it, else UNSETTLED. Read-only, O(1)."""
+        prev = getattr(self, "_ci_window_slug", None)
+        if prev == slug:
+            return
+        self._ci_window_slug = slug
+        if prev is None:
+            return
+        try:
+            row = (self.store.state.get("retired_markets") or {}).get(prev)
+            emit("L5_CI_WINDOW_SUMMARY", {
+                "market": prev, "observed_t": float(now),
+                "settled_pnl": (None if not row
+                                else row.get("settlement_pnl")),
+                "status": "SETTLED" if row else "UNSETTLED",
+                "labels": "settlement-backed only; UNSETTLED is not zero"})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["continuous:summary_error:%s"
+                       % type(exc).__name__] += 1
+
+    @staticmethod
+    def _ci_decision_line(plan: Mapping[str, Any], ws: float,
+                          now: float) -> Dict[str, Any]:
+        """The per-decision instrument: matched, residual and its basis,
+        worst outcome, the decision and why, paired cost, time left."""
+        st = plan.get("state") or {}
+        try:
+            up, dn = D(st.get("up_q", "0")), D(st.get("dn_q", "0"))
+            uc, dc = D(st.get("up_cost", "0")), D(st.get("dn_cost", "0"))
+            matched = min(up, dn)
+            heavy = st.get("heavy")
+            hq, hc = (up, uc) if heavy == "UP" else (dn, dc)
+            paired = (None if matched <= 0 or up <= 0 or dn <= 0
+                      else str(uc / up + dc / dn))
+            alt = (plan.get("evaluated") or {}).get("alternatives") or {}
+            return {"matched": str(matched), "residual_side": heavy,
+                    "residual_qty": str(abs(up - dn)),
+                    "residual_basis": (str(hc / hq) if heavy and hq > 0
+                                       else None),
+                    "worst_outcome_pnl": str(min(up, dn) - uc - dc),
+                    "paired_cost_per_contract": paired,
+                    "decision": alt.get("chosen") or (
+                        "PLACE" if any(a.get("kind") == "PLACE"
+                                       for a in plan.get("actions") or ())
+                        else "HOLD"),
+                    "reason": alt.get("reason") or plan.get("holds"),
+                    "time_left_s": round(float(ws) + 900.0 - float(now), 1),
+                    "order_states": [
+                        "%s@%s:%s" % (r.get("side"), r.get("price"),
+                                      r.get("remaining"))
+                        for r in st.get("resting") or ()]}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__}
 
     def _continuous_place(self, plan: Mapping[str, Any], slug: str,
                           ws: float, repriced: Set[str] = frozenset()
@@ -8960,6 +9087,7 @@ class Runner:
             dec = {"side": str(a["side"]), "price": a["price"],
                    "l5_size": TSP.opening_leg_max_contracts(),
                    "relation": "continuous"}
+            _t0 = time.time()
             try:
                 rec = self.executor.handle(
                     None, book, market=slug, window=str(ws),
@@ -8970,6 +9098,16 @@ class Runner:
                 self.executor._probe_leg_pending = None
                 self.executor._probe_round_pending = None
                 self.executor._continuous_key_pending = None
+            _o = (rec or {}).get("ORDER") or {}
+            if _o.get("submitted") and _o.get("client_order_id"):
+                _c = str(_o["client_order_id"])
+                self._ci_note(_c, "decision_t", self.now_t)
+                self._ci_note(_c, "submit_ack_latency_s",
+                              round(time.time() - _t0, 4))
+                self._ci_note(_c, "intent", intent)
+                self._ci_note(_c, "side", str(a.get("side")))
+                self._ci_note(_c, "price", str(a.get("price")))
+                self._ci_note(_c, "qty", str(a.get("qty")))
             if opening:
                 opening_attempted = True
             why = str((rec or {}).get("refused_reason") or "")
