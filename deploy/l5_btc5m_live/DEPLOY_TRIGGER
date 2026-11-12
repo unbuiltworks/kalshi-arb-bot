@@ -22,3 +22,6 @@ deploy of a money-capable service.
 
 2026-11-12T15:45Z  redeploy: campaign names its window in the executor
                    market lock (MARKET_NOT_CONFIGURED fix).
+
+2026-11-12T15:53Z  redeploy: the market-lock fix, this time actually in the
+                   shipped tree (the previous deploy merged a stale branch).
