@@ -108,8 +108,8 @@ def _fin(v: Any) -> Optional[float]:
 
 
 # =================================================================== strike
-def parse_strike(payload: Any, *, slug: str, window_start: float
-                 ) -> Dict[str, Any]:
+def parse_strike(payload: Any, *, slug: str, window_start: float,
+                 window_s: float = WINDOW_S) -> Dict[str, Any]:
     """The venue's own strike for EXACTLY this market and window, or why not.
 
     Every field that could make the strike belong to something else is
@@ -138,8 +138,10 @@ def parse_strike(payload: Any, *, slug: str, window_start: float
     if abs(ws - float(window_start)) > 0.5:
         return no("STRIKE_WINDOW_MISALIGNED", strike_window_start=ws,
                   wanted_window_start=float(window_start))
-    if abs((we - ws) - WINDOW_S) > 0.5:
-        return no("WINDOW_IS_NOT_FIFTEEN_MINUTES", window_s=we - ws)
+    if abs((we - ws) - float(window_s)) > 0.5:
+        return no("WINDOW_IS_NOT_FIFTEEN_MINUTES" if float(window_s) == WINDOW_S
+                  else "WINDOW_LENGTH_UNEXPECTED", window_s=we - ws,
+                  wanted_window_s=float(window_s))
     ptb = terms.get("priceToBeat")
     k = _fin(ptb.get("value")) if isinstance(ptb, Mapping) else None
     if k is None or k <= 0:
@@ -251,8 +253,13 @@ class Reference:
 
     def __init__(self, *, fetch: Callable[[str], Any] = _http_json,
                  clock: Callable[[], float] = time.time,
-                 gateway: str = GATEWAY, poll_s: float = 1.0) -> None:
+                 gateway: str = GATEWAY, poll_s: float = 1.0,
+                 window_s: float = WINDOW_S) -> None:
         self._fetch, self._clock = fetch, clock
+        #: the length of the markets this feed prices: 900 for BTC15m (the
+        #: default, unchanged), 300 for the BTC5m runner. A strike for a
+        #: window of any other length is refused.
+        self.window_s = float(window_s)
         self._gateway, self._poll_s = gateway.rstrip("/"), float(poll_s)
         self._lock = threading.Lock()
         self._series: Deque[Tuple[int, float]] = collections.deque()
@@ -348,7 +355,8 @@ class Reference:
         slug, ws = want
         got = parse_strike(self._fetch("%s/v1/market/slug/%s"
                                        % (self._gateway, slug)),
-                           slug=slug, window_start=ws)
+                           slug=slug, window_start=ws,
+                           window_s=self.window_s)
         got["checked_t"] = self._clock()
         with self._lock:
             self._strikes[slug] = got

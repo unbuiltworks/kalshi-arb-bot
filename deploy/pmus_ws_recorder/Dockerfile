@@ -83,6 +83,8 @@ COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 # The order serializer and the preview gate. Both are pure: no transport, no
 # endpoint, no credential, and no import of any executor. The preflight needs

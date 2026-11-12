@@ -126,18 +126,24 @@ class TestDeploymentDrain:
         path can be stopped by it."""
         import inspect
         src = inspect.getsource(AUTH)
-        # THE INVARIANT: the switch is READ exactly once in the module, and
-        # that read is inside `authorize_arming` -- the one function that
-        # admits new exposure. Any second reader would be a path that could
-        # stop something other than arming, cancellation included.
-        assert src.count("os.getenv(SUBMIT_PAUSE_ENV)") == 1, src.count(
-            "os.getenv(SUBMIT_PAUSE_ENV)")
-        assert "os.getenv(SUBMIT_PAUSE_ENV)" in inspect.getsource(
-            AUTH.authorize_arming)
+        # THE INVARIANT: the switch is read ONLY by the functions that admit
+        # new exposure, and every reader is named here. There were one of
+        # those and there are now two: `authorize_arming` for the 15-minute
+        # strategy, and `btc5m_authorization` -- the 5-minute strategy's
+        # verdict, added by owner decision on 2026-11-11, which has no
+        # separate arming boundary and so has to honour the drain itself.
+        # Any OTHER reader would be a path that could stop something other
+        # than a new submission, cancellation included, and still fails here.
+        readers = ("authorize_arming", "btc5m_authorization")
+        assert src.count("os.getenv(SUBMIT_PAUSE_ENV)") == len(readers), \
+            src.count("os.getenv(SUBMIT_PAUSE_ENV)")
+        for reader in readers:
+            assert inspect.getsource(getattr(AUTH, reader)).count(
+                "os.getenv(SUBMIT_PAUSE_ENV)") == 1, reader
         # and no cancellation entry point consults it
         for name in dir(AUTH):
             fn = getattr(AUTH, name, None)
-            if not inspect.isfunction(fn) or name == "authorize_arming":
+            if not inspect.isfunction(fn) or name in readers:
                 continue
             if "cancel" not in name.lower():
                 continue

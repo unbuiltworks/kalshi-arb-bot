@@ -189,4 +189,10 @@ def test_the_ceilings_are_the_authorized_envelope():
     # eight windows buys more opportunities to deploy the same $5, never
     # more dollars at risk at once.
     assert CA.MAX_WINDOWS == 8
-    assert CA.ALLOWED_SERIES == ("cpc-btc-updown-15m-",)
+    # the 5-minute series was added by owner decision on 2026-11-11 ("extend
+    # the existing single-use authorization mechanism to recognize
+    # explicitly approved BTC5m markets"). It is a second NAME on the same
+    # mechanism, with its own tighter exposure ceiling; the 15-minute
+    # envelope asserted above is unchanged by it.
+    assert CA.ALLOWED_SERIES == ("cpc-btc-updown-15m-", "cpc-btc-updown-5m-")
+    assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD == {"cpc-btc-updown-5m-": D("5")}

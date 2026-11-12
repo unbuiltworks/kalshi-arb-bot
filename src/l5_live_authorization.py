@@ -914,7 +914,9 @@ def submissions_spent(path: str, experiment: str) -> List[str]:
         return []
     out = []
     for p in d.glob("l5_auth_claim_*.lock"):
-        for kind in ("sub1.", "acc1."):
+        # `b5m1.` is the 5-minute strategy's per-order claim. Counted here so
+        # the SAME total binds it; adding a kind can only count more.
+        for kind in ("sub1.", "acc1.", "b5m1."):
             pre = "l5_auth_claim_%s%s" % (
                 re.sub(r"[^A-Za-z0-9_.-]", "_", kind), safe)
             if p.name.startswith(pre):
@@ -1567,6 +1569,18 @@ def refuse_unauthorized_window(market: str) -> None:
                                "inside the grant is refused."})
     _why = str(_st.get("why") or "")
     if _st.get("approved"):
+        # THE DOCUMENT'S OWN SERIES FIRST. `opening_refusal` judges the
+        # window's START, and a 15-minute and a 5-minute window can open at
+        # the same instant -- so the start alone cannot tell one strategy's
+        # window from the other's. Arming already refuses a series mismatch;
+        # this is the same refusal at the last boundary before the wire, so
+        # an approval for one series can never be spent on the other.
+        _series = str((_st.get("scope") or {}).get("series") or "")
+        if not _series or not mkt.startswith(_series):
+            raise Refused("SUBMISSION_SERIES_NOT_AUTHORIZED",
+                          {"series": _series, "market": mkt[:80],
+                           "note": "the approval in force names another "
+                                   "series; it authorizes nothing here."})
         _bad = _CAW.opening_refusal(_st.get("scope") or {}, mkt)
         if _bad is not None:
             raise Refused("SUBMISSION_WINDOW_NOT_AUTHORIZED",
@@ -1919,6 +1933,323 @@ def claim_submission(market: str, payload: Mapping[str, Any],
                        "note": "the claim could not be persisted, so it is "
                                "not held. Refusing rather than submitting on "
                                "an unproven claim."})
+    return rec
+
+
+# ================================================ THE BTC 5-MINUTE CLAIM
+#
+# OWNER DECISION, 2026-11-11: "Extend the existing single-use authorization
+# mechanism to recognize explicitly approved BTC5m markets. Do not create a
+# second, weaker authorization path. Each strategy must have its own
+# approved market, time window, exposure cap, and order ownership."
+#
+# SO THIS IS THE SAME MECHANISM, NOT A NEW ONE. Every part below already
+# exists and already guards the 15-minute strategy:
+#
+#   the approval      `L5_CAMPAIGN_APPROVAL`, an owner-set document the
+#                     executor cannot write, read through `approval_gate()`
+#   the window grant  `opening_refusal` + the durable per-nonce
+#                     `WindowLedger`, spent through `reserve_window`
+#   the budgets       `submission_budget_refusal` (the flat total) and
+#                     `class_claim_or_refuse` (OPEN / COMPLETE / REPLACE)
+#   the claim itself  `claim_once`: O_CREAT|O_EXCL, fsynced before the wire,
+#                     never returned by a cancel, a fill, a restart, a
+#                     rejection or an ambiguous acknowledgement
+#   the holder        `role_refusal` and `durability_refusal`
+#
+# WHERE IT IS STRICTER THAN THE 15-MINUTE CLAIM, and why. The 15-minute
+# executor reaches its claim only after `authorize_arming` has returned, so
+# its claim may treat an ABSENT approval as "the single-window handshake
+# decides". The 5-minute adapter has no such second boundary behind it, so
+# here everything is decided at the claim and absent is a refusal:
+#
+#   * an approved document is REQUIRED, and it must name the 5-minute
+#     series -- a 15-minute approval authorizes nothing here, and (see
+#     `refuse_unauthorized_window`) a 5-minute one authorizes nothing there;
+#   * the windows must be ENUMERATED (`window_starts`). "Explicitly
+#     approved markets" is a set of windows, not an interval;
+#   * the flat submission total must be CONFIGURED. Unset does not bind the
+#     15-minute path for historical reasons; here unset refuses;
+#   * the order's class must be STATED;
+#   * the caller must state the strategy's worst-case exposure including
+#     this order and its settled result for the UTC day, and both are held
+#     to the document's own limits (already clamped to the code ceilings);
+#   * both shared locks and the deploy drain are read again, here, exactly
+#     as the 15-minute service reads them.
+#
+# WHAT IT DOES NOT DO. It does not arm a transport, hold a credential, or
+# decide a price. The venue transport still needs its own preflight and the
+# owner's arm token before `submit` can do anything at all, exactly as for
+# the 15-minute strategy.
+
+BTC5M_SERIES = "cpc-btc-updown-5m-"
+BTC5M_WINDOW_S = 300.0
+BTC5M_CLAIM_PREFIX = "b5m1."
+BTC5M_COID_RE = re.compile(r"b5m-[0-9a-f]{24}")
+#: the two shared locks, by the names the 15-minute service reads them
+#: under (`l5_pmus_live_runner.LIVE_HALT_ENV` / `SHADOW_ONLY_ENV`). Not
+#: imported: this module must not depend on the runner. A test pins the
+#: names and the readings to the runner's.
+LIVE_HALT_ENV = "L5_LIVE_HALT"
+SHADOW_ONLY_ENV = "L5_SHADOW_ONLY"
+#: `_lock_path` keeps 120 characters of a claim id. An id longer than that
+#: would be TRUNCATED, and two different orders could then share one lock.
+_LOCK_ID_MAX = 120
+
+
+def operator_halt_engaged() -> bool:
+    """Any non-empty value halts. Same expression as the runner's."""
+    return bool(str(os.getenv(LIVE_HALT_ENV, "")).strip())
+
+
+def shadow_lock_engaged() -> bool:
+    """Released ONLY by exactly "0". Unset is locked."""
+    return str(os.getenv(SHADOW_ONLY_ENV, "1")).strip() != "0"
+
+
+def btc5m_sid(experiment: str, client_order_id: str) -> str:
+    """The claim id for ONE 5-minute order. One client order id, one claim."""
+    return "%s%s.%s" % (BTC5M_CLAIM_PREFIX, experiment, client_order_id)
+
+
+def _usd(v: Any) -> Optional[Any]:
+    """A finite Decimal, or None. A bool is not a number."""
+    from decimal import Decimal as _D, InvalidOperation as _IO
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        d = v if isinstance(v, _D) else _D(str(v).strip())
+    except (_IO, ValueError, TypeError):
+        return None
+    return d if d.is_finite() else None
+
+
+def btc5m_authorization(market: Any, *,
+                        now: Optional[dt.datetime] = None,
+                        path: Optional[str] = None,
+                        root: Optional[str] = None,
+                        require_durable: bool = True) -> Dict[str, Any]:
+    """May an order be sent into THIS 5-minute market right now? Default NO.
+
+    READ-ONLY: it reserves nothing, spends nothing and writes nothing, so
+    it is safe to call on every tick and to publish. `claim_btc5m_submission`
+    calls it first and then spends; the verdict here and the refusal there
+    are therefore one decision, never two opinions.
+
+    Returns `{"ok": bool, "reason": str|None, "detail": {...}, "scope": ...}`.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    path = path or ledger_path()
+
+    def no(reason: str, **detail: Any) -> Dict[str, Any]:
+        return {"ok": False, "reason": reason, "detail": detail,
+                "scope": None, "strategy": "BTC5M"}
+
+    # 0. the deploy drain, read as `authorize_arming` reads it
+    _pause = (os.getenv(SUBMIT_PAUSE_ENV) or "").strip()
+    if _pause and _pause.lower() not in ("0", "false", "no", "off"):
+        return no("SUBMISSION_PAUSED_FOR_DEPLOY", env=SUBMIT_PAUSE_ENV)
+    # 1. the two shared locks
+    if operator_halt_engaged():
+        return no("OPERATOR_HALT", env=LIVE_HALT_ENV)
+    if shadow_lock_engaged():
+        return no("SHADOW_ONLY_LOCK", env=SHADOW_ONLY_ENV)
+    # 2. this process is the declared holder, on durable storage
+    _role = role_refusal()
+    if _role is not None:
+        return no(str(_role["reason"]), **dict(_role.get("detail") or {}))
+    if require_durable:
+        _dur = durability_refusal(path)
+        if _dur is not None:
+            return no(str(_dur["reason"]), **dict(_dur.get("detail") or {}))
+    # 3. a 5-minute market, by name
+    mkt = str(market or "").strip() if isinstance(market, str) else ""
+    if not mkt or not mkt.startswith(BTC5M_SERIES):
+        return no("BTC5M_MARKET_NOT_IN_SERIES", series=BTC5M_SERIES,
+                  market=str(market)[:80])
+    # 4. the owner's approval: present, valid, for THIS series, with the
+    #    windows enumerated, and this window one of them
+    try:
+        from src import l5_campaign_approval as _CAW   # late: avoids a cycle
+        verdict = _CAW.campaign_decision(mkt, root=root, now=now,
+                                         reserve=False)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return no("BTC5M_APPROVAL_UNVERIFIABLE", error=type(exc).__name__)
+    if not verdict.get("present"):
+        return no("BTC5M_APPROVAL_ABSENT", env=CAMPAIGN_APPROVAL_ENV,
+                  note="no approval document: the 5-minute strategy has no "
+                       "other way to be authorized")
+    if not verdict.get("ok"):
+        return no(str(verdict.get("reason") or "BTC5M_APPROVAL_NOT_VALID"),
+                  **{"approval": dict(verdict.get("detail") or {})})
+    scope = dict(verdict.get("scope") or {})
+    if str(scope.get("series") or "") != BTC5M_SERIES:
+        return no("BTC5M_APPROVAL_SERIES_MISMATCH",
+                  series=str(scope.get("series"))[:60])
+    if not scope.get("window_starts"):
+        return no("BTC5M_WINDOWS_NOT_ENUMERATED",
+                  note="the approval must list each window it authorizes; "
+                       "an interval is not an explicit approval")
+    # 5. the window is OPEN: not before its start, not at or after its end
+    ws = _CAW._slug_start_utc(mkt)
+    if ws is None:
+        return no("WINDOW_START_UNREADABLE", market=mkt[:80])
+    age = (now - ws).total_seconds()
+    if age < 0:
+        return no("BTC5M_WINDOW_NOT_OPEN", opens_in_s=round(-age, 1))
+    if age >= BTC5M_WINDOW_S:
+        return no("BTC5M_WINDOW_CLOSED", closed_for_s=round(
+            age - BTC5M_WINDOW_S, 1))
+    # 6. a named experiment and a configured total
+    if not experiment_id():
+        return no("BTC5M_CLAIM_NO_EXPERIMENT", env=EXPERIMENT_ENV)
+    if max_submissions() is None:
+        return no("BTC5M_SUBMISSION_BUDGET_NOT_SET", env=MAX_SUBMISSIONS_ENV,
+                  note="the flat submission total must be configured for "
+                       "the 5-minute strategy; unset is not unlimited here")
+    # THE NONCE STAYS WITH THE OWNER. The verdict is published on the
+    # heartbeat; the limits are what a reader needs, the credential is not.
+    scope = {k: v for k, v in scope.items()
+             if k not in ("nonce", "nonce_sid")}
+    return {"ok": True, "reason": None, "detail": {}, "scope": scope,
+            "strategy": "BTC5M", "window": verdict.get("window"),
+            "document_sha256": verdict.get("document_sha256"),
+            "window_start_utc": ws.isoformat(),
+            "window_end_utc": (ws + dt.timedelta(
+                seconds=BTC5M_WINDOW_S)).isoformat()}
+
+
+def claim_btc5m_submission(market: str, client_order_id: str,
+                           payload: Mapping[str, Any], *,
+                           worst_case_usd: Any,
+                           day_realized_usd: Any,
+                           klass: Any,
+                           reducing: bool = False,
+                           path: Optional[str] = None,
+                           root: Optional[str] = None,
+                           now: Optional[dt.datetime] = None,
+                           require_durable: bool = True) -> Dict[str, Any]:
+    """Consume the claim for ONE 5-minute order, or raise. Never auto-resets.
+
+    The caller invokes this BEFORE `transport.submit`. Everything that can
+    refuse is evaluated before anything is spent; then, in this order, the
+    window is reserved (idempotent per slug), the class ticket is taken, and
+    the order's own lock is created and fsynced. A process that dies after
+    this returns has spent the claim, which is the conservative direction.
+
+    `worst_case_usd` is the strategy's dollars at risk INCLUDING this order;
+    `day_realized_usd` its settled result for the current UTC day (negative
+    is a loss). Both are the caller's own authenticated ledger figures, and
+    an unreadable one refuses.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    path = path or ledger_path()
+    v = btc5m_authorization(market, now=now, path=path, root=root,
+                            require_durable=require_durable)
+    if not v.get("ok"):
+        raise Refused(str(v.get("reason")), dict(v.get("detail") or {}))
+    mkt = str(market).strip()
+    # THE SHARED WINDOW GUARD, by name, as every market-keyed pre-wire claim
+    # calls it. The verdict above already required this window to be in the
+    # approved set; this is the same decision made by the one function the
+    # other two claims use, so the three can never disagree.
+    refuse_unauthorized_window(mkt)
+    scope = dict(v.get("scope") or {})
+    coid = str(client_order_id or "").strip()
+    if not BTC5M_COID_RE.fullmatch(coid):
+        raise Refused("BTC5M_CLAIM_BAD_ORDER_ID",
+                      {"client_order_id": coid[:40],
+                       "note": "a 5-minute order carries the 5-minute "
+                               "strategy's own id; anything else is not "
+                               "this strategy's order to claim for"})
+    # THE STRATEGY'S OWN LIMITS, from the document (already clamped to the
+    # code ceilings by `ApprovalGate.state`). Unreadable is a refusal.
+    cap, loss_cap = (_usd(scope.get("max_total_exposure_usd")),
+                     _usd(scope.get("max_daily_loss_usd")))
+    wc, day = _usd(worst_case_usd), _usd(day_realized_usd)
+    if cap is None or loss_cap is None or cap <= 0 or loss_cap <= 0:
+        raise Refused("BTC5M_APPROVED_LIMITS_UNREADABLE")
+    if wc is None or wc < 0:
+        raise Refused("BTC5M_EXPOSURE_UNREADABLE",
+                      {"note": "the strategy's worst-case exposure "
+                               "including this order was not stated"})
+    if wc > cap:
+        raise Refused("BTC5M_EXPOSURE_ABOVE_APPROVED",
+                      {"worst_case_usd": str(wc),
+                       "approved_usd": str(cap)})
+    if day is None:
+        raise Refused("BTC5M_DAY_RESULT_UNREADABLE")
+    if day <= -loss_cap:
+        raise Refused("BTC5M_DAILY_LOSS_LIMIT",
+                      {"day_realized_usd": str(day),
+                       "approved_loss_usd": str(loss_cap),
+                       "note": "the strategy's settled loss for the UTC day "
+                               "has reached the approved limit"})
+    try:
+        k = normalize_class(klass)
+    except Refused:
+        raise
+    if k is None:
+        raise Refused("BTC5M_CLASS_NOT_STATED",
+                      {"known": list(SUBMISSION_CLASSES)})
+    exp = experiment_id()
+    sid = btc5m_sid(exp, coid)
+    if len(re.sub(r"[^A-Za-z0-9_.-]", "_", sid)) > _LOCK_ID_MAX:
+        raise Refused("BTC5M_CLAIM_ID_TOO_LONG", {"length": len(sid)})
+    # A REPLAY OF THE SAME ORDER spends nothing further: no window, no
+    # ticket. The lock is the record that it was already sent.
+    if claim_held(sid, path):
+        raise Refused("AUTHORIZATION_ALREADY_USED",
+                      {"session_id": sid,
+                       "note": "this order's claim is already spent; one "
+                               "client order id is submitted once"})
+    # THE FLAT TOTAL. Not applied to a risk-reducing order, for the reason
+    # `total_backstop_binds` gives: a count that can refuse the hedge can
+    # only strand the inventory the other classes created.
+    if total_backstop_binds(reducing):
+        over = submission_budget_refusal(path, exp)
+        if over:
+            raise Refused(str(over["reason"]), over)
+    # THE WINDOW, spent last among the things that can still refuse for a
+    # reason unrelated to the budget. Idempotent per slug.
+    try:
+        from src import l5_campaign_approval as _CAW   # late: avoids a cycle
+        res = _CAW.reserve_window(mkt, root=root, now=now)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("BTC5M_WINDOW_RESERVE_FAILED",
+                      {"error": type(exc).__name__})
+    if not res.get("ok"):
+        raise Refused(str(res.get("reason") or "BTC5M_WINDOW_NOT_RESERVED"),
+                      dict(res.get("detail") or {}) if isinstance(
+                          res.get("detail"), Mapping) else {"window": res})
+    ticket = class_claim_or_refuse(path, exp, k, reducing=reducing)
+    rec = {"kind": "btc5m_submission_claim", "strategy": "BTC5M",
+           "experiment": exp, "market": mkt, "sid": sid,
+           "client_order_id": coid, "klass": k, "reducing": bool(reducing),
+           "class_ticket": (None if ticket is None else ticket.get("sid")),
+           "window_index": res.get("index"),
+           "worst_case_usd": str(wc), "approved_exposure_usd": str(cap),
+           "document_sha256": v.get("document_sha256"),
+           "t": now.isoformat(),
+           **dict(payload)}
+    try:
+        claim_once(path, sid, rec)
+    except Refused:
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("BTC5M_CLAIM_UNAVAILABLE",
+                      {"sid": sid, "market": mkt,
+                       "error": "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:200]),
+                       "note": "the claim could not be persisted, so it is "
+                               "not held. Refusing rather than submitting "
+                               "on an unproven claim."})
     return rec
 
 

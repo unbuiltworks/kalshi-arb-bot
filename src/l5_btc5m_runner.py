@@ -1,0 +1,632 @@
+"""The BTC 5-minute live session: ONE approved window, then stop.
+
+WHAT IT DOES, in order, for the one market named in `L5_BTC5M_MARKET`:
+
+  1. refuses to start a market it has already run (a durable marker);
+  2. reads the venue market and runs the EXISTING transport's preflight for
+     the 5-minute series, then arms the transport only if the owner's arm
+     token is present (`pmus_auth.armed()`) -- exactly as BTC15m arms;
+  3. installs the adapter's `owns_venue_order_id` as the transport's
+     cancel-ownership test, so a cancel can only name an order this ledger
+     recorded;
+  4. from the window start to `CANCEL_LEAD_S` before its end, every
+     `STEP_S`: reads the shared halt (`L5_HALT_URL`, the same record the
+     independent watchdog asserts), the operator halt, and the account-wide
+     loss state the BTC15m service publishes; if any refuses or cannot be
+     read it cancels its own orders and places nothing; otherwise one
+     adapter step, on the public book and the venue-index probability;
+  5. cancels every order of its own by exact venue id, re-reading each to a
+     terminal state, and disarms the transport;
+  6. waits for the venue's own settlement, records it once, reads each of
+     its orders back for the venue's commission, compares its inventory
+     with the venue's position rows, and emits one session report;
+  7. writes the marker and idles. It never chooses another window.
+
+EVERY ORDER STILL SPENDS `claim_btc5m_submission` inside the adapter, so the
+owner's approval document for this exact window is required as well.
+
+LABELS. The report states submitted, filled, cancelled, settled. Settlement
+P&L is settlement arithmetic on the venue's confirmed fills minus the
+venue's own commission; it is "realized" only once the venue has credited
+the redemption, and the report says so. An order the transport refused
+because it was disarmed is reported as WOULD_SUBMIT and never as a trade.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import threading
+import time
+import urllib.request
+from decimal import Decimal, InvalidOperation
+from typing import Any, Callable, Dict, List, Mapping, Optional
+
+from src import l5_btc5m_controller as C
+from src import l5_btc5m_execution as X
+from src import l5_live_authorization as AUTH
+
+D = Decimal
+UTC = dt.timezone.utc
+WINDOW_S = 300.0
+STEP_S = 5.0
+#: stop placing and start cancelling this long before the window ends
+CANCEL_LEAD_S = 30.0
+#: how long after the window end the cancel loop may keep re-reading
+CANCEL_GRACE_S = 60.0
+#: how long to wait for the venue's settlement before reporting without it
+SETTLE_WAIT_S = 1800.0
+SETTLE_POLL_S = 15.0
+#: the account-wide risk document must be at most this old
+RISK_MAX_AGE_S = 30.0
+GATEWAY = "https://gateway.polymarket.us"
+
+LEDGER_ENV = "L5_BTC5M_LEDGER"
+RISK_URL_ENV = "L5_ACCOUNT_RISK_URL"
+HALT_URL_ENV = "L5_HALT_URL"
+FILLS_PORT_ENV = "L5_BTC5M_FILLS_PORT"
+SESSION_DIR = "btc5m_sessions"
+
+
+def emit(kind: str, doc: Mapping[str, Any]) -> None:
+    print("%s %s" % (kind, json.dumps(dict(doc), sort_keys=True,
+                                      default=str)), flush=True)
+
+
+def _dec(v: Any) -> Optional[Decimal]:
+    if isinstance(v, Mapping):
+        v = v.get("value")
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        d = D(str(v).strip())
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return d if d.is_finite() else None
+
+
+def window_start(market: str) -> Optional[dt.datetime]:
+    try:
+        d = dt.datetime.strptime(str(market)[-16:], "%Y-%m-%d-%H%Mz")
+    except ValueError:
+        return None
+    return d.replace(tzinfo=UTC)
+
+
+# ------------------------------------------------------------ the inputs
+
+def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
+                ) -> Dict[str, Any]:
+    """YES best bid/ask from the venue's public market record. GET only."""
+    def get(url: str) -> Any:
+        req = urllib.request.Request(url, headers={"Accept":
+                                                   "application/json"})
+        with urllib.request.urlopen(req, timeout=3.0) as r:     # noqa: S310
+            return json.loads(r.read().decode("utf-8"))
+    t0 = time.time()
+    doc = (fetch or get)("%s/v1/market/slug/%s" % (GATEWAY, market))
+    m = doc.get("market") if isinstance(doc, Mapping) and isinstance(
+        doc.get("market"), Mapping) else doc
+    if not isinstance(m, Mapping) or str(m.get("slug")) != str(market):
+        return {"bid": None, "ask": None, "age_s": None,
+                "reason": "BOOK_FOR_ANOTHER_MARKET"}
+    return {"bid": _dec(m.get("bestBidQuote")),
+            "ask": _dec(m.get("bestAskQuote")),
+            "age_s": max(0.0, time.time() - t0),
+            "closed": bool(m.get("closed"))}
+
+
+def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
+                 fetch: Optional[Callable[[str], Any]] = None
+                 ) -> Dict[str, Any]:
+    """The ACCOUNT-WIDE loss state, as the BTC15m service computes it, plus
+    this strategy's settled results that service has not yet booked.
+
+    Refuses (ok False) on: no URL, an unreadable or stale document, a
+    document that says it is unreadable, either halt already tripped, the
+    operator halt, or the combined figure reaching either limit. Only this
+    strategy's LOSSES are added (`own_unaccounted` is <= 0 by construction),
+    so the combination can only bind earlier, never later.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, ok=False, reason=reason)
+
+    if not url:
+        return no("ACCOUNT_RISK_URL_NOT_SET", env=RISK_URL_ENV)
+    try:
+        if fetch is not None:
+            doc = fetch(url)
+        else:
+            with urllib.request.urlopen(url, timeout=3.0) as r:  # noqa: S310
+                doc = json.loads(r.read().decode("utf-8"))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return no("ACCOUNT_RISK_UNREADABLE:%s" % type(exc).__name__)
+    risk = doc.get("account_risk") if isinstance(doc, Mapping) else None
+    if not isinstance(risk, Mapping):
+        return no("ACCOUNT_RISK_NOT_PUBLISHED")
+    try:
+        as_of = dt.datetime.fromisoformat(
+            str(doc.get("as_of_utc")).replace("Z", "+00:00"))
+        age = (now - as_of).total_seconds()
+    except (TypeError, ValueError):
+        return no("ACCOUNT_RISK_UNDATED")
+    if age > RISK_MAX_AGE_S or age < -5:
+        return no("ACCOUNT_RISK_STALE", age_s=round(age, 1))
+    if not risk.get("readable"):
+        return no("ACCOUNT_RISK_SAYS_UNREADABLE", why=risk.get("reason"))
+    # THE OTHER SERVICE'S OPERATOR HALT IS ITS OWN KILL SWITCH, NOT AN
+    # ACCOUNT LIMIT. `L5_LIVE_HALT` is a per-service variable: the BTC15m
+    # service's says "BTC15m may not trade" and is deliberately ON while it
+    # stays disarmed. Reading it here would stop BTC5m for as long as BTC15m
+    # is off. What binds across services is the LOSS state below and the
+    # watchdog's halt record (`shared_halt`); BTC5m's own `L5_LIVE_HALT` is
+    # read by the session itself. The value is reported, never acted on.
+    other_halt = bool(risk.get("operator_halt"))
+    day, halt = (_dec(risk.get("utc_day_realized_usd")),
+                 _dec(risk.get("daily_halt_usd")))
+    life, cum = (_dec(risk.get("lifetime_realized_usd")),
+                 _dec(risk.get("cumulative_loss_ceiling_usd")))
+    if None in (day, halt, life, cum):
+        return no("ACCOUNT_RISK_FIGURES_UNREADABLE")
+    if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
+        return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
+    add = min(D(0), own_unaccounted)
+    day_all, life_all = day + add, life + add
+    room = min(halt + day_all, cum + life_all)
+    out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
+           "lifetime_realized_usd": str(life_all),
+           "cumulative_loss_ceiling_usd": str(cum),
+           "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
+           # what may still be LOST before either account-wide limit binds
+           "loss_room_usd": str(room),
+           "btc15m_operator_halt": other_halt,
+           "age_s": round(age, 1)}
+    if day_all <= -halt:
+        return no("ACCOUNT_DAILY_LOSS_HALT", **out)
+    if -life_all >= cum:
+        return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
+    return dict(out, ok=True, reason=None)
+
+
+def shared_halt(url: str) -> Dict[str, Any]:
+    """The halt record the independent watchdog asserts. Unreadable or
+    unconfigured refuses: a live session needs the watchdog's hand on it."""
+    if not url:
+        return {"ok": False, "reason": "HALT_URL_NOT_SET", "env": HALT_URL_ENV}
+    try:
+        from src import l5_halt_gate as HG
+        st = HG.HaltGate(HG.HttpHaltStore(url)).state()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"ok": False, "reason": "HALT_UNREADABLE:%s" % type(exc).__name__}
+    # `HaltGate.state()`: `permitted` True only for a present, fresh,
+    # parseable, NOT-halted record; every other case names its `why`
+    if not isinstance(st, Mapping) or st.get("permitted") is not True:
+        return {"ok": False, "reason": "HALT:%s" % (
+            (st or {}).get("why") if isinstance(st, Mapping) else "UNREADABLE")}
+    return {"ok": True, "reason": None}
+
+
+# ------------------------------------------------------- the fills feed
+
+def fills_document(ex: "X.Btc5mExecutor") -> Dict[str, Any]:
+    """This ledger's own orders and fills, for the account-wide ledger to
+    check against the venue. READ-ONLY; publishes no credential."""
+    try:
+        rows = ex.orders()
+    except BaseException:                                      # noqa: BLE001
+        return {"readable": False, "orders": []}
+    if not ex._ledger_ok:                                      # noqa: SLF001
+        return {"readable": False, "orders": []}
+    return {"readable": True, "strategy": X.STRATEGY,
+            "as_of_utc": dt.datetime.now(UTC).isoformat(),
+            "orders": [{"client_order_id": c, "venue_order_id":
+                        r.get("venue_order_id"), "market": r.get("market"),
+                        "side": r.get("side"), "price": r.get("price"),
+                        "filled_qty": r.get("filled_qty"),
+                        "filled_cost": r.get("filled_cost"),
+                        "state": r.get("state")}
+                       for c, r in sorted(rows.items())]}
+
+
+def serve_fills(ex: "X.Btc5mExecutor", port: int):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:                              # noqa: N802
+            if self.path.split("?", 1)[0].lstrip("/") != "btc5m_fills":
+                body, code = b'{"error":"no such key"}', 404
+            else:
+                body, code = json.dumps(fills_document(ex),
+                                        default=str).encode(), 200
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a) -> None:
+            return
+    httpd = ThreadingHTTPServer(("0.0.0.0", int(port)), H)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd
+
+
+# ------------------------------------------------------------ the session
+
+class Session:
+    """One window. Every collaborator is injectable; nothing is global."""
+
+    def __init__(self, *, market: str, executor: "X.Btc5mExecutor",
+                 transport: Any, root: str,
+                 book_fn: Callable[[str], Mapping[str, Any]],
+                 p_fn: Callable[[str, float, float], Mapping[str, Any]],
+                 risk_fn: Callable[[dt.datetime, Decimal], Mapping[str, Any]],
+                 halt_fn: Callable[[], Mapping[str, Any]],
+                 clock: Callable[[], float] = time.time,
+                 sleep: Callable[[float], None] = time.sleep,
+                 armed_fn: Optional[Callable[[], bool]] = None,
+                 arm_fn: Optional[Callable[[Any], Any]] = None) -> None:
+        self.market, self.ex, self.t = market, executor, transport
+        self.root = root
+        self.book_fn, self.p_fn = book_fn, p_fn
+        self.risk_fn, self.halt_fn = risk_fn, halt_fn
+        self.clock, self.sleep = clock, sleep
+        self.armed_fn = armed_fn
+        #: WHO MAY ARM THE TRANSPORT. Every module in src/ that arms must
+        #: route the decision through `l5_live_authorization.
+        #: authorize_arming`, the one shared boundary (three guard tests
+        #: pin it). That boundary has not yet been extended to the BTC5m
+        #: session, so this module does not arm at all: with no `arm_fn`
+        #: the session runs DISARMED, its transport's submit raises, and the
+        #: adapter reports every decision as WOULD_SUBMIT. A test may inject
+        #: one against a scripted venue; production cannot.
+        self.arm_fn = arm_fn
+        self.events: List[Dict[str, Any]] = []
+        self.would_submit = 0
+
+    def _now(self) -> dt.datetime:
+        return dt.datetime.fromtimestamp(self.clock(), UTC)
+
+    def _log(self, kind: str, doc: Mapping[str, Any]) -> None:
+        rec = dict(doc, market=self.market, utc=self._now().isoformat())
+        self.events.append(dict(rec, kind=kind))
+        emit(kind, rec)
+
+    def marker(self) -> str:
+        return os.path.join(self.root, SESSION_DIR, "%s.done" % self.market)
+
+    def _own_unaccounted(self) -> Decimal:
+        """This strategy's settled result today, losses only. The BTC15m
+        ledger books BTC5m results only if it ever adopted the position, so
+        none of this is assumed to be inside its figure already."""
+        got = self.ex.day_settled_pnl(self._now())
+        if got is None:
+            raise ValueError("own settled result unreadable")
+        return min(D(0), got)
+
+    def gates(self) -> Dict[str, Any]:
+        h = self.halt_fn()
+        if not h.get("ok"):
+            return {"ok": False, "reason": "SHARED_HALT:%s" % h.get("reason")}
+        if AUTH.operator_halt_engaged():
+            return {"ok": False, "reason": "OPERATOR_HALT"}
+        try:
+            own = self._own_unaccounted()
+        except ValueError:
+            return {"ok": False, "reason": "OWN_SETTLED_RESULT_UNREADABLE"}
+        r = self.risk_fn(self._now(), own)
+        if not r.get("ok"):
+            return {"ok": False, "reason": "ACCOUNT_RISK:%s" % r.get("reason"),
+                    "risk": dict(r)}
+        # THE WORST CASE MUST FIT INSIDE WHAT THE ACCOUNT MAY STILL LOSE.
+        # The account-wide halts are judged on SETTLED results, so a position
+        # opened with less room than it could lose would overshoot them
+        # after the fact. The bound used is this strategy's whole exposure
+        # ceiling -- the most it can have at risk at once -- so nothing it
+        # is allowed to open can take the account past either limit.
+        room = _dec(r.get("loss_room_usd"))
+        cap = self.exposure_ceiling()
+        if room is None or cap is None:
+            return {"ok": False, "reason": "LOSS_ROOM_UNREADABLE",
+                    "risk": dict(r)}
+        if cap > room:
+            return {"ok": False, "reason": "EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM",
+                    "exposure_ceiling_usd": str(cap),
+                    "loss_room_usd": str(room), "risk": dict(r)}
+        return {"ok": True, "risk": dict(r)}
+
+    def exposure_ceiling(self) -> Optional[Decimal]:
+        """The smaller of the adapter's own ceiling and the owner's approved
+        exposure for this window. None when the approval cannot be read."""
+        v = AUTH.btc5m_authorization(self.market, now=self._now(),
+                                     require_durable=False)
+        scope = v.get("scope") or {}
+        approved = _dec(scope.get("max_total_exposure_usd"))
+        own = _dec(self.ex.params.max_exposure_usd)
+        if own is None:
+            return None
+        if approved is None:
+            # no readable approval: the claim refuses every order anyway;
+            # the adapter's own ceiling is the bound that applies
+            return own
+        return min(own, approved)
+
+    def start(self) -> Dict[str, Any]:
+        """Preflight and arm, AT THE WINDOW START. Never raises.
+
+        A 5-minute market reads MARKET_STATUS_CLOSED until its window opens
+        (observed on the venue 2026-11-12), and preflight requires an open
+        market, so a preflight run at launch could never pass. The session
+        therefore waits for the window, then preflights and arms. A window
+        already past its last trading second is refused, never chased."""
+        if os.path.exists(self.marker()):
+            return {"ok": False, "reason": "MARKET_ALREADY_RUN",
+                    "marker": self.marker()}
+        ws = window_start(self.market)
+        if ws is None or not self.market.startswith(X.MARKET_PREFIX):
+            return {"ok": False, "reason": "NOT_A_BTC5M_MARKET"}
+        if self.clock() >= ws.timestamp() + WINDOW_S - CANCEL_LEAD_S:
+            return {"ok": False, "reason": "WINDOW_ALREADY_PAST"}
+        while self.clock() < ws.timestamp():
+            self.sleep(min(STEP_S, ws.timestamp() - self.clock()))
+        try:
+            pf = self.t.preflight()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            pf = {"preflight": "FAILED", "error": type(exc).__name__}
+        self.t.cancel_owner_oracle = self.ex.owns_venue_order_id
+        armed = False
+        arm_error = None
+        if (pf or {}).get("preflight") == "PASSED":
+            if self.arm_fn is None:
+                arm_error = ("ARMING_BOUNDARY_NOT_WIRED: the BTC5m session "
+                             "does not arm until authorize_arming covers it")
+            else:
+                try:
+                    self.arm_fn(self.t)
+                    armed = bool(getattr(self.t, "armed", False))
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    arm_error = "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:160])
+        rep = {"ok": True, "preflight": (pf or {}).get("preflight"),
+               "preflight_failed": [c.get("check") for c in
+                                    (pf or {}).get("checks") or ()
+                                    if not c.get("passed")],
+               "transport_armed": armed, "arm_error": arm_error,
+               "window_start_utc": ws.isoformat()}
+        self._log("L5_BTC5M_START", rep)
+        return rep
+
+    def trade(self) -> None:
+        ws = window_start(self.market).timestamp()
+        stop_at = ws + WINDOW_S - CANCEL_LEAD_S
+        while self.clock() < ws:
+            self.sleep(min(STEP_S, ws - self.clock()))
+        while self.clock() < stop_at:
+            now = self.clock()
+            g = self.gates()
+            if not g["ok"]:
+                rep = self.ex.end_of_window(self.market)
+                self._log("L5_BTC5M_BLOCKED", {
+                    "reason": g["reason"],
+                    "cancelled": [c["venue_order_id"]
+                                  for c in rep.get("cancelled") or ()]})
+            else:
+                book = self.book_fn(self.market)
+                est = self.p_fn(self.market, ws, now) or {}
+                p_up = est.get("p_up") if est.get("ok") else None
+                rep = self.ex.step(
+                    market=self.market,
+                    book={"bid": book.get("bid"), "ask": book.get("ask"),
+                          "age_s": book.get("age_s")},
+                    t_in_window_s=now - ws, p_up=p_up,
+                    p_source=("VENUE_INDEX" if p_up is not None else None))
+                self.would_submit += len(rep.get("would_submit") or ())
+                self._log("L5_BTC5M_STEP", {
+                    "t_in_window_s": round(now - ws, 2),
+                    "bid": book.get("bid"), "ask": book.get("ask"),
+                    "p_up": p_up, "p_reason": est.get("reason"),
+                    "action": rep.get("action"), "why": rep.get("why"),
+                    "placed": [(p["side"], p["price"], p["qty"],
+                                p["venue_order_id"])
+                               for p in rep.get("placed") or ()],
+                    "cancelled": [c.get("venue_order_id")
+                                  for c in rep.get("cancelled") or ()],
+                    "fills": [(f["side"], str(f["qty"]), str(f["price"]),
+                               f["venue_order_id"])
+                              for f in rep.get("fills") or ()],
+                    "refused": [r.get("reason")
+                                for r in rep.get("refused") or ()],
+                    "would_submit_not_sent": len(rep.get("would_submit")
+                                                 or ()),
+                    "halted_reason": rep.get("halted_reason"),
+                    "arming_refusal": rep.get("arming_refusal")})
+            self.sleep(max(0.0, min(STEP_S, stop_at - self.clock())))
+
+    def close(self) -> Dict[str, Any]:
+        """Cancel every own order by exact id until each reads terminal."""
+        ws = window_start(self.market).timestamp()
+        deadline = ws + WINDOW_S + CANCEL_GRACE_S
+        while True:
+            rep = self.ex.end_of_window(self.market)
+            left = (rep.get("still_open") or []) + (rep.get("unresolved") or [])
+            self._log("L5_BTC5M_CLOSE", {
+                "cancelled": [c["venue_order_id"]
+                              for c in rep.get("cancelled") or ()],
+                "filled_while_cancelling": [c["venue_order_id"] for c in
+                                            rep.get("filled") or ()],
+                "still_open": [c.get("venue_order_id") for c in left]})
+            if not left or self.clock() >= deadline:
+                break
+            self.sleep(2.0)
+        try:
+            self.t.disarm("BTC5M_SESSION_CLOSED")
+        except BaseException:                                  # noqa: BLE001
+            pass
+        return {"clean": not left,
+                "unresolved": [c.get("venue_order_id") for c in left]}
+
+    def settle(self) -> Dict[str, Any]:
+        ws = window_start(self.market).timestamp()
+        until = ws + WINDOW_S + SETTLE_WAIT_S
+        verdict = None
+        while self.clock() < until:
+            try:
+                verdict = self.t.settlement(self.market)
+            except BaseException:                              # noqa: BLE001
+                verdict = None
+            if verdict and verdict.get("terminal"):
+                break
+            self.sleep(SETTLE_POLL_S)
+        if not (verdict and verdict.get("terminal")):
+            return {"settled": False, "reason": "VENUE_SETTLEMENT_NOT_SEEN",
+                    "last": verdict}
+        px = _dec(verdict.get("settlement_px"))
+        if px not in (D(0), D(1)):
+            return {"settled": False, "reason": "SETTLEMENT_NOT_BINARY",
+                    "settlement_px": str(px)}
+        return dict(self.ex.settle(self.market, px == D(1)), settled=True,
+                    settlement_px=str(px))
+
+    def reconcile(self) -> Dict[str, Any]:
+        """Our inventory beside the venue's own position row for the
+        market. Agreement is stated, never assumed."""
+        inv = self.ex.inventory(self.market)
+        try:
+            rows = [r for r in (self.t.positions() or ())
+                    if isinstance(r, Mapping) and str(
+                        r.get("marketSlug") or r.get("market")) == self.market]
+        except BaseException as exc:                           # noqa: BLE001
+            return {"read": False, "error": type(exc).__name__}
+        net_ours = inv[C.UP]["qty"] - inv[C.DOWN]["qty"]
+        venue_net = None
+        for r in rows:
+            venue_net = _dec(r.get("netPositionDecimal")
+                             if r.get("netPositionDecimal") is not None
+                             else r.get("netPosition"))
+        return {"read": True, "venue_rows": rows,
+                "ours": {k: {"qty": str(v["qty"]), "cost": str(v["cost"])}
+                         for k, v in inv.items()},
+                "ours_net_up_minus_down": str(net_ours),
+                "venue_net": None if venue_net is None else str(venue_net),
+                "agrees": (venue_net == net_ours) if venue_net is not None
+                else (net_ours == 0 and not rows),
+                "note": ("the venue nets the two outcome tokens; a matched "
+                         "pair reads as zero there")}
+
+    def fees(self) -> Dict[str, Any]:
+        """The venue's own commission on each of our orders, read back."""
+        total, per, unread = D(0), {}, []
+        for coid, r in sorted(self.ex.orders().items()):
+            vid = r.get("venue_order_id")
+            if not vid or r.get("market") != self.market:
+                continue
+            try:
+                row = self.t.order(vid) or {}
+            except BaseException:                              # noqa: BLE001
+                unread.append(vid)
+                continue
+            fee = _dec(row.get("commissionNotionalTotalCollected"))
+            if fee is None:
+                unread.append(vid)
+                continue
+            per[vid] = str(fee)
+            total += fee
+        return {"total_usd": str(total), "per_order": per,
+                "unreadable": unread, "complete": not unread}
+
+    def run(self) -> Dict[str, Any]:
+        st = self.start()
+        if not st.get("ok"):
+            self._log("L5_BTC5M_NOT_STARTED", st)
+            return {"started": False, **st}
+        self.trade()
+        closed = self.close()
+        settled = self.settle()
+        recon = self.reconcile()
+        fees = self.fees()
+        orders = self.ex.orders()
+        mine = {c: r for c, r in orders.items() if r["market"] == self.market}
+        pnl = _dec(settled.get("settlement_pnl")) if settled.get(
+            "settled") else None
+        fee_total = _dec(fees["total_usd"])
+        report = {
+            "market": self.market,
+            "transport_armed": st.get("transport_armed"),
+            "submitted": sum(1 for r in mine.values()
+                             if r.get("venue_order_id")),
+            "submit_uncertain": sum(1 for r in mine.values()
+                                    if r["state"] == X.UNCERTAIN),
+            "filled_orders": sum(1 for r in mine.values()
+                                 if D(r["filled_qty"]) > 0),
+            "fills_qty": str(sum((D(r["filled_qty"]) for r in mine.values()),
+                                 D(0))),
+            "fills_cost_usd": str(sum((D(r["filled_cost"])
+                                       for r in mine.values()), D(0))),
+            "cancelled": sum(1 for r in mine.values()
+                             if r["state"] == X.CANCELLED),
+            "would_submit_not_sent": self.would_submit,
+            "close": closed, "settlement": settled, "reconcile": recon,
+            "venue_fees": fees,
+            "settled_net_usd": (None if pnl is None or not fees["complete"]
+                                else str(pnl - fee_total)),
+            "labels": (
+                "venue-confirmed orders and fills only. settled_net_usd is "
+                "settlement arithmetic on confirmed fills minus the venue's "
+                "own commission; it is REALIZED once the venue credits the "
+                "redemption. would_submit_not_sent counts decisions a "
+                "disarmed transport did not send: they are not trades."),
+        }
+        os.makedirs(os.path.dirname(self.marker()), exist_ok=True)
+        with open(self.marker(), "w") as fh:
+            json.dump(report, fh, default=str, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        self._log("L5_BTC5M_SESSION_REPORT", report)
+        return report
+
+
+def main() -> int:            # pragma: no cover - the service entrypoint
+    from src import l5_btc_reference as REF
+    from src import l5_pmus_transport as T
+    market = (os.getenv(X.MARKET_ENV) or "").strip()
+    root = (os.getenv(AUTH.LEDGER_ENV) or "/state/btc5m/auth.jsonl")
+    root = os.path.dirname(root)
+    ledger = (os.getenv(LEDGER_ENV) or os.path.join(root, "btc5m_ledger.json"))
+    ex = X.Btc5mExecutor(None, ledger)
+    port = (os.getenv(FILLS_PORT_ENV) or "").strip()
+    if port:
+        serve_fills(ex, int(port))
+    if not market:
+        emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED"})
+    else:
+        t = T.PmusTransport(market_slug=market, series="BTC5M")
+        ex.transport = t
+        ref = REF.Reference(window_s=WINDOW_S)
+        ref.start()
+        sess = Session(
+            market=market, executor=ex, transport=t, root=root,
+            book_fn=public_book,
+            p_fn=lambda m, ws, now: ref.estimate(m, ws, now),
+            risk_fn=lambda now, own: account_risk(
+                url=(os.getenv(RISK_URL_ENV) or "").strip(), now=now,
+                own_unaccounted=own),
+            halt_fn=lambda: shared_halt((os.getenv(HALT_URL_ENV) or "").strip()))
+        sess.run()
+    # NEVER CHOOSES ANOTHER WINDOW. It idles until the owner changes the
+    # configuration; a restart finds the marker and does not trade again.
+    while True:
+        emit("L5_BTC5M_IDLE", {"market": market or None,
+                               "utc": dt.datetime.now(UTC).isoformat()})
+        time.sleep(60.0)
+
+
+if __name__ == "__main__":    # pragma: no cover
+    raise SystemExit(main())

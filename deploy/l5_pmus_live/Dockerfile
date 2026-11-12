@@ -77,6 +77,8 @@ COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_origin.py src/l5_origin.py
 # The shared arming boundary. The runner now imports it at module scope, so
 # an image without it cannot boot -- the same incomplete-closure defect that
 # bit the preflight and live-probe images. test_the_image_copies_every_module
