@@ -279,6 +279,9 @@ ALLOWED_DATA = {
     "config/cost_basis_batch_manifest_20261016b.json",
     "config/cost_basis_batch_manifest_20261016c.json",
     "config/cost_basis_batch_manifest_20261016d.json",
+    # the owner-approved one-leg restatement of the manual 19:15Z trade
+    # (2026-11-12): read only when L5_COST_BASIS_BATCH_MANIFEST names it
+    "config/cost_basis_batch_manifest_20261112_manual1915z.json",
     # the frozen v2 action model the shadow controller loads at construction
     "analysis/l5/l5_action_model_v2.json",
 }
