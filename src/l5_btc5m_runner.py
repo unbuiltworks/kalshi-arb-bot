@@ -793,6 +793,22 @@ class Session:
                                                  or ()),
                     "halted_reason": rep.get("halted_reason"),
                     "arming_refusal": rep.get("arming_refusal"),
+                    # WHAT IS CONSUMING THE ACCOUNT CEILING. `_place`
+                    # computes this on every placement attempt and it was
+                    # being thrown away, so a window refused
+                    # ACCOUNT_EXPOSURE_CAP could not say WHY from the logs
+                    # (observed live 2026-11-12 15:55Z). Foreign rows are
+                    # charged $1.00 a contract and positions count GROSS on
+                    # both legs, so a matched pair of 0.17+0.17 elsewhere on
+                    # the account consumes $0.34 of the ceiling while
+                    # carrying almost no risk. No extra venue call: this is
+                    # the figure the placement already read.
+                    "account": {k: (((rep.get("exposure") or {})
+                                     .get("account")) or {}).get(k)
+                                for k in ("total_usd", "own_usd", "other_usd",
+                                          "other_open_order_contracts",
+                                          "other_position_contracts",
+                                          "unknown", "unknown_reason")},
                     "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
                               ("why", "cap_usd", "completion_reserve_usd",
                                "room_usd", "price", "qty")},

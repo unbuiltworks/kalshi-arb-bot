@@ -746,3 +746,36 @@ class TestCampaignNamesTheWindowInTheExecutorLock:
         i = src.index("os.environ[X.MARKET_ENV] = slug")
         assert "finally:" in src[i:], "the lock must be restored"
         assert "os.environ.pop(X.MARKET_ENV, None)" in src[i:]
+
+
+# ======================================================================
+class TestAccountExposureIsVisible:
+    """A window refused ACCOUNT_EXPOSURE_CAP must be able to say WHY from
+    its own logs. Observed live 2026-11-12 15:55Z: every order was refused
+    and the records could not show what was consuming the ceiling."""
+
+    def test_the_step_record_carries_the_account_breakdown(self):
+        src = inspect.getsource(RUN.Session.trade)
+        assert '"account"' in src
+        for field in ("total_usd", "own_usd", "other_usd",
+                      "other_position_contracts", "unknown"):
+            assert field in src, field
+
+    def test_it_reads_no_extra_venue_call(self):
+        """It must reuse the figure the placement already read."""
+        src = inspect.getsource(RUN.Session.trade)
+        i = src.index('"account"')
+        assert 'rep.get("exposure")' in src[i:i + 400]
+
+    def test_foreign_positions_count_gross_on_both_legs(self, tmp_path,
+                                                        monkeypatch):
+        """The mechanism behind the live refusal: a MATCHED pair elsewhere
+        on the account still consumes both legs of the ceiling."""
+        r = rig(tmp_path, monkeypatch)
+        r.venue.extra_positions = [
+            {"marketSlug": "cpc-btc-updown-15m-2026-11-11-1200z",
+             "qtyBought": "0.17", "qtySold": "0.17"}]
+        acct = r.ex.account_exposure()
+        assert acct["unknown"] is False
+        assert acct["other_position_contracts"] == D("0.34")
+        assert acct["other_usd"] == D("0.34")
