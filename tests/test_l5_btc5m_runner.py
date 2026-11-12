@@ -314,7 +314,6 @@ def test_a_fresh_account_state_inside_both_limits_permits():
     ({"utc_day_realized_usd": "-5.0138"}, "ACCOUNT_DAILY_LOSS_HALT"),
     ({"lifetime_realized_usd": "-21.0406"}, "ACCOUNT_CUMULATIVE_LOSS_CEILING"),
     ({"lifetime_realized_usd": "-20.00"}, "ACCOUNT_CUMULATIVE_LOSS_CEILING"),
-    ({"operator_halt": True}, "OPERATOR_HALT"),
     ({"readable": False, "reason": "DAY_READ_FAILED"},
      "ACCOUNT_RISK_SAYS_UNREADABLE"),
     ({"utc_day_realized_usd": None}, "ACCOUNT_RISK_FIGURES_UNREADABLE"),
@@ -659,3 +658,21 @@ def test_todays_account_state_would_refuse_on_the_lifetime_ceiling():
                cumulative_loss_ceiling_usd="18.6325")
     assert got["ok"] is False
     assert got["reason"] == "ACCOUNT_CUMULATIVE_LOSS_CEILING"
+
+
+def test_the_btc15m_services_own_kill_switch_does_not_stop_btc5m():
+    """Production today: BTC15m is disarmed with L5_LIVE_HALT=1 on its own
+    service. That is its kill switch, not an account limit; it is reported
+    and BTC5m is judged on the loss state alone."""
+    got = risk(operator_halt=True)
+    assert got["ok"] is True and got["btc15m_operator_halt"] is True
+
+
+def test_btc5ms_own_operator_halt_and_the_watchdogs_halt_still_stop_it(
+        tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, halt=lambda: {"ok": False,
+                                                   "reason": "HALT:asserted"})
+    rep = rig.session.run()
+    assert rig.venue.sent == [] and rep["submitted"] == 0
+    assert {b["reason"] for b in rig.kinds("L5_BTC5M_BLOCKED")} == {
+        "SHARED_HALT:HALT:asserted"}
