@@ -272,3 +272,69 @@ owner-set authorization controls and were left exactly as they are.**
   `completion_reserve` docstring as the source of a 42-window cap-policy
   measurement, is **not present in this repository**. That citation is
   unverifiable from this tree.
+
+---
+
+## Entry gates: tested, negative, and the family is closed
+
+`replay_gates.py`, 189-window tape, 187 resolved, chronological OOS cut at
+`2026-11-12-0730z` (63 windows). Window-clustered means. Every arm is
+reported against NO-TRADE, which nets exactly zero.
+
+Calibrated *probability* features were already tested and all worsened
+out-of-sample log loss. This tests a different hypothesis class: not what
+the fair price is, but **when to rest at all**. Resting a maker buy at the
+bid should earn half the spread, so a loss of ~4.9c a share is adverse
+selection, not mispricing — the bid gets hit because the bid is about to
+fall.
+
+Gates tested, each suppressing only new placements (cancels and fills are
+untouched, so a gate can never invent an exit): spread width (≥2/3/4
+ticks), a quiet book (mid moved ≤1/2/3c over 20s), early-only, late-only,
+a favorite-price ceiling (0.60/0.70/0.80), and two conjunctions.
+
+**Every one of the 17 arms is negative out of sample.** The least-bad
+positive-looking arm, `SPREAD>=3 AND QUIET<=2c`, is `+$0.0008/window` at
+**t = +0.19** on **6 fills / 0.93 shares across 63 windows** — noise, and
+promoting it would be fitting the tape.
+
+### Why the family is closed, not merely unlucky
+
+Across the 17 arms, selectivity and per-share result are strongly
+**rank-correlated in the wrong direction**:
+
+    Spearman rho(shares traded, net per share) = +0.833   t = +5.84, n = 17
+
+Fewer shares traded goes with a *worse* price per share. Examples:
+
+| arm | shares | net/share |
+|---|---|---|
+| ungated | 108.58 | −0.0487 |
+| SPREAD ≥ 3 | 18.54 | −0.0871 |
+| SPREAD ≥ 4 | 5.49 | −0.1959 |
+| LATE t ≥ 240s | 9.53 | −0.2515 |
+
+Net-per-window shrinks toward zero under a tight gate only because volume
+shrinks, not because the trades got better. The gates are an expensive way
+of approximating no-trade.
+
+The mechanism: **the toxicity is a property of the fill, not of the
+pre-fill state.** A resting maker buy is only reached when the market comes
+down to it, so any state that raises the fill probability is the same state
+in which the price is moving against us. The more selective the filter, the
+more it concentrates on fills that could only have been caused by a real
+move — which is why a wide-spread gate is worse per share, not better.
+Filtering on observable pre-fill state cannot separate "I got filled" from
+"I got filled because I was wrong".
+
+### What this rules in and out
+
+- **Ruled out:** entry-state filters as a route to positive expectancy for
+  $0.51–$0.90 favorite accumulation. Do not re-open this family without a
+  *new observable*, not a new threshold on these.
+- **Not yet testable:** order-book **imbalance and depth**. The quotes tape
+  carries `bid`/`ask` only, no sizes, so queue-ahead and flow imbalance —
+  the one feature class that is about the fill rather than the state — has
+  no data. Closing that gap is a recorder change, not a strategy change.
+- **Unchanged:** no-trade still dominates every measured arm, at every
+  clip, depth, band and gate tested.
