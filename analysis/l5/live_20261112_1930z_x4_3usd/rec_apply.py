@@ -50,7 +50,8 @@ pre = {"sha": dep.get("commitHash") == SHA, "dep_ok": dep.get("status") == "SUCC
        "taker_off": cur.get("L5_TS_COMPLETION_CROSS") == "NO" and cur.get("L5_TAKER_COMPLETION_POLICY") == "NO" and cur.get("L5_DEFENSIVE_COMPLETION") == "0",
        "exposure_cap": cur.get("L5_MAX_TOTAL_EXPOSURE_USD") == "1.00", "cash_cap": cur.get("L5_MAX_CASH_DEPLOYED_USD") == "0.90",
        "deficit_bound": cur.get("L5_MAX_WORST_CASE_DEFICIT_USD") == "1.00", "residual_cap": cur.get("PMUS_RESIDUAL_CAP_K") == "2",   # owner 16:07Z: K=2
-       "daily_halt": cur.get("L5_DAILY_REALIZED_LOSS_HALT_USD") in ("5.00", "10"),
+       # runtime refuses CAMPAIGN_LIMITS_WIDER_THAN_APPROVED unless running halt <= approved daily loss (code cap 5)
+       "daily_halt": D(cur.get("L5_DAILY_REALIZED_LOSS_HALT_USD") or "999") <= D(doc["max_daily_loss_usd"]),
        "opening_leg_one_contract": cur.get("L5_TS_OPENING_LEG_MAX_CONTRACTS") == "1",
        "ceilings": cur.get("L5_TS_MAX_PAIR_COST") == "0.99" and cur.get("L5_TS_COMPLETION_MAX_PAIR") == "0.99" and not cur.get("L5_COMPLETION_PAIR_CEILING"),
        "owner_inventory_settings": cur.get("L5_INVENTORY_RECOVERY") == "ON" and cur.get("L5_DUAL_REPLENISH") == "ON" and cur.get("L5_DUAL_QUOTE") == "ON",
