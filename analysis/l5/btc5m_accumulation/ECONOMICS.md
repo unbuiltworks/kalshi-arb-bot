@@ -1,14 +1,29 @@
-# BTC5m favorite accumulation — diagnosis and expected net economics
+# BTC5m favorite accumulation — diagnosis, and the measured economics
 
 Date: 2026-11-12. Service `l5-btc5m-live` (project `arb-ev-wallet-shadow`).
-Deployed SHA at the time of writing: `ee5f4e8027cedfe5cb6301711e215f3397a42ee4`
+Deployed SHA: `ee5f4e8027cedfe5cb6301711e215f3397a42ee4`
 (branch `integration/l5-safe-release-candidate-20261109`, deployment
 `69acea6a-c051-4c05-baf5-7dd3ea64c755`, 2026-11-12 08:05Z, SUCCESS).
 
-**Nothing in this document is realized money.** No order of this strategy
-has ever filled. The economics below are a replay of the real controller
-over recorded public books, bounded by two fill rules, and the headline is
-not statistically distinguishable from zero.
+**Nothing here is realized money.** No order of this strategy has ever
+filled. The economics below are the shipped controller replayed over 12
+hours of recorded public PMUS books.
+
+## THE HEADLINE
+
+The mechanism was genuinely broken and is now fixed: the policy places
+**8.7 entries a window** where the live service placed **one order in four
+armed windows**.
+
+The policy as specified **loses money** on the recorded tape. Over 142
+resolved windows, net is **-$0.021 a window** and **-$0.0358 a share**
+(-$2.98 in total). **No price-band floor and no clip size tested is
+positive.** The cause is measured, not assumed: a passive buy of the
+favorite at its own bid is filled by flow that knows more than the price
+does, and that costs **3.65 cents a share** -- the favorite wins 60.8% of
+the time against an average price paid of 64.5 cents.
+
+**Recommendation: merge the mechanism fix disarmed; do not arm this policy.**
 
 ---
 
@@ -18,221 +33,240 @@ not statistically distinguishable from zero.
 |---|---|
 | service | `l5-btc5m-live`, restart policy NEVER, one approved window then idle |
 | deployed SHA | `ee5f4e80` |
-| mode | armed transport in the last three windows; **zero fills, ever** |
-| live orders | none |
-| controller entry rule before this change | `EDGE_GATED` |
-| aggregate exposure ceiling | **$0.45** (unchanged by this work) |
+| state now | **idle, `market: null`** -- no window configured, nothing armed |
+| controller entry rule on the service | `EDGE_GATED` (`L5_BTC5M_ENTRY_MODE` is not set) |
+| aggregate exposure ceiling | **$0.45**, unchanged by this work |
+| realized P&L, this strategy, ever | **$0.00 -- no fill has ever occurred** |
 
 ## B. WHY THE OVERNIGHT CAMPAIGN PRODUCED ONE ORDER
 
-From the service's own `L5_BTC5M_START` / `L5_BTC5M_SESSION_REPORT` /
-`L5_BTC5M_STEP` records, 2026-11-12:
+From the service's own `L5_BTC5M_START` / `SESSION_REPORT` / `STEP`
+records, 2026-11-12:
 
 | window | preflight | armed | submitted | filled | what stopped it |
 |---|---|---|---|---|---|
-| 03:45z | FAILED | no | 0 | 0 | `cryptography` / `websockets` absent from the image; every authenticated call raised `ModuleNotFoundError`. 3 decisions recorded as `would_submit`, nothing sent |
-| 05:00z | PASSED | yes | **1** | 0 | the one order of the campaign; cancelled at the close, never filled. Most steps had `bid: null`, i.e. a one-sided book |
-| 06:30z | PASSED | yes | 0 | 0 | **every step `EV_BELOW_MIN`** with `room_usd` ≈ $0.41 of the $0.45 cap unused |
+| 03:45z | FAILED | no | 0 | 0 | `cryptography` / `websockets` absent from the image; every authenticated call raised `ModuleNotFoundError`. 3 decisions recorded `would_submit`, nothing sent |
+| 05:00z | PASSED | yes | **1** | 0 | the one order of the campaign; cancelled at the close, never filled. Most steps had `bid: null` -- a one-sided book |
+| 06:30z | PASSED | yes | 0 | 0 | **every step `EV_BELOW_MIN`** with `room_usd` about $0.41 of the $0.45 cap unused |
 | 08:00z | PASSED | yes | 0 | 0 | same |
 
-Five causes, in order of how much throughput each cost:
+Six causes, in order of throughput cost:
 
 1. **The edge gate was arithmetically unreachable** (primary). An entry was
-   admitted only when `p_side − price − 0.06 ≥ 0.01`. The entry rested
+   admitted only when `p_side - price - 0.06 >= 0.01`. The entry rested
    `depth_ticks = 2` under the favorite's bid and `p_side` came from the
    book mid, so on a one-cent book the test reduces to
-   `half_spread + 0.02 ≥ 0.07`, i.e. the entry had to sit about **seven
+   `half_spread + 0.02 >= 0.07` -- the entry had to sit about **seven
    cents** under the bid. A 5-minute PMUS book does not offer that. The
    06:30z record shows it exactly: entry priced 0.68, qty 0.14, room
    $0.4080, refused.
 2. **One window per deployment.** The runner trades the single window named
-   in `L5_BTC5M_MARKET` and then idles for ever ("never chooses another
-   window"). The "overnight campaign" was therefore four windows of which
-   three were armed — not a night of 5-minute windows.
+   in `L5_BTC5M_MARKET` and then idles for ever. The "overnight campaign"
+   was four windows, three armed -- not a night of 5-minute windows.
 3. **One entry at a time.** `ENTRY_ALREADY_RESTING` vetoed a second entry
-   even with $0.35 of the cap free, so there was no accumulation available
-   even if the gate had passed.
-4. **Resting two ticks under the bid.** Behind the entire visible queue in
-   a 300-second window: the rare fill is the maximally adversely selected
-   one.
-5. **The eligible band was judged on the touch, not on the price paid.** A
+   with $0.35 of the cap free.
+4. **Resting two ticks under the bid** -- behind the entire visible queue in
+   a 300-second window.
+5. **The eligible band was judged on the touch, not the price paid.** A
    touch of 0.52 paid 0.50 and was admitted; a touch of 0.91 paid 0.89 and
-   was refused. The contract speaks about the price paid.
+   was refused.
+6. **A second identical clip hashed to the same client order id** and was
+   refused `DUPLICATE_INTENT`. Found by the new acceptance tests, not by
+   reading; accumulation could not have worked without fixing it.
 
-A sixth, hidden in the executor rather than the controller, was found by
-the new acceptance tests: a second identical clip hashed to the **same**
-client order id and was refused `DUPLICATE_INTENT`. Accumulation could not
-have worked without fixing the order identity (see `coid(..., slot=)`).
+Causes 1 and 3-6 are fixed. Cause 2 is untouched: extending one window into
+recurring trading is not a code decision.
 
 ## C. WHAT CHANGED
 
 `src/l5_btc5m_controller.py` gains a second entry rule, `ACCUMULATE`,
-selected by `L5_BTC5M_ENTRY_MODE`. Unset — the shipped default — keeps
-`EDGE_GATED` byte-for-byte, and the 506 pre-existing BTC5m tests pass
-unchanged. In `ACCUMULATE`:
+selected by `L5_BTC5M_ENTRY_MODE`. Unset -- the shipped default -- keeps
+`EDGE_GATED` unchanged, and the 506 pre-existing BTC5m tests pass
+untouched. In `ACCUMULATE`:
 
 * the entry joins the favorite's own bid (`accumulate_depth_ticks = 0`);
-* eligibility is `$0.51 ≤ price ≤ $0.90` **inclusive, on the price paid**;
+* eligibility is `$0.51 <= price <= $0.90` **inclusive, on the price paid**;
 * there is **no edge gate**; `ev_per_share` is still computed and reported
   on every decision as evidence and blocks nothing;
-* up to `max_resting_entries` clips rest at once
-  (`L5_BTC5M_MAX_RESTING_ENTRIES`, default 2, hard-bounded at 8);
+* up to `max_resting_entries` clips rest at once;
 * a resting entry is requoted on **any** tick of drift from the bid;
-* `hedge_enabled = False` and `reserve_mode = "NONE"`: no completing order,
-  no pair formation, no L5 replication, and the whole $0.45 is available to
-  entries rather than part of it being reserved for a completion;
-* adding to a side stops the moment it is no longer the favorite, and
-  anything resting on the other side is cancelled.
+* `hedge_enabled = False`, `reserve_mode = "NONE"`: no completing order, no
+  pair formation, no L5 replication, and the whole $0.45 is available to
+  entries;
+* adding to a side stops the moment it is no longer the favorite.
 
 Unchanged and still binding in both modes: the $0.45 aggregate ceiling, the
-account-wide cap, the shared halts, the watchdog halt record, startup
-reconciliation, the arm token, and the per-order authorization claim.
-Maker-only; taker remains disabled.
+account-wide cap, both shared halts, the watchdog halt record, startup
+reconciliation, the arm token, the per-order authorization claim.
+Maker-only; taker disabled.
 
-## D. EXPECTED NET ECONOMICS
+## D. THE MEASURED ECONOMICS
 
-**Method.** The real `l5_btc5m_controller.decide` in `ACCUMULATE` mode,
-$0.45 cap, $0.10 clip, stepped every 5 s to the 270 s entry deadline, over
-36 recorded PMUS BTC5m windows (09:00Z–11:55Z, 2026-11-12, 4,976 public
-quotes from service `l5-btc5m-public-recorder`); 34 windows resolved from
-the venue's own terminal quote. Script: `replay.py`; output:
-`replay_output_20261112.txt`; tape: `pmus_btc5m_quotes_20261112.jsonl`.
+**Method.** The real `l5_btc5m_controller.decide` in `ACCUMULATE`, $0.45
+cap, $0.10 clip, stepped every 5 s to the 270 s entry deadline, over **144
+recorded PMUS BTC5m windows (00:00Z-11:55Z, 2026-11-12, 20,900 public
+quotes** from service `l5-btc5m-public-recorder`); **142 resolved** from the
+venue's own terminal quote. Outcomes are balanced: **65 UP, 77 DOWN**.
+Script `replay.py`, output `replay_output_20261112.txt`, tape
+`pmus_btc5m_quotes_20261112.jsonl`.
 
-**Fills are bounded, not estimated.** The tape carries quotes only — no
-prints, no depth — so a maker fill cannot be observed. Two rules, reported
-side by side and never averaged:
-
-* **ADVERSE** — filled when the side's own bid falls *below* our price. We
-  are filled exactly as what we just bought gets cheaper.
-* **FAVOURED** — ADVERSE plus filled when the bid *stays* at our price for
-  10 s. Assumes front of queue; an explicit upper bound.
+**Fills are bounded, not estimated.** The tape is quotes only -- no prints,
+no depth -- so a maker fill cannot be observed. Two rules, reported side by
+side and never averaged: **ADVERSE** (filled when the side's own bid falls
+*below* our price -- we are filled as what we bought gets cheaper) and
+**FAVOURED** (ADVERSE plus filled when the bid *stays* at our price 10 s,
+assuming front of queue; an explicit upper bound).
 
 **Fees.** Maker commission is **zero**, read back from the venue
-(`commissionNotionalTotalCollected` = 0.0000 on every order of the
-overnight campaign), not assumed. Carried through the arithmetic anyway.
+(`commissionNotionalTotalCollected` = 0.0000 on every order of the overnight
+campaign), not assumed. Carried through the arithmetic anyway.
 
-### Net by entry-price bucket (ADVERSE rule)
+### Net by entry-price bucket (ADVERSE, 142 windows)
 
 | price paid | fills | shares | paid $ | win rate | breakeven | adv. sel./share | net $ |
 |---|---|---|---|---|---|---|---|
-| 0.51–0.54 | 18 | 3.34 | 1.7507 | 0.278 | 0.524 | **−0.2457** | **−0.8207** |
-| 0.55–0.59 | 25 | 4.24 | 2.4146 | 0.802 | 0.569 | +0.2324 | +0.9854 |
-| 0.60–0.64 | 19 | 2.98 | 1.8338 | 0.577 | 0.615 | −0.0382 | −0.1138 |
-| 0.65–0.69 | 20 | 2.85 | 1.9298 | 0.800 | 0.677 | +0.1229 | +0.3502 |
-| 0.70–0.74 | 11 | 1.51 | 1.0743 | 0.907 | 0.711 | +0.1958 | +0.2957 |
-| 0.75–0.79 | 10 | 1.24 | 0.9529 | 0.806 | 0.768 | +0.0380 | +0.0471 |
-| 0.80–0.84 | 17 | 2.02 | 1.6452 | 0.941 | 0.814 | +0.1261 | +0.2548 |
-| 0.85–0.89 | 6 | 0.66 | 0.5786 | 1.000 | 0.877 | +0.1233 | +0.0814 |
-| 0.90 | 1 | 0.11 | 0.0990 | 1.000 | 0.900 | +0.1000 | +0.0110 |
-| **all** | **127** | **18.95** | **12.2789** | **0.706** | **0.648** | **+0.0576** | **+1.0911** |
+| 0.51-0.54 | 90 | 16.71 | 8.7477 | 0.446 | 0.524 | -0.0771 | **-1.2877** |
+| 0.55-0.59 | 91 | 15.57 | 8.8214 | 0.514 | 0.567 | -0.0528 | -0.8214 |
+| 0.60-0.64 | 88 | 13.78 | 8.5134 | 0.612 | 0.618 | -0.0053 | -0.0734 |
+| 0.65-0.69 | 73 | 10.55 | 7.0565 | 0.699 | 0.669 | +0.0297 | +0.3135 |
+| 0.70-0.74 | 61 | 8.19 | 5.8879 | 0.741 | 0.719 | +0.0222 | +0.1821 |
+| 0.75-0.79 | 54 | 6.74 | 5.1753 | 0.610 | 0.768 | -0.1581 | -1.0653 |
+| 0.80-0.84 | 48 | 5.69 | 4.6404 | 0.852 | 0.816 | +0.0368 | +0.2096 |
+| 0.85-0.89 | 37 | 4.07 | 3.5376 | 0.784 | 0.869 | -0.0854 | -0.3476 |
+| 0.90 | 2 | 0.22 | 0.1980 | 0.500 | 0.900 | -0.4000 | -0.0880 |
+| **all** | **544** | **81.52** | **52.5782** | **0.608** | **0.645** | **-0.0365** | **-2.9782** |
 
-FAVOURED gives +$0.7917 over the same windows (+$0.0417/share). The truth
-is between the two and nearer ADVERSE.
+Aggregated into wider bands, with standard errors:
 
-### Throughput and capital
+| band | fills | net/share | s.e. | t |
+|---|---|---|---|---|
+| 0.51-0.59 | 181 | -0.0649 | 0.0372 | -1.75 |
+| 0.60-0.69 | 161 | +0.0108 | 0.0374 | +0.29 |
+| 0.70-0.79 | 115 | -0.0641 | 0.0442 | -1.45 |
+| 0.80-0.90 | 87 | -0.0244 | 0.0422 | -0.58 |
 
-| | ADVERSE |
-|---|---|
-| entries placed | 288 over 34 windows (**8.5 per window**, against 1 order in 4 armed windows live) |
-| fill rate | 44.1% of placements |
-| capital filled per window | mean $0.361, max $0.395 of the $0.45 cap |
-| binding constraint | `NO_EXPOSURE_ROOM` on 712 of ~1,770 decisions — **the cap, not the opportunity** |
-| other refusals | `OUT_OF_BAND` 419, `BOOK_UNUSABLE` 263, `BOOK_STALE` 83, `MAX_RESTING_ENTRIES` 5 |
+**No band is significantly positive.** The only positive point estimate
+(0.60-0.69) has t = +0.29.
 
-`BOOK_STALE` is an artefact of the replay, not of production: the tape is
-sampled every ~2 s and the replay ages each quote to the step it is used
-at, while live the runner reads the book itself and reports the fetch
-round-trip as the age. `BOOK_UNUSABLE` is real — a one-sided book, with no
-bid, which the live 05:00z window showed for most of its steps.
-
-### The honest uncertainty
+### Totals and uncertainty
 
 | quantity | estimate | s.e. | t | 95% CI |
 |---|---|---|---|---|
-| net per window | **+$0.0321** | 0.0319 | **1.01** | **[−$0.031, +$0.095]** |
-| net per filled share | +$0.0672 | 0.0369 | 1.82 | [−$0.005, +$0.140] |
+| net per window | **-$0.0210** | 0.0183 | -1.15 | [-$0.057, +$0.015] |
+| net per filled share | **-$0.0358** | 0.0202 | -1.77 | [-$0.075, +$0.004] |
 
-**Profitability is not established.** The per-window mean is one standard
-error from zero. Two further reasons not to read the headline as an edge:
+Median per window is **+$0.070** while the mean is **-$0.021**: 78 winning
+windows against 62 losing ones, with the losses larger. That left skew is
+the signature of collecting small amounts and occasionally paying a lot --
+what a passive bid on a directional instrument earns.
 
-1. **The sample is directionally biased.** 24 of the 34 windows settled
-   DOWN. BTC fell through this 3-hour block, and "the favorite keeps
-   winning" flatters a trending tape. A mean-reverting block would do the
-   opposite to the same policy.
-2. **The band-floor sweep is non-monotone**, which is the signature of
-   noise, not structure: net/window is +0.0321 at a $0.51 floor, +0.0766 at
-   $0.55, **+0.0052** at $0.60, +0.0301 at $0.65, +0.0339 at $0.70,
-   +0.0183 at $0.75. Nothing here supports choosing a floor, and picking
-   $0.55 because it prints best on 34 windows would be fitting noise.
+### Throughput and capital
 
-What the sample *does* support, because it is a large effect on the full
-set rather than a bucket difference:
+| | |
+|---|---|
+| entries placed | 1,256 over 142 windows -- **8.7 a window**, against 1 order in 4 armed windows live |
+| fill rate | 43.3% |
+| binding constraint | `NO_EXPOSURE_ROOM` on 2,125 decisions -- the **cap**, not the opportunity |
+| other refusals | `OUT_OF_BAND` 941, `BOOK_UNUSABLE` 1,018, `BOOK_STALE` 83, `MAX_RESTING_ENTRIES` 10 |
 
-* **The $0.06 adverse-selection penalty the old gate charged is not
-  visible.** Measured over all 127 fills, the favorite bought at the bid
-  won *more* often than its price implied (+$0.058/share, ADVERSE). The
-  parameter that blocked every order overnight was borrowed from a
-  15-minute proxy and this 5-minute evidence does not reproduce it. It is
-  right that it no longer gates entry; it is reported instead.
-* **The bucket adjacent to the coin flip is the worst one** (0.51–0.54:
-  win rate 0.278 against 0.524 paid, −$0.82 of a +$1.09 total, on 18
-  fills). Mechanistically that is what one expects — near $0.50 the
-  "favorite" carries almost no information and the fill is pure adverse
-  selection — but 18 fills do not settle it.
+`BOOK_STALE` is a replay artefact: the tape is sampled every ~2 s and the
+replay ages each quote to the step it is used at, while live the runner
+reads the book itself and reports the fetch round-trip as the age.
+`BOOK_UNUSABLE` is real -- a one-sided book with no bid, which the live
+05:00z window showed for most of its steps.
 
-Clip size: $0.15–$0.22 replayed slightly better than $0.10 (+$0.053 and
-+$0.056 per window against +$0.032), consistent with fewer, larger clips
-wasting less of a $0.45 cap on requote churn. Also inside the noise.
+### No parameter rescues it
 
-## E. BOTTLENECK
+| band floor | net/window | | clip | net/window |
+|---|---|---|---|---|
+| $0.51 | -$0.0210 | | $0.05 | -$0.0221 |
+| $0.55 | -$0.0148 | | $0.10 | -$0.0210 |
+| $0.60 | -$0.0229 | | $0.15 | -$0.0252 |
+| $0.65 | -$0.0132 | | $0.22 | -$0.0254 |
+| $0.70 | -$0.0121 | | | |
+| $0.75 | -$0.0189 | | | |
 
-Not order count any more — it is **evidence**. 34 windows of one
-contiguous, directionally biased 3-hour block cannot separate this policy
-from zero. The next measurement that changes a GO/BLOCKED decision is a
-**read-only shadow of `ACCUMULATE` over several hundred windows spanning
-both trending and mean-reverting blocks**, recording every decision, its
-price bucket, and the settled outcome. The recorder service that produced
-this tape already runs; the shadow needs no new money path.
+Every one is negative. The sweep is also non-monotone, so none of the
+differences between them is a signal to tune on.
 
-### The next constraint after this change: the submission-class budgets
+### Fill type does not rescue it either
 
-A hard limit this work deliberately did not touch. Every order is charged
-to one of three owner-set budgets (`L5_LIVE_AUTH_MAX_OPEN`,
-`_MAX_COMPLETE`, `_MAX_REPLACE` on `l5-btc5m-live`), by
-`Btc5mExecutor._order_class`: COMPLETE when it buys the side we are short
-of and cannot overshoot the unmatched amount, **REPLACE once an order of
-ours on that side has been cancelled before**, OPEN otherwise.
+Decomposing the FAVOURED tier by how the fill happened:
 
-Accumulation requotes on every tick of drift, so after the first requote
-on a side almost everything is charged to REPLACE. Measured over the same
-34 windows:
+| fill type | fills | win rate | avg price | net/share | t |
+|---|---|---|---|---|---|
+| bid fell through our price | 528 | 0.625 | 0.661 | -0.0365 | -1.77 |
+| bid dwelled at our price 10 s | 22 | 0.682 | 0.709 | -0.0268 | -0.30 |
 
-| class | total placements | per window, mean | per window, max |
+Both negative. There is no subset of fills here that pays.
+
+## E. A CORRECTION TO MY EARLIER READING
+
+On a first 34-window sample (09:00Z-11:55Z only) this replay returned
+**+$0.032 a window** and I reported that the controller's assumed $0.06
+adverse-selection penalty "is not visible". **That was wrong, and the cause
+was the sample.** Those three hours settled 24 DOWN against 10 UP -- BTC
+fell through them -- and a trending tape flatters "the favorite keeps
+winning". Splitting the full tape shows it directly:
+
+| block | windows | UP/DOWN | net per window |
 |---|---|---|---|
-| OPEN | 60 | 1.8 | 4 |
-| COMPLETE | 23 | 0.7 | 5 |
-| **REPLACE** | **205** | **6.0** | **16** |
+| 00:00-04:16 | 51 | 25 / 26, balanced | **-$0.0345** |
+| 09:00-11:55 | 34 | 10 / 24, skewed | **+$0.0321** |
+| whole tape | 142 | 65 / 77 | **-$0.0210** |
 
-So **REPLACE is the budget that binds**, not OPEN — 205 of 288 placements.
+The adverse selection the old gate charged was **directionally right** --
+measured at **-3.65 cents a share**, against the 6 cents it assumed. What
+was wrong with the gate was its *calibration against a book-derived
+probability*: comparing `mid` to a price two ticks under the bid made the
+test unreachable rather than merely strict. Removing it as a mandatory
+condition was still the right change, because a gate that can never pass is
+not a risk control. But the cost it was pointing at is real.
+
+## F. ONE BOTTLENECK
+
+Not order count, and no longer evidence volume. It is **the entry price**.
+A post-only buy of the favorite at its own bid is, on this venue and this
+instrument, filled by better-informed flow at a cost of about 3.6 cents a
+share, and nothing in the specified policy pays for that. To be profitable
+the policy needs a probability estimate **independent of the book** -- the
+venue index, which `l5_btc_reference` already supplies to the live runner
+and which is *not* in this quote tape -- so that
+`p_side - price - adverse selection` is a real test rather than a
+restatement of the price. That is a hypothesis. It is not tested here,
+because this tape cannot test it.
+
+## G. THE NEXT CONSTRAINT IF IT IS EVER ARMED: REPLACE, NOT OPEN
+
+Every order is charged to one of three owner-set budgets
+(`L5_LIVE_AUTH_MAX_OPEN` / `_COMPLETE` / `_REPLACE`), and
+`Btc5mExecutor._order_class` charges it to **REPLACE** once an order of
+ours on that side has been cancelled before. Accumulation requotes on every
+tick of drift, so after the first requote almost everything is a REPLACE:
+
+| class | total | per window, mean | per window, max |
+|---|---|---|---|
+| OPEN | 246 | 1.7 | 4 |
+| COMPLETE | 138 | 1.0 | 12 |
+| **REPLACE** | **872** | **6.1** | **23** |
+
 If `L5_LIVE_AUTH_MAX_REPLACE` is sized for the old one-entry pair strategy
 it will stall accumulation after the first requote whatever the controller
-decides, and the symptom will be `AUTHORIZATION:...` refusals rather than
-an entry reason. The current values are not readable from this session.
+decides, and the symptom will be an `AUTHORIZATION:...` refusal rather than
+an entry reason. The values are not readable from this session. **These are
+owner-set authorization controls and were left exactly as they are.**
 
-**These are owner-set authorization controls and were left exactly as they
-are.** Sizing them is an owner decision, and the figures above are what it
-needs: per window, roughly 4 OPEN, 5 COMPLETE and 16 REPLACE covers the
-worst window in the sample at a $0.10 clip. A larger clip lowers all three
-(see the clip sweep).
+## H. WHAT IS NOT CLAIMED
 
-## F. WHAT IS NOT CLAIMED
-
-* No fill, no settlement, no realized P&L for this strategy — ever.
+* No fill, no settlement, no realized P&L for this strategy -- ever.
 * The replay's fills are bounds from a quote tape, not observed fills.
-* Queue position is unobservable from public data and is not modelled.
-* The band floor, the clip size and the resting limit are **not** tuned
-  here; the shipped defaults are the owner's contract values.
+  Queue position is unobservable from public data and is not modelled.
+* 12 hours of one day is not a regime sample. The negative result holds in
+  both the balanced and the trending block of it, but a longer tape could
+  move the magnitude.
+* The band floor, clip size and resting limit are **not** tuned; the
+  shipped defaults are the owner's contract values.
 * `analysis/l5/btc5m_cap_policy_replay.py`, cited in the controller's
-  `completion_reserve` docstring as the source of the 42-window cap-policy
-  measurement, is **not present in the repository**. That citation is
+  `completion_reserve` docstring as the source of a 42-window cap-policy
+  measurement, is **not present in this repository**. That citation is
   unverifiable from this tree.
