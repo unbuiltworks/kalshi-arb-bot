@@ -1,0 +1,15 @@
+BTC5m live deploy trigger.
+
+This file is the ONLY watchPattern of the l5-btc5m-live service, so writing
+to it is what ships the image. Nothing else in this repository can cause a
+deploy of a money-capable service.
+
+2026-11-12T14:53Z  owner-instructed deploy of the favorite-accumulation
+                   campaign. Integration 8c2d7a5fb (PR #232 merged after a
+                   full-suite parity check: 34 failed / 14 errors, failure
+                   IDs byte-identical to the accepted baseline, zero in any
+                   BTC5m module, 21259 passed).
+                   Armed by the owner's instruction for the four windows
+                   15:10Z, 15:15Z, 15:20Z, 15:25Z, nonce
+                   b5m-f5e46a866f1979ffe761901a, $0.45 aggregate exposure,
+                   $1.00 daily loss. Maker-only; taker disabled.
