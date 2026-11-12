@@ -135,9 +135,20 @@ class AuthBook:
     """Live authenticated book for the BTC15m windows, on a daemon thread."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time,
-                 lead_s: float = LEAD_S) -> None:
+                 lead_s: float = LEAD_S,
+                 slugs_fn: Optional[Callable[[float, float],
+                                             List[str]]] = None) -> None:
         self.clock = clock
         self.lead_s = lead_s
+        #: WHICH SLUGS THIS FEED SUBSCRIBES, as (now, lead_s) -> [slug].
+        #: Defaults to the 15-minute `wanted_slugs`, so every existing
+        #: caller is unchanged. The fold below -- ingest, snapshot, stall
+        #: detection, resubscription -- reads no window length and is
+        #: series-agnostic; only slug SELECTION is series-specific, which
+        #: is why this is the one thing that needed injecting. BTC5m
+        #: supplies a 5-minute selector so its preflight has the same
+        #: authenticated-socket fallback BTC15m already relies on.
+        self.slugs_fn = slugs_fn or wanted_slugs
         self.lock = threading.Lock()
         self.state: Dict[str, dict] = {}
         self.first_book: Dict[str, float] = {}
@@ -494,12 +505,12 @@ class AuthBook:
                     self.connects += 1
                     self.subscribed = []
                     backoff = 1.0
-                    await self._subscribe(ws, wanted_slugs(self.clock(),
-                                                           self.lead_s))
+                    await self._subscribe(ws, self.slugs_fn(self.clock(),
+                                                            self.lead_s))
                     last_hb = time.monotonic()
                     while not self._stop:
-                        want = [s for s in wanted_slugs(self.clock(),
-                                                        self.lead_s)
+                        want = [s for s in self.slugs_fn(self.clock(),
+                                                         self.lead_s)
                                 if s not in self.subscribed]
                         if want:
                             if len(self.subscribed) + len(want) > MAX_SUBSCRIBED:
