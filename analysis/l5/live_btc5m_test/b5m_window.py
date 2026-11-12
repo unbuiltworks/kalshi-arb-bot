@@ -41,7 +41,36 @@ def checks(slug):
     if m.get("slug") != slug or t.get("windowStart") != ws.strftime("%Y-%m-%dT%H:%M:%SZ") or t.get("indexSymbol") != "BRTI": bad.append("MARKET_IDENTITY")
     return {"ok": not bad, "fail": bad, "room": str(room), "lead_s": round(lead), "window_start": ws.isoformat()}
 
-def arm(slug):
+# ---- overnight campaign (owner approval required before any campaign arm) ----
+CAMPAIGN_FILE = "campaign_overnight_20261112.json"
+def campaign():
+    return json.load(open(CAMPAIGN_FILE))
+
+def campaign_cap(slug):
+    """Cap for SLUG under the campaign: min(window cap, room - fee reserve).
+    Refuses (None, reason) when the slug is not approved, the campaign is not
+    approved, a prior armed window is not venue-settled/reconciled, or the
+    room is below the minimum. Never raises a cap."""
+    c = campaign()
+    if not c.get("owner_approved"): return None, "CAMPAIGN_NOT_APPROVED"
+    if slug not in c["windows"]: return None, "SLUG_NOT_IN_CAMPAIGN"
+    if slug in c.get("results", {}): return None, "WINDOW_ALREADY_RUN"
+    net = D(0)
+    for w in c["windows"]:
+        if w == slug: break
+        r = c.get("results", {}).get(w)
+        if r is None: continue                       # skipped, never armed
+        if r.get("status") != "SETTLED" or r.get("settled_net_usd") is None:
+            return None, "PRIOR_WINDOW_UNRECONCILED:%s" % w
+        net += D(r["settled_net_usd"])
+    room = D(c["max_campaign_loss_usd"]) + min(D(0), net)
+    cap = min(D(c["max_window_exposure_usd"]), room - D(c["fee_reserve_usd"]))
+    if cap < D(c["min_window_cap_usd"]): return None, "CAMPAIGN_ROOM:%s" % room
+    return cap.quantize(D("0.01")), "OK"
+
+def arm(slug, cap=None):
+    global CAP
+    if cap is not None: CAP = str(cap)
     ck = checks(slug); print(json.dumps(ck))
     if not ck["ok"]:
         print("NOT ARMED"); return 1
@@ -65,5 +94,13 @@ def restore():
     vals = {"L5_SHADOW_ONLY": "1", "L5_LIVE_HALT": "1", **{k: "" for k in WINDOW_VARS}}
     print(b5(write=vals).set_variables(vals)); return 0
 
+def arm_campaign(slug):
+    cap, why = campaign_cap(slug); print(json.dumps({"campaign_cap": str(cap), "why": why}))
+    if cap is None:
+        print("NOT ARMED (campaign)"); return 1
+    return arm(slug, cap)
+
 if __name__ == "__main__":
+    if sys.argv[1] == "arm-campaign": sys.exit(arm_campaign(sys.argv[2]))
+    if sys.argv[1] == "campaign-cap": print(campaign_cap(sys.argv[2])); sys.exit(0)
     sys.exit(arm(sys.argv[2]) if sys.argv[1] == "arm" else restore() if sys.argv[1] == "restore" else (print(json.dumps(checks(sys.argv[2]))) or 0))

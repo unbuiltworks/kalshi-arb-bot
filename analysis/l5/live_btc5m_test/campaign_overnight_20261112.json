@@ -1,0 +1,15 @@
+{
+ "campaign": "btc5m-overnight-20261112",
+ "owner_approved": false,
+ "windows": [
+  "cpc-btc-updown-5m-2026-11-12-0500z",
+  "cpc-btc-updown-5m-2026-11-12-0630z",
+  "cpc-btc-updown-5m-2026-11-12-0800z"
+ ],
+ "max_window_exposure_usd": "0.45",
+ "max_campaign_loss_usd": "1.35",
+ "fee_reserve_usd": "0.02",
+ "min_window_cap_usd": "0.10",
+ "approved_sha": "9de1e1189a4f158a2cacccd8ef596112bab86da5",
+ "results": {}
+}
