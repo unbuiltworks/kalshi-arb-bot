@@ -85,3 +85,37 @@ def verified_pair_net(first_fill: Mapping, opposite_fill: Mapping, market: str):
     if second["timestamp"] < first["timestamp"]:
         raise Unscorable("complement predates first fill")
     return first["qty"] * (Decimal(1) - first["price"] - second["price"]) - first["fee"] - second["fee"]
+
+
+def verified_partial_completion(first_fill: Mapping, opposite_fill: Mapping,
+                                settlement: Mapping, market: str):
+    """Net of an authenticated partial complement plus settled residual.
+
+    Both venue fills must be observed. The first-fill fee is attributed
+    proportionally to matched and residual lots; no modeled fill is credited.
+    The result is only realized once the residual has venue settlement.
+    """
+    first = verified_first_fill(first_fill, market)
+    second = verified_first_fill(opposite_fill, market)
+    if first["side"] == second["side"]:
+        raise Unscorable("complement is same side")
+    if first["fill_id"] == second["fill_id"] or first["order_id"] == second["order_id"]:
+        raise Unscorable("duplicate venue identity")
+    if second["timestamp"] < first["timestamp"]:
+        raise Unscorable("complement predates first fill")
+    if second["qty"] > first["qty"]:
+        raise Unscorable("complement exceeds first lot")
+    if settlement.get("market") != market or settlement.get("winner") not in ("UP", "DOWN"):
+        raise Unscorable("missing settlement winner")
+    if not isinstance(settlement.get("settlement_id"), str) or not settlement["settlement_id"].strip():
+        raise Unscorable("missing settlement id")
+    matched = second["qty"]
+    residual = first["qty"] - matched
+    first_matched_fee = first["fee"] * matched / first["qty"]
+    first_residual_fee = first["fee"] - first_matched_fee
+    matched_net = matched * (Decimal(1) - first["price"] - second["price"]) - first_matched_fee - second["fee"]
+    payout = Decimal(1) if settlement["winner"] == first["side"] else Decimal(0)
+    residual_net = residual * (payout - first["price"]) - first_residual_fee
+    return {"matched_qty": matched, "residual_qty": residual,
+            "matched_net": matched_net, "residual_net": residual_net,
+            "total_net": matched_net + residual_net}
