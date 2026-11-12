@@ -7025,6 +7025,171 @@ class FaithfulExecutor:
             return "STATE_UNREADABLE:%s" % type(exc).__name__
         return None
 
+    # ================================ THE CONTINUOUS INVENTORY CONTROLLER
+    #
+    # `l5_continuous_inventory.decide_pass` decides; the runner's continuous
+    # pass hands each PLACE to `handle(None, ..., controller=...)` with the
+    # intent attached under `continuous`; these three methods adopt it at
+    # the one seam where the two-sided branch would otherwise have chosen a
+    # leg from a frozen plan. They add no gate that is not already applied
+    # downstream and remove none: every check here REFUSES, none permits.
+
+    @staticmethod
+    def continuous_pass_intent(controller: Optional[Mapping[str, Any]]
+                               ) -> Optional[Mapping[str, Any]]:
+        """The continuous pass's PLACE intent, or None. None unless the
+        switch is exactly YES and the caller attached one."""
+        if controller is None or not continuous_inventory_enabled():
+            return None
+        c = controller.get("continuous")
+        if not isinstance(c, Mapping) or str(c.get("kind")) != "PLACE":
+            return None
+        return c
+
+    def continuous_claim_slot(self, market: str, side: str) -> Optional[int]:
+        """The first (round, side) claim this market has not spent, or None.
+
+        THE EXISTING CLAIM, REUSED. Every continuous placement is claimed
+        through `claim_accumulation_leg` at attempt zero of the first round
+        whose `side` leg is unclaimed, so each one consumes its own durable,
+        fsynced, never-reset slot -- and the total per side per window stays
+        bounded by `L5_ACC_MAX_ROUNDS`, which nothing here raises. Unreadable
+        is None: refuse rather than guess.
+        """
+        from src import l5_live_authorization as AUTH
+        try:
+            exp = AUTH.experiment_id()
+            for r in range(int(self.acc_max_rounds())):
+                if not AUTH.claim_held(AUTH.accumulation_sid(
+                        exp, str(market), r, str(side).upper(), 0)):
+                    return r
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        return None
+
+    def continuous_slots_left(self, market: str, side: str) -> int:
+        """How many claim slots this side still has. Unreadable is 0."""
+        from src import l5_live_authorization as AUTH
+        try:
+            exp = AUTH.experiment_id()
+            return sum(1 for r in range(int(self.acc_max_rounds()))
+                       if not AUTH.claim_held(AUTH.accumulation_sid(
+                           exp, str(market), r, str(side).upper(), 0)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return 0
+
+    def continuous_adopt(self, market: str, cip: Mapping[str, Any],
+                         dec: Dict[str, Any], tr: Mapping[str, Any],
+                         authenticated: Mapping[str, Any], prov: Any
+                         ) -> Dict[str, Any]:
+        """Re-verify a continuous intent against durable state and adopt it.
+
+        Re-checked HERE, on the executor's own clock and ledger, because the
+        pass decided a moment ago and a fill may have landed since:
+
+          * the window clock: an opening intent needs `may_enter`, a
+            completion `may_complete` -- the same two deadlines the round
+            path enforces;
+          * a COMPLETE must still reduce the REALIZED residual and must not
+            reverse it, and average held cost + price must be <= the hard
+            completion ceiling PER CONTRACT (PR #218 / #219);
+          * the price must rest: post-only, never at or through the far
+            touch, so no taker order can come from this path;
+          * a claim slot must exist.
+        """
+        from src import l5_continuous_inventory as CI
+        try:
+            side = str(cip.get("side")).upper()
+            price = D(str(cip.get("price")))
+            qty = D(str(cip.get("qty")))
+            intent = str(cip.get("intent") or "")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False, "reason": "CONTINUOUS_INTENT_UNREADABLE"}
+        if side not in (UP, DOWN) or not price.is_finite() or \
+                not qty.is_finite() or price <= 0 or qty <= 0:
+            return {"ok": False, "reason": "CONTINUOUS_INTENT_UNREADABLE"}
+        try:
+            from src import l5_pmus_auth_book as _AB
+            ws = _AB.slug_start(market)
+        except BaseException:                                  # noqa: BLE001
+            ws = None
+        if ws is None:
+            return {"ok": False, "reason": "WINDOW_START_UNKNOWN"}
+        tnow = float(self._now().timestamp())
+        late = (TS.may_complete(tnow, float(ws), float(ws) + TS.WINDOW_S)
+                if intent == CI.COMPLETE
+                else TS.may_enter(tnow, float(ws), float(ws) + TS.WINDOW_S))
+        if late:
+            return {"ok": False, "reason": late}
+        try:
+            up = self.store.position(market, UP)
+            dn = self.store.position(market, DOWN)
+            lc = self.store.leg_cost(market)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False, "reason": "INVENTORY_UNREADABLE"}
+        resid = up - dn
+        basis = None
+        if intent == CI.COMPLETE:
+            held = UP if resid > 0 else DOWN if resid < 0 else None
+            if held is None or side == held:
+                return {"ok": False, "reason": "COMPLETE_NOT_REDUCING"}
+            if qty > abs(resid):
+                return {"ok": False, "reason": "COMPLETE_WOULD_REVERSE"}
+            hq = up if held == UP else dn
+            hc = D(str(lc.get(held, 0)))
+            if hq <= 0 or hc <= 0:
+                return {"ok": False, "reason": "HELD_COST_UNKNOWN"}
+            basis = hc / hq
+            if basis + price + CI.maker_fee_per_contract() > \
+                    TS.completion_pair_ceiling():
+                return {"ok": False,
+                        "reason": "COMPLETION_ABOVE_HARD_CEILING"}
+        elif intent in (CI.OPEN, CI.REPLENISH) and resid != 0:
+            return {"ok": False, "reason": "OPEN_NOT_FLAT"}
+        book = self.ts_authenticated_book(market, authenticated) or {}
+        try:
+            b, a = D(str(book.get("bid"))), D(str(book.get("ask")))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False, "reason": "BOOK_UNREADABLE"}
+        far = a if side == UP else (D(1) - b)
+        if price >= far:
+            return {"ok": False, "reason": "WOULD_CROSS:%s" % side}
+        inc = venue_quantity_increment(self.transport)
+        if inc is not None:
+            qty = floor_to_increment(qty, inc)
+        if qty <= 0:
+            return {"ok": False, "reason": "QUANTITY_BELOW_MIN_INCREMENT"}
+        slot = self.continuous_claim_slot(market, side)
+        if slot is None:
+            return {"ok": False, "reason": "CONTINUOUS_CLAIM_SLOTS_EXHAUSTED"}
+        dec["side"] = side
+        self._probe_leg_pending = side
+        self._probe_round_pending = slot
+        self._continuous_key_pending = CI.action_key(
+            market, side, price,
+            epoch="%s|s%d" % (CI.inventory_epoch(up, dn), int(slot)))
+        prov.stage("CONTINUOUS_INVENTORY", {
+            "intent": intent, "side": side, "price": str(price),
+            "qty": str(qty), "claim_slot": int(slot),
+            "basis": None if basis is None else str(basis),
+            "realized": {"UP": str(up), "DOWN": str(dn)},
+            "pass_reason": cip.get("reason"),
+            "labels": ("decided by l5_continuous_inventory.decide_pass from "
+                       "the current book and durable inventory; every gate "
+                       "below still runs on this order")})
+        new_tr = dict(tr, ok=True, mode=FT.MAKER, price=price, qty=qty)
+        return {"ok": True, "tr": new_tr, "executable": qty}
+
     def probe_leg_order(self, market: str, legs: Mapping[str, Any],
                         cheapest_first: Sequence[str]) -> List[str]:
         """Which leg to offer next: the one that REDUCES a held residual.
@@ -9596,6 +9761,9 @@ class FaithfulExecutor:
         # set and consumed within one `handle()`.
         self._probe_leg_pending = None
         self._probe_round_pending = None
+        # the continuous controller's derived key is the same kind of
+        # per-call scratch, and is cleared for the same reason.
+        self._continuous_key_pending = None
 
         # A CONTROLLER DECISION WHOSE NUMBERS CANNOT BE READ, refused here
         # rather than where it was detected: the reset above must precede
@@ -9824,7 +9992,27 @@ class FaithfulExecutor:
             return prov.refuse("SAFETY_OVERLAY",
                                "CONFLICTING_EXPERIMENTS_TS_AND_QM")
 
-        if TS.active(market):
+        # ============ THE CONTINUOUS INVENTORY CONTROLLER'S OWN INTENT
+        #
+        # Only when L5_TS_CONTINUOUS_INVENTORY is exactly YES AND the caller
+        # is the runner's continuous pass (it alone attaches `continuous`).
+        # Then the order was already decided by
+        # `l5_continuous_inventory.decide_pass` from the current book and
+        # the durable inventory, and the frozen-plan round machinery below
+        # is not consulted. Everything AFTER this branch -- the strategy
+        # ownership gate, the validation gates, the safety overlay, the
+        # residual cap, the claim, reconciliation and the wire -- runs on
+        # this order exactly as it runs on a round leg. Default OFF: with
+        # the switch unset `_cip` is None and this is the old `if`.
+        _cip = self.continuous_pass_intent(controller)
+        if _cip is not None and TS.active(market):
+            _cia = self.continuous_adopt(market, _cip, dec, tr,
+                                         authenticated, prov)
+            if not _cia.get("ok"):
+                return prov.refuse("CONTINUOUS_INVENTORY",
+                                   str(_cia.get("reason"))[:120])
+            tr, executable = _cia["tr"], _cia["executable"]
+        elif TS.active(market):
             # THE PLACEMENT CUTOFF, ACTUALLY ENFORCED. may_place() existed
             # and had no call site; an audit is right that a constant nobody
             # calls is not a deadline. A leg placed too late cannot be
@@ -11014,7 +11202,16 @@ class FaithfulExecutor:
             # the intended behavioural change, and every gate between the
             # decision and this line has already run on the order itself --
             # so moving the key does not move a gate.
-            if continuous_inventory_enabled():
+            if continuous_inventory_enabled() and getattr(
+                    self, "_continuous_key_pending", None):
+                # THE CONTINUOUS PASS'S OWN KEY, derived in
+                # `continuous_adopt` from (market, side, price), the
+                # realized-inventory epoch and the claim slot this order is
+                # about to consume -- so a replay of THIS placement is
+                # suppressed and a replenishment at an unchanged price after
+                # a fill is a new identity.
+                key = str(self._continuous_key_pending)
+            elif continuous_inventory_enabled():
                 # DERIVED HERE, from the order that is actually about to be
                 # submitted, so no new durable state is introduced and
                 # nothing has to survive a call. `tr` and `dec` are the same
@@ -11483,6 +11680,7 @@ class FaithfulExecutor:
                                    "INTENT_MUTATED_AFTER_GATES")
             self._probe_leg_pending = None
             self._probe_round_pending = None
+            self._continuous_key_pending = None
             # PRE-SUBMISSION CALIBRATION CAPTURE, immediately before the
             # wire and after every gate. Observational only: it holds no
             # transport, cannot refuse, cannot alter `intent`, and swallows

@@ -62,6 +62,13 @@ CONFIGS = collections.OrderedDict([
     ("as_deployed+recycle", dict(WAIVE, **RECYCLE)),
     ("recovery_1.00+recycle", dict(WAIVE, L5_TS_COMPLETION_MAX_PAIR="1.00",
                                    **dict(RECOVERY, **RECYCLE))),
+    # ONE continuous inventory controller (src/l5_continuous_inventory.
+    # decide_pass, wired behind L5_TS_CONTINUOUS_INVENTORY=YES), with
+    # replenishment and inventory recovery on; same 0.98 maker completion
+    # target, same cash, same order limit, same clip as recovery_0.98.
+    ("continuous_wired", dict(WAIVE, L5_TS_COMPLETION_MAX_PAIR="0.98",
+                              L5_TS_CONTINUOUS_INVENTORY="YES",
+                              L5_DUAL_REPLENISH="ON", **RECOVERY)),
 ])
 
 _BOOKS = None
@@ -141,7 +148,9 @@ def replay(rows, env, *, step=2.0, start=7.0, end=600.0, on_submit=None):
             filled[side] = sum(D(h.venue.cum[o]) for o, _ in mine)
             paid[side] = sum(D(h.venue.cum[o]) * D(str(i["price"]))
                              for o, i in mine)
+        fills = sum(1 for o in h.venue.by_oid if D(h.venue.cum[o]) > 0)
         return {"log": log, "sent": h.sent(), "filled": filled, "paid": paid,
+                "fills": fills,
                 "cancelled": len(h.venue.cancelled),
                 "stats": dict(h.r.stats)}
     finally:
