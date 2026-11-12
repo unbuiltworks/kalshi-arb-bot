@@ -839,6 +839,10 @@ class Session:
                                           "other_open_order_contracts",
                                           "other_position_contracts",
                                           "unknown", "unknown_reason")},
+                    #: top-of-book SIZE from the authenticated socket, the
+                    #: only feature class the gate sweep left untested and
+                    #: the one the public tape cannot carry. Observational.
+                    "depth": self.book_depth(),
                     "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
                               ("why", "cap_usd", "completion_reserve_usd",
                                "room_usd", "price", "qty")},
@@ -916,6 +920,54 @@ class Session:
                 else (net_ours == 0 and not rows),
                 "note": ("the venue nets the two outcome tokens; a matched "
                          "pair reads as zero there")}
+
+    def book_depth(self) -> Dict[str, Any]:
+        """SIZE at the top of the authenticated book, for the record only.
+
+        WHY THIS EXISTS. `replay_gates.py` closed the entry-state filter
+        family: across 17 gates, selectivity and per-share result are
+        rank-correlated the WRONG way (rho +0.833, t +5.84) because a
+        resting maker buy is only reached when the market comes down to it,
+        so any state that raises the fill probability is the state in which
+        the price is moving against us. The one feature class that is about
+        the FILL rather than the pre-fill state -- queue ahead of us and
+        order-flow imbalance -- has never been testable, because the
+        PUBLIC market endpoint publishes no size at any level
+        (`btc5m_aligned_recorder.DEPTH_REASON`; depth is null in all 27,425
+        aligned rows). The AUTHENTICATED socket does carry it, and this
+        session already runs that socket for the preflight substitute, so
+        the sizes are reachable at zero extra venue cost -- they were
+        simply never written down.
+
+        STRICTLY OBSERVATIONAL. Nothing reads this but the log. It takes no
+        decision, places no order and cannot fail the step: any error is
+        recorded as a reason and the step proceeds.
+        """
+        #: the INSTANCE DICT, not getattr. The runner assigns
+        #: `t.ws_book = auth_book` itself, so the instance dict is exactly
+        #: where it lives, and reading it directly cannot trip a
+        #: transport's guarded `__getattr__` (the execution fake asserts on
+        #: unexpected attribute access, by design). An observational field
+        #: must not be able to raise through a guard it has no business
+        #: touching.
+        try:
+            bk = vars(self.t).get("ws_book")
+        except BaseException:                                  # noqa: BLE001
+            bk = None
+        if bk is None:
+            return {"read": False, "reason": "NO_AUTH_BOOK"}
+        try:
+            snap = bk.snapshot(self.market)
+        except BaseException as exc:                           # noqa: BLE001
+            return {"read": False, "reason": type(exc).__name__}
+        if not isinstance(snap, Mapping):
+            return {"read": False, "reason": "NO_SNAPSHOT"}
+        out = {"read": True}
+        for k in ("bid", "ask", "bid_shares", "ask_shares", "book_updates",
+                  "stream_age_s", "market_state", "source"):
+            v = snap.get(k)
+            out[k] = None if v is None else str(v)
+        return out
 
     def fees(self) -> Dict[str, Any]:
         """The venue's own commission on each of our orders, read back."""
