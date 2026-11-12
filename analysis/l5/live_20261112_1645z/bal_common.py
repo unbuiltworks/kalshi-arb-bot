@@ -23,7 +23,9 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            "L5_TS_ROUND_ALLOCATIONS": "3",
            # 15:15Z: the replenish ledger spent its credits on 20 s re-prices (REPLENISH_UNPAID x51) and starved
            # both new rounds and the completion re-place; rounds/allocations alone govern openings
-           "L5_DUAL_REPLENISH": "OFF"}
+           "L5_DUAL_REPLENISH": "OFF",
+           # owner 16:17Z "taker on": bounded taker completion of stranded legs (pair <= 1.00, outlay cap L5_TAKER_MAX_OUTLAY_USD=3)
+           "L5_TS_COMPLETION_CROSS": "YES", "L5_TAKER_COMPLETION_POLICY": "YES"}
 TIGHTEN = {"L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "24", "L5_LIVE_AUTH_MAX_COMPLETE": "48", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "140"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",
@@ -33,7 +35,7 @@ RESTORE = {"L5_LIVE_HALT": "1", "L5_SHADOW_ONLY": "1", "L5_LIVE_AUTH_MAX_WINDOWS
            "L5_MAX_LIVE_ORDERS": "4", "L5_TS_CONCURRENT_ROUNDS": "2", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
            "L5_LIVE_AUTH_MAX_OPEN": "140", "L5_LIVE_AUTH_MAX_COMPLETE": "300", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "500",
            "L5_TS_REQUOTE_KEEPS_ROUND": "", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "",
-           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": "", "L5_TS_DEPTH_TICKS": "", "L5_TS_ORDER_TTL_S": "", "L5_TS_ROUND_ALLOCATIONS": "2", "L5_DUAL_REPLENISH": "ON"}
+           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": "", "L5_TS_DEPTH_TICKS": "", "L5_TS_ORDER_TTL_S": "", "L5_TS_ROUND_ALLOCATIONS": "2", "L5_DUAL_REPLENISH": "ON", "L5_TS_COMPLETION_CROSS": "NO", "L5_TAKER_COMPLETION_POLICY": "NO"}
 def client(write=None):
     if write: return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC, allow_writes=True, writable=tuple(write))
     return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC)
