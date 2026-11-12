@@ -92,6 +92,17 @@ class Params:
     taker_allowed: bool = False
     taker_fee_coef: Decimal = D("0.095")
     flip_margin: Decimal = D("0.05")
+    #: How entries keep room for the completing (opposite-side) order.
+    #: "FIXED": entries may not use the last `hedge_reserve_usd` of the cap
+    #: (the original rule; meaningless when the cap is below the reserve).
+    #: "COMPLETION": an entry is placed only if, after it, the cap still
+    #: holds the cost of completing EVERY unmatched share -- held, resting
+    #: on the favorite side, and the new entry -- at the hard pair ceiling,
+    #: plus `completion_fee_per_share`. Shares already resting on the
+    #: completing side are counted once, as resting notional, not reserved
+    #: again. The executor runs in this mode with its effective ceiling.
+    reserve_mode: str = "FIXED"
+    completion_fee_per_share: Decimal = D("0")
 
 
 # --------------------------------------------------------------- readers
@@ -249,6 +260,43 @@ def exposure(inventory: Any, resting: Any) -> Optional[Dict[str, Any]]:
     return _exposure(inv, rest)
 
 
+# ------------------------------------------------------ completion reserve
+
+def completion_reserve(inv: Dict[str, tuple], rest: List[Dict[str, Any]],
+                       params: "Params", add_side: Optional[str] = None,
+                       add_price: Decimal = ZERO, add_qty: Decimal = ZERO
+                       ) -> Dict[str, Any]:
+    """Dollars the cap must still hold to complete every unmatched share.
+
+    Worst case for the reserve: every resting BUY fills (and the optional
+    new order too). The long side is the one with more shares after that;
+    each uncovered share needs one share of the other side at a price no
+    higher than `hard_pair_ceiling - avg long cost` -- the most any hedge
+    the controller can choose may pay, the flipped-favorite case included
+    -- plus the fee allowance. Shares resting on the short side are
+    already in `total_exposure_usd` as resting notional, so they cover their
+    part of the gap and are not reserved a second time.
+    """
+    qty = {s: inv[s][0] for s in SIDES}
+    cost = {s: inv[s][1] for s in SIDES}
+    for o in rest:
+        qty[o["side"]] += o["qty"]
+        cost[o["side"]] += o["qty"] * o["price"]
+    if add_side in SIDES and add_qty > 0:
+        qty[add_side] += add_qty
+        cost[add_side] += add_qty * add_price
+    if qty[UP] == qty[DOWN]:
+        return {"usd": ZERO, "uncovered_qty": ZERO, "long_side": None,
+                "price_bound": None}
+    long_ = UP if qty[UP] > qty[DOWN] else DOWN
+    gap = qty[long_] - qty[_other(long_)]
+    avg = cost[long_] / qty[long_]
+    bound = max(ZERO, params.hard_pair_ceiling - avg)
+    per = bound + params.completion_fee_per_share
+    return {"usd": gap * per, "uncovered_qty": gap, "long_side": long_,
+            "price_bound": bound}
+
+
 # --------------------------------------------------------------- decide
 
 def _result(action, why, orders, evaluation, exp, favorite=None, p_up=None,
@@ -279,6 +327,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
 
     tick, min_qty = _dec(params.tick), _dec(params.min_qty)
     if tick is None or tick <= 0 or min_qty is None or min_qty <= 0:
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    if params.reserve_mode not in ("FIXED", "COMPLETION"):
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    _cap, _fee = _dec(params.max_exposure_usd), _dec(params.completion_fee_per_share)
+    if _cap is None or _cap < 0 or _fee is None or _fee < 0:
         return hold("PARAMS_UNREADABLE", cancel=True)
 
     # 1. The book. Without a fresh two-sided YES quote nothing may rest.
@@ -460,11 +513,22 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         e_qty = (_floor_qty(params.clip_usd / target, params)
                  if target > 0 else D("0.00"))
     notional = target * e_qty
-    entry_cap = params.max_exposure_usd - params.hedge_reserve_usd
+    if params.reserve_mode == "COMPLETION":
+        res = completion_reserve(inv, rest, params, add_side=fav,
+                                 add_price=target, add_qty=e_qty)
+        entry_cap = params.max_exposure_usd - res["usd"]
+    elif params.reserve_mode == "FIXED":
+        res = None
+        entry_cap = params.max_exposure_usd - params.hedge_reserve_usd
+    else:                                   # unreachable: checked above
+        return hold("PARAMS_UNREADABLE", cancel=True)
     entry = {"kind": kind, "side": fav, "fav_bid": fav_bid, "price": target,
              "qty": e_qty, "p_side": prob[fav], "ev_per_share": ev_at(fav, target),
              "min_edge_per_share": params.min_edge_per_share,
              "notional_usd": notional, "room_usd": entry_cap - total,
+             "reserve_mode": params.reserve_mode,
+             "completion_reserve_usd": None if res is None else res["usd"],
+             "cap_usd": params.max_exposure_usd,
              "chosen": False}
     block = entry_block(target)
     if block is None and any(o["side"] == fav for o in kept):

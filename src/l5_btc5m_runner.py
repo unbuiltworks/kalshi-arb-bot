@@ -578,7 +578,8 @@ class Session:
                     book={"bid": book.get("bid"), "ask": book.get("ask"),
                           "age_s": book.get("age_s")},
                     t_in_window_s=now - ws, p_up=p_up,
-                    p_source=("VENUE_INDEX" if p_up is not None else None))
+                    p_source=("VENUE_INDEX" if p_up is not None else None),
+                    exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
                 self._log("L5_BTC5M_STEP", {
                     "t_in_window_s": round(now - ws, 2),
@@ -598,7 +599,12 @@ class Session:
                     "would_submit_not_sent": len(rep.get("would_submit")
                                                  or ()),
                     "halted_reason": rep.get("halted_reason"),
-                    "arming_refusal": rep.get("arming_refusal")})
+                    "arming_refusal": rep.get("arming_refusal"),
+                    "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
+                              ("why", "cap_usd", "completion_reserve_usd",
+                               "room_usd", "price", "qty")},
+                    "hedge": {k: (rep.get("hedge_eval") or {}).get(k) for k in
+                              ("why", "price", "qty", "pair_cost", "room_usd")}})
             self.sleep(max(0.0, min(STEP_S, stop_at - self.clock())))
 
     def close(self) -> Dict[str, Any]:
