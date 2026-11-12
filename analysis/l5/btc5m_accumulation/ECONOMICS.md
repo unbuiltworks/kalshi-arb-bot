@@ -139,6 +139,12 @@ is between the two and nearer ADVERSE.
 | binding constraint | `NO_EXPOSURE_ROOM` on 712 of ~1,770 decisions — **the cap, not the opportunity** |
 | other refusals | `OUT_OF_BAND` 419, `BOOK_UNUSABLE` 263, `BOOK_STALE` 83, `MAX_RESTING_ENTRIES` 5 |
 
+`BOOK_STALE` is an artefact of the replay, not of production: the tape is
+sampled every ~2 s and the replay ages each quote to the step it is used
+at, while live the runner reads the book itself and reports the fetch
+round-trip as the age. `BOOK_UNUSABLE` is real — a one-sided book, with no
+bid, which the live 05:00z window showed for most of its steps.
+
 ### The honest uncertainty
 
 | quantity | estimate | s.e. | t | 95% CI |
