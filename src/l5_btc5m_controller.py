@@ -62,7 +62,12 @@ SIDES = (UP, DOWN)
 #: the two entry rules. See `Params.entry_mode`.
 EDGE_GATED = "EDGE_GATED"
 ACCUMULATE = "ACCUMULATE"
-ENTRY_MODES = (EDGE_GATED, ACCUMULATE)
+#: "STRADDLE" rests a FIXED limit on BOTH sides for the whole window and
+#: never requotes. It has no favorite, no band and no edge gate, because it
+#: is not a view on which side wins -- it is a bet that the window reverses
+#: hard enough to fill both legs cheaply. See `Params.straddle_price`.
+STRADDLE = "STRADDLE"
+ENTRY_MODES = (EDGE_GATED, ACCUMULATE, STRADDLE)
 
 ZERO = D("0")
 ONE = D("1")
@@ -140,6 +145,14 @@ class Params:
     #: nothing. Adding to a side STOPS the moment that side is no longer the
     #: favorite, and anything resting on the other side is cancelled.
     entry_mode: str = "EDGE_GATED"
+    #: STRADDLE only: the fixed own-price each side rests at, all window.
+    #: A matched pair costs exactly 2 x this and pays 1.00, so anything at
+    #: or above 0.50 locks a LOSS by construction and is refused as
+    #: unreadable rather than treated as a configuration choice. Measured
+    #: best on the 189-window tape around 0.05-0.10 (analysis/l5/
+    #: btc5m_accumulation/straddle.py); the default is deliberately the
+    #: do-nothing value so the mode cannot trade until it is set.
+    straddle_price: Decimal = D("0")
     #: ACCUMULATE only: ticks below the favorite's bid an entry rests at.
     #: 0 joins the bid, which is where a maker buy has queue priority and
     #: the smallest gap to the price the band speaks about.
@@ -395,7 +408,13 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         return hold("PARAMS_UNREADABLE", cancel=True)
     if params.reserve_mode not in ("FIXED", "COMPLETION", "NONE"):
         return hold("PARAMS_UNREADABLE", cancel=True)
-    if params.entry_mode not in (EDGE_GATED, ACCUMULATE):
+    if params.entry_mode not in ENTRY_MODES:
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    straddle = params.entry_mode == STRADDLE
+    _sx = _dec(params.straddle_price)
+    if straddle and (_sx is None or not (ZERO < _sx < HALF)):
+        # at or above 0.50 the pair costs >= 1.00 and cannot profit, so it
+        # is a contradiction rather than an aggressive setting.
         return hold("PARAMS_UNREADABLE", cancel=True)
     # "NONE" says nothing is kept back for a completing order, which is only
     # true when no completing order is ever placed. Asking for one without
@@ -431,6 +450,44 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         return hold("INVENTORY_UNREADABLE", cancel=True)
     if rest is None:
         return hold("RESTING_UNREADABLE", cancel=True)
+
+    # 1b. STRADDLE. Handled in full here, before any favorite, band or
+    #     edge machinery is touched, so the two older modes cannot be
+    #     perturbed by it: nothing below this block runs in this mode.
+    #
+    #     The rule is deliberately dumb. Leave ONE resting buy per side at
+    #     `straddle_price` and never move it. A fixed limit cannot drift,
+    #     so if both fill the pair cost is exactly 2x that price -- no
+    #     adverse selection on the PRICE at all, only on which legs fill.
+    #     A side that already holds inventory is finished: the straddle
+    #     wants one fill a side, not accumulation.
+    if straddle:
+        exp_s = _exposure(inv, rest)
+        room = _cap - exp_s["total_exposure_usd"]
+        qty = _floor_qty(_dec(params.clip_usd) / _sx, params)
+        want = []
+        why_s = "STRADDLE_RESTING"
+        if qty <= 0:
+            why_s = "CLIP_TOO_SMALL"
+        elif t >= params.no_new_entry_after_s:
+            why_s = "ENTRY_WINDOW_CLOSED"
+        else:
+            for side in SIDES:
+                if inv[side][0] > 0:
+                    continue                      # this leg is done
+                if any(o["side"] == side for o in rest):
+                    continue                      # already resting
+                if _sx * qty > room:
+                    why_s = "NO_EXPOSURE_ROOM"
+                    continue
+                room -= _sx * qty
+                want.append(_place(side, _sx, qty, "STRADDLE_LEG"))
+        ev_s = {"entry": {"why": why_s, "price": str(_sx), "qty": str(qty),
+                          "room_usd": str(max(ZERO, room)),
+                          "cap_usd": str(_cap),
+                          "pair_cost_if_both_fill": str(2 * _sx)}}
+        return _result(OPEN_FAVORITE if want else HOLD_OR_SKIP,
+                       why_s, want, ev_s, exp_s)
 
     # 2. Probability and favorite.
     if p_up is None:
