@@ -17,5 +17,27 @@
  "predecessor_must_settle": [
   "cpc-btc-updown-5m-2026-11-12-0345z"
  ],
- "predecessor_results": {}
+ "predecessor_results": {
+  "cpc-btc-updown-5m-2026-11-12-0345z": {
+   "status": "SETTLED",
+   "settled_net_usd": "0",
+   "submitted": 0,
+   "filled_orders": 0,
+   "fills_cost_usd": "0",
+   "fees_usd": "0",
+   "settlement_px": null,
+   "transport_armed": false,
+   "flat_and_no_open_orders": true,
+   "watchdog": {
+    "as_of_utc": "2026-11-12T04:23:26.589548+00:00",
+    "age_s": 21.8,
+    "open_orders": 0,
+    "cancel_enabled": true,
+    "emergency_cancel": false,
+    "read_error": null,
+    "halted": null
+   },
+   "recorded_utc": "2026-11-12T04:23:48.377961+00:00"
+  }
+ }
 }
