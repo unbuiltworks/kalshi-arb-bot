@@ -569,6 +569,9 @@ class Session:
                "preflight_failed": self._failed_checks(pf),
                "preflight_attempts": attempts,
                "transport_armed": armed, "arm_error": arm_error,
+               # the owner's per-class submission budgets, BEFORE the
+               # window is spent finding out that one of them binds
+               "submission_budget": X.submission_budget(),
                "window_start_utc": ws.isoformat()}
         self._log("L5_BTC5M_START", rep)
         return rep
@@ -769,6 +772,7 @@ class Session:
             "cancelled": sum(1 for r in mine.values()
                              if r["state"] == X.CANCELLED),
             "would_submit_not_sent": self.would_submit,
+            "submission_budget": X.submission_budget(),
             "close": closed, "settlement": settled, "reconcile": recon,
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]

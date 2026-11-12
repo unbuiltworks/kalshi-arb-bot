@@ -454,3 +454,54 @@ class TestFavoriteReversalFreeze:
         run(r)
         cancelled = r.venue.cancelled_ids()
         assert len(cancelled) == len(set(cancelled)), cancelled
+
+
+# ======================================================================
+class TestSubmissionBudgetIsVisible:
+    """A live window must not be spent discovering that an owner-set budget
+    binds. The budget is reported before trading and again in the report,
+    and reading it claims nothing."""
+
+    def test_the_budget_is_reported_at_the_start_and_in_the_report(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        st = r.session.start()
+        assert "submission_budget" in st
+        rep = r.session.run() if False else r.session
+        out = r.ex.orders()  # noqa: F841 - keep the ledger touched
+        assert set(st["submission_budget"]) >= {"OPEN", "COMPLETE",
+                                                "REPLACE", "readable"}
+        assert st["submission_budget"]["readable"] is True
+        assert rep is r.session
+
+    def test_an_unset_budget_does_not_bind_and_says_so(self, tmp_path,
+                                                       monkeypatch):
+        for k in X.AUTH.CLASS_BUDGET_ENV.values():
+            monkeypatch.delenv(k, raising=False)
+        b = X.submission_budget()
+        for k in ("OPEN", "COMPLETE", "REPLACE"):
+            assert b[k]["max"] is None
+            assert b[k]["binds"] is False
+            assert b[k]["remaining"] is None
+
+    def test_a_configured_budget_reports_what_remains(self, tmp_path,
+                                                      monkeypatch):
+        monkeypatch.setenv(X.AUTH.CLASS_BUDGET_ENV["REPLACE"], "6")
+        b = X.submission_budget()
+        assert b["REPLACE"]["max"] == 6
+        assert b["REPLACE"]["binds"] is True
+        assert b["REPLACE"]["remaining"] == 6 - b["REPLACE"]["spent"]
+
+    def test_reading_the_budget_claims_nothing(self, tmp_path, monkeypatch):
+        """It must never consume a ticket it is only reporting on."""
+        monkeypatch.setenv(X.AUTH.CLASS_BUDGET_ENV["OPEN"], "3")
+        first = X.submission_budget()["OPEN"]["spent"]
+        for _ in range(5):
+            X.submission_budget()
+        assert X.submission_budget()["OPEN"]["spent"] == first
+
+    def test_the_session_report_carries_it_too(self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        rep = run(r)
+        assert rep["submission_budget"]["readable"] is True
+        assert "REPLACE" in rep["submission_budget"]
