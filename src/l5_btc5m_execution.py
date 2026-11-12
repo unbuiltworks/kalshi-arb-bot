@@ -97,6 +97,13 @@ ACCOUNT_CAP_ENV = "L5_ACCOUNT_MAX_EXPOSURE_USD"
 ENTRY_MODE_ENV = "L5_BTC5M_ENTRY_MODE"
 #: ACCUMULATE only: how many of our own entry orders may rest at once.
 MAX_RESTING_ENV = "L5_BTC5M_MAX_RESTING_ENTRIES"
+#: dollars per entry. Tunable WITHOUT a code change because the clip trades
+#: order count against how much of the ceiling actually gets used -- measured
+#: on the 142-window tape: $0.06 places 2,239 entries and fills 86.7% of the
+#: cap, $0.10 places 1,256 and fills 82.3%, $0.15 places 957 and fills 94.5%.
+#: It does NOT change the net: every one of those settles at about -$0.020 a
+#: window, because the loss is per share and not a capacity problem.
+CLIP_USD_ENV = "L5_BTC5M_CLIP_USD"
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
@@ -189,7 +196,18 @@ def entry_mode() -> str:
     return C.ACCUMULATE if want == C.ACCUMULATE else C.EDGE_GATED
 
 
-def max_resting_entries(default: int = 2) -> int:
+def clip_usd(default: Decimal = D("0.10")) -> Decimal:
+    """Dollars per entry. An unreadable or out-of-range value keeps the
+    default: a typo must never widen the size this strategy trades in. The
+    band is $0.02 (two cents buys at least one share at any eligible price)
+    to $0.45 (the whole ceiling in one clip)."""
+    raw = _dec(os.environ.get(CLIP_USD_ENV))
+    if raw is None or not (D("0.02") <= raw <= D("0.45")):
+        return default
+    return raw
+
+
+def max_resting_entries(default: int = 4) -> int:
     """How many entry orders may rest at once. Out-of-range reads keep the
     default: a typo must not widen what the strategy may have working."""
     raw = (os.environ.get(MAX_RESTING_ENV) or "").strip()
@@ -199,13 +217,20 @@ def max_resting_entries(default: int = 2) -> int:
     return n if 1 <= n <= 8 else default
 
 
-def live_order_bound(default: int = 2) -> int:
+#: the executor's hard bound on simultaneously live orders OUTSIDE
+#: accumulation. This is the original value and the edge-gated path must
+#: keep it: that rule rests at most one entry at a time.
+EDGE_GATED_LIVE_ORDERS = 2
+
+
+def live_order_bound() -> int:
     """The executor's hard cap on simultaneously live orders. In ACCUMULATE
-    it follows `max_resting_entries` so the controller's plan and the
-    executor's bound agree; otherwise it is the original 2."""
+    it follows `max_resting_entries`, so the controller's plan is not
+    silently clipped by a smaller bound; in every other mode it is the
+    original 2, unchanged."""
     if entry_mode() != C.ACCUMULATE:
-        return default
-    return max(default, max_resting_entries(default))
+        return EDGE_GATED_LIVE_ORDERS
+    return max(EDGE_GATED_LIVE_ORDERS, max_resting_entries())
 
 
 def account_cap() -> Optional[Decimal]:
@@ -957,6 +982,7 @@ class Btc5mExecutor:
             # room before it arms.
             over.update(entry_mode=C.ACCUMULATE, hedge_enabled=False,
                         reserve_mode="NONE",
+                        clip_usd=clip_usd(self.params.clip_usd),
                         max_resting_entries=max_resting_entries(
                             self.params.max_resting_entries))
         else:

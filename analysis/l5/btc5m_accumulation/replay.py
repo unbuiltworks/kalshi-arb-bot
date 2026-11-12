@@ -64,8 +64,8 @@ CANCEL_LEAD_S = 30.0
 WINDOW_S = 300.0
 DWELL_S = 10.0
 CAP = D("0.45")
-CLIP_USD = D("0.10")
-MAX_RESTING = 2
+CLIP_USD = C.Params().clip_usd                # the shipped default
+MAX_RESTING = C.Params().max_resting_entries   # the shipped default
 MAKER_FEE_PER_SHARE = D("0")
 #: a terminal quote this decided is the venue's own settlement
 RESOLVE_AFTER_S = 240.0

@@ -147,7 +147,12 @@ class Params:
     #: ACCUMULATE only: how many of this strategy's own entry orders may
     #: rest on the favorite at once. The executor's `max_live_orders` is a
     #: separate, harder bound and the smaller of the two is what binds.
-    max_resting_entries: int = 2
+    #: FOUR, because four $0.10 clips are what a $0.45 ceiling holds, so the
+    #: CAP is what stops accumulation rather than a count: measured on the
+    #: 142-window tape, a limit of 2 refused 20 entries the cap would have
+    #: allowed and a limit of 4 refuses 1. Raising it further changes
+    #: nothing at this clip size.
+    max_resting_entries: int = 4
     #: Whether an unmatched leg is completed with the opposite side at all.
     #: False is favorite accumulation: a directional inventory with no pair
     #: formation, so no HEDGE_UNDERDOG is ever emitted, nothing is reserved

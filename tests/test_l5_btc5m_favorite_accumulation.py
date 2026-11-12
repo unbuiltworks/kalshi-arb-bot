@@ -268,40 +268,94 @@ class TestRepeatedEntries:
 
     def test_and_stops_at_the_resting_limit_not_at_one(self, armed, acc,
                                                        rig45):
-        for _ in range(2):
+        n = X.max_resting_entries()
+        assert n == 4, "the default should hold four $0.10 clips in $0.45"
+        for _ in range(n):
             step(rig45.tick(), "0.70", "0.71")
-        third = step(rig45.tick(), "0.70", "0.71")
-        assert third["placed"] == []
-        assert third["entry_eval"]["why"] == "MAX_RESTING_ENTRIES"
-        assert third["entry_eval"]["resting_entries"] == 2
+        extra = step(rig45.tick(), "0.70", "0.71")
+        assert extra["placed"] == []
+        assert extra["entry_eval"]["why"] in ("MAX_RESTING_ENTRIES",
+                                              "NO_EXPOSURE_ROOM")
+        assert extra["entry_eval"]["resting_entries"] == n
 
     def test_the_owner_may_raise_the_resting_limit(self, armed, acc, rig45,
                                                    monkeypatch, tmp_path):
-        monkeypatch.setenv(X.MAX_RESTING_ENV, "4")
-        assert X.live_order_bound() == 4
+        monkeypatch.setenv(X.MAX_RESTING_ENV, "6")
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.06")
+        assert X.live_order_bound() == 6
         rig = Rig(tmp_path, max_live_orders=X.live_order_bound())
-        for _ in range(4):
+        for _ in range(6):
             step(rig.tick(), "0.70", "0.71")
-        assert rep_count(rig) == 4
-        assert step(rig.tick(), "0.70", "0.71")["entry_eval"]["why"] == (
-            "MAX_RESTING_ENTRIES")
+        assert rep_count(rig) == 6
+        assert D(exposure(rig)["total_exposure_usd"]) <= D(CAP)
+
+    # ---------------------------------------------------- the clip control
+    def test_the_clip_is_tunable_without_a_code_change(self, monkeypatch):
+        assert X.clip_usd() == D("0.10")
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.06")
+        assert X.clip_usd() == D("0.06")
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.15")
+        assert X.clip_usd() == D("0.15")
+
+    @pytest.mark.parametrize("junk", ["0.01", "0.46", "-0.10", "lots", "",
+                                      "1e9", "nan"])
+    def test_an_out_of_range_clip_keeps_the_default(self, monkeypatch, junk):
+        """A typo must never widen the size this strategy trades in."""
+        monkeypatch.setenv(X.CLIP_USD_ENV, junk)
+        assert X.clip_usd() == D("0.10")
+
+    def test_the_clip_env_reaches_the_controller(self, armed, acc, rig45,
+                                                 monkeypatch):
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.06")
+        assert rig45.ex.effective_params(D(CAP)).clip_usd == D("0.06")
+        rep = step(rig45, "0.70", "0.71")
+        # $0.06 / $0.70 = 0.0857 -> floored to the 0.01 grid
+        assert placed(rep) == [("UP", D("0.70"), D("0.08"))]
+
+    def test_a_smaller_clip_buys_more_increments_inside_the_same_cap(
+            self, armed, acc, tmp_path, monkeypatch):
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.06")
+        monkeypatch.setenv(X.MAX_RESTING_ENV, "8")
+        rig = Rig(tmp_path, max_live_orders=X.live_order_bound())
+        for _ in range(8):
+            step(rig.tick(), "0.70", "0.71")
+        assert rep_count(rig) >= 6
+        assert D(exposure(rig)["total_exposure_usd"]) <= D(CAP)
 
     def test_an_out_of_range_resting_limit_keeps_the_default(self,
                                                              monkeypatch):
         for junk in ("0", "9", "-1", "two", ""):
             monkeypatch.setenv(X.MAX_RESTING_ENV, junk)
-            assert X.max_resting_entries() == 2, junk
+            assert X.max_resting_entries() == 4, junk
+
+    def test_four_clips_is_what_the_045_ceiling_holds(self, armed, acc,
+                                                      rig45):
+        """The CAP, not a count, is what should stop accumulation. Four
+        $0.10 clips at $0.70 cost $0.392 of the $0.45 ceiling; a fifth does
+        not fit, so the cap is the thing that refuses it."""
+        for _ in range(4):
+            step(rig45.tick(), "0.70", "0.71")
+        e = exposure(rig45)
+        assert D(e["total_exposure_usd"]) == D("0.392")
+        assert D(e["total_exposure_usd"]) + D("0.098") > D(CAP)
 
     def test_a_filled_entry_frees_its_slot_and_the_next_one_goes_on(
             self, armed, acc, rig45):
-        step(rig45, "0.70", "0.71")
-        step(rig45.tick(), "0.70", "0.71")
-        assert step(rig45.tick(), "0.70", "0.71")["placed"] == []
-        rig45.venue.fill("v1")                      # one of the two is done
+        """Fill the resting limit, confirm it blocks, then let one fill and
+        confirm the freed slot is used again."""
+        n = X.max_resting_entries()
+        for _ in range(n):
+            step(rig45.tick(), "0.70", "0.71")
+        blocked = step(rig45.tick(), "0.70", "0.71")
+        assert blocked["placed"] == []
+        rig45.venue.fill("v1")                      # one of them is done
         rep = step(rig45.tick(), "0.70", "0.71")
         assert [(f["side"], f["qty"]) for f in rep["fills"]] == [
             ("UP", D("0.14"))]
-        assert placed(rep) == [("UP", D("0.70"), D("0.14"))]
+        # the fill turned resting notional into filled cost, so the cap has
+        # no new room; what matters is that the COUNT no longer blocks
+        assert rep["entry_eval"]["resting_entries"] == n - 1
+        assert rep["entry_eval"]["why"] != "MAX_RESTING_ENTRIES"
 
     def test_every_repeated_entry_is_its_own_order_with_its_own_id(
             self, armed, acc, rig45):
@@ -419,9 +473,14 @@ class TestFavoriteReversal:
             self, armed, acc, rig45):
         step(rig45, "0.70", "0.71")
         rig45.venue.fill("v1")                      # we now HOLD 0.14 UP
+        before_up = sum(1 for s in rig45.venue.sent if s["side"] == "UP")
         for _ in range(3):
             step(rig45.tick(), "0.29", "0.30")
-        assert [s["side"] for s in rig45.venue.sent] == ["UP", "DOWN", "DOWN"]
+        after_up = sum(1 for s in rig45.venue.sent if s["side"] == "UP")
+        # NOT ONE further order on the side that lost the lead, however many
+        # go on the new favorite
+        assert after_up == before_up == 1
+        assert any(s["side"] == "DOWN" for s in rig45.venue.sent)
         assert rig45.ex.inventory(MARKET)[C.UP]["qty"] == D("0.14")
 
     def test_the_held_losing_leg_is_neither_hedged_nor_sold(self, armed, acc,
