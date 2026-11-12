@@ -576,3 +576,90 @@ class TestApprovedWindowEnumeration:
             monkeypatch.setenv(RUN.CAMPAIGN_ENV, junk)
             assert (os.environ.get(RUN.CAMPAIGN_ENV) or "").strip() != "ON", \
                 junk
+
+
+# ======================================================================
+class TestRollingWindows:
+    """The approval layer offers TWO opening bounds: an enumerated
+    `window_starts`, or a `last_open_utc` after which no window may open.
+    The second is the rolling form the 15-minute lane uses. Neither widens
+    anything: both are the owner's own document."""
+
+    @staticmethod
+    def _scope(monkeypatch, **scope):
+        from src import l5_campaign_approval as CA
+
+        def fake(market, now=None, reserve=False):
+            return {"present": True, "ok": True,
+                    "scope": dict({"series": CA.BTC5M_SERIES}, **scope)}
+        monkeypatch.setattr(CA, "campaign_decision", fake)
+
+    def test_a_last_open_bound_rolls_the_next_windows(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=4,
+                    last_open_utc="2026-11-12T15:30:00Z")
+        got = RUN.approved_markets(now)
+        assert got["mode"] == "ROLLING"
+        assert got["markets"] == [
+            "cpc-btc-updown-5m-2026-11-12-1505z",
+            "cpc-btc-updown-5m-2026-11-12-1510z",
+            "cpc-btc-updown-5m-2026-11-12-1515z",
+            "cpc-btc-updown-5m-2026-11-12-1520z"], got["markets"]
+
+    def test_it_never_plans_a_window_already_under_way(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=8,
+                    last_open_utc="2026-11-12T16:00:00Z")
+        got = RUN.approved_markets(now)
+        assert "cpc-btc-updown-5m-2026-11-12-1500z" not in got["markets"]
+        assert got["markets"][0] == "cpc-btc-updown-5m-2026-11-12-1505z"
+
+    def test_last_open_binds_before_max_windows(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=8,
+                    last_open_utc="2026-11-12T15:15:00Z")
+        got = RUN.approved_markets(now)
+        assert got["markets"] == [
+            "cpc-btc-updown-5m-2026-11-12-1505z",
+            "cpc-btc-updown-5m-2026-11-12-1510z",
+            "cpc-btc-updown-5m-2026-11-12-1515z"], got["markets"]
+
+    def test_max_windows_binds_before_last_open(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=2,
+                    last_open_utc="2026-11-12T18:00:00Z")
+        got = RUN.approved_markets(now)
+        assert len(got["markets"]) == 2
+
+    def test_a_rolling_plan_never_exceeds_the_hard_ceiling(self,
+                                                           monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=999,
+                    last_open_utc="2026-11-13T00:00:00Z")
+        got = RUN.approved_markets(now)
+        assert len(got["markets"]) <= RUN.CA_MAX_ROLLING_WINDOWS == 8
+
+    def test_enumerated_windows_still_win_when_both_are_present(self,
+                                                                monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=4,
+                    window_starts=["2026-11-12T16:00:00Z"],
+                    last_open_utc="2026-11-12T18:00:00Z")
+        got = RUN.approved_markets(now)
+        assert got["mode"] == "ENUMERATED"
+        assert got["markets"] == ["cpc-btc-updown-5m-2026-11-12-1600z"]
+
+    def test_neither_bound_plans_nothing(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=4)
+        got = RUN.approved_markets(now)
+        assert got["markets"] == []
+        assert got["why"] == "APPROVAL_ENUMERATES_NO_WINDOWS"
+
+    def test_a_last_open_already_past_plans_nothing(self, monkeypatch):
+        now = dt.datetime(2026, 11, 12, 15, 2, 30, tzinfo=UTC)
+        self._scope(monkeypatch, max_windows=4,
+                    last_open_utc="2026-11-12T14:00:00Z")
+        got = RUN.approved_markets(now)
+        assert got["markets"] == []
+        assert got["why"] == "NO_WINDOW_OPENS_BEFORE_LAST_OPEN_UTC"
