@@ -255,7 +255,6 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
     return httpd
 
 
-<<<<<<< HEAD
 # ----------------------------------------------- the one arming boundary
 
 class ArmingView:
@@ -390,8 +389,6 @@ def arm_through_boundary(session: "Session") -> Dict[str, Any]:
     return {"claim": claim}
 
 
-=======
->>>>>>> origin/integration/l5-safe-release-candidate-20261109
 # ------------------------------------------------------------ the session
 
 class Session:
@@ -406,19 +403,14 @@ class Session:
                  clock: Callable[[], float] = time.time,
                  sleep: Callable[[float], None] = time.sleep,
                  armed_fn: Optional[Callable[[], bool]] = None,
-<<<<<<< HEAD
                  arm_fn: Optional[Callable[[Any], Any]] = None,
                  bounds_fn: Optional[Callable[[str], Any]] = None) -> None:
-=======
-                 arm_fn: Optional[Callable[[Any], Any]] = None) -> None:
->>>>>>> origin/integration/l5-safe-release-candidate-20261109
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
         self.risk_fn, self.halt_fn = risk_fn, halt_fn
         self.clock, self.sleep = clock, sleep
         self.armed_fn = armed_fn
-<<<<<<< HEAD
         #: WHO MAY ARM THE TRANSPORT: `arm_through_boundary`, i.e. only
         #: through `l5_live_authorization.authorize_arming`, the one shared
         #: boundary every arming path in src/ uses (three guard tests pin
@@ -428,17 +420,6 @@ class Session:
             lambda t: arm_through_boundary(self))
         self.bounds_fn = bounds_fn or venue_window_bounds
         self.last_preflight: Any = None
-=======
-        #: WHO MAY ARM THE TRANSPORT. Every module in src/ that arms must
-        #: route the decision through `l5_live_authorization.
-        #: authorize_arming`, the one shared boundary (three guard tests
-        #: pin it). That boundary has not yet been extended to the BTC5m
-        #: session, so this module does not arm at all: with no `arm_fn`
-        #: the session runs DISARMED, its transport's submit raises, and the
-        #: adapter reports every decision as WOULD_SUBMIT. A test may inject
-        #: one against a scripted venue; production cannot.
-        self.arm_fn = arm_fn
->>>>>>> origin/integration/l5-safe-release-candidate-20261109
         self.events: List[Dict[str, Any]] = []
         self.would_submit = 0
 
@@ -493,7 +474,6 @@ class Session:
                     "loss_room_usd": str(room), "risk": dict(r)}
         return {"ok": True, "risk": dict(r)}
 
-<<<<<<< HEAD
     def approved_scope(self) -> Dict[str, Any]:
         """The owner's approval for THIS window as the campaign layer reads
         it (already clamped to the code ceilings), or {} when there is no
@@ -518,14 +498,6 @@ class Session:
         """The smaller of the adapter's own ceiling and the owner's approved
         exposure for this window. None when the approval cannot be read."""
         scope = self.approved_scope()
-=======
-    def exposure_ceiling(self) -> Optional[Decimal]:
-        """The smaller of the adapter's own ceiling and the owner's approved
-        exposure for this window. None when the approval cannot be read."""
-        v = AUTH.btc5m_authorization(self.market, now=self._now(),
-                                     require_durable=False)
-        scope = v.get("scope") or {}
->>>>>>> origin/integration/l5-safe-release-candidate-20261109
         approved = _dec(scope.get("max_total_exposure_usd"))
         own = _dec(self.ex.params.max_exposure_usd)
         if own is None:
@@ -561,7 +533,6 @@ class Session:
                 raise
             pf = {"preflight": "FAILED", "error": type(exc).__name__}
         self.t.cancel_owner_oracle = self.ex.owns_venue_order_id
-<<<<<<< HEAD
         self.last_preflight = pf
         armed = False
         arm_error = None
@@ -575,23 +546,6 @@ class Session:
                 arm_error = "%s: %s" % (
                     getattr(exc, "reason", None) or type(exc).__name__,
                     str(getattr(exc, "detail", "") or exc)[:200])
-=======
-        armed = False
-        arm_error = None
-        if (pf or {}).get("preflight") == "PASSED":
-            if self.arm_fn is None:
-                arm_error = ("ARMING_BOUNDARY_NOT_WIRED: the BTC5m session "
-                             "does not arm until authorize_arming covers it")
-            else:
-                try:
-                    self.arm_fn(self.t)
-                    armed = bool(getattr(self.t, "armed", False))
-                except BaseException as exc:                   # noqa: BLE001
-                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                        raise
-                    arm_error = "%s: %s" % (type(exc).__name__,
-                                            str(exc)[:160])
->>>>>>> origin/integration/l5-safe-release-candidate-20261109
         rep = {"ok": True, "preflight": (pf or {}).get("preflight"),
                "preflight_failed": [c.get("check") for c in
                                     (pf or {}).get("checks") or ()
