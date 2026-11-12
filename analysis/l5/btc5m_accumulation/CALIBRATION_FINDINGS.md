@@ -162,3 +162,67 @@ filter improved conditional EV out of sample. Adding 45 windows turned the
 only previously-positive variant negative. **No-trade dominates all three
 variants**, and the shipped configuration's per-share loss is now
 significant at t = −2.66.
+
+---
+
+# Addendum — hedging the flip, measured
+
+The owner asked to "mathematically figure out how to hedge when it flips."
+
+## The arithmetic
+
+Hold `q` shares of the old favorite at average cost `c`; the favorite
+flips; buy `q` of the new favorite at `d`. A matched pair pays $1 whichever
+way it settles:
+
+```
+hedged   net/share = 1 - (c + d)      DETERMINISTIC
+held     net/share = p_held - c       expected, still random
+
+hedging beats holding  iff  1 - (c + d) > p_held - c  iff  d < 1 - p_held
+```
+
+Resting as a **maker** on the new favorite pays its bid, `d = 1 - old_fav_ask`,
+so the test reduces to **`p_held < old_fav_ask`**: hedge when the side you
+hold is worth less than what someone will still pay for it. Paying the ask
+(taker) gives `d = 1 - old_fav_bid` and the much harder test
+`p_held < old_fav_bid`.
+
+## The structural problem
+
+This strategy only ever buys a favorite at **$0.51 or more**. When that side
+stops being the favorite, the other side *is* the favorite, so it also
+costs about **$0.51 or more**. The pair therefore costs about **$1.02 or
+more**, which locks a guaranteed loss. There is no pricing of the hedge that
+escapes this: it is a consequence of the band, not of execution.
+
+## Measured, 187 windows, ADVERSE fills, chronological split
+
+| arm | matched % | net/window | s.e. | t | OOS 61 |
+|---|---|---|---|---|---|
+| **NO-TRADE** | — | **$0.0000** | — | — | **$0.0000** |
+| HOLD (shipped) | 13.7% | −$0.0283 | 0.0160 | −1.76 | −$0.0192 |
+| **HEDGE** (maker, ceiling $1.00) | 48.4% | **−$0.0263** | **0.0045** | **−5.88** | −$0.0264 (t −3.32) |
+
+**Hedging does not reduce the loss. It makes the loss certain.** The
+standard error collapses from 0.0160 to 0.0045 because a matched pair is
+deterministic, so the result moves from a noisy negative to a **5.9-sigma**
+negative. That is the opposite of what a hedge is wanted for.
+
+Paired per window, HEDGE − HOLD is **+$0.0019 (s.e. 0.0143, t +0.13)** —
+better in 62 windows, worse in 111, equal in 14. Indistinguishable from
+zero, and more often worse than better.
+
+The realized **blended** two-sided book cost on windows that ended holding
+both sides averaged **$1.054** (min $0.804, max $1.472), with **94 of 183**
+above $1.00. That blend includes accumulation on both sides across a flip,
+not only the hedge leg — the controller refuses any single hedge order
+above `hard_pair_ceiling` — but it is what the book actually cost.
+
+## Verdict
+
+No-trade dominates every arm. Hedging the flip is sound arithmetic applied
+to a position whose entry price makes it unprofitable: the $0.51 floor on
+both legs guarantees a pair above par. Hedging is therefore available as
+**loss-variance reduction**, not as a route to profit, and it is not
+promoted to a default.
