@@ -12,10 +12,22 @@
 # submit when either cannot be read.
 #
 # The COPY list is the import closure of the entrypoint plus the modules it
-# imports lazily on the submit, approval and halt paths; a test keeps it so.
+# imports lazily on the submit, approval, ARMING and halt paths; tests keep it
+# so (tests/test_l5_btc5m_image_deps.py walks the lazy imports too:
+# `authorize_arming` imports l5_mandate_signature unconditionally and
+# l5_promotion_gate under a mandate, and neither was shipped before).
 FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
+# THIRD-PARTY DEPENDENCIES of the shipped modules, the same pins as the
+# l5-pmus-live image. `pmus_auth` signs every authenticated venue request
+# with `cryptography` (Ed25519); `l5_pmus_auth_book` reads the authenticated
+# socket with `websockets`. Both are imported lazily, so their absence did
+# not show at import time: on 2026-11-12 03:45Z every authenticated call
+# (account, positions, orders, settlement) raised ModuleNotFoundError, the
+# preflight failed and the window never armed. A test now requires every
+# third-party import in the shipped files to be installed here.
+RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/__init__.py src/__init__.py
 COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
 COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
@@ -29,11 +41,13 @@ COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
+COPY src/l5_promotion_gate.py src/l5_promotion_gate.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
