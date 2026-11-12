@@ -42,3 +42,4 @@ deploy of a money-capable service.
                    16:45 through 17:10Z.
 2026-11-12T17:25:18Z  ramp to $2.25 cap, 9 slots; reconcile-before-settle; depth capture
 2026-11-12T18:58:42Z  blocked-record diagnostics: name which loss limit binds
+2026-11-12T20:55:04Z  STRADDLE mode live, armed at 0.08
