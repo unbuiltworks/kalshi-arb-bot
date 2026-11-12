@@ -272,3 +272,120 @@ owner-set authorization controls and were left exactly as they are.**
   `completion_reserve` docstring as the source of a 42-window cap-policy
   measurement, is **not present in this repository**. That citation is
   unverifiable from this tree.
+
+---
+
+## Entry gates: tested, negative, and the family is closed
+
+`replay_gates.py`, 189-window tape, 187 resolved, chronological OOS cut at
+`2026-11-12-0730z` (63 windows). Window-clustered means. Every arm is
+reported against NO-TRADE, which nets exactly zero.
+
+Calibrated *probability* features were already tested and all worsened
+out-of-sample log loss. This tests a different hypothesis class: not what
+the fair price is, but **when to rest at all**. Resting a maker buy at the
+bid should earn half the spread, so a loss of ~4.9c a share is adverse
+selection, not mispricing — the bid gets hit because the bid is about to
+fall.
+
+Gates tested, each suppressing only new placements (cancels and fills are
+untouched, so a gate can never invent an exit): spread width (≥2/3/4
+ticks), a quiet book (mid moved ≤1/2/3c over 20s), early-only, late-only,
+a favorite-price ceiling (0.60/0.70/0.80), and two conjunctions.
+
+**Every one of the 17 arms is negative out of sample.** The least-bad
+positive-looking arm, `SPREAD>=3 AND QUIET<=2c`, is `+$0.0008/window` at
+**t = +0.19** on **6 fills / 0.93 shares across 63 windows** — noise, and
+promoting it would be fitting the tape.
+
+### Why the family is closed, not merely unlucky
+
+Across the 17 arms, selectivity and per-share result are strongly
+**rank-correlated in the wrong direction**:
+
+    Spearman rho(shares traded, net per share) = +0.833   t = +5.84, n = 17
+
+Fewer shares traded goes with a *worse* price per share. Examples:
+
+| arm | shares | net/share |
+|---|---|---|
+| ungated | 108.58 | −0.0487 |
+| SPREAD ≥ 3 | 18.54 | −0.0871 |
+| SPREAD ≥ 4 | 5.49 | −0.1959 |
+| LATE t ≥ 240s | 9.53 | −0.2515 |
+
+Net-per-window shrinks toward zero under a tight gate only because volume
+shrinks, not because the trades got better. The gates are an expensive way
+of approximating no-trade.
+
+The mechanism: **the toxicity is a property of the fill, not of the
+pre-fill state.** A resting maker buy is only reached when the market comes
+down to it, so any state that raises the fill probability is the same state
+in which the price is moving against us. The more selective the filter, the
+more it concentrates on fills that could only have been caused by a real
+move — which is why a wide-spread gate is worse per share, not better.
+Filtering on observable pre-fill state cannot separate "I got filled" from
+"I got filled because I was wrong".
+
+### What this rules in and out
+
+- **Ruled out:** entry-state filters as a route to positive expectancy for
+  $0.51–$0.90 favorite accumulation. Do not re-open this family without a
+  *new observable*, not a new threshold on these.
+- **Not yet testable:** order-book **imbalance and depth**. The quotes tape
+  carries `bid`/`ask` only, no sizes, so queue-ahead and flow imbalance —
+  the one feature class that is about the fill rather than the state — has
+  no data. Closing that gap is a recorder change, not a strategy change.
+- **Unchanged:** no-trade still dominates every measured arm, at every
+  clip, depth, band and gate tested.
+
+---
+
+## The replay's first contact with settled money
+
+`live_vs_replay.py`. Every negative conclusion above comes out of the same
+replay, so if the replay does not describe reality, none of it stands. On
+2026-11-12 the service traded real money under ACCUMULATE for the first
+time, which makes the model falsifiable against settled cashflows instead
+of only against itself.
+
+Five windows filled and settled. Windows that placed nothing are excluded
+rather than counted as flats: 16:15z (preflight failed) and 17:00z /
+17:05z / 17:10z, which submitted nothing because the campaign's **OPEN
+budget was exhausted** (max 8 per campaign, spent 8 by 17:00z) — a budget
+limit, not a decision not to trade. Commission read back as 0.0000 on
+every order, consistent with the zero maker fee the replay already
+assumes.
+
+| window | fills | qty | cost | settled net |
+|---|---|---|---|---|
+| 16:20z | 4 | 0.66 | 0.3830 | −0.0930 |
+| 16:25z | 4 | 0.58 | 0.3902 | −0.3902 |
+| 16:45z | 3 | 0.53 | 0.2886 | −0.2886 |
+| 16:50z | 4 | 0.56 | 0.3897 | **+0.1703** |
+| 16:55z | 4 | 0.64 | 0.3897 | −0.0797 |
+
+| | replay | live |
+|---|---|---|
+| net per window | −0.0286 | −0.1362 |
+| net per share | −0.0487 | −0.2294 |
+
+19 fills, 2.97 contracts, $1.8412 deployed, **−$0.6812 settled**.
+
+At the replay's own per-window sd of 0.2206, a 5-window mean has
+se = 0.0987, so live sits **−1.09 se** from the prediction. The worst live
+window (−0.3902) is inside the replay's observed range (−0.3964 to
++0.3111). **Not rejected.**
+
+This is deliberately the weak claim: five windows cannot confirm a model,
+only fail to break it. What they do kill is the hopeful reading — that
+real fills would behave better than the replay's ADVERSE tier. They did
+not. Live came in *below* the prediction, not above.
+
+Two of the five formed matched pairs **above par** — 1.1759 at 16:20z and
+1.2197 at 16:55z — which is the structural flip result confirmed again in
+live money: both legs of a $0.51–$0.90 favorite cost more than $1.00
+together, so completing a flipped position locks a loss.
+
+The sign is unchanged in both: negative live, negative in replay, and
+no-trade still dominates every arm tested.

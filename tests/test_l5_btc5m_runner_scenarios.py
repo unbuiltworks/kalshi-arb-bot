@@ -843,3 +843,147 @@ class TestAuthenticatedBookFallback:
         i = src.index("AB.AuthBook")
         assert "except BaseException" in src[i:i + 500]
         assert '"started": False' in src[i:i + 700]
+
+
+# ======================================================================
+class TestReconciliationHappensBeforeSettlement:
+    """A safety check that cannot pass when it matters is not a check.
+
+    OBSERVED LIVE 2026-11-12. `run()` settled before it reconciled. The
+    venue redeems a settled position and then reports no row for it, while
+    this ledger still states what was held, so `agrees` -- which is
+    `net_ours == 0 and not rows` when the venue offers no net -- was False
+    for every window that actually filled (16:20z holding 0.29 UP / 0.37
+    DOWN, 16:25z holding 0.58 DOWN) and True only for windows that held
+    nothing."""
+
+    def test_reconcile_is_called_before_settle(self):
+        src = inspect.getsource(RUN.Session.run)
+        assert src.index("recon = self.reconcile()") < \
+            src.index("settled = self.settle()"), \
+            "reconciliation must see the venue before it redeems"
+
+    def test_the_post_settlement_read_is_kept_but_not_the_verdict(self):
+        src = inspect.getsource(RUN.Session.run)
+        assert "recon_after = self.reconcile()" in src
+        assert '"reconcile": recon,' in src
+        assert '"reconcile_after_settlement": recon_after,' in src
+
+    def test_a_held_position_reconciles_against_the_live_venue(
+            self, tmp_path, monkeypatch):
+        """With inventory held and the venue still reporting it, the
+        reconciliation in the step record AGREES. Before the fix this
+        same window reported agrees false."""
+        r = rig(tmp_path, monkeypatch, fill_at={12.0: ("v1", "0.05")})
+        rep = run(r)
+        assert D(rep["fills_qty"]) > 0, "nothing filled; test proves nothing"
+        rec = rep["reconcile"]
+        assert rec["read"] is True
+        assert rec["agrees"] is True, rec
+        assert rec["venue_rows"], "the venue should still show the position"
+
+    def test_an_empty_venue_against_held_inventory_does_not_agree(
+            self, tmp_path, monkeypatch):
+        """The failure mode made visible. This is what a post-settlement
+        read looks like -- our ledger holds, the venue has redeemed and
+        reports nothing -- and it must never read as agreement."""
+        r = rig(tmp_path, monkeypatch, fill_at={12.0: ("v1", "0.05")})
+        run(r)
+        assert r.ex.inventory(M)[C.UP]["qty"] > 0
+        r.venue.by_oid.clear()      # the venue forgets, as after redemption
+        r.venue.cum.clear()
+        rec = r.session.reconcile()
+        assert rec["read"] is True
+        assert rec["venue_rows"] == []
+        assert rec["agrees"] is False, rec
+
+
+# ======================================================================
+class TestTopOfBookDepthIsRecorded:
+    """The authenticated socket carries SIZE; the public tape does not.
+
+    `replay_gates.py` closed the entry-state filter family -- 17 gates, all
+    negative out of sample, with selectivity and per-share result
+    rank-correlated the wrong way (rho +0.833, t +5.84). The one feature
+    class left untested is queue ahead / flow imbalance, and it was
+    untestable only because nothing wrote the sizes down: depth is null in
+    all 27,425 aligned rows because the PUBLIC endpoint publishes none.
+    This session already runs the authenticated socket, so the capture is
+    free. It must stay strictly observational."""
+
+    class Book:
+        def __init__(self, snap=None, boom=None):
+            self.snap, self.boom, self.calls = snap, boom, 0
+
+        def snapshot(self, slug):
+            self.calls += 1
+            if self.boom is not None:
+                raise self.boom
+            return self.snap
+
+    def test_without_an_authenticated_book_it_says_so(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.t.ws_book = None
+        assert r.session.book_depth() == {"read": False,
+                                          "reason": "NO_AUTH_BOOK"}
+
+    def test_sizes_are_captured_from_the_snapshot(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.t.ws_book = self.Book(snap={
+            "bid": "0.70", "ask": "0.71", "bid_shares": "120",
+            "ask_shares": "35", "book_updates": 9, "stream_age_s": 0.2,
+            "market_state": "OPEN", "source": "authenticated_ws"})
+        got = r.session.book_depth()
+        assert got["read"] is True
+        assert got["bid_shares"] == "120" and got["ask_shares"] == "35"
+        assert got["book_updates"] == "9"
+        assert got["source"] == "authenticated_ws"
+
+    def test_a_missing_snapshot_is_a_reason_not_a_crash(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.t.ws_book = self.Book(snap=None)
+        assert r.session.book_depth() == {"read": False,
+                                          "reason": "NO_SNAPSHOT"}
+
+    def test_a_raising_book_cannot_break_the_step(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.t.ws_book = self.Book(boom=RuntimeError("socket gone"))
+        assert r.session.book_depth() == {"read": False,
+                                          "reason": "RuntimeError"}
+        rep = run(r)          # the window still runs to completion
+        assert int(rep["submitted"]) > 0
+        steps = r.kinds("L5_BTC5M_STEP")
+        assert steps and all(
+            s["depth"] == {"read": False, "reason": "RuntimeError"}
+            for s in steps)
+
+    def test_the_step_record_carries_it(self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.t.ws_book = self.Book(snap={"bid": "0.70", "ask": "0.71",
+                                      "bid_shares": "120",
+                                      "ask_shares": "35"})
+        run(r)
+        steps = r.kinds("L5_BTC5M_STEP")
+        assert steps, "no step records"
+        assert steps[0]["depth"]["bid_shares"] == "120"
+
+    def test_depth_cannot_change_a_single_order(self, tmp_path, monkeypatch):
+        """THE SAFETY PROPERTY. Identical submissions with and without the
+        authenticated book attached. If this ever fails, an observational
+        field has become an input to a money decision."""
+        a = rig(tmp_path / "a", monkeypatch)
+        a.session.t.ws_book = None
+        run(a)
+        without = submitted(a)
+
+        b = rig(tmp_path / "b", monkeypatch)
+        b.session.t.ws_book = self.Book(snap={"bid": "0.70", "ask": "0.71",
+                                      "bid_shares": "999",
+                                      "ask_shares": "1"})
+        run(b)
+        assert submitted(b) == without
+        assert b.session.t.ws_book.calls > 0, "the book was never consulted"

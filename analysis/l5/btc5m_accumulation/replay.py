@@ -134,8 +134,18 @@ class Order:
         self.at_price_since = t
 
 
-def run_window(rows, *, tier):
+#: OPTIONAL ENTRY GATE, default off. A callable (q, t, age, rows) -> bool;
+#: when it returns False, new BUY placements for that instant are
+#: suppressed while cancellations and fills proceed exactly as before --
+#: i.e. "do not rest here", which is the only thing a gate may do. With
+#: GATE None the loop is byte-for-byte the path that produced every number
+#: in ECONOMICS.md, so a gate experiment cannot silently move the baseline.
+GATE = None
+
+
+def run_window(rows, *, tier, gate=None):
     """One window under one fill rule. Returns the fills and the refusals."""
+    gate = gate if gate is not None else GATE
     won = outcome(rows)
     if won is None:
         return None
@@ -199,6 +209,9 @@ def run_window(rows, *, tier):
                 if gone is not None:
                     cancelled_side.add(gone.side)
             else:
+                if gate is not None and not gate(q, t, age, rows):
+                    whys["GATED_OUT"] += 1
+                    continue
                 side = op["side"]
                 other = C.DOWN if side == C.UP else C.UP
                 unmatched = inv[other]["qty"] - inv[side]["qty"]
@@ -217,6 +230,7 @@ def run_window(rows, *, tier):
         t += STEP_S
 
     return {"won": won, "fills": fills, "placed": placed, "whys": whys,
+            "gated": whys.get("GATED_OUT", 0),
             "inv": inv, "klasses": klasses}
 
 

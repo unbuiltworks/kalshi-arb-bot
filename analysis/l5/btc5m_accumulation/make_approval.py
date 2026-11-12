@@ -64,14 +64,31 @@ def slug(t: dt.datetime) -> str:
 
 
 def build(n: int, start: dt.datetime, nonce: str, exposure: str,
-          daily_loss: str) -> dict:
+          daily_loss: str, rolling: bool = False) -> dict:
+    """The approval document.
+
+    TWO OPENING BOUNDS, and the approval layer accepts either:
+
+      ENUMERATED  `window_starts` names each window. Exact, and what to use
+                  when the windows wanted are known.
+      ROLLING     `last_open_utc` says "no window may OPEN after this", and
+                  the runner takes the next windows in order up to
+                  `max_windows`. This is the form the 15-minute lane is
+                  bounded by, and it is what `L5_BTC5M_CAMPAIGN=ON` with no
+                  enumeration consumes.
+
+    Neither is more permissive: `max_windows` caps both, the approval layer
+    clamps it to 8, and the runner holds its own ceiling at 8 as well. A
+    document carrying NEITHER bound is refused outright, so there is no
+    permissive default.
+    """
     issued = dt.datetime.now(UTC).replace(microsecond=0)
     starts = [start + dt.timedelta(minutes=5 * i) for i in range(n)]
     # settle-out grace after the last window, inside the 4 h campaign bound
     expires = starts[-1] + dt.timedelta(minutes=35)
     if (expires - issued).total_seconds() > CA.MAX_CAMPAIGN_S:
         expires = issued + dt.timedelta(seconds=CA.MAX_CAMPAIGN_S - 60)
-    return {
+    doc = {
         "approved": True,
         "nonce": nonce,
         "series": SERIES,
@@ -80,9 +97,13 @@ def build(n: int, start: dt.datetime, nonce: str, exposure: str,
         "max_windows": n,
         "max_total_exposure_usd": exposure,
         "max_daily_loss_usd": daily_loss,
-        "window_starts": [t.isoformat().replace("+00:00", "Z")
-                          for t in starts],
     }
+    if rolling:
+        doc["last_open_utc"] = starts[-1].isoformat().replace("+00:00", "Z")
+    else:
+        doc["window_starts"] = [t.isoformat().replace("+00:00", "Z")
+                                for t in starts]
+    return doc
 
 
 def main(argv=None) -> int:
@@ -92,6 +113,10 @@ def main(argv=None) -> int:
     ap.add_argument("--nonce")
     ap.add_argument("--exposure", default="0.45")
     ap.add_argument("--daily-loss", default="1.00")
+    ap.add_argument("--rolling", action="store_true",
+                    help="bound the campaign with last_open_utc instead of "
+                         "enumerating each window; the runner then takes "
+                         "the next N windows as they come")
     a = ap.parse_args(argv)
 
     if not (1 <= a.n <= CA.MAX_WINDOWS):
@@ -108,7 +133,8 @@ def main(argv=None) -> int:
         print("nonce must be at least 8 characters", file=sys.stderr)
         return 2
 
-    doc = build(a.n, start, nonce, a.exposure, a.daily_loss)
+    doc = build(a.n, start, nonce, a.exposure, a.daily_loss,
+                rolling=a.rolling)
     first = slug(start)
 
     # ---- verify against the REAL gate, exactly as the service will read it
@@ -118,11 +144,19 @@ def main(argv=None) -> int:
     ok = bool(verdict.get("present") and verdict.get("ok"))
 
     print("=" * 72)
-    print("BTC5m CAMPAIGN APPROVAL  --  %d window(s), first %s" % (a.n, first))
+    print("BTC5m CAMPAIGN APPROVAL  --  %d window(s), %s, first %s"
+          % (a.n, "ROLLING" if a.rolling else "ENUMERATED", first))
     print("=" * 72)
-    for i, t in enumerate(doc["window_starts"], 1):
-        print("  %2d. %s   %s" % (i, t, slug(
-            dt.datetime.fromisoformat(t.replace("Z", "+00:00")))))
+    if a.rolling:
+        print("  last_open_utc  %s" % doc["last_open_utc"])
+        print("  the runner takes the next %d windows as they come, and may"
+              % a.n)
+        print("  open none after that time. Set L5_BTC5M_CAMPAIGN=ON and")
+        print("  leave L5_BTC5M_MARKET empty.")
+    else:
+        for i, t in enumerate(doc["window_starts"], 1):
+            print("  %2d. %s   %s" % (i, t, slug(
+                dt.datetime.fromisoformat(t.replace("Z", "+00:00")))))
     print()
     print("SELF-CHECK against l5_campaign_approval.campaign_decision:")
     print("   accepted: %s" % ("YES" if ok else "NO"))
