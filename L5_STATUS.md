@@ -12,7 +12,7 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
-## BTC5m overnight campaign, first venue-accepted 5-minute order (2026-11-12 05:08Z)
+## BTC5m overnight campaign COMPLETE (2026-11-12 08:08Z)
 
 **Running state.** `l5-btc5m-live` on `ee5f4e802` (PR #227 + #228 merged into
 `integration/l5-safe-release-candidate-20261109`), DISARMED: `L5_SHADOW_ONLY=1`,
@@ -27,13 +27,15 @@ watchdog 0 open orders. `l5-pmus-live` (BTC15m) unchanged on `9de1e1189`, disarm
 |---|---|
 | 0345z (separately approved) | NEVER ARMED, 0 orders. Image had no `cryptography`: every authenticated call raised ModuleNotFoundError; preflight ran once at +0.6 ms. Flat, net $0 |
 | 0500z | ARMED (preflight PASSED at +3.4 s). 1 maker order DOWN 0.11 @ 0.87 accepted (`DNVWAARG13ZK`), cancelled by exact id after the price left the band; 0 fills; venue fee $0; venue settlement 0 (DOWN won); reconcile agrees; settled net **$0.00** |
+| 0630z | ARMED (+3.7 s). 0 orders: EV_BELOW_MIN 21 / OUT_OF_BAND 16 / BOOK_UNUSABLE 16; index rated UP above the book, DOWN won (settlement 0). Net **$0** |
+| 0800z | ARMED after the preflight retry (attempt 1 failed `book_readable` at +3.7 s, attempt 2 passed at +6.9 s). 0 orders: EV_BELOW_MIN 38 / OUT_OF_BAND 8 / BOOK_UNUSABLE 6; book led the index, UP won (settlement 1). Net **$0** |
 
 **Defects fixed tonight** (all BTC5m controller/execution/image; full-suite parity identical to the 34-ID baseline each time):
 1. BTC5m image installed no packages (`cryptography`, `websockets`) and did not ship `l5_mandate_signature` / `l5_promotion_gate`, which `authorize_arming` imports lazily (PR #228; guard test walks lazy imports).
 2. One preflight at the window start raced the venue's CLOSED→OPEN flip (measured at 0350z: CLOSED at -1.95 s, OPEN at +0.125 s). Now retried 3/6/12/24 s until 90 s; failing checks are named (PR #227).
 3. Controller planned against its $5 default under a $0.45 account cap, so entries could starve the completion. Now plans against the binding ceiling with a completion reserve (PR #227).
 
-**Economics.** REPLAY only (42 windows, $0.45 cap, hypothetical fills): every policy negative; the effective-cap fix removes cap-refused completions (6 -> 0) and is within noise of the old wiring; simultaneous two-sided quoting is clearly worse (about -$1.60 vs about -$0.40). The binding loss is residual favorite inventory after adverse moves. Live: 1 order, 0 fills, $0 realized. No realized profit claimed.
+**Economics.** REPLAY only (42 windows, $0.45 cap, hypothetical fills): every policy negative; the effective-cap fix removes cap-refused completions (6 -> 0) and is within noise of the old wiring; simultaneous two-sided quoting is clearly worse (about -$1.60 vs about -$0.40). The binding loss is residual favorite inventory after adverse moves. Live campaign total: 3 windows armed, 1 order submitted (accepted, cancelled), 0 fills, $0 realized; campaign loss used $0 of $1.35. No realized profit claimed. Bottleneck: participation -- the favorite controller's EV gate (index probability minus a 6c adverse allowance) never cleared on windows that resolved early, and where the index disagreed with the book the book was right (3/3 tonight).
 
 ## Manual 19:15Z trade restated to its venue-verified cost (2026-11-12 02:08Z)
 
