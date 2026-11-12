@@ -1656,6 +1656,22 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
         # `x[...] = ...` as proof it cannot write to the store, and that rule
         # caught this on the first run.
         planned.append((plan, per_fill))
+    # A SCOPED BATCH. By default the batch is every leg this walk can
+    # establish, and the manifest must match that whole set. An owner may
+    # instead approve ONE named correction: a manifest carrying
+    # "scope": "KEYS_ONLY" plans only the legs it lists, and every other leg
+    # is reported OUT_OF_BATCH_SCOPE and left exactly as it is. The batch
+    # check below still requires the listed legs, their trade ids, their
+    # before/after costs and the total delta to match exactly, and each leg
+    # still goes through every guard of `correct_cost_basis`. A scope can
+    # only make a batch SMALLER; it cannot add a leg the walk did not plan.
+    if isinstance(manifest, Mapping) and \
+            str(manifest.get("scope") or "").strip().upper() == "KEYS_ONLY":
+        _in = set(str(k) for k in (manifest.get("keys") or ()))
+        skipped.extend({"key": p.get("key"), "reason": "OUT_OF_BATCH_SCOPE",
+                        "cost": "UNCHANGED"}
+                       for p, _f in planned if p.get("key") not in _in)
+        planned = [(p, f) for p, f in planned if p.get("key") in _in]
     # THE BATCH PRECONDITION, evaluated before ANY write. On a dry run it is
     # reported; on an apply a mismatch ABANDONS the batch and writes nothing.
     checked = (check_batch([p for p, _ in planned], manifest)

@@ -266,6 +266,7 @@ COPY config/cost_basis_batch_manifest_20261016.json config/cost_basis_batch_mani
 COPY config/cost_basis_batch_manifest_20261016b.json config/cost_basis_batch_manifest_20261016b.json
 COPY config/cost_basis_batch_manifest_20261016c.json config/cost_basis_batch_manifest_20261016c.json
 COPY config/cost_basis_batch_manifest_20261016d.json config/cost_basis_batch_manifest_20261016d.json
+COPY config/cost_basis_batch_manifest_20261112_manual1915z.json config/cost_basis_batch_manifest_20261112_manual1915z.json
 
 ENV PMUS_SERVICE_ROLE=l5-pmus-live \
     L5_LIVE_ROOT=/state/l5-live \
