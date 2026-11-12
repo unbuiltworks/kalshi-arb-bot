@@ -389,3 +389,103 @@ class TestTheClipCeilingIsPerMode:
         for cost in per_side.values():
             assert cost <= D("2.25")
         assert sum(per_side.values()) <= D("4.50")
+
+
+# ======================================================================
+class TestTheLadderTruncatesEvenly:
+    """A half-built ladder is a directional bet wearing a straddle's
+    clothes. OBSERVED LIVE 2026-11-12 23:12Z: 12 rungs wanted, 10 orders
+    allowed by MAX_LIVE_ORDERS, and because the old code drained one side
+    before starting the other, UP took all 6 and DOWN got 4."""
+
+    LADDER = (D("0.05"), D("0.06"), D("0.07"), D("0.08"), D("0.09"),
+              D("0.10"))
+
+    def test_orders_alternate_sides(self):
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        sides = [o["side"] for o in out["orders"]]
+        # consecutive pairs must cover both sides, so any prefix is balanced
+        for i in range(0, len(sides) - 1, 2):
+            assert {sides[i], sides[i + 1]} == {C.UP, C.DOWN}, sides
+
+    @pytest.mark.parametrize("keep", [2, 4, 6, 8, 10])
+    def test_any_truncation_leaves_the_sides_balanced(self, keep):
+        """However many orders an external cap lets through, the ladder
+        must not end up lopsided by more than one."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        taken = out["orders"][:keep]
+        n_up = sum(1 for o in taken if o["side"] == C.UP)
+        n_dn = sum(1 for o in taken if o["side"] == C.DOWN)
+        assert abs(n_up - n_dn) <= 1, (keep, n_up, n_dn)
+
+    def test_cheap_rungs_are_placed_first(self):
+        """Truncation should keep the rungs with the best breakeven."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        first_four = [o["price"] for o in out["orders"][:4]]
+        assert set(first_four) <= {D("0.05"), D("0.06")}
+
+    def test_a_filled_side_does_not_block_the_other(self):
+        inv = {C.UP: {"qty": "5", "cost": "0.40"},
+               C.DOWN: {"qty": "0", "cost": "0"}}
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"), inventory=inv)
+        assert {o["side"] for o in out["orders"]} == {C.DOWN}
+        assert len(out["orders"]) == len(self.LADDER)
+
+
+# ======================================================================
+class TestTheLiveOrderBoundFitsThePlan:
+    """A bound smaller than the plan does not shrink the strategy, it
+    DEFORMS it. OBSERVED LIVE 2026-11-12 23:10Z: STRADDLE fell through to
+    the EDGE_GATED bound of 2, so a six-rung ladder rested two orders,
+    both on UP, and the window settled a purely directional -$0.55."""
+
+    def test_the_single_rung_straddle_needs_two(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.delenv(X.STRADDLE_RUNGS_ENV, raising=False)
+        assert X.live_order_bound() == 2
+
+    def test_a_six_rung_ladder_needs_twelve(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV,
+                           "0.05,0.06,0.07,0.08,0.09,0.10")
+        assert X.live_order_bound() == 12
+
+    @pytest.mark.parametrize("n", [1, 2, 3, 6, 10])
+    def test_the_bound_is_two_per_rung(self, monkeypatch, n):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        rungs = ",".join("0.%02d" % (4 + i) for i in range(n))
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, rungs)
+        assert X.live_order_bound() == max(2, 2 * n)
+
+    def test_an_unreadable_ladder_falls_back_to_the_single_rung_bound(
+            self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.05,0.90")   # bad rung
+        assert X.live_order_bound() == 2
+
+    def test_the_other_modes_are_untouched(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.05,0.06,0.07")
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "EDGE_GATED")
+        assert X.live_order_bound() == 2
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "ACCUMULATE")
+        monkeypatch.setenv(X.MAX_RESTING_ENV, "8")   # 8 is its ceiling
+        assert X.live_order_bound() == 8
+
+    def test_accumulate_still_refuses_an_out_of_range_slot_count(
+            self, monkeypatch):
+        """Worth pinning: `max_resting_entries` caps at 8, so the 10 and 15
+        set live on 2026-11-12 both fell back to the default of 4."""
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "ACCUMULATE")
+        for raw in ("9", "10", "15"):
+            monkeypatch.setenv(X.MAX_RESTING_ENV, raw)
+            assert X.max_resting_entries() == 4
