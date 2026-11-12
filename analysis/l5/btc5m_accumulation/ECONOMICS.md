@@ -188,13 +188,36 @@ both trending and mean-reverting blocks**, recording every decision, its
 price bucket, and the settled outcome. The recorder service that produced
 this tape already runs; the shadow needs no new money path.
 
-A second, operational bottleneck is a hard limit this work did not touch:
-`L5_LIVE_AUTH_MAX_OPEN` on `l5-btc5m-live` caps OPEN-class submissions per
-campaign. Its value is not readable from here. Accumulation needs roughly
-6–10 OPEN submissions per window; if that variable is set for the old
-one-entry pair strategy it will throttle accumulation regardless of the
-controller. **It is an owner-set authorization control and was deliberately
-left alone.**
+### The next constraint after this change: the submission-class budgets
+
+A hard limit this work deliberately did not touch. Every order is charged
+to one of three owner-set budgets (`L5_LIVE_AUTH_MAX_OPEN`,
+`_MAX_COMPLETE`, `_MAX_REPLACE` on `l5-btc5m-live`), by
+`Btc5mExecutor._order_class`: COMPLETE when it buys the side we are short
+of and cannot overshoot the unmatched amount, **REPLACE once an order of
+ours on that side has been cancelled before**, OPEN otherwise.
+
+Accumulation requotes on every tick of drift, so after the first requote
+on a side almost everything is charged to REPLACE. Measured over the same
+34 windows:
+
+| class | total placements | per window, mean | per window, max |
+|---|---|---|---|
+| OPEN | 60 | 1.8 | 4 |
+| COMPLETE | 23 | 0.7 | 5 |
+| **REPLACE** | **205** | **6.0** | **16** |
+
+So **REPLACE is the budget that binds**, not OPEN — 205 of 288 placements.
+If `L5_LIVE_AUTH_MAX_REPLACE` is sized for the old one-entry pair strategy
+it will stall accumulation after the first requote whatever the controller
+decides, and the symptom will be `AUTHORIZATION:...` refusals rather than
+an entry reason. The current values are not readable from this session.
+
+**These are owner-set authorization controls and were left exactly as they
+are.** Sizing them is an owner decision, and the figures above are what it
+needs: per window, roughly 4 OPEN, 5 COMPLETE and 16 REPLACE covers the
+worst window in the sample at a $0.10 clip. A larger clip lowers all three
+(see the clip sweep).
 
 ## F. WHAT IS NOT CLAIMED
 

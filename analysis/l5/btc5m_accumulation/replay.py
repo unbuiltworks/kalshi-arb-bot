@@ -142,6 +142,14 @@ def run_window(rows, *, tier):
     inv = {C.UP: {"qty": D(0), "cost": D(0)},
            C.DOWN: {"qty": D(0), "cost": D(0)}}
     resting, fills, whys = {}, [], collections.Counter()
+    #: the shared SUBMISSION CLASS each placement would be charged to, by
+    #: the same rule as `Btc5mExecutor._order_class`: COMPLETE when it buys
+    #: the side we are short of and cannot overshoot the unmatched amount,
+    #: REPLACE when an order of ours on that side was cancelled before,
+    #: OPEN otherwise. It decides WHICH owner-set budget the window spends,
+    #: so accumulation's requoting is charged to REPLACE, not OPEN.
+    klasses = collections.Counter()
+    cancelled_side = set()
     nid, placed = 0, 0
     t = 0.0
     while t < WINDOW_S - CANCEL_LEAD_S:
@@ -187,8 +195,21 @@ def run_window(rows, *, tier):
              or out["why"]] += 1
         for op in out["orders"]:
             if op["op"] == "CANCEL":
-                resting.pop(op["id"], None)
+                gone = resting.pop(op["id"], None)
+                if gone is not None:
+                    cancelled_side.add(gone.side)
             else:
+                side = op["side"]
+                other = C.DOWN if side == C.UP else C.UP
+                unmatched = inv[other]["qty"] - inv[side]["qty"]
+                working = sum((o.qty for o in resting.values()
+                               if o.side == side), D(0))
+                if unmatched > 0 and op["qty"] + working <= unmatched:
+                    klasses["COMPLETE"] += 1
+                elif side in cancelled_side:
+                    klasses["REPLACE"] += 1
+                else:
+                    klasses["OPEN"] += 1
                 nid += 1
                 resting["o%d" % nid] = Order("o%d" % nid, op["side"],
                                              op["price"], op["qty"], t)
@@ -196,7 +217,7 @@ def run_window(rows, *, tier):
         t += STEP_S
 
     return {"won": won, "fills": fills, "placed": placed, "whys": whys,
-            "inv": inv}
+            "inv": inv, "klasses": klasses}
 
 
 def bucket(price):
@@ -274,6 +295,20 @@ def report(tape):
                      min(float(x) for x in pw), max(float(x) for x in pw)))
         wonw = sum(1 for x in pw if x > 0)
         print("winning windows      : %d of %d" % (wonw, len(pw)))
+        print()
+        kl = collections.Counter()
+        per = collections.defaultdict(list)
+        for r in usable.values():
+            kl.update(r["klasses"])
+            for k in ("OPEN", "COMPLETE", "REPLACE"):
+                per[k].append(r["klasses"].get(k, 0))
+        print("submission class each placement is charged to"
+              " (owner-set budgets):")
+        for k in ("OPEN", "COMPLETE", "REPLACE"):
+            n = kl.get(k, 0)
+            print("   %-10s %4d total   per window: mean %4.1f  max %d"
+                  % (k, n, statistics.fmean(per[k]) if per[k] else 0.0,
+                     max(per[k]) if per[k] else 0))
         print()
         print("why no entry (decision counts):")
         agg = collections.Counter()
