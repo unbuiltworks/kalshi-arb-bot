@@ -229,3 +229,90 @@ class TestTheExecutorWiring:
                                        reserve_mode="NONE"))
         assert out["orders"] == []
         assert out["why"] == "PARAMS_UNREADABLE"
+
+
+# ======================================================================
+class TestTheLadder:
+    """Multiple rungs a side. A LADDER IS LEVERAGE, NOT DIVERSIFICATION:
+    every rung fills on the same loser collapse and pays on the same
+    reversal, so widening it multiplies both the stake and the variance.
+    Measured on the 189-window tape, 0.05-0.20 returns 10x the absolute
+    profit of a single rung for 27x the capital with t falling 1.67 ->
+    1.17, and 0.05-0.25 and 0.10-0.25 go NEGATIVE out of sample. These
+    tests pin the mechanics; the economics are in the research files."""
+
+    LADDER = (D("0.05"), D("0.06"), D("0.07"), D("0.08"), D("0.09"),
+              D("0.10"))
+
+    def test_one_order_per_rung_per_side(self):
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"))
+        by_side = {}
+        for o in out["orders"]:
+            by_side.setdefault(o["side"], []).append(o["price"])
+        assert set(by_side) == {C.UP, C.DOWN}
+        for prices in by_side.values():
+            assert sorted(prices) == sorted(self.LADDER)
+
+    def test_each_rung_gets_its_own_slot(self):
+        """Two clips at different prices must be distinguishable, or the
+        executor reads the second as a replay of the first."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"))
+        for side in (C.UP, C.DOWN):
+            slots = [o["slot"] for o in out["orders"] if o["side"] == side]
+            assert len(slots) == len(set(slots)), slots
+
+    def test_one_side_costs_exactly_the_clip(self):
+        """Sizing rule: qty = clip / sum(rungs), so the whole ladder on one
+        side costs `clip` and the worst case stays 2 x clip whatever the
+        ladder's width. That is what keeps the cap meaningful."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"))
+        up = [o for o in out["orders"] if o["side"] == C.UP]
+        cost = sum(o["price"] * o["qty"] for o in up)
+        assert cost <= D("0.45")
+        assert cost > D("0.44")          # and it really uses the clip
+
+    def test_the_single_rung_case_is_unchanged(self):
+        """The whole point of sum(rungs): with one rung the sum IS the
+        price, so the live configuration must be byte-identical."""
+        a = decide(straddle_price=D("0.08"), clip_usd=D("0.35"))
+        b = decide(straddle_price=D("0.08"), straddle_rungs=(D("0.08"),),
+                   clip_usd=D("0.35"))
+        assert a["orders"] == b["orders"]
+
+    def test_a_rung_already_resting_is_not_duplicated(self):
+        rest = [{"id": "a", "side": C.UP, "price": D("0.07"),
+                 "qty": D("1"), "age_s": 2.0}]
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"),
+                     resting=rest)
+        up = [o["price"] for o in out["orders"] if o["side"] == C.UP]
+        assert D("0.07") not in up
+        assert len(up) == len(self.LADDER) - 1
+
+    def test_rungs_are_deduplicated_and_sorted(self):
+        out = decide(straddle_rungs=(D("0.10"), D("0.05"), D("0.10")),
+                     clip_usd=D("0.45"))
+        up = [o["price"] for o in out["orders"] if o["side"] == C.UP]
+        assert up == [D("0.05"), D("0.10")]
+
+    @pytest.mark.parametrize("bad", [(D("0.05"), D("0.50")),
+                                     (D("0.05"), D("0.90")),
+                                     (D("0"), D("0.08")),
+                                     (D("-0.01"), D("0.08"))])
+    def test_any_rung_outside_the_bound_refuses_the_whole_ladder(self, bad):
+        """One bad rung is not silently dropped: a ladder that was not
+        specified correctly must not half-trade."""
+        out = decide(straddle_rungs=bad)
+        assert out["why"] == "PARAMS_UNREADABLE"
+        assert out["orders"] == []
+
+    def test_the_rungs_are_reported(self):
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"))
+        ev = out["evaluation"]["entry"]
+        assert ev["rungs"] == [str(r) for r in self.LADDER]
+        assert D(ev["ladder_cost_one_side"]) <= D("0.45")
+
+    def test_the_cap_still_bounds_the_ladder(self):
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"),
+                     max_exposure_usd=D("0.20"))
+        spent = sum(o["price"] * o["qty"] for o in out["orders"])
+        assert spent <= D("0.20")
