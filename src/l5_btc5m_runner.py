@@ -573,6 +573,93 @@ def arm_through_boundary(session: "Session") -> Dict[str, Any]:
     return {"claim": claim}
 
 
+# ------------------------------------------------- settlement recovery
+
+def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]:
+    """Record the venue's own settlement for markets a dead window left open.
+
+    `settle()` is reached at the END of a window. A process killed in the
+    middle of one -- a redeploy, a crash, an OOM -- therefore never records
+    that window, and `_own_exposure` keeps charging its filled cost against
+    the account cap FOREVER, because it only skips markets present in the
+    ledger's `settled` block. Observed live 2026-11-12: $4.97 of exposure on
+    markets the venue reported holding nothing for, which refused the two
+    outermost rungs of every straddle ladder for the rest of the day.
+
+    This is bookkeeping, not trading. It reads the venue's `settlementPx`
+    with a GET, and the only thing it writes is the ledger's `settled`
+    block, through the same `ex.settle()` the live path uses -- so a market
+    with an unresolved order stays provisional and unrecorded, and a market
+    already settled the other way still raises rather than being reversed.
+    It creates no order, cancels nothing and claims no authorization.
+
+    A market the venue has NOT finally settled is left alone: an open or
+    half-expired window must keep counting as exposure.
+    """
+    out: Dict[str, Any] = {
+        "considered": [], "recovered": [], "left": [],
+        "exposure_before_usd": None, "exposure_after_usd": None,
+        "freed_usd": None, "error": None}
+    try:
+        before = ex.account_exposure()
+        out["exposure_before_usd"] = str(before.get("own_usd"))
+        # unsettled markets this ledger has ever had an order in, oldest
+        # first, so a long backlog recovers deterministically.
+        seen = []
+        for r in ex._ledger["orders"].values():          # noqa: SLF001
+            m = r.get("market")
+            if m and m not in ex._ledger["settled"] and m not in seen:  # noqa: SLF001
+                seen.append(m)
+        out["considered"] = sorted(seen)[:limit]
+        for market in out["considered"]:
+            try:
+                t = transport_for(market)
+                verdict = t.settlement(market)
+            except Exception as exc:                           # noqa: BLE001
+                out["left"].append({"market": market,
+                                    "why": "READ_FAILED:%s" % type(exc).__name__})
+                continue
+            why = verdict.get("not_terminal_reason")
+            if why is not None:
+                out["left"].append({"market": market, "why": why,
+                                    "state": verdict.get("state")})
+                continue
+            px = verdict.get("settlement_px")
+            if px is None or px not in (D(0), D(1)):
+                out["left"].append({"market": market,
+                                    "why": "SETTLEMENT_NOT_BINARY"})
+                continue
+            try:
+                rec = ex.settle(market, px == D(1))
+            except Exception as exc:                           # noqa: BLE001
+                out["left"].append({"market": market,
+                                    "why": "SETTLE_REFUSED:%s" % type(exc).__name__})
+                continue
+            # `settlement_arithmetic` is PROVISIONAL while an order of
+            # ours is unresolved, and `ex.settle` deliberately records
+            # nothing in that case -- the market must keep counting.
+            if rec.get("provisional") or market not in ex._ledger["settled"]:  # noqa: SLF001
+                out["left"].append({"market": market,
+                                    "why": "PROVISIONAL",
+                                    "unresolved": rec.get("unresolved_orders")})
+                continue
+            out["recovered"].append({
+                "market": market, "up_won": bool(px == D(1)),
+                "settlement_px": str(px),
+                "settlement_pnl": str(rec.get("settlement_pnl")),
+                "already_settled": bool(rec.get("already_settled"))})
+        after = ex.account_exposure()
+        out["exposure_after_usd"] = str(after.get("own_usd"))
+        b, a = (_dec(out["exposure_before_usd"]),
+                _dec(out["exposure_after_usd"]))
+        if b is not None and a is not None:
+            out["freed_usd"] = str(b - a)
+    except Exception as exc:                                   # noqa: BLE001
+        # A bookkeeping sweep must never stop the service from trading.
+        out["error"] = "%s:%s" % (type(exc).__name__, exc)
+    return out
+
+
 # ------------------------------------------------------------ the session
 
 class Session:
@@ -1085,6 +1172,20 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     if port:
         serve_fills(ex, int(port))
     ref = REF.Reference(window_s=WINDOW_S)
+
+    # SETTLEMENT RECOVERY, before the first window. A window whose process
+    # died in the middle never recorded its settlement, and that market's
+    # filled cost keeps counting against the account cap until it does --
+    # which on 2026-11-12 cost the ladder its two outermost rungs on every
+    # window of the evening. GET only; records the venue's own settlementPx.
+    try:
+        rec = recover_settlements(
+            ex, lambda slug: T.PmusTransport(market_slug=slug, series="BTC5M"))
+        emit("L5_BTC5M_SETTLEMENT_RECOVERY", rec)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BTC5M_SETTLEMENT_RECOVERY", {"error": type(exc).__name__})
 
     # THE AUTHENTICATED BOOK FEED, subscribed to the 5-minute series. It is
     # what lets `book_readable` survive the venue's early-window 404s, via
