@@ -876,8 +876,30 @@ class Btc5mExecutor:
 
     # ---------------------------------------------------------------- step
 
+    def effective_params(self, ceiling_usd: Any = None) -> "C.Params":
+        """The controller's parameters with the ceiling that actually binds.
+
+        The controller budgets entries against `max_exposure_usd`; left at
+        its $5.00 default under a $0.45 account cap, entries could use the
+        whole real cap and leave nothing for the completing order, which
+        `_place` would then refuse. So the controller is given the smallest
+        of: its own ceiling, the account cap (`L5_ACCOUNT_MAX_EXPOSURE_USD`)
+        and the caller's approved ceiling for this window, and it reserves
+        the completion cost inside that ("COMPLETION" mode). This only ever
+        LOWERS the budget the controller plans with; every hard check in
+        `_place` (strategy cap, account-wide cap, the authorization claim)
+        is unchanged and still applies to each order."""
+        eff = self.params.max_exposure_usd
+        for c in (account_cap(), _dec(ceiling_usd)):
+            if c is not None:
+                eff = min(eff, c)
+        return type(self.params)(**dict(vars(self.params),
+                                        max_exposure_usd=max(ZERO, eff),
+                                        reserve_mode="COMPLETION"))
+
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
-             p_up: Any = None, p_source: Any = None) -> Dict[str, Any]:
+             p_up: Any = None, p_source: Any = None,
+             exposure_ceiling_usd: Any = None) -> Dict[str, Any]:
         """Poll, decide, cancel, place. One pass; returns what happened."""
         now = self._now()
         report: Dict[str, Any] = {
@@ -908,12 +930,19 @@ class Btc5mExecutor:
             decision = C.decide(
                 book=book, t_in_window_s=t_in_window_s,
                 inventory=self.inventory(market),
-                resting=self._resting(market, now), params=self.params,
+                resting=self._resting(market, now),
+                params=self.effective_params(exposure_ceiling_usd),
                 p_up=p_up, p_source=p_source)
         except Exception as exc:                               # noqa: BLE001
             report["action"], report["why"] = "CONTROLLER_ERROR", type(exc).__name__
             return done()
         report["action"], report["why"] = decision["action"], decision["why"]
+        report["entry_eval"] = {k: (_s(v) if isinstance(v, Decimal) else v)
+                                for k, v in ((decision.get("evaluation") or {})
+                                             .get("entry") or {}).items()}
+        report["hedge_eval"] = {k: (_s(v) if isinstance(v, Decimal) else v)
+                                for k, v in ((decision.get("evaluation") or {})
+                                             .get("hedge") or {}).items()}
         if decision["action"] == C.DISABLED:
             return done()
         todo = [o for o in decision["orders"] if isinstance(o, Mapping)]
