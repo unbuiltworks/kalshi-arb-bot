@@ -18,9 +18,11 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            # further round at d=0; depth 1 keeps it aggressive AND lets rounds reopen (owner: keep adjusting)
            "L5_TS_DEPTH_TICKS": "1",
            # owner 14:57Z "MORE PAIRS. get aggressive. move constantly": opening bids re-priced every 20 s (was 120 s)
-           "L5_TS_ORDER_TTL_S": "20"}
-TIGHTEN = {"L5_MAX_LIVE_ORDERS": "4", "L5_TS_CONCURRENT_ROUNDS": "2", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
-           "L5_LIVE_AUTH_MAX_OPEN": "16", "L5_LIVE_AUTH_MAX_COMPLETE": "32", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "120"}
+           "L5_TS_ORDER_TTL_S": "20",
+           # owner 15:17Z "place these pairs simultaneously": three rounds in parallel
+           "L5_TS_ROUND_ALLOCATIONS": "3"}
+TIGHTEN = {"L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
+           "L5_LIVE_AUTH_MAX_OPEN": "24", "L5_LIVE_AUTH_MAX_COMPLETE": "48", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "140"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",
              "L5_LIVE_PROBE_MARKET", "L5_LIVE_HALT", "L5_SHADOW_ONLY") + tuple(TEST_ON) + tuple(TIGHTEN)
 #: exactly the values in force before the window (read 2026-11-12 13:45Z); owner settings 0.99/recovery/replenish stay
@@ -28,7 +30,7 @@ RESTORE = {"L5_LIVE_HALT": "1", "L5_SHADOW_ONLY": "1", "L5_LIVE_AUTH_MAX_WINDOWS
            "L5_MAX_LIVE_ORDERS": "4", "L5_TS_CONCURRENT_ROUNDS": "2", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
            "L5_LIVE_AUTH_MAX_OPEN": "140", "L5_LIVE_AUTH_MAX_COMPLETE": "300", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "500",
            "L5_TS_REQUOTE_KEEPS_ROUND": "", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "",
-           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": "", "L5_TS_DEPTH_TICKS": "", "L5_TS_ORDER_TTL_S": ""}
+           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": "", "L5_TS_DEPTH_TICKS": "", "L5_TS_ORDER_TTL_S": "", "L5_TS_ROUND_ALLOCATIONS": "2"}
 def client(write=None):
     if write: return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC, allow_writes=True, writable=tuple(write))
     return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC)
