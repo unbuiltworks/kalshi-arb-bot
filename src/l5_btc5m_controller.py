@@ -27,6 +27,13 @@ is left working that this decision could not re-justify.
 
 Every PLACE is a post-only maker BUY unless `Params.taker_allowed` is True
 (default False), which is the only way EXIT_OR_FLIP can be emitted.
+
+TWO ENTRY RULES, selected by `Params.entry_mode` and described there.
+"EDGE_GATED" is the original and the default. "ACCUMULATE" is favorite
+accumulation: repeated small maker buys of the current favorite at an
+eligible paid price, for the whole window, while the cap has room, with no
+edge gate and no pair formation. Nothing about the caps, the halts, the
+post-only rule or the authorization path differs between them.
 """
 from __future__ import annotations
 
@@ -51,6 +58,11 @@ HOLD_OR_SKIP = "HOLD_OR_SKIP"
 UP = "UP"
 DOWN = "DOWN"
 SIDES = (UP, DOWN)
+
+#: the two entry rules. See `Params.entry_mode`.
+EDGE_GATED = "EDGE_GATED"
+ACCUMULATE = "ACCUMULATE"
+ENTRY_MODES = (EDGE_GATED, ACCUMULATE)
 
 ZERO = D("0")
 ONE = D("1")
@@ -101,8 +113,47 @@ class Params:
     #: plus `completion_fee_per_share`. Shares already resting on the
     #: completing side are counted once, as resting notional, not reserved
     #: again. The executor runs in this mode with its effective ceiling.
+    #: "NONE": entries may use the whole cap. Only coherent with
+    #: `hedge_enabled` False -- there is no completing order to reserve for.
     reserve_mode: str = "FIXED"
     completion_fee_per_share: Decimal = D("0")
+
+    # ------------------------------------------------- entry mode
+    #: WHICH ENTRY RULE APPLIES. Two, and they are different strategies.
+    #:
+    #: "EDGE_GATED" (the default, unchanged): one entry at a time, resting
+    #: `depth_ticks` below the favorite's bid, admitted only when
+    #:     p_side - price - adverse_selection_per_share >= min_edge_per_share
+    #: On a one-cent book that asks the entry to sit about SEVEN cents under
+    #: the bid (0.06 + 0.01), which a 5-minute book does not offer: every
+    #: step of the 2026-11-12 06:30z and 08:00z windows refused with
+    #: EV_BELOW_MIN while $0.41 of the $0.45 cap sat unused.
+    #:
+    #: "ACCUMULATE" (favorite accumulation, owner's contract 2026-11-12):
+    #: repeated small post-only maker buys of the CURRENT FAVORITE at an
+    #: eligible price, throughout the window, while capacity remains. The
+    #: edge gate is NOT an entry condition: the eligible price band is. The
+    #: band is judged ON THE PRICE THIS ORDER WOULD PAY -- `band_lo` through
+    #: `band_hi` inclusive -- not on the touch it is derived from, because
+    #: the band is a statement about the price paid. `ev_per_share` is still
+    #: computed and reported on every decision, as evidence; it blocks
+    #: nothing. Adding to a side STOPS the moment that side is no longer the
+    #: favorite, and anything resting on the other side is cancelled.
+    entry_mode: str = "EDGE_GATED"
+    #: ACCUMULATE only: ticks below the favorite's bid an entry rests at.
+    #: 0 joins the bid, which is where a maker buy has queue priority and
+    #: the smallest gap to the price the band speaks about.
+    accumulate_depth_ticks: int = 0
+    #: ACCUMULATE only: how many of this strategy's own entry orders may
+    #: rest on the favorite at once. The executor's `max_live_orders` is a
+    #: separate, harder bound and the smaller of the two is what binds.
+    max_resting_entries: int = 2
+    #: Whether an unmatched leg is completed with the opposite side at all.
+    #: False is favorite accumulation: a directional inventory with no pair
+    #: formation, so no HEDGE_UNDERDOG is ever emitted, nothing is reserved
+    #: for a completion, and a resting order on the non-favorite side is
+    #: cancelled rather than read as a hedge.
+    hedge_enabled: bool = True
 
 
 # --------------------------------------------------------------- readers
@@ -310,9 +361,14 @@ def _result(action, why, orders, evaluation, exp, favorite=None, p_up=None,
             "p_up": p_up, "p_source": p_source}
 
 
-def _place(side, price, qty, reason, *, post_only=True, intent="BUY"):
+def _place(side, price, qty, reason, *, post_only=True, intent="BUY", slot=0):
+    """One order. `slot` is which of the concurrent entries this is: 0
+    everywhere except an ACCUMULATE entry beyond the first, where the
+    caller needs to tell two identical clips apart without reading either
+    as a replay of the other."""
     return {"op": "PLACE", "side": side, "price": price, "qty": qty,
-            "post_only": post_only, "intent": intent, "reason": reason}
+            "post_only": post_only, "intent": intent, "reason": reason,
+            "slot": int(slot)}
 
 
 def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
@@ -332,7 +388,17 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     tick, min_qty = _dec(params.tick), _dec(params.min_qty)
     if tick is None or tick <= 0 or min_qty is None or min_qty <= 0:
         return hold("PARAMS_UNREADABLE", cancel=True)
-    if params.reserve_mode not in ("FIXED", "COMPLETION"):
+    if params.reserve_mode not in ("FIXED", "COMPLETION", "NONE"):
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    if params.entry_mode not in (EDGE_GATED, ACCUMULATE):
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    # "NONE" says nothing is kept back for a completing order, which is only
+    # true when no completing order is ever placed. Asking for one without
+    # the other is a contradiction, not a default.
+    if (params.reserve_mode == "NONE") != (not params.hedge_enabled):
+        return hold("PARAMS_UNREADABLE", cancel=True)
+    accumulate = params.entry_mode == ACCUMULATE
+    if accumulate and int(params.max_resting_entries) < 1:
         return hold("PARAMS_UNREADABLE", cancel=True)
     _cap, _fee = _dec(params.max_exposure_usd), _dec(params.completion_fee_per_share)
     if _cap is None or _cap < 0 or _fee is None or _fee < 0:
@@ -379,7 +445,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         return PRICE_MIN <= x <= PRICE_MAX
 
     # 3. Entry price and its value after the adverse-selection allowance.
-    target = _floor_to(fav_bid - params.depth_ticks * tick, tick)
+    #    ACCUMULATE rests `accumulate_depth_ticks` below the bid (0 = join
+    #    it); EDGE_GATED keeps its own `depth_ticks`.
+    _ticks = (params.accumulate_depth_ticks if accumulate
+              else params.depth_ticks)
+    target = _floor_to(fav_bid - _ticks * tick, tick)
 
     def ev_at(side, price):
         return prob[side] - price - params.adverse_selection_per_share
@@ -387,19 +457,29 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     late = t >= params.no_new_entry_after_s
 
     def entry_block(price):
-        """Why a favorite entry at `price` is refused, or None."""
+        """Why a favorite entry at `price` is refused, or None.
+
+        ACCUMULATE judges the band on `price` -- what this order pays --
+        and applies NO edge gate. EDGE_GATED is unchanged: the band on the
+        touch, and the adverse-selection edge test.
+        """
         if late:
             return "ENTRY_WINDOW_CLOSED"
-        if not (params.band_lo <= fav_bid <= params.band_hi):
+        banded = price if accumulate else fav_bid
+        if not (params.band_lo <= banded <= params.band_hi):
             return "OUT_OF_BAND"
         if not priced(price):
             return "PRICE_OUT_OF_RANGE"
-        if ev_at(fav, price) < params.min_edge_per_share:
+        if not accumulate and ev_at(fav, price) < params.min_edge_per_share:
             return "EV_BELOW_MIN"
         return None
 
     # Hedge geometry: the unmatched side is `held`, the hedge buys the other.
+    # With `hedge_enabled` False there is no hedge at all: no leg is read as
+    # one, none is priced, and none is ever chosen.
     held, unmatched = exp["unmatched_side"], exp["unmatched_qty"]
+    if not params.hedge_enabled:
+        held, unmatched = None, ZERO
     hedge_side = _other(held) if held else None
     avg_held = inv[held][1] / inv[held][0] if held else None
     hedge_price = _floor_to(quote[hedge_side]["bid"], tick) if held else None
@@ -417,6 +497,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     # 4./5. Review what is resting: keep only what would be placed again now.
     cancels, review, kept = [], [], []
     kept_hedge_qty = ZERO
+    kept_entries = 0
+    #: an ACCUMULATE entry tracks the touch exactly: one tick of drift means
+    #: paying over the bid (filled by a seller on the way down) or sitting
+    #: behind it (never reached). EDGE_GATED keeps its one-tick tolerance.
+    drift_tol = ZERO if accumulate else tick
     for o in rest:
         purpose, why = None, None
         on_hedge, on_fav = bool(held) and o["side"] == hedge_side, o["side"] == fav
@@ -436,12 +521,16 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     purpose = "HEDGE"
                     kept_hedge_qty += o["qty"]
             if purpose is None and on_fav:
-                if abs(o["price"] - target) > tick:
+                if abs(o["price"] - target) > drift_tol:
                     why = "PRICE_DRIFT"
                 elif entry_block(o["price"]) is not None:
                     why = entry_block(o["price"])
+                elif (accumulate and
+                      kept_entries >= int(params.max_resting_entries)):
+                    why = "MAX_RESTING_ENTRIES"
                 else:
                     purpose, why = "ENTRY", None
+                    kept_entries += 1
         if purpose is None:
             cancels.append({"op": "CANCEL", "id": o["id"]})
         else:
@@ -453,7 +542,9 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     total = exp["total_exposure_usd"]   # counts orders being cancelled: a cancel can lose the race
 
     # 6. Hedge the unmatched leg. May use the hedge reserve.
-    hedge = {"chosen": False, "why": "NO_UNMATCHED_INVENTORY"}
+    hedge = {"chosen": False,
+             "why": ("HEDGING_DISABLED" if not params.hedge_enabled
+                     else "NO_UNMATCHED_INVENTORY")}
     if held:
         pair = avg_held + hedge_price
         # Everything already working on the hedge side counts, cancelled or not.
@@ -521,6 +612,9 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         res = completion_reserve(inv, rest, params, add_side=fav,
                                  add_price=target, add_qty=e_qty)
         entry_cap = params.max_exposure_usd - res["usd"]
+    elif params.reserve_mode == "NONE":
+        res = None
+        entry_cap = params.max_exposure_usd
     elif params.reserve_mode == "FIXED":
         res = None
         entry_cap = params.max_exposure_usd - params.hedge_reserve_usd
@@ -533,10 +627,22 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
              "reserve_mode": params.reserve_mode,
              "completion_reserve_usd": None if res is None else res["usd"],
              "cap_usd": params.max_exposure_usd,
+             "entry_mode": params.entry_mode,
+             "resting_entries": kept_entries,
+             "max_resting_entries": (int(params.max_resting_entries)
+                                     if accumulate else 1),
              "chosen": False}
     block = entry_block(target)
-    if block is None and any(o["side"] == fav for o in kept):
-        block = "ENTRY_ALREADY_RESTING"
+    if block is None:
+        # EDGE_GATED allows one entry at a time. ACCUMULATE allows
+        # `max_resting_entries`, which is what "repeated small maker orders
+        # while capacity remains" needs: the cap, not a count of one, is
+        # what should stop it.
+        if accumulate:
+            if kept_entries >= int(params.max_resting_entries):
+                block = "MAX_RESTING_ENTRIES"
+        elif any(o["side"] == fav for o in kept):
+            block = "ENTRY_ALREADY_RESTING"
     if block is None and e_qty < min_qty:
         block = "QTY_BELOW_MIN"
     if block is None and total + notional > entry_cap:
@@ -570,7 +676,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                        post_only=False, intent="SELL")
         return done(EXIT_OR_FLIP, exit_["why"], list(cancel_all) + [order])
     if entry["chosen"]:
-        order = _place(fav, target.quantize(tick), e_qty, kind)
+        # the lowest free slot, which is simply how many entries are
+        # already resting: the same state decides the same slot, so a
+        # replayed decision is still recognised as the same intent.
+        order = _place(fav, target.quantize(tick), e_qty, kind,
+                       slot=(kept_entries if accumulate else 0))
         return done(kind, entry["why"], cancels + [order])
     if cancels:
         reasons = sorted({r["why"] for r in review if r["verdict"] == "CANCEL"})
