@@ -25,3 +25,12 @@ deploy of a money-capable service.
 
 2026-11-12T15:53Z  redeploy: the market-lock fix, this time actually in the
                    shipped tree (the previous deploy merged a stale branch).
+
+2026-11-12T16:07Z  account-exposure visibility in the step record, and the
+                   account ceiling raised 0.45 -> 1.00 at the owner's
+                   instruction. BTC5m own exposure UNCHANGED at $0.45: the
+                   approval still says max_total_exposure_usd 0.45 and
+                   effective_params takes the minimum, so this only stops
+                   foreign rows crowding BTC5m out of a shared ceiling.
+                   Approval nonce b5m-d0ab2d55e40c77ced6d8841c,
+                   windows 16:15/20/25/30Z.
