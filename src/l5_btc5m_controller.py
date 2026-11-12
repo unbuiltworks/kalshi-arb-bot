@@ -497,12 +497,22 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         elif t >= params.no_new_entry_after_s:
             why_s = "ENTRY_WINDOW_CLOSED"
         else:
-            for side in SIDES:
-                if inv[side][0] > 0:
-                    continue                      # this side is done
-                live = {o["price"] for o in rest if o["side"] == side}
-                for i, r in enumerate(_rungs):
-                    if r in live:
+            #: RUNGS OUTER, SIDES INNER -- so that any truncation falls
+            #: EVENLY on both sides. Draining one side first (the original
+            #: order) meant an external cap left the ladder lopsided: with
+            #: 12 rungs wanted and 10 orders allowed, UP took all 6 and
+            #: DOWN got 4, which is a directional bet wearing a straddle's
+            #: clothes. Observed live 2026-11-12 23:12Z as MAX_LIVE_ORDERS
+            #: refusing ten placements after UP had been filled first.
+            #: A half-built ladder is the one shape this strategy must
+            #: never hold.
+            live = {s: {o["price"] for o in rest if o["side"] == s}
+                    for s in SIDES}
+            for i, r in enumerate(_rungs):
+                for side in SIDES:
+                    if inv[side][0] > 0:
+                        continue                  # this side is done
+                    if r in live[side]:
                         continue                  # that rung already rests
                     if r * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"

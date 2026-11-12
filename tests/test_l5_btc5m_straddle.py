@@ -389,3 +389,48 @@ class TestTheClipCeilingIsPerMode:
         for cost in per_side.values():
             assert cost <= D("2.25")
         assert sum(per_side.values()) <= D("4.50")
+
+
+# ======================================================================
+class TestTheLadderTruncatesEvenly:
+    """A half-built ladder is a directional bet wearing a straddle's
+    clothes. OBSERVED LIVE 2026-11-12 23:12Z: 12 rungs wanted, 10 orders
+    allowed by MAX_LIVE_ORDERS, and because the old code drained one side
+    before starting the other, UP took all 6 and DOWN got 4."""
+
+    LADDER = (D("0.05"), D("0.06"), D("0.07"), D("0.08"), D("0.09"),
+              D("0.10"))
+
+    def test_orders_alternate_sides(self):
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        sides = [o["side"] for o in out["orders"]]
+        # consecutive pairs must cover both sides, so any prefix is balanced
+        for i in range(0, len(sides) - 1, 2):
+            assert {sides[i], sides[i + 1]} == {C.UP, C.DOWN}, sides
+
+    @pytest.mark.parametrize("keep", [2, 4, 6, 8, 10])
+    def test_any_truncation_leaves_the_sides_balanced(self, keep):
+        """However many orders an external cap lets through, the ladder
+        must not end up lopsided by more than one."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        taken = out["orders"][:keep]
+        n_up = sum(1 for o in taken if o["side"] == C.UP)
+        n_dn = sum(1 for o in taken if o["side"] == C.DOWN)
+        assert abs(n_up - n_dn) <= 1, (keep, n_up, n_dn)
+
+    def test_cheap_rungs_are_placed_first(self):
+        """Truncation should keep the rungs with the best breakeven."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"))
+        first_four = [o["price"] for o in out["orders"][:4]]
+        assert set(first_four) <= {D("0.05"), D("0.06")}
+
+    def test_a_filled_side_does_not_block_the_other(self):
+        inv = {C.UP: {"qty": "5", "cost": "0.40"},
+               C.DOWN: {"qty": "0", "cost": "0"}}
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("2.25"),
+                     max_exposure_usd=D("10"), inventory=inv)
+        assert {o["side"] for o in out["orders"]} == {C.DOWN}
+        assert len(out["orders"]) == len(self.LADDER)
