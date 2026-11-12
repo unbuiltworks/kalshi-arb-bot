@@ -88,6 +88,15 @@ NOT_AFTER_ENV = "L5_BTC5M_NOT_AFTER"
 HALT_ENV = "L5_LIVE_HALT"
 SHADOW_ONLY_ENV = "L5_SHADOW_ONLY"
 ACCOUNT_CAP_ENV = "L5_ACCOUNT_MAX_EXPOSURE_USD"
+#: WHICH ENTRY RULE THE CONTROLLER RUNS. "ACCUMULATE" selects favorite
+#: accumulation; anything else (including unset) keeps the original
+#: edge-gated rule, so a deployment changes no behaviour until the owner
+#: sets this variable. It selects a STRATEGY; it authorizes nothing: every
+#: cap, both halts, the arm token and the per-order authorization claim are
+#: unchanged and still apply to each order in either mode.
+ENTRY_MODE_ENV = "L5_BTC5M_ENTRY_MODE"
+#: ACCUMULATE only: how many of our own entry orders may rest at once.
+MAX_RESTING_ENV = "L5_BTC5M_MAX_RESTING_ENTRIES"
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
@@ -172,6 +181,31 @@ def live_halt_engaged() -> bool:
 
 def shadow_only_engaged() -> bool:
     return (os.environ.get(SHADOW_ONLY_ENV, "1") or "").strip() != "0"
+
+
+def entry_mode() -> str:
+    """The owner's entry rule, defaulting to the original edge-gated one."""
+    want = (os.environ.get(ENTRY_MODE_ENV) or "").strip().upper()
+    return C.ACCUMULATE if want == C.ACCUMULATE else C.EDGE_GATED
+
+
+def max_resting_entries(default: int = 2) -> int:
+    """How many entry orders may rest at once. Out-of-range reads keep the
+    default: a typo must not widen what the strategy may have working."""
+    raw = (os.environ.get(MAX_RESTING_ENV) or "").strip()
+    if not raw.isdigit():
+        return default
+    n = int(raw)
+    return n if 1 <= n <= 8 else default
+
+
+def live_order_bound(default: int = 2) -> int:
+    """The executor's hard cap on simultaneously live orders. In ACCUMULATE
+    it follows `max_resting_entries` so the controller's plan and the
+    executor's bound agree; otherwise it is the original 2."""
+    if entry_mode() != C.ACCUMULATE:
+        return default
+    return max(default, max_resting_entries(default))
 
 
 def account_cap() -> Optional[Decimal]:
@@ -446,11 +480,27 @@ class Btc5mExecutor:
         return sum(1 for r in self._ledger["orders"].values()
                    if r["market"] == market and r["state"] in TERMINAL)
 
-    def coid(self, market: Any, seq: Any, side: Any, price: Any, qty: Any) -> str:
+    def coid(self, market: Any, seq: Any, side: Any, price: Any, qty: Any,
+             slot: Any = 0) -> str:
+        """This intent's one id. The SAME intent must hash the same, so a
+        replayed decision is caught as DUPLICATE_INTENT instead of sent
+        twice; a DIFFERENT intent must hash differently, or a legitimate
+        order is refused as a duplicate.
+
+        `slot` is which of the strategy's concurrent entries this is --
+        always 0 outside ACCUMULATE, where accumulation deliberately rests
+        several identical clips at once and `seq` alone cannot tell them
+        apart. It is left out of the hashed string when it is 0, so every
+        id this method produced before accumulation existed is unchanged.
+        A slot is reused only after the order holding it went terminal,
+        which has already moved `seq`, so no two orders collide."""
         px, q = _dec(price), _dec(qty)
-        raw = "|".join([str(market), str(int(seq)), str(side),
-                        _canon(px) if px is not None else str(price),
-                        _canon(q) if q is not None else str(qty)])
+        parts = [str(market), str(int(seq)), str(side),
+                 _canon(px) if px is not None else str(price),
+                 _canon(q) if q is not None else str(qty)]
+        if int(slot) != 0:
+            parts.append("s%d" % int(slot))
+        raw = "|".join(parts)
         return COID_PREFIX + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
     # ------------------------------------------------------------- arming
@@ -783,7 +833,8 @@ class Btc5mExecutor:
         if fault:
             return refuse(fault)
         side, price, qty = order["side"], _dec(order["price"]), _dec(order["qty"])
-        coid = self.coid(market, self._seq(market), side, price, qty)
+        slot = order.get("slot") or 0
+        coid = self.coid(market, self._seq(market), side, price, qty, slot)
         if coid in self._ledger["orders"]:
             return refuse("DUPLICATE_INTENT", client_order_id=coid)
         pending = self._cancel_pending(market)
@@ -845,7 +896,7 @@ class Btc5mExecutor:
             "price": _s(price), "qty": _s(qty), "venue_order_id": None,
             "state": NEW, "filled_qty": "0", "filled_cost": "0",
             "created_at": now.isoformat() if now is not None else None,
-            "reason": order.get("reason"),
+            "reason": order.get("reason"), "slot": int(slot),
             "klass": klass, "claim_sid": claim.get("sid")}
         if not self._save_or_halt():
             del self._ledger["orders"][coid]
@@ -893,9 +944,24 @@ class Btc5mExecutor:
         for c in (account_cap(), _dec(ceiling_usd)):
             if c is not None:
                 eff = min(eff, c)
-        return type(self.params)(**dict(vars(self.params),
-                                        max_exposure_usd=max(ZERO, eff),
-                                        reserve_mode="COMPLETION"))
+        over: Dict[str, Any] = {"max_exposure_usd": max(ZERO, eff)}
+        mode = entry_mode()
+        if mode == C.ACCUMULATE:
+            # FAVORITE ACCUMULATION. A directional inventory: no completing
+            # order is ever placed, so there is nothing to reserve for and
+            # entries may use the whole binding ceiling. The ceiling itself
+            # is NOT raised -- it is still the smallest of the adapter's
+            # own, the account cap and the owner's approved figure, and the
+            # worst case of a one-sided book is exactly that ceiling, which
+            # is what the runner already checks against the account's loss
+            # room before it arms.
+            over.update(entry_mode=C.ACCUMULATE, hedge_enabled=False,
+                        reserve_mode="NONE",
+                        max_resting_entries=max_resting_entries(
+                            self.params.max_resting_entries))
+        else:
+            over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
+        return type(self.params)(**dict(vars(self.params), **over))
 
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
              p_up: Any = None, p_source: Any = None,

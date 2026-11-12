@@ -796,7 +796,11 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     root = (os.getenv(AUTH.LEDGER_ENV) or "/state/btc5m/auth.jsonl")
     root = os.path.dirname(root)
     ledger = (os.getenv(LEDGER_ENV) or os.path.join(root, "btc5m_ledger.json"))
-    ex = X.Btc5mExecutor(None, ledger)
+    # The executor's live-order bound follows the entry rule: 2 as before,
+    # and in ACCUMULATE whatever `L5_BTC5M_MAX_RESTING_ENTRIES` allows, so
+    # the controller's plan is not silently clipped by a smaller bound.
+    ex = X.Btc5mExecutor(None, ledger,
+                         max_live_orders=X.live_order_bound())
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
