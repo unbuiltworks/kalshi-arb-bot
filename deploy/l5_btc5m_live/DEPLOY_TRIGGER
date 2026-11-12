@@ -13,3 +13,9 @@ deploy of a money-capable service.
                    15:10Z, 15:15Z, 15:20Z, 15:25Z, nonce
                    b5m-f5e46a866f1979ffe761901a, $0.45 aggregate exposure,
                    $1.00 daily loss. Maker-only; taker disabled.
+
+2026-11-12T15:33Z  redeploy with the campaign skip fix (4cb30926) and rolling
+                   windows (c04ae136). Approval nonce
+                   b5m-3be5b845f2887719f24b807a for 15:40/45/50/55Z.
+                   L5_LIVE_AUTH_MAX_OPEN raised to 8 at the owner's
+                   instruction; REPLACE 24, COMPLETE 8.
