@@ -67,3 +67,21 @@ def paired_counterfactual(first_fill: Mapping, complement_price, complement_fee,
     if not (0 < price < 1) or fee < 0:
         raise Unscorable("invalid complement")
     return f["qty"] * (Decimal(1) - f["price"] - price) - f["fee"] - fee
+
+def verified_pair_net(first_fill: Mapping, opposite_fill: Mapping, market: str):
+    """Realized matched-pair net ONLY for two authenticated, equal-size venue fills.
+
+    A partial complement is not a completed pair; split it into separately
+    evidenced matched and residual lots before invoking this function.
+    """
+    first = verified_first_fill(first_fill, market)
+    second = verified_first_fill(opposite_fill, market)
+    if first["side"] == second["side"]:
+        raise Unscorable("complement is same side")
+    if first["fill_id"] == second["fill_id"] or first["order_id"] == second["order_id"]:
+        raise Unscorable("duplicate venue identity")
+    if first["qty"] != second["qty"]:
+        raise Unscorable("unmatched complement quantity")
+    if second["timestamp"] < first["timestamp"]:
+        raise Unscorable("complement predates first fill")
+    return first["qty"] * (Decimal(1) - first["price"] - second["price"]) - first["fee"] - second["fee"]
