@@ -962,6 +962,31 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     ref = REF.Reference(window_s=WINDOW_S)
 
     def one_window(slug: str, max_windows: int) -> Dict[str, Any]:
+        # THE EXECUTOR'S OWN LOCK NAMES THIS WINDOW. `arming_refusal`
+        # refuses every submission unless `L5_BTC5M_MARKET` is set AND
+        # equals the market being traded -- an ADDITIONAL lock in front of
+        # the authorization claim. A campaign deliberately leaves that
+        # variable empty so the runner can take its windows from the
+        # owner's approval, which made the two incompatible: observed live
+        # 2026-11-12 15:42Z, the controller chose OPEN_FAVORITE at 0.76,
+        # 0.80, 0.82, 0.85 and every one was refused MARKET_NOT_CONFIGURED.
+        #
+        # Naming the current window here keeps the lock's meaning exactly:
+        # at any instant it names ONE market, the one this session is
+        # running, and it is narrowed per window rather than widened. What
+        # AUTHORIZES the window is unchanged -- the owner's approval
+        # enumerating it, and the per-order claim.
+        prev = os.environ.get(X.MARKET_ENV)
+        os.environ[X.MARKET_ENV] = slug
+        try:
+            return _run_one(slug, max_windows)
+        finally:
+            if prev is None:
+                os.environ.pop(X.MARKET_ENV, None)
+            else:
+                os.environ[X.MARKET_ENV] = prev
+
+    def _run_one(slug: str, max_windows: int) -> Dict[str, Any]:
         t = T.PmusTransport(market_slug=slug, series="BTC5M")
         ex.transport = t
         sess = Session(

@@ -704,3 +704,45 @@ class TestCampaignSkipsRatherThanStops:
         again = r.session.start()
         assert again["ok"] is False
         assert again["reason"] == "MARKET_ALREADY_RUN"
+
+
+# ======================================================================
+class TestCampaignNamesTheWindowInTheExecutorLock:
+    """Regression for a defect observed LIVE on 2026-11-12 at 15:42Z.
+
+    `Btc5mExecutor.arming_refusal` refuses every submission unless
+    `L5_BTC5M_MARKET` is set AND equals the market being traded. A campaign
+    leaves that variable empty so the runner can take its windows from the
+    owner's approval, so every order was refused MARKET_NOT_CONFIGURED
+    while the controller was correctly choosing OPEN_FAVORITE at 0.76,
+    0.80, 0.82 and 0.85.
+
+    The runner now names the current window in that lock for the duration
+    of the window: it still names exactly ONE market at any instant, and it
+    is narrowed per window, never widened."""
+
+    def test_the_lock_is_what_refuses_an_unnamed_market(self, tmp_path,
+                                                        monkeypatch):
+        r = rig(tmp_path, monkeypatch, env={X.MARKET_ENV: ""})
+        assert r.ex.arming_refusal(M, dt.datetime.now(UTC)) == \
+            "MARKET_NOT_CONFIGURED"
+
+    def test_naming_the_window_clears_that_refusal(self, tmp_path,
+                                                   monkeypatch):
+        r = rig(tmp_path, monkeypatch, env={X.MARKET_ENV: M})
+        assert r.ex.arming_refusal(M, dt.datetime.now(UTC)) != \
+            "MARKET_NOT_CONFIGURED"
+
+    def test_a_different_market_is_still_refused(self, tmp_path,
+                                                 monkeypatch):
+        r = rig(tmp_path, monkeypatch, env={X.MARKET_ENV: M})
+        other = "cpc-btc-updown-5m-2026-11-11-1205z"
+        assert r.ex.arming_refusal(other, dt.datetime.now(UTC)) == \
+            "MARKET_MISMATCH"
+
+    def test_the_runner_sets_and_restores_the_lock_around_each_window(self):
+        src = inspect.getsource(RUN.main)
+        assert "os.environ[X.MARKET_ENV] = slug" in src
+        i = src.index("os.environ[X.MARKET_ENV] = slug")
+        assert "finally:" in src[i:], "the lock must be restored"
+        assert "os.environ.pop(X.MARKET_ENV, None)" in src[i:]
