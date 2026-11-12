@@ -779,3 +779,67 @@ class TestAccountExposureIsVisible:
         assert acct["unknown"] is False
         assert acct["other_position_contracts"] == D("0.34")
         assert acct["other_usd"] == D("0.34")
+
+
+# ======================================================================
+class TestAuthenticatedBookFallback:
+    """Why BTC5m kept losing windows to `book_readable`.
+
+    The venue's REST book route 404s for the first minutes of a window.
+    `PmusTransport._ws_book_substitute` already handles that: it accepts
+    the AUTHENTICATED SOCKET's book in place of a 404 when the snapshot is
+    fresh, two-sided and the market reads OPEN. BTC15m supplies that
+    socket. BTC5m supplied nothing, so `ws_book` was None, the substitute
+    returned None immediately, and every 404 failed the preflight --
+    measured live at 15:15z, 15:45z and 16:15z, t=3s to t=88s."""
+
+    def test_the_5m_selector_takes_the_current_window(self):
+        now = dt.datetime(2026, 11, 12, 16, 22, 30, tzinfo=UTC).timestamp()
+        assert RUN.wanted_5m_slugs(now, 60.0) == [
+            "cpc-btc-updown-5m-2026-11-12-1620z"]
+
+    def test_it_adds_the_next_window_inside_the_lead(self):
+        now = dt.datetime(2026, 11, 12, 16, 24, 30, tzinfo=UTC).timestamp()
+        assert RUN.wanted_5m_slugs(now, 60.0) == [
+            "cpc-btc-updown-5m-2026-11-12-1620z",
+            "cpc-btc-updown-5m-2026-11-12-1625z"]
+
+    def test_every_slug_it_names_is_in_the_5m_series(self):
+        base = dt.datetime(2026, 11, 12, 0, 0, tzinfo=UTC).timestamp()
+        for k in range(0, 288):
+            for s in RUN.wanted_5m_slugs(base + k * 300 + 30, 60.0):
+                assert s.startswith(X.MARKET_PREFIX), s
+                assert RUN.window_start(s) is not None, s
+
+    def test_the_15m_feed_is_unchanged_by_default(self):
+        """The shared module gained an optional selector. Absent it, the
+        feed must still subscribe exactly the 15-minute windows."""
+        from src import l5_pmus_auth_book as AB
+        book = AB.AuthBook()
+        assert book.slugs_fn is AB.wanted_slugs
+        now = dt.datetime(2026, 11, 12, 16, 22, 30, tzinfo=UTC).timestamp()
+        assert book.slugs_fn(now, AB.LEAD_S) == AB.wanted_slugs(now,
+                                                                AB.LEAD_S)
+        assert all("-15m-" in s for s in book.slugs_fn(now, AB.LEAD_S))
+
+    def test_an_injected_selector_is_what_the_feed_uses(self):
+        from src import l5_pmus_auth_book as AB
+        book = AB.AuthBook(slugs_fn=RUN.wanted_5m_slugs)
+        now = dt.datetime(2026, 11, 12, 16, 22, 30, tzinfo=UTC).timestamp()
+        assert book.slugs_fn(now, 60.0) == [
+            "cpc-btc-updown-5m-2026-11-12-1620z"]
+
+    def test_the_runner_hands_the_socket_to_the_transport(self):
+        src = inspect.getsource(RUN.main)
+        assert "AB.AuthBook(slugs_fn=wanted_5m_slugs)" in src
+        assert "t.ws_book = auth_book" in src
+        i = src.index("t.ws_book = auth_book")
+        assert "if auth_book is not None:" in src[max(0, i - 200):i]
+
+    def test_a_feed_that_will_not_start_is_not_fatal(self):
+        """No socket means the old behaviour -- a 404 simply fails the
+        preflight -- never a crash and never an unguarded order."""
+        src = inspect.getsource(RUN.main)
+        i = src.index("AB.AuthBook")
+        assert "except BaseException" in src[i:i + 500]
+        assert '"started": False' in src[i:i + 700]

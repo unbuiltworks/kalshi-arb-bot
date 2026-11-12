@@ -415,6 +415,36 @@ def venue_window_bounds(market: str, *,
             "source": AUTH.WINDOW_SOURCE_VENUE}
 
 
+def wanted_5m_slugs(now: float, lead_s: float) -> List[str]:
+    """The 5-minute window trading now, plus the next once it is within
+    `lead_s`. The same shape as the 15-minute `wanted_slugs` the
+    authenticated book feed defaults to, for the 5-minute series.
+
+    WHY THIS EXISTS. `PmusTransport.preflight`'s `book_readable` gate asks
+    whether this market's book can be read. The venue's REST book route
+    404s for the first minutes of a window -- measured on BTC5m at
+    2026-11-12 15:15z, 15:45z and 16:15z, failing every attempt from t=3s
+    to t=88s and costing the window. The transport already handles that:
+    `_ws_book_substitute` accepts the AUTHENTICATED SOCKET's book in place
+    of a 404, provided the snapshot is fresh, two-sided and the market
+    reads OPEN. BTC15m supplies that socket and so recovers; BTC5m supplied
+    NOTHING, so `ws_book` was None, the substitute returned None
+    immediately, and every 404 failed the preflight outright.
+    """
+    ws = int(now // WINDOW_S) * int(WINDOW_S)
+    out = [slug_for_start(ws)]
+    nxt = ws + int(WINDOW_S)
+    if now >= nxt - lead_s:
+        out.append(slug_for_start(nxt))
+    return out
+
+
+def slug_for_start(ws_epoch: int) -> str:
+    d = dt.datetime.fromtimestamp(ws_epoch, UTC)
+    return "%s%s-%02d%02dz" % (X.MARKET_PREFIX, d.strftime("%Y-%m-%d"),
+                               d.hour, d.minute)
+
+
 def approved_markets(now: dt.datetime) -> Dict[str, Any]:
     """The BTC5m windows the OWNER's approval document enumerates, oldest
     first, as market slugs. READ-ONLY and it reserves nothing.
@@ -977,6 +1007,22 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         serve_fills(ex, int(port))
     ref = REF.Reference(window_s=WINDOW_S)
 
+    # THE AUTHENTICATED BOOK FEED, subscribed to the 5-minute series. It is
+    # what lets `book_readable` survive the venue's early-window 404s, via
+    # the transport's existing `_ws_book_substitute`. Daemon thread,
+    # read-only, no order path.
+    auth_book = None
+    try:
+        from src import l5_pmus_auth_book as AB
+        auth_book = AB.AuthBook(slugs_fn=wanted_5m_slugs).start()
+        emit("L5_BTC5M_AUTH_BOOK", {"started": True,
+                                    "series": X.MARKET_PREFIX})
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BTC5M_AUTH_BOOK", {"started": False,
+                                    "why": type(exc).__name__})
+
     def one_window(slug: str, max_windows: int) -> Dict[str, Any]:
         # THE EXECUTOR'S OWN LOCK NAMES THIS WINDOW. `arming_refusal`
         # refuses every submission unless `L5_BTC5M_MARKET` is set AND
@@ -1004,6 +1050,10 @@ def main() -> int:            # pragma: no cover - the service entrypoint
 
     def _run_one(slug: str, max_windows: int) -> Dict[str, Any]:
         t = T.PmusTransport(market_slug=slug, series="BTC5M")
+        # the socket stands in for a 404ing REST book, exactly as it does
+        # for BTC15m. None leaves the old behaviour: the 404 simply fails.
+        if auth_book is not None:
+            t.ws_book = auth_book
         ex.transport = t
         sess = Session(
             market=slug, executor=ex, transport=t, root=root,
