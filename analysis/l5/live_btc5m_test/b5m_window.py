@@ -140,6 +140,41 @@ def record(slug, predecessor=False):
     c = campaign(); c["predecessor_results" if predecessor else "results"][slug] = res
     json.dump(c, open(CAMPAIGN_FILE, "w"), indent=1); print(json.dumps(res)); return 0
 
+def deploy_sha(sha):
+    """Deploy exactly SHA to l5-btc5m-live. Refuses unless both locks are on
+    and no window is configured (disarmed deploy only)."""
+    v = b5().variables()
+    if v.get("L5_SHADOW_ONLY") != "1" or v.get("L5_LIVE_HALT") != "1" or any(v.get(k) for k in WINDOW_VARS):
+        print("REFUSED: not disarmed", {k: v.get(k) for k in ("L5_SHADOW_ONLY", "L5_LIVE_HALT", "L5_BTC5M_MARKET")}); return 1
+    b = b5(write=("deploy",)); before = b.latest_deployment()
+    r = b._gql("mutation($s:String!,$e:String!,$c:String){serviceInstanceDeployV2(serviceId:$s,environmentId:$e,commitSha:$c)}",
+               {"s": B5, "e": E, "c": sha})
+    print("deploy requested", r)
+    got = b5().wait_for_deployment(expect_sha=sha, timeout_s=600, poll_s=10, not_before=before["createdAt"])
+    print("DEPLOYED", got["id"], got["status"], got["commitHash"]); return 0
+
+def verify_disarmed(sha):
+    """Read-only: SHA, both locks, no window configured, idle log line,
+    watchdog 0 orders, BTC15m disarmed, account loss room."""
+    b = b5(); d = b.latest_deployment(); v = b.variables(); bad = []
+    if d["status"] != "SUCCESS" or d["commitHash"] != sha: bad.append("DEPLOY:%s/%s" % (d["status"], (d["commitHash"] or "")[:9]))
+    if v.get("L5_SHADOW_ONLY") != "1": bad.append("SHADOW_LOCK_OFF")
+    if v.get("L5_LIVE_HALT") != "1": bad.append("HALT_OFF")
+    if any(v.get(k) for k in WINDOW_VARS): bad.append("WINDOW_VARS_SET")
+    if v.get("L5_ACCOUNT_MAX_EXPOSURE_USD") != "0.45": bad.append("ACCOUNT_CAP:%s" % v.get("L5_ACCOUNT_MAX_EXPOSURE_USD"))
+    idle = [r for r in b.logs(deployment_id=d["id"], filter="L5_BTC5M", limit=20) if "L5_BTC5M_IDLE" in str(r.get("message"))]
+    if not idle: bad.append("NO_IDLE_LINE_YET")
+    tb = b.logs(deployment_id=d["id"], filter="Traceback", limit=5)
+    if tb: bad.append("TRACEBACK")
+    w = watchdog()
+    if w.get("open_orders") != 0 or w.get("halted") or w.get("read_error") or w.get("age_s", 999) > 120: bad.append("WATCHDOG")
+    c = client(); hb = c.heartbeat(deployment_id=c.latest_deployment()["id"]) or {}
+    if hb.get("armed") or (hb.get("order_progress") or {}).get("live_orders") not in (0, None): bad.append("BTC15M_NOT_IDLE")
+    out = {"ok": not bad, "fail": bad, "deployment": d["id"], "sha": d["commitHash"], "watchdog": w,
+           "idle": str(idle[-1].get("message"))[:200] if idle else None,
+           "btc15m_day_realized": hb.get("day_realized")}
+    print(json.dumps(out, default=str)); return 0 if not bad else 1
+
 def arm_campaign(slug):
     global SHA
     SHA = campaign()["approved_sha"]   # start SHA, or a verified successor recorded here
@@ -149,6 +184,8 @@ def arm_campaign(slug):
     return arm(slug, cap)
 
 if __name__ == "__main__":
+    if sys.argv[1] == "deploy-sha": sys.exit(deploy_sha(sys.argv[2]))
+    if sys.argv[1] == "verify-disarmed": sys.exit(verify_disarmed(sys.argv[2]))
     if sys.argv[1] == "record": sys.exit(record(sys.argv[2], predecessor="--predecessor" in sys.argv))
     if sys.argv[1] == "arm-campaign": sys.exit(arm_campaign(sys.argv[2]))
     if sys.argv[1] == "campaign-cap": print(campaign_cap(sys.argv[2])); sys.exit(0)
