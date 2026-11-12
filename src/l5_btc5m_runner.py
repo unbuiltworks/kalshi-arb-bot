@@ -82,6 +82,10 @@ SESSION_DIR = "btc5m_sessions"
 #: from the owner's own approval document and this runner can neither add
 #: to it nor invent one.
 CAMPAIGN_ENV = "L5_BTC5M_CAMPAIGN"
+#: a hard ceiling on a ROLLING campaign, independent of the document. The
+#: approval layer already caps `max_windows` at 8, and this refuses to plan
+#: past that even if a future document were to carry more.
+CA_MAX_ROLLING_WINDOWS = 8
 
 
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
@@ -438,23 +442,59 @@ def approved_markets(now: dt.datetime) -> Dict[str, Any]:
     if str(scope.get("series") or "") != X.MARKET_PREFIX:
         out["why"] = "APPROVAL_IS_FOR_ANOTHER_SERIES"
         return out
+    mw = scope.get("max_windows")
+    cap = int(mw) if isinstance(mw, int) else None
+
+    def to_slug(t: dt.datetime) -> str:
+        t = t.astimezone(UTC)
+        return "%s%s-%sz" % (X.MARKET_PREFIX, t.strftime("%Y-%m-%d"),
+                             t.strftime("%H%M"))
+
     starts = scope.get("window_starts")
-    if not isinstance(starts, (list, tuple)) or not starts:
+    if isinstance(starts, (list, tuple)) and starts:
+        # ENUMERATED: the owner named each window.
+        slugs = []
+        for raw in starts:
+            try:
+                t = dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                out["why"] = "APPROVAL_WINDOW_START_UNREADABLE"
+                return out
+            slugs.append(to_slug(t))
+        out.update(markets=sorted(set(slugs)), readable=True, mode="ENUMERATED",
+                   max_windows=(cap if cap is not None else len(slugs)))
+        return out
+
+    # ROLLING: the owner bounded the campaign with `last_open_utc` instead
+    # of naming each window -- the approval layer's own alternative, and
+    # the same shape the 15-minute lane uses. We take the NEXT windows in
+    # order, and the bound is whichever of `last_open_utc` and
+    # `max_windows` binds first. Absent BOTH forms the approval layer has
+    # already refused the document, so there is no permissive fallback here.
+    last_open = scope.get("last_open_utc")
+    if not last_open:
         out["why"] = "APPROVAL_ENUMERATES_NO_WINDOWS"
         return out
-    slugs = []
-    for raw in starts:
-        try:
-            t = dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        except (TypeError, ValueError):
-            out["why"] = "APPROVAL_WINDOW_START_UNREADABLE"
-            return out
-        slugs.append("%s%s-%sz" % (X.MARKET_PREFIX,
-                                   t.astimezone(UTC).strftime("%Y-%m-%d"),
-                                   t.astimezone(UTC).strftime("%H%M")))
-    mw = scope.get("max_windows")
-    out.update(markets=sorted(set(slugs)), readable=True,
-               max_windows=(int(mw) if isinstance(mw, int) else len(slugs)))
+    try:
+        lo = dt.datetime.fromisoformat(str(last_open).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        out["why"] = "APPROVAL_LAST_OPEN_UNREADABLE"
+        return out
+    step = dt.timedelta(seconds=WINDOW_S)
+    t = now.astimezone(UTC).replace(second=0, microsecond=0)
+    t -= dt.timedelta(minutes=t.minute % 5)
+    if t <= now:                       # never a window already under way
+        t += step
+    rolled = []
+    limit = cap if cap is not None else CA_MAX_ROLLING_WINDOWS
+    while t <= lo and len(rolled) < min(limit, CA_MAX_ROLLING_WINDOWS):
+        rolled.append(to_slug(t))
+        t += step
+    out.update(markets=rolled, readable=True, mode="ROLLING",
+               last_open_utc=lo.isoformat(),
+               max_windows=(cap if cap is not None else len(rolled)))
+    if not rolled:
+        out["why"] = "NO_WINDOW_OPENS_BEFORE_LAST_OPEN_UTC"
     return out
 
 
@@ -958,11 +998,26 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         # NEVER MORE THAN THE OWNER APPROVED, whatever the list says.
         for slug in plan["markets"][:max(1, int(plan["max_windows"]))]:
             rep = one_window(slug, plan["max_windows"])
+            # ALREADY RUN OR ALREADY OVER IS A SKIP, NOT A STOP. A restart
+            # inside a campaign re-plans the whole approved list and so meets
+            # the windows it already finished; treating that as a refusal
+            # ended the campaign on its FIRST entry and never reached the
+            # windows still ahead of it (observed live, 2026-11-12 15:20Z:
+            # the 15:10z marker stopped a campaign that still had 15:20z and
+            # 15:25z to run). The durable marker still guarantees no window
+            # is traded twice -- that is exactly what lets this be a skip.
+            skip = {"MARKET_ALREADY_RUN", "WINDOW_ALREADY_PAST"}
             # A halt, a refusing account-risk state or an unresolved order
             # ENDS THE CAMPAIGN. It never marches on to the next window.
             stop = None
             if not rep.get("started"):
-                stop = rep.get("reason")
+                reason = rep.get("reason")
+                if reason in skip:
+                    emit("L5_BTC5M_WINDOW_SKIPPED",
+                         {"market": slug, "reason": reason,
+                          "utc": dt.datetime.now(UTC).isoformat()})
+                    continue
+                stop = reason
             elif not (rep.get("close") or {}).get("clean", True):
                 stop = "CLOSE_NOT_CLEAN"
             elif ex.halted_reason:
