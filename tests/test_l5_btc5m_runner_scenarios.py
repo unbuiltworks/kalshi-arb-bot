@@ -843,3 +843,56 @@ class TestAuthenticatedBookFallback:
         i = src.index("AB.AuthBook")
         assert "except BaseException" in src[i:i + 500]
         assert '"started": False' in src[i:i + 700]
+
+
+# ======================================================================
+class TestReconciliationHappensBeforeSettlement:
+    """A safety check that cannot pass when it matters is not a check.
+
+    OBSERVED LIVE 2026-11-12. `run()` settled before it reconciled. The
+    venue redeems a settled position and then reports no row for it, while
+    this ledger still states what was held, so `agrees` -- which is
+    `net_ours == 0 and not rows` when the venue offers no net -- was False
+    for every window that actually filled (16:20z holding 0.29 UP / 0.37
+    DOWN, 16:25z holding 0.58 DOWN) and True only for windows that held
+    nothing."""
+
+    def test_reconcile_is_called_before_settle(self):
+        src = inspect.getsource(RUN.Session.run)
+        assert src.index("recon = self.reconcile()") < \
+            src.index("settled = self.settle()"), \
+            "reconciliation must see the venue before it redeems"
+
+    def test_the_post_settlement_read_is_kept_but_not_the_verdict(self):
+        src = inspect.getsource(RUN.Session.run)
+        assert "recon_after = self.reconcile()" in src
+        assert '"reconcile": recon,' in src
+        assert '"reconcile_after_settlement": recon_after,' in src
+
+    def test_a_held_position_reconciles_against_the_live_venue(
+            self, tmp_path, monkeypatch):
+        """With inventory held and the venue still reporting it, the
+        reconciliation in the step record AGREES. Before the fix this
+        same window reported agrees false."""
+        r = rig(tmp_path, monkeypatch, fill_at={12.0: ("v1", "0.05")})
+        rep = run(r)
+        assert D(rep["fills_qty"]) > 0, "nothing filled; test proves nothing"
+        rec = rep["reconcile"]
+        assert rec["read"] is True
+        assert rec["agrees"] is True, rec
+        assert rec["venue_rows"], "the venue should still show the position"
+
+    def test_an_empty_venue_against_held_inventory_does_not_agree(
+            self, tmp_path, monkeypatch):
+        """The failure mode made visible. This is what a post-settlement
+        read looks like -- our ledger holds, the venue has redeemed and
+        reports nothing -- and it must never read as agreement."""
+        r = rig(tmp_path, monkeypatch, fill_at={12.0: ("v1", "0.05")})
+        run(r)
+        assert r.ex.inventory(M)[C.UP]["qty"] > 0
+        r.venue.by_oid.clear()      # the venue forgets, as after redemption
+        r.venue.cum.clear()
+        rec = r.session.reconcile()
+        assert rec["read"] is True
+        assert rec["venue_rows"] == []
+        assert rec["agrees"] is False, rec

@@ -945,8 +945,21 @@ class Session:
             return {"started": False, **st}
         self.trade()
         closed = self.close()
-        settled = self.settle()
+        # RECONCILE BEFORE SETTLEMENT. The venue redeems a settled position
+        # and then reports no row for it, while this ledger still states
+        # what was held -- so a reconciliation run AFTER `settle()` compares
+        # our inventory against an empty venue and can only "agree" when we
+        # held NOTHING. Observed live 2026-11-12: every zero-fill window
+        # reported agrees true, and both windows that actually filled
+        # (16:20z holding 0.29 UP / 0.37 DOWN, 16:25z holding 0.58 DOWN)
+        # reported agrees FALSE with venue_rows empty. The check could not
+        # pass in exactly the case it exists for.
         recon = self.reconcile()
+        settled = self.settle()
+        #: the same read AFTER settlement, kept for the record. An empty
+        #: venue here is expected -- the position has been redeemed -- so
+        #: this one is never what `agrees` is judged on.
+        recon_after = self.reconcile()
         fees = self.fees()
         orders = self.ex.orders()
         mine = {c: r for c, r in orders.items() if r["market"] == self.market}
@@ -971,6 +984,7 @@ class Session:
             "would_submit_not_sent": self.would_submit,
             "submission_budget": submission_budget(),
             "close": closed, "settlement": settled, "reconcile": recon,
+            "reconcile_after_settlement": recon_after,
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]
                                 else str(pnl - fee_total)),
