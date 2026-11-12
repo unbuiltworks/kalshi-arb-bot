@@ -17,7 +17,7 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            # 14:45Z showed depth 0 fills fast but the reopening rule (min edge $0.01/contract) refuses every
            # further round at d=0; depth 1 keeps it aggressive AND lets rounds reopen (owner: keep adjusting)
            "L5_TS_DEPTH_TICKS": "1"}
-TIGHTEN = {"L5_MAX_LIVE_ORDERS": "2", "L5_TS_CONCURRENT_ROUNDS": "1", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
+TIGHTEN = {"L5_MAX_LIVE_ORDERS": "4", "L5_TS_CONCURRENT_ROUNDS": "2", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "8", "L5_LIVE_AUTH_MAX_COMPLETE": "24", "L5_LIVE_AUTH_MAX_REPLACE": "48", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "80"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",
              "L5_LIVE_PROBE_MARKET", "L5_LIVE_HALT", "L5_SHADOW_ONLY") + tuple(TEST_ON) + tuple(TIGHTEN)
