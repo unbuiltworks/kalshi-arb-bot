@@ -13,7 +13,9 @@ NONCE = "owner-20261112-1445z-afbaf751-recycle"
 #: owner 2026-11-12 14:17Z: "turn on recycling and relax the floor for the next window"
 TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "ON",
            "L5_CASH_POLICY": "RECYCLE_ON_COMPLETE", "L5_TS_OWN_EVIDENCE_GATE": "WAIVED_BY_OWNER",
-           "L5_REPLENISH_MAX_ROUNDS": "12"}
+           "L5_REPLENISH_MAX_ROUNDS": "12",
+           # owner 14:19Z: "be aggressive. get pairs. get fills" -> quote AT the touch (maker, post-only)
+           "L5_TS_DEPTH_TICKS": "0"}
 TIGHTEN = {"L5_MAX_LIVE_ORDERS": "2", "L5_TS_CONCURRENT_ROUNDS": "1", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "8", "L5_LIVE_AUTH_MAX_COMPLETE": "24", "L5_LIVE_AUTH_MAX_REPLACE": "48", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "80"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",
@@ -23,7 +25,7 @@ RESTORE = {"L5_LIVE_HALT": "1", "L5_SHADOW_ONLY": "1", "L5_LIVE_AUTH_MAX_WINDOWS
            "L5_MAX_LIVE_ORDERS": "4", "L5_TS_CONCURRENT_ROUNDS": "2", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
            "L5_LIVE_AUTH_MAX_OPEN": "140", "L5_LIVE_AUTH_MAX_COMPLETE": "300", "L5_LIVE_AUTH_MAX_REPLACE": "60", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "500",
            "L5_TS_REQUOTE_KEEPS_ROUND": "", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "",
-           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": ""}
+           "L5_CASH_POLICY": "NO_RECYCLING", "L5_TS_OWN_EVIDENCE_GATE": "", "L5_REPLENISH_MAX_ROUNDS": "", "L5_TS_DEPTH_TICKS": ""}
 def client(write=None):
     if write: return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC, allow_writes=True, writable=tuple(write))
     return RW.RailwayClient(project_id=P, environment_id=E, service_id=SVC)
