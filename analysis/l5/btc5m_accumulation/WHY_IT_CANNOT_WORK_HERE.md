@@ -173,3 +173,51 @@ source-accounted.
 and read the commission field back. Negative means a rebate larger than the
 loss, in a book with ten times the spread. That is a bounded probe with a
 clear, falsifiable answer.
+
+### Correction: the rebate is size-gated, and our clips earn zero
+
+An earlier revision of this file estimated the maker rebate at
+`9 fills x $0.0168 = +$0.1512/window`, i.e. five times the measured loss.
+**That was wrong.** It treated the credit as per-print and
+size-independent. `analysis/l5/PMUS_INCENTIVE_BREAKEVEN.md` fits the real
+formula from the same 25 credits:
+
+```
+credit = 0.0125 x qty x p(1-p), ROUNDED to whole cents
+```
+
+Rounding is the whole story at our size:
+
+| clip | price | shares | raw credit | credited |
+|---|---|---|---|---|
+| $0.30 | 0.65 | 0.46 | 0.00131 | **$0.00** |
+| $0.45 | 0.65 | 0.69 | 0.00197 | **$0.00** |
+| $1.00 | 0.65 | 1.54 | 0.00437 | **$0.00** |
+| $2.00 | 0.65 | 3.08 | 0.00875 | $0.01 |
+| $3.25 | 0.65 | 5.00 | 0.01422 | $0.01 |
+
+Confirmed by the venue's own uncredited prints: 1.38 sh @0.49 and
+1.41 sh @0.50 both credited **$0.00**. A print needs roughly **2.5+
+shares** to clear the one-cent floor. The $0.0168 average came from prints
+of 2.5–5.7 shares, not from ours at 0.3–0.9.
+
+Three consequences:
+
+1. **Nine of our fills credit $0.00 a window, not $0.15.**
+2. **"Frequency before size" is backwards for rebate capture.** Many small
+   clips each round to zero; a few large ones collect. Earning rebates
+   wants 1–2 clips of $1.62–$3.25, not 15 clips of $0.30.
+3. **The rebate peaks at p = 0.50** and decays toward the extremes, so the
+   $0.51–$0.90 band sits entirely on its declining side.
+
+And the ceiling is low regardless: at our sizes a complete pair collects at
+most **$0.04**, and per that study *"above a pair cost of 1.008 a COMPLETE
+loses money at every size and price studied even with every observed credit
+counted."* BTC5m's realized pairs were 1.1852, 1.2121, 1.2582, 1.3251.
+
+**What makes the sports lane attractive is therefore the spread and the
+0.98 pair gate, not the rebate.** The rebate is a rounding bonus on large
+prints, not a rescue. This does not change the BTC5m conclusion — crypto
+credits $0.00 at any clip size — but it removes a reason that was being
+given for the move, and a reason that does not survive checking is worse
+than no reason.
