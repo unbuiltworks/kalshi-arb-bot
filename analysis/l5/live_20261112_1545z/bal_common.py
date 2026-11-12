@@ -16,7 +16,7 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            "L5_REPLENISH_MAX_ROUNDS": "12",
            # 14:45Z showed depth 0 fills fast but the reopening rule (min edge $0.01/contract) refuses every
            # further round at d=0; depth 1 keeps it aggressive AND lets rounds reopen (owner: keep adjusting)
-           "L5_TS_DEPTH_TICKS": "1",
+           "L5_TS_DEPTH_TICKS": "2",   # owner 15:20Z: UP and DOWN bids 2 ticks below the bid, simultaneously
            # owner 14:57Z "MORE PAIRS. get aggressive. move constantly": opening bids re-priced every 20 s (was 120 s)
            "L5_TS_ORDER_TTL_S": "20",
            # owner 15:17Z "place these pairs simultaneously": three rounds in parallel
