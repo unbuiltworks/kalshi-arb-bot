@@ -987,3 +987,43 @@ class TestTopOfBookDepthIsRecorded:
         run(b)
         assert submitted(b) == without
         assert b.session.t.ws_book.calls > 0, "the book was never consulted"
+
+
+# ======================================================================
+class TestBlockedRecordSaysWhichLimitBound:
+    """A refusal that names only a reason code is not diagnosable.
+
+    OBSERVED LIVE 2026-11-12 18:53Z. A campaign blocked repeatedly on
+    EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM. There are TWO daily-loss limits --
+    the campaign approval's `max_daily_loss_usd` and the account-wide risk
+    service's `loss_room_usd` -- and `gates()` judges against the second.
+    The record carried neither number, so the first one raised was the
+    wrong one. `gates()` had already computed both."""
+
+    def test_the_numbers_gates_computed_are_carried(self):
+        src = inspect.getsource(RUN.Session.run_window) \
+            if hasattr(RUN.Session, "run_window") else inspect.getsource(RUN)
+        i = src.index('"L5_BTC5M_BLOCKED"')
+        blk = src[i:i + 700]
+        for field in ("exposure_ceiling_usd", "loss_room_usd", "risk"):
+            assert field in blk, "%s is dropped from the blocked record" % field
+
+    def test_a_blocked_window_reports_both_figures(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        r.session.risk_fn = lambda now, own: {
+            "ok": True, "loss_room_usd": "0.01", "source": "TEST"}
+        run(r)
+        blocked = r.kinds("L5_BTC5M_BLOCKED")
+        assert blocked, "the window should have been blocked"
+        b = blocked[0]
+        assert b["reason"] == "EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM"
+        assert b["loss_room_usd"] == "0.01"
+        assert b["exposure_ceiling_usd"] is not None
+        assert b["risk"].get("source") == "TEST"
+
+    def test_an_unblocked_window_still_logs_nothing_extra(
+            self, tmp_path, monkeypatch):
+        r = rig(tmp_path, monkeypatch)
+        run(r)
+        assert not r.kinds("L5_BTC5M_BLOCKED")

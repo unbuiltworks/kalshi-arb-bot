@@ -788,8 +788,21 @@ class Session:
             g = self.gates()
             if not g["ok"]:
                 rep = self.ex.end_of_window(self.market)
+                #: `gates()` already computed WHY it refused -- the
+                #: exposure ceiling it was judged against, the account's
+                #: remaining loss room, and the whole risk payload -- and
+                #: this record was throwing all of it away, leaving only a
+                #: reason code. Observed 2026-11-12 18:53Z: a campaign
+                #: blocked on EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM said
+                #: nothing about which of the TWO daily-loss limits bound
+                #: it (the campaign approval's max_daily_loss_usd, or the
+                #: account-wide risk service's loss_room_usd), so the wrong
+                #: one was raised first. The numbers cost nothing to carry.
                 self._log("L5_BTC5M_BLOCKED", {
                     "reason": g["reason"],
+                    "exposure_ceiling_usd": g.get("exposure_ceiling_usd"),
+                    "loss_room_usd": g.get("loss_room_usd"),
+                    "risk": dict(g.get("risk") or {}),
                     "cancelled": [c["venue_order_id"]
                                   for c in rep.get("cancelled") or ()]})
             else:
