@@ -124,11 +124,15 @@ class Rig:
             sleep=self.clock.sleep,
             # the scripted venue's own arm. Production has no arm_fn: the
             # session cannot arm until authorize_arming covers it
+<<<<<<< HEAD
             arm_fn=(lambda t: t.arm()) if arm is True else None,
             bounds_fn=lambda m: {
                 "start": WS.isoformat(),
                 "end": (WS + dt.timedelta(minutes=5)).isoformat(),
                 "source": "VENUE"} if m == M else None)
+=======
+            arm_fn=(lambda t: t.arm()) if arm else None)
+>>>>>>> origin/integration/l5-safe-release-candidate-20261109
 
     def _book(self, market):
         t = self.clock() - WS.timestamp()
@@ -686,15 +690,36 @@ def test_btc5ms_own_operator_halt_and_the_watchdogs_halt_still_stop_it(
         "SHARED_HALT:HALT:asserted"}
 
 
+<<<<<<< HEAD
 def test_the_runner_arms_only_inside_the_shared_boundary():
     """One `.arm()` in the module, inside `arm_through_boundary`, AFTER its
     call to `authorize_arming`."""
     import ast
     import inspect
+=======
+def test_without_an_arm_function_the_session_cannot_arm_and_sends_nothing(
+        tmp_path, monkeypatch):
+    """THE PRODUCTION STATE until `authorize_arming` covers BTC5m: every
+    other gate passes, the venue's preflight passes, and still nothing is
+    sent. Every decision is reported as WOULD_SUBMIT, never as a trade."""
+    rig = Rig(tmp_path, monkeypatch, arm=False)
+    rep = rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["preflight"] == "PASSED"
+    assert start["transport_armed"] is False
+    assert start["arm_error"].startswith("ARMING_BOUNDARY_NOT_WIRED")
+    assert rig.venue.sent == [] and rep["submitted"] == 0
+    assert rep["would_submit_not_sent"] > 0
+
+
+def test_the_runner_never_arms_a_transport_itself():
+    import ast
+>>>>>>> origin/integration/l5-safe-release-candidate-20261109
     import pathlib
     src = pathlib.Path(RUN.__file__).read_text()
     calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "arm"]
+<<<<<<< HEAD
     assert len(calls) == 1
     body = inspect.getsource(RUN.arm_through_boundary)
     assert body.index("AUTH.authorize_arming(") < body.index(".arm()")
@@ -796,3 +821,6 @@ def test_venue_window_bounds_confirm_the_slug_or_say_nothing():
     def boom(u):
         raise ConnectionError("no")
     assert RUN.venue_window_bounds(M, fetch=boom) is None
+=======
+    assert calls == []
+>>>>>>> origin/integration/l5-safe-release-candidate-20261109

@@ -12,6 +12,25 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## Manual 19:15Z trade restated to its venue-verified cost (2026-11-12 02:08Z)
+
+Owner-approved. PR #226 merged as `f58fdfe0e` and deployed to `l5-pmus-live`
+(deployment `ba17e229`). The service's own apply ran with batch
+`cb-20261112-manual1915z-2.90` and a one-leg `KEYS_ONLY` manifest, and
+reported APPLIED: 1 leg, 0 refused, batch check ok, delta +$2.90. The other
+three legs the walk planned were left OUT_OF_BATCH_SCOPE and unchanged. The
+row keeps the original $5.00 in `cost_superseded`, and the correction is
+recorded under id `cb-20261112-manual1915z-2.90|cpc-btc-updown-15m-2026-11-11-1915z|DOWN`.
+
+Afterwards `L5_COST_BASIS_APPLY` was set back to INSPECT (deployment
+`76aeac4c`, `f58fdfe0e`). Verified on its heartbeat:
+- all-time realized **-$18.1406** (was -$21.0406); UTC day $0;
+- `L5_LIVE_HALT=1`, `L5_SHADOW_ONLY=1`, gate `OPERATOR_HALT`, not armed;
+- 0 orders, $0 exposure, limits unchanged; watchdog 0 orders.
+
+**Lifetime loss room:** $18.6325 - $18.1406 = **$0.4919**. The ceiling was not
+changed.
+
 ## PR #224 deployed DISARMED; BTC5m arming wired; manual cost verified (2026-11-12 01:00Z)
 
 **Running:** `l5-pmus-live` deployment `e9e9df5b` on `8a17b720c` (merge of
