@@ -98,6 +98,48 @@ def restore():
     vals = {"L5_SHADOW_ONLY": "1", "L5_LIVE_HALT": "1", **{k: "" for k in WINDOW_VARS}}
     print(b5(write=vals).set_variables(vals)); return 0
 
+def session_report(slug):
+    """The L5_BTC5M_SESSION_REPORT for SLUG from l5-btc5m-live's deploy logs
+    (searches the recent deployments), or None."""
+    b = b5()
+    q = b._gql("query($pid:String!,$eid:String!,$sid:String!){deployments(first:6,input:{projectId:$pid,environmentId:$eid,serviceId:$sid}){edges{node{id}}}}",
+               {"pid": P, "eid": E, "sid": B5})
+    for d in [e["node"] for e in q["deployments"]["edges"]]:
+        for r in b.logs(deployment_id=d["id"], filter="L5_BTC5M_SESSION_REPORT", limit=20) or ():
+            m = str(r.get("message"))
+            if m.startswith("L5_BTC5M_SESSION_REPORT"):
+                rep = json.loads(m.split(" ", 1)[1])
+                if rep.get("market") == slug:
+                    return rep
+    return None
+
+def record(slug, predecessor=False):
+    """Write SLUG's venue result into the campaign file. SETTLED only when the
+    venue settled it, every own order is terminal, fees are fully read, the
+    position reconciles and the watchdog sees 0 open orders on the account.
+    Anything else is recorded UNRECONCILED (which blocks the next window)."""
+    rep = session_report(slug); w = watchdog()
+    if rep is None:
+        res = {"status": "NO_SESSION_REPORT"}
+    else:
+        st = rep.get("settlement") or {}; cl = rep.get("close") or {}
+        fees = rep.get("venue_fees") or {}; rc = rep.get("reconcile") or {}
+        clean = bool(st.get("settled") and cl.get("clean") and fees.get("complete")
+                     and rc.get("read") and rc.get("agrees") and rep.get("submit_uncertain") == 0
+                     and w.get("open_orders") == 0 and not w.get("read_error"))
+        no_trade = rep.get("submitted") == 0 and cl.get("clean") and w.get("open_orders") == 0
+        net = rep.get("settled_net_usd")
+        if no_trade and net is None: net = "0"
+        res = {"status": "SETTLED" if (clean or no_trade) and net is not None else "UNRECONCILED",
+               "settled_net_usd": net, "submitted": rep.get("submitted"),
+               "filled_orders": rep.get("filled_orders"), "fills_cost_usd": rep.get("fills_cost_usd"),
+               "fees_usd": fees.get("total_usd"), "settlement_px": st.get("settlement_px"),
+               "transport_armed": rep.get("transport_armed"),
+               "flat_and_no_open_orders": bool(cl.get("clean") and w.get("open_orders") == 0)}
+    res["watchdog"] = w; res["recorded_utc"] = dt.datetime.now(UTC).isoformat()
+    c = campaign(); c["predecessor_results" if predecessor else "results"][slug] = res
+    json.dump(c, open(CAMPAIGN_FILE, "w"), indent=1); print(json.dumps(res)); return 0
+
 def arm_campaign(slug):
     global SHA
     SHA = campaign()["approved_sha"]   # start SHA, or a verified successor recorded here
@@ -107,6 +149,7 @@ def arm_campaign(slug):
     return arm(slug, cap)
 
 if __name__ == "__main__":
+    if sys.argv[1] == "record": sys.exit(record(sys.argv[2], predecessor="--predecessor" in sys.argv))
     if sys.argv[1] == "arm-campaign": sys.exit(arm_campaign(sys.argv[2]))
     if sys.argv[1] == "campaign-cap": print(campaign_cap(sys.argv[2])); sys.exit(0)
     sys.exit(arm(sys.argv[2]) if sys.argv[1] == "arm" else restore() if sys.argv[1] == "restore" else (print(json.dumps(checks(sys.argv[2]))) or 0))
