@@ -56,6 +56,8 @@ import subprocess
 import sys
 import time
 import traceback
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,12 +80,53 @@ SEQ_CSV = config.OUTPUT_DIR / "l5_canonical_sequence.csv.gz"
 L5_WALLET = "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
 
 ADAPTERS: Dict[str, VenueAdapter] = {"polymarket": PolymarketUpDownAdapter()}
+#: Polymarket retired Data API v1 (HTTP 410 "Data API v1 has been retired")
+#: around 2026-11-02 18:41Z. v1 errors were swallowed as "no new rows", so
+#: this collector reported status ok for ten days while collecting nothing.
+#: v2: rows under "data", snake_case fields, cursor-only paging
+#: ("pagination.next_cursor"), newest first, start/end filters (epoch s).
 SOURCES = {
-    "polymarket": ("https://data-api.polymarket.com/activity?user={wallet}"
-                   "&limit=500&offset={offset}&sortBy=TIMESTAMP"
-                   "&sortDirection=DESC"),
+    "polymarket": "https://data-api.polymarket.com/v2/activity?user={wallet}&limit=500",
 }
-MAX_COLLECT_PAGES = 8          # 4000 rows >> any sane invocation gap
+MAX_COLLECT_PAGES = 60         # per run; a backfill continues on the next run
+SLICE_S = 6 * 3600             # the cursor advances one fully-read slice at a time
+FRESH_LOOKBACK_S = 24 * 3600   # first run on empty state
+
+#: v2 snake_case -> the v1 field names every downstream reader uses
+V2_FIELDS = {"proxy_wallet": "proxyWallet", "condition_id": "conditionId",
+             "usdc_size": "usdcSize", "transaction_hash": "transactionHash",
+             "token_id": "asset", "outcome_index": "outcomeIndex",
+             "event_slug": "eventSlug", "profile_image": "profileImage",
+             "profile_image_optimized": "profileImageOptimized"}
+
+
+class CollectError(RuntimeError):
+    """The source did not answer with a readable page. Never read as zero rows."""
+
+
+def normalize_v2(row: Dict[str, Any]) -> Dict[str, Any]:
+    out = {V2_FIELDS.get(k, k): v for k, v in row.items()}
+    for k in ("price", "size", "usdcSize"):
+        if isinstance(out.get(k), str):
+            try:
+                out[k] = float(out[k])
+            except ValueError:
+                pass
+    return out
+
+
+def _page(template: str, wallet: str, start: int, end: int,
+          cursor: Optional[str]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    url = template.format(wallet=wallet) + "&start=%d&end=%d" % (start, end)
+    if cursor:
+        url += "&cursor=" + urllib.parse.quote(cursor, safe="")
+    doc = _fetch(url)
+    if not isinstance(doc, dict) or not isinstance(doc.get("data"), list):
+        raise CollectError("unreadable page from %s: %r" % (
+            url.split("?")[0], str(doc)[:300]))
+    rows = [normalize_v2(r) for r in doc["data"] if isinstance(r, dict)]
+    nxt = (doc.get("pagination") or {}).get("next_cursor")
+    return rows, (nxt or None)
 
 
 def _utcnow() -> str:
@@ -158,34 +201,62 @@ def _existing_fingerprints(prefix: str, ts_values: Iterable[float]) -> set:
 def _fetch(url: str, retries: int = 3) -> Optional[Any]:
     req = urllib.request.Request(url, headers={
         "User-Agent": "kalshi-arb-bot/l5-ops (read-only research collector)"})
+    last: Any = None
     for i in range(retries):
         try:
             with urllib.request.urlopen(req, timeout=25) as r:
                 return json.loads(r.read())
-        except Exception:
-            time.sleep(1.5 * (i + 1))
-    return None
+        except urllib.error.HTTPError as exc:   # keep the body: it says why
+            try:
+                last = json.loads(exc.read() or b"null")
+            except Exception:                   # noqa: BLE001
+                last = {"http_status": exc.code}
+            if exc.code in (400, 404, 410):
+                return last                     # not retryable
+        except Exception as exc:                # noqa: BLE001
+            last = {"error": repr(exc)}
+        time.sleep(1.5 * (i + 1))
+    return last
 
 
 # ---------------- collect ----------------
 
 def run_collect(venue: str, wallet: str) -> Dict[str, Any]:
+    """Collect L5 activity since the cursor, gap-free.
+
+    The cursor (`last_ts`) advances only past a [start, end] slice whose
+    pages were ALL read, so a run cut short by the page budget resumes where
+    it stopped instead of skipping the older part of a gap. Any unreadable
+    page raises CollectError: the CLI records a failure artifact and flips
+    the heartbeat to error -- an outage is never reported as zero new rows.
+    """
     state = _read_state()
     now = time.time()
     template = SOURCES[venue]
     fetched: List[Dict[str, Any]] = []
-    oldest_fetched = None
-    for page in range(MAX_COLLECT_PAGES):
-        rows = _fetch(template.format(wallet=wallet, offset=page * 500))
-        if not isinstance(rows, list) or not rows:
+    cur = float(state.get("last_ts") or 0) or (now - FRESH_LOOKBACK_S)
+    pages = 0
+    slices = 0
+    while cur < now and pages < MAX_COLLECT_PAGES:
+        end = min(now, cur + SLICE_S)
+        cursor: Optional[str] = None
+        part: List[Dict[str, Any]] = []
+        complete = False
+        while pages < MAX_COLLECT_PAGES:
+            rows, cursor = _page(template, wallet, int(cur - 120), int(end) + 1,
+                                 cursor)
+            pages += 1
+            part.extend(rows)
+            if not cursor:
+                complete = True
+                break
+        fetched.extend(part)            # dedup below makes a partial slice safe
+        if not complete:
             break
-        page_ts = [float(r.get("timestamp") or 0) for r in rows
-                   if isinstance(r, dict)]
-        oldest_fetched = min(page_ts) if page_ts else oldest_fetched
-        fetched.extend(r for r in rows if isinstance(r, dict))
-        # stop once the page is entirely before our cursor (with overlap slack)
-        if page_ts and min(page_ts) < state.get("last_ts", 0) - 120:
-            break
+        cur = end
+        slices += 1
+    oldest_fetched = min((float(r.get("timestamp") or 0) for r in fetched),
+                         default=None)
     seen = _existing_fingerprints(
         "activity", (float(r.get("timestamp") or now) for r in fetched))
     new_rows: List[Dict[str, Any]] = []
@@ -210,8 +281,8 @@ def run_collect(venue: str, wallet: str) -> Dict[str, Any]:
     for path, lines in by_file.items():
         with path.open("a", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
-    if new_rows:
-        state["last_ts"] = max(float(r.get("timestamp") or 0) for r in new_rows)
+    state["last_ts"] = cur if cur > float(state.get("last_ts") or 0) else \
+        float(state.get("last_ts") or 0)
     state["rows_collected_total"] = state.get("rows_collected_total", 0) + len(new_rows)
     state["runs"] = state.get("runs", 0) + 1
     state["last_run_utc"] = _utcnow()
@@ -223,6 +294,9 @@ def run_collect(venue: str, wallet: str) -> Dict[str, Any]:
         "rows_total": state["rows_collected_total"],
         "runs": state["runs"],
         "possible_gap_before_oldest_fetch": bool(gap_warning),
+        "pages": pages, "slices_completed": slices,
+        "backfill_remaining_s": round(max(0.0, now - cur), 1),
+        "source": "data-api v2",
     }
     _heartbeat("ok", stage="collect", **report)
     return report
