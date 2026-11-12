@@ -54,6 +54,13 @@ LIVE = [
      "cost": 2.2309, "net": -0.8709, "cap": 2.25,
      "note": "matched 1.36 at a realized pair cost of 1.2262, above par; "
              "residual 0.83 DOWN lost in full"},
+    {"window": "19:10z", "submitted": 22, "filled": 9, "qty": 3.65,
+     "cost": 2.2159, "net": +0.5641, "cap": 2.25,
+     "note": "THE FIRST CLEAR WIN at full size. The matched 0.87 still "
+             "cost 1.1852, above par and losing as always; the profit came "
+             "entirely from the residual 1.91 UP being right. The venue UI "
+             "showed +$1.91, which is the REDEMPTION (1.91 contracts at "
+             "$1.00), not the +$0.5641 of profit"},
 ]
 
 #: the replay's own ADVERSE-tier figures on the 189-window tape (187
@@ -110,12 +117,27 @@ def main() -> int:
         a = sum(r["net"] for r in lo) / sum(r["qty"] for r in lo)
         b = sum(r["net"] for r in hi) / sum(r["qty"] for r in hi)
         print()
-        print("  SIZE DID NOT IMPROVE THE PRICE. %.1fx the cap moved per-share"
-              % (caps[-1] / caps[0]))
-        print("  economics from %+0.4f to %+0.4f (%+0.4f). The loss scales"
-              % (a, b, b - a))
-        print("  with size rather than being diluted by it, which is what")
-        print("  'ramp it up' buys: the same per-share result, multiplied.")
+        n_hi = len([r for r in LIVE if r["cap"] == caps[-1]])
+        print("  %.1fx the cap moved per-share economics from %+0.4f to"
+              % (caps[-1] / caps[0], a))
+        print("  %+0.4f (%+0.4f), on %d window(s) at the larger size."
+              % (b, b - a, n_hi))
+        print()
+        if n_hi < 5:
+            print("  THAT DIFFERENCE IS NOISE, in either direction. %d"
+                  % n_hi)
+            print("  window(s) cannot measure a per-share rate against a")
+            print("  per-window sd of 0.22. Do not read it as size helping")
+            print("  OR hurting.")
+        elif b > a:
+            print("  Per-share is BETTER at the larger size on this sample.")
+        else:
+            print("  Per-share is WORSE at the larger size on this sample.")
+        print()
+        print("  What is NOT noise is the arithmetic: size cannot change")
+        print("  the SIGN of a per-share expectation, because expectation")
+        print("  is linear. Scaling multiplies whatever the per-share")
+        print("  number is; it never flips it.")
     print()
 
     print("=" * 72)
