@@ -12,6 +12,30 @@ GET-only.
 Everything from "Consolidation lineage" onward is preserved historical
 evidence and is not rewritten. Only this handoff section tracks current state.
 
+## PR #224 deployed DISARMED; BTC5m arming wired; manual cost verified (2026-11-12 01:00Z)
+
+**Running:** `l5-pmus-live` deployment `e9e9df5b` on `8a17b720c` (merge of
+PR #224), SUCCESS. `L5_LIVE_HALT=1`, `L5_SHADOW_ONLY=1`, gate blocked
+`OPERATOR_HALT`, not armed, 0 live orders, $0 exposure, limits and realized
+lines unchanged, no alarm, watchdog 0 orders and not halted. Order registry
+serving on 8081 (now with `account_risk`). Rollback: deploy `ff4b5291a`.
+No BTC5m service exists.
+
+**Tests:** candidate `7a045e8ad` (= merged tree): 21,074 passed, 20 failed,
+14 errors; the 34 failing IDs are identical to the pre-existing set on
+`ff4b5291a`.
+
+**Verified cost basis (authenticated venue activity, inspect mode):** the
+manual 15m 19:15Z leg is 5.00 DOWN at 0.42 = **$2.10**, fee $0.00, one fill
+(`DNKM4580F3YF`). The ledger books **$5.00**. Not restated (owner decision).
+
+**Lifetime loss budget** (`L5_MAX_CUMULATIVE_LOSS_USD` = 18.6325): as booked
+-$21.0406, **$2.41 over**; with the verified manual cost restated, -$18.1406,
+**$0.49 of room**. Settled realized P&L is unchanged.
+
+**BTC5m:** the session arms only through `authorize_arming`; candidate
+`9660592ca` (PR #225), not deployed.
+
 ## BTC5m authorization, mandatory isolation and origin labels (2026-11-11, late)
 
 **Production is unchanged and DISARMED.** `l5-pmus-live` runs `ff4b5291a`

@@ -3,15 +3,13 @@
 Nothing here has been deployed, armed or submitted. Every step marked
 OWNER needs the owner's explicit approval or action; I do not take them.
 
-**ENGINEERING BLOCKER (found by the full suite, 2026-11-12 00:45Z): the
-BTC5m session cannot arm yet.** Every module that arms a transport must take
-that decision through `l5_live_authorization.authorize_arming`, the one shared
-arming boundary (three guard tests pin it). That boundary is built around the
-15-minute store, campaign and market binding and does not cover the 5-minute
-session. Until it does, the session runs DISARMED: preflight runs, nothing is
-sent, and every decision is reported as WOULD_SUBMIT. Extending the boundary
-to BTC5m is the next engineering step; the owner steps below still apply
-after it.
+**UPDATE 2026-11-12 01:00Z.** `l5-pmus-live` now runs `8a17b720c` (PR #224),
+DISARMED, and publishes the account-wide loss state. The BTC5m session arms
+only through `authorize_arming` (candidate `9660592ca`, PR #225). The
+manual 19:15Z cost is verified from authenticated venue records:
+`manual_1915z_cost_basis_venue.json` ($2.10 actual vs $5.00 booked). The
+01:30Z window below has expired; the current proposal is in
+`L5_STATUS.md` and in the PR #225 description.
 
 ## What the test must show, and where each answer comes from
 
