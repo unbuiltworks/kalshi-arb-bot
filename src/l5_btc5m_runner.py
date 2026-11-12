@@ -168,10 +168,13 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
     add = min(D(0), own_unaccounted)
     day_all, life_all = day + add, life + add
+    room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
+           # what may still be LOST before either account-wide limit binds
+           "loss_room_usd": str(room),
            "age_s": round(age, 1)}
     if day_all <= -halt:
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
@@ -302,16 +305,57 @@ class Session:
         if not r.get("ok"):
             return {"ok": False, "reason": "ACCOUNT_RISK:%s" % r.get("reason"),
                     "risk": dict(r)}
+        # THE WORST CASE MUST FIT INSIDE WHAT THE ACCOUNT MAY STILL LOSE.
+        # The account-wide halts are judged on SETTLED results, so a position
+        # opened with less room than it could lose would overshoot them
+        # after the fact. The bound used is this strategy's whole exposure
+        # ceiling -- the most it can have at risk at once -- so nothing it
+        # is allowed to open can take the account past either limit.
+        room = _dec(r.get("loss_room_usd"))
+        cap = self.exposure_ceiling()
+        if room is None or cap is None:
+            return {"ok": False, "reason": "LOSS_ROOM_UNREADABLE",
+                    "risk": dict(r)}
+        if cap > room:
+            return {"ok": False, "reason": "EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM",
+                    "exposure_ceiling_usd": str(cap),
+                    "loss_room_usd": str(room), "risk": dict(r)}
         return {"ok": True, "risk": dict(r)}
 
+    def exposure_ceiling(self) -> Optional[Decimal]:
+        """The smaller of the adapter's own ceiling and the owner's approved
+        exposure for this window. None when the approval cannot be read."""
+        v = AUTH.btc5m_authorization(self.market, now=self._now(),
+                                     require_durable=False)
+        scope = v.get("scope") or {}
+        approved = _dec(scope.get("max_total_exposure_usd"))
+        own = _dec(self.ex.params.max_exposure_usd)
+        if own is None:
+            return None
+        if approved is None:
+            # no readable approval: the claim refuses every order anyway;
+            # the adapter's own ceiling is the bound that applies
+            return own
+        return min(own, approved)
+
     def start(self) -> Dict[str, Any]:
-        """Preflight and arm. Never raises; returns what happened."""
+        """Preflight and arm, AT THE WINDOW START. Never raises.
+
+        A 5-minute market reads MARKET_STATUS_CLOSED until its window opens
+        (observed on the venue 2026-11-12), and preflight requires an open
+        market, so a preflight run at launch could never pass. The session
+        therefore waits for the window, then preflights and arms. A window
+        already past its last trading second is refused, never chased."""
         if os.path.exists(self.marker()):
             return {"ok": False, "reason": "MARKET_ALREADY_RUN",
                     "marker": self.marker()}
         ws = window_start(self.market)
         if ws is None or not self.market.startswith(X.MARKET_PREFIX):
             return {"ok": False, "reason": "NOT_A_BTC5M_MARKET"}
+        if self.clock() >= ws.timestamp() + WINDOW_S - CANCEL_LEAD_S:
+            return {"ok": False, "reason": "WINDOW_ALREADY_PAST"}
+        while self.clock() < ws.timestamp():
+            self.sleep(min(STEP_S, ws.timestamp() - self.clock()))
         try:
             pf = self.t.preflight()
         except BaseException as exc:                           # noqa: BLE001

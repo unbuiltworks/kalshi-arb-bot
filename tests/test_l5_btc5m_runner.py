@@ -89,7 +89,8 @@ class LiveVenue(T5.Venue):
 
 
 def ok_risk(now, own):
-    return {"ok": True, "reason": None, "own": str(own)}
+    return {"ok": True, "reason": None, "own": str(own),
+            "loss_room_usd": "5.00"}
 
 
 def ok_halt():
@@ -142,8 +143,12 @@ def test_a_session_places_fills_cancels_settles_and_reports(tmp_path,
               venue_kw={"fee": "0", "settle_px": "1"})
     rep = rig.session.run()
     v = rig.venue
-    # armed through the transport's own arm, after preflight
-    assert rig.kinds("L5_BTC5M_START")[0]["transport_armed"] is True
+    # armed through the transport's own arm, after preflight, which ran at
+    # the window start and not at launch (a 5-minute market reads CLOSED
+    # until its window opens)
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["transport_armed"] is True
+    assert start["utc"] >= WS.isoformat()
     assert v.cancel_owner_oracle == rig.ex.owns_venue_order_id
     # nothing before the window opened
     first = min(e["utc"] for e in rig.kinds("L5_BTC5M_STEP"))
@@ -233,7 +238,7 @@ def test_a_refusing_gate_cancels_our_orders_and_places_nothing_new(
         t = rig.clock() - WS.timestamp()
         if t >= state["block_from"]:
             return {"ok": False, "reason": "TEST_REFUSAL"}
-        return {"ok": True}
+        return {"ok": True, "loss_room_usd": "5.00"}
     kw = {"halt": gate} if which == "halt" else {"risk": gate}
     rig = Rig(tmp_path, monkeypatch, **kw)
     rig.session.run()
@@ -600,3 +605,57 @@ def test_the_image_ships_the_whole_closure_and_nothing_from_the_15m_runner():
     assert manifest["deploy"]["restartPolicyType"] == "NEVER"
     assert manifest["deploy"]["numReplicas"] == 1
     assert 'CMD ["python3", "-u", "-m", "src.l5_btc5m_runner"]' in df
+
+
+# ======================================================================
+# 7. TIMING AND THE ACCOUNT'S REMAINING LOSS ROOM
+# ======================================================================
+def test_a_window_already_past_is_refused_not_chased(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    rig.clock.t = WS.timestamp() + RUN.WINDOW_S - RUN.CANCEL_LEAD_S
+    rep = rig.session.run()
+    assert rep["started"] is False and rep["reason"] == "WINDOW_ALREADY_PAST"
+    assert rig.venue.sent == [] and not os.path.exists(rig.session.marker())
+
+
+def test_preflight_waits_for_the_window_to_open(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    seen = []
+    base = rig.venue.preflight
+    rig.venue.preflight = lambda: (seen.append(rig.clock()), base())[1]
+    rig.session.run()
+    assert seen and seen[0] >= WS.timestamp()
+
+
+@pytest.mark.parametrize("room,ok", [("1.00", True), ("0.99", False),
+                                     ("0", False), (None, False)])
+def test_the_approved_exposure_must_fit_inside_the_loss_room(
+        tmp_path, monkeypatch, room, ok):
+    """Approved $1.00: it may trade only while the account can still lose
+    $1.00 before either account-wide limit binds."""
+    def risk_fn(now, own):
+        return {"ok": True, "loss_room_usd": room}
+    rig = Rig(tmp_path, monkeypatch, risk=risk_fn)
+    T5.authorize_5m(monkeypatch, tmp_path,
+                    now_fn=lambda: dt.datetime.fromtimestamp(rig.clock(), UTC),
+                    starts=(WS,), max_total_exposure_usd="1.00")
+    rep = rig.session.run()
+    if ok:
+        assert rep["submitted"] >= 1
+        assert not rig.kinds("L5_BTC5M_BLOCKED")
+    else:
+        assert rig.venue.sent == [] and rep["submitted"] == 0
+        reasons = {b["reason"] for b in rig.kinds("L5_BTC5M_BLOCKED")}
+        assert reasons == {"EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM"
+                           if room is not None else "LOSS_ROOM_UNREADABLE"}
+
+
+def test_todays_account_state_would_refuse_on_the_lifetime_ceiling():
+    """The account as read from production on 2026-11-12 00:10Z: today's
+    realized 0 against $5.00, all-time -$21.0406 against $18.6325. The
+    session refuses, as it must, until the OWNER changes that state."""
+    got = risk(utc_day_realized_usd="0", daily_halt_usd="5.00",
+               lifetime_realized_usd="-21.0406",
+               cumulative_loss_ceiling_usd="18.6325")
+    assert got["ok"] is False
+    assert got["reason"] == "ACCOUNT_CUMULATIVE_LOSS_CEILING"
