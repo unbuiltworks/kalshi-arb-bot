@@ -387,5 +387,8 @@ def test_EVERY_market_keyed_preWire_claim_calls_the_shared_guard():
          else unguarded).append(name)
     assert unguarded == [], (
         "market-keyed pre-wire claims with no window guard: %s" % unguarded)
-    assert sorted(guarded) == ["claim_accumulation_leg", "claim_submission"], \
-        guarded
+    # the third is the BTC 5-minute claim (owner decision, 2026-11-11):
+    # the same guard, by name
+    assert sorted(guarded) == ["claim_accumulation_leg",
+                               "claim_btc5m_submission",
+                               "claim_submission"], guarded

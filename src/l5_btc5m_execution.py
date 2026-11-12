@@ -631,6 +631,14 @@ class Btc5mExecutor:
             terminal = leaves == 0
         else:
             terminal = ended or cum == qty
+        # THE VENUE'S OWN COMMISSION ON THIS ORDER, when it states one.
+        # Recorded as reported (cumulative per order) and never estimated.
+        _fee = _dec(got.get("commissionNotionalTotalCollected"))
+        if _fee is not None and _fee >= 0:
+            row["venue_fees"] = _s(_fee)
+        _avg = _dec(got.get("avgPx"))
+        if _avg is not None:
+            row["venue_avg_px_wire"] = _s(_avg)
         delta = cum - booked
         if delta > 0:
             price = D(row["price"])

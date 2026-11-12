@@ -2151,6 +2151,11 @@ def claim_btc5m_submission(market: str, client_order_id: str,
     if not v.get("ok"):
         raise Refused(str(v.get("reason")), dict(v.get("detail") or {}))
     mkt = str(market).strip()
+    # THE SHARED WINDOW GUARD, by name, as every market-keyed pre-wire claim
+    # calls it. The verdict above already required this window to be in the
+    # approved set; this is the same decision made by the one function the
+    # other two claims use, so the three can never disagree.
+    refuse_unauthorized_window(mkt)
     scope = dict(v.get("scope") or {})
     coid = str(client_order_id or "").strip()
     if not BTC5M_COID_RE.fullmatch(coid):

@@ -1412,7 +1412,8 @@ class Runner:
         self.registry_server = None
         try:
             from src import l5_order_registry_server as REG
-            self.registry_server = REG.serve_from_env(self.store)
+            self.registry_server = REG.serve_from_env(
+                self.store, risk=self.account_risk_line)
             if self.registry_server is not None:
                 emit("L5_LIVE_ORDER_REGISTRY", {
                     "serving": "/" + REG.REGISTRY_KEY,
@@ -2785,6 +2786,11 @@ class Runner:
                 if why and why != "STATE_NOT_TERMINAL":
                     self.stats["awaiting_settlement:%s" % why] += 1
                 continue
+            # ANOTHER STRATEGY'S POSITION, held here at the $1 bound: before
+            # it is settled, try to replace the bound with its real cost.
+            # Off unless the other strategy's fills feed is configured; any
+            # failure leaves the bound and the ordinary settlement runs.
+            self.attest_other_strategy_cost(market, t)
             try:
                 out = self.store.retire_settled_market(
                     market, yes_value=rep["settlement_px"],
@@ -6342,6 +6348,91 @@ class Runner:
                 raise
             out["reason"] = "CAMPAIGN_TELEMETRY_FAILED:%s" % type(exc).__name__
         return out
+
+    def attest_other_strategy_cost(self, market: str, t: Any
+                                   ) -> Optional[Dict[str, Any]]:
+        """Restate a BTC5m position this ledger holds at the $1 bound, from
+        the BTC5m ledger's published fills, each confirmed by OUR OWN read
+        of the venue's order row. See `InventoryStore.attest_other_strategy_
+        cost` for the checks. Never raises into the settlement sweep."""
+        url = str(os.getenv(BTC5M_FILLS_URL_ENV, "")).strip()
+        if not url or LX.ORIGIN.strategy_of_market(market) != \
+                LX.ORIGIN.BTC5M:
+            return None
+        if not any(str(k).rsplit("|", 1)[0] == market for k in
+                   (self.store.state.get("leg_cost_basis_unknown") or [])):
+            return None
+        try:
+            import urllib.request as _ur
+            with _ur.urlopen(url, timeout=3.0) as r:           # noqa: S310
+                doc = json.loads(r.read().decode("utf-8"))
+            if not isinstance(doc, Mapping) or not doc.get("readable"):
+                raise ValueError("feed not readable")
+            fills = [o for o in (doc.get("orders") or ())
+                     if isinstance(o, Mapping) and o.get("market") == market]
+            rows = {}
+            for f in fills:
+                vid = str(f.get("venue_order_id") or "").strip()
+                if vid and D(str(f.get("filled_qty") or 0)) > 0:
+                    rows[vid] = t.order(vid)
+            out = self.store.attest_other_strategy_cost(
+                market, fills, rows,
+                source="BTC5M_LEDGER_FILLS_CONFIRMED_BY_VENUE_ORDER_READS")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out = {"attested": False, "market": market,
+                   "reason": "ATTEST_FAILED:%s" % type(exc).__name__}
+        emit("L5_OTHER_STRATEGY_COST", dict(out, labels=(
+            "attested=False leaves the position at the $1 bound; the "
+            "settlement below is unchanged by a refusal")))
+        return out
+
+    def account_risk_line(self) -> Dict[str, Any]:
+        """The account-wide loss state, for ANOTHER strategy on this account.
+
+        Published read-only on the order registry so the BTC5m runner reads
+        THE limits this service enforces rather than a second copy: the UTC
+        day realized against the daily halt, the all-time realized against
+        the cumulative ceiling, the operator halt, and which markets this
+        ledger has already retired (so a reader can tell which of its own
+        results are already inside these figures). `readable` is False
+        whenever any of it cannot be established, and the reader refuses.
+        """
+        day = self.day_realized_line()
+        try:
+            lifetime = D(str(self.store.realized_today()))
+            vg = getattr(self.executor, "validation_gates", None)
+            cum = getattr(vg, "max_cumulative_loss_usd", None)
+            cum = None if cum is None else D(str(cum))
+            retired = sorted((self.store.state.get("retired_markets")
+                              or {}).keys())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"readable": False,
+                    "reason": "RISK_READ_FAILED:%s" % type(exc).__name__}
+        dr = day.get("utc_day_realized_usd")
+        ok = dr is not None and cum is not None
+        return {
+            "readable": bool(ok),
+            "reason": None if ok else (
+                day.get("reason") or "CUMULATIVE_CEILING_UNREADABLE"),
+            "utc_day": day.get("utc_day"),
+            "utc_day_realized_usd": dr,
+            "daily_halt_usd": day.get("halt_usd"),
+            "daily_would_halt": day.get("would_halt"),
+            "lifetime_realized_usd": str(lifetime),
+            "cumulative_loss_ceiling_usd": (None if cum is None
+                                            else str(cum)),
+            "cumulative_would_halt": (None if cum is None
+                                      else bool(-lifetime >= cum)),
+            "operator_halt": bool(operator_halted()),
+            "retired_markets": retired[-400:],
+            "labels": ("the account-wide figures the 15-minute service's own "
+                       "gates read, published so a second strategy cannot "
+                       "hold a looser copy. Read-only."),
+        }
 
     def day_realized_line(self) -> Dict[str, Any]:
         """The figure the DAILY loss halt actually reads, published.
@@ -12061,6 +12152,9 @@ def completion_requote_enabled() -> bool:
 
 #: names the guard service's READ-ONLY halt endpoint. Unset = inert.
 HALT_URL_ENV = "L5_HALT_URL"
+#: the BTC5m service's read-only fills feed. Unset: 5-minute positions this
+#: ledger adopts stay at the $1 bound through settlement, as before.
+BTC5M_FILLS_URL_ENV = "L5_BTC5M_FILLS_URL"
 #: "0" disables the validation gates; anything else (including unset) is ON
 GATES_ENV = "L5_VALIDATION_GATES"
 
