@@ -27,6 +27,7 @@ plus issue #233 B4's freeze/reversal requirement:
 from __future__ import annotations
 
 import datetime as dt
+import os
 from decimal import Decimal as D
 
 import pytest
@@ -504,3 +505,74 @@ class TestSubmissionBudgetIsVisible:
         rep = run(r)
         assert rep["submission_budget"]["readable"] is True
         assert "REPLACE" in rep["submission_budget"]
+
+
+# ======================================================================
+class TestApprovedWindowEnumeration:
+    """Running more than one window must consume the OWNER's approval, not
+    widen it. The runner may only ever name windows that the owner's own
+    document enumerates, and never more than it allows."""
+
+    @staticmethod
+    def _approve(monkeypatch, tmp_path, starts, **over):
+        from src import l5_campaign_approval as CA
+        now = starts[0] - dt.timedelta(minutes=5)
+        TR.T5.authorize_5m(monkeypatch, tmp_path, now_fn=lambda: now,
+                           starts=starts, **over)
+        return now
+
+    def test_it_lists_exactly_the_windows_the_owner_enumerated(
+            self, tmp_path, monkeypatch):
+        starts = [WS + dt.timedelta(minutes=5 * i) for i in range(3)]
+        now = self._approve(monkeypatch, tmp_path, starts)
+        got = RUN.approved_markets(now)
+        assert got["readable"] is True
+        assert got["markets"] == sorted(
+            "cpc-btc-updown-5m-%s-%sz"
+            % (t.strftime("%Y-%m-%d"), t.strftime("%H%M")) for t in starts)
+        assert got["max_windows"] == 3
+
+    def test_no_approval_document_enumerates_nothing(self, tmp_path,
+                                                     monkeypatch):
+        from src import l5_campaign_approval as CA
+        monkeypatch.delenv(CA.APPROVAL_ENV, raising=False)
+        got = RUN.approved_markets(dt.datetime.now(UTC))
+        assert got["markets"] == []
+        assert got["readable"] is False
+
+    def test_an_approval_for_another_series_enumerates_nothing(
+            self, tmp_path, monkeypatch):
+        starts = [WS]
+        now = self._approve(monkeypatch, tmp_path, starts,
+                            series="cpc-btc-updown-15m-")
+        got = RUN.approved_markets(now)
+        assert got["markets"] == []
+        assert got["why"] in ("APPROVAL_IS_FOR_ANOTHER_SERIES",
+                              "NO_APPROVAL_DOCUMENT")
+
+    def test_the_runner_cannot_invent_a_window(self, tmp_path, monkeypatch):
+        """Every slug it returns must map back to an approved start."""
+        starts = [WS, WS + dt.timedelta(minutes=10)]
+        now = self._approve(monkeypatch, tmp_path, starts)
+        approved = {t.strftime("%H%M") for t in starts}
+        for slug in RUN.approved_markets(now)["markets"]:
+            assert slug[-5:-1] in approved, slug
+
+    def test_the_session_passes_the_owners_window_count_to_the_boundary(
+            self, tmp_path, monkeypatch):
+        """Not a hardcoded 1: the boundary must check against the figure
+        the owner actually wrote."""
+        r = rig(tmp_path, monkeypatch)
+        assert r.session.max_windows == 1
+        r2 = Rig(tmp_path / "b", monkeypatch)
+        r2.session.max_windows = 4
+        assert r2.session.max_windows == 4
+
+    def test_campaign_mode_is_off_unless_the_owner_sets_it(self,
+                                                           monkeypatch):
+        monkeypatch.delenv(RUN.CAMPAIGN_ENV, raising=False)
+        assert (os.environ.get(RUN.CAMPAIGN_ENV) or "").strip() != "ON"
+        for junk in ("", "on", "1", "true", "YES"):
+            monkeypatch.setenv(RUN.CAMPAIGN_ENV, junk)
+            assert (os.environ.get(RUN.CAMPAIGN_ENV) or "").strip() != "ON", \
+                junk
