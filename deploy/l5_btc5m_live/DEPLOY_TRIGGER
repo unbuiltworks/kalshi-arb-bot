@@ -45,3 +45,4 @@ deploy of a money-capable service.
 2026-11-12T20:55:04Z  STRADDLE mode live, armed at 0.08
 2026-11-12T22:02:49Z  STRADDLE ladder 0.05-0.10 live
 2026-11-12T22:31:36Z  straddle clip 5x -> $2.25
+2026-11-12T23:24:40Z  clean ladder: symmetry + live-order bound fixes
