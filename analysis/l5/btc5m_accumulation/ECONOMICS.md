@@ -338,3 +338,39 @@ Filtering on observable pre-fill state cannot separate "I got filled" from
   no data. Closing that gap is a recorder change, not a strategy change.
 - **Unchanged:** no-trade still dominates every measured arm, at every
   clip, depth, band and gate tested.
+
+---
+
+## The replay's first contact with settled money
+
+`live_vs_replay.py`. Every negative conclusion above comes out of the same
+replay, so if the replay does not describe reality, none of it stands. On
+2026-11-12 the service traded real money under ACCUMULATE for the first
+time, which makes the model falsifiable against settled cashflows instead
+of only against itself.
+
+Two windows filled and settled (16:15z placed nothing — preflight failed —
+so it is excluded rather than counted as a flat). Commission read back as
+0.0000 on every order, consistent with the zero maker fee the replay
+already assumes.
+
+| | replay | live |
+|---|---|---|
+| net per window | −0.0286 | −0.2416 |
+| net per share | −0.0487 | −0.3897 |
+
+15 orders, 8 fills (53%), 1.24 contracts, $0.7732 deployed, **−$0.4832
+settled**.
+
+At the replay's own per-window sd of 0.2206, a 2-window mean has
+se = 0.1560, so live sits **−1.37 se** from the prediction. The worst live
+window (−0.3902) is inside the replay's observed range (−0.3964 to
++0.3111). **Not rejected.**
+
+This is deliberately the weak claim: two windows cannot confirm a model,
+only fail to break it. What they do kill is the hopeful reading — that
+real fills would behave better than the replay's ADVERSE tier. They did
+not. Live came in *below* the prediction, not above.
+
+The sign is unchanged in both: negative live, negative in replay, and
+no-trade still dominates every arm tested.
