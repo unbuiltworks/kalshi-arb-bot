@@ -55,6 +55,15 @@ CANCEL_LEAD_S = 30.0
 #: how long after the window end the cancel loop may keep re-reading
 CANCEL_GRACE_S = 60.0
 #: how long to wait for the venue's settlement before reporting without it
+#: PREFLIGHT RETRY INSIDE THE WINDOW. A 5-minute market reads CLOSED until
+#: the venue flips it open, and the flip is not instantaneous at the window
+#: start: the 03:45Z window of 2026-11-12 preflighted 0.6 ms after its start,
+#: failed, and -- with a single attempt -- never armed. The session now
+#: retries with the BTC15m runner's backoff until PREFLIGHT_UNTIL_S into the
+#: window. Arming still happens only through `authorize_arming`, only after
+#: a PASSED preflight, and never after the deadline.
+PREFLIGHT_BACKOFF_S = (3.0, 6.0, 12.0, 24.0)
+PREFLIGHT_UNTIL_S = 90.0
 SETTLE_WAIT_S = 1800.0
 SETTLE_POLL_S = 15.0
 #: the account-wide risk document must be at most this old
@@ -526,12 +535,22 @@ class Session:
             return {"ok": False, "reason": "WINDOW_ALREADY_PAST"}
         while self.clock() < ws.timestamp():
             self.sleep(min(STEP_S, ws.timestamp() - self.clock()))
-        try:
-            pf = self.t.preflight()
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            pf = {"preflight": "FAILED", "error": type(exc).__name__}
+        attempts: List[Dict[str, Any]] = []
+        deadline = ws.timestamp() + PREFLIGHT_UNTIL_S
+        while True:
+            pf = self._preflight_once()
+            attempts.append({
+                "t_in_window_s": round(self.clock() - ws.timestamp(), 2),
+                "preflight": (pf or {}).get("preflight"),
+                "failed": self._failed_checks(pf),
+                "error": (pf or {}).get("error")})
+            if (pf or {}).get("preflight") == "PASSED":
+                break
+            wait = PREFLIGHT_BACKOFF_S[min(len(attempts) - 1,
+                                           len(PREFLIGHT_BACKOFF_S) - 1)]
+            if self.clock() + wait > deadline:
+                break
+            self.sleep(wait)
         self.t.cancel_owner_oracle = self.ex.owns_venue_order_id
         self.last_preflight = pf
         armed = False
@@ -547,13 +566,33 @@ class Session:
                     getattr(exc, "reason", None) or type(exc).__name__,
                     str(getattr(exc, "detail", "") or exc)[:200])
         rep = {"ok": True, "preflight": (pf or {}).get("preflight"),
-               "preflight_failed": [c.get("check") for c in
-                                    (pf or {}).get("checks") or ()
-                                    if not c.get("passed")],
+               "preflight_failed": self._failed_checks(pf),
+               "preflight_attempts": attempts,
                "transport_armed": armed, "arm_error": arm_error,
                "window_start_utc": ws.isoformat()}
         self._log("L5_BTC5M_START", rep)
         return rep
+
+    def _preflight_once(self) -> Dict[str, Any]:
+        """One preflight. The transport RAISES on any failed gate and keeps
+        the report on `preflight_report`; that report is returned so the
+        failing check is named instead of lost."""
+        try:
+            return self.t.preflight()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            rep = getattr(self.t, "preflight_report", None)
+            out = dict(rep) if isinstance(rep, Mapping) else {}
+            out["preflight"] = "FAILED"
+            out["error"] = type(exc).__name__
+            return out
+
+    @staticmethod
+    def _failed_checks(pf: Any) -> List[str]:
+        return [str(c.get("check")) for c in (pf or {}).get("checks") or ()
+                if isinstance(c, Mapping) and not c.get("passed")
+                and c.get("blocking", True)]
 
     def trade(self) -> None:
         ws = window_start(self.market).timestamp()
@@ -578,7 +617,8 @@ class Session:
                     book={"bid": book.get("bid"), "ask": book.get("ask"),
                           "age_s": book.get("age_s")},
                     t_in_window_s=now - ws, p_up=p_up,
-                    p_source=("VENUE_INDEX" if p_up is not None else None))
+                    p_source=("VENUE_INDEX" if p_up is not None else None),
+                    exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
                 self._log("L5_BTC5M_STEP", {
                     "t_in_window_s": round(now - ws, 2),
@@ -598,7 +638,12 @@ class Session:
                     "would_submit_not_sent": len(rep.get("would_submit")
                                                  or ()),
                     "halted_reason": rep.get("halted_reason"),
-                    "arming_refusal": rep.get("arming_refusal")})
+                    "arming_refusal": rep.get("arming_refusal"),
+                    "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
+                              ("why", "cap_usd", "completion_reserve_usd",
+                               "room_usd", "price", "qty")},
+                    "hedge": {k: (rep.get("hedge_eval") or {}).get(k) for k in
+                              ("why", "price", "qty", "pair_cost", "room_usd")}})
             self.sleep(max(0.0, min(STEP_S, stop_at - self.clock())))
 
     def close(self) -> Dict[str, Any]:
@@ -751,7 +796,11 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     root = (os.getenv(AUTH.LEDGER_ENV) or "/state/btc5m/auth.jsonl")
     root = os.path.dirname(root)
     ledger = (os.getenv(LEDGER_ENV) or os.path.join(root, "btc5m_ledger.json"))
-    ex = X.Btc5mExecutor(None, ledger)
+    # The executor's live-order bound follows the entry rule: 2 as before,
+    # and in ACCUMULATE whatever `L5_BTC5M_MAX_RESTING_ENTRIES` allows, so
+    # the controller's plan is not silently clipped by a smaller bound.
+    ex = X.Btc5mExecutor(None, ledger,
+                         max_live_orders=X.live_order_bound())
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
