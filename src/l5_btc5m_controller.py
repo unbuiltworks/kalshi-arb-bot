@@ -97,7 +97,7 @@ class Params:
     #: (the original rule; meaningless when the cap is below the reserve).
     #: "COMPLETION": an entry is placed only if, after it, the cap still
     #: holds the cost of completing EVERY unmatched share -- held, resting
-    #: on the favorite side, and the new entry -- at the hard pair ceiling,
+    #: on the favorite side, and the new entry -- at the target pair price,
     #: plus `completion_fee_per_share`. Shares already resting on the
     #: completing side are counted once, as resting notional, not reserved
     #: again. The executor runs in this mode with its effective ceiling.
@@ -271,9 +271,13 @@ def completion_reserve(inv: Dict[str, tuple], rest: List[Dict[str, Any]],
     Worst case for the reserve: every resting BUY fills (and the optional
     new order too). The long side is the one with more shares after that;
     each uncovered share needs one share of the other side at a price no
-    higher than `hard_pair_ceiling - avg long cost` -- the most any hedge
-    the controller can choose may pay, the flipped-favorite case included
-    -- plus the fee allowance. Shares resting on the short side are
+    higher than `hedge_target_pair - avg long cost` -- what an ordinary
+    completion may pay -- plus the fee allowance. A flipped-favorite hedge
+    may pay up to `hard_pair_ceiling`; for that case the reserve can fall
+    short by (ceiling - target) a share and the hedge is sized to the room
+    left. Pricing the reserve at the ceiling instead was measured on the 42
+    recorded windows (analysis/l5/btc5m_cap_policy_replay.py): it blocked
+    entries that later completed cheaply and replayed worse. Shares resting on the short side are
     already in `total_exposure_usd` as resting notional, so they cover their
     part of the gap and are not reserved a second time.
     """
@@ -291,7 +295,7 @@ def completion_reserve(inv: Dict[str, tuple], rest: List[Dict[str, Any]],
     long_ = UP if qty[UP] > qty[DOWN] else DOWN
     gap = qty[long_] - qty[_other(long_)]
     avg = cost[long_] / qty[long_]
-    bound = max(ZERO, params.hard_pair_ceiling - avg)
+    bound = max(ZERO, params.hedge_target_pair - avg)
     per = bound + params.completion_fee_per_share
     return {"usd": gap * per, "uncovered_qty": gap, "long_side": long_,
             "price_bound": bound}

@@ -69,12 +69,11 @@ def test_flat_book_reserves_nothing():
 
 
 def test_reserve_prices_every_uncovered_share_at_the_target_pair():
-    # 0.17 UP at 0.58: any hedge the controller may choose (flipped case
-    # included) pays at most 1.00 - 0.58 = 0.42 a share
+    # 0.17 UP at 0.58: an ordinary completion pays at most 0.98 - 0.58
     got = _r(inv(up=("0.17", "0.0986")))
     assert got["long_side"] == "UP" and got["uncovered_qty"] == D("0.17")
-    assert got["price_bound"] == D("0.42")
-    assert got["usd"] == D("0.17") * D("0.42")
+    assert got["price_bound"] == D("0.40")
+    assert got["usd"] == D("0.17") * D("0.40")
 
 
 def test_resting_completion_is_counted_once_not_reserved_again():
@@ -119,13 +118,13 @@ def test_completion_mode_opens_when_the_pair_still_fits(on):
     assert d["action"] == C.OPEN_FAVORITE
     e = d["evaluation"]["entry"]
     assert e["cap_usd"] == CAP
-    assert e["completion_reserve_usd"] == D("0.17") * D("0.42")
+    assert e["completion_reserve_usd"] == D("0.17") * D("0.40")
 
 
 def test_entries_stop_while_the_completion_still_fits(on):
     # held 0.35 UP at 0.58 (0.203); the price dipped so the hedge pair is
     # 0.58 + 0.45 = 1.03 (blocked). One more 0.19 @0.52 entry would need
-    # 0.203 + 0.0988 + 0.54 * (1.00 - 0.5589) = 0.54 > 0.45
+    # 0.203 + 0.0988 + 0.54 * (0.98 - 0.5589) = 0.53 > 0.45
     held = inv(up=("0.35", "0.203"))
     d = decide(book("0.54", "0.55"), inventory=held, p_up="0.70")
     assert d["evaluation"]["hedge"]["why"] == "PAIR_ABOVE_CEILING"
@@ -151,7 +150,7 @@ def test_cap_left_after_entries_always_buys_the_full_completion(on):
         c = D(held["UP"]["cost"]) + o["qty"] * o["price"]
         held = inv(up=(str(q), str(c)))
     q, c = D(held["UP"]["qty"]), D(held["UP"]["cost"])
-    need = q * (D("1.00") - c / q)
+    need = q * (D("0.98") - c / q)
     assert q > 0 and c + need <= CAP
 
 
