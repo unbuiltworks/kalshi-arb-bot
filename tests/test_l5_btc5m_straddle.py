@@ -434,3 +434,58 @@ class TestTheLadderTruncatesEvenly:
                      max_exposure_usd=D("10"), inventory=inv)
         assert {o["side"] for o in out["orders"]} == {C.DOWN}
         assert len(out["orders"]) == len(self.LADDER)
+
+
+# ======================================================================
+class TestTheLiveOrderBoundFitsThePlan:
+    """A bound smaller than the plan does not shrink the strategy, it
+    DEFORMS it. OBSERVED LIVE 2026-11-12 23:10Z: STRADDLE fell through to
+    the EDGE_GATED bound of 2, so a six-rung ladder rested two orders,
+    both on UP, and the window settled a purely directional -$0.55."""
+
+    def test_the_single_rung_straddle_needs_two(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.delenv(X.STRADDLE_RUNGS_ENV, raising=False)
+        assert X.live_order_bound() == 2
+
+    def test_a_six_rung_ladder_needs_twelve(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV,
+                           "0.05,0.06,0.07,0.08,0.09,0.10")
+        assert X.live_order_bound() == 12
+
+    @pytest.mark.parametrize("n", [1, 2, 3, 6, 10])
+    def test_the_bound_is_two_per_rung(self, monkeypatch, n):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        rungs = ",".join("0.%02d" % (4 + i) for i in range(n))
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, rungs)
+        assert X.live_order_bound() == max(2, 2 * n)
+
+    def test_an_unreadable_ladder_falls_back_to_the_single_rung_bound(
+            self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "STRADDLE")
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.05,0.90")   # bad rung
+        assert X.live_order_bound() == 2
+
+    def test_the_other_modes_are_untouched(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.05,0.06,0.07")
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "EDGE_GATED")
+        assert X.live_order_bound() == 2
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "ACCUMULATE")
+        monkeypatch.setenv(X.MAX_RESTING_ENV, "8")   # 8 is its ceiling
+        assert X.live_order_bound() == 8
+
+    def test_accumulate_still_refuses_an_out_of_range_slot_count(
+            self, monkeypatch):
+        """Worth pinning: `max_resting_entries` caps at 8, so the 10 and 15
+        set live on 2026-11-12 both fell back to the default of 4."""
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, "ACCUMULATE")
+        for raw in ("9", "10", "15"):
+            monkeypatch.setenv(X.MAX_RESTING_ENV, raw)
+            assert X.max_resting_entries() == 4

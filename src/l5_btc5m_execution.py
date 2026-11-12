@@ -289,13 +289,28 @@ EDGE_GATED_LIVE_ORDERS = 2
 
 
 def live_order_bound() -> int:
-    """The executor's hard cap on simultaneously live orders. In ACCUMULATE
-    it follows `max_resting_entries`, so the controller's plan is not
-    silently clipped by a smaller bound; in every other mode it is the
-    original 2, unchanged."""
-    if entry_mode() != C.ACCUMULATE:
-        return EDGE_GATED_LIVE_ORDERS
-    return max(EDGE_GATED_LIVE_ORDERS, max_resting_entries())
+    """The executor's hard cap on simultaneously live orders.
+
+    Each mode gets the bound ITS OWN PLAN NEEDS, because a bound smaller
+    than the plan does not shrink the strategy -- it deforms it.
+
+      ACCUMULATE  follows `max_resting_entries`.
+      STRADDLE    needs TWO ORDERS PER RUNG, one a side. OBSERVED LIVE
+                  2026-11-12 23:10Z: the mode fell through to the
+                  EDGE_GATED 2, so a six-rung ladder could rest only two
+                  orders, both landed on UP, and the window settled a
+                  purely directional -$0.55. The single-rung straddle was
+                  unaffected -- it wants exactly 2 -- which is why it had
+                  worked all evening and hid this.
+      EDGE_GATED  the original 2, unchanged.
+    """
+    mode = entry_mode()
+    if mode == C.ACCUMULATE:
+        return max(EDGE_GATED_LIVE_ORDERS, max_resting_entries())
+    if mode == C.STRADDLE:
+        rungs = len(straddle_rungs()) or 1
+        return max(EDGE_GATED_LIVE_ORDERS, 2 * rungs)
+    return EDGE_GATED_LIVE_ORDERS
 
 
 def account_cap() -> Optional[Decimal]:
