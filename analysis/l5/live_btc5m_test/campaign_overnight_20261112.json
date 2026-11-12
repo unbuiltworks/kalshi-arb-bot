@@ -10,7 +10,7 @@
  "max_campaign_loss_usd": "1.35",
  "fee_reserve_usd": "0.02",
  "min_window_cap_usd": "0.10",
- "approved_sha": "9de1e1189a4f158a2cacccd8ef596112bab86da5",
+ "approved_sha": "ee5f4e8027cedfe5cb6301711e215f3397a42ee4",
  "results": {},
  "approved_utc": "2026-11-12T03:25:11.695949+00:00",
  "approval_terms": "Option B. At most three maker-only windows 0500z/0630z/0800z on l5-btc5m-live; start SHA 9de1e1189; successor SHA only if it changes BTC5m controller/execution logic only (not authorization, limits, halts, watchdog, account-risk), passes targeted regressions and full-suite baseline parity, deployed disarmed and verified before arming. Per window <=$0.45 exposure, <=20 orders (OPEN 4/COMPLETE 8/REPLACE 6), taker disabled. Campaign realized net-loss limit $1.35 incl fees; cap reduced to remaining budget with $0.02 fee reserve; fail closed if anything unreconciled. Account $5 daily / $25 lifetime unchanged; watchdog required; BTC15m disarmed; no overlap; skipped windows not replaced; no unchanged configuration repeated after evidence it is economically unsound.",
@@ -39,5 +39,19 @@
    },
    "recorded_utc": "2026-11-12T04:23:48.377961+00:00"
   }
- }
+ },
+ "successor_sha_log": [
+  {
+   "sha": "ee5f4e8027cedfe5cb6301711e215f3397a42ee4",
+   "prs": [
+    227,
+    228
+   ],
+   "scope": "BTC5m controller/execution + BTC5m image deps; no authorization/limit/halt/watchdog/account-risk change",
+   "targeted_tests": "476 BTC5m + 4 image-deps pass",
+   "full_suite_parity": "identical 34 baseline IDs on d23d05560 and e426650cc (trees identical to merges 9068aaa02/ee5f4e802)",
+   "disarmed_deploy": "7b1a591a SUCCESS 04:42Z; locks on; idle; watchdog 0; BTC15m disarmed",
+   "verified_utc": "2026-11-12T04:42:28.495356+00:00"
+  }
+ ]
 }
