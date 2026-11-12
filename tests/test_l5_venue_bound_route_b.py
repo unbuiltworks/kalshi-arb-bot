@@ -1,7 +1,7 @@
 """Deterministic research evidence gates; no live or modeled fill promotion."""
 import unittest
 from analysis.l5.issue208.venue_bound_route_b import (
-    Unscorable, verified_first_fill, causal_book, settled_residual, paired_counterfactual
+    Unscorable, verified_first_fill, causal_book, settled_residual, paired_counterfactual, verified_pair_net
 )
 from decimal import Decimal
 
@@ -31,6 +31,19 @@ class VenueBoundRouteBTests(unittest.TestCase):
         for invalid in (None, "", "  ", 0, 42, False):
             with self.assertRaises(Unscorable):
                 settled_residual(F, dict(market="m", settlement_id=invalid, winner="DOWN"), "m")
+    def test_verified_pair_net_uses_actual_fills_and_fees(self):
+        opposite = dict(F, order_id="o2", fill_id="f2", side="DOWN",
+                        price="0.48", fee="0.001", timestamp="101")
+        self.assertEqual(verified_pair_net(F, opposite, "m"), Decimal("0.014"))
+    def test_partial_or_invalid_complement_never_promotes_to_pair(self):
+        good = dict(F, order_id="o2", fill_id="f2", side="DOWN",
+                    price="0.48", fee="0", timestamp="101")
+        for changes in (dict(qty="0.29"), dict(side="UP"),
+                        dict(fill_id="f"), dict(order_id="o"),
+                        dict(timestamp="99"), dict(market="other")):
+            bad = dict(good, **changes)
+            with self.assertRaises(Unscorable):
+                verified_pair_net(F, bad, "m")
     def test_market_mismatch_rejected(self):
         with self.assertRaises(Unscorable):
             verified_first_fill(F, "other")
