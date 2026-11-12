@@ -53,7 +53,7 @@ def settled_residual(first_fill: Mapping, settlement: Mapping, market: str):
     f = verified_first_fill(first_fill, market)
     if settlement.get("market") != market or settlement.get("winner") not in ("UP", "DOWN"):
         raise Unscorable("missing settlement winner")
-    if not settlement.get("settlement_id"):
+    if not isinstance(settlement.get("settlement_id"), str) or not settlement["settlement_id"].strip():
         raise Unscorable("missing settlement id")
     payout = Decimal(1) if settlement["winner"] == f["side"] else Decimal(0)
     return f["qty"] * (payout - f["price"]) - f["fee"]
