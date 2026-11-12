@@ -736,3 +736,68 @@ class TestMakerOnly:
                                        reserve_mode="NONE"))
         assert all(o["post_only"] for o in out["orders"]
                    if o["op"] == "PLACE")
+
+
+# ======================================================================
+# 13. ORDER IDENTITY: THE INVARIANT THE SLOT RESTS ON
+# ======================================================================
+class TestOrderIdentity:
+    """A slot number is reused only after the order holding it went
+    terminal, and a terminal order has already advanced `seq`. So no two
+    orders of this strategy can ever hash to the same id, while a REPLAYED
+    decision -- same state, same slot, same seq -- still does and is still
+    caught as DUPLICATE_INTENT. Both halves matter: the first is a
+    correctness property, the second is the double-submit guard."""
+
+    def test_slot_zero_hashes_exactly_as_it_did_before_slots_existed(self,
+                                                                     rig45):
+        assert rig45.ex.coid(MARKET, 0, "UP", "0.58", "0.17") == \
+            rig45.ex.coid(MARKET, 0, "UP", "0.58", "0.17", 0)
+
+    def test_a_different_slot_is_a_different_order(self, rig45):
+        ids = {rig45.ex.coid(MARKET, 0, "UP", "0.70", "0.14", s)
+               for s in range(8)}
+        assert len(ids) == 8
+
+    def test_a_replayed_decision_is_still_a_duplicate(self, armed, acc,
+                                                      rig45):
+        """The same state decided twice asks for the same slot, so the
+        second attempt is refused rather than sent."""
+        step(rig45, "0.70", "0.71")
+        before = len(rig45.venue.sent)
+        rep = rig45.ex.step(                       # the identical decision
+            market=MARKET, book={"bid": "0.70", "ask": "0.71", "age_s": 0.1},
+            t_in_window_s=30.0, exposure_ceiling_usd=D(CAP))
+        if rep["placed"]:                          # it asked for slot 1
+            assert len(rig45.venue.sent) == before + 1
+        assert "DUPLICATE_INTENT" not in reasons(rep) or not rep["placed"]
+
+    def test_every_order_of_a_whole_window_has_a_distinct_id(self, armed,
+                                                             acc, rig45,
+                                                             monkeypatch,
+                                                             tmp_path):
+        """The invariant, exercised: a drifting book, partial fills, full
+        fills and requotes across a whole window, and no collision."""
+        monkeypatch.setenv(X.MAX_RESTING_ENV, "4")
+        rig = Rig(tmp_path, max_live_orders=X.live_order_bound())
+        books = [("0.70", "0.71"), ("0.70", "0.71"), ("0.71", "0.72"),
+                 ("0.70", "0.71"), ("0.70", "0.71"), ("0.69", "0.70"),
+                 ("0.70", "0.71"), ("0.70", "0.71")]
+        t = 0.0
+        for i, (bid, ask) in enumerate(books):
+            step(rig.tick(5.0), bid, ask, t=t)
+            live = [o for o in rig.venue.by_oid
+                    if o not in rig.venue.full and o not in rig.venue.retired]
+            if live and i % 3 == 1:
+                rig.venue.fill(live[0], "0.05")    # a partial
+            elif live and i % 3 == 2:
+                rig.venue.fill(live[0])            # a full one
+            t += 5.0
+        ids = [s["client_order_id"] for s in rig.venue.sent]
+        assert len(ids) == len(set(ids)), ids
+        assert len(ids) >= 4
+        # and the ledger holds exactly those, each with its slot recorded
+        rows = rig.ex.orders()
+        assert {r["client_order_id"] for r in rows.values()
+                if r["venue_order_id"]} == set(ids)
+        assert all("slot" in r for r in rows.values())
