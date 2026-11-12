@@ -343,3 +343,49 @@ class TestTheLadderEnv:
         from src import l5_btc5m_execution as X
         monkeypatch.delenv(X.STRADDLE_RUNGS_ENV, raising=False)
         assert X.straddle_rungs() == ()
+
+
+# ======================================================================
+class TestTheClipCeilingIsPerMode:
+    """STRADDLE got a higher clip bound by owner decision 2026-11-12. The
+    directional modes must NOT have been widened as a side effect."""
+
+    def test_the_straddle_ceiling_is_five_times_the_other(self):
+        from src import l5_btc5m_execution as X
+        assert X.CLIP_MAX_USD == D("0.45")
+        assert X.STRADDLE_CLIP_MAX_USD == D("2.25")
+
+    @pytest.mark.parametrize("raw", ["0.50", "1.00", "2.25"])
+    def test_a_big_clip_is_taken_for_the_straddle(self, monkeypatch, raw):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.CLIP_USD_ENV, raw)
+        assert X.clip_usd(max_usd=X.STRADDLE_CLIP_MAX_USD) == D(raw)
+
+    @pytest.mark.parametrize("raw", ["0.50", "1.00", "2.25"])
+    def test_the_same_clip_is_REFUSED_for_the_other_modes(self, monkeypatch,
+                                                          raw):
+        """The whole point of scoping it: accumulation keeps $0.45."""
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.CLIP_USD_ENV, raw)
+        assert X.clip_usd(default=D("0.10")) == D("0.10")
+
+    @pytest.mark.parametrize("raw", ["2.26", "5.00", "100"])
+    def test_above_the_straddle_ceiling_still_falls_back(self, monkeypatch,
+                                                         raw):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.CLIP_USD_ENV, raw)
+        assert X.clip_usd(default=D("0.10"),
+                          max_usd=X.STRADDLE_CLIP_MAX_USD) == D("0.10")
+
+    def test_the_worst_case_is_still_two_clips(self):
+        """Whatever the ladder's width, one side costs `clip`."""
+        out = decide(straddle_rungs=(D("0.05"), D("0.06"), D("0.07"),
+                                     D("0.08"), D("0.09"), D("0.10")),
+                     clip_usd=D("2.25"), max_exposure_usd=D("5.00"))
+        per_side = {}
+        for o in out["orders"]:
+            per_side[o["side"]] = per_side.get(o["side"], D(0)) \
+                + o["price"] * o["qty"]
+        for cost in per_side.values():
+            assert cost <= D("2.25")
+        assert sum(per_side.values()) <= D("4.50")
