@@ -6124,6 +6124,8 @@ class FaithfulExecutor:
         #: None is exactly what "no leg pending" already meant.
         self._probe_leg_pending: Optional[str] = None
         self._probe_round_pending: Optional[int] = None
+        #: and the continuous inventory controller's derived key, same rule
+        self._continuous_key_pending: Optional[str] = None
         self.lam = lam
         #: DISARMED-SHADOW HOOKS, declared here rather than attached from
         #: outside. The graft test is right to insist: an attribute the

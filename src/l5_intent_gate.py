@@ -109,6 +109,10 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "PMUS_TRANSLATION:QUANTITY_BELOW_MIN_INCREMENT",
     "PMUS_TRANSLATION:TRANSLATION_REASON",
     "SAFETY_OVERLAY:CONFLICTING_EXPERIMENTS_TS_AND_QM",
+    # the continuous inventory controller's intent, re-verified at the seam
+    # (cutoffs, per-contract hard ceiling, post-only, claim slot); only
+    # reachable with L5_TS_CONTINUOUS_INVENTORY=YES
+    "CONTINUOUS_INVENTORY:ADOPT_REFUSED",
     "TWO_SIDED_PROBE:WINDOW_START_UNKNOWN",
     "TWO_SIDED_PROBE:MAY_PLACE_LATE",
     "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED",
