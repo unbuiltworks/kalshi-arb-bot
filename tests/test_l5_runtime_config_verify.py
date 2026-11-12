@@ -96,6 +96,7 @@ def _approval_document():
 def approved(monkeypatch):
     for k, v in APPROVED_ENV.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("L5_TS_MAX_PAIR_COST", "0.99")   # owner-raised 2026-11-12
     monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", _approval_document())
     # the defensive flag is OFF at deploy, which the verifier requires
     monkeypatch.delenv("L5_DEFENSIVE_COMPLETION", raising=False)
@@ -337,7 +338,7 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     # RAISED 5 -> 20 by owner decision; the daily halt stays $5.
     assert V.APPROVED["aggregate_exposure_usd"] == D("5")
     assert V.APPROVED["daily_realized_loss_halt_usd"] == D("5")
-    assert V.APPROVED["maker_pair_ceiling"] == D("0.96")
+    assert V.APPROVED["maker_pair_ceiling"] == D("0.99")   # owner, 2026-11-12
     assert V.APPROVED["defensive_pair_ceiling"] == D("1.20")
     assert V.APPROVED["cancel_margin_s"] == 300.0
     assert V.APPROVED["defensive_guard_opens_s"] == 540.0
@@ -379,6 +380,7 @@ APPROVED_SNAPSHOT = {
     # configuration fails its own prediction.
     "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "10.00",
     "L5_TS_OPENING_NOTIONAL_BUDGET_USD": "0.80",
+    "L5_TS_MAX_PAIR_COST": "0.99",   # owner-raised 2026-11-12
 }
 
 #: what production is believed to hold TODAY: the four-window campaign's
