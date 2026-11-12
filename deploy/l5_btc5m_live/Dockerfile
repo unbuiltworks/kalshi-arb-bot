@@ -1,0 +1,43 @@
+# L5 BTC 5-minute live session. ONE owner-approved window, then idle.
+#
+# MONEY-CAPABLE when the owner supplies PMUS credentials and arms it. It
+# submits only through `l5_btc5m_execution`, which spends the owner's
+# single-use authorization claim before every order; the transport arms only
+# after its own preflight passes AND the owner's arm token is present. With
+# either missing it sends nothing.
+#
+# Separate service from l5-pmus-live. It shares no volume with it. It reads
+# that service's account-wide loss state (L5_ACCOUNT_RISK_URL) and the shared
+# halt record the independent watchdog asserts (L5_HALT_URL), and refuses to
+# submit when either cannot be read.
+#
+# The COPY list is the import closure of the entrypoint plus the modules it
+# imports lazily on the submit, approval and halt paths; a test keeps it so.
+FROM python:3.11-slim
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1
+COPY src/__init__.py src/__init__.py
+COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
+COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
+COPY src/l5_btc5m_runner.py src/l5_btc5m_runner.py
+COPY src/l5_btc_reference.py src/l5_btc_reference.py
+COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
+COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
+COPY src/l5_execution_translations.py src/l5_execution_translations.py
+COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
+COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
+COPY src/l5_halt_gate.py src/l5_halt_gate.py
+COPY src/l5_live_authorization.py src/l5_live_authorization.py
+COPY src/l5_live_execution.py src/l5_live_execution.py
+COPY src/l5_order_body.py src/l5_order_body.py
+COPY src/l5_origin.py src/l5_origin.py
+COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
+COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_preview_gate.py src/l5_preview_gate.py
+COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
+COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
+COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
+COPY src/pmus_auth.py src/pmus_auth.py
+COPY src/pmus_fees.py src/pmus_fees.py
+COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
+CMD ["python3", "-u", "-m", "src.l5_btc5m_runner"]

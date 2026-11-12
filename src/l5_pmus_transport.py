@@ -44,6 +44,18 @@ from src.l5_live_execution import NotArmed
 #: the series the faithful probe is scoped to. A different series fails.
 BTC15M_SERIES = "btc-updown-15m"
 BTC15M_SLUG_RE = re.compile(r"^cpc-btc-updown-15m-\d{4}-\d{2}-\d{2}-\d{4}z$")
+#: THE 5-MINUTE SERIES, for the BTC5m runner only. A transport is built for
+#: ONE series and preflight refuses a slug or a venue market outside it. The
+#: default is BTC15M, so every existing caller is unchanged.
+BTC5M_SERIES = "btc-updown-5m"
+BTC5M_SLUG_RE = re.compile(r"^cpc-btc-updown-5m-\d{4}-\d{2}-\d{2}-\d{4}z$")
+#: name -> (venue series marker, slug pattern, the two preflight gate names)
+SERIES = {
+    "BTC15M": (BTC15M_SERIES, BTC15M_SLUG_RE,
+               "slug_is_btc15m_series", "market_series_is_btc15m"),
+    "BTC5M": (BTC5M_SERIES, BTC5M_SLUG_RE,
+              "slug_is_btc5m_series", "market_series_is_btc5m"),
+}
 
 #: the two outcomes, and the ONLY mapping this engine accepts
 OUTCOMES = ("UP", "DOWN")
@@ -708,7 +720,11 @@ class PmusTransport:
     name = "PMUS"
 
     def __init__(self, *, market_slug: str, http: Optional[Any] = None,
-                 now_fn=None, limiter: Optional["RateLimiter"] = None) -> None:
+                 now_fn=None, limiter: Optional["RateLimiter"] = None,
+                 series: str = "BTC15M") -> None:
+        if series not in SERIES:
+            raise ValueError("unknown series %r" % (series,))
+        self.series = series
         self.market_slug = market_slug
         #: the durable ledger's ownership test, installed by the runner.
         #: None means ownership cannot be established and cancel refuses.
@@ -1162,8 +1178,9 @@ class PmusTransport:
                            % (expect_account, fp))
 
         # 3/4. intended series and current market slug
-        ok &= gate("slug_is_btc15m_series",
-                   bool(BTC15M_SLUG_RE.match(self.market_slug or "")),
+        _ser, _ser_re, _g_slug, _g_market = SERIES[
+            getattr(self, "series", "BTC15M")]
+        ok &= gate(_g_slug, bool(_ser_re.match(self.market_slug or "")),
                    self.market_slug)
         mk: Dict[str, Any] = {}
         if ok:
@@ -1172,9 +1189,9 @@ class PmusTransport:
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "market_readable", exc)
             ok &= gate("market_resolves", bool(mk), mk.get("slug"))
-            ok &= gate("market_series_is_btc15m",
-                       BTC15M_SERIES in str(mk.get("seriesSlug")
-                                            or mk.get("slug") or ""),
+            ok &= gate(_g_market,
+                       _ser in str(mk.get("seriesSlug")
+                                   or mk.get("slug") or ""),
                        mk.get("seriesSlug") or mk.get("slug"))
 
         # 5. open / tradable. This resource reports tradability as
