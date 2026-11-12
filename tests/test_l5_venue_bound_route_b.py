@@ -1,7 +1,7 @@
 """Deterministic research evidence gates; no live or modeled fill promotion."""
 import unittest
 from analysis.l5.issue208.venue_bound_route_b import (
-    Unscorable, verified_first_fill, causal_book, settled_residual, paired_counterfactual, verified_pair_net
+    Unscorable, verified_first_fill, causal_book, settled_residual, paired_counterfactual, verified_pair_net, verified_partial_completion
 )
 from decimal import Decimal
 
@@ -44,6 +44,29 @@ class VenueBoundRouteBTests(unittest.TestCase):
             bad = dict(good, **changes)
             with self.assertRaises(Unscorable):
                 verified_pair_net(F, bad, "m")
+    def test_partial_completion_splits_real_matched_and_settled_residual(self):
+        first = dict(F, fee="0.003")
+        opposite = dict(F, order_id="o2", fill_id="f2", side="DOWN",
+                        qty="0.10", price="0.48", fee="0.001", timestamp="101")
+        result = verified_partial_completion(first, opposite,
+                   dict(market="m", settlement_id="s", winner="DOWN"), "m")
+        self.assertEqual(result["matched_qty"], Decimal("0.10"))
+        self.assertEqual(result["residual_qty"], Decimal("0.20"))
+        self.assertEqual(result["matched_net"], Decimal("0.003"))
+        self.assertEqual(result["residual_net"], Decimal("-0.096"))
+        self.assertEqual(result["total_net"], Decimal("-0.093"))
+
+    def test_partial_completion_rejects_missing_settlement_and_overfill(self):
+        opposite = dict(F, order_id="o2", fill_id="f2", side="DOWN",
+                        qty="0.10", price="0.48", timestamp="101")
+        settlement = dict(market="m", settlement_id="s", winner="DOWN")
+        for bad_settlement in (dict(market="m", winner="DOWN"),
+                               dict(market="m", settlement_id="s", winner="UNKNOWN")):
+            with self.assertRaises(Unscorable):
+                verified_partial_completion(F, opposite, bad_settlement, "m")
+        with self.assertRaises(Unscorable):
+            verified_partial_completion(F, dict(opposite, qty="0.31"), settlement, "m")
+
     def test_market_mismatch_rejected(self):
         with self.assertRaises(Unscorable):
             verified_first_fill(F, "other")
