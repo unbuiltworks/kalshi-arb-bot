@@ -1,3 +1,5 @@
+> **SUPERSEDED in part.** The headline figures below are the 142-window tape. See `CALIBRATION_FINDINGS.md` for the 187-window results and the probability calibration.
+
 # BTC5m favorite accumulation — diagnosis, and the measured economics
 
 Date: 2026-11-12. Service `l5-btc5m-live` (project `arb-ev-wallet-shadow`).

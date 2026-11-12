@@ -75,6 +75,13 @@ RISK_URL_ENV = "L5_ACCOUNT_RISK_URL"
 HALT_URL_ENV = "L5_HALT_URL"
 FILLS_PORT_ENV = "L5_BTC5M_FILLS_PORT"
 SESSION_DIR = "btc5m_sessions"
+#: OPT-IN to running every window the owner's approval ENUMERATES, instead
+#: of the single window named in `L5_BTC5M_MARKET`. Anything but exactly
+#: "ON" keeps the one-window behaviour, so a deployment changes nothing
+#: until the owner asks. This GRANTS NOTHING: the list of windows comes
+#: from the owner's own approval document and this runner can neither add
+#: to it nor invent one.
+CAMPAIGN_ENV = "L5_BTC5M_CAMPAIGN"
 
 
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
@@ -197,6 +204,55 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
     if -life_all >= cum:
         return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
     return dict(out, ok=True, reason=None)
+
+
+def submission_budget() -> Dict[str, Any]:
+    """What the owner's per-class submission budgets allow and what is
+    already spent. READ-ONLY: it composes `AUTH.max_of_class` with
+    `AUTH.class_spent`, both of which only read, and claims nothing.
+
+    WHY IT EXISTS. Accumulation requotes on every tick of drift, so
+    `_order_class` charges most of its orders to REPLACE rather than OPEN.
+    If `L5_LIVE_AUTH_MAX_REPLACE` is sized for the one-entry pair strategy,
+    a live window stalls after its first requote and the step records say
+    `AUTHORIZATION:...` -- which reads like a strategy failure and is not
+    one. Reporting the budget at the start of the session and again in its
+    report makes that distinguishable from the outside, before a window is
+    spent finding out.
+
+    `max` None means the owner configured no budget for that class, which
+    does not bind. A directory we cannot read reports `spent` None rather
+    than 0: an absence we cannot see is not an absence.
+    """
+    out: Dict[str, Any] = {}
+    try:
+        exp = AUTH.experiment_id()
+        path = AUTH.ledger_path()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"readable": False, "why": type(exc).__name__}
+    for k in AUTH.SUBMISSION_CLASSES:
+        try:
+            cap = AUTH.max_of_class(k)
+        except BaseException:                                  # noqa: BLE001
+            cap = None
+        try:
+            spent: Optional[int] = len(AUTH.class_spent(path, exp, k))
+        except BaseException:                                  # noqa: BLE001
+            spent = None
+        out[k] = {
+            "max": cap, "spent": spent,
+            "remaining": (None if cap is None or spent is None
+                          else max(0, cap - spent)),
+            "binds": cap is not None,
+        }
+    out["readable"] = True
+    out["experiment"] = exp
+    out["note"] = ("accumulation charges most orders to REPLACE, not OPEN; "
+                   "a REPLACE budget sized for the one-entry pair strategy "
+                   "stalls a window after its first requote")
+    return out
 
 
 def shared_halt(url: str) -> Dict[str, Any]:
@@ -355,6 +411,53 @@ def venue_window_bounds(market: str, *,
             "source": AUTH.WINDOW_SOURCE_VENUE}
 
 
+def approved_markets(now: dt.datetime) -> Dict[str, Any]:
+    """The BTC5m windows the OWNER's approval document enumerates, oldest
+    first, as market slugs. READ-ONLY and it reserves nothing.
+
+    The approval layer already carries `window_starts` and `max_windows`
+    and validates both against the code ceilings, the document's own
+    expiry and its last-open bound; this only reads the result. A window
+    that is not in that list can never be returned, so the runner cannot
+    widen what the owner authorized -- it can only consume it.
+    """
+    from src import l5_campaign_approval as CA
+    out: Dict[str, Any] = {"markets": [], "max_windows": None,
+                           "readable": False, "why": None}
+    try:
+        v = CA.campaign_decision(None, now=now, reserve=False)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["why"] = "APPROVAL_UNREADABLE:%s" % type(exc).__name__
+        return out
+    if not isinstance(v, Mapping) or not v.get("present"):
+        out["why"] = "NO_APPROVAL_DOCUMENT"
+        return out
+    scope = dict(v.get("scope") or {})
+    if str(scope.get("series") or "") != X.MARKET_PREFIX:
+        out["why"] = "APPROVAL_IS_FOR_ANOTHER_SERIES"
+        return out
+    starts = scope.get("window_starts")
+    if not isinstance(starts, (list, tuple)) or not starts:
+        out["why"] = "APPROVAL_ENUMERATES_NO_WINDOWS"
+        return out
+    slugs = []
+    for raw in starts:
+        try:
+            t = dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            out["why"] = "APPROVAL_WINDOW_START_UNREADABLE"
+            return out
+        slugs.append("%s%s-%sz" % (X.MARKET_PREFIX,
+                                   t.astimezone(UTC).strftime("%Y-%m-%d"),
+                                   t.astimezone(UTC).strftime("%H%M")))
+    mw = scope.get("max_windows")
+    out.update(markets=sorted(set(slugs)), readable=True,
+               max_windows=(int(mw) if isinstance(mw, int) else len(slugs)))
+    return out
+
+
 def arm_through_boundary(session: "Session") -> Dict[str, Any]:
     """ARM ONLY THROUGH `authorize_arming`, the one shared boundary every
     arming path in src/ uses. Every input is this session's own reading:
@@ -391,7 +494,9 @@ def arm_through_boundary(session: "Session") -> Dict[str, Any]:
         window_bounds=session.bounds_fn(market),
         nominal_window_s=WINDOW_S,
         series=X.MARKET_PREFIX,
-        max_windows=1,
+        # the owner's own figure, clamped by the approval layer against the
+        # code ceiling. One when the document names one.
+        max_windows=max(1, int(session.max_windows or 1)),
         now=now,
         shadow_locked=AUTH.shadow_lock_engaged())
     session.t.arm()
@@ -413,7 +518,8 @@ class Session:
                  sleep: Callable[[float], None] = time.sleep,
                  armed_fn: Optional[Callable[[], bool]] = None,
                  arm_fn: Optional[Callable[[Any], Any]] = None,
-                 bounds_fn: Optional[Callable[[str], Any]] = None) -> None:
+                 bounds_fn: Optional[Callable[[str], Any]] = None,
+                 max_windows: int = 1) -> None:
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
@@ -428,6 +534,11 @@ class Session:
         self.arm_fn = arm_fn if arm_fn is not None else (
             lambda t: arm_through_boundary(self))
         self.bounds_fn = bounds_fn or venue_window_bounds
+        #: how many windows the OWNER's approval enumerates. It is passed
+        #: to `authorize_arming` so the boundary checks this session against
+        #: the figure the owner actually wrote, not a hardcoded 1. It
+        #: authorizes nothing by itself.
+        self.max_windows = int(max_windows or 1)
         self.last_preflight: Any = None
         self.events: List[Dict[str, Any]] = []
         self.would_submit = 0
@@ -569,6 +680,9 @@ class Session:
                "preflight_failed": self._failed_checks(pf),
                "preflight_attempts": attempts,
                "transport_armed": armed, "arm_error": arm_error,
+               # the owner's per-class submission budgets, BEFORE the
+               # window is spent finding out that one of them binds
+               "submission_budget": submission_budget(),
                "window_start_utc": ws.isoformat()}
         self._log("L5_BTC5M_START", rep)
         return rep
@@ -769,6 +883,7 @@ class Session:
             "cancelled": sum(1 for r in mine.values()
                              if r["state"] == X.CANCELLED),
             "would_submit_not_sent": self.would_submit,
+            "submission_budget": submission_budget(),
             "close": closed, "settlement": settled, "reconcile": recon,
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]
@@ -804,26 +919,64 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
-    if not market:
-        emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED"})
-    else:
-        t = T.PmusTransport(market_slug=market, series="BTC5M")
+    ref = REF.Reference(window_s=WINDOW_S)
+
+    def one_window(slug: str, max_windows: int) -> Dict[str, Any]:
+        t = T.PmusTransport(market_slug=slug, series="BTC5M")
         ex.transport = t
-        ref = REF.Reference(window_s=WINDOW_S)
-        ref.start()
         sess = Session(
-            market=market, executor=ex, transport=t, root=root,
+            market=slug, executor=ex, transport=t, root=root,
             book_fn=public_book,
             p_fn=lambda m, ws, now: ref.estimate(m, ws, now),
             risk_fn=lambda now, own: account_risk(
                 url=(os.getenv(RISK_URL_ENV) or "").strip(), now=now,
                 own_unaccounted=own),
-            halt_fn=lambda: shared_halt((os.getenv(HALT_URL_ENV) or "").strip()))
-        sess.run()
-    # NEVER CHOOSES ANOTHER WINDOW. It idles until the owner changes the
-    # configuration; a restart finds the marker and does not trade again.
+            halt_fn=lambda: shared_halt(
+                (os.getenv(HALT_URL_ENV) or "").strip()),
+            max_windows=max_windows)
+        return sess.run()
+
+    # WHICH WINDOWS. Either the ONE the owner named, which is the original
+    # behaviour and the default, or -- only when the owner opts in -- every
+    # window the owner's own approval document ENUMERATES. This runner can
+    # neither add to that list nor invent a window.
+    plan = {"markets": [market] if market else [], "max_windows": 1,
+            "source": "L5_BTC5M_MARKET"}
+    if not market and (os.getenv(CAMPAIGN_ENV) or "").strip() == "ON":
+        got = approved_markets(dt.datetime.now(UTC))
+        plan = {"markets": got["markets"],
+                "max_windows": got["max_windows"] or 1,
+                "source": "OWNER_APPROVAL_WINDOW_STARTS",
+                "why": got["why"]}
+    emit("L5_BTC5M_PLAN", dict(plan, utc=dt.datetime.now(UTC).isoformat()))
+
+    if not plan["markets"]:
+        emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED",
+                               "why": plan.get("why")})
+    else:
+        ref.start()
+        # NEVER MORE THAN THE OWNER APPROVED, whatever the list says.
+        for slug in plan["markets"][:max(1, int(plan["max_windows"]))]:
+            rep = one_window(slug, plan["max_windows"])
+            # A halt, a refusing account-risk state or an unresolved order
+            # ENDS THE CAMPAIGN. It never marches on to the next window.
+            stop = None
+            if not rep.get("started"):
+                stop = rep.get("reason")
+            elif not (rep.get("close") or {}).get("clean", True):
+                stop = "CLOSE_NOT_CLEAN"
+            elif ex.halted_reason:
+                stop = "LEDGER_HALTED:%s" % ex.halted_reason
+            if stop:
+                emit("L5_BTC5M_CAMPAIGN_STOPPED",
+                     {"after": slug, "reason": stop,
+                      "utc": dt.datetime.now(UTC).isoformat()})
+                break
+    # NEVER CHOOSES A WINDOW OF ITS OWN. It idles until the owner changes
+    # the configuration; a restart finds each marker and does not re-trade.
     while True:
         emit("L5_BTC5M_IDLE", {"market": market or None,
+                               "planned": len(plan["markets"]),
                                "utc": dt.datetime.now(UTC).isoformat()})
         time.sleep(60.0)
 

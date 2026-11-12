@@ -1,0 +1,295 @@
+"""Forward recorder of the SYNCHRONIZED BTC5m decision dataset. READ-ONLY.
+
+Replaces the dead `btc-ref-collector` by folding its job into the recorder
+that already runs: one process, one volume, one service. It polls the
+venue's PUBLIC market endpoint for the 5-minute window and the venue's
+PUBLIC 1-second BRTI average, and writes one `BTC5M_ALIGNED` row per poll
+carrying everything a decision needed at the moment it was made --
+market/window id, UP and DOWN bid/ask, depth, strike, time remaining, the
+index, an INDEPENDENT probability with its model version, and the source
+timestamps and freshness of each. Settlement is written once the venue
+states it.
+
+NO CREDENTIALS, NO ORDERS, NO ACCOUNT DATA. Two unauthenticated GETs. It
+imports nothing from the execution path and cannot reach one: it holds no
+transport and never constructs one. BTC5m and BTC15m execution behaviour is
+untouched by its presence.
+
+HEALTH IS NEVER ASSUMED. Every poll also writes a `BTC5M_HEALTH` row whose
+`ok` is True only when every input it needs was actually read and fresh:
+the market record, a two-sided quote, the strike, an index bucket no older
+than `l5_btc_reference.MAX_AGE_S`, and a probability the model was willing
+to state. Anything missing or stale sets `ok` False and names the component
+and the reason, and `consecutive_bad` counts how long it has been so. A
+silent feed therefore shows as a FAILING health row rather than as no row
+at all, and a monitor watching for `"ok": false` or for the absence of
+rows will see both cases.
+
+DEPTH. The public market endpoint publishes no size at any level, so depth
+is written as null with `depth_unavailable_reason`. It is never guessed.
+Should the venue begin publishing sizes, `_depth` is the one place to read
+them.
+
+FILLS. This process sees no fills -- it holds no account. The field is
+written empty with its reason so the schema matches the replay's and a
+fill-aware writer can fill it in later.
+
+usage: python3 analysis/l5/btc5m_aligned_recorder.py OUT.jsonl [HOURS]
+       OUT of "-" writes to stdout, which is how the service keeps them.
+       HOURS of 0 runs until stopped.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import sys
+import time
+import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+
+from src import l5_btc_reference as REF        # noqa: E402
+
+GATEWAY = "https://gateway.polymarket.us"
+MARKET_URL = GATEWAY + "/v1/market/slug/"
+INDEX_URL = (GATEWAY + "/v1/asset-prices/history?assets=crypto:btc"
+             "&bucket=ASSET_PRICE_BUCKET_1S&from=%d")
+EVERY_S = 2.0
+WINDOW_S = 300.0
+#: how much index history to hold: the volatility estimate needs 900 s
+INDEX_KEEP_S = 1200
+#: the first poll fetches this much history so a probability is available
+#: from the first row rather than after fifteen minutes of warm-up
+INDEX_WARMUP_S = 1500
+SETTLE_AFTER_S = 330.0
+SETTLE_GIVE_UP_S = 1800.0
+UTC = dt.timezone.utc
+SCHEMA = "btc5m_aligned/1"
+
+DEPTH_REASON = (
+    "the venue's PUBLIC market endpoint publishes no size at any level "
+    "(bestBidQuote/bestAskQuote and marketSides carry prices only); depth "
+    "needs the authenticated book, which this read-only path does not touch")
+FILLS_REASON = (
+    "this recorder holds no account and sees no fills; the field exists so a "
+    "fill-aware writer can populate it")
+
+
+def _get(url: str, timeout: float = 8.0):
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/json", "User-Agent": "research-client"})
+    t0 = time.time()
+    with urllib.request.urlopen(req, timeout=timeout) as fh:  # noqa: S310
+        return json.loads(fh.read().decode()), time.time() - t0
+
+
+def slug_for(start: dt.datetime) -> str:
+    return "cpc-btc-updown-5m-%s-%sz" % (start.strftime("%Y-%m-%d"),
+                                         start.strftime("%H%M"))
+
+
+def window_start(now: dt.datetime) -> dt.datetime:
+    return now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
+
+
+def _q(v):
+    """The venue's {"value": ...} money shape, as a float or None."""
+    if isinstance(v, dict):
+        v = v.get("value")
+    try:
+        return None if v is None else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _depth(market, side):
+    """Available size on `side`, or None. The public record carries none;
+    this is the one place to read it if the venue ever publishes it."""
+    for key in ("bestBidSize", "bestAskSize"):
+        if key in (market or {}):
+            break
+    else:
+        return None
+    return _q((market or {}).get(
+        "bestBidSize" if side == "bid" else "bestAskSize"))
+
+
+class IndexFeed:
+    """The venue's own 1-second BRTI average, newest last. Read-only."""
+
+    def __init__(self, get=_get):
+        self.get = get
+        self.points = {}
+        self.last_rtt = None
+        self.last_error = None
+        self.last_read_t = None
+
+    def poll(self, now_epoch: float) -> None:
+        have = max(self.points) if self.points else None
+        frm = int(now_epoch - (INDEX_WARMUP_S if have is None else 90))
+        try:
+            doc, rtt = self.get(INDEX_URL % frm)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.last_error = type(exc).__name__
+            return
+        self.last_error, self.last_rtt = None, rtt
+        self.last_read_t = time.time()
+        for s in (doc or {}).get("series") or ():
+            for c in s.get("candles") or ():
+                try:
+                    self.points[int(c["timestamp"])] = float(c["close"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+        cut = now_epoch - INDEX_KEEP_S
+        for t in [t for t in self.points if t < cut]:
+            del self.points[t]
+
+    def series(self, upto_epoch: float):
+        """Buckets that had ALREADY ENDED at `upto_epoch`, oldest first.
+        A bucket stamped t covers [t, t+1), so it has ended at t+1."""
+        return sorted((t, v) for t, v in self.points.items()
+                      if t + 1.0 <= upto_epoch)
+
+
+def model_version() -> str:
+    return ("l5_btc_reference;source=%s;averaging_s=%d;vol_inflation=%s;"
+            "sigma_rel_floor=%s;max_index_age_s=%s"
+            % (REF.VENUE_INDEX, REF.AVERAGING_S, REF.VOL_INFLATION,
+               REF.SIGMA_REL_FLOOR, REF.MAX_AGE_S))
+
+
+def build_row(*, slug, start, now, market, market_rtt, market_error, index):
+    """One aligned row plus its health verdict. Pure given its inputs."""
+    now_epoch = now.timestamp()
+    ws, we = start.timestamp(), start.timestamp() + WINDOW_S
+    terms = (market or {}).get("assetPriceTerms") or {}
+    bid, ask = _q((market or {}).get("bestBidQuote")), \
+        _q((market or {}).get("bestAskQuote"))
+    strike = _q(terms.get("priceToBeat"))
+    series = index.series(now_epoch)
+    p = REF.probability_up(
+        series=series, strike=(strike if strike else float("nan")),
+        window_end=we, now=now_epoch, received_t=index.last_read_t,
+        rtt_s=index.last_rtt)
+
+    bad = []
+    if market_error:
+        bad.append("market:%s" % market_error)
+    elif not market:
+        bad.append("market:EMPTY")
+    else:
+        if str((market or {}).get("slug")) != slug:
+            bad.append("market:SLUG_MISMATCH")
+        if bid is None or ask is None:
+            bad.append("quote:ONE_SIDED_OR_ABSENT")
+        if strike is None:
+            bad.append("strike:ABSENT")
+    if index.last_error:
+        bad.append("index:%s" % index.last_error)
+    elif not series:
+        bad.append("index:NO_BUCKETS")
+    if not p.get("ok"):
+        bad.append("probability:%s" % p.get("reason"))
+
+    row = {
+        "schema": SCHEMA,
+        "market": slug,
+        "window_start_utc": start.isoformat(),
+        "window_end_utc": dt.datetime.fromtimestamp(we, UTC).isoformat(),
+        "t_in_window_s": round(now_epoch - ws, 2),
+        "seconds_remaining": round(we - now_epoch, 2),
+        "quote_utc": now.isoformat(),
+        "quote_rtt_s": market_rtt,
+        "up": {"bid": bid, "ask": ask, "depth": _depth(market, "bid")},
+        "down": {"bid": (None if ask is None else round(1.0 - ask, 4)),
+                 "ask": (None if bid is None else round(1.0 - bid, 4)),
+                 "depth": _depth(market, "ask")},
+        "depth_unavailable_reason": DEPTH_REASON,
+        "strike": strike,
+        "index": {"a": p.get("index"), "bucket_t": p.get("bucket_t"),
+                  "age_s": (None if p.get("index_age_s") is None
+                            else round(p["index_age_s"], 3)),
+                  "symbol": REF.INDEX_SYMBOL,
+                  "averaging_s": REF.AVERAGING_S,
+                  "buckets_held": len(index.points),
+                  "read_rtt_s": index.last_rtt,
+                  "read_error": index.last_error},
+        "p_up": {"ok": bool(p.get("ok")), "value": p.get("p_up"),
+                 "reason": p.get("reason"), "model_version": model_version(),
+                 "tau_s": p.get("seconds_left"),
+                 "expected_settlement": p.get("expected_settlement"),
+                 "sd": p.get("sd"), "z": p.get("z"),
+                 "sigma_per_second": p.get("sigma_per_second"),
+                 "distance_to_strike": p.get("distance")},
+        "closed": (market or {}).get("closed"),
+        "settled_outcome": None,
+        "fills": [],
+        "fills_reason": FILLS_REASON,
+    }
+    health = {"ok": not bad, "bad": bad, "market": slug,
+              "utc": now.isoformat()}
+    return row, health
+
+
+def main(argv):
+    out = sys.stdout if argv[1] == "-" else open(argv[1], "a", buffering=1)
+    hours = float(argv[2]) if len(argv) > 2 else 0.0
+    end = time.time() + hours * 3600 if hours > 0 else float("inf")
+    tag = argv[1] == "-"
+    index = IndexFeed()
+    unsettled = {}
+    consecutive_bad = 0
+
+    def emit(kind, doc):
+        out.write(("%s " % kind if tag else "") + json.dumps(doc) + "\n")
+        out.flush()
+
+    while time.time() < end:
+        now = dt.datetime.now(UTC)
+        start = window_start(now)
+        slug = slug_for(start)
+        index.poll(now.timestamp())
+        market, rtt, err = None, None, None
+        try:
+            market, rtt = _get(MARKET_URL + slug)
+            market = market.get("market") or market
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            err = type(exc).__name__
+        row, health = build_row(slug=slug, start=start, now=now,
+                                market=market, market_rtt=rtt,
+                                market_error=err, index=index)
+        emit("BTC5M_ALIGNED", row)
+        consecutive_bad = 0 if health["ok"] else consecutive_bad + 1
+        health["consecutive_bad"] = consecutive_bad
+        emit("BTC5M_HEALTH", health)
+        unsettled.setdefault(slug, start)
+
+        for s, st0 in list(unsettled.items()):
+            if (now - st0).total_seconds() < SETTLE_AFTER_S:
+                continue
+            try:
+                m, _ = _get(MARKET_URL + s)
+                m = m.get("market") or m
+                prices = m.get("outcomePrices")
+                if prices and prices not in ('["0","0"]', '["0.5","0.5"]'):
+                    emit("BTC5M_SETTLED", {"schema": SCHEMA, "market": s,
+                                           "settled": prices,
+                                           "utc": now.isoformat()})
+                    del unsettled[s]
+                elif (now - st0).total_seconds() > SETTLE_GIVE_UP_S:
+                    del unsettled[s]
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+        time.sleep(EVERY_S)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

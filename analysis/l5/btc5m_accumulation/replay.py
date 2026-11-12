@@ -64,8 +64,8 @@ CANCEL_LEAD_S = 30.0
 WINDOW_S = 300.0
 DWELL_S = 10.0
 CAP = D("0.45")
-CLIP_USD = D("0.10")
-MAX_RESTING = 2
+CLIP_USD = C.Params().clip_usd                # the shipped default
+MAX_RESTING = C.Params().max_resting_entries   # the shipped default
 MAKER_FEE_PER_SHARE = D("0")
 #: a terminal quote this decided is the venue's own settlement
 RESOLVE_AFTER_S = 240.0
@@ -388,3 +388,54 @@ def clip_sweep(tape=TAPE):
               % (clip, sum(r["placed"] for r in rs), len(fills), f6(sh),
                  "%+.4f" % net, "%+.4f" % (net / len(rs))))
     PARAMS = keep
+
+
+def depth_sweep(tape=TAPE):
+    """WHERE IN THE RANGE TO REST -- the last lever that is purely "maker
+    orders in that band".
+
+    Resting below the favorite's bid pays less per share, so the naive
+    expectation is that it earns more. It does the OPPOSITE, monotonically.
+    The reason is the fill mechanism: a resting buy is reached when the bid
+    falls THROUGH it, so resting k ticks lower means only filling when the
+    side has moved k ticks further against us. The adverse selection grows
+    faster than the k cents of price concession.
+    """
+    global PARAMS
+    import math
+    import statistics
+    w = load(tape)
+    slugs = sorted(w)
+    cut = int(len(slugs) * 0.67)
+    keep = PARAMS
+    print()
+    print("=" * 78)
+    print("RESTING DEPTH BELOW THE FAVORITE BID (ADVERSE, $0.45 cap)")
+    print("=" * 78)
+    print("%-7s %7s %7s %9s %10s %9s %7s %11s"
+          % ("ticks", "placed", "fills", "fill%", "net/share", "net/win",
+             "t", "OOS net/win"))
+    print("-" * 78)
+    for k in range(0, 7):
+        PARAMS = C.Params(**dict(vars(keep), accumulate_depth_ticks=k))
+        globals()["PARAMS"] = PARAMS
+        us = {s: r for s, r in ((s, run_window(w[s], tier="ADVERSE"))
+                                for s in slugs) if r}
+        f = [x for r in us.values() for x in r["fills"]]
+        placed = sum(r["placed"] for r in us.values())
+        if not f:
+            continue
+        ps = [float((D(1) if x["won"] else D(0)) - x["price"]) for x in f]
+        pw = [float(sum((x["qty"] if x["won"] else D(0))
+                        - x["qty"] * x["price"] for x in r["fills"]))
+              for r in us.values()]
+        oos = [float(sum((x["qty"] if x["won"] else D(0))
+                         - x["qty"] * x["price"] for x in us[s]["fills"]))
+               for s in slugs[cut:] if s in us]
+        m = statistics.fmean(pw)
+        se = statistics.stdev(pw) / math.sqrt(len(pw))
+        print("%-7d %7d %7d %8.1f%% %+10.4f %+9.4f %+7.2f %+11.4f"
+              % (k, placed, len(f), 100.0 * len(f) / max(1, placed),
+                 statistics.fmean(ps), m, m / se, statistics.fmean(oos)))
+    PARAMS = keep
+    globals()["PARAMS"] = keep
