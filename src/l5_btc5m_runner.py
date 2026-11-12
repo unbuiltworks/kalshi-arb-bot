@@ -255,6 +255,140 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
     return httpd
 
 
+# ----------------------------------------------- the one arming boundary
+
+class ArmingView:
+    """The 5-minute ledger as `authorize_arming` reads a store: whether any
+    order's state is uncertain, what is live, what holds cost, what is
+    settled. READ-ONLY; it computes nothing the ledger does not state."""
+
+    def __init__(self, ex: "X.Btc5mExecutor") -> None:
+        self.ex = ex
+
+    def orders_uncertain(self) -> Optional[str]:
+        if not self.ex._ledger_ok:                             # noqa: SLF001
+            return "BTC5M_LEDGER_UNREADABLE"
+        return self.ex.halted_reason
+
+    def live_orders(self) -> Dict[str, Dict[str, Any]]:
+        out = {}
+        for c, r in self.ex.live_orders().items():
+            out[c] = dict(r, remaining=str(D(r["qty"]) - D(r["filled_qty"])))
+        return out
+
+    def committed(self) -> Dict[str, Decimal]:
+        out: Dict[str, Decimal] = {}
+        for r in self.ex.orders().values():
+            if D(r["filled_cost"]) > 0:
+                out[r["market"]] = out.get(r["market"], D(0)) + D(
+                    r["filled_cost"])
+        return out
+
+    @property
+    def state(self) -> Dict[str, Any]:
+        return {"retired_markets": dict(self.ex._ledger["settled"])}  # noqa
+
+
+class RunningLimits:
+    """The session's capital scope in the shape the boundary reads: the
+    same three attributes the BTC15m service's limits object carries, and
+    `as_dict()` for the record. Values are the owner-approved figures, so
+    the boundary's own CAMPAIGN_LIMITS_WIDER_THAN_APPROVED check compares
+    like with like."""
+
+    def __init__(self, *, max_usd_per_market: Decimal,
+                 max_total_exposure_usd: Decimal,
+                 daily_realized_loss_halt_usd: Decimal) -> None:
+        self.max_usd_per_market = max_usd_per_market
+        self.max_total_exposure_usd = max_total_exposure_usd
+        self.daily_realized_loss_halt_usd = daily_realized_loss_halt_usd
+
+    def as_dict(self) -> Dict[str, str]:
+        return {"max_usd_per_market": str(self.max_usd_per_market),
+                "max_total_exposure_usd": str(self.max_total_exposure_usd),
+                "daily_realized_loss_halt_usd":
+                    str(self.daily_realized_loss_halt_usd)}
+
+
+def venue_window_bounds(market: str, *,
+                        fetch: Optional[Callable[[str], Any]] = None
+                        ) -> Optional[Dict[str, Any]]:
+    """This market's window AS THE VENUE STATES IT (`assetPriceTerms`),
+    offered only when it confirms the slug's own start and is five minutes
+    long. None otherwise; the boundary then refuses WINDOW_BOUNDS_UNKNOWN."""
+    def get(url: str) -> Any:
+        req = urllib.request.Request(url, headers={"Accept":
+                                                   "application/json"})
+        with urllib.request.urlopen(req, timeout=3.0) as r:     # noqa: S310
+            return json.loads(r.read().decode("utf-8"))
+    try:
+        doc = (fetch or get)("%s/v1/market/slug/%s" % (GATEWAY, market))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    m = doc.get("market") if isinstance(doc, Mapping) and isinstance(
+        doc.get("market"), Mapping) else doc
+    if not isinstance(m, Mapping) or str(m.get("slug")) != str(market):
+        return None
+    terms = m.get("assetPriceTerms") or {}
+    try:
+        st = dt.datetime.fromisoformat(
+            str(terms.get("windowStart")).replace("Z", "+00:00"))
+        en = dt.datetime.fromisoformat(
+            str(terms.get("windowEnd")).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    ws = window_start(market)
+    if ws is None or st != ws or (en - st).total_seconds() != WINDOW_S:
+        return None
+    return {"start": st.isoformat(), "end": en.isoformat(),
+            "source": AUTH.WINDOW_SOURCE_VENUE}
+
+
+def arm_through_boundary(session: "Session") -> Dict[str, Any]:
+    """ARM ONLY THROUGH `authorize_arming`, the one shared boundary every
+    arming path in src/ uses. Every input is this session's own reading:
+    the owner's campaign verdict for this exact window, the preflight that
+    just ran, the 5-minute ledger, the watchdog's halt and this service's
+    own operator halt, a reconciled book, venue-confirmed window bounds,
+    the owner's arm token, the shadow lock and the approved capital scope.
+    A refusal raises `ArmingRefusal` and the transport stays disarmed."""
+    from src import l5_campaign_approval as CA
+    from src import pmus_auth as Q1
+    now = session._now()                                       # noqa: SLF001
+    market = session.market
+    h = session.halt_fn()
+    scope = session.approved_scope()
+    cap = session.exposure_ceiling()
+    loss = _dec(scope.get("max_daily_loss_usd"))
+    limits = None
+    if cap is not None and loss is not None:
+        limits = RunningLimits(max_usd_per_market=cap,
+                               max_total_exposure_usd=cap,
+                               daily_realized_loss_halt_usd=loss)
+    rec = session.reconcile()
+    claim = AUTH.authorize_arming(
+        campaign=CA.campaign_decision(market, now=now, reserve=False),
+        market=market,
+        preflight=session.last_preflight,
+        store=ArmingView(session.ex),
+        halted=bool(not h.get("ok") or AUTH.operator_halt_engaged()),
+        halt_gate_present=bool((os.getenv(HALT_URL_ENV) or "").strip()),
+        reconciled=bool(rec.get("read") and rec.get("agrees")),
+        unresolved=(),
+        transport_armable=Q1.armed(),
+        limits=limits,
+        window_bounds=session.bounds_fn(market),
+        nominal_window_s=WINDOW_S,
+        series=X.MARKET_PREFIX,
+        max_windows=1,
+        now=now,
+        shadow_locked=AUTH.shadow_lock_engaged())
+    session.t.arm()
+    return {"claim": claim}
+
+
 # ------------------------------------------------------------ the session
 
 class Session:
@@ -269,22 +403,23 @@ class Session:
                  clock: Callable[[], float] = time.time,
                  sleep: Callable[[float], None] = time.sleep,
                  armed_fn: Optional[Callable[[], bool]] = None,
-                 arm_fn: Optional[Callable[[Any], Any]] = None) -> None:
+                 arm_fn: Optional[Callable[[Any], Any]] = None,
+                 bounds_fn: Optional[Callable[[str], Any]] = None) -> None:
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
         self.risk_fn, self.halt_fn = risk_fn, halt_fn
         self.clock, self.sleep = clock, sleep
         self.armed_fn = armed_fn
-        #: WHO MAY ARM THE TRANSPORT. Every module in src/ that arms must
-        #: route the decision through `l5_live_authorization.
-        #: authorize_arming`, the one shared boundary (three guard tests
-        #: pin it). That boundary has not yet been extended to the BTC5m
-        #: session, so this module does not arm at all: with no `arm_fn`
-        #: the session runs DISARMED, its transport's submit raises, and the
-        #: adapter reports every decision as WOULD_SUBMIT. A test may inject
-        #: one against a scripted venue; production cannot.
-        self.arm_fn = arm_fn
+        #: WHO MAY ARM THE TRANSPORT: `arm_through_boundary`, i.e. only
+        #: through `l5_live_authorization.authorize_arming`, the one shared
+        #: boundary every arming path in src/ uses (three guard tests pin
+        #: it). `arm_fn` exists so a test can substitute the venue double's
+        #: own arm; production never passes one.
+        self.arm_fn = arm_fn if arm_fn is not None else (
+            lambda t: arm_through_boundary(self))
+        self.bounds_fn = bounds_fn or venue_window_bounds
+        self.last_preflight: Any = None
         self.events: List[Dict[str, Any]] = []
         self.would_submit = 0
 
@@ -339,12 +474,30 @@ class Session:
                     "loss_room_usd": str(room), "risk": dict(r)}
         return {"ok": True, "risk": dict(r)}
 
+    def approved_scope(self) -> Dict[str, Any]:
+        """The owner's approval for THIS window as the campaign layer reads
+        it (already clamped to the code ceilings), or {} when there is no
+        valid approval naming it. Read-only: reserves nothing. The halts are
+        NOT applied here, so a refusal downstream is named for its cause."""
+        from src import l5_campaign_approval as CA
+        try:
+            v = CA.campaign_decision(self.market, now=self._now(),
+                                     reserve=False)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {}
+        if not (v.get("present") and v.get("ok")):
+            return {}
+        scope = dict(v.get("scope") or {})
+        if str(scope.get("series") or "") != X.MARKET_PREFIX:
+            return {}
+        return scope
+
     def exposure_ceiling(self) -> Optional[Decimal]:
         """The smaller of the adapter's own ceiling and the owner's approved
         exposure for this window. None when the approval cannot be read."""
-        v = AUTH.btc5m_authorization(self.market, now=self._now(),
-                                     require_durable=False)
-        scope = v.get("scope") or {}
+        scope = self.approved_scope()
         approved = _dec(scope.get("max_total_exposure_usd"))
         own = _dec(self.ex.params.max_exposure_usd)
         if own is None:
@@ -380,21 +533,19 @@ class Session:
                 raise
             pf = {"preflight": "FAILED", "error": type(exc).__name__}
         self.t.cancel_owner_oracle = self.ex.owns_venue_order_id
+        self.last_preflight = pf
         armed = False
         arm_error = None
         if (pf or {}).get("preflight") == "PASSED":
-            if self.arm_fn is None:
-                arm_error = ("ARMING_BOUNDARY_NOT_WIRED: the BTC5m session "
-                             "does not arm until authorize_arming covers it")
-            else:
-                try:
-                    self.arm_fn(self.t)
-                    armed = bool(getattr(self.t, "armed", False))
-                except BaseException as exc:                   # noqa: BLE001
-                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                        raise
-                    arm_error = "%s: %s" % (type(exc).__name__,
-                                            str(exc)[:160])
+            try:
+                self.arm_fn(self.t)
+                armed = bool(getattr(self.t, "armed", False))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                arm_error = "%s: %s" % (
+                    getattr(exc, "reason", None) or type(exc).__name__,
+                    str(getattr(exc, "detail", "") or exc)[:200])
         rep = {"ok": True, "preflight": (pf or {}).get("preflight"),
                "preflight_failed": [c.get("check") for c in
                                     (pf or {}).get("checks") or ()

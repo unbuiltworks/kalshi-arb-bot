@@ -124,7 +124,11 @@ class Rig:
             sleep=self.clock.sleep,
             # the scripted venue's own arm. Production has no arm_fn: the
             # session cannot arm until authorize_arming covers it
-            arm_fn=(lambda t: t.arm()) if arm else None)
+            arm_fn=(lambda t: t.arm()) if arm is True else None,
+            bounds_fn=lambda m: {
+                "start": WS.isoformat(),
+                "end": (WS + dt.timedelta(minutes=5)).isoformat(),
+                "source": "VENUE"} if m == M else None)
 
     def _book(self, market):
         t = self.clock() - WS.timestamp()
@@ -682,25 +686,113 @@ def test_btc5ms_own_operator_halt_and_the_watchdogs_halt_still_stop_it(
         "SHARED_HALT:HALT:asserted"}
 
 
-def test_without_an_arm_function_the_session_cannot_arm_and_sends_nothing(
-        tmp_path, monkeypatch):
-    """THE PRODUCTION STATE until `authorize_arming` covers BTC5m: every
-    other gate passes, the venue's preflight passes, and still nothing is
-    sent. Every decision is reported as WOULD_SUBMIT, never as a trade."""
-    rig = Rig(tmp_path, monkeypatch, arm=False)
-    rep = rig.session.run()
-    start = rig.kinds("L5_BTC5M_START")[0]
-    assert start["preflight"] == "PASSED"
-    assert start["transport_armed"] is False
-    assert start["arm_error"].startswith("ARMING_BOUNDARY_NOT_WIRED")
-    assert rig.venue.sent == [] and rep["submitted"] == 0
-    assert rep["would_submit_not_sent"] > 0
-
-
-def test_the_runner_never_arms_a_transport_itself():
+def test_the_runner_arms_only_inside_the_shared_boundary():
+    """One `.arm()` in the module, inside `arm_through_boundary`, AFTER its
+    call to `authorize_arming`."""
     import ast
+    import inspect
     import pathlib
     src = pathlib.Path(RUN.__file__).read_text()
     calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "arm"]
-    assert calls == []
+    assert len(calls) == 1
+    body = inspect.getsource(RUN.arm_through_boundary)
+    assert body.index("AUTH.authorize_arming(") < body.index(".arm()")
+
+
+# ======================================================================
+# 8. THE PRODUCTION ARMING PATH: authorize_arming, with every condition
+# ======================================================================
+OWNER_TOKEN = {"PMUS_Q1_LIVE": "YES", "PMUS_Q1_SESSION_ID": "b5m-test-sid",
+               "PMUS_Q1_ARM": "b5m-test-sid"}
+
+
+def owner_armed(monkeypatch):
+    for k, v in OWNER_TOKEN.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv(RUN.HALT_URL_ENV, "http://watchdog.internal:8080")
+    for k in ("L5_LIVE_PROBE_MARKET", "L5_LIVE_AUTH_NOT_AFTER",
+              "L5_LIVE_AUTH_MARKET_SERIES", "L5_WINDOW_STRATEGY",
+              "L5_LIVE_AUTH_MAX_WINDOWS", "L5_CAMPAIGN_BUDGET_USD"):
+        monkeypatch.delenv(k, raising=False)
+
+
+def test_with_every_condition_the_boundary_arms_and_the_session_trades(
+        tmp_path, monkeypatch):
+    owner_armed(monkeypatch)
+    rig = Rig(tmp_path, monkeypatch, arm="boundary",
+              fill_at={12.0: ("v1", "0.05")})
+    rep = rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["arm_error"] is None, start
+    assert start["transport_armed"] is True
+    assert rep["submitted"] >= 1 and rep["close"]["clean"] is True
+    assert rep["settlement"]["settled"] is True
+
+
+@pytest.mark.parametrize("change,reason", [
+    (lambda mp: [mp.delenv(k) for k in OWNER_TOKEN], "TRANSPORT_CANNOT_ARM"),
+    (lambda mp: mp.setenv("PMUS_Q1_ARM", "a-different-token"),
+     "TRANSPORT_CANNOT_ARM"),
+    (lambda mp: mp.delenv(RUN.HALT_URL_ENV), "HALT_GATE_ABSENT"),
+    (lambda mp: mp.setenv(AUTH.LIVE_HALT_ENV, "1"), "HALTED"),
+    (lambda mp: mp.setenv(AUTH.SHADOW_ONLY_ENV, "1"), "SHADOW_ONLY_LOCK"),
+    (lambda mp: mp.setenv(AUTH.SUBMIT_PAUSE_ENV, "1"),
+     "SUBMISSION_PAUSED_FOR_DEPLOY"),
+    (lambda mp: mp.setenv("L5_LIVE_PROBE_MARKET", M15),
+     "AUTHORIZATION_BOUND_TO_MARKET"),
+])
+def test_each_missing_condition_keeps_the_transport_disarmed(
+        tmp_path, monkeypatch, change, reason):
+    owner_armed(monkeypatch)
+    rig = Rig(tmp_path, monkeypatch, arm="boundary")
+    change(monkeypatch)
+    rep = rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["transport_armed"] is False
+    assert reason in (start["arm_error"] or ""), start["arm_error"]
+    assert rig.venue.sent == [] and rep["submitted"] == 0
+
+
+def test_unconfirmed_window_bounds_keep_it_disarmed(tmp_path, monkeypatch):
+    owner_armed(monkeypatch)
+    rig = Rig(tmp_path, monkeypatch, arm="boundary")
+    rig.session.bounds_fn = lambda m: None
+    rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["transport_armed"] is False
+    assert "WINDOW_BOUNDS_UNKNOWN" in start["arm_error"]
+    assert rig.venue.sent == []
+
+
+def test_an_unreconciled_book_keeps_it_disarmed(tmp_path, monkeypatch):
+    owner_armed(monkeypatch)
+    rig = Rig(tmp_path, monkeypatch, arm="boundary")
+    rig.venue.extra_positions = [{"marketSlug": M, "netPositionDecimal": "0.5",
+                                  "qtyBought": "0.5", "qtySold": "0"}]
+    rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["transport_armed"] is False
+    assert "NOT_RECONCILED" in start["arm_error"]
+
+
+def test_venue_window_bounds_confirm_the_slug_or_say_nothing():
+    rec = {"market": {"slug": M, "assetPriceTerms": {
+        "windowStart": "2026-11-11T12:00:00Z",
+        "windowEnd": "2026-11-11T12:05:00Z"}}}
+    got = RUN.venue_window_bounds(M, fetch=lambda u: rec)
+    assert got == {"start": WS.isoformat(),
+                   "end": (WS + dt.timedelta(minutes=5)).isoformat(),
+                   "source": "VENUE"}
+    for bad in ({"market": {"slug": M15}},
+                {"market": {"slug": M, "assetPriceTerms": {
+                    "windowStart": "2026-11-11T12:05:00Z",
+                    "windowEnd": "2026-11-11T12:10:00Z"}}},
+                {"market": {"slug": M, "assetPriceTerms": {
+                    "windowStart": "2026-11-11T12:00:00Z",
+                    "windowEnd": "2026-11-11T12:15:00Z"}}}):
+        assert RUN.venue_window_bounds(M, fetch=lambda u, b=bad: b) is None
+
+    def boom(u):
+        raise ConnectionError("no")
+    assert RUN.venue_window_bounds(M, fetch=boom) is None
