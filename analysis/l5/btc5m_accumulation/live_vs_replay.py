@@ -54,6 +54,17 @@ LIVE = [
      "cost": 2.2309, "net": -0.8709, "cap": 2.25,
      "note": "matched 1.36 at a realized pair cost of 1.2262, above par; "
              "residual 0.83 DOWN lost in full"},
+    {"window": "19:15z", "submitted": 14, "filled": 9, "qty": 3.58,
+     "cost": 2.2295, "net": -0.0795, "cap": 2.25,
+     "note": "matched 1.43 at pair cost 1.2121, above par; residual 0.72 "
+             "UP won but did not cover the pair"},
+    {"window": "19:20z", "submitted": 13, "filled": 2, "qty": 0.87,
+     "cost": 0.4953, "net": -0.4953, "cap": 2.25,
+     "note": "pure directional UP; UP lost; the whole stake lost"},
+    {"window": "19:25z", "submitted": 14, "filled": 9, "qty": 3.38,
+     "cost": 2.2260, "net": +0.2840, "cap": 2.25,
+     "note": "matched 0.87 at pair cost 1.2582, above par; the profit is "
+             "the residual 1.64 DOWN, again directional"},
     {"window": "19:10z", "submitted": 22, "filled": 9, "qty": 3.65,
      "cost": 2.2159, "net": +0.5641, "cap": 2.25,
      "note": "THE FIRST CLEAR WIN at full size. The matched 0.87 still "
@@ -123,7 +134,12 @@ def main() -> int:
         print("  %+0.4f (%+0.4f), on %d window(s) at the larger size."
               % (b, b - a, n_hi))
         print()
-        if n_hi < 5:
+        #: 20 windows, not 5. An earlier draft used n<5 and promptly
+        #: printed "BETTER at the larger size" off FIVE windows, which is
+        #: not a measurement. Against a per-window sd of 0.22, separating
+        #: a per-share difference of this size needs tens of windows, so
+        #: the threshold is set where a claim could actually be supported.
+        if n_hi < 20:
             print("  THAT DIFFERENCE IS NOISE, in either direction. %d"
                   % n_hi)
             print("  window(s) cannot measure a per-share rate against a")
@@ -133,6 +149,14 @@ def main() -> int:
             print("  Per-share is BETTER at the larger size on this sample.")
         else:
             print("  Per-share is WORSE at the larger size on this sample.")
+        print()
+        print("  The comparison that IS informative: the larger regime's")
+        print("  %+0.4f a share against the replay's %+0.4f. The small"
+              % (b, REPLAY_NET_PER_SHARE))
+        print("  regime's %+0.4f was the outlier, driven by a 1-for-6 run"
+              % a)
+        print("  of windows, and more data is pulling live back toward")
+        print("  what the model predicted all along.")
         print()
         print("  What is NOT noise is the arithmetic: size cannot change")
         print("  the SIGN of a per-share expectation, because expectation")
