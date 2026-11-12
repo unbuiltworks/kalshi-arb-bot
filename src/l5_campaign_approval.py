@@ -47,11 +47,16 @@ APPROVAL_KEY = "campaign_approval.json"
 #: be $160 of sequential commitment, which `l5_campaign_budget` now bounds
 #: at $20 of worst-case loss independently of this number.
 MAX_TOTAL_EXPOSURE_USD = D("20")
-#: UNCHANGED at $5. Note the asymmetry this creates and does not resolve: a
+#: RAISED 5 -> 10 BY OWNER DECISION, 2026-11-12 ("Keep $10, raise code cap"):
+#: the owner set L5_DAILY_REALIZED_LOSS_HALT_USD=10 on l5-pmus-live, and a
+#: campaign could never approve it, so every window refused
+#: CAMPAIGN_LIMITS_WIDER_THAN_APPROVED. The runtime halt is still floored
+#: at $5 and capped at $50 by its accessor; a document asking for less
+#: still gets less. Was: UNCHANGED at $5. Note the asymmetry this creates and does not resolve: a
 #: single market can lose $20, so one settlement can overshoot the daily halt
 #: fourfold. The halt stops new commitment; it cannot unwind what is already
 #: at risk. The campaign budget is what bounds the overshoot.
-MAX_DAILY_LOSS_USD = D("5")
+MAX_DAILY_LOSS_USD = D("10")
 #: EIGHT, raised from four for the two-hour eight-window campaign.
 #: WHAT THIS DOES NOT CHANGE, and the distinction is the whole safety
 #: argument: exposure is bounded by MAX_TOTAL_EXPOSURE_USD at every

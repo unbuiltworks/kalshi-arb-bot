@@ -63,7 +63,7 @@ def test_a_well_formed_in_scope_document_is_approved():
 @pytest.mark.parametrize("field,asked,expected", [
     ("max_windows", 40, 8),
     ("max_total_exposure_usd", "500", "20"),
-    ("max_daily_loss_usd", "250", "5"),
+    ("max_daily_loss_usd", "250", "10"),
 ])
 def test_a_document_asking_for_more_is_clamped_not_honoured(field, asked,
                                                             expected):
@@ -183,7 +183,7 @@ def test_the_ceilings_are_the_authorized_envelope():
     # NOT raised, so one market can now overshoot it fourfold;
     # l5_campaign_budget bounds the campaign independently.
     assert CA.MAX_TOTAL_EXPOSURE_USD == D("20")
-    assert CA.MAX_DAILY_LOSS_USD == D("5")
+    assert CA.MAX_DAILY_LOSS_USD == D("10")   # owner 2026-11-12: 5 -> 10
     # raised 4 -> 8 for the eight-window campaign. The ENVELOPE assertion
     # is the point of this test and the other three ceilings are unchanged:
     # eight windows buys more opportunities to deploy the same $5, never

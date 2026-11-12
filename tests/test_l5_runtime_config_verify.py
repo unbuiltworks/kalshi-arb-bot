@@ -218,7 +218,7 @@ def test_the_code_constant_limits_are_checked_not_just_the_variables(
                         ("defensive_pair_ceiling", "1.20"),
                         ("campaign_duration_ceiling_s", 14400.0),
                         ("approval_exposure_ceiling_usd", "20"),
-                        ("approval_daily_loss_ceiling_usd", "5"),
+                        ("approval_daily_loss_ceiling_usd", "10"),
                         ("max_windows_code_ceiling", 8)):
         r = row(out, name)
         assert r["ok"] is True, name

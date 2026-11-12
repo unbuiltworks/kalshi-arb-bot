@@ -142,7 +142,7 @@ APPROVED: Dict[str, Any] = {
     # budget (l5_campaign_budget, $11.10) is what bounds that, and $11.10 is
     # itself the UNSPENT part of the untouched $20 account-wide ceiling.
     "approval_exposure_ceiling_usd": D("20"),
-    "approval_daily_loss_ceiling_usd": D("5"),
+    "approval_daily_loss_ceiling_usd": D("10"),   # owner 2026-11-12: cap 5 -> 10
     # at DEPLOY time, before activation
     #
     # OWNER-APPROVED BUT DELIBERATELY NOT APPLIED HERE, 2026-10-22. The

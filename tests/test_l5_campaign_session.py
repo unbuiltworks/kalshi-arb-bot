@@ -134,7 +134,7 @@ def test_the_code_ceilings_clamp_a_greedier_document(tmp_path):
     s = out["scope"]
     assert s["max_windows"] == CA.MAX_WINDOWS == 8
     assert D(s["max_total_exposure_usd"]) == CA.MAX_TOTAL_EXPOSURE_USD == D("20")
-    assert D(s["max_daily_loss_usd"]) == CA.MAX_DAILY_LOSS_USD == D("5")
+    assert D(s["max_daily_loss_usd"]) == CA.MAX_DAILY_LOSS_USD == D("10")
     assert s["clamped"]["max_windows"] is True
     assert s["clamped"]["max_total_exposure_usd"] is True
     assert s["clamped"]["expires_utc"] is True
