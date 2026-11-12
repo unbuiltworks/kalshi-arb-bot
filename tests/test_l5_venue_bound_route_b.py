@@ -27,6 +27,10 @@ class VenueBoundRouteBTests(unittest.TestCase):
                 verified_first_fill(f, "m")
         with self.assertRaises(Unscorable):
             settled_residual(F, dict(market="m", winner="DOWN"), "m")
+    def test_invalid_settlement_identifier_rejected(self):
+        for invalid in (None, "", "  ", 0, 42, False):
+            with self.assertRaises(Unscorable):
+                settled_residual(F, dict(market="m", settlement_id=invalid, winner="DOWN"), "m")
     def test_market_mismatch_rejected(self):
         with self.assertRaises(Unscorable):
             verified_first_fill(F, "other")
