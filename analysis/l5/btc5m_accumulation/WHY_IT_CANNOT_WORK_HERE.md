@@ -110,3 +110,66 @@ Keep it only as a read-only recorder if the authenticated depth feed is
 wanted for the queue-position question (`depth_probe.py`), which is the one
 BTC5m hypothesis still open — and which, even if it succeeds, is competing
 for 0.5 cents.
+
+---
+
+## Rebates: real on this venue, zero on this series
+
+Asked whether rebates could close the gap. They could — more than close it —
+but not here.
+
+`analysis/l5/venue_rebate_credits.json` holds **25 maker prints actually
+credited on PMUS**, every row `passiveExecution`, `credited_to_us: true`,
+`at_or_above_floor: true`:
+
+```
+markets 5   prints 25   qty 119.49   credited $0.4200
+per PRINT      $0.0168
+per CONTRACT   $0.0035
+qty range 2.52-5.68   <- the same size BTC5m trades (2.72-3.65)
+```
+
+At our observed 9 maker fills a window that is **+$0.1512/window**, against
+a measured BTC5m loss of **−$0.0286/window**. The rebate is roughly **five
+times the loss**.
+
+**We do not get it.** Every credited print is on an `aec-` / `asc-` /
+`tsc-` slug — sports. BTC5m is `cpc-`, and every order placed today read
+commission `0.0000`. Confirmed independently by
+`analysis/l5/PMI_CURRENT_REWARD_STATE.md`: crypto rewards **EXPIRED, 21 of
+21 families, `rates: null`**. The scaffolding survives (min_size 50,
+max_spread 4.5); no rate is attached.
+
+So crypto rebates are switched off at the venue. This is not a setting we
+have failed to enable.
+
+### It is the same move as the spread finding
+
+The wide-spread in-band markets from the live census were `aec-shl-hv71-lhf`
+(16c), `aec-setkamecz-horond-smalib` (20c), `aec-setkamemd-todion-scovla`
+(25c). All `aec-`. **The markets that pay rebates are the markets with the
+wide spreads.**
+
+| | BTC5m (`cpc-`) | sports (`aec-`) |
+|---|---|---|
+| median spread | 1c | 8–25c |
+| maker edge available | 0.5c | 4–12c |
+| measured adverse selection | 4.87c | unmeasured |
+| maker rebate | **$0.0000** | **$0.0168/print** |
+
+Three independent lines — spread arithmetic, the rebate ledger, and
+`BAND_SPREAD_FINDINGS.md` ("we have been fishing in the wrong pond") — now
+point at the same destination.
+
+### What is NOT established
+
+The rebate evidence is from **September 2026**, and that programme's own
+audit rule was "don't infer continuation from August documentation" — which
+applies equally to September. 25 prints is a small sample, and per
+`analysis/l5/CLAUDE.md` a rebate is not real until credited and
+source-accounted.
+
+**The cheap test:** place a few maker orders on an in-band `aec-` market
+and read the commission field back. Negative means a rebate larger than the
+loss, in a book with ten times the spread. That is a bounded probe with a
+clear, falsifiable answer.
