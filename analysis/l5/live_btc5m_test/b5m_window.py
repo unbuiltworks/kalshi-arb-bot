@@ -94,9 +94,25 @@ def arm(slug, cap=None):
     print("DEPLOYED", got["id"], got["status"], "nonce", doc["nonce"])
     return 0
 
+TOKEN_REFS = ("PMUS_Q1_LIVE", "PMUS_Q1_SESSION_ID", "PMUS_Q1_ARM")
+
 def restore():
-    vals = {"L5_SHADOW_ONLY": "1", "L5_LIVE_HALT": "1", **{k: "" for k in WINDOW_VARS}}
-    print(b5(write=vals).set_variables(vals)); return 0
+    """Both locks on, window variables emptied, and the owner arm-token
+    REFERENCES deleted. Writing "" over a ${{...}} reference did not clear it
+    (observed 04:40Z 2026-11-12), so the three are removed with
+    variableDelete. Values are never printed."""
+    vals = {"L5_SHADOW_ONLY": "1", "L5_LIVE_HALT": "1",
+            **{k: "" for k in WINDOW_VARS if k not in TOKEN_REFS}}
+    print(b5(write=vals).set_variables(vals))
+    b = b5()
+    for k in TOKEN_REFS:
+        r = b._gql("mutation($p:String!,$e:String!,$s:String!,$n:String!){variableDelete(input:{projectId:$p,environmentId:$e,serviceId:$s,name:$n})}",
+                   {"p": P, "e": E, "s": B5, "n": k})
+        print("deleted", k, bool(r.get("variableDelete")))
+    raw = b._gql("query($p:String!,$e:String!,$s:String!){variables(projectId:$p,environmentId:$e,serviceId:$s,unrendered:true)}",
+                 {"p": P, "e": E, "s": B5})["variables"]
+    left = [k for k in TOKEN_REFS if raw.get(k)]
+    print("token refs remaining:", left or "none"); return 0 if not left else 1
 
 def session_report(slug):
     """The L5_BTC5M_SESSION_REPORT for SLUG from l5-btc5m-live's deploy logs
