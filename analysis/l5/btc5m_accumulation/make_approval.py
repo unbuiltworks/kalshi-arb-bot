@@ -114,9 +114,13 @@ def main(argv=None) -> int:
     ap.add_argument("--exposure", default="0.45")
     ap.add_argument("--daily-loss", default="1.00")
     ap.add_argument("--rolling", action="store_true",
-                    help="bound the campaign with last_open_utc instead of "
-                         "enumerating each window; the runner then takes "
-                         "the next N windows as they come")
+                    help="REFUSED FOR BTC5m, and kept only so the refusal "
+                         "is explicit rather than silent: bounding the "
+                         "campaign with last_open_utc passes the campaign "
+                         "planner but is rejected on every ORDER by the "
+                         "claim layer (BTC5M_WINDOWS_NOT_ENUMERATED). The "
+                         "15-minute lane accepts that form; this series "
+                         "does not")
     a = ap.parse_args(argv)
 
     if not (1 <= a.n <= CA.MAX_WINDOWS):
@@ -143,6 +147,27 @@ def main(argv=None) -> int:
                                    reserve=False)
     ok = bool(verdict.get("present") and verdict.get("ok"))
 
+    # ---- AND against the PER-ORDER claim layer, which is a stricter gate.
+    # The campaign planner and the order claim are two different checks, and
+    # passing the first says nothing about the second. A ROLLING document
+    # clears `campaign_decision` -- the runner plans its windows happily --
+    # and is then refused on EVERY order by
+    # `l5_live_authorization.claim_btc5m_submission` with
+    # BTC5M_WINDOWS_NOT_ENUMERATED, because for this series "an interval is
+    # not an explicit approval".
+    #
+    # Observed live 2026-11-12 17:30z/17:35z: a self-verified rolling
+    # document armed the transport, planned 8 windows, chose OPEN_FAVORITE
+    # on every step with EV_AND_ROOM_OK -- and submitted nothing at all,
+    # because each order was refused at the claim. The document was valid
+    # and useless, and the generator had said YES.
+    #
+    # This tests the SAME predicate the claim layer tests rather than
+    # restating the rule, so the two cannot drift apart.
+    scope_now = dict(verdict.get("scope") or {})
+    enumerated = bool(scope_now.get("window_starts"))
+    claim_ok = ok and enumerated
+
     print("=" * 72)
     print("BTC5m CAMPAIGN APPROVAL  --  %d window(s), %s, first %s"
           % (a.n, "ROLLING" if a.rolling else "ENUMERATED", first))
@@ -159,10 +184,17 @@ def main(argv=None) -> int:
                 dt.datetime.fromisoformat(t.replace("Z", "+00:00")))))
     print()
     print("SELF-CHECK against l5_campaign_approval.campaign_decision:")
-    print("   accepted: %s" % ("YES" if ok else "NO"))
+    print("   campaign planner accepted: %s" % ("YES" if ok else "NO"))
     if not ok:
         print("   reason  : %s" % (verdict.get("reason")
                                    or verdict.get("why")))
+    print("   per-order claim accepted : %s" % ("YES" if claim_ok else "NO"))
+    if ok and not enumerated:
+        print("   reason  : BTC5M_WINDOWS_NOT_ENUMERATED -- the approval")
+        print("             must list each window it authorizes; an")
+        print("             interval is not an explicit approval. This")
+        print("             document would arm the service and then have")
+        print("             EVERY order refused. Drop --rolling.")
     sc = dict((verdict.get("scope") or {}))
     for k in ("max_windows", "max_total_exposure_usd", "max_daily_loss_usd",
               "expires_utc", "last_open_utc"):
@@ -171,6 +203,13 @@ def main(argv=None) -> int:
     if sc.get("clamped"):
         red = [k for k, v in sc["clamped"].items() if v]
         print("   clamped by code ceilings: %s" % (red or "nothing"))
+    print()
+    if not claim_ok:
+        print()
+        print("!" * 72)
+        print("NOT USABLE FOR BTC5m. The document is printed below only so")
+        print("you can see what was rejected; do not set it.")
+        print("!" * 72)
     print()
     print("NOTE: the service treats this as STALE one hour after issued_utc")
     print("      (%s). Generate it shortly before you set it."
@@ -189,7 +228,7 @@ def main(argv=None) -> int:
     print("   L5_SHADOW_ONLY      = 0")
     print("   plus: release both shared halts, and touch")
     print("         deploy/l5_btc5m_live/DEPLOY_TRIGGER to ship the code")
-    return 0 if ok else 1
+    return 0 if claim_ok else 1
 
 
 if __name__ == "__main__":

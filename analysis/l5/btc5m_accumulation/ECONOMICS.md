@@ -389,3 +389,149 @@ together, so completing a flipped position locks a loss.
 
 The sign is unchanged in both: negative live, negative in replay, and
 no-trade still dominates every arm tested.
+
+
+---
+
+## The ramp answered the size question: no
+
+On 2026-11-12 the owner authorized raising the aggregate exposure cap from
+$0.45 to **$2.25** (clip $0.10 → $0.25, resting slots 4 → 9, submission
+budgets OPEN/COMPLETE/REPLACE 8/8/24 → 48/48/108). The first full-size
+window ran at 17:45z.
+
+| window | submitted | filled | shares | deployed | settled |
+|---|---|---|---|---|---|
+| 17:45z | 16 | 9 | 3.55 | $2.2309 | **−$0.8709** |
+
+It reached the cap almost exactly ($2.2309 against $2.25) and the budgets
+stopped binding (OPEN 2/48, REPLACE 9/108), so this is the strategy running
+unconstrained rather than throttled.
+
+**Per share — the only size-invariant comparison:**
+
+| regime | windows | shares | net | net/share |
+|---|---|---|---|---|
+| $0.45 cap | 5 | 2.97 | −0.6812 | **−0.2294** |
+| $2.25 cap | 1 | 3.55 | −0.8709 | **−0.2453** |
+| all | 6 | 6.52 | −1.5521 | −0.2381 |
+
+Five times the size moved per-share economics by −0.0160, i.e. not at all
+in any useful sense. **The loss scales with size rather than being diluted
+by it.** One window at the new size lost more (−$0.87) than the five before
+it combined (−$0.68).
+
+This closes a hypothesis that was worth testing: that the measured loss was
+an artefact of trading too small to matter. It was not. Live per-share is
+now −0.2381 against the replay's −0.0487, i.e. 4.9× worse, and the pair at
+17:45z cost **1.2262** — the third above-par pair in six windows.
+
+A per-*window* mean across the two regimes is meaningless, so the regimes
+are reported apart and per-share carries the comparison.
+
+
+---
+
+## "But we win a bunch of windows"
+
+True, and it is not an illusion. `winrate.py`, 185 windows that traded:
+
+- **54.6%** of windows are net positive (101 of 185)
+- **59.3%** of shares settle on the winning side
+
+Buying the favorite is supposed to win more often than it loses. That is
+what a favorite is. The win rate was never the problem.
+
+**The payoff is asymmetric, so the bar is not 50%.** Buy at `p` and you
+make `1 − p` when right and lose `p` when wrong, so the breakeven win rate
+*is* the average price paid:
+
+```
+average price paid    0.6419   ->  BREAKEVEN win rate  64.2%
+actual win rate                                        59.3%
+gap                                                    -4.9 points
+
+right  +$0.3581 a share      wrong  -$0.6419 a share
+needs right:wrong of 1.79    actual 1.46
+```
+
+That 4.9-point gap is the entire loss. "Most" has to mean more than 64%,
+not more than 50%.
+
+### Reading a short live run without fooling yourself
+
+The live loss decomposes into the structural gap and luck:
+
+```
+live               -0.2381 /share
+  structural       -0.0316   (pay 62.5%, model wins 59.3%)
+  luck             -0.2065   (live won 38.7% vs the model's 59.3%)
+```
+
+**87% of the live loss is variance, not mechanism.** UP won 5 of the 6
+live windows and we were accumulating DOWN in 4 of them; going 1-for-6
+when the true rate is 54.6% has probability 0.072, about 1 in 14 —
+unusual, not anomalous.
+
+So the raw live figure **overstates** how bad this is, and comparing it
+head-on against the replay's per-share number (as an earlier revision of
+`live_vs_replay.py` did, calling live "4.9x the replay's loss") is
+misleading. The number that carries is the structural 4.9 points, which
+rests on 185 windows rather than six.
+
+
+---
+
+## The per-price table looks like a fixable loss. It is not.
+
+`replay.py`'s per-price breakdown is the most seductive table in this
+directory:
+
+| band | win rate | breakeven | gap | net$ |
+|---|---|---|---|---|
+| 0.50–0.54 | 0.468 | 0.523 | −5.5 | −1.24 |
+| 0.55–0.59 | 0.494 | 0.568 | −7.4 | −1.56 |
+| 0.60–0.64 | 0.531 | 0.619 | −8.8 | −1.73 |
+| 0.65–0.69 | 0.667 | 0.668 | −0.1 | −0.02 |
+| 0.70–0.74 | 0.728 | 0.718 | +1.0 | **+0.10** |
+| 0.75–0.79 | 0.675 | 0.768 | −9.3 | −0.79 |
+| 0.80–0.84 | 0.848 | 0.817 | +3.1 | **+0.20** |
+| 0.85–0.89 | 0.822 | 0.869 | −4.7 | −0.23 |
+
+The three cheapest buckets carry −$4.53 of the −$5.28 total, and at
+0.50–0.54 the "favorite" wins only **46.8%** — below a coin flip. It reads
+like a mechanism: near 0.51 the market is a near tie, the favorite label is
+within noise, and a maker fill means the lead was already going.
+
+**It does not survive testing**, and the reasons are worth keeping:
+
+1. It conditions on the price a fill *happened* at — chosen after the fact.
+2. Most volume sits in the cheap buckets (63.3 of 108.6 shares), so they
+   carry most of the loss even at an equal per-share rate.
+3. The two positive buckets are +0.0101/share on 73 fills (t ≈ +0.2) and
+   +0.0316 on 53 (t ≈ +0.6). Both are indistinguishable from zero.
+4. Raising the band floor is **not the same experiment**. Skipping a 0.55
+   favorite does not hand you its 0.70 fill later — the trajectory changes.
+
+`band_floor_oos.py` runs the executable version, chronologically split:
+
+```
+best floor in sample       0.80   -0.0265/window  t -2.18
+that same floor OOS               +0.0225/window  t +2.21
+that same floor FULL tape         -0.0105/window  t -1.17
+best floor OUT of sample   0.55   (the in-sample pick did not transfer)
+
+arms positive IN sample      0 of 7
+arms positive OUT of sample  5 of 7
+```
+
+**Floor 0.80 is significantly negative in one half and significantly
+positive in the other.** A real edge does not change sign at 2σ on both
+sides. And with 0 of 7 arms positive in sample against 5 of 7 out of
+sample, the later block is a kinder **regime**, not a vindication of any
+floor. Over the full tape, floor 0.80 is −0.0105/window.
+
+Worth recording honestly: 0.80 does roughly **half** the damage of the
+shipped 0.51 floor (−0.0105 vs −0.0283 full-tape). Less bad is not
+profitable, and it buys that by trading far less — the same way every
+gate in the sweep "improved" things.

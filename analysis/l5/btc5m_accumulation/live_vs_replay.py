@@ -32,20 +32,28 @@ from __future__ import annotations
 #: minus cost basis minus the venue's own commission.
 LIVE = [
     {"window": "16:20z", "submitted": 11, "filled": 4, "qty": 0.66,
-     "cost": 0.3830, "net": -0.0930,
+     "cost": 0.3830, "cap": 0.45, "net": -0.0930,
      "note": "matched 0.29 at a realized pair cost of 1.1759, above par"},
     {"window": "16:25z", "submitted": 4, "filled": 4, "qty": 0.58,
-     "cost": 0.3902, "net": -0.3902,
+     "cost": 0.3902, "cap": 0.45, "net": -0.3902,
      "note": "pure directional DOWN; UP won; the whole stake lost"},
     {"window": "16:45z", "submitted": 4, "filled": 3, "qty": 0.53,
-     "cost": 0.2886, "net": -0.2886,
+     "cost": 0.2886, "cap": 0.45, "net": -0.2886,
      "note": "pure directional DOWN; UP won; the whole stake lost"},
     {"window": "16:50z", "submitted": 9, "filled": 4, "qty": 0.56,
-     "cost": 0.3897, "net": +0.1703,
+     "cost": 0.3897, "cap": 0.45, "net": +0.1703,
      "note": "pure directional UP; UP won; the only winning window so far"},
     {"window": "16:55z", "submitted": 10, "filled": 4, "qty": 0.64,
-     "cost": 0.3897, "net": -0.0797,
+     "cost": 0.3897, "net": -0.0797, "cap": 0.45,
      "note": "matched 0.31 at a realized pair cost of 1.2197, above par"},
+    #: --- the owner-authorized ramp: cap 0.45 -> 2.25, clip 0.10 -> 0.25,
+    #: slots 4 -> 9. A per-WINDOW mean across the two regimes would be
+    #: meaningless, so the regimes are reported apart and the comparison
+    #: that carries is per SHARE, which is size-invariant.
+    {"window": "17:45z", "submitted": 16, "filled": 9, "qty": 3.55,
+     "cost": 2.2309, "net": -0.8709, "cap": 2.25,
+     "note": "matched 1.36 at a realized pair cost of 1.2262, above par; "
+             "residual 0.83 DOWN lost in full"},
 ]
 
 #: the replay's own ADVERSE-tier figures on the 189-window tape (187
@@ -82,53 +90,61 @@ def main() -> int:
     print()
 
     print("=" * 72)
+    print("BY SIZE REGIME -- per SHARE, because it is size-invariant")
+    print("=" * 72)
+    caps = sorted({r["cap"] for r in LIVE})
+    for cap in caps:
+        rows = [r for r in LIVE if r["cap"] == cap]
+        # NB: distinct names. An earlier draft called these `net` and
+        # shadowed the whole-sample total, so the per-share figure printed
+        # below was the LAST regime's net over EVERY share (-0.1336 instead
+        # of -0.2381).
+        q_cap = sum(r["qty"] for r in rows)
+        net_cap = sum(r["net"] for r in rows)
+        print("  $%.2f cap   %d window(s)  %5.2f shares  net %+8.4f   "
+              "per share %+0.4f"
+              % (cap, len(rows), q_cap, net_cap, net_cap / q_cap))
+    if len(caps) > 1:
+        lo = [r for r in LIVE if r["cap"] == caps[0]]
+        hi = [r for r in LIVE if r["cap"] == caps[-1]]
+        a = sum(r["net"] for r in lo) / sum(r["qty"] for r in lo)
+        b = sum(r["net"] for r in hi) / sum(r["qty"] for r in hi)
+        print()
+        print("  SIZE DID NOT IMPROVE THE PRICE. %.1fx the cap moved per-share"
+              % (caps[-1] / caps[0]))
+        print("  economics from %+0.4f to %+0.4f (%+0.4f). The loss scales"
+              % (a, b, b - a))
+        print("  with size rather than being diluted by it, which is what")
+        print("  'ramp it up' buys: the same per-share result, multiplied.")
+    print()
+
+    print("=" * 72)
     print("REPLAY PREDICTION vs LIVE")
     print("=" * 72)
     se = REPLAY_SD_PER_WINDOW / (n ** 0.5)
-    live_pw = net / n
-    z = (live_pw - REPLAY_NET_PER_WINDOW) / se
     print("  %-22s %12s %12s" % ("", "replay", "live"))
-    print("  %-22s %+12.4f %+12.4f" % ("net per window",
-                                       REPLAY_NET_PER_WINDOW, live_pw))
     print("  %-22s %+12.4f %+12.4f" % ("net per share",
                                        REPLAY_NET_PER_SHARE, net / qty))
     print()
-    print("  expected spread of a %d-window mean, at the replay's own" % n)
-    print("  per-window sd of %.4f:  se = %.4f" % (REPLAY_SD_PER_WINDOW, se))
-    print("  live mean is %+0.2f se from the replay's mean" % z)
+    print("  per-WINDOW is not comparable across the regime change, so the")
+    print("  replay's per-window figure is not restated here. Per share,")
+    print("  live is %.1fx the replay's loss."
+          % (abs(net / qty) / abs(REPLAY_NET_PER_SHARE)))
     print()
     worst = min(r["net"] for r in LIVE)
-    print("  worst live window %+0.4f, against a replay range of"
-          % worst)
-    print("  %+0.4f to %+0.4f -- %s" % (
-        REPLAY_WORST_WINDOW, REPLAY_BEST_WINDOW,
-        "inside it" if REPLAY_WORST_WINDOW <= worst <= REPLAY_BEST_WINDOW
-        else "OUTSIDE it, which the model does not explain"))
+    print("  worst live window %+0.4f" % worst)
     print()
 
     print("=" * 72)
     print("VERDICT")
     print("=" * 72)
-    if abs(z) < 2.0:
-        print("  NOT REJECTED. The live result sits %+0.2f se from what the"
-              % z)
-        print("  replay predicts, which at n=%d is ordinary noise. The model"
-              % n)
-        print("  survives its first contact with settled money.")
-        print()
-        print("  Read this as the WEAK claim it is: %d windows cannot" % n)
-        print("  confirm a model, they can only fail to break it. What they")
-        print("  do rule out is the hopeful reading -- that live fills would")
-        print("  behave better than the replay's ADVERSE tier. They did not;")
-        print("  live came in BELOW the prediction, not above.")
-    else:
-        print("  REJECTED at %+0.2f se. The replay does not describe what" % z)
-        print("  the venue did, and every economic conclusion drawn from it")
-        print("  needs re-deriving before it is relied on again.")
+    print("  Negative in every window but one, in both size regimes, and")
+    print("  negative in replay. No-trade still dominates every arm tested.")
     print()
-    print("  Either way the sign is unchanged: the measured result is")
-    print("  negative live and negative in replay, and no-trade still")
-    print("  dominates every arm tested.")
+    print("  The ramp answered one question cleanly: whether the loss was")
+    print("  an artefact of trading too small. It was not. Five times the")
+    print("  size reproduced the same per-share result, so a single window")
+    print("  at the new size lost more than the five before it combined.")
     return 0
 
 
