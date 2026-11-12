@@ -8712,6 +8712,13 @@ class Runner:
     CONTINUOUS_REPRICE_TICKS_ENV = "L5_CI_REPRICE_TICKS"
     CONTINUOUS_ADD_BAND_ENV = "L5_CI_ADD_BAND_CONTRACTS"
     CONTINUOUS_HAIRCUT_ENV = "L5_CI_HAIRCUT_TICKS"
+    #: seconds a resting bid must rest before it may be moved. Default 0:
+    #: the owner's "move the bid constantly". The claim budget
+    #: (L5_ACC_MAX_ROUNDS) still bounds how many placements a side gets.
+    CONTINUOUS_MIN_REST_ENV = "L5_CI_REPRICE_MIN_REST_S"
+    #: exactly YES keeps a still-valid order instead of following the touch
+    #: down (issue #233 Track A reading). Unset: follow the touch both ways.
+    CONTINUOUS_KEEP_VALID_ENV = "L5_CI_KEEP_VALID_ORDERS"
 
     def continuous_owns(self, slug: Any) -> bool:
         """Does the continuous controller own this market's order flow?"""
@@ -8833,7 +8840,10 @@ class Runner:
             complete_ceiling=TSP.completion_pair_ceiling(),
             reprice_ticks=self._env_int(self.CONTINUOUS_REPRICE_TICKS_ENV,
                                         1, 1, 50),
-            reprice_min_rest_s=float(TSP.REQUOTE_MIN_REST_S),
+            reprice_min_rest_s=float(self._env_int(
+                self.CONTINUOUS_MIN_REST_ENV, 0, 0, 120)),
+            keep_valid_orders=(os.getenv(self.CONTINUOUS_KEEP_VALID_ENV)
+                               or "").strip().upper() == "YES",
             stranded_since_s=stranded,
             replenish_permitted=(not rpl_on) or led.may_open(ws),
             traded_before=bool(up_q > 0 or dn_q > 0),

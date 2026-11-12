@@ -602,7 +602,7 @@ def decide_pass(*, market: str, bid: Any, ask: Any, tick: Any,
                 slots_left: Optional[Mapping[str, Any]] = None,
                 bid_shares: Any = None, ask_shares: Any = None,
                 haircut_ticks: int = 1,
-                pair_still_valid_only: bool = True
+                keep_valid_orders: bool = False
                 ) -> Dict[str, Any]:
     """The whole pass, recomputed from the current book and inventory.
 
@@ -848,15 +848,26 @@ def decide_pass(*, market: str, bid: Any, ask: Any, tick: Any,
             # the pair it was priced for.
             behind = (w["price"] - r["price"]) >= thr
             ahead = (r["price"] - w["price"]) >= thr
-            # an opening leg the book came TO is cancelled only once it is
-            # no longer valid: its pair with the other side's current quote
-            # breaches the opening ceiling. A still-valid order is kept.
-            if ahead and w["intent"] != COMPLETE and pair_still_valid_only:
-                o_s = DOWN if s == UP else UP
-                o_px = own(o_s, depth_ticks)
-                ahead = o_px is None or (r["price"] + o_px + 2 * fee
-                                         > ceiling)
-            moved = behind or (ahead and w["intent"] != COMPLETE)
+            # TWO POLICIES FOR A BOOK THAT CAME TO US, chosen by the caller.
+            #
+            # DEFAULT (owner directive 2026-11-12, "move the bid
+            # constantly"): every resting bid follows the touch both ways,
+            # every pass it moves by `reprice_ticks` -- an opening leg back
+            # to its depth, a completion down to the cheaper pair.
+            #
+            # `keep_valid_orders` (issue #233 Track A): a completion AHEAD
+            # is a better-placed bid inside its ceiling and is kept; an
+            # opening leg AHEAD is cancelled only once its pair with the
+            # other side's current quote breaches the opening ceiling.
+            if keep_valid_orders:
+                if ahead and w["intent"] != COMPLETE:
+                    o_s = DOWN if s == UP else UP
+                    o_px = own(o_s, depth_ticks)
+                    ahead = o_px is None or (r["price"] + o_px + 2 * fee
+                                             > ceiling)
+                moved = behind or (ahead and w["intent"] != COMPLETE)
+            else:
+                moved = behind or ahead
             left = _slots(s)
             spare = left is None or left >= (1 if w["intent"] == COMPLETE
                                              else 2)

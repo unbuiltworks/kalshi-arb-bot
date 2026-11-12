@@ -53,6 +53,8 @@ RECYCLE = {"L5_CASH_POLICY": "RECYCLE_ON_COMPLETE",
            "L5_HEDGE_CASH_AT_LIMIT": "ON",
            "L5_TS_ROUND_CHARGED_ON_SUBMISSION": "ON",
            "L5_REOPEN_FLOOR_PER_CONTRACT": "ON", "L5_ACC_MAX_ROUNDS": "32"}
+PROD_099 = {"L5_TS_MAX_PAIR_COST": "0.99", "L5_TS_COMPLETION_MAX_PAIR": "0.99",
+            "L5_INVENTORY_RECOVERY": "ON", "L5_DUAL_REPLENISH": "ON"}
 CONFIGS = collections.OrderedDict([
     ("as_deployed", dict(WAIVE)),
     ("recovery_0.98", dict(WAIVE, L5_TS_COMPLETION_MAX_PAIR="0.98",
@@ -66,9 +68,15 @@ CONFIGS = collections.OrderedDict([
     # decide_pass, wired behind L5_TS_CONTINUOUS_INVENTORY=YES), with
     # replenishment and inventory recovery on; same 0.98 maker completion
     # target, same cash, same order limit, same clip as recovery_0.98.
-    ("continuous_wired", dict(WAIVE, L5_TS_COMPLETION_MAX_PAIR="0.98",
-                              L5_TS_CONTINUOUS_INVENTORY="YES",
-                              L5_DUAL_REPLENISH="ON", **RECOVERY)),
+    ("continuous_wired_0.98", dict(WAIVE, L5_TS_COMPLETION_MAX_PAIR="0.98",
+                                   L5_TS_CONTINUOUS_INVENTORY="YES",
+                                   L5_DUAL_REPLENISH="ON", **RECOVERY)),
+    # THE OWNER'S PRODUCTION SET OF 2026-11-12 (l5-pmus-live, disarmed):
+    # 0.99 opening and completion pair, recovery and replenishment on. As
+    # deployed, and the same set with the continuous controller switched on.
+    ("prod_0.99", dict(WAIVE, **PROD_099)),
+    ("continuous_wired", dict(WAIVE, L5_TS_CONTINUOUS_INVENTORY="YES",
+                              **PROD_099)),
 ])
 
 _BOOKS = None

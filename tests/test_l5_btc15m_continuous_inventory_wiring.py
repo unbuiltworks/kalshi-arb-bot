@@ -29,8 +29,12 @@ from src import l5_live_execution as E
 from src import l5_pmus_live_runner as R
 
 SLUG = T.SLUG
-ON = {"L5_TS_CONTINUOUS_INVENTORY": "YES", "PMUS_RESIDUAL_CAP_K": "1",
-      "L5_MAX_LIVE_ORDERS": "4"}
+#: the owner's production set of 2026-11-12 (0.99 opening and completion
+#: pair, recovery and replenishment on) plus the switch under test
+PROD_099 = {"L5_TS_MAX_PAIR_COST": "0.99", "L5_TS_COMPLETION_MAX_PAIR": "0.99",
+            "L5_INVENTORY_RECOVERY": "ON", "L5_DUAL_REPLENISH": "ON"}
+ON = dict(PROD_099, L5_TS_CONTINUOUS_INVENTORY="YES", PMUS_RESIDUAL_CAP_K="1",
+          L5_MAX_LIVE_ORDERS="4")
 CENT = D("0.01")
 
 
@@ -411,18 +415,47 @@ def test_the_book_moving_reprices_both_quotes_by_exact_id(tmp_path,
     h = opened(rig(tmp_path, monkeypatch))
     ids = set(LAD.resting_ids(h))
     h.book.set("0.55", "0.57")
-    h.tick(10.0)                       # under the 14s minimum rest: kept
-    assert h.venue.cancelled == []
-    h.tick(22.0)
+    h.tick(8.0)                 # the very next pass: "move the bid constantly"
     assert set(h.venue.cancelled) == ids
     assert LAD.resting(h) == [("DOWN", D("0.41")), ("UP", D("0.53"))]
     # never two orders on one side, never more than the order limit
     for s in ("UP", "DOWN"):
         assert len(LAD.resting_ids(h, s)) == 1
     assert len(h.r.store.live_orders()) <= R.max_live_orders()
+    # and back down again when the book returns: both directions
+    h.book.set("0.52", "0.54")
+    h.tick(9.0)
+    assert LAD.resting(h) == [("DOWN", D("0.44")), ("UP", D("0.50"))]
+    # an unchanged book moves nothing: no duplicate intent, no churn
+    n = len(h.venue.sent)
+    h.tick(10.0)
+    h.tick(11.0)
+    assert len(h.venue.sent) == n
 
 
-def test_a_completion_ahead_of_the_touch_is_not_moved_down():
+def test_a_configured_minimum_rest_is_respected(tmp_path, monkeypatch):
+    h = opened(rig(tmp_path, monkeypatch, L5_CI_REPRICE_MIN_REST_S="14"))
+    h.book.set("0.55", "0.57")
+    h.tick(10.0)
+    assert h.venue.cancelled == []
+    h.tick(22.0)
+    assert len(h.venue.cancelled) == 2
+
+
+def test_by_default_a_completion_follows_the_touch_down():
+    """Owner directive: the bid moves every pass the touch moves, so a
+    completion the book came TO is re-placed at the cheaper pair."""
+    p = CI.decide_pass(
+        market="m", bid="0.40", ask="0.50", tick="0.01", up_q=D(1),
+        up_cost=D("0.40"), now_s=100.0,
+        resting=[{"coid": "c", "side": "DOWN", "price": "0.53",
+                  "remaining": "1", "submitted_s": 50.0}],
+        complete_target=D("0.99"), cash_cap=D(5), max_worst_loss=D(5),
+        residual_k=None)
+    assert [(a["kind"], a["coid"]) for a in p["actions"]] == [("CANCEL", "c")]
+
+
+def test_keep_valid_a_completion_ahead_is_not_moved_down():
     """A resting completion bid the book came TO is better placed, not
     stale: moving it down would only spend a claim to fill less."""
     p = CI.decide_pass(
@@ -431,7 +464,7 @@ def test_a_completion_ahead_of_the_touch_is_not_moved_down():
         resting=[{"coid": "c", "side": "DOWN", "price": "0.53",
                   "remaining": "1", "submitted_s": 50.0}],
         complete_target=D("0.98"), cash_cap=D(5), max_worst_loss=D(5),
-        residual_k=None)
+        residual_k=None, keep_valid_orders=True)
     assert not [a for a in p["actions"] if a["kind"] == "CANCEL"]
     assert p["holds"]["DOWN"] == "KEEP_RESTING"
 
@@ -775,7 +808,7 @@ def test_order_lifecycle_is_recorded_with_measured_latencies(tmp_path,
     assert any("cancel_ack_latency_s" in r for r in lc)
 
 
-def test_a_still_valid_opening_leg_is_never_cancelled():
+def test_keep_valid_a_still_valid_opening_leg_is_kept():
     """The book comes TO a resting opening leg, but its pair with the other
     side's current quote is still inside 0.96: it is kept."""
     p = CI.decide_pass(
@@ -785,7 +818,7 @@ def test_a_still_valid_opening_leg_is_never_cancelled():
                  {"coid": "d", "side": "DOWN", "price": "0.44",
                   "remaining": "0.6", "submitted_s": 10.0}],
         pair_ceiling=D("0.96"), cash_cap=D(5), max_worst_loss=D(5),
-        residual_k=None, reprice_min_rest_s=14.0)
+        residual_k=None, reprice_min_rest_s=14.0, keep_valid_orders=True)
     # UP wanted 0.48, resting 0.50 (ahead); 0.50 + DOWN 0.46 = 0.96: valid
     assert not [a for a in p["actions"] if a["kind"] == "CANCEL"
                 and a["side"] == "UP"]
