@@ -268,13 +268,23 @@ class Session:
                  halt_fn: Callable[[], Mapping[str, Any]],
                  clock: Callable[[], float] = time.time,
                  sleep: Callable[[float], None] = time.sleep,
-                 armed_fn: Optional[Callable[[], bool]] = None) -> None:
+                 armed_fn: Optional[Callable[[], bool]] = None,
+                 arm_fn: Optional[Callable[[Any], Any]] = None) -> None:
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
         self.risk_fn, self.halt_fn = risk_fn, halt_fn
         self.clock, self.sleep = clock, sleep
         self.armed_fn = armed_fn
+        #: WHO MAY ARM THE TRANSPORT. Every module in src/ that arms must
+        #: route the decision through `l5_live_authorization.
+        #: authorize_arming`, the one shared boundary (three guard tests
+        #: pin it). That boundary has not yet been extended to the BTC5m
+        #: session, so this module does not arm at all: with no `arm_fn`
+        #: the session runs DISARMED, its transport's submit raises, and the
+        #: adapter reports every decision as WOULD_SUBMIT. A test may inject
+        #: one against a scripted venue; production cannot.
+        self.arm_fn = arm_fn
         self.events: List[Dict[str, Any]] = []
         self.would_submit = 0
 
@@ -373,13 +383,18 @@ class Session:
         armed = False
         arm_error = None
         if (pf or {}).get("preflight") == "PASSED":
-            try:
-                self.t.arm()
-                armed = bool(getattr(self.t, "armed", False))
-            except BaseException as exc:                       # noqa: BLE001
-                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    raise
-                arm_error = "%s: %s" % (type(exc).__name__, str(exc)[:160])
+            if self.arm_fn is None:
+                arm_error = ("ARMING_BOUNDARY_NOT_WIRED: the BTC5m session "
+                             "does not arm until authorize_arming covers it")
+            else:
+                try:
+                    self.arm_fn(self.t)
+                    armed = bool(getattr(self.t, "armed", False))
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    arm_error = "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:160])
         rep = {"ok": True, "preflight": (pf or {}).get("preflight"),
                "preflight_failed": [c.get("check") for c in
                                     (pf or {}).get("checks") or ()

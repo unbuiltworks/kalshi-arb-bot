@@ -99,7 +99,8 @@ def ok_halt():
 
 class Rig:
     def __init__(self, tmp_path, monkeypatch, *, venue_kw=None,
-                 risk=ok_risk, halt=ok_halt, fill_at=None, book=None):
+                 risk=ok_risk, halt=ok_halt, fill_at=None, book=None,
+                 arm=True):
         self.clock = Clock(WS.timestamp() - 40)
         T5.authorize_5m(monkeypatch, tmp_path,
                         now_fn=lambda: dt.datetime.fromtimestamp(
@@ -120,7 +121,10 @@ class Rig:
             root=str(tmp_path / "root"), book_fn=self._book,
             p_fn=lambda m, ws, now: {"ok": True, "p_up": "0.75"},
             risk_fn=risk, halt_fn=halt, clock=self.clock,
-            sleep=self.clock.sleep)
+            sleep=self.clock.sleep,
+            # the scripted venue's own arm. Production has no arm_fn: the
+            # session cannot arm until authorize_arming covers it
+            arm_fn=(lambda t: t.arm()) if arm else None)
 
     def _book(self, market):
         t = self.clock() - WS.timestamp()
@@ -676,3 +680,27 @@ def test_btc5ms_own_operator_halt_and_the_watchdogs_halt_still_stop_it(
     assert rig.venue.sent == [] and rep["submitted"] == 0
     assert {b["reason"] for b in rig.kinds("L5_BTC5M_BLOCKED")} == {
         "SHARED_HALT:HALT:asserted"}
+
+
+def test_without_an_arm_function_the_session_cannot_arm_and_sends_nothing(
+        tmp_path, monkeypatch):
+    """THE PRODUCTION STATE until `authorize_arming` covers BTC5m: every
+    other gate passes, the venue's preflight passes, and still nothing is
+    sent. Every decision is reported as WOULD_SUBMIT, never as a trade."""
+    rig = Rig(tmp_path, monkeypatch, arm=False)
+    rep = rig.session.run()
+    start = rig.kinds("L5_BTC5M_START")[0]
+    assert start["preflight"] == "PASSED"
+    assert start["transport_armed"] is False
+    assert start["arm_error"].startswith("ARMING_BOUNDARY_NOT_WIRED")
+    assert rig.venue.sent == [] and rep["submitted"] == 0
+    assert rep["would_submit_not_sent"] > 0
+
+
+def test_the_runner_never_arms_a_transport_itself():
+    import ast
+    import pathlib
+    src = pathlib.Path(RUN.__file__).read_text()
+    calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == "arm"]
+    assert calls == []
