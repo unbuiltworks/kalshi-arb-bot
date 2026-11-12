@@ -1,0 +1,75 @@
+{
+ "service": "l5-btc5m-live",
+ "status": "PREPARED, NOT CREATED. Creating it is the owner's action and makes a money-capable service.",
+ "build": {
+  "repo": "unbuiltworks/kalshi-arb-bot",
+  "branch": "integration/l5-safe-release-candidate-20261109 (after PR #225 is merged)",
+  "config_file": "deploy/l5_btc5m_live/railway.json",
+  "dockerfile": "deploy/l5_btc5m_live/Dockerfile",
+  "restart_policy": "NEVER",
+  "replicas": 1,
+  "volume": {
+   "mount": "/state",
+   "size": "small (ledger + claim locks only)"
+  }
+ },
+ "variables": {
+  "secrets_by_reference_only": {
+   "PMUS_API_KEY_ID": "${{l5-pmus-live.PMUS_API_KEY_ID}}",
+   "PMUS_API_SECRET_KEY": "${{l5-pmus-live.PMUS_API_SECRET_KEY}}",
+   "_note": "Railway reference variables to the same account's existing credentials; no value is copied, typed or shown. Confirm the two names match the l5-pmus-live variable names before saving."
+  },
+  "owner_arm_token_set_by_owner_only": {
+   "PMUS_Q1_LIVE": "YES",
+   "PMUS_Q1_SESSION_ID": "<owner-chosen session id>",
+   "PMUS_Q1_ARM": "<the same value as PMUS_Q1_SESSION_ID>",
+   "_note": "without all three the transport refuses to arm (TRANSPORT_CANNOT_ARM). Leave unset to keep the service disarmed."
+  },
+  "approval_set_by_owner_only": {
+   "L5_CAMPAIGN_APPROVAL": "<the one-window document in the authorization request>"
+  },
+  "identity_and_durability": {
+   "PMUS_SERVICE_ROLE": "l5-btc5m-live",
+   "L5_LIVE_AUTH_OWNER_ROLE": "l5-btc5m-live",
+   "L5_LIVE_AUTH_LEDGER": "/state/btc5m/auth.jsonl",
+   "L5_LIVE_ROOT": "/state/btc5m",
+   "L5_BTC5M_LEDGER": "/state/btc5m/btc5m_ledger.json",
+   "L5_EXPERIMENT_ID": "b5m-live-1330z"
+  },
+  "budgets": {
+   "L5_LIVE_AUTH_MAX_SUBMISSIONS": "20",
+   "L5_LIVE_AUTH_MAX_OPEN": "4",
+   "L5_LIVE_AUTH_MAX_COMPLETE": "8",
+   "L5_LIVE_AUTH_MAX_REPLACE": "6",
+   "L5_ACCOUNT_MAX_EXPOSURE_USD": "0.45"
+  },
+  "strategy_and_window": {
+   "L5_BTC5M_CONTROLLER": "ON",
+   "L5_BTC5M_LIVE": "ARMED_BY_OWNER",
+   "L5_BTC5M_MARKET": "cpc-btc-updown-5m-2026-11-12-1330z",
+   "L5_BTC5M_NOT_AFTER": "2026-11-12T13:35:00Z"
+  },
+  "locks": {
+   "L5_SHADOW_ONLY": "1  (set to 0 ONLY as part of the live authorization; 1 keeps every submission blocked)",
+   "L5_LIVE_HALT": "1  (this service's own kill switch; clear ONLY as part of the live authorization)"
+  },
+  "shared_safety_state": {
+   "L5_HALT_URL": "http://l5-halt-watchdog.railway.internal:8080",
+   "L5_ACCOUNT_RISK_URL": "http://l5-pmus-live.railway.internal:8081/l5/live_orders.json",
+   "L5_BTC5M_FILLS_PORT": "8082"
+  }
+ },
+ "optional_on_l5_pmus_live": {
+  "L5_BTC5M_FILLS_URL": "http://l5-btc5m-live.railway.internal:8082/btc5m_fills",
+  "_note": "lets the account-wide ledger restate a BTC5m position from venue-confirmed fills instead of the $1 bound. Unset is safe."
+ },
+ "what_protects_the_account": [
+  "every order spends the owner's single-use claim for the exact window, within the approved exposure and daily loss",
+  "arming only through authorize_arming: owner arm token, approval for this window, preflight at the window open, venue-confirmed bounds, reconciled book, watchdog halt URL configured and permitting",
+  "every 5 s: watchdog halt, own L5_LIVE_HALT, account-wide loss state from l5-pmus-live (stale/unreadable/tripped refuses), cap must fit inside the remaining loss room; any refusal cancels its own orders",
+  "cancels name only venue ids this ledger recorded (installed as the transport's cancel-ownership test); re-read to terminal",
+  "maker-only: post-only buys; the adapter never sends a taker order",
+  "the watchdog asserts the shared halt on any order resting > 300 s; BTC5m quotes live <= 20 s",
+  "one window, then idle; restart refuses a market already run; restart policy NEVER"
+ ]
+}
