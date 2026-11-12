@@ -428,3 +428,53 @@ now −0.2381 against the replay's −0.0487, i.e. 4.9× worse, and the pair at
 
 A per-*window* mean across the two regimes is meaningless, so the regimes
 are reported apart and per-share carries the comparison.
+
+
+---
+
+## "But we win a bunch of windows"
+
+True, and it is not an illusion. `winrate.py`, 185 windows that traded:
+
+- **54.6%** of windows are net positive (101 of 185)
+- **59.3%** of shares settle on the winning side
+
+Buying the favorite is supposed to win more often than it loses. That is
+what a favorite is. The win rate was never the problem.
+
+**The payoff is asymmetric, so the bar is not 50%.** Buy at `p` and you
+make `1 − p` when right and lose `p` when wrong, so the breakeven win rate
+*is* the average price paid:
+
+```
+average price paid    0.6419   ->  BREAKEVEN win rate  64.2%
+actual win rate                                        59.3%
+gap                                                    -4.9 points
+
+right  +$0.3581 a share      wrong  -$0.6419 a share
+needs right:wrong of 1.79    actual 1.46
+```
+
+That 4.9-point gap is the entire loss. "Most" has to mean more than 64%,
+not more than 50%.
+
+### Reading a short live run without fooling yourself
+
+The live loss decomposes into the structural gap and luck:
+
+```
+live               -0.2381 /share
+  structural       -0.0316   (pay 62.5%, model wins 59.3%)
+  luck             -0.2065   (live won 38.7% vs the model's 59.3%)
+```
+
+**87% of the live loss is variance, not mechanism.** UP won 5 of the 6
+live windows and we were accumulating DOWN in 4 of them; going 1-for-6
+when the true rate is 54.6% has probability 0.072, about 1 in 14 —
+unusual, not anomalous.
+
+So the raw live figure **overstates** how bad this is, and comparing it
+head-on against the replay's per-share number (as an earlier revision of
+`live_vs_replay.py` did, calling live "4.9x the replay's loss") is
+misleading. The number that carries is the structural 4.9 points, which
+rests on 185 windows rather than six.
