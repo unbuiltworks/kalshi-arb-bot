@@ -199,6 +199,55 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
     return dict(out, ok=True, reason=None)
 
 
+def submission_budget() -> Dict[str, Any]:
+    """What the owner's per-class submission budgets allow and what is
+    already spent. READ-ONLY: it composes `AUTH.max_of_class` with
+    `AUTH.class_spent`, both of which only read, and claims nothing.
+
+    WHY IT EXISTS. Accumulation requotes on every tick of drift, so
+    `_order_class` charges most of its orders to REPLACE rather than OPEN.
+    If `L5_LIVE_AUTH_MAX_REPLACE` is sized for the one-entry pair strategy,
+    a live window stalls after its first requote and the step records say
+    `AUTHORIZATION:...` -- which reads like a strategy failure and is not
+    one. Reporting the budget at the start of the session and again in its
+    report makes that distinguishable from the outside, before a window is
+    spent finding out.
+
+    `max` None means the owner configured no budget for that class, which
+    does not bind. A directory we cannot read reports `spent` None rather
+    than 0: an absence we cannot see is not an absence.
+    """
+    out: Dict[str, Any] = {}
+    try:
+        exp = AUTH.experiment_id()
+        path = AUTH.ledger_path()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"readable": False, "why": type(exc).__name__}
+    for k in AUTH.SUBMISSION_CLASSES:
+        try:
+            cap = AUTH.max_of_class(k)
+        except BaseException:                                  # noqa: BLE001
+            cap = None
+        try:
+            spent: Optional[int] = len(AUTH.class_spent(path, exp, k))
+        except BaseException:                                  # noqa: BLE001
+            spent = None
+        out[k] = {
+            "max": cap, "spent": spent,
+            "remaining": (None if cap is None or spent is None
+                          else max(0, cap - spent)),
+            "binds": cap is not None,
+        }
+    out["readable"] = True
+    out["experiment"] = exp
+    out["note"] = ("accumulation charges most orders to REPLACE, not OPEN; "
+                   "a REPLACE budget sized for the one-entry pair strategy "
+                   "stalls a window after its first requote")
+    return out
+
+
 def shared_halt(url: str) -> Dict[str, Any]:
     """The halt record the independent watchdog asserts. Unreadable or
     unconfigured refuses: a live session needs the watchdog's hand on it."""
@@ -571,7 +620,7 @@ class Session:
                "transport_armed": armed, "arm_error": arm_error,
                # the owner's per-class submission budgets, BEFORE the
                # window is spent finding out that one of them binds
-               "submission_budget": X.submission_budget(),
+               "submission_budget": submission_budget(),
                "window_start_utc": ws.isoformat()}
         self._log("L5_BTC5M_START", rep)
         return rep
@@ -772,7 +821,7 @@ class Session:
             "cancelled": sum(1 for r in mine.values()
                              if r["state"] == X.CANCELLED),
             "would_submit_not_sent": self.would_submit,
-            "submission_budget": X.submission_budget(),
+            "submission_budget": submission_budget(),
             "close": closed, "settlement": settled, "reconcile": recon,
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]
