@@ -156,8 +156,14 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_STALE", age_s=round(age, 1))
     if not risk.get("readable"):
         return no("ACCOUNT_RISK_SAYS_UNREADABLE", why=risk.get("reason"))
-    if risk.get("operator_halt"):
-        return no("OPERATOR_HALT")
+    # THE OTHER SERVICE'S OPERATOR HALT IS ITS OWN KILL SWITCH, NOT AN
+    # ACCOUNT LIMIT. `L5_LIVE_HALT` is a per-service variable: the BTC15m
+    # service's says "BTC15m may not trade" and is deliberately ON while it
+    # stays disarmed. Reading it here would stop BTC5m for as long as BTC15m
+    # is off. What binds across services is the LOSS state below and the
+    # watchdog's halt record (`shared_halt`); BTC5m's own `L5_LIVE_HALT` is
+    # read by the session itself. The value is reported, never acted on.
+    other_halt = bool(risk.get("operator_halt"))
     day, halt = (_dec(risk.get("utc_day_realized_usd")),
                  _dec(risk.get("daily_halt_usd")))
     life, cum = (_dec(risk.get("lifetime_realized_usd")),
@@ -175,6 +181,7 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
            # what may still be LOST before either account-wide limit binds
            "loss_room_usd": str(room),
+           "btc15m_operator_halt": other_halt,
            "age_s": round(age, 1)}
     if day_all <= -halt:
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
