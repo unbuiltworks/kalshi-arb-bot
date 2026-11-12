@@ -153,6 +153,17 @@ class Params:
     #: btc5m_accumulation/straddle.py); the default is deliberately the
     #: do-nothing value so the mode cannot trade until it is set.
     straddle_price: Decimal = D("0")
+    #: STRADDLE only: extra rungs. Empty means the single `straddle_price`.
+    #: A LADDER IS LEVERAGE, NOT DIVERSIFICATION -- every rung fills on the
+    #: same loser collapse and pays on the same reversal, so they are
+    #: perfectly correlated and widening the ladder does NOT improve the
+    #: risk-adjusted result. Measured on the 189-window tape: 0.05-0.20
+    #: returns 10x the absolute profit of a single rung for 27x the
+    #: capital, with t falling 1.67 -> 1.17; 0.05-0.25 and 0.10-0.25 go
+    #: NEGATIVE out of sample. Only the narrow cheap end (0.05-0.10) holds
+    #: its return on capital. Rungs at or above 0.50 are refused with the
+    #: single price, for the same reason.
+    straddle_rungs: tuple = ()
     #: ACCUMULATE only: ticks below the favorite's bid an entry rests at.
     #: 0 joins the bid, which is where a maker buy has queue priority and
     #: the smallest gap to the price the band speaks about.
@@ -416,6 +427,16 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         # at or above 0.50 the pair costs >= 1.00 and cannot profit, so it
         # is a contradiction rather than an aggressive setting.
         return hold("PARAMS_UNREADABLE", cancel=True)
+    _rungs = ()
+    if straddle:
+        raw = params.straddle_rungs or (params.straddle_price,)
+        try:
+            _rungs = tuple(sorted({_dec(r) for r in raw}))
+        except TypeError:
+            return hold("PARAMS_UNREADABLE", cancel=True)
+        if not _rungs or any(r is None or not (ZERO < r < HALF)
+                             for r in _rungs):
+            return hold("PARAMS_UNREADABLE", cancel=True)
     # "NONE" says nothing is kept back for a completing order, which is only
     # true when no completing order is ever placed. Asking for one without
     # the other is a contradiction, not a default.
@@ -464,7 +485,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     if straddle:
         exp_s = _exposure(inv, rest)
         room = _cap - exp_s["total_exposure_usd"]
-        qty = _floor_qty(_dec(params.clip_usd) / _sx, params)
+        #: SIZED SO ONE SIDE'S WHOLE LADDER COSTS `clip_usd`, which keeps
+        #: the single-rung case identical (sum == the one price) and makes
+        #: the worst case exactly 2 x clip whatever the ladder's width.
+        ladder = sum(_rungs, ZERO)
+        qty = _floor_qty(_dec(params.clip_usd) / ladder, params)
         want = []
         why_s = "STRADDLE_RESTING"
         if qty <= 0:
@@ -474,17 +499,22 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         else:
             for side in SIDES:
                 if inv[side][0] > 0:
-                    continue                      # this leg is done
-                if any(o["side"] == side for o in rest):
-                    continue                      # already resting
-                if _sx * qty > room:
-                    why_s = "NO_EXPOSURE_ROOM"
-                    continue
-                room -= _sx * qty
-                want.append(_place(side, _sx, qty, "STRADDLE_LEG"))
+                    continue                      # this side is done
+                live = {o["price"] for o in rest if o["side"] == side}
+                for i, r in enumerate(_rungs):
+                    if r in live:
+                        continue                  # that rung already rests
+                    if r * qty > room:
+                        why_s = "NO_EXPOSURE_ROOM"
+                        continue
+                    room -= r * qty
+                    want.append(_place(side, r, qty, "STRADDLE_LEG",
+                                       slot=i))
         ev_s = {"entry": {"why": why_s, "price": str(_sx), "qty": str(qty),
                           "room_usd": str(max(ZERO, room)),
                           "cap_usd": str(_cap),
+                          "rungs": [str(r) for r in _rungs],
+                          "ladder_cost_one_side": str(ladder * qty),
                           "pair_cost_if_both_fill": str(2 * _sx)}}
         return _result(OPEN_FAVORITE if want else HOLD_OR_SKIP,
                        why_s, want, ev_s, exp_s)
