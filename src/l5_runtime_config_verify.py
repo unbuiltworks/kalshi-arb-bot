@@ -90,7 +90,11 @@ APPROVED: Dict[str, Any] = {
     # 1.87-contract leg at own 0.62 again.
     "opening_notional_budget_usd": D("0.80"),
     "daily_realized_loss_halt_usd": D("5"),
-    "maker_pair_ceiling": D("0.96"),
+    # RAISED 0.96 -> 0.99 BY OWNER DECISION, 2026-11-12 ("Raise the pair
+    # ceiling to .99 ... capture every pair below that"). L5_TS_MAX_PAIR_COST
+    # and L5_TS_COMPLETION_MAX_PAIR are 0.99 on l5-pmus-live; the code caps
+    # the override at 0.99, so this is also the most the engine accepts.
+    "maker_pair_ceiling": D("0.99"),
     "defensive_pair_ceiling": D("1.20"),
     "cancel_margin_s": 300.0,
     "defensive_terminal_s": 600.0,
@@ -220,6 +224,10 @@ SNAPSHOT_ALLOWED = (
     "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD",
     # and the opening-notional cap's, so a snapshot can predict its row
     "L5_TS_OPENING_NOTIONAL_BUDGET_USD",
+    # THE MAKER PAIR CEILING'S OWN VARIABLE: graded row `maker_pair_ceiling`
+    # could not be predicted from a snapshot without it (owner raised it to
+    # 0.99 on 2026-11-12).
+    "L5_TS_MAX_PAIR_COST",
 )
 
 #: Name fragments that mean "this is a secret, and it must not be in a file
