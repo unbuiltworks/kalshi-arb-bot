@@ -389,3 +389,42 @@ together, so completing a flipped position locks a loss.
 
 The sign is unchanged in both: negative live, negative in replay, and
 no-trade still dominates every arm tested.
+
+
+---
+
+## The ramp answered the size question: no
+
+On 2026-11-12 the owner authorized raising the aggregate exposure cap from
+$0.45 to **$2.25** (clip $0.10 → $0.25, resting slots 4 → 9, submission
+budgets OPEN/COMPLETE/REPLACE 8/8/24 → 48/48/108). The first full-size
+window ran at 17:45z.
+
+| window | submitted | filled | shares | deployed | settled |
+|---|---|---|---|---|---|
+| 17:45z | 16 | 9 | 3.55 | $2.2309 | **−$0.8709** |
+
+It reached the cap almost exactly ($2.2309 against $2.25) and the budgets
+stopped binding (OPEN 2/48, REPLACE 9/108), so this is the strategy running
+unconstrained rather than throttled.
+
+**Per share — the only size-invariant comparison:**
+
+| regime | windows | shares | net | net/share |
+|---|---|---|---|---|
+| $0.45 cap | 5 | 2.97 | −0.6812 | **−0.2294** |
+| $2.25 cap | 1 | 3.55 | −0.8709 | **−0.2453** |
+| all | 6 | 6.52 | −1.5521 | −0.2381 |
+
+Five times the size moved per-share economics by −0.0160, i.e. not at all
+in any useful sense. **The loss scales with size rather than being diluted
+by it.** One window at the new size lost more (−$0.87) than the five before
+it combined (−$0.68).
+
+This closes a hypothesis that was worth testing: that the measured loss was
+an artefact of trading too small to matter. It was not. Live per-share is
+now −0.2381 against the replay's −0.0487, i.e. 4.9× worse, and the pair at
+17:45z cost **1.2262** — the third above-par pair in six windows.
+
+A per-*window* mean across the two regimes is meaningless, so the regimes
+are reported apart and per-share carries the comparison.
