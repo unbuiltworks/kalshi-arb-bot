@@ -104,6 +104,8 @@ MAX_RESTING_ENV = "L5_BTC5M_MAX_RESTING_ENTRIES"
 #: It does NOT change the net: every one of those settles at about -$0.020 a
 #: window, because the loss is per share and not a capacity problem.
 CLIP_USD_ENV = "L5_BTC5M_CLIP_USD"
+#: STRADDLE only; see `straddle_price`. Absent means the mode cannot trade.
+STRADDLE_PRICE_ENV = "L5_BTC5M_STRADDLE_PRICE"
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
@@ -191,9 +193,30 @@ def shadow_only_engaged() -> bool:
 
 
 def entry_mode() -> str:
-    """The owner's entry rule, defaulting to the original edge-gated one."""
+    """The owner's entry rule, defaulting to the original edge-gated one.
+
+    An unrecognised value reads as EDGE_GATED rather than failing, so a
+    typo narrows what trades instead of widening it.
+    """
     want = (os.environ.get(ENTRY_MODE_ENV) or "").strip().upper()
-    return C.ACCUMULATE if want == C.ACCUMULATE else C.EDGE_GATED
+    if want in (C.ACCUMULATE, C.STRADDLE):
+        return want
+    return C.EDGE_GATED
+
+
+def straddle_price(default: Decimal = D("0")) -> Decimal:
+    """STRADDLE only: the fixed own-price both legs rest at.
+
+    Bounded to (0, 0.50) EXCLUSIVE, because a pair costs twice this and
+    pays 1.00: at 0.50 or above it is a locked loss whatever happens. An
+    unreadable or out-of-range value keeps the default of 0, which the
+    controller refuses as PARAMS_UNREADABLE -- so selecting the MODE
+    without choosing a price trades nothing rather than guessing one.
+    """
+    raw = _dec(os.environ.get(STRADDLE_PRICE_ENV))
+    if raw is None or not (D("0") < raw < D("0.50")):
+        return default
+    return raw
 
 
 def clip_usd(default: Decimal = D("0.10")) -> Decimal:
@@ -985,6 +1008,17 @@ class Btc5mExecutor:
                         clip_usd=clip_usd(self.params.clip_usd),
                         max_resting_entries=max_resting_entries(
                             self.params.max_resting_entries))
+        elif mode == C.STRADDLE:
+            # FIXED TWO-SIDED LIMITS. No favorite, no band, no requote, and
+            # no completion: both legs are opened deliberately, so there is
+            # nothing to reserve for. The price is NOT derived from the
+            # book -- that is the point, since a fixed limit cannot drift
+            # and the pair cost is therefore known before either leg fills.
+            over.update(entry_mode=C.STRADDLE, hedge_enabled=False,
+                        reserve_mode="NONE",
+                        straddle_price=straddle_price(
+                            self.params.straddle_price),
+                        clip_usd=clip_usd(self.params.clip_usd))
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))
