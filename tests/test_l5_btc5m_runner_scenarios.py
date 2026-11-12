@@ -27,6 +27,7 @@ plus issue #233 B4's freeze/reversal requirement:
 from __future__ import annotations
 
 import datetime as dt
+import inspect
 import os
 from decimal import Decimal as D
 
@@ -663,3 +664,43 @@ class TestRollingWindows:
         got = RUN.approved_markets(now)
         assert got["markets"] == []
         assert got["why"] == "NO_WINDOW_OPENS_BEFORE_LAST_OPEN_UTC"
+
+
+# ======================================================================
+class TestCampaignSkipsRatherThanStops:
+    """Regression for a defect observed LIVE on 2026-11-12 at 15:20Z: a
+    restart inside a campaign re-plans the whole approved list, meets the
+    window it already finished, and treated that as a refusal -- ending the
+    campaign on its first entry while 15:20z and 15:25z were still ahead of
+    it and unrun.
+
+    An already-run or already-past window is a SKIP. The durable marker is
+    what guarantees no window trades twice, and that is exactly what makes
+    skipping safe. A halt, a refusing risk state or an unclean close still
+    STOP the campaign."""
+
+    def test_an_already_run_window_is_skipped_not_fatal(self):
+        src = inspect.getsource(RUN.main)
+        assert '"MARKET_ALREADY_RUN", "WINDOW_ALREADY_PAST"' in src
+        i = src.index("skip = {")
+        j = src.index("stop = reason")
+        assert i < j, "the skip set must be consulted before stopping"
+        assert "continue" in src[i:j]
+
+    def test_a_real_refusal_still_stops_the_campaign(self):
+        src = inspect.getsource(RUN.main)
+        for fatal in ("CLOSE_NOT_CLEAN", "LEDGER_HALTED"):
+            assert fatal in src, fatal
+        assert "L5_BTC5M_CAMPAIGN_STOPPED" in src
+
+    def test_a_skipped_window_is_announced(self):
+        assert "L5_BTC5M_WINDOW_SKIPPED" in inspect.getsource(RUN.main)
+
+    def test_the_marker_still_prevents_a_second_run(self, tmp_path,
+                                                    monkeypatch):
+        """Skipping is only safe because the marker is authoritative."""
+        r = rig(tmp_path, monkeypatch)
+        run(r)
+        again = r.session.start()
+        assert again["ok"] is False
+        assert again["reason"] == "MARKET_ALREADY_RUN"

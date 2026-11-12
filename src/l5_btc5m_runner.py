@@ -998,11 +998,26 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         # NEVER MORE THAN THE OWNER APPROVED, whatever the list says.
         for slug in plan["markets"][:max(1, int(plan["max_windows"]))]:
             rep = one_window(slug, plan["max_windows"])
+            # ALREADY RUN OR ALREADY OVER IS A SKIP, NOT A STOP. A restart
+            # inside a campaign re-plans the whole approved list and so meets
+            # the windows it already finished; treating that as a refusal
+            # ended the campaign on its FIRST entry and never reached the
+            # windows still ahead of it (observed live, 2026-11-12 15:20Z:
+            # the 15:10z marker stopped a campaign that still had 15:20z and
+            # 15:25z to run). The durable marker still guarantees no window
+            # is traded twice -- that is exactly what lets this be a skip.
+            skip = {"MARKET_ALREADY_RUN", "WINDOW_ALREADY_PAST"}
             # A halt, a refusing account-risk state or an unresolved order
             # ENDS THE CAMPAIGN. It never marches on to the next window.
             stop = None
             if not rep.get("started"):
-                stop = rep.get("reason")
+                reason = rep.get("reason")
+                if reason in skip:
+                    emit("L5_BTC5M_WINDOW_SKIPPED",
+                         {"market": slug, "reason": reason,
+                          "utc": dt.datetime.now(UTC).isoformat()})
+                    continue
+                stop = reason
             elif not (rep.get("close") or {}).get("clean", True):
                 stop = "CLOSE_NOT_CLEAN"
             elif ex.halted_reason:
