@@ -1,0 +1,75 @@
+{
+ "label": "RECORDED snapshots (offline), not a tape with outcomes",
+ "snapshot_2026_09_10": {
+  "times": {
+   "A": {
+    "started": "2026-09-10T18:15:21.814914+00:00",
+    "ended": "2026-09-10T18:18:02.155336+00:00"
+   },
+   "B": {
+    "started": "2026-09-10T18:25:17.912047+00:00",
+    "ended": "2026-09-10T18:28:12.393890+00:00"
+   }
+  },
+  "by_league": {
+   "ALL": {
+    "n": 423,
+    "median_c": 1.0,
+    "p75_c": 2.0,
+    "p90_c": 9.0,
+    "share_ge_3c": 0.132,
+    "share_ge_5c": 0.116
+   },
+   "ucl": {
+    "n": 413,
+    "median_c": 1.0,
+    "p75_c": 2.0,
+    "p90_c": 4.0,
+    "share_ge_3c": 0.116,
+    "share_ge_5c": 0.099
+   },
+   "mls": {
+    "n": 6,
+    "median_c": 97.0,
+    "p75_c": 97.0,
+    "p90_c": 97.0,
+    "share_ge_3c": 1.0,
+    "share_ge_5c": 1.0
+   },
+   "dota2": {
+    "n": 2,
+    "median_c": 1.0,
+    "p75_c": 1.0,
+    "p90_c": 1.0,
+    "share_ge_3c": 0.0,
+    "share_ge_5c": 0.0
+   },
+   "cs2": {
+    "n": 2,
+    "median_c": 98.0,
+    "p75_c": 98.0,
+    "p90_c": 98.0,
+    "share_ge_3c": 1.0,
+    "share_ge_5c": 1.0
+   }
+  }
+ },
+ "mlb_sample_2026_09_02": {
+  "aec-mlb-sd-cin-2026-09-02": {
+   "n": 116,
+   "median_c": 0.5,
+   "p75_c": 0.5,
+   "p90_c": 0.5,
+   "share_ge_3c": 0.086,
+   "share_ge_5c": 0.086
+  },
+  "aec-mlb-atl-wsh-2026-09-02": {
+   "n": 116,
+   "median_c": 0.5,
+   "p75_c": 0.5,
+   "p90_c": 0.5,
+   "share_ge_3c": 0.0,
+   "share_ge_5c": 0.0
+  }
+ }
+}

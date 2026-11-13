@@ -1,0 +1,1154 @@
+{
+ "label": "SNAPSHOT, public PMUS order books, read-only",
+ "times": [
+  "2026-11-13T15:54:26.739345+00:00",
+  "2026-11-13T15:56:59.215310+00:00"
+ ],
+ "groups": {
+  "ALL": {
+   "quoted_obs": 162,
+   "unquoted_obs": 18,
+   "median_c": 1.0,
+   "p75_c": 3.0,
+   "p90_c": 6.0,
+   "ge_3c": 0.272,
+   "ge_5c": 0.136
+  },
+  "league:itfwo": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:itfme": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:intf": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:dota2": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 2.0,
+   "p75_c": 2.0,
+   "p90_c": 3.0,
+   "ge_3c": 0.111,
+   "ge_5c": 0.0
+  },
+  "league:utr": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 36.0,
+   "p75_c": 38.0,
+   "p90_c": 38.0,
+   "ge_3c": 0.667,
+   "ge_5c": 0.667
+  },
+  "league:atp": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:cs2": {
+   "quoted_obs": 7,
+   "unquoted_obs": 2,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 2.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:setkamecz": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:setkameua": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:modus": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 4.0,
+   "p75_c": 4.0,
+   "p90_c": 5.0,
+   "ge_3c": 0.5,
+   "ge_5c": 0.167
+  },
+  "league:atpdb": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 6.0,
+   "p75_c": 6.0,
+   "p90_c": 6.0,
+   "ge_3c": 0.5,
+   "ge_5c": 0.5
+  },
+  "league:wtt": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 5.0,
+   "p90_c": 7.0,
+   "ge_3c": 0.333,
+   "ge_5c": 0.333
+  },
+  "league:nba": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:acw": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:khl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 2.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 0.333,
+   "ge_5c": 0.0
+  },
+  "league:wtadb": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:snhl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.0
+  },
+  "league:ahl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.0
+  },
+  "league:ebfwcb": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:eurolg": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:autbl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.0
+  },
+  "league:ebb": {
+   "quoted_obs": 3,
+   "unquoted_obs": 3,
+   "median_c": 5.0,
+   "p75_c": 6.0,
+   "p90_c": 6.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.667
+  },
+  "league:adt10": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 39.0,
+   "p75_c": 39.0,
+   "p90_c": 39.0,
+   "ge_3c": 1.0,
+   "ge_5c": 1.0
+  },
+  "league:ebbec": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 7.0,
+   "p90_c": 7.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.333
+  },
+  "league:testcr": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 2.0,
+   "p75_c": 2.0,
+   "p90_c": 2.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:fra2": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 4.0,
+   "p75_c": 4.0,
+   "p90_c": 4.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.0
+  },
+  "league:wcbb": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 2.0,
+   "p90_c": 2.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:setkawoua": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.0
+  },
+  "league:unl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:bskt3x3": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:cnl": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:wta": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 2.0,
+   "p90_c": 2.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:boxing": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 42.0,
+   "p75_c": 42.0,
+   "p90_c": 42.0,
+   "ge_3c": 1.0,
+   "ge_5c": 1.0
+  },
+  "league:afcq": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:cfb": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 0.5,
+   "p75_c": 0.5,
+   "p90_c": 0.5,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "league:setkamemd": {
+   "quoted_obs": 2,
+   "unquoted_obs": 4,
+   "median_c": 47.0,
+   "p75_c": 47.0,
+   "p90_c": 47.0,
+   "ge_3c": 0.5,
+   "ge_5c": 0.5
+  },
+  "league:ebfsa": {
+   "quoted_obs": 0,
+   "unquoted_obs": 3
+  },
+  "league:czechligapro": {
+   "quoted_obs": 0,
+   "unquoted_obs": 3
+  },
+  "league:cbb": {
+   "quoted_obs": 0,
+   "unquoted_obs": 3
+  },
+  "phase:pre-game": {
+   "quoted_obs": 96,
+   "unquoted_obs": 9,
+   "median_c": 1.0,
+   "p75_c": 3.0,
+   "p90_c": 4.0,
+   "ge_3c": 0.292,
+   "ge_5c": 0.094
+  },
+  "phase:in-play": {
+   "quoted_obs": 66,
+   "unquoted_obs": 9,
+   "median_c": 1.0,
+   "p75_c": 2.0,
+   "p90_c": 38.0,
+   "ge_3c": 0.242,
+   "ge_5c": 0.197
+  },
+  "sport:tennis": {
+   "quoted_obs": 48,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 36.0,
+   "ge_3c": 0.188,
+   "ge_5c": 0.188
+  },
+  "sport:table": {
+   "quoted_obs": 23,
+   "unquoted_obs": 7,
+   "median_c": 1.0,
+   "p75_c": 3.0,
+   "p90_c": 5.0,
+   "ge_3c": 0.261,
+   "ge_5c": 0.13
+  },
+  "sport:basketball": {
+   "quoted_obs": 18,
+   "unquoted_obs": 3,
+   "median_c": 1.0,
+   "p75_c": 3.0,
+   "p90_c": 4.0,
+   "ge_3c": 0.333,
+   "ge_5c": 0.0
+  },
+  "sport:soccer": {
+   "quoted_obs": 18,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "sport:esports": {
+   "quoted_obs": 16,
+   "unquoted_obs": 2,
+   "median_c": 1.0,
+   "p75_c": 2.0,
+   "p90_c": 2.0,
+   "ge_3c": 0.062,
+   "ge_5c": 0.0
+  },
+  "sport:hockey": {
+   "quoted_obs": 9,
+   "unquoted_obs": 0,
+   "median_c": 3.0,
+   "p75_c": 3.0,
+   "p90_c": 3.0,
+   "ge_3c": 0.778,
+   "ge_5c": 0.0
+  },
+  "sport:darts": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 4.0,
+   "p75_c": 4.0,
+   "p90_c": 5.0,
+   "ge_3c": 0.5,
+   "ge_5c": 0.167
+  },
+  "sport:cricket": {
+   "quoted_obs": 6,
+   "unquoted_obs": 0,
+   "median_c": 39.0,
+   "p75_c": 39.0,
+   "p90_c": 39.0,
+   "ge_3c": 0.5,
+   "ge_5c": 0.5
+  },
+  "sport:ebasketball": {
+   "quoted_obs": 6,
+   "unquoted_obs": 3,
+   "median_c": 5.0,
+   "p75_c": 6.0,
+   "p90_c": 7.0,
+   "ge_3c": 1.0,
+   "ge_5c": 0.5
+  },
+  "sport:football": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 0.5,
+   "p75_c": 0.5,
+   "p90_c": 0.5,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "sport:efootball": {
+   "quoted_obs": 3,
+   "unquoted_obs": 3,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  },
+  "sport:boxing": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 42.0,
+   "p75_c": 42.0,
+   "p90_c": 42.0,
+   "ge_3c": 1.0,
+   "ge_5c": 1.0
+  },
+  "sport:beach": {
+   "quoted_obs": 3,
+   "unquoted_obs": 0,
+   "median_c": 1.0,
+   "p75_c": 1.0,
+   "p90_c": 1.0,
+   "ge_3c": 0.0,
+   "ge_5c": 0.0
+  }
+ },
+ "markets_ge_3c_all_rounds": [
+  {
+   "slug": "aec-adt10-aar-uba-2026-11-13",
+   "phase": "in-play",
+   "spreads": [
+    0.39,
+    0.39,
+    0.39
+   ]
+  },
+  {
+   "slug": "aec-atpdb-hidalgmolten-rinconrocbat-2026-11-12",
+   "phase": "in-play",
+   "spreads": [
+    0.06,
+    0.06,
+    0.06
+   ]
+  },
+  {
+   "slug": "aec-modus-jacdra-conwhi-2026-11-13",
+   "phase": "in-play",
+   "spreads": [
+    0.05,
+    0.04,
+    0.04
+   ]
+  },
+  {
+   "slug": "aec-utr-comale-admama-2026-11-09",
+   "phase": "in-play",
+   "spreads": [
+    0.38,
+    0.38,
+    0.38
+   ]
+  },
+  {
+   "slug": "aec-utr-galpio-turale-2026-11-09",
+   "phase": "pre-game",
+   "spreads": [
+    0.36,
+    0.36,
+    0.36
+   ]
+  },
+  {
+   "slug": "aec-fra2-aix-nan-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.04,
+    0.04,
+    0.04
+   ]
+  },
+  {
+   "slug": "aec-setkawoua-shevik-ivcole-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  {
+   "slug": "aec-ahl-wbs-her-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  {
+   "slug": "aec-autbl-kuf-gmu-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  {
+   "slug": "aec-ebb-min-sac-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.06,
+    0.05
+   ]
+  },
+  {
+   "slug": "aec-ebbec-bay-prs-2026-11-13-dh1",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.03,
+    0.07
+   ]
+  },
+  {
+   "slug": "aec-snhl-scb-fri-2026-11-13",
+   "phase": "pre-game",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  {
+   "slug": "aec-boxing-rubdel-guisch-2026-11-14",
+   "phase": "pre-game",
+   "spreads": [
+    0.42,
+    0.42,
+    0.42
+   ]
+  }
+ ],
+ "median_min_touch_qty": {
+  "in-play": 114.05,
+  "pre-game": 11.98
+ },
+ "per_market": {
+  "aec-itfme-danpag-hercas-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-utr-pikcha-gamari-2026-11-09": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-cs2-ezt-baks-2026-11-13": {
+   "phase": "in-play",
+   "sport": "esports",
+   "spreads": [
+    0.02,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-itfwo-letvid-marsou-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "atc-intf-uae-hnd-2026-11-13-uae": {
+   "phase": "in-play",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-atp-kilfel-mikpet-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-dota2-fro-pckcp-2026-11-13": {
+   "phase": "in-play",
+   "sport": "esports",
+   "spreads": [
+    0.03,
+    0.02,
+    0.01
+   ]
+  },
+  "atc-ebfsa-roma-sas-2026-11-13-dh7-roma": {
+   "phase": "in-play",
+   "sport": "efootball",
+   "spreads": [
+    null,
+    null,
+    null
+   ]
+  },
+  "aec-setkameua-koziva-pesden-2026-11-13": {
+   "phase": "in-play",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-testcr-pak-slr-2026-11-09": {
+   "phase": "in-play",
+   "sport": "cricket",
+   "spreads": [
+    0.02,
+    0.02,
+    0.02
+   ]
+  },
+  "aec-adt10-aar-uba-2026-11-13": {
+   "phase": "in-play",
+   "sport": "cricket",
+   "spreads": [
+    0.39,
+    0.39,
+    0.39
+   ]
+  },
+  "aec-atpdb-hidalgmolten-rinconrocbat-2026-11-12": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.06,
+    0.06,
+    0.06
+   ]
+  },
+  "aec-ebb-phi-lac-2026-11-13-dh1": {
+   "phase": "in-play",
+   "sport": "ebasketball",
+   "spreads": [
+    null,
+    null,
+    null
+   ]
+  },
+  "aec-modus-jacdra-conwhi-2026-11-13": {
+   "phase": "in-play",
+   "sport": "darts",
+   "spreads": [
+    0.05,
+    0.04,
+    0.04
+   ]
+  },
+  "aec-setkamecz-farkar-bertad-2026-11-13": {
+   "phase": "in-play",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-setkamemd-bucole-mocdav-2026-11-13": {
+   "phase": "in-play",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.47,
+    null
+   ]
+  },
+  "aec-wta-lausam-eliman-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.02
+   ]
+  },
+  "aec-wtt-nikart-donkan-2026-11-13": {
+   "phase": "in-play",
+   "sport": "table",
+   "spreads": [
+    0.07,
+    0.01,
+    0.05
+   ]
+  },
+  "aec-itfme-danjad-tylzin-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-utr-comale-admama-2026-11-09": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.38,
+    0.38,
+    0.38
+   ]
+  },
+  "aec-cs2-tdp-rush-2026-11-13": {
+   "phase": "in-play",
+   "sport": "esports",
+   "spreads": [
+    0.01,
+    null,
+    null
+   ]
+  },
+  "aec-itfwo-vicbos-julsil-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "atc-intf-ksa-kor-2026-11-13-ksa": {
+   "phase": "in-play",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-atp-calhem-pedmar-2026-11-13": {
+   "phase": "in-play",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-dota2-all-p-2026-11-13": {
+   "phase": "in-play",
+   "sport": "esports",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-setkameua-abaspa-pontym-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-cbb-vit-gb-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    null,
+    null,
+    null
+   ]
+  },
+  "aec-utr-galpio-turale-2026-11-09": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.36,
+    0.36,
+    0.36
+   ]
+  },
+  "aec-wcbb-amercn-delst-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.02,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-czechligapro-id2503634976731582": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    null,
+    null,
+    null
+   ]
+  },
+  "aec-itfme-ofeshi-matfor-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-setkamemd-orbale-buiedu-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    null,
+    null,
+    null
+   ]
+  },
+  "aec-itfwo-jansal-anisah-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-modus-jambai-neiduf-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "darts",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-setkamecz-blajan-sabdav-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-cs2-gls-reda-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "esports",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-atp-tayfri-lormus-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-fra2-aix-nan-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.04,
+    0.04,
+    0.04
+   ]
+  },
+  "aec-setkawoua-shevik-ivcole-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  "atc-unl-mda-kaz-2026-11-13-mda": {
+   "phase": "pre-game",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "atc-afcq-gab-les-2026-11-13-gab": {
+   "phase": "pre-game",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-nba-ny-ind-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-ahl-wbs-her-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "hockey",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  "aec-atpdb-dudapereir-pankinperego-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-acw-zavvas-nitzai-2026-11-13-460b7f01": {
+   "phase": "pre-game",
+   "sport": "beach",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-bskt3x3-met-tem-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "atc-ebfwcb-bel-mor-2026-11-13-dh5-bel": {
+   "phase": "pre-game",
+   "sport": "efootball",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-autbl-kuf-gmu-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  "aec-ebb-min-sac-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "ebasketball",
+   "spreads": [
+    0.03,
+    0.06,
+    0.05
+   ]
+  },
+  "aec-cfb-flst-pitt-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "football",
+   "spreads": [
+    0.005,
+    0.005,
+    0.005
+   ]
+  },
+  "aec-dota2-liquid-lgd-2026-11-14": {
+   "phase": "pre-game",
+   "sport": "esports",
+   "spreads": [
+    0.02,
+    0.02,
+    0.02
+   ]
+  },
+  "aec-ebbec-bay-prs-2026-11-13-dh1": {
+   "phase": "pre-game",
+   "sport": "ebasketball",
+   "spreads": [
+    0.03,
+    0.03,
+    0.07
+   ]
+  },
+  "atc-intf-arg-ury-2026-11-13-arg": {
+   "phase": "pre-game",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-snhl-scb-fri-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "hockey",
+   "spreads": [
+    0.03,
+    0.03,
+    0.03
+   ]
+  },
+  "aec-wtadb-erjavekulamb-mcadoorogers-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "tennis",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-wtt-hanara-miuhir-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "table",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-boxing-rubdel-guisch-2026-11-14": {
+   "phase": "pre-game",
+   "sport": "boxing",
+   "spreads": [
+    0.42,
+    0.42,
+    0.42
+   ]
+  },
+  "atc-cnl-pur-dma-2026-11-13-pur": {
+   "phase": "pre-game",
+   "sport": "soccer",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-eurolg-efs-vib-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "basketball",
+   "spreads": [
+    0.01,
+    0.01,
+    0.01
+   ]
+  },
+  "aec-khl-tor-lad-2026-11-13": {
+   "phase": "pre-game",
+   "sport": "hockey",
+   "spreads": [
+    0.02,
+    0.03,
+    0.01
+   ]
+  }
+ }
+}
