@@ -326,15 +326,147 @@ def record(minutes: float, out_path: str) -> int:
     return 0
 
 
+#: THE WHOLE OPEN SPORTS UNIVERSE, not just the live slate. The live-events
+#: query embeds at most ~15 markets an event while an event can carry 47-162,
+#: so the live slate is a sample and a small one. `/v1/markets` pages the
+#: real universe AND carries bestBidQuote/bestAskQuote inline, so a spread
+#: census over thousands of markets costs one call per 500 markets instead
+#: of one per market. Depth still costs a call, so it is bought only where
+#: the spread is wide enough to matter -- which is the whole question.
+ENUM_PAGE = 500
+ENUM_MAX_PAGES = 40
+
+
+def enumerate_open(max_pages: int = ENUM_MAX_PAGES) -> "tuple[list, dict]":
+    """Every open+active market, paged. Degrades rather than dies: a
+    mid-way failure returns what was gathered and SAYS how many pages it
+    got, because a short sweep reported as a complete one would understate
+    the universe and no reader could tell."""
+    rows: list = []
+    pages = 0
+    stopped = "short_page"
+    for page in range(max_pages):
+        try:
+            resp = _get("/v1/markets?active=true&closed=false"
+                        "&limit=%d&offset=%d" % (ENUM_PAGE, page * ENUM_PAGE))
+        except RateLimited:
+            stopped = "rate_limited"
+            break
+        except Exception as exc:                               # noqa: BLE001
+            stopped = "error:" + type(exc).__name__
+            break
+        ms = resp.get("markets") if isinstance(resp, Mapping) else None
+        if not isinstance(ms, list):
+            stopped = "no_markets_key"
+            break
+        pages += 1
+        rows.extend(m for m in ms if isinstance(m, Mapping))
+        if len(ms) < ENUM_PAGE:
+            break
+        time.sleep(1.0 / max(BUDGET_RPS, 1.0))
+    else:
+        stopped = "page_cap"
+    return rows, {"pages": pages, "markets_seen": len(rows),
+                  "stopped_because": stopped,
+                  "complete": stopped == "short_page"}
+
+
+def universe(wide_threshold: float = 0.05, depth_cap: int = 220) -> int:
+    """Spread over the whole open sports universe; depth where it is wide.
+
+    Reports the spread distribution from the inline quotes, then buys the
+    depth ladder for every wide-spread market (up to a cap, so this stays a
+    bounded read) and reports spread x depth on exactly the cells the
+    strategy would want.
+    """
+    rows, cov = enumerate_open()
+    emit(TAG + "_UNIVERSE_ENUM", cov)
+    if not cov["complete"]:
+        emit(TAG + "_UNIVERSE_PARTIAL",
+             {"note": "sweep did not reach a short page; counts below are a "
+                      "LOWER BOUND on the universe, not the universe",
+              "stopped_because": cov["stopped_because"]})
+    sports = []
+    excluded = {"crypto": 0, "other": 0}
+    for m in rows:
+        slug = m.get("slug") or ""
+        if is_sports(slug):
+            bid, ask = _num(m.get("bestBidQuote")), _num(m.get("bestAskQuote"))
+            sports.append({"slug": slug, "bid": bid, "ask": ask,
+                           "market_type": m.get("marketType"),
+                           "spread": (None if bid is None or ask is None
+                                      or ask < bid else round(ask - bid, 4))})
+        elif slug.startswith(CRYPTO_PREFIXES):
+            excluded["crypto"] += 1
+        else:
+            excluded["other"] += 1
+    two = [s for s in sports if s["spread"] is not None]
+    wide = sorted((s for s in two if s["spread"] >= wide_threshold),
+                  key=lambda s: -s["spread"])
+    emit(TAG + "_UNIVERSE_SPORTS",
+         {"sports_markets": len(sports), "two_sided": len(two),
+          "one_sided_or_unquoted": len(sports) - len(two),
+          "wide_ge_%.2f" % wide_threshold: len(wide),
+          "excluded": excluded,
+          "note": "a one-sided book has NO spread, which is not a spread "
+                  "of 0 and is counted separately"})
+    #: SAMPLE STRATIFIED BY SPREAD, not widest-first, and the first run of
+    #: this file got it wrong in a way worth recording. Taking the widest
+    #: 220 of 852 returned a sample whose median spread was 0.32 and whose
+    #: lifetime volume was 0.0 shares in 100% of cases -- true, and
+    #: useless, because the widest quotes are the deadest markets by
+    #: construction. "No survivors" from that sample would have been an
+    #: artefact of the ORDERING, not a fact about the venue, and it would
+    #: have looked exactly like a clean negative result.
+    #:
+    #: The cells the prior work actually pointed at were 8-25c with real
+    #: size and real volume, so the sample has to cover the wide RANGE
+    #: evenly. Equal quota per bucket, taken evenly across each bucket.
+    buckets: dict = {}
+    edges = [(0.05, 0.08), (0.08, 0.12), (0.12, 0.18), (0.18, 0.25),
+             (0.25, 0.40), (0.40, 1.01)]
+    for lo, hi in edges:
+        buckets["%.2f-%.2f" % (lo, hi)] = [s for s in wide
+                                           if lo <= s["spread"] < hi]
+    quota = max(1, depth_cap // max(1, len(buckets)))
+    picked = []
+    for name, members in buckets.items():
+        if not members:
+            continue
+        step = max(1, len(members) // quota)
+        picked.extend(members[::step][:quota])
+    emit(TAG + "_UNIVERSE_STRATA",
+         {name: {"available": len(m),
+                 "sampled": min(len(m[::max(1, len(m) // quota)]), quota)}
+          for name, m in buckets.items()})
+    emit(TAG + "_UNIVERSE_DEPTH_PLAN",
+         {"wide_total": len(wide), "reading_depth_for": len(picked),
+          "cap": depth_cap,
+          "unread": max(0, len(wide) - len(picked))})
+    pace = max(CALLS_PER_MARKET / BUDGET_RPS, 0.0)
+    for s in picked:
+        row = observe(s["slug"])
+        row["enum_spread"] = s["spread"]
+        row["market_type"] = s.get("market_type")
+        emit(TAG + "_WIDE", row)
+        time.sleep(pace)
+    emit(TAG + "_UNIVERSE_DONE", {"wide_read": len(picked)})
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", action="store_true")
     ap.add_argument("--record", action="store_true")
+    ap.add_argument("--universe", action="store_true")
+    ap.add_argument("--wide", type=float, default=0.05)
     ap.add_argument("--minutes", type=float, default=30.0)
     ap.add_argument("--out", default="sports_tape.jsonl")
     a = ap.parse_args()
     if a.snapshot:
         return snapshot()
+    if a.universe:
+        return universe(a.wide)
     if a.record:
         return record(a.minutes, a.out)
     ap.print_help()
