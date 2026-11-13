@@ -120,7 +120,7 @@ def test_the_window_argument_parses_both_spellings(argv, want):
 def test_the_approved_limits_are_at_or_inside_every_code_ceiling():
     doc = M.mint(now=NOW, nonce="h" * 32, windows=3)
     assert doc["max_total_exposure_usd"] == str(CA.MAX_TOTAL_EXPOSURE_USD)
-    # the minter still asks for $5; the code ceiling was raised to $10 (owner 2026-11-12), so $5 is inside it
+    # the minter still asks for $5; the code ceiling was raised to $40 (owner 2026-11-12/13), so $5 is inside it
     assert doc["max_daily_loss_usd"] == "5"
     assert CA.D(doc["max_daily_loss_usd"]) <= CA.MAX_DAILY_LOSS_USD
     assert doc["series"] == CA.ALLOWED_SERIES[0]

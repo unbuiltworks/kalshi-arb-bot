@@ -79,7 +79,7 @@ def test_a_greedy_document_is_clamped_to_the_code_constants(monkeypatch):
     sc = st["scope"]
     assert sc["max_windows"] == CA.MAX_WINDOWS == 8
     assert D(sc["max_total_exposure_usd"]) == CA.MAX_TOTAL_EXPOSURE_USD == D("20")
-    assert D(sc["max_daily_loss_usd"]) == CA.MAX_DAILY_LOSS_USD == D("10")
+    assert D(sc["max_daily_loss_usd"]) == CA.MAX_DAILY_LOSS_USD == D("40")
 
 
 def test_the_campaign_duration_is_clamped_too(monkeypatch):

@@ -203,7 +203,7 @@ def test_a_reformatted_document_has_a_different_digest(monkeypatch,
 
 @pytest.mark.parametrize("kw", [
     {"max_total_exposure_usd": "50"},
-    {"max_daily_loss_usd": "25"},
+    {"max_daily_loss_usd": "45"},   # above the $40 ceiling (owner 2026-11-13)
     {"max_windows": 99},
 ])
 def test_it_refuses_to_construct_a_document_above_a_code_ceiling(kw):
