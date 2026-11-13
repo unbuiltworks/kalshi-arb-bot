@@ -303,6 +303,8 @@ def lifecycle_aware_verdict(
             terminal_at = at
         elif state not in ("ACK", "PARTIAL_FILL"):
             return {"verdict": None, "reason": "LIFECYCLE_UNKNOWN_STATE"}
+        if terminal_at is not None and state in ("ACK", "PARTIAL_FILL"):
+            return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
         if state == "PARTIAL_FILL" and (resting_at is None or terminal_at is not None):
             return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
     if resting_at is None or resting_at > start:
