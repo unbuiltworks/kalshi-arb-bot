@@ -144,3 +144,59 @@ it. But choosing the best of 49 arms needs `sqrt(2 ln 49) = 2.79`, and
 with a small real edge and with zero, which is what the plateau's
 flatness said already. What is established, at t -2-to-6, is that
 everything from 0.24 upward LOSES.
+
+---
+
+# Asymmetric pricing by side: looks like the best idea here, and is not
+
+Owner asked 2026-11-13 whether to adjust, move, or cheapen the bid. The
+symmetric sweep above answers the first and third. This answers the one
+variant that was never tested: pricing the two sides DIFFERENTLY.
+
+Settlement P&L is linear in legs, so each leg stands alone and the best
+symmetric price is the best asymmetric price ONLY IF both sides behave
+alike. Measured by `side_asymmetry.py`, same tape and fill rule:
+
+| price | UP fills | UP win% | UP c/w | UP t | DOWN fills | DOWN win% | DOWN c/w | DOWN t |
+|---|---|---|---|---|---|---|---|---|
+| 0.05 | 99 | 4.0% | -0.51 | -0.48 | 89 | 12.4% | +3.50 | +2.08 |
+| 0.08 | 107 | 7.5% | -0.30 | -0.21 | 93 | 16.1% | **+4.04** | **+2.10** |
+| 0.10 | 107 | 7.5% | -1.44 | -0.99 | 96 | 18.8% | +4.49 | +2.16 |
+| 0.30 | 133 | 21.8% | -5.83 | -2.27 | 125 | 34.4% | +2.94 | +1.03 |
+
+Read naively this is the best result in the whole program: the DOWN leg
+alone is **+4.04 c/w at t +2.10**, better than the symmetric straddle's
++3.74 at t +1.67, and the UP leg contributes nothing. It says drop the UP
+leg and rest DOWN only.
+
+**It is a directional artifact.** On this tape DOWN settled **105 of 187
+windows, 56.1%, z +1.68**. A DOWN leg bought at 0.08 pays 1.00 whenever
+DOWN settles, so a tape that drifted down makes DOWN legs look skilled.
+Normalising each side's win-given-fill by its own base rate shrinks the
+gap from 2.1x to 1.7x, and what remains rests on **8 and 15 wins** --
+single-digit counts.
+
+Two further reasons not to act on it:
+
+1. **Multiple comparisons.** Seven prices x two sides is 14 arms, so the
+   bar is `sqrt(2 ln 14) = 2.30`. The best cell reaches **2.10**. It does
+   not clear, and the per-arm t values were never corrected for the search
+   that produced them.
+2. **It is the thing the operating model names.** "Do not assume residual
+   directional exposure has predictive skill; historical evidence does not
+   support that." Resting DOWN-only IS residual directional exposure. On a
+   tape where BTC trended up the sign flips, and nothing here distinguishes
+   a structural side preference from one day's drift.
+
+**Verdict: asymmetry joins the closed list. 0.08 / 0.08 stands.** Testing
+it would need tapes with opposite drift and a prediction fixed in advance
+of seeing them -- not a sweep over sides on a single skewed sample.
+
+## So, the three price questions, answered
+
+| question | answer |
+|---|---|
+| adjust the price? | 0.08 is the measured PEAK of a 0.05-0.16 plateau |
+| set the bid cheaper? | measured WORSE: 0.05 is +2.99 vs 0.08's +3.74. Cheaper buys a fairer losing leg and rarer pairs, in almost exact proportion |
+| move prices (requote/follow)? | closed: the relative-depth grid, 2-15c below the bid, pins pair cost at exactly 1.0000 across 18 cells |
+| different price per side? | closed above -- directional artifact, does not clear its bar |
