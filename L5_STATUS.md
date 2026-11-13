@@ -1621,3 +1621,55 @@ pair-cost ceiling" on the live gate is independently confirmed.
 
 Detail: `analysis/l5/RUN_LENGTH_PREREGISTRATION.md` (frozen before scoring),
 `analysis/l5/RUN_LENGTH_FINDINGS.md`.
+
+---
+
+## 2026-11-13: BTC5m cannot run concurrently with BTC15m under the $8 cap
+
+An owner-authorized straddle campaign (8 windows, 5 shares a side at 0.08,
+`STRADDLE` only) was armed live at 15:10z. It placed **zero orders** across
+every window, refusing each leg with `ACCOUNT_EXPOSURE_CAP`:
+
+```
+account:  other_position_contracts 15,  other_usd "15.00",  own_usd "0"
+L5_ACCOUNT_MAX_EXPOSURE_USD = 8.00
+```
+
+This is not a fault and not a loss-limit problem. The cause is structural:
+
+`ExecutionAdapter.account_exposure()` reads the venue live on every step and
+charges **every foreign contract at `FOREIGN_USD_PER_CONTRACT` = $1.00**, on
+a **gross** basis: `held = abs(qtyBought) + abs(qtySold)`. The BTC15m lane
+was holding `matched=6.56` pairs plus a 1.00 residual in a single CLOSED
+market, which is ~15 contracts gross -> $15.00 charged against an $8.00
+account-wide cap, by a lane whose matched pairs always redeem at exactly
+$1.00 and therefore carry near-zero risk.
+
+The conservatism is deliberate (`FOREIGN_BASIS`): this adapter cannot know
+another lane's pairing or economics from position rows, so it assumes the
+worst. The consequence is that **while BTC15m holds any material matched
+inventory, BTC5m has no room to place a single order**, regardless of how
+small or how well hedged the BTC5m order is.
+
+Options, none taken unilaterally -- all three are owner/cross-session calls:
+
+1. raise `L5_ACCOUNT_MAX_EXPOSURE_USD` (account-wide, affects every lane);
+2. run BTC5m only while BTC15m is flat (BTC15m runs continuously, so this
+   is close to never);
+3. make the foreign basis matched-aware (a change to a SHARED safety
+   control that would weaken it, and the pairing is not reliably derivable
+   from `qtyBought`/`qtySold`, which are per outcome token, not per side).
+
+Owner's call 2026-11-13 was **leave armed, change no limit**; the campaign
+expired at `NOT_AFTER 15:50:00Z` having cost nothing.
+
+**Two corrections this run produced** (detail in
+`LIVE_RUNBOOK_20261113.md`): the `$55` cumulative-loss raise was never
+needed -- the gate already passes at the existing ceiling of 20, proven by
+a shadow probe giving 20 STEP and 0 BLOCKED records -- and the service that
+raise targets, `l5-pmus-live`, is the **live BTC15m trader**, so the change
+was never BTC5m-local.
+
+**Shadow cannot see this refusal.** The `account` block reads all-null
+without the arm token, so a campaign can look perfectly clean in shadow and
+place nothing live. Read `account.other_usd` against the cap before arming.
