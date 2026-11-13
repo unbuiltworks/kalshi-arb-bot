@@ -2,7 +2,7 @@
 afbaf7511, maker-only, taker off, pair/completion ceiling 0.99 (owner), inventory recovery + dual replenish ON (owner), requote-keeps-round,
 reducing-replace fallback, recycling OFF, two live orders, one round at a time, additional loss $1.00, every capital limit unchanged. No other window."""
 import os, sys, json, datetime as dt
-sys.path.insert(0, "/home/user/kalshi-arb-bot")
+sys.path.insert(0, os.environ.get("KIT_SRC", "/home/user/kalshi-arb-bot"))   # KIT_SRC = checkout of the DEPLOYED SHA
 from src import l5_railway as RW
 P = "50fb7357-e2bc-4d04-a49e-71eb5d73b0d1"; E = "f3642d27-26dc-4e21-9170-bc76290c076f"
 SVC = "87f1834e-530e-4fc4-a310-91c8d3add196"; WD = "fb038b8c-c7c1-4599-b06a-54f72bad544f"
@@ -30,7 +30,8 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            "L5_TS_COMPLETION_CROSS": "YES", "L5_TAKER_COMPLETION_POLICY": "YES",
            # owner 16:31Z "deploy 234": the single continuous inventory controller drives this window
            "L5_TS_CONTINUOUS_INVENTORY": "YES"}
-TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "50.00",   # owner 19:1xZ "lifetime $50" (persistent; not restored); daily halt stays the owner's $10 (not written)
+TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "50.00",   # owner 19:1xZ "lifetime $50" (persistent; not restored)
+           "L5_DAILY_REALIZED_LOSS_HALT_USD": "10.00",   # owner 22:4xZ "Write $10 in arm write" (another session had set 50)
            "L5_MAX_TOTAL_EXPOSURE_USD": "3.00", "L5_MAX_CASH_DEPLOYED_USD": "2.70", "L5_MAX_WORST_CASE_DEFICIT_USD": "3.00", "L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "96", "L5_LIVE_AUTH_MAX_COMPLETE": "192", "L5_LIVE_AUTH_MAX_REPLACE": "240", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "560"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",

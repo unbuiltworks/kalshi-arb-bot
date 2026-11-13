@@ -51,9 +51,9 @@ pre = {"sha": dep.get("commitHash") == SHA, "dep_ok": dep.get("status") == "SUCC
        "recorder_durable": L._get(hb, "fill_calibration.readback.readable") is True,
        "residual_cap": cur.get("PMUS_RESIDUAL_CAP_K") == "2",   # owner 16:07Z: K=2
        # starting state = the 19:30Z batch as written (approval expired at 20:45Z); only approval/market/id/halt change now
-       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in list(TEST_ON) + list(TIGHTEN)),
+       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in list(TEST_ON) + [k for k in TIGHTEN if k != "L5_DAILY_REALIZED_LOSS_HALT_USD"]),
        # runtime refuses CAMPAIGN_LIMITS_WIDER_THAN_APPROVED unless running halt <= approved daily loss (code cap 5)
-       "daily_halt_fits_approval": D(cur.get("L5_DAILY_REALIZED_LOSS_HALT_USD") or "999") <= D(doc["max_daily_loss_usd"]),
+       "daily_halt_written_fits_approval": D(TIGHTEN["L5_DAILY_REALIZED_LOSS_HALT_USD"]) <= D(doc["max_daily_loss_usd"]),
        "opening_leg_one_contract": cur.get("L5_TS_OPENING_LEG_MAX_CONTRACTS") == "1",
        "ceilings": cur.get("L5_TS_MAX_PAIR_COST") == "0.99" and cur.get("L5_TS_COMPLETION_MAX_PAIR") == "0.99" and not cur.get("L5_COMPLETION_PAIR_CEILING"),
        "controller_shadow_no_profile": cur.get("L5_PORTFOLIO_CONTROLLER") == "SHADOW" and not cur.get("L5_PORTFOLIO_PROFILE") and not cur.get("L5_PORTFOLIO_FAVORITE"),
