@@ -137,20 +137,14 @@ class RateLimited(Exception):
     pass
 
 
-def bbo(slug, timeout=8.0, retries=3):
-    """GET only. Returns (bid, ask, state, settlement_px) or Nones.
-
-    Retries 429 with exponential backoff; raises RateLimited if it will
-    not clear. Never sends anything but a GET and holds no credentials.
-    """
-    url = "%s/v1/markets/%s/bbo" % (GATEWAY, slug)
+def _get(url, timeout=8.0, retries=3):
+    """GET a JSON document. Retries 429 with backoff; raises RateLimited."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     delay = 2.0
     for attempt in range(retries + 1):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
-                doc = json.loads(r.read().decode("utf-8"))
-            break
+                return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code != 429 or attempt == retries:
                 if exc.code == 429:
@@ -158,11 +152,48 @@ def bbo(slug, timeout=8.0, retries=3):
                 raise
             time.sleep(delay)
             delay *= 2
+    raise RateLimited("429")
+
+
+def quote(slug, timeout=8.0):
+    """The live touch: (bid, ask). GET only.
+
+    USES THE RECORDER'S ENDPOINT, and the distinction cost most of a night.
+    `/v1/markets/{slug}/bbo` -- which carries settlementPx, depth and volume
+    -- returns HTTP 404 for a market while that market is OPEN. Measured
+    2026-11-13: twenty rapid probes of the live window all failed, and a
+    spaced probe at age 195s still 404'd, while the four EXPIRED windows
+    behind it all answered. My shadow therefore polled a dead URL half the
+    time and sampled at a 5.7s mean gap.
+
+    `/v1/market/slug/{slug}` (singular, no /bbo) answers for an OPEN market
+    and is what `btc5m_public_recorder.py` has always used. Its tape proves
+    the cadence is achievable: 189 windows, median 147 observations each,
+    gap median 2.0s, p95 2.1s, SIX gaps over 10s out of 27,236. That is the
+    density the fill rule was validated at, so matching the endpoint is what
+    makes the shadow's pair rate comparable to the 10.2% baseline rather
+    than merely similar.
+
+    What this endpoint does NOT carry: settlementPx, sharesTraded or any
+    depth. Settlement comes from `settlement()` below, and volume-while-
+    fillable is simply not obtainable from public data on a live window --
+    see the note at `vol_while_fillable_*`.
+    """
+    doc = _get("%s/v1/market/slug/%s" % (GATEWAY, slug), timeout=timeout)
+    m = doc.get("market") or doc
+    return dec(m.get("bestBidQuote")), dec(m.get("bestAskQuote"))
+
+
+def settlement(slug, timeout=8.0):
+    """The venue's own settlementPx, or None. Works once EXPIRED.
+
+    This is the /bbo endpoint, which is useless while the window is open
+    and correct once it is not -- the opposite of `quote()`. Verified
+    against the live service's own settle() on five of five windows.
+    """
+    doc = _get("%s/v1/markets/%s/bbo" % (GATEWAY, slug), timeout=timeout)
     md = doc.get("marketData") or doc
-    return (dec(md.get("bestBid")), dec(md.get("bestAsk")),
-            str(md.get("state") or ""), dec(md.get("settlementPx")),
-            dec(md.get("sharesTraded")), dec(md.get("bidShares")),
-            dec(md.get("askShares")))
+    return dec(md.get("settlementPx"))
 
 
 def own_price(side, bid, ask):
@@ -225,7 +256,8 @@ def watch_window(ws, price, verbose=False):
     while dt.datetime.now(UTC) < stop_at:
         polls += 1
         try:
-            bid, ask, state, _px, vol, bshares, ashares = bbo(slug)
+            bid, ask = quote(slug)
+            vol = bshares = ashares = None
         except RateLimited:
             rate_limited += 1
             time.sleep(POLL_S * 4)          # the venue asked us to slow down
@@ -328,7 +360,7 @@ def try_settle(slug):
     poller was starving itself.
     """
     try:
-        _b, _a, _state, px = bbo(slug, retries=3)[:4]
+        px = settlement(slug)
     except Exception:                                          # noqa: BLE001
         return None
     if px is not None and px in (D(0), D(1)):
@@ -363,8 +395,18 @@ def finish(obs, won):
            "opp_deepest_after_first": (str(obs["opp_deepest_after"])
                                        if obs["opp_deepest_after"] is not None
                                        else None),
-           "vol_while_fillable_up": str(obs["traded"][UP]),
-           "vol_while_fillable_down": str(obs["traded"][DOWN]),
+           #: NOT MEASURED, and reported as null rather than 0. The only
+           #: public endpoint carrying sharesTraded is /bbo, which 404s
+           #: while the window is OPEN -- so volume-through-our-level,
+           #: the quantity that would answer whether 45 shares fills,
+           #: cannot be had from public data at all. A 0 here would read
+           #: as "no volume passed through", which is the same fake-zero
+           #: mistake as a rate-limited window reporting case NONE.
+           #: Answering the scaling question needs the authenticated
+           #: book, which this process deliberately has no key for.
+           "vol_while_fillable_up": None,
+           "vol_while_fillable_down": None,
+           "vol_unavailable_reason": "BBO_404_WHILE_OPEN",
            "min_touch_shares_up": (str(obs["touch_shares"][UP])
                                    if obs["touch_shares"][UP] is not None
                                    else None),
