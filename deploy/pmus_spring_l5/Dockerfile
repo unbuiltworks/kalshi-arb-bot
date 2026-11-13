@@ -47,6 +47,11 @@ COPY src/pmus_migration_close_live.py src/pmus_migration_close_live.py
 # read-only settlement audit (venue POSITION_RESOLUTION activities) so the
 # campaign can record the authoritative realized result of a held market
 COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py
+# second, independent settlement-evidence path (2026-11-13): public final
+# settlementPx + zero venue position + no open order + coherent ledger, used
+# ONLY when the activity history no longer reaches a market. Read-only, no
+# order path; imported by settle_held on the shutdown settlement pass.
+COPY src/pmus_settlement_public_px.py src/pmus_settlement_public_px.py
 # One-time local accounting correction for the two venue-confirmed settled
 # markets inflated by the bad venue-trade backfill. It is idempotent and
 # fail-closed; after convergence it is a no-op on every restart.

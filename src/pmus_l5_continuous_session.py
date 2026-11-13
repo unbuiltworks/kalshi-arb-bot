@@ -1080,6 +1080,57 @@ def settle_held(t, slug: str, walk=None) -> dict:
                 "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
 
 
+def _short_walk_unavailable(rep: Mapping[str, Any]) -> bool:
+    """settle_held's AUDIT_UNAVAILABLE for EXACTLY the
+    activity_walk_short_of_since case ("RuntimeError:activity_walk_...")."""
+    if not isinstance(rep, Mapping) or rep.get("status") != "AUDIT_UNAVAILABLE":
+        return False
+    from src import pmus_settlement_public_px as ppx
+    err = str(rep.get("error") or "")
+    return ppx.is_short_walk_error(err.split(":", 1)[-1])
+
+
+def public_px_fallback(t, slug: str, unavailable: Mapping[str, Any]) -> dict:
+    """The SECOND, independent settlement-evidence path (2026-11-13).
+
+    Called ONLY by the bounded shutdown settlement pass, and only when
+    settle_held came back AUDIT_UNAVAILABLE with activity_walk_short_of_since:
+    the venue's activity history no longer reaches the market, so the
+    activity path can never confirm it (LIVE since >= 2026-10-26: 96
+    September markets, -17.26 floor, R5FB refusing on
+    combined_loss_above_stop).
+
+    Settles only on ALL of: public final settlementPx exactly 0/1 on an
+    expired market, zero CURRENT venue position and no open order in it, and
+    a coherent ledger (see pmus_settlement_public_px). The result carries its
+    own provenance, is never realized_confirmed and never fills realized_usd.
+    Anything short of all of it returns `unavailable` UNCHANGED plus the
+    reason it stayed pending. Read-only; never raises."""
+    unavailable = dict(unavailable)
+    try:
+        from src import pmus_settlement_public_px as ppx
+        fb = ppx.settle_by_public_px(t, slug)
+    except Exception as exc2:                      # noqa: BLE001
+        return {**unavailable, "public_px_fallback": {
+            "settled": False, "reason": f"raised:{type(exc2).__name__}"}}
+    if not fb.get("settled"):
+        return {**unavailable, "public_px_fallback": {
+            "settled": False, "reason": fb.get("reason")}}
+    return {"status": ppx.PROVENANCE, "settled": True,
+            "settled_by": ppx.PROVENANCE,
+            # NOT venue-confirmed: realized_usd stays None so no sum that is
+            # labelled venue-confirmed can pick this market up
+            "realized_confirmed": False, "realized_usd": None,
+            "realized_derived_usd": fb.get("realized_derived_usd"),
+            "realized_source": ("DERIVED: public settlementPx x ledger net "
+                                "held qty - ledger cost; not venue-confirmed"),
+            "settlement_px": fb.get("settlement_px"),
+            "market": slug, "activity_walk_error": unavailable.get("error"),
+            "public_px_fallback": fb,
+            "ledger_rows_written": [ppx.KIND] if fb.get("ledger_row_written")
+            else []}
+
+
 def _trade_shape(trades: list) -> dict:
     """LIVE 15:41Z: the venue's trade rows for the market -- state
     histogram, the field names, side/outcome fields and qty per row -- so
@@ -1221,6 +1272,14 @@ def unsettled_slugs() -> list:
                 pass
         elif kind == "realized":
             # the venue put a number on it; realized_today() now carries it
+            settled.add(slug)
+        elif kind == "realized_derived":
+            # 2026-11-13: settled by the SECOND evidence path
+            # (pmus_settlement_public_px: public final settlementPx + zero
+            # venue position + no open order + coherent ledger), written only
+            # when the activity history can no longer reach the market.
+            # realized_today() sums it in the same transition, so its dollars
+            # leave the floor and enter the budget together -- never neither.
             settled.add(slug)
     return [s for s in filled if s not in settled]
 
@@ -1776,7 +1835,10 @@ def shutdown_settle_pass(t=None) -> dict:
         "unsettled_floor_usd": None, "combined_loss_usd": None,
         "combined_budget_usd": str(base.daily_loss_stop()),
         "budget_permits_normal_operation": None,
-        "labels": "read-only; venue-confirmed realized only; no order path"}
+        "labels": ("read-only; no order path; realized_usd is venue-"
+                   "confirmed only; realized_derived_usd (provenance "
+                   "SETTLED_BY_PUBLIC_SETTLEMENT_PX_AND_ZERO_VENUE_POSITION) "
+                   "is derived and is never venue-confirmed cash")}
     if t is None:                       # no transport, no venue read
         return {**out, "errors": ["no_transport"]}
     try:
@@ -1855,6 +1917,11 @@ def shutdown_settle_pass(t=None) -> dict:
         t0 = time.time()
         try:
             rep = settle_held(t, slug, walk=shared_walk)
+            # the second evidence path, used ONLY for the
+            # activity_walk_short_of_since case (see public_px_fallback).
+            # Same batch, same durable cursor; nothing else changes.
+            if _short_walk_unavailable(rep):
+                rep = public_px_fallback(t, slug, rep)
         except Exception as exc:        # noqa: BLE001
             # ...but if it ever does, ONE market must not take the cycle down.
             # The market stays pending -- it is NOT dropped, because a failed
@@ -1873,10 +1940,18 @@ def shutdown_settle_pass(t=None) -> dict:
                  "realized_usd": rep.get("realized_usd"),
                  "realized_source": rep.get("realized_source"),
                  "breakdown": rep.get("breakdown"),
+                 # present only for the public-px path; its own provenance,
+                 # never folded into realized_usd
+                 **({"settled_by": rep.get("settled_by"),
+                     "realized_derived_usd": rep.get("realized_derived_usd"),
+                     "settlement_px": rep.get("settlement_px")}
+                    if rep.get("realized_derived_usd") is not None else {}),
                  "elapsed_s": elapsed})
         else:
             out["still_pending"].append(
                 {"slug": slug, "status": rep.get("status"),
+                 **({"public_px_fallback": rep["public_px_fallback"]}
+                    if rep.get("public_px_fallback") else {}),
                  "elapsed_s": elapsed})
         if rep.get("status") == "AUDIT_UNAVAILABLE":
             out["errors"].append(f"{slug}:{rep.get('error')}")

@@ -204,6 +204,18 @@ def realized_today() -> D:
                     total += D(str(row["realized_usd"]))
                 except Exception:
                     continue
+            # 2026-11-13: a market settled by the SECOND evidence path
+            # (src/pmus_settlement_public_px.py) leaves unsettled_slugs on
+            # this row, so its derived result must enter the budget here in
+            # the same transition -- otherwise its dollars would be in
+            # NEITHER term of combined_loss. Only that module writes this
+            # kind; it is labelled derived, never venue-confirmed.
+            elif row.get("kind") == "realized_derived" and \
+                    str(row.get("t", "")).startswith(today):
+                try:
+                    total += D(str(row["realized_derived_usd"]))
+                except Exception:
+                    continue
     return total
 
 
