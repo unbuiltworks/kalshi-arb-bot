@@ -13,22 +13,60 @@ strategy is viable only where:
     spread  >  adverse selection
 
 - **BTC5m: 1c spread vs 4.87c adverse selection — 4.9x too small. CLOSED.**
-- **Sports: maker pairs observed quoted at 0.74 and 0.81 → a 19-26c
-  spread.** Adverse selection there is UNMEASURED. Observed depth at those
-  touches was only 1 and 3 shares, so capacity may be negligible.
+- **Sports: NOT a wide-spread venue. CORRECTED 2026-11-13 by live
+  census.** 261 active two-sided markets: spread median **1.0c**, p25 1.0c,
+  p90 2.0c, max 7.0c, and only 2 of 261 at or above 5c. The widest pair
+  available was 0.930, not 0.74. An earlier claim of "pairs at 0.74 and
+  0.81 / a 19-26c spread" is NOT supported and must not be built on.
+  **So the SPREAD argument for sports is dead, by the same arithmetic that
+  killed BTC5m.**
 
 That ratio is why seven different BTC5m levers all failed: none of them
 changed it.
 
-## First task (free, read-only, no credentials, no money)
+## The REAL argument for sports, and the first task
 
-Build a **sports spread-and-depth census** modelled on
-`analysis/l5/btc5m_accumulation/straddle_shadow.py`. Measure, per market
-per poll: spread, depth at the touch, and realized adverse selection.
-Answer two questions:
+The spread census is already done and came back negative, so do not redo
+it. What survives is a DIFFERENT and genuinely unmeasured argument, and it
+is the owner's:
 
-1. Is `spread > adverse selection` on sports?
-2. Is the depth large enough to matter, or is it 1-3 shares?
+**DURATION.** BTC5m gives you 270 seconds and you must take whatever the
+market offers. A `tec-nfl-nfceast-2027-01-10` or
+`aachc-ufc-middlew-2026-12-31` market lives for WEEKS. L5's policy is
+explicitly patient -- "COMPLETE is often delayed until pricing improves" --
+and on a 5-minute window that patience is impossible. Sports is the first
+venue where it is.
+
+**CONCURRENCY.** 261 live two-sided markets, versus one BTC5m window at a
+time. The PMUS architecture in the root CLAUDE.md is already built for this
+(full slate discovery -> screening -> HOT/WARM/COLD queue -> single-market
+execution selector).
+
+**WHY DURATION COULD RESCUE A 1c SPREAD.** Adverse selection is not a
+constant, it is a property of the timescale. BTC5m's 4.87c comes from a
+five-minute informational race: the price collapses through your bid
+because something just happened to Bitcoin and you are last to know. A
+multi-week futures market has no such structure -- a resting bid is
+plausibly filled by someone rebalancing rather than by someone who knows
+more than you. **If sports adverse selection is below 1c, a 1c spread is
+enough.**
+
+### FIRST TASK: measure sports adverse selection
+
+Not the spread -- that is settled. Replicate the BTC5m adverse-selection
+measurement (`analysis/l5/ADVERSE_SELECTION_MEASUREMENT_20261024.md`,
+which produced the 4.87c figure) on long-dated sports markets: after a
+hypothetical maker fill at the touch, how far does the price move against
+you, over minutes and over hours?
+
+The decisive comparison is:
+
+    sports adverse selection  vs  1c spread
+
+If it is under 1c, two-sided making works there and L5's patient policy
+has found its venue. If it is 4.87c like BTC5m, sports is closed too and
+the whole avenue should be reported dead -- which costs nothing to learn
+and is a real result.
 
 Validate the collector against recorded data before trusting it — see
 `shadow_crosscheck.py` for the pattern (it reproduced the BTC5m baseline
@@ -155,7 +193,13 @@ venue at this size.**
 
 ## What would make sports worth real money
 
-Spread capture of 19-26c a pair beats BTC5m's 1c by 20x+, but observed
-depth of 1-3 shares caps it. The census must report **spread x depth**, not
-spread alone. If depth is tiny, say so plainly and stop — that is a real
-result and it costs nothing.
+NOT the spread -- that is 1c, the same as BTC5m, and the census is done.
+What could make sports work is adverse selection being SMALLER on a
+multi-week market than on a 5-minute one, so that a 1c spread is finally
+enough to capture. Measure that first and report it plainly either way.
+
+Depth also still matters: report **spread x depth**, never spread alone.
+And if adverse selection on sports comes back at BTC5m levels, say so and
+stop. A negative result that costs nothing is worth more than a campaign
+that costs money and settles nothing -- which is what 2026-11-12 proved,
+twice.
