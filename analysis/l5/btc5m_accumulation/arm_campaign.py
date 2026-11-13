@@ -35,9 +35,11 @@ PMUS15 = "87f1834e-530e-4fc4-a310-91c8d3add196"
 URL = "https://backboard.railway.com/graphql/v2"
 
 #: the campaign's shape. One market at a time, `--shares` a side at 0.08.
-WINDOWS = 8
+WINDOWS = 8          # overridden by --windows
 PRICE = D("0.08")
 DAILY_LOSS = "5.00"
+#: windows whose $1 booking may still be uncorrected at any instant
+UNCORRECTED_ALLOWANCE = 4
 
 
 def shape(shares: int) -> dict:
@@ -65,6 +67,16 @@ def shape(shares: int) -> dict:
             #: check whose absence let 2026-11-13 consume 39.27 of a 40.00
             #: halt on 2.25 of actual risk.
             "phantom_worst_usd": D(shares) * WINDOWS,
+            #: ONCE VENUE ATTESTATION IS LIVE the $1 bound is transient: a
+            #: leg books at 1.00/share and is corrected to its real 0.08
+            #: about two minutes after settlement. Windows arrive every
+            #: five minutes, so only a window or two is ever uncorrected.
+            #: Four is the allowance -- lag, plus the step's correction cap.
+            #: The RAW phantom still applies when attestation is not
+            #: working, because then nothing ever corrects.
+            "attested_worst_usd": (legs * WINDOWS
+                                   + D(UNCORRECTED_ALLOWANCE) * D(shares)
+                                   * (D(1) - PRICE)),
             "real_worst_usd": legs * WINDOWS}
 
 
@@ -91,6 +103,29 @@ def logs(dep, limit=600):
     q = ("query($d:String!){ deploymentLogs(deploymentId:$d, limit:%d)"
          "{ message } }" % int(limit))
     return [x["message"] for x in gql(q, {"d": dep})["data"]["deploymentLogs"]]
+
+
+def attestation_live():
+    """Is venue cost attestation actually correcting, right now?
+
+    Returns (live, detail). Live means the block exists AND has applied
+    corrections -- a block that is present but has attested nothing is
+    NOT a reason to relax the phantom bound. This is deliberately a
+    behavioural check, not a config check: the whole defect it guards
+    against was a figure that looked fine and was not.
+    """
+    dep, _ = latest_deployment(PMUS15)
+    hb = [m for m in logs(dep, 400) if m.startswith("L5_LIVE_HB")]
+    if not hb:
+        return False, "no heartbeat"
+    va = json.loads(hb[-1].split(" ", 1)[1]).get("venue_cost_attestation")
+    if not isinstance(va, dict):
+        return False, "no venue_cost_attestation block"
+    applied = va.get("corrections_applied") or 0
+    stuck = (va.get("still_upper_bound") or {}).get("pending") or 0
+    if int(applied) <= 0:
+        return False, "block present but 0 corrections applied"
+    return True, "applied %s, %s still pending" % (applied, stuck)
 
 
 def account_risk():
@@ -127,6 +162,9 @@ def main(argv):
     shares = 5
     if "--shares" in argv:
         shares = int(argv[argv.index("--shares") + 1])
+    if "--windows" in argv:
+        global WINDOWS
+        WINDOWS = int(argv[argv.index("--windows") + 1])
     sh = shape(shares)
     print("shape: %d share(s) a side at %s -> clip %s, approval exposure %s"
           % (sh["shares"], PRICE, sh["clip_usd"], sh["exposure"]))
@@ -155,15 +193,20 @@ def main(argv):
                       % (room, need))
     # AND the phantom booking has to fit, or the account-wide DAILY HALT
     # trips partway through and stops every lane, not just this one.
-    if sh["phantom_worst_usd"] > room:
+    live, detail = attestation_live()
+    print("venue cost attestation: %s (%s)"
+          % ("LIVE" if live else "NOT LIVE", detail))
+    booked = sh["attested_worst_usd"] if live else sh["phantom_worst_usd"]
+    print("  booked worst case used: %s" % booked)
+    if booked > room:
         fits = int(room / D(sh["shares"])) if sh["shares"] else 0
         return refuse(
-            "the LEDGER would book up to %s (at $1.00/share) against %s of "
+            "the LEDGER would book up to %s against %s of "
             "room, so the account-wide daily halt would trip after about %d "
             "window(s) and stop every lane. Real risk is only %s. Either run "
             "%d share(s) a side, or fix the cost basis "
             "(COST_BASIS_OVERSTATEMENT.md)."
-            % (sh["phantom_worst_usd"], room, fits, sh["real_worst_usd"],
+            % (booked, room, fits, sh["real_worst_usd"],
                max(1, int(room / WINDOWS)) if room >= WINDOWS else 1))
 
     # 3. account exposure headroom. Foreign contracts are charged at $1.00
