@@ -332,7 +332,10 @@ def lifecycle_aware_verdict(
 # leg d ticks behind its own touch gives 1 - spread - 2*d*tick.
 
 def touch_pair(bids: Any, asks: Any) -> Optional[D]:
-    b, a = _levels(bids), _levels(asks)
+    # Ignore zero-size tombstones: they cannot establish executable touch
+    # prices, and must not manufacture favorable pair economics.
+    b = [(px, sz) for px, sz in _levels(bids) if sz > 0]
+    a = [(px, sz) for px, sz in _levels(asks) if sz > 0]
     if not b or not a:
         return None
     bb, ba = max(px for px, _ in b), min(px for px, _ in a)
