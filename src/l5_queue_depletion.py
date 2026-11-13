@@ -258,6 +258,68 @@ def _own_level_size(side: str, own_px: D,
     return sum((sz for px, sz in book if px == w), D(0))
 
 
+
+def lifecycle_aware_verdict(
+    side: str,
+    own_px: Any,
+    frames: Sequence[Mapping[str, Any]],
+    *,
+    start: int = 0,
+    end: Optional[int] = None,
+    lifecycle: Sequence[Mapping[str, Any]] = (),
+) -> Dict[str, Any]:
+    """Bound book evidence to an authenticated resting-order interval.
+
+    Frame indices in lifecycle events refer to the same ordered snapshots as
+    `frames`. An ACK alone does not establish that an order was resting.
+    Missing/contradictory lifecycle evidence fails closed. This is a research
+    replay helper, never an order submission or a venue fill assertion.
+    """
+    if not frames or start < 0 or start >= len(frames):
+        return {"verdict": None, "reason": "NO_FRAMES"}
+    stop = len(frames) if end is None else end
+    if not isinstance(stop, int) or stop <= start or stop > len(frames):
+        return {"verdict": None, "reason": "INVALID_END"}
+    if not lifecycle:
+        return {"verdict": None, "reason": "LIFECYCLE_UNATTESTED"}
+    resting_at = None
+    terminal_at = None
+    last_at = -1
+    for event in lifecycle:
+        if not isinstance(event, Mapping):
+            return {"verdict": None, "reason": "LIFECYCLE_UNREADABLE"}
+        at = event.get("frame")
+        state = event.get("state")
+        if not isinstance(at, int) or at < 0 or at >= len(frames) or at < last_at:
+            return {"verdict": None, "reason": "LIFECYCLE_UNORDERED"}
+        last_at = at
+        if state == "RESTING":
+            if resting_at is not None or terminal_at is not None:
+                return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+            resting_at = at
+        elif state in ("CANCELED", "EXPIRED", "REJECTED", "FILLED"):
+            if terminal_at is not None:
+                return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+            terminal_at = at
+        elif state not in ("ACK", "PARTIAL_FILL"):
+            return {"verdict": None, "reason": "LIFECYCLE_UNKNOWN_STATE"}
+        if state == "PARTIAL_FILL" and (resting_at is None or terminal_at is not None):
+            return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+    if resting_at is None or resting_at > start:
+        return {"verdict": None, "reason": "RESTING_NOT_AT_JOIN"}
+    if terminal_at is not None:
+        stop = min(stop, terminal_at)
+    if stop <= start + 1:
+        return {"verdict": None, "reason": "NO_ELIGIBLE_OBSERVATION"}
+    result = fill_verdict(side, own_px, frames[:stop], start=start)
+    result["eligible_end_exclusive"] = stop
+    result["lifecycle_attested"] = True
+    result["venue_fill_confirmed"] = False
+    result["book_only"] = True
+    return result
+
+
+
 # ======================================================= PAIR ECONOMICS
 #
 # The identity that makes the depth choice an economic one rather than a
