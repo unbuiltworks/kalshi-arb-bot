@@ -573,6 +573,53 @@ def arm_through_boundary(session: "Session") -> Dict[str, Any]:
     return {"claim": claim}
 
 
+# ------------------------------------------------------ budget reach
+
+def budget_reach(n_windows: int, orders_per_window: int) -> Dict[str, Any]:
+    """How many approved windows the OPEN budget can actually pay for.
+
+    These two numbers are set in different places and nothing compared
+    them. Tonight they disagreed in silence: an approval enumerated 8
+    windows, the ladder spent 8 OPEN submissions a window, and
+    `L5_LIVE_AUTH_MAX_OPEN` was 48 -- sized long ago for a one-entry pair
+    strategy that spent two. Windows 1-6 traded, window 7 was refused for
+    an exhausted budget, and the campaign reported 8 approved windows
+    throughout. The operator had no way to see it coming.
+
+    This WIDENS NOTHING and refuses nothing: the budget stays the binding
+    control and an exhausted one still stops every submission. It only
+    says, before the first window, which window will be the last -- so a
+    short campaign is a stated fact rather than a surprise at window 7.
+    """
+    out: Dict[str, Any] = {
+        "open_budget": None, "orders_per_window": int(orders_per_window),
+        "windows_approved": int(n_windows), "windows_payable": None,
+        "short_by": None, "last_payable_window": None, "ok": None,
+        "why": None}
+    try:
+        cap = AUTH.max_of_class("OPEN")
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["why"] = "UNREADABLE:%s" % type(exc).__name__
+        return out
+    out["open_budget"] = cap
+    if cap is None:
+        #: unconfigured is not a shortfall -- the class simply does not bind
+        out["why"] = "OPEN_BUDGET_NOT_CONFIGURED"
+        return out
+    per = max(1, int(orders_per_window))
+    payable = int(cap) // per
+    out["windows_payable"] = payable
+    out["ok"] = payable >= int(n_windows)
+    if not out["ok"]:
+        out["short_by"] = int(n_windows) - payable
+        out["last_payable_window"] = payable
+        out["why"] = ("OPEN_BUDGET_COVERS_%d_OF_%d_WINDOWS"
+                      % (payable, int(n_windows)))
+    return out
+
+
 # ------------------------------------------------- settlement recovery
 
 def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]:
@@ -1259,7 +1306,14 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 "max_windows": got["max_windows"] or 1,
                 "source": "OWNER_APPROVAL_WINDOW_STARTS",
                 "why": got["why"]}
-    emit("L5_BTC5M_PLAN", dict(plan, utc=dt.datetime.now(UTC).isoformat()))
+    # WILL THE BUDGET REACH THE LAST APPROVED WINDOW? Stated here,
+    # before the first one, rather than discovered at window 7.
+    reach = budget_reach(len(plan["markets"]) or 1,
+                         X.live_order_bound())
+    emit("L5_BTC5M_PLAN", dict(plan, budget_reach=reach,
+                               utc=dt.datetime.now(UTC).isoformat()))
+    if reach.get("ok") is False:
+        emit("L5_BTC5M_BUDGET_SHORT", reach)
 
     if not plan["markets"]:
         emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED",
