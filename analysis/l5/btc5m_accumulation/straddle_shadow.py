@@ -136,12 +136,21 @@ def own_price(side, bid, ask):
     return bid if side == UP else D(1) - ask
 
 
-def run_window(ws, price, verbose=False):
+def watch_window(ws, price, verbose=False):
     """Watch ONE window. Returns the single summary row, or None."""
     slug = slug_for(ws)
     filled = {}
-    polls = reads = 0
+    polls = reads = rate_limited = 0
     deepest = {UP: None, DOWN: None}
+    #: READ DENSITY IS A DATA-QUALITY SIGNAL, not a curiosity. The tape the
+    #: fill rule was validated on samples every ~2s; a gap of 10s can hide
+    #: a brief dip to the resting price entirely, which UNDER-counts fills.
+    #: That bias is conservative -- it cannot manufacture an edge -- but a
+    #: sparse window is weaker evidence than a dense one, so the gap is
+    #: reported and a window can be filtered on it later rather than
+    #: silently averaged in.
+    last_read = None
+    max_gap = 0.0
     stop_at = ws + dt.timedelta(seconds=WINDOW_S - CANCEL_LEAD_S)
 
     while dt.datetime.now(UTC) < stop_at:
@@ -149,6 +158,7 @@ def run_window(ws, price, verbose=False):
         try:
             bid, ask, state, _px = bbo(slug)
         except RateLimited:
+            rate_limited += 1
             time.sleep(POLL_S * 4)          # the venue asked us to slow down
             continue
         except Exception:                                      # noqa: BLE001
@@ -156,6 +166,10 @@ def run_window(ws, price, verbose=False):
             continue
         if bid is not None and ask is not None:
             reads += 1
+            nowt = dt.datetime.now(UTC)
+            if last_read is not None:
+                max_gap = max(max_gap, (nowt - last_read).total_seconds())
+            last_read = nowt
             for side in (UP, DOWN):
                 p = own_price(side, bid, ask)
                 if p is None:
@@ -171,34 +185,41 @@ def run_window(ws, price, verbose=False):
                               "own_price": str(p)})
         time.sleep(POLL_S)
 
-    #: the venue's own settlement, polled until terminal or we give up
-    won = px = None
-    deadline = dt.datetime.now(UTC) + dt.timedelta(seconds=180)
-    while dt.datetime.now(UTC) < deadline:
-        try:
-            _b, _a, state, px = bbo(slug)
-        except RateLimited:
-            time.sleep(20.0)
-            continue
-        except Exception:                                      # noqa: BLE001
-            time.sleep(5.0)
-            continue
-        if px is not None and px in (D(0), D(1)):
-            won = UP if px == D(1) else DOWN
-            break
-        time.sleep(5.0)
+    #: SETTLEMENT IS NOT WAITED FOR HERE. Blocking on it cost us every
+    #: other window: the venue can take minutes to publish settlementPx,
+    #: and by the time it did the next window had already opened. Observed
+    #: 2026-11-13 -- a two-window run captured 0110z and 0120z and skipped
+    #: 0115z entirely, which over a day is 144 windows instead of 288 and
+    #: doubles the time to a verdict. So this returns the OBSERVATION and
+    #: the caller settles it later, out of band.
+    return {"slug": slug, "ws": ws, "price": price, "filled": filled,
+            "deepest": deepest, "polls": polls, "reads": reads,
+            "rate_limited": rate_limited, "max_gap": max_gap}
 
-    if won is None:
-        emit(TAG + "_UNRESOLVED", {"market": slug, "polls": polls,
-                                   "reads": reads,
-                                   "note": "no binary settlementPx seen"})
+
+def try_settle(slug):
+    """ONE attempt at the venue's own settlement. None = not yet."""
+    try:
+        _b, _a, _state, px = bbo(slug, retries=0)
+    except Exception:                                          # noqa: BLE001
         return None
+    if px is not None and px in (D(0), D(1)):
+        return UP if px == D(1) else DOWN
+    return None
 
+
+def finish(obs, won):
+    """Turn a settled observation into the single summary row."""
+    ws, price, filled = obs["ws"], obs["price"], obs["filled"]
+    deepest, slug = obs["deepest"], obs["slug"]
+    reads, max_gap = obs["reads"], obs["max_gap"]
     #: linear in legs. No pairing arithmetic needed, and none assumed.
     pnl = D(0)
     for side in filled:
         pnl += (D(1) if side == won else D(0)) - price
     case = {2: "BOTH", 1: "ONE", 0: "NONE"}[len(filled)]
+    polls = obs["polls"]
+    rate_limited = obs["rate_limited"]
     row = {"market": slug, "window_start": ws.isoformat(),
            "price": str(price), "case": case,
            "up_t": filled.get(UP), "down_t": filled.get(DOWN),
@@ -207,11 +228,50 @@ def run_window(ws, price, verbose=False):
            "deepest_down": (str(deepest[DOWN])
                             if deepest[DOWN] is not None else None),
            "polls": polls, "reads": reads,
+           "rate_limited": rate_limited,
+           "max_read_gap_s": round(max_gap, 1),
+           "mean_read_gap_s": (round((WINDOW_S - CANCEL_LEAD_S) / reads, 1)
+                               if reads else None),
            "labels": "SHADOW. no order was placed. pnl_per_share is "
                      "settlement arithmetic on hypothetical fills, per "
                      "share a side, and is NOT realized anything."}
     emit(TAG, row)
     return row
+
+
+#: how long to keep asking the venue about a closed window before giving up
+SETTLE_PATIENCE_S = 1800.0
+
+
+def drain(pending, until=None):
+    """Try to settle each closed window once. Returns what is still open.
+
+    Costs one GET per pending window per sweep, so the backlog clears
+    without ever delaying the NEXT window -- which is the whole point of
+    separating this from `watch_window`. `until` stops the sweep early so
+    the pre-window wait is never overrun.
+    """
+    still = []
+    for obs in pending:
+        if until is not None and dt.datetime.now(UTC) >= until:
+            still.append(obs)
+            continue
+        won = try_settle(obs["slug"])
+        if won is not None:
+            finish(obs, won)
+            continue
+        age = (dt.datetime.now(UTC) - obs["ws"]).total_seconds()
+        if age > SETTLE_PATIENCE_S:
+            #: a window the venue never settled is reported as such, never
+            #: guessed from a quote -- an unknown outcome contributes
+            #: nothing to the edge and must not be inferred.
+            emit(TAG + "_UNRESOLVED",
+                 {"market": obs["slug"], "reads": obs["reads"],
+                  "age_s": round(age, 0),
+                  "note": "no binary settlementPx within patience"})
+            continue
+        still.append(obs)
+    return still
 
 
 def tally(path):
@@ -236,6 +296,19 @@ def tally(path):
     t = (m / se) if se else 0.0
     both = sum(1 for r in rows if r["case"] == "BOTH")
     one = sum(1 for r in rows if r["case"] == "ONE")
+    #: data quality first. A window sampled every 10s can miss a brief dip
+    #: to the resting price, which UNDER-counts fills -- conservative, but
+    #: it makes the window weaker evidence, so say so before the figures.
+    gaps = [r.get("max_read_gap_s") for r in rows
+            if isinstance(r.get("max_read_gap_s"), (int, float))]
+    if gaps:
+        sparse = sum(1 for g in gaps if g > 10.0)
+        print("read gaps: median %.1fs   worst %.1fs   windows over 10s: "
+              "%d of %d" % (statistics.median(gaps), max(gaps), sparse,
+                            len(gaps)))
+        if sparse:
+            print("  (a sparse window can miss a brief dip to the price, so "
+                  "fills are under-counted there, never over-counted)")
     print("windows %d   BOTH %d (%.1f%%)   ONE %d (%.1f%%)   NONE %d"
           % (n, both, 100 * both / n, one, 100 * one / n, n - both - one))
     print("net %+.2f c/w a share   se %.2f   t %+.2f" % (100 * m, 100 * se, t))
@@ -274,6 +347,7 @@ def main():
                           "windows": a.windows or "forever",
                           "provenance": "public gateway, GET only, no "
                                         "credentials, no order path"})
+    pending = []
     done = 0
     while a.windows == 0 or done < a.windows:
         now = dt.datetime.now(UTC)
@@ -281,9 +355,27 @@ def main():
         #: only start a window we can see most of
         if (now - ws).total_seconds() > 30.0:
             ws = ws + dt.timedelta(seconds=WINDOW_S)
-            time.sleep(max(1.0, (ws - dt.datetime.now(UTC)).total_seconds()))
-        run_window(ws, price, verbose=a.verbose)
-        done += 1
+            #: the wait before the next window is the natural moment to
+            #: clear the settlement backlog, so it costs no coverage.
+            pending = drain(pending, until=ws)
+            left = (ws - dt.datetime.now(UTC)).total_seconds()
+            if left > 0:
+                time.sleep(left)
+        obs = watch_window(ws, price, verbose=a.verbose)
+        if obs is not None:
+            pending.append(obs)
+            done += 1
+        pending = drain(pending)
+    #: one last sweep so a bounded run does not exit holding observations
+    deadline = dt.datetime.now(UTC) + dt.timedelta(seconds=240)
+    while pending and dt.datetime.now(UTC) < deadline:
+        pending = drain(pending)
+        if pending:
+            time.sleep(10.0)
+    for obs in pending:
+        emit(TAG + "_UNRESOLVED",
+             {"market": obs["slug"], "reads": obs["reads"],
+              "note": "no binary settlementPx seen before giving up"})
     return 0
 
 
