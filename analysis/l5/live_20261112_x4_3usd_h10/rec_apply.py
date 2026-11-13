@@ -51,7 +51,7 @@ pre = {"sha": dep.get("commitHash") == SHA, "dep_ok": dep.get("status") == "SUCC
        "recorder_durable": L._get(hb, "fill_calibration.readback.readable") is True,
        "residual_cap": cur.get("PMUS_RESIDUAL_CAP_K") == "2",   # owner 16:07Z: K=2
        # starting state = the 19:30Z batch as written (approval expired at 20:45Z); only approval/market/id/halt change now
-       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in list(TEST_ON) + [k for k in TIGHTEN if k != "L5_DAILY_REALIZED_LOSS_HALT_USD"]),
+       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in list(TEST_ON) + [k for k in TIGHTEN if k not in ("L5_DAILY_REALIZED_LOSS_HALT_USD", "L5_MAX_CUMULATIVE_LOSS_USD")]),
        # runtime refuses CAMPAIGN_LIMITS_WIDER_THAN_APPROVED unless running halt <= approved daily loss (code cap 5)
        "daily_halt_written_fits_approval": D(TIGHTEN["L5_DAILY_REALIZED_LOSS_HALT_USD"]) <= D(doc["max_daily_loss_usd"]),
        "opening_leg_one_contract": cur.get("L5_TS_OPENING_LEG_MAX_CONTRACTS") == "1",
@@ -64,8 +64,9 @@ pre = {"sha": dep.get("commitHash") == SHA, "dep_ok": dep.get("status") == "SUCC
        "owner": cur.get("L5_WINDOW_STRATEGY") == "TWO_SIDED", "fidelity_off": not cur.get("L5_FIDELITY_MODE"),
        "forced_side_off": not cur.get("L5_PROVISIONAL_FORCED_SIDE"),
        "day_room": (hb.get("day_realized") or {}).get("would_halt") is False,
+       "day_room_under_written_halt": D(TIGHTEN["L5_DAILY_REALIZED_LOSS_HALT_USD"]) + D(str((hb.get("day_realized") or {}).get("utc_day_realized_usd"))) > D(BUDGET),
        "lifetime_limit_set": D(cur.get("L5_MAX_CUMULATIVE_LOSS_USD") or "0") >= D("25.00"),
-       "campaign_fits_lifetime_room": (D(cur.get("L5_MAX_CUMULATIVE_LOSS_USD") or "0") + D(str((hb.get("day_realized") or {}).get("all_time_realized_usd"))) - D(BUDGET)) > D("1.00"),
+       "campaign_fits_lifetime_room": (D(TIGHTEN["L5_MAX_CUMULATIVE_LOSS_USD"]) + D(str((hb.get("day_realized") or {}).get("all_time_realized_usd"))) - D(BUDGET)) > D("1.00"),
        "venue_lists_the_market": vm.get("slug") == SLUG and str(vm.get("gameStartTime")) == A.strftime("%Y-%m-%dT%H:%M:%SZ"),
        "watchdog_fresh": wd["age_s"] < 90 and wd["cancel_enabled"] is True and not wd["read_error"] and wd["open_orders"] in (0, [], None) and not wd["emergency_cancel"]}
 print("PRE", hb.get("utc"), json.dumps(pre)); print("WATCHDOG", json.dumps(wd))

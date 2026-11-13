@@ -30,7 +30,7 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            "L5_TS_COMPLETION_CROSS": "YES", "L5_TAKER_COMPLETION_POLICY": "YES",
            # owner 16:31Z "deploy 234": the single continuous inventory controller drives this window
            "L5_TS_CONTINUOUS_INVENTORY": "YES"}
-TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "50.00",   # owner 19:1xZ "lifetime $50" (persistent; not restored)
+TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "75.00",   # owner 2026-11-13 04:0xZ "$75 (Recommended)" after BTC5m 0035z -28.12 (was 50, owner 11-12)
            "L5_DAILY_REALIZED_LOSS_HALT_USD": "10.00",   # owner 22:4xZ "Write $10 in arm write" (another session had set 50)
            "L5_MAX_TOTAL_EXPOSURE_USD": "3.00", "L5_MAX_CASH_DEPLOYED_USD": "2.70", "L5_MAX_WORST_CASE_DEFICIT_USD": "3.00", "L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "96", "L5_LIVE_AUTH_MAX_COMPLETE": "192", "L5_LIVE_AUTH_MAX_REPLACE": "240", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "560"}
