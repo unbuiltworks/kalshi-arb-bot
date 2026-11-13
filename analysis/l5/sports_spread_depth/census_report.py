@@ -318,6 +318,60 @@ def pair_simulation(per: dict, horizon: int = PAIR_HORIZON) -> dict:
             "by_spread": {k: dict(v) for k, v in spread_at_entry.items()}}
 
 
+def controls(per: dict) -> dict:
+    """Is the adverse-selection figure information, or volatility wearing a
+    sign? Two controls, because a signed conditional mean is exactly the
+    kind of statistic that looks like a finding when it is an artefact.
+
+    MIRROR. Signing by the opposite leg must give the exact negative. If it
+    does not, the attribution step is contributing a drift of its own.
+
+    TRADED vs UNTRADED absolute move. Adverse selection predicts the mid
+    moves MORE across intervals where someone traded than across quiet
+    ones. If the two were equal, conditioning on a trade would be telling
+    us nothing and the signed mean would be ordinary volatility that the
+    sign convention had tidied up.
+    """
+    signed, mirror, hit_abs, quiet_abs = [], [], [], []
+    for _slug, rows in per.items():
+        for i in range(len(rows) - 1):
+            r, x = rows[i], rows[i + 1]
+            if not two_sided(r) or not two_sided(x):
+                continue
+            if r.get("shares_traded") is None or x.get("shares_traded") is None:
+                continue
+            dv = x["shares_traded"] - r["shares_traded"]
+            m0, m1 = mid(r), mid(x)
+            if dv <= 0:
+                quiet_abs.append(abs(m1 - m0))
+                continue
+            px = x.get("last_trade_px")
+            if px is None:
+                continue
+            hit = px <= r["bid"] + 1e-9
+            lift = px >= r["ask"] - 1e-9
+            if not hit and not lift:
+                continue
+            hit_abs.append(abs(m1 - m0))
+            d = (m0 - m1) if hit else (m1 - m0)
+            signed.append(d)
+            mirror.append(-d)
+
+    def agg(v):
+        if not v:
+            return None
+        m = statistics.fmean(v)
+        se = (statistics.stdev(v) / math.sqrt(len(v))) if len(v) > 1 else 0.0
+        return {"mean_c": round(100 * m, 3), "se_c": round(100 * se, 3),
+                "n": len(v), "t": round(m / se, 2) if se else None}
+    out = {"signed": agg(signed), "mirror": agg(mirror),
+           "abs_traded": agg(hit_abs), "abs_quiet": agg(quiet_abs)}
+    if hit_abs and quiet_abs:
+        out["abs_ratio_traded_over_quiet"] = round(
+            statistics.fmean(hit_abs) / statistics.fmean(quiet_abs), 2)
+    return out
+
+
 def report(tape: str) -> int:
     d = load(tape)
     per = d["per"]
@@ -438,6 +492,25 @@ def report(tape: str) -> int:
               % (name, p_both, 100 * cell["med_spread"], p_one, asel, net,
                  "--" if size is None else "%.0f" % size,
                  "--" if size is None else "$%+.4f" % (net * size / 100.0)))
+    print()
+    c = controls(per)
+    print("CONTROLS on the adverse-selection figure")
+    for key, label in (("signed", "signed by the leg we were filled on"),
+                       ("mirror", "signed by the OPPOSITE leg (mirror)"),
+                       ("abs_traded", "|mid move|, intervals WITH a trade"),
+                       ("abs_quiet", "|mid move|, intervals with NO trade")):
+        v = c.get(key)
+        if v is None:
+            print("  %-36s n=0" % label)
+            continue
+        print("  %-36s %+7.3f c  se %.3f  n %4d  t %s"
+              % (label, v["mean_c"], v["se_c"], v["n"],
+                 "--" if v["t"] is None else "%+.2f" % v["t"]))
+    if c.get("abs_ratio_traded_over_quiet") is not None:
+        print("  traded intervals move %.2fx as far as quiet ones."
+              % c["abs_ratio_traded_over_quiet"])
+        print("  Were that ratio 1.0, the signed figure above would be")
+        print("  ordinary volatility wearing a sign rather than information.")
     print()
     print("  the adverse-selection term is the pooled tau=1 figure, not a")
     print("  per-bucket one: there are too few queue-cleared fills in any")
