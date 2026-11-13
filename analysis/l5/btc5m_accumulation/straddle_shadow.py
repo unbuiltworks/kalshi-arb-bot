@@ -186,6 +186,20 @@ def watch_window(ws, price, verbose=False):
     traded = {UP: D(0), DOWN: D(0)}
     touch_shares = {UP: None, DOWN: None}
     last_vol = None
+    #: THE COMPLETION CURVE, captured in the same pass. A pair does not need
+    #: to cost 2x the entry -- it needs to cost under 1.00 -- so once one
+    #: leg fills, the other can be bought far higher and still lock profit.
+    #: On the recorded tape, completing at 0.20 instead of 0.08 raised the
+    #: pair rate from 10.2% to 12.8% at the same net, with lower variance
+    #: and much better out-of-sample stability. That finding came from 14
+    #: arms on ONE tape and badly needs fresh data.
+    #:
+    #: Recording the opposite side's DEEPEST price AFTER the first fill is
+    #: all that is needed: offline, a pair forms at completion price c iff
+    #: that value is <= c. One number tests every completion price, so the
+    #: whole curve comes free with the same windows.
+    first_fill = None               # (side, t) of whichever filled first
+    opp_deepest_after = None        # other side's low after that moment
     stop_at = ws + dt.timedelta(seconds=WINDOW_S - CANCEL_LEAD_S)
 
     while dt.datetime.now(UTC) < stop_at:
@@ -205,6 +219,13 @@ def watch_window(ws, price, verbose=False):
             if last_read is not None:
                 max_gap = max(max_gap, (nowt - last_read).total_seconds())
             last_read = nowt
+            #: track the opposite side's low once one leg has filled
+            if first_fill is not None:
+                opp = DOWN if first_fill[0] == UP else UP
+                op = own_price(opp, bid, ask)
+                if op is not None and (opp_deepest_after is None
+                                       or op < opp_deepest_after):
+                    opp_deepest_after = op
             dvol = D(0)
             if vol is not None:
                 if last_vol is not None and vol >= last_vol:
@@ -227,6 +248,8 @@ def watch_window(ws, price, verbose=False):
                 if side not in filled and p <= price:
                     t = (dt.datetime.now(UTC) - ws).total_seconds()
                     filled[side] = round(t, 1)
+                    if first_fill is None:
+                        first_fill = (side, round(t, 1))
                     if verbose:
                         emit(TAG + "_FILL",
                              {"market": slug, "side": side, "t": filled[side],
@@ -250,7 +273,9 @@ def watch_window(ws, price, verbose=False):
     return {"slug": slug, "ws": ws, "price": price, "filled": filled,
             "deepest": deepest, "polls": polls, "reads": reads,
             "rate_limited": rate_limited, "max_gap": max_gap,
-            "traded": traded, "touch_shares": touch_shares}
+            "traded": traded, "touch_shares": touch_shares,
+            "first_fill": first_fill,
+            "opp_deepest_after": opp_deepest_after}
 
 
 def try_settle(slug):
@@ -294,6 +319,13 @@ def finish(obs, won):
            "deepest_up": str(deepest[UP]) if deepest[UP] is not None else None,
            "deepest_down": (str(deepest[DOWN])
                             if deepest[DOWN] is not None else None),
+           "first_fill_side": (obs["first_fill"][0]
+                               if obs["first_fill"] else None),
+           "first_fill_t": (obs["first_fill"][1]
+                            if obs["first_fill"] else None),
+           "opp_deepest_after_first": (str(obs["opp_deepest_after"])
+                                       if obs["opp_deepest_after"] is not None
+                                       else None),
            "vol_while_fillable_up": str(obs["traded"][UP]),
            "vol_while_fillable_down": str(obs["traded"][DOWN]),
            "min_touch_shares_up": (str(obs["touch_shares"][UP])
