@@ -109,6 +109,50 @@ to the decimal place on 187 windows).
 - A small-sample campaign cannot settle a small edge: at a 10.2% hit rate,
   40% of 8-window campaigns contain no win at all.
 
+## Is this L5 replication? NO — and knowing why matters
+
+Measured from L5's own public activity (`data/l5/raw/sep/l5_sep23_25.json`,
+`data/l5/recent/l5_activity_*.json`, wallet 0xb945...):
+
+- **L5 never traded sports.** Zero of ~12,500 rows across two samples:
+  98.3% BTC, 1.7% ETH, all `btc-updown-5m-*` / `btc-updown-15m-*`.
+- **L5's income is MAKER REBATES, not trading edge.** 2.66 days of
+  activity: 2,066 trades/day, $25,182/day of notional bought, median clip
+  $5.05 — and **MAKER_REBATE $1,066/day, which is 4.23% of notional.**
+  That rebate alone is 2.2x the entire $480/day target. The spread/
+  settlement edge is a side-show next to it.
+- **L5 turns over 74x our whole account every day.**
+
+**PMUS cannot reproduce those economics at any size we can reach.** Per
+`PMUS_INCENTIVE_BREAKEVEN.md`, derived from 25 actual credits:
+
+    credit = round_half_even(0.0125 x qty x p x (1-p), cent)
+    -> 0.74% of notional, versus L5's 4.23%: 5.7x stingier
+    -> pays $0.00 below $0.005 raw, so our small prints earn NOTHING
+    -> scales with p(1-p), MAXIMISED at 0.50 and 3.4x smaller at 0.08
+
+and that last point is a trap: the rebate is largest exactly where the
+trade loses most. Combining the measured settlement P&L with an unrounded,
+generously-counted rebate:
+
+| price | settle c/w | rebate c/w | total c/w |
+|---|---|---|---|
+| 0.08 | +3.74 | +0.18 | **+3.92** |
+| 0.20 | +0.75 | +0.40 | +1.15 |
+| 0.40 | -5.03 | +0.60 | -4.43 |
+| 0.49 | -10.27 | +0.62 | -9.65 |
+
+The rebate is under 1 c/w a share at EVERY price. It cannot pay for a -5 to
+-10 c/w loss, and at our sizes it rounds to zero anyway. Crypto rewards on
+PMUS are expired outright (21 of 21 families, `rates: null`).
+
+**So: pursue sports for the SPREAD, which is a real and independent
+argument (19-26c versus 1c). Do NOT pursue it believing it recovers L5's
+rebate economics — it does not, and that false premise would be expensive.
+L5's POLICY (patient two-sided maker inventory, delayed completion) is
+market-agnostic and transfers fine; L5's INCOME does not transfer to this
+venue at this size.**
+
 ## What would make sports worth real money
 
 Spread capture of 19-26c a pair beats BTC5m's 1c by 20x+, but observed
