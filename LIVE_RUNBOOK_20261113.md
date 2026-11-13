@@ -101,3 +101,67 @@ outcome and means nothing either way. Settling the edge needs ~300 windows.
 unproven) and NEGATIVE at the live shadow's observed 2.8% pair rate. Every
 dollar it has ever made came from pair windows -- 2 of 5 in the +$6.29 run.
 If no pair lands in these 8, expect about -$3.20.
+
+---
+
+# CORRECTION, written 2026-11-13 15:1xZ from the live run
+
+Two numbers above were wrong. Both were written from memory rather than
+read from the system, and both were checked against source before acting.
+
+## 1. The $55 raise was never needed
+
+Step 1 above says to raise `L5_MAX_L5_CUMULATIVE_LOSS_USD` to 55 because
+`loss_room_usd` was `-1.18` against a $50 ceiling. **The ceiling was
+actually 20, and the gate already passes.**
+
+Verified without risking money: the campaign was set with
+`L5_SHADOW_ONLY=1` and no arm token, which the authorization layer reports
+as `SHADOW_ONLY_LOCK: submit() is structurally blocked; arming would
+change nothing`. `Session.gates()` calls `risk_fn` on EVERY step and emits
+`L5_BTC5M_BLOCKED` (never `L5_BTC5M_STEP`) when it refuses. The probe
+produced **20 STEP records and 0 BLOCKED records**, so
+`loss_room_usd >= exposure_ceiling()`, which is
+`min(adapter ceiling, approved 1.00) = 1.00`.
+
+Do not raise a limit to clear a refusal you have not actually observed.
+
+## 2. The raise would have restarted the live BTC15m trader
+
+The runbook says to set it on "the service `L5_ACCOUNT_RISK_URL` points
+at". That is `l5-pmus-live` -- which is **the live BTC15m trader**: 1078
+references to `cpc-btc-updown-15m-*` against 210 to 5m, 31
+`L5_LIVE_DECISION` records, and at the time it held an open residual
+position (1.00 UP @ 0.4500 basis, matched 2.51) having just cleared an
+order-state uncertainty at 14:54:59.
+
+Raising the ceiling there is not a BTC5m-local change: it restarts a
+money-capable service mid-position and raises the account-wide limit for
+the 15m lane too. It belongs to the BTC15m session, not this one.
+
+## 3. The real blocker is the ACCOUNT EXPOSURE CAP, not loss room
+
+Armed at 15:10z the straddle placed **nothing**, refusing every leg:
+
+```
+account:  other_position_contracts 15,  other_usd "15.00",  own_usd "0"
+L5_ACCOUNT_MAX_EXPOSURE_USD = 8.00
+refused x28: ACCOUNT_EXPOSURE_CAP
+```
+
+Another lane already holds $15.00 against the $8.00 account-wide cap. Our
+own usage is zero. For a $0.80 straddle to fit, other-exposure must fall
+to $7.20.
+
+This is the shared cap working correctly. It is a DIFFERENT limit from the
+cumulative-loss ceiling the owner raised, and it is account-wide across
+every lane, so it is not ours to raise alone. Owner's call 2026-11-13:
+**leave armed, change no limit** -- it trades only if the 15m lane settles
+and frees room, and otherwise costs nothing.
+
+## What to check first next time
+
+Read `account.other_usd` against `L5_ACCOUNT_MAX_EXPOSURE_USD` BEFORE
+arming. In shadow that block reads all-null, so the shadow probe cannot
+see this refusal; only an armed step can. That asymmetry is why the
+campaign looked clean in shadow and placed nothing live.
