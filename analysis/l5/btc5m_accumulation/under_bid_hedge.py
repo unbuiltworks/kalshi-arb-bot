@@ -55,7 +55,7 @@ BAND_LO, BAND_HI = D("0.51"), D("0.90")
 OTHER = {C.UP: C.DOWN, C.DOWN: C.UP}
 
 
-def walk(rows, follow, hedge):
+def walk(rows, follow, hedge, under=UNDER):
     """hedge: None | 'touch' | a Decimal price on the unfavoured side."""
     won = outcome(rows)                            # noqa: F821
     if won is None:
@@ -87,7 +87,7 @@ def walk(rows, follow, hedge):
                         fav = C.UP if px[C.UP] >= px[C.DOWN] else C.DOWN
                         b = px[fav]
                         if BAND_LO <= b <= BAND_HI:
-                            want = b - UNDER
+                            want = b - under
                             if resting is None or follow:
                                 resting = (fav, want)
                         elif follow:
@@ -127,23 +127,27 @@ def stats(v):
 
 def run(w, slugs, cut, follow, label):
     print("%s" % label)
-    print("  %-10s %7s %8s %10s %9s %7s %6s %9s" % (
-        "hedge", "fill%", "hedge%", "pair cost", "net c/w", "se", "t", "OOS"))
-    print("  " + "-"*72)
-    for hedge, hl in ((None, "none"), ("touch", "touch"),
-                      (D("0.30"), "0.30"), (D("0.20"), "0.20"),
-                      (D("0.12"), "0.12"), (D("0.08"), "0.08")):
-        rs = [r for r in (walk(w[s], follow, hedge) for s in slugs) if r]
-        n = len(rs)
-        m, se, t = stats([r["pnl"] for r in rs])
-        mo, _, _ = stats([r["pnl"] for r in rs[cut:]])
-        nf = sum(r["filled"] for r in rs)
-        nh = sum(r["hedged"] for r in rs)
-        pairs = [r["pair"] for r in rs if r["pair"] is not None]
-        pc = ("%.4f" % statistics.median(pairs)) if pairs else "-"
-        print("  %-10s %6.0f%% %7.0f%% %10s %+9.2f %7.2f %+6.2f %+9.2f"
-              % (hl, 100*nf/n, 100*nh/n, pc, 100*m, 100*se, t, 100*mo))
-    print()
+    print("  %-7s %-8s %6s %7s %10s %9s %7s %6s %9s" % (
+        "under", "hedge", "fill%", "hedge%", "pair cost", "net c/w",
+        "se", "t", "OOS"))
+    print("  " + "-"*78)
+    for ucents in (2, 3, 5, 8, 12, 15):
+        under = D(ucents)/100
+        for hedge, hl in ((None, "none"), ("touch", "touch"),
+                          (D("0.08"), "0.08")):
+            rs = [r for r in (walk(w[s], follow, hedge, under)
+                              for s in slugs) if r]
+            n = len(rs)
+            m, se, t = stats([r["pnl"] for r in rs])
+            mo, _, _ = stats([r["pnl"] for r in rs[cut:]])
+            nf = sum(r["filled"] for r in rs)
+            nh = sum(r["hedged"] for r in rs)
+            pairs = [r["pair"] for r in rs if r["pair"] is not None]
+            pc = ("%.4f" % statistics.median(pairs)) if pairs else "-"
+            print("  %-7s %-8s %5.0f%% %6.0f%% %10s %+9.2f %7.2f %+6.2f %+9.2f"
+                  % ("%dc" % ucents, hl, 100*nf/n, 100*nh/n, pc,
+                     100*m, 100*se, t, 100*mo))
+        print()
 
 
 def main():
@@ -152,8 +156,7 @@ def main():
     cut = int(len(slugs)*0.67)
     print("windows %d   band [0.51, 0.90], resting 2c under the bid" % len(slugs))
     print()
-    run(w, slugs, cut, True, "FOLLOW -- requoted to bid-0.02 every step")
-    run(w, slugs, cut, False, "ANCHOR -- placed once at bid-0.02, never moved")
+    run(w, slugs, cut, False, "ANCHOR -- placed once at bid-N, never moved")
     print("reference on these windows: straddle alone +4.66 c/w, t +2.05")
     print("a pair costing MORE than 1.0000 is a locked loss by construction.")
     return 0
