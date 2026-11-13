@@ -12,8 +12,12 @@ GET gateway.polymarket.us/v1/incentives.
   market can place an account in the matching rebate tier.
 * Liquidity Incentive Program: per-market pools, scored every second by
   DiscountFactor^(ticks from best) x size. `GET /v1/incentives?symbols=` returned
-  **no programs** for cpc-btc-updown-15m-2026-11-13-1530z/1545z/1600z. A 40-page walk of all
-  programs (4,000 rows: AI/tech/finance/people markets) contained no btc or cpc- market.
+  **no programs** for cpc-btc-updown-15m-2026-11-13-1530z/1545z/1600z.
+  CORRECTION (same day): the "40-page walk found no btc/cpc programs" claim was WRONG. The
+  endpoint's nextPageToken returns page 1 again, so that walk read one page 40 times. A full
+  census by `symbols=` (analysis/l5/pivot_pmus/RESULT.md: 24,358 open markets, 131 active
+  programs) found programs on sports (10,873 markets) and crypto (1,197 markets: BTC/ETH/SOL/XRP
+  above/range, up/down 1h and 1d; BTC up/down 1d pool $400/day), but none on BTC15m.
 * Market Maker Program: approval-based; contact institutional@qcex.com.
 
 Fee rebate at p=0.50 for Tier 2: 0.0035 x 0.25 = $0.000875 per contract.
