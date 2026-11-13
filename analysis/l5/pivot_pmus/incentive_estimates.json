@@ -1,0 +1,1425 @@
+{
+ "label": "PUBLISHED pools x SNAPSHOT books; three pool readings; NOT credited, NOT realized",
+ "pool_totals_by_category": {
+  "macro": {
+   "daily_usd_per_day|PER_EVENT": 1960.0,
+   "daily_usd_per_day|PER_MARKET": 15220.0,
+   "daily_usd_per_day|PER_PROGRAM": 450.0
+  },
+  "sports": {
+   "daily_usd_per_day|PER_EVENT": 14208.0,
+   "daily_usd_per_day|PER_MARKET": 251775.0,
+   "daily_usd_per_day|PER_PROGRAM": 1452.0,
+   "game_period_usd|PER_EVENT": 153897.0,
+   "game_period_usd|PER_MARKET": 185427.0,
+   "game_period_usd|PER_PROGRAM": 15902.0
+  },
+  "culture": {
+   "daily_usd_per_day|PER_EVENT": 3350.0,
+   "daily_usd_per_day|PER_MARKET": 44865.0,
+   "daily_usd_per_day|PER_PROGRAM": 115.0,
+   "game_period_usd|PER_EVENT": 1250.0,
+   "game_period_usd|PER_MARKET": 7500.0,
+   "game_period_usd|PER_PROGRAM": 250.0
+  },
+  "technology": {
+   "daily_usd_per_day|PER_EVENT": 750.0,
+   "daily_usd_per_day|PER_MARKET": 4550.0,
+   "daily_usd_per_day|PER_PROGRAM": 100.0
+  },
+  "finance": {
+   "daily_usd_per_day|PER_EVENT": 4400.0,
+   "daily_usd_per_day|PER_MARKET": 15750.0,
+   "daily_usd_per_day|PER_PROGRAM": 2600.0
+  },
+  "politics": {
+   "daily_usd_per_day|PER_EVENT": 9145.0,
+   "daily_usd_per_day|PER_MARKET": 121019.0,
+   "daily_usd_per_day|PER_PROGRAM": 877.0
+  },
+  "crypto": {
+   "daily_usd_per_day|PER_EVENT": 5686.0,
+   "daily_usd_per_day|PER_MARKET": 128628.0,
+   "daily_usd_per_day|PER_PROGRAM": 2229.0
+  },
+  "science": {
+   "daily_usd_per_day|PER_EVENT": 70.0,
+   "daily_usd_per_day|PER_MARKET": 290.0,
+   "daily_usd_per_day|PER_PROGRAM": 60.0
+  },
+  "geopolitics": {
+   "daily_usd_per_day|PER_EVENT": 330.0,
+   "daily_usd_per_day|PER_MARKET": 480.0,
+   "daily_usd_per_day|PER_PROGRAM": 15.0
+  },
+  "climate": {
+   "daily_usd_per_day|PER_EVENT": 100.0,
+   "daily_usd_per_day|PER_MARKET": 500.0,
+   "game_period_usd|PER_EVENT": 2775.0,
+   "game_period_usd|PER_MARKET": 16650.0,
+   "game_period_usd|PER_PROGRAM": 185.0
+  }
+ },
+ "estimates": [
+  {
+   "slug": "cpausp-gold-updown-1d-2026-11-12-2315z",
+   "category": "finance",
+   "programId": "metals_gold_updown_1d_20261110",
+   "period": "daily_event",
+   "pool": 1000.0,
+   "M_event": 1,
+   "M_program": 1,
+   "df": 0.3,
+   "target": 5000.0,
+   "maxSpread": 0.03,
+   "spreads": [
+    0.06,
+    0.01,
+    0.02,
+    0.02
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.002,
+      0.002
+     ],
+     [
+      0.002,
+      0.002
+     ],
+     [
+      0.002,
+      0.007
+     ],
+     [
+      0.002,
+      0.002
+     ]
+    ],
+    "PER_MARKET": 2.57,
+    "PER_EVENT": 2.57,
+    "PER_PROGRAM": 2.574,
+    "min_round_PER_MARKET": 1.996,
+    "capital_usd": 9.8
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.01,
+      0.01
+     ],
+     [
+      0.01,
+      0.01
+     ],
+     [
+      0.01,
+      0.032
+     ],
+     [
+      0.01,
+      0.01
+     ]
+    ],
+    "PER_MARKET": 12.69,
+    "PER_EVENT": 12.69,
+    "PER_PROGRAM": 12.694,
+    "min_round_PER_MARKET": 9.9,
+    "capital_usd": 49.0
+   }
+  },
+  {
+   "slug": "cpagsp-silver-updown-1d-2026-11-12-2315z",
+   "category": "finance",
+   "programId": "metals_silver_updown_1d_20261110",
+   "period": "daily_event",
+   "pool": 750.0,
+   "M_event": 1,
+   "M_program": 1,
+   "df": 0.3,
+   "target": 3000.0,
+   "maxSpread": 0.03,
+   "spreads": [
+    0.05,
+    0.05,
+    0.05,
+    0.06
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.0,
+    "PER_EVENT": 0.0,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.0,
+    "capital_usd": 9.4
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.0,
+    "PER_EVENT": 0.0,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.0,
+    "capital_usd": 47.0
+   }
+  },
+  {
+   "slug": "cpc-btc-updown-1d-2026-11-12-2200z",
+   "category": "crypto",
+   "programId": "crypto_btc_updown_1d_20261110",
+   "period": "daily_event",
+   "pool": 400.0,
+   "M_event": 1,
+   "M_program": 1,
+   "df": 0.3,
+   "target": 10000.0,
+   "maxSpread": 0.03,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.001,
+      0.002
+     ],
+     [
+      0.002,
+      0.002
+     ],
+     [
+      0.002,
+      0.002
+     ],
+     [
+      0.001,
+      0.005
+     ]
+    ],
+    "PER_MARKET": 0.78,
+    "PER_EVENT": 0.78,
+    "PER_PROGRAM": 0.778,
+    "min_round_PER_MARKET": 0.603,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.007,
+      0.008
+     ],
+     [
+      0.009,
+      0.008
+     ],
+     [
+      0.009,
+      0.008
+     ],
+     [
+      0.003,
+      0.024
+     ]
+    ],
+    "PER_MARKET": 3.85,
+    "PER_EVENT": 3.85,
+    "PER_PROGRAM": 3.849,
+    "min_round_PER_MARKET": 2.996,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "tec-rlwc-2026-11-15-w-aus",
+   "category": "sports",
+   "programId": "rugby_wc_20261015",
+   "period": "daily",
+   "pool": 600.0,
+   "M_event": 2,
+   "M_program": 2,
+   "df": 0.2,
+   "target": 5000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.12,
+    "PER_EVENT": 0.06,
+    "PER_PROGRAM": 0.061,
+    "min_round_PER_MARKET": 0.123,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.001,
+      0.001
+     ],
+     [
+      0.001,
+      0.001
+     ],
+     [
+      0.001,
+      0.001
+     ],
+     [
+      0.001,
+      0.001
+     ]
+    ],
+    "PER_MARKET": 0.61,
+    "PER_EVENT": 0.31,
+    "PER_PROGRAM": 0.306,
+    "min_round_PER_MARKET": 0.612,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "tec-rlwc-2026-11-15-w-nzl",
+   "category": "sports",
+   "programId": "rugby_wc_20261015",
+   "period": "daily",
+   "pool": 600.0,
+   "M_event": 2,
+   "M_program": 2,
+   "df": 0.2,
+   "target": 5000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.18,
+    "PER_EVENT": 0.09,
+    "PER_PROGRAM": 0.088,
+    "min_round_PER_MARKET": 0.176,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.001,
+      0.002
+     ],
+     [
+      0.001,
+      0.002
+     ],
+     [
+      0.001,
+      0.002
+     ],
+     [
+      0.001,
+      0.002
+     ]
+    ],
+    "PER_MARKET": 0.88,
+    "PER_EVENT": 0.44,
+    "PER_PROGRAM": 0.44,
+    "min_round_PER_MARKET": 0.88,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "apdc-kimpow-nvda-vp-2026-11-30",
+   "category": "finance",
+   "programId": "finance_nvda_kimpow_20261112",
+   "period": "daily_event",
+   "pool": 100.0,
+   "M_event": 2,
+   "M_program": 2,
+   "df": 0.3,
+   "target": 500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.127,
+      0.164
+     ],
+     [
+      0.127,
+      0.164
+     ],
+     [
+      0.127,
+      0.164
+     ],
+     [
+      0.127,
+      0.164
+     ]
+    ],
+    "PER_MARKET": 14.58,
+    "PER_EVENT": 7.29,
+    "PER_PROGRAM": 7.288,
+    "min_round_PER_MARKET": 14.577,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.421,
+      0.496
+     ],
+     [
+      0.421,
+      0.496
+     ],
+     [
+      0.421,
+      0.496
+     ],
+     [
+      0.421,
+      0.496
+     ]
+    ],
+    "PER_MARKET": 45.86,
+    "PER_EVENT": 22.93,
+    "PER_PROGRAM": 22.932,
+    "min_round_PER_MARKET": 45.864,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "apdc-kimpow-nvda-vp-2026-12-31",
+   "category": "finance",
+   "programId": "finance_nvda_kimpow_20261112",
+   "period": "daily_event",
+   "pool": 100.0,
+   "M_event": 2,
+   "M_program": 2,
+   "df": 0.3,
+   "target": 500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.045,
+      0.052
+     ],
+     [
+      0.045,
+      0.052
+     ],
+     [
+      0.045,
+      0.052
+     ],
+     [
+      0.045,
+      0.052
+     ]
+    ],
+    "PER_MARKET": 4.85,
+    "PER_EVENT": 2.43,
+    "PER_PROGRAM": 2.425,
+    "min_round_PER_MARKET": 4.849,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.19,
+      0.216
+     ],
+     [
+      0.19,
+      0.216
+     ],
+     [
+      0.19,
+      0.216
+     ],
+     [
+      0.19,
+      0.216
+     ]
+    ],
+    "PER_MARKET": 20.3,
+    "PER_EVENT": 10.15,
+    "PER_PROGRAM": 10.149,
+    "min_round_PER_MARKET": 20.29,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "cpceth-eth-updown-1d-2026-11-12-2200z",
+   "category": "crypto",
+   "programId": "crypto_alt_updown_1d_20261110",
+   "period": "daily_event",
+   "pool": 150.0,
+   "M_event": 1,
+   "M_program": 3,
+   "df": 0.3,
+   "target": 2000.0,
+   "maxSpread": 0.05,
+   "spreads": [
+    0.02,
+    0.02,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.01,
+      0.002
+     ],
+     [
+      0.01,
+      0.002
+     ],
+     [
+      0.033,
+      0.002
+     ],
+     [
+      0.033,
+      0.002
+     ]
+    ],
+    "PER_MARKET": 1.77,
+    "PER_EVENT": 1.77,
+    "PER_PROGRAM": 0.591,
+    "min_round_PER_MARKET": 0.908,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.05,
+      0.009
+     ],
+     [
+      0.049,
+      0.009
+     ],
+     [
+      0.147,
+      0.009
+     ],
+     [
+      0.147,
+      0.009
+     ]
+    ],
+    "PER_MARKET": 8.05,
+    "PER_EVENT": 8.05,
+    "PER_PROGRAM": 2.683,
+    "min_round_PER_MARKET": 4.381,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "cpcsol-sol-updown-1d-2026-11-12-2200z",
+   "category": "crypto",
+   "programId": "crypto_alt_updown_1d_20261110",
+   "period": "daily_event",
+   "pool": 150.0,
+   "M_event": 1,
+   "M_program": 3,
+   "df": 0.3,
+   "target": 2000.0,
+   "maxSpread": 0.05,
+   "spreads": [
+    0.05,
+    0.05,
+    0.04,
+    0.04
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.015,
+      0.039
+     ],
+     [
+      0.027,
+      0.04
+     ],
+     [
+      0.029,
+      0.061
+     ],
+     [
+      0.036,
+      0.064
+     ]
+    ],
+    "PER_MARKET": 5.82,
+    "PER_EVENT": 5.82,
+    "PER_PROGRAM": 1.941,
+    "min_round_PER_MARKET": 3.977,
+    "capital_usd": 9.6
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.069,
+      0.167
+     ],
+     [
+      0.122,
+      0.174
+     ],
+     [
+      0.13,
+      0.246
+     ],
+     [
+      0.156,
+      0.255
+     ]
+    ],
+    "PER_MARKET": 24.73,
+    "PER_EVENT": 24.73,
+    "PER_PROGRAM": 8.242,
+    "min_round_PER_MARKET": 17.659,
+    "capital_usd": 48.0
+   }
+  },
+  {
+   "slug": "aec-atp-calhem-pedmar-2026-11-13",
+   "category": "sports",
+   "programId": "atp_wta_moneyline_live_20261018",
+   "period": "live",
+   "pool": 184.0,
+   "M_event": 1,
+   "M_program": 37,
+   "df": 0.3,
+   "target": 19000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.001
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.05,
+    "PER_EVENT": 0.05,
+    "PER_PROGRAM": 0.001,
+    "min_round_PER_MARKET": 0.034,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.001,
+      0.004
+     ],
+     [
+      0.001,
+      0.001
+     ],
+     [
+      0.001,
+      0.001
+     ],
+     [
+      0.001,
+      0.001
+     ]
+    ],
+    "PER_MARKET": 0.26,
+    "PER_EVENT": 0.26,
+    "PER_PROGRAM": 0.007,
+    "min_round_PER_MARKET": 0.168,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-atp-kilfel-mikpet-2026-11-13",
+   "category": "sports",
+   "programId": "atp_wta_moneyline_live_20261018",
+   "period": "live",
+   "pool": 184.0,
+   "M_event": 1,
+   "M_program": 37,
+   "df": 0.3,
+   "target": 19000.0,
+   "maxSpread": null,
+   "spreads": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.01,
+    "PER_EVENT": 0.01,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.002,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.001,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.03,
+    "PER_EVENT": 0.03,
+    "PER_PROGRAM": 0.001,
+    "min_round_PER_MARKET": 0.01,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-cs2-bca-leo-2026-11-13",
+   "category": "sports",
+   "programId": "esports_moneyline_live_20261008",
+   "period": "live",
+   "pool": 80.0,
+   "M_event": 1,
+   "M_program": 66,
+   "df": 0.4,
+   "target": 7500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.019,
+      0.0
+     ],
+     [
+      0.01,
+      0.0
+     ],
+     [
+      0.014,
+      0.0
+     ],
+     [
+      0.019,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.63,
+    "PER_EVENT": 0.63,
+    "PER_PROGRAM": 0.009,
+    "min_round_PER_MARKET": 0.404,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.09,
+      0.0
+     ],
+     [
+      0.049,
+      0.0
+     ],
+     [
+      0.067,
+      0.0
+     ],
+     [
+      0.089,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 2.94,
+    "PER_EVENT": 2.94,
+    "PER_PROGRAM": 0.045,
+    "min_round_PER_MARKET": 1.943,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-cs2-fmo-all-2026-11-13",
+   "category": "sports",
+   "programId": "esports_moneyline_live_20261008",
+   "period": "live",
+   "pool": 80.0,
+   "M_event": 1,
+   "M_program": 66,
+   "df": 0.4,
+   "target": 7500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.02
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.015,
+      0.022
+     ],
+     [
+      0.011,
+      0.021
+     ],
+     [
+      0.011,
+      0.022
+     ],
+     [
+      0.006,
+      0.022
+     ]
+    ],
+    "PER_MARKET": 1.29,
+    "PER_EVENT": 1.29,
+    "PER_PROGRAM": 0.02,
+    "min_round_PER_MARKET": 1.138,
+    "capital_usd": 9.8
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.07,
+      0.102
+     ],
+     [
+      0.051,
+      0.095
+     ],
+     [
+      0.053,
+      0.099
+     ],
+     [
+      0.031,
+      0.102
+     ]
+    ],
+    "PER_MARKET": 6.03,
+    "PER_EVENT": 6.03,
+    "PER_PROGRAM": 0.091,
+    "min_round_PER_MARKET": 5.297,
+    "capital_usd": 49.0
+   }
+  },
+  {
+   "slug": "aec-atpdb-dudapereir-pankinperego-2026-11-13",
+   "category": "sports",
+   "programId": "doubles_moneyline_live_20261018",
+   "period": "live",
+   "pool": 70.0,
+   "M_event": 1,
+   "M_program": 28,
+   "df": 0.3,
+   "target": 4000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.04,
+      0.141
+     ],
+     [
+      0.04,
+      0.141
+     ],
+     [
+      0.04,
+      0.141
+     ],
+     [
+      0.04,
+      0.141
+     ]
+    ],
+    "PER_MARKET": 6.35,
+    "PER_EVENT": 6.35,
+    "PER_PROGRAM": 0.227,
+    "min_round_PER_MARKET": 6.348,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.173,
+      0.451
+     ],
+     [
+      0.173,
+      0.452
+     ],
+     [
+      0.173,
+      0.452
+     ],
+     [
+      0.173,
+      0.451
+     ]
+    ],
+    "PER_MARKET": 21.86,
+    "PER_EVENT": 21.86,
+    "PER_PROGRAM": 0.781,
+    "min_round_PER_MARKET": 21.847,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-atpdb-locklock-mackinnedunc-2026-11-13",
+   "category": "sports",
+   "programId": "doubles_moneyline_live_20261018",
+   "period": "live",
+   "pool": 70.0,
+   "M_event": 1,
+   "M_program": 28,
+   "df": 0.3,
+   "target": 4000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.02,
+    0.01,
+    0.05
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.786,
+      0.851
+     ],
+     [
+      0.26,
+      0.111
+     ],
+     [
+      0.424,
+      0.249
+     ],
+     [
+      0.748,
+      0.961
+     ]
+    ],
+    "PER_MARKET": 38.41,
+    "PER_EVENT": 38.41,
+    "PER_PROGRAM": 1.372,
+    "min_round_PER_MARKET": 12.967,
+    "capital_usd": 9.5
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.948,
+      0.966
+     ],
+     [
+      0.637,
+      0.384
+     ],
+     [
+      0.787,
+      0.624
+     ],
+     [
+      0.937,
+      0.992
+     ]
+    ],
+    "PER_MARKET": 54.91,
+    "PER_EVENT": 54.91,
+    "PER_PROGRAM": 1.961,
+    "min_round_PER_MARKET": 35.732,
+    "capital_usd": 47.5
+   }
+  },
+  {
+   "slug": "enwc-uspres-nom-dem-2028-abdels",
+   "category": "politics",
+   "programId": "presidential_election_20261028",
+   "period": "daily_event",
+   "pool": 500.0,
+   "M_event": 19,
+   "M_program": 177,
+   "df": 0.2,
+   "target": 20000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.008,
+      0.106
+     ],
+     [
+      0.008,
+      0.095
+     ],
+     [
+      0.008,
+      0.095
+     ],
+     [
+      0.008,
+      0.095
+     ]
+    ],
+    "PER_MARKET": 26.43,
+    "PER_EVENT": 1.39,
+    "PER_PROGRAM": 0.149,
+    "min_round_PER_MARKET": 25.705,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.04,
+      0.371
+     ],
+     [
+      0.04,
+      0.344
+     ],
+     [
+      0.038,
+      0.344
+     ],
+     [
+      0.039,
+      0.344
+     ]
+    ],
+    "PER_MARKET": 97.51,
+    "PER_EVENT": 5.13,
+    "PER_PROGRAM": 0.551,
+    "min_round_PER_MARKET": 95.529,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "enwc-uspres-nom-dem-2028-aleocc",
+   "category": "politics",
+   "programId": "presidential_election_20261028",
+   "period": "daily_event",
+   "pool": 500.0,
+   "M_event": 19,
+   "M_program": 177,
+   "df": 0.2,
+   "target": 20000.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.03,
+    "PER_EVENT": 0.0,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.025,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.12,
+    "PER_EVENT": 0.01,
+    "PER_PROGRAM": 0.001,
+    "min_round_PER_MARKET": 0.123,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-itfme-aledec-jackant-2026-11-13",
+   "category": "sports",
+   "programId": "itf_ml_live_20261018",
+   "period": "live",
+   "pool": 52.0,
+   "M_event": 1,
+   "M_program": 68,
+   "df": 0.5,
+   "target": 7500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.0,
+    "PER_EVENT": 0.0,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.0,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "PER_MARKET": 0.0,
+    "PER_EVENT": 0.0,
+    "PER_PROGRAM": 0.0,
+    "min_round_PER_MARKET": 0.0,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-itfme-cankin-janopi-2026-11-13",
+   "category": "sports",
+   "programId": "itf_ml_live_20261018",
+   "period": "live",
+   "pool": 52.0,
+   "M_event": 1,
+   "M_program": 68,
+   "df": 0.5,
+   "target": 7500.0,
+   "maxSpread": null,
+   "spreads": [
+    0.01,
+    0.01,
+    0.01,
+    0.01
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.002,
+      0.002
+     ],
+     [
+      0.009,
+      0.004
+     ],
+     [
+      0.01,
+      0.005
+     ],
+     [
+      0.006,
+      0.002
+     ]
+    ],
+    "PER_MARKET": 0.25,
+    "PER_EVENT": 0.25,
+    "PER_PROGRAM": 0.004,
+    "min_round_PER_MARKET": 0.088,
+    "capital_usd": 9.9
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.008,
+      0.009
+     ],
+     [
+      0.044,
+      0.021
+     ],
+     [
+      0.047,
+      0.023
+     ],
+     [
+      0.027,
+      0.008
+     ]
+    ],
+    "PER_MARKET": 1.21,
+    "PER_EVENT": 1.21,
+    "PER_PROGRAM": 0.018,
+    "min_round_PER_MARKET": 0.439,
+    "capital_usd": 49.5
+   }
+  },
+  {
+   "slug": "aec-utr-alijul-ingser-2026-11-09",
+   "category": "sports",
+   "programId": "utr_moneyline_live_20261008",
+   "period": "live",
+   "pool": 50.0,
+   "M_event": 1,
+   "M_program": 149,
+   "df": 0.3,
+   "target": 500.0,
+   "maxSpread": 0.06,
+   "spreads": [
+    0.37,
+    0.37,
+    0.37,
+    0.37
+   ],
+   "Q10": {
+    "shares_bid_ask_by_round": [
+     [
+      0.014,
+      0.049
+     ],
+     [
+      0.014,
+      0.049
+     ],
+     [
+      0.014,
+      0.049
+     ],
+     [
+      0.014,
+      0.049
+     ]
+    ],
+    "PER_MARKET": 1.56,
+    "PER_EVENT": 1.56,
+    "PER_PROGRAM": 0.01,
+    "min_round_PER_MARKET": 1.56,
+    "capital_usd": 6.3
+   },
+   "Q50": {
+    "shares_bid_ask_by_round": [
+     [
+      0.066,
+      0.203
+     ],
+     [
+      0.066,
+      0.203
+     ],
+     [
+      0.066,
+      0.203
+     ],
+     [
+      0.066,
+      0.203
+     ]
+    ],
+    "PER_MARKET": 6.72,
+    "PER_EVENT": 6.72,
+    "PER_PROGRAM": 0.045,
+    "min_round_PER_MARKET": 6.723,
+    "capital_usd": 31.5
+   }
+  }
+ ]
+}
