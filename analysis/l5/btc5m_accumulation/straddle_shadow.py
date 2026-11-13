@@ -62,7 +62,15 @@ from decimal import Decimal as D
 
 UTC = dt.timezone.utc
 GATEWAY = os.environ.get("PMUS_PUBLIC_GATEWAY", "https://gateway.polymarket.us")
-WINDOW_S = 300.0
+#: the series and its window length, both configurable so the SAME
+#: validated collector can watch btc-updown-15m. Window length is the
+#: one dimension never varied, and window_length.py models the 15m pair
+#: rate at 29.2% against 5m's 10.2% -- a round trip is a hitting-time
+#: problem and 15 minutes gives it three times as long. L5 itself trades
+#: btc-updown-15m alongside the 5m. That is a model, though: this is how
+#: it gets measured on real quotes.
+SERIES = os.environ.get("SHADOW_SERIES", "cpc-btc-updown-5m")
+WINDOW_S = float(os.environ.get("SHADOW_WINDOW_S", "300"))
 CANCEL_LEAD_S = 30.0
 #: ADAPTIVE POLLING. For most of a window the price is nowhere near the
 #: resting level and a 2s sample is a wasted request -- and those wasted
@@ -121,11 +129,14 @@ def dec(v):
 
 
 def slug_for(ws):
-    return "cpc-btc-updown-5m-%s" % ws.strftime("%Y-%m-%d-%H%Mz")
+    return "%s-%s" % (SERIES, ws.strftime("%Y-%m-%d-%H%Mz"))
 
 
 def window_start(now):
-    return now.replace(second=0, microsecond=0, minute=(now.minute // 5) * 5)
+    """Floor to the series boundary -- 5 or 15 minutes, from WINDOW_S."""
+    m = max(1, int(WINDOW_S // 60))
+    return now.replace(second=0, microsecond=0,
+                       minute=(now.minute // m) * m)
 
 
 #: the gateway rate-limits. Measured 2026-11-13: six slugs in quick
@@ -540,6 +551,7 @@ def main():
         return 2
 
     emit(TAG + "_START", {"gateway": GATEWAY, "price": str(price),
+                          "series": SERIES,
                           "window_s": WINDOW_S,
                           "cancel_lead_s": CANCEL_LEAD_S,
                           "poll_s": POLL_S,
