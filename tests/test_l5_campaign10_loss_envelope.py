@@ -267,7 +267,15 @@ class TestThreeMarketsCannotExceedNineDollars:
         # the approval intersects, never widens
         import inspect
         src = inspect.getsource(CA.ApprovalGate.state)
-        assert "eff_w = min(want_w, MAX_WINDOWS)" in src
+        assert "eff_w = min(want_w, max_windows_for(series))" in src
+        # THE PER-SERIES COUNT IS SCOPED, and this campaign is 15-minute:
+        # the wider BTC5m window count must not reach it, and anything
+        # unrecognized must fall back to the GENERAL ceiling rather than
+        # to the wider one. Asserted behaviourally, not by source text.
+        assert CA.max_windows_for(CA.BTC15M_SERIES) == CA.MAX_WINDOWS == 8
+        assert CA.max_windows_for(None) == 8
+        assert CA.max_windows_for("") == 8
+        assert CA.max_windows_for("cpc-not-a-series-") == 8
         # and the env budget can only tighten it further
         assert hasattr(AUTH, "max_windows_env")
 

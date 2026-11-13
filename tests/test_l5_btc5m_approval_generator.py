@@ -75,6 +75,29 @@ class TestTheGeneratorAgreesWithTheClaimLayer:
         assert "last_open_utc" not in doc
         assert doc["series"] == CA.BTC5M_SERIES
 
-    @pytest.mark.parametrize("n", ["0", "9"])
+    @pytest.mark.parametrize("n", ["0", "49"])
     def test_window_count_stays_inside_the_code_ceiling(self, n):
+        """Below 1, and above BTC5m's OWN ceiling, are both refused.
+
+        The out-of-range case must be stated in terms of the SERIES
+        ceiling -- `max_windows_for(BTC5M_SERIES)` = 48 -- and not the
+        general `MAX_WINDOWS` = 8. Nine windows is now INSIDE the
+        5-minute ceiling, so asserting nine is refused would assert
+        nothing at all.
+        """
         assert run(n).returncode == 2
+
+    def test_the_generator_uses_the_SERIES_ceiling_not_the_general_one(self):
+        """Pins both numbers so the generator and claim layer cannot drift.
+
+        BTC5m has its own wider count; BTC15m and anything unrecognized
+        keep the general one. If a later change moves either, this fails
+        rather than silently widening what the generator will emit.
+        """
+        assert CA.max_windows_for(CA.BTC5M_SERIES) == 48
+        assert CA.max_windows_for(CA.BTC15M_SERIES) == CA.MAX_WINDOWS == 8
+        assert CA.max_windows_for(None) == 8
+        assert CA.max_windows_for("") == 8
+        assert CA.max_windows_for("cpc-not-a-series-") == 8
+        # and one past the series ceiling is refused by the generator itself
+        assert run(str(CA.max_windows_for(CA.BTC5M_SERIES) + 1)).returncode == 2

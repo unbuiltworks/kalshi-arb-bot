@@ -15,7 +15,10 @@ THE CONSTRAINTS IT ENFORCES, all from the code's own ceilings:
   nonce                >= 8 characters, single use. Reusing a spent nonce
                        does not buy a second campaign: consumption is
                        durable and keyed on the nonce.
-  max_windows          <= 8  (l5_campaign_approval.MAX_WINDOWS)
+  max_windows          <= 48 for this series
+                       (l5_campaign_approval.max_windows_for). The GENERAL
+                       ceiling stays 8; only BTC5m has the wider count, and
+                       48 five-minute windows is exactly the 4h campaign cap.
   campaign length      <= 4 h from issued_utc to expires_utc
   document age         the service treats a document as STALE one hour
                        after `issued_utc`, so generate it shortly before
@@ -29,7 +32,7 @@ THE CONSTRAINTS IT ENFORCES, all from the code's own ceilings:
 
 usage:
   python3 -I analysis/l5/btc5m_accumulation/make_approval.py [N] [--start ISO]
-      N        how many consecutive 5-minute windows (default 4, max 8)
+      N        how many consecutive 5-minute windows (default 4, max 48)
       --start  first window start, ISO 8601 UTC. Default: the next
                5-minute boundary at least 6 minutes away.
       --nonce  supply your own; otherwise a fresh random one is generated.
@@ -123,9 +126,10 @@ def main(argv=None) -> int:
                          "does not")
     a = ap.parse_args(argv)
 
-    if not (1 <= a.n <= CA.MAX_WINDOWS):
-        print("n must be 1..%d (l5_campaign_approval.MAX_WINDOWS)"
-              % CA.MAX_WINDOWS, file=sys.stderr)
+    ceiling = CA.max_windows_for(SERIES)
+    if not (1 <= a.n <= ceiling):
+        print("n must be 1..%d (l5_campaign_approval.max_windows_for(%r))"
+              % (ceiling, SERIES), file=sys.stderr)
         return 2
     start = (dt.datetime.fromisoformat(a.start.replace("Z", "+00:00"))
              if a.start else next_boundary())

@@ -89,6 +89,40 @@ SERIES_WINDOW_S = {BTC15M_SERIES: 900.0, BTC5M_SERIES: 300.0}
 #: looser. The 5-minute strategy was approved for preparation at $5 of
 #: exposure; a document asking for more gets $5.
 SERIES_MAX_TOTAL_EXPOSURE_USD = {BTC5M_SERIES: D("5")}
+#: PER-SERIES WINDOW COUNT. Unlike SERIES_MAX_TOTAL_EXPOSURE_USD above,
+#: this is the ONE per-series value that is LOOSER than the general
+#: ceiling, so the argument has to be made rather than assumed.
+#:
+#: WHY IT IS SAFE -- the same argument that took MAX_WINDOWS from four to
+#: eight: exposure is bounded by MAX_TOTAL_EXPOSURE_USD and by
+#: SERIES_MAX_TOTAL_EXPOSURE_USD at EVERY INSTANT, not by how many windows
+#: may be worked. More windows buys more OPPORTUNITIES to deploy the same
+#: $5, never more dollars at risk at once.
+#:
+#: IT CANNOT EXTEND A CAMPAIGN, ONLY FILL ONE. MAX_CAMPAIGN_S still caps a
+#: single approval at four hours, and 48 five-minute windows IS four hours
+#: exactly, so this ceiling can never reach past the duration ceiling --
+#: `last_open > eff_expires` still refuses anything that would.
+#:
+#: WHAT STILL BINDS, untouched: both instantaneous exposure ceilings, the
+#: campaign duration ceiling, MAX_DAILY_LOSS_USD (which acts as the
+#: campaign's own stop-loss and halts it after roughly twelve consecutive
+#: losing windows), the account-wide daily realized halt, the series
+#: allowlist, the class budgets, the completion reserve, the watchdog and
+#: the HALT latch.
+#:
+#: BTC15m IS DELIBERATELY ABSENT and keeps MAX_WINDOWS = 8.
+SERIES_MAX_WINDOWS = {BTC5M_SERIES: 48}
+
+
+def max_windows_for(series: Any) -> int:
+    """The window-count ceiling for one series.
+
+    `MAX_WINDOWS` unless the series has its own entry. An absent, empty or
+    malformed series gets the GENERAL ceiling, never a per-series one, so
+    an unreadable document can never buy the wider count.
+    """
+    return int(SERIES_MAX_WINDOWS.get(str(series or ""), MAX_WINDOWS))
 
 
 def series_of(market: Any) -> Optional[str]:
@@ -187,6 +221,8 @@ class ApprovalGate:
                              str(MAX_TOTAL_EXPOSURE_USD),
                              "max_daily_loss_usd": str(MAX_DAILY_LOSS_USD),
                              "max_windows": MAX_WINDOWS,
+                             "series_max_windows":
+                             dict(SERIES_MAX_WINDOWS),
                              "max_campaign_s": MAX_CAMPAIGN_S,
                              "allowed_series": list(ALLOWED_SERIES)},
                 "labels": ("ceilings are code constants; an approval is the "
@@ -289,7 +325,7 @@ class ApprovalGate:
         if starts is not None and starts >= expires:
             return no("approval_start_after_expiry")
 
-        eff_w = min(want_w, MAX_WINDOWS)
+        eff_w = min(want_w, max_windows_for(series))
         eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD,
                       SERIES_MAX_TOTAL_EXPOSURE_USD.get(
                           series, MAX_TOTAL_EXPOSURE_USD))
@@ -337,9 +373,10 @@ class ApprovalGate:
                     return no("approval_window_starts_unusable")
                 parsed.append(t)
             win_starts = sorted(set(parsed))
-            if len(win_starts) > MAX_WINDOWS:
+            if len(win_starts) > max_windows_for(series):
                 return no("approval_window_starts_above_ceiling",
-                          count=len(win_starts), ceiling=MAX_WINDOWS)
+                          count=len(win_starts),
+                          ceiling=max_windows_for(series))
         # ABSENT IS NOT REFUSED HERE, AND IS STILL NOT PERMISSIVE.
         #
         # WHERE THE LINE GOES, and why it is not here. Requirement: preserve
