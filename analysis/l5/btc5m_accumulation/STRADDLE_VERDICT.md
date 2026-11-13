@@ -32,16 +32,37 @@ leg-by-leg-linear totals agree to the cent on all 187 valid windows
 (36.08 total, 19.29 c/w). Settlement P&L is linear in legs, so the grouping
 is presentation only. The NET column is correct under any of them.
 
-## What IS established
+## Does it work? Probably. Not proven. Never measured negative.
 
-A one-sided leg loses **4.54 cents**, se 0.54, **t -8.39**, n 986. Resting a
-deep bid is a reliable way to buy something about to be worth nothing. That
-is not marginal and not noise.
+Lead with the net, because the decomposition below reads as a verdict and
+is not one:
 
-## What is NOT established
+| config | net c/w | se | t | P(edge > 0), naive |
+|---|---|---|---|---|
+| 0.08 single rung | +3.74 | 2.25 | +1.66 | ~95% |
+| 0.05-0.10 ladder | +19.29 | 12.23 | +1.58 | ~94% |
 
-Whether the pair case pays for it. t +1.58 on 189 windows, after 80+ arms
-were searched on this tape. The cost is proven; the benefit is not.
+It has never measured negative -- not at any price, not in sample, not out
+of sample. Every price 0.05-0.15 is positive and 8 of 9 agree OOS. The live
+record over-delivered on the parameter that matters: 2 pairs in 11 windows
+is 18% against a 10.7% model rate.
+
+The honest caveat is narrower than "it does not work": 80+ arms were
+searched on ONE tape, so the naive 95% is optimistic, and these nested
+price levels are not independent confirmations. That is an argument for
+more data -- which is free -- not for abandoning the strategy.
+
+### Within that net, where the money comes from
+
+ESTABLISHED: a one-sided leg loses **4.54 cents**, se 0.54, **t -8.39**,
+n 986. Resting a deep bid reliably buys something about to be worth
+nothing.
+
+NOT ESTABLISHED: that the pair case pays for it, at t +1.58.
+
+Both are true, and stating them in that order has misled readers of earlier
+drafts of this file, including its author. The one-sided bleed is a
+COMPONENT already paid for inside the +3.74. The net is what gets traded.
 
 ## Five refinements tested. All five dead.
 
@@ -80,11 +101,20 @@ that earns anything.
 | earlier 2026-11-12 | 0.08 single, ~5 sh | 5 | 2 | **+$6.29** |
 | 23:10z | ladder, two defects | 1 | 0 | **-$0.55** |
 | 23:30z-00:00z | ladder 0.05-0.08, 5 sh | 6 | 0 | **-$6.50** |
-| **day** | | **12** | **2** | **-$0.76** |
+| unbooked, recovered 00:21Z | three windows never settled in the ledger | 3 | | **+$0.74** |
+| **day** | | **12** | **2** | **about FLAT** |
 
-Roughly flat. The "+$7" was gross wins inside a session that was net
-slightly negative throughout -- the account's own 24hr figure read -$0.64
-right after a +$3.69 payout and -$1.21 after a +$1.91 one.
+The "+$7" was gross wins inside a session that was net roughly flat -- the
+account's own 24hr figure read -$0.64 right after a +$3.69 payout and
+-$1.21 after a +$1.91 one.
+
+The +$0.74 line is not an estimate. The settlement recovery ran at boot on
+2026-11-13 00:21Z and booked three windows the ledger had never recorded,
+from the venue's own settlementPx: 16:30z +0.1232, 20:25z -0.7007, 20:35z
++1.3146. So the day's realized figure had been UNDERSTATED, and every
+earlier report in this file's history that said "-$0.76" was reading an
+incomplete ledger. Same run freed the $4.97 of ghost exposure:
+`exposure_before 4.9729 -> after 0`.
 
 2 pairs in 11 valid windows is 18% against a 10.7% model rate. Nothing in
 the live record contradicts the model; nothing in it confirms the edge
@@ -125,10 +155,20 @@ Against the $50 daily halt over a 288-window day:
 | 2 sh/rung | +$111 +/- $57 | ~$46 | **trips on noise** |
 | 5 sh/rung | +$278 +/- $143 | ~$114 | **trips on noise** |
 
-**1 share a rung is the only size that can run a full day.** It risks $0.45 a
-window, essentially the same as the ~$0.40 single-rung configuration that
-ran earlier, so it is not a reduction in stake -- it is the same stake
-spread over six rungs instead of one.
+**1 share a rung is the only size that can run a full day.**
+
+And these two are THE SAME TRADE, which is the practical point:
+
+| config | net c/w | worst case a window |
+|---|---|---|
+| 0.08 single rung, 5 shares | +18.70 | 40c |
+| 0.05-0.10 ladder, 1 share | +19.29 | 45c |
+| 0.05-0.08 ladder, 5 shares (ran 23:30z) | +55.73 | **130c** |
+
+Same return, same risk, for the first two. So going back to 8c on both
+sides is not a retreat -- it is one of two equivalent correct sizings, and
+the simpler one. The third line is what actually ran, at 3.25x the stake,
+and is the whole difference between -$6.50 and about -$2.
 
 ## The evidence is already free, and we were buying it
 
