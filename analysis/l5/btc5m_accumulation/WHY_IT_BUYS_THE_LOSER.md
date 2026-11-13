@@ -93,3 +93,54 @@ rather than cleverness.
 | rest narrower | same t |
 | ladder instead of single rung | same t, pure leverage |
 | **rest deeper, where the lone leg is fair** | **flat per dollar; no gain** |
+
+---
+
+# Extension to the FULL 1c-49c range, 2026-11-13
+
+The owner asked whether the flat ~2.5% holds for 1-49. **It does not, and
+the direction matters.** The table above stops at 0.30; everything between
+0.09-0.14, 0.16-0.29 and 0.31-0.49 was never measured until now.
+
+Measured by `lone_leg_full_range.py`, same tape, same adverse fill rule.
+It reproduces the published decomposition at 0.08 exactly (BOTH 19, ONE
+162, NONE 6 of 187) before reporting anything else.
+
+| price | both% | one n | one win% | net c/w | t |
+|---|---|---|---|---|---|
+| 0.01 | 0.5% | 135 | 0.0% | -0.20 | -0.37 |
+| 0.05 | 5.3% | 168 | 3.0% | +2.99 | +1.56 |
+| **0.08** | 10.2% | 162 | 2.5% | **+3.74** | **+1.67** |
+| 0.16 | 21.4% | 146 | 1.4% | +3.12 | +1.20 |
+| 0.24 | 29.4% | 132 | 1.5% | -0.58 | -0.25 |
+| 0.32 | 41.7% | 109 | **0.0%** | -3.64 | -1.48 |
+| 0.40 | 58.3% | 78 | **0.0%** | -5.03 | -2.32 |
+| 0.49 | 75.9% | 45 | **0.0%** | **-10.27** | **-6.43** |
+
+**The lone leg does not stay at 2-3%. It decays to exactly ZERO.** From
+0.32 to 0.49 the side we were left holding won **0 times out of 45-109
+one-sided windows at every single price**. If the price fell that far and
+never round-tripped, it never came back. Not once.
+
+## This also closes "win more windows at a smaller prize"
+
+That idea was right about the mechanism and wrong about the money, and the
+sweep separates the two cleanly:
+
+- **Win rate does rise, exactly as expected.** Pairs go from 0.5% at 0.01
+  to **75.9% at 0.49**. Resting near the money wins three windows in four.
+- **Net goes the other way, hard.** +3.74 c/w at 0.08 -> **-10.27 c/w at
+  0.49**, t **-6.43**. The pair pays `1 - 2p`, which is 2c at 0.49, and
+  that cannot fund a lone leg that is worth nothing and costs 49c.
+
+Winning more windows is not the same as making more money, and here they
+point in opposite directions over the whole range.
+
+## 0.08 is at the optimum, and the optimum is not proven
+
+Net c/w peaks on a plateau from about 0.05 to 0.16 and 0.08 is the top of
+it. But choosing the best of 49 arms needs `sqrt(2 ln 49) = 2.79`, and
+0.08 reaches **+1.67**. The peak is NOT established -- it is consistent
+with a small real edge and with zero, which is what the plateau's
+flatness said already. What is established, at t -2-to-6, is that
+everything from 0.24 upward LOSES.
