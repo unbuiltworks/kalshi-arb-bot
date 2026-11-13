@@ -3676,3 +3676,25 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 #   Dockerfile -- COPY of the new module.
 # Every existing ceiling, including the lifetime realized one, still runs.
 # Deposits/withdrawals: the owner moves L5_PORTFOLIO_ANCHOR_USD by the amount.
+
+# 2026-11-13 — owner-approved VENUE-ATTESTED COST BASIS for settled positions
+# this ledger did not open ("Yes, and correct today too").
+#   DEFECT: foreign legs (e.g. BTC5m in cpc-btc-updown-5m-*) adopted from the
+#     venue were settled at a $1.00/share upper bound: a lone $0.08 leg booked
+#     12.5x its cost and a completed pair booked 0 instead of its gain, which
+#     pushed the account-wide daily figure toward the halt on phantom losses.
+#   src/l5_venue_cost_attestation.py -- new. Paced read of the venue's own
+#     /v1/portfolio/activities (existing signed transport, existing parser in
+#     l5_cost_basis_audit) for markets retired at UNKNOWN_COST_UPPER_BOUND on or
+#     after 2026-11-13; per-side fills must equal the held quantity EXACTLY.
+#   src/l5_live_execution.py -- InventoryStore.attest_retired_market_cost:
+#     re-derives the cost, restates settlement_pnl = redemption - attested cost
+#     on the market's ORIGINAL UTC day, keeps the old row in cost_superseded,
+#     appends a VENUE_ATTESTED_MARKET_COST record to cost_basis_corrections.
+#     Provenance VENUE_ATTESTED_COST; never verified L5. Anything partial,
+#     unreadable or not reconciling keeps the $1 bound (fail closed).
+#   src/l5_pmus_live_runner.py -- maybe_attest_venue_costs after each
+#     settlement sweep (fully guarded); heartbeat `venue_cost_attestation`.
+#   Dockerfile -- COPY of the new module.
+# No open position, exposure cap, risk floor, halt threshold or order path
+# changes; only realized figures of already-settled markets are corrected.

@@ -2835,6 +2835,53 @@ class Runner:
                 self.stats["retire_refused:%s"
                            % out.get("reason", "?")] += 1
 
+    def maybe_attest_venue_costs(self, now: float) -> None:
+        """Replace the $1/share bound on SETTLED positions this ledger did not
+        open with the venue's own fill costs, where they reconcile exactly.
+
+        After settlement only: no open position, exposure cap, risk floor or
+        submission gate reads anything this writes. It moves the realized
+        figure of an already-settled market, on the day it settled, through
+        an auditable correction record. Paced and bounded inside
+        `l5_venue_cost_attestation`; ANY failure here is swallowed and the
+        bound stays -- this can never stop a tick.
+        """
+        try:
+            from src import l5_venue_cost_attestation as VCA
+            att = getattr(self, "_venue_cost_attestor", None)
+            if att is None:
+                att = VCA.Attestor()
+                self._venue_cost_attestor = att
+            out = att.step(self.store, self.transport, float(now))
+            done = [r for r in (out.get("evaluated") or out.get("refused")
+                                or []) if isinstance(r, Mapping)]
+            if done or out.get("walk_failed"):
+                emit("L5_VENUE_COST_ATTESTATION", dict(out, labels=(
+                    "attested=False keeps the $1/share bound. A correction "
+                    "restates an already-settled market on its own UTC day; "
+                    "it is account-wide realized, not verified L5.")))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["venue_cost_attest_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
+    def venue_cost_attestation_lines(self) -> Dict[str, Any]:
+        """The heartbeat block for `maybe_attest_venue_costs`. Never raises."""
+        try:
+            from src import l5_venue_cost_attestation as VCA
+            att = getattr(self, "_venue_cost_attestor", None) or VCA.Attestor()
+            return att.heartbeat(self.store)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__,
+                    "labels": "attestation telemetry unavailable; the $1 "
+                              "bound stays wherever it was"}
+
     def resolve_pending_terminal(self, now: float) -> List[Dict[str, Any]]:
         """Book the final fill of every order that left the venue's open list.
 
@@ -6800,6 +6847,10 @@ class Runner:
             # bucket. Reported so the -218.99 cannot be read as verified L5
             # or as the owner's measured manual losses.
             "accounting": self.store.four_bucket_accounting(),
+            # VENUE-ATTESTED COST BASIS of settled positions this ledger did
+            # not open: attested, still at the $1 bound (with reasons), and
+            # the corrections applied with their delta. Reporting only.
+            "venue_cost_attestation": self.venue_cost_attestation_lines(),
             "l5_baseline": self.store.l5_baseline_lines(),
             # ACCOUNT-WIDE EXPOSURE, reported independently of the decision
             # path. The aggregation itself runs inside the gate, which the
@@ -11373,6 +11424,7 @@ class Runner:
         if self.store.pending_terminal():
             self.resolve_pending_terminal(now)
         self.sweep_settlements()
+        self.maybe_attest_venue_costs(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)

@@ -3555,6 +3555,306 @@ class InventoryStore:
                            "are exactly as they were. HALT is not read and "
                            "not cleared.")}
 
+    #: the provenance a retired row carries once its $1/share upper bound has
+    #: been replaced by the venue's own fills. DISTINCT from
+    #: VERIFIED_L5_GROSS_SETTLEMENT: these are usually ANOTHER strategy's
+    #: legs, and a known cost does not make them L5's.
+    VENUE_ATTESTED_COST = "VENUE_ATTESTED_COST"
+    #: the durable per-market record of the attestation pass (its cursor).
+    VENUE_ATTEST_STATE_KEY = "venue_cost_attestation"
+
+    def note_venue_cost_attempt(self, market: str, *, reason: str,
+                                final: bool, count_attempt: bool = True
+                                ) -> Dict[str, Any]:
+        """Record ONE refused attestation attempt. Writes no money field.
+
+        The record is the pass's durable cursor: a market whose attempts are
+        exhausted is `UPPER_BOUND_KEPT` and is never read again, so the pass
+        runs a bounded number of times per market across restarts. The
+        retired row itself is not touched -- it keeps its $1/share bound.
+        """
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        rows = book.setdefault("markets", {})
+        rec = dict(rows.get(market) or {})
+        if count_attempt:
+            rec["attempts"] = int(rec.get("attempts") or 0) + 1
+        rec["status"] = "UPPER_BOUND_KEPT" if final else "PENDING"
+        rec["last_reason"] = str(reason)[:200]
+        rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        rows[market] = rec
+        self.save()
+        return dict(rec)
+
+    def attest_retired_market_cost(self, market: str, *,
+                                   legs: Mapping[str, Any],
+                                   walk: Mapping[str, Any],
+                                   correction_id: str) -> Dict[str, Any]:
+        """Replace a RETIRED market's $1/share upper bound with the cost the
+        VENUE's own fills state -- only when they reconcile exactly.
+
+        THE DEFECT. A position this ledger did not open (another strategy's
+        legs, adopted from the venue) is booked at $1 a share. A BTC5m leg
+        that rested at $0.08 therefore books 12.5x its real cost, and a
+        completed pair books 0 instead of its gain -- enough to trip the
+        account-wide daily halt on losses that never happened.
+
+        WHAT THIS CHECKS, every one required:
+          * the row is retired AT THE BOUND (`UNKNOWN_COST_UPPER_BOUND`),
+            never corrected before, with readable quantities and settlement;
+          * `walk.sufficient` is True: the venue's activity feed was read far
+            enough to contain every fill of this market;
+          * the venue's fills are re-derived here, per side (qty x
+            own-outcome price; a DOWN fill's price is the YES price, so its
+            own cost is 1 - price), and their quantities reconcile EXACTLY
+            with what the ledger held: per side (GROSS), or -- where the
+            ledger adopted the venue's netted position -- as the same net
+            with the ledger holding at most one side (VENUE_NET). A partial,
+            extra or unreadable fill refuses;
+          * a side whose basis this ledger already KNEW must be confirmed
+            by its own verified fill provenance at the same cost;
+          * the trade ids were not consumed by any earlier correction;
+          * in the GROSS form, the new cost is not ABOVE the bound it
+            replaces.
+
+        WHAT IT WRITES. The row's settlement is recomputed under its own
+        recorded settlement price -- redemption of the venue's filled
+        shares (UP x v + DOWN x (1 - v)) minus their attested cost --
+        so the result stays on the UTC day the market settled. The original
+        row is kept verbatim in `cost_superseded`; a correction record (old
+        pnl, new pnl, delta, the fills and order ids used) is appended to
+        `cost_basis_corrections`, where `account_wide_delta_realized` and
+        the double-spend guard already read. `realized_attributed` and the
+        legacy scalar move by the delta. `realized_unattributed` is not
+        touched. No owner field is written: `l5_owner_attribution_verified`
+        stays False and the origin label stays what settlement wrote.
+
+        Any refusal leaves EVERYTHING as it was: the bound stays.
+        """
+        def no(reason: str, **kw: Any) -> Dict[str, Any]:
+            return dict(kw, attested=False, market=market, reason=reason)
+
+        try:
+            market = canonical_market(market, doing="attesting a venue cost")
+        except UnknownMarket:
+            return no("MARKET_UNREADABLE")
+        done = {r.get("id") for r in
+                (self.state.get("cost_basis_corrections") or [])
+                if isinstance(r, Mapping)}
+        if correction_id in done:
+            return no("CORRECTION_ALREADY_APPLIED",
+                      correction_id=correction_id)
+        row = (self.state.get("retired_markets") or {}).get(market)
+        if not isinstance(row, Mapping):
+            return no("MARKET_NOT_RETIRED")
+        if row.get("pnl_provenance") != "UNKNOWN_COST_UPPER_BOUND":
+            return no("NOT_AT_THE_UPPER_BOUND",
+                      provenance=row.get("pnl_provenance"))
+        if row.get("cost_superseded") or row.get("venue_cost_attested"):
+            return no("COST_ALREADY_CORRECTED")
+        unknown_keys = [str(k) for k in
+                        (row.get("unverified_cost_basis_keys") or [])]
+        if not unknown_keys:
+            return no("NO_UNKNOWN_BASIS_KEYS")
+        if not isinstance(walk, Mapping) or walk.get("sufficient") is not True:
+            return no("VENUE_WALK_NOT_SUFFICIENT",
+                      walk=dict(walk) if isinstance(walk, Mapping) else None)
+        v = finite_decimal(row.get("yes_value"))
+        if v is None or v not in (D(0), D(1)):
+            return no("SETTLEMENT_UNREADABLE",
+                      yes_value=str(row.get("yes_value")))
+        held = {UP: finite_decimal(row.get("up_qty")),
+                DOWN: finite_decimal(row.get("dn_qty"))}
+        if held[UP] is None or held[DOWN] is None \
+                or held[UP] < 0 or held[DOWN] < 0:
+            return no("LEDGER_QTY_UNREADABLE")
+        old_cost = finite_decimal(row.get("cost_total"))
+        old_pnl = finite_decimal(row.get("settlement_pnl"))
+        if old_cost is None or old_pnl is None:
+            return no("LEDGER_COST_UNREADABLE")
+        legs = legs if isinstance(legs, Mapping) else {}
+        derived: Dict[str, Dict[str, Any]] = {}
+        venue = {UP: D(0), DOWN: D(0)}
+        ids: List[str] = []
+        order_ids: List[str] = []
+        for side in (UP, DOWN):
+            leg = legs.get(side)
+            fills = list((leg or {}).get("fills") or ()) \
+                if isinstance(leg, Mapping) else []
+            if not fills:
+                continue
+            q_sum, c_sum, fee_sum, fee_known = D(0), D(0), D(0), True
+            per_fill = []
+            for f in fills:
+                if not isinstance(f, Mapping):
+                    return no("FILL_UNREADABLE", side=side)
+                q = finite_decimal(f.get("qty"))
+                px = finite_decimal(f.get("price"))
+                tid = str(f.get("trade_id") or "").strip()
+                if q is None or px is None or q <= 0 \
+                        or not (D(0) < px < D(1)) or not tid:
+                    return no("FILL_UNREADABLE", side=side, trade_id=tid)
+                if tid in ids:
+                    return no("TRADE_ID_REPEATED", trade_id=tid)
+                fee = finite_decimal(f.get("fee"))
+                if fee is None:
+                    fee_known = False
+                else:
+                    fee_sum += fee
+                # OWN-OUTCOME cost: the venue quotes the YES price, so a DOWN
+                # share costs its complement (see own_outcome_price).
+                own = px if side == UP else (D(1) - px)
+                q_sum += q
+                c_sum += q * own
+                ids.append(tid)
+                vid = str(f.get("venue_order_id") or "").strip()
+                if vid and vid not in order_ids:
+                    order_ids.append(vid)
+                per_fill.append({"trade_id": tid, "venue_order_id": vid or None,
+                                 "qty": str(q), "price_wire": str(px),
+                                 "own_price": str(own),
+                                 "fee": None if fee is None else str(fee)})
+            supplied = finite_decimal((leg or {}).get("cost"))
+            if supplied is not None and supplied != c_sum:
+                return no("COST_NOT_RECONCILED", side=side,
+                          supplied=str(supplied), derived=str(c_sum))
+            venue[side] = q_sum
+            derived[side] = {"qty": str(q_sum), "cost": str(c_sum),
+                             "fees": str(fee_sum) if fee_known else None,
+                             "fills": per_fill}
+        if not derived:
+            return no("NO_VENUE_FILLS")
+        # THE RECONCILIATION RULE, exact, in one of the two forms this
+        # ledger can hold a market in:
+        #   GROSS      held UP == venue UP and held DOWN == venue DOWN;
+        #   VENUE_NET  the ledger adopted the venue's NETTED position (a
+        #              DOWN buy is a sale of YES, so a completed pair nets to
+        #              flat at the venue): held UP - held DOWN equals venue
+        #              UP - venue DOWN, and the ledger holds at most one side.
+        # Anything else -- a fill missing, an extra fill, a different
+        # quantity -- refuses and the bound stays.
+        if held[UP] == venue[UP] and held[DOWN] == venue[DOWN]:
+            form = "GROSS"
+        elif (min(held[UP], held[DOWN]) == 0
+              and held[UP] - held[DOWN] == venue[UP] - venue[DOWN]):
+            form = "VENUE_NET"
+        else:
+            return no("VENUE_QTY_NE_LEDGER_QTY",
+                      venue_up=str(venue[UP]), venue_down=str(venue[DOWN]),
+                      ledger_up=str(held[UP]), ledger_down=str(held[DOWN]))
+        for side in (UP, DOWN):
+            key = "%s|%s" % (market, side)
+            if held[side] > 0 and key not in unknown_keys:
+                # this ledger already KNEW this side's basis. It is never
+                # re-priced from the feed unless its own verified provenance
+                # states the same quantity and cost.
+                proof = (((self.state.get("fill_provenance") or {})
+                          .get(market) or {}).get("legs") or {}).get(side)
+                pq = finite_decimal((proof or {}).get("total_qty")) \
+                    if isinstance(proof, Mapping) else None
+                pc = finite_decimal((proof or {}).get("verified_cost")) \
+                    if isinstance(proof, Mapping) else None
+                if form != "GROSS" or pq != held[side] or pc is None \
+                        or abs(pc - D(derived[side]["cost"])) > D("0.0001"):
+                    return no("KNOWN_SIDE_NOT_CONFIRMED", side=side)
+        spent = set()
+        for rec in (self.state.get("cost_basis_corrections") or []):
+            if isinstance(rec, Mapping):
+                spent.update(str(t) for t in (rec.get("trade_ids") or ()))
+        clash = sorted(set(ids) & spent)
+        if clash:
+            return no("TRADE_ID_ALREADY_CONSUMED", trade_ids=clash)
+        new_cost = sum((D(derived[s]["cost"]) for s in derived), D(0))
+        if form == "GROSS" and new_cost > old_cost:
+            # the bound is the most a held share can cost. A larger
+            # "measurement" of the SAME shares means the evidence and the
+            # ledger disagree about the market.
+            return no("ATTESTED_COST_ABOVE_THE_BOUND",
+                      attested=str(new_cost), bound=str(old_cost))
+        # REDEMPTION ON THE VENUE'S GROSS FILLS. A netted pair pays exactly
+        # $1 whichever way the market settles, so valuing every filled share
+        # at its own payout is the same result as the venue's netting.
+        redeem = venue[UP] * v + venue[DOWN] * (D(1) - v)
+        new_pnl = redeem - new_cost
+        delta = new_pnl - old_pnl
+
+        now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+        before = self.realized_lines()
+        # the SAME row object read above: an existing row is restated in
+        # place, as the existing cost-restatement verb does. No row is added,
+        # so retire_settled_market stays the only writer of a NEW one.
+        row["cost_superseded"] = {k: x for k, x in dict(row).items()
+                                  if k != "cost_superseded"}
+        row["up_cost"] = derived.get(UP, {}).get("cost", "0")
+        row["dn_cost"] = derived.get(DOWN, {}).get("cost", "0")
+        row["cost_total"] = str(new_cost)
+        row["redemption_total"] = str(redeem)
+        row["redemption_basis"] = "VENUE_GROSS_FILLS"
+        row["venue_up_qty"] = str(venue[UP])
+        row["venue_dn_qty"] = str(venue[DOWN])
+        row["venue_qty_form"] = form
+        row["settlement_pnl"] = str(new_pnl)
+        row["pnl_provenance"] = self.VENUE_ATTESTED_COST
+        row["cost_provenance"] = self.VENUE_ATTESTED_COST
+        row["origin_cost_basis"] = ORIGIN.BASIS_AUTHENTICATED
+        row["cost_corrected_at"] = now_iso
+        row["cost_correction_id"] = correction_id
+        row["venue_cost_attested"] = {
+            "trade_ids": list(ids), "venue_order_ids": list(order_ids),
+            "legs": {s: {k: x for k, x in d.items() if k != "fills"}
+                     for s, d in derived.items()}}
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0)) + delta)
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + delta)
+        removed = [k for k in (self.state.get("leg_cost_basis_unknown") or [])
+                   if str(k).rsplit("|", 1)[0] == market]
+        if removed:
+            self.state["leg_cost_basis_unknown"] = [
+                k for k in (self.state.get("leg_cost_basis_unknown") or [])
+                if str(k).rsplit("|", 1)[0] != market]
+        rec = {
+            "id": correction_id,
+            "kind": "VENUE_ATTESTED_MARKET_COST",
+            "key": "%s|MARKET" % market, "market": market, "side": "BOTH",
+            "t": now_iso,
+            "settled_at": str(row.get("t") or ""),
+            "settlement_utc_day": str(row.get("t") or "")[:10],
+            "yes_value": str(v),
+            "qty_form": form,
+            "ledger_qty": {UP: str(held[UP]), DOWN: str(held[DOWN])},
+            "venue_qty": {UP: str(venue[UP]), DOWN: str(venue[DOWN])},
+            "old_pnl": str(old_pnl), "new_pnl": str(new_pnl),
+            "delta": str(delta),
+            "was_cost_total": str(old_cost), "now_cost_total": str(new_cost),
+            "old_provenance": "UNKNOWN_COST_UPPER_BOUND",
+            "cost_provenance": self.VENUE_ATTESTED_COST,
+            "legs": derived,
+            "trade_ids": list(ids), "venue_order_ids": list(order_ids),
+            "unknown_basis_keys_cleared": removed,
+            "activity_walk": {k: walk.get(k) for k in
+                              ("pages", "ended", "sufficient", "by",
+                               "started_at", "floor")},
+            "ownership_unchanged": True,
+            "labels": ("account-wide realized with a venue-attested cost "
+                       "basis. NOT verified L5: no owner field was written. "
+                       "Fees are recorded per leg and are NOT in the pnl."),
+        }
+        self.state.setdefault("cost_basis_corrections", []).append(rec)
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        book.setdefault("markets", {})[market] = {
+            "status": "CORRECTED", "t": now_iso,
+            "attempts": int(((book.get("markets") or {}).get(market) or {})
+                            .get("attempts") or 0) + 1,
+            "correction_id": correction_id, "delta": str(delta)}
+        self.save()
+        return {"attested": True, "market": market,
+                "correction_id": correction_id,
+                "old_pnl": str(old_pnl), "new_pnl": str(new_pnl),
+                "delta": str(delta), "trade_ids": ids,
+                "venue_order_ids": order_ids,
+                "realized_before": before,
+                "realized_after": self.realized_lines()}
+
     def correct_settled_market(self, market: str, *, correction_id: str,
                                expect: Mapping[str, Any],
                                corrected_yes_value: D,

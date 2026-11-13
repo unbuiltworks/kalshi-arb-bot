@@ -185,6 +185,11 @@ COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 # wired. It is read-only and writes nothing.
 COPY src/l5_continuous_inventory.py src/l5_continuous_inventory.py
 COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
+# Lazily imported by Runner.maybe_attest_venue_costs on EVERY tick. Its import
+# is guarded (a failure keeps the $1 bound), so a missing COPY would not fail
+# the boot -- it would silently leave every adopted leg at the bound. Named
+# here so the image carries it.
+COPY src/l5_venue_cost_attestation.py src/l5_venue_cost_attestation.py
 # The blocked-arm switch gate, called from the HEARTBEAT when
 # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
 # would NOT fail the boot -- it would report PROBE_FAILED:
