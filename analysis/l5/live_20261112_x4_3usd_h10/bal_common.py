@@ -11,7 +11,7 @@ BUDGET = "3.00"   # owner 19:0xZ: "$3 exposure (Recommended)"
 A = dt.datetime.fromisoformat(os.environ["KIT_START"]) if os.environ.get("KIT_START") else dt.datetime(2026, 11, 12, 22, 30, 0, tzinfo=dt.timezone.utc)
 STARTS = [A + dt.timedelta(minutes=15*i) for i in range(4)]   # owner 17:4xZ: one arm, consecutive windows (chose "Both")
 SLUGS = ["cpc-btc-updown-15m-" + s.strftime("%Y-%m-%d-%H%Mz") for s in STARTS]; SLUG = SLUGS[0]; NWIN = len(SLUGS)
-NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-h40f-t120-" + SHA[:8]
+NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-l5x3-" + SHA[:8]
 #: owner 2026-11-12 14:17Z: "turn on recycling and relax the floor for the next window"
 TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "ON",
            "L5_CASH_POLICY": "RECYCLE_ON_COMPLETE", "L5_TS_OWN_EVIDENCE_GATE": "WAIVED_BY_OWNER",
@@ -33,7 +33,10 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            # owner 2026-11-13 04:2xZ "Yes, fidelity + 48 slots": L5 trades to ~752 s and quotes both sides at once;
            # 21:00Z ran entry 480 s / complete 600 s (vars), never had both sides resting, ran out of 24 slots at ~600 s. Same dollar limits.
            "L5_FIDELITY_MODE": "ON", "L5_TS_ENTRY_CUTOFF_S": "840", "L5_TS_COMPLETE_CUTOFF_S": "870",
-           "L5_ACC_MAX_ROUNDS": "48"}
+           "L5_ACC_MAX_ROUNDS": "48",
+           # owner 2026-11-13 14:2xZ "Yes" to L5 shape: EXTEND the held side up to 3 contracts while waiting to complete
+           # (L5 median same-side run ~3.9 fills). Opening clip stays 1; $3 exposure/budget unchanged.
+           "L5_CI_ADD_BAND_CONTRACTS": "3"}
 TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "75.00",   # owner 2026-11-13 04:0xZ "$75 (Recommended)" after BTC5m 0035z -28.12 (was 50, owner 11-12)
            "L5_DAILY_REALIZED_LOSS_HALT_USD": "40.00",   # owner 2026-11-13 ~11:55Z "Halt + cap $40, go today" (was 10)
            "L5_MAX_TOTAL_EXPOSURE_USD": "3.00", "L5_CAMPAIGN_BUDGET_USD": "3.00",   # campaign worst-case budget was a legacy 1.00 that refused 13:45/14:00 (CAMPAIGN_WORST_CASE_EXHAUSTED 1>=1.00); aligned to the owner's $3
