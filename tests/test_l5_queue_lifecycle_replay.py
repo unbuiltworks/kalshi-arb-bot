@@ -1,5 +1,5 @@
 """Regression tests for lifecycle-bounded book-only queue evidence."""
-from src.l5_queue_depletion import lifecycle_aware_verdict
+from src.l5_queue_depletion import lifecycle_aware_verdict, touch_pair
 
 
 def frame(bid, ask):
@@ -81,3 +81,13 @@ def test_zero_size_opposite_touch_does_not_prove_fill():
         )
         assert result["verdict"] != "PROVEN"
         assert result["venue_fill_confirmed"] is False
+
+
+def test_touch_pair_ignores_zero_size_tombstones():
+    from decimal import Decimal
+    # A deleted bid at .54 and deleted ask at .46 must not fabricate
+    # a crossed or high-edge executable touch.
+    assert touch_pair([[".54", "0"], [".45", "10"]],
+                      [[".46", "0"], [".55", "10"]]) == Decimal(".90")
+    assert touch_pair([[".45", "0"]], [[".55", "10"]]) is None
+    assert touch_pair([[".45", "10"]], [[".55", "0"]]) is None
