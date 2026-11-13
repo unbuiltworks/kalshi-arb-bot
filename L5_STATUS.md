@@ -1710,3 +1710,47 @@ was never BTC5m-local.
 **Shadow cannot see this refusal.** The `account` block reads all-null
 without the arm token, so a campaign can look perfectly clean in shadow and
 place nothing live. Read `account.other_usd` against the cap before arming.
+
+### Run 2, 2026-11-13 1605z-1640z (straddle, 5 shares/side @ 0.08)
+
+| window | outcome | settled |
+|---|---|---|
+| **1605z** | **PAIR -- both legs filled** | **+4.20** |
+| 1610z | UP only | -0.40 |
+| 1615z | UP only | -0.40 |
+| 1620z-1640z | blocked `EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM` | 0 |
+
+**Run 2 net +3.40.** Identical shape to run 1: one pair, two singles.
+
+**Combined straddle live, 2026-11-13: +6.80 over 6 placing windows, 2
+pairs.** 2/6 = 33% pair rate against a 10.2% tape rate. Six windows cannot
+distinguish those, and the live shadow's own observed rate was 2.8%. This
+is NOT evidence the edge is real; it is evidence the mechanism executes.
+
+**Why it stopped, and it was not us.** The account-wide risk doc at 1620z:
+
+```
+daily_halt_usd        40.00   utc_day_realized_usd   -39.5296
+cumulative_ceiling    75.00   lifetime_realized_usd  -59.7762
+loss_room_usd          0.4704  (= min(40-39.5296, 75-59.7762))
+```
+
+The binding limit is the DAILY halt: the account has lost $39.53 today
+against a $40.00 halt. BTC5m's own contribution is not the cause
+(`btc5m_losses_not_yet_in_account_ledger_usd: 0`, and the straddle is UP on
+the day). `exposure_ceiling() = 1.00 > 0.4704`, so the gate refuses to open
+any window. Correct fail-closed behaviour.
+
+**Correction to the earlier entry above:** the cumulative loss ceiling is
+**75.00**, not 20. The 20 was read from `L5_MAX_L5_CUMULATIVE_LOSS_USD` on
+`l5-pmus-live`; the PUBLISHED risk doc says 75.00 and the doc is what the
+gate reads. The conclusion ("the gate already passes, no raise needed") was
+right; the number attached to it was wrong. Read the published doc, not the
+env var.
+
+**Operational note:** martingale sizing on the loss branch was considered
+and rejected. The loss branch is ~87% likely, so P(8 consecutive) = 33% and
+the stake at step 8 is $51.20 against a $17 account cap -- the authorization
+layer refuses at about step 3. More fundamentally, settlement P&L is linear
+in legs, so neither martingale nor a higher pair rate at a smaller prize
+adds any expected value; both only reshape variance.
