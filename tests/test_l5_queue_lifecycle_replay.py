@@ -53,3 +53,16 @@ def test_restart_unordered_and_contradictory_fail_closed():
     ]:
         assert lifecycle_aware_verdict("UP", ".45", FRAMES, start=0,
                                        lifecycle=lifecycle)["reason"] == reason
+
+
+def test_terminal_event_cannot_be_followed_by_ack_or_partial_fill():
+    for terminal in ("CANCELED", "EXPIRED", "REJECTED", "FILLED"):
+        for late in ("ACK", "PARTIAL_FILL"):
+            result = lifecycle_aware_verdict(
+                "UP", ".45", FRAMES, start=0,
+                lifecycle=[{"frame": 0, "state": "RESTING"},
+                           {"frame": 1, "state": terminal},
+                           {"frame": 2, "state": late}],
+            )
+            assert result["verdict"] is None
+            assert result["reason"] == "LIFECYCLE_CONTRADICTORY"
