@@ -2385,6 +2385,19 @@ class InventoryStore:
     def residual(self, market: str) -> D:
         return self.position(market, "UP") - self.position(market, "DOWN")
 
+    def positions_by_market(self) -> Dict[str, Dict[str, D]]:
+        """{market: {"UP": qty, "DOWN": qty}} for every position the ledger
+        holds, as reconciled from the venue. Raises on an unreadable entry so
+        the caller reports the portfolio value as unknown, never as zero."""
+        out: Dict[str, Dict[str, D]] = {}
+        for key, v in (self.state.get("positions") or {}).items():
+            m, _, side = str(key).rpartition("|")
+            side = side.strip().upper()
+            if not m or side not in ("UP", "DOWN"):
+                continue
+            out.setdefault(m, {"UP": D(0), "DOWN": D(0)})[side] = D(str(v))
+        return out
+
     # ---------------------------------------------------------------- dwell
     #
     # THE FIRST UNMATCHED-FILL TIMESTAMP, per market, persisted.
@@ -9323,10 +9336,28 @@ class FaithfulExecutor:
                     self.store.account_wide_delta_realized()),
                 cumulative_unrealized_loss=unreal,
                 available_cash_usd=self.available_cash_usd,
-                inventory=inv)
+                inventory=inv,
+                portfolio_value_usd=self.portfolio_value_for_gates())
             if reason:
                 return "PAIR_%s:%s" % (leg["side"], reason)
         return None
+
+    def portfolio_value_for_gates(self) -> Optional[D]:
+        """Worst-case portfolio value for the drawdown gate, or None.
+
+        Venue buying power plus the guaranteed redemption of matched pairs;
+        see `l5_portfolio_drawdown`. None (unknown) whenever buying power has
+        no fresh reading or the ledger cannot be read, which the gate turns
+        into a refusal when the limit is configured.
+        """
+        from src import l5_portfolio_drawdown as PDD
+        try:
+            pos = self.store.positions_by_market()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        return PDD.worst_case_value(self.available_cash_usd, pos)
 
     def inventory_for_gates(self, market: str) -> Dict[str, Any]:
         """Confirmed per-side quantity and ACTUAL acquisition cost.
@@ -11004,7 +11035,8 @@ class FaithfulExecutor:
                     cumulative_unrealized_loss=(
                         self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,
-                    inventory=self.inventory_for_gates(market))
+                    inventory=self.inventory_for_gates(market),
+                    portfolio_value_usd=self.portfolio_value_for_gates())
             except Exception as exc:                       # noqa: BLE001
                 # a gate that cannot evaluate refuses. Failing open here
                 # would silently remove the protection it exists to be.

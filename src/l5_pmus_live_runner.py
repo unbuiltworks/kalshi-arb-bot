@@ -1608,6 +1608,20 @@ class Runner:
             return {"ok": False,
                     "reason": "ORIGIN_REPORT_FAILED:%s" % type(exc).__name__}
 
+    def portfolio_drawdown_report(self) -> Dict[str, Any]:
+        """The account-wide portfolio drawdown block for the heartbeat.
+        Reporting only; the executor's validation gate enforces it."""
+        from src import l5_portfolio_drawdown as PDD
+        try:
+            pos = self.store.positions_by_market()
+            val = PDD.worst_case_value(self.available_cash_usd, pos)
+            return PDD.report(val)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"state": "UNREADABLE",
+                    "reason": "PORTFOLIO_REPORT_FAILED:%s" % type(exc).__name__}
+
     def account_exposure_lines(self) -> Dict[str, Any]:
         """Account-wide worst-case exposure and the capacity left under it.
 
@@ -6761,6 +6775,7 @@ class Runner:
                 "source": "/v1/account/balances",
                 "labels": ("None is no reading, never unlimited. A number "
                            "only ADDS a refusal to the cash gate.")},
+            "portfolio_drawdown": self.portfolio_drawdown_report(),
             "risk_gate": {
                 "measures": "worst-case loss over both settlements",
                 "max_usd_per_market": str(self.limits.max_usd_per_market),

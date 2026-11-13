@@ -607,7 +607,8 @@ class ValidationGates:
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
                available_cash_usd: Optional[D] = None,
-               inventory: Optional[Mapping[str, Any]] = None
+               inventory: Optional[Mapping[str, Any]] = None,
+               portfolio_value_usd: Optional[D] = None
                ) -> Optional[str]:
         """None to allow, else the reason. Never raises on ordinary input."""
         q = _d(order_qty)
@@ -622,6 +623,15 @@ class ValidationGates:
         #    reconciliation is not a small cash figure, it is an unknown one.
         if book_uncertain:
             return "BOOK_UNCERTAIN:%s" % str(book_uncertain)[:160]
+
+        # 0b. THE ACCOUNT-WIDE PORTFOLIO DRAWDOWN (owner 2026-11-13).
+        #     ADDITIVE: OFF when unconfigured, and configured it can only
+        #     refuse. A worst-case portfolio value that cannot be computed
+        #     refuses rather than reading as no drawdown.
+        from src import l5_portfolio_drawdown as PDD
+        _pdd = PDD.refusal(portfolio_value_usd)
+        if _pdd:
+            return _pdd
 
         # 1. unmatched directional inventory
         if abs(_d(unmatched_after)) > self.max_unmatched_contracts:

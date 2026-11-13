@@ -3661,3 +3661,18 @@ deploy: 2026-11-06T02:15Z book-age completion, halted and disarmed
 # is NOT being replaced. No order can be submitted by this deployment. A new
 # window needs a new owner approval naming the exact window and this SHA.
 deploy: 2026-11-10 window-owner binding gate, halted and disarmed
+
+# 2026-11-13 — owner-authorized ACCOUNT-WIDE PORTFOLIO DRAWDOWN LIMIT
+# ("Build it, start $336.68, stop at -$15").
+#   src/l5_portfolio_drawdown.py -- new. Worst-case portfolio value =
+#     venue buying power + min(UP, DOWN) per market (guaranteed pair
+#     redemption; lone legs and resting-order holds count 0).
+#   src/l5_live_validation_gates.py -- refuse() gains portfolio_value_usd and
+#     refuses PORTFOLIO_DRAWDOWN_LIMIT when anchor - value >= max. ADDITIVE:
+#     OFF unless L5_PORTFOLIO_ANCHOR_USD and L5_PORTFOLIO_MAX_DRAWDOWN_USD are
+#     both set; half-set or unreadable refuses; an unknown value refuses.
+#   src/l5_live_execution.py -- both vg.refuse() call sites pass the value.
+#   src/l5_pmus_live_runner.py -- heartbeat `portfolio_drawdown` block.
+#   Dockerfile -- COPY of the new module.
+# Every existing ceiling, including the lifetime realized one, still runs.
+# Deposits/withdrawals: the owner moves L5_PORTFOLIO_ANCHOR_USD by the amount.
