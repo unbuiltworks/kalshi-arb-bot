@@ -158,10 +158,12 @@ def _crossed_by_other_side(side: str, own_px: D,
     sell against the best bid. None when that side is unreadable.
     """
     w = wire_of(side, own_px)
+    # Zero-size ladder rows are not executable liquidity. Treat an entirely
+    # empty opposite side as unreadable rather than a crossing/fill proof.
     if rests_on(side) == "BID":
-        a = _levels(frame.get("asks"))
+        a = [(px, sz) for px, sz in _levels(frame.get("asks")) if sz > 0]
         return None if not a else (min(px for px, _ in a) <= w)
-    b = _levels(frame.get("bids"))
+    b = [(px, sz) for px, sz in _levels(frame.get("bids")) if sz > 0]
     return None if not b else (max(px for px, _ in b) >= w)
 
 
