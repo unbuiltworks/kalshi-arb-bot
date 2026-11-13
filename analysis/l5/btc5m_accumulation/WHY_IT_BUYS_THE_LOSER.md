@@ -200,3 +200,81 @@ of seeing them -- not a sweep over sides on a single skewed sample.
 | set the bid cheaper? | measured WORSE: 0.05 is +2.99 vs 0.08's +3.74. Cheaper buys a fairer losing leg and rarer pairs, in almost exact proportion |
 | move prices (requote/follow)? | closed: the relative-depth grid, 2-15c below the bid, pins pair cost at exactly 1.0000 across 18 cells |
 | different price per side? | closed above -- directional artifact, does not clear its bar |
+
+---
+
+# Patient maker COMPLETION: tested properly, and it fails for a general reason
+
+Owner pushed back 2026-11-13 that the strategy could still be improved.
+The strongest remaining idea, and the one the operating model itself names
+as a first-class action, is COMPLETE: after one leg fills at 0.08, rest a
+MAKER buy on the other side at ~0.88 so the pair costs 0.96 and still
+redeems 1.00 -- +4c a share, locked, and needing only a recovery to about
+0.12 rather than the full round trip to 0.92 that the cheap pair requires.
+
+This was NOT the already-closed idea. The closed note covers TAKER
+completion at market (DOWN's ask is ~0.91-0.93 when UP fills, so crossing
+costs ~0.99-1.01 — about nothing, and taker is disabled anyway). Resting
+and waiting is a different action, and a completed pair pays exactly 1.00
+either way, so adverse selection on the PRICE of the completing leg is
+irrelevant. On paper it looked like the best idea left.
+
+Measured by `patient_completion.py`, same tape, same adverse fill rule,
+causal by construction (the completing order is placed only after a fill
+already observed). Baseline reproduces +3.74 c/w, t +1.67, 19 cheap pairs.
+
+| complete at | pair cost | locks | completed | cheap pairs left | net c/w | t |
+|---|---|---|---|---|---|---|
+| — (baseline) | 0.16 | +0.84 | 0 | 19 | **+3.74** | +1.67 |
+| 0.90 | 0.98 | +0.02 | 120 | 0 | -1.33 | -3.88 |
+| 0.88 | 0.96 | +0.04 | 88 | 0 | -2.10 | -4.83 |
+| 0.88, only after 240s | 0.96 | +0.04 | 32 | 7 | -2.25 | -1.74 |
+| 0.88, only after 265s | 0.96 | +0.04 | 10 | 19 | +2.25 | +1.11 |
+
+Every configuration is worse than doing nothing. Delaying it recovers the
+cannibalised cheap pairs but never gets back to baseline.
+
+## Cannibalisation is NOT the main reason. Adverse selection is.
+
+The obvious explanation is that completing pre-empts the +0.84 cheap pair
+(note the `cheap pairs left` column going to zero). That is real but
+secondary: at 265s all 19 cheap pairs survive and it is STILL worse.
+
+The actual mechanism, and it is sharper:
+
+| | baseline would have |
+|---|---|
+| completions at 0.88, any time | **26% WON**, 74% lost |
+| completions at 0.88 after 265s | **40% WON**, 60% lost |
+| lone-leg win rate overall | **2.5%** |
+
+**Completions cap a winner 10-16x more often than chance.** The opposite
+side only becomes cheap when OUR side strengthens, and our side
+strengthening is exactly when our lone leg was going to win. So the
+completing order fires preferentially on the positions that were about to
+pay 1.00, and caps +0.92 at +0.04.
+
+```
+capped winner   +0.92 -> +0.04  =  -0.88
+saved loser     -0.08 -> +0.04  =  +0.12
+break-even needs winners < 0.12/(0.88+0.12) = 12% of completions
+measured                                      26-40%
+```
+
+## The general law, now confirmed twice
+
+This is the same structure as the hedging result earlier in the program:
+*deep hedges fire only when the favourite is already winning -- a tax on
+winners, absent from losers.* Two different mechanisms, same finding:
+
+> **In this market, any hedge or completion that triggers on your own
+> position improving is adversely selected against your winners.** The
+> trigger condition and the winning condition are the same event.
+
+That is not a parameter to tune. It applies to completion at any price,
+any delay, and to hedging generally, and it is why "lock in a smaller
+sure thing" keeps measuring worse than holding. It is the same shape as
+the martingale and lower-prize-higher-frequency results: a variance
+reduction bought with expectation.
+
+**Closed. 0.08/0.08, hold to settlement, no completion, no hedge.**
