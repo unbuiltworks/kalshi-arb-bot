@@ -261,6 +261,16 @@ def watch_window(ws, price, verbose=False):
     #: that value is <= c. One number tests every completion price, so the
     #: whole curve comes free with the same windows.
     first_fill = None               # (side, t) of whichever filled first
+    #: SAME-SIDE PEAK AFTER THE FILL. exit_on_recovery.py is the only
+    #: arm in this program to clear its own search bar (t +2.69 against
+    #: a 2.04 bar for 8 arms): 31% of legs that collapse to 8c RECOVER
+    #: to 12c inside the window, and selling into that recovery as a
+    #: maker turns -8c into +4c. Offers fill when the price RISES to
+    #: them, so it is mechanically available where buying the winner is
+    #: not. The collector recorded only the OPPOSITE side's low, which
+    #: is the wrong quantity for it -- so the best finding we have could
+    #: not be checked against live data at all.
+    own_peak_after = None           # that side's HIGH after it filled
     opp_deepest_after = None        # other side's low after that moment
     stop_at = ws + dt.timedelta(seconds=WINDOW_S - CANCEL_LEAD_S)
 
@@ -301,6 +311,11 @@ def watch_window(ws, price, verbose=False):
                 if op is not None and (opp_deepest_after is None
                                        or op < opp_deepest_after):
                     opp_deepest_after = op
+                #: and the filled side's own recovery high
+                sp = own_price(first_fill[0], bid, ask)
+                if sp is not None and (own_peak_after is None
+                                       or sp > own_peak_after):
+                    own_peak_after = sp
             dvol = D(0)
             if vol is not None:
                 if last_vol is not None and vol >= last_vol:
@@ -355,7 +370,8 @@ def watch_window(ws, price, verbose=False):
             "errors": errors,
             "traded": traded, "touch_shares": touch_shares,
             "first_fill": first_fill,
-            "opp_deepest_after": opp_deepest_after}
+            "opp_deepest_after": opp_deepest_after,
+            "own_peak_after": own_peak_after}
 
 
 def try_settle(slug):
@@ -406,6 +422,10 @@ def finish(obs, won):
            "opp_deepest_after_first": (str(obs["opp_deepest_after"])
                                        if obs["opp_deepest_after"] is not None
                                        else None),
+           #: tests every exit level offline: a leg exits at X iff this >= X
+           "own_peak_after_first": (str(obs.get("own_peak_after"))
+                                    if obs.get("own_peak_after") is not None
+                                    else None),
            #: NOT MEASURED, and reported as null rather than 0. The only
            #: public endpoint carrying sharesTraded is /bbo, which 404s
            #: while the window is OPEN -- so volume-through-our-level,
