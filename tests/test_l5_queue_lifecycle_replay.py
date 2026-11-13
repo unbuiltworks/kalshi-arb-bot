@@ -91,3 +91,24 @@ def test_touch_pair_ignores_zero_size_tombstones():
                       [[".46", "0"], [".55", "10"]]) == Decimal(".90")
     assert touch_pair([[".45", "0"]], [[".55", "10"]]) is None
     assert touch_pair([[".45", "10"]], [[".55", "0"]]) is None
+
+
+def test_tombstone_only_own_side_cannot_attest_zero_queue():
+    from src.l5_queue_depletion import queue_ahead
+    # A deleted book side is missing evidence, not an empty FIFO queue.
+    assert queue_ahead("UP", ".45", bids=[[".45", "0"]]) is None
+    assert queue_ahead("DOWN", ".45", asks=[[".55", "0"]]) is None
+    for side, empty in (
+        ("UP", {"bids": [[".45", "0"]], "asks": [[".55", "10"]]}),
+        ("DOWN", {"bids": [[".45", "10"]], "asks": [[".55", "0"]]}),
+    ):
+        result = lifecycle_aware_verdict(
+            side, ".45", [empty, frame(".45", ".55")],
+            lifecycle=[{"frame": 0, "state": "RESTING"}],
+        )
+        assert result["verdict"] is None
+        assert result["reason"] == "QUEUE_UNREADABLE"
+    # Real displayed liquidity only at worse prices legitimately means
+    # no queue ahead; it must not be mistaken for a missing book.
+    assert queue_ahead("UP", ".45", bids=[[".44", "10"], [".45", "0"]]) == 0
+    assert queue_ahead("DOWN", ".45", asks=[[".56", "10"], [".55", "0"]]) == 0
