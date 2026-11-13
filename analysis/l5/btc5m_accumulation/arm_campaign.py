@@ -34,17 +34,38 @@ BTC5M = "09271601-9e58-4add-8343-fdabede5679d"
 PMUS15 = "87f1834e-530e-4fc4-a310-91c8d3add196"
 URL = "https://backboard.railway.com/graphql/v2"
 
-#: the campaign's shape. One market at a time, 5 shares a side at 0.08.
+#: the campaign's shape. One market at a time, `--shares` a side at 0.08.
 WINDOWS = 8
-CLIP_USD = "0.40"
-PRICE = "0.08"
-EXPOSURE = "1.00"
+PRICE = D("0.08")
 DAILY_LOSS = "5.00"
-#: the gate judges `exposure_ceiling()` = min(adapter, approved) against
-#: the account's remaining loss room, so this is the bar to clear.
-NEED_LOSS_ROOM = D("1.00")
-#: both legs at once
-NEED_EXPOSURE_HEADROOM = D("0.80")
+
+
+def shape(shares: int) -> dict:
+    """Every figure the campaign needs, derived from ONE number.
+
+    These were four hand-kept constants and they drifted: a 5-share clip
+    with a 1-share exposure approval refuses every order, and the reverse
+    silently approves five times the intended size.
+    """
+    legs = D(shares) * PRICE                 # one side
+    both = legs * 2                          # both legs at once
+    return {"shares": int(shares),
+            "clip_usd": str(legs),
+            #: the approval must cover both legs with a little slack, and
+            #: `exposure_ceiling()` = min(adapter, approved) is what the
+            #: gate judges against the account's remaining loss room.
+            "exposure": str((both * D("1.25")).quantize(D("0.01"))),
+            "need_exposure_headroom": both,
+            #: WHAT THE LEDGER WILL BOOK, WHICH IS NOT WHAT WE RISK.
+            #: `l5-pmus-live` prices BTC5m legs it has no basis for at
+            #: $1.00/share (UNKNOWN_COST_UPPER_BOUND), so a losing leg
+            #: books `shares` dollars, not `shares * 0.08`. The DAILY HALT
+            #: is judged on that booked figure, so the phantom worst case
+            #: is the real constraint on how many windows fit. This is the
+            #: check whose absence let 2026-11-13 consume 39.27 of a 40.00
+            #: halt on 2.25 of actual risk.
+            "phantom_worst_usd": D(shares) * WINDOWS,
+            "real_worst_usd": legs * WINDOWS}
 
 
 def gql(query, variables):
@@ -103,6 +124,15 @@ def refuse(why):
 
 def main(argv):
     go = "--go" in argv
+    shares = 5
+    if "--shares" in argv:
+        shares = int(argv[argv.index("--shares") + 1])
+    sh = shape(shares)
+    print("shape: %d share(s) a side at %s -> clip %s, approval exposure %s"
+          % (sh["shares"], PRICE, sh["clip_usd"], sh["exposure"]))
+    print("  real worst case over %d windows    %s" % (WINDOWS, sh["real_worst_usd"]))
+    print("  BOOKED worst case (at $1/share)   %s   <-- what the halt sees"
+          % sh["phantom_worst_usd"])
     v = btc5m_variables()
 
     # 1. not already armed
@@ -117,15 +147,30 @@ def main(argv):
     room = D(str(dr["room_usd"]))
     print("account day realized %s of halt %s -> loss room %s"
           % (dr.get("utc_day_realized_usd"), dr.get("halt_usd"), room))
-    if room < NEED_LOSS_ROOM:
-        return refuse("loss room %s < %s; the gate would refuse every window "
-                      "(EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM). The daily figure "
-                      "resets at 00:00Z." % (room, NEED_LOSS_ROOM))
+    need = D(sh["exposure"])
+    if room < need:
+        return refuse("loss room %s < approved exposure %s; the gate would "
+                      "refuse every window (EXPOSURE_CEILING_EXCEEDS_LOSS_"
+                      "ROOM). The daily figure resets at 00:00Z."
+                      % (room, need))
+    # AND the phantom booking has to fit, or the account-wide DAILY HALT
+    # trips partway through and stops every lane, not just this one.
+    if sh["phantom_worst_usd"] > room:
+        fits = int(room / D(sh["shares"])) if sh["shares"] else 0
+        return refuse(
+            "the LEDGER would book up to %s (at $1.00/share) against %s of "
+            "room, so the account-wide daily halt would trip after about %d "
+            "window(s) and stop every lane. Real risk is only %s. Either run "
+            "%d share(s) a side, or fix the cost basis "
+            "(COST_BASIS_OVERSTATEMENT.md)."
+            % (sh["phantom_worst_usd"], room, fits, sh["real_worst_usd"],
+               max(1, int(room / WINDOWS)) if room >= WINDOWS else 1))
 
     # 3. account exposure headroom. Foreign contracts are charged at $1.00
     #    GROSS, so another lane's MATCHED inventory can consume the cap.
     #    Shadow cannot see this: the account block reads null unarmed.
     cap = D(str(v.get("L5_ACCOUNT_MAX_EXPOSURE_USD") or "0"))
+    NEED_EXPOSURE_HEADROOM = sh["need_exposure_headroom"]
     dep, _ = latest_deployment(BTC5M)
     other = None
     for m in reversed(logs(dep, 400)):
@@ -148,7 +193,8 @@ def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     gen = subprocess.run(
         [sys.executable, "-I", os.path.join(here, "make_approval.py"),
-         str(WINDOWS), "--exposure", EXPOSURE, "--daily-loss", DAILY_LOSS],
+         str(WINDOWS), "--exposure", sh["exposure"],
+         "--daily-loss", DAILY_LOSS],
         capture_output=True, text=True, timeout=120)
     doc = [x for x in gen.stdout.splitlines() if x.startswith('{"approved"')]
     if "campaign planner accepted: YES" not in gen.stdout or not doc:
@@ -166,9 +212,9 @@ def main(argv):
     plan = [("L5_CAMPAIGN_APPROVAL", approval),
             ("L5_BTC5M_NOT_AFTER", not_after),
             ("L5_BTC5M_ENTRY_MODE", "STRADDLE"),
-            ("L5_BTC5M_STRADDLE_PRICE", PRICE),
+            ("L5_BTC5M_STRADDLE_PRICE", str(PRICE)),
             ("L5_BTC5M_STRADDLE_RUNGS", ""),
-            ("L5_BTC5M_CLIP_USD", CLIP_USD),
+            ("L5_BTC5M_CLIP_USD", sh["clip_usd"]),
             ("L5_BTC5M_CAMPAIGN", "ON"),
             ("L5_BTC5M_MARKET", ""),
             ("L5_SHADOW_ONLY", "0"),
