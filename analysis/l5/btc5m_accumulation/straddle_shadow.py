@@ -159,8 +159,12 @@ def own_price(side, bid, ask):
 def watch_window(ws, price, verbose=False):
     """Watch ONE window. Returns the single summary row, or None."""
     slug = slug_for(ws)
+    emit(TAG + "_WINDOW_OPEN", {"market": slug,
+                                "window_start": ws.isoformat(),
+                                "price": str(price)})
     filled = {}
     polls = reads = rate_limited = 0
+    errors = {}
     deepest = {UP: None, DOWN: None}
     #: READ DENSITY IS A DATA-QUALITY SIGNAL, not a curiosity. The tape the
     #: fill rule was validated on samples every ~2s; a gap of 10s can hide
@@ -210,7 +214,19 @@ def watch_window(ws, price, verbose=False):
             rate_limited += 1
             time.sleep(POLL_S * 4)          # the venue asked us to slow down
             continue
-        except Exception:                                      # noqa: BLE001
+        except Exception as exc:                               # noqa: BLE001
+            #: NEVER SWALLOW THIS SILENTLY. A bare continue here is how the
+            #: first deployment managed to poll for 24 minutes and log
+            #: nothing: every call was failing and the loop just spun. The
+            #: reason is recorded and the FIRST one is emitted, so a broken
+            #: collector says so within seconds instead of looking idle.
+            why = "%s:%s" % (type(exc).__name__,
+                             getattr(exc, "code", "") or "")
+            errors[why] = errors.get(why, 0) + 1
+            if sum(errors.values()) == 1:
+                emit(TAG + "_READ_ERROR", {"market": slug, "why": why,
+                                           "note": "first failure this "
+                                                   "window"})
             time.sleep(POLL_S)
             continue
         if bid is not None and ask is not None:
@@ -270,9 +286,14 @@ def watch_window(ws, price, verbose=False):
     #: 0115z entirely, which over a day is 144 windows instead of 288 and
     #: doubles the time to a verdict. So this returns the OBSERVATION and
     #: the caller settles it later, out of band.
+    emit(TAG + "_WINDOW_CLOSE",
+         {"market": slug, "reads": reads, "polls": polls,
+          "rate_limited": rate_limited, "errors": errors,
+          "filled": sorted(filled), "awaiting_settlement": True})
     return {"slug": slug, "ws": ws, "price": price, "filled": filled,
             "deepest": deepest, "polls": polls, "reads": reads,
             "rate_limited": rate_limited, "max_gap": max_gap,
+            "errors": errors,
             "traded": traded, "touch_shares": touch_shares,
             "first_fill": first_fill,
             "opp_deepest_after": opp_deepest_after}
@@ -336,6 +357,7 @@ def finish(obs, won):
                                      else None),
            "polls": polls, "reads": reads,
            "rate_limited": rate_limited,
+           "read_errors": obs.get("errors") or {},
            "max_read_gap_s": round(max_gap, 1),
            "mean_read_gap_s": (round((WINDOW_S - CANCEL_LEAD_S) / reads, 1)
                                if reads else None),
