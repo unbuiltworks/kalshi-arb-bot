@@ -66,10 +66,17 @@ At an ~87-90% single-fill rate, runs of 9-13 losers are COMMON. So:
    three windows. **Shadow cannot see this** -- the `account` block reads
    all-null without the arm token, so a campaign looks clean in shadow and
    places nothing live.
-3. The unexplained **-$10.00** step in the account ledger (14:31 -> 15:51
-   on 2026-11-13, exactly -10.00000000 on BOTH day and lifetime figures,
-   while authoritative cash ROSE 3.40). Unresolved; it consumes a quarter
-   of each day's budget.
+3. **The cost-basis overstatement, which is the real blocker.** SOLVED as
+   a diagnosis, UNFIXED as a defect -- see `COST_BASIS_OVERSTATEMENT.md`.
+   `l5-pmus-live` prices BTC5m legs it has no basis for at **$1.00 a
+   share** (`UNKNOWN_COST_UPPER_BOUND`); we rest at 0.08, so every losing
+   leg books at **12.5x** its real cost. On 2026-11-13 that consumed
+   **39.27 of the 40.00 daily halt on 2.25 of actual risk** and refused
+   every window after 1620z.
+   **This recurs daily and scales with the run**: ~87 losing legs across
+   100 windows would book on the order of -435 against a -40 halt. Waiting
+   for 00:00Z works once; it does not work thirteen times. Fix the basis
+   before committing to the full 13 campaigns.
 
 ## Per campaign: set ALL variables, THEN deploy once
 
