@@ -108,11 +108,62 @@ def main(path: str) -> int:
                  statistics.median(xs), nd, q(xs, .75), nd, max(xs)))
     print()
 
-    #: THE JOINT TEST. A cell is only worth anything if the spread is wide,
-    #: a pair is placeable at a size worth placing, AND the market actually
-    #: trades. Each clause removes a different illusion, so they are
-    #: reported as a funnel rather than a single pass/fail.
-    print("FUNNEL, each clause removing a different illusion")
+    #: THE JOINT TEST, AND A CORRECTION TO HOW IT WAS FIRST REPORTED. The
+    #: funnel below is CUMULATIVE, and in its first run that hid the only
+    #: cell that mattered: it reported "0 markets" surviving `traded >= 100`
+    #: while the sample's maximum lifetime volume was 101,900 shares. Both
+    #: statements were true -- the high-volume market failed the PRECEDING
+    #: `pair size >= 50` clause, so it was already gone before flow was
+    #: ever tested -- and together they read as "nothing trades here",
+    #: which is false.
+    #:
+    #: A cumulative funnel answers "how many pass every clause in this
+    #: order", and the order is an editorial choice that can delete the
+    #: answer. So the non-cumulative cross-tab is printed FIRST and the
+    #: funnel second, and the survivor list is taken on spread-and-flow
+    #: without a depth gate in front of it.
+    print("CROSS-TAB, non-cumulative: does anything actually trade here?")
+    rate = collections.Counter()
+    for s in scored:
+        sp = s["spread"]
+        b = ("0.05-0.08" if sp < 0.08 else "0.08-0.12" if sp < 0.12
+             else "0.12-0.18" if sp < 0.18 else "0.18-0.25" if sp < 0.25
+             else "0.25+")
+        rate[(b, (num(s.get("shares_traded")) or 0) >= 100)] += 1
+    print("  %-11s %8s %9s %8s" % ("spread", "flow", "no flow", "flow%"))
+    for b in ("0.05-0.08", "0.08-0.12", "0.12-0.18", "0.18-0.25", "0.25+"):
+        y, nn = rate[(b, True)], rate[(b, False)]
+        if not (y + nn):
+            continue
+        print("  %-11s %8d %9d %7.1f%%" % (b, y, nn, 100.0 * y / (y + nn)))
+    flowing = [s for s in scored
+               if (num(s.get("shares_traded")) or 0) >= 100]
+    print("  wide AND flowing: %d of %d (%.1f%%)"
+          % (len(flowing), len(scored),
+             100.0 * len(flowing) / len(scored) if scored else 0.0))
+    print()
+    if flowing:
+        print("  WIDE AND FLOWING, no depth gate applied:")
+        print("  %-46s %7s %9s %9s %11s %9s"
+              % ("slug", "spread", "pair_sh", "cap_$", "traded", "levels"))
+        for s in sorted(flowing,
+                        key=lambda x: -(num(x.get("shares_traded")) or 0)):
+            ps = s["pair_size"]
+            print("  %-46s %7.3f %9s %9s %11.1f %4d/%-4d"
+                  % (s["slug"][:46], s["spread"],
+                     "--" if ps is None else "%.2f" % ps,
+                     "--" if s["capacity"] is None else "%.2f" % s["capacity"],
+                     num(s.get("shares_traded")) or 0.0,
+                     s.get("bid_levels") or 0, s.get("ask_levels") or 0))
+        print()
+        print("  LIFETIME volume is not a rate, and for a long-dated market")
+        print("  the difference decides it: 101,900 shares on a season-long")
+        print("  `series-2026` market opened months ago is a trickle, while")
+        print("  the 1c in-game books on the tape do ~450 shares a MINUTE.")
+        print("  P(both) depends on the RATE, so these names need their own")
+        print("  tape before any of them is called viable.")
+        print()
+    print("FUNNEL, cumulative -- read the cross-tab above first")
     steps = [
         ("wide spread >= 5c", lambda s: s["spread"] >= 0.05),
         ("  + both touches quoted", lambda s: s["pair_size"] is not None),
@@ -129,7 +180,7 @@ def main(path: str) -> int:
         print("  %-32s %5d markets" % (label, len(cur)))
     print()
     if cur:
-        print("SURVIVORS: wide spread, placeable pair, and real flow")
+        print("PASSING EVERY CUMULATIVE CLAUSE: wide, placeable, flowing")
         print("  %-52s %7s %9s %9s %11s"
               % ("slug", "spread", "pair_sh", "cap_$", "traded"))
         for s in sorted(cur, key=lambda x: -(x["capacity"] or 0))[:25]:
@@ -141,8 +192,9 @@ def main(path: str) -> int:
         print("  median capacity $%.4f a pair across %d survivors"
               % (statistics.median(caps), len(cur)))
     else:
-        print("NO SURVIVORS. Every wide-spread market in the sample failed")
-        print("on depth or on flow: the spread is visible and not takeable.")
+        print("Nothing passes every cumulative clause in this order. That is")
+        print("NOT the same as nothing trading -- see the cross-tab above,")
+        print("which is the number to read.")
     print()
     #: the counter-illusion, stated explicitly because it is the one the
     #: handoff's "19-26c spread" reading fell into.

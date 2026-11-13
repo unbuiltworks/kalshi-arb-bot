@@ -82,6 +82,7 @@ CRYPTO_PREFIXES = ("cpc-", "cpce", "cpcs", "cpcx", "cpag", "cpau")
 #: calls, so the budget is per-request and the cycle length follows from it.
 BUDGET_RPS = float(os.environ.get("CENSUS_BUDGET_RPS", "6.0"))
 CALLS_PER_MARKET = 2                     # bbo + book
+CALLS_PER_MARKET_BOOK_ONLY = 1           # book alone; see observe_book_only
 MIN_CYCLE_S = 15.0
 GAP_WARN_S = 30.0
 
@@ -230,6 +231,73 @@ def observe(slug: str) -> dict:
     return row
 
 
+#: ONE CALL INSTEAD OF TWO, which doubles the sampling rate for free and
+#: was found by reading what `/book` actually returns. Its `stats` block
+#: carries `sharesTraded`, `lastTradePx`, `openInterest` and the session
+#: high/low -- so the ladder AND the volume come from a single GET, and
+#: `bbo` is not needed at all for the census.
+#:
+#: THIS ALSO FALSIFIES A LOAD-BEARING CLAIM IN THE BTC5M WORK. That shadow
+#: recorded `vol_while_fillable: None` with reason `BBO_404_WHILE_OPEN` for
+#: 199 windows, on the finding that "volume-while-fillable CANNOT be
+#: measured on a live window from public data". Measured today: `/book`
+#: answers 200 on a LIVE `cpc-btc-updown-5m` window with a 98-level ladder
+#: and `stats.sharesTraded` populated. The quantity was one endpoint away
+#: the whole time. BTC5m stays closed -- it is closed on spread arithmetic,
+#: not on this -- but "cannot be measured" was wrong, and the same
+#: assumption would have travelled into the sports census unexamined.
+#:
+#: ONE TRAP, AND IT WOULD HAVE MIS-SETTLED EVERY WINDOW. `stats` also
+#: carries `settlementPx`, and on an OPEN market it reads 0.0000 rather
+#: than null -- measured on a live window trading at 0.98. `straddle_shadow`
+#: treats a settlementPx of 0 or 1 as the settled outcome, so reading
+#: settlement from `/book` would have resolved every open window to DOWN
+#: with total confidence. Settlement is therefore taken ONLY from `/bbo`,
+#: which correctly returns null while open, and never from here.
+SETTLEMENT_NEVER_FROM_BOOK = True
+
+
+def observe_book_only(slug: str) -> dict:
+    """One GET: the touch, the ladder behind it, and the volume."""
+    row: dict = {"slug": slug, "utc": dt.datetime.now(UTC).isoformat(),
+                 "source": "book_only"}
+    try:
+        md = (_get("/v1/markets/%s/book" % slug).get("marketData") or {})
+    except RateLimited:
+        return {**row, "readable": False, "why": "RATE_LIMITED"}
+    except Exception as exc:                                   # noqa: BLE001
+        return {**row, "readable": False,
+                "why": "%s:%s" % (type(exc).__name__,
+                                  getattr(exc, "code", "") or "")}
+    bids = md.get("bids") or []
+    offers = md.get("offers") or []          # PMUS serves sell depth here
+    st = md.get("stats") or {}
+    bid = _num((bids[0] or {}).get("px")) if bids else None
+    ask = _num((offers[0] or {}).get("px")) if offers else None
+    row.update({
+        "readable": True, "depth_available": True,
+        "state": md.get("state"),
+        "bid": bid, "ask": ask,
+        "bid_touch_qty": _num((bids[0] or {}).get("qty")) if bids else None,
+        "ask_touch_qty": _num((offers[0] or {}).get("qty")) if offers else None,
+        "bid_levels": len(bids), "ask_levels": len(offers),
+        "shares_traded": _num(st.get("sharesTraded")),
+        "last_trade_px": _num(st.get("lastTradePx")),
+        "last_trade_qty": _num(st.get("lastTradeQty")),
+        "open_interest": _num(st.get("openInterest")),
+        #: deliberately NOT read from stats -- see the trap note above.
+        "settlement_px": None,
+        "settlement_source": "not_read_here_see_SETTLEMENT_NEVER_FROM_BOOK",
+    })
+    row["spread"] = (None if bid is None or ask is None or ask < bid
+                     else round(ask - bid, 4))
+    row["maker_pair_cost"] = (None if row["spread"] is None
+                              else round(bid + (1.0 - ask), 4))
+    row["queue_ahead_bid"] = row["bid_touch_qty"]
+    row["queue_ahead_ask"] = row["ask_touch_qty"]
+    return row
+
+
 def snapshot() -> int:
     """One pass over the live sports slate. Answers the depth question now."""
     slugs, cov = discover()
@@ -257,7 +325,8 @@ def snapshot() -> int:
     return 0
 
 
-def record(minutes: float, out_path: str) -> int:
+def record(minutes: float, out_path: str,
+           book_only: bool = False, slugs_file: str = None) -> int:
     """Poll the live sports slate on a cycle and write a tape.
 
     Re-discovers every cycle, because a sports slate turns over as games
@@ -270,6 +339,20 @@ def record(minutes: float, out_path: str) -> int:
                           "minutes": minutes, "budget_rps": BUDGET_RPS,
                           "provenance": "public gateway, GET only, no "
                                         "credentials, no order path"})
+    #: AN EXPLICIT SLUG LIST, because the markets that matter are not on
+    #: the live slate. The wide-spread cells that actually trade turned out
+    #: to be long-dated `atc-...-series-2026-*` names, which the live-events
+    #: query never returns -- it serves in-game events. Polling the live
+    #: slate to judge those markets would measure the wrong population and
+    #: report it as the right one.
+    fixed = None
+    if slugs_file:
+        with open(slugs_file, encoding="utf-8") as fh:
+            fixed = [ln.strip() for ln in fh
+                     if ln.strip() and not ln.startswith("#")]
+        emit(TAG + "_FIXED_SLATE",
+             {"slugs": len(fixed), "source": slugs_file,
+              "note": "explicit list; live-slate discovery is NOT used"})
     last_seen: dict = {}
     cycle = 0
     totals = {"rows": 0, "rate_limited": 0, "errors": 0, "no_depth": 0}
@@ -278,7 +361,10 @@ def record(minutes: float, out_path: str) -> int:
             cycle += 1
             t0 = dt.datetime.now(UTC)
             try:
-                slugs, cov = discover()
+                if fixed is not None:
+                    slugs, cov = fixed, {"fixed_slate": len(fixed)}
+                else:
+                    slugs, cov = discover()
             except RateLimited:
                 totals["rate_limited"] += 1
                 time.sleep(10.0)
@@ -288,11 +374,14 @@ def record(minutes: float, out_path: str) -> int:
                 emit(TAG + "_DISCOVERY_ERROR", {"why": type(exc).__name__})
                 time.sleep(10.0)
                 continue
-            pace = max(CALLS_PER_MARKET / BUDGET_RPS, 0.0)
+            calls = (CALLS_PER_MARKET_BOOK_ONLY if book_only
+                     else CALLS_PER_MARKET)
+            pace = max(calls / BUDGET_RPS, 0.0)
             for slug in slugs:
                 if dt.datetime.now(UTC) >= deadline:
                     break
-                row = observe(slug)
+                row = (observe_book_only(slug) if book_only
+                       else observe(slug))
                 row["cycle"] = cycle
                 prev = last_seen.get(slug)
                 now = dt.datetime.now(UTC)
@@ -460,6 +549,10 @@ def main() -> int:
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--universe", action="store_true")
     ap.add_argument("--wide", type=float, default=0.05)
+    ap.add_argument("--book-only", action="store_true",
+                    help="one GET a market instead of two; doubles resolution")
+    ap.add_argument("--slugs", help="file of explicit slugs, one a line; "
+                                    "bypasses live-slate discovery")
     ap.add_argument("--minutes", type=float, default=30.0)
     ap.add_argument("--out", default="sports_tape.jsonl")
     a = ap.parse_args()
@@ -468,7 +561,7 @@ def main() -> int:
     if a.universe:
         return universe(a.wide)
     if a.record:
-        return record(a.minutes, a.out)
+        return record(a.minutes, a.out, a.book_only, a.slugs)
     ap.print_help()
     return 2
 
