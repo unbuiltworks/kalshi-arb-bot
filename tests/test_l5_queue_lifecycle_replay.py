@@ -66,3 +66,18 @@ def test_terminal_event_cannot_be_followed_by_ack_or_partial_fill():
             )
             assert result["verdict"] is None
             assert result["reason"] == "LIFECYCLE_CONTRADICTORY"
+
+
+def test_zero_size_opposite_touch_does_not_prove_fill():
+    # A deleted/zero-size level must not be treated as an executable cross.
+    for side, empty_cross in (
+        ("UP", {"bids": [[".45", "10"]], "asks": [[".44", "0"], [".55", "10"]]}),
+        ("DOWN", {"bids": [[".56", "0"], [".45", "10"]], "asks": [[".55", "10"]]}),
+    ):
+        frames = [frame(".45", ".55"), empty_cross]
+        result = lifecycle_aware_verdict(
+            side, ".45", frames, start=0,
+            lifecycle=[{"frame": 0, "state": "RESTING"}],
+        )
+        assert result["verdict"] != "PROVEN"
+        assert result["venue_fill_confirmed"] is False
