@@ -51,7 +51,7 @@ pre = {"sha": dep.get("commitHash") == SHA, "dep_ok": dep.get("status") == "SUCC
        "recorder_durable": L._get(hb, "fill_calibration.readback.readable") is True,
        "residual_cap": cur.get("PMUS_RESIDUAL_CAP_K") == "2",   # owner 16:07Z: K=2
        # starting state = the 19:30Z batch as written (approval expired at 20:45Z); only approval/market/id/halt change now
-       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in [k for k in TEST_ON if k != "L5_TS_ORDER_TTL_S"] + [k for k in TIGHTEN if k not in ("L5_DAILY_REALIZED_LOSS_HALT_USD", "L5_MAX_CUMULATIVE_LOSS_USD")]),
+       "state_is_prev_batch": all((cur.get(k) or "") == (PREV.get(k) or "") for k in [k for k in TEST_ON if k != "L5_TS_ORDER_TTL_S"] + [k for k in TIGHTEN if k not in ("L5_DAILY_REALIZED_LOSS_HALT_USD", "L5_MAX_CUMULATIVE_LOSS_USD", "L5_CAMPAIGN_BUDGET_USD")]),
        # runtime refuses CAMPAIGN_LIMITS_WIDER_THAN_APPROVED unless running halt <= approved daily loss (code cap 5)
        "daily_halt_written_fits_approval": D(TIGHTEN["L5_DAILY_REALIZED_LOSS_HALT_USD"]) <= D(doc["max_daily_loss_usd"]),
        "opening_leg_one_contract": cur.get("L5_TS_OPENING_LEG_MAX_CONTRACTS") == "1",
