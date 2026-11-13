@@ -11,7 +11,7 @@ BUDGET = "3.00"   # owner 19:0xZ: "$3 exposure (Recommended)"
 A = dt.datetime.fromisoformat(os.environ["KIT_START"]) if os.environ.get("KIT_START") else dt.datetime(2026, 11, 12, 22, 30, 0, tzinfo=dt.timezone.utc)
 STARTS = [A + dt.timedelta(minutes=15*i) for i in range(4)]   # owner 17:4xZ: one arm, consecutive windows (chose "Both")
 SLUGS = ["cpc-btc-updown-15m-" + s.strftime("%Y-%m-%d-%H%Mz") for s in STARTS]; SLUG = SLUGS[0]; NWIN = len(SLUGS)
-NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-h40f-" + SHA[:8]
+NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-h40f-t120-" + SHA[:8]
 #: owner 2026-11-12 14:17Z: "turn on recycling and relax the floor for the next window"
 TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "ON",
            "L5_CASH_POLICY": "RECYCLE_ON_COMPLETE", "L5_TS_OWN_EVIDENCE_GATE": "WAIVED_BY_OWNER",
@@ -20,7 +20,7 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            # further round at d=0; depth 1 keeps it aggressive AND lets rounds reopen (owner: keep adjusting)
            "L5_TS_DEPTH_TICKS": "2",   # owner 15:20Z: UP and DOWN bids 2 ticks below the bid, simultaneously
            # owner 14:57Z "MORE PAIRS. get aggressive. move constantly": opening bids re-priced every 20 s (was 120 s)
-           "L5_TS_ORDER_TTL_S": "20",
+           "L5_TS_ORDER_TTL_S": "120",   # owner 2026-11-13 13:4xZ "TTL 120 only": reprice on touch move (wake <=0.25s, 1 tick), not on a 20 s timer
            # owner 15:17Z "place these pairs simultaneously": three rounds in parallel
            "L5_TS_ROUND_ALLOCATIONS": "3",
            # 15:15Z: the replenish ledger spent its credits on 20 s re-prices (REPLENISH_UNPAID x51) and starved
