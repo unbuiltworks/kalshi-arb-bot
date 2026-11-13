@@ -29,7 +29,11 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            # owner 16:17Z "taker on": bounded taker completion of stranded legs (pair <= 1.00, outlay cap L5_TAKER_MAX_OUTLAY_USD=3)
            "L5_TS_COMPLETION_CROSS": "YES", "L5_TAKER_COMPLETION_POLICY": "YES",
            # owner 16:31Z "deploy 234": the single continuous inventory controller drives this window
-           "L5_TS_CONTINUOUS_INVENTORY": "YES"}
+           "L5_TS_CONTINUOUS_INVENTORY": "YES",
+           # owner 2026-11-13 04:2xZ "Yes, fidelity + 48 slots": L5 trades to ~752 s and quotes both sides at once;
+           # 21:00Z ran entry 480 s / complete 600 s (vars), never had both sides resting, ran out of 24 slots at ~600 s. Same dollar limits.
+           "L5_FIDELITY_MODE": "ON", "L5_TS_ENTRY_CUTOFF_S": "840", "L5_TS_COMPLETE_CUTOFF_S": "870",
+           "L5_ACC_MAX_ROUNDS": "48"}
 TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "75.00",   # owner 2026-11-13 04:0xZ "$75 (Recommended)" after BTC5m 0035z -28.12 (was 50, owner 11-12)
            "L5_DAILY_REALIZED_LOSS_HALT_USD": "10.00",   # owner 22:4xZ "Write $10 in arm write" (another session had set 50)
            "L5_MAX_TOTAL_EXPOSURE_USD": "3.00", "L5_MAX_CASH_DEPLOYED_USD": "2.70", "L5_MAX_WORST_CASE_DEFICIT_USD": "3.00", "L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
