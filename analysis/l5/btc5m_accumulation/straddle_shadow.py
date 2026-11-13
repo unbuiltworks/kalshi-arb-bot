@@ -64,7 +64,16 @@ UTC = dt.timezone.utc
 GATEWAY = os.environ.get("PMUS_PUBLIC_GATEWAY", "https://gateway.polymarket.us")
 WINDOW_S = 300.0
 CANCEL_LEAD_S = 30.0
-POLL_S = 2.0
+#: ADAPTIVE POLLING. For most of a window the price is nowhere near the
+#: resting level and a 2s sample is a wasted request -- and those wasted
+#: requests were buying 429s that blocked the settlement reads. So poll
+#: FAST only when a fill is plausible and slow down when it is not. This
+#: cuts request volume substantially while IMPROVING resolution exactly
+#: where the fill rule needs it.
+POLL_NEAR_S = 2.0          # within NEAR_BAND of the resting price
+POLL_FAR_S = 6.0           # both sides far away; nothing can fill
+NEAR_BAND = D("0.06")
+POLL_S = POLL_NEAR_S       # the settle-loop backoff still keys off this
 UP, DOWN = "UP", "DOWN"
 TAG = "BTC5M_STRADDLE_SHADOW"
 
@@ -126,7 +135,9 @@ def bbo(slug, timeout=8.0, retries=3):
             delay *= 2
     md = doc.get("marketData") or doc
     return (dec(md.get("bestBid")), dec(md.get("bestAsk")),
-            str(md.get("state") or ""), dec(md.get("settlementPx")))
+            str(md.get("state") or ""), dec(md.get("settlementPx")),
+            dec(md.get("sharesTraded")), dec(md.get("bidShares")),
+            dec(md.get("askShares")))
 
 
 def own_price(side, bid, ask):
@@ -151,12 +162,27 @@ def watch_window(ws, price, verbose=False):
     #: silently averaged in.
     last_read = None
     max_gap = 0.0
+    #: WOULD SIZE HAVE FILLED? Every figure in this analysis comes from a
+    #: rule that fills us whenever the price touches our level, with no
+    #: queue position and no size. That is fine for one share and unproven
+    #: for forty-five. The decisive quantity is how much volume trades
+    #: THROUGH our level while we would be resting there: hundreds of
+    #: shares and size fills, three shares and it does not.
+    #:
+    #: And the asymmetry matters more than the total. The one-sided toxic
+    #: fill is informed sellers dumping onto a bid worth 2.5c -- they take
+    #: that at any size. The pair-completing fill is incidental. So this
+    #: records volume-while-fillable PER SIDE, because size could raise the
+    #: bleed faster than the pairs, which is the direction that kills it.
+    traded = {UP: D(0), DOWN: D(0)}
+    touch_shares = {UP: None, DOWN: None}
+    last_vol = None
     stop_at = ws + dt.timedelta(seconds=WINDOW_S - CANCEL_LEAD_S)
 
     while dt.datetime.now(UTC) < stop_at:
         polls += 1
         try:
-            bid, ask, state, _px = bbo(slug)
+            bid, ask, state, _px, vol, bshares, ashares = bbo(slug)
         except RateLimited:
             rate_limited += 1
             time.sleep(POLL_S * 4)          # the venue asked us to slow down
@@ -170,12 +196,25 @@ def watch_window(ws, price, verbose=False):
             if last_read is not None:
                 max_gap = max(max_gap, (nowt - last_read).total_seconds())
             last_read = nowt
+            dvol = D(0)
+            if vol is not None:
+                if last_vol is not None and vol >= last_vol:
+                    dvol = vol - last_vol
+                last_vol = vol
             for side in (UP, DOWN):
                 p = own_price(side, bid, ask)
                 if p is None:
                     continue
                 if deepest[side] is None or p < deepest[side]:
                     deepest[side] = p
+                if p <= price:
+                    #: we would be AT or INSIDE the touch here, so this
+                    #: window's volume is volume we could have been filled by
+                    traded[side] += dvol
+                    sh = bshares if side == UP else ashares
+                    if sh is not None and (touch_shares[side] is None
+                                           or sh < touch_shares[side]):
+                        touch_shares[side] = sh
                 if side not in filled and p <= price:
                     t = (dt.datetime.now(UTC) - ws).total_seconds()
                     filled[side] = round(t, 1)
@@ -183,7 +222,14 @@ def watch_window(ws, price, verbose=False):
                         emit(TAG + "_FILL",
                              {"market": slug, "side": side, "t": filled[side],
                               "own_price": str(p)})
-        time.sleep(POLL_S)
+        #: how close is a fill? The nearest own price decides the cadence.
+        near = None
+        for side in (UP, DOWN):
+            pp = own_price(side, bid, ask)
+            if pp is not None and (near is None or pp < near):
+                near = pp
+        time.sleep(POLL_NEAR_S if (near is not None and near <= price + NEAR_BAND)
+                   else POLL_FAR_S)
 
     #: SETTLEMENT IS NOT WAITED FOR HERE. Blocking on it cost us every
     #: other window: the venue can take minutes to publish settlementPx,
@@ -194,13 +240,24 @@ def watch_window(ws, price, verbose=False):
     #: the caller settles it later, out of band.
     return {"slug": slug, "ws": ws, "price": price, "filled": filled,
             "deepest": deepest, "polls": polls, "reads": reads,
-            "rate_limited": rate_limited, "max_gap": max_gap}
+            "rate_limited": rate_limited, "max_gap": max_gap,
+            "traded": traded, "touch_shares": touch_shares}
 
 
 def try_settle(slug):
-    """ONE attempt at the venue's own settlement. None = not yet."""
+    """The venue's own settlement, or None if not published yet.
+
+    RETRIES 429. With retries=0 a single rate-limit answer made this return
+    None, drain treated that as "not settled yet", and the next sweep was a
+    window away -- so a window could stay unsettled indefinitely while the
+    venue had published it all along. Observed 2026-11-13: 0135z read
+    EXPIRED with settlementPx 0.0000 from a plain curl while the running
+    poller had emitted nothing for three windows, because its own 2s
+    polling was generating the 429s that blocked its settlement reads. The
+    poller was starving itself.
+    """
     try:
-        _b, _a, _state, px = bbo(slug, retries=0)
+        _b, _a, _state, px = bbo(slug, retries=3)[:4]
     except Exception:                                          # noqa: BLE001
         return None
     if px is not None and px in (D(0), D(1)):
@@ -227,6 +284,14 @@ def finish(obs, won):
            "deepest_up": str(deepest[UP]) if deepest[UP] is not None else None,
            "deepest_down": (str(deepest[DOWN])
                             if deepest[DOWN] is not None else None),
+           "vol_while_fillable_up": str(obs["traded"][UP]),
+           "vol_while_fillable_down": str(obs["traded"][DOWN]),
+           "min_touch_shares_up": (str(obs["touch_shares"][UP])
+                                   if obs["touch_shares"][UP] is not None
+                                   else None),
+           "min_touch_shares_down": (str(obs["touch_shares"][DOWN])
+                                     if obs["touch_shares"][DOWN] is not None
+                                     else None),
            "polls": polls, "reads": reads,
            "rate_limited": rate_limited,
            "max_read_gap_s": round(max_gap, 1),
