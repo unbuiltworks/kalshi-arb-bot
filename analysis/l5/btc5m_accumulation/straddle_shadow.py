@@ -73,6 +73,15 @@ CANCEL_LEAD_S = 30.0
 POLL_NEAR_S = 2.0          # within NEAR_BAND of the resting price
 POLL_FAR_S = 6.0           # both sides far away; nothing can fill
 NEAR_BAND = D("0.06")
+#: A WINDOW WE COULD NOT SEE IS NOT AN OBSERVATION. Measured 2026-11-13:
+#: 0130z was rate-limited out completely, reads=0, and still emitted
+#: "case NONE, pnl 0" as though that were data. It is not -- a window with
+#: no reads cannot know whether a fill happened, and reporting it as NONE
+#: silently drags BOTH the pair rate and the bleed toward zero. Three
+#: hundred windows polluted that way would be worthless, and worse, they
+#: would look like a clean null result. Below this many reads the window is
+#: emitted under a different tag that `--tally` does not count.
+MIN_READS = 30
 POLL_S = POLL_NEAR_S       # the settle-loop backoff still keys off this
 UP, DOWN = "UP", "DOWN"
 TAG = "BTC5M_STRADDLE_SHADOW"
@@ -276,6 +285,7 @@ def finish(obs, won):
         pnl += (D(1) if side == won else D(0)) - price
     case = {2: "BOTH", 1: "ONE", 0: "NONE"}[len(filled)]
     polls = obs["polls"]
+    usable = reads >= MIN_READS
     rate_limited = obs["rate_limited"]
     row = {"market": slug, "window_start": ws.isoformat(),
            "price": str(price), "case": case,
@@ -297,10 +307,14 @@ def finish(obs, won):
            "max_read_gap_s": round(max_gap, 1),
            "mean_read_gap_s": (round((WINDOW_S - CANCEL_LEAD_S) / reads, 1)
                                if reads else None),
+           "usable": usable,
            "labels": "SHADOW. no order was placed. pnl_per_share is "
                      "settlement arithmetic on hypothetical fills, per "
                      "share a side, and is NOT realized anything."}
-    emit(TAG, row)
+    #: an unseen window goes out under its own tag, so no tally can count
+    #: it as a zero and no reader can mistake it for a measurement.
+    emit(TAG if usable else TAG + "_UNUSABLE",
+         row if usable else dict(row, why="FEWER_THAN_%d_READS" % MIN_READS))
     return row
 
 
