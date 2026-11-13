@@ -343,6 +343,52 @@ So `spread > adverse selection` has no reachable cell on PMUS sports. The
 inequality is not narrowly failed in one place and nearly met in another:
 **its two sides are never measurable at the same time.**
 
+## 7. The definitive screen: 897 wide markets, and the flow rate is zero
+
+The §3 prevalence came from 188 markets. Repeated on a random sample of
+**897** of the 4,030 wide-spread markets, one `/book` call each (the
+single-call path, so the touch, the ladder and the volume arrive together):
+
+```
+DEPTH -- ample, and this is the handoff's worry answered for good
+  pair size (sh)        median   38.00   p75  136.00   p95 1,100   max 2,500
+  capacity ($/pair)     median    4.59   p75   10.40   p95 80.75   max 1,260
+
+FLOW -- absent
+  lifetime traded >=     1 sh      32 of 897    3.57%
+  lifetime traded >=   100 sh      16 of 897    1.78%
+  lifetime traded >= 1,000 sh       3 of 897    0.33%
+  lifetime traded >= 10,000 sh      1 of 897    0.11%
+```
+
+**96.4% of wide-spread sports markets have never traded a single share.**
+
+And the measurement that ends it. For the 195 markets that got two reads,
+volume between the reads gives a flow *rate* rather than a lifetime:
+
+```
+shares per minute      median 0.0000    p95 0.0000    max 0.2492
+markets with ANY volume in a ~12-minute window:   1 of 195  (0.5%)
+  the one:  tsc-nfl-lac-bal-2026-11-16-total-42pt5
+            0.249 sh/min -- 3.1 shares over 12.3 minutes, spread 0.07
+```
+
+The median flow rate in a wide-spread sports market is **zero shares per
+minute**, and the busiest of 195 managed three shares in twelve minutes.
+The 1c in-game books on the tape do **291.7 shares a minute**.
+
+So `spread x depth` is the wrong product, and this is the sharpest way to
+say what the census found. The median wide market offers $4.59 of capacity
+a pair. Multiply by its flow rate:
+
+```
+$4.59 a pair  x  0 pairs an hour  =  $0 an hour
+```
+
+Capacity is not the scarce factor and never was. **Arrival is.** A quote
+nobody trades against is worth exactly nothing, however wide it is and
+however much size is behind it.
+
 ---
 
 # Verdict
@@ -362,13 +408,15 @@ is not a good one. §6 shows why the two regimes cannot be combined.
 
 **2. Is the depth large enough to matter, or is it 1-3 shares?**
 
-**It is large enough, and the handoff's worry was misplaced.** Median pair
-size in wide-spread markets is 19-42 shares depending on the sample, p75
-50-144, p95 994, max 2,110. Capacity reaches $408 a pair. **Depth was never
-the constraint.**
+**It is large enough, and the handoff's worry was misplaced.** On 897 wide
+markets: median pair size **38 shares**, p75 136, p95 1,100, max 2,500;
+capacity median $4.59 a pair, p95 $80.75, max $1,260. **Depth was never the
+constraint.**
 
-The constraint is flow: **95.7% of wide-spread sports markets have never
-traded a single share**, and only 2.5% have traded 100.
+The constraint is arrival. **96.4% of wide-spread sports markets have never
+traded a single share**, and the median flow rate is **0.0000 shares per
+minute** -- 1 of 195 markets traded anything at all across a 12-minute
+window. $4.59 a pair times zero pairs an hour is zero.
 
 ## So: stop
 
