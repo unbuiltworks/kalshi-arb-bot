@@ -1660,8 +1660,45 @@ Options, none taken unilaterally -- all three are owner/cross-session calls:
    control that would weaken it, and the pairing is not reliably derivable
    from `qtyBought`/`qtySold`, which are per outcome token, not per side).
 
-Owner's call 2026-11-13 was **leave armed, change no limit**; the campaign
-expired at `NOT_AFTER 15:50:00Z` having cost nothing.
+Owner's call 2026-11-13: first **leave armed, change no limit**, then
+**raise `L5_ACCOUNT_MAX_EXPOSURE_USD` 8.00 -> 17.00**. Note the cap is
+BTC5m-LOCAL: only `l5_btc5m_execution.py` reads it, so raising it grants the
+15m lane nothing -- it raises BTC5m's own refusal threshold, measured
+against total account exposure. There is no code clamp (`account_cap()`
+accepts any value >= 0).
+
+### RESULT of the armed campaign (approval b5m-12cfb0ae, 1510z-1545z)
+
+| window | outcome | settled |
+|---|---|---|
+| 1510z, 1515z, 1520z | refused `ACCOUNT_EXPOSURE_CAP` (15m lane held $15 vs $8) | 0 |
+| **1525z** | **PAIR -- UP and DOWN both filled 0.08 x 5** | **+4.20** |
+| 1530z | UP only filled | -0.40 |
+| 1535z | UP only filled | -0.40 |
+| 1540z, 1545z | refused `AUTHORIZATION:BTC5M_DAILY_LOSS_LIMIT` | 0 |
+
+**Campaign net +3.40**, all closes clean, no unresolved orders.
+
+Three things this run actually established, none of them flattering to the
+tidy story:
+
+1. **The pair came BEFORE the raise, not because of it.** During 1525z
+   `account_total_usd` was `7.40` -- under the ORIGINAL 8.00 cap, because
+   the 15m lane had just settled. The raise bought windows 1530z and
+   1535z, and both LOST. Credit the 15m lane settling, not the cap change.
+2. **A redeploy orphaned the winning window.** The cap-raise redeploy
+   killed 1525z mid-flight before it recorded settlement, leaving $0.80
+   stranded. `recover_settlements()` booked the +4.20 at next boot
+   (`already_settled: false`). Without it that win was invisible.
+3. **The daily-loss stop fired on a stale figure.** 1540z/1545z were
+   refused on `BTC5M_DAILY_LOSS_LIMIT` computed WITHOUT the unbooked
+   +4.20, i.e. a day figure $4.20 too pessimistic. The limit worked; its
+   input was stale because settlement booking lags an orphaned window.
+
+Sample size: ONE pair in THREE windows that actually placed. The tape says
+10.2%. Three windows cannot distinguish 33% from 10%, and this is not
+evidence the straddle works.
+
 
 **Two corrections this run produced** (detail in
 `LIVE_RUNBOOK_20261113.md`): the `$55` cumulative-loss raise was never
