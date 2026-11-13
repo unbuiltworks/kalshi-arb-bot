@@ -71,8 +71,24 @@ CANCEL_LEAD_S = 30.0
 #: cuts request volume substantially while IMPROVING resolution exactly
 #: where the fill rule needs it.
 POLL_NEAR_S = 2.0          # within NEAR_BAND of the resting price
-POLL_FAR_S = 6.0           # both sides far away; nothing can fill
-NEAR_BAND = D("0.06")
+POLL_FAR_S = 2.0           # was 6.0; see MEASURED note below
+NEAR_BAND = D("0.50")      # effectively always near; kept as a knob
+#: a window sampled worse than this gets its own warning line
+GAP_WARN_S = 10.0
+#: MEASURED IN PRODUCTION 2026-11-13, and it reversed the decision above.
+#: The first settled window reported rate_limited 0 across 61 polls: the
+#: venue was not pushing back at all. The 429s that motivated throttling
+#: came from a session's BURST queries during testing, not from steady
+#: polling, and the public recorder has sustained 2s for 27 hours.
+#:
+#: The throttle cost real accuracy: that window sampled at a 6.8s mean
+#: and a 16.1s WORST gap, against the ~2s tape the fill rule was
+#: validated on. A 16s hole hides a dip to the resting price entirely,
+#: so fills are UNDER-counted -- which biases the PAIR RATE DOWNWARD.
+#: That is not a safe direction: the pair case carries the whole edge, so
+#: a real 10.2%% could measure 7%% and be called dead on an artefact of
+#: our own sampling. Under-counting the bleed would be conservative;
+#: under-counting the pairs is simply wrong.
 #: A WINDOW WE COULD NOT SEE IS NOT AN OBSERVATION. Measured 2026-11-13:
 #: 0130z was rate-limited out completely, reads=0, and still emitted
 #: "case NONE, pnl 0" as though that were data. It is not -- a window with
@@ -367,6 +383,14 @@ def finish(obs, won):
                      "share a side, and is NOT realized anything."}
     #: an unseen window goes out under its own tag, so no tally can count
     #: it as a zero and no reader can mistake it for a measurement.
+    if usable and max_gap > GAP_WARN_S:
+        #: usable but coarse. Its own line, because a hole this big
+        #: under-counts fills and so under-states the pair rate.
+        emit(TAG + "_COARSE",
+             {"market": slug, "max_read_gap_s": round(max_gap, 1),
+              "reads": reads,
+              "note": "a gap this large can hide a dip to the resting "
+                      "price; fills under-counted, never over"})
     emit(TAG if usable else TAG + "_UNUSABLE",
          row if usable else dict(row, why="FEWER_THAN_%d_READS" % MIN_READS))
     return row
