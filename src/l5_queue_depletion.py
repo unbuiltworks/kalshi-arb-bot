@@ -134,7 +134,11 @@ def queue_ahead(side: str, own_px: Any, *, bids: Any = None,
     if p is None:
         return None
     w = wire_of(side, p)
-    book = _levels(bids if rests_on(side) == "BID" else asks)
+    # Tombstone-only ladders contain no displayed queue and cannot attest
+    # a zero-ahead position. Preserve zero when real worse-priced liquidity
+    # exists, because that is a legitimate empty queue at our price.
+    book = [(px, sz) for px, sz in _levels(
+        bids if rests_on(side) == "BID" else asks) if sz > 0]
     if not book:
         return None
     # a BID at wire w is beaten by HIGHER bids; an ASK at wire w by LOWER
