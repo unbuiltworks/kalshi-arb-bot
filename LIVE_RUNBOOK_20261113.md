@@ -47,12 +47,17 @@ L5_BTC5M_CAMPAIGN        = ON
 L5_BTC5M_MARKET          = (empty)
 L5_BTC5M_LIVE            = ARMED_BY_OWNER
 L5_SHADOW_ONLY           = 0
-L5_BTC5M_NOT_AFTER       = <last window + 5 min, e.g. 2026-11-13T15:30:00Z>
+L5_BTC5M_NOT_AFTER       = 2026-11-13T15:35:00Z
 L5_CAMPAIGN_APPROVAL     = <the JSON below>
 ```
 
-**The approval below was issued 14:43:45Z and goes STALE at 15:43:45Z**, and
-its windows start 14:50Z. If that has passed, regenerate:
+**Issued 14:47:23Z. STALE at 15:47:23Z.** Windows run 14:55z to 15:30z,
+so set `L5_BTC5M_NOT_AFTER = 2026-11-13T15:35:00Z`.
+
+Windows already past when you arm are simply skipped -- the runner takes
+the remaining enumerated ones -- so arming at 15:05z gets you six windows,
+not eight. That is fine; it is not an error. But if more than about half
+have gone, regenerate rather than running a stub:
 
 ```
 python3 -I analysis/l5/btc5m_accumulation/make_approval.py 8 \
@@ -60,8 +65,11 @@ python3 -I analysis/l5/btc5m_accumulation/make_approval.py 8 \
 ```
 
 ```json
-{"approved":true,"nonce":"b5m-5fff41b868cc762892138217","series":"cpc-btc-updown-5m-","issued_utc":"2026-11-13T14:43:45Z","expires_utc":"2026-11-13T16:00:00Z","max_windows":8,"max_total_exposure_usd":"1.00","max_daily_loss_usd":"3.50","window_starts":["2026-11-13T14:50:00Z","2026-11-13T14:55:00Z","2026-11-13T15:00:00Z","2026-11-13T15:05:00Z","2026-11-13T15:10:00Z","2026-11-13T15:15:00Z","2026-11-13T15:20:00Z","2026-11-13T15:25:00Z"]}
+{"approved":true,"nonce":"b5m-dcbe0a531dd1750b34444738","series":"cpc-btc-updown-5m-","issued_utc":"2026-11-13T14:47:23Z","expires_utc":"2026-11-13T16:05:00Z","max_windows":8,"max_total_exposure_usd":"1.00","max_daily_loss_usd":"3.50","window_starts":["2026-11-13T14:55:00Z","2026-11-13T15:00:00Z","2026-11-13T15:05:00Z","2026-11-13T15:10:00Z","2026-11-13T15:15:00Z","2026-11-13T15:20:00Z","2026-11-13T15:25:00Z","2026-11-13T15:30:00Z"]}
 ```
+
+Self-check at generation: campaign planner accepted YES, per-order claim
+accepted YES, nothing clamped by code ceilings.
 
 ## 3. Then trigger the build
 
