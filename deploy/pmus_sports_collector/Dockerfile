@@ -12,6 +12,9 @@ COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_sports_live_collector.py src/pmus_sports_live_collector.py
 COPY src/pmus_sports_offers_hotfix.py src/pmus_sports_offers_hotfix.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
+# THEORETICAL liquidity-incentive recorder (read-only, GET-only, fail-soft;
+# imported lazily by the live runner behind PMUS_INCENTIVE_RECORDER=1)
+COPY src/pmus_incentive_recorder.py src/pmus_incentive_recorder.py
 # sequential L5 decision layer (issue #167 comment 5535231759): frozen
 # read-only policy + its model artifact; no executor module enters this
 # keyless image

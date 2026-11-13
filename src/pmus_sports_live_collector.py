@@ -627,6 +627,12 @@ def _legacy_targets(leagues: list[str], prefixes: list[str], incentives: dict,
     return rows, {"fallback_leagues": leagues, "fallback_errors": errors}
 
 
+def _remember_universe(rows: Iterable[Mapping[str, Any]]) -> None:
+    global _last_universe
+    _last_universe = [{"slug": r.get("slug"), "event_slug": r.get("event_slug")}
+                      for r in rows or () if r.get("slug")]
+
+
 def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
                           cycle: int = 0) -> tuple[list[dict], dict]:
     """Primary live-sports discovery with explicit, measured fallback."""
@@ -641,6 +647,7 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
     live_events, live_diag = col.fetch_live_events(col.http_get_json)
     if live_events and live_diag.get("v1_live_error") is None:
         universe = live_targets(live_events, prefixes)
+        _remember_universe(universe)
         # Incentive-only slugs are still NOT appended to the poll set: a
         # program market whose game has not started is a closed book and
         # polling it densely buys nothing. What DOES matter is that the
@@ -667,6 +674,7 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
 
     fallback, fallback_diag = _legacy_targets(
         leagues, prefixes, incentives, include_inc)
+    _remember_universe(fallback)
     live_programs = sorted(
         {str(t.get("slug")) for t in fallback
          if str(t.get("slug")) in program_slugs})
@@ -683,6 +691,61 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
         "incentive_programs_live": live_programs,
         "incentive_autopin": incentive_autopin_enabled(),
     }
+
+
+# THEORETICAL INCENTIVE RECORDER (src/pmus_incentive_recorder.py). Read-only
+# side measurement of what a resting touch quote would score in a liquidity
+# program and lose to adverse fills. It is strictly additive: every call goes
+# through recorder_call(), which swallows and counts any exception, so a
+# recorder defect can cost recorder rows but never a poll, a row of the
+# existing tape, a heartbeat or the status line. "0" disables it.
+INCENTIVE_RECORDER_ENV = "PMUS_INCENTIVE_RECORDER"
+_recorder_failures = {"count": 0, "last": None}
+# the full discovered universe of the latest discovery (slug + event_slug),
+# so the recorder can count same-event markets for its PER_EVENT reading
+_last_universe: list = []
+
+
+def incentive_recorder_enabled() -> bool:
+    return os.getenv(INCENTIVE_RECORDER_ENV, "1").strip().lower() not in (
+        "0", "false", "no", "off")
+
+
+def _note_recorder_failure(root: Any, stage: str, exc: BaseException) -> None:
+    _recorder_failures["count"] += 1
+    _recorder_failures["last"] = f"{stage}:{type(exc).__name__}:{str(exc)[:100]}"
+    n = _recorder_failures["count"]
+    if root is None or not (n <= 20 or n % 1000 == 0):
+        return
+    try:
+        col.append_rows(root, [{"kind": "error", "stage": "incentive_recorder",
+                               "t": col._utcnow().isoformat(),
+                               "failures": n,
+                               "err": _recorder_failures["last"]}])
+    except Exception:
+        pass
+
+
+def make_incentive_recorder(root: Any) -> Any:
+    if not incentive_recorder_enabled():
+        return None
+    try:
+        from src import pmus_incentive_recorder as pir
+        return pir.IncentiveRecorder(root)
+    except Exception as exc:
+        _note_recorder_failure(root, "init", exc)
+        return None
+
+
+def recorder_call(recorder: Any, method: str, *args: Any,
+                  root: Any = None) -> None:
+    """Invoke one recorder method; never raises into the collector."""
+    if recorder is None:
+        return
+    try:
+        getattr(recorder, method)(*args)
+    except Exception as exc:
+        _note_recorder_failure(root, method, exc)
 
 
 def run(minutes: Optional[float] = None) -> int:
@@ -708,6 +771,8 @@ def run(minutes: Optional[float] = None) -> int:
         "discovery_mode": "v1_live_sports_authoritative",
         "poll_s": poll_s, "budget_rps": budget, "max_markets": max_markets,
     }])
+
+    recorder = make_incentive_recorder(root)
 
     deadline = time.monotonic() + minutes * 60 if minutes else None
     targets: list[dict] = []
@@ -783,11 +848,19 @@ def run(minutes: Optional[float] = None) -> int:
                 rows.append({"kind": "error", "stage": "poll", "slug": slug,
                              "t": col._utcnow().isoformat(),
                              "err": str(exc)[:120]})
+                continue
+            # theoretical side measurement on the book already fetched
+            recorder_call(recorder, "observe", slug, target, bbo, book,
+                          root=root)
         if rows:
             col.append_rows(root, rows)
             # measured conditions feed the next cycle's ranking, so a
             # market earns priority by what it DOES, not by its type
             update_observed(rows)
+
+        # program map refresh, markouts, settlement reads, status line
+        recorder_call(recorder, "after_cycle", targets, _last_universe,
+                      root=root)
 
         state["cycles"] = int(state.get("cycles", 0)) + 1
         state["rows_written"] = int(state.get("rows_written", 0)) + len(rows)

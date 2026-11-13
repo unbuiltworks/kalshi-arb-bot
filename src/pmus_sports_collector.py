@@ -339,7 +339,10 @@ def _market_meta(m: Mapping[str, Any]) -> dict:
                 # 5521333079): copied only when the venue actually served
                 # them — never guessed, never defaulted
                 "bestBidQuote", "bestAskQuote", "outcomePrices",
-                "volume", "volume24hr", "liquidity", "gameStartTime"):
+                "volume", "volume24hr", "liquidity", "gameStartTime",
+                # the venue's price grid, read by the theoretical
+                # incentive recorder's ticks-from-best scoring
+                "orderPriceMinTickSize"):
         if m.get(key) is not None:
             meta[key] = m.get(key)
     return meta
