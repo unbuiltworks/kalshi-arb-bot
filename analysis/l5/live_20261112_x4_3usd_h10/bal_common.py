@@ -11,7 +11,7 @@ BUDGET = "3.00"   # owner 19:0xZ: "$3 exposure (Recommended)"
 A = dt.datetime.fromisoformat(os.environ["KIT_START"]) if os.environ.get("KIT_START") else dt.datetime(2026, 11, 12, 22, 30, 0, tzinfo=dt.timezone.utc)
 STARTS = [A + dt.timedelta(minutes=15*i) for i in range(4)]   # owner 17:4xZ: one arm, consecutive windows (chose "Both")
 SLUGS = ["cpc-btc-updown-15m-" + s.strftime("%Y-%m-%d-%H%Mz") for s in STARTS]; SLUG = SLUGS[0]; NWIN = len(SLUGS)
-NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-h10-" + SHA[:8]
+NONCE = "owner-" + A.strftime("%Y%m%d-%H%Mz") + "-x4-3usd-h40f-" + SHA[:8]
 #: owner 2026-11-12 14:17Z: "turn on recycling and relax the floor for the next window"
 TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USES_COMPLETE": "ON",
            "L5_CASH_POLICY": "RECYCLE_ON_COMPLETE", "L5_TS_OWN_EVIDENCE_GATE": "WAIVED_BY_OWNER",
@@ -35,7 +35,7 @@ TEST_ON = {"L5_TS_REQUOTE_KEEPS_ROUND": "ON", "L5_LIVE_AUTH_REDUCING_REPLACE_USE
            "L5_FIDELITY_MODE": "ON", "L5_TS_ENTRY_CUTOFF_S": "840", "L5_TS_COMPLETE_CUTOFF_S": "870",
            "L5_ACC_MAX_ROUNDS": "48"}
 TIGHTEN = {"L5_MAX_CUMULATIVE_LOSS_USD": "75.00",   # owner 2026-11-13 04:0xZ "$75 (Recommended)" after BTC5m 0035z -28.12 (was 50, owner 11-12)
-           "L5_DAILY_REALIZED_LOSS_HALT_USD": "10.00",   # owner 22:4xZ "Write $10 in arm write" (another session had set 50)
+           "L5_DAILY_REALIZED_LOSS_HALT_USD": "40.00",   # owner 2026-11-13 ~11:55Z "Halt + cap $40, go today" (was 10)
            "L5_MAX_TOTAL_EXPOSURE_USD": "3.00", "L5_MAX_CASH_DEPLOYED_USD": "2.70", "L5_MAX_WORST_CASE_DEFICIT_USD": "3.00", "L5_MAX_LIVE_ORDERS": "6", "L5_TS_CONCURRENT_ROUNDS": "3", "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": BUDGET,
            "L5_LIVE_AUTH_MAX_OPEN": "96", "L5_LIVE_AUTH_MAX_COMPLETE": "192", "L5_LIVE_AUTH_MAX_REPLACE": "240", "L5_LIVE_AUTH_MAX_SUBMISSIONS": "560"}
 ARM_NAMES = ("L5_CAMPAIGN_APPROVAL", "L5_TS_MARKET", "L5_TS_EXPERIMENT_ID", "L5_LIVE_AUTH_NOT_AFTER", "L5_LIVE_AUTH_MAX_WINDOWS",

@@ -15,7 +15,7 @@ print("now", real_now.isoformat()[:19], "clock used", now.isoformat()[:19], "lea
 if lead < 420: print("STOP: too close to the window to arm safely"); sys.exit(3)
 if lead > 1500: print("STOP: too early"); sys.exit(3)
 assert L.slug_for_window(A) == SLUG
-doc = L.build_document(window_start=A, now=now, max_windows=NWIN, max_total_exposure_usd="3.00", max_daily_loss_usd="10.00", nonce=NONCE)
+doc = L.build_document(window_start=A, now=now, max_windows=NWIN, max_total_exposure_usd="3.00", max_daily_loss_usd="40.00", nonce=NONCE)
 doc["window_starts"] = [s.strftime("%Y-%m-%dT%H:%M:%SZ") for s in STARTS]
 doc["expires_utc"] = (STARTS[-1] + dt.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
 line = L.document_line(doc); digest = L.document_digest(doc)
@@ -25,7 +25,7 @@ for when in (now, A + dt.timedelta(seconds=5), STARTS[-1] + dt.timedelta(minutes
     st = CA.ApprovalGate(_S(), max_age_s=CA.MAX_CAMPAIGN_S, now_fn=lambda: when).state()
     assert st.get("approved") is True, (when, st.get("why"))
     sc = st["scope"]
-    assert int(sc["max_windows"]) == NWIN and str(sc["max_total_exposure_usd"]) == "3.00" and D(str(sc["max_daily_loss_usd"])) == D("10"), sc
+    assert int(sc["max_windows"]) == NWIN and str(sc["max_total_exposure_usd"]) == "3.00" and D(str(sc["max_daily_loss_usd"])) == D("40"), sc
     for s in SLUGS: assert CA.opening_refusal(sc, s) is None, s
     for other in (L.slug_for_window(A - dt.timedelta(minutes=15)), L.slug_for_window(STARTS[-1] + dt.timedelta(minutes=15)), L.slug_for_window(A + dt.timedelta(hours=13))):
         assert (CA.opening_refusal(sc, other) or {}).get("reason") == "WINDOW_NOT_IN_AUTHORIZED_SET", other
