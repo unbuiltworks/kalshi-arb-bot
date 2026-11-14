@@ -106,6 +106,7 @@ COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
 # PMUS_SPRING_CANDIDATES=gateway; keyless public GETs, no order path. Its
 # gateway helpers are inlined so the probe image never carries the collector.
 COPY src/pmus_spring_gateway_candidates.py src/pmus_spring_gateway_candidates.py
+COPY src/pmus_sports_two_sided.py src/pmus_sports_two_sided.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 # venue-served GAME POSITION (period/clock/score) for the live sports slate.

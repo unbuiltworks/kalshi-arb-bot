@@ -4344,4 +4344,10 @@ def main(argv: Optional[Sequence[str]] = None,
 
 
 if __name__ == "__main__":
+    # OWNER 2026-11-14 "Place orders 2 ticks below the price on both sides":
+    # the same service/image runs the bounded two-sided sports mode instead
+    # of the L5 campaign when PMUS_SPORTS_MODE=two_sided (never both).
+    if os.getenv("PMUS_SPORTS_MODE", "").strip() == "two_sided":
+        from src import pmus_sports_two_sided as _two_sided
+        raise SystemExit(_two_sided.main())
     raise SystemExit(main())

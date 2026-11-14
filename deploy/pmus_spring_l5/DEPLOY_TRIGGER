@@ -240,3 +240,4 @@
 # (3) PMUS_SPRING_DEPTH_TICKS (default 0): OPEN/EXTEND rest N ticks under the
 #     touch; COMPLETE pricing (l5_touch) unchanged.
 2026-11-14T15:20Z gateway feed: reserve request budget for market-state reads (LIVE 15:12Z 22/30 rows refused strict_evidence_market_state_missing); state TTL 120s -> 300s.
+2026-11-14T15:35Z OWNER "Place orders 2 ticks below the price on both sides": src/pmus_sports_two_sided.py, selected by PMUS_SPORTS_MODE=two_sided (else the L5 probe as before). R5FB budget: $1.50/market, 3 markets, $4.50 total lone-leg cost, pair <= 0.98, post-only, foreign-exposure markets skipped.
