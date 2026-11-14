@@ -557,3 +557,50 @@ only sell them once they have stopped.* Every variant tested on this
 branch -- favourites, ladders, patient completion, asymmetric pricing,
 40/40, and now selling -- is a different attempt to escape that
 asymmetry, and the market does not permit it.
+
+---
+
+# One side per window, alternating: identical economics, half the orders
+
+Owner asked 2026-11-14 about resting only UP one window, only DOWN the
+next. This never pairs, so it tests whether the pair matters -- and it
+does not, which is consistent with the 89.5% first-leg finding above.
+
+| | net c/w | t | risk/window | per $ at risk |
+|---|---|---|---|---|
+| straddle (BOTH sides) | +3.74 | +1.67 | 0.16 | **0.23** |
+| alternate, phase-averaged | +1.87 | +1.67 | 0.08 | **0.23** |
+
+**Exactly half the expectancy for exactly half the exposure, and the same
+t.** Linearity again: each leg stands alone, so dropping one drops half
+the EV and half the risk. No edge is gained or lost.
+
+## Where it IS useful
+
+Orders per window go from 2 to 1, so the SAME `L5_LIVE_AUTH_MAX_OPEN`
+covers twice as many windows:
+
+```
+straddle     2 orders/window -> budget 100 covers  50 windows
+alternating  1 order/window  -> budget 100 covers 100 windows
+```
+
+Resting 10 shares on one side instead of 5 on each gives identical
+exposure (0.80/window) and identical expectancy (10 x 1.87 = 5 x 3.74)
+while halving submissions. That is the constraint that truncated campaign
+1 at 24 of 46 windows and forced the 48 -> 100 budget raise.
+
+## Caveats
+
+- The two phases measured +1.13 and +2.61 c/w on this sample. They must
+  average to half the straddle, so that spread is sampling noise on which
+  side each window happened to get -- it washes out over a long run and
+  does NOT over one campaign. A single alternating campaign is noisier
+  than a straddle campaign of the same length.
+- Never pairing means the +0.84 events disappear entirely and the result
+  rests on single legs winning at 11.5%. Same mean, lumpier path.
+- It is NOT a config change: the controller has STRADDLE and ACCUMULATE
+  only, so single-side alternating would be new code in the live path.
+
+**Verdict: worth doing if the order budget binds, which it has. Not worth
+doing for edge, because there is none to gain.**
