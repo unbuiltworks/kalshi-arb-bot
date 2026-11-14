@@ -64,6 +64,37 @@ STATE_DIR = Path(os.getenv("PMUS_TWO_SIDED_STATE_DIR",
                            "/state/pmus-spring/two_sided"))
 SPORTS_PREFIXES = ("aec-", "asc-", "tsc-", "atc-", "astatc-")
 
+# OWNER 2026-11-14 liquidity-reward mode. DEFAULT OFF: with
+# PMUS_TWO_SIDED_REWARDS unset every code path below is skipped and the bot
+# behaves exactly as before. When on: live sports markets carrying a paying
+# liquidity program (GET /v1/incentives) are selected FIRST; in them both legs
+# join the touch (shallowest pair-cap-legal depth whose legs sit within the
+# program's maxSpread of mid) at REWARD_QTY contracts; the per-market cap
+# there is REWARD_PER_MARKET_CAP on WORST LONE-LEG cost; and for EVERY market
+# a new pair opens only if total unmatched + other markets' resting-pair
+# worst lone leg + this pair's worst lone leg <= TOTAL_CAP. Program rewards
+# are THEORETICAL and never enter P&L.
+REWARDS_ENV = "PMUS_TWO_SIDED_REWARDS"
+REWARD_QTY = _env_d("PMUS_TWO_SIDED_REWARD_QTY", "10")
+REWARD_PER_MARKET_CAP = _env_d("PMUS_TWO_SIDED_REWARD_PER_MARKET_USD", "7.50")
+REWARD_REFRESH_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_REFRESH_S", "300"))
+REWARD_LOG_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_LOG_S", "60"))
+# optional comma-separated slug prefixes; empty = any rewarded sports market
+REWARD_ALLOW_ENV = "PMUS_TWO_SIDED_REWARD_ALLOW"
+
+
+def rewards_on() -> bool:
+    return os.getenv(REWARDS_ENV, "").strip().lower() in (
+        "1", "yes", "true", "on")
+
+
+def reward_allowed(slug: str) -> bool:
+    raw = os.getenv(REWARD_ALLOW_ENV, "").strip()
+    if not raw:
+        return True
+    return any(slug.startswith(p.strip()) for p in raw.split(",")
+               if p.strip())
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -95,6 +126,29 @@ def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS
     if y < tick or n < tick or y + n > PAIR_CAP:
         return None
     return {"YES": y, "NO": n}
+
+
+def reward_open_prices(yes_bid: D, yes_ask: D, tick: D,
+                       max_spread: Optional[float]) -> Optional[tuple]:
+    """(prices, depth) for a rewarded market, or None.
+
+    Depth 0 = both legs AT the touch (YES bid at best bid, NO bid at
+    1 - best ask, i.e. a YES offer at best ask). If that pair breaks
+    PAIR_CAP (spread < 2c at a 0.98 cap) take the next deeper legal depth,
+    exactly as the normal ladder does. The chosen legs must ALSO sit within
+    the program's maxSpread of mid (|YES - mid| and |(1 - NO) - mid|);
+    deeper is only farther from mid, so the first legal depth that fails
+    maxSpread ends the search (None -> quote as a non-rewarded market)."""
+    from src.pmus_sports_rewards import legs_within_max_spread
+    for d in range(0, DEPTH_TICKS + 1):
+        p = open_prices(yes_bid, yes_ask, tick, depth=d)
+        if p is None:
+            continue
+        if legs_within_max_spread(float(p["YES"]), float(p["NO"]),
+                                  float(yes_bid), float(yes_ask), max_spread):
+            return p, d
+        return None
+    return None
 
 
 def side_bid(side: str, yes_bid: D, yes_ask: D) -> D:
@@ -149,6 +203,26 @@ class Book:
 
     def total_unmatched(self) -> D:
         return sum((self.unmatched_cost(s) for s in self.d["markets"]), D(0))
+
+    def resting_pair_exposure(self, slug: str) -> D:
+        """Worst NEW lone-leg cost the market's resting orders can create:
+        when balanced, one open leg filling alone (the dearer remainder).
+        When unbalanced the open order is the completion, which only
+        reduces unmatched cost -> 0."""
+        mk = self.d["markets"].get(slug)
+        if not mk or mk.get("done"):
+            return D(0)
+        if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
+            return D(0)
+        legs = [D(o["px"]) * (D(o["qty"]) - D(o.get("filled", "0")))
+                for o in mk["orders"].values() if o.get("open")]
+        return max(legs, default=D(0))
+
+    def committed_excluding(self, slug: str) -> D:
+        """Total unmatched + every OTHER market's resting-pair exposure."""
+        return self.total_unmatched() + sum(
+            (self.resting_pair_exposure(s) for s in self.d["markets"]
+             if s != slug), D(0))
 
 
 # ------------------------------------------------------------- venue I/O
@@ -247,6 +321,98 @@ class Engine:
     def __init__(self, venue: Venue, book: Book):
         self.v, self.b = venue, book
         self.stop = False
+        # reward mode only: {slug: (fetched_monotonic, program_row | None)}
+        self._prog: Dict[str, Any] = {}
+        self._rget = None
+
+    # ------------------------------------------------ reward programs
+    def _reward_get(self):
+        if self._rget is None:
+            from src.pmus_sports_rewards import SpacedGet
+            self._rget = SpacedGet(self.v.gget)
+        return self._rget
+
+    def reward_programs(self, slugs: list) -> Dict[str, Any]:
+        """{slug: paying period dict} for the given slugs; programs cached
+        REWARD_REFRESH_S, only stale/unseen slugs are queried (<= 2 rps)."""
+        from src import pmus_sports_rewards as R
+        now = time.monotonic()
+        stale = [s for s in slugs if s not in self._prog or
+                 now - self._prog[s][0] > REWARD_REFRESH_S]
+        if stale:
+            found, diag = R.fetch_programs(self._reward_get(), stale)
+            pm = R.build_program_map(found)
+            for s in stale:
+                self._prog[s] = (now, pm.get(s))
+            log("reward_discovery", queried=len(stale), rewarded=len(pm),
+                requests=diag["requests"], errors=diag["errors"][:3],
+                label=R.LABEL)
+        out = {}
+        for s in slugs:
+            prog = (self._prog.get(s) or (0, None))[1]
+            if not prog or not reward_allowed(s):
+                continue
+            per = R.paying_period(prog, time.time(), event_live=True)
+            if per:
+                out[s] = per
+        return out
+
+    def refresh_active_rewards(self) -> None:
+        """Keep each active market's paying period current (a period that
+        stops paying drops the market back to normal quoting)."""
+        act = self.active()
+        if not act:
+            return
+        try:
+            pp = self.reward_programs(act)
+        except Exception as exc:                      # noqa: BLE001
+            log("reward_discovery_error", err=str(exc)[:160])
+            return
+        for s in act:
+            mk = self.b.m(s)
+            new = pp.get(s)
+            if (mk.get("reward") or None) != new:
+                mk["reward"] = new
+        self.b.save()
+
+    def _reward_quote(self, slug: str, mk: Dict[str, Any], bbo: Mapping,
+                      tick: D) -> Optional[Dict[str, Any]]:
+        """Reward-mode prices for a rewarded market, else None."""
+        if not rewards_on():
+            return None
+        rp = mk.get("reward")
+        if not rp:
+            return None
+        r = reward_open_prices(bbo["bid"], bbo["ask"], tick,
+                               rp.get("maxSpread"))
+        self._log_reward(slug, mk, rp, bbo, tick, r)
+        if r is None:
+            return None
+        return {"want": r[0], "depth": r[1]}
+
+    def _log_reward(self, slug: str, mk: Dict[str, Any], rp: Mapping,
+                    bbo: Mapping, tick: D, r: Optional[tuple]) -> None:
+        last = float(mk.get("reward_logged_at") or 0)
+        if time.time() - last < REWARD_LOG_S:
+            return
+        mk["reward_logged_at"] = time.time()
+        est: Dict[str, Any] = {"qualifies": None, "est_share": None}
+        try:
+            from src import pmus_sports_rewards as R
+            book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+            est = R.estimate(book, rp, float(REWARD_QTY), float(tick))
+        except Exception as exc:                      # noqa: BLE001
+            est["book_error"] = str(exc)[:120]
+        log("reward_program", slug=slug, program_id=rp.get("programId"),
+            pool=rp.get("pool"), period=rp.get("period"),
+            period_s=rp.get("period_s"), targetSize=rp.get("targetSize"),
+            maxSpread=rp.get("maxSpread"), bid=bbo["bid"], ask=bbo["ask"],
+            quote_depth=(r[1] if r else None),
+            quote=({k: str(v) for k, v in r[0].items()} if r else None),
+            price_within_max_spread=r is not None,
+            qualifies=est.get("qualifies"), est_share=est.get("est_share"),
+            est=est, label="THEORETICAL reward estimate; never P&L")
 
     def own(self) -> set:
         return set(self.b.d["own_order_ids"])
@@ -347,17 +513,36 @@ class Engine:
             set_at = float(mk.setdefault("pair_set_at", time.time()))
             steps = int((time.time() - set_at) // STALE_S) if STALE_S > 0 else 0
             want = None
-            for d in range(max(0, DEPTH_TICKS - steps), DEPTH_TICKS + 1):
-                want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d)
-                if want is not None:
-                    break
+            rq = self._reward_quote(slug, mk, bbo, tick)   # None unless on
+            if rq is not None:
+                want = rq["want"]
+                qty = max(REWARD_QTY, spec["min_qty"])
+            else:
+                for d in range(max(0, DEPTH_TICKS - steps), DEPTH_TICKS + 1):
+                    want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d)
+                    if want is not None:
+                        break
+                qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES")
-            qty = max(QTY, spec["min_qty"])
+            worst_leg = max(want.values()) * qty if want else D(0)
+            if rewards_on() and want is not None and not blocked and \
+                    self.b.committed_excluding(slug) + worst_leg > TOTAL_CAP:
+                # every market, reward mode: a new pair opens only if all
+                # lone legs that could exist at once stay within TOTAL_CAP
+                blocked = True
+                if mk.get("precheck_logged") != str(worst_leg):
+                    mk["precheck_logged"] = str(worst_leg)
+                    log("total_cap_precheck_block", slug=slug,
+                        committed=self.b.committed_excluding(slug),
+                        worst_leg=worst_leg, total_cap=TOTAL_CAP)
             in_place = (want is not None and not blocked and
                         set(open_by_side) == {"YES", "NO"} and
                         all(D(open_by_side[sd][1]["px"]) == want[sd]
-                            for sd in ("YES", "NO")))
+                            for sd in ("YES", "NO")) and
+                        (not rewards_on() or
+                         all(D(open_by_side[sd][1]["qty"]) == qty
+                             for sd in ("YES", "NO"))))
             if in_place:
                 return
             # OWNER 2026-11-14 "Pairs should be set simultaneously": never
@@ -385,11 +570,18 @@ class Engine:
             mk.pop("idle_since", None)
             if want is None or blocked:
                 return
-            if (want["YES"] + want["NO"]) * qty > PER_MARKET_CAP:
+            if rq is not None:
+                # rewarded: cap the WORST LONE-LEG cost in this market
+                if self.b.unmatched_cost(slug) + worst_leg > \
+                        REWARD_PER_MARKET_CAP:
+                    return
+            elif (want["YES"] + want["NO"]) * qty > PER_MARKET_CAP:
                 return
             mk["partner_px"] = {k: str(v) for k, v in want.items()}
+            stage = "two_sided_open_rewarded" if rq is not None \
+                else "two_sided_open"
             for side in ("YES", "NO"):
-                self.place(slug, side, want[side], qty, "two_sided_open")
+                self.place(slug, side, want[side], qty, stage)
             return
         # unbalanced: the lagging side is the completion
         lag = "NO" if y > n else "YES"
@@ -467,6 +659,18 @@ class Engine:
                 continue
             scored.append((a - b, abs(b - D("0.5")), slug))
         scored.sort()
+        rewarded: Dict[str, Any] = {}
+        if rewards_on() and scored:
+            try:
+                rewarded = self.reward_programs([s for *_x, s in scored])
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_discovery_error", err=str(exc)[:160])
+            # rewarded in-band markets FIRST, richest pool rate first; the
+            # rest keep today's order (tightest spread, nearest 0.50)
+            scored.sort(key=lambda r: (
+                0 if r[2] in rewarded else 1,
+                -rewarded[r[2]]["pool_rate_usd_s"] if r[2] in rewarded else 0,
+                r))
         for _sp, _c, slug in scored:
             if len(self.active()) >= MAX_MARKETS:
                 break
@@ -478,10 +682,21 @@ class Engine:
             if not spec or not bbo or open_prices(bbo["bid"], bbo["ask"],
                                                    spec["tick"]) is None:
                 continue
-            self.b.m(slug)
+            mk = self.b.m(slug)
+            if slug in rewarded:
+                mk["reward"] = rewarded[slug]
             self.b.save()
             log("SELECTED", slug=slug, bid=bbo["bid"], ask=bbo["ask"],
                 tick=spec["tick"])
+            if slug in rewarded:
+                rp = rewarded[slug]
+                log("reward_program", slug=slug, at="select",
+                    program_id=rp["programId"], pool=rp["pool"],
+                    period=rp["period"], period_s=rp["period_s"],
+                    targetSize=rp["targetSize"], maxSpread=rp["maxSpread"],
+                    pool_rate_usd_s=rp["pool_rate_usd_s"],
+                    qualifies=None, est_share=None,
+                    label="THEORETICAL reward program; never P&L")
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
@@ -492,7 +707,13 @@ class Engine:
                                 for p in pairs) if pairs else 0,
             enabled=os.getenv(ENABLED_ENV, ""), depth_ticks=DEPTH_TICKS,
             caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
-                  "markets": MAX_MARKETS, "pair_cap": PAIR_CAP, "qty": QTY})
+                  "markets": MAX_MARKETS, "pair_cap": PAIR_CAP, "qty": QTY},
+            rewards_enabled=rewards_on(),
+            rewarded_active=sum(1 for s in self.active()
+                                if self.b.m(s).get("reward")),
+            reward_caps={"qty": REWARD_QTY,
+                         "per_market_lone_leg": REWARD_PER_MARKET_CAP},
+            reward_label="program rewards THEORETICAL; not in P&L")
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
@@ -509,6 +730,8 @@ class Engine:
                     continue
                 if time.monotonic() - last_sel > 20:
                     self.select(self.v.account())
+                    if rewards_on():
+                        self.refresh_active_rewards()
                     last_sel = time.monotonic()
                 for slug in self.active():
                     if self.stop:
