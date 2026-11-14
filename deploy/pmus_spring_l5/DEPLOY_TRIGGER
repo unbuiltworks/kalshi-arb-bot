@@ -211,3 +211,7 @@
 # still set. Follow-on owner-approved steps, each verified separately: rung
 # R5FT -> R5FB ($1.50/market x 3, $4.50, -$5.00 stop), then clear the shutdown
 # latch only after the 96-market September backlog has drained.
+
+# 2026-11-14 — owner "live trades asap": SHUTDOWN-pass settlement batch 5 -> 24
+# (SHUTDOWN_SETTLE_BATCH; the campaign loop's SETTLE_AUDIT_BATCH stays 5) so the
+# 96-market backlog drains in ~4 cycles. Settlement-only; still latched; rung R5FB.

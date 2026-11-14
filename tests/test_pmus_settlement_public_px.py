@@ -308,7 +308,7 @@ def _september(state, n):
 def test_production_row_shape_drains(state, monkeypatch):
     """Reproduces the LIVE row: 96 pending, every error
     activity_walk_short_of_since, settled_now == []. With the fallback the
-    same pass drains them, SETTLE_AUDIT_BATCH per cycle, and the floor drops
+    same pass drains them, SHUTDOWN_SETTLE_BATCH per cycle, and the floor drops
     monotonically to zero."""
     _shutdown_env(monkeypatch)
     slugs = _september(state, 96)
@@ -317,7 +317,7 @@ def test_production_row_shape_drains(state, monkeypatch):
     # BEFORE (no public price yet): exactly the production shape
     out = cont.shutdown_settle_pass(t=FakeT(bbo={}))
     assert out["pending_total"] == 96 and out["settled_now"] == []
-    assert len(out["errors"]) == cont.SETTLE_AUDIT_BATCH
+    assert len(out["errors"]) == cont.SHUTDOWN_SETTLE_BATCH
     assert all("RuntimeError:activity_walk_short_of_since" in e
                for e in out["errors"])
     floor0 = D(out["unsettled_floor_usd"])
@@ -330,7 +330,7 @@ def test_production_row_shape_drains(state, monkeypatch):
         ppx.reset_cache()
         out = cont.shutdown_settle_pass(t=t)
         cycles += 1
-        assert len(out["batch"]) <= cont.SETTLE_AUDIT_BATCH
+        assert len(out["batch"]) <= cont.SHUTDOWN_SETTLE_BATCH
         assert len(out["settled_now"]) == len(out["batch"])
         for r in out["settled_now"]:
             assert r["settled_by"] == ppx.PROVENANCE
@@ -339,7 +339,7 @@ def test_production_row_shape_drains(state, monkeypatch):
             assert r["realized_derived_usd"] in ("2.70", "-1.30")
         floors.append(D(out["unsettled_floor_usd"]))
         assert cycles < 40
-    assert cycles == -(-96 // cont.SETTLE_AUDIT_BATCH)
+    assert cycles == -(-96 // cont.SHUTDOWN_SETTLE_BATCH)
     assert all(b >= a for a, b in zip(floors, floors[1:])), floors
     assert floors[-1] == 0
     # floor left and realized_today took it in the SAME transition
@@ -349,29 +349,29 @@ def test_production_row_shape_drains(state, monkeypatch):
 
 def test_bounded_per_cycle_and_reads_shared(state, monkeypatch):
     _shutdown_env(monkeypatch)
-    slugs = _september(state, 12)
+    slugs = _september(state, 60)
     t = FakeT(bbo={s: bbo(s, "1") for s in slugs})
     out = cont.shutdown_settle_pass(t=t)
-    assert len(out["settled_now"]) == cont.SETTLE_AUDIT_BATCH
+    assert len(out["settled_now"]) == cont.SHUTDOWN_SETTLE_BATCH
     bbo_reads = [c for c in t.calls if c.endswith("/bbo")]
-    assert len(bbo_reads) == cont.SETTLE_AUDIT_BATCH
+    assert len(bbo_reads) == cont.SHUTDOWN_SETTLE_BATCH
     # account-scoped reads are shared by the batch, not per market
     assert t.calls.count("/v1/orders/open") == 1
 
 
 def test_durable_cursor_across_restart(state, monkeypatch):
     _shutdown_env(monkeypatch)
-    slugs = _september(state, 12)
+    slugs = _september(state, 60)
     # nothing public yet: cursor advances, nothing settles
     cont.shutdown_settle_pass(t=FakeT(bbo={}))
-    assert cont.load_settle_cursor() == cont.SETTLE_AUDIT_BATCH
+    assert cont.load_settle_cursor() == cont.SHUTDOWN_SETTLE_BATCH
     # "restart": process memory gone, the cursor file is not
     ppx.reset_cache()
     t = FakeT(bbo={s: bbo(s, "0") for s in slugs})
     out = cont.shutdown_settle_pass(t=t)
-    assert out["cursor"] == cont.SETTLE_AUDIT_BATCH
+    assert out["cursor"] == cont.SHUTDOWN_SETTLE_BATCH
     assert [r["slug"] for r in out["settled_now"]] == \
-        slugs[cont.SETTLE_AUDIT_BATCH:2 * cont.SETTLE_AUDIT_BATCH]
+        slugs[cont.SHUTDOWN_SETTLE_BATCH:2 * cont.SHUTDOWN_SETTLE_BATCH]
 
 
 def test_failed_evidence_leaves_the_production_shape_unchanged(state,

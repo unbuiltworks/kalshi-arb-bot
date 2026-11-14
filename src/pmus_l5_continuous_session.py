@@ -1175,6 +1175,11 @@ SETTLE_AUDIT_EVERY_S = 60.0
 # this much each pass, so the whole set is covered rather than the same
 # five markets forever.
 SETTLE_AUDIT_BATCH = 5
+# The SHUTDOWN pass only (no orders possible there): owner 2026-11-14 "live trades
+# asap" -- drain the 96-market September backlog in ~4 cycles instead of ~20.
+# Each market costs one public settlementPx read; positions/orders are read once
+# per batch and cached.
+SHUTDOWN_SETTLE_BATCH = 24
 # P1: the settlement_breakdown row's schema version. Bumped when its fields
 # change so a reader can tell a complete terminal record from an older one.
 TERMINAL_RECONCILIATION_VERSION = "canonical-terminal/v1"
@@ -1857,7 +1862,8 @@ def shutdown_settle_pass(t=None) -> dict:
     # stopped completing and the loop reported nothing at all. One slow or
     # unreachable market could block every other market behind it forever.
     cursor = load_settle_cursor()
-    batch, next_cursor = settle_batch(list(pending), cursor)
+    batch, next_cursor = settle_batch(list(pending), cursor,
+                                      SHUTDOWN_SETTLE_BATCH)
     save_settle_cursor(next_cursor)
     out["pending_total"] = len(pending)
     out["batch"] = list(batch)
