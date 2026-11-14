@@ -157,3 +157,50 @@ def test_registry_http(tmp_path):
     M.serve_registry(b, port)
     d = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/{M.REGISTRY_KEY}").read())
     assert d["orders"][0]["venue_order_id"] == "OID1"
+
+
+def test_stale_open_pair_is_resubmitted_closer(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")                                  # 0.42 / 0.52 (depth 2)
+    e.b.d["markets"]["aec-x"]["pair_set_at"] -= 61
+    e.step_market("aec-x")
+    live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    assert live == {"YES": D("0.43"), "NO": D("0.53")}       # depth 1, pair 0.96
+    e.b.d["markets"]["aec-x"]["pair_set_at"] -= 61
+    e.step_market("aec-x")
+    live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    assert live == {"YES": D("0.44"), "NO": D("0.54")}       # at the touch, pair 0.98
+
+
+def test_join_touch_never_breaks_pair_cap(eng):
+    e, v = eng
+    v.bid, v.ask = D("0.44"), D("0.45")                       # 1c spread
+    e.select(v.account())
+    e.step_market("aec-x")
+    e.b.d["markets"]["aec-x"]["pair_set_at"] -= 600
+    e.step_market("aec-x")
+    live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    assert sum(live.values()) <= M.PAIR_CAP and len(live) == 2
+
+
+def test_stale_completion_steps_up_one_tick_to_cap(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)          # YES @0.42
+    e.step_market("aec-x")
+    comp = next(o for o in e.b.d["markets"]["aec-x"]["orders"].values() if o["open"])
+    assert comp["px"] == "0.52"
+    comp["placed_at"] -= 61
+    e.step_market("aec-x")                                    # cancel
+    e.step_market("aec-x")                                    # resubmit
+    live = [o for o in v.orders.values() if o["open"]]
+    assert len(live) == 1 and live[0]["px"] == D("0.53")
+    for _ in range(5):
+        c = next(o for o in e.b.d["markets"]["aec-x"]["orders"].values() if o["open"])
+        c["placed_at"] -= 61
+        e.step_market("aec-x"); e.step_market("aec-x")
+    live = [o for o in v.orders.values() if o["open"]]
+    assert live[0]["px"] == D("0.54")                         # its bid; pair 0.96 <= cap

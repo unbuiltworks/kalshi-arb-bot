@@ -57,6 +57,9 @@ BAND_LO = _env_d("PMUS_TWO_SIDED_BAND_LO", "0.25")
 BAND_HI = _env_d("PMUS_TWO_SIDED_BAND_HI", "0.75")
 MAX_SPREAD_TICKS = int(os.getenv("PMUS_TWO_SIDED_MAX_SPREAD_TICKS", "6"))
 LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
+# OWNER 2026-11-14 "If a pair is just sitting there for a while, cancel and
+# resubmit closer": every STALE_S unfilled, one tick closer to the touch.
+STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
 STATE_DIR = Path(os.getenv("PMUS_TWO_SIDED_STATE_DIR",
                            "/state/pmus-spring/two_sided"))
 SPORTS_PREFIXES = ("aec-", "asc-", "tsc-", "atc-", "astatc-")
@@ -292,7 +295,8 @@ class Engine:
         oid = self.v.place(slug, side, px, qty, stage)
         mk = self.b.m(slug)
         mk["orders"][oid] = {"side": side, "px": str(px), "qty": str(qty),
-                             "filled": "0", "open": True, "stage": stage}
+                             "filled": "0", "open": True, "stage": stage,
+                             "placed_at": time.time()}
         self.b.d["own_order_ids"].append(oid)
         self.b.save()
         log("ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage,
@@ -335,10 +339,18 @@ class Engine:
                 self.b.d["pairs"].append({"slug": slug, "qty": str(y),
                                           "pair_cost": str(cpair), "t": now_iso()})
                 mk["pair_logged_at"] = str(y)
+                mk["pair_set_at"] = time.time()
                 log("PAIR_LOCKED", slug=slug, pairs=y, avg_pair_cost=cpair,
                     locked_edge_per_pair=ONE - cpair,
                     label="locked pair economics; realized at settlement")
-            want = open_prices(bbo["bid"], bbo["ask"], tick)
+            mk.pop("complete_px", None)
+            set_at = float(mk.setdefault("pair_set_at", time.time()))
+            steps = int((time.time() - set_at) // STALE_S) if STALE_S > 0 else 0
+            want = None
+            for d in range(max(0, DEPTH_TICKS - steps), DEPTH_TICKS + 1):
+                want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d)
+                if want is not None:
+                    break
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES")
             qty = max(QTY, spec["min_qty"])
@@ -396,17 +408,29 @@ class Engine:
         cur = open_by_side.get(lag)
         # The partner was set together with the filled leg: leave it at its
         # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
+        cap_px = floor_tick(PAIR_CAP - lead_px, tick)
+        lag_bid = side_bid(lag, bbo["bid"], bbo["ask"])
         if cur:
             rem_open = D(cur[1]["qty"]) - D(cur[1]["filled"])
-            if rem_open == need:
+            age = time.time() - float(cur[1].get("placed_at") or time.time())
+            closer = min(D(cur[1]["px"]) + tick, lag_bid, cap_px)
+            if rem_open == need and (age < STALE_S or
+                                     closer <= D(cur[1]["px"])):
                 return
+            if rem_open == need:
+                # sat unfilled: resubmit one tick closer (never past the
+                # pair cap, never above this side's own bid)
+                mk["complete_px"] = str(closer)
+                log("tighten_complete", slug=slug, side=lag,
+                    from_px=cur[1]["px"], to_px=closer, age_s=round(age))
             self.v.cancel(cur[0])
             st = self.v.status(cur[0])
             self._record_fill(slug, lag, cur[0], st)
             cur[1]["open"] = st["open"]
             self.b.save()
             return
-        px = D(mk.get("partner_px", {}).get(lag) or "0") or floor_tick(
+        px = D(mk.get("complete_px") or mk.get("partner_px", {}).get(lag)
+               or "0") or floor_tick(
             min(side_bid(lag, bbo["bid"], bbo["ask"]) - DEPTH_TICKS * tick,
                 PAIR_CAP - lead_px), tick)
         px = min(px, floor_tick(PAIR_CAP - lead_px, tick))
