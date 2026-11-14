@@ -1321,7 +1321,36 @@ class PmusTransport:
             oo = self.open_orders()
         except Exception as exc:                               # noqa: BLE001
             return self._fail(checks, gate, "positions_readable", exc)
-        ok &= gate("no_unexpected_open_orders", len(oo) == 0, len(oo))
+        #: A SHARED ACCOUNT MAKES len(oo)==0 THE WRONG TEST, and this gate
+        #: was written before the account was shared. On 2026-11-14 the
+        #: sports two-sided lane held 8 resting completions by owner
+        #: direction; this gate counted them as unexpected and refused to
+        #: arm -- six attempts from t=3.6s to t=75.3s -- so BTC5m placed
+        #: nothing all window while $0 was ever at risk. It refused
+        #: CORRECTLY on a rule whose premise had changed.
+        #:
+        #: ONE DEFINITION, THREE GUARDS. The same
+        #: L5_WATCHDOG_MANAGED_LANE_URLS contract already exempts these ids
+        #: from the watchdog's age latch (l5_watchdog.managed_lane_ids) and
+        #: from the reset ceremony's venue precondition
+        #: (l5_halt_reset.managed_lane_claims). A lane qualifies only if it
+        #: publishes /l5/live_orders.json with readable=true,
+        #: manages_own_resting=true and an as_of_utc at most 60s old.
+        #:
+        #: FAIL CLOSED, identically to the other two: unreachable, stale,
+        #: malformed or not-a-managed-lane contributes NOTHING, so the gate
+        #: stays exactly as strict as it is today. Unset means unchanged.
+        #:
+        #: WHAT IS NOT EXEMPTED: anything a lane does not name. An order we
+        #: cannot attribute still refuses to arm. This narrows "unexpected"
+        #: to "unaccounted for"; it does not stop counting.
+        lane_ids, lane_notes = self._managed_lane_ids()
+        unexpected = [r for r in oo
+                      if str(r.get("id") or "").strip() not in lane_ids]
+        ok &= gate("no_unexpected_open_orders", len(unexpected) == 0,
+                   {"unexpected": len(unexpected), "venue_open": len(oo),
+                    "managed_lane_exempt": len(oo) - len(unexpected),
+                    "managed_lanes": lane_notes})
         if known_positions is not None:
             venue = {"%s|%s" % (p.get("market"), p.get("side")): str(p.get("qty"))
                      for p in pos}
@@ -1527,6 +1556,30 @@ class PmusTransport:
                 "transport is DISARMED. Preflight status: %s; owner arm: %s"
                 % ((self.preflight_report or {}).get("preflight", "NOT_RUN"),
                    "present" if Q1.armed() else "absent"))
+
+    def _managed_lane_ids(self) -> tuple:
+        """({venue_order_id, ...}, [notes]) from FRESH managed lanes.
+
+        Delegates to `l5_watchdog.Watchdog.managed_lane_ids` rather than
+        re-implementing the freshness and shape rules, so the executor, the
+        watchdog's age latch and the reset ceremony cannot drift apart in
+        what counts as a managed lane.
+
+        NEVER RAISES. Any failure contributes no ids and a note, leaving the
+        caller exactly as strict as it was before this existed -- a preflight
+        that crashes is a preflight that cannot refuse.
+        """
+        try:
+            from src import l5_watchdog as W
+            urls = W._managed_lanes_from_env()
+            if not urls:
+                return set(), []
+            w = W.Watchdog(None, None, managed_lanes=list(urls))
+            return w.managed_lane_ids()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return set(), ["MANAGED_LANES_UNAVAILABLE:%s" % type(exc).__name__]
 
     def arm(self) -> Dict[str, Any]:
         """Arm ONLY if preflight passed in this process AND the owner armed."""

@@ -559,3 +559,92 @@ def test_market_readable_fails_closed_when_no_host_serves_it(creds):
     rep = json.loads(str(e.value))
     assert "market_readable" in [c["check"] for c in rep["checks"]
                                  if not c["passed"]]
+
+
+class TestPreflightManagedLaneExemption:
+    """`no_unexpected_open_orders` on a SHARED account.
+
+    WHAT HAPPENED, 2026-11-14. The sports two-sided lane held 8 resting
+    completions by owner direction. This gate required len(open_orders)==0
+    account-wide, counted them as unexpected, and refused to arm: six
+    attempts from t=3.6s to t=75.3s, BTC5m placed nothing for a whole
+    window, $0 at risk. The gate was right and its premise was stale.
+
+    ONE DEFINITION, THREE GUARDS. The same L5_WATCHDOG_MANAGED_LANE_URLS
+    contract exempts these ids from the watchdog's age latch and from the
+    reset ceremony's venue precondition. Freshness and document shape are
+    tested where they are implemented (test_l5_watchdog_managed_lanes);
+    these tests pin that THIS gate uses the result and stays strict about
+    everything else.
+    """
+
+    def _oo(self, *ids):
+        return {"/v1/orders/open": {"orders": [{"id": i} for i in ids]}}
+
+    def _failed(self, t):
+        with pytest.raises(T.PreflightFailed) as e:
+            t.preflight()
+        return [c["check"] for c in json.loads(str(e.value))["checks"]
+                if not c["passed"]]
+
+    def test_unset_means_unchanged_so_a_stray_order_still_refuses(
+            self, creds, monkeypatch):
+        monkeypatch.delenv("L5_WATCHDOG_MANAGED_LANE_URLS", raising=False)
+        t = tp(**self._oo("stray-1"))
+        assert "no_unexpected_open_orders" in self._failed(t)
+
+    def test_an_order_a_fresh_lane_names_does_not_block_arming(
+            self, creds, monkeypatch):
+        monkeypatch.setattr(
+            T.PmusTransport, "_managed_lane_ids",
+            lambda self: ({"sports-1", "sports-2"}, ["lane:OK:2"]))
+        t = tp(**self._oo("sports-1", "sports-2"))
+        rep = t.preflight()
+        g = [c for c in rep["checks"]
+             if c["check"] == "no_unexpected_open_orders"][0]
+        assert g["passed"] is True
+        # `gate()` passes detail through redact(), which renders it, so the
+        # observable artifact is the rendered string -- assert on what is
+        # actually logged rather than on a dict the log never carries.
+        d = str(g["detail"])
+        assert "'venue_open': 2" in d
+        assert "'managed_lane_exempt': 2" in d
+        assert "'unexpected': 0" in d
+        assert "lane:OK:2" in d
+
+    def test_an_order_no_lane_names_still_blocks(self, creds, monkeypatch):
+        """THE PROPERTY THAT MATTERS. This narrows 'unexpected' to
+        'unaccounted for'; it does not stop counting."""
+        monkeypatch.setattr(
+            T.PmusTransport, "_managed_lane_ids",
+            lambda self: ({"sports-1"}, ["lane:OK:1"]))
+        t = tp(**self._oo("sports-1", "who-is-this"))
+        failed = self._failed(t)
+        assert "no_unexpected_open_orders" in failed
+
+    def test_a_dead_lane_exempts_nothing(self, creds, monkeypatch):
+        """Fail closed: unreachable/stale/malformed contributes no ids, so
+        the gate is exactly as strict as before this existed."""
+        monkeypatch.setattr(
+            T.PmusTransport, "_managed_lane_ids",
+            lambda self: (set(), ["lane:UNREACHABLE:URLError"]))
+        t = tp(**self._oo("sports-1"))
+        assert "no_unexpected_open_orders" in self._failed(t)
+
+    def test_the_helper_never_raises_and_degrades_to_strict(
+            self, monkeypatch):
+        """A preflight that crashes is a preflight that cannot refuse."""
+        monkeypatch.setenv("L5_WATCHDOG_MANAGED_LANE_URLS",
+                           "http://lane.invalid:8090")
+        import src.l5_watchdog as W
+        monkeypatch.setattr(W, "Watchdog",
+                            lambda *a, **k: (_ for _ in ()).throw(
+                                RuntimeError("boom")))
+        ids, notes = tp()._managed_lane_ids()
+        assert ids == set()
+        assert notes and notes[0].startswith("MANAGED_LANES_UNAVAILABLE")
+
+    def test_no_urls_configured_short_circuits_without_a_fetch(
+            self, monkeypatch):
+        monkeypatch.delenv("L5_WATCHDOG_MANAGED_LANE_URLS", raising=False)
+        assert tp()._managed_lane_ids() == (set(), [])

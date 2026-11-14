@@ -577,8 +577,17 @@ class Watchdog:
                  max_order_age_s: float = DEFAULT_MAX_ORDER_AGE_S,
                  report_max_age_s: float = DEFAULT_REPORT_MAX_AGE_S,
                  cancel_enabled: bool = False, who: str = "l5-watchdog",
-                 oracle: Any = None) -> None:
+                 oracle: Any = None,
+                 managed_lanes: Optional[List[str]] = None,
+                 lane_opener: Any = None) -> None:
         self.t = transport
+        #: OTHER LANES ON THE SHARED ACCOUNT that rest maker orders for
+        #: minutes BY DESIGN and attest, freshly, that they are managing them
+        #: (OWNER 2026-11-14: sports two-sided and BTC5m run together). See
+        #: `managed_lane_ids`.
+        self.managed_lanes = [u.strip().rstrip("/") for u in
+                              (managed_lanes or []) if u and u.strip()]
+        self._lane_opener = lane_opener
         self.asserter = asserter
         self.max_order_age_s = float(max_order_age_s)
         self.report_max_age_s = float(report_max_age_s)
@@ -590,6 +599,53 @@ class Watchdog:
         #: power is not merely off, it is unavailable.
         self.cancel_enabled = bool(cancel_enabled) and oracle is not None
         self.cancel_requested = bool(cancel_enabled)
+
+    #: A lane attestation older than this is not proof of management.
+    LANE_MAX_AGE_S = 60.0
+
+    def managed_lane_ids(self, now: Optional[dt.datetime] = None) -> tuple:
+        """({venue_order_id, ...}, [notes]) attested by a FRESH managed lane.
+
+        A lane qualifies only if its document is readable, says
+        `manages_own_resting: true`, and its `as_of_utc` is at most
+        LANE_MAX_AGE_S old. Anything else -- unreachable, stale, malformed --
+        contributes NOTHING, so a dead lane's orders are judged by age
+        exactly as before. This EXEMPTS from the overdue/age latch only; it
+        never makes an order cancellable (ownership is still the oracle's)."""
+        ids: set = set()
+        notes: List[str] = []
+        now = now or _utc()
+        for base in self.managed_lanes:
+            url = "%s/l5/live_orders.json" % base
+            try:
+                if self._lane_opener is not None:
+                    raw = self._lane_opener(url, 3.0)
+                else:
+                    import urllib.request
+                    with urllib.request.urlopen(url, timeout=3.0) as r:
+                        raw = r.read()
+                doc = json.loads(raw or b"{}")
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                notes.append("%s:UNREACHABLE:%s" % (base, type(exc).__name__))
+                continue
+            if not isinstance(doc, Mapping) or doc.get("readable") is not True \
+                    or doc.get("manages_own_resting") is not True:
+                notes.append("%s:NOT_A_MANAGED_LANE" % base)
+                continue
+            t = _parse_t(doc.get("as_of_utc"))
+            age = None if t is None else (now - t).total_seconds()
+            if age is None or age > self.LANE_MAX_AGE_S or age < -5:
+                notes.append("%s:STALE:%s" % (base, age))
+                continue
+            for row in doc.get("orders") or []:
+                vid = str((row or {}).get("venue_order_id") or "").strip() \
+                    if isinstance(row, Mapping) else ""
+                if vid:
+                    ids.add(vid)
+            notes.append("%s:OK:%d" % (base, len(doc.get("orders") or [])))
+        return ids, notes
 
     def emergency_state(self) -> tuple:
         """(emergency, reason). Is a HALT latched right now?
@@ -746,8 +802,18 @@ class Watchdog:
                                        "whatever it still has resting")})
                 return out
         overdue = []
+        lane_ids, lane_notes = (self.managed_lane_ids(now=now)
+                                if self.managed_lanes else (set(), []))
+        if self.managed_lanes:
+            out["managed_lanes"] = lane_notes
+            out["managed_lane_exempt"] = []
         for r in rows:
             if is_terminal(r):
+                continue
+            if str(r.get("id") or "") in lane_ids:
+                # a fresh lane is managing this resting order: its age is
+                # by design, not evidence of an unmanaged order
+                out["managed_lane_exempt"].append(str(r.get("id")))
                 continue
             age = order_age_s(r, now=now)
             # age UNKNOWN is treated as overdue: an order whose creation time
@@ -939,7 +1005,8 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
             report_max_age_s=float(os.getenv("L5_WATCHDOG_REPORT_MAX_AGE_S",
                                              str(DEFAULT_REPORT_MAX_AGE_S))),
             cancel_enabled=False,
-            oracle=None)
+            oracle=None,
+            managed_lanes=_managed_lanes_from_env())
     return Watchdog(
         transport if transport is not None else CancelOnlyTransport(),
         asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),
@@ -954,7 +1021,15 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
                                          str(DEFAULT_REPORT_MAX_AGE_S))),
         cancel_enabled=str(
             os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
-        oracle=oracle_from_env())
+        oracle=oracle_from_env(),
+        managed_lanes=_managed_lanes_from_env())
+
+
+def _managed_lanes_from_env() -> List[str]:
+    """L5_WATCHDOG_MANAGED_LANE_URLS: comma-separated base URLs of lanes that
+    publish /l5/live_orders.json with manages_own_resting=true."""
+    raw = str(os.getenv("L5_WATCHDOG_MANAGED_LANE_URLS", "")).strip()
+    return [u.strip() for u in raw.split(",") if u.strip()]
 
 
 def oracle_from_env() -> Optional[OwnershipOracle]:
