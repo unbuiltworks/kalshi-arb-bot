@@ -331,10 +331,29 @@ def watch_window(ws, price, verbose=False):
                     #: we would be AT or INSIDE the touch here, so this
                     #: window's volume is volume we could have been filled by
                     traded[side] += dvol
-                    sh = bshares if side == UP else ashares
-                    if sh is not None and (touch_shares[side] is None
-                                           or sh < touch_shares[side]):
-                        touch_shares[side] = sh
+                    #: DEAD ON PURPOSE, AND LEFT SAYING SO. `bshares` and
+                    #: `ashares` are bound to None a few lines up and are
+                    #: never assigned, because `/v1/market/slug/{slug}` --
+                    #: the only endpoint that answers for an OPEN window --
+                    #: carries no depth at all. The /bbo endpoint that does
+                    #: carry it 404s until the window EXPIRES. So this
+                    #: tracked a quantity it could never observe and
+                    #: `min_touch_shares_*` has been null on every row ever
+                    #: emitted, pair windows included.
+                    #:
+                    #: IT IS NOT WORTH FIXING, which is the part worth
+                    #: recording. The question it existed to answer -- "was
+                    #: there depth to fill our size on both sides?" -- was
+                    #: answered another way on 2026-11-14 from post-expiry
+                    #: /bbo `sharesTraded`: 163,023 shares on the 0255z pair
+                    #: window and 219,628 on 0345z. At 8 shares we are
+                    #: 0.005% of a window's volume, and live confirms it --
+                    #: one leg filled promptly in 19 of 19 placing windows.
+                    #: Depth is not the binding constraint at our size, so
+                    #: the pair rate is a genuine price-path property and
+                    #: the shadow's rate is NOT inflated by unfillable
+                    #: touches. Chasing per-level depth would buy nothing.
+                    pass
                 if side not in filled and p <= price:
                     t = (dt.datetime.now(UTC) - ws).total_seconds()
                     filled[side] = round(t, 1)
@@ -438,12 +457,13 @@ def finish(obs, won):
            "vol_while_fillable_up": None,
            "vol_while_fillable_down": None,
            "vol_unavailable_reason": "BBO_404_WHILE_OPEN",
-           "min_touch_shares_up": (str(obs["touch_shares"][UP])
-                                   if obs["touch_shares"][UP] is not None
-                                   else None),
-           "min_touch_shares_down": (str(obs["touch_shares"][DOWN])
-                                     if obs["touch_shares"][DOWN] is not None
-                                     else None),
+           #: ALWAYS NULL, and now says why in the row itself rather
+           #: than leaving a reader to guess. See the note at the
+           #: touch-depth block above: no OPEN-window endpoint carries
+           #: depth, and the question is answered without it.
+           "min_touch_shares_up": None,
+           "min_touch_shares_down": None,
+           "touch_depth_unavailable_reason": "NO_DEPTH_ON_OPEN_WINDOW",
            "polls": polls, "reads": reads,
            "rate_limited": rate_limited,
            "read_errors": obs.get("errors") or {},

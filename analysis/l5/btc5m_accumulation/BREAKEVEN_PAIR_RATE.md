@@ -125,3 +125,86 @@ Cheapest path, in order:
 Do not raise the daily cap to "give it room". Under a fixed cap the
 expected value is flat in size, so a larger cap buys variance, not edge,
 until p is pinned down.
+
+---
+
+# Addendum, same day: the depth question is closed, the edge question is not
+
+## The recorder gap was not fixable, and did not need to be
+
+`min_touch_shares_*` was null on every row ever emitted, and the cause was
+not a missed assignment that could be patched. `bshares`/`ashares` are
+bound to None and never assigned because `/v1/market/slug/{slug}` -- the
+only endpoint that answers for an OPEN window -- carries no depth, and the
+`/bbo` endpoint that does carry depth returns 404 until the window EXPIRES.
+The field was tracking a quantity the process could not observe.
+
+**The question it existed to answer was then answered another way.**
+Post-expiry `/bbo` does serve `sharesTraded`:
+
+| window | | sharesTraded |
+|--------|---|-------------|
+| 0255z | a shadow pair window | 163,023 |
+| 0345z | live, one leg only | 219,628 |
+
+At 8 shares we are **0.005% of a window's volume**, and live agrees: one
+leg filled promptly in 19 of 19 placing windows. **Depth is not the
+binding constraint at our size.** So the pair rate is a genuine price-path
+property, the shadow's rate is NOT inflated by unfillable touches, and the
+suspicion recorded in section 2 above was wrong.
+
+The dead block is left in place with that finding written next to it, so
+nobody re-opens it.
+
+## A second, independent estimate of the pair rate
+
+`pmus_btc5m_quotes_20261112.jsonl` is a separate 189-window quote tape from
+Nov 11-12, recorded by a different process. Replaying the identical rule on
+it -- `own_price(UP) = bid`, `own_price(DOWN) = 1 - ask`, fill at <= 0.08 --
+with a density filter of >= 60 reads and max gap <= 10s:
+
+| sample | pairs/n | rate | 95% Wilson CI | vs breakeven 8.70% |
+|--------|---------|------|---------------|--------------------|
+| shadow, live cadence | 10/106 | 9.43% | 5.21% .. 16.50% | straddles |
+| independent tape | 21/172 | 12.21% | 8.13% .. 17.94% | straddles |
+| **POOLED** | **31/278** | **11.15%** | **7.97% .. 15.39%** | **straddles** |
+
+Pooled EV **+0.0226 $/share/window**. Two independently sourced samples,
+278 windows, and breakeven is still inside the interval.
+
+How fine the margin is:
+
+| pairs of 278 | rate | CI low | EV | verdict |
+|--------------|------|--------|-----|---------|
+| 28 | 10.07% | 7.06% | +0.0127 | undecided |
+| 31 | 11.15% | 7.97% | +0.0226 | undecided |
+| 34 | 12.23% | 8.89% | +0.0325 | **edge** |
+| 37 | 13.31% | 9.81% | +0.0424 | **edge** |
+
+**Three pairs either way flips the verdict.** That is the whole state of
+the evidence after three live campaigns.
+
+## What settles it, and what it costs
+
+For the CI low to clear breakeven at the pooled rate: **~631 windows**.
+278 are held, so **~353 more**, which is **1.2 days of shadow recording**
+at 288 five-minute windows a day.
+
+**Zero cost. Read-only. No arming, no capital at risk.**
+
+That is the entire remaining question for this strategy, and live trading
+cannot answer it faster than the shadow can -- the daily loss cap allows
+only ~17 windows a day at 8 shares, against 288 a day for free in shadow.
+Live trading is 17x slower at buying the one thing still missing, and it
+pays for the privilege.
+
+## Standing recommendation
+
+1. Let the shadow run ~1.2 days and re-pool. The verdict will be
+   arithmetic, not judgement.
+2. If the CI low clears 8.70%, size live from the bottom -- section 4
+   shows expected net is flat in size under a fixed cap while P(reaching a
+   pair) falls from 0.976 at 4 shares to 0.582 at 16.
+3. If it does not clear, the 8c straddle is done and the lone-leg
+   adverse-selection finding (19/19, p = 1.9e-6) says why: a resting bid
+   is filled by someone selling the loser.
