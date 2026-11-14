@@ -3059,10 +3059,10 @@ def _run_session_body(t: Optional[Transport] = None,
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
                 # maker depth: an OPEN/EXTEND resting N ticks under the
-                # touch is "still the quote" while it sits at touch - N;
-                # depth 0 makes this the touch exactly, as before
-                if relation_ in requote_relations() and \
-                        depth_rest_px(touch, spec["tick"], relation_) != px_:
+                # touch is "still the quote" while it sits at touch - N.
+                # Identity at depth 0 and for COMPLETE (unchanged).
+                touch = depth_rest_px(touch, spec["tick"], relation_)
+                if relation_ in requote_relations() and touch != px_:
                     # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS, AND
                     # A RE-QUOTE WITH NO LEGAL PRICE AT ALL IS WORSE.
                     #
