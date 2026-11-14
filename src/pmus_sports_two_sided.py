@@ -104,6 +104,9 @@ REWARD_ALLOW_ENV = "PMUS_TWO_SIDED_REWARD_ALLOW"
 #     (one side filled) are never pulled by this; they lock the pair.
 WS_ENV = "PMUS_TWO_SIDED_WS"
 JUMP_TICKS = int(os.getenv("PMUS_TWO_SIDED_JUMP_TICKS", "2"))
+# A jump is also measured in PRICE: on 0.005-tick books (college football)
+# 2 ticks is 1c of noise, which paused CFB ~60 times in 2 min live (19:05Z).
+JUMP_MIN_PX = _env_d("PMUS_TWO_SIDED_JUMP_MIN_PX", "0.02")
 JUMP_PAUSE_S = float(os.getenv("PMUS_TWO_SIDED_JUMP_PAUSE_S", "15"))
 
 
@@ -434,7 +437,7 @@ class Engine:
         flat = D(mk["pos"]["YES"]) == D(mk["pos"]["NO"])
         open_legs = [o for o in mk["orders"].values() if o.get("open")]
         new = moves[-1][1]
-        if jump >= JUMP_TICKS:
+        if jump >= JUMP_TICKS and jump * tick >= JUMP_MIN_PX:
             mk["jump_pause_until"] = time.time() + JUMP_PAUSE_S
             self.jump_pauses += 1
             self.b.save()
@@ -891,6 +894,12 @@ class Engine:
                     qualifies=None, est_share=None,
                     label="THEORETICAL reward program; never P&L")
 
+    def _latest_pairs(self) -> Dict[str, Any]:
+        last: Dict[str, Any] = {}
+        for p in self.b.d.get("pairs") or []:
+            last[p["slug"]] = p
+        return last
+
     def report(self) -> None:
         pairs = self.b.d["pairs"]
         extra = {} if self.ws is None else {
@@ -899,8 +908,14 @@ class Engine:
         log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
             pairs=len(pairs),
-            locked_edge_usd=sum((ONE - D(p["pair_cost"])) * D(p["qty"])
-                                for p in pairs) if pairs else 0,
+            # each PAIR_LOCKED row carries the market's CUMULATIVE pairs and
+            # average cost, so only the LATEST row per market counts (summing
+            # every row double-counted; owner report 18:28Z corrected).
+            matched_pairs=str(sum((D(p["qty"]) for p in
+                                   self._latest_pairs().values()), D(0))),
+            locked_edge_usd=str(sum(((ONE - D(p["pair_cost"])) * D(p["qty"])
+                                     for p in self._latest_pairs().values()),
+                                    D(0)).quantize(D("0.0001"))),
             enabled=os.getenv(ENABLED_ENV, ""), depth_ticks=DEPTH_TICKS,
             caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                   "markets": MAX_MARKETS, "pair_cap": PAIR_CAP, "qty": QTY},

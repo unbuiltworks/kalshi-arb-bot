@@ -381,7 +381,7 @@ def test_reward_program_log_is_theoretical(reng, capsys):
     e.report()
     hb = [ln for ln in capsys.readouterr().out.splitlines() if '"heartbeat"' in ln][-1]
     assert '"rewarded_active":1' in hb
-    assert '"locked_edge_usd":0' in hb                          # rewards never in P&L
+    assert '"locked_edge_usd":"0.0000"' in hb                          # rewards never in P&L
 
 
 def test_default_off_never_touches_incentives(tmp_path, monkeypatch):
@@ -665,3 +665,20 @@ def test_ws_default_off_unchanged(eng, monkeypatch):
     e.drain_ws_events()                                  # no-op
     assert "quoted_bbo" not in e.b.d["markets"]["aec-x"]
     assert M.Venue.ws is None
+
+
+def test_locked_edge_counts_latest_cumulative_row_per_market(eng):
+    e, v = eng
+    e.b.d["pairs"] = [{"slug": "a", "qty": "1", "pair_cost": "0.96"},
+                      {"slug": "a", "qty": "2", "pair_cost": "0.97"},
+                      {"slug": "b", "qty": "1", "pair_cost": "0.98"}]
+    last = e._latest_pairs()
+    total = sum((M.ONE - D(p["pair_cost"])) * D(p["qty"]) for p in last.values())
+    assert total == D("0.08")
+
+
+def test_jump_threshold_is_also_a_price_floor():
+    assert M.JUMP_MIN_PX == D("0.02")
+    # 2 ticks of 0.005 = 1c < 2c floor -> not a jump; 4 ticks = 2c -> jump
+    assert not (2 >= M.JUMP_TICKS and 2 * D("0.005") >= M.JUMP_MIN_PX)
+    assert 4 >= M.JUMP_TICKS and 4 * D("0.005") >= M.JUMP_MIN_PX
