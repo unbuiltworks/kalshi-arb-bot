@@ -489,3 +489,132 @@ class TestTheLiveOrderBoundFitsThePlan:
         for raw in ("9", "10", "15"):
             monkeypatch.setenv(X.MAX_RESTING_ENV, raw)
             assert X.max_resting_entries() == 4
+
+
+class TestPatientCompletionOfALoneLeg:
+    """STRADDLE completion: when one leg fills and the other has not, rest
+    an ADDITIONAL order on the unfilled side so the pair costs a fixed
+    total. The cheap rung STAYS -- this is a fallback, not a replacement.
+
+    WHY IT IS NOT THE EXISTING HEDGE. `hedge_enabled` cancels anything on
+    the hedge side that is not at the hedge price, which kills the cheap
+    rung. Measured on 183 recorded windows that is WORSE than doing
+    nothing: -1.33 to -0.35 c/window against +2.86 for today's behaviour,
+    because forfeiting fourteen +84c pairs costs more than rescuing 169
+    lone legs. Keeping the rung and ADDING the completion measured +4.79
+    c/window at a 0.96 pair cost, t +2.53, and stays above today's figure
+    even if the completion fills only 20% of the times it is reachable
+    (+3.23), because a filled completion (+4c) beats a held losing leg
+    (-8c).
+
+    These tests pin the MECHANISM and the bounds, not the edge.
+    """
+
+    HELD_UP = {C.UP: {"qty": "5", "cost": "0.40"},
+               C.DOWN: {"qty": "0", "cost": "0"}}
+    #: THE COMPLETION IS CAPITAL-HUNGRY and that is the headline operational
+    #: fact about it, not a detail. Five shares held at 0.08 cost $0.40;
+    #: completing them at 0.88 costs $4.40 -- about 5.5x the whole straddle.
+    #: The default $3.00 cap in `params()` cannot fund it, so these tests
+    #: raise the ceiling explicitly rather than quietly, and the refusal at
+    #: a realistic ceiling is pinned below.
+    ROOM = D("8.00")
+
+    def test_off_by_default_so_the_mode_is_unchanged(self):
+        out = decide(inventory=self.HELD_UP)
+        assert all(o["reason"] != "STRADDLE_COMPLETION"
+                   for o in out["orders"])
+        comp = (out.get("evaluation") or {}).get("completion") or {}
+        assert comp.get("why") == "COMPLETION_DISABLED"
+
+    def test_it_rests_the_completion_at_pair_cost_minus_what_we_paid(self):
+        out = decide(inventory=self.HELD_UP, max_exposure_usd=self.ROOM,
+                     straddle_completion_pair_cost=D("0.96"))
+        comp = [o for o in out["orders"] if o["reason"] == "STRADDLE_COMPLETION"]
+        assert len(comp) == 1
+        o = comp[0]
+        assert o["side"] == C.DOWN          # the side we do NOT hold
+        assert o["price"] == D("0.88")      # 0.96 - 0.08 paid
+        assert o["post_only"] is True
+        ev = (out.get("evaluation") or {}).get("completion") or {}
+        assert ev["pair_cost"] == "0.96"
+
+    def test_the_cheap_rung_is_not_cancelled_which_is_the_whole_point(self):
+        """Forfeiting the cheap pair measured WORSE than doing nothing."""
+        out = decide(inventory=self.HELD_UP, max_exposure_usd=self.ROOM,
+                     straddle_completion_pair_cost=D("0.96"))
+        assert not [o for o in out["orders"] if o.get("op") == "CANCEL"]
+
+    def test_nothing_unmatched_means_no_completion(self):
+        out = decide(straddle_completion_pair_cost=D("0.96"))
+        ev = (out.get("evaluation") or {}).get("completion") or {}
+        assert ev["why"] == "NOTHING_UNMATCHED"
+
+    def test_a_completion_already_resting_is_not_duplicated(self):
+        rest = [{"id": "x", "side": C.DOWN, "price": D("0.88"), "qty": D("5"),
+                 "age_s": 1.0}]
+        out = decide(inventory=self.HELD_UP, resting=rest,
+                     max_exposure_usd=self.ROOM,
+                     straddle_completion_pair_cost=D("0.96"))
+        ev = (out.get("evaluation") or {}).get("completion") or {}
+        assert ev["why"] == "COMPLETION_ALREADY_WORKING"
+
+    def test_it_refuses_rather_than_overspends_when_the_cap_is_realistic(self):
+        """THE OPERATIONAL CONSTRAINT. At the $3.00 default cap a 5-share
+        completion at 0.88 needs $4.40 and is refused, not trimmed. This is
+        the behaviour that decides live sizing: funding a completion costs
+        about 5.5x the straddle, so the series exposure ceiling -- not the
+        daily loss cap -- is what bounds clip size once this is enabled."""
+        out = decide(inventory=self.HELD_UP,
+                     straddle_completion_pair_cost=D("0.96"))
+        ev = (out.get("evaluation") or {}).get("completion") or {}
+        assert ev["why"] == "NO_EXPOSURE_ROOM"
+        assert ev["price"] == "0.88"        # it priced it correctly first
+        assert not [o for o in out["orders"]
+                    if o["reason"] == "STRADDLE_COMPLETION"]
+
+    @pytest.mark.parametrize("bad", [D("0.50"), D("0.40"), D("1.01"), D("2")])
+    def test_a_pair_cost_outside_0_50_to_1_00_is_refused_not_guessed(self, bad):
+        out = decide(inventory=self.HELD_UP,
+                     straddle_completion_pair_cost=bad)
+        assert out["why"] == "PARAMS_UNREADABLE"
+
+    def test_the_completion_price_is_reachable_not_a_forward_reference(self):
+        """REGRESSION. The first cut called `priced()`, a closure defined
+        AFTER the straddle branch returns, so enabling a completion raised
+        NameError at runtime while every existing test still passed --
+        they never enable it. This exercises the path end to end."""
+        out = decide(inventory=self.HELD_UP, max_exposure_usd=self.ROOM,
+                     straddle_completion_pair_cost=D("0.96"))
+        assert out["action"] == C.OPEN_FAVORITE
+        assert any(o["reason"] == "STRADDLE_COMPLETION" for o in out["orders"])
+
+
+class TestTheCompletionPairCostCeilingIsEnforcedInCode:
+    """Near-$1 pair tolerance is LOCKED by L5_OPERATING_MODEL -- it is
+    later incentive-era L5 behaviour and stays locked until the economics
+    are source-confirmed for this account. The ceiling is therefore in the
+    code, not in whoever sets the variable."""
+
+    def test_an_over_target_request_is_clamped_down_not_obeyed(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "1.00")
+        assert X.completion_pair_cost() == X.COMPLETION_PAIR_COST_MAX
+        assert X.COMPLETION_PAIR_COST_MAX == D("0.96")
+
+    @pytest.mark.parametrize("raw", ["0.50", "0.30", "0", "-1", "nonsense", ""])
+    def test_at_or_below_the_cheap_rung_disables_rather_than_clamps_up(
+            self, monkeypatch, raw):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, raw)
+        assert X.completion_pair_cost() == D("0")
+
+    def test_absent_means_disabled(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.delenv(X.COMPLETION_PAIR_COST_ENV, raising=False)
+        assert X.completion_pair_cost() == D("0")
+
+    def test_a_legal_value_passes_through(self, monkeypatch):
+        from src import l5_btc5m_execution as X
+        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.94")
+        assert X.completion_pair_cost() == D("0.94")
