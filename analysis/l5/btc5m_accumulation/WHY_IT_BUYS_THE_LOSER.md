@@ -326,3 +326,77 @@ a side at 0.08 and the live campaigns use 5.
 **If you want more from the same cap, add SHARES at 0.08, not rungs above
 it.** This is the same conclusion the earlier ladder work reached ("same
 t, pure leverage"); this records the arithmetic behind it.
+
+---
+
+# Recovery time, and what the pair's second leg is actually worth
+
+Owner pushed back 2026-11-14 that the 5m was not exhausted. The 15m
+shadow had just shown a lone leg winning 27.8% against 2.5% on 5m, and
+the obvious mechanism is RECOVERY TIME rather than window length as such.
+If so it must also operate inside a 5-minute window, where a leg filled
+at t=30s has four minutes to come back and one filled at t=240s has
+thirty seconds. Measured by `recovery_time.py`.
+
+## The mechanism does NOT operate within 5m
+
+| fill time | n | wins | win rate |
+|---|---|---|---|
+| 0-60s | 7 | 0 | 0.0% |
+| 60-120s | 44 | 1 | 2.3% |
+| 120-180s | 51 | 1 | 2.0% |
+| 180-240s | 51 | 2 | 3.9% |
+| 240-300s | 9 | 0 | 0.0% |
+
+Flat at 0-4% whenever it fills. So whatever makes the 15m lone leg worth
+27.8% is NOT simply more seconds on the clock, and the 15m result needs
+its own explanation (or is the small-sample artifact its confounds
+suggest).
+
+## What the second leg of a pair is worth
+
+In the 19 windows where both sides touched 0.08, the FIRST-filled side
+went on to win **17 times, 89.5% (+/- 7.0%)**. That is not a coincidence:
+the second side only collapses to 0.08 because the first side RECOVERED,
+so by the time we buy the second leg we already hold the likely winner.
+
+```
+hold only the first leg:  0.895 x 0.92 + 0.105 x (-0.08) = +0.8147
+hold the pair:                                              +0.8400
+break-even needs the first leg to win 92%
+```
+
+**The second leg is approximately fairly-priced insurance.** 89.5%
+against a 92% break-even is indistinguishable at n=19. So the pair's
++0.84 is NOT where the edge lives -- in a pair window we would do nearly
+as well holding the first leg alone. This corrects how this strategy has
+been described throughout: "the pair is the only profitable branch" is
+true of the ACCOUNTING and false of the MARGINAL decision.
+
+It is also the adverse-selection law again, applied to the straddle's own
+second leg: that leg fills precisely when our existing position has
+improved, which is exactly the trigger that was shown to be adversely
+selected for patient completion and for hedging.
+
+## The cutoff result, and why it is NOT a finding
+
+Stopping the resting orders early looked like a win:
+
+| cutoff | BOTH | ONE | NONE | net c/w | t |
+|---|---|---|---|---|---|
+| none | 19 | 162 | 6 | +3.74 | +1.67 |
+| 240s | 7 | 165 | 15 | +4.11 | +1.79 |
+| 180s | 1 | 117 | 69 | +4.00 | **+1.95** |
+| 120s | 0 | 57 | 130 | +1.30 | +0.98 |
+
+Seven cutoffs were swept, so the bar is `sqrt(2 ln 7) = 1.97` and the
+best cell reaches **1.95**. It does not clear. This is the same procedure
+that produced the retracted exit rule (+5.88 c/w) and the per-side
+"edge" (t +2.10), and it gets the same verdict: **not established.**
+
+## The standing conclusion
+
+187 windows can no longer distinguish a real improvement from a lucky
+slice, and each further search makes that worse rather than better. The
+dataset is used up. What can still move the answer is more DATA -- the
+live phase-1 campaigns, and the 15m shadow -- not more ideas.
