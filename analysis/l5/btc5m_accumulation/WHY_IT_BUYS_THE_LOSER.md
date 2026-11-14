@@ -400,3 +400,53 @@ that produced the retracted exit rule (+5.88 c/w) and the per-side
 slice, and each further search makes that worse rather than better. The
 dataset is used up. What can still move the answer is more DATA -- the
 live phase-1 campaigns, and the 15m shadow -- not more ideas.
+
+---
+
+# BTC's own volatility does not predict the pair rate
+
+`regime_filter.py` found no predictor clearing its bar, but every
+predictor it tried came from the previous window's OWN UP PRICE -- chop,
+flips, whether it paired, how deep the loser got. It never used the
+underlying. That left the most mechanical candidate untested: a pair
+needs the price to travel 0.08 -> ~0.92 AND BACK inside five minutes,
+which needs a large round trip in BTC itself, so realized volatility
+should predict pairing almost by construction. And unlike the price-path
+predictors it is measurable BEFORE the window opens, so it could support
+a real "rest this window or sit it out" decision.
+
+Measured by `vol_regime.py` from `btc_index_1s`, volatility computed from
+ticks STRICTLY before each window's start.
+
+| prior 5m vol | n | pair% | net c/w | t |
+|---|---|---|---|---|
+| Q1 calmest | 46 | 8.7% | +0.17 | +0.05 |
+| Q2 | 46 | 6.5% | +0.17 | +0.04 |
+| Q3 | 46 | **19.6%** | **+12.35** | **+2.17** |
+| Q4 most volatile | 49 | 6.1% | +2.37 | +0.57 |
+
+Q3 clears the four-bucket bar of `sqrt(2 ln 4) = 1.67`. It is still
+nothing, for two reasons.
+
+**It is not monotonic.** If volatility drove pairing, Q4 would be the
+best bucket. It is the WORST -- 6.1% against Q3's 19.6%. A mechanism
+produces a gradient; this produces a spike in the middle. Any story about
+high vol being directional rather than choppy would be invented after
+seeing the data, which is exactly how the retracted exit rule and the
+per-side artifact happened.
+
+**The continuous test kills it.** Bucketing gives four chances to find a
+lucky bucket. Correlation gives one:
+
+```
+corr(prior vol, net pnl)     = +0.0166   t = +0.23
+corr(prior vol, paired 0/1)  = -0.0307   t = -0.42
+```
+
+Essentially zero, and the pairing correlation is NEGATIVE. The Q3 spike
+was manufactured by the bucketing.
+
+**Closed.** Regime prediction is now tested on both the price path
+(regime_filter) and the underlying (here), and neither predicts. There is
+no remaining predictor class for deciding which 5-minute windows to sit
+out.
