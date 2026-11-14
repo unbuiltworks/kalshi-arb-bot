@@ -195,6 +195,31 @@ def quote(slug, timeout=8.0):
     return dec(m.get("bestBidQuote")), dec(m.get("bestAskQuote"))
 
 
+def traded_now(slug, timeout=8.0):
+    """Cumulative `sharesTraded` for an OPEN window, or None.
+
+    SETTLEMENT IS NEVER TAKEN FROM HERE and never from /book. /book's
+    stats carry `settlementPx` 0.0000 on an OPEN market rather than null,
+    so reading an outcome from it resolves every open window to DOWN with
+    total confidence and no error. /bbo returns settlementPx None while
+    open, which is why `settlement()` below uses it and this does not
+    touch the field at all.
+
+    None on any failure, which keeps the old behaviour exactly: a missing
+    volume reads as unknown, never as zero.
+    """
+    try:
+        doc = _get("%s/v1/markets/%s/bbo" % (GATEWAY, slug), timeout=timeout)
+    except BaseException:                                      # noqa: BLE001
+        return None
+    st = (doc or {}).get("marketData") or (doc or {}).get("stats") or {}
+    v = st.get("sharesTraded")
+    try:
+        return D(str(v)) if v is not None else None
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
 def settlement(slug, timeout=8.0):
     """The venue's own settlementPx, or None. Works once EXPIRED.
 
@@ -278,7 +303,22 @@ def watch_window(ws, price, verbose=False):
         polls += 1
         try:
             bid, ask = quote(slug)
-            vol = bshares = ashares = None
+            bshares = ashares = None
+            #: VOLUME, WHICH WAS NEVER ACTUALLY UNAVAILABLE. This line was
+            #: `vol = None` for 199 windows on the belief, recorded in
+            #: `quote()` below and repeated in every report built on it,
+            #: that /bbo 404s while a window is OPEN. MEASURED
+            #: 2026-11-14T13:50Z on a live cpc-btc-updown-5m window: /bbo
+            #: answers 200 with sharesTraded 108701.31, lastTradePx 0.0800,
+            #: openInterest 24198.57 and settlementPx None. The 404 was
+            #: real when it was first seen and is not real now.
+            #:
+            #: It matters because `traded[side]` below already accumulates
+            #: volume-through-our-level and was written for exactly this
+            #: input -- so the one number that answers "would our size have
+            #: filled?" was an endpoint away the whole time, and the
+            #: question was instead worked around with post-expiry data.
+            vol = traded_now(slug)
         except RateLimited:
             rate_limited += 1
             time.sleep(POLL_S * 4)          # the venue asked us to slow down
@@ -454,9 +494,17 @@ def finish(obs, won):
            #: mistake as a rate-limited window reporting case NONE.
            #: Answering the scaling question needs the authenticated
            #: book, which this process deliberately has no key for.
-           "vol_while_fillable_up": None,
-           "vol_while_fillable_down": None,
-           "vol_unavailable_reason": "BBO_404_WHILE_OPEN",
+           #: NOW MEASURED. /bbo answers 200 on an OPEN window (verified
+           #: 2026-11-14), so this is volume that passed through while our
+           #: resting price was at or inside the touch -- the quantity
+           #: that answers whether our size would have filled.
+           "vol_while_fillable_up": (str(obs["traded"][UP])
+                                     if obs["traded"][UP] is not None
+                                     else None),
+           "vol_while_fillable_down": (str(obs["traded"][DOWN])
+                                       if obs["traded"][DOWN] is not None
+                                       else None),
+           "vol_unavailable_reason": None,
            #: ALWAYS NULL, and now says why in the row itself rather
            #: than leaving a reader to guess. See the note at the
            #: touch-depth block above: no OPEN-window endpoint carries
