@@ -202,3 +202,12 @@
 # test_spread_scanner (9), test_pmus_spring_probe_readiness (6),
 # test_orderbook (5) and test_deploy_fallthrough_guard (2), none in a file
 # these commits touch.
+
+# 2026-11-14 — OWNER-APPROVED (in session: "Approve all three steps") deploy of
+# the SETTLEMENT-ONLY fix b803b0011: second settlement-evidence path (public
+# settlementPx exactly 0/1 + zero venue position and no open order + coherent
+# ledger), used only for activity_walk_short_of_since; rows are
+# `realized_derived`, venue_confirmed false. Deployed with PMUS_SPRING_SHUTDOWN=YES
+# still set. Follow-on owner-approved steps, each verified separately: rung
+# R5FT -> R5FB ($1.50/market x 3, $4.50, -$5.00 stop), then clear the shutdown
+# latch only after the 96-market September backlog has drained.
