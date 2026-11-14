@@ -341,24 +341,32 @@ class Engine:
             want = open_prices(bbo["bid"], bbo["ask"], tick)
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES")
-            for side in ("YES", "NO"):
-                cur = open_by_side.get(side)
-                if cur and (want is None or blocked or
-                            D(cur[1]["px"]) != want[side]):
-                    self.v.cancel(cur[0])
-                    st = self.v.status(cur[0])
-                    self._record_fill(slug, side, cur[0], st)
-                    cur[1]["open"] = False
-                    self.b.save()
-                    return                      # re-evaluate next loop
+            qty = max(QTY, spec["min_qty"])
+            in_place = (want is not None and not blocked and
+                        set(open_by_side) == {"YES", "NO"} and
+                        all(D(open_by_side[sd][1]["px"]) == want[sd]
+                            for sd in ("YES", "NO")))
+            if in_place:
+                return
+            # OWNER 2026-11-14 "Pairs should be set simultaneously": never
+            # leave one side resting alone. Pull every open leg together,
+            # then (still flat) set both legs together.
+            for side, (oid, o) in open_by_side.items():
+                self.v.cancel(oid)
+                st = self.v.status(oid)
+                self._record_fill(slug, side, oid, st)
+                o["open"] = st["open"]
+            self.b.save()
+            if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]) or \
+                    any(o.get("open") for o in mk["orders"].values()):
+                return                  # a leg filled while pulling: complete it
             if want is None or blocked:
                 return
-            qty = max(QTY, spec["min_qty"])
             if (want["YES"] + want["NO"]) * qty > PER_MARKET_CAP:
                 return
+            mk["partner_px"] = {k: str(v) for k, v in want.items()}
             for side in ("YES", "NO"):
-                if side not in open_by_side:
-                    self.place(slug, side, want[side], qty, "two_sided_open")
+                self.place(slug, side, want[side], qty, "two_sided_open")
             return
         # unbalanced: the lagging side is the completion
         lag = "NO" if y > n else "YES"
@@ -375,22 +383,26 @@ class Engine:
             self.b.save()
             return
         cur = open_by_side.get(lag)
-        base_px = D(cur[1]["px"]) if cur else floor_tick(
-            min(side_bid(lag, bbo["bid"], bbo["ask"]) - DEPTH_TICKS * tick,
-                PAIR_CAP - lead_px), tick)
-        px = completion_price(lag, base_px, lead_px, bbo["bid"], bbo["ask"],
-                              tick)
-        if px + lead_px > PAIR_CAP or px < tick:
-            return
-        rem = need - (D(cur[1]["qty"]) - D(cur[1]["filled"]) if cur else 0)
-        if cur and (px != D(cur[1]["px"]) or rem != 0):
+        # The partner was set together with the filled leg: leave it at its
+        # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
+        if cur:
+            rem_open = D(cur[1]["qty"]) - D(cur[1]["filled"])
+            if rem_open == need:
+                return
             self.v.cancel(cur[0])
             st = self.v.status(cur[0])
             self._record_fill(slug, lag, cur[0], st)
-            cur[1]["open"] = False
+            cur[1]["open"] = st["open"]
             self.b.save()
             return
-        if not cur and need >= spec["min_qty"]:
+        px = D(mk.get("partner_px", {}).get(lag) or "0") or floor_tick(
+            min(side_bid(lag, bbo["bid"], bbo["ask"]) - DEPTH_TICKS * tick,
+                PAIR_CAP - lead_px), tick)
+        px = min(px, floor_tick(PAIR_CAP - lead_px, tick))
+        if px < tick or px >= side_bid(lag, bbo["bid"], bbo["ask"]) + \
+                (bbo["ask"] - bbo["bid"]):
+            return
+        if need >= spec["min_qty"]:
             self.place(slug, lag, px, need, "two_sided_complete")
 
     def select(self, acct: Mapping[str, Any]) -> None:

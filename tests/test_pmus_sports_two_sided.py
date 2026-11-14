@@ -88,16 +88,27 @@ def test_full_pair_cycle(eng):
     assert opened == {"YES": D("0.42"), "NO": D("0.52")}
     yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
     v.orders[yes].update(filled=D("1"), open=False)
-    e.step_market("aec-x")      # NO resting at 0.52 is re-priced up to its bid 0.54 (cancel)
-    e.step_market("aec-x")      # place completion
+    v.bid, v.ask = D("0.40"), D("0.42")      # market moves: partner is NOT touched
+    e.step_market("aec-x")
+    e.step_market("aec-x")
     comp = [o for o in v.orders.values() if o["open"]]
-    assert len(comp) == 1 and comp[0]["side"] == "NO" and comp[0]["px"] == D("0.54")
-    assert comp[0]["px"] + D("0.42") <= M.PAIR_CAP
+    assert len(comp) == 1 and comp[0]["side"] == "NO" and comp[0]["px"] == D("0.52")
+    assert v.n == 2
     cid = next(k for k, o in v.orders.items() if o["open"])
     v.orders[cid].update(filled=D("1"), open=False)
     e.step_market("aec-x")
-    assert e.b.d["pairs"][0]["pair_cost"] == "0.96"
-    assert len([o for o in v.orders.values() if o["open"]]) == 2   # next pair quoted
+    assert e.b.d["pairs"][0]["pair_cost"] == "0.94"
+    assert len([o for o in v.orders.values() if o["open"]]) == 2   # next pair set together
+
+
+def test_requote_moves_both_legs_together(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    v.bid, v.ask = D("0.47"), D("0.49")
+    e.step_market("aec-x")
+    live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    assert live == {"YES": D("0.45"), "NO": D("0.49")}
 
 
 def test_total_cap_blocks_new_pairs(eng, monkeypatch):
