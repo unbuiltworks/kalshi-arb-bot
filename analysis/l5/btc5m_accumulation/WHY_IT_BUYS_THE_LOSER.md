@@ -450,3 +450,53 @@ was manufactured by the bucketing.
 (regime_filter) and the underlying (here), and neither predicts. There is
 no remaining predictor class for deciding which 5-minute windows to sit
 out.
+
+---
+
+# Asymmetric pricing: 0.20 on one side, 0.08 on the other
+
+Owner asked 2026-11-14 whether resting 0.20 and 0.08 and having both fill
+still counts as a pair. **It does** -- any two opposite legs redeem exactly
+1.00, so that pair costs 0.28 and locks +0.72. And the 0.20 leg fills far
+more often, because its side only has to dip to 0.20 rather than 0.08.
+Smaller round trip, more pairs, smaller prize.
+
+**This was genuinely untested.** The full sweep rests both sides at the
+SAME price and `side_asymmetry.py` measures each side separately but still
+at a common price. Neither can see an asymmetric COMBINATION. Measured by
+`asymmetric_pair.py`, with every pairing evaluated BOTH WAYS (UP@p1/DOWN@p2
+and UP@p2/DOWN@p1) and averaged, so the tape's 56.1% DOWN drift -- the
+confound that made the per-side result look real at t +2.10 -- cannot
+contaminate it.
+
+| rest at | pair cost | locks | pair rate | net c/w | t |
+|---|---|---|---|---|---|
+| **0.08 / 0.08** | 0.16 | +0.84 | 10.2% | **+3.74** | **+1.67** |
+| 0.08 / 0.16 | 0.24 | +0.76 | 15.0% | +3.43 | +1.54 |
+| 0.08 / 0.20 | 0.28 | +0.72 | 16.6% | +2.25 | +1.02 |
+| 0.08 / 0.30 | 0.38 | +0.62 | 22.7% | +0.43 | +0.21 |
+| 0.16 / 0.20 | 0.36 | +0.64 | **23.0%** | +1.94 | +0.76 |
+
+**The pair rate behaves exactly as predicted** -- 10.2% to 23.0%, more than
+double. **And net falls monotonically the whole way.** Every asymmetric
+combination is worse than 8/8.
+
+## Why more pairs still loses
+
+The prize shrinks (+0.84 -> +0.62) but that is the smaller effect. The
+bigger one is that pairs are 10-23% of windows and a LONE LEG is the other
+77-90%, and the lone leg is worth **~2.5c no matter what was paid for it**.
+So lifting a side from 0.08 to 0.20 turns the frequent branch from a
+5.5-point overpayment into a 17.5-point one. The 6.4 points of extra pair
+frequency cannot pay for 12 extra cents of overpayment on four windows in
+five.
+
+Same arithmetic as the symmetric 0.16/0.20 results and the ladder,
+reached by a new route: **lifting any leg off 0.08 buys frequency with
+expectancy at a bad exchange rate.**
+
+12 combinations were tested so the honest bar is `sqrt(2 ln 12) = 2.23`
+and nothing approaches it -- which also means these results do not
+definitively RANK the combinations. What they establish is that nothing
+beats 8/8, with a monotonic ordering and a mechanism, which is the
+opposite of the volatility quartile spike that was discarded.
