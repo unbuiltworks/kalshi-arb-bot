@@ -246,3 +246,4 @@
 2026-11-14T16:35Z two-sided: release a flat market that stays out of band/too wide for 2 min, freeing the slot.
 2026-11-14T16:50Z two-sided publishes its own-order registry at :8090/l5/live_orders.json (watchdog ownership + managed-lane attestation).
 2026-11-14T17:25Z OWNER 'cancel and resubmit closer': unfilled pair/completion steps 1 tick closer every 60s (pair <= 0.98, never above own bid).
+2026-11-14T17:30Z registry: bind-family log, private-DNS self-test, rate-limited read log (watchdog reachability).

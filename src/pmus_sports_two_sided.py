@@ -528,6 +528,7 @@ class Engine:
         return 0
 
 
+_LAST_ACCESS_LOG = [0.0]
 REGISTRY_KEY = "l5/live_orders.json"      # same path as l5_order_registry_server
 LANE = "pmus-sports-two-sided"
 
@@ -569,8 +570,14 @@ def serve_registry(book: "Book", port: int) -> None:
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, *a):                      # quiet
-            return
+        def log_message(self, fmt, *a):
+            # one line per registry read, so a cross-service fetch (the l5
+            # watchdog) is visible here; health checks stay quiet
+            if REGISTRY_KEY in (self.path or ""):
+                now = time.monotonic()
+                if now - _LAST_ACCESS_LOG[0] > 60:
+                    _LAST_ACCESS_LOG[0] = now
+                    log("registry_read", client=self.client_address[0])
 
     try:                       # Railway private networking is IPv6
         import socket as _sock
@@ -581,7 +588,22 @@ def serve_registry(book: "Book", port: int) -> None:
     except OSError:
         srv = ThreadingHTTPServer(("0.0.0.0", port), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    log("registry_serving", port=port, path=REGISTRY_KEY)
+    log("registry_serving", port=port, path=REGISTRY_KEY,
+        family=("ipv6_dualstack" if srv.address_family != 2 else "ipv4"))
+    # SELF-TEST through the private DNS name other services use
+    host = os.getenv("RAILWAY_PRIVATE_DOMAIN", "")
+    if host:
+        def _probe():
+            import urllib.request
+            time.sleep(2)
+            url = f"http://{host}:{port}/{REGISTRY_KEY}"
+            try:
+                with urllib.request.urlopen(url, timeout=5) as r:
+                    log("registry_selftest", ok=True, url=url, status=r.status)
+            except Exception as exc:                     # noqa: BLE001
+                log("registry_selftest", ok=False, url=url,
+                    err=f"{type(exc).__name__}:{str(exc)[:120]}")
+        threading.Thread(target=_probe, daemon=True).start()
 
 
 def main() -> int:
