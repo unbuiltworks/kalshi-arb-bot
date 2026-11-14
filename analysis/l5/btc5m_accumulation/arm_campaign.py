@@ -37,7 +37,13 @@ URL = "https://backboard.railway.com/graphql/v2"
 #: the campaign's shape. One market at a time, `--shares` a side at 0.08.
 WINDOWS = 8          # overridden by --windows
 PRICE = D("0.08")
-DAILY_LOSS = "5.00"
+#: the campaign's own daily stop-loss, REQUESTED here and clamped by
+#: `max_daily_loss_for(series)` in l5_campaign_approval. Raised 5.00 ->
+#: 11.00 with the per-series cap on 2026-11-14 by owner decision. The
+#: request must MATCH the cap: asking 5.00 under an 11.00 cap gets
+#: min(5, 11) = 5 and refuses instantly on a day already at -5.00,
+#: which is the trap this comment exists to stop.
+DAILY_LOSS = "11.00"
 #: windows whose $1 booking may still be uncorrected at any instant
 UNCORRECTED_ALLOWANCE = 4
 
