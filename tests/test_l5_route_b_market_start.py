@@ -1,11 +1,13 @@
 """Regression: ROUTE B replay must use actual UTC market boundaries."""
 import importlib.util
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 PATH = Path(__file__).resolve().parents[1] / "analysis/l5/issue208/route_b_replay.py"
+sys.path.insert(0, str(PATH.parent))
 SPEC = importlib.util.spec_from_file_location("route_b_replay_cutoff", PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
