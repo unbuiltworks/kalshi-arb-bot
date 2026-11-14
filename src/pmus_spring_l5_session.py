@@ -1005,6 +1005,35 @@ def rest_policy() -> str:
     return ladder.rest_policy()
 
 
+# OPTIONAL MAKER DEPTH (2026-11-14, owner report: live tennis fills resting
+# 2 ticks below the bid). OPEN / EXTEND maker bids rest N ticks BELOW the
+# touch of their side. 0 (the default, and any unreadable value) is today's
+# join-the-touch behaviour exactly. Resting lower never crosses; the pair
+# ceiling, the matched-pair invariant, the unmatched/spend caps and the
+# complement preflight all run AFTER this, on the deeper price. COMPLETE is
+# never touched -- it keeps complement_pricing() (l5_touch).
+DEPTH_TICKS_ENV = "PMUS_SPRING_DEPTH_TICKS"
+MAX_DEPTH_TICKS = 10
+
+
+def maker_depth_ticks() -> int:
+    try:
+        n = int(os.getenv(DEPTH_TICKS_ENV, "0").strip() or "0")
+    except ValueError:
+        return 0
+    return max(0, min(n, MAX_DEPTH_TICKS))
+
+
+def depth_rest_px(touch_px: D, tick: D, relation: str) -> D:
+    """The resting price for an OPEN/EXTEND whose side's touch is
+    `touch_px`: touch - depth ticks, floored at one tick (never above the
+    touch, so never crossing). Any other relation, or depth 0: the touch."""
+    n = maker_depth_ticks()
+    if n == 0 or relation not in ("open", "extend"):
+        return touch_px
+    return max(D(str(tick)), D(str(touch_px)) - D(str(tick)) * n)
+
+
 def maker_rest_max_s() -> float:
     """How long a post-only maker order may REST before the session
     cancels it: R1..R4 the fixed 30 s (SPORTS_MAKER_REST_MAX_S); under
@@ -1207,6 +1236,161 @@ def set_concurrent_owned(slugs=()) -> frozenset:
 
 def concurrent_owned() -> frozenset:
     return frozenset(_CONCURRENT_OWNED)
+
+
+# ---------------------------------------------------------------------------
+# LANE ISOLATION (2026-11-14). The venue account is SHARED: the BTC5m and
+# BTC15m bots trade cpc-btc-updown-* on it, and the owner trades by hand on
+# it (a Taylor Fritz tennis match at the time of writing). LIVE 14:22Z and
+# 14:25Z the probe read the BTC5m bot's positions out of the account-wide
+# /v1/portfolio/positions, logged resume_start on them as if they were its
+# own held markets, then failed preflight on the BTC5m bot's resting orders
+# (PREFLIGHT_FAILED open_orders:2).
+#
+# OWN is decided from ONE source: this probe's own durable ledger
+# (PMUS_Q1_STATE_DIR/ledger.jsonl, the probe's private volume). A market is
+# OWN when the ledger carries a `submitted` row for it; an open order is OWN
+# when its id is a submitted order id OR it rests in an OWN market (an order
+# whose submitted row was lost to a crash still blocks: fail closed).
+# Everything else is FOREIGN:
+#   * a foreign position/order is never resumed, extended, completed,
+#     cancelled or counted as held inventory -- it is invisible to the
+#     account lock, so another lane cannot stall this one;
+#   * a foreign position or foreign open order in the TARGET market (the
+#     one about to be opened) still refuses, so the probe never trades on
+#     top of the owner's manual position or another bot's quotes.
+# Code default OFF (every caller is then byte-identical to the account-wide
+# micro.account_block_reason lock); the probe IMAGE turns it on with
+# ENV PMUS_SPRING_LANE_ISOLATION=1 in deploy/pmus_spring_l5/Dockerfile, so
+# the deployed service is isolated without a platform variable change.
+# ---------------------------------------------------------------------------
+LANE_ISOLATION_ENV = "PMUS_SPRING_LANE_ISOLATION"
+FOREIGN_EXPOSURE_MAX_AGE_S = 30.0
+_LANE_LAST: dict = {}
+
+
+def lane_isolation_enabled() -> bool:
+    return os.getenv(LANE_ISOLATION_ENV, "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def lane_own() -> tuple:
+    """(own_slugs, own_order_ids) from this probe's own durable ledger."""
+    path = q1.base.state_dir() / "ledger.jsonl"
+    slugs: set = set()
+    ids: set = set()
+    if not path.exists():
+        return slugs, ids
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:                                   # noqa: BLE001
+            continue
+        if not isinstance(row, dict) or row.get("kind") != "submitted":
+            continue
+        if row.get("slug"):
+            slugs.add(str(row["slug"]))
+        if row.get("order_id"):
+            ids.add(str(row["order_id"]))
+    return slugs, ids
+
+
+def lane_account_block_reason(t: Transport, allow_slugs: Any = (),
+                              target: Optional[str] = None) -> Optional[str]:
+    """The account lock scoped to THIS probe's lane.
+
+    Same reads, same reason strings and same fail-closed parsing as
+    micro.account_block_reason, over OWN orders/positions only, plus the
+    two target-market refusals (`foreign_open_orders:` / `foreign_position:`).
+    With isolation off it IS micro.account_block_reason."""
+    if not lane_isolation_enabled():
+        return (micro.account_block_reason(t, allow_slugs=allow_slugs)
+                if allow_slugs else micro.account_block_reason(t))
+    allowed = {str(s) for s in (allow_slugs or ())}
+    own_slugs, own_ids = lane_own()
+    target = str(target) if target else None
+    opened = q1.base._get_with_retry(t, "/v1/orders/open")
+    orders = opened.get("orders") if isinstance(opened, Mapping) else None
+    ours_orders = 0
+    foreign: dict = {}
+    for o in orders if isinstance(orders, list) else []:
+        if not isinstance(o, Mapping):
+            ours_orders += 1                 # unreadable: fail closed
+            continue
+        slug = str(o.get("marketSlug") or "")
+        oid = str(o.get("id") or o.get("orderId") or "")
+        if not slug or slug in own_slugs or (oid and oid in own_ids):
+            ours_orders += 1
+        else:
+            foreign.setdefault(slug, set()).add("open_orders")
+    resp = q1.base._get_with_retry(t, "/v1/portfolio/positions")
+    rows = resp.get("positions") if isinstance(resp, Mapping) else None
+    if isinstance(rows, Mapping):
+        iterable = rows.items()
+    elif isinstance(rows, list):
+        iterable = ((str(r.get("marketSlug") or ""), r)
+                    for r in rows if isinstance(r, Mapping))
+    else:
+        iterable = []
+    nonzero: list = []
+    unparseable = False
+    for slug, row in iterable:
+        if not isinstance(row, Mapping):
+            continue
+        slug = str(slug)
+        raw = row.get("netPositionDecimal")
+        if raw is None:
+            raw = row.get("netPosition")
+        if raw is None:
+            raw = row.get("quantity")
+        value = micro._d(raw)
+        own = (not slug) or slug in own_slugs
+        if value is None:
+            if own:
+                unparseable = True
+            else:
+                foreign.setdefault(slug, set()).add("position_unparseable")
+            continue
+        if value == 0:
+            continue
+        if own:
+            if slug not in allowed:
+                nonzero.append((slug, str(value)))
+        else:
+            foreign.setdefault(slug, set()).add("position")
+    _LANE_LAST.clear()
+    _LANE_LAST.update({"at": time.time(),
+                       "foreign": {s: sorted(v) for s, v in foreign.items()}})
+    if ours_orders:
+        return f"open_orders:{ours_orders}"
+    if target and "open_orders" in foreign.get(target, ()):
+        return f"foreign_open_orders:{target}"
+    if unparseable:
+        return "position_unparseable"
+    if nonzero:
+        return "nonzero_positions:" + ",".join(
+            f"{slug}={value}" for slug, value in nonzero[:5])
+    if target and foreign.get(target):
+        return f"foreign_position:{target}"
+    return None
+
+
+def foreign_exposure(t: Optional[Transport] = None,
+                     max_age_s: float = FOREIGN_EXPOSURE_MAX_AGE_S) -> dict:
+    """{slug: [what]} for every market where the account holds a position
+    or a resting order this probe did not place. Served from the lane
+    lock's last read when it is fresh (the campaign reads it every cycle
+    via held_markets), else re-read. Empty with isolation off -- the
+    account-wide lock already refuses every such market."""
+    if not lane_isolation_enabled():
+        return {}
+    if _LANE_LAST and time.time() - float(_LANE_LAST.get("at") or 0) \
+            <= max_age_s:
+        return dict(_LANE_LAST.get("foreign") or {})
+    if t is None:
+        return {}
+    lane_account_block_reason(t)
+    return dict(_LANE_LAST.get("foreign") or {})
 # OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
@@ -2061,8 +2245,9 @@ def resume_block_reason(t: Transport, slug: str) -> Optional[str]:
     owned = concurrent_owned()
     # concurrency 1 (every rung but the owner's concurrency rung) calls the
     # lock exactly as before, with no extra argument
-    block = (micro.account_block_reason(t, allow_slugs=owned) if owned
-             else micro.account_block_reason(t))
+    # lane-scoped (2026-11-14): foreign lanes' orders/positions never
+    # block; off, this is the account-wide call exactly as before
+    block = lane_account_block_reason(t, allow_slugs=owned, target=slug)
     if block is None or not block.startswith("nonzero_positions:"):
         return block
     others = [p for p in block.split(":", 1)[1].split(",")
@@ -2296,8 +2481,8 @@ def _run_session_body(t: Optional[Transport] = None,
         last_skey: dict = {}
         _owned = concurrent_owned()
         block = (resume_block_reason(t, slug) if resume
-                 else (micro.account_block_reason(t, allow_slugs=_owned)
-                       if _owned else micro.account_block_reason(t)))
+                 else lane_account_block_reason(t, allow_slugs=_owned,
+                                                target=slug))
         if block:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
         row = dict(micro.micro_eligible(t, slug))
@@ -2412,7 +2597,8 @@ def _run_session_body(t: Optional[Transport] = None,
                  # fidelity-gate inputs: OPEN/EXTEND join the touch of
                  # their side (L5's aggressiveness); COMPLETE rests at the
                  # fee-safe bound; OPEN side is the shared convention side
-                 "touch_join": relation_ in ("open", "extend"),
+                 "touch_join": (relation_ in ("open", "extend")
+                                and not maker_depth_ticks()),
                  "side_convention_ok": True if relation_ == "open" else None,
                  # OWNER 5553674206 #3: the scale mismatch is MEASURED --
                  # L5's historical size for this state/relation beside the
@@ -2872,7 +3058,11 @@ def _run_session_body(t: Optional[Transport] = None,
                                       else str(max(touch, D(track["max_touch"]))))
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
-                if relation_ in requote_relations() and touch != px_:
+                # maker depth: an OPEN/EXTEND resting N ticks under the
+                # touch is "still the quote" while it sits at touch - N;
+                # depth 0 makes this the touch exactly, as before
+                if relation_ in requote_relations() and \
+                        depth_rest_px(touch, spec["tick"], relation_) != px_:
                     # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS, AND
                     # A RE-QUOTE WITH NO LEGAL PRICE AT ALL IS WORSE.
                     #
@@ -3449,6 +3639,13 @@ def _run_session_body(t: Optional[Transport] = None,
                     report["decisions"][-1]["authenticated_trim"] = _trim
                     if _trim.get("applied"):
                         px = D(str(_trim["px_out"]))
+                if maker_depth_ticks():
+                    _touch_px = px
+                    px = depth_rest_px(px, spec["tick"], relation)
+                    report["decisions"][-1]["maker_depth"] = {
+                        "ticks": maker_depth_ticks(),
+                        "touch_px": str(_touch_px), "rest_px": str(px),
+                        "env": DEPTH_TICKS_ENV}
                 qty = spec["qty"]
                 # OWNER 2026-09-10: the average matched-pair ceiling. An
                 # EXTEND raises a_up under inventory that is ALREADY matched,

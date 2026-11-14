@@ -273,6 +273,17 @@ def load_status_document(path: Optional[str] = None) -> tuple:
     read the same bytes the same way.
     """
     if path is None:
+        # PMUS_SPRING_CANDIDATES=gateway (2026-11-14): the probe builds the
+        # status document itself from the public gateway; unset = unchanged
+        try:
+            from src import pmus_spring_gateway_candidates as gw
+        except ImportError:
+            gw = None
+        if gw is not None and gw.enabled():
+            try:
+                return gw.build_status(), "gateway:public"
+            except Exception as exc:                 # noqa: BLE001
+                return None, f"gateway_unavailable:{type(exc).__name__}"
         path = (os.getenv(EVIDENCE_STATUS_URL_ENV, "").strip()
                 or os.getenv(EVIDENCE_STATUS_PATH_ENV, ""))
     path = str(path).strip()

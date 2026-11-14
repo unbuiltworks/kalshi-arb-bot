@@ -129,7 +129,9 @@ def off_distribution_of(row: Optional[Mapping[str, Any]]) -> Optional[bool]:
 
 def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
                      model_sha: Optional[str] = None,
-                     off_distribution: Optional[bool] = None) -> Optional[dict]:
+                     off_distribution: Optional[bool] = None,
+                     strict_rows: Optional[Mapping[str, Any]] = None,
+                     cats: Optional[Mapping[str, Any]] = None) -> Optional[dict]:
     """Build the spring entry guard's evidence payload for one sports
     market, preserving provenance, age, category semantics and the
     action-model SHA. Missing inputs stay missing so the guard fails
@@ -151,8 +153,12 @@ def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
                 l5d.decide_market(slug, obs, now, l5d.pv2.load_v2()))
         except Exception:
             off_distribution = None
-    strict_rows = strict_rows_from_sports(by_slug, now)
-    cats = replay.category_spring_evidence(strict_rows, now)
+    # precomputed by a caller composing many slugs over one tape (the
+    # probe-local gateway feed); None recomputes exactly as before
+    if strict_rows is None:
+        strict_rows = strict_rows_from_sports(by_slug, now)
+    if cats is None:
+        cats = replay.category_spring_evidence(strict_rows, now)
     mine = strict_rows.get(slug) or {}
     cat_key = replay.slug_category(slug)
     cat_ev = cats.get(cat_key) or {"completions_60m": 0,
@@ -212,6 +218,20 @@ def compose_evidence_from_recorder(status: Mapping[str, Any], slug: str,
     if not row:
         return None
     row = dict(row)
+    declared = str(status.get("evidence_provenance") or "").strip().lower()
+    if declared and declared != PROVENANCE_AUTHENTICATED:
+        # a document that DECLARES non-authenticated provenance (the
+        # probe-local public gateway feed, 2026-11-14) keeps it: provenance
+        # is never relabelled authenticated by this composer
+        row["evidence_provenance"] = declared
+        row["evidence_source"] = str(status.get("evidence_source") or declared)
+        if row.get("action_model_sha") is None:
+            row["action_model_sha"] = model_sha
+        row["labels"] = ("INFERRED evidence (declared by the status "
+                         "document); trade direction NOT observed")
+        row["probe_evidence"] = _probe_evidence(
+            row, source_label=f"{declared} provenance")
+        return row
     row["evidence_provenance"] = PROVENANCE_AUTHENTICATED
     row["evidence_source"] = SOURCE_RECORDER
     if row.get("action_model_sha") is None:

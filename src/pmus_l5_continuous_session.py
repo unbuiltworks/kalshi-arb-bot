@@ -687,9 +687,15 @@ def shadow_rank_held_cycle(now: float, held_all, concurrency: int, model,
 def rank_candidates(status: Mapping[str, Any], now: float,
                     model: Optional[Mapping[str, Any]] = None,
                     exclude: Optional[Mapping[str, float]] = None,
-                    yield_by_slug: Optional[Mapping[str, Any]] = None) -> dict:
+                    yield_by_slug: Optional[Mapping[str, Any]] = None,
+                    foreign: Optional[Mapping[str, Any]] = None) -> dict:
     """Every spring_watch row through the strict guard; admitted rows
-    ranked. Returns {"admitted": [...], "refused": [...]}."""
+    ranked. Returns {"admitted": [...], "refused": [...]}.
+
+    `foreign` (lane isolation): markets where the shared account holds a
+    position or resting order this probe did not place. Refused, never
+    selected -- the probe does not trade on top of another lane."""
+    foreign = foreign or {}
     from src import pmus_spring_evidence_transfer as xfer
     exclude = exclude or {}
     yield_by_slug = yield_by_slug or {}
@@ -710,7 +716,13 @@ def rank_candidates(status: Mapping[str, Any], now: float,
             continue
         slug = str(row["slug"])
         ev = xfer.compose_evidence_from_recorder(status, slug, now)
-        reason = (entry.strict_evidence_reason(slug, ev, now=now)
+        # provenance stays REQUIRED unless the document declares inferred
+        # provenance AND the owner explicitly accepted it
+        # (PMUS_SPRING_ACCEPT_INFERRED_PROVENANCE=1); every other gate holds
+        reason = (entry.strict_evidence_reason(
+                      slug, ev, now=now,
+                      **({"require_provenance": False}
+                         if _inferred_accepted(status) else {}))
                   if ev is not None else "compose_failed")
         mv = _model_view(model, row.get("bid"))
         item = {"slug": slug, "bid": row.get("bid"), "ask": row.get("ask"),
@@ -729,6 +741,9 @@ def rank_candidates(status: Mapping[str, Any], now: float,
                                   if y else None)
         item["yield_rate"] = float(y.get("legit_decisions_per_h") or 0.0) if y else 0.0
         until = exclude.get(slug)
+        if slug in foreign:          # named first: it outranks any gate
+            reason = ("foreign_account_exposure:"
+                      + "+".join(str(x) for x in (foreign[slug] or ["?"])))
         if reason is None and until is not None and now < until:
             reason = f"cooldown_until:{round(until - now, 1)}s"
         if reason is None:
@@ -785,6 +800,17 @@ def rank_candidates(status: Mapping[str, Any], now: float,
             "status_t": status.get("t"), "progress_diag": progress_diag}
 
 
+def _inferred_accepted(status: Mapping[str, Any]) -> bool:
+    if str(status.get("evidence_provenance") or "").strip().lower() \
+            != "inferred":
+        return False
+    try:
+        from src import pmus_spring_gateway_candidates as gw
+    except ImportError:
+        return False
+    return gw.accept_inferred()
+
+
 CFB_LEAGUE_TOKENS = frozenset({"cfb", "ncaaf", "ncaafb"})
 
 
@@ -796,7 +822,8 @@ def _is_cfb(slug: str) -> bool:
 def select_candidate(now: Optional[float] = None,
                      model: Optional[Mapping[str, Any]] = None,
                      exclude: Optional[Mapping[str, float]] = None,
-                     path: Optional[str] = None) -> dict:
+                     path: Optional[str] = None,
+                     foreign: Optional[Mapping[str, Any]] = None) -> dict:
     """One selection cycle: fetch, gate, rank, log. Read-only."""
     now = time.time() if now is None else now
     status, source = entry.load_status_document(path)
@@ -805,7 +832,8 @@ def select_candidate(now: Optional[float] = None,
         return {"chosen": None, "source": source, "admitted": [],
                 "refused": []}
     ranking = rank_candidates(status, now, model, exclude,
-                              yield_by_slug=pmus_shadow_yield(now))
+                              yield_by_slug=pmus_shadow_yield(now),
+                              **({"foreign": foreign} if foreign else {}))
     chosen = ranking["admitted"][0] if ranking["admitted"] else None
     _log("selection", source=source, status_t=ranking["status_t"],
          evidence_age_s=(round(now - entry._epoch(ranking["status_t"]), 3)
@@ -887,7 +915,7 @@ def held_markets(t) -> list:
         return [one]
     if t is None:
         return []
-    block = base.micro.account_block_reason(t)
+    block = base.lane_account_block_reason(t)
     if not block or not block.startswith("nonzero_positions:"):
         return []
     return sorted({p.split("=", 1)[0] for p in block.split(":", 1)[1].split(",")
@@ -901,7 +929,11 @@ def held_market(t) -> Optional[str]:
     the one-market campaign never continues into."""
     if t is None:
         return None
-    block = base.micro.account_block_reason(t)
+    # LANE ISOLATION (2026-11-14): with PMUS_SPRING_LANE_ISOLATION on, only
+    # markets in this probe's own ledger can be "held" -- the BTC5m/BTC15m
+    # bots' and the owner's manual positions are never resumed. Off, this is
+    # micro.account_block_reason exactly as before.
+    block = base.lane_account_block_reason(t)
     if not block or not block.startswith("nonzero_positions:"):
         return None
     slugs = [p.split("=", 1)[0] for p in block.split(":", 1)[1].split(",")
@@ -1385,6 +1417,24 @@ def sweep_orphan_orders(t) -> dict:
     return out
 
 
+def foreign_orders_stop(sweep: Mapping[str, Any]) -> bool:
+    """A foreign open order stops the campaign only under the account-wide
+    lock. With lane isolation on, other lanes (BTC5m/BTC15m bots, the
+    owner's manual orders) always have orders resting on the shared
+    account; they are reported, never cancelled, and refused per-market at
+    selection and preflight instead of halting this lane."""
+    return bool(sweep.get("foreign")) and not base.lane_isolation_enabled()
+
+
+def _own_seen(sweep: Mapping[str, Any]) -> int:
+    """Open orders the sweep saw that were NOT foreign (lane isolation) --
+    or every order seen (account-wide lock, the original check)."""
+    seen = int(sweep.get("seen") or 0)
+    if base.lane_isolation_enabled():
+        return seen - len(sweep.get("foreign") or [])
+    return seen
+
+
 SHUTDOWN_IDLE_S = 300.0
 
 # OWNER re-arm 2026-09-10: the nine conditions that must hold BEFORE the
@@ -1580,12 +1630,21 @@ def boot_assertions(t=None, sweep: Optional[Mapping[str, Any]] = None) -> dict:
     # 1. the running artifact contains the crash fix -- read from its source
     _check("crash_fix_51e384fb", base.crash_fix_present, True)
     # 2. fresh venue orphan sweep: zero open, and no foreign ambiguity
-    _check("orphan_sweep_clean",
-           lambda: (sweep is not None and not sweep.get("foreign")
-                    and not sweep.get("errors")
-                    and int(sweep.get("seen") or 0) == 0), True)
-    _check("no_open_orders_fresh_read",
-           lambda: _fresh_open_orders(t), {"ours": 0, "foreign": 0})
+    if base.lane_isolation_enabled():
+        # LANE ISOLATION: scoped to this probe's own markets/order ids; a
+        # foreign lane's resting orders are not this lane's state
+        _check("orphan_sweep_clean",
+               lambda: (sweep is not None and not sweep.get("errors")
+                        and _own_seen(sweep) == 0), True)
+        _check("no_open_orders_fresh_read",
+               lambda: _fresh_open_orders(t)["ours"], 0)
+    else:
+        _check("orphan_sweep_clean",
+               lambda: (sweep is not None and not sweep.get("foreign")
+                        and not sweep.get("errors")
+                        and int(sweep.get("seen") or 0) == 0), True)
+        _check("no_open_orders_fresh_read",
+               lambda: _fresh_open_orders(t), {"ours": 0, "foreign": 0})
     # 3. flat: nothing held at the venue that BLOCKS arming. With quarantine
     #    off (the default) that is literally nothing held, byte-identical to
     #    the original check. With quarantine on, a dormant venue-confirmed
@@ -2669,8 +2728,9 @@ def continuation_preflight(t, filled: set, settled: set,
             if v["venue_qty_total"] is not None and v["ledger_qty_total"] is not None
             and D(str(v["venue_qty_total"])) != D(str(v["ledger_qty_total"])))}
     sweep = sweep_orphan_orders(t)
-    checks["open_orders"] = {"ok": sweep["seen"] == 0 and not sweep["errors"]
-                             and not sweep["foreign"], "sweep": sweep}
+    checks["open_orders"] = {"ok": _own_seen(sweep) == 0 and not sweep["errors"]
+                             and not foreign_orders_stop(sweep),
+                             "sweep": sweep}
     held = held_market(t)
     checks["positions_flat"] = {"ok": held is None, "held": held}
     ledger_unsettled = unsettled_slugs()
@@ -2845,7 +2905,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             sweep = sweep_orphan_orders(t)
             _log("orphan_sweep", **sweep)
             report["orphan_sweep"] = sweep
-            if sweep["foreign"]:
+            if foreign_orders_stop(sweep):
                 # an open order this strategy did not place: not ours to
                 # cancel, and not a state to trade into -- stop, report
                 return {**report, "status": "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"}
@@ -3021,6 +3081,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     if persisted:
         filled_markets |= set(persisted.get("filled_markets") or [])
         settled_here |= set(persisted.get("settled_here") or [])
+        if base.lane_isolation_enabled():
+            # LIVE 2026-11-14 14:22Z: the BTC5m bot's markets were resumed
+            # as "held" and added to filled_markets, which spends the rung's
+            # market allowance on markets this probe never traded. Only a
+            # market in this probe's own ledger is a campaign market.
+            _own = ledger_slugs()
+            _foreign = sorted((filled_markets | settled_here) - _own)
+            if _foreign:
+                filled_markets -= set(_foreign)
+                settled_here -= set(_foreign)
+                _log("campaign_foreign_markets_dropped", dropped=_foreign,
+                     evidence="restored campaign markets absent from this "
+                              "probe's own ledger (no submitted row): "
+                              "another lane's positions, never ours")
         # OWNER 2026-09-11: the advance gate asks "is every filled market
         # of this campaign settled?" and answered it from a PROCESS-LOCAL
         # accumulator. A market settled by an EARLIER process -- or by the
@@ -3498,7 +3572,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          outage_class=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("class"),
                          maintenance=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("maintenance"),
                          recovery_boundary_utc=_utc(wall))
-                    if sweep["foreign"]:
+                    if foreign_orders_stop(sweep):
                         status = "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
                         break
                     if outage is None:
@@ -3823,7 +3897,13 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             # continued by the resume path, not opened again
             sel = select_candidate(
                 now, model,
-                {**cooldown, **{s: float("inf") for s in held_all}})
+                {**cooldown, **{s: float("inf") for s in held_all}},
+                # LANE ISOLATION: never select a market where the shared
+                # account already carries another lane's position/orders
+                # (the owner's manual Fritz match, the BTC bots' quotes)
+                **({"foreign": base.foreign_exposure(t)}
+                   if t is not None and base.lane_isolation_enabled()
+                   else {}))
             report["selections"] += 1
             funnel["cycles"] += 1
             funnel["universe_rows"] += len(sel["admitted"]) + len(sel["refused"])

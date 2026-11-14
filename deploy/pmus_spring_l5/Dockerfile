@@ -102,6 +102,10 @@ COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 # parsing; carries no order path and no credentials of its own.
 COPY src/pmus_spring_evidence_transfer.py src/pmus_spring_evidence_transfer.py
 COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
+# probe-local public-gateway candidate feed (2026-11-14). Inert unless
+# PMUS_SPRING_CANDIDATES=gateway; keyless public GETs, no order path. Its
+# gateway helpers are inlined so the probe image never carries the collector.
+COPY src/pmus_spring_gateway_candidates.py src/pmus_spring_gateway_candidates.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 # venue-served GAME POSITION (period/clock/score) for the live sports slate.
@@ -142,10 +146,18 @@ RUN touch src/__init__.py
 # cannot be read back on this service (every config read returns the same
 # schema error), so a silently failed write would mean the next deploy
 # resumes R5F. Here it is in the repo, in the image, and under test.
+#
+# PMUS_SPRING_LANE_ISOLATION=1 (2026-11-14): the account is SHARED with the
+# BTC5m/BTC15m bots and the owner's manual trades. Only markets in this
+# probe's own ledger are held/resumable; foreign positions/orders never
+# block it and are never touched, and a market carrying foreign exposure is
+# never selected. In the image (not only a platform variable) for the same
+# reason as the allowance above: it must be visible and under test.
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PMUS_Q1_STATE_DIR=/state/pmus-spring \
     PMUS_SPRING_MAX_ACTIONS=6 \
     PMUS_SPRING_RUNG_MARKETS=1 \
+    PMUS_SPRING_LANE_ISOLATION=1 \
     PYTHONUNBUFFERED=1
 
 # Deployment guard delegates to the canonical session after safety checks.

@@ -225,3 +225,17 @@
 # R5FT canary is archived and the owner's R5FB-SPORTS-LIVE-2026-11-14 approval
 # starts under R5FB caps; with no approval for the configured rung the probe
 # goes to safe shutdown instead of trading. Latch cleared with this deploy.
+
+# 2026-11-14 — sports live (branch fix/pmus-spring-sports-live-20261114):
+# (1) LANE ISOLATION, image ENV PMUS_SPRING_LANE_ISOLATION=1 (code default off):
+#     held/resumable = markets with a `submitted` row in this probe's own ledger;
+#     BTC5m/BTC15m/manual positions+orders never resumed, cancelled, counted or
+#     blocking; a market carrying foreign position/orders is never selected and
+#     refused at preflight (foreign_position: / foreign_open_orders:). Foreign
+#     slugs restored into campaign filled/settled sets are dropped.
+# (2) PMUS_SPRING_CANDIDATES=gateway (default unset = recorder URL unchanged):
+#     probe builds its own status doc from the public gateway live sports slate
+#     (<=2 rps, 24 req/build). Provenance is declared INFERRED; admission also
+#     needs PMUS_SPRING_ACCEPT_INFERRED_PROVENANCE=1 (owner decision).
+# (3) PMUS_SPRING_DEPTH_TICKS (default 0): OPEN/EXTEND rest N ticks under the
+#     touch; COMPLETE pricing (l5_touch) unchanged.
