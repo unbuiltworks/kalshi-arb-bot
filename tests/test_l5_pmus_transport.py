@@ -634,15 +634,31 @@ class TestPreflightManagedLaneExemption:
     def test_the_helper_never_raises_and_degrades_to_strict(
             self, monkeypatch):
         """A preflight that crashes is a preflight that cannot refuse."""
+        #: PATCHES l5_managed_lanes, NOT l5_watchdog. This test originally
+        #: patched the watchdog and kept passing against the refactor that
+        #: moved the contract out of it -- it was silently deselected by a
+        #: `-k` filter, so the staleness only surfaced in a full run. The
+        #: thing under test is that a raising dependency degrades to STRICT
+        #: rather than propagating out of preflight.
         monkeypatch.setenv("L5_WATCHDOG_MANAGED_LANE_URLS",
                            "http://lane.invalid:8090")
-        import src.l5_watchdog as W
-        monkeypatch.setattr(W, "Watchdog",
+        import src.l5_managed_lanes as ML
+        monkeypatch.setattr(ML, "lane_ids",
                             lambda *a, **k: (_ for _ in ()).throw(
                                 RuntimeError("boom")))
         ids, notes = tp()._managed_lane_ids()
         assert ids == set()
         assert notes and notes[0].startswith("MANAGED_LANES_UNAVAILABLE")
+
+    def test_an_unreachable_lane_url_also_degrades_to_strict(
+            self, monkeypatch):
+        """The REAL path, no patching: an invalid host must fail closed
+        inside lane_ids rather than raise, so preflight stays strict."""
+        monkeypatch.setenv("L5_WATCHDOG_MANAGED_LANE_URLS",
+                           "http://lane.invalid:8090")
+        ids, notes = tp()._managed_lane_ids()
+        assert ids == set()
+        assert notes and "UNREACHABLE" in notes[0]
 
     def test_no_urls_configured_short_circuits_without_a_fetch(
             self, monkeypatch):

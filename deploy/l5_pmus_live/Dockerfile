@@ -220,6 +220,7 @@ COPY src/l5_shadow_controller.py src/l5_shadow_controller.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_managed_lanes.py src/l5_managed_lanes.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
