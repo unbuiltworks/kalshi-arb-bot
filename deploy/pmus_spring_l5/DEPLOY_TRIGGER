@@ -251,3 +251,4 @@
 2026-11-14T18:45Z OWNER 'close out single-side fills early': lone leg unpaired >= 180s is completed by taking the complement at its ask when pair <= 1.03.
 2026-11-14T19:00Z OWNER-APPROVED two-sided realtime reaction, DEFAULT OFF behind PMUS_TWO_SIDED_WS=1 (src/pmus_two_sided_ws.py, websockets>=14): read-only market-data socket feeds BBO (fresh <=3s else gateway poll); a >=1-tick touch move pulls both legs of an unfilled pair at once and re-sets them; a >=2-tick jump (PMUS_TWO_SIDED_JUMP_TICKS) pulls opening legs and pauses re-open 15s (PMUS_TWO_SIDED_JUMP_PAUSE_S); completion legs never pulled by the jump.
 2026-11-14T19:15Z heartbeat locked_edge = latest cumulative row per market (no double count); jump pause also needs >= 2c move (CFB 0.005 ticks were pausing on 1c noise).
+2026-11-14T19:55Z CFB lone legs exit after 60s with pair <= 1.05 (others unchanged 180s / 1.03).

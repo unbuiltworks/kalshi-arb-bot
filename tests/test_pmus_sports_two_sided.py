@@ -682,3 +682,8 @@ def test_jump_threshold_is_also_a_price_floor():
     # 2 ticks of 0.005 = 1c < 2c floor -> not a jump; 4 ticks = 2c -> jump
     assert not (2 >= M.JUMP_TICKS and 2 * D("0.005") >= M.JUMP_MIN_PX)
     assert 4 >= M.JUMP_TICKS and 4 * D("0.005") >= M.JUMP_MIN_PX
+
+
+def test_cfb_exits_sooner_and_accepts_more():
+    assert M.exit_rule("aec-cfb-x-y-2026-11-14") == (60.0, D("1.05"))
+    assert M.exit_rule("aec-atp-x-y-2026-11-14") == (M.EXIT_S, M.EXIT_MAX_PAIR)

@@ -68,6 +68,16 @@ STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
 # that the loss is already sunk and the maker completion keeps resting.
 EXIT_S = float(os.getenv("PMUS_TWO_SIDED_EXIT_S", "180"))
 EXIT_MAX_PAIR = _env_d("PMUS_TWO_SIDED_EXIT_MAX_PAIR", "1.03")
+# OWNER 2026-11-14: college football swings from ~45c to <10c within minutes,
+# past the 180s/1.03 exit. CFB lone legs exit sooner and accept a little more.
+EXIT_S_CFB = float(os.getenv("PMUS_TWO_SIDED_EXIT_S_CFB", "60"))
+EXIT_MAX_PAIR_CFB = _env_d("PMUS_TWO_SIDED_EXIT_MAX_PAIR_CFB", "1.05")
+
+
+def exit_rule(slug: str) -> tuple:
+    if "-cfb-" in slug:
+        return EXIT_S_CFB, EXIT_MAX_PAIR_CFB
+    return EXIT_S, EXIT_MAX_PAIR
 STATE_DIR = Path(os.getenv("PMUS_TWO_SIDED_STATE_DIR",
                            "/state/pmus-spring/two_sided"))
 SPORTS_PREFIXES = ("aec-", "asc-", "tsc-", "atc-", "astatc-")
@@ -775,8 +785,9 @@ class Engine:
         cur = open_by_side.get(lag)
         lone_since = float(mk.setdefault("lone_since", time.time()))
         comp_ask = (bbo["ask"] if lag == "YES" else ONE - bbo["bid"])
-        if EXIT_S > 0 and time.time() - lone_since >= EXIT_S \
-                and lead_px + comp_ask <= EXIT_MAX_PAIR \
+        exit_s, exit_max = exit_rule(slug)
+        if exit_s > 0 and time.time() - lone_since >= exit_s \
+                and lead_px + comp_ask <= exit_max \
                 and need >= spec["min_qty"]:
             if cur:                          # pull the resting maker first
                 self.v.cancel(cur[0])
