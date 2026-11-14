@@ -500,3 +500,60 @@ and nothing approaches it -- which also means these results do not
 definitively RANK the combinations. What they establish is that nothing
 beats 8/8, with a monotonic ordering and a mechanism, which is the
 opposite of the volatility quartile spike that was discarded.
+
+---
+
+# Selling the longshot: the fill condition and the longshot condition exclude each other
+
+Owner asked 2026-11-14 about selling longshots rather than buying them.
+Every sweep on this branch rests BUY orders, so this was genuinely
+unmeasured. It is also not settled by the position-level argument that
+selling UP at p equals buying DOWN at 1-p: that equivalence is about the
+PAYOFF, not about when you get FILLED, and the fill is the whole story
+here.
+
+Measured by `sell_side.py` with the adverse rule mirrored -- a resting
+SELL at p fills when that side's bid RISES through p.
+
+| price | fill% | wins given fill | EV c/leg | t |
+|---|---|---|---|---|
+| 0.08 | **99.7%** | **50.1%** | **-42.02** | **-11.55** |
+| 0.20 | 99.2% | 50.4% | -30.16 | -8.30 |
+| 0.40 | 94.1% | 53.1% | -12.35 | -3.50 |
+| 0.50 | 87.2% | 57.4% | -6.42 | -1.92 |
+
+At **t -11.55** this is the most statistically conclusive result on the
+branch -- far more certain than anything measured pointing positive.
+
+## Why, and it is the sharpest statement of the whole program
+
+Compare the two directions at the SAME price:
+
+```
+BUY  at 0.08:  fills 53.5%,  what you own wins 11.5%   ->  +1.87 c
+SELL at 0.08:  fills 99.7%,  what you are short wins 50.1%  -> -42.02 c
+```
+
+**The fill condition and the longshot condition are mutually exclusive.**
+A side sits at 0.08 only while nobody wants it. The moment somebody is
+willing to PAY 0.08 for it, it is not a longshot any more -- and that
+moment is exactly when a resting sell fills. You never sell a longshot;
+you sell a thing that has just stopped being one, which resolves a coin
+flip against you.
+
+The buy side is the mirror and it is why 0.08 works at all: a resting buy
+fills ONLY when the side has genuinely collapsed, which is both why it is
+cheap and why it loses 88.5% of the time -- and the 11.5% is the entire
+edge.
+
+## The complete picture
+
+The price curve is now measured for BUYING from 0.01 to 0.95 and for
+SELLING from 0.03 to 0.50. There is exactly one positive region in the
+whole space: **buying at 0.02-0.20, peaking at 0.08**.
+
+*You can only buy things cheaply while they are collapsing, and you can
+only sell them once they have stopped.* Every variant tested on this
+branch -- favourites, ladders, patient completion, asymmetric pricing,
+40/40, and now selling -- is a different attempt to escape that
+asymmetry, and the market does not permit it.
