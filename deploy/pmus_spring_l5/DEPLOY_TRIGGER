@@ -215,3 +215,7 @@
 # 2026-11-14 — owner "live trades asap": SHUTDOWN-pass settlement batch 5 -> 24
 # (SHUTDOWN_SETTLE_BATCH; the campaign loop's SETTLE_AUDIT_BATCH stays 5) so the
 # 96-market backlog drains in ~4 cycles. Settlement-only; still latched; rung R5FB.
+
+# 2026-11-14 — owner approval R5FB-SPORTS-LIVE-2026-11-14 added to
+# analysis/l5/l5_campaign_approvals.json (R5FB, rung_markets, $4.50, -$5 stop).
+# Latch already cleared (PMUS_SPRING_SHUTDOWN=NO) on owner instruction.

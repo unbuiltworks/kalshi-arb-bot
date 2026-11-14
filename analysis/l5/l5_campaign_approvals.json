@@ -147,6 +147,24 @@
       "report_per_market": "the sampled versus acted action; every order with its price, its distance from the touch in ticks, the queue ahead of it and the depth at the touch on both sides; pair cost at L5's touch versus executed; each completion's exact pair cost, credited rebate, fees, residual avoided or created and eventual realized economics; the residual path in dollars; rest durations against the model cadence; and the settlement audit. Strict labels throughout: submitted -> filled -> settled -> realized, and realized only from the venue's own number.",
       "not": "not a promotion of R5F, which stays off and keeps its own 0.98 shell label, its own $7.50 cap, its own -$15.00 stop and its own cohort; not a concurrency or universe change; not a raise of the per-ACTION size; not an unlock of mature incentive-era L5 behaviour; not permission to assume a rebate or liquidity reward before the venue credits it; no automatic repeat and no automatic promotion after this campaign.",
       "amended": "AMENDED IN PLACE 2026-09-11T20:55Z, BEFORE EVER BEING CONSUMED. The row first stated a $3.00 per-market cap under the -$15.00 daily stop. The owner then said 'lets raise it to $30 or something'; asked which number, he answered BOTH -- the per-market cap AND the daily realized-loss stop. Nothing is retconned: this approval had not started a campaign, the probe start command was still the read-only settlement sweep, and no order has been placed under it. Amending rather than appending is deliberate -- a second row would queue BEHIND this one and the $3.00 version would be consumed first, which is not what he asked for."
+    },
+    {
+      "campaign_id": "R5FB-SPORTS-LIVE-2026-11-14",
+      "approved_by": "owner",
+      "approved_utc": "2026-11-14T12:47:00Z",
+      "source": "owner in session 2026-11-14: chose 'R5FB as approved: $4.50 total (Recommended)' and 'Approve all three steps' (deploy settlement fix; switch R5FT -> R5FB; lift the shutdown latch), then 'Just get me live sports trades right now ... give me the same strategy'.",
+      "rung": "R5FB",
+      "shell": "R5FB/cap1.50/residual6/conc1/maker-only/pair<=1.00/l5_touch/rest5s",
+      "stop_rule": "rung_markets",
+      "stop_rule_reading": "3 filled markets, one at a time, each held to settlement; worst case 3 x $1.50 = $4.50 per campaign, bounded by the rung's -$5.00 daily realized-loss stop; campaigns_per_day 1; ends at CAMPAIGN_RUNG_COMPLETE for the owner -- no automatic promotion",
+      "unchanged": "maker/post-only, l5_touch complement pricing with pair capped at par, concurrency 1, ONE outstanding order, 4 actions per session, deadman/cancel, orphan sweep, settlement/realized accounting, the frozen fidelity gate",
+      "preconditions": [
+        "previous campaign complete",
+        "zero open orders on the venue, no foreign orders",
+        "positions flat",
+        "clean preflight"
+      ],
+      "not": "not R5FT ($30); not a size increase beyond R5FB; no automatic promotion"
     }
   ]
 }
