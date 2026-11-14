@@ -62,6 +62,9 @@ LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
 # OWNER 2026-11-14 "If a pair is just sitting there for a while, cancel and
 # resubmit closer": every STALE_S unfilled, one tick closer to the touch.
 STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
+# OWNER 2026-11-14 "set up the daily reward credit check": the venue's own
+# /v1/incentives/earnings (credited vs pending split) every REWARD_CHECK_S.
+REWARD_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_CHECK_S", "3600"))
 # OWNER 2026-11-14 "close out single-side fills early": a lone leg unpaired
 # for EXIT_S is completed by TAKING the complement at its ask, but only while
 # that pair costs <= EXIT_MAX_PAIR (a small, bounded realized loss). Beyond
@@ -396,6 +399,7 @@ class Venue:
 class Engine:
     def __init__(self, venue: Venue, book: Book):
         self.v, self.b = venue, book
+        self._last_reward = time.monotonic() - REWARD_CHECK_S + 120  # first ~2min after boot
         self.stop = False
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
         self._prog: Dict[str, Any] = {}
@@ -911,6 +915,27 @@ class Engine:
             last[p["slug"]] = p
         return last
 
+    def reward_check(self) -> None:
+        """OBSERVED reward earnings from the venue. Only rows the venue marks
+        credited are money; pending/skipped are reported, never counted."""
+        try:
+            from src import pmus_incentive_audit as IA
+            e = IA.earnings(self.v.t)
+        except Exception as exc:                          # noqa: BLE001
+            log("REWARD_CHECK", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return
+        ours = set(self.b.d.get("markets") or {})
+        mine = [r for r in (e.get("rows_detail") or [])
+                if str(r.get("marketSlug") or "") in ours]
+        log("REWARD_CHECK", ok=bool(e.get("ok")), endpoint=e.get("endpoint"),
+            rows=e.get("rows"), credited_usd=e.get("credited_usd"),
+            accrued_not_credited_usd=e.get("accrued_not_credited_usd"),
+            by_status=e.get("by_status"), by_program=e.get("by_program"),
+            rows_on_our_markets=len(mine), sample_ours=mine[:10],
+            error=e.get("error"),
+            label="venue /v1/incentives/earnings; ONLY credited_usd is money")
+
     def report(self) -> None:
         pairs = self.b.d["pairs"]
         extra = {} if self.ws is None else {
@@ -964,6 +989,10 @@ class Engine:
                     except Exception as exc:          # noqa: BLE001
                         log("market_error", slug=slug,
                             err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                if REWARD_CHECK_S > 0 and \
+                        time.monotonic() - self._last_reward > REWARD_CHECK_S:
+                    self._last_reward = time.monotonic()
+                    self.reward_check()
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()

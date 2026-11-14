@@ -687,3 +687,20 @@ def test_jump_threshold_is_also_a_price_floor():
 def test_cfb_exits_sooner_and_accepts_more():
     assert M.exit_rule("aec-cfb-x-y-2026-11-14") == (60.0, D("1.05"))
     assert M.exit_rule("aec-atp-x-y-2026-11-14") == (M.EXIT_S, M.EXIT_MAX_PAIR)
+
+
+def test_reward_check_logs_only_credited_as_money(eng, monkeypatch, capsys):
+    e, v = eng
+    v.t = object()
+    e.b.m("aec-cs2-x")
+    from src import pmus_incentive_audit as IA
+    monkeypatch.setattr(IA, "earnings", lambda t: {
+        "ok": True, "endpoint": "/v1/incentives/earnings", "rows": 2,
+        "credited_usd": "0", "accrued_not_credited_usd": "1.25",
+        "by_status": {"PENDING": 2}, "by_program": {"liquidityProgram": 2},
+        "rows_detail": [{"marketSlug": "aec-cs2-x", "status": "PENDING"},
+                        {"marketSlug": "other", "status": "PENDING"}]})
+    e.reward_check()
+    out = capsys.readouterr().out
+    assert '"kind":"REWARD_CHECK"' in out and '"rows_on_our_markets":1' in out
+    assert '"credited_usd":"0"' in out
