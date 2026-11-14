@@ -278,3 +278,51 @@ the martingale and lower-prize-higher-frequency results: a variance
 reduction bought with expectation.
 
 **Closed. 0.08/0.08, hold to settlement, no completion, no hedge.**
+
+---
+
+# Resting at several prices at once (8 + 16 + 20): leverage, not edge
+
+Owner asked 2026-11-14: if 0.08 and 0.16 are both positive, why not rest
+both? Measured by `ladder_prices.py`, same tape and fill rule.
+
+| rungs | net c/w | t | at risk | **c/w at the same $1 cap** |
+|---|---|---|---|---|
+| **0.08 only** | +3.74 | **+1.67** | 16c | **+23.4** |
+| 0.16 only | +3.12 | +1.20 | 32c | +9.8 |
+| 0.20 only | +0.75 | +0.29 | 40c | +1.9 |
+| 0.08 + 0.16 | +6.87 | +1.54 | 48c | +14.3 |
+| 0.08 + 0.16 + 0.20 | +7.61 | +1.12 | 88c | +8.7 |
+| 0.08 + 0.12 + 0.16 + 0.20 | **+10.18** | +1.13 | 112c | +9.1 |
+
+**The ladder looks better and is worse.** Four rungs earns +10.18 c/w
+against the single rung's +3.74 -- nearly triple -- while tying up SEVEN
+TIMES the capital. Normalise to the same $1.00 of approved per-window
+exposure, which is what the caps actually ration, and the single rung
+earns +23.4 against the ladder's +9.1.
+
+Under the real $1.00/window approval:
+
+```
+0.08 only   $1.00 / $0.16 = 6 shares a side  -> 6 x 3.74 = +22 c/w
+4-rung      $1.00 / $1.12 = 1 share per rung ->  1 x 10.18 = +10 c/w
+```
+
+Same dollar at risk, half the return. `t` moves the same way (1.67 single
+vs 1.12-1.54 laddered), so a ladder is also SLOWER to prove.
+
+## Why
+
+Edge per cent at risk is **0.234 at 0.08, 0.098 at 0.16, 0.019 at 0.20**.
+Every rung above 0.08 dilutes the average. Exposure is the rationed
+resource (`SERIES_MAX_TOTAL_EXPOSURE_USD` $5, approval $1 a window), so
+every cent should sit at the highest edge per cent -- a single rung at the
+top of the plateau.
+
+A ladder would only make sense with spare exposure that could not
+otherwise be deployed. There is none: $1.00/window already funds 6 shares
+a side at 0.08 and the live campaigns use 5.
+
+**If you want more from the same cap, add SHARES at 0.08, not rungs above
+it.** This is the same conclusion the earlier ladder work reached ("same
+t, pure leverage"); this records the arithmetic behind it.
