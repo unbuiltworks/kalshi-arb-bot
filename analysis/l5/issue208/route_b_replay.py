@@ -29,6 +29,8 @@ measured -0.0236/contract, not by preferring more fills.
 from __future__ import annotations
 
 import argparse
+import re
+from datetime import datetime, timezone
 import os
 import sys
 from decimal import Decimal as D
@@ -45,6 +47,20 @@ RESIDUAL_PER_CONTRACT = D("-0.0236")
 
 TAPES = ["analysis/l5/residual_exit/preserved/*.ndjson"]
 
+
+
+def market_window_start(window: str) -> float:
+    """Use the venue market's UTC start, never a quote-relative surrogate."""
+    match = re.fullmatch(
+        r"cpc-btc-updown-(15m|5m)-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})z",
+        window)
+    if match is None:
+        raise ValueError("unrecognized market identity: %r" % window)
+    duration, year, month, day, hour, minute = match.groups()
+    if int(minute) % (5 if duration == "5m" else 15):
+        raise ValueError("unaligned market window: %r" % window)
+    return datetime(int(year), int(month), int(day), int(hour), int(minute),
+                    tzinfo=timezone.utc).timestamp()
 
 def _legs(window: str, got: Dict[str, Any], pr: Dict[str, Any]):
     opening = completion = None
@@ -81,7 +97,7 @@ def replay(tapes: Optional[List[str]] = None,
             held_cost_usd=str(held_cost),
             deficient_qty="0", deficient_cost_usd="0", book=book,
             now_t=completion.quote_line_at,
-            window_start=completion.quote_line_at - 120,
+            window_start=market_window_start(window),
             resting=(), tick="0.01", min_qty="0.01",
             depth_ticks=BC.completion_depth_ticks(),
             residual_budget_usd=residual_budget_usd,
