@@ -247,3 +247,4 @@
 2026-11-14T16:50Z two-sided publishes its own-order registry at :8090/l5/live_orders.json (watchdog ownership + managed-lane attestation).
 2026-11-14T17:25Z OWNER 'cancel and resubmit closer': unfilled pair/completion steps 1 tick closer every 60s (pair <= 0.98, never above own bid).
 2026-11-14T17:30Z registry: bind-family log, private-DNS self-test, rate-limited read log (watchdog reachability).
+2026-11-14T18:30Z OWNER-APPROVED two-sided liquidity-reward mode (src/pmus_sports_rewards.py), DEFAULT OFF behind PMUS_TWO_SIDED_REWARDS=1: rewarded live sports markets ranked first; there both legs join the touch (shallowest pair-cap-legal depth inside maxSpread of mid) at PMUS_TWO_SIDED_REWARD_QTY=10, per-market cap PMUS_TWO_SIDED_REWARD_PER_MARKET_USD=7.50 on worst lone-leg cost; in reward mode every new pair needs total unmatched + resting pairs' worst lone legs + its own worst lone leg <= TOTAL_CAP. Rewards THEORETICAL, never P&L.
