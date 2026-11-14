@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import signal
+import threading
 import time
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal as D
@@ -87,6 +89,54 @@ REWARD_REFRESH_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_REFRESH_S", "300"))
 REWARD_LOG_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_LOG_S", "60"))
 # optional comma-separated slug prefixes; empty = any rewarded sports market
 REWARD_ALLOW_ENV = "PMUS_TWO_SIDED_REWARD_ALLOW"
+
+
+# OWNER 2026-11-14 realtime reaction ("stop being picked off"). DEFAULT OFF:
+# with PMUS_TWO_SIDED_WS unset no socket is opened, no key is written and
+# every code path below behaves exactly as before. When on, a read-only
+# market-data socket (src/pmus_two_sided_ws.py) feeds Venue.bbo (fresh <= 3s,
+# else the gateway poll) and every touch change wakes the main loop at once:
+#   * an UNFILLED pair whose touch moved >= 1 tick since it was priced (or
+#     whose opposite side moved toward it) is pulled together and re-set by
+#     the normal step at the new price;
+#   * a move of >= JUMP_TICKS ticks in one update pulls unfilled opening legs
+#     and blocks a new pair in that market for JUMP_PAUSE_S. Completion legs
+#     (one side filled) are never pulled by this; they lock the pair.
+WS_ENV = "PMUS_TWO_SIDED_WS"
+JUMP_TICKS = int(os.getenv("PMUS_TWO_SIDED_JUMP_TICKS", "2"))
+JUMP_PAUSE_S = float(os.getenv("PMUS_TWO_SIDED_JUMP_PAUSE_S", "15"))
+
+
+def ws_on() -> bool:
+    return os.getenv(WS_ENV, "").strip().lower() in ("1", "yes", "true", "on")
+
+
+def ticks_moved(prev: Mapping[str, D], new: Mapping[str, D], tick: D) -> int:
+    """Largest best-bid / best-ask move between two tops, in whole ticks."""
+    m = D(0)
+    for k in ("bid", "ask"):
+        if prev.get(k) is not None and new.get(k) is not None:
+            m = max(m, abs(D(new[k]) - D(prev[k])))
+    return int((m / tick).to_integral_value(rounding=ROUND_DOWN))
+
+
+def stale_reasons(quoted: Mapping[str, Any], new: Mapping[str, D],
+                  tick: D) -> list:
+    """Why an unfilled pair priced off `quoted` is stale at `new`.
+    YES leg's touch = best bid, its opposite = best ask (moving DOWN is
+    toward it). NO leg's touch = 1 - best ask, its opposite = 1 - best bid
+    (best bid moving UP is toward it)."""
+    qb, qa = D(str(quoted["bid"])), D(str(quoted["ask"]))
+    out = []
+    if abs(new["bid"] - qb) >= tick:
+        out.append("yes_touch_moved")
+        if new["bid"] > qb:
+            out.append("no_opposite_toward")
+    if abs(new["ask"] - qa) >= tick:
+        out.append("no_touch_moved")
+        if new["ask"] < qa:
+            out.append("yes_opposite_toward")
+    return out
 
 
 def rewards_on() -> bool:
@@ -251,7 +301,13 @@ class Venue:
         return [tg for tg in self.gw.live_event_targets(events)
                 if str(tg["slug"]).startswith(SPORTS_PREFIXES)]
 
+    ws = None              # src.pmus_two_sided_ws.TwoSidedWs when WS is on
+
     def bbo(self, slug: str) -> Optional[Dict[str, D]]:
+        if self.ws is not None:
+            hit = self.ws.fresh_bbo(slug)
+            if hit is not None:
+                return hit
         md = (self.gget(f"/v1/markets/{slug}/bbo") or {}).get("marketData") or {}
         b, a = self.q1._d(md.get("bestBid")), self.q1._d(md.get("bestAsk"))
         if b is None or a is None:
@@ -331,6 +387,102 @@ class Engine:
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
         self._prog: Dict[str, Any] = {}
         self._rget = None
+        # realtime mode only (PMUS_TWO_SIDED_WS=1 -> venue.ws is set)
+        self.ws = getattr(venue, "ws", None)
+        self._wake = threading.Event()
+        self._evq: "queue.Queue" = queue.Queue()
+        self.reactive_pulls = 0
+        self.jump_pauses = 0
+        if self.ws is not None:
+            self.ws.on_change = self._on_ws_change
+
+    # ------------------------------------------------ realtime (WS) mode
+    def _on_ws_change(self, slug: str, prev: Mapping, new: Mapping,
+                      t: float) -> None:
+        """SOCKET THREAD: enqueue and wake the main loop; nothing else.
+        Stamped with this process's monotonic receipt time (latency_ms)."""
+        self._evq.put((slug, dict(prev), dict(new), time.monotonic()))
+        self._wake.set()
+
+    def drain_ws_events(self) -> None:
+        """MAIN THREAD: act on every queued touch change, one pass per slug."""
+        if self.ws is None:
+            return
+        self.ws.set_slugs(self.active())
+        moves: Dict[str, list] = {}
+        while True:
+            try:
+                slug, prev, new, t = self._evq.get_nowait()
+            except queue.Empty:
+                break
+            moves.setdefault(slug, []).append((prev, new, t))
+        for slug, mv in moves.items():
+            try:
+                self.react(slug, mv)
+            except Exception as exc:                  # noqa: BLE001
+                log("market_error", slug=slug, at="ws_react",
+                    err=f"{type(exc).__name__}:{str(exc)[:200]}")
+
+    def react(self, slug: str, moves: list) -> None:
+        mk = self.b.d["markets"].get(slug)
+        if not mk or mk.get("done"):
+            return
+        spec = self.v.spec(slug) or {}
+        tick = spec.get("tick") or D("0.01")
+        t0 = moves[0][2]
+        jump = max(ticks_moved(p, n, tick) for p, n, _t in moves)
+        flat = D(mk["pos"]["YES"]) == D(mk["pos"]["NO"])
+        open_legs = [o for o in mk["orders"].values() if o.get("open")]
+        new = moves[-1][1]
+        if jump >= JUMP_TICKS:
+            mk["jump_pause_until"] = time.time() + JUMP_PAUSE_S
+            self.jump_pauses += 1
+            self.b.save()
+            log("jump_pause", slug=slug, ticks=jump, prev=moves[0][0],
+                new=new, pause_s=JUMP_PAUSE_S,
+                pulls_opening_legs=bool(flat and open_legs),
+                completion_kept=bool(not flat and open_legs))
+            if flat and open_legs:
+                self._pull(slug, f"jump_{jump}_ticks", t0)
+            return
+        if not flat or not open_legs:
+            return                 # completion legs: re-evaluated as today
+        quoted = mk.get("quoted_bbo") or moves[0][0]
+        why = stale_reasons(quoted, new, tick)
+        if why:
+            self._pull(slug, ",".join(why), t0)
+            self.step_market(slug)          # re-set both legs at the new touch
+
+    def _pull(self, slug: str, reason: str, t0: float) -> None:
+        mk = self.b.m(slug)
+        legs = 0
+        for oid, o in list(mk["orders"].items()):
+            if not o.get("open"):
+                continue
+            legs += 1
+            self.v.cancel(oid)
+            st = self.v.status(oid)
+            self._record_fill(slug, o["side"], oid, st)
+            o["open"] = st["open"]
+        self.b.save()
+        self.reactive_pulls += 1
+        log("reactive_pull", slug=slug, reason=reason, legs=legs,
+            latency_ms=round((time.monotonic() - t0) * 1000),
+            pos=mk["pos"])
+
+    def _sleep(self, seconds: float) -> None:
+        """LOOP_S sleep; in WS mode every touch change is handled at once."""
+        if self.ws is None:
+            time.sleep(seconds)
+            return
+        end = time.monotonic() + seconds
+        while not self.stop:
+            left = end - time.monotonic()
+            if left <= 0:
+                break
+            if self._wake.wait(left):
+                self._wake.clear()
+                self.drain_ws_events()
 
     # ------------------------------------------------ reward programs
     def _reward_get(self):
@@ -520,6 +672,13 @@ class Engine:
                     label="locked pair economics; realized at settlement")
             mk.pop("complete_px", None)
             mk.pop("lone_since", None)
+            if self.ws is not None and \
+                    time.time() < float(mk.get("jump_pause_until") or 0):
+                # JUMP PAUSE: no opening legs rest in this market until the
+                # pause ends (completion legs never reach this branch)
+                if open_by_side:
+                    self._pull(slug, "jump_pause_hold", time.monotonic())
+                return
             set_at = float(mk.setdefault("pair_set_at", time.time()))
             steps = int((time.time() - set_at) // STALE_S) if STALE_S > 0 else 0
             want = None
@@ -590,6 +749,9 @@ class Engine:
             mk["partner_px"] = {k: str(v) for k, v in want.items()}
             stage = "two_sided_open_rewarded" if rq is not None \
                 else "two_sided_open"
+            if self.ws is not None:
+                mk["quoted_bbo"] = {"bid": str(bbo["bid"]),
+                                    "ask": str(bbo["ask"])}
             for side in ("YES", "NO"):
                 self.place(slug, side, want[side], qty, stage)
             return
@@ -731,7 +893,10 @@ class Engine:
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
-        log("heartbeat", active=self.active(),
+        extra = {} if self.ws is None else {
+            "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
+            "jump_pauses": self.jump_pauses}
+        log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
             pairs=len(pairs),
             locked_edge_usd=sum((ONE - D(p["pair_cost"])) * D(p["qty"])
@@ -748,7 +913,7 @@ class Engine:
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
-        log("boot", caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
+        log("boot", **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "depth_ticks": DEPTH_TICKS,
                           "qty": QTY, "pair_cap": PAIR_CAP})
         last_sel = 0.0
@@ -767,6 +932,7 @@ class Engine:
                 for slug in self.active():
                     if self.stop:
                         break
+                    self.drain_ws_events()          # no-op unless WS mode
                     try:
                         self.step_market(slug)
                     except Exception as exc:          # noqa: BLE001
@@ -777,7 +943,11 @@ class Engine:
                     last_hb = time.monotonic()
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
-            time.sleep(LOOP_S)
+            try:
+                self.drain_ws_events()
+            except Exception as exc:                  # noqa: BLE001
+                log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
+            self._sleep(LOOP_S)
         self.cancel_all_own("sigterm")
         return 0
 
@@ -867,7 +1037,21 @@ def main() -> int:
                                            "8090")))
     except Exception as exc:                             # noqa: BLE001
         log("registry_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
-    return Engine(Venue(), book).run()
+    venue = Venue()
+    if ws_on():
+        try:
+            from src.pmus_two_sided_ws import TwoSidedWs
+            venue.ws = TwoSidedWs(log=log)
+            venue.ws.set_slugs([s for s, mk in book.d["markets"].items()
+                                if not mk.get("done")])
+            venue.ws.start()
+            log("ws_enabled", jump_ticks=JUMP_TICKS, jump_pause_s=JUMP_PAUSE_S,
+                fresh_s=venue.ws.fresh_s)
+        except Exception as exc:                         # noqa: BLE001
+            venue.ws = None
+            log("ws_error", err=f"{type(exc).__name__}:{str(exc)[:160]}",
+                fallback="gateway_poll_only")
+    return Engine(venue, book).run()
 
 
 if __name__ == "__main__":

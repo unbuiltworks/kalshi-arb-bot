@@ -423,3 +423,245 @@ def test_lone_leg_not_exited_when_too_expensive(eng):
     e.step_market("aec-x"); e.step_market("aec-x")
     assert getattr(v, "taker", []) == []
     assert [o for o in v.orders.values() if o["open"] and o["side"] == "NO"]
+
+
+# ---------------------------------------------------------------- realtime WS
+# OWNER 2026-11-14: react to price changes in real time (PMUS_TWO_SIDED_WS=1).
+import json  # noqa: E402
+from src import pmus_two_sided_ws as W  # noqa: E402
+
+
+def frame(slug, bid, ask):
+    return {"market_data": {"marketSlug": slug,
+                            "bids": [{"px": {"value": bid}, "qty": "5"}],
+                            "offers": [{"px": {"value": ask}, "qty": "5"}]}}
+
+
+class Clock:
+    def __init__(self, t=1000.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+class WsVenue(FakeVenue):
+    """Gateway poll stays at the FakeVenue bid/ask; the socket can differ."""
+
+    def __init__(self, clock):
+        super().__init__()
+        self.ws = W.TwoSidedWs(clock=clock, log=M.log)
+
+    def bbo(self, slug):
+        return self.ws.fresh_bbo(slug) or {"bid": self.bid, "ask": self.ask}
+
+
+@pytest.fixture
+def weng(tmp_path):
+    clk = Clock()
+    v = WsVenue(clk)
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    return e, v, clk
+
+
+def _open(v):
+    return {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+
+
+def test_ws_wire_format_matches_the_recorder(monkeypatch):
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from src import pmus_ws_evidence_recorder as rec
+    raw = ed25519.Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+        serialization.NoEncryption())
+    secret = base64.b64encode(raw).decode()
+    monkeypatch.setenv("PMUS_API_KEY_ID", "kid")
+    monkeypatch.setenv("PMUS_API_SECRET_KEY", secret)
+    assert W.ws_headers(now_ms=123) == rec.auth_headers("kid", secret, now_ms=123)
+    assert (W.WS_URL, W.WS_PATH) == (rec.WS_URL, rec.WS_PATH)
+    mine = W.subscribe_frame({"b", "a"})["subscribe"]
+    theirs = rec.subscribe_frames(["a", "b"])[0]["subscribe"]
+    assert set(mine) == set(theirs) and mine["market_slugs"] == ["a", "b"]
+    assert mine["subscription_type"] == theirs["subscription_type"] == rec.SUB_MARKET_DATA
+    W.guard_outbound(W.subscribe_frame(["a"]))
+    with pytest.raises(RuntimeError):
+        W.guard_outbound({"order": {}})
+    for msg in (frame("m-1", "0.45", "0.47"),
+                {"marketData": {"marketSlug": "m-2", "bestBid": {"value": "0.30"},
+                                "bestAsk": {"value": "0.33"}}}):
+        st = {}
+        rec.apply_events(st, msg, 1.0)
+        got = W.parse_tops(msg)
+        assert got == [(s, st[s]["bid"], st[s]["ask"]) for s in st]
+
+
+def test_fresh_ws_price_used_over_gateway_and_stale_falls_back():
+    from src import pmus_q1_executor_v4 as q1
+    clk = Clock()
+    v = M.Venue.__new__(M.Venue)
+    v.q1 = q1
+    v.gget = lambda p: {"marketData": {"bestBid": "0.30", "bestAsk": "0.32"}}
+    v.ws = W.TwoSidedWs(clock=clk, log=lambda *a, **k: None)
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    clk.t += 2.5
+    assert v.bbo("aec-x") == {"bid": D("0.44"), "ask": D("0.46")}      # fresh WS
+    clk.t += 1.0                                                     # 3.5s, socket down
+    assert v.bbo("aec-x") == {"bid": D("0.30"), "ask": D("0.32")}      # gateway
+    assert v.bbo("aec-unknown") == {"bid": D("0.30"), "ask": D("0.32")}
+    # a book unchanged on the LIVE socket (frames still arriving) is current
+    v.ws.connected = True
+    v.ws.last_frame_t = clk.t - 0.5
+    assert v.bbo("aec-x") == {"bid": D("0.44"), "ask": D("0.46")}
+    v.ws.conn_id += 1                                                # not across reconnects
+    assert v.bbo("aec-x") == {"bid": D("0.30"), "ask": D("0.32")}
+
+
+def test_stale_reasons_and_ticks():
+    q = {"bid": "0.44", "ask": "0.46"}
+    assert M.stale_reasons(q, {"bid": D("0.44"), "ask": D("0.46")}, T) == []
+    assert M.stale_reasons(q, {"bid": D("0.45"), "ask": D("0.46")}, T) == [
+        "yes_touch_moved", "no_opposite_toward"]
+    assert M.stale_reasons(q, {"bid": D("0.44"), "ask": D("0.45")}, T) == [
+        "no_touch_moved", "yes_opposite_toward"]
+    assert M.ticks_moved({"bid": D("0.44"), "ask": D("0.46")},
+                         {"bid": D("0.46"), "ask": D("0.47")}, T) == 2
+
+
+def test_touch_move_pulls_both_legs_and_replaces_at_new_price(weng, capsys):
+    e, v, clk = weng
+    e.select(v.account())
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    e.step_market("aec-x")
+    assert _open(v) == {"YES": D("0.42"), "NO": D("0.52")}
+    assert not e._wake.is_set()
+    v.ws.ingest(frame("aec-x", "0.43", "0.45"))          # 1-tick drop on both sides
+    assert e._wake.is_set()                              # main loop woken at once
+    e.drain_ws_events()
+    assert "aec-x" in v.ws.wanted()                      # subscription follows active set
+    assert set(v.ws.wanted()) == set(e.active())
+    assert _open(v) == {"YES": D("0.41"), "NO": D("0.53")}   # gateway still says 0.44/0.46
+    assert v.n == 4 and e.reactive_pulls == 1
+    out = capsys.readouterr().out
+    row = [ln for ln in out.splitlines() if '"reactive_pull"' in ln][0]
+    assert '"slug":"aec-x"' in row and "yes_touch_moved" in row
+    assert 0 <= json.loads(row.split(" ", 1)[1])["latency_ms"] < 1000
+
+
+def test_two_tick_jump_pauses_reopen(weng, capsys):
+    e, v, clk = weng
+    e.select(v.account())
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    e.step_market("aec-x")
+    v.ws.ingest(frame("aec-x", "0.46", "0.48"))          # 2-tick jump
+    e.drain_ws_events()
+    assert _open(v) == {} and v.n == 2
+    for _ in range(3):
+        e.step_market("aec-x")
+    assert _open(v) == {} and v.n == 2                   # no re-open inside the window
+    assert '"jump_pause"' in capsys.readouterr().out
+    e.b.d["markets"]["aec-x"]["jump_pause_until"] -= M.JUMP_PAUSE_S + 1
+    e.step_market("aec-x")
+    assert _open(v) == {"YES": D("0.44"), "NO": D("0.50")}
+
+
+def test_completion_leg_not_pulled_by_jump(weng, capsys):
+    e, v, clk = weng
+    e.select(v.account())
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")                               # lone YES; NO completes
+    v.ws.ingest(frame("aec-x", "0.40", "0.42"))          # 4-tick jump
+    e.drain_ws_events()
+    assert _open(v) == {"NO": D("0.52")}
+    v.ws.ingest(frame("aec-x", "0.39", "0.41"))          # 1-tick touch move
+    e.drain_ws_events()
+    assert _open(v) == {"NO": D("0.52")} and e.reactive_pulls == 0
+    assert '"completion_kept":true' in capsys.readouterr().out
+
+
+def test_main_loop_wakes_on_ws_event(weng):
+    import threading as th
+    import time as _t
+    e, v, clk = weng
+    e.select(v.account())
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    e.step_market("aec-x")
+    pulled_at = []
+    real_cancel = v.cancel
+    v.cancel = lambda oid: pulled_at.append(_t.monotonic()) or real_cancel(oid)
+    t = th.Timer(0.05, lambda: v.ws.ingest(frame("aec-x", "0.45", "0.47")))
+    t0 = _t.monotonic()
+    t.start()
+    e._sleep(1.0)
+    assert pulled_at and pulled_at[0] - t0 < 0.5         # reacted mid-sleep
+    assert _open(v) == {"YES": D("0.43"), "NO": D("0.51")}
+
+
+def test_ws_thread_subscribes_streams_and_reconnects(monkeypatch):
+    """Real socket thread against a local server: subscribe frame for the
+    wanted slugs, book frames land in the latest-top map, a dropped
+    connection reconnects with backoff and resubscribes."""
+    import asyncio
+    import threading as th
+    import time as _t
+    websockets = pytest.importorskip("websockets")
+    from websockets.asyncio.server import serve
+    got, conns = [], []
+
+    async def handler(ws):
+        conns.append(ws)
+        sub = json.loads(await ws.recv())
+        got.append(sub)
+        slug = sub["subscribe"]["market_slugs"][0]
+        await ws.send(json.dumps(frame(slug, "0.44", "0.46")))
+        await ws.send(json.dumps(frame(slug, "0.45", "0.47")))
+        if len(conns) == 1:
+            await ws.close()                      # force one reconnect
+            return
+        await asyncio.sleep(5)
+
+    ready, port = th.Event(), []
+
+    def server():
+        async def main():
+            async with serve(handler, "127.0.0.1", 0) as srv:
+                port.append(srv.sockets[0].getsockname()[1])
+                ready.set()
+                await asyncio.sleep(8)
+        asyncio.run(main())
+    th.Thread(target=server, daemon=True).start()
+    assert ready.wait(5)
+    monkeypatch.setattr(W, "WS_URL", f"ws://127.0.0.1:{port[0]}")
+    monkeypatch.setattr(W, "ws_headers", lambda now_ms=None: {"X-PM-Access-Key": "test"})
+    logs = []
+    ws = W.TwoSidedWs(log=lambda kind, **kw: logs.append(kind))
+    changes = []
+    ws.on_change = lambda *a: changes.append(a)
+    ws.set_slugs(["aec-x"])
+    ws.start()
+    deadline = _t.monotonic() + 6
+    while _t.monotonic() < deadline and logs.count("ws_connected") < 2:
+        _t.sleep(0.05)
+    _t.sleep(0.2)
+    ws.stop()
+    assert logs.count("ws_connected") >= 2 and "ws_reconnect" in logs
+    assert got[0]["subscribe"]["market_slugs"] == ["aec-x"]
+    assert got[0]["subscribe"]["subscription_type"] == W.SUB_MARKET_DATA
+    assert ws.fresh_bbo("aec-x") == {"bid": D("0.45"), "ask": D("0.47")}
+    assert changes and changes[0][0] == "aec-x"
+
+
+def test_ws_default_off_unchanged(eng, monkeypatch):
+    monkeypatch.delenv("PMUS_TWO_SIDED_WS", raising=False)
+    assert not M.ws_on()
+    e, v = eng
+    assert e.ws is None
+    e.select(v.account())
+    e.step_market("aec-x")
+    e.drain_ws_events()                                  # no-op
+    assert "quoted_bbo" not in e.b.d["markets"]["aec-x"]
+    assert M.Venue.ws is None

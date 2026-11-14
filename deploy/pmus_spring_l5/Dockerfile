@@ -18,7 +18,9 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-RUN pip install --no-cache-dir "cryptography>=42"
+# websockets: the two-sided bot's realtime market-data feed (2026-11-14,
+# inert unless PMUS_TWO_SIDED_WS=1). >=14 for connect(additional_headers=).
+RUN pip install --no-cache-dir "cryptography>=42" "websockets>=14"
 
 # continuous campaign (OWNER 5552036210): select -> sequential session ->
 # reselect. Inherits every guard below; DISARMED it is a shadow selector.
@@ -110,6 +112,12 @@ COPY src/pmus_sports_two_sided.py src/pmus_sports_two_sided.py
 # liquidity-program discovery/scoring for two-sided reward mode (2026-11-14).
 # Inert unless PMUS_TWO_SIDED_REWARDS=1; keyless public GETs, no order path.
 COPY src/pmus_sports_rewards.py src/pmus_sports_rewards.py
+# realtime top-of-book feed for two-sided (OWNER 2026-11-14 "stop being
+# picked off"). Inert unless PMUS_TWO_SIDED_WS=1; READ-ONLY market-data
+# socket (subscribe/heartbeat frames only, no order path), signed with the
+# order-free src/pmus_auth.py exactly as the evidence recorder signs.
+COPY src/pmus_two_sided_ws.py src/pmus_two_sided_ws.py
+COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
