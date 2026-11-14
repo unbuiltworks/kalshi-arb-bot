@@ -3069,6 +3069,53 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             # a market of an earlier campaign is never re-entered
             for s_ in (p.get("filled_markets") or []) + (p.get("settled_here") or []):
                 cooldown[str(s_)] = float("inf")
+        # OWNER 2026-11-14: THE CONFIGURED RUNG WINS OVER A STALE CAMPAIGN.
+        # A campaign restored from durable state re-applies ITS OWN rung, so
+        # a September R5FT canary ($30/market) silently overrode the owner's
+        # PMUS_SPRING_RUNG=R5FB on boot. If the configured rung differs from
+        # the restored campaign's, archive the restored campaign (its markets
+        # stay on permanent cooldown) and start the first unconsumed owner
+        # approval for the configured rung. With no such approval the probe
+        # FAILS CLOSED into safe shutdown: it never trades a rung the owner
+        # did not configure.
+        _env_rung = (os.getenv(ladder.RUNG_ENV) or "").strip().upper()
+        _restored_rung = str(persisted.get("rung") or _active_rung_id()).strip().upper()
+        if _env_rung and _restored_rung and _restored_rung != _env_rung:
+            _done = {campaign_id, *[str(p.get("campaign_id")) for p in previous_campaigns]}
+            _appr = next((a for a in load_campaign_approvals()
+                          if str(a.get("rung") or "").strip().upper() == _env_rung
+                          and a["campaign_id"] not in _done
+                          and a.get("stop_rule") in (STOP_RULE_RUNG, STOP_RULE_EVIDENCE)),
+                         None)
+            if _appr is None:
+                _log("campaign_rung_mismatch_refused", restored_campaign=campaign_id,
+                     restored_rung=_restored_rung, configured_rung=_env_rung,
+                     action="SAFE_SHUTDOWN: no unconsumed owner approval for the configured rung")
+                rep = safe_shutdown(t)
+                _log("safe_shutdown", **rep)
+                shutdown_idle(sleep, rep, t)
+                return {"campaign": "pmus-l5-continuous-v1", "mode": "SHUTDOWN",
+                        "status": "CAMPAIGN_RUNG_MISMATCH", "shutdown": rep,
+                        "realized_pnl": None, "sessions": [], "selections": 0}
+            previous_campaigns.append({
+                "campaign_id": campaign_id, "stop_rule": stop_rule,
+                "rung": _restored_rung,
+                "filled_markets": sorted(filled_markets),
+                "settled_here": sorted(settled_here),
+                "archived_on_boot": "CONFIGURED_RUNG_DIFFERS",
+                "ended_utc": _utc(wall)})
+            for s_ in filled_markets | settled_here:
+                cooldown[s_] = float("inf")
+            filled_markets.clear()
+            settled_here.clear()
+            _old_id = campaign_id
+            campaign_id = str(_appr["campaign_id"])
+            stop_rule = str(_appr.get("stop_rule") or STOP_RULE_RUNG)
+            _apply_rung(_env_rung)
+            persisted = dict(persisted, rung=_env_rung)
+            _log("campaign_rotated_on_boot", archived_campaign=_old_id,
+                 archived_rung=_restored_rung, new_campaign=campaign_id,
+                 rung=_env_rung, approval=_appr.get("campaign_id"))
         report["rung"] = _rung_report()
         if persisted.get("outage"):
             # re-classified on restore: state saved by an older build (or

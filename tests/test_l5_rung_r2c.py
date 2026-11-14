@@ -221,3 +221,64 @@ def test_repo_approval_record_names_the_r2c_rung_after_the_r1_continuation():
                                      appr)
     assert nxt is None or nxt["campaign_id"] in ("R2C2-RUN-2026-09-06",
                                                  "R3L-RUN-2026-09-06")
+
+
+def _restored_r1_state():
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "campaign_id": "R1-OLD-CAMPAIGN",
+        "stop_rule": "rung_markets", "previous_campaigns": [],
+        "filled_markets": ["old1"], "settled_here": ["old1"],
+        "outage": None, "liveness_baseline": {}, "recovery_gate": None, "burst": None})
+
+
+def test_configured_rung_beats_a_stale_restored_campaign(monkeypatch, tmp_path):
+    """OWNER 2026-11-14: a September R5FT campaign restored from durable
+    state overrode PMUS_SPRING_RUNG=R5FB. The configured rung must win: the
+    stale campaign is archived and the owner's approval for the configured
+    rung starts, under that rung's caps, without waiting for the old
+    campaign's continuation preflight."""
+    from tests.test_pmus_l5_continuous_session import _two_run_harness
+    monkeypatch.setenv(ld.RUNG_ENV, "R2C")
+    monkeypatch.delenv(cont.RUNG_MARKETS_ENV, raising=False)
+    fake = _two_run_harness(monkeypatch, tmp_path, {"v": 100.0}, {"trades": 5})
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    approvals = tmp_path / "approvals.json"
+    approvals.write_text(json.dumps({"approvals": [{
+        "campaign_id": "R2C-NEW", "approved_by": "owner",
+        "rung": "R2C", "stop_rule": "rung_markets"}]}))
+    monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", approvals)
+    _restored_r1_state()
+    seen = []
+
+    def session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+        seen.append((str(spring.session_notional_cap()), spring.safety_shell_version()))
+        return {"status": "SPRING_NO_FILL", "slug": slug, "orders": [],
+                "decisions": [], "inventory": {"up": "0", "dn": "0"}}
+    ticks = itertools.chain([0.0] + [1.0] * 20, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=500.0,
+                            session_runner=session)
+    assert rep["rung"]["ladder_rung"] == "R2C"
+    assert rep["rung"]["campaign_id"] == "R2C-NEW"
+    assert "R1-OLD-CAMPAIGN" in rep["rung"]["previous_campaigns"]
+    assert all(cap == "0.15" and lbl == R2C_LABEL for cap, lbl in seen)
+    saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
+    assert saved["rung"] == "R2C" and saved["campaign_id"] == "R2C-NEW"
+
+
+def test_configured_rung_without_an_approval_fails_closed(monkeypatch, tmp_path):
+    from tests.test_pmus_l5_continuous_session import _two_run_harness
+    monkeypatch.setenv(ld.RUNG_ENV, "R2C")
+    fake = _two_run_harness(monkeypatch, tmp_path, {"v": 100.0}, {"trades": 5})
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", tmp_path / "none.json")
+    _restored_r1_state()
+    monkeypatch.setattr(cont, "safe_shutdown", lambda t=None: {"verdict": "SHUTDOWN_VERIFIED"})
+    monkeypatch.setattr(cont, "shutdown_idle", lambda *a, **k: None)
+    calls = []
+    ticks = itertools.chain([0.0] + [1.0] * 5, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=500.0,
+                            session_runner=lambda *a, **k: calls.append(k) or {})
+    assert rep["mode"] == "SHUTDOWN" and rep["status"] == "CAMPAIGN_RUNG_MISMATCH"
+    assert calls == []

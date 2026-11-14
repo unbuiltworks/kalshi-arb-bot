@@ -191,6 +191,12 @@ def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
                  "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]
     assert cont.approved_continuation(
         "R5F-RUN-2026-09-07", after_r5f)["campaign_id"] == "R5FT-CANARY-2026-09-11"
+    # OWNER 2026-11-14: the R5FB sports campaign is queued after the canary,
+    # and after it there is nothing automatic.
     assert cont.approved_continuation(
-        "R5FT-CANARY-2026-09-11", after_r5f + ["R5F-RUN-2026-09-07"]) is None
+        "R5FT-CANARY-2026-09-11", after_r5f + ["R5F-RUN-2026-09-07"]
+    )["campaign_id"] == "R5FB-SPORTS-LIVE-2026-11-14"
+    assert cont.approved_continuation(
+        "R5FB-SPORTS-LIVE-2026-11-14",
+        after_r5f + ["R5F-RUN-2026-09-07", "R5FT-CANARY-2026-09-11"]) is None
     json.dumps(approvals)   # serialisable, as the campaign logs it

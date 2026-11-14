@@ -219,3 +219,9 @@
 # 2026-11-14 — owner approval R5FB-SPORTS-LIVE-2026-11-14 added to
 # analysis/l5/l5_campaign_approvals.json (R5FB, rung_markets, $4.50, -$5 stop).
 # Latch already cleared (PMUS_SPRING_SHUTDOWN=NO) on owner instruction.
+
+# 2026-11-14 — owner "get me live trades": on boot the CONFIGURED rung
+# (PMUS_SPRING_RUNG) beats a stale restored campaign's rung. The September
+# R5FT canary is archived and the owner's R5FB-SPORTS-LIVE-2026-11-14 approval
+# starts under R5FB caps; with no approval for the configured rung the probe
+# goes to safe shutdown instead of trading. Latch cleared with this deploy.

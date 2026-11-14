@@ -172,4 +172,8 @@ def test_a_consumed_canary_is_never_re_run():
     prev = ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
             "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06", "R3L-RUN-2026-09-06",
             "R4-RUN-2026-09-07", "R5F-RUN-2026-09-07"]
-    assert cont.approved_continuation(CANARY, prev) is None
+    # OWNER 2026-11-14: the next approval is the R5FB sports campaign, never
+    # the canary again; after it, nothing is queued.
+    nxt = cont.approved_continuation(CANARY, prev)
+    assert nxt is not None and nxt["campaign_id"] == "R5FB-SPORTS-LIVE-2026-11-14"
+    assert cont.approved_continuation(nxt["campaign_id"], prev + [CANARY]) is None
