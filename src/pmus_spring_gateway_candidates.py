@@ -47,7 +47,7 @@ EVENTS_REFRESH_S = 60.0
 REBUILD_MIN_S = 10.0
 HISTORY_S = 3900.0
 MAX_OBS_PER_SLUG = 800
-MARKET_STATE_TTL_S = 120.0
+MARKET_STATE_TTL_S = 300.0
 ROW_MAX_AGE_S = 60.0          # a row older than this is not served
 SCREEN_LO, SCREEN_HI = 0.20, 0.80   # cheap pre-screen, wider than the band
 PROVENANCE = "inferred"
@@ -285,10 +285,17 @@ def build_status(now: Optional[float] = None, get: Optional[Callable] = None,
             del by_slug[slug]
     # 2. round-robin BBO + book polls inside the budget
     polled = 0
+    # Reserve budget for /v1/market/slug state reads: without it the BBO/book
+    # round-robin spends every request and rows ship with no market_state
+    # (LIVE 15:12Z: 22/30 rows refused strict_evidence_market_state_missing).
+    mst = _STATE.get("mstate") or {}
+    stale = sum(1 for sl in by_slug
+                if not (sl in mst and now - mst[sl][0] < MARKET_STATE_TTL_S))
+    reserve = min(stale, _max_req() // 2)
     if targets:
         cur = int(_STATE.get("cursor") or 0) % len(targets)
         for i in range(len(targets)):
-            if lim.left < 3:          # leave one for a market-state read
+            if lim.left < 3 + reserve:  # keep state-read budget
                 break
             tg = targets[(cur + i) % len(targets)]
             slug = str(tg["slug"])
