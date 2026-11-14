@@ -504,8 +504,70 @@ class Engine:
         return 0
 
 
+REGISTRY_KEY = "l5/live_orders.json"      # same path as l5_order_registry_server
+LANE = "pmus-sports-two-sided"
+
+
+def registry_doc(book: "Book") -> Dict[str, Any]:
+    """The orders this bot placed and still believes live, in the shape the
+    l5 watchdog's ownership oracle reads, plus its own freshness stamp. A
+    fresh document is the bot attesting that it is ALIVE AND MANAGING these
+    resting orders (maker bids that legitimately rest for minutes)."""
+    rows = []
+    for slug, mk in (book.d.get("markets") or {}).items():
+        for oid, o in (mk.get("orders") or {}).items():
+            if o.get("open"):
+                rows.append({"venue_order_id": oid, "market": slug,
+                             "side": o.get("side"), "session_id": LANE,
+                             "price": o.get("px"), "qty": o.get("qty")})
+    return {"readable": True, "lane": LANE, "manages_own_resting": True,
+            "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
+            "orders": rows, "as_of_utc": now_iso(),
+            "labels": ("venue order ids pmus_sports_two_sided placed and "
+                       "still believes live; it cancels them itself on "
+                       "requote, disable and SIGTERM")}
+
+
+def serve_registry(book: "Book", port: int) -> None:
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):                               # noqa: N802
+            path = self.path.split("?", 1)[0].lstrip("/")
+            if path not in (REGISTRY_KEY, "health"):
+                self.send_response(404); self.end_headers(); return
+            body = json.dumps(registry_doc(book) if path == REGISTRY_KEY
+                              else {"ok": True}, default=str).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):                      # quiet
+            return
+
+    try:                       # Railway private networking is IPv6
+        import socket as _sock
+
+        class V6(ThreadingHTTPServer):
+            address_family = _sock.AF_INET6
+        srv = V6(("::", port), H)
+    except OSError:
+        srv = ThreadingHTTPServer(("0.0.0.0", port), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    log("registry_serving", port=port, path=REGISTRY_KEY)
+
+
 def main() -> int:
-    return Engine(Venue(), Book(STATE_DIR / "state.json")).run()
+    book = Book(STATE_DIR / "state.json")
+    try:
+        serve_registry(book, int(os.getenv("PMUS_TWO_SIDED_REGISTRY_PORT",
+                                           "8090")))
+    except Exception as exc:                             # noqa: BLE001
+        log("registry_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
+    return Engine(Venue(), book).run()
 
 
 if __name__ == "__main__":

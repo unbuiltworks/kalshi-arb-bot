@@ -136,3 +136,24 @@ def test_flat_market_out_of_band_frees_its_slot(eng, monkeypatch):
     e.b.d["markets"]["aec-x"]["idle_since"] = 0
     e.step_market("aec-x")
     assert e.active() == []
+
+
+def test_registry_doc_lists_only_open_own_orders(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    doc = M.registry_doc(e.b)
+    assert doc["readable"] is True and doc["manages_own_resting"] is True
+    assert {r["side"] for r in doc["orders"]} == {"YES", "NO"}
+    assert all(r["market"] == "aec-x" for r in doc["orders"])
+    assert doc["as_of_utc"]
+
+
+def test_registry_http(tmp_path):
+    import json, socket, urllib.request
+    b = M.Book(tmp_path / "s.json")
+    b.m("aec-z")["orders"]["OID1"] = {"side": "YES", "px": "0.4", "qty": "1", "filled": "0", "open": True}
+    s = socket.socket(); s.bind(("", 0)); port = s.getsockname()[1]; s.close()
+    M.serve_registry(b, port)
+    d = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/{M.REGISTRY_KEY}").read())
+    assert d["orders"][0]["venue_order_id"] == "OID1"
