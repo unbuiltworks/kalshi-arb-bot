@@ -109,6 +109,19 @@ STRADDLE_PRICE_ENV = "L5_BTC5M_STRADDLE_PRICE"
 #: STRADDLE only: a comma-separated ladder, e.g. "0.05,0.06,0.07". Absent
 #: means the single `STRADDLE_PRICE_ENV` rung.
 STRADDLE_RUNGS_ENV = "L5_BTC5M_STRADDLE_RUNGS"
+#: STRADDLE only; see `completion_pair_cost`. Absent means no completion,
+#: which is the mode's historical behaviour.
+COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
+#: THE POLICY CEILING ON A COMPLETED PAIR, enforced here rather than left to
+#: whoever sets the variable. L5_OPERATING_MODEL keeps near-$1 pair
+#: tolerance LOCKED -- it belongs to later incentive-era L5 behaviour and
+#: stays locked until equivalent economics are source-confirmed for this
+#: account -- and puts spring discipline at "materially cheaper", 0.96.
+#: A larger value is clamped to this, so a typo or an eager operator cannot
+#: buy the locked behaviour. Measured difference: a 1.00 pair cost is worth
+#: +6.08 c/window against +4.79 at 0.96, so the lock costs about 1.3 c a
+#: window and that is the price of not unlocking it by accident.
+COMPLETION_PAIR_COST_MAX = D("0.96")
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
@@ -220,6 +233,25 @@ def straddle_price(default: Decimal = D("0")) -> Decimal:
     if raw is None or not (D("0") < raw < D("0.50")):
         return default
     return raw
+
+
+def completion_pair_cost(default: Decimal = D("0")) -> Decimal:
+    """STRADDLE only: what a COMPLETED pair may cost, in total.
+
+    Zero -- the default, and what an absent or unreadable variable gives --
+    disables completion entirely and leaves the mode byte-for-byte as it
+    was. A value at or below 0.50 is refused rather than clamped up,
+    because the cheap rung already rests there and asking for a completion
+    below it is a contradiction rather than an aggressive setting.
+
+    Anything above `COMPLETION_PAIR_COST_MAX` is CLAMPED DOWN to it, not
+    refused: the owner's intent to complete is honoured, the locked
+    near-$1 behaviour is not.
+    """
+    raw = _dec(os.environ.get(COMPLETION_PAIR_COST_ENV))
+    if raw is None or raw <= D("0.50"):
+        return default
+    return min(raw, COMPLETION_PAIR_COST_MAX)
 
 
 #: Per-entry clip ceilings, PER MODE. The directional modes keep the
@@ -1071,8 +1103,16 @@ class Btc5mExecutor:
             # nothing to reserve for. The price is NOT derived from the
             # book -- that is the point, since a fixed limit cannot drift
             # and the pair cost is therefore known before either leg fills.
+            # `hedge_enabled` stays False ON PURPOSE even when a
+            # completion is configured. The hedge path CANCELS anything on
+            # the hedge side that is not at its own price, which would kill
+            # the cheap rung; measured on 183 windows that is worse than
+            # doing nothing (-1.33 c/window against +2.86). The completion
+            # below is additive and lives in the straddle branch instead.
             over.update(entry_mode=C.STRADDLE, hedge_enabled=False,
                         reserve_mode="NONE",
+                        straddle_completion_pair_cost=completion_pair_cost(
+                            self.params.straddle_completion_pair_cost),
                         straddle_price=straddle_price(
                             self.params.straddle_price),
                         straddle_rungs=straddle_rungs(
