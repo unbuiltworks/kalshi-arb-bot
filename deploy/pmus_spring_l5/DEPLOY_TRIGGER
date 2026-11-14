@@ -243,3 +243,4 @@
 2026-11-14T15:35Z OWNER "Place orders 2 ticks below the price on both sides": src/pmus_sports_two_sided.py, selected by PMUS_SPORTS_MODE=two_sided (else the L5 probe as before). R5FB budget: $1.50/market, 3 markets, $4.50 total lone-leg cost, pair <= 0.98, post-only, foreign-exposure markets skipped.
 2026-11-14T15:31Z copy src/l5_order_body.py (two-sided order body; ImportError at 15:30Z, no order placed)
 2026-11-14T15:45Z OWNER 'Pairs should be set simultaneously': requote pulls and re-sets both legs together; after a fill the partner stays at its price.
+2026-11-14T16:35Z two-sided: release a flat market that stays out of band/too wide for 2 min, freeing the slot.

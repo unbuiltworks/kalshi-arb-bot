@@ -360,6 +360,17 @@ class Engine:
             if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]) or \
                     any(o.get("open") for o in mk["orders"].values()):
                 return                  # a leg filled while pulling: complete it
+            if want is None and not blocked:
+                # flat and out of band/too wide: free the slot for another
+                # live market after 2 minutes (pairs already locked stay).
+                idle = mk.setdefault("idle_since", time.time())
+                if time.time() - float(idle) > 120:
+                    mk["done"] = True
+                    self.b.save()
+                    log("released_flat_market", slug=slug, pos=mk["pos"],
+                        bid=bbo["bid"], ask=bbo["ask"])
+                return
+            mk.pop("idle_since", None)
             if want is None or blocked:
                 return
             if (want["YES"] + want["NO"]) * qty > PER_MARKET_CAP:
