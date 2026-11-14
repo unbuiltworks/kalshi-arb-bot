@@ -48,7 +48,13 @@ DAILY_LOSS = "11.00"
 UNCORRECTED_ALLOWANCE = 4
 
 
-def shape(shares: int) -> dict:
+#: when --completion is used, the TOTAL a completed pair may cost. The
+#: engine clamps this to COMPLETION_PAIR_COST_MAX (0.96) regardless, so
+#: this only has to agree with it, never enforce it.
+COMPLETION_PAIR_COST = D("0.96")
+
+
+def shape(shares: int, completion: bool = False) -> dict:
     """Every figure the campaign needs, derived from ONE number.
 
     These were four hand-kept constants and they drifted: a 5-share clip
@@ -57,13 +63,33 @@ def shape(shares: int) -> dict:
     """
     legs = D(shares) * PRICE                 # one side
     both = legs * 2                          # both legs at once
+    #: COMPLETION CHANGES THE EXPOSURE SHAPE, and this is the whole reason
+    #: it cannot simply be switched on. The worst instant holds the filled
+    #: cheap leg, the other cheap leg still resting, AND the completion
+    #: order resting at (pair_cost - price):
+    #:     shares * (PRICE + PRICE + (COMPLETION_PAIR_COST - PRICE))
+    #:   = shares * (PRICE + COMPLETION_PAIR_COST)
+    #: At 0.08 and 0.96 that is 1.04 a share -- 6.5x the 0.16 a share the
+    #: bare straddle needs. SERIES_MAX_TOTAL_EXPOSURE_USD is $5, so this
+    #: is what caps the clip at 4 shares ($4.16) rather than 5 ($5.20).
+    worst_instant = (D(shares) * (PRICE + COMPLETION_PAIR_COST)
+                     if completion else both)
     return {"shares": int(shares),
             "clip_usd": str(legs),
             #: the approval must cover both legs with a little slack, and
             #: `exposure_ceiling()` = min(adapter, approved) is what the
             #: gate judges against the account's remaining loss room.
-            "exposure": str((both * D("1.25")).quantize(D("0.01"))),
-            "need_exposure_headroom": both,
+            "completion": bool(completion),
+            "completion_pair_cost": str(COMPLETION_PAIR_COST),
+            "worst_instant_usd": worst_instant,
+            #: 1.25x slack on the bare straddle as before; with a
+            #: completion the figure is already the true worst instant, so
+            #: it takes a thinner 1.05x -- 1.25x would exceed the $5 series
+            #: ceiling at any clip worth running.
+            "exposure": str((worst_instant * (D("1.05") if completion
+                                              else D("1.25"))
+                             ).quantize(D("0.01"))),
+            "need_exposure_headroom": worst_instant,
             #: WHAT THE LEDGER WILL BOOK, WHICH IS NOT WHAT WE RISK.
             #: `l5-pmus-live` prices BTC5m legs it has no basis for at
             #: $1.00/share (UNKNOWN_COST_UPPER_BOUND), so a losing leg
@@ -171,9 +197,15 @@ def main(argv):
     if "--windows" in argv:
         global WINDOWS
         WINDOWS = int(argv[argv.index("--windows") + 1])
-    sh = shape(shares)
+    completion = "--completion" in argv
+    sh = shape(shares, completion=completion)
     print("shape: %d share(s) a side at %s -> clip %s, approval exposure %s"
           % (sh["shares"], PRICE, sh["clip_usd"], sh["exposure"]))
+    if completion:
+        print("  COMPLETION ON at pair cost %s: worst instant %s a window"
+              % (sh["completion_pair_cost"], sh["worst_instant_usd"]))
+    else:
+        print("  completion OFF (bare straddle)")
     print("  real worst case over %d windows    %s" % (WINDOWS, sh["real_worst_usd"]))
     print("  BOOKED worst case (at $1/share)   %s   <-- what the halt sees"
           % sh["phantom_worst_usd"])
@@ -258,7 +290,9 @@ def main(argv):
     print("approval ok: %d windows, %s .. %s, NOT_AFTER %s"
           % (len(starts), starts[0], starts[-1], not_after))
 
-    plan = [("L5_CAMPAIGN_APPROVAL", approval),
+    plan = [("L5_BTC5M_COMPLETION_PAIR_COST",
+             str(COMPLETION_PAIR_COST) if completion else ""),
+            ("L5_CAMPAIGN_APPROVAL", approval),
             ("L5_BTC5M_NOT_AFTER", not_after),
             ("L5_BTC5M_ENTRY_MODE", "STRADDLE"),
             ("L5_BTC5M_STRADDLE_PRICE", str(PRICE)),
