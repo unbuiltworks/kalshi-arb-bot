@@ -1569,13 +1569,20 @@ class PmusTransport:
         caller exactly as strict as it was before this existed -- a preflight
         that crashes is a preflight that cannot refuse.
         """
+        #: `l5_managed_lanes` rather than `l5_watchdog`, and the distinction
+        #: is a shipped-image fact rather than a style choice: this image
+        #: does not carry l5_watchdog (which pulls l5_order_registry_server
+        #: behind it), so importing it here raises ImportError at runtime,
+        #: fails closed, and leaves the exemption permanently inert while
+        #: LOOKING like it works. Caught by
+        #: test_l5_btc5m_image_deps.test_lazy_src_imports_on_the_live_path_
+        #: are_shipped before it shipped.
         try:
-            from src import l5_watchdog as W
-            urls = W._managed_lanes_from_env()
+            from src import l5_managed_lanes as ML
+            urls = ML.from_env()
             if not urls:
                 return set(), []
-            w = W.Watchdog(None, None, managed_lanes=list(urls))
-            return w.managed_lane_ids()
+            return ML.lane_ids(urls)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

@@ -66,6 +66,7 @@ COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
+COPY src/l5_managed_lanes.py       src/l5_managed_lanes.py
 # THE OWNER'S EMERGENCY HALT. Reads a signed marker from a URL and
 # can reach exactly one call: HaltAsserter.assert_halt. It holds no
 # venue credential and no order path (asserted by
