@@ -114,6 +114,49 @@ SERIES_MAX_TOTAL_EXPOSURE_USD = {BTC5M_SERIES: D("5")}
 #: BTC15m IS DELIBERATELY ABSENT and keeps MAX_WINDOWS = 8.
 SERIES_MAX_WINDOWS = {BTC5M_SERIES: 48}
 
+#: PER-SERIES DAILY LOSS CAP. The SECOND per-series value that is LOOSER
+#: than the general ceiling, so, like SERIES_MAX_WINDOWS above, the
+#: argument has to be made rather than assumed -- and it is a DIFFERENT
+#: argument, weaker than that one, which is why it is written out here
+#: instead of borrowed.
+#:
+#: SERIES_MAX_WINDOWS could say "more windows buys more OPPORTUNITIES to
+#: deploy the same $5 and never more dollars at risk at once". THAT
+#: ARGUMENT DOES NOT TRANSFER AND IS NOT CLAIMED HERE. This raises the
+#: dollars the 5-minute strategy may lose in one UTC day from $5 to $11.
+#: It is a risk increase, stated as one.
+#:
+#: WHY $11, 2026-11-14T03:00Z, BY EXPLICIT OWNER DECISION, reaffirmed after
+#: being shown the day's figures and declined twice by this session. The
+#: number is the arithmetic of ONE further campaign, not a round figure:
+#: BTC5m's settled day loss stood at -5.00 when this was set, and an
+#: 8-share 8-window straddle at 0.08 has a REAL worst case of 5.12
+#: (8 * 0.08 * 8). 5.00 + 5.12 = 10.12, so $11 permits exactly that one
+#: campaign to run its full worst case and refuses the next. A larger
+#: number would permit a second campaign nobody approved.
+#:
+#: WHAT STILL BINDS, untouched: MAX_TOTAL_EXPOSURE_USD and
+#: SERIES_MAX_TOTAL_EXPOSURE_USD at every instant, the campaign worst-case
+#: budget in l5_campaign_budget (DEFAULT_BUDGET_USD $5, which is SEPARATE
+#: and still refuses first on worst case), the account-wide daily realized
+#: halt, the account-wide cumulative ceiling, MAX_CAMPAIGN_S, the series
+#: allowlist, the class budgets, the completion reserve, the watchdog and
+#: the HALT latch.
+#:
+#: BTC15m IS DELIBERATELY ABSENT and keeps the general $5. A series with no
+#: entry here gets MAX_DAILY_LOSS_USD, never a per-series value.
+SERIES_MAX_DAILY_LOSS_USD = {BTC5M_SERIES: D("11")}
+
+
+def max_daily_loss_for(series: Any) -> D:
+    """The daily loss ceiling for one series.
+
+    `MAX_DAILY_LOSS_USD` unless the series has its own entry. An absent,
+    empty or malformed series gets the GENERAL ceiling, never a per-series
+    one, so an unreadable document can never buy the wider cap.
+    """
+    return SERIES_MAX_DAILY_LOSS_USD.get(str(series or ""), MAX_DAILY_LOSS_USD)
+
 
 def max_windows_for(series: Any) -> int:
     """The window-count ceiling for one series.
@@ -329,7 +372,7 @@ class ApprovalGate:
         eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD,
                       SERIES_MAX_TOTAL_EXPOSURE_USD.get(
                           series, MAX_TOTAL_EXPOSURE_USD))
-        eff_loss = min(want_loss, MAX_DAILY_LOSS_USD)
+        eff_loss = min(want_loss, max_daily_loss_for(series))
         eff_expires = min(expires, issued + dt.timedelta(seconds=MAX_CAMPAIGN_S))
         if (eff_expires - now).total_seconds() <= 0:
             return no("approval_campaign_ceiling_expired")

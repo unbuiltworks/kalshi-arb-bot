@@ -331,10 +331,29 @@ def test_a_document_asking_for_more_exposure_gets_the_5m_ceiling(
     v = verdict(ledger)
     assert v["ok"] is True
     assert v["scope"]["max_total_exposure_usd"] == "5"
-    assert v["scope"]["max_daily_loss_usd"] == str(CA.MAX_DAILY_LOSS_USD)
+    # CLAMPED STILL, to the 5-minute series' own cap rather than the
+    # general one. $50 asked, $11 granted: the document is still unable to
+    # widen its own ceiling, which is what this test exists to pin.
+    assert v["scope"]["max_daily_loss_usd"] == str(
+        CA.max_daily_loss_for(CA.BTC5M_SERIES))
+    assert D(v["scope"]["max_daily_loss_usd"]) < D("50")
     assert v["scope"]["clamped"]["max_total_exposure_usd"] is True
     refused(ledger, "BTC5M_EXPOSURE_ABOVE_APPROVED", worst="5.01")
     assert take(ledger, worst="5")["approved_exposure_usd"] == "5"
+
+
+def test_the_wider_daily_loss_cap_is_the_5m_series_and_nothing_else():
+    """The per-series loss cap must not leak to any other series.
+
+    SERIES_MAX_DAILY_LOSS_USD is LOOSER than the general ceiling, so the
+    blast radius is the whole point: BTC15m and anything unreadable get
+    MAX_DAILY_LOSS_USD, never the 5-minute value.
+    """
+    assert CA.max_daily_loss_for(CA.BTC5M_SERIES) == D("11")
+    assert CA.max_daily_loss_for(CA.BTC15M_SERIES) == CA.MAX_DAILY_LOSS_USD
+    assert CA.MAX_DAILY_LOSS_USD == D("5")
+    for bad in (None, "", "   ", "not-a-series", 0, object()):
+        assert CA.max_daily_loss_for(bad) == CA.MAX_DAILY_LOSS_USD
 
 
 def test_a_document_asking_for_less_gets_less(env, ledger):
