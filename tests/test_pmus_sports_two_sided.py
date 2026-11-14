@@ -52,7 +52,8 @@ class FakeVenue:
     def account(self):
         return self.acct
 
-    def place(self, slug, side, px, qty, stage):
+    def place(self, slug, side, px, qty, stage, post_only=True):
+        self.taker = getattr(self, "taker", []) + ([oid_px := (side, px)] if not post_only else [])
         self.n += 1
         oid = f"o{self.n}"
         self.orders[oid] = {"slug": slug, "side": side, "px": px, "qty": qty, "filled": D(0), "open": True}
@@ -393,3 +394,32 @@ def test_default_off_never_touches_incentives(tmp_path, monkeypatch):
     assert v.gets == []
     assert all(o["qty"] == D("1") for o in v.orders.values())
     assert not any(e.b.m(s).get("reward") for s in e.active())
+
+
+
+def test_lone_leg_exits_by_taking_complement_when_cheap(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")                                  # 0.42 / 0.52
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")                                  # lone YES @0.42
+    e.b.d["markets"]["aec-x"]["lone_since"] -= M.EXIT_S + 1
+    v.bid, v.ask = D("0.40"), D("0.42")                     # NO ask = 0.60 -> pair 1.02
+    e.step_market("aec-x")                                  # pulls resting maker
+    e.step_market("aec-x")                                  # takes
+    assert getattr(v, "taker", []) == [("NO", D("0.60"))]
+
+
+def test_lone_leg_not_exited_when_too_expensive(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")
+    e.b.d["markets"]["aec-x"]["lone_since"] -= M.EXIT_S + 1
+    v.bid, v.ask = D("0.25"), D("0.27")                     # NO ask 0.75 -> pair 1.17
+    e.step_market("aec-x"); e.step_market("aec-x")
+    assert getattr(v, "taker", []) == []
+    assert [o for o in v.orders.values() if o["open"] and o["side"] == "NO"]

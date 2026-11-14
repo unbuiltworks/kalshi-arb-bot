@@ -60,6 +60,12 @@ LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
 # OWNER 2026-11-14 "If a pair is just sitting there for a while, cancel and
 # resubmit closer": every STALE_S unfilled, one tick closer to the touch.
 STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
+# OWNER 2026-11-14 "close out single-side fills early": a lone leg unpaired
+# for EXIT_S is completed by TAKING the complement at its ask, but only while
+# that pair costs <= EXIT_MAX_PAIR (a small, bounded realized loss). Beyond
+# that the loss is already sunk and the maker completion keeps resting.
+EXIT_S = float(os.getenv("PMUS_TWO_SIDED_EXIT_S", "180"))
+EXIT_MAX_PAIR = _env_d("PMUS_TWO_SIDED_EXIT_MAX_PAIR", "1.03")
 STATE_DIR = Path(os.getenv("PMUS_TWO_SIDED_STATE_DIR",
                            "/state/pmus-spring/two_sided"))
 SPORTS_PREFIXES = ("aec-", "asc-", "tsc-", "atc-", "astatc-")
@@ -307,9 +313,10 @@ class Venue:
         return {"qty": f["qty"] if f else D(0), "px": f["price"] if f else None,
                 "open": is_open, "state": state}
 
-    def place(self, slug: str, side: str, px: D, qty: D, stage: str) -> str:
+    def place(self, slug: str, side: str, px: D, qty: D, stage: str,
+              post_only: bool = True) -> str:
         return self.micro.place_limit_buy(self.t, slug, side, px, qty, stage,
-                                          post_only=True)
+                                          post_only=post_only)
 
     def cancel(self, oid: str) -> bool:
         return self.q1.cancel_exact(self.t, oid)
@@ -457,8 +464,10 @@ class Engine:
         self.b.save()
         log("cancelled_all_own", why=why)
 
-    def place(self, slug: str, side: str, px: D, qty: D, stage: str) -> None:
-        oid = self.v.place(slug, side, px, qty, stage)
+    def place(self, slug: str, side: str, px: D, qty: D, stage: str,
+              post_only: bool = True) -> None:
+        oid = (self.v.place(slug, side, px, qty, stage) if post_only else
+               self.v.place(slug, side, px, qty, stage, post_only=False))
         mk = self.b.m(slug)
         mk["orders"][oid] = {"side": side, "px": str(px), "qty": str(qty),
                              "filled": "0", "open": True, "stage": stage,
@@ -510,6 +519,7 @@ class Engine:
                     locked_edge_per_pair=ONE - cpair,
                     label="locked pair economics; realized at settlement")
             mk.pop("complete_px", None)
+            mk.pop("lone_since", None)
             set_at = float(mk.setdefault("pair_set_at", time.time()))
             steps = int((time.time() - set_at) // STALE_S) if STALE_S > 0 else 0
             want = None
@@ -598,6 +608,27 @@ class Engine:
             self.b.save()
             return
         cur = open_by_side.get(lag)
+        lone_since = float(mk.setdefault("lone_since", time.time()))
+        comp_ask = (bbo["ask"] if lag == "YES" else ONE - bbo["bid"])
+        if EXIT_S > 0 and time.time() - lone_since >= EXIT_S \
+                and lead_px + comp_ask <= EXIT_MAX_PAIR \
+                and need >= spec["min_qty"]:
+            if cur:                          # pull the resting maker first
+                self.v.cancel(cur[0])
+                st = self.v.status(cur[0])
+                self._record_fill(slug, lag, cur[0], st)
+                cur[1]["open"] = st["open"]
+                self.b.save()
+                return
+            log("EXIT_LONE_LEG", slug=slug, lead=lead, lead_px=lead_px,
+                take_side=lag, take_px=comp_ask, qty=need,
+                pair_cost=lead_px + comp_ask,
+                age_s=round(time.time() - lone_since),
+                label="taker completion; realized pair loss bounded by "
+                      "EXIT_MAX_PAIR, settles at par")
+            self.place(slug, lag, comp_ask, need, "two_sided_exit",
+                       post_only=False)
+            return
         # The partner was set together with the filled leg: leave it at its
         # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
         cap_px = floor_tick(PAIR_CAP - lead_px, tick)
