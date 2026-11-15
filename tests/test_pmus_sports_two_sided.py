@@ -1374,3 +1374,13 @@ def test_abandoned_market_cancels_and_never_replaces(eng, monkeypatch, capsys):
     assert len(v.orders) == n and e.b.d["markets"][slug]["done"]
     assert slug not in e.active()
     assert '"market_abandoned"' in capsys.readouterr().out
+
+
+def test_no_cricket_ever(monkeypatch):
+    monkeypatch.delenv("PMUS_TWO_SIDED_ABANDON", raising=False)
+    for s in ("aec-testcr-afg-zim-2026-11-13", "aec-ipl-csk-mi-2026-04-01",
+              "aec-t20cr-ind-aus-2026-11-20", "aec-bbl-six-str-2026-12-20"):
+        assert M.is_cricket(s) and M.excluded(s) and M.abandoned(s), s
+    for s in ("aec-cs2-brute-eid-2026-11-15", "aec-atp-a-b-2026-11-15",
+              "aec-cfb-tx-lsu-2026-11-14", "aec-nba-det-mia-2026-11-14"):
+        assert not M.is_cricket(s) and not M.abandoned(s), s

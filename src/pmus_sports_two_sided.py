@@ -365,7 +365,23 @@ EXCLUDE_TAGS = tuple(t.strip() for t in os.getenv(
     "PMUS_TWO_SIDED_EXCLUDE", "cr-").split(",") if t.strip())
 
 
+# OWNER 2026-11-15 "I want NO cricket trades at all": a hard rule, not a
+# setting. Cricket is never selected, and any cricket market already in the
+# book is abandoned (orders cancelled, nothing re-placed, completions too).
+CRICKET_LEAGUES = ("ipl", "bbl", "psl", "cpl", "wpl", "sa20", "t20", "odi",
+                   "t20i", "ilt20", "hundred", "cricket")
+
+
+def is_cricket(slug: str) -> bool:
+    parts = str(slug).split("-")
+    league = parts[1] if len(parts) > 1 else ""
+    return league.endswith("cr") or league in CRICKET_LEAGUES or \
+        "cricket" in str(slug)
+
+
 def excluded(slug: str) -> bool:
+    if is_cricket(slug):
+        return True
     parts = str(slug).split("-")
     league = parts[1] if len(parts) > 1 else ""
     return any(league.endswith(t.rstrip("-")) if t.endswith("-") else t in slug
@@ -380,7 +396,7 @@ def excluded(slug: str) -> bool:
 def abandoned(slug: str) -> bool:
     toks = [t.strip() for t in os.getenv("PMUS_TWO_SIDED_ABANDON",
                                          "").split(",") if t.strip()]
-    return any(t in str(slug) for t in toks)
+    return is_cricket(slug) or any(t in str(slug) for t in toks)
 
 
 CRYPTO_PREFIXES = tuple(p.strip() for p in os.getenv(
