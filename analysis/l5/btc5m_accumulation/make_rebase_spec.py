@@ -55,8 +55,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import arm_campaign as A                                    # noqa: E402
 
-#: sports settled ledger (venue's own figure) + BTC5m AUTHENTICATED_FILLS
-VENUE_CONFIRMED = D("-19.96")
+#: VENUE-CONFIRMED REALIZED, both lanes. Sports ACCOUNT_AUDIT 22:49Z:
+#: -21.62 over 39 markets from the venue's own rows; its book independently
+#: gives -17.89 over 95 markets before 4.26 of fees, i.e. -22.15, and the
+#: two agree within 0.53. BTC5m adds -0.48 (AUTHENTICATED_FILLS).
+VENUE_CONFIRMED = D("-22.10")
 
 
 def live_state():
@@ -89,6 +92,22 @@ def main(argv):
     if st["unresolved"]:
         raise SystemExit("REFUSED: unresolved accounting records exist; a "
                          "loss of unknown size is on the books")
+    #: `worst_case` HERE IS THE STORE'S OPINION, NOT THE VENUE'S.
+    #: `account_exposure` is computed from
+    #: `store.account_wide_risk_by_market()` -- the SERVICE'S OWN STORE.
+    #: That store is the component that spent 2026-11-15 adopting sports
+    #: orders it did not own, so a leg it still carries may be a phantom.
+    #: On 2026-11-15 it reported 1.0000 of worst case in
+    #: aec-testcr-afg-zim-2026-11-13 while the venue's own
+    #: /v1/portfolio/positions, walked to the end, showed ZERO non-zero
+    #: positions at 21:49Z and again at 22:49Z. The venue read wins: the
+    #: market is open until 2026-11-27, but holding no position in an open
+    #: market is still flat.
+    #:
+    #: So a non-zero figure here is a PROMPT TO CHECK THE VENUE, not proof
+    #: of exposure, and this script cannot do that check -- it holds no
+    #: signing credentials. Confirm against positions before relying on it.
+    #:
     #: FLATNESS IS A CONDITION ON A CASH DELTA, NOT ON A REBASE.
     #: The requirement exists because `cash_delta` across a non-flat read
     #: folds unsettled positions into a realized figure. With --from-now
@@ -98,8 +117,10 @@ def main(argv):
     #: Requiring flatness there would be cargo-culting the guard rather
     #: than applying it.
     if st["worst_case"] > 0:
-        print("\nNOT FLAT: %s of worst-case exposure is open (%s)."
+        print("\nSTORE REPORTS %s of worst case in %s."
               % (st["worst_case"], ", ".join(st["open_markets"])))
+        print("  This is the STORE's view, not the venue's. Confirm against "
+              "/v1/portfolio/positions before treating it as exposure.")
         if "--from-now" in argv:
             print("  ALLOWED here: --from-now sets cash_delta to 0, so no "
                   "cash delta exists for the open position to corrupt. It "
