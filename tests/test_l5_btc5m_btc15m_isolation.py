@@ -644,19 +644,28 @@ class TestCharacterise15mReconciliationOfForeign5mState:
 # ======================================================================
 from src import l5_live_execution as _E15
 from src import l5_origin as _OG
+from src import l5_series_registry as _REG
 
 
 class TestForeignOrdersAreNeverAdopted:
 
+    #: EVERY registered strategy other than our own. Grew from ("b5m-",)
+    #: on 2026-11-15 when ETH/SOL/XRP 5m were registered, and the growth is
+    #: a SAFETY GAIN, not a widening of what we may do: a prefix in this
+    #: set is one we must NEVER adopt or cancel. l5-pmus-live spent hours
+    #: today adopting and cancelling orders it did not recognise, because
+    #: its foreign filter knew only one other series.
+    REG = ("b5m-",)
+
     @pytest.mark.parametrize("raw,want", [
-        (None, ("b5m-",)), ("", ("b5m-",)), ("b5m-", ("b5m-",)),
-        (" b5m- , x9- ", ("b5m-", "x9-")),         # the variable can only ADD
-        ("x9-", ("b5m-", "x9-")),
-        ("l5f-", ("b5m-",)),               # our own prefix is never foreign
-        ("b5m-,l5f-,b5m-", ("b5m-",)),
-        ("B5M-", ("b5m-",)), ("b5m", ("b5m-",)), ("-", ("b5m-",)),
-        ("a-", ("b5m-",)), ("muchtoolongprefix-", ("b5m-",)),
-        ("b5m-*", ("b5m-",)), ("0", ("b5m-",)), ("off", ("b5m-",)),
+        (None, REG), ("", REG), ("b5m-", REG),
+        (" b5m- , x9- ", REG + ("x9-",)),          # the variable can only ADD
+        ("x9-", REG + ("x9-",)),
+        ("l5f-", REG),                     # our own prefix is never foreign
+        ("b5m-,l5f-,b5m-", REG),
+        ("B5M-", REG), ("b5m", REG), ("-", REG),
+        ("a-", REG), ("muchtoolongprefix-", REG),
+        ("b5m-*", REG), ("0", REG), ("off", REG),
     ])
     def test_the_registry_always_applies_and_the_variable_only_adds(
             self, monkeypatch, raw, want):
@@ -677,6 +686,11 @@ class TestForeignOrdersAreNeverAdopted:
         assert X.COID_PREFIX == _OG.STRATEGY_COID_PREFIX[_OG.BTC5M] == "b5m-"
         assert _E15.OWN_COID_PREFIX not in _E15.foreign_coid_prefixes()
         assert X.COID_PREFIX in _E15.foreign_coid_prefixes()
+        # every OTHER registered strategy is foreign to this one, so a new
+        # series cannot be adopted by an older lane simply by existing
+        for r in _REG.REGISTRY:
+            if r.strategy != _E15.OWN_STRATEGY:
+                assert r.coid_prefix in _E15.foreign_coid_prefixes()
 
     def test_a_side_less_5m_row_does_not_stop_15m(self, both):
         both.venue.rows_state_side = False

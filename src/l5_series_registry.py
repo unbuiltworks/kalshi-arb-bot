@@ -61,17 +61,59 @@ class Series(NamedTuple):
 
     @property
     def venue_marker(self) -> str:
-        """What the venue calls the series on a market document: the prefix
-        without the "cpc-" namespace and without its trailing dash."""
-        return self.prefix[4:].rstrip("-") if self.prefix.startswith("cpc-") \
-            else self.prefix.rstrip("-")
+        """The series as it appears INSIDE a market slug: the prefix with
+        its namespace and trailing dash removed.
+
+        The transport's `market_series_is_*` gate asks whether this is a
+        SUBSTRING of the market's own slug, so it must be the part the slug
+        actually repeats:
+
+            cpc-btc-updown-5m-      -> btc-updown-5m   in cpc-BTC-UPDOWN-5M-...
+            cpceth-eth-updown-5m-   -> eth-updown-5m   in cpceth-ETH-UPDOWN-5M-...
+
+        Stripping a literal "cpc-" was right only while BTC was the only
+        asset; every other asset carries its ticker in the namespace too,
+        so the rule is "up to and including the first hyphen".
+        """
+        return self.prefix.split("-", 1)[1].rstrip("-")
 
 
 #: EVERY series this engine knows. Adding an asset is adding a row here.
+#:
+#: THE PREFIXES ARE IRREGULAR, and this is the whole reason the table
+#: exists. BTC is "cpc-btc-updown-5m-"; every other asset embeds its own
+#: ticker in the namespace too: "cpceth-eth-updown-5m-". Confirmed against
+#: the venue 2026-11-15T22:06Z, all four MARKET_STATUS_OPEN on the same
+#: window. No rule extrapolated from BTC produces the others -- 64 guessed
+#: variants all 404'd -- so each one is written down from the venue's own
+#: answer rather than derived.
 REGISTRY: Tuple[Series, ...] = (
     Series("cpc-btc-updown-15m-", "btc", 900.0, "BTC15M", "l5f-"),
     Series("cpc-btc-updown-5m-", "btc", 300.0, "BTC5M", "b5m-"),
 )
+
+#: VERIFIED AND READY, NOT YET REGISTERED. All three answered
+#: MARKET_STATUS_OPEN on gateway.polymarket.us at 2026-11-15T22:06Z on the
+#: same window BTC was open on, and their slugs came from the venue's own
+#: event payload rather than from guessing:
+#:
+#:     Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-")
+#:     Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-")
+#:     Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-")
+#:
+#: WHY THEY ARE NOT IN THE TABLE YET. Adding them widens
+#: `l5_campaign_approval.ALLOWED_SERIES`, which the runtime config verifier
+#: grades as the `series_allowlist` row against the APPROVED PRODUCTION
+#: CONFIGURATION. Changing what production is authorised to trade is an
+#: owner decision, not a code tidy-up, and the verifier correctly fails
+#: until the approved configuration is updated to match. Registering them
+#: also adds three keys to `l5_origin`'s per-strategy P&L split, which
+#: every consumer of that split sees.
+#:
+#: Moving the three lines above into REGISTRY is the whole change; the
+#: blast radius is 12 tests, all of them pins on the two-series world:
+#: runtime config verify (7), origin registry (2), campaign approval
+#: contract (1), runtime config derived (1), btc5m runner (1).
 
 
 def _check(rows: Tuple[Series, ...]) -> None:
@@ -88,7 +130,8 @@ def _check(rows: Tuple[Series, ...]) -> None:
     if len(set(strats)) != len(strats):
         raise ValueError("duplicate strategy id in REGISTRY")
     for r in rows:
-        if not re.match(r"^cpc-[a-z0-9]{2,10}-updown-\d{1,3}m-$", r.prefix):
+        if not re.match(r"^cpc[a-z0-9]{0,6}-[a-z0-9]{2,10}-updown-\d{1,3}m-$",
+                        r.prefix):
             raise ValueError("series prefix not in the venue's shape: %r"
                              % (r.prefix,))
         if r.horizon_s <= 0:

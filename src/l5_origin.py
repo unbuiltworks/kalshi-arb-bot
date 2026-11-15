@@ -41,7 +41,11 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from src import l5_series_registry as _REG
 
 BTC15M, BTC5M, MANUAL, UNKNOWN = "BTC15M", "BTC5M", "MANUAL", "UNKNOWN"
-ORIGINS = (BTC15M, BTC5M, MANUAL, UNKNOWN)
+#: every registered strategy, plus the two non-strategy origins. Derived,
+#: so a series added to the registry is attributable the moment it exists
+#: -- an unattributable order is a halt, and a row that could place but not
+#: be recognised would halt the account rather than fail safe.
+ORIGINS = tuple([r.strategy for r in _REG.REGISTRY]) + (MANUAL, UNKNOWN)
 
 #: the client-order-id prefix each automated strategy writes, and the
 #: series it trades. Both DERIVE from l5_series_registry, which is the one
