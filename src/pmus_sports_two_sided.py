@@ -237,8 +237,17 @@ RECOVERY_LOG_KEEP = 500
 #   halt asserted -> NO order of any kind is placed (cancels stay allowed)
 #   unreadable    -> no NEW first legs; risk-reducing recovery continues
 SHARED_HALT_URL_ENV = "L5_HALT_URL"
+# every closed market is looked up (paced); the old cap of 25 per audit left
+# the settled ledger incomplete for hours
 SETTLE_LOOKUPS_PER_AUDIT = int(os.getenv(
-    "PMUS_TWO_SIDED_SETTLE_LOOKUPS", "25"))
+    "PMUS_TWO_SIDED_SETTLE_LOOKUPS", "400"))
+SETTLE_LOOKUP_GAP_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_GAP_S", "0.2"))
+# OWNER 2026-11-15 "Prevent losing first legs": open a two-sided quote only
+# when its expected NET value from this bot's own SETTLED results is
+# positive (src/pmus_sports_open_gate.py). DEFAULT OFF.
+OPEN_EV_GATE = os.getenv("PMUS_TWO_SIDED_OPEN_EV_GATE", "0").strip() == "1"
+OPEN_EV_MIN = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN", "0")
+OPEN_EV_MIN_MARKETS = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN_MARKETS", "10")
 SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
@@ -1335,6 +1344,33 @@ class Engine:
                 "new openings until next UTC day, completions continue")
         return bool(day.get("stopped"))
 
+    def _gate_stats(self):
+        now = time.monotonic()
+        hit = getattr(self, "_gate_cache", None)
+        if hit and now - hit[0] < 300:
+            return hit[1]
+        from src import pmus_sports_open_gate as G
+        st = G.stats(self.b.d.get("markets") or {})
+        self._gate_cache = (now, st)
+        return st
+
+    def open_gate(self, slug: str) -> Dict[str, Any]:
+        from src import pmus_sports_open_gate as G
+        return G.allow_open(G.sport_of(slug), self._gate_stats(),
+                            min_ev=OPEN_EV_MIN,
+                            min_markets=OPEN_EV_MIN_MARKETS)
+
+    def open_gate_snapshot(self) -> Dict[str, Any]:
+        from src import pmus_sports_open_gate as G
+        st = self._gate_stats()
+        out = {"on": OPEN_EV_GATE}
+        for sp in sorted(k for k in st if k != "*"):
+            e = G.expected_open_value(sp, st)
+            if e:
+                out[sp] = {"ev": str(e["ev"].quantize(D("0.0001"))),
+                           "n": str(e["n_sport"])}
+        return out
+
     def halt_new_exposure(self) -> bool:
         if not RECOVERY_ON:
             return False
@@ -1690,6 +1726,15 @@ class Engine:
                     log("late_cutoff", slug=slug, reason=late,
                         pos=mk["pos"], label="no new pairs; completions continue")
                 want = None          # pulls opening legs; frees the slot later
+            if OPEN_EV_GATE and want is not None and not blocked:
+                g = self.open_gate(slug)
+                if not g["allow"]:
+                    if mk.get("gate_logged") != g["why"]:
+                        mk["gate_logged"] = g["why"]
+                        log("open_ev_reject", slug=slug, **g,
+                            label="expected net value of opening from "
+                                  "SETTLED results <= min; no new pair")
+                    want = None
             worst_leg = max(want.values()) * qty if want else D(0)
             shrunk = False
             if rq is not None and want is not None and not blocked and \
@@ -2081,6 +2126,8 @@ class Engine:
                     D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
                 continue
             looked += 1
+            if looked > 1 and SETTLE_LOOKUP_GAP_S > 0:
+                time.sleep(SETTLE_LOOKUP_GAP_S)
             try:
                 ps = SP.public_settlement(self.v.t, s_)
             except Exception:                             # noqa: BLE001
@@ -2120,6 +2167,11 @@ class Engine:
                     {"usd": str(bs_new["settled_usd"]),
                      "markets": bs_new["markets"],
                      "by_sport": bs_new["by_sport"]} if bs_new else None),
+                "open_gate": self.open_gate_snapshot(),
+                "settled_lookups_pending": sum(
+                    1 for m_ in mk_all.values()
+                    if m_.get("done") and m_.get("settle_px") is None and (
+                        D(m_["pos"]["YES"]) or D(m_["pos"]["NO"]))),
                 "venue_vs_book_discrepancies": PNL.discrepancies(
                     vr["by_market"], bs["by_market"], vr["settled_slugs"])},
             settled_by_sport=vr["settled_by_sport"],

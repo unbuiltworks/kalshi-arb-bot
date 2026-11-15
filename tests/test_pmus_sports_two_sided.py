@@ -1651,3 +1651,22 @@ def test_book_settled_pnl_and_discrepancy():
     d = P.discrepancies({"aec-a": "0.10", "aec-b": "-0.44"}, b["by_market"],
                         ["aec-a", "aec-b"])
     assert [r["slug"] for r in d] == ["aec-a"]
+
+
+# ------------------------------------------------ opening EV gate (2026-11-15)
+def test_open_gate_off_by_default_and_blocks_negative_ev_when_on(eng, monkeypatch, capsys):
+    assert M.OPEN_EV_GATE is False
+    e, v = eng
+    for i in range(12):                                 # settled losers
+        m = e.b.m(f"aec-x-r{i}-q")
+        m.update(pos={"YES": "1", "NO": "0"}, cost={"YES": "0.55", "NO": "0"},
+                 settle_px="0", done=True)
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.b.m("aec-x")
+    e.step_market("aec-x")
+    assert v.orders == {}
+    assert '"open_ev_reject"' in capsys.readouterr().out
+    monkeypatch.setattr(M, "OPEN_EV_GATE", False)
+    e.step_market("aec-x")
+    assert len(v.orders) == 2                           # off: unchanged
