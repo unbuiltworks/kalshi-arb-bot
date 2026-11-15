@@ -382,10 +382,17 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# OWNER 2026-11-15: record depth, quote age, movement and fills going
+# forward (src/pmus_sports_tape.py). Set in main(); None = not recording.
+TAPE = None
+
+
 def log(kind: str, **kw: Any) -> None:
     print("PMUS_TWO_SIDED " + json.dumps({"kind": kind, "t": now_iso(), **kw},
                                          default=str, separators=(",", ":")),
           flush=True)
+    if TAPE is not None:
+        TAPE.event(kind, kw)
 
 
 # ------------------------------------------------------------- pure pricing
@@ -2261,6 +2268,7 @@ class Engine:
             unmatched_cost_total=self.b.total_unmatched(),
             recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
                           taker=RECOVERY_TAKER),
+            tape=TAPE.stats() if TAPE is not None else None,
             pairs=len(pairs),
             # each PAIR_LOCKED row carries the market's CUMULATIVE pairs and
             # average cost, so only the LATEST row per market counts (summing
@@ -2440,10 +2448,21 @@ def main() -> int:
     except Exception as exc:                             # noqa: BLE001
         log("registry_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
     venue = Venue()
+    global TAPE
+    if os.getenv("PMUS_TWO_SIDED_TAPE", "1").strip() != "0":
+        try:
+            from src.pmus_sports_tape import Tape
+            TAPE = Tape(STATE_DIR / "tape", max_bytes_per_day=int(os.getenv(
+                "PMUS_TWO_SIDED_TAPE_MAX_BYTES", "40000000")))
+            log("tape_enabled", dir=str(STATE_DIR / "tape"))
+        except Exception as exc:                         # noqa: BLE001
+            log("tape_error", err=f"{type(exc).__name__}:{str(exc)[:120]}")
     if ws_on():
         try:
             from src.pmus_two_sided_ws import TwoSidedWs
             venue.ws = TwoSidedWs(log=log)
+            if TAPE is not None:
+                venue.ws.tape_fn = TAPE.book
             venue.ws.set_slugs([s for s, mk in book.d["markets"].items()
                                 if not mk.get("done")])
             venue.ws.start()

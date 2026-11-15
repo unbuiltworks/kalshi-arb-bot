@@ -213,6 +213,12 @@ class TwoSidedWs:
     def ingest(self, msg: Any, now: Optional[float] = None) -> int:
         """Fold one received frame; fire on_change per moved slug."""
         now = self.clock() if now is None else now
+        tape = getattr(self, "tape_fn", None)
+        if tape is not None:
+            try:
+                tape(msg)                 # recording only; never raises
+            except Exception:             # noqa: BLE001
+                pass
         changes = []
         with self._lock:
             self.frames += 1

@@ -277,3 +277,4 @@
 2026-11-15T18:30Z settled realized from afterPosition.realized; seven-metric report in ACCOUNT_AUDIT (reporting only).
 2026-11-15T18:40Z recovery reprice hysteresis (2 ticks; keep while within 1 tick of the bid) after a live 0.46<->0.47 cancel/re-place loop.
 2026-11-15T19:10Z opening EV gate (default off) + uncapped paced settlement lookups.
+2026-11-15T19:30Z market+execution tape (recording only) for out-of-sample entry testing.
