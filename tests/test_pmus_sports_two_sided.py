@@ -1,5 +1,7 @@
 """Owner 2026-11-14 two-sided resting bids: pricing, completion, caps, isolation."""
 import os
+import time
+from datetime import datetime, timezone
 from decimal import Decimal as D
 
 import pytest
@@ -1694,3 +1696,54 @@ def test_market_closed_keeps_unconfirmed_cancel_open_and_named(eng):
     v.cancel = real_cancel                       # cancel now applies
     e.step_market(slug)
     assert mk["done"] and not M.registry_doc(e.b)["orders"]
+
+
+# ------------------------------------------------- pre-game mode (2026-11-15)
+def _ev(slug, start_iso, live=False, bid="0.48", ask="0.50"):
+    return {"live": live, "markets": [{"slug": slug, "gameStartTime": start_iso,
+                                       "bestBidQuote": bid, "bestAskQuote": ask}]}
+
+
+def test_pregame_targets_only_unstarted_games_in_the_lead_window():
+    now = 1_800_000_000.0
+    iso = lambda dt: datetime.fromtimestamp(now + dt, timezone.utc).isoformat()
+    evs = [_ev("aec-atp-soon-x", iso(3600)),          # 1h ahead: in
+           _ev("aec-atp-tooclose-x", iso(60)),        # < min lead: out
+           _ev("aec-atp-far-x", iso(48 * 3600)),      # > max lead: out
+           _ev("aec-atp-live-x", iso(3600), live=True),
+           _ev("cpc-btc-updown-5m-x", iso(3600)),     # not sports
+           {"live": False, "markets": [{"slug": "aec-nostart-x"}]}]
+    got = M.pregame_targets(evs, now)
+    assert [t["slug"] for t in got] == ["aec-atp-soon-x"]
+    assert got[0]["game_start"] == now + 3600
+
+
+def test_pregame_mode_quotes_before_start_and_pulls_at_cutoff(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "PREGAME", True)
+    start = time.time() + 3600
+    v.pregame_sports = lambda: [{"slug": "aec-x", "game_start": start,
+                                 "market_meta": {"bestBidQuote": "0.48",
+                                                 "bestAskQuote": "0.50"}}]
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    mk = e.b.m("aec-x")
+    assert mk["game_start"] == start
+    e.step_market("aec-x")
+    assert len([o for o in v.orders.values() if o["open"]]) == 2   # quoting
+    mk["game_start"] = time.time() + M.PREGAME_CUTOFF_S - 1         # at cutoff
+    e.step_market("aec-x")
+    assert not [o for o in v.orders.values() if o["open"]]          # pulled
+
+
+def test_pregame_mode_never_opens_a_market_without_a_start_time(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "PREGAME", True)
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.b.m("aec-x")                                   # e.g. a live legacy market
+    e.step_market("aec-x")
+    assert v.orders == {}
+
+
+def test_pregame_off_by_default():
+    assert M.PREGAME is False

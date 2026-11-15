@@ -36,7 +36,7 @@ import time
 from datetime import datetime, timezone
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal as D
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional
 
 ONE = D("1")
 
@@ -231,6 +231,59 @@ RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
 # at/above this (recovery mode only).
 UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
 RECOVERY_LOG_KEEP = 500
+# OWNER 2026-11-15 "build pre-game quoting": all 77 settled markets were
+# traded IN-PLAY (the bot only ever selected live games), where every point
+# moves the price through resting orders. PREGAME mode selects games that
+# have NOT started (start PREGAME_MIN_LEAD_S..PREGAME_MAX_LEAD_S ahead) and
+# pulls every opening order PREGAME_CUTOFF_S before the venue's
+# gameStartTime; an unmatched leg keeps its maker-only recovery after that.
+# DEFAULT OFF.
+PREGAME = os.getenv("PMUS_TWO_SIDED_PREGAME", "0").strip() == "1"
+PREGAME_MIN_LEAD_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_MIN_LEAD_S",
+                                     "900"))
+PREGAME_MAX_LEAD_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_MAX_LEAD_S",
+                                     "21600"))
+PREGAME_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CUTOFF_S", "300"))
+PREGAME_CACHE_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CACHE_S", "120"))
+
+
+def parse_start(v: Any) -> Optional[float]:
+    """Epoch seconds of an ISO time, or None."""
+    if not v:
+        return None
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")
+                                      ).timestamp()
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def pregame_targets(events: Iterable[Mapping[str, Any]], now: float
+                    ) -> list:
+    """Sports markets whose game has not started and starts within the lead
+    window. Each target carries the venue's gameStartTime (epoch)."""
+    out, seen = [], set()
+    for ev in events or []:
+        if not isinstance(ev, Mapping) or ev.get("live") is True:
+            continue
+        for m in ev.get("markets") or []:
+            if not isinstance(m, Mapping):
+                continue
+            slug = str(m.get("slug") or "")
+            if not slug.startswith(SPORTS_PREFIXES) or slug in seen:
+                continue
+            g = parse_start(m.get("gameStartTime") or ev.get("startTime"))
+            if g is None:
+                continue
+            lead = g - now
+            if not (PREGAME_MIN_LEAD_S <= lead <= PREGAME_MAX_LEAD_S):
+                continue
+            seen.add(slug)
+            out.append({"slug": slug, "game_start": g,
+                        "market_meta": {k: m.get(k) for k in
+                                        ("bestBidQuote", "bestAskQuote")
+                                        if m.get(k) is not None}})
+    return out
 # OWNER 2026-11-15: "never override watchdog or reconciliation halts". The
 # shared latch (l5_halt_gate, the record the watchdog writes and BTC5m
 # reads) is read every SHARED_HALT_TTL_S when L5_HALT_URL is set:
@@ -712,6 +765,25 @@ class Venue:
         return [tg for tg in self.gw.live_event_targets(events)
                 if str(tg["slug"]).startswith(SPORTS_PREFIXES)]
 
+    _pregame_cache = None
+
+    def pregame_sports(self) -> list:
+        now = time.time()
+        hit = self._pregame_cache
+        if hit and now - hit[0] < PREGAME_CACHE_S:
+            return hit[1]
+        lo = datetime.fromtimestamp(now, timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        hi = datetime.fromtimestamp(now + PREGAME_MAX_LEAD_S,
+                                    timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        d = self.gget("/v1/events?active=true&closed=false&categories=sports"
+                      f"&limit=500&startDateMin={lo}&startDateMax={hi}")
+        evs = d.get("events") if isinstance(d, Mapping) else d
+        out = pregame_targets(evs or [], now)
+        self._pregame_cache = (now, out)
+        return out
+
     ws = None              # src.pmus_two_sided_ws.TwoSidedWs when WS is on
 
     def bbo(self, slug: str) -> Optional[Dict[str, D]]:
@@ -823,6 +895,7 @@ class Engine:
         self._rget = None
         # realtime mode only (PMUS_TWO_SIDED_WS=1 -> venue.ws is set)
         self.ws = getattr(venue, "ws", None)
+        self._game_start: Dict[str, float] = {}
         self._wake = threading.Event()
         self._evq: "queue.Queue" = queue.Queue()
         self.reactive_pulls = 0
@@ -1738,6 +1811,12 @@ class Engine:
                 if LATE_CUTOFF else None
             if excluded(slug):
                 late = "excluded"
+            elif PREGAME:
+                gs = mk.get("game_start")
+                if gs is None:
+                    late = "pregame_no_start_time"
+                elif time.time() >= float(gs) - PREGAME_CUTOFF_S:
+                    late = "pregame_cutoff"
             if late:
                 if mk.get("late_logged") != late:
                     mk["late_logged"] = late
@@ -1990,10 +2069,14 @@ class Engine:
         if self.full():
             return
         try:
-            targets = self.v.live_sports()
+            targets = (self.v.pregame_sports() if PREGAME
+                       else self.v.live_sports())
         except Exception as exc:                      # noqa: BLE001
             log("discovery_error", err=str(exc)[:160])
             return
+        if PREGAME:
+            self._game_start.update({t["slug"]: t["game_start"]
+                                     for t in targets if "game_start" in t})
         scored = []
         for tg in targets:
             slug = tg["slug"]
@@ -2066,6 +2149,8 @@ class Engine:
                                                spec["tick"]) is None:
             return False
         mk = self.b.m(slug)
+        if slug in self._game_start:
+            mk["game_start"] = self._game_start[slug]
         if rp:
             mk["reward"] = rp
             if reward_first_on():
@@ -2308,7 +2393,9 @@ class Engine:
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
                                   SHARED_HALT_URL_ENV) or "").strip())},
-            daily_loss_usd=DAILY_LOSS_USD, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
+            daily_loss_usd=DAILY_LOSS_USD, pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
+                     "max_lead_s": PREGAME_MAX_LEAD_S,
+                     "cutoff_s": PREGAME_CUTOFF_S}, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
                           "qty": QTY, "pair_cap": PAIR_CAP},
             exit={"fee_aware": EXIT_FEE_AWARE, "taker_fee_rate": TAKER_FEE_RATE,
