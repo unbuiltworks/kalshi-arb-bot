@@ -253,3 +253,4 @@
 2026-11-14T19:15Z heartbeat locked_edge = latest cumulative row per market (no double count); jump pause also needs >= 2c move (CFB 0.005 ticks were pausing on 1c noise).
 2026-11-14T19:55Z CFB lone legs exit after 60s with pair <= 1.05 (others unchanged 180s / 1.03).
 2026-11-14T20:40Z REWARD_CHECK: hourly venue /v1/incentives/earnings (credited vs pending), rows on our markets.
+2026-11-15T03:10Z REWARD_CHECK logs earnings rows (scalar fields) to attribute the PAID/SKIPPED rows.
