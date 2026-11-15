@@ -91,7 +91,16 @@ SERIES_WINDOW_S = {r.prefix: r.horizon_s for r in _REG.REGISTRY}
 #: PER-SERIES ceilings, each TIGHTER than the general one above and never
 #: looser. The 5-minute strategy was approved for preparation at $5 of
 #: exposure; a document asking for more gets $5.
-SERIES_MAX_TOTAL_EXPOSURE_USD = {BTC5M_SERIES: D("5")}
+#: ETH/SOL/XRP 5m get the SAME $5 ceiling as BTC5m, and this entry is
+#: REQUIRED rather than optional: with no row a series inherits the
+#: general MAX_TOTAL_EXPOSURE_USD of $20, which is FOUR TIMES what the
+#: 5-minute strategy is approved for. The per-series table is tighter than
+#: the general one everywhere else, so a missing row fails OPEN here and
+#: that is the one place in this file where it does.
+SERIES_MAX_TOTAL_EXPOSURE_USD = {
+    s: D("5") for s in _REG.prefixes(300.0)}
+#: Daily loss is deliberately NOT granted to the new three. BTC5m has an
+#: owner-approved $11; they inherit the general $5, which is tighter.
 #: PER-SERIES WINDOW COUNT. Unlike SERIES_MAX_TOTAL_EXPOSURE_USD above,
 #: this is the ONE per-series value that is LOOSER than the general
 #: ceiling, so the argument has to be made rather than assumed.

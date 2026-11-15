@@ -170,43 +170,53 @@ class TestTheShippedTableIsSane:
         assert "from src" not in src and "import src" not in src
 
 
-class TestTheVerifiedButUnregisteredSeries:
-    """ETH/SOL/XRP 5m were confirmed OPEN on the venue at 2026-11-15T22:06Z
-    and their exact prefixes are recorded in the module, NOT registered --
-    registering them changes the approved production series allowlist,
-    which is an owner decision. These pin what is true today."""
+class TestTheFourFiveMinuteSeries:
+    """All four were MARKET_STATUS_OPEN on the same window at
+    2026-11-15T22:06Z. The prefixes are IRREGULAR, which is why they are
+    written down from the venue's own answer rather than derived: BTC is
+    "cpc-btc-", every other asset repeats its ticker, "cpceth-eth-". 64
+    variants extrapolated from BTC all 404'd."""
 
-    READY = ("cpceth-eth-updown-5m-", "cpcsol-sol-updown-5m-",
-             "cpcxrp-xrp-updown-5m-")
+    REAL = {
+        "BTC5M": "cpc-btc-updown-5m-2026-11-15-2205z",
+        "ETH5M": "cpceth-eth-updown-5m-2026-11-15-2205z",
+        "SOL5M": "cpcsol-sol-updown-5m-2026-11-15-2205z",
+        "XRP5M": "cpcxrp-xrp-updown-5m-2026-11-15-2205z",
+    }
 
-    def test_they_are_documented_with_their_real_prefixes(self):
-        import inspect
-        src = inspect.getsource(R)
-        for pre in self.READY:
-            assert pre in src
+    def test_all_four_are_registered_at_five_minutes(self):
+        assert R.prefixes(300.0) == (
+            "cpc-btc-updown-5m-", "cpceth-eth-updown-5m-",
+            "cpcsol-sol-updown-5m-", "cpcxrp-xrp-updown-5m-")
 
-    def test_they_are_NOT_tradeable_until_registered(self):
+    @pytest.mark.parametrize("strategy,slug", sorted(REAL.items()))
+    def test_a_real_venue_slug_resolves_to_its_strategy(self, strategy, slug):
+        s = R.for_slug(slug)
+        assert s is not None and s.strategy == strategy and s.horizon_s == 300.0
+
+    def test_no_slug_resolves_to_another_asset(self):
+        for strategy, slug in self.REAL.items():
+            for other in R.REGISTRY:
+                if other.strategy != strategy:
+                    assert not other.slug_re.match(slug), (strategy, other)
+
+    def test_the_btc_shaped_guess_for_eth_is_NOT_a_series(self):
+        """"cpc-eth-updown-5m-" is what extrapolating from BTC produces and
+        is not what the venue serves. It must resolve to nothing."""
+        assert R.for_slug("cpc-eth-updown-5m-2026-11-15-2205z") is None
+
+    def test_each_carries_the_same_five_dollar_ceiling_as_btc5m(self):
+        """REQUIRED, not optional: with no per-series row a series inherits
+        the general $20, four times what the 5m strategy is approved for.
+        This is the one place where a missing row fails OPEN."""
         from src import l5_campaign_approval as CA
+        for pre in R.prefixes(300.0):
+            assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD[pre] == CA.D("5")
+
+    def test_every_strategy_is_attributable(self):
         from src import l5_origin as O
-        for pre in self.READY:
-            assert pre not in R.BY_PREFIX
-            assert pre not in CA.ALLOWED_SERIES
-            assert R.for_slug(pre + "2026-11-15-2205z") is None
-        for strat in ("ETH5M", "SOL5M", "XRP5M"):
-            assert strat not in O.ORIGINS
+        for r in R.REGISTRY:
+            assert r.strategy in O.ORIGINS
+            assert O.STRATEGY_COID_PREFIX[r.strategy] == r.coid_prefix
 
-    def test_each_would_be_accepted_by_the_registry_checks(self):
-        """The rows are ready: valid shape, unique prefixes, unique coids."""
-        rows = R.REGISTRY + (
-            R.Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-"),
-            R.Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-"),
-            R.Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-"))
-        R._check(rows)
-        for r in rows:
-            assert r.venue_marker in (r.prefix + "2026-11-15-2205z")
 
-    def test_the_btc_shaped_guess_is_not_the_real_prefix(self):
-        """"cpc-eth-updown-5m-" is what extrapolating from BTC produces.
-        The venue serves "cpceth-eth-updown-5m-". 64 guessed variants 404'd
-        before the event payload gave the real one."""
-        assert "cpc-eth-updown-5m-" not in self.READY

@@ -655,7 +655,7 @@ class TestForeignOrdersAreNeverAdopted:
     #: set is one we must NEVER adopt or cancel. l5-pmus-live spent hours
     #: today adopting and cancelling orders it did not recognise, because
     #: its foreign filter knew only one other series.
-    REG = ("b5m-",)
+    REG = ("b5m-", "e5m-", "s5m-", "x5m-")
 
     @pytest.mark.parametrize("raw,want", [
         (None, REG), ("", REG), ("b5m-", REG),

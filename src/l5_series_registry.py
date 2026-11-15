@@ -90,31 +90,10 @@ class Series(NamedTuple):
 REGISTRY: Tuple[Series, ...] = (
     Series("cpc-btc-updown-15m-", "btc", 900.0, "BTC15M", "l5f-"),
     Series("cpc-btc-updown-5m-", "btc", 300.0, "BTC5M", "b5m-"),
+    Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-"),
+    Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-"),
+    Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-"),
 )
-
-#: VERIFIED AND READY, NOT YET REGISTERED. All three answered
-#: MARKET_STATUS_OPEN on gateway.polymarket.us at 2026-11-15T22:06Z on the
-#: same window BTC was open on, and their slugs came from the venue's own
-#: event payload rather than from guessing:
-#:
-#:     Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-")
-#:     Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-")
-#:     Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-")
-#:
-#: WHY THEY ARE NOT IN THE TABLE YET. Adding them widens
-#: `l5_campaign_approval.ALLOWED_SERIES`, which the runtime config verifier
-#: grades as the `series_allowlist` row against the APPROVED PRODUCTION
-#: CONFIGURATION. Changing what production is authorised to trade is an
-#: owner decision, not a code tidy-up, and the verifier correctly fails
-#: until the approved configuration is updated to match. Registering them
-#: also adds three keys to `l5_origin`'s per-strategy P&L split, which
-#: every consumer of that split sees.
-#:
-#: Moving the three lines above into REGISTRY is the whole change; the
-#: blast radius is 12 tests, all of them pins on the two-series world:
-#: runtime config verify (7), origin registry (2), campaign approval
-#: contract (1), runtime config derived (1), btc5m runner (1).
-
 
 def _check(rows: Tuple[Series, ...]) -> None:
     """Refuse at import on the two confusions that would be dangerous."""

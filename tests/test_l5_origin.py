@@ -50,15 +50,29 @@ def test_an_orders_origin_is_its_id_prefix_and_is_never_manual(coid, want):
     assert OG.origin_of_coid(coid) != OG.MANUAL
 
 
-def test_the_registry_names_two_strategies_with_distinct_prefixes_and_series():
+def test_the_registry_names_every_strategy_with_distinct_prefixes_and_series():
+    """Five strategies since ETH/SOL/XRP 5m registered 2026-11-15. The
+    pairwise prefix check matters MORE with more of them: a coid prefix
+    that is a prefix of another makes two strategies indistinguishable in
+    the ownership registry, which is what the watchdog latches on."""
     assert set(OG.STRATEGY_COID_PREFIX) == set(OG.STRATEGY_SERIES) \
-        == {OG.BTC15M, OG.BTC5M}
-    a, b = OG.STRATEGY_COID_PREFIX.values()
-    assert not a.startswith(b) and not b.startswith(a)
-    x, y = OG.STRATEGY_SERIES.values()
-    assert not x.startswith(y) and not y.startswith(x)
-    assert OG.other_strategy_prefixes(OG.BTC15M) == ("b5m-",)
-    assert OG.other_strategy_prefixes(OG.BTC5M) == ("l5f-",)
+        == {OG.BTC15M, OG.BTC5M, "ETH5M", "SOL5M", "XRP5M"}
+    for a in OG.STRATEGY_COID_PREFIX.values():
+        for b in OG.STRATEGY_COID_PREFIX.values():
+            if a is not b:
+                assert not a.startswith(b), (a, b)
+    for x in OG.STRATEGY_SERIES.values():
+        for y in OG.STRATEGY_SERIES.values():
+            if x is not y:
+                assert not x.startswith(y), (x, y)
+    #: "other" is every OTHER registered strategy. Growing this set is a
+    #: SAFETY gain: a prefix listed here is one a lane must never adopt or
+    #: cancel, and a lane that knew only one other series spent hours on
+    #: 2026-11-15 cancelling orders it did not recognise.
+    assert OG.other_strategy_prefixes(OG.BTC15M) == (
+        "b5m-", "e5m-", "s5m-", "x5m-")
+    assert OG.other_strategy_prefixes(OG.BTC5M) == (
+        "l5f-", "e5m-", "s5m-", "x5m-")
     assert OG.strategy_of_market(M15) == OG.BTC15M
     assert OG.strategy_of_market(M5) == OG.BTC5M
     assert OG.strategy_of_market(OTHER) is None
@@ -220,9 +234,16 @@ def test_the_split_always_adds_up_and_never_touches_the_totals(
     assert before == (D("-7.141"), D("-7.141"))
     rep = store.realized_by_origin()
     by = {k: D(v["settled_usd"]) for k, v in rep["by_origin"].items()}
+    #: one row per registered strategy plus MANUAL and UNKNOWN. The three
+    #: 5m assets registered on 2026-11-15 appear at zero: the split names
+    #: every origin it knows, so a strategy that traded nothing is still
+    #: visible rather than silently absent.
     assert by == {"BTC15M": D("-0.141"), "BTC5M": D("0"),
+                  "ETH5M": D("0"), "SOL5M": D("0"), "XRP5M": D("0"),
                   "MANUAL": D("0"), "UNKNOWN": D("-7")}
     assert sum(by.values()) == D(rep["sum_of_rows_usd"]) == D("-7.141")
+    #: `rows` counts the settled MARKETS in the split, not the origins it
+    #: names, so registering three more strategies leaves it at 4.
     assert rep["rows"] == 4 and rep["complete"] is True
     assert D(rep["account_wide"]["realized_attributed"]) == D("-7.141")
     # a label written at settlement stays what it was: attesting later does
