@@ -211,6 +211,13 @@ REWARD_FLOOR_CHECK_HOUR_ET = int(os.getenv(
 REWARD_PROJECT_HORIZON_S = float(os.getenv(
     "PMUS_TWO_SIDED_REWARD_PROJECT_HORIZON_S", "7200"))
 REWARDED_STAGE = "two_sided_open_rewarded"
+# OWNER 2026-11-15 "We're bleeding money" / "make this system work": a
+# DAILY LOSS STOP. The bot marks its own book every step (matched pairs at
+# $1, a lone leg at its side's bid, minus everything paid) and freezes each
+# market's mark when it closes. If today's change (UTC day) falls below
+# -DAILY_LOSS_USD, no NEW pair or reward quote opens until the next UTC day;
+# completions of open legs continue. MARK-TO-MARKET ESTIMATE, never P&L.
+DAILY_LOSS_USD = _env_d("PMUS_TWO_SIDED_DAILY_LOSS_USD", "3")
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
 # -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
@@ -1247,6 +1254,65 @@ class Engine:
                 return True
         return False
 
+    @staticmethod
+    def mark_value(mk: Mapping[str, Any], bbo: Mapping[str, D]) -> D:
+        """Book value now minus cash paid: matched pairs at $1, a lone leg
+        at its own side's bid. MARK-TO-MARKET ESTIMATE."""
+        y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        paid = D(mk["cost"]["YES"]) + D(mk["cost"]["NO"])
+        matched = min(y, n)
+        val = matched
+        if y > n:
+            val += (y - n) * D(str(bbo["bid"]))
+        elif n > y:
+            val += (n - y) * (ONE - D(str(bbo["ask"])))
+        return val - paid
+
+    @staticmethod
+    def _today() -> str:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    def _mark(self, slug: str, mk: Dict[str, Any], bbo: Mapping) -> None:
+        """Each market's change is measured from its FIRST mark of the UTC
+        day, so a restart or an old lone leg never books yesterday's loss
+        as today's."""
+        try:
+            v = self.mark_value(mk, bbo)
+        except Exception:                             # noqa: BLE001
+            return
+        today = self._today()
+        base = mk.get("mark0") or {}
+        if base.get("date") != today:
+            mk["mark0"] = {"date": today, "value": str(v)}
+        mk["mark"] = str(v)
+        self.daily_stopped()
+
+    def day_change(self) -> D:
+        today = self._today()
+        out = D(0)
+        for mk in self.b.d["markets"].values():
+            base = mk.get("mark0") or {}
+            if base.get("date") == today and mk.get("mark") is not None:
+                out += D(mk["mark"]) - D(base["value"])
+        return out
+
+    def daily_stopped(self) -> bool:
+        if DAILY_LOSS_USD <= 0:
+            return False
+        today = self._today()
+        day = self.b.d.setdefault("day", {})
+        if day.get("date") != today:
+            day.clear()
+            day["date"] = today
+        change = self.day_change()
+        if change < -DAILY_LOSS_USD and not day.get("stopped"):
+            day["stopped"] = True
+            self.b.save()
+            log("daily_loss_stop", date=today, change=change,
+                limit=-DAILY_LOSS_USD, label="MARK-TO-MARKET ESTIMATE; no "
+                "new openings until next UTC day, completions continue")
+        return bool(day.get("stopped"))
+
     def active(self) -> list:
         return [s for s, mk in self.b.d["markets"].items() if not mk["done"]]
 
@@ -1355,6 +1421,7 @@ class Engine:
                     unmatched_cost=self.b.unmatched_cost(slug))
             return
         tick = spec["tick"]
+        self._mark(slug, mk, bbo)
         if reward_first_on() and mk.get("reward"):
             # THEORETICAL accrual for the interval just ended (legs that
             # rested), then refresh the share estimate for the next one
@@ -1405,7 +1472,8 @@ class Engine:
                         break
                 qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
-                       os.getenv(ENABLED_ENV, "").upper() != "YES")
+                       os.getenv(ENABLED_ENV, "").upper() != "YES" or
+                       self.daily_stopped())
             late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
                 if LATE_CUTOFF else None
             if excluded(slug):

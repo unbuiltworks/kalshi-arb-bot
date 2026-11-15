@@ -1384,3 +1384,36 @@ def test_no_cricket_ever(monkeypatch):
     for s in ("aec-cs2-brute-eid-2026-11-15", "aec-atp-a-b-2026-11-15",
               "aec-cfb-tx-lsu-2026-11-14", "aec-nba-det-mia-2026-11-14"):
         assert not M.is_cricket(s) and not M.abandoned(s), s
+
+
+def test_daily_loss_stop_blocks_new_openings_only(eng, monkeypatch, capsys):
+    e, v = eng
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("0.10"))
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)                                  # mark0 ~ 0
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market(slug)                                  # lone YES @0.46
+    assert not e.daily_stopped()
+    v.bid, v.ask = D("0.20"), D("0.22")                  # YES marked at 0.20
+    e.step_market(slug)
+    assert e.daily_stopped() and e.day_change() < D("-0.10")
+    assert '"daily_loss_stop"' in capsys.readouterr().out
+    # the completion still rests; a fresh flat market opens nothing
+    assert [o for o in v.orders.values() if o["open"] and o["side"] == "NO"]
+    mk = e.b.m("aec-new")
+    v.bid, v.ask = D("0.48"), D("0.50")
+    n = len(v.orders)
+    e.step_market("aec-new")
+    assert len(v.orders) == n
+
+
+def test_daily_change_ignores_losses_from_before_today(eng):
+    e, v = eng
+    mk = e.b.m("aec-old")
+    mk["pos"] = {"YES": "10", "NO": "0"}
+    mk["cost"] = {"YES": "6.00", "NO": "0"}
+    e._mark("aec-old", mk, {"bid": D("0.08"), "ask": D("0.10")})
+    assert e.day_change() == 0 and not e.daily_stopped()
