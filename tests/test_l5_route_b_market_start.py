@@ -33,3 +33,16 @@ def test_window_start_is_market_utc_not_quote_minus_120(market, expected):
 def test_unknown_or_misaligned_market_fails_closed(market):
     with pytest.raises(ValueError):
         MODULE.market_window_start(market)
+
+
+@pytest.mark.parametrize("duration,seconds", [("15m", 900), ("5m", 300)])
+def test_sequential_book_must_follow_confirmed_opening_and_precede_expiry(duration, seconds):
+    market = f"cpc-btc-updown-{duration}-2026-11-14-1345z" if duration == "15m" else "cpc-btc-updown-5m-2026-11-14-1355z"
+    start = MODULE.market_window_start(market)
+    gate = MODULE.causally_eligible_book
+    assert not gate(market, None, start + 20)
+    assert not gate(market, start + 30, None)
+    assert not gate(market, start + 30, start + 29)
+    assert gate(market, start + 30, start + 30)
+    assert gate(market, start + 30, start + seconds - 1)
+    assert not gate(market, start + 30, start + seconds)
