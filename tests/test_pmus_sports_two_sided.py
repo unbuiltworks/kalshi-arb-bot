@@ -1144,3 +1144,11 @@ def test_closed_markets_do_not_count_toward_the_cap(eng):
     live = e.b.m("aec-live")
     live.update(pos={"YES": "0", "NO": "1"}, cost={"YES": "0", "NO": "0.40"})
     assert e.b.total_unmatched() == D("0.40")
+
+
+@pytest.mark.parametrize("slug,ex", [
+    ("aec-testcr-afg-zim-2026-11-13", True), ("aec-odicr-a-b-2026-11-15", True),
+    ("aec-t20icr-eln-slr-2026-09-13", True), ("aec-cfb-a-b-2026-11-14", False),
+    ("aec-atp-x-y-2026-11-15", False), ("aec-cs2-x-y-2026-11-15", False)])
+def test_cricket_excluded(slug, ex):
+    assert M.excluded(slug) is ex

@@ -287,6 +287,20 @@ def log(kind: str, **kw: Any) -> None:
 LATE_CUTOFF = os.getenv("PMUS_TWO_SIDED_LATE_CUTOFF", "1").strip() != "0"
 
 
+# OWNER 2026-11-15 "Can we not trade cricket": substrings excluded from
+# selection; an active excluded market stops opening pairs and frees its slot
+# once flat (completions continue).
+EXCLUDE_TAGS = tuple(t.strip() for t in os.getenv(
+    "PMUS_TWO_SIDED_EXCLUDE", "cr-").split(",") if t.strip())
+
+
+def excluded(slug: str) -> bool:
+    parts = str(slug).split("-")
+    league = parts[1] if len(parts) > 1 else ""
+    return any(league.endswith(t.rstrip("-")) if t.endswith("-") else t in slug
+               for t in EXCLUDE_TAGS)
+
+
 CRYPTO_PREFIXES = tuple(p.strip() for p in os.getenv(
     "PMUS_TWO_SIDED_CRYPTO_PREFIXES", "").split(",") if p.strip())
 CRYPTO_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_CRYPTO_CUTOFF_S", "7200"))
@@ -1185,6 +1199,8 @@ class Engine:
                        os.getenv(ENABLED_ENV, "").upper() != "YES")
             late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
                 if LATE_CUTOFF else None
+            if excluded(slug):
+                late = "excluded"
             if late:
                 if mk.get("late_logged") != late:
                     mk["late_logged"] = late
@@ -1385,8 +1401,8 @@ class Engine:
             a = self.v.gw._qnum(meta.get("bestAskQuote"))
             if b is None or a is None:
                 continue
-            if LATE_CUTOFF and is_late((getattr(self.v, "states", {}) or {})
-                                       .get(slug)):
+            if excluded(slug) or (LATE_CUTOFF and is_late(
+                    (getattr(self.v, "states", {}) or {}).get(slug))):
                 continue
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
