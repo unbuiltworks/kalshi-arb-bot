@@ -1670,3 +1670,27 @@ def test_open_gate_off_by_default_and_blocks_negative_ev_when_on(eng, monkeypatc
     monkeypatch.setattr(M, "OPEN_EV_GATE", False)
     e.step_market("aec-x")
     assert len(v.orders) == 2                           # off: unchanged
+
+
+def test_market_closed_keeps_unconfirmed_cancel_open_and_named(eng):
+    """LIVE 2026-11-15 20:03:34Z: the market went inactive, the cancel did
+    not take, the book marked the order closed and dropped the market; the
+    watchdog latched on the still-resting order 5s later."""
+    e, v = eng
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)
+    oids = [k for k, o in v.orders.items() if o["open"]]
+    assert oids
+    real_cancel = v.cancel
+    v.cancel = lambda oid: True                  # venue ignores the cancel
+    v.spec = lambda s: None                      # market no longer active
+    e.step_market(slug)
+    mk = e.b.m(slug)
+    assert not mk["done"]                        # still managed
+    names = {r["venue_order_id"] for r in M.registry_doc(e.b)["orders"]}
+    assert set(oids) <= names                    # watchdog still sees them
+    v.cancel = real_cancel                       # cancel now applies
+    e.step_market(slug)
+    assert mk["done"] and not M.registry_doc(e.b)["orders"]

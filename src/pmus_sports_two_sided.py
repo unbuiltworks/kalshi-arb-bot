@@ -1652,13 +1652,24 @@ class Engine:
         bbo = self.v.bbo(slug)
         if spec is None or bbo is None:
             if spec is None:
+                # LIVE 2026-11-15 20:03Z: this marked every order closed
+                # whether or not the cancel took, then closed the market --
+                # a still-resting order dropped out of the registry and the
+                # watchdog latched 5s later. An order is closed only when
+                # the venue says so; the market stays open (and named in
+                # the registry) until every order is terminal.
                 for oid, o in mk["orders"].items():
                     if o.get("open"):
                         try:
                             self.v.cancel(oid)
+                            st = self.v.status(oid)
+                            self._record_fill(slug, o["side"], oid, st)
+                            o["open"] = st["open"]
                         except Exception:             # noqa: BLE001
-                            pass
-                        o["open"] = False
+                            pass                      # stays open: retried
+                if any(o.get("open") for o in mk["orders"].values()):
+                    self.b.save()
+                    return
                 mk["done"] = True
                 if mk.get("lone_since") is not None:
                     self._recovery_resolved(slug, mk, "held_to_close")
