@@ -62,6 +62,16 @@ def market_window_start(window: str) -> float:
     return datetime(int(year), int(month), int(day), int(hour), int(minute),
                     tzinfo=timezone.utc).timestamp()
 
+def causally_eligible_book(window: str, opening_terminal_at: Optional[float],
+                           book_observed_at: Optional[float]) -> bool:
+    """Conservative causal gate: only post-confirmation, in-window books."""
+    if opening_terminal_at is None or book_observed_at is None:
+        return False
+    start = market_window_start(window)
+    end = start + (300 if "-5m-" in window else 900)
+    return opening_terminal_at <= book_observed_at < end
+
+
 def _legs(window: str, got: Dict[str, Any], pr: Dict[str, Any]):
     opening = completion = None
     for o in got["orders"].values():
@@ -93,11 +103,8 @@ def replay(tapes: Optional[List[str]] = None,
         # cannot be used to replay a sequential hedge. The reconstruction's
         # terminal_at is conservative (may be later than the first fill).
         # Exclude ambiguous chronology rather than leak future information.
-        if (opening.terminal_at is None or completion.quote_line_at is None
-                or completion.quote_line_at < opening.terminal_at):
-            continue
-        if completion.quote_line_at >= market_window_start(window) + (
-                300 if "-5m-" in window else 900):
+        if not causally_eligible_book(window, opening.terminal_at,
+                                     completion.quote_line_at):
             continue
         book = dict(completion.quote.get("book") or {})
         qty = opening.final_qty
