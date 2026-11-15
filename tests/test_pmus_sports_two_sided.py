@@ -693,7 +693,8 @@ def test_jump_threshold_is_also_a_price_floor():
 
 
 def test_cfb_exits_sooner_and_accepts_more():
-    assert M.exit_rule("aec-cfb-x-y-2026-11-14") == (60.0, D("1.05"))
+    assert M.exit_rule("aec-cfb-x-y-2026-11-14") == (20.0, D("1.05"))
+    assert M.EXIT_S == 30.0
     assert M.exit_rule("aec-atp-x-y-2026-11-14") == (M.EXIT_S, M.EXIT_MAX_PAIR)
 
 
@@ -780,7 +781,7 @@ def test_tennis_pair_cap_is_tighter():
 
 # ------------------------------------------------- fee-aware exit (2026-11-15)
 def test_taker_fee_rounds_up_to_the_cent_per_order():
-    assert M.EXIT_FEE_AWARE is True and M.EXIT_MAX_TAKER_QTY == D("2")
+    assert M.EXIT_FEE_AWARE is True and M.EXIT_MAX_TAKER_QTY == D("0")
     assert M.taker_fee(D("0.60"), D("1")) == D("0.02")      # 0.0144 -> 0.02
     assert M.taker_fee(D("0.60"), D("2")) == D("0.03")      # 0.0288 -> 0.03
     assert M.taker_fee(D("0.50"), D("10")) == D("0.15")     # exact
@@ -821,8 +822,9 @@ def test_fee_under_cap_allows_exit_and_logs_fee(eng, capsys):
     assert d["est_fee_usd"] == "0.02" and d["pair_cost_with_fee"] == "1.03"
 
 
-def test_large_lone_leg_is_not_taker_exited(reng, capsys):
+def test_large_lone_leg_is_not_taker_exited(reng, capsys, monkeypatch):
     e, v = reng
+    monkeypatch.setattr(M, "EXIT_MAX_TAKER_QTY", D("2"))   # gate now opt-in
     v.bid, v.ask = D("0.44"), D("0.48")
     e.select(v.account())
     e.step_market("aec-rw")                                 # 10 x 0.44 / 10 x 0.52
@@ -1297,3 +1299,19 @@ def test_lone_leg_market_does_not_hold_an_opening_slot(eng, monkeypatch):
     assert e.slots_used() == 0 and not e.full()
     monkeypatch.setattr(M, "MAX_TRACKED", 1)
     assert e.full()                           # hard bound still holds
+
+
+def test_ten_lot_lone_leg_exits_by_default_within_cap(reng, capsys):
+    e, v = reng
+    v.bid, v.ask = D("0.44"), D("0.48")
+    e.select(v.account())
+    e.step_market("aec-rw")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("10"), open=False)
+    e.step_market("aec-rw")
+    mk = e.b.d["markets"]["aec-rw"]
+    mk["lone_since"] -= M.EXIT_S + 1
+    v.bid, v.ask = D("0.45"), D("0.46")     # NO ask 0.55 -> 0.99 + fee
+    for _ in range(4):
+        e.step_market("aec-rw")
+    assert '"EXIT_LONE_LEG"' in capsys.readouterr().out

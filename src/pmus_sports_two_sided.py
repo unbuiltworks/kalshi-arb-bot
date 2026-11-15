@@ -95,11 +95,15 @@ REWARD_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_CHECK_S", "3600"))
 # for EXIT_S is completed by TAKING the complement at its ask, but only while
 # that pair costs <= EXIT_MAX_PAIR (a small, bounded realized loss). Beyond
 # that the loss is already sunk and the maker completion keeps resting.
-EXIT_S = float(os.getenv("PMUS_TWO_SIDED_EXIT_S", "180"))
+# OWNER 2026-11-15 "handle these stranded legs better": a stranded leg is
+# cheap to close only in the first seconds; by minutes the price has run
+# (aec-cs2-brute-eid: 10-lot YES@0.60 lone 2h, complement never back under
+# a 1.07 pair, now ~-$5). Exit windows are now seconds, not minutes.
+EXIT_S = float(os.getenv("PMUS_TWO_SIDED_EXIT_S", "30"))
 EXIT_MAX_PAIR = _env_d("PMUS_TWO_SIDED_EXIT_MAX_PAIR", "1.03")
 # OWNER 2026-11-14: college football swings from ~45c to <10c within minutes,
 # past the 180s/1.03 exit. CFB lone legs exit sooner and accept a little more.
-EXIT_S_CFB = float(os.getenv("PMUS_TWO_SIDED_EXIT_S_CFB", "60"))
+EXIT_S_CFB = float(os.getenv("PMUS_TWO_SIDED_EXIT_S_CFB", "20"))
 EXIT_MAX_PAIR_CFB = _env_d("PMUS_TWO_SIDED_EXIT_MAX_PAIR_CFB", "1.05")
 
 
@@ -121,7 +125,9 @@ def exit_rule(slug: str) -> tuple:
 EXIT_FEE_AWARE = os.getenv("PMUS_TWO_SIDED_EXIT_FEE_AWARE", "1").strip() \
     not in ("0", "no", "false", "off")
 TAKER_FEE_RATE = _env_d("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.06")
-EXIT_MAX_TAKER_QTY = _env_d("PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY", "2")
+# 0 = no size gate. The fee is per contract either way, and the gate only
+# turned 10-lot reward legs into permanent strands.
+EXIT_MAX_TAKER_QTY = _env_d("PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY", "0")
 CENT = D("0.01")
 # OWNER 2026-11-15 "close patiently first": a lone leg's maker completion
 # rests at the pair cap, and once it has been lone for MAKER_PHASE_FRAC of
@@ -1487,8 +1493,9 @@ class Engine:
         # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
         pcap = pair_cap(slug)
         lone_age = time.time() - lone_since
+        # a multi-contract (reward-size) lone leg joins the bid at once
         patient = exit_s > 0 and COMPLETE_MAX_PAIR > pcap and \
-            lone_age >= exit_s * MAKER_PHASE_FRAC
+            (lone_age >= exit_s * MAKER_PHASE_FRAC or need > 2)
         cap_px = floor_tick((COMPLETE_MAX_PAIR if patient else pcap)
                             - lead_px, tick)
         lag_bid = side_bid(lag, bbo["bid"], bbo["ask"])
@@ -1823,7 +1830,7 @@ class Engine:
                           "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
                           "qty": QTY, "pair_cap": PAIR_CAP},
             exit={"fee_aware": EXIT_FEE_AWARE, "taker_fee_rate": TAKER_FEE_RATE,
-                  "max_taker_qty": EXIT_MAX_TAKER_QTY},
+                  "max_taker_qty": EXIT_MAX_TAKER_QTY, "exit_s": EXIT_S, "exit_s_cfb": EXIT_S_CFB, "complete_max_pair": COMPLETE_MAX_PAIR},
             reward_first=reward_first_on(),
             **({"reward_first_cfg": {
                 "markets": REWARD_MARKETS, "periods": REWARD_FIRST_PERIODS,
