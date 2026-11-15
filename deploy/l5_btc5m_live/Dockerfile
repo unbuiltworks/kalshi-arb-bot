@@ -39,6 +39,7 @@ COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_fidelity_mode.py src/l5_fidelity_mode.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py
+COPY src/l5_managed_lanes.py src/l5_managed_lanes.py
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py

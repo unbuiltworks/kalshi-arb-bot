@@ -86,6 +86,7 @@ COPY src/l5_live_execution.py src/l5_live_execution.py
 # imported at module level by l5_live_execution (order/position origin)
 COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_managed_lanes.py src/l5_managed_lanes.py
 # The order serializer and the preview gate. Both are pure: no transport, no
 # endpoint, no credential, and no import of any executor. The preflight needs
 # the contract data in l5_order_body, and submit() needs the gate if this

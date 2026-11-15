@@ -577,8 +577,17 @@ class Watchdog:
                  max_order_age_s: float = DEFAULT_MAX_ORDER_AGE_S,
                  report_max_age_s: float = DEFAULT_REPORT_MAX_AGE_S,
                  cancel_enabled: bool = False, who: str = "l5-watchdog",
-                 oracle: Any = None) -> None:
+                 oracle: Any = None,
+                 managed_lanes: Optional[List[str]] = None,
+                 lane_opener: Any = None) -> None:
         self.t = transport
+        #: OTHER LANES ON THE SHARED ACCOUNT that rest maker orders for
+        #: minutes BY DESIGN and attest, freshly, that they are managing them
+        #: (OWNER 2026-11-14: sports two-sided and BTC5m run together). See
+        #: `managed_lane_ids`.
+        self.managed_lanes = [u.strip().rstrip("/") for u in
+                              (managed_lanes or []) if u and u.strip()]
+        self._lane_opener = lane_opener
         self.asserter = asserter
         self.max_order_age_s = float(max_order_age_s)
         self.report_max_age_s = float(report_max_age_s)
@@ -590,6 +599,26 @@ class Watchdog:
         #: power is not merely off, it is unavailable.
         self.cancel_enabled = bool(cancel_enabled) and oracle is not None
         self.cancel_requested = bool(cancel_enabled)
+
+    #: A lane attestation older than this is not proof of management.
+    LANE_MAX_AGE_S = 60.0
+
+    def managed_lane_ids(self, now: Optional[dt.datetime] = None) -> tuple:
+        """({venue_order_id, ...}, [notes]) attested by a FRESH managed lane.
+
+        DELEGATES to `l5_managed_lanes`, which is the single definition
+        shared with the executor's preflight and the reset ceremony's venue
+        precondition. Behaviour is unchanged: a lane qualifies only if its
+        document is readable, says `manages_own_resting: true`, and its
+        `as_of_utc` is at most MAX_AGE_S old. Anything else -- unreachable,
+        stale, malformed -- contributes NOTHING, so a dead lane's orders are
+        judged by age exactly as before. This EXEMPTS from the overdue/age
+        latch only; it never makes an order cancellable (ownership is still
+        the oracle's).
+        """
+        from src import l5_managed_lanes as ML
+        return ML.lane_ids(self.managed_lanes, opener=self._lane_opener,
+                           now=now or _utc())
 
     def emergency_state(self) -> tuple:
         """(emergency, reason). Is a HALT latched right now?
@@ -746,8 +775,18 @@ class Watchdog:
                                        "whatever it still has resting")})
                 return out
         overdue = []
+        lane_ids, lane_notes = (self.managed_lane_ids(now=now)
+                                if self.managed_lanes else (set(), []))
+        if self.managed_lanes:
+            out["managed_lanes"] = lane_notes
+            out["managed_lane_exempt"] = []
         for r in rows:
             if is_terminal(r):
+                continue
+            if str(r.get("id") or "") in lane_ids:
+                # a fresh lane is managing this resting order: its age is
+                # by design, not evidence of an unmanaged order
+                out["managed_lane_exempt"].append(str(r.get("id")))
                 continue
             age = order_age_s(r, now=now)
             # age UNKNOWN is treated as overdue: an order whose creation time
@@ -939,7 +978,8 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
             report_max_age_s=float(os.getenv("L5_WATCHDOG_REPORT_MAX_AGE_S",
                                              str(DEFAULT_REPORT_MAX_AGE_S))),
             cancel_enabled=False,
-            oracle=None)
+            oracle=None,
+            managed_lanes=_managed_lanes_from_env())
     return Watchdog(
         transport if transport is not None else CancelOnlyTransport(),
         asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),
@@ -954,7 +994,15 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
                                          str(DEFAULT_REPORT_MAX_AGE_S))),
         cancel_enabled=str(
             os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
-        oracle=oracle_from_env())
+        oracle=oracle_from_env(),
+        managed_lanes=_managed_lanes_from_env())
+
+
+def _managed_lanes_from_env() -> List[str]:
+    """L5_WATCHDOG_MANAGED_LANE_URLS: comma-separated base URLs of lanes that
+    publish /l5/live_orders.json with manages_own_resting=true."""
+    from src import l5_managed_lanes as ML
+    return ML.from_env()
 
 
 def oracle_from_env() -> Optional[OwnershipOracle]:
