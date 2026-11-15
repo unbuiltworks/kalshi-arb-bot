@@ -1420,3 +1420,150 @@ def test_daily_change_ignores_losses_from_before_today(eng):
     mk["cost"] = {"YES": "6.00", "NO": "0"}
     e._mark("aec-old", mk, {"bid": D("0.08"), "ask": D("0.10")})
     assert e.day_change() == 0 and not e.daily_stopped()
+
+
+# ------------------------------------------- recovery controller (2026-11-15)
+@pytest.fixture
+def rec(eng, monkeypatch):
+    monkeypatch.setattr(M, "RECOVERY_ON", True)
+    monkeypatch.setattr(M, "RECOVERY_TAKER", False)
+    e, v = eng
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)                                   # both legs rest
+    return e, v, slug
+
+
+def _fill(v, side, qty="1"):
+    oid = next(k for k, o in v.orders.items() if o["side"] == side and o["open"])
+    v.orders[oid].update(filled=D(qty), open=False)
+    return oid
+
+
+def _live(v, slug):
+    return [o for o in v.orders.values() if o["open"] and o["slug"] == slug]
+
+
+def test_recovery_yes_fills_no_never_fills_is_worked_continuously(rec, capsys):
+    e, v, slug = rec
+    _fill(v, "YES")
+    for _ in range(3):
+        e.step_market(slug)
+    live = _live(v, slug)
+    assert len(live) == 1 and live[0]["side"] == "NO"
+    assert '"RECOVERY_DECISION"' in capsys.readouterr().out
+    first = live[0]["px"]
+    mk = e.b.m(slug)
+    mk["lone_since"] -= 1200                              # it ages
+    for _ in range(3):
+        e.step_market(slug)
+    live = _live(v, slug)
+    # aged: the risk cost now pays for stepping inside the NO spread
+    assert len(live) == 1 and live[0]["px"] == D("0.51") > first
+    assert getattr(v, "taker", []) == []                  # never unauthorized
+
+
+def test_recovery_no_fills_yes_completion_and_pair_record(rec):
+    e, v, slug = rec
+    _fill(v, "NO")
+    for _ in range(3):
+        e.step_market(slug)
+    (c,) = _live(v, slug)
+    assert c["side"] == "YES"
+    _fill(v, "YES")                                        # completion fills
+    e.step_market(slug)
+    recs = e.b.d["recoveries"]
+    assert recs[-1]["outcome"] == "paired" and recs[-1]["slug"] == slug
+    m = e.recovery_metrics()
+    assert m["paired_pct"] == 100.0 and m["time_to_pair_s_median"] is not None
+
+
+def test_recovery_taker_only_when_authorized_and_old(rec, monkeypatch):
+    e, v, slug = rec
+    monkeypatch.setattr(M, "RECOVERY_TAKER", True)
+    _fill(v, "YES")
+    e.step_market(slug)
+    e.b.m(slug)["lone_since"] -= 7200
+    for _ in range(4):
+        e.step_market(slug)
+    assert v.taker and v.taker[-1][0] == "NO"
+    assert v.taker[-1][1] == D("0.52")                    # NO ask = 1 - 0.48
+
+
+def test_recovery_both_sides_partially_filled_need_is_the_difference(rec):
+    e, v, slug = rec
+    mk = e.b.m(slug)
+    for oid in [k for k, o in v.orders.items() if o["open"]]:
+        v.orders[oid]["open"] = False
+    mk["pos"] = {"YES": "3", "NO": "2"}
+    mk["cost"] = {"YES": "1.38", "NO": "1.04"}
+    for o in mk["orders"].values():
+        o["open"] = False
+    for _ in range(3):
+        e.step_market(slug)
+    (c,) = _live(v, slug)
+    assert c["side"] == "NO" and c["qty"] == D("1")      # never above need
+
+
+def test_recovery_survives_restart_with_unmatched_inventory(rec, tmp_path):
+    e, v, slug = rec
+    _fill(v, "YES")
+    e.step_market(slug)
+    since = e.b.m(slug)["lone_since"]
+    e2 = M.Engine(v, M.Book(tmp_path / "s.json"))        # same durable book
+    assert e2.b.m(slug)["lone_since"] == since
+    for _ in range(3):
+        e2.step_market(slug)
+    assert len(_live(v, slug)) == 1
+
+
+def test_recovery_external_cancel_is_replaced_once_not_duplicated(rec):
+    e, v, slug = rec
+    _fill(v, "YES")
+    for _ in range(3):
+        e.step_market(slug)
+    (c,) = [k for k, o in v.orders.items() if o["open"]]
+    v.orders[c]["open"] = False                           # watchdog/venue cancel
+    for _ in range(3):
+        e.step_market(slug)
+    assert len(_live(v, slug)) == 1
+
+
+def test_recovery_status_failure_never_duplicates_exposure(rec):
+    e, v, slug = rec
+    _fill(v, "YES")
+    for _ in range(3):
+        e.step_market(slug)
+    n = len(v.orders)
+    v.status = lambda oid: (_ for _ in ()).throw(ConnectionError("down"))
+    with pytest.raises(ConnectionError):
+        e.step_market(slug)
+    assert len(v.orders) == n                             # nothing new placed
+
+
+def test_recovery_liquidity_gone_adds_nothing(rec):
+    e, v, slug = rec
+    _fill(v, "YES")
+    for _ in range(3):
+        e.step_market(slug)
+    n = len(v.orders)
+    v.bbo = lambda s: None
+    e.step_market(slug)
+    assert len(v.orders) == n
+
+
+def test_halt_new_exposure_blocks_other_first_legs(rec, monkeypatch):
+    e, v, slug = rec
+    monkeypatch.setattr(M, "UNMATCHED_HALT_USD", D("0.40"))
+    _fill(v, "YES")                                       # 0.46 unmatched
+    e.step_market(slug)
+    assert e.halt_new_exposure()
+    e.b.m("aec-other")
+    n = len(v.orders)
+    e.step_market("aec-other")
+    assert len(v.orders) == n
+
+
+def test_recovery_off_by_default():
+    assert M.RECOVERY_ON is False and M.RECOVERY_TAKER is False

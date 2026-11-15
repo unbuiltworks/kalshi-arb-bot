@@ -218,6 +218,19 @@ REWARDED_STAGE = "two_sided_open_rewarded"
 # -DAILY_LOSS_USD, no NEW pair or reward quote opens until the next UTC day;
 # completions of open legs continue. MARK-TO-MARKET ESTIMATE, never P&L.
 DAILY_LOSS_USD = _env_d("PMUS_TWO_SIDED_DAILY_LOSS_USD", "3")
+# OWNER 2026-11-15 "Eliminate stranded legs through active inventory
+# management": every unmatched position goes to ONE decision function
+# (src/pmus_sports_recovery.py) every loop. DEFAULT OFF -- the deployed
+# phase/deadline logic below stays in force until the owner enables it.
+# Taker recovery additionally needs PMUS_TWO_SIDED_RECOVERY_TAKER=1.
+RECOVERY_ON = os.getenv("PMUS_TWO_SIDED_RECOVERY", "0").strip() == "1"
+RECOVERY_TAKER = os.getenv("PMUS_TWO_SIDED_RECOVERY_TAKER",
+                           "0").strip() == "1"
+RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
+# HALT_NEW_EXPOSURE: no new first legs anywhere while unmatched cost is
+# at/above this (recovery mode only).
+UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
+RECOVERY_LOG_KEEP = 500
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
 # -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
@@ -1313,6 +1326,117 @@ class Engine:
                 "new openings until next UTC day, completions continue")
         return bool(day.get("stopped"))
 
+    def halt_new_exposure(self) -> bool:
+        if not RECOVERY_ON:
+            return False
+        from src.pmus_sports_recovery import halt_new_exposure
+        stop = halt_new_exposure(self.b.total_unmatched(), UNMATCHED_HALT_USD)
+        if stop != bool(self.b.d.get("halt_new_exposure")):
+            self.b.d["halt_new_exposure"] = stop
+            log("HALT_NEW_EXPOSURE" if stop else "resume_new_exposure",
+                unmatched_cost=self.b.total_unmatched(),
+                limit=UNMATCHED_HALT_USD)
+        return stop
+
+    def _recovery_resolved(self, slug: str, mk: Dict[str, Any],
+                           outcome: str) -> None:
+        """Durable record of how each unmatched position ended, for the
+        paired %, time-to-completion and age metrics."""
+        since = mk.get("lone_since")
+        if since is None:
+            return
+        rec = {"slug": slug, "outcome": outcome, "t": now_iso(),
+               "age_s": round(time.time() - float(since)),
+               "actions": mk.get("recovery_actions", {})}
+        lst = self.b.d.setdefault("recoveries", [])
+        lst.append(rec)
+        del lst[:-RECOVERY_LOG_KEEP]
+        mk.pop("recovery_actions", None)
+        mk.pop("recovery_logged", None)
+        log("RECOVERY_RESOLVED", **rec)
+
+    def recovery_metrics(self) -> Dict[str, Any]:
+        recs = self.b.d.get("recoveries") or []
+        paired = sorted(r["age_s"] for r in recs if r["outcome"] == "paired")
+        q = (lambda xs, f: xs[min(len(xs) - 1, int(f * len(xs)))]
+             if xs else None)
+        now = time.time()
+        ages = {"lt_60s": 0, "lt_10m": 0, "lt_1h": 0, "ge_1h": 0}
+        notional = D(0)
+        for s in self.active():
+            mk = self.b.m(s)
+            if mk.get("lone_since") is None:
+                continue
+            a = now - float(mk["lone_since"])
+            k = ("lt_60s" if a < 60 else "lt_10m" if a < 600 else
+                 "lt_1h" if a < 3600 else "ge_1h")
+            ages[k] += 1
+            notional += self.b.unmatched_cost(s)
+        return {"resolved": len(recs),
+                "paired_pct": (round(100 * len(paired) / len(recs), 1)
+                               if recs else None),
+                "time_to_pair_s_median": q(paired, 0.5),
+                "time_to_pair_s_p95": q(paired, 0.95),
+                "open_by_age": ages, "open_notional_usd": str(notional)}
+
+    def _recover(self, slug: str, mk: Dict[str, Any], spec: Mapping,
+                 bbo: Mapping, tick: D, lead: str, lag: str, need: D,
+                 lead_px: D, cur, lone_since: float) -> None:
+        """ONE decision per loop for an unmatched position, executed through
+        the existing order path (exact-id cancel confirmed by a status read
+        before any replacement; partial fills booked from that read)."""
+        from src import pmus_sports_recovery as RC
+        late = bool(is_late((getattr(self.v, "states", {}) or {}).get(slug))
+                    ) if LATE_CUTOFF else False
+        resting_px = None
+        if cur:
+            rem = D(cur[1]["qty"]) - D(cur[1]["filled"])
+            if rem == need and cur[1].get("stage") != "two_sided_exit":
+                resting_px = D(cur[1]["px"])
+        dec = RC.decide(
+            lead=lead, lead_px=lead_px, need=need, bid=bbo.get("bid"),
+            ask=bbo.get("ask"), tick=tick, age_s=time.time() - lone_since,
+            late=late, resting_px=resting_px,
+            taker_allowed=RECOVERY_TAKER,
+            taker_chunk=(RECOVERY_TAKER_CHUNK if RECOVERY_TAKER_CHUNK > 0
+                         else None),
+            min_qty=spec["min_qty"],
+            params={"taker_fee_rate": TAKER_FEE_RATE})
+        act = dec["action"]
+        acts = mk.setdefault("recovery_actions", {})
+        key = f"{act}:{dec.get('px')}:{dec.get('qty')}"
+        if mk.get("recovery_logged") != key:
+            mk["recovery_logged"] = key
+            acts[act] = acts.get(act, 0) + 1
+            log("RECOVERY_DECISION", slug=slug, lead=lead, lead_px=lead_px,
+                need=need, age_s=round(time.time() - lone_since),
+                late=late, decision=dec,
+                label="model-based choice; values are ESTIMATES relative "
+                      "to holding at mid, never P&L")
+        if act == "KEEP":
+            return
+        if cur:
+            # anything else replaces or removes the resting order first:
+            # exact-id cancel, then book what the venue says it filled
+            self.v.cancel(cur[0])
+            st = self.v.status(cur[0])
+            self._record_fill(slug, lag, cur[0], st)
+            cur[1]["open"] = st["open"]
+            self.b.save()
+            return                       # re-decide on the reconciled book
+        if act == "HOLD" or dec["qty"] < spec["min_qty"]:
+            return
+        if act in ("COMPLETE_TAKER", "PARTIAL_REBALANCE"):
+            log("EXIT_LONE_LEG", slug=slug, lead=lead, lead_px=lead_px,
+                take_side=lag, take_px=dec["px"], qty=dec["qty"],
+                pair_cost=lead_px + dec["px"], recovery=act,
+                label="recovery taker; bounded by the engine's lock-loss "
+                      "cap; settles at par")
+            self.place(slug, lag, dec["px"], dec["qty"], "two_sided_exit",
+                       post_only=False)
+            return
+        self.place(slug, lag, dec["px"], dec["qty"], "two_sided_complete")
+
     def active(self) -> list:
         return [s for s, mk in self.b.d["markets"].items() if not mk["done"]]
 
@@ -1399,6 +1523,8 @@ class Engine:
                         pass
             if not any(o.get("open") for o in mk["orders"].values()):
                 mk["done"] = True
+                if mk.get("lone_since") is not None:
+                    self._recovery_resolved(slug, mk, "abandoned")
                 log("market_abandoned", slug=slug, pos=mk["pos"],
                     label="owner abandoned: orders cancelled, no new "
                           "orders; position rides to settlement")
@@ -1416,6 +1542,8 @@ class Engine:
                             pass
                         o["open"] = False
                 mk["done"] = True
+                if mk.get("lone_since") is not None:
+                    self._recovery_resolved(slug, mk, "held_to_close")
                 self.b.save()
                 log("market_closed", slug=slug, pos=mk["pos"],
                     unmatched_cost=self.b.unmatched_cost(slug))
@@ -1445,6 +1573,8 @@ class Engine:
                     locked_edge_per_pair=ONE - cpair,
                     label="locked pair economics; realized at settlement")
             mk.pop("complete_px", None)
+            if mk.get("lone_since") is not None:
+                self._recovery_resolved(slug, mk, "paired")
             mk.pop("lone_since", None)
             if self.ws is not None and \
                     time.time() < float(mk.get("jump_pause_until") or 0):
@@ -1473,7 +1603,7 @@ class Engine:
                 qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES" or
-                       self.daily_stopped())
+                       self.daily_stopped() or self.halt_new_exposure())
             late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
                 if LATE_CUTOFF else None
             if excluded(slug):
@@ -1576,11 +1706,23 @@ class Engine:
             self.v.cancel(oid)
             st = self.v.status(oid)
             self._record_fill(slug, lead, oid, st)
-            o["open"] = False
+            # LIVE 2026-11-15: this was `False` unconditionally -- a cancel
+            # the venue had not yet applied left an order resting that the
+            # book called closed (the orphan that latched the watchdog).
+            o["open"] = st["open"]
             self.b.save()
             return
         cur = open_by_side.get(lag)
-        lone_since = float(mk.setdefault("lone_since", time.time()))
+        if mk.get("lone_since") is None:
+            # durable at once: an unmatched position must survive a restart
+            # with its age (it was only saved by a later order action)
+            mk["lone_since"] = time.time()
+            self.b.save()
+        lone_since = float(mk["lone_since"])
+        if RECOVERY_ON:
+            self._recover(slug, mk, spec, bbo, tick, lead, lag, need,
+                          lead_px, cur, lone_since)
+            return
         comp_ask = (bbo["ask"] if lag == "YES" else ONE - bbo["bid"])
         exit_s, exit_max = exit_rule(slug)
         exit_due = exit_s > 0 and time.time() - lone_since >= exit_s \
@@ -1948,6 +2090,8 @@ class Engine:
             "jump_pauses": self.jump_pauses}
         log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
+            recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
+                          taker=RECOVERY_TAKER),
             pairs=len(pairs),
             # each PAIR_LOCKED row carries the market's CUMULATIVE pairs and
             # average cost, so only the LATEST row per market counts (summing
