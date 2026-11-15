@@ -169,6 +169,26 @@ def account_risk():
     return json.loads(hb[-1].split(" ", 1)[1]).get("day_realized") or {}
 
 
+def cash_available():
+    """The venue's own buying power, from the 15m service's heartbeat.
+
+    Same figure, same route (/v1/account/balances) the executor itself
+    reads at the submission gate under FOREIGN_EXPOSURE=REPORTED. None is
+    no reading and refuses; it is never read as unlimited.
+    """
+    dep, _ = latest_deployment(PMUS15)
+    hb = [m for m in logs(dep, 600) if m.startswith("L5_LIVE_HB")]
+    if not hb:
+        return None
+    ac = json.loads(hb[-1].split(" ", 1)[1]).get("available_cash")
+    if not isinstance(ac, dict) or ac.get("usd") is None:
+        return None
+    try:
+        return D(str(ac["usd"]))
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
 def btc5m_variables():
     q = ("query($p:String!,$e:String!,$s:String!){ variables(projectId:$p,"
          " environmentId:$e, serviceId:$s) }")
@@ -247,11 +267,24 @@ def main(argv):
             % (booked, room, fits, sh["real_worst_usd"],
                max(1, int(room / WINDOWS)) if room >= WINDOWS else 1))
 
-    # 3. account exposure headroom. Foreign contracts are charged at $1.00
+    # 3. account exposure headroom, under whichever rule the SERVICE will
+    #    actually apply -- read from its own variables, not assumed here.
+    #
+    #    CHARGED (the default): every foreign contract is charged at $1.00
     #    GROSS, so another lane's MATCHED inventory can consume the cap.
     #    Shadow cannot see this: the account block reads null unarmed.
+    #
+    #    REPORTED: the cap bounds OUR exposure and the venue's own buying
+    #    power bounds what the shared account can fund, so the check that
+    #    matters is cash, not the other lane's inventory. Checked here too
+    #    rather than left to the first window, because arming into an
+    #    account that cannot fund the clip is the failure this script
+    #    exists to prevent.
     cap = D(str(v.get("L5_ACCOUNT_MAX_EXPOSURE_USD") or "0"))
     NEED_EXPOSURE_HEADROOM = sh["need_exposure_headroom"]
+    mode = (v.get("L5_BTC5M_FOREIGN_EXPOSURE") or "CHARGED").strip().upper()
+    mode = "REPORTED" if mode == "REPORTED" else "CHARGED"
+    print("foreign exposure mode: %s" % mode)
     dep, _ = latest_deployment(BTC5M)
     other = None
     for m in reversed(logs(dep, 400)):
@@ -260,7 +293,21 @@ def main(argv):
             if acct.get("other_usd") is not None:
                 other = D(str(acct["other_usd"]))
                 break
-    if other is None:
+    if mode == "REPORTED":
+        if NEED_EXPOSURE_HEADROOM > cap:
+            return refuse("our own worst instant %s exceeds cap %s"
+                          % (NEED_EXPOSURE_HEADROOM, cap))
+        cash = cash_available()
+        if cash is None:
+            return refuse("buying power unreadable; the service will refuse "
+                          "every order with ACCOUNT_CASH_UNREADABLE")
+        if cash < NEED_EXPOSURE_HEADROOM:
+            return refuse("buying power %s < worst instant %s "
+                          "(ACCOUNT_CASH_SHORT)" % (cash, NEED_EXPOSURE_HEADROOM))
+        print("ours %s within cap %s; buying power %s; foreign %s reported, "
+              "not charged" % (NEED_EXPOSURE_HEADROOM, cap, cash,
+                               "unknown" if other is None else other))
+    elif other is None:
         print("NOTE: no recent armed step, so foreign exposure is unknown. "
               "It is only observable while armed; the first window will "
               "report it and refuse with ACCOUNT_EXPOSURE_CAP if short.")
