@@ -351,6 +351,68 @@ def account_cap() -> Optional[Decimal]:
     return cap if cap is not None and cap >= 0 else None
 
 
+#: HOW ANOTHER LANE'S INVENTORY COUNTS AGAINST OUR ACCOUNT CEILING.
+#:
+#: "CHARGED" is the default and today's behaviour: every contract this
+#: ledger did not create is charged at FOREIGN_USD_PER_CONTRACT ($1) and
+#: counted against ACCOUNT_CAP_ENV. That was right when this was the only
+#: automated lane on the account.
+#:
+#: WHY IT STOPPED BEING RIGHT, measured 2026-11-15T03:30Z. The owner's
+#: sports lane held 45 contracts, which this priced at $48.90 against a
+#: $17 ceiling, and BTC5m refused every order with ACCOUNT_EXPOSURE_CAP
+#: for five consecutive windows at $0 of its own risk. Two different
+#: things had been collapsed into one number:
+#:   - OUR risk, which the owner's ceiling exists to bound; and
+#:   - another lane's inventory, which is bounded by that lane's own
+#:     limits and is not ours to lose.
+#: The $1 charge is also a 12.5x overstatement at an 8c entry, the same
+#: defect COST_BASIS_OVERSTATEMENT.md documents for our own legs.
+#:
+#: "REPORTED" separates them. The ceiling then bounds OUR exposure, and a
+#: SECOND check -- the venue's own buying power -- bounds what the shared
+#: account can actually fund. Foreign inventory is still read, still
+#: reported in the account block, and still makes the account UNKNOWN when
+#: it cannot be read; it just stops being charged to us.
+#:
+#: FAIL CLOSED EITHER WAY: unreadable buying power refuses, exactly as an
+#: unreadable foreign book does. Unknown cash is never read as unlimited.
+FOREIGN_EXPOSURE_ENV = "L5_BTC5M_FOREIGN_EXPOSURE"
+FOREIGN_CHARGED, FOREIGN_REPORTED = "CHARGED", "REPORTED"
+
+
+def _buying_power(transport: Any) -> Optional[Decimal]:
+    """The venue's own account-scoped funds, or None if unreadable.
+
+    Both halves come from the transport: `account()` for the answer and
+    the transport class's own `buying_power` to read it. This module
+    deliberately imports nothing that holds a credential or knows a venue
+    schema (TestIsolationOfTheModule pins that), so it does not carry a
+    second copy of the balances parser -- a transport that cannot parse
+    its own answer reads as unreadable.
+
+    ANY failure -- no cash route, a network error, no parser, a shape the
+    parser does not know -- reads as unreadable, and an unreadable cash
+    figure refuses the order. Unknown cash is never unlimited.
+    """
+    parse = getattr(type(transport), "buying_power", None)
+    if parse is None:
+        return None
+    try:
+        out = parse(transport.account())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    return out if isinstance(out, Decimal) else None
+
+
+def foreign_exposure_mode() -> str:
+    """CHARGED unless EXACTLY "REPORTED" is set. Anything else is CHARGED."""
+    raw = str(os.environ.get(FOREIGN_EXPOSURE_ENV, "")).strip().upper()
+    return FOREIGN_REPORTED if raw == FOREIGN_REPORTED else FOREIGN_CHARGED
+
+
 class Btc5mExecutor:
     """The controller's hands for one 5-minute market. See the module doc."""
 
@@ -1002,7 +1064,27 @@ class Btc5mExecutor:
         report["exposure"]["account"] = acct
         if acct["unknown"]:
             return refuse("ACCOUNT_STATE_UNKNOWN", detail=acct["unknown_reason"])
-        if acct["total_usd"] + notional > cap:
+        mode = foreign_exposure_mode()
+        report["exposure"]["foreign_mode"] = mode
+        if mode == FOREIGN_REPORTED:
+            #: OUR exposure against the owner's ceiling, and the venue's own
+            #: buying power against what we are about to commit. Foreign
+            #: inventory is reported above and charged to nobody here.
+            if acct["own_usd"] + notional > cap:
+                return refuse("ACCOUNT_EXPOSURE_CAP",
+                              total_usd=acct["own_usd"], cap_usd=cap,
+                              foreign_mode=mode,
+                              other_usd_reported=_s(acct["other_usd"]))
+            bp = _buying_power(self.transport)
+            report["exposure"]["buying_power_usd"] = (None if bp is None
+                                                      else _s(bp))
+            if bp is None:
+                return refuse("ACCOUNT_CASH_UNREADABLE")
+            if acct["own_usd"] + notional > bp:
+                return refuse("ACCOUNT_CASH_SHORT",
+                              own_usd=_s(acct["own_usd"]),
+                              buying_power_usd=_s(bp))
+        elif acct["total_usd"] + notional > cap:
             return refuse("ACCOUNT_EXPOSURE_CAP", total_usd=acct["total_usd"],
                           other_usd=acct["other_usd"], cap_usd=cap)
         # THE AUTHORIZATION CLAIM. The owner's approval for THIS 5-minute
