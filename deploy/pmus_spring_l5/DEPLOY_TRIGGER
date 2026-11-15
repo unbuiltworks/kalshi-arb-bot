@@ -255,3 +255,4 @@
 2026-11-14T20:40Z REWARD_CHECK: hourly venue /v1/incentives/earnings (credited vs pending), rows on our markets.
 2026-11-15T03:10Z REWARD_CHECK logs earnings rows (scalar fields) to attribute the PAID/SKIPPED rows.
 2026-11-15T03:25Z late-game cutoff: no new pairs in Q4/OT, CBB last 10m, P3, soccer 70'+, tennis S3+, table tennis S4+, UFC final round; late games not selected.
+2026-11-15T03:50Z hourly ACCOUNT_AUDIT (venue realizedPnl per market/sport, our-side fees); tennis pair cap 0.96.

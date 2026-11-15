@@ -55,6 +55,15 @@ MAX_MARKETS = int(os.getenv("PMUS_TWO_SIDED_MAX_MARKETS", "3"))
 PER_MARKET_CAP = _env_d("PMUS_TWO_SIDED_PER_MARKET_USD", "1.50")
 TOTAL_CAP = _env_d("PMUS_TWO_SIDED_TOTAL_USD", "4.50")
 PAIR_CAP = _env_d("PMUS_TWO_SIDED_PAIR_CAP", "0.98")
+# OWNER 2026-11-15: tennis completes 88% of pairs, so keep more edge there.
+PAIR_CAP_TENNIS = _env_d("PMUS_TWO_SIDED_PAIR_CAP_TENNIS", "0.96")
+TENNIS_TAGS = ("-atp-", "-wta-", "-itfme-", "-itfwo-", "-utr-", "-atpdb-",
+               "-wtadb-", "-atpcq-", "-wtt-")
+
+
+def pair_cap(slug: str) -> D:
+    return PAIR_CAP_TENNIS if any(t in "-" + str(slug) for t in TENNIS_TAGS) \
+        else PAIR_CAP
 BAND_LO = _env_d("PMUS_TWO_SIDED_BAND_LO", "0.25")
 BAND_HI = _env_d("PMUS_TWO_SIDED_BAND_HI", "0.75")
 MAX_SPREAD_TICKS = int(os.getenv("PMUS_TWO_SIDED_MAX_SPREAD_TICKS", "6"))
@@ -251,7 +260,8 @@ def floor_tick(px: D, tick: D) -> D:
     return (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
 
 
-def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS
+def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS,
+                cap: Optional[D] = None
                 ) -> Optional[Dict[str, D]]:
     """Both opening bids, D ticks under each side's touch. None if refused."""
     if yes_bid is None or yes_ask is None or yes_ask <= yes_bid:
@@ -262,7 +272,7 @@ def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS
         return None
     y = floor_tick(yes_bid - depth * tick, tick)
     n = floor_tick((ONE - yes_ask) - depth * tick, tick)
-    if y < tick or n < tick or y + n > PAIR_CAP:
+    if y < tick or n < tick or y + n > (PAIR_CAP if cap is None else cap):
         return None
     return {"YES": y, "NO": n}
 
@@ -782,7 +792,8 @@ class Engine:
                 qty = max(REWARD_QTY, spec["min_qty"])
             else:
                 for d in range(max(0, DEPTH_TICKS - steps), DEPTH_TICKS + 1):
-                    want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d)
+                    want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d,
+                                       cap=pair_cap(slug))
                     if want is not None:
                         break
                 qty = max(QTY, spec["min_qty"])
@@ -896,7 +907,8 @@ class Engine:
             return
         # The partner was set together with the filled leg: leave it at its
         # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
-        cap_px = floor_tick(PAIR_CAP - lead_px, tick)
+        pcap = pair_cap(slug)
+        cap_px = floor_tick(pcap - lead_px, tick)
         lag_bid = side_bid(lag, bbo["bid"], bbo["ask"])
         if cur:
             rem_open = D(cur[1]["qty"]) - D(cur[1]["filled"])
@@ -920,8 +932,8 @@ class Engine:
         px = D(mk.get("complete_px") or mk.get("partner_px", {}).get(lag)
                or "0") or floor_tick(
             min(side_bid(lag, bbo["bid"], bbo["ask"]) - DEPTH_TICKS * tick,
-                PAIR_CAP - lead_px), tick)
-        px = min(px, floor_tick(PAIR_CAP - lead_px, tick))
+                pcap - lead_px), tick)
+        px = min(px, floor_tick(pcap - lead_px, tick))
         if px < tick or px >= side_bid(lag, bbo["bid"], bbo["ask"]) + \
                 (bbo["ask"] - bbo["bid"]):
             return
@@ -1002,6 +1014,69 @@ class Engine:
         for p in self.b.d.get("pairs") or []:
             last[p["slug"]] = p
         return last
+
+    AUDIT_SINCE = os.getenv("PMUS_TWO_SIDED_AUDIT_SINCE",
+                            "2026-11-14T15:30:00Z")
+
+    def account_audit(self) -> None:
+        """VENUE TRUTH for this bot's markets, from /v1/portfolio/activities:
+        realizedPnl summed per market and per sport (trades + resolutions),
+        and the commissions on OUR side of our trades (taker fees charged,
+        maker rebates credited). Owner 2026-11-15: P&L from one source."""
+        try:
+            from src import pmus_settlement_auditor as SA
+            from src import pmus_incentive_audit as IA
+            walk = SA.activity_pages(self.v.t, since=self.AUDIT_SINCE,
+                                     max_pages=200)
+        except Exception as exc:                          # noqa: BLE001
+            log("ACCOUNT_AUDIT", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return
+        ours = set(self.b.d.get("markets") or {})
+        per_mkt: Dict[str, D] = {}
+        types: Dict[str, int] = {}
+        mine = []
+        for r in walk.get("rows") or []:
+            body = None
+            for k in ("trade", "positionResolution", "accountBalanceChange"):
+                if isinstance(r.get(k), Mapping):
+                    body = r[k]
+                    break
+            if not body:
+                continue
+            slug = str(body.get("marketSlug") or "")
+            if slug not in ours:
+                continue
+            mine.append(r)
+            t = str(r.get("type") or "?")
+            types[t] = types.get(t, 0) + 1
+            rp = body.get("realizedPnl")
+            rp = rp.get("value") if isinstance(rp, Mapping) else rp
+            try:
+                v = D(str(rp)) if rp is not None else None
+            except Exception:                             # noqa: BLE001
+                v = None
+            if v is not None:
+                per_mkt[slug] = per_mkt.get(slug, D(0)) + v
+        sport: Dict[str, D] = {}
+        for slug, v in per_mkt.items():
+            k = slug.split("-")[1] if slug.count("-") > 1 else "?"
+            sport[k] = sport.get(k, D(0)) + v
+        try:
+            fees = IA.credited_on_fills(mine)
+        except Exception as exc:                          # noqa: BLE001
+            fees = {"error": repr(exc)[:120]}
+        log("ACCOUNT_AUDIT", ok=True, since=self.AUDIT_SINCE,
+            walk_ended=walk.get("ended"), rows_ours=len(mine), types=types,
+            venue_realized_pnl_usd=str(sum(per_mkt.values(), D(0))),
+            realized_by_sport={k: str(v) for k, v in sorted(sport.items())},
+            realized_by_market={k: str(v) for k, v in sorted(per_mkt.items())},
+            fees_our_side={k: fees.get(k) for k in
+                           ("charged_to_us_usd", "credited_to_us_usd",
+                            "net_to_us_usd", "our_fills_with_a_credit",
+                            "trades", "error") if k in fees},
+            label="venue realizedPnl on this bot's markets; fees are OUR "
+                  "side per isAggressor. Rewards are separate (REWARD_CHECK).")
 
     def reward_check(self) -> None:
         """OBSERVED reward earnings from the venue. Only rows the venue marks
@@ -1089,6 +1164,7 @@ class Engine:
                         time.monotonic() - self._last_reward > REWARD_CHECK_S:
                     self._last_reward = time.monotonic()
                     self.reward_check()
+                    self.account_audit()
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()
