@@ -121,10 +121,10 @@ def test_total_cap_blocks_new_pairs(eng, monkeypatch):
     v.orders[yes].update(filled=D("1"), open=False)
     e.step_market("aec-x")
     assert e.b.total_unmatched() == D("0.42")
-    e.b.d["markets"]["aec-x"]["done"] = True
+    # an OPEN lone leg at/over the cap blocks selecting another market
     v.targets.append({"slug": "aec-y", "market_meta": {"bestBidQuote": "0.44", "bestAskQuote": "0.46"}})
     e.select(v.account())
-    assert e.active() == []
+    assert e.active() == ["aec-x"]
 
 
 def test_flat_market_out_of_band_frees_its_slot(eng, monkeypatch):
