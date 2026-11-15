@@ -1475,8 +1475,9 @@ def test_recovery_no_fills_yes_completion_and_pair_record(rec):
     e.step_market(slug)
     recs = e.b.d["recoveries"]
     assert recs[-1]["outcome"] == "paired" and recs[-1]["slug"] == slug
-    m = e.recovery_metrics()
+    m = e.recovery_metrics()["recovery"]
     assert m["paired_pct"] == 100.0 and m["time_to_pair_s_median"] is not None
+    assert recs[-1]["controller"] == "recovery" and "improved" in recs[-1]
 
 
 def test_recovery_taker_only_when_authorized_and_old(rec, monkeypatch):
@@ -1567,3 +1568,86 @@ def test_halt_new_exposure_blocks_other_first_legs(rec, monkeypatch):
 
 def test_recovery_off_by_default():
     assert M.RECOVERY_ON is False and M.RECOVERY_TAKER is False
+
+
+# ------------------------------------------------ shared halt (2026-11-15)
+def test_shared_halt_unset_changes_nothing(eng, monkeypatch):
+    monkeypatch.delenv("L5_HALT_URL", raising=False)
+    e, v = eng
+    assert e.shared_halt() is None
+
+
+def _halt_state(monkeypatch, state):
+    from src import l5_halt_gate as HG
+    monkeypatch.setenv("L5_HALT_URL", "http://watchdog.internal/l5")
+    monkeypatch.setattr(HG.HaltGate, "state", lambda self: state)
+
+
+def test_shared_halt_asserted_refuses_every_placement(eng, monkeypatch, capsys):
+    _halt_state(monkeypatch, {"permitted": False, "why": "halt_asserted"})
+    e, v = eng
+    assert e.shared_halt() == "HALT"
+    e.place("aec-x", "NO", D("0.50"), D("1"), "two_sided_complete")
+    assert v.orders == {}
+    assert '"place_refused_shared_halt"' in capsys.readouterr().out
+
+
+def test_shared_halt_unreadable_blocks_openings_not_recovery(eng, monkeypatch):
+    _halt_state(monkeypatch, {"permitted": False,
+                              "why": "halt_state_unavailable"})
+    e, v = eng
+    assert e.shared_halt() == "UNAVAILABLE"
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.b.m("aec-x")
+    e.step_market("aec-x")
+    assert v.orders == {}                       # no new first legs
+    e.place("aec-x", "NO", D("0.50"), D("1"), "two_sided_complete")
+    assert len(v.orders) == 1                   # risk-reducing still allowed
+
+
+def test_shared_halt_permitted_is_cached(eng, monkeypatch):
+    calls = []
+    from src import l5_halt_gate as HG
+    monkeypatch.setenv("L5_HALT_URL", "http://watchdog.internal/l5")
+    monkeypatch.setattr(HG.HaltGate, "state",
+                        lambda self: calls.append(1) or {"permitted": True})
+    e, v = eng
+    assert e.shared_halt() is None and e.shared_halt() is None
+    assert len(calls) == 1
+
+
+
+def test_legacy_positions_are_reported_apart_from_recovery(eng, monkeypatch):
+    e, v = eng                                       # RECOVERY_ON False
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market(slug)
+    no = next(k for k, o in v.orders.items() if o["side"] == "NO" and o["open"])
+    v.orders[no].update(filled=D("1"), open=False)
+    e.step_market(slug)
+    m = e.recovery_metrics()
+    assert m["legacy"]["resolved"] == 1 and m["recovery"]["resolved"] == 0
+
+
+def test_book_settled_pnl_and_discrepancy():
+    from src import pmus_sports_pnl as P
+    mk = {"aec-a": {"settle_px": "1", "orders": {"o": {"placed_at": 100}},
+                    "pos": {"YES": "2", "NO": "1"},
+                    "cost": {"YES": "0.90", "NO": "0.52"}},
+          "aec-b": {"settle_px": "0", "orders": {"o": {"placed_at": 900}},
+                    "pos": {"YES": "1", "NO": "0"},
+                    "cost": {"YES": "0.44", "NO": "0"}},
+          "aec-c": {"orders": {}, "pos": {"YES": "1", "NO": "0"},
+                    "cost": {"YES": "0.4", "NO": "0"}}}
+    b = P.book_settled(mk)
+    # a: 2*1 + 1*0 - 1.42 = 0.58 ; b: 0 - 0.44
+    assert b["markets"] == 2 and b["settled_usd"] == D("0.14")
+    assert b["worst"]["slug"] == "aec-b"
+    assert P.book_settled(mk, since=500)["markets"] == 1
+    d = P.discrepancies({"aec-a": "0.10", "aec-b": "-0.44"}, b["by_market"],
+                        ["aec-a", "aec-b"])
+    assert [r["slug"] for r in d] == ["aec-a"]

@@ -130,3 +130,54 @@ def book_economics(markets: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
             "completed_pairs": str(pairs),
             "gross_pair_margin_usd": str(margin.quantize(D("0.0001"))),
             "unmatched_cost_usd": str(unmatched_cost.quantize(D("0.0001")))}
+
+
+def book_settled(markets: Mapping[str, Mapping[str, Any]],
+                 since: Optional[float] = None) -> Dict[str, Any]:
+    """INDEPENDENT settled P&L from the bot's own venue-confirmed fills and
+    the venue's PUBLIC final settlement price: YES pays px, NO pays 1-px.
+    Correct with or without netting (gross fills, gross payout). Fees are
+    not in the fill cost and are reported separately. `since` keeps only
+    markets whose first order was placed at/after that epoch second."""
+    tot = D(0)
+    per: Dict[str, D] = {}
+    for slug, mk in markets.items():
+        px = mk.get("settle_px")
+        if px is None:
+            continue
+        if since is not None and _first_order_t(mk) < since:
+            continue
+        y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        if y == 0 and n == 0:
+            continue
+        pnl = y * D(px) + n * (D(1) - D(px)) - D(mk["cost"]["YES"]) \
+            - D(mk["cost"]["NO"])
+        per[slug] = pnl
+        tot += pnl
+    worst = min(per.items(), key=lambda kv: kv[1]) if per else None
+    return {"markets": len(per), "settled_usd": tot,
+            "by_sport": _by_sport(per),
+            "worst": {"slug": worst[0], "usd": str(worst[1])} if worst
+            else None,
+            "by_market": {k: str(v) for k, v in per.items()}}
+
+
+def _first_order_t(mk: Mapping[str, Any]) -> float:
+    ts = [float(o.get("placed_at") or 0) for o in
+          (mk.get("orders") or {}).values()]
+    return min(ts) if ts else 0.0
+
+
+def discrepancies(venue_by_market: Mapping[str, str],
+                  book_by_market: Mapping[str, str], settled_slugs,
+                  tol: D = D("0.02"), limit: int = 8) -> list:
+    """Markets where the venue's settled figure and the book's disagree."""
+    out = []
+    for s in settled_slugs:
+        if s in venue_by_market and s in book_by_market:
+            d = D(venue_by_market[s]) - D(book_by_market[s])
+            if abs(d) > tol:
+                out.append({"slug": s, "venue": venue_by_market[s],
+                            "book": book_by_market[s], "diff": str(d)})
+    out.sort(key=lambda r: -abs(D(r["diff"])))
+    return out[:limit]

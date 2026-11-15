@@ -231,6 +231,15 @@ RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
 # at/above this (recovery mode only).
 UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
 RECOVERY_LOG_KEEP = 500
+# OWNER 2026-11-15: "never override watchdog or reconciliation halts". The
+# shared latch (l5_halt_gate, the record the watchdog writes and BTC5m
+# reads) is read every SHARED_HALT_TTL_S when L5_HALT_URL is set:
+#   halt asserted -> NO order of any kind is placed (cancels stay allowed)
+#   unreadable    -> no NEW first legs; risk-reducing recovery continues
+SHARED_HALT_URL_ENV = "L5_HALT_URL"
+SETTLE_LOOKUPS_PER_AUDIT = int(os.getenv(
+    "PMUS_TWO_SIDED_SETTLE_LOOKUPS", "25"))
+SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
 # -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
@@ -1348,6 +1357,17 @@ class Engine:
         rec = {"slug": slug, "outcome": outcome, "t": now_iso(),
                "age_s": round(time.time() - float(since)),
                "actions": mk.get("recovery_actions", {})}
+        ls = mk.pop("lone_start", None) or {}
+        rec["controller"] = ls.get("controller", "legacy")
+        if outcome == "paired" and ls:
+            lag = ls["lag"]
+            dq = D(mk["pos"][lag]) - D(ls["qty0"])
+            if dq > 0:
+                paid = (D(mk["cost"][lag]) - D(ls["cost0"])) / dq
+                rec["completion_px"] = str(paid)
+                rec["start_taker_px"] = ls["taker_px"]
+                # improved: cheaper than taking at once when it went lone
+                rec["improved"] = paid < D(ls["taker_px"])
         lst = self.b.d.setdefault("recoveries", [])
         lst.append(rec)
         del lst[:-RECOVERY_LOG_KEEP]
@@ -1355,29 +1375,52 @@ class Engine:
         mk.pop("recovery_logged", None)
         log("RECOVERY_RESOLVED", **rec)
 
-    def recovery_metrics(self) -> Dict[str, Any]:
-        recs = self.b.d.get("recoveries") or []
+    def mark_recovery_start(self) -> None:
+        """Once, the first time the recovery controller runs: positions
+        that went lone before this are LEGACY and are reported apart."""
+        if RECOVERY_ON and not self.b.d.get("recovery_since"):
+            self.b.d["recovery_since"] = time.time()
+            self.b.save()
+            log("recovery_controller_activated", since=now_iso())
+
+    def recovery_metrics(self, controller: Optional[str] = None
+                         ) -> Dict[str, Any]:
+        if controller is None:
+            return {"legacy": self.recovery_metrics("legacy"),
+                    "recovery": self.recovery_metrics("recovery"),
+                    "open": self._open_unmatched()}
+        recs = [r for r in (self.b.d.get("recoveries") or [])
+                if r.get("controller", "legacy") == controller]
         paired = sorted(r["age_s"] for r in recs if r["outcome"] == "paired")
         q = (lambda xs, f: xs[min(len(xs) - 1, int(f * len(xs)))]
              if xs else None)
+        judged = [r for r in recs if "improved" in r]
+        return {"resolved": len(recs),
+                "paired_pct": (round(100 * len(paired) / len(recs), 1)
+                               if recs else None),
+                "time_to_pair_s_median": q(paired, 0.5),
+                "time_to_pair_s_p95": q(paired, 0.95),
+                "improved_vs_immediate_taker": sum(
+                    1 for r in judged if r["improved"]),
+                "worse_than_immediate_taker": sum(
+                    1 for r in judged if not r["improved"]),
+                "held_to_close": sum(1 for r in recs
+                                     if r["outcome"] == "held_to_close")}
+
+    def _open_unmatched(self) -> Dict[str, Any]:
         now = time.time()
         ages = {"lt_60s": 0, "lt_10m": 0, "lt_1h": 0, "ge_1h": 0}
         notional = D(0)
-        for s in self.active():
-            mk = self.b.m(s)
+        for s_ in self.active():
+            mk = self.b.m(s_)
             if mk.get("lone_since") is None:
                 continue
             a = now - float(mk["lone_since"])
             k = ("lt_60s" if a < 60 else "lt_10m" if a < 600 else
                  "lt_1h" if a < 3600 else "ge_1h")
             ages[k] += 1
-            notional += self.b.unmatched_cost(s)
-        return {"resolved": len(recs),
-                "paired_pct": (round(100 * len(paired) / len(recs), 1)
-                               if recs else None),
-                "time_to_pair_s_median": q(paired, 0.5),
-                "time_to_pair_s_p95": q(paired, 0.95),
-                "open_by_age": ages, "open_notional_usd": str(notional)}
+            notional += self.b.unmatched_cost(s_)
+        return {"by_age": ages, "notional_usd": str(notional)}
 
     def _recover(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                  bbo: Mapping, tick: D, lead: str, lag: str, need: D,
@@ -1480,8 +1523,40 @@ class Engine:
         self.b.save()
         log("cancelled_all_own", why=why)
 
+    def shared_halt(self) -> Optional[str]:
+        """None = permitted; "HALT" = the watchdog asserted the shared halt;
+        "UNAVAILABLE" = configured but unreadable/stale. Not configured ->
+        None (logged once), the behavior before this check existed."""
+        url = (os.getenv(SHARED_HALT_URL_ENV) or "").strip()
+        if not url:
+            if not getattr(self, "_halt_unset_logged", False):
+                self._halt_unset_logged = True
+                log("shared_halt_not_configured", env=SHARED_HALT_URL_ENV)
+            return None
+        now = time.monotonic()
+        hit = getattr(self, "_halt_cache", None)
+        if hit and now - hit[0] < SHARED_HALT_TTL_S:
+            return hit[1]
+        try:
+            from src import l5_halt_gate as HG
+            st = HG.HaltGate(HG.HttpHaltStore(url)).state()
+            why = st.get("why")
+            val = None if st.get("permitted") else (
+                "HALT" if why in ("halt_asserted", "env_halt")
+                else "UNAVAILABLE")
+        except Exception as exc:                          # noqa: BLE001
+            why, val = f"{type(exc).__name__}", "UNAVAILABLE"
+        if val != (hit[1] if hit else "init"):
+            log("shared_halt", state=val or "PERMITTED", why=why)
+        self._halt_cache = (now, val)
+        return val
+
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if self.shared_halt() == "HALT":
+            log("place_refused_shared_halt", slug=slug, side=side, px=px,
+                qty=qty, stage=stage)
+            return
         oid = (self.v.place(slug, side, px, qty, stage) if post_only else
                self.v.place(slug, side, px, qty, stage, post_only=False))
         mk = self.b.m(slug)
@@ -1603,7 +1678,8 @@ class Engine:
                 qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES" or
-                       self.daily_stopped() or self.halt_new_exposure())
+                       self.daily_stopped() or self.halt_new_exposure() or
+                       self.shared_halt() is not None)
             late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
                 if LATE_CUTOFF else None
             if excluded(slug):
@@ -1717,6 +1793,16 @@ class Engine:
             # durable at once: an unmatched position must survive a restart
             # with its age (it was only saved by a later order action)
             mk["lone_since"] = time.time()
+            # the counterfactual: completing by taker at the moment it went
+            # lone (ask + estimated fee) -- the yardstick for every later
+            # recovery outcome
+            c_ask = bbo["ask"] if lag == "YES" else ONE - bbo["bid"]
+            mk["lone_start"] = {"lag": lag, "cost0": mk["cost"][lag],
+                                "qty0": mk["pos"][lag],
+                                "taker_px": str(c_ask + taker_fee(
+                                    c_ask, need) / need),
+                                "controller": "recovery" if RECOVERY_ON
+                                else "legacy"}
             self.b.save()
         lone_since = float(mk["lone_since"])
         if RECOVERY_ON:
@@ -1985,6 +2071,27 @@ class Engine:
         # residual = what settled markets realized beyond their completed
         # pairs' gross margin (lone legs, exits; fees if the venue nets them)
         mk_all = self.b.d.get("markets") or {}
+        # the venue's PUBLIC final settlement price per market (bounded)
+        looked = 0
+        from src import pmus_settlement_public_px as SP
+        for s_, mk_ in mk_all.items():
+            if looked >= SETTLE_LOOKUPS_PER_AUDIT:
+                break
+            if mk_.get("settle_px") is not None or not mk_.get("done") or (
+                    D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
+                continue
+            looked += 1
+            try:
+                ps = SP.public_settlement(self.v.t, s_)
+            except Exception:                             # noqa: BLE001
+                continue
+            if ps.get("final"):
+                mk_["settle_px"] = ps["px"]
+        if looked:
+            self.b.save()
+        bs = PNL.book_settled(mk_all)
+        since = self.b.d.get("recovery_since")
+        bs_new = PNL.book_settled(mk_all, since=since) if since else None
         settled_margin = D(PNL.book_economics(
             {s: mk_all[s] for s in vr["settled_slugs"]
              if s in mk_all})["gross_pair_margin_usd"])
@@ -2004,7 +2111,17 @@ class Engine:
                 "7_settled_markets": vr["settled_markets"],
                 "unsettled_trade_realized_usd": str(
                     vr["unsettled_trade_realized_usd"]),
-                "trades_missing_realized": vr["trades_missing_realized"]},
+                "trades_missing_realized": vr["trades_missing_realized"],
+                "7b_book_settled_usd": str(bs["settled_usd"]),
+                "7b_book_settled_markets": bs["markets"],
+                "7b_book_settled_by_sport": bs["by_sport"],
+                "7b_worst_market": bs["worst"],
+                "7b_since_recovery_on": (
+                    {"usd": str(bs_new["settled_usd"]),
+                     "markets": bs_new["markets"],
+                     "by_sport": bs_new["by_sport"]} if bs_new else None),
+                "venue_vs_book_discrepancies": PNL.discrepancies(
+                    vr["by_market"], bs["by_market"], vr["settled_slugs"])},
             settled_by_sport=vr["settled_by_sport"],
             realized_by_market=vr["by_market"],
             label="venue rows only: realized = trade.realizedPnl + "
@@ -2114,7 +2231,13 @@ class Engine:
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
-        log("boot", **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
+        self.mark_recovery_start()
+        log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER,
+                              "unmatched_halt_usd": UNMATCHED_HALT_USD,
+                              "since": self.b.d.get("recovery_since"),
+                              "shared_halt_url_set": bool((os.getenv(
+                                  SHARED_HALT_URL_ENV) or "").strip())},
+            daily_loss_usd=DAILY_LOSS_USD, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
                           "qty": QTY, "pair_cap": PAIR_CAP},
             exit={"fee_aware": EXIT_FEE_AWARE, "taker_fee_rate": TAKER_FEE_RATE,
