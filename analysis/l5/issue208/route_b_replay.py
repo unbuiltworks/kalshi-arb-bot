@@ -29,6 +29,7 @@ measured -0.0236/contract, not by preferring more fills.
 from __future__ import annotations
 
 import argparse
+import math
 import re
 from datetime import datetime, timezone
 import os
@@ -69,7 +70,8 @@ def causally_eligible_book(window: str, opening_terminal_at: Optional[float],
         return False
     start = market_window_start(window)
     end = start + (300 if "-5m-" in window else 900)
-    return opening_terminal_at <= book_observed_at < end
+    return (start <= opening_terminal_at <= book_observed_at < end
+            and all(math.isfinite(t) for t in (opening_terminal_at, book_observed_at)))
 
 
 def _legs(window: str, got: Dict[str, Any], pr: Dict[str, Any]):
