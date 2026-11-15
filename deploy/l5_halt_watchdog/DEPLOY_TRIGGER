@@ -219,3 +219,4 @@ promote: 644ab221221aa23621966e322fbdb918b69573da 2026-11-01 one-action HALT
 promote: ebaef2d8 2026-11-01 emergency HALT cancel-all regardless of age
 2026-11-05T12:40Z watchdog read-only bounded retry on /v1/orders/open + redacted read_error_detail; owner-approved Option A; no trading change
 2026-11-14T17:00Z managed lanes: L5_WATCHDOG_MANAGED_LANE_URLS exempts a FRESH lane's own long-resting maker orders from the age latch (sports two-sided).
+2026-11-14T19:15Z reset precondition honours fresh managed lanes (same definition as the age exemption); no sports pause needed for future resets.

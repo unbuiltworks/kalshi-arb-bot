@@ -287,8 +287,28 @@ def _require_unconsumed(store: Any, rid: str) -> List[Dict[str, Any]]:
     return prior
 
 
+def managed_lane_claims(urls: Optional[List[str]] = None, *,
+                        opener: Any = None) -> set:
+    """Venue ids attested by FRESH managed lanes (L5_WATCHDOG_MANAGED_LANE_URLS).
+
+    ONE definition, shared with the watchdog's age exemption: a lane that
+    publishes /l5/live_orders.json with readable=true, manages_own_resting=
+    true and an as_of_utc <= 60s old. Unreachable/stale lanes contribute
+    nothing (fail closed). Owner 2026-11-14: sports two-sided + BTC5m share
+    the account; without this a reset needs the sports lane paused."""
+    from src import l5_watchdog as W
+    if urls is None:
+        urls = W._managed_lanes_from_env()
+    if not urls:
+        return set()
+    w = W.Watchdog(None, None, managed_lanes=list(urls), lane_opener=opener)
+    ids, _notes = w.managed_lane_ids()
+    return ids
+
+
 def venue_evidence(transport: Any, *,
-                   claimed: Optional[Mapping[str, Any]] = None
+                   claimed: Optional[Mapping[str, Any]] = None,
+                   lane_ids: Optional[set] = None
                    ) -> Dict[str, Any]:
     """Gate 4(a): no UNRESOLVED L5-OWNED order, on a SHARED account.
 
@@ -342,11 +362,15 @@ def venue_evidence(transport: Any, *,
             "taken as flat" % type(exc).__name__)
     from src import l5_watchdog as W
     working = [r for r in rows if not W.is_terminal(r)]
-    l5_owned, manual, unattributed = [], [], []
+    l5_owned, manual, unattributed, lane = [], [], [], []
+    lane_ids = set(lane_ids or ())
     for r in working:
         oid = str(r.get("id") or "").strip()
         ind = str(r.get("manualOrderIndicator") or "")
-        if oid and oid in claimed:
+        if oid and oid in lane_ids and oid not in claimed:
+            # attributed to a FRESH managed lane that is managing it now
+            lane.append({"id": oid, "market": str(r.get("marketSlug") or "")})
+        elif oid and oid in claimed:
             l5_owned.append({"id": oid, "market": str(r.get("marketSlug")
                                                       or "")})
         elif ind == W.AUTOMATIC or not ind:
@@ -372,6 +396,7 @@ def venue_evidence(transport: Any, *,
     return {"l5_owned_working_orders": 0,
             "venue_working_orders_seen": len(working),
             "owner_manual_orders_allowed": manual,
+            "managed_lane_orders_allowed": lane,
             "account_positions": positions if pos_err is None else None,
             "account_positions_error": pos_err,
             "source": "/v1/orders/open and /v1/portfolio/positions, signed",
@@ -549,7 +574,8 @@ def inspect(*, store: Any, transport: Optional[Any], registry_url: str,
                 "NO_VENUE_CREDENTIALS: this boot cannot perform the "
                 "authenticated venue checks. The latch digest and registry "
                 "evidence below are still valid.")
-        return venue_evidence(transport, claimed=claimed)
+        return venue_evidence(transport, claimed=claimed,
+                              lane_ids=managed_lane_claims())
 
     for name, fn in (("venue", _venue),
                      ("registry", lambda: registry_evidence(
@@ -604,7 +630,8 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
             "no-open-alarm evidence you checked. It is recorded as an "
             "operator attestation, not as a machine check." % ATTEST_ENV)
     claimed = ownership(registry_url, opener=registry_opener)
-    venue = venue_evidence(transport, claimed=claimed)
+    venue = venue_evidence(transport, claimed=claimed,
+                           lane_ids=managed_lane_claims())
     registry = registry_evidence(registry_url, opener=registry_opener)
     t = (now or _utc()).isoformat()
     entry = {
