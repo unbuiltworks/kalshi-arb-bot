@@ -34,7 +34,7 @@ import signal
 import threading
 import time
 from datetime import datetime, timezone
-from decimal import ROUND_DOWN, Decimal as D
+from decimal import ROUND_CEILING, ROUND_DOWN, Decimal as D
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -50,6 +50,19 @@ def _env_d(name: str, default: str) -> D:
 
 ENABLED_ENV = "PMUS_TWO_SIDED_ENABLED"
 DEPTH_TICKS = int(os.getenv("PMUS_TWO_SIDED_DEPTH_TICKS", "2"))
+# OWNER 2026-11-15 "when I was saying ticks I meant cents": openings sit
+# OPEN_OFFSET_PX (2c) under each side's touch whatever the market's tick, so
+# a half-cent CFB market opens 4 ticks deep, not 1c. depth_ticks(tick) turns
+# that into ticks; PMUS_TWO_SIDED_OPEN_OFFSET_PX=0 restores DEPTH_TICKS.
+OPEN_OFFSET_PX = _env_d("PMUS_TWO_SIDED_OPEN_OFFSET_PX", "0.02")
+
+
+def depth_ticks(tick) -> int:
+    t = D(str(tick or "0.01"))
+    if OPEN_OFFSET_PX <= 0 or t <= 0:
+        return DEPTH_TICKS
+    return max(1, int((OPEN_OFFSET_PX / t).to_integral_value(
+        rounding=ROUND_CEILING)))
 QTY = _env_d("PMUS_TWO_SIDED_QTY", "1")
 MAX_MARKETS = int(os.getenv("PMUS_TWO_SIDED_MAX_MARKETS", "3"))
 PER_MARKET_CAP = _env_d("PMUS_TWO_SIDED_PER_MARKET_USD", "1.50")
@@ -107,6 +120,13 @@ EXIT_FEE_AWARE = os.getenv("PMUS_TWO_SIDED_EXIT_FEE_AWARE", "1").strip() \
 TAKER_FEE_RATE = _env_d("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.06")
 EXIT_MAX_TAKER_QTY = _env_d("PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY", "2")
 CENT = D("0.01")
+# OWNER 2026-11-15 "close patiently first": a lone leg's maker completion
+# rests at the pair cap, and once it has been lone for MAKER_PHASE_FRAC of
+# its exit window it moves to JOIN this side's bid, up to a break-even pair
+# (COMPLETE_MAX_PAIR, default 1.00) -- still post-only, no fee, buying the
+# bid instead of paying the ask. The taker exit fires only at the deadline.
+COMPLETE_MAX_PAIR = _env_d("PMUS_TWO_SIDED_COMPLETE_MAX_PAIR", "1.00")
+MAKER_PHASE_FRAC = float(os.getenv("PMUS_TWO_SIDED_MAKER_PHASE_FRAC", "0.5"))
 
 
 def taker_fee(px: D, qty: D, rate: Optional[D] = None) -> D:
@@ -402,10 +422,12 @@ def floor_tick(px: D, tick: D) -> D:
     return (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
 
 
-def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS,
+def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: Optional[int] = None,
                 cap: Optional[D] = None
                 ) -> Optional[Dict[str, D]]:
     """Both opening bids, D ticks under each side's touch. None if refused."""
+    if depth is None:
+        depth = depth_ticks(tick)
     if yes_bid is None or yes_ask is None or yes_ask <= yes_bid:
         return None
     if not (BAND_LO <= yes_bid <= BAND_HI):
@@ -432,7 +454,7 @@ def reward_open_prices(yes_bid: D, yes_ask: D, tick: D,
     deeper is only farther from mid, so the first legal depth that fails
     maxSpread ends the search (None -> quote as a non-rewarded market)."""
     from src.pmus_sports_rewards import legs_within_max_spread
-    for d in range(0, DEPTH_TICKS + 1):
+    for d in range(0, depth_ticks(tick) + 1):
         p = open_prices(yes_bid, yes_ask, tick, depth=d, cap=cap)
         if p is None:
             continue
@@ -767,7 +789,7 @@ class Engine:
                 if o.get("open")}
         why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
                                      "ask": D(str(new["ask"]))},
-                              tick, DEPTH_TICKS)
+                              tick, depth_ticks(tick))
         if why:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
@@ -1286,7 +1308,8 @@ class Engine:
                 want = rq["want"]
                 qty = max(REWARD_QTY, spec["min_qty"])
             else:
-                for d in range(max(0, DEPTH_TICKS - steps), DEPTH_TICKS + 1):
+                dmax = depth_ticks(tick)
+                for d in range(max(0, dmax - steps), dmax + 1):
                     want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d,
                                        cap=pair_cap(slug))
                     if want is not None:
@@ -1433,12 +1456,33 @@ class Engine:
         # The partner was set together with the filled leg: leave it at its
         # price (pair locked <= PAIR_CAP). Only a partial fill re-sizes it.
         pcap = pair_cap(slug)
-        cap_px = floor_tick(pcap - lead_px, tick)
+        lone_age = time.time() - lone_since
+        patient = exit_s > 0 and COMPLETE_MAX_PAIR > pcap and \
+            lone_age >= exit_s * MAKER_PHASE_FRAC
+        cap_px = floor_tick((COMPLETE_MAX_PAIR if patient else pcap)
+                            - lead_px, tick)
         lag_bid = side_bid(lag, bbo["bid"], bbo["ask"])
         if cur:
             rem_open = D(cur[1]["qty"]) - D(cur[1]["filled"])
             age = time.time() - float(cur[1].get("placed_at") or time.time())
             closer = min(D(cur[1]["px"]) + tick, lag_bid, cap_px)
+            if patient and D(cur[1]["px"]) < min(lag_bid, cap_px):
+                # maker phase: join the bid now (break-even at worst)
+                closer = min(lag_bid, cap_px)
+                if mk.get("maker_phase_logged") != str(closer):
+                    mk["maker_phase_logged"] = str(closer)
+                    log("maker_complete_join_bid", slug=slug, side=lag,
+                        from_px=cur[1]["px"], to_px=closer, lead_px=lead_px,
+                        pair_cost=lead_px + closer, lone_s=round(lone_age),
+                        label="post-only completion at the bid; no fee")
+                if rem_open == need:
+                    mk["complete_px"] = str(closer)
+                    self.v.cancel(cur[0])
+                    st = self.v.status(cur[0])
+                    self._record_fill(slug, lag, cur[0], st)
+                    cur[1]["open"] = st["open"]
+                    self.b.save()
+                    return
             if rem_open == need and (age < STALE_S or
                                      closer <= D(cur[1]["px"])):
                 return
@@ -1456,9 +1500,9 @@ class Engine:
             return
         px = D(mk.get("complete_px") or mk.get("partner_px", {}).get(lag)
                or "0") or floor_tick(
-            min(side_bid(lag, bbo["bid"], bbo["ask"]) - DEPTH_TICKS * tick,
+            min(side_bid(lag, bbo["bid"], bbo["ask"]) - depth_ticks(tick) * tick,
                 pcap - lead_px), tick)
-        px = min(px, floor_tick(pcap - lead_px, tick))
+        px = min(px, cap_px)
         if px < tick or px >= side_bid(lag, bbo["bid"], bbo["ask"]) + \
                 (bbo["ask"] - bbo["bid"]):
             return

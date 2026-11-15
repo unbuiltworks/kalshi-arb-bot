@@ -832,12 +832,11 @@ def test_large_lone_leg_is_not_taker_exited(reng, capsys):
     live = [o for o in v.orders.values() if o["open"]]
     assert len(live) == 1 and live[0]["side"] == "NO" and live[0]["qty"] == D("10")
     assert '"exit_skipped_size"' in capsys.readouterr().out
-    # maker completion keeps stepping up as before
-    c = next(o for o in mk["orders"].values() if o["open"])
-    c["placed_at"] -= M.STALE_S + 1
+    # past the exit deadline the maker completion JOINS the NO bid (0.54,
+    # pair 0.98 <= break-even) instead of stepping one tick
     e.step_market("aec-rw"); e.step_market("aec-rw")
     live = [o for o in v.orders.values() if o["open"]]
-    assert len(live) == 1 and live[0]["px"] == D("0.53")
+    assert len(live) == 1 and live[0]["px"] == D("0.54")
 
 
 def test_small_lone_leg_still_exits_and_size_gate_can_be_disabled(eng, monkeypatch):
@@ -1240,3 +1239,38 @@ def test_tracked_orders_are_not_orphans(eng):
     ids = [k for k, o in v.orders.items() if o["open"]]
     e.orphan_sweep([{"id": i, "marketSlug": "aec-x", "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"} for i in ids])
     assert all(v.orders[i]["open"] for i in ids)
+
+
+def test_open_offset_is_cents_not_ticks():
+    # 2c under the touch: 2 ticks at a 1c tick, 4 ticks at a half-cent tick
+    assert M.depth_ticks(D("0.01")) == 2
+    assert M.depth_ticks(D("0.005")) == 4
+    p = M.open_prices(D("0.500"), D("0.505"), D("0.005"), cap=D("0.98"))
+    assert p == {"YES": D("0.480"), "NO": D("0.475")}
+
+
+def test_open_offset_zero_restores_depth_ticks(monkeypatch):
+    monkeypatch.setattr(M, "OPEN_OFFSET_PX", D("0"))
+    assert M.depth_ticks(D("0.005")) == M.DEPTH_TICKS
+
+
+def test_lone_leg_joins_bid_at_break_even_before_taker(eng, capsys):
+    e, v = eng
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    e.step_market("aec-x")                       # YES 0.46 / NO 0.48
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")                       # lone YES @0.46
+    mk = e.b.d["markets"]["aec-x"]
+    v.bid, v.ask = D("0.42"), D("0.44")          # NO bid 0.56 -> pair 1.02
+    e.step_market("aec-x")
+    live = [o for o in v.orders.values() if o["open"]]
+    assert live and live[0]["px"] <= D("0.52")   # still at the pair cap
+    mk["lone_since"] -= M.EXIT_S * M.MAKER_PHASE_FRAC + 1
+    e.step_market("aec-x"); e.step_market("aec-x")
+    live = [o for o in v.orders.values() if o["open"]]
+    # bid 0.56 would break even-ness (0.46+0.56>1): capped at 0.54
+    assert len(live) == 1 and live[0]["side"] == "NO" and live[0]["px"] == D("0.54")
+    assert getattr(v, "taker", []) == []
+    assert '"maker_complete_join_bid"' in capsys.readouterr().out
