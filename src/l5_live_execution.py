@@ -6004,8 +6004,15 @@ class InventoryStore:
             _f_market = (o.get("marketSlug") or o.get("market_slug")
                          or o.get("market"))
             _f_series = ORIGIN.strategy_of_market(_f_market)
-            _f_by_series = (_f_series is not None
-                            and _f_series != OWN_STRATEGY)
+            # LIVE 2026-11-15: an untracked order in a market OUTSIDE our
+            # own series is not ours either. The sports two-sided bot
+            # (aec-/atc-/... and cpcsol/cpceth 1d markets, an unregistered
+            # series) had every resting order adopted here and then
+            # cancelled as `orphan_unarmed` -- roughly every 5 minutes, all
+            # day. Owner rule (2026-11-11): neither strategy adopts,
+            # cancels or settles another strategy's orders.
+            _f_by_series = (_f_series != OWN_STRATEGY
+                            if _f_market else False)
             _f_tracked = coid in ours or bool(tracked_coid_for_venue_order(
                 o.get("id") or o.get("order_id"), self.state))
             if not _f_tracked and (is_foreign_coid(coid) or _f_by_series):

@@ -3698,3 +3698,4 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 #   Dockerfile -- COPY of the new module.
 # No open position, exposure cap, risk floor, halt threshold or order path
 # changes; only realized figures of already-settled markets are corrected.
+# 2026-11-15T14:50Z foreign-order isolation: an untracked open order in a market OUTSIDE this ledger's own series (cpc-btc-updown-15m-) is foreign -- never adopted, never cancelled. LIVE: the sports two-sided bot's resting orders were adopted and cancelled as orphan_unarmed about every 5 minutes. No order path, cap, limit or arming change.

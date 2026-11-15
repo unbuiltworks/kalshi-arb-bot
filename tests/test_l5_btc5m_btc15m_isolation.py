@@ -868,3 +868,50 @@ class TestIsolationOnRowsWithoutClientIds:
                    for o in both.venue.cancelled)
         acct = both.ex.account_exposure()
         assert acct["unknown"] is False
+
+
+
+@pytest.mark.parametrize("market", ["aec-cs2-brute-eid-2026-11-15",
+                                    "cpcsol-sol-updown-1d-2026-11-15"])
+def test_sports_order_outside_own_series_is_never_adopted_or_cancelled(
+        both, market):
+    """LIVE 2026-11-15: every resting order of the sports two-sided bot
+    (an unregistered series) was adopted from /v1/orders/open and then
+    cancelled as `orphan_unarmed`. On real rows (no client id) it is now
+    foreign by its market and is never swept."""
+    both.venue.rows_carry_client_id = False
+    both.venue.rows_state_side = True
+    h, st = both.h, both.store15()
+    both.open15()
+    sports = both.venue.submit({"client_order_id": "sp-" + "1" * 20,
+                                "market": market, "side": "UP",
+                                "price": "0.45", "qty": "5",
+                                "mode": "MAKER"})
+    sports = sports.get("venue_order_id") if isinstance(sports, dict) \
+        else sports
+    h.r.reconciled = False
+    h.tick(30.0)
+    live = st.live_orders()
+    assert all(o["market"] == M15 for o in live.values())
+    frows = {r["market"]: r for r in st.state["foreign_orders"].values()}
+    assert frows[market]["foreign_because"] == "MARKET_SERIES"
+    assert frows[market]["series_strategy"] is None
+    for off in (134.3, 300.0, 500.0, 584.0, 586.0, 590.0):
+        h.tick(off)
+    assert not [o for o in both.venue.cancelled
+                if both.venue.by_oid[o]["market"] == market]
+
+
+def test_untracked_order_outside_own_series_is_foreign_never_adopted():
+    """LIVE 2026-11-15: sports orders (aec-..., cpcsol-...-1d) were adopted
+    from /v1/orders/open and cancelled as orphan_unarmed."""
+    import src.l5_live_execution as LX
+    src = open(LX.__file__).read()
+    assert "_f_series != OWN_STRATEGY" in src
+    from src import l5_origin as ORIGIN
+    for m in ("aec-cs2-brute-eid-2026-11-15",
+              "cpcsol-sol-updown-1d-2026-11-15",
+              "cpc-btc-updown-5m-2026-11-15-1435z"):
+        assert ORIGIN.strategy_of_market(m) != LX.OWN_STRATEGY
+    assert ORIGIN.strategy_of_market(
+        "cpc-btc-updown-15m-2026-11-15-1430z") == LX.OWN_STRATEGY
