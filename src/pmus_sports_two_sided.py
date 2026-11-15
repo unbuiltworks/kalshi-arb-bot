@@ -933,6 +933,9 @@ class Engine:
             accrued_not_credited_usd=e.get("accrued_not_credited_usd"),
             by_status=e.get("by_status"), by_program=e.get("by_program"),
             rows_on_our_markets=len(mine), sample_ours=mine[:10],
+            rows_brief=[{k: r.get(k) for k in r if not isinstance(
+                r.get(k), (dict, list))} for r in
+                (e.get("rows_detail") or [])[:50]],
             error=e.get("error"),
             label="venue /v1/incentives/earnings; ONLY credited_usd is money")
 
