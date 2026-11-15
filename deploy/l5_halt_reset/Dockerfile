@@ -52,6 +52,7 @@ COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 # duplicating the "is this order still working" rule is how two answers to
 # one question get out of step.
 COPY src/l5_watchdog.py       src/l5_watchdog.py
+COPY src/l5_managed_lanes.py       src/l5_managed_lanes.py
 # signing + ReadOnlyTransport (GET-only). No mutating route.
 COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
