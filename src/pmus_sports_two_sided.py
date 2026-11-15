@@ -625,6 +625,9 @@ class Venue:
             o = self.q1._order_status(self.t, oid)
         except self.q1.RejectedNoFill:
             return {"qty": D(0), "px": None, "open": False, "state": "REJECTED"}
+        return self.status_from(o)
+
+    def status_from(self, o: Mapping[str, Any]) -> Dict[str, Any]:
         state = str(o.get("state") or o.get("status") or "").upper()
         f = self.micro.authoritative_fill(o, D(str(o.get("quantity") or
                                                   o.get("qty") or "1e9")),
@@ -648,18 +651,19 @@ class Venue:
         market of its own order. POST once, then confirm a terminal state
         (short polls). Same venue route and body as cancel_exact."""
         self.t.request("POST", f"/v1/order/{oid}/cancel", {"marketSlug": slug})
+        last = None
         for _ in range(12):
             try:
                 o = self.q1._order_status(self.t, oid)
             except self.q1.RejectedNoFill:
-                return True
-            state = str(o.get("state") or o.get("status") or "").upper()
-            if any(x in state for x in ("CANCEL", "EXPIRED", "REJECT")):
-                return True
-            if "FILLED" in state and "PARTIALLY" not in state:
-                return False
+                return {"qty": D(0), "px": None, "open": False,
+                        "state": "REJECTED"}
+            st = self.status_from(o)
+            last = st
+            if not st["open"]:
+                return st          # terminal: this read IS the final state
             time.sleep(0.1)
-        return False
+        return last                # still open after ~1.2s: caller sees open
 
 
 # ------------------------------------------------------------- engine
@@ -759,9 +763,11 @@ class Engine:
             oid, _o = item
             try:
                 if fast is not None:
-                    fast(oid, slug)
-                else:
-                    self.v.cancel(oid)
+                    st = fast(oid, slug)          # final state, one read
+                    if st is None:
+                        st = self.v.status(oid)
+                    return oid, st, None
+                self.v.cancel(oid)
                 return oid, self.v.status(oid), None
             except Exception as exc:                      # noqa: BLE001
                 return oid, None, exc
@@ -788,10 +794,14 @@ class Engine:
         open_legs = [(oid, o) for oid, o in mk["orders"].items()
                      if o.get("open")]
         legs = len(open_legs)
+        c0 = time.monotonic()
         self._cancel_legs(slug, open_legs)
+        cancel_ms = round((time.monotonic() - c0) * 1000)
+        queue_ms = round((c0 - t0) * 1000) if t0 else None
         self.reactive_pulls += 1
         log("reactive_pull", slug=slug, reason=reason, legs=legs,
             latency_ms=round((time.monotonic() - t0) * 1000),
+            queue_ms=queue_ms, cancel_ms=cancel_ms,
             pos=mk["pos"])
 
     def _sleep(self, seconds: float) -> None:
