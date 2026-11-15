@@ -461,7 +461,13 @@ class IntlGuard(_IntlSocket):
         return slug in self.resolved
 
     def track(self, slugs: Iterable[str]) -> None:
-        """Subscribe intl for exactly these markets (the engine's active)."""
+        """Subscribe intl for exactly these markets (the engine's active).
+        LIVE 2026-11-15 23:43Z: markets selected BEFORE the guard existed
+        were never matched (prefetch ran only on new candidates), so the
+        guard priced nothing and those markets held every slot. Every
+        tracked market is now queued for matching too."""
+        slugs = list(slugs)
+        self.prefetch(slugs)
         want = {s: self.resolved[s] for s in slugs if self.resolved.get(s)}
         with self._lock:
             self.tokens = want
@@ -499,8 +505,10 @@ class IntlGuard(_IntlSocket):
         if it is None or it["bid"] is None or it["ask"] is None or \
                 it["ask"] <= it["bid"]:
             self.stats["no_intl"] += 1
+            # matched=True while matching is still pending: the engine holds
+            # the market; only a market intl CANNOT price is released
             return {"ok": not self.require, "why": "no_fresh_intl",
-                    "matched": bool(tok)}
+                    "matched": bool(tok) or slug not in self.resolved}
         mid = (it["bid"] + it["ask"]) / 2
         margin = float(tick) * self.margin_ticks
         fair = {"YES": mid, "NO": 1 - mid}

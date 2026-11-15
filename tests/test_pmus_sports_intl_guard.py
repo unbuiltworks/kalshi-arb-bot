@@ -150,3 +150,26 @@ def test_guard_object_has_no_order_path():
     g = X.IntlGuard(lambda p: {}, lambda p: [])
     for name in ("place", "cancel", "cancel_fast", "v", "venue", "t"):
         assert not hasattr(g, name)
+
+
+def test_track_queues_existing_markets_for_matching():
+    # live 23:43Z: markets chosen before the guard started were never matched
+    g = X.IntlGuard(lambda p: {}, lambda p: [])
+    g.track(["aec-old-1", "aec-old-2"])
+    assert g._pending == ["aec-old-1", "aec-old-2"]
+
+
+def test_pending_market_is_held_unpriceable_market_is_released(tmp_path):
+    g = X.IntlGuard(lambda p: {}, lambda p: [])
+    assert g.verdict("aec-x", {"YES": D("0.42")}, T)["matched"] is True
+    g.resolved["aec-x"] = None                     # intl does not list it
+    assert g.verdict("aec-x", {"YES": D("0.42")}, T)["matched"] is False
+    e, v = eng(tmp_path, g)
+    g.resolved["aec-x"] = "TOK"
+    e.select(v.account())                          # selected while matched
+    g.resolved["aec-x"] = None                     # later: unpriceable
+    mk = e.b.m("aec-x")
+    e.step_market("aec-x")
+    mk["idle_since"] = time.time() - 999
+    e.step_market("aec-x")
+    assert mk.get("done")                          # slot freed
