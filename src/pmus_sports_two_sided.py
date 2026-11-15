@@ -287,6 +287,11 @@ def log(kind: str, **kw: Any) -> None:
 LATE_CUTOFF = os.getenv("PMUS_TWO_SIDED_LATE_CUTOFF", "1").strip() != "0"
 
 
+CRYPTO_PREFIXES = tuple(p.strip() for p in os.getenv(
+    "PMUS_TWO_SIDED_CRYPTO_PREFIXES", "").split(",") if p.strip())
+CRYPTO_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_CRYPTO_CUTOFF_S", "7200"))
+
+
 def _clock_s(v: Any) -> Optional[float]:
     try:
         mm, ss = str(v).strip().rstrip("'").split(":")[:2]
@@ -309,6 +314,15 @@ def is_late(state: Optional[Mapping[str, Any]]) -> Optional[str]:
         return None
     typ = str(state.get("type") or "").lower()
     per = str(state.get("period") or "").upper()
+    if typ == "crypto-1d":
+        try:
+            end = datetime.fromisoformat(str(state.get("endDate"))
+                                         .replace("Z", "+00:00"))
+            left = (end - datetime.now(timezone.utc)).total_seconds()
+        except Exception:                                 # noqa: BLE001
+            return "crypto_end_unknown"
+        return "crypto_last_%ds" % int(CRYPTO_CUTOFF_S) \
+            if left <= CRYPTO_CUTOFF_S else None
     if state.get("ended"):
         return "ended"
     if per.startswith("OT") or per in ("SO", "PEN", "ET1", "ET2"):
@@ -484,7 +498,41 @@ class Venue:
 
     states: Dict[str, Any] = {}
 
+    def crypto_targets(self) -> list:
+        """OWNER 2026-11-15 SOL/ETH 1d reward trial: explicit prefixes only
+        (never cpc-btc-: the BTC5m/BTC15m lanes)."""
+        if not CRYPTO_PREFIXES:
+            return []
+        d = self.gget("/v1/events?active=true&closed=false&limit=200"
+                      "&categories=crypto") or {}
+        evs = d if isinstance(d, list) else d.get("events") or []
+        out = []
+        for ev in evs:
+            for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
+                slug = str((m or {}).get("slug") or "")
+                if not slug.startswith(CRYPTO_PREFIXES) or \
+                        slug.startswith("cpc-btc-"):
+                    continue
+                self.states[slug] = {"type": "crypto-1d",
+                                     "endDate": m.get("endDate")
+                                     or ev.get("endDate")}
+                out.append({"slug": slug, "league": "crypto",
+                            "why": "crypto_reward_trial",
+                            "event_state": self.states[slug],
+                            "market_meta": {k: m.get(k) for k in
+                                            ("bestBidQuote", "bestAskQuote")
+                                            if m.get(k) is not None}})
+        return out
+
     def live_sports(self) -> list:
+        crypto = []
+        try:
+            crypto = self.crypto_targets()
+        except Exception as exc:                          # noqa: BLE001
+            log("crypto_discovery_error", err=str(exc)[:160])
+        return self._live_sports() + crypto
+
+    def _live_sports(self) -> list:
         events, _ = self.gw.fetch_live_events(self.gget)
         st: Dict[str, Any] = {}
         for ev in events or []:
@@ -493,7 +541,9 @@ class Venue:
                 if isinstance(m, Mapping) and m.get("slug"):
                     st[str(m["slug"])] = es or {}
         if st:
-            self.states = st
+            keep = {k: v for k, v in self.states.items()
+                    if (v or {}).get("type") == "crypto-1d"}
+            self.states = {**keep, **st}
         return [tg for tg in self.gw.live_event_targets(events)
                 if str(tg["slug"]).startswith(SPORTS_PREFIXES)]
 

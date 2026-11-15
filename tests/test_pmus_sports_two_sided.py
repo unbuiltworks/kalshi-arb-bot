@@ -1112,3 +1112,26 @@ def test_reward_first_default_off_keeps_reward_mode_behaviour(reng):
     assert v.n == n0 + 2
     assert not M.Engine.reward_first_quoting(e.b.m("aec-rw"))
     assert "reward_accrual" not in e.b.d
+
+
+def test_crypto_late_rule_uses_end_date():
+    from datetime import datetime, timedelta, timezone
+    soon = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    later = (datetime.now(timezone.utc) + timedelta(hours=10)).isoformat()
+    assert M.is_late({"type": "crypto-1d", "endDate": soon}).startswith("crypto_last_")
+    assert M.is_late({"type": "crypto-1d", "endDate": later}) is None
+    assert M.is_late({"type": "crypto-1d", "endDate": "x"}) == "crypto_end_unknown"
+
+
+def test_crypto_targets_only_explicit_prefixes_never_btc(monkeypatch):
+    monkeypatch.setattr(M, "CRYPTO_PREFIXES", ("cpcsol-sol-updown-1d-", "cpc-btc-"))
+    v = M.Venue.__new__(M.Venue)
+    v.states = {}
+    v.gget = lambda path: {"events": [{"markets": [
+        {"slug": "cpcsol-sol-updown-1d-2026-11-15-2200z", "endDate": "2026-11-16T22:00:00Z",
+         "bestBidQuote": "0.48", "bestAskQuote": "0.50"},
+        {"slug": "cpc-btc-updown-1d-2026-11-15-2200z"},
+        {"slug": "cpceth-eth-updown-1d-2026-11-15-2200z"}]}]}
+    out = v.crypto_targets()
+    assert [t["slug"] for t in out] == ["cpcsol-sol-updown-1d-2026-11-15-2200z"]
+    assert v.states["cpcsol-sol-updown-1d-2026-11-15-2200z"]["type"] == "crypto-1d"
