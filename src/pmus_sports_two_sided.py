@@ -180,6 +180,73 @@ def log(kind: str, **kw: Any) -> None:
 
 # ------------------------------------------------------------- pure pricing
 
+# OWNER 2026-11-14 late-game cutoff: 20/20 settled lone legs LOST, nearly all
+# "N vs N+1" -- the last pair opened as a game was being decided strands its
+# losing leg. No NEW pair once a game is late (completions/exits continue).
+LATE_CUTOFF = os.getenv("PMUS_TWO_SIDED_LATE_CUTOFF", "1").strip() != "0"
+
+
+def _clock_s(v: Any) -> Optional[float]:
+    try:
+        mm, ss = str(v).strip().rstrip("'").split(":")[:2]
+        return int(mm) * 60 + float(ss)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def _minute(v: Any) -> Optional[int]:
+    try:
+        return int(str(v).strip().rstrip("'").split("+")[0].split(":")[0])
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def is_late(state: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Reason string if the game is in its deciding stretch, else None.
+    Unknown sports/shapes -> None (the price band still applies)."""
+    if not state:
+        return None
+    typ = str(state.get("type") or "").lower()
+    per = str(state.get("period") or "").upper()
+    if state.get("ended"):
+        return "ended"
+    if per.startswith("OT") or per in ("SO", "PEN", "ET1", "ET2"):
+        return "overtime:" + per
+    clock = _clock_s(state.get("elapsed"))
+    if typ in ("football", "basketball"):
+        if per == "Q4":
+            return "Q4"
+        if typ == "basketball" and per == "H2" and clock is not None \
+                and clock <= 600:
+            return "H2_last10"
+    if typ == "college-basketball" and per == "H2" and clock is not None \
+            and clock <= 600:
+        return "H2_last10"
+    if typ == "hockey" and per == "P3":
+        return "P3"
+    if typ == "soccer" and per == "2H":
+        m = _minute(state.get("elapsed"))
+        if m is not None and m >= 70:
+            return "2H_70+"
+    if typ == "tennis" and per.startswith("S"):
+        try:
+            if int(per[1:]) >= 3:
+                return "set_" + per
+        except ValueError:
+            pass
+    if typ == "table-tennis" and per.startswith("S"):
+        try:
+            if int(per[1:]) >= 4:
+                return "set_" + per
+        except ValueError:
+            pass
+    if typ == "ufc":
+        rounds = (state.get("ufcState") or {}).get("rounds")
+        if rounds and per == "R%s" % rounds:
+            return "final_round"
+    return None
+
+
 def floor_tick(px: D, tick: D) -> D:
     return (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
 
@@ -312,8 +379,18 @@ class Venue:
     def gget(self, path: str) -> Any:
         return self.gw.http_get_json(path)
 
+    states: Dict[str, Any] = {}
+
     def live_sports(self) -> list:
         events, _ = self.gw.fetch_live_events(self.gget)
+        st: Dict[str, Any] = {}
+        for ev in events or []:
+            es = ev.get("eventState") if isinstance(ev, Mapping) else None
+            for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
+                if isinstance(m, Mapping) and m.get("slug"):
+                    st[str(m["slug"])] = es or {}
+        if st:
+            self.states = st
         return [tg for tg in self.gw.live_event_targets(events)
                 if str(tg["slug"]).startswith(SPORTS_PREFIXES)]
 
@@ -711,6 +788,14 @@ class Engine:
                 qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES")
+            late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
+                if LATE_CUTOFF else None
+            if late:
+                if mk.get("late_logged") != late:
+                    mk["late_logged"] = late
+                    log("late_cutoff", slug=slug, reason=late,
+                        pos=mk["pos"], label="no new pairs; completions continue")
+                want = None          # pulls opening legs; frees the slot later
             worst_leg = max(want.values()) * qty if want else D(0)
             if rewards_on() and want is not None and not blocked and \
                     self.b.committed_excluding(slug) + worst_leg > TOTAL_CAP:
@@ -865,6 +950,9 @@ class Engine:
             a = self.v.gw._qnum(meta.get("bestAskQuote"))
             if b is None or a is None:
                 continue
+            if LATE_CUTOFF and is_late((getattr(self.v, "states", {}) or {})
+                                       .get(slug)):
+                continue
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
                 continue
@@ -979,6 +1067,11 @@ class Engine:
                     time.sleep(30)
                     continue
                 if time.monotonic() - last_sel > 20:
+                    if len(self.active()) >= MAX_MARKETS and LATE_CUTOFF:
+                        try:                       # keep game clocks fresh
+                            self.v.live_sports()
+                        except Exception:          # noqa: BLE001
+                            pass
                     self.select(self.v.account())
                     if rewards_on():
                         self.refresh_active_rewards()

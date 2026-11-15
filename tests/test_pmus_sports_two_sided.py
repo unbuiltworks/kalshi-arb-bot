@@ -704,3 +704,44 @@ def test_reward_check_logs_only_credited_as_money(eng, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert '"kind":"REWARD_CHECK"' in out and '"rows_on_our_markets":1' in out
     assert '"credited_usd":"0"' in out
+
+
+@pytest.mark.parametrize("st,late", [
+    ({"type": "football", "period": "Q4", "elapsed": "9:37"}, "Q4"),
+    ({"type": "football", "period": "Q3", "elapsed": "2:00"}, None),
+    ({"type": "basketball", "period": "Q4", "elapsed": "07:08"}, "Q4"),
+    ({"type": "college-basketball", "period": "H2", "elapsed": "20:00"}, None),
+    ({"type": "college-basketball", "period": "H2", "elapsed": "08:00"}, "H2_last10"),
+    ({"type": "hockey", "period": "P3", "elapsed": "12:37"}, "P3"),
+    ({"type": "soccer", "period": "2H", "elapsed": "74'"}, "2H_70+"),
+    ({"type": "soccer", "period": "1H", "elapsed": "10'"}, None),
+    ({"type": "tennis", "period": "S3"}, "set_S3"),
+    ({"type": "tennis", "period": "S2"}, None),
+    ({"type": "table-tennis", "period": "S4"}, "set_S4"),
+    ({"type": "ufc", "period": "R3", "ufcState": {"rounds": 3}}, "final_round"),
+    ({"type": "football", "period": "OT"}, "overtime:OT"),
+    (None, None), ({"type": "cs2"}, None)])
+def test_is_late(st, late):
+    assert M.is_late(st) == late
+
+
+def test_late_game_stops_new_pairs_but_completion_continues(eng):
+    e, v = eng
+    v.states = {}
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len([o for o in v.orders.values() if o["open"]]) == 2
+    v.states = {"aec-x": {"type": "football", "period": "Q4"}}
+    e.step_market("aec-x")                                   # pulls the opening pair
+    assert not [o for o in v.orders.values() if o["open"]]
+    e.b.d["markets"]["aec-x"]["pos"] = {"YES": "1", "NO": "0"}
+    e.b.d["markets"]["aec-x"]["cost"] = {"YES": "0.42", "NO": "0"}
+    e.step_market("aec-x")                                   # completion still placed
+    assert [o for o in v.orders.values() if o["open"] and o["side"] == "NO"]
+
+
+def test_late_game_not_selected(eng):
+    e, v = eng
+    v.states = {"aec-x": {"type": "hockey", "period": "P3"}}
+    e.select(v.account())
+    assert e.active() == []
