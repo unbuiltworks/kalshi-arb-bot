@@ -2629,7 +2629,40 @@ def main() -> int:
             venue.ws = None
             log("ws_error", err=f"{type(exc).__name__}:{str(exc)[:160]}",
                 fallback="gateway_poll_only")
+    start_xv_paper(venue)
     return Engine(venue, book).run()
+
+
+XV_PAPER_ENV = "PMUS_TWO_SIDED_XV_PAPER"
+
+
+def start_xv_paper(venue: "Venue") -> Optional[Any]:
+    """PAPER-ONLY cross-venue signal (src/pmus_sports_xv.py), default OFF.
+    Given READ functions only -- discovery and public gateway GETs -- never
+    the venue object, so it cannot place or cancel an order."""
+    if os.getenv(XV_PAPER_ENV, "0").strip() != "1":
+        return None
+    try:
+        from src import pmus_sports_xv as XV
+
+        def targets() -> list:
+            out = list(venue.live_sports())
+            try:
+                out += list(venue.pregame_sports())
+            except Exception:                           # noqa: BLE001
+                pass
+            return out
+        xv = XV.XvPaper(targets, venue.gget, XV.gamma_get, log,
+                        max_markets=int(os.getenv(
+                            "PMUS_TWO_SIDED_XV_MARKETS", "20")),
+                        tape_event=(TAPE.event if TAPE is not None
+                                    else None))
+        xv.start()
+        log("xv_paper_enabled", label="PAPER ONLY: no orders")
+        return xv
+    except Exception as exc:                             # noqa: BLE001
+        log("xv_paper_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
+        return None
 
 
 if __name__ == "__main__":
