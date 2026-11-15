@@ -372,6 +372,17 @@ def excluded(slug: str) -> bool:
                for t in EXCLUDE_TAGS)
 
 
+# OWNER 2026-11-15 "cancel that Zimbabwe cricket order ... it keeps coming
+# back": markets the owner abandons. Their open orders are cancelled, the
+# market is closed in the book and nothing is ever placed there again; any
+# position simply rides to settlement. Comma-separated slugs (or slug
+# fragments) in PMUS_TWO_SIDED_ABANDON.
+def abandoned(slug: str) -> bool:
+    toks = [t.strip() for t in os.getenv("PMUS_TWO_SIDED_ABANDON",
+                                         "").split(",") if t.strip()]
+    return any(t in str(slug) for t in toks)
+
+
 CRYPTO_PREFIXES = tuple(p.strip() for p in os.getenv(
     "PMUS_TWO_SIDED_CRYPTO_PREFIXES", "").split(",") if p.strip())
 CRYPTO_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_CRYPTO_CUTOFF_S", "7200"))
@@ -1294,6 +1305,23 @@ class Engine:
                     age_s=round(time.time() - float(o.get("placed_at")
                                                     or time.time())))
         self.b.save()
+        if abandoned(slug):
+            for oid, o in mk["orders"].items():
+                if o.get("open"):
+                    try:
+                        self.v.cancel(oid)
+                        st = self.v.status(oid)
+                        self._record_fill(slug, o["side"], oid, st)
+                        o["open"] = st["open"]
+                    except Exception:                 # noqa: BLE001
+                        pass
+            if not any(o.get("open") for o in mk["orders"].values()):
+                mk["done"] = True
+                log("market_abandoned", slug=slug, pos=mk["pos"],
+                    label="owner abandoned: orders cancelled, no new "
+                          "orders; position rides to settlement")
+            self.b.save()
+            return
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug)
         if spec is None or bbo is None:

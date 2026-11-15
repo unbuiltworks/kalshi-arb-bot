@@ -1354,3 +1354,23 @@ def test_reward_first_two_cents_back_quote_and_hold(rfeng, monkeypatch):
     n = len(v.orders)
     e.step_market(slug)                       # unchanged book -> no churn
     assert len(v.orders) == n
+
+
+def test_abandoned_market_cancels_and_never_replaces(eng, monkeypatch, capsys):
+    e, v = eng
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market(slug)                                  # completion resting
+    assert [o for o in v.orders.values() if o["open"]]
+    monkeypatch.setenv("PMUS_TWO_SIDED_ABANDON", slug)
+    n = len(v.orders)
+    for _ in range(3):
+        e.step_market(slug)
+    assert not [o for o in v.orders.values() if o["open"]]
+    assert len(v.orders) == n and e.b.d["markets"][slug]["done"]
+    assert slug not in e.active()
+    assert '"market_abandoned"' in capsys.readouterr().out
