@@ -265,3 +265,4 @@
 2026-11-15T13:05Z cancel_fast returns the terminal read (no second status GET); reactive_pull logs queue_ms vs cancel_ms.
 2026-11-15T13:20Z OWNER 'it keeps reopening the same pair': pull only on adverse moves; 1-tick hysteresis on resting openings.
 2026-11-15T13:30Z log order_closed_by_venue (state) for own orders closed without our cancel.
+2026-11-15T13:45Z orphan sweep every 30s: venue-open AUTOMATIC orders in our markets missing from the book are adopted and cancelled (watchdog latch 09:12Z on DQX6ACVG13ZK).

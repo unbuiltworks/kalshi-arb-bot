@@ -1218,3 +1218,25 @@ def test_adverse_reasons():
     assert M.adverse_reasons(legs, {"bid": D("0.43"), "ask": D("0.46")}, T, 2) == ["yes_closer_than_2t"]
     assert "no_closer_than_2t" in M.adverse_reasons(legs, {"bid": D("0.44"), "ask": D("0.47")}, T, 2)
     assert "yes_near_cross" in M.adverse_reasons(legs, {"bid": D("0.40"), "ask": D("0.43")}, T, 2)
+
+
+def test_orphan_in_our_market_is_adopted_and_cancelled(eng, capsys):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    v.orders["ORPH"] = {"slug": "aec-x", "side": "YES", "px": D("0.40"), "qty": D("1"), "filled": D(0), "open": True}
+    e.orphan_sweep([{"id": "ORPH", "marketSlug": "aec-x", "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC", "outcomeSide": "OUTCOME_SIDE_YES"},
+                    {"id": "MAN1", "marketSlug": "aec-x", "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL"},
+                    {"id": "FOREIGN", "marketSlug": "cpc-btc-x", "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"}])
+    assert v.orders["ORPH"]["open"] is False
+    out = capsys.readouterr().out
+    assert "ORPHAN_ADOPTED" in out and "MAN1" not in out and "FOREIGN" not in out
+
+
+def test_tracked_orders_are_not_orphans(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    ids = [k for k, o in v.orders.items() if o["open"]]
+    e.orphan_sweep([{"id": i, "marketSlug": "aec-x", "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"} for i in ids])
+    assert all(v.orders[i]["open"] for i in ids)

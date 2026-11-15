@@ -1646,6 +1646,52 @@ class Engine:
             label="venue realizedPnl on this bot's markets; fees are OUR "
                   "side per isAggressor. Rewards are separate (REWARD_CHECK).")
 
+    def orphan_sweep(self, orders: Optional[list] = None) -> None:
+        """LIVE 2026-11-15T09:12Z the watchdog latched on DQX6ACVG13ZK: an
+        order of OURS resting 310s that our book no longer listed as open.
+        Every sweep: any venue-open AUTOMATIC order in a market this bot has
+        traded that is NOT an open order in our book is adopted back into the
+        book (so the registry names it) and cancelled. Manual orders and
+        markets we never traded are never touched."""
+        if orders is None:
+            try:
+                oo = self.v.t.request("GET", "/v1/orders/open") or {}
+                orders = [o for o in (oo.get("orders") or [])
+                          if isinstance(o, Mapping)]
+            except Exception as exc:                      # noqa: BLE001
+                log("orphan_sweep_error", err=str(exc)[:160])
+                return
+        mine = set(self.b.d.get("markets") or {})
+        tracked = {oid for mk in self.b.d["markets"].values()
+                   for oid, o in (mk.get("orders") or {}).items()
+                   if o.get("open")}
+        for o in orders:
+            slug = str(o.get("marketSlug") or "")
+            oid = str(o.get("id") or "")
+            ind = str(o.get("manualOrderIndicator") or "")
+            if not oid or slug not in mine or oid in tracked:
+                continue
+            if ind and "AUTOMATIC" not in ind:
+                continue                      # a human's order: never ours
+            mk = self.b.m(slug)
+            rec = mk["orders"].get(oid) or {}
+            side = rec.get("side") or ("NO" if "NO" in str(
+                o.get("outcomeSide") or "").upper() else "YES")
+            mk["orders"][oid] = {**rec, "side": side,
+                                 "px": rec.get("px") or str(o.get("price") or "0"),
+                                 "qty": rec.get("qty") or str(o.get("quantity") or "0"),
+                                 "filled": rec.get("filled") or "0",
+                                 "open": True, "stage": rec.get("stage") or "orphan",
+                                 "placed_at": rec.get("placed_at") or time.time()}
+            self.b.save()
+            log("ORPHAN_ADOPTED", slug=slug, order_id=oid, side=side,
+                known_before=bool(rec), label="venue-open, missing from book; cancelling")
+            try:
+                self._cancel_legs(slug, [(oid, mk["orders"][oid])])
+            except Exception as exc:                      # noqa: BLE001
+                log("orphan_cancel_error", slug=slug, order_id=oid,
+                    err=str(exc)[:160])
+
     def reward_check(self) -> None:
         """OBSERVED reward earnings from the venue. Only rows the venue marks
         credited are money; pending/skipped are reported, never counted."""
@@ -1742,6 +1788,9 @@ class Engine:
                     self._last_reward = time.monotonic()
                     self.reward_check()
                     self.account_audit()
+                if time.monotonic() - getattr(self, "_last_orphan", 0) > 30:
+                    self._last_orphan = time.monotonic()
+                    self.orphan_sweep()
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()
