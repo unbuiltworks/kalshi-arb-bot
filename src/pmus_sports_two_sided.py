@@ -836,6 +836,34 @@ class Venue:
         orders = [o for o in (oo.get("orders") or []) if isinstance(o, Mapping)]
         return {"positions": held, "open_orders": orders}
 
+    def positions_snapshot(self, max_pages: int = 20) -> Dict[str, Any]:
+        """EVERY venue position row (account-wide, all strategies) plus all
+        open orders. Read-only GETs. /v1/portfolio/positions pages with
+        nextCursor/eof; account() reads page one only, so this walks the
+        cursor and says whether the walk was complete."""
+        from src import pmus_sports_inventory as INV
+        get = self.q1.base._get_with_retry
+        resp = get(self.t, "/v1/portfolio/positions")
+        rows = INV.rows_of(resp)
+        pages, complete = 1, True
+        while isinstance(resp, Mapping) and not resp.get("eof") and \
+                resp.get("nextCursor"):
+            if pages >= max_pages:
+                complete = False
+                break
+            resp = get(self.t, "/v1/portfolio/positions?cursor="
+                       + str(resp["nextCursor"]))
+            page = INV.rows_of(resp)
+            if not page:
+                break
+            rows.extend(page)
+            pages += 1
+        oo = get(self.t, "/v1/orders/open")
+        orders = [o for o in (oo.get("orders") or []) if isinstance(o, Mapping)] \
+            if isinstance(oo, Mapping) else []
+        return {"rows": rows, "open_orders": orders, "pages": pages,
+                "complete": complete}
+
     def status(self, oid: str) -> Dict[str, Any]:
         """{'qty': filled, 'px': outcome-terms avg, 'open': bool}."""
         try:
@@ -2216,6 +2244,7 @@ class Engine:
         except Exception as exc:                          # noqa: BLE001
             fees = {"error": repr(exc)[:120]}
         book = PNL.book_economics(self.b.d.get("markets") or {})
+        inv = self.inventory_reconcile()
         # residual = what settled markets realized beyond their completed
         # pairs' gross margin (lone legs, exits; fees if the venue nets them)
         mk_all = self.b.d.get("markets") or {}
@@ -2256,7 +2285,19 @@ class Engine:
                 "5_rebates_credited_usd": fees.get("credited_to_us_usd"),
                 "6_residual_settled_usd": str(
                     vr["settled_realized_usd"] - settled_margin),
-                "6_unmatched_cost_open_usd": book["unmatched_cost_usd"],
+                # LIVE 2026-11-15: this read book["unmatched_cost_usd"], the
+                # LIFETIME lone-leg cost of every market incl. settled ones
+                # ($26.72 while nothing was open). Open = venue-confirmed.
+                "6_unmatched_cost_open_usd": (
+                    inv["sports_open_unmatched_cost_usd"] if inv
+                    else str(self.b.total_unmatched())),
+                "6_unmatched_cost_open_source": (
+                    "venue_reconciled" if inv and inv["reconciled"]
+                    else "venue_unreconciled" if inv else "book_only"),
+                "6_unmatched_cost_pending_resolution_usd": (
+                    inv["sports_pending_resolution_cost_usd"] if inv
+                    else None),
+                "6_unmatched_cost_lifetime_usd": book["unmatched_cost_usd"],
                 "7_settled_realized_usd": str(vr["settled_realized_usd"]),
                 "7_settled_markets": vr["settled_markets"],
                 "unsettled_trade_realized_usd": str(
@@ -2284,6 +2325,24 @@ class Engine:
                   "side per isAggressor and reported separately; 1-4 and "
                   "unmatched cost are the bot's own book. Rewards are "
                   "separate (REWARD_CHECK).")
+
+    def inventory_reconcile(self) -> Optional[Dict[str, Any]]:
+        """Account-wide venue positions vs this bot's book; logged every
+        audit. READ-ONLY: never cancels, sells or adopts anything -- other
+        strategies' positions and orders are attributed and left alone."""
+        from src import pmus_sports_inventory as INV
+        try:
+            snap = self.v.positions_snapshot()
+        except Exception as exc:                          # noqa: BLE001
+            log("INVENTORY_RECONCILE", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return None
+        rep = INV.reconcile(snap["rows"], snap["open_orders"],
+                            self.b.d.get("markets") or {},
+                            self.own(), walk_complete=snap["complete"])
+        log("INVENTORY_RECONCILE", ok=True, pages=snap["pages"],
+            book_open_unmatched_usd=str(self.b.total_unmatched()), **rep)
+        return rep
 
     def orphan_sweep(self, orders: Optional[list] = None) -> None:
         """LIVE 2026-11-15T09:12Z the watchdog latched on DQX6ACVG13ZK: an
