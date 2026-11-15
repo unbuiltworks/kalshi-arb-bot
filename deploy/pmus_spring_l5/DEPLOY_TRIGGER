@@ -260,3 +260,4 @@
 2026-11-15T04:45Z SOL/ETH 1d reward trial: PMUS_TWO_SIDED_CRYPTO_PREFIXES discovery (never cpc-btc-), no new pairs in last 2h before endDate.
 2026-11-15T12:15Z cap counts OPEN lone legs only (closed markets were pinning it at 11.999/12).
 2026-11-15T12:25Z OWNER: no cricket (league tag ending 'cr': testcr/odicr/t20icr...).
+2026-11-15T12:45Z parallel exact-id cancels (no pre-read) for pulls and requotes; stale step 10s (env).

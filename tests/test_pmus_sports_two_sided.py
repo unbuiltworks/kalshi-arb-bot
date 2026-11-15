@@ -1152,3 +1152,37 @@ def test_closed_markets_do_not_count_toward_the_cap(eng):
     ("aec-atp-x-y-2026-11-15", False), ("aec-cs2-x-y-2026-11-15", False)])
 def test_cricket_excluded(slug, ex):
     assert M.excluded(slug) is ex
+
+
+def test_both_legs_cancel_in_parallel(eng, monkeypatch):
+    import time as _t
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    orig = v.cancel
+
+    def slow(oid):
+        _t.sleep(0.3)
+        return orig(oid)
+    monkeypatch.setattr(v, "cancel", slow)
+    t0 = _t.monotonic()
+    e._pull("aec-x", "test", t0)
+    assert _t.monotonic() - t0 < 0.5                       # not 0.6 sequential
+    assert not [o for o in v.orders.values() if o["open"]]
+
+
+def test_cancel_error_is_raised_after_all_legs_attempted(eng, monkeypatch):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    ids = [k for k, o in v.orders.items() if o["open"]]
+    orig = v.cancel
+
+    def flaky(oid):
+        if oid == ids[0]:
+            raise RuntimeError("venue said no")
+        return orig(oid)
+    monkeypatch.setattr(v, "cancel", flaky)
+    with pytest.raises(RuntimeError):
+        e._pull("aec-x", "test", 0.0)
+    assert v.orders[ids[1]]["open"] is False                # the other leg still pulled

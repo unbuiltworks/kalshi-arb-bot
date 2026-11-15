@@ -642,6 +642,24 @@ class Venue:
     def cancel(self, oid: str) -> bool:
         return self.q1.cancel_exact(self.t, oid)
 
+    def cancel_fast(self, oid: str, slug: str) -> bool:
+        """Exact-id cancel without the pre-read: the bot already knows the
+        market of its own order. POST once, then confirm a terminal state
+        (short polls). Same venue route and body as cancel_exact."""
+        self.t.request("POST", f"/v1/order/{oid}/cancel", {"marketSlug": slug})
+        for _ in range(12):
+            try:
+                o = self.q1._order_status(self.t, oid)
+            except self.q1.RejectedNoFill:
+                return True
+            state = str(o.get("state") or o.get("status") or "").upper()
+            if any(x in state for x in ("CANCEL", "EXPIRED", "REJECT")):
+                return True
+            if "FILLED" in state and "PARTIALLY" not in state:
+                return False
+            time.sleep(0.1)
+        return False
+
 
 # ------------------------------------------------------------- engine
 
@@ -725,18 +743,51 @@ class Engine:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
 
-    def _pull(self, slug: str, reason: str, t0: float) -> None:
-        mk = self.b.m(slug)
-        legs = 0
-        for oid, o in list(mk["orders"].items()):
-            if not o.get("open"):
+    def _cancel_legs(self, slug: str, legs: list) -> None:
+        """OWNER 2026-11-15 'be quicker with cancellations': cancel every
+        listed own leg IN PARALLEL, then read each final state and record any
+        fill that raced the cancel. Exact own ids only; nothing is re-placed
+        until every leg has been read back. The first error is re-raised
+        after all legs were attempted (fail closed, market_error path)."""
+        if not legs:
+            return
+        from concurrent.futures import ThreadPoolExecutor
+        fast = getattr(self.v, "cancel_fast", None)
+
+        def _one(item):
+            oid, _o = item
+            try:
+                if fast is not None:
+                    fast(oid, slug)
+                else:
+                    self.v.cancel(oid)
+                return oid, self.v.status(oid), None
+            except Exception as exc:                      # noqa: BLE001
+                return oid, None, exc
+        if len(legs) == 1:
+            results = [_one(legs[0])]
+        else:
+            with ThreadPoolExecutor(max_workers=len(legs)) as ex:
+                results = list(ex.map(_one, legs))
+        first_err = None
+        by_id = dict(legs)
+        for oid, st, err in results:
+            o = by_id[oid]
+            if err is not None:
+                first_err = first_err or err
                 continue
-            legs += 1
-            self.v.cancel(oid)
-            st = self.v.status(oid)
             self._record_fill(slug, o["side"], oid, st)
             o["open"] = st["open"]
         self.b.save()
+        if first_err is not None:
+            raise first_err
+
+    def _pull(self, slug: str, reason: str, t0: float) -> None:
+        mk = self.b.m(slug)
+        open_legs = [(oid, o) for oid, o in mk["orders"].items()
+                     if o.get("open")]
+        legs = len(open_legs)
+        self._cancel_legs(slug, open_legs)
         self.reactive_pulls += 1
         log("reactive_pull", slug=slug, reason=reason, legs=legs,
             latency_ms=round((time.monotonic() - t0) * 1000),
@@ -1237,12 +1288,7 @@ class Engine:
             # OWNER 2026-11-14 "Pairs should be set simultaneously": never
             # leave one side resting alone. Pull every open leg together,
             # then (still flat) set both legs together.
-            for side, (oid, o) in open_by_side.items():
-                self.v.cancel(oid)
-                st = self.v.status(oid)
-                self._record_fill(slug, side, oid, st)
-                o["open"] = st["open"]
-            self.b.save()
+            self._cancel_legs(slug, [v for v in open_by_side.values()])
             if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]) or \
                     any(o.get("open") for o in mk["orders"].values()):
                 return                  # a leg filled while pulling: complete it
