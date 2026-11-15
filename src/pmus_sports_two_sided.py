@@ -458,7 +458,12 @@ class Book:
         return D(0)
 
     def total_unmatched(self) -> D:
-        return sum((self.unmatched_cost(s) for s in self.d["markets"]), D(0))
+        """OPEN lone-leg exposure only. A market marked done is either
+        released flat (0) or CLOSED -- its lone leg has resolved and is no
+        longer at risk. Counting closed markets (LIVE 2026-11-15: 20+ settled
+        legs) pinned the cap at 11.999/12 and stopped all new pairs."""
+        return sum((self.unmatched_cost(s) for s, mk in
+                    self.d["markets"].items() if not mk.get("done")), D(0))
 
     def resting_pair_exposure(self, slug: str) -> D:
         """Worst NEW lone-leg cost the market's resting orders can create:

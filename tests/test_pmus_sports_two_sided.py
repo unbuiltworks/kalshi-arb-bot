@@ -1135,3 +1135,12 @@ def test_crypto_targets_only_explicit_prefixes_never_btc(monkeypatch):
     out = v.crypto_targets()
     assert [t["slug"] for t in out] == ["cpcsol-sol-updown-1d-2026-11-15-2200z"]
     assert v.states["cpcsol-sol-updown-1d-2026-11-15-2200z"]["type"] == "crypto-1d"
+
+
+def test_closed_markets_do_not_count_toward_the_cap(eng):
+    e, v = eng
+    mk = e.b.m("aec-old")
+    mk.update(pos={"YES": "1", "NO": "0"}, cost={"YES": "0.45", "NO": "0"}, done=True)
+    live = e.b.m("aec-live")
+    live.update(pos={"YES": "0", "NO": "1"}, cost={"YES": "0", "NO": "0.40"})
+    assert e.b.total_unmatched() == D("0.40")
