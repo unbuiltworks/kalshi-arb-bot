@@ -44,6 +44,7 @@ COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_order_body.py src/l5_order_body.py
+COPY src/l5_series_registry.py src/l5_series_registry.py
 COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py

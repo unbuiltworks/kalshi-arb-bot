@@ -29,6 +29,8 @@ approval is a refusal.
 """
 from __future__ import annotations
 
+from src import l5_series_registry as _REG
+
 import datetime as dt
 import hashlib
 import json
@@ -77,14 +79,15 @@ MAX_CAMPAIGN_S = 4 * 3600.0
 #: ONE DOCUMENT NAMES ONE SERIES, so an approval for one strategy can never
 #: authorize the other: `authorize_window`, `reserve_window` and every
 #: pre-wire claim refuse a market outside the document's own series.
-BTC15M_SERIES = "cpc-btc-updown-15m-"
-BTC5M_SERIES = "cpc-btc-updown-5m-"
-ALLOWED_SERIES = (BTC15M_SERIES, BTC5M_SERIES)
+#: DERIVED from l5_series_registry -- the one table an asset is added to.
+BTC15M_SERIES = _REG.BY_STRATEGY["BTC15M"].prefix
+BTC5M_SERIES = _REG.BY_STRATEGY["BTC5M"].prefix
+ALLOWED_SERIES = _REG.prefixes()
 #: which strategy a series belongs to. A series with no entry has no
 #: strategy and nothing may be claimed for it.
-SERIES_STRATEGY = {BTC15M_SERIES: "BTC15M", BTC5M_SERIES: "BTC5M"}
+SERIES_STRATEGY = {r.prefix: r.strategy for r in _REG.REGISTRY}
 #: how long one window of the series lasts, in seconds
-SERIES_WINDOW_S = {BTC15M_SERIES: 900.0, BTC5M_SERIES: 300.0}
+SERIES_WINDOW_S = {r.prefix: r.horizon_s for r in _REG.REGISTRY}
 #: PER-SERIES ceilings, each TIGHTER than the general one above and never
 #: looser. The 5-minute strategy was approved for preparation at $5 of
 #: exposure; a document asking for more gets $5.

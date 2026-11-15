@@ -40,21 +40,26 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_auth as Q1
 from src.l5_live_execution import NotArmed
+from src import l5_series_registry as _REG
 
-#: the series the faithful probe is scoped to. A different series fails.
-BTC15M_SERIES = "btc-updown-15m"
-BTC15M_SLUG_RE = re.compile(r"^cpc-btc-updown-15m-\d{4}-\d{2}-\d{2}-\d{4}z$")
-#: THE 5-MINUTE SERIES, for the BTC5m runner only. A transport is built for
-#: ONE series and preflight refuses a slug or a venue market outside it. The
-#: default is BTC15M, so every existing caller is unchanged.
-BTC5M_SERIES = "btc-updown-5m"
-BTC5M_SLUG_RE = re.compile(r"^cpc-btc-updown-5m-\d{4}-\d{2}-\d{2}-\d{4}z$")
+#: THE SERIES A TRANSPORT MAY BE SCOPED TO, derived from
+#: l5_series_registry. A transport is built for ONE series and preflight
+#: refuses a slug or a venue market outside it; the default is BTC15M, so
+#: every existing caller is unchanged.
+#:
+#: The marker and the slug pattern are BOTH taken from the registry row, so
+#: a new asset cannot end up with a pattern that disagrees with its own
+#: prefix -- the failure mode of keeping two literals in step by hand.
+BTC15M_SERIES = _REG.BY_STRATEGY["BTC15M"].venue_marker
+BTC15M_SLUG_RE = _REG.BY_STRATEGY["BTC15M"].slug_re
+BTC5M_SERIES = _REG.BY_STRATEGY["BTC5M"].venue_marker
+BTC5M_SLUG_RE = _REG.BY_STRATEGY["BTC5M"].slug_re
 #: name -> (venue series marker, slug pattern, the two preflight gate names)
 SERIES = {
-    "BTC15M": (BTC15M_SERIES, BTC15M_SLUG_RE,
-               "slug_is_btc15m_series", "market_series_is_btc15m"),
-    "BTC5M": (BTC5M_SERIES, BTC5M_SLUG_RE,
-              "slug_is_btc5m_series", "market_series_is_btc5m"),
+    r.strategy: (r.venue_marker, r.slug_re,
+                 "slug_is_%s_series" % r.strategy.lower(),
+                 "market_series_is_%s" % r.strategy.lower())
+    for r in _REG.REGISTRY
 }
 
 #: the two outcomes, and the ONLY mapping this engine accepts

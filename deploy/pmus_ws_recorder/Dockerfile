@@ -84,6 +84,7 @@ COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 # imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_series_registry.py src/l5_series_registry.py
 COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 COPY src/l5_managed_lanes.py src/l5_managed_lanes.py

@@ -38,13 +38,17 @@ import re
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from src import l5_series_registry as _REG
+
 BTC15M, BTC5M, MANUAL, UNKNOWN = "BTC15M", "BTC5M", "MANUAL", "UNKNOWN"
 ORIGINS = (BTC15M, BTC5M, MANUAL, UNKNOWN)
 
-#: the client-order-id prefix each automated strategy writes. THE registry.
-STRATEGY_COID_PREFIX = {BTC15M: "l5f-", BTC5M: "b5m-"}
-#: the market series each automated strategy trades
-STRATEGY_SERIES = {BTC15M: "cpc-btc-updown-15m-", BTC5M: "cpc-btc-updown-5m-"}
+#: the client-order-id prefix each automated strategy writes, and the
+#: series it trades. Both DERIVE from l5_series_registry, which is the one
+#: table an asset is added to; writing them literally here is how
+#: "cpc-btc-updown-5m-" ended up in 34 files.
+STRATEGY_COID_PREFIX = {r.strategy: r.coid_prefix for r in _REG.REGISTRY}
+STRATEGY_SERIES = {r.strategy: r.prefix for r in _REG.REGISTRY}
 
 #: cost-basis kinds, strongest first. Only the first is a measured cost.
 BASIS_AUTHENTICATED = "AUTHENTICATED_FILLS"
