@@ -299,6 +299,14 @@ SETTLE_LOOKUP_GAP_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_GAP_S", "0.2"))
 # when its expected NET value from this bot's own SETTLED results is
 # positive (src/pmus_sports_open_gate.py). DEFAULT OFF.
 OPEN_EV_GATE = os.getenv("PMUS_TWO_SIDED_OPEN_EV_GATE", "0").strip() == "1"
+# OWNER 2026-11-15 "work every market until it's profitable": bounded
+# same-side EXTEND while a market is stranded (needs the recovery controller)
+EXTEND_ON = os.getenv("PMUS_TWO_SIDED_EXTEND", "0").strip() == "1"
+EXTEND_QTY = D(os.getenv("PMUS_TWO_SIDED_EXTEND_QTY", "1"))
+EXTEND_MAX_IMBALANCE = D(os.getenv("PMUS_TWO_SIDED_EXTEND_MAX_IMBALANCE",
+                                   "2"))
+EXTEND_STEP_PX = D(os.getenv("PMUS_TWO_SIDED_EXTEND_STEP_PX", "0.03"))
+EXTEND_MAX_USD = D(os.getenv("PMUS_TWO_SIDED_EXTEND_MAX_USD", "1.50"))
 OPEN_EV_MIN = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN", "0")
 OPEN_EV_MIN_MARKETS = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN_MARKETS", "10")
 SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
@@ -972,9 +980,23 @@ class Engine:
 
     def _intl_check(self, slug: str, t0: float) -> None:
         mk = self.b.d["markets"].get(slug)
-        if not mk or mk.get("done") or \
-                D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
-            return                       # completions are never guarded
+        if not mk or mk.get("done"):
+            return
+        if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
+            # unbalanced: completions are never guarded; an EXTEND is
+            ext = [(oid, o) for oid, o in mk["orders"].items()
+                   if o.get("open") and o.get("stage") == "two_sided_extend"]
+            if not ext:
+                return
+            tick = (self.v.spec(slug) or {}).get("tick") or D("0.01")
+            oid, o = ext[0]
+            v = self.guard.verdict(slug, {o["side"]: D(o["px"])}, tick)
+            if not v["ok"]:
+                self.guard.stats["pulled"] += 1
+                log("intl_guard_pull", slug=slug, legs={o["side"]: o["px"]},
+                    stage="two_sided_extend", **v)
+                self._cancel_legs(slug, [(oid, o)])
+            return
         legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
                 if o.get("open")}
         if not legs:
@@ -1616,6 +1638,82 @@ class Engine:
             notional += self.b.unmatched_cost(s_)
         return {"by_age": ages, "notional_usd": str(notional)}
 
+    def extend_target(self, slug: str, mk: Mapping[str, Any], bbo: Mapping,
+                      tick: D, lead: str, need: D, lead_px: D, qty: D
+                      ) -> Dict[str, Any]:
+        """Where (if anywhere) a same-side EXTEND bid may rest. Pure apart
+        from the guard/gate reads. Never larger than EXTEND_QTY, never past
+        EXTEND_MAX_IMBALANCE, only BELOW the average cost by EXTEND_STEP_PX
+        (so a later completion can lock a cheaper pair), always a maker
+        DEPTH ticks under this side's own bid, and inside every cap."""
+        if need + qty > EXTEND_MAX_IMBALANCE:
+            return {"px": None, "why": "max_imbalance"}
+        if os.getenv(ENABLED_ENV, "").upper() != "YES" or \
+                self.daily_stopped() or self.halt_new_exposure() or \
+                self.shared_halt() is not None:
+            return {"px": None, "why": "blocked"}
+        late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
+            if LATE_CUTOFF else None
+        if late or excluded(slug):
+            return {"px": None, "why": f"late:{late or 'excluded'}"}
+        lead_bid = side_bid(lead, bbo["bid"], bbo["ask"])
+        px = floor_tick(min(lead_bid - depth_ticks(tick) * tick,
+                            lead_px - EXTEND_STEP_PX), tick)
+        if px < max(tick, BAND_LO):
+            return {"px": None, "why": "below_band"}
+        add = px * qty
+        if self.b.unmatched_cost(slug) + add > EXTEND_MAX_USD:
+            return {"px": None, "why": "per_market_usd"}
+        if self.b.total_unmatched() + add > TOTAL_CAP:
+            return {"px": None, "why": "total_cap"}
+        if OPEN_EV_GATE:
+            g = self.open_gate(slug)
+            if not g["allow"]:
+                return {"px": None, "why": "open_ev_gate"}
+        if self.guard is not None:
+            gv = self.guard.verdict(slug, {lead: px}, tick)
+            if not gv["ok"]:
+                return {"px": None, "why": "intl_guard:" + gv["why"]}
+        return {"px": px, "why": "ok"}
+
+    def _extend(self, slug: str, mk: Dict[str, Any], spec: Mapping,
+                bbo: Mapping, tick: D, lead: str, need: D, lead_px: D,
+                resting) -> None:
+        """OWNER 2026-11-15: keep working a stranded market -- OPEN ->
+        EXTEND -> COMPLETE -> new pair -- instead of only waiting. A bounded
+        same-side bid below our average cost: if it fills, the average
+        drops and the completion (re-sized by the recovery controller) can
+        lock a cheaper pair. Fixed size, hard imbalance and dollar caps, so
+        it can never become a martingale."""
+        qty = max(EXTEND_QTY, spec["min_qty"])
+        tg = self.extend_target(slug, mk, bbo, tick, lead, need, lead_px,
+                                qty)
+        if resting is not None:
+            oid, o = resting
+            keep = (tg["px"] is not None and
+                    tg["px"] - tick <= D(o["px"]) <= tg["px"])
+            if keep:
+                return
+            self.v.cancel(oid)
+            st = self.v.status(oid)
+            self._record_fill(slug, lead, oid, st)
+            o["open"] = st["open"]
+            self.b.save()
+            log("extend_pulled", slug=slug, side=lead, px=o["px"],
+                why=tg["why"], target=str(tg["px"]))
+            return
+        if tg["px"] is None:
+            if mk.get("extend_logged") != tg["why"]:
+                mk["extend_logged"] = tg["why"]
+                log("extend_skip", slug=slug, side=lead, need=need,
+                    lead_px=lead_px, why=tg["why"])
+            return
+        mk.pop("extend_logged", None)
+        log("EXTEND", slug=slug, side=lead, px=tg["px"], qty=qty,
+            need_before=need, avg_cost_before=lead_px,
+            label="same-side maker add below average cost; bounded")
+        self.place(slug, lead, tg["px"], qty, "two_sided_extend")
+
     def _recover(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                  bbo: Mapping, tick: D, lead: str, lag: str, need: D,
                  lead_px: D, cur, lone_since: float) -> None:
@@ -2013,8 +2111,11 @@ class Engine:
         lead = "YES" if lag == "NO" else "NO"
         need = abs(y - n)
         lead_px = D(mk["cost"][lead]) / D(mk["pos"][lead])
-        # stop adding to the leading side
-        if lead in open_by_side:
+        # stop adding to the leading side -- except a bounded EXTEND order,
+        # which _extend manages (keeps, re-prices or pulls) below
+        if lead in open_by_side and not (
+                EXTEND_ON and RECOVERY_ON and
+                open_by_side[lead][1].get("stage") == "two_sided_extend"):
             oid, o = open_by_side[lead]
             self.v.cancel(oid)
             st = self.v.status(oid)
@@ -2045,6 +2146,9 @@ class Engine:
         if RECOVERY_ON:
             self._recover(slug, mk, spec, bbo, tick, lead, lag, need,
                           lead_px, cur, lone_since)
+            if EXTEND_ON:
+                self._extend(slug, mk, spec, bbo, tick, lead, need, lead_px,
+                             open_by_side.get(lead))
             return
         comp_ask = (bbo["ask"] if lag == "YES" else ONE - bbo["bid"])
         exit_s, exit_max = exit_rule(slug)

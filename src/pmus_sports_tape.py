@@ -30,7 +30,8 @@ EVENT_KINDS = frozenset({
     "released_flat_market", "daily_loss_stop", "HALT_NEW_EXPOSURE",
     "shared_halt", "INVENTORY_RECONCILE", "XV_PAPER_ENTRY",
     "XV_PAPER_RESULT", "XV_PAPER_SUMMARY", "XV_PAPER_MARKETS",
-    "intl_guard_pull", "intl_guard_block"})
+    "intl_guard_pull", "intl_guard_block",
+    "EXTEND", "extend_pulled"})
 
 
 def book_levels(msg: Any, out: Optional[list] = None, slug_hint: str = ""
