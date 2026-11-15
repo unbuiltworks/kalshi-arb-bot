@@ -1048,7 +1048,12 @@ class TestIsolationOfTheModule:
             "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
             "l5_origin as ORIGIN"]
 
-    def test_it_calls_only_the_five_transport_methods(self):
+    def test_it_calls_only_the_six_transport_methods(self):
+        """Five since this module was written, plus `account` -- the cash
+        read FOREIGN_EXPOSURE=REPORTED gates on. `buying_power` is the
+        transport class's own parser for that answer, taken from the
+        transport rather than reimplemented here, because this module may
+        not import a module that knows a venue schema."""
         src = inspect.getsource(X)
         direct = set(re.findall(r"\btransport\.(\w+)", src))
         # `t = self.transport` is the one alias, and it only reads
@@ -1056,7 +1061,8 @@ class TestIsolationOfTheModule:
         alias = set(re.findall(r"\bt\.(\w+)\(", src))
         assert alias == {"open_orders", "positions"}
         assert direct | alias == {"submit", "cancel", "order", "open_orders",
-                                  "positions"}
+                                  "positions", "account"}
+        assert 'getattr(type(transport), "buying_power", None)' in src
         assert "cancel_all" not in src and "setattr(" not in src
         assert src.count("getattr(self.transport") == 1      # reads `armed`
 
@@ -1269,3 +1275,152 @@ class TestTheClaimGatesEverySubmit:
         assert i < src.index("self.transport.submit(")
         # nothing between the claim and the wire can skip the wire's gate
         assert len(re.findall(r"\btransport\.submit\(", src)) == 1
+
+
+# ======================================================================
+# FOREIGN EXPOSURE: REPORTED -- THE MONEY PATH
+# ======================================================================
+class TestForeignExposureReportedMoneyPath:
+    """L5_BTC5M_FOREIGN_EXPOSURE=REPORTED, at the submission gate.
+
+    The decision is scripted in these tests so the order reaches the money
+    path regardless of what the controller's own exposure-room check would
+    have said; the cross-lane behaviour is pinned in
+    test_l5_btc5m_btc15m_isolation. CHARGED is the default and every other
+    test in this file runs under it."""
+
+    CASH = {"balances": [{"buyingPower": "500.00"}]}
+
+    @pytest.fixture(autouse=True)
+    def _parser(self, monkeypatch):
+        """Give the fake the REAL balances parser, as a class attribute --
+        the adapter reads it off `type(transport)`, never off the instance.
+
+        The test may import the live transport; the adapter may not, so the
+        parser under test here is the same code the live venue uses and not
+        a second implementation of the schema."""
+        from src.l5_pmus_transport import PmusTransport
+        monkeypatch.setattr(Venue, "buying_power",
+                            staticmethod(PmusTransport.buying_power),
+                            raising=False)
+
+    @staticmethod
+    def _foreign(rig, contracts="3"):
+        rig.venue.extra_positions = [{
+            "marketSlug": M15, "qtyBought": contracts, "qtySold": "0",
+            "netPositionDecimal": contracts}]
+
+    def test_reported_stops_charging_a_foreign_position(
+            self, rig, armed, monkeypatch):
+        """The same block as the CHARGED test above: 3 foreign contracts,
+        a $3.05 ceiling, $0 of our own risk."""
+        self._foreign(rig)
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "3.05")
+        scripted(monkeypatch, place())
+        assert reasons(rig.step()) == ["ACCOUNT_EXPOSURE_CAP"]
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        rig.venue.account = lambda: self.CASH
+        rep = rig.step()
+        assert rep["refused"] == [] and len(rep["placed"]) == 1
+        acct = rep["exposure"]["account"]
+        assert acct["other_usd"] == D("3.00")       # still read, still priced
+        assert acct["own_usd"] == 0 and acct["unknown"] is False
+        assert rep["exposure"]["foreign_mode"] == X.FOREIGN_REPORTED
+        assert rep["exposure"]["buying_power_usd"] == "500.00"
+
+    def test_our_own_exposure_still_meets_the_ceiling(
+            self, rig, armed, monkeypatch):
+        self._foreign(rig)
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.05")       # under one leg
+        rig.venue.account = lambda: self.CASH
+        scripted(monkeypatch, place())                      # 0.58 * 0.17
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_EXPOSURE_CAP"] and rig.venue.sent == []
+        r0 = rep["refused"][0]
+        assert D(str(r0["total_usd"])) == 0                 # OURS, not theirs
+        assert D(str(r0["cap_usd"])) == D("0.05")
+        assert r0["foreign_mode"] == X.FOREIGN_REPORTED
+        assert D(str(r0["other_usd_reported"])) == D("3.00")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.0986")     # exactly at it
+        assert len(rig.step()["placed"]) == 1
+
+    def test_a_second_leg_is_charged_to_us(self, rig, armed, monkeypatch):
+        """Our own filled cost accumulates under REPORTED exactly as it
+        does under CHARGED -- only the foreign term changed."""
+        self._foreign(rig)
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.15")
+        rig.venue.account = lambda: self.CASH
+        scripted(monkeypatch, place())
+        assert len(rig.step()["placed"]) == 1               # 0.0986 resting
+        scripted(monkeypatch, place(price="0.57"))          # a distinct intent
+        rep = rig.step()                                    # + 0.0969 > 0.15
+        assert reasons(rep) == ["ACCOUNT_EXPOSURE_CAP"]
+        assert D(str(rep["refused"][0]["total_usd"])) == D("0.0986")
+
+    def test_unreadable_cash_refuses(self, rig, armed, monkeypatch):
+        """The fake raises on any transport call it does not script, so a
+        venue with no cash route is exactly an unreadable one. Unknown
+        cash is never read as unlimited."""
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "10")
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_CASH_UNREADABLE"]
+        assert rig.venue.sent == []
+        assert rep["exposure"]["buying_power_usd"] is None
+
+        def boom():
+            raise ConnectionError("venue did not answer")
+
+        rig.venue.account = boom
+        assert reasons(rig.step()) == ["ACCOUNT_CASH_UNREADABLE"]
+        rig.venue.account = lambda: {"somethingElse": 1}    # unknown shape
+        assert reasons(rig.step()) == ["ACCOUNT_CASH_UNREADABLE"]
+        assert rig.venue.sent == []
+        rig.venue.account = lambda: self.CASH
+        monkeypatch.delattr(Venue, "buying_power")          # no parser at all
+        assert reasons(rig.step()) == ["ACCOUNT_CASH_UNREADABLE"]
+        assert rig.venue.sent == []
+        monkeypatch.setattr(Venue, "buying_power",
+                            staticmethod(lambda b: D("500.00")), raising=False)
+        assert len(rig.step()["placed"]) == 1
+
+    def test_cash_short_refuses(self, rig, armed, monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "10")
+        rig.venue.account = lambda: {"balances": [{"buyingPower": "0.05"}]}
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_CASH_SHORT"] and rig.venue.sent == []
+        r0 = rep["refused"][0]
+        assert D(str(r0["buying_power_usd"])) == D("0.05")
+        assert D(str(r0["own_usd"])) == 0
+        rig.venue.account = lambda: {"balances": [{"buyingPower": "0.0986"}]}
+        assert len(rig.step()["placed"]) == 1               # exactly fundable
+
+    def test_an_unreadable_foreign_book_still_halts_us(
+            self, rig, armed, monkeypatch):
+        """REPORTED weakens the CHARGE, never the READ."""
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "10")
+        rig.venue.account = lambda: self.CASH
+        rig.venue.account_error = ConnectionError("venue did not answer")
+        scripted(monkeypatch, place())
+        assert reasons(rig.step()) == ["ACCOUNT_STATE_UNKNOWN"]
+        assert rig.venue.sent == []
+
+    def test_cash_is_not_read_at_all_under_charged(
+            self, rig, armed, monkeypatch):
+        """No new transport call on the default path: CHARGED must not
+        start depending on a cash route that may not answer."""
+        monkeypatch.delenv(X.FOREIGN_EXPOSURE_ENV, raising=False)
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "10")
+        calls = []
+        rig.venue.account = lambda: calls.append(1) or self.CASH
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert len(rep["placed"]) == 1 and calls == []
+        assert rep["exposure"]["foreign_mode"] == X.FOREIGN_CHARGED
+        assert "buying_power_usd" not in rep["exposure"]

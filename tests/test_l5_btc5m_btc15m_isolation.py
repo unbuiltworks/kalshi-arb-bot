@@ -868,3 +868,163 @@ class TestIsolationOnRowsWithoutClientIds:
                    for o in both.venue.cancelled)
         acct = both.ex.account_exposure()
         assert acct["unknown"] is False
+
+
+# ======================================================================
+# E2. FOREIGN EXPOSURE: REPORTED
+# ======================================================================
+class TestForeignExposureReported:
+    """L5_BTC5M_FOREIGN_EXPOSURE=REPORTED stops charging another lane's
+    inventory against OUR ceiling, and replaces that charge with the
+    venue's own buying power as the bound on the shared account.
+
+    Section E above pins CHARGED, which stays the default. These tests
+    pin what REPORTED changes and -- more importantly -- what it does
+    NOT: our own exposure still meets the owner's ceiling, foreign
+    inventory is still read and still reported, an unreadable foreign
+    book still makes the account UNKNOWN, and cash that cannot be read
+    refuses rather than reading as unlimited."""
+
+    @pytest.fixture(autouse=True)
+    def _parser(self, monkeypatch):
+        """The REAL balances parser, as a class attribute: the adapter
+        reads it off `type(transport)` and may not import the live
+        transport itself, so the schema under test here is the one the
+        live venue uses and not a second implementation."""
+        from src.l5_pmus_transport import PmusTransport
+        monkeypatch.setattr(SharedVenue, "buying_power",
+                            staticmethod(PmusTransport.buying_power),
+                            raising=False)
+
+    @staticmethod
+    def _cash(both, payload):
+        """Teach the shared venue to answer /v1/account/balances."""
+        both.venue.account = lambda: payload
+
+    def test_default_is_charged_and_unchanged(self, both, monkeypatch):
+        monkeypatch.delenv(X.FOREIGN_EXPOSURE_ENV, raising=False)
+        assert X.foreign_exposure_mode() == X.FOREIGN_CHARGED
+        both.open15()
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "1.25")
+        rep = both.step5(at=8.0)
+        assert [r["reason"] for r in rep["refused"]] == ["ACCOUNT_EXPOSURE_CAP"]
+        assert rep["exposure"]["foreign_mode"] == X.FOREIGN_CHARGED
+
+    def test_junk_and_lowercase_values(self, both, monkeypatch):
+        for raw, want in (("", X.FOREIGN_CHARGED), ("charged", X.FOREIGN_CHARGED),
+                          ("yes", X.FOREIGN_CHARGED), ("1", X.FOREIGN_CHARGED),
+                          ("REPORT", X.FOREIGN_CHARGED),
+                          ("reported", X.FOREIGN_REPORTED),
+                          (" Reported ", X.FOREIGN_REPORTED),
+                          ("REPORTED", X.FOREIGN_REPORTED)):
+            monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, raw)
+            assert X.foreign_exposure_mode() == want, raw
+
+    def test_reported_lets_the_order_through_the_same_block(self, both,
+                                                            monkeypatch):
+        """The exact live block: foreign inventory over the ceiling, $0 of
+        our own risk. CHARGED refuses; REPORTED places."""
+        both.open15()
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "1.25")       # 1.20 foreign
+        assert [r["reason"] for r in both.step5(at=8.0)["refused"]] == \
+            ["ACCOUNT_EXPOSURE_CAP"]
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+        rep = both.step5(at=9.0)
+        assert rep["refused"] == [], rep
+        assert [(p["side"], D(p["price"]), D(p["qty"]))
+                for p in rep["placed"]] == [FIRST_5M]
+        assert rep["exposure"]["foreign_mode"] == X.FOREIGN_REPORTED
+        assert rep["exposure"]["buying_power_usd"] == "500.00"
+
+    def test_foreign_inventory_is_still_read_and_reported(self, both,
+                                                          monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+        both.open15()
+        both.venue.fill("v1")
+        both.h.tick(13.0)
+        rep = both.step5(at=14.0)
+        acct = rep["exposure"]["account"]
+        assert acct["other_open_order_contracts"] == D("0.6")
+        assert acct["other_position_contracts"] == D("0.6")
+        assert acct["other_usd"] == D("1.20")               # priced, not charged
+        assert rep["refused"] == [], rep
+
+    def test_the_ceiling_still_bounds_us_under_reported(self, both,
+                                                        monkeypatch):
+        """A ceiling under our own first leg stops us even with foreign
+        inventory no longer charged and cash to spare.
+
+        The guard that fires here is the CONTROLLER's exposure-room check,
+        which is strictly earlier than the money path and reads the same
+        ceiling; REPORTED does not widen it. The money path's own
+        ACCOUNT_EXPOSURE_CAP under REPORTED is pinned in
+        test_l5_btc5m_execution, where the decision can be scripted past
+        this gate."""
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+        both.open15()
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.05")       # under one 5m leg
+        rep = both.step5(at=8.0)
+        assert rep["refused"] == [] and rep["placed"] == []
+        assert (rep["action"], rep["why"]) == ("HOLD_OR_SKIP",
+                                              "NO_EXPOSURE_ROOM")
+        assert D(str(rep["entry_eval"]["cap_usd"])) == D("0.05")
+        assert both.venue.ids("b5m-") == [] and both.ex.orders() == {}
+
+    def test_unreadable_cash_refuses(self, both, monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        both.open15()
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "1.25")
+
+        def boom():
+            raise ConnectionError("venue did not answer")
+
+        both.venue.account = boom
+        rep = both.step5(at=8.0)
+        assert [r["reason"] for r in rep["refused"]] == ["ACCOUNT_CASH_UNREADABLE"]
+        assert both.venue.ids("b5m-") == []
+        # a shape the parser does not know is equally unreadable
+        both.venue.account = lambda: {"somethingElse": 1}
+        rep = both.step5(at=8.5)
+        assert [r["reason"] for r in rep["refused"]] == ["ACCOUNT_CASH_UNREADABLE"]
+        assert rep["exposure"]["buying_power_usd"] is None
+        assert both.venue.ids("b5m-") == []
+
+    def test_cash_short_refuses(self, both, monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        both.open15()
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "10")
+        self._cash(both, {"balances": [{"buyingPower": "0.05"}]})
+        rep = both.step5(at=8.0)
+        assert [r["reason"] for r in rep["refused"]] == ["ACCOUNT_CASH_SHORT"]
+        assert D(str(rep["refused"][0]["buying_power_usd"])) == D("0.05")
+        assert both.venue.ids("b5m-") == []
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+        both.open5(at=9.0)
+
+    def test_an_unreadable_foreign_book_still_halts_us(self, both,
+                                                       monkeypatch):
+        """REPORTED weakens the CHARGE, never the READ. If we cannot see
+        the account we do not place, whatever our own cash says."""
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+
+        def boom():
+            raise ConnectionError("venue did not answer")
+
+        both.venue.open_orders = boom
+        rep = both.step5(at=8.0)
+        assert [r["reason"] for r in rep["refused"]] == ["ACCOUNT_STATE_UNKNOWN"]
+        assert both.venue.ids("b5m-") == []
+
+    def test_an_unset_ceiling_still_refuses_under_reported(self, both,
+                                                           monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        self._cash(both, {"balances": [{"buyingPower": "500.00"}]})
+        monkeypatch.delenv(X.ACCOUNT_CAP_ENV, raising=False)
+        rep = both.step5(at=8.0)
+        assert [r["reason"] for r in rep["refused"]] == \
+            ["ACCOUNT_CAP_UNSET_OR_UNREADABLE"]
+        assert both.venue.ids("b5m-") == []
