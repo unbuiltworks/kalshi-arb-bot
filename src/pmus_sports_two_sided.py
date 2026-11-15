@@ -71,6 +71,7 @@ LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
 # OWNER 2026-11-14 "If a pair is just sitting there for a while, cancel and
 # resubmit closer": every STALE_S unfilled, one tick closer to the touch.
 STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
+OPEN_LADDER = os.getenv("PMUS_TWO_SIDED_OPEN_LADDER", "1").strip() != "0"
 # OWNER 2026-11-14 "set up the daily reward credit check": the venue's own
 # /v1/incentives/earnings (credited vs pending split) every REWARD_CHECK_S.
 REWARD_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_CHECK_S", "3600"))
@@ -1233,7 +1234,10 @@ class Engine:
                     self._pull(slug, "jump_pause_hold", time.monotonic())
                 return
             set_at = float(mk.setdefault("pair_set_at", time.time()))
-            steps = int((time.time() - set_at) // STALE_S) if STALE_S > 0 else 0
+            # OWNER 2026-11-15: openings stay DEPTH_TICKS under the touch;
+            # only a stranded leg's completion steps closer.
+            steps = int((time.time() - set_at) // STALE_S) \
+                if (STALE_S > 0 and OPEN_LADDER) else 0
             want = None
             rq = self._reward_quote(slug, mk, bbo, tick)   # None unless on
             if rq is not None:

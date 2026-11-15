@@ -1186,3 +1186,14 @@ def test_cancel_error_is_raised_after_all_legs_attempted(eng, monkeypatch):
     with pytest.raises(RuntimeError):
         e._pull("aec-x", "test", 0.0)
     assert v.orders[ids[1]]["open"] is False                # the other leg still pulled
+
+
+def test_open_ladder_off_keeps_openings_two_ticks_back(eng, monkeypatch):
+    monkeypatch.setattr(M, "OPEN_LADDER", False)
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    e.b.d["markets"]["aec-x"]["pair_set_at"] -= 600
+    e.step_market("aec-x")
+    live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    assert live == {"YES": D("0.42"), "NO": D("0.52")}
