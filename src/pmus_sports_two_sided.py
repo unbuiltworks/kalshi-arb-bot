@@ -255,6 +255,27 @@ def stale_reasons(quoted: Mapping[str, Any], new: Mapping[str, D],
     return out
 
 
+def adverse_reasons(legs: Mapping[str, D], new: Mapping[str, D], tick: D,
+                    depth: int) -> list:
+    """OWNER 2026-11-15 'it keeps reopening the same pair -- be aware of
+    what's sitting': pull a resting opening leg ONLY when the move is against
+    it -- it now sits closer than `depth` ticks to its own touch (it would buy
+    above the market's new level) or within one tick of crossing. A touch
+    moving AWAY leaves the leg deeper and safe; it is left resting."""
+    out = []
+    for side, px in legs.items():
+        px = D(str(px))
+        if side == "YES":
+            touch, opp = new["bid"], new["ask"]
+        else:
+            touch, opp = ONE - new["ask"], ONE - new["bid"]
+        if px > touch - depth * tick:
+            out.append("%s_closer_than_%dt" % (side.lower(), depth))
+        if opp - px <= tick:
+            out.append("%s_near_cross" % side.lower())
+    return out
+
+
 def rewards_on() -> bool:
     """Reward machinery on: PMUS_TWO_SIDED_REWARDS, or implied by
     PMUS_TWO_SIDED_REWARD_FIRST."""
@@ -742,8 +763,11 @@ class Engine:
             # a >= REWARD_REPRICE_TICKS move or a target-walk exit. The jump
             # pause above still pulls at once.
             return
-        quoted = mk.get("quoted_bbo") or moves[0][0]
-        why = stale_reasons(quoted, new, tick)
+        legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
+                if o.get("open")}
+        why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
+                                     "ask": D(str(new["ask"]))},
+                              tick, DEPTH_TICKS)
         if why:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
@@ -1283,10 +1307,15 @@ class Engine:
                     log("total_cap_precheck_block", slug=slug,
                         committed=self.b.committed_excluding(slug),
                         worst_leg=worst_leg, total_cap=TOTAL_CAP)
+            # HYSTERESIS: a resting leg AT its target or up to one tick
+            # deeper stays put (no cancel/re-place churn on flicker); only a
+            # leg closer than target, or 2+ ticks too deep, is re-set.
             in_place = (want is not None and not blocked and
                         set(open_by_side) == {"YES", "NO"} and
-                        all(D(open_by_side[sd][1]["px"]) == want[sd]
-                            for sd in ("YES", "NO")) and
+                        all(want[sd] - (tick if (not OPEN_LADDER and
+                                                 not rewards_on()) else 0)
+                            <= D(open_by_side[sd][1]["px"])
+                            <= want[sd] for sd in ("YES", "NO")) and
                         (not rewards_on() or
                          all(D(open_by_side[sd][1]["qty"]) == qty
                              for sd in ("YES", "NO"))))

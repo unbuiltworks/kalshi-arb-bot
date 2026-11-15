@@ -263,3 +263,4 @@
 2026-11-15T12:45Z parallel exact-id cancels (no pre-read) for pulls and requotes; stale step 10s (env).
 2026-11-15T12:55Z OWNER: openings stay 2 ticks under the touch (PMUS_TWO_SIDED_OPEN_LADDER=0); stranded-leg completions still step.
 2026-11-15T13:05Z cancel_fast returns the terminal read (no second status GET); reactive_pull logs queue_ms vs cancel_ms.
+2026-11-15T13:20Z OWNER 'it keeps reopening the same pair': pull only on adverse moves; 1-tick hysteresis on resting openings.

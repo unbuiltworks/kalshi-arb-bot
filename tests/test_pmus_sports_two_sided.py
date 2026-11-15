@@ -547,7 +547,7 @@ def test_touch_move_pulls_both_legs_and_replaces_at_new_price(weng, capsys):
     assert v.n == 4 and e.reactive_pulls == 1
     out = capsys.readouterr().out
     row = [ln for ln in out.splitlines() if '"reactive_pull"' in ln][0]
-    assert '"slug":"aec-x"' in row and "yes_touch_moved" in row
+    assert '"slug":"aec-x"' in row and "yes_closer_than_2t" in row
     assert 0 <= json.loads(row.split(" ", 1)[1])["latency_ms"] < 1000
 
 
@@ -1197,3 +1197,24 @@ def test_open_ladder_off_keeps_openings_two_ticks_back(eng, monkeypatch):
     e.step_market("aec-x")
     live = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
     assert live == {"YES": D("0.42"), "NO": D("0.52")}
+
+
+
+def test_move_away_from_our_legs_does_not_churn(weng):
+    e, v, clk = weng
+    e.select(v.account())
+    v.ws.ingest(frame("aec-x", "0.44", "0.46"))
+    e.step_market("aec-x")
+    n0 = v.n
+    v.ws.ingest(frame("aec-x", "0.45", "0.46"))          # bid up: YES deeper, NO untouched
+    e.drain_ws_events()
+    assert e.reactive_pulls == 0 and v.n == n0              # nothing cancelled or re-placed
+    assert _open(v) == {"YES": D("0.42"), "NO": D("0.52")}
+
+
+def test_adverse_reasons():
+    legs = {"YES": D("0.42"), "NO": D("0.52")}
+    assert M.adverse_reasons(legs, {"bid": D("0.44"), "ask": D("0.46")}, T, 2) == []
+    assert M.adverse_reasons(legs, {"bid": D("0.43"), "ask": D("0.46")}, T, 2) == ["yes_closer_than_2t"]
+    assert "no_closer_than_2t" in M.adverse_reasons(legs, {"bid": D("0.44"), "ask": D("0.47")}, T, 2)
+    assert "yes_near_cross" in M.adverse_reasons(legs, {"bid": D("0.40"), "ask": D("0.43")}, T, 2)
