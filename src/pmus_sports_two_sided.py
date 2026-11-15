@@ -211,6 +211,19 @@ REWARD_FLOOR_CHECK_HOUR_ET = int(os.getenv(
 REWARD_PROJECT_HORIZON_S = float(os.getenv(
     "PMUS_TWO_SIDED_REWARD_PROJECT_HORIZON_S", "7200"))
 REWARDED_STAGE = "two_sided_open_rewarded"
+# OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
+# longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
+# -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
+# opening, and the adverse-move pull applies to them too. 0 = old behavior.
+REWARD_MIN_DEPTH_PX = _env_d("PMUS_TWO_SIDED_REWARD_MIN_DEPTH_PX", "0.02")
+
+
+def reward_min_depth(tick) -> int:
+    t = D(str(tick or "0.01"))
+    if REWARD_MIN_DEPTH_PX <= 0 or t <= 0:
+        return 0
+    return int((REWARD_MIN_DEPTH_PX / t).to_integral_value(
+        rounding=ROUND_CEILING))
 
 
 def reward_first_on() -> bool:
@@ -470,7 +483,8 @@ def reward_open_prices(yes_bid: D, yes_ask: D, tick: D,
     deeper is only farther from mid, so the first legal depth that fails
     maxSpread ends the search (None -> quote as a non-rewarded market)."""
     from src.pmus_sports_rewards import legs_within_max_spread
-    for d in range(0, depth_ticks(tick) + 1):
+    d0 = reward_min_depth(tick)
+    for d in range(d0, max(d0, depth_ticks(tick)) + 1):
         p = open_prices(yes_bid, yes_ask, tick, depth=d, cap=cap)
         if p is None:
             continue
@@ -795,7 +809,7 @@ class Engine:
             return
         if not flat or not open_legs:
             return                 # completion legs: re-evaluated as today
-        if self.reward_first_quoting(mk):
+        if self.reward_first_quoting(mk) and REWARD_MIN_DEPTH_PX <= 0:
             # REWARD-FIRST: time on book is the score -- no 1-tick reactive
             # pull; the main loop's step_market (every LOOP_S) re-prices on
             # a >= REWARD_REPRICE_TICKS move or a target-walk exit. The jump
@@ -1021,7 +1035,8 @@ class Engine:
         px = {sd: D(o["px"]) for sd, o in legs.items()}
         why = []
         for sd in ("YES", "NO"):
-            dist = abs(side_bid(sd, bbo["bid"], bbo["ask"]) - px[sd]) / tick
+            dist = abs(side_bid(sd, bbo["bid"], bbo["ask"]) - px[sd]
+                       - reward_min_depth(tick) * tick) / tick
             if dist >= REWARD_REPRICE_TICKS:
                 why.append(f"{sd.lower()}_touch_{int(dist)}_ticks")
         if px["YES"] + px["NO"] > pair_cap(slug):

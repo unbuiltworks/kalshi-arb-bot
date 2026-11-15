@@ -254,6 +254,7 @@ class RewardVenue(FakeVenue):
 
 @pytest.fixture
 def reng(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "REWARD_MIN_DEPTH_PX", D("0"))     # at-touch mode
     monkeypatch.setenv("PMUS_TWO_SIDED_REWARDS", "1")
     monkeypatch.setattr(M, "TOTAL_CAP", D("12.00"))           # live value
     v = RewardVenue()
@@ -918,6 +919,7 @@ class RFVenue(FakeVenue):
 
 @pytest.fixture
 def rfeng(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "REWARD_MIN_DEPTH_PX", D("0"))     # at-touch mode
     monkeypatch.delenv("PMUS_TWO_SIDED_REWARDS", raising=False)
     monkeypatch.setenv("PMUS_TWO_SIDED_REWARD_FIRST", "1")
     monkeypatch.setattr(M, "TOTAL_CAP", D("20.00"))
@@ -1028,6 +1030,7 @@ class _RFWsVenue(RFVenue):
 
 
 def test_reward_first_no_reactive_pull_but_jump_and_late_still_pull(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "REWARD_MIN_DEPTH_PX", D("0"))     # at-touch mode
     monkeypatch.setenv("PMUS_TWO_SIDED_REWARD_FIRST", "1")
     monkeypatch.setattr(M, "TOTAL_CAP", D("20.00"))
     monkeypatch.setattr(M, "MAX_MARKETS", 1)
@@ -1324,3 +1327,30 @@ def test_reward_only_selects_no_unrewarded_market(rfeng):
     e.select(v.account())
     assert set(e.active()) == {"aec-rf1", "aec-rf2"}     # REWARD_MARKETS=2 here
     assert all(e.b.m(s).get("reward") for s in e.active())
+
+
+
+# ---------------------------------------- 2c-back reward quotes (2026-11-15)
+def test_reward_quotes_rest_two_cents_back_by_default():
+    assert M.REWARD_MIN_DEPTH_PX == D("0.02")
+    assert M.reward_min_depth(D("0.01")) == 2
+    r = M.reward_open_prices(D("0.48"), D("0.50"), D("0.01"), None)
+    assert r is not None
+    p, d = r
+    assert d == 2 and p == {"YES": D("0.46"), "NO": D("0.48")}
+
+
+def test_reward_first_two_cents_back_quote_and_hold(rfeng, monkeypatch):
+    e, v = rfeng
+    monkeypatch.setattr(M, "REWARD_MIN_DEPTH_PX", D("0.02"))
+    e.select(v.account())
+    slug = next(s for s in e.active() if e.b.m(s).get("reward"))
+    e.step_market(slug)
+    live = {o["side"]: o["px"] for o in v.orders.values()
+            if o["open"] and o["slug"] == slug}
+    bbo = v.bbo(slug)
+    assert live["YES"] == bbo["bid"] - D("0.02")
+    assert live["NO"] == (M.ONE - bbo["ask"]) - D("0.02")
+    n = len(v.orders)
+    e.step_market(slug)                       # unchanged book -> no churn
+    assert len(v.orders) == n

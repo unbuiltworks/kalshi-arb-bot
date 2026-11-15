@@ -270,3 +270,4 @@
 2026-11-15T13:50Z lone-leg markets free their opening slot; reward size shrinks to fit TOTAL_CAP instead of idling.
 2026-11-15T14:25Z stranded legs: exit windows 30s (CFB 20s), no taker size gate, multi-contract lone legs join the bid at once.
 2026-11-15T14:35Z OWNER 'focus on liquidity rewards': reward-only selection; every slot may be rewarded.
+2026-11-15T15:35Z restart after losses: reward quotes rest 2c under the touch (not at it) and the adverse-move pull applies to them; 1-contract reward size via env.
