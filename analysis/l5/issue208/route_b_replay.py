@@ -89,6 +89,16 @@ def replay(tapes: Optional[List[str]] = None,
         opening, completion = _legs(window, got, pr)
         if not (opening and completion and completion.quote):
             continue
+        # A completion quote observed before the opening leg was confirmed
+        # cannot be used to replay a sequential hedge. The reconstruction's
+        # terminal_at is conservative (may be later than the first fill).
+        # Exclude ambiguous chronology rather than leak future information.
+        if (opening.terminal_at is None or completion.quote_line_at is None
+                or completion.quote_line_at < opening.terminal_at):
+            continue
+        if completion.quote_line_at >= market_window_start(window) + (
+                300 if "-5m-" in window else 900):
+            continue
         book = dict(completion.quote.get("book") or {})
         qty = opening.final_qty
         held_cost = (D(opening.own_px) * D(qty)).quantize(D("0.000001"))
