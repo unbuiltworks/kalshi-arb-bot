@@ -57,6 +57,10 @@ DEFAULTS = {
     "max_lock_loss": D("0.15"),
     # minimum improvement (USD per contract) before moving a resting order
     "reprice_min_usd": D("0.005"),
+    # hysteresis: a resting completion moves only for >= this many ticks,
+    # and is kept while it sits no deeper than keep_band_ticks under the bid
+    "reprice_min_ticks": D("2"),
+    "keep_band_ticks": D("1"),
     "taker_fee_rate": D("0.06"),
 }
 
@@ -160,9 +164,19 @@ def decide(*, lead: str, lead_px: D, need: D, bid: Optional[D],
     out["px"], out["qty"] = s["px"], s["qty"]
     out["action"] = pick
     if pick == "COMPLETE_MAKER" and resting_px is not None:
+        resting_ok = (resting_px <= lock_cap and resting_px < cb["ask"]
+                      and resting_px >= cb["bid"] - p["keep_band_ticks"]
+                      * tick)
         if resting_px == s["px"]:
             out["action"] = "KEEP"            # preserve queue priority
             out["reason"] = "resting at the chosen price"
+        elif resting_ok and (s["px"] - resting_px).copy_abs() < \
+                p["reprice_min_ticks"] * tick:
+            # LIVE 2026-11-15 18:30Z: a 1-tick flicker of the spread moved
+            # the choice 0.46 <-> 0.47 every ~7s, a cancel/re-place loop.
+            # A resting order still inside the band holds its queue place.
+            out["action"], out["px"] = "KEEP", resting_px
+            out["reason"] = "within reprice hysteresis"
         else:
             gain = need * (s["px"] - resting_px).copy_abs() * s["p_fill"]
             if gain < need * p["reprice_min_usd"] and \

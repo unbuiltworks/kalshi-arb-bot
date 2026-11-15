@@ -115,3 +115,15 @@ def test_halt_new_exposure_threshold():
 
 def test_flat_position_needs_nothing():
     assert dec(need=D("0"))["action"] == "HOLD"
+
+
+def test_one_tick_flicker_does_not_reprice_a_resting_completion():
+    # live 18:30Z: choice flipped 0.46 <-> 0.47 as the spread flickered
+    for bid, ask in (("0.52", "0.55"), ("0.52", "0.54"), ("0.53", "0.54")):
+        d = dec(bid=D(bid), ask=D(ask), resting_px=D("0.46"), age_s=1200)
+        assert d["action"] == "KEEP", (bid, ask, d)
+
+
+def test_two_tick_move_still_reprices():
+    d = dec(bid=D("0.40"), ask=D("0.41"), resting_px=D("0.52"))
+    assert d["action"] == "REPRICE_COMPLETION"
