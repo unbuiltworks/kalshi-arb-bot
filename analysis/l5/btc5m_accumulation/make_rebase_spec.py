@@ -89,13 +89,24 @@ def main(argv):
     if st["unresolved"]:
         raise SystemExit("REFUSED: unresolved accounting records exist; a "
                          "loss of unknown size is on the books")
+    #: FLATNESS IS A CONDITION ON A CASH DELTA, NOT ON A REBASE.
+    #: The requirement exists because `cash_delta` across a non-flat read
+    #: folds unsettled positions into a realized figure. With --from-now
+    #: the delta is ZERO BY CONSTRUCTION, so there is no delta for an open
+    #: position to contaminate: the rebase asserts "realized is measured
+    #: from here", and an open leg simply registers when it settles.
+    #: Requiring flatness there would be cargo-culting the guard rather
+    #: than applying it.
     if st["worst_case"] > 0:
-        print("\nNOT FLAT: %s of worst-case exposure is open. A cash delta "
-              "across a non-flat read folds unsettled positions into a "
-              "realized figure, which is the error this discipline exists "
-              "to prevent." % st["worst_case"])
-        if "--allow-not-flat" not in argv:
-            raise SystemExit("REFUSED: wait until flat, or pass "
+        print("\nNOT FLAT: %s of worst-case exposure is open (%s)."
+              % (st["worst_case"], ", ".join(st["open_markets"])))
+        if "--from-now" in argv:
+            print("  ALLOWED here: --from-now sets cash_delta to 0, so no "
+                  "cash delta exists for the open position to corrupt. It "
+                  "settles into realized afterwards, as it should.")
+        elif "--allow-not-flat" not in argv:
+            raise SystemExit("REFUSED: a flat-to-flat cash delta needs both "
+                             "reads flat. Wait until flat, or pass "
                              "--allow-not-flat and justify it in the reason")
 
     if "--from-now" in argv:
@@ -105,7 +116,10 @@ def main(argv):
                   "ATTRIBUTION with 148 UPPER_BOUND legs; measurement "
                   "restarts here. This DISCARDS the historical record as "
                   "the halt's input, including the venue-confirmed ~20 of "
-                  "real losses.")
+                  "real losses. Open at the time of the anchor: %s of "
+                  "worst case in %s, which settles into realized after "
+                  "this point rather than before it."
+                  % (st["worst_case"], st["open_markets"] or "nothing"))
     else:
         if "--base-balance" not in argv:
             raise SystemExit("REFUSED: need --base-balance (an earlier FLAT "
