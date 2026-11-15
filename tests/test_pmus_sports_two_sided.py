@@ -763,13 +763,16 @@ def test_account_audit_sums_venue_realized_per_market_and_sport(eng, monkeypatch
     e.b.m("aec-cfb-a-b-2026-11-14"); e.b.m("aec-atp-c-d-2026-11-14")
     from src import pmus_settlement_auditor as SA
     rows = [{"type": "ACTIVITY_TYPE_TRADE", "trade": {"marketSlug": "aec-cfb-a-b-2026-11-14", "realizedPnl": {"value": "-0.40"}}},
-            {"type": "ACTIVITY_TYPE_POSITION_RESOLUTION", "positionResolution": {"marketSlug": "aec-atp-c-d-2026-11-14", "realizedPnl": "0.05"}},
+            # the venue's real shape: settlement P&L is afterPosition.realized
+            {"type": "ACTIVITY_TYPE_POSITION_RESOLUTION", "positionResolution": {"marketSlug": "aec-atp-c-d-2026-11-14", "beforePosition": {"realized": "0"}, "afterPosition": {"realized": "0.05"}}},
             {"type": "ACTIVITY_TYPE_TRADE", "trade": {"marketSlug": "cpc-btc-x", "realizedPnl": "9"}}]
     monkeypatch.setattr(SA, "activity_pages", lambda t, since=None, max_pages=0: {"rows": rows, "ended": "eof"})
     e.account_audit()
     out = capsys.readouterr().out
-    assert '"venue_realized_pnl_usd":"-0.35"' in out
-    assert '"cfb":"-0.40"' in out and '"atp":"0.05"' in out and "cpc-btc" not in out.split("ACCOUNT_AUDIT")[1].split("label")[0]
+    body = out.split("ACCOUNT_AUDIT")[1].split("label")[0]
+    assert '"7_settled_realized_usd":"0.05"' in body and '"7_settled_markets":1' in body
+    assert '"unsettled_trade_realized_usd":"-0.40"' in body
+    assert '"settled_by_sport":{"atp":"0.05"}' in body and "cpc-btc" not in body
 
 
 def test_tennis_pair_cap_is_tighter():

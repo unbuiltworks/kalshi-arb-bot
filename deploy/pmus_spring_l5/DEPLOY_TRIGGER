@@ -274,3 +274,4 @@
 2026-11-15T15:45Z OWNER abandon switch: PMUS_TWO_SIDED_ABANDON (Zimbabwe cricket completion kept coming back).
 2026-11-15T18:00Z OWNER 'NO cricket trades at all': hard cricket ban (select + abandon existing).
 2026-11-15T18:15Z daily loss stop: -$3/UTC day mark-to-market (per-market day baseline); blocks new openings, completions continue.
+2026-11-15T18:30Z settled realized from afterPosition.realized; seven-metric report in ACCOUNT_AUDIT (reporting only).

@@ -43,6 +43,7 @@
       "analysis/l5/l5_cadence_behavioral_unit.json",
       "analysis/l5/l5_campaign_approvals.json",
       "src/pmus_sports_two_sided.py",
+      "src/pmus_sports_pnl.py",
       "src/pmus_sports_rewards.py",
       "src/pmus_two_sided_ws.py",
       "src/pmus_auth.py",

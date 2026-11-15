@@ -109,6 +109,7 @@ COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
 # gateway helpers are inlined so the probe image never carries the collector.
 COPY src/pmus_spring_gateway_candidates.py src/pmus_spring_gateway_candidates.py
 COPY src/pmus_sports_two_sided.py src/pmus_sports_two_sided.py
+COPY src/pmus_sports_pnl.py src/pmus_sports_pnl.py
 # liquidity-program discovery/scoring for two-sided reward mode (2026-11-14).
 # Inert unless PMUS_TWO_SIDED_REWARDS=1; keyless public GETs, no order path.
 COPY src/pmus_sports_rewards.py src/pmus_sports_rewards.py

@@ -1820,7 +1820,6 @@ class Engine:
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return
         ours = set(self.b.d.get("markets") or {})
-        per_mkt: Dict[str, D] = {}
         types: Dict[str, int] = {}
         mine = []
         for r in walk.get("rows") or []:
@@ -1829,41 +1828,48 @@ class Engine:
                 if isinstance(r.get(k), Mapping):
                     body = r[k]
                     break
-            if not body:
-                continue
-            slug = str(body.get("marketSlug") or "")
-            if slug not in ours:
+            if not body or str(body.get("marketSlug") or "") not in ours:
                 continue
             mine.append(r)
             t = str(r.get("type") or "?")
             types[t] = types.get(t, 0) + 1
-            rp = body.get("realizedPnl")
-            rp = rp.get("value") if isinstance(rp, Mapping) else rp
-            try:
-                v = D(str(rp)) if rp is not None else None
-            except Exception:                             # noqa: BLE001
-                v = None
-            if v is not None:
-                per_mkt[slug] = per_mkt.get(slug, D(0)) + v
-        sport: Dict[str, D] = {}
-        for slug, v in per_mkt.items():
-            k = slug.split("-")[1] if slug.count("-") > 1 else "?"
-            sport[k] = sport.get(k, D(0)) + v
+        from src import pmus_sports_pnl as PNL
+        vr = PNL.venue_realized(mine, ours)
         try:
             fees = IA.credited_on_fills(mine)
         except Exception as exc:                          # noqa: BLE001
             fees = {"error": repr(exc)[:120]}
+        book = PNL.book_economics(self.b.d.get("markets") or {})
+        # residual = what settled markets realized beyond their completed
+        # pairs' gross margin (lone legs, exits; fees if the venue nets them)
+        mk_all = self.b.d.get("markets") or {}
+        settled_margin = D(PNL.book_economics(
+            {s: mk_all[s] for s in vr["settled_slugs"]
+             if s in mk_all})["gross_pair_margin_usd"])
         log("ACCOUNT_AUDIT", ok=True, since=self.AUDIT_SINCE,
             walk_ended=walk.get("ended"), rows_ours=len(mine), types=types,
-            venue_realized_pnl_usd=str(sum(per_mkt.values(), D(0))),
-            realized_by_sport={k: str(v) for k, v in sorted(sport.items())},
-            realized_by_market={k: str(v) for k, v in sorted(per_mkt.items())},
-            fees_our_side={k: fees.get(k) for k in
-                           ("charged_to_us_usd", "credited_to_us_usd",
-                            "net_to_us_usd", "our_fills_with_a_credit",
-                            "trades", "error") if k in fees},
-            label="venue realizedPnl on this bot's markets; fees are OUR "
-                  "side per isAggressor. Rewards are separate (REWARD_CHECK).")
+            report={
+                "1_orders_submitted": book["orders_submitted"],
+                "2_venue_confirmed_filled_contracts": book["filled_contracts"],
+                "3_completed_pairs": book["completed_pairs"],
+                "4_gross_pair_margin_usd": book["gross_pair_margin_usd"],
+                "5_fees_charged_usd": fees.get("charged_to_us_usd"),
+                "5_rebates_credited_usd": fees.get("credited_to_us_usd"),
+                "6_residual_settled_usd": str(
+                    vr["settled_realized_usd"] - settled_margin),
+                "6_unmatched_cost_open_usd": book["unmatched_cost_usd"],
+                "7_settled_realized_usd": str(vr["settled_realized_usd"]),
+                "7_settled_markets": vr["settled_markets"],
+                "unsettled_trade_realized_usd": str(
+                    vr["unsettled_trade_realized_usd"]),
+                "trades_missing_realized": vr["trades_missing_realized"]},
+            settled_by_sport=vr["settled_by_sport"],
+            realized_by_market=vr["by_market"],
+            label="venue rows only: realized = trade.realizedPnl + "
+                  "resolution afterPosition.realized delta; fees are OUR "
+                  "side per isAggressor and reported separately; 1-4 and "
+                  "unmatched cost are the bot's own book. Rewards are "
+                  "separate (REWARD_CHECK).")
 
     def orphan_sweep(self, orders: Optional[list] = None) -> None:
         """LIVE 2026-11-15T09:12Z the watchdog latched on DQX6ACVG13ZK: an
