@@ -328,16 +328,22 @@ def test_touch_outside_max_spread_falls_back_to_normal_quote(reng):
     assert live == {"YES": (D("0.38"), D("1")), "NO": (D("0.52"), D("1"))}
 
 
-def test_total_cap_precheck_blocks_new_ten_lot_pair(reng, monkeypatch):
+def test_total_cap_precheck_shrinks_ten_lot_reward_pair_to_fit(reng, monkeypatch):
     e, v = reng
     v.bid, v.ask = D("0.44"), D("0.48")
     monkeypatch.setattr(M, "TOTAL_CAP", D("5.00"))  # worst 10-lot leg 0.52*10
     e.select(v.account())
     e.step_market("aec-rw")
-    assert not [o for o in v.orders.values() if o["open"]]
-    monkeypatch.setattr(M, "TOTAL_CAP", D("12.00"))
-    e.step_market("aec-rw")
+    live = [o for o in v.orders.values() if o["open"]]
+    # 5.00 / 0.52 -> 9 contracts per leg: worst lone leg 4.68 <= cap
+    assert len(live) == 2 and all(o["qty"] == D("9") for o in live)
+    e.step_market("aec-rw")                        # no churn while it fits
     assert len([o for o in v.orders.values() if o["open"]]) == 2
+    assert len(v.orders) == 2
+    monkeypatch.setattr(M, "TOTAL_CAP", D("12.00"))
+    e.step_market("aec-rw"); e.step_market("aec-rw")
+    live = [o for o in v.orders.values() if o["open"]]
+    assert len(live) == 2 and all(o["qty"] == D("10") for o in live)
     # a second market cannot open while aec-rw's resting 10-lot pair could
     # leave a $5.20 lone leg and the cap is $5.50
     monkeypatch.setattr(M, "TOTAL_CAP", D("5.50"))
@@ -1274,3 +1280,20 @@ def test_lone_leg_joins_bid_at_break_even_before_taker(eng, capsys):
     assert len(live) == 1 and live[0]["side"] == "NO" and live[0]["px"] == D("0.54")
     assert getattr(v, "taker", []) == []
     assert '"maker_complete_join_bid"' in capsys.readouterr().out
+
+
+def test_lone_leg_market_does_not_hold_an_opening_slot(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 1)
+    monkeypatch.setattr(M, "MAX_TRACKED", 3)
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.select(v.account())
+    slug = next(iter(e.b.d["markets"]))
+    e.step_market(slug)
+    assert e.full()
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market(slug)                       # now a lone leg
+    assert e.slots_used() == 0 and not e.full()
+    monkeypatch.setattr(M, "MAX_TRACKED", 1)
+    assert e.full()                           # hard bound still holds

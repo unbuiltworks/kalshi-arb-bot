@@ -65,6 +65,9 @@ def depth_ticks(tick) -> int:
         rounding=ROUND_CEILING)))
 QTY = _env_d("PMUS_TWO_SIDED_QTY", "1")
 MAX_MARKETS = int(os.getenv("PMUS_TWO_SIDED_MAX_MARKETS", "3"))
+# hard bound on markets tracked at once (opening slots + lone-leg markets)
+MAX_TRACKED = int(os.getenv("PMUS_TWO_SIDED_MAX_TRACKED",
+                            str(2 * MAX_MARKETS)))
 PER_MARKET_CAP = _env_d("PMUS_TWO_SIDED_PER_MARKET_USD", "1.50")
 TOTAL_CAP = _env_d("PMUS_TWO_SIDED_TOTAL_USD", "4.50")
 PAIR_CAP = _env_d("PMUS_TWO_SIDED_PAIR_CAP", "0.98")
@@ -990,7 +993,7 @@ class Engine:
 
     def _reward_hold(self, slug: str, mk: Dict[str, Any],
                      open_by_side: Mapping, bbo: Mapping, tick: D,
-                     qty: D) -> bool:
+                     qty: D, shrunk: bool = False) -> bool:
         """REWARD-FIRST: keep resting rewarded legs unless a leg is
         >= REWARD_REPRICE_TICKS from its touch, the quote no longer sits
         within maxSpread / the pair cap, or our order left the target walk.
@@ -998,7 +1001,8 @@ class Engine:
         if set(open_by_side) != {"YES", "NO"}:
             return False
         legs = {sd: open_by_side[sd][1] for sd in ("YES", "NO")}
-        if any(o.get("stage") != REWARDED_STAGE or D(o["qty"]) != qty
+        if any(o.get("stage") != REWARDED_STAGE or
+               (D(o["qty"]) > qty if shrunk else D(o["qty"]) != qty)
                for o in legs.values()):
             return False
         px = {sd: D(o["px"]) for sd, o in legs.items()}
@@ -1191,6 +1195,19 @@ class Engine:
     def active(self) -> list:
         return [s for s, mk in self.b.d["markets"].items() if not mk["done"]]
 
+    def slots_used(self) -> int:
+        """Markets holding an OPENING slot. LIVE 2026-11-15: four lone-leg
+        markets waiting to complete (one for 6h) plus cap-blocked rewarded
+        markets filled all MAX_MARKETS slots, so no new market (CFB) could
+        be selected. A market with an unmatched leg keeps completing but no
+        longer holds a slot; its exposure is still bounded by TOTAL_CAP and
+        the whole book by MAX_TRACKED."""
+        return sum(1 for s in self.active() if self.b.unmatched_cost(s) == 0)
+
+    def full(self) -> bool:
+        return self.slots_used() >= MAX_MARKETS or \
+            len(self.active()) >= MAX_TRACKED
+
     def _record_fill(self, slug: str, side: str, oid: str, st: Dict) -> None:
         mk = self.b.m(slug)
         o = mk["orders"][oid]
@@ -1328,6 +1345,18 @@ class Engine:
                         pos=mk["pos"], label="no new pairs; completions continue")
                 want = None          # pulls opening legs; frees the slot later
             worst_leg = max(want.values()) * qty if want else D(0)
+            shrunk = False
+            if rq is not None and want is not None and not blocked and \
+                    self.b.committed_excluding(slug) + worst_leg > TOTAL_CAP:
+                # LIVE 2026-11-15: a 10-lot reward quote never fit under the
+                # cap and the market sat idle. Quote the size that DOES fit
+                # (never above REWARD_QTY, never below the venue minimum).
+                room = TOTAL_CAP - self.b.committed_excluding(slug)
+                fit = (room / max(want.values())).to_integral_value(
+                    rounding=ROUND_DOWN) if room > 0 else D(0)
+                if fit >= spec["min_qty"] and fit < qty:
+                    qty, shrunk = fit, True
+                    worst_leg = max(want.values()) * qty
             if rewards_on() and want is not None and not blocked and \
                     self.b.committed_excluding(slug) + worst_leg > TOTAL_CAP:
                 # every market, reward mode: a new pair opens only if all
@@ -1348,7 +1377,8 @@ class Engine:
                             <= D(open_by_side[sd][1]["px"])
                             <= want[sd] for sd in ("YES", "NO")) and
                         (not rewards_on() or
-                         all(D(open_by_side[sd][1]["qty"]) == qty
+                         all((D(open_by_side[sd][1]["qty"]) <= qty) if shrunk
+                             else (D(open_by_side[sd][1]["qty"]) == qty)
                              for sd in ("YES", "NO"))))
             if not in_place and rq is not None and reward_first_on() and \
                     want is not None and not blocked:
@@ -1356,7 +1386,7 @@ class Engine:
                 # no 1-tick chase -- hold unless >= REWARD_REPRICE_TICKS
                 # away / out of the target walk / maxSpread / pair cap
                 in_place = self._reward_hold(slug, mk, open_by_side, bbo,
-                                             tick, qty)
+                                             tick, qty, shrunk)
             if in_place:
                 return
             # OWNER 2026-11-14 "Pairs should be set simultaneously": never
@@ -1525,7 +1555,7 @@ class Engine:
             return
         if self.b.total_unmatched() >= TOTAL_CAP:
             return
-        if len(self.active()) >= MAX_MARKETS:
+        if self.full():
             return
         try:
             targets = self.v.live_sports()
@@ -1570,18 +1600,18 @@ class Engine:
             ranked = self.reward_first_rank(rewarded) \
                 if self.rewarded_active() < REWARD_MARKETS else []
             for slug, est in ranked:
-                if len(self.active()) >= MAX_MARKETS or \
+                if self.full() or \
                         self.rewarded_active() >= REWARD_MARKETS:
                     break
                 self._try_select(slug, acct, rewarded[slug], est)
             for _sp, _c, slug in scored:
-                if len(self.active()) >= MAX_MARKETS:
+                if self.full():
                     break
                 if slug not in self.b.d["markets"]:
                     self._try_select(slug, acct, None)
             return
         for _sp, _c, slug in scored:
-            if len(self.active()) >= MAX_MARKETS:
+            if self.full():
                 break
             self._try_select(slug, acct, rewarded.get(slug))
 
@@ -1790,7 +1820,7 @@ class Engine:
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         log("boot", **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
-                          "markets": MAX_MARKETS, "depth_ticks": DEPTH_TICKS,
+                          "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
                           "qty": QTY, "pair_cap": PAIR_CAP},
             exit={"fee_aware": EXIT_FEE_AWARE, "taker_fee_rate": TAKER_FEE_RATE,
                   "max_taker_qty": EXIT_MAX_TAKER_QTY},
@@ -1809,7 +1839,7 @@ class Engine:
                     time.sleep(30)
                     continue
                 if time.monotonic() - last_sel > 20:
-                    if len(self.active()) >= MAX_MARKETS and LATE_CUTOFF:
+                    if self.full() and LATE_CUTOFF:
                         try:                       # keep game clocks fresh
                             self.v.live_sports()
                         except Exception:          # noqa: BLE001
