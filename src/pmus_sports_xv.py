@@ -210,7 +210,70 @@ def resolve_token(gamma_get: Callable[[str], Any], slug: str,
     return str(toks[0])
 
 
-class XvPaper:
+class _IntlSocket:
+    """Shared: the intl public market socket feeding an IntlBook for the
+    assets in self.tokens (slug -> token). Subclasses set tokens/_lock."""
+
+    def _notify(self, msg: Any) -> None:
+        """Hook for subclasses; called after each ingested message."""
+
+    # ---------------------------------------------------------- intl socket
+    def _ws_thread(self) -> None:
+        import asyncio
+        try:
+            asyncio.run(self._ws_run())
+        except Exception as exc:                          # noqa: BLE001
+            self.ws_state["last_err"] = f"{type(exc).__name__}:{exc}"[:160]
+
+    async def _ws_run(self) -> None:
+        import asyncio
+        import websockets
+        backoff = 2.0
+        while not self.stop:
+            with self._lock:
+                want = sorted(set(self.tokens.values()))
+            if not want:
+                await asyncio.sleep(5)
+                continue
+            try:
+                async with websockets.connect(INTL_WS, open_timeout=15,
+                                              ping_interval=None) as ws:
+                    await ws.send(json.dumps({"assets_ids": want,
+                                              "type": "market"}))
+                    self.ws_state["connected"] = True
+                    backoff = 2.0
+                    last_ping = time.monotonic()
+                    while not self.stop:
+                        with self._lock:
+                            now_want = sorted(set(self.tokens.values()))
+                        if now_want != want:
+                            break                     # resubscribe
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), 10)
+                        except asyncio.TimeoutError:
+                            raw = None
+                        if time.monotonic() - last_ping > 10:
+                            await ws.send("PING")
+                            last_ping = time.monotonic()
+                        if not raw or raw == "PONG":
+                            continue
+                        try:
+                            msg = json.loads(raw)
+                            self.intl.ingest(msg)
+                            self.ws_state["msgs"] += 1
+                            self._notify(msg)
+                        except (TypeError, ValueError):
+                            continue
+            except Exception as exc:                      # noqa: BLE001
+                self.ws_state["errors"] += 1
+                self.ws_state["last_err"] = \
+                    f"{type(exc).__name__}:{str(exc)[:120]}"
+            self.ws_state["connected"] = False
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 120.0)
+
+
+class XvPaper(_IntlSocket):
     """Runner. READ functions only: targets() -> PMUS sports targets,
     pm_get(path) -> PMUS public gateway JSON, gamma_get(path) -> gamma JSON.
     No order-path handle is ever given to this object."""
@@ -270,59 +333,6 @@ class XvPaper:
             self.tokens = found
         self._emit("XV_PAPER_MARKETS", n=len(found),
                    slugs=sorted(found)[:self.max_markets])
-
-    # ---------------------------------------------------------- intl socket
-    def _ws_thread(self) -> None:
-        import asyncio
-        try:
-            asyncio.run(self._ws_run())
-        except Exception as exc:                          # noqa: BLE001
-            self.ws_state["last_err"] = f"{type(exc).__name__}:{exc}"[:160]
-
-    async def _ws_run(self) -> None:
-        import asyncio
-        import websockets
-        backoff = 2.0
-        while not self.stop:
-            with self._lock:
-                want = sorted(set(self.tokens.values()))
-            if not want:
-                await asyncio.sleep(5)
-                continue
-            try:
-                async with websockets.connect(INTL_WS, open_timeout=15,
-                                              ping_interval=None) as ws:
-                    await ws.send(json.dumps({"assets_ids": want,
-                                              "type": "market"}))
-                    self.ws_state["connected"] = True
-                    backoff = 2.0
-                    last_ping = time.monotonic()
-                    while not self.stop:
-                        with self._lock:
-                            now_want = sorted(set(self.tokens.values()))
-                        if now_want != want:
-                            break                     # resubscribe
-                        try:
-                            raw = await asyncio.wait_for(ws.recv(), 10)
-                        except asyncio.TimeoutError:
-                            raw = None
-                        if time.monotonic() - last_ping > 10:
-                            await ws.send("PING")
-                            last_ping = time.monotonic()
-                        if not raw or raw == "PONG":
-                            continue
-                        try:
-                            self.intl.ingest(json.loads(raw))
-                            self.ws_state["msgs"] += 1
-                        except (TypeError, ValueError):
-                            continue
-            except Exception as exc:                      # noqa: BLE001
-                self.ws_state["errors"] += 1
-                self.ws_state["last_err"] = \
-                    f"{type(exc).__name__}:{str(exc)[:120]}"
-            self.ws_state["connected"] = False
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 120.0)
 
     # ---------------------------------------------------------- PMUS poll
     def step(self, slug: str, tok: str, now: float) -> None:
@@ -398,6 +408,142 @@ class XvPaper:
         t = threading.Thread(target=self.run, daemon=True, name="xv-paper")
         t.start()
         return t
+
+
+class IntlGuard(_IntlSocket):
+    """LIVE-PATH GUARD (default off; PMUS_TWO_SIDED_INTL_GUARD=1).
+
+    The losses were never a lack of fills: 1,004 contracts filled; completed
+    pairs made +$8.47, and 37 of 37 markets left with one leg lost ~-$29.
+    The lone leg is the fill an informed taker picks off when the price is
+    already moving -- and Polymarket intl moves FIRST (offline corr 0.28 vs
+    0.02 the other way). So an OPENING bid is posted, and kept, only while
+    intl's fair value says it is still cheap:
+
+        YES bid p is unsafe when  p > intl_mid      - margin
+        NO  bid q is unsafe when  q > (1 - intl_mid) - margin
+
+    Fails CLOSED for openings: no fresh intl quote -> no opening (require
+    mode). Completions are never touched. This object can only answer
+    questions and wake the engine; it has no order path."""
+
+    def __init__(self, pm_get: Callable, gamma_get: Callable, *,
+                 margin_ticks: int = 1, max_age_s: float = 20.0,
+                 require: bool = True, on_change: Optional[Callable] = None,
+                 log: Optional[Callable] = None):
+        self.pm_get, self.gamma_get = pm_get, gamma_get
+        self.margin_ticks, self.max_age = margin_ticks, max_age_s
+        self.require = require
+        self.on_change = on_change
+        self.log = log or (lambda *a, **k: None)
+        self.intl = IntlBook()
+        self.tokens: Dict[str, str] = {}
+        self.resolved: Dict[str, Optional[str]] = {}
+        self._pending: List[str] = []
+        self._lock = threading.Lock()
+        self.stop = False
+        self.ws_state = {"connected": False, "msgs": 0, "errors": 0,
+                         "last_err": None}
+        self._asset_slug: Dict[str, str] = {}
+        self.stats = {"blocked": 0, "pulled": 0, "no_intl": 0, "ok": 0}
+
+    # -- matching (background thread: never on the trading loop)
+    def prefetch(self, slugs: Iterable[str]) -> None:
+        with self._lock:
+            for s in slugs:
+                if s not in self.resolved and s not in self._pending:
+                    self._pending.append(s)
+
+    def token(self, slug: str) -> Optional[str]:
+        return self.resolved.get(slug)
+
+    def known(self, slug: str) -> bool:
+        return slug in self.resolved
+
+    def track(self, slugs: Iterable[str]) -> None:
+        """Subscribe intl for exactly these markets (the engine's active)."""
+        want = {s: self.resolved[s] for s in slugs if self.resolved.get(s)}
+        with self._lock:
+            self.tokens = want
+            self._asset_slug = {t: s for s, t in want.items()}
+
+    def _resolve_one(self, slug: str) -> None:
+        tok = None
+        try:
+            md = self.pm_get(f"/v1/market/slug/{slug}") or {}
+            m = md.get("market") if isinstance(md, Mapping) and \
+                "market" in md else md
+            po = m.get("outcomes") if isinstance(m, Mapping) else None
+            if isinstance(po, str):
+                po = json.loads(po)
+            tok = resolve_token(self.gamma_get, slug, po)
+        except Exception:                                 # noqa: BLE001
+            tok = None
+        self.resolved[slug] = tok
+
+    def _resolver(self) -> None:
+        while not self.stop:
+            with self._lock:
+                slug = self._pending.pop(0) if self._pending else None
+            if slug is None:
+                time.sleep(1.0)
+                continue
+            self._resolve_one(slug)
+            time.sleep(0.2)
+
+    # -- the decision (pure given the intl book)
+    def verdict(self, slug: str, prices: Mapping[str, Any], tick: Any
+                ) -> Dict[str, Any]:
+        tok = self.resolved.get(slug)
+        it = self.intl.fresh(tok, self.max_age) if tok else None
+        if it is None or it["bid"] is None or it["ask"] is None or \
+                it["ask"] <= it["bid"]:
+            self.stats["no_intl"] += 1
+            return {"ok": not self.require, "why": "no_fresh_intl",
+                    "matched": bool(tok)}
+        mid = (it["bid"] + it["ask"]) / 2
+        margin = float(tick) * self.margin_ticks
+        fair = {"YES": mid, "NO": 1 - mid}
+        bad = {sd: round(fair[sd], 4) for sd, px in prices.items()
+               if px is not None and float(px) > fair[sd] - margin + 1e-9}
+        if bad:
+            return {"ok": False, "why": "intl_says_not_cheap",
+                    "intl_mid": round(mid, 4), "unsafe": bad,
+                    "intl_age_s": round(self.intl.clock() - it["t"], 1)}
+        self.stats["ok"] += 1
+        return {"ok": True, "why": "intl_confirms", "intl_mid": round(mid, 4)}
+
+    def _notify(self, msg: Any) -> None:
+        if self.on_change is None:
+            return
+        ids = set()
+        for m in (msg if isinstance(msg, list) else [msg]):
+            if not isinstance(m, Mapping):
+                continue
+            if m.get("asset_id"):
+                ids.add(str(m["asset_id"]))
+            for c in m.get("price_changes") or m.get("changes") or []:
+                if isinstance(c, Mapping) and c.get("asset_id"):
+                    ids.add(str(c["asset_id"]))
+        for a in ids:
+            s = self._asset_slug.get(a)
+            if s:
+                try:
+                    self.on_change(s)
+                except Exception:                         # noqa: BLE001
+                    pass
+
+    def start(self) -> None:
+        threading.Thread(target=self._resolver, daemon=True,
+                         name="intl-guard-resolve").start()
+        threading.Thread(target=self._ws_thread, daemon=True,
+                         name="intl-guard-ws").start()
+
+    def status(self) -> Dict[str, Any]:
+        return {"ws": dict(self.ws_state), "matched": len(self.tokens),
+                "resolved": sum(1 for v in self.resolved.values() if v),
+                "unmatched": sum(1 for v in self.resolved.values() if not v),
+                **self.stats}
 
 
 def gamma_get(path: str, timeout: float = 10.0) -> Any:

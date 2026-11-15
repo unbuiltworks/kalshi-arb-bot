@@ -785,6 +785,7 @@ class Venue:
         return out
 
     ws = None              # src.pmus_two_sided_ws.TwoSidedWs when WS is on
+    guard = None           # src.pmus_sports_xv.IntlGuard when the guard is on
 
     def bbo(self, slug: str) -> Optional[Dict[str, D]]:
         if self.ws is not None:
@@ -930,6 +931,11 @@ class Engine:
         self.jump_pauses = 0
         if self.ws is not None:
             self.ws.on_change = self._on_ws_change
+        # intl fair-value guard on OPENING quotes (PMUS_TWO_SIDED_INTL_GUARD)
+        self.guard = getattr(venue, "guard", None)
+        self._intlq: "queue.Queue" = queue.Queue()
+        if self.guard is not None:
+            self.guard.on_change = self._on_intl_change
 
     # ------------------------------------------------ realtime (WS) mode
     def _on_ws_change(self, slug: str, prev: Mapping, new: Mapping,
@@ -939,8 +945,52 @@ class Engine:
         self._evq.put((slug, dict(prev), dict(new), time.monotonic()))
         self._wake.set()
 
+    def _on_intl_change(self, slug: str) -> None:
+        """INTL SOCKET THREAD: enqueue and wake the main loop; nothing else."""
+        self._intlq.put((slug, time.monotonic()))
+        self._wake.set()
+
+    def drain_intl_events(self) -> None:
+        """MAIN THREAD: intl moved for these markets -- re-check every
+        resting OPENING quote against intl fair value; pull unsafe pairs at
+        once (PMUS has usually not moved yet, so react() would not fire)."""
+        if self.guard is None:
+            return
+        seen: Dict[str, float] = {}
+        while True:
+            try:
+                slug, t = self._intlq.get_nowait()
+            except queue.Empty:
+                break
+            seen.setdefault(slug, t)
+        for slug, t in seen.items():
+            try:
+                self._intl_check(slug, t)
+            except Exception as exc:                      # noqa: BLE001
+                log("market_error", slug=slug, at="intl_guard",
+                    err=f"{type(exc).__name__}:{str(exc)[:200]}")
+
+    def _intl_check(self, slug: str, t0: float) -> None:
+        mk = self.b.d["markets"].get(slug)
+        if not mk or mk.get("done") or \
+                D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
+            return                       # completions are never guarded
+        legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
+                if o.get("open")}
+        if not legs:
+            return
+        tick = (self.v.spec(slug) or {}).get("tick") or D("0.01")
+        v = self.guard.verdict(slug, legs, tick)
+        if v["ok"]:
+            return
+        self.guard.stats["pulled"] += 1
+        log("intl_guard_pull", slug=slug, legs={k: str(x) for k, x in
+                                               legs.items()}, **v)
+        self._pull(slug, "intl_guard:" + v["why"], t0)
+
     def drain_ws_events(self) -> None:
         """MAIN THREAD: act on every queued touch change, one pass per slug."""
+        self.drain_intl_events()
         if self.ws is None:
             return
         self.ws.set_slugs(self.active())
@@ -1055,7 +1105,7 @@ class Engine:
 
     def _sleep(self, seconds: float) -> None:
         """LOOP_S sleep; in WS mode every touch change is handled at once."""
-        if self.ws is None:
+        if self.ws is None and self.guard is None:
             time.sleep(seconds)
             return
         end = time.monotonic() + seconds
@@ -1860,6 +1910,23 @@ class Engine:
                             label="expected net value of opening from "
                                   "SETTLED results <= min; no new pair")
                     want = None
+            guard_hold = False
+            if self.guard is not None and want is not None and not blocked:
+                gv = self.guard.verdict(slug, want, tick)
+                if not gv["ok"]:
+                    self.guard.stats["blocked"] += 1
+                    if mk.get("guard_logged") != gv["why"]:
+                        mk["guard_logged"] = gv["why"]
+                        log("intl_guard_block", slug=slug,
+                            want={k: str(x) for k, x in want.items()}, **gv,
+                            label="opening withheld: intl fair value says "
+                                  "the quote would be picked off")
+                    # a matched market waits for intl to agree again; only a
+                    # market intl cannot price is released like any idle one
+                    guard_hold = bool(gv.get("matched", True))
+                    want = None
+                else:
+                    mk.pop("guard_logged", None)
             worst_leg = max(want.values()) * qty if want else D(0)
             shrunk = False
             if rq is not None and want is not None and not blocked and \
@@ -1912,7 +1979,7 @@ class Engine:
             if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]) or \
                     any(o.get("open") for o in mk["orders"].values()):
                 return                  # a leg filled while pulling: complete it
-            if want is None and not blocked:
+            if want is None and not blocked and not guard_hold:
                 # flat and out of band/too wide: free the slot for another
                 # live market after 2 minutes (pairs already locked stay).
                 idle = mk.setdefault("idle_since", time.time())
@@ -2123,6 +2190,12 @@ class Engine:
                 continue
             scored.append((a - b, abs(b - D("0.5")), slug))
         scored.sort()
+        if self.guard is not None:
+            self.guard.prefetch([s for *_x, s in scored])
+            if self.guard.require:
+                # open only where intl can price the market (resolved in the
+                # guard's background thread; unresolved -> next round)
+                scored = [r for r in scored if self.guard.token(r[2])]
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
@@ -2416,9 +2489,13 @@ class Engine:
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
+        if self.guard is not None:
+            self.guard.track(self.active())
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
             "jump_pauses": self.jump_pauses}
+        if self.guard is not None:
+            extra["intl_guard"] = self.guard.status()
         log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
             recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
@@ -2480,6 +2557,8 @@ class Engine:
                         except Exception:          # noqa: BLE001
                             pass
                     self.select(self.v.account())
+                    if self.guard is not None:
+                        self.guard.track(self.active())
                     if rewards_on():
                         self.refresh_active_rewards()
                     last_sel = time.monotonic()
@@ -2630,10 +2709,41 @@ def main() -> int:
             log("ws_error", err=f"{type(exc).__name__}:{str(exc)[:160]}",
                 fallback="gateway_poll_only")
     start_xv_paper(venue)
+    start_intl_guard(venue)
     return Engine(venue, book).run()
 
 
 XV_PAPER_ENV = "PMUS_TWO_SIDED_XV_PAPER"
+INTL_GUARD_ENV = "PMUS_TWO_SIDED_INTL_GUARD"
+
+
+def start_intl_guard(venue: "Venue") -> Optional[Any]:
+    """Intl fair-value guard on OPENING quotes, default OFF. Read functions
+    only; the engine owns every cancel. A guard that fails to start leaves
+    openings BLOCKED in require mode (venue.guard set, never fed) rather
+    than silently trading unguarded."""
+    if os.getenv(INTL_GUARD_ENV, "0").strip() != "1":
+        return None
+    from src import pmus_sports_xv as XV
+    g = XV.IntlGuard(
+        venue.gget, XV.gamma_get,
+        margin_ticks=int(os.getenv("PMUS_TWO_SIDED_INTL_GUARD_MARGIN_TICKS",
+                                   "1")),
+        max_age_s=float(os.getenv("PMUS_TWO_SIDED_INTL_GUARD_MAX_AGE_S",
+                                  "20")),
+        require=os.getenv("PMUS_TWO_SIDED_INTL_GUARD_REQUIRE",
+                          "1").strip() != "0",
+        log=log)
+    venue.guard = g
+    try:
+        g.start()
+        log("intl_guard_enabled", margin_ticks=g.margin_ticks,
+            max_age_s=g.max_age, require=g.require)
+    except Exception as exc:                             # noqa: BLE001
+        log("intl_guard_error", err=f"{type(exc).__name__}:{str(exc)[:160]}",
+            effect="openings blocked (require mode)" if g.require
+            else "unguarded")
+    return g
 
 
 def start_xv_paper(venue: "Venue") -> Optional[Any]:
