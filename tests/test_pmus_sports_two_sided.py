@@ -397,7 +397,9 @@ def test_default_off_never_touches_incentives(tmp_path, monkeypatch):
 
 
 
-def test_lone_leg_exits_by_taking_complement_when_cheap(eng):
+def test_lone_leg_exits_by_taking_complement_when_cheap(eng, monkeypatch):
+    # pre-2026-11-15 fee-blind behaviour (PMUS_TWO_SIDED_EXIT_FEE_AWARE=0)
+    monkeypatch.setattr(M, "EXIT_FEE_AWARE", False)
     e, v = eng
     e.select(v.account())
     e.step_market("aec-x")                                  # 0.42 / 0.52
@@ -768,3 +770,345 @@ def test_tennis_pair_cap_is_tighter():
     assert M.pair_cap("aec-cfb-x-y-2026-11-14") == M.PAIR_CAP
     assert M.open_prices(D("0.48"), D("0.50"), T, depth=1, cap=D("0.96")) is not None   # 0.47+0.49
     assert M.open_prices(D("0.48"), D("0.49"), T, depth=0, cap=D("0.96")) is None       # 0.48+0.51
+
+
+# ------------------------------------------------- fee-aware exit (2026-11-15)
+def test_taker_fee_rounds_up_to_the_cent_per_order():
+    assert M.EXIT_FEE_AWARE is True and M.EXIT_MAX_TAKER_QTY == D("2")
+    assert M.taker_fee(D("0.60"), D("1")) == D("0.02")      # 0.0144 -> 0.02
+    assert M.taker_fee(D("0.60"), D("2")) == D("0.03")      # 0.0288 -> 0.03
+    assert M.taker_fee(D("0.50"), D("10")) == D("0.15")     # exact
+    assert M.taker_fee(D("0.99"), D("1")) == D("0.01")      # 0.000594 -> 0.01
+
+
+def _lone_yes(e, v):
+    e.select(v.account())
+    e.step_market("aec-x")                                  # 0.42 / 0.52
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")                                  # lone YES @0.42
+    e.b.d["markets"]["aec-x"]["lone_since"] -= M.EXIT_S + 1
+
+
+def test_fee_pushes_exit_over_cap_blocks_taker(eng, capsys):
+    e, v = eng
+    _lone_yes(e, v)
+    v.bid, v.ask = D("0.40"), D("0.42")     # 0.42 + 0.60 = 1.02, + 0.02 fee = 1.04
+    e.step_market("aec-x"); e.step_market("aec-x")
+    assert getattr(v, "taker", []) == []
+    assert [o for o in v.orders.values() if o["open"] and o["side"] == "NO"]
+    out = capsys.readouterr().out
+    row = [ln for ln in out.splitlines() if '"exit_skipped_fee"' in ln]
+    assert len(row) == 1 and '"pair_cost_with_fee":"1.04"' in row[0]
+
+
+def test_fee_under_cap_allows_exit_and_logs_fee(eng, capsys):
+    e, v = eng
+    _lone_yes(e, v)
+    v.bid, v.ask = D("0.41"), D("0.43")     # 0.42 + 0.59 = 1.01, + 0.02 fee = 1.03
+    e.step_market("aec-x")                  # pulls resting maker
+    e.step_market("aec-x")                  # takes
+    assert getattr(v, "taker", []) == [("NO", D("0.59"))]
+    row = [ln for ln in capsys.readouterr().out.splitlines()
+           if '"EXIT_LONE_LEG"' in ln][0]
+    d = json.loads(row.split(" ", 1)[1])
+    assert d["est_fee_usd"] == "0.02" and d["pair_cost_with_fee"] == "1.03"
+
+
+def test_large_lone_leg_is_not_taker_exited(reng, capsys):
+    e, v = reng
+    v.bid, v.ask = D("0.44"), D("0.48")
+    e.select(v.account())
+    e.step_market("aec-rw")                                 # 10 x 0.44 / 10 x 0.52
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES" and o["open"])
+    v.orders[yes].update(filled=D("10"), open=False)
+    e.step_market("aec-rw")                                 # lone 10-lot YES
+    mk = e.b.d["markets"]["aec-rw"]
+    mk["lone_since"] -= M.EXIT_S + 1
+    v.bid, v.ask = D("0.45"), D("0.46")     # NO ask 0.55 -> pair 0.99: cheap
+    for _ in range(3):
+        e.step_market("aec-rw")
+    assert getattr(v, "taker", []) == []
+    live = [o for o in v.orders.values() if o["open"]]
+    assert len(live) == 1 and live[0]["side"] == "NO" and live[0]["qty"] == D("10")
+    assert '"exit_skipped_size"' in capsys.readouterr().out
+    # maker completion keeps stepping up as before
+    c = next(o for o in mk["orders"].values() if o["open"])
+    c["placed_at"] -= M.STALE_S + 1
+    e.step_market("aec-rw"); e.step_market("aec-rw")
+    live = [o for o in v.orders.values() if o["open"]]
+    assert len(live) == 1 and live[0]["px"] == D("0.53")
+
+
+def test_small_lone_leg_still_exits_and_size_gate_can_be_disabled(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "EXIT_MAX_TAKER_QTY", D("0"))
+    _lone_yes(e, v)
+    v.bid, v.ask = D("0.41"), D("0.43")
+    e.step_market("aec-x"); e.step_market("aec-x")
+    assert getattr(v, "taker", []) == [("NO", D("0.59"))]
+
+
+# ------------------------------------------------- reward-first (2026-11-15)
+def _lv(rows):
+    return [{"px": {"value": p}, "qty": q} for p, q in rows]
+
+
+RF_BBO = {"aec-rf1": ("0.44", "0.48"), "aec-rf2": ("0.44", "0.48"),
+          "aec-rf3": ("0.44", "0.45"), "aec-x": ("0.44", "0.46")}
+RF_BOOKS = {
+    # thin touch: our 10 is a large share
+    "aec-rf1": {"bids": _lv([("0.44", "20"), ("0.43", "200")]),
+                "offers": _lv([("0.48", "20"), ("0.49", "200")])},
+    # deep touch, bigger pool, smaller share -> lower expected reward
+    "aec-rf2": {"bids": _lv([("0.44", "1000")]), "offers": _lv([("0.48", "1000")])},
+    # 1-tick spread -> depth 1; target met at the best bid: YES leg OUTSIDE
+    "aec-rf3": {"bids": _lv([("0.44", "500")]),
+                "offers": _lv([("0.45", "5"), ("0.46", "5"), ("0.47", "500")])},
+}
+
+
+def _live_prog(slug, pid, pool, max_spread=None):
+    tp = {"programType": "liquidityProgram", "programId": pid, "rewardPool": pool,
+          "period": "live", "discountFactor": "0.5", "targetSize": "100",
+          "status": "active", "start": "2026-01-01T00:00:00Z"}
+    if max_spread:
+        tp["maxSpread"] = max_spread
+    return {"marketSlug": slug, "eventStartTime": "", "timePeriods": [tp]}
+
+
+RF_INCENTIVES = {"programs": [_live_prog("aec-rf1", "P1", "100", "0.03"),
+                              _live_prog("aec-rf2", "P2", "300"),
+                              _live_prog("aec-rf3", "P3", "5000")]}
+
+
+class RFVenue(FakeVenue):
+    def __init__(self):
+        super().__init__()
+        self.gets = []
+        self.px = {s: (D(b), D(a)) for s, (b, a) in RF_BBO.items()}
+        self.targets = [{"slug": s, "market_meta": {"bestBidQuote": b, "bestAskQuote": a}}
+                        for s, (b, a) in RF_BBO.items()]
+        self.ws = None
+
+    def bbo(self, slug):
+        if self.ws is not None:
+            hit = self.ws.fresh_bbo(slug)
+            if hit:
+                return hit
+        b, a = self.px[slug]
+        return {"bid": b, "ask": a}
+
+    def gget(self, path):
+        self.gets.append(path)
+        if path.startswith("/v1/incentives?"):
+            return RF_INCENTIVES
+        for s, bk in RF_BOOKS.items():
+            if path == f"/v1/markets/{s}/book":
+                return {"marketData": bk}
+        return {}
+
+
+@pytest.fixture
+def rfeng(tmp_path, monkeypatch):
+    monkeypatch.delenv("PMUS_TWO_SIDED_REWARDS", raising=False)
+    monkeypatch.setenv("PMUS_TWO_SIDED_REWARD_FIRST", "1")
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20.00"))
+    monkeypatch.setattr(M, "MAX_MARKETS", 4)
+    monkeypatch.setattr(M, "REWARD_MARKETS", 2)
+    v = RFVenue()
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e._rget = R.SpacedGet(v.gget, gap_s=0.0)
+    return e, v
+
+
+def test_side_score_matches_venue_formula():
+    # docs example: DF 0.30, 1,000 at best + 1,000 three ticks away
+    lv = [(0.50, 1000.0), (0.47, 1000.0)]
+    s = R.side_score(lv, 0.47, 0.0, 0.01, 0.30, 2000, True)
+    assert abs(s["total_score"] - 1027.0) < 1e-9
+    # our 1,000 three ticks away (theirs removed, ours added once)
+    s = R.side_score(lv, 0.47, 1000.0, 0.01, 0.30, 2000, True, own_resting=1000.0)
+    assert abs(s["share"] - 27.0 / 1027.0) < 1e-9 and s["inside"]
+    # target reached at the best level -> deeper orders score zero
+    s = R.side_score([(0.50, 25000.0)], 0.49, 10.0, 0.01, 0.3, 20000, True)
+    assert not s["inside"] and s["share"] == 0.0 and s["qualifies"]
+    # target never reached -> nobody scores
+    s = R.side_score([(0.50, 5.0)], 0.50, 10.0, 0.01, 0.3, 100, True)
+    assert s["inside"] and not s["qualifies"] and s["share"] == 0.0
+
+
+def test_quote_estimate_share_and_rate():
+    per = {"df": 0.5, "targetSize": 100.0, "maxSpread": 0.03,
+           "pool_rate_usd_s": 100 / 10800.0}
+    bk = {k: v for k, v in RF_BOOKS["aec-rf1"].items()}
+    est = R.quote_estimate(bk, per, 0.44, 0.52, 10.0, 0.01)
+    side = 10.0 / (30.0 + 0.5 * 200.0)
+    assert abs(est["bid_share"] - side) < 1e-6 and abs(est["ask_share"] - side) < 1e-6
+    assert est["inside_walk"] and est["max_spread_ok"]
+    assert abs(est["rate_usd_s"] - per["pool_rate_usd_s"] * side) < 1e-9
+    assert abs(est["est_usd_per_day"] - est["rate_usd_s"] * 86400) < 1e-4
+
+
+def test_reward_first_ranking_prefers_inside_walk_and_higher_expected(rfeng, capsys):
+    e, v = rfeng
+    e.select(v.account())
+    rank = [ln for ln in capsys.readouterr().out.splitlines() if "REWARD_FIRST_RANK" in ln][0]
+    top = [r["slug"] for r in json.loads(rank.split(" ", 1)[1])["top"]]
+    assert top == ["aec-rf1", "aec-rf2", "aec-rf3"]       # rf3 outside walk -> last
+    assert e.b.m("aec-rf1")["reward"]["programId"] == "P1"
+    assert e.b.m("aec-rf2")["reward"]["programId"] == "P2"
+    # REWARD_MARKETS=2: rf3 still trades, but in a normal (unrewarded) slot
+    assert set(e.active()) == {"aec-rf1", "aec-rf2", "aec-rf3", "aec-x"}
+    assert not e.b.m("aec-rf3").get("reward") and not e.b.m("aec-x").get("reward")
+    e.refresh_active_rewards()                             # cap kept on refresh
+    assert e.rewarded_active() == 2 and not e.b.m("aec-rf3").get("reward")
+
+
+def test_reward_first_quotes_reward_qty_at_touch(rfeng):
+    e, v = rfeng
+    e.select(v.account())
+    e.step_market("aec-rf1")
+    live = {o["side"]: (o["px"], o["qty"]) for o in v.orders.values()
+            if o["open"] and o["slug"] == "aec-rf1"}
+    assert live == {"YES": (D("0.44"), D("10")), "NO": (D("0.52"), D("10"))}
+    assert all(o["stage"] == M.REWARDED_STAGE for o in
+               e.b.d["markets"]["aec-rf1"]["orders"].values())
+
+
+def _rf1_open(v):
+    return {o["side"]: o["px"] for o in v.orders.values() if o["open"] and o["slug"] == "aec-rf1"}
+
+
+def test_reward_first_holds_on_one_tick_reprices_on_two(rfeng, capsys):
+    e, v = rfeng
+    e.select(v.account())
+    e.step_market("aec-rf1")
+    n0 = v.n
+    mk = e.b.d["markets"]["aec-rf1"]
+    mk["pair_set_at"] -= 10 * M.STALE_S                    # no step ladder either
+    v.px["aec-rf1"] = (D("0.45"), D("0.48"))               # touch 1 tick away
+    e.step_market("aec-rf1")
+    assert v.n == n0 and _rf1_open(v) == {"YES": D("0.44"), "NO": D("0.52")}
+    v.px["aec-rf1"] = (D("0.46"), D("0.48"))               # 2 ticks -> re-price
+    e.step_market("aec-rf1")
+    assert _rf1_open(v) == {"YES": D("0.46"), "NO": D("0.52")} and v.n == n0 + 2
+    assert '"reward_reprice"' in capsys.readouterr().out
+
+
+def test_reward_first_reprices_when_order_leaves_target_walk(rfeng, monkeypatch):
+    e, v = rfeng
+    e.select(v.account())
+    v.px["aec-rf1"] = (D("0.44"), D("0.45"))               # 1-tick: depth-1 quote
+    e.step_market("aec-rf1")
+    assert _rf1_open(v) == {"YES": D("0.43"), "NO": D("0.54")}
+    n0 = v.n
+    # someone stacks the best bid past target: our 0.43 is now outside
+    monkeypatch.setitem(RF_BOOKS, "aec-rf1", {"bids": _lv([("0.44", "500")]),
+                                              "offers": _lv([("0.45", "20")])})
+    v.px["aec-rf1"] = (D("0.44"), D("0.46"))               # 1 tick: would hold
+    e.b.d["markets"]["aec-rf1"]["reward_est"]["t"] = 0     # walk re-check due
+    e.step_market("aec-rf1")
+    assert v.n == n0 + 2                                   # re-priced at the touch
+    assert _rf1_open(v) == {"YES": D("0.44"), "NO": D("0.54")}
+
+
+class _RFWsVenue(RFVenue):
+    def __init__(self, clock):
+        super().__init__()
+        self.ws = W.TwoSidedWs(clock=clock, log=M.log)
+
+
+def test_reward_first_no_reactive_pull_but_jump_and_late_still_pull(tmp_path, monkeypatch):
+    monkeypatch.setenv("PMUS_TWO_SIDED_REWARD_FIRST", "1")
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20.00"))
+    monkeypatch.setattr(M, "MAX_MARKETS", 1)
+    clk = Clock()
+    v = _RFWsVenue(clk)
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e._rget = R.SpacedGet(v.gget, gap_s=0.0)
+    e.select(v.account())
+    assert e.active() == ["aec-rf1"]
+    v.ws.ingest(frame("aec-rf1", "0.44", "0.48"))
+    e.step_market("aec-rf1")
+    assert _rf1_open(v) == {"YES": D("0.44"), "NO": D("0.52")}
+    v.ws.ingest(frame("aec-rf1", "0.45", "0.48"))          # 1-tick touch move
+    e.drain_ws_events()
+    assert e.reactive_pulls == 0 and _rf1_open(v) == {"YES": D("0.44"), "NO": D("0.52")}
+    v.ws.ingest(frame("aec-rf1", "0.47", "0.50"))          # 2-tick / 2c jump
+    e.drain_ws_events()
+    assert _rf1_open(v) == {} and e.jump_pauses == 1
+    e.b.d["markets"]["aec-rf1"]["jump_pause_until"] = 0
+    e.step_market("aec-rf1")
+    assert _rf1_open(v) == {"YES": D("0.47"), "NO": D("0.50")}
+    v.states = {"aec-rf1": {"type": "football", "period": "Q4"}}
+    e.step_market("aec-rf1")                               # late cutoff pulls
+    assert _rf1_open(v) == {}
+
+
+def test_accrual_tracker_math_and_floor(rfeng, capsys):
+    e, v = rfeng
+    e.select(v.account())
+    e.step_market("aec-rf1")                               # legs placed
+    e.step_market("aec-rf1")                               # estimate of resting legs
+    mk = e.b.d["markets"]["aec-rf1"]
+    rate = mk["reward_est"]["rate_usd_s"]
+    # resting: our 10 is assumed to be IN the public 0.44 x 20 level, so it is
+    # removed and added back once -> 10 / (20 + 0.5 * 200)
+    side = 10.0 / (20.0 + 0.5 * 200.0)
+    assert abs(rate - (100 / 10800.0) * side) < 1e-12
+    day = M.et_clock(M.time.time())[0]
+    row = e.b.d["reward_accrual"][day]["aec-rf1"]
+    before = row["est_usd"]
+    mk["accrual_t"] -= 60
+    e._accrue("aec-rf1", mk)
+    assert abs(row["est_usd"] - before - rate * 60) < 1e-6
+    mk["accrual_t"] -= 10_000                              # long gap: capped
+    e._accrue("aec-rf1", mk)
+    assert abs(row["est_usd"] - before - rate * (60 + M.REWARD_ACCRUAL_MAX_GAP_S)) < 1e-6
+    # floor report at 19:00 ET on a fixed day (EST, UTC-5): 2026-11-16T00:00Z
+    ts = 1794787200.0
+    assert M.et_clock(ts)[:2] == ("2026-11-15", 19)
+    e.b.d["reward_accrual"] = {"2026-11-15": {
+        "aec-rf1": {"est_usd": 0.40, "rest_s": 3600, "rate_usd_s": 0.00005},
+        "aec-rf2": {"est_usd": 1.20, "rest_s": 3600, "rate_usd_s": 0.0}}}
+    capsys.readouterr()
+    m = e.reward_accrual_report(now=ts)
+    horizon = min(5 * 3600, M.REWARD_PROJECT_HORIZON_S)
+    assert m["aec-rf2"]["floor"] == "met"
+    assert abs(m["aec-rf1"]["projected_eod_usd"] - (0.40 + 0.00005 * horizon)) < 1e-5
+    assert m["aec-rf1"]["floor"] == "at_risk"              # 0.40 + 0.36 < 1.00
+    out = capsys.readouterr().out
+    assert '"kind":"REWARD_ACCRUAL"' in out and "THEORETICAL" in out
+    risk = [ln for ln in out.splitlines() if '"reward_floor_at_risk"' in ln]
+    assert len(risk) == 1 and '"aec-rf1"' in risk[0]
+    # before 18:00 ET: reported, not flagged
+    e.reward_accrual_report(now=ts - 6 * 3600)             # 13:00 ET
+    assert '"reward_floor_at_risk"' not in capsys.readouterr().out
+
+
+def test_et_clock_matches_zoneinfo():
+    zi = pytest.importorskip("zoneinfo")
+    from datetime import datetime, timezone
+    try:
+        ny = zi.ZoneInfo("America/New_York")
+    except Exception:
+        pytest.skip("no tzdata")
+    for ts in (1773554400.0, 1773568800.0, 1788933600.0, 1793512800.0,
+               1794787200.0, 1798761599.0, 1784000000.0):
+        loc = datetime.fromtimestamp(ts, timezone.utc).astimezone(ny)
+        assert M.et_clock(ts)[:2] == (loc.strftime("%Y-%m-%d"), loc.hour)
+
+
+def test_reward_first_default_off_keeps_reward_mode_behaviour(reng):
+    e, v = reng                                            # REWARDS=1 only
+    assert not M.reward_first_on() and M.rewards_on()
+    v.bid, v.ask = D("0.44"), D("0.48")
+    e.select(v.account())
+    e.step_market("aec-rw")
+    n0 = v.n
+    v.bid, v.ask = D("0.45"), D("0.48")                    # today: 1 tick re-quotes
+    e.step_market("aec-rw")
+    assert v.n == n0 + 2
+    assert not M.Engine.reward_first_quoting(e.b.m("aec-rw"))
+    assert "reward_accrual" not in e.b.d

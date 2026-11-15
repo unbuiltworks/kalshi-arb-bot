@@ -333,3 +333,109 @@ def estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
             "est_usd_per_day_per_market_reading": round(
                 period["pool_rate_usd_s"] * 0.5 * (sb + sa) * 86400.0, 4),
             "label": LABEL}
+
+
+# ------------------------------------------------- reward-first (2026-11-15)
+# Venue rule (docs.polymarket.us/incentives/liquidity.md): every second a
+# random snapshot; per side, walk from the best price outward, LEVEL BY
+# LEVEL, until cumulative raw size reaches targetSize; every order in the
+# walked levels scores discountFactor ** ticks_from_best * size, beyond = 0;
+# each side normalized to 1.0 per snapshot; payout proportional to score
+# share. Rewards < $1.00 are not paid. THEORETICAL estimates only.
+
+def side_score(levels: list, our_px: Optional[float], our_qty: float,
+               tick: float, df: float, target: float, is_bid: bool,
+               own_resting: float = 0.0) -> dict:
+    """Our score share on ONE side with ``our_qty`` resting at ``our_px``.
+
+    ``levels`` best-first [(px, qty)] as the public book shows them.
+    ``own_resting`` is the size of our order already in that public book at
+    ``our_px``; it is removed first so our order is counted exactly once."""
+    if tick <= 0:
+        raise ValueError("tick must be > 0")
+    lv: dict = {}
+    for px, q in levels:
+        k = int(round(px / tick))
+        lv[k] = lv.get(k, 0.0) + float(q)
+    ok = None if our_px is None else int(round(our_px / tick))
+    if ok is not None and own_resting > 0:
+        lv[ok] = max(0.0, lv.get(ok, 0.0) - float(own_resting))
+    if ok is not None and our_qty > 0:
+        lv[ok] = lv.get(ok, 0.0) + float(our_qty)
+    keys = sorted((k for k, q in lv.items() if q > EPS), reverse=is_bid)
+    out = {"inside": False, "qualifies": False, "share": 0.0,
+           "our_score": 0.0, "total_score": 0.0, "ticks_from_best": None,
+           "in_range_size": 0.0, "levels_in_range": 0, "size_adj_px": None,
+           "best": (keys[0] * tick) if keys else None}
+    if not keys:
+        return out
+    best = keys[0]
+    cum = total = ours = notional = 0.0
+    used = 0
+    for i, k in enumerate(keys):
+        if i > 0 and cum >= target - EPS:
+            break
+        t = abs(k - best)
+        q = lv[k]
+        total += (df ** t) * q
+        notional += k * tick * q
+        cum += q
+        used += 1
+        if ok is not None and k == ok and our_qty > 0:
+            out["inside"] = True
+            out["ticks_from_best"] = t
+            ours = (df ** t) * our_qty
+    qual = cum >= target - EPS
+    out.update(qualifies=qual, our_score=ours, total_score=total,
+               share=(ours / total) if (qual and total > 0) else 0.0,
+               in_range_size=cum, levels_in_range=used,
+               size_adj_px=(notional / cum) if cum > 0 else None)
+    return out
+
+
+def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
+                   yes_px: Optional[float], no_px: Optional[float],
+                   qty: float, tick: float, own_yes: float = 0.0,
+                   own_no: float = 0.0) -> dict:
+    """THEORETICAL share / reward rate for our YES bid at ``yes_px`` and our
+    NO bid at ``no_px`` (= a YES offer at ``1 - no_px``), ``qty`` each; a
+    leg passed as None is not quoted. ``own_*`` = our size already in the
+    public book at those prices (removed so it is not double-counted).
+
+    share = 0.5 * (bid_side_share + ask_side_share) (each side is normalized
+    to 1.0 per snapshot, so the two sides are equal halves of the pool);
+    with maxSpread BOTH sides must qualify and have their size-adjusted
+    price within maxSpread of the mid, or neither side scores.
+    rate_usd_s = pool_rate_usd_s * share; est_usd_per_day = rate * 86400."""
+    bids, asks = book_sides(book_md or {})
+    df, target = float(period["df"]), float(period["targetSize"])
+    b = side_score(bids, yes_px, qty if yes_px is not None else 0.0, tick,
+                   df, target, True, own_yes)
+    a = side_score(asks, None if no_px is None else 1.0 - no_px,
+                   qty if no_px is not None else 0.0, tick, df, target,
+                   False, own_no)
+    mid = ((b["best"] + a["best"]) / 2.0) if (b["best"] is not None and
+                                              a["best"] is not None) else None
+    ms = period.get("maxSpread")
+    ms_ok = None
+    if ms is not None:
+        ms_ok = bool(mid is not None and b["qualifies"] and a["qualifies"]
+                     and b["size_adj_px"] is not None
+                     and a["size_adj_px"] is not None
+                     and abs(b["size_adj_px"] - mid) <= ms + EPS
+                     and abs(a["size_adj_px"] - mid) <= ms + EPS)
+    sb = b["share"] if ms_ok in (None, True) else 0.0
+    sa = a["share"] if ms_ok in (None, True) else 0.0
+    share = 0.5 * (sb + sa)
+    rate = float(period.get("pool_rate_usd_s") or 0.0) * share
+    legs = [x for x, px in ((b, yes_px), (a, no_px)) if px is not None]
+    return {"share": round(share, 9), "bid_share": round(sb, 9),
+            "ask_share": round(sa, 9),
+            "inside_walk": bool(legs) and all(x["inside"] for x in legs),
+            "bid_inside": b["inside"], "ask_inside": a["inside"],
+            "bid_qualifies": b["qualifies"], "ask_qualifies": a["qualifies"],
+            "bid_ticks_from_best": b["ticks_from_best"],
+            "ask_ticks_from_best": a["ticks_from_best"],
+            "max_spread_ok": ms_ok, "mid": mid,
+            "rate_usd_s": rate, "est_usd_per_hour": round(rate * 3600.0, 6),
+            "est_usd_per_day": round(rate * 86400.0, 6), "label": LABEL}

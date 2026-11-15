@@ -90,6 +90,32 @@ def exit_rule(slug: str) -> tuple:
     if "-cfb-" in slug:
         return EXIT_S_CFB, EXIT_MAX_PAIR_CFB
     return EXIT_S, EXIT_MAX_PAIR
+
+
+# OWNER 2026-11-15 FEE-AWARE EXIT (DEFAULT ON). Venue audit: $3.76 of taker
+# commissions on 578 trades since 2026-11-14T15:30Z and $0 maker rebates;
+# the lone-leg taker EXIT pays the fee. The exit now takes only if
+#   lead_px + take_px + taker_fee_per_contract(take_px) <= exit max pair,
+# fee = TAKER_FEE_RATE * qty * p * (1 - p) rounded UP to the cent per order
+# (as the venue rounds), and a lone leg larger than EXIT_MAX_TAKER_QTY
+# contracts never taker-exits: it keeps maker-completing (stepping up as
+# before). PMUS_TWO_SIDED_EXIT_FEE_AWARE=0 restores the fee-blind check;
+# PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY=0 removes the size gate.
+EXIT_FEE_AWARE = os.getenv("PMUS_TWO_SIDED_EXIT_FEE_AWARE", "1").strip() \
+    not in ("0", "no", "false", "off")
+TAKER_FEE_RATE = _env_d("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.06")
+EXIT_MAX_TAKER_QTY = _env_d("PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY", "2")
+CENT = D("0.01")
+
+
+def taker_fee(px: D, qty: D, rate: Optional[D] = None) -> D:
+    """Estimated taker fee for ONE order: rate * qty * p * (1 - p), rounded
+    up to the cent. ESTIMATE from the published schedule, not a venue
+    figure."""
+    from decimal import ROUND_CEILING
+    r = TAKER_FEE_RATE if rate is None else rate
+    raw = r * D(qty) * D(px) * (ONE - D(px))
+    return raw.quantize(CENT, rounding=ROUND_CEILING)
 STATE_DIR = Path(os.getenv("PMUS_TWO_SIDED_STATE_DIR",
                            "/state/pmus-spring/two_sided"))
 SPORTS_PREFIXES = ("aec-", "asc-", "tsc-", "atc-", "astatc-")
@@ -111,6 +137,70 @@ REWARD_REFRESH_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_REFRESH_S", "300"))
 REWARD_LOG_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_LOG_S", "60"))
 # optional comma-separated slug prefixes; empty = any rewarded sports market
 REWARD_ALLOW_ENV = "PMUS_TWO_SIDED_REWARD_ALLOW"
+
+# OWNER 2026-11-15 REWARD-FIRST MODE. DEFAULT OFF (PMUS_TWO_SIDED_REWARD_FIRST
+# unset -> nothing below runs). When on (it implies the reward machinery
+# above):
+#   * selection ranks live, in-band, not-late markets carrying a paying
+#     liquidity period in REWARD_FIRST_PERIODS by THEORETICAL expected reward
+#     for our REWARD_QTY quote (pool rate * our share from the current book,
+#     venue formula); our order inside the target walk first; up to
+#     REWARD_MARKETS of them take slots, the rest are selected as before;
+#   * a rewarded market rests BOTH legs at the touch (pair-cap legal depth)
+#     and is NOT pulled by 1-tick touch moves: it re-prices only when a leg
+#     is >= REWARD_REPRICE_TICKS from its touch or leaves the target walk;
+#     jump pauses and the late-game cutoff still pull;
+#   * REWARD_ACCRUAL every REWARD_ACCRUAL_LOG_S: THEORETICAL est_today_usd per
+#     market per ET day vs the venue's $1.00 payout floor; reward_floor_at_risk
+#     from REWARD_FLOOR_CHECK_HOUR_ET on (REPORT ONLY, no size change).
+# Every figure is THEORETICAL and never enters P&L.
+REWARD_FIRST_ENV = "PMUS_TWO_SIDED_REWARD_FIRST"
+REWARD_MARKETS = int(os.getenv("PMUS_TWO_SIDED_REWARD_MARKETS", "4"))
+REWARD_FIRST_PERIODS = tuple(
+    p.strip() for p in os.getenv("PMUS_TWO_SIDED_REWARD_FIRST_PERIODS",
+                                 "live").split(",") if p.strip())
+REWARD_REPRICE_TICKS = int(os.getenv("PMUS_TWO_SIDED_REWARD_REPRICE_TICKS",
+                                     "2"))
+REWARD_WALK_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_WALK_CHECK_S",
+                                      "30"))
+REWARD_SCAN_MAX = int(os.getenv("PMUS_TWO_SIDED_REWARD_SCAN_MAX", "12"))
+REWARD_ACCRUAL_LOG_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_ACCRUAL_LOG_S",
+                                       "600"))
+REWARD_ACCRUAL_MAX_GAP_S = float(os.getenv(
+    "PMUS_TWO_SIDED_REWARD_ACCRUAL_MAX_GAP_S", "120"))
+REWARD_FLOOR_USD = _env_d("PMUS_TWO_SIDED_REWARD_FLOOR_USD", "1.00")
+REWARD_FLOOR_CHECK_HOUR_ET = int(os.getenv(
+    "PMUS_TWO_SIDED_REWARD_FLOOR_CHECK_HOUR_ET", "18"))
+REWARD_PROJECT_HORIZON_S = float(os.getenv(
+    "PMUS_TWO_SIDED_REWARD_PROJECT_HORIZON_S", "7200"))
+REWARDED_STAGE = "two_sided_open_rewarded"
+
+
+def reward_first_on() -> bool:
+    return os.getenv(REWARD_FIRST_ENV, "").strip().lower() in (
+        "1", "yes", "true", "on")
+
+
+def _et_offset_h(utc: datetime) -> int:
+    """US Eastern UTC offset: EDT (-4) from the 2nd Sunday of March 07:00Z to
+    the 1st Sunday of November 06:00Z, else EST (-5). Stdlib only."""
+    y = utc.year
+    m1 = datetime(y, 3, 1, tzinfo=timezone.utc)
+    start = datetime(y, 3, 1 + (6 - m1.weekday()) % 7 + 7, 7,
+                     tzinfo=timezone.utc)
+    n1 = datetime(y, 11, 1, tzinfo=timezone.utc)
+    end = datetime(y, 11, 1 + (6 - n1.weekday()) % 7, 6, tzinfo=timezone.utc)
+    return -4 if start <= utc < end else -5
+
+
+def et_clock(ts: float) -> tuple:
+    """(ET date 'YYYY-MM-DD', ET hour, seconds left to ET midnight)."""
+    from datetime import timedelta
+    utc = datetime.fromtimestamp(ts, timezone.utc)
+    loc = utc + timedelta(hours=_et_offset_h(utc))
+    secs = loc.hour * 3600 + loc.minute * 60 + loc.second + \
+        loc.microsecond / 1e6
+    return loc.strftime("%Y-%m-%d"), loc.hour, 86400.0 - secs
 
 
 # OWNER 2026-11-14 realtime reaction ("stop being picked off"). DEFAULT OFF:
@@ -165,8 +255,10 @@ def stale_reasons(quoted: Mapping[str, Any], new: Mapping[str, D],
 
 
 def rewards_on() -> bool:
+    """Reward machinery on: PMUS_TWO_SIDED_REWARDS, or implied by
+    PMUS_TWO_SIDED_REWARD_FIRST."""
     return os.getenv(REWARDS_ENV, "").strip().lower() in (
-        "1", "yes", "true", "on")
+        "1", "yes", "true", "on") or reward_first_on()
 
 
 def reward_allowed(slug: str) -> bool:
@@ -278,7 +370,8 @@ def open_prices(yes_bid: D, yes_ask: D, tick: D, depth: int = DEPTH_TICKS,
 
 
 def reward_open_prices(yes_bid: D, yes_ask: D, tick: D,
-                       max_spread: Optional[float]) -> Optional[tuple]:
+                       max_spread: Optional[float],
+                       cap: Optional[D] = None) -> Optional[tuple]:
     """(prices, depth) for a rewarded market, or None.
 
     Depth 0 = both legs AT the touch (YES bid at best bid, NO bid at
@@ -290,7 +383,7 @@ def reward_open_prices(yes_bid: D, yes_ask: D, tick: D,
     maxSpread ends the search (None -> quote as a non-rewarded market)."""
     from src.pmus_sports_rewards import legs_within_max_spread
     for d in range(0, DEPTH_TICKS + 1):
-        p = open_prices(yes_bid, yes_ask, tick, depth=d)
+        p = open_prices(yes_bid, yes_ask, tick, depth=d, cap=cap)
         if p is None:
             continue
         if legs_within_max_spread(float(p["YES"]), float(p["NO"]),
@@ -551,6 +644,12 @@ class Engine:
             return
         if not flat or not open_legs:
             return                 # completion legs: re-evaluated as today
+        if self.reward_first_quoting(mk):
+            # REWARD-FIRST: time on book is the score -- no 1-tick reactive
+            # pull; the main loop's step_market (every LOOP_S) re-prices on
+            # a >= REWARD_REPRICE_TICKS move or a target-walk exit. The jump
+            # pause above still pulls at once.
+            return
         quoted = mk.get("quoted_bbo") or moves[0][0]
         why = stale_reasons(quoted, new, tick)
         if why:
@@ -634,6 +733,12 @@ class Engine:
         for s in act:
             mk = self.b.m(s)
             new = pp.get(s)
+            if reward_first_on():
+                # only markets selected INTO a reward slot carry a program
+                # (keeps the REWARD_MARKETS cap), and only listed periods
+                if not mk.get("reward_slot") or (
+                        new and new.get("period") not in REWARD_FIRST_PERIODS):
+                    new = None
             if (mk.get("reward") or None) != new:
                 mk["reward"] = new
         self.b.save()
@@ -647,11 +752,227 @@ class Engine:
         if not rp:
             return None
         r = reward_open_prices(bbo["bid"], bbo["ask"], tick,
-                               rp.get("maxSpread"))
+                               rp.get("maxSpread"),
+                               cap=pair_cap(slug) if reward_first_on()
+                               else None)
         self._log_reward(slug, mk, rp, bbo, tick, r)
         if r is None:
             return None
         return {"want": r[0], "depth": r[1]}
+
+    # ------------------------------------------------ reward-first mode
+    @staticmethod
+    def reward_first_quoting(mk: Mapping[str, Any]) -> bool:
+        """Reward-first market whose open legs are the rewarded quote."""
+        if not reward_first_on() or not mk.get("reward"):
+            return False
+        legs = [o for o in (mk.get("orders") or {}).values() if o.get("open")]
+        return bool(legs) and all(o.get("stage") == REWARDED_STAGE
+                                  for o in legs)
+
+    def _open_legs(self, mk: Mapping[str, Any]) -> Dict[str, tuple]:
+        """{side: (px, remaining qty)} of our open orders in a market."""
+        out: Dict[str, tuple] = {}
+        for o in (mk.get("orders") or {}).values():
+            if o.get("open"):
+                out[o["side"]] = (D(o["px"]),
+                                  D(o["qty"]) - D(o.get("filled", "0")))
+        return out
+
+    def _reward_estimate(self, slug: str, mk: Dict[str, Any], tick: D,
+                         force: bool = False) -> Optional[Dict[str, Any]]:
+        """THEORETICAL share of our CURRENT open legs (cached
+        REWARD_WALK_CHECK_S, recomputed when the legs change). Our own size
+        is removed from the public book first, then added once."""
+        rp = mk.get("reward")
+        if not rp:
+            return None
+        legs = self._open_legs(mk)
+        key = {s: [str(p), str(q)] for s, (p, q) in sorted(legs.items())}
+        est = mk.get("reward_est")
+        if not force and est and est.get("legs") == key and \
+                time.time() - float(est.get("t") or 0) < REWARD_WALK_CHECK_S:
+            return est
+        if not legs:
+            est = {"t": time.time(), "legs": key, "share": 0.0,
+                   "rate_usd_s": 0.0, "inside_walk": False}
+            mk["reward_est"] = est
+            return est
+        from src import pmus_sports_rewards as R
+        book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                ).get("marketData") or {}
+        y, n = legs.get("YES"), legs.get("NO")
+        q = float(max(q for _p, q in legs.values()))
+        r = R.quote_estimate(book, rp, float(y[0]) if y else None,
+                             float(n[0]) if n else None, q, float(tick),
+                             own_yes=float(y[1]) if y else 0.0,
+                             own_no=float(n[1]) if n else 0.0)
+        est = {"t": time.time(), "legs": key, **r}
+        mk["reward_est"] = est
+        return est
+
+    def _reward_hold(self, slug: str, mk: Dict[str, Any],
+                     open_by_side: Mapping, bbo: Mapping, tick: D,
+                     qty: D) -> bool:
+        """REWARD-FIRST: keep resting rewarded legs unless a leg is
+        >= REWARD_REPRICE_TICKS from its touch, the quote no longer sits
+        within maxSpread / the pair cap, or our order left the target walk.
+        True = keep (no cancel/replace)."""
+        if set(open_by_side) != {"YES", "NO"}:
+            return False
+        legs = {sd: open_by_side[sd][1] for sd in ("YES", "NO")}
+        if any(o.get("stage") != REWARDED_STAGE or D(o["qty"]) != qty
+               for o in legs.values()):
+            return False
+        px = {sd: D(o["px"]) for sd, o in legs.items()}
+        why = []
+        for sd in ("YES", "NO"):
+            dist = abs(side_bid(sd, bbo["bid"], bbo["ask"]) - px[sd]) / tick
+            if dist >= REWARD_REPRICE_TICKS:
+                why.append(f"{sd.lower()}_touch_{int(dist)}_ticks")
+        if px["YES"] + px["NO"] > pair_cap(slug):
+            why.append("pair_cap")
+        from src.pmus_sports_rewards import legs_within_max_spread
+        if not legs_within_max_spread(float(px["YES"]), float(px["NO"]),
+                                      float(bbo["bid"]), float(bbo["ask"]),
+                                      (mk.get("reward") or {}).get(
+                                          "maxSpread")):
+            why.append("max_spread")
+        if not why:
+            try:
+                est = self._reward_estimate(slug, mk, tick)
+            except Exception as exc:                  # noqa: BLE001
+                est = None
+                log("reward_estimate_error", slug=slug, err=str(exc)[:120])
+            if est is not None and est.get("legs") and \
+                    not est.get("inside_walk", True):
+                why.append("left_target_walk")
+        if why:
+            log("reward_reprice", slug=slug, reasons=why,
+                legs={k: str(v) for k, v in px.items()}, bid=bbo["bid"],
+                ask=bbo["ask"], label="THEORETICAL reward quoting")
+            return False
+        return True
+
+    def _accrue(self, slug: str, mk: Dict[str, Any]) -> None:
+        """THEORETICAL accrual for the time since the last step: pool rate *
+        estimated share of the legs that rested over that interval. Gaps
+        longer than REWARD_ACCRUAL_MAX_GAP_S are not credited."""
+        now = time.time()
+        last = mk.get("accrual_t")
+        mk["accrual_t"] = now
+        if last is None or not mk.get("reward"):
+            return
+        dt = min(max(0.0, now - float(last)), REWARD_ACCRUAL_MAX_GAP_S)
+        est = mk.get("reward_est") or {}
+        rate = float(est.get("rate_usd_s") or 0.0) if est.get("legs") else 0.0
+        day = et_clock(now)[0]
+        acc = self.b.d.setdefault("reward_accrual", {})
+        row = acc.setdefault(day, {}).setdefault(
+            slug, {"est_usd": 0.0, "rest_s": 0.0})
+        row["est_usd"] = float(row["est_usd"]) + rate * dt
+        if rate > 0:
+            row["rest_s"] = float(row["rest_s"]) + dt
+        row["rate_usd_s"] = rate
+        row["share"] = est.get("share")
+        for d in sorted(acc)[:-7]:                    # keep 7 ET days
+            acc.pop(d, None)
+
+    def reward_accrual_report(self, now: Optional[float] = None) -> Dict:
+        """REWARD_ACCRUAL (THEORETICAL) per market for today (ET) against the
+        venue's $1.00 payout floor. projected_eod_usd = est_today + current
+        rate * min(seconds to ET midnight, REWARD_PROJECT_HORIZON_S) for an
+        active rewarded market (0 for inactive ones). From
+        REWARD_FLOOR_CHECK_HOUR_ET on, a market (or the total) projected
+        under the floor logs reward_floor_at_risk. Report only."""
+        now = time.time() if now is None else now
+        day, hour, left = et_clock(now)
+        rows = (self.b.d.get("reward_accrual") or {}).get(day) or {}
+        active = set(self.active())
+        horizon = min(left, REWARD_PROJECT_HORIZON_S)
+        floor = float(REWARD_FLOOR_USD)
+        mkts = {}
+        for slug, r in sorted(rows.items()):
+            est = float(r.get("est_usd") or 0.0)
+            rate = float(r.get("rate_usd_s") or 0.0) if slug in active \
+                else 0.0
+            proj = est + rate * horizon
+            mkts[slug] = {"est_today_usd": round(est, 6),
+                          "rest_s": round(float(r.get("rest_s") or 0.0)),
+                          "rate_usd_s": rate, "share": r.get("share"),
+                          "projected_eod_usd": round(proj, 6),
+                          "floor": ("met" if est >= floor else
+                                    "on_track" if proj >= floor else
+                                    "at_risk")}
+        tot = sum(m["est_today_usd"] for m in mkts.values())
+        tot_proj = sum(m["projected_eod_usd"] for m in mkts.values())
+        log("REWARD_ACCRUAL", et_day=day, et_hour=hour,
+            est_today_usd=round(tot, 6), projected_eod_usd=round(tot_proj, 6),
+            floor_usd=floor, floor_met=tot >= floor,
+            projection_horizon_s=round(horizon), markets=mkts,
+            label="THEORETICAL reward estimate (pool rate x est share x "
+                  "resting time); NOT credited, never P&L; venue pays "
+                  "nothing under $1.00")
+        if hour >= REWARD_FLOOR_CHECK_HOUR_ET:
+            for slug, m in mkts.items():
+                if m["floor"] == "at_risk":
+                    log("reward_floor_at_risk", et_day=day, slug=slug,
+                        est_today_usd=m["est_today_usd"],
+                        projected_eod_usd=m["projected_eod_usd"],
+                        floor_usd=floor, action="report_only_no_size_change",
+                        label="THEORETICAL")
+            if mkts and tot_proj < floor:
+                log("reward_floor_at_risk", et_day=day, slug="ALL",
+                    est_today_usd=round(tot, 6),
+                    projected_eod_usd=round(tot_proj, 6), floor_usd=floor,
+                    action="report_only_no_size_change", label="THEORETICAL")
+        return mkts
+
+    def reward_first_rank(self, rewarded: Mapping[str, Any]) -> list:
+        """[(slug, estimate)] best first: live paying programs only; our
+        REWARD_QTY quote at the touch (pair-cap legal depth) scored against
+        the current public book with the venue formula. Our order inside
+        the target walk first, then higher THEORETICAL reward rate. Markets
+        whose quote would earn nothing are left out."""
+        from src import pmus_sports_rewards as R
+        cands = sorted(((s, p) for s, p in rewarded.items()
+                        if p.get("period") in REWARD_FIRST_PERIODS),
+                       key=lambda sp: -float(sp[1]["pool_rate_usd_s"]))
+        out = []
+        for slug, per in cands[:max(0, REWARD_SCAN_MAX)]:
+            try:
+                spec = self.v.spec(slug)
+                bbo = self.v.bbo(slug) if spec else None
+                if not spec or not bbo:
+                    continue
+                r = reward_open_prices(bbo["bid"], bbo["ask"], spec["tick"],
+                                       per.get("maxSpread"),
+                                       cap=pair_cap(slug))
+                if r is None:
+                    continue
+                book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                        ).get("marketData") or {}
+                qty = max(REWARD_QTY, spec["min_qty"])
+                est = R.quote_estimate(book, per, float(r[0]["YES"]),
+                                       float(r[0]["NO"]), float(qty),
+                                       float(spec["tick"]))
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_rank_error", slug=slug, err=str(exc)[:120])
+                continue
+            est["depth"] = r[1]
+            if est["rate_usd_s"] > 0:
+                out.append((slug, est))
+        out.sort(key=lambda se: (0 if se[1]["inside_walk"] else 1,
+                                 -se[1]["rate_usd_s"], se[0]))
+        log("REWARD_FIRST_RANK", candidates=len(cands), scored=len(out),
+            top=[{"slug": s, "inside_walk": e["inside_walk"],
+                  "share": e["share"], "depth": e["depth"],
+                  "pool_rate_usd_s": rewarded[s]["pool_rate_usd_s"],
+                  "est_usd_per_hour": e["est_usd_per_hour"],
+                  "est_usd_per_day": e["est_usd_per_day"]}
+                 for s, e in out[:8]],
+            label="THEORETICAL reward ranking; never P&L")
+        return out
 
     def _log_reward(self, slug: str, mk: Dict[str, Any], rp: Mapping,
                     bbo: Mapping, tick: D, r: Optional[tuple]) -> None:
@@ -760,6 +1081,14 @@ class Engine:
                     unmatched_cost=self.b.unmatched_cost(slug))
             return
         tick = spec["tick"]
+        if reward_first_on() and mk.get("reward"):
+            # THEORETICAL accrual for the interval just ended (legs that
+            # rested), then refresh the share estimate for the next one
+            self._accrue(slug, mk)
+            try:
+                self._reward_estimate(slug, mk, tick)
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_estimate_error", slug=slug, err=str(exc)[:120])
         y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
         open_by_side = {o["side"]: (oid, o) for oid, o in mk["orders"].items()
                         if o.get("open")}
@@ -825,6 +1154,13 @@ class Engine:
                         (not rewards_on() or
                          all(D(open_by_side[sd][1]["qty"]) == qty
                              for sd in ("YES", "NO"))))
+            if not in_place and rq is not None and reward_first_on() and \
+                    want is not None and not blocked:
+                # REWARD-FIRST: time on book is the score; no step ladder,
+                # no 1-tick chase -- hold unless >= REWARD_REPRICE_TICKS
+                # away / out of the target walk / maxSpread / pair cap
+                in_place = self._reward_hold(slug, mk, open_by_side, bbo,
+                                             tick, qty)
             if in_place:
                 return
             # OWNER 2026-11-14 "Pairs should be set simultaneously": never
@@ -886,9 +1222,26 @@ class Engine:
         lone_since = float(mk.setdefault("lone_since", time.time()))
         comp_ask = (bbo["ask"] if lag == "YES" else ONE - bbo["bid"])
         exit_s, exit_max = exit_rule(slug)
-        if exit_s > 0 and time.time() - lone_since >= exit_s \
-                and lead_px + comp_ask <= exit_max \
-                and need >= spec["min_qty"]:
+        exit_due = exit_s > 0 and time.time() - lone_since >= exit_s \
+            and need >= spec["min_qty"]
+        fee = taker_fee(comp_ask, need) if EXIT_FEE_AWARE else D(0)
+        fee_pc = (fee / need) if need > 0 else D(0)
+        exit_ok = exit_due and lead_px + comp_ask + fee_pc <= exit_max
+        if exit_due and EXIT_MAX_TAKER_QTY > 0 and need > EXIT_MAX_TAKER_QTY:
+            exit_ok = False
+            self._log_exit_skip(slug, mk, "exit_skipped_size", lead=lead,
+                                take_side=lag, qty=need,
+                                max_taker_qty=EXIT_MAX_TAKER_QTY,
+                                take_px=comp_ask, est_fee_usd=fee)
+        elif exit_due and not exit_ok and EXIT_FEE_AWARE and \
+                lead_px + comp_ask <= exit_max:
+            self._log_exit_skip(slug, mk, "exit_skipped_fee", lead=lead,
+                                take_side=lag, qty=need, lead_px=lead_px,
+                                take_px=comp_ask, est_fee_usd=fee,
+                                fee_per_contract=fee_pc,
+                                pair_cost_with_fee=lead_px + comp_ask + fee_pc,
+                                exit_max_pair=exit_max)
+        if exit_ok:
             if cur:                          # pull the resting maker first
                 self.v.cancel(cur[0])
                 st = self.v.status(cur[0])
@@ -899,9 +1252,13 @@ class Engine:
             log("EXIT_LONE_LEG", slug=slug, lead=lead, lead_px=lead_px,
                 take_side=lag, take_px=comp_ask, qty=need,
                 pair_cost=lead_px + comp_ask,
+                est_fee_usd=fee, fee_per_contract=fee_pc,
+                pair_cost_with_fee=lead_px + comp_ask + fee_pc,
+                exit_max_pair=exit_max, fee_aware=EXIT_FEE_AWARE,
                 age_s=round(time.time() - lone_since),
                 label="taker completion; realized pair loss bounded by "
-                      "EXIT_MAX_PAIR, settles at par")
+                      "EXIT_MAX_PAIR incl. ESTIMATED taker fee, settles "
+                      "at par")
             self.place(slug, lag, comp_ask, need, "two_sided_exit",
                        post_only=False)
             return
@@ -940,6 +1297,17 @@ class Engine:
         if need >= spec["min_qty"]:
             self.place(slug, lag, px, need, "two_sided_complete")
 
+    @staticmethod
+    def _log_exit_skip(slug: str, mk: Dict[str, Any], kind: str,
+                       **kw: Any) -> None:
+        """Once per (reason, qty, take price) per market: no log spam."""
+        key = f"{kind}:{kw.get('qty')}:{kw.get('take_px')}"
+        if mk.get("exit_skip_logged") == key:
+            return
+        mk["exit_skip_logged"] = key
+        log(kind, slug=slug, **kw,
+            label="no taker exit; maker completion keeps resting/stepping")
+
     def select(self, acct: Mapping[str, Any]) -> None:
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             return
@@ -976,38 +1344,70 @@ class Engine:
                 rewarded = self.reward_programs([s for *_x, s in scored])
             except Exception as exc:                  # noqa: BLE001
                 log("reward_discovery_error", err=str(exc)[:160])
-            # rewarded in-band markets FIRST, richest pool rate first; the
-            # rest keep today's order (tightest spread, nearest 0.50)
-            scored.sort(key=lambda r: (
-                0 if r[2] in rewarded else 1,
-                -rewarded[r[2]]["pool_rate_usd_s"] if r[2] in rewarded else 0,
-                r))
+            if not reward_first_on():
+                # rewarded in-band markets FIRST, richest pool rate first;
+                # the rest keep today's order (tightest spread, nearest 0.50)
+                scored.sort(key=lambda r: (
+                    0 if r[2] in rewarded else 1,
+                    -rewarded[r[2]]["pool_rate_usd_s"] if r[2] in rewarded
+                    else 0, r))
+        if reward_first_on() and rewarded:
+            # REWARD-FIRST: up to REWARD_MARKETS rewarded markets, best
+            # THEORETICAL expected reward first; then today's order with no
+            # reward tag (a rewarded market past the cap quotes normally)
+            ranked = self.reward_first_rank(rewarded) \
+                if self.rewarded_active() < REWARD_MARKETS else []
+            for slug, est in ranked:
+                if len(self.active()) >= MAX_MARKETS or \
+                        self.rewarded_active() >= REWARD_MARKETS:
+                    break
+                self._try_select(slug, acct, rewarded[slug], est)
+            for _sp, _c, slug in scored:
+                if len(self.active()) >= MAX_MARKETS:
+                    break
+                if slug not in self.b.d["markets"]:
+                    self._try_select(slug, acct, None)
+            return
         for _sp, _c, slug in scored:
             if len(self.active()) >= MAX_MARKETS:
                 break
-            if self.foreign_exposure(slug, acct):
-                log("skip_foreign_exposure", slug=slug)
-                continue
-            spec = self.v.spec(slug)
-            bbo = self.v.bbo(slug) if spec else None
-            if not spec or not bbo or open_prices(bbo["bid"], bbo["ask"],
-                                                   spec["tick"]) is None:
-                continue
-            mk = self.b.m(slug)
-            if slug in rewarded:
-                mk["reward"] = rewarded[slug]
-            self.b.save()
-            log("SELECTED", slug=slug, bid=bbo["bid"], ask=bbo["ask"],
-                tick=spec["tick"])
-            if slug in rewarded:
-                rp = rewarded[slug]
-                log("reward_program", slug=slug, at="select",
-                    program_id=rp["programId"], pool=rp["pool"],
-                    period=rp["period"], period_s=rp["period_s"],
-                    targetSize=rp["targetSize"], maxSpread=rp["maxSpread"],
-                    pool_rate_usd_s=rp["pool_rate_usd_s"],
-                    qualifies=None, est_share=None,
-                    label="THEORETICAL reward program; never P&L")
+            self._try_select(slug, acct, rewarded.get(slug))
+
+    def rewarded_active(self) -> int:
+        return sum(1 for s in self.active() if self.b.m(s).get("reward"))
+
+    def _try_select(self, slug: str, acct: Mapping[str, Any],
+                    rp: Optional[Mapping[str, Any]],
+                    est: Optional[Mapping[str, Any]] = None) -> bool:
+        if self.foreign_exposure(slug, acct):
+            log("skip_foreign_exposure", slug=slug)
+            return False
+        spec = self.v.spec(slug)
+        bbo = self.v.bbo(slug) if spec else None
+        if not spec or not bbo or open_prices(bbo["bid"], bbo["ask"],
+                                               spec["tick"]) is None:
+            return False
+        mk = self.b.m(slug)
+        if rp:
+            mk["reward"] = rp
+            if reward_first_on():
+                mk["reward_slot"] = True
+        self.b.save()
+        log("SELECTED", slug=slug, bid=bbo["bid"], ask=bbo["ask"],
+            tick=spec["tick"], **({"reward_first": True} if est else {}))
+        if rp:
+            log("reward_program", slug=slug, at="select",
+                program_id=rp["programId"], pool=rp["pool"],
+                period=rp["period"], period_s=rp["period_s"],
+                targetSize=rp["targetSize"], maxSpread=rp["maxSpread"],
+                pool_rate_usd_s=rp["pool_rate_usd_s"],
+                qualifies=None if est is None else est.get("share", 0) > 0,
+                est_share=None if est is None else est.get("share"),
+                inside_walk=None if est is None else est.get("inside_walk"),
+                est_usd_per_day=None if est is None
+                else est.get("est_usd_per_day"),
+                label="THEORETICAL reward program; never P&L")
+        return True
 
     def _latest_pairs(self) -> Dict[str, Any]:
         last: Dict[str, Any] = {}
@@ -1126,15 +1526,24 @@ class Engine:
                                 if self.b.m(s).get("reward")),
             reward_caps={"qty": REWARD_QTY,
                          "per_market_lone_leg": REWARD_PER_MARKET_CAP},
+            reward_first=reward_first_on(),
             reward_label="program rewards THEORETICAL; not in P&L")
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         log("boot", **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "depth_ticks": DEPTH_TICKS,
-                          "qty": QTY, "pair_cap": PAIR_CAP})
+                          "qty": QTY, "pair_cap": PAIR_CAP},
+            exit={"fee_aware": EXIT_FEE_AWARE, "taker_fee_rate": TAKER_FEE_RATE,
+                  "max_taker_qty": EXIT_MAX_TAKER_QTY},
+            reward_first=reward_first_on(),
+            **({"reward_first_cfg": {
+                "markets": REWARD_MARKETS, "periods": REWARD_FIRST_PERIODS,
+                "reprice_ticks": REWARD_REPRICE_TICKS, "qty": REWARD_QTY,
+                "floor_usd": REWARD_FLOOR_USD}} if reward_first_on() else {}))
         last_sel = 0.0
         last_hb = 0.0
+        last_acc = time.monotonic()
         while not self.stop:
             try:
                 if os.getenv(ENABLED_ENV, "").upper() != "YES":
@@ -1168,6 +1577,11 @@ class Engine:
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()
+                if reward_first_on() and \
+                        time.monotonic() - last_acc > REWARD_ACCRUAL_LOG_S:
+                    last_acc = time.monotonic()
+                    self.reward_accrual_report()
+                    self.b.save()
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
             try:
