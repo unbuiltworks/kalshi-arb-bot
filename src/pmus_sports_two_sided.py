@@ -1218,6 +1218,14 @@ class Engine:
             st = self.v.status(oid)
             self._record_fill(slug, o["side"], oid, st)
             o["open"] = st["open"]
+            if not st["open"] and D(o.get("filled") or "0") < D(o["qty"]):
+                # closed by the VENUE (we did not cancel it here): say why,
+                # so a silent re-place loop is visible (owner 2026-11-15)
+                log("order_closed_by_venue", slug=slug, side=o["side"],
+                    px=o["px"], qty=o["qty"], filled=o.get("filled"),
+                    state=st.get("state"), stage=o.get("stage"),
+                    age_s=round(time.time() - float(o.get("placed_at")
+                                                    or time.time())))
         self.b.save()
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug)
