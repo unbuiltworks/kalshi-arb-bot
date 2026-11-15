@@ -185,7 +185,14 @@ REWARD_ALLOW_ENV = "PMUS_TWO_SIDED_REWARD_ALLOW"
 #     from REWARD_FLOOR_CHECK_HOUR_ET on (REPORT ONLY, no size change).
 # Every figure is THEORETICAL and never enters P&L.
 REWARD_FIRST_ENV = "PMUS_TWO_SIDED_REWARD_FIRST"
-REWARD_MARKETS = int(os.getenv("PMUS_TWO_SIDED_REWARD_MARKETS", "4"))
+# OWNER 2026-11-15 "Focus on liquidity rewards": every slot may be a
+# rewarded market, and in reward-first mode NO non-rewarded market is
+# selected (their lone legs ate the TOTAL_CAP that reward quotes need).
+# PMUS_TWO_SIDED_REWARD_ONLY=0 restores filler pairs (e.g. CFB).
+REWARD_MARKETS = int(os.getenv("PMUS_TWO_SIDED_REWARD_MARKETS",
+                               str(MAX_MARKETS)))
+REWARD_ONLY = os.getenv("PMUS_TWO_SIDED_REWARD_ONLY", "1").strip().lower() \
+    in ("1", "yes", "true", "on")
 REWARD_FIRST_PERIODS = tuple(
     p.strip() for p in os.getenv("PMUS_TWO_SIDED_REWARD_FIRST_PERIODS",
                                  "live").split(",") if p.strip())
@@ -1611,12 +1618,16 @@ class Engine:
                         self.rewarded_active() >= REWARD_MARKETS:
                     break
                 self._try_select(slug, acct, rewarded[slug], est)
+            if REWARD_ONLY:
+                return
             for _sp, _c, slug in scored:
                 if self.full():
                     break
                 if slug not in self.b.d["markets"]:
                     self._try_select(slug, acct, None)
             return
+        if reward_first_on() and REWARD_ONLY:
+            return                     # no rewarded market in band right now
         for _sp, _c, slug in scored:
             if self.full():
                 break
@@ -1833,7 +1844,7 @@ class Engine:
                   "max_taker_qty": EXIT_MAX_TAKER_QTY, "exit_s": EXIT_S, "exit_s_cfb": EXIT_S_CFB, "complete_max_pair": COMPLETE_MAX_PAIR},
             reward_first=reward_first_on(),
             **({"reward_first_cfg": {
-                "markets": REWARD_MARKETS, "periods": REWARD_FIRST_PERIODS,
+                "markets": REWARD_MARKETS, "reward_only": REWARD_ONLY, "periods": REWARD_FIRST_PERIODS,
                 "reprice_ticks": REWARD_REPRICE_TICKS, "qty": REWARD_QTY,
                 "floor_usd": REWARD_FLOOR_USD}} if reward_first_on() else {}))
         last_sel = 0.0

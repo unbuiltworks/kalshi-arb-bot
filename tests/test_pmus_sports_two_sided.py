@@ -957,8 +957,9 @@ def test_quote_estimate_share_and_rate():
     assert abs(est["est_usd_per_day"] - est["rate_usd_s"] * 86400) < 1e-4
 
 
-def test_reward_first_ranking_prefers_inside_walk_and_higher_expected(rfeng, capsys):
+def test_reward_first_ranking_prefers_inside_walk_and_higher_expected(rfeng, capsys, monkeypatch):
     e, v = rfeng
+    monkeypatch.setattr(M, "REWARD_ONLY", False)       # filler pairs allowed
     e.select(v.account())
     rank = [ln for ln in capsys.readouterr().out.splitlines() if "REWARD_FIRST_RANK" in ln][0]
     top = [r["slug"] for r in json.loads(rank.split(" ", 1)[1])["top"]]
@@ -1315,3 +1316,11 @@ def test_ten_lot_lone_leg_exits_by_default_within_cap(reng, capsys):
     for _ in range(4):
         e.step_market("aec-rw")
     assert '"EXIT_LONE_LEG"' in capsys.readouterr().out
+
+
+def test_reward_only_selects_no_unrewarded_market(rfeng):
+    e, v = rfeng
+    assert M.REWARD_ONLY is True                         # default
+    e.select(v.account())
+    assert set(e.active()) == {"aec-rf1", "aec-rf2"}     # REWARD_MARKETS=2 here
+    assert all(e.b.m(s).get("reward") for s in e.active())
