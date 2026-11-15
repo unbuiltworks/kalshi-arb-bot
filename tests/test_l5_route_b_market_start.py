@@ -46,3 +46,7 @@ def test_sequential_book_must_follow_confirmed_opening_and_precede_expiry(durati
     assert gate(market, start + 30, start + 30)
     assert gate(market, start + 30, start + seconds - 1)
     assert not gate(market, start + 30, start + seconds)
+    assert not gate(market, start - 1, start + 30)  # pre-market fill is impossible
+    assert not gate(market, start + seconds, start + seconds + 1)
+    assert not gate(market, float("nan"), start + 30)
+    assert not gate(market, start + 30, float("inf"))
