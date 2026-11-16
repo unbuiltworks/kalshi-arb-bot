@@ -140,8 +140,20 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
     out["t_left_s"] = str(left)
     if left < ZERO:
         return no("WINDOW_OVER")
-    if left > _dec(late_window_s):
-        return no("TOO_EARLY", late_window_s=str(late_window_s))
+    #: AN UNSET LATE WINDOW REFUSES, and says so as itself.
+    #:
+    #: It used to fall through to DEFAULT_WINDOW_S, and a caller that
+    #: passed None reached `left > None` and raised. Worse, the default
+    #: of 30 is unreachable: the session steps only while
+    #: `t < window_s - CANCEL_LEAD_S`, so a 30-second window on a
+    #: 300-second market begins exactly where stepping ends. Every step
+    #: of every window then refused TOO_EARLY -- indistinguishable, in a
+    #: log, from a market with no opportunity in it.
+    lw = _dec(late_window_s)
+    if lw is None or lw <= ZERO:
+        return no("NO_LATE_WINDOW_SET")
+    if left > lw:
+        return no("TOO_EARLY", late_window_s=str(lw))
 
     if not isinstance(book, Mapping):
         return no("BOOK_UNUSABLE")

@@ -316,6 +316,83 @@ def straddle_price(default: Decimal = D("0")) -> Decimal:
     return raw
 
 
+#: THE LATE-FAVORITE's inputs. None of these had an environment reader,
+#: so every one of them sat at its dataclass default of 0 and the
+#: strategy was disabled three ways over: no edge margin (refused as
+#: NO_EDGE_MARGIN_SET), no clip (qty 0), and a late window that could
+#: never be stepped. The module deliberately has NO safe default for a
+#: margin, and these keep that property: unreadable leaves 0, and 0
+#: refuses.
+LATE_WINDOW_ENV = "L5_LATE_FAVORITE_WINDOW_S"
+LATE_CLIP_ENV = "L5_LATE_FAVORITE_CLIP_USD"
+LATE_EDGE_ENV = "L5_LATE_FAVORITE_MIN_EDGE_PER_SHARE"
+LATE_FEE_ENV = "L5_LATE_FAVORITE_FEE_PER_SHARE"
+
+#: a late window must leave at least this much stepping time, or the
+#: strategy is unreachable however its other inputs are set. The session
+#: steps `while clock() < window_start + 300 - CANCEL_LEAD_S`, so a
+#: window of exactly CANCEL_LEAD_S fires from the first instant the loop
+#: has already stopped. `l5_live_safety.strategy_can_fire` is the gate
+#: that refuses the unreachable combination; this bound keeps a typo
+#: from producing one silently.
+LATE_WINDOW_MIN_S = D("36")
+LATE_WINDOW_MAX_S = D("120")
+LATE_CLIP_MAX_USD = D("5.00")
+#: above this a "97c favourite" is not a favourite trade any more
+LATE_EDGE_MAX = D("0.20")
+
+
+def late_favorite_window_s(default: Decimal = D("0")) -> Decimal:
+    """How late the favourite may be bought, in seconds before close.
+
+    Bounded BELOW, not just above. A value at or under the cancel lead
+    describes a window the session has already stopped stepping in, and
+    the strategy would refuse TOO_EARLY on every step of every window
+    while reporting nothing unusual -- which is what the shipped default
+    of 30 did. Out of range keeps the default of 0, which refuses.
+    """
+    raw = _dec(os.environ.get(LATE_WINDOW_ENV))
+    if raw is None or not (LATE_WINDOW_MIN_S <= raw <= LATE_WINDOW_MAX_S):
+        return default
+    return raw
+
+
+def late_favorite_clip_usd(default: Decimal = D("0")) -> Decimal:
+    """Dollars one late-favourite order may spend. 0 places nothing."""
+    raw = _dec(os.environ.get(LATE_CLIP_ENV))
+    if raw is None or not (ZERO < raw <= LATE_CLIP_MAX_USD):
+        return default
+    return raw
+
+
+def late_favorite_min_edge_per_share(default: Decimal = D("0")) -> Decimal:
+    """The edge a level must clear after fees to be worth resting at.
+
+    THERE IS NO SAFE DEFAULT and this does not invent one. At 0.97 the
+    break-even win rate is about 97%: one loss cancels roughly 32 wins,
+    so the margin is the only thing standing between a modelled edge and
+    a correlated loss. Unreadable leaves 0, and the strategy refuses.
+    """
+    raw = _dec(os.environ.get(LATE_EDGE_ENV))
+    if raw is None or not (ZERO < raw <= LATE_EDGE_MAX):
+        return default
+    return raw
+
+
+def late_favorite_fee_per_share(default: Decimal = D("0")) -> Decimal:
+    """The venue's per-share commission, charged against every level.
+
+    Zero is legitimate here -- a maker order may genuinely pay no
+    commission -- so an unreadable value keeps the default rather than
+    refusing. It makes the EV gate STRICTER to overstate it, never
+    looser, and the gate still has to clear the margin above.
+    """
+    raw = _dec(os.environ.get(LATE_FEE_ENV))
+    if raw is None or raw < ZERO or raw > D("0.10"):
+        return default
+    return raw
+
+
 def completion_pair_cost(default: Decimal = D("0")) -> Decimal:
     """STRADDLE only: what a COMPLETED pair may cost, in total.
 
@@ -1491,7 +1568,22 @@ class Btc5mExecutor:
                         straddle_rungs=straddle_rungs(
                             self.params.straddle_rungs),
                         clip_usd=clip_usd(self.params.clip_usd,
-                                          STRADDLE_CLIP_MAX_USD))
+                                          STRADDLE_CLIP_MAX_USD),
+                        #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because
+                        #: `decide()` evaluates it inside the straddle arm
+                        #: and the arbiter chooses between the two. Without
+                        #: these four it is evaluated and refuses every
+                        #: time, which reads identically to "no
+                        #: opportunity" in a log.
+                        late_favorite_window_s=late_favorite_window_s(
+                            self.params.late_favorite_window_s),
+                        late_favorite_clip_usd=late_favorite_clip_usd(
+                            self.params.late_favorite_clip_usd),
+                        late_favorite_min_edge_per_share=(
+                            late_favorite_min_edge_per_share(
+                                self.params.late_favorite_min_edge_per_share)),
+                        late_favorite_fee_per_share=late_favorite_fee_per_share(
+                            self.params.late_favorite_fee_per_share))
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))

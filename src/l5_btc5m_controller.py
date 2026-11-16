@@ -126,6 +126,14 @@ class Params:
     straddle_p_lone_win: Optional[Decimal] = None
     straddle_fee_per_share: Decimal = D("0")
     straddle_min_ev_per_share: Decimal = D("0")
+    #: HOW LATE the favourite may be bought, in seconds before close.
+    #: 0 -- the default -- cannot fire and refuses, deliberately. The
+    #: module's own default of 30 is WORSE than refusing: the session
+    #: steps only while `t < window_s - CANCEL_LEAD_S` (270 of 300), and
+    #: a 30-second window fires from t=270, so the two never overlap. It
+    #: refused TOO_EARLY on every step of every window and looked like a
+    #: quiet market. Measured: zero steps at t>=270 across 20 windows.
+    late_favorite_window_s: Decimal = D("0")
     late_favorite_clip_usd: Decimal = D("0")
     late_favorite_fee_per_share: Decimal = D("0")
     late_favorite_min_edge_per_share: Decimal = D("0")
@@ -763,7 +771,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 loss_room_usd=loss_room_usd,
                 clip_usd=params.late_favorite_clip_usd,
                 fee_per_share=params.late_favorite_fee_per_share,
-                min_edge_per_share=params.late_favorite_min_edge_per_share)
+                min_edge_per_share=params.late_favorite_min_edge_per_share,
+                late_window_s=params.late_favorite_window_s)
             arb = AR.choose(
                 straddle_orders=want, completion_order=None,
                 completion_ev_usd=None, late=late,

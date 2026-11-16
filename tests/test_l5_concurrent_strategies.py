@@ -39,6 +39,17 @@ def params(**kw):
                 straddle_p_pair_natural=D("0.070"),
                 straddle_p_complete=D("0.131"),
                 straddle_p_lone_win=D("0.0981"),
+                #: A REACHABLE LATE WINDOW, which these tests previously
+                #: got from the module's default of 30 -- a value the
+                #: session can never step in, because the step loop ends
+                #: at `window_s - CANCEL_LEAD_S` = 270 and a 30-second
+                #: window begins exactly there. These tests call
+                #: `decide()` directly at t=275, past the end of the
+                #: stepping range, which is how the gap stayed hidden:
+                #: the concurrency they pin was real, the reachability
+                #: was not. `tests/test_l5_live_safety.py` now refuses
+                #: the unreachable combination outright.
+                late_favorite_window_s=D("45"),
                 late_favorite_clip_usd=D("1.94"),
                 late_favorite_fee_per_share=D("0"),
                 late_favorite_min_edge_per_share=D("0.005"),
