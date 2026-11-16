@@ -119,3 +119,42 @@ class TestAccountLanesAreDeclaredByTheFleet:
         forgetting the argument."""
         with pytest.raises(TypeError):
             F.child_env("BTC5M", "/state")
+
+
+class TestExplicitLedgerPaths:
+    """A lane already trading has settled rows under the path it was
+    deployed with. Moving it to a derived path resets `day_settled_pnl`
+    to 0 -- readable-but-empty answers 0, not None -- so the day-loss
+    guard fails OPEN. These overrides keep the running lane where it is."""
+
+    LED, AUT = "/state/btc5m/btc5m_ledger.json", "/state/btc5m/auth.jsonl"
+
+    def test_an_explicit_path_wins_over_the_derived_one(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", self.LED)
+        monkeypatch.setenv(F.AUTH_PREFIX + "BTC5M", self.AUT)
+        e = F.child_env("BTC5M", "/state", 4)
+        assert e["L5_BTC5M_LEDGER"] == self.LED
+        assert e["L5_LIVE_AUTH_LEDGER"] == self.AUT
+
+    def test_it_only_moves_the_lane_it_names(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", self.LED)
+        e = F.child_env("ETH5M", "/state", 4)
+        assert e["L5_BTC5M_LEDGER"] == "/state/eth/ledger.json"
+
+    def test_unset_and_blank_keep_the_derived_path(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", "   ")
+        assert F.child_env("BTC5M", "/state", 4)["L5_BTC5M_LEDGER"] \
+            == "/state/btc/ledger.json"
+
+    def test_an_override_cannot_make_two_lanes_share_a_ledger(self, monkeypatch):
+        """The collision check runs on the paths actually handed out."""
+        monkeypatch.setenv(F.LEDGER_PREFIX + "ETH5M", "/state/btc/ledger.json")
+        with pytest.raises(SystemExit) as exc:
+            F._distinct(["BTC5M", "ETH5M"], "/state")
+        assert "share" in str(exc.value)
+
+    def test_an_override_colliding_on_the_auth_ledger_is_refused(self, monkeypatch):
+        monkeypatch.setenv(F.AUTH_PREFIX + "SOL5M", "/state/xrp/auth.jsonl")
+        with pytest.raises(SystemExit) as exc:
+            F._distinct(["SOL5M", "XRP5M"], "/state")
+        assert "share" in str(exc.value)

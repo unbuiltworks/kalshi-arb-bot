@@ -53,6 +53,22 @@ STATE_ROOT_ENV = "L5_5M_FLEET_STATE_ROOT"
 DEFAULT_ROOT = "/state"
 #: per-asset approval, e.g. L5_CAMPAIGN_APPROVAL_ETH5M
 APPROVAL_PREFIX = "L5_CAMPAIGN_APPROVAL_"
+#: EXPLICIT PER-ASSET LEDGER PATHS, e.g. L5_5M_LEDGER_BTC5M. Derived
+#: paths are the rule; these exist for the ONE case the rule gets wrong.
+#:
+#: WHY. A lane that has already been trading has settled rows on the
+#: volume under whatever path it was deployed with. `day_settled_pnl`
+#: reads that lane's own day result from its ledger, and an EMPTY ledger
+#: is readable, so it answers 0 -- not None, which would refuse. Moving
+#: a running lane to a derived path therefore resets its day-loss guard
+#: to zero rather than failing closed, and it does so at the moment the
+#: fleet adds its siblings. BTC5m was deployed at
+#: /state/btc5m/btc5m_ledger.json, which no derivation produces.
+#:
+#: `_distinct` validates these exactly as it validates derived paths, so
+#: an override cannot be used to make two lanes share a ledger.
+LEDGER_PREFIX = "L5_5M_LEDGER_"
+AUTH_PREFIX = "L5_5M_AUTH_"
 
 
 def fleet() -> List[str]:
@@ -100,8 +116,11 @@ def child_env(strategy: str, root: str, lanes: int) -> Dict[str, str]:
     #: service's variables because the fleet is the only thing that
     #: knows how many children there actually are.
     env["L5_ACCOUNT_LANES"] = str(int(lanes))
-    env["L5_BTC5M_LEDGER"] = "%s/%s/ledger.json" % (root, row.asset)
-    env["L5_LIVE_AUTH_LEDGER"] = "%s/%s/auth.jsonl" % (root, row.asset)
+    #: an explicit path wins over the derived one; see LEDGER_PREFIX.
+    led = (os.environ.get(LEDGER_PREFIX + strategy) or "").strip()
+    aut = (os.environ.get(AUTH_PREFIX + strategy) or "").strip()
+    env["L5_BTC5M_LEDGER"] = led or "%s/%s/ledger.json" % (root, row.asset)
+    env["L5_LIVE_AUTH_LEDGER"] = aut or "%s/%s/auth.jsonl" % (root, row.asset)
     #: each asset carries its OWN owner approval. A fleet-wide approval
     #: would authorize one series and be refused by the other three, or
     #: -- worse, if the series check ever softened -- authorize all four
