@@ -87,3 +87,14 @@ analysis/l5/taker_entry/windows.json
 # reserves a window writes here. Committing one could seed a deployed ledger with
 # windows marked spent.
 campaign_windows/
+
+# 0x8dxd competitor capture: the verified wallet's venue-reported history.
+# trades.jsonl alone is 117MB -- past GitHub's 50MB warning and its 100MB
+# hard limit -- and a growing file costs a full new blob per commit, the
+# same reason data/policy_d_port tapes are excluded above. The capture is
+# regenerable from a public read-only API:
+#   python3 -I analysis/l5/competitor_0x8dxd_fetch.py
+# Identity is verified inside that script's docstring, not assumed: v2
+# returns name "0x8dxd" / pseudonym "Blushing-Fine" for proxy_wallet
+# 0x63ce342161250d705dc0b16df89036c8e5f9ba9a on three separate routes.
+data/l5/competitor_0x8dxd/*.jsonl
