@@ -11789,6 +11789,45 @@ ACCOUNTING_REBASES = [
                    "the halt's input, including the venue-confirmed ~20 of "
                    "real losses."),
     },
+    {
+        # OWNER 2026-11-16 (sports session, "Apply it"): the --from-now rebase
+        # above left realized_unattributed = +19.96, a residual that belongs
+        # to no UTC day, so realized_current_utc_day() fails closed (None)
+        # forever and the DAILY ceiling is unreadable -- nothing can arm.
+        # Zero it. attributed = cash_delta = 0 because the flat-account
+        # invariant requires a MEASURED delta and only one flat read exists
+        # (338.3456); asserting -22.10 would need a balance nobody read.
+        # Cost, stated to the owner: the venue-confirmed ~-22.10 of past
+        # losses permanently stops counting against the cumulative ceiling.
+        # Spec from the BTC5m session (local d5ffc0366, never pushed).
+        "id": "residual-zeroing-20261116",
+        "matches_realized_total": D("0.00"),
+        "attributed": D("0"),
+        "cash_delta": D("0"),
+        "anchor": {
+            "at_read_utc": "2026-11-16T00:11:52Z",
+            "at_read_balance": "338.3456",
+            "pre_arm_balance": "338.3456",
+            "at_disarm_balance": "338.3456",
+            "base_utc": ("CURRENT BALANCE IS THE BASE; both reads 338.3456, "
+                         "delta 0"),
+            "flat_at_each_read": ("zero open orders account-wide; venue "
+                                  "/v1/portfolio/positions zero non-zero rows "
+                                  "at 21:49Z and 22:49Z on 2026-11-15. This "
+                                  "service's own exposure book still counts "
+                                  "1.0000 in aec-testcr-afg-zim-2026-11-13, "
+                                  "which the venue says the account does not "
+                                  "hold: a phantom leg adopted and never "
+                                  "cleared."),
+        },
+        "reason": ("owner instruction 2026-11-16: zero the undated +19.96 "
+                   "residual left by upper-basis-contamination-20261115 so "
+                   "the DAILY loss figure is computable again. attributed "
+                   "and cash_delta are both 0 because the flat-account "
+                   "invariant requires a measured delta and no earlier flat "
+                   "read exists. The venue-confirmed ~-22.10 of past losses "
+                   "no longer counts against the cumulative ceiling."),
+    },
 ]
 
 

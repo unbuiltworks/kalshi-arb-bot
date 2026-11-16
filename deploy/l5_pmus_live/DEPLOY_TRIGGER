@@ -3703,3 +3703,7 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 # 2026-11-15T23:5xZ accounting rebase upper-basis-contamination-20261115
 # (owner-approved --from-now; realized -78.6836 -> 0, attributed -19.96).
 # No order path, limit, halt threshold or arming change.
+
+# 2026-11-16T00:2xZ accounting rebase residual-zeroing-20261116
+# (owner-approved; zero the undated +19.96 residual so the daily
+# loss figure is computable). No order path/limit/halt/arming change.
