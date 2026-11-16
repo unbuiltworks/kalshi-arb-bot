@@ -50,7 +50,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 # THE SIGNING MODULE IS OPTIONAL ON PURPOSE. The credential-free watchdog
 # image omits src/pmus_auth.py entirely, so this module must import without
@@ -1033,12 +1033,92 @@ def _managed_lanes_from_env() -> List[str]:
     return [u.strip() for u in raw.split(",") if u.strip()]
 
 
-def oracle_from_env() -> Optional[OwnershipOracle]:
-    """The executor's read-only registry, or None -- which disables cancel."""
-    url = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
-    if not url:
+class CompositeOracle:
+    """Ownership across SEVERAL executors' registries, unioned.
+
+    WHY THIS EXISTS. The oracle read exactly one URL, and the watchdog
+    cancels nothing it cannot claim: an order whose venue id is absent
+    from `claimed()` is recorded `not_ours: NOT_IN_OWNERSHIP_REGISTRY`,
+    the halt is asserted, and the order is LEFT RESTING. With one
+    account now carrying a second executor, that single URL forced a
+    choice between them -- whichever registry it named, the other
+    executor's orders became uncancellable. Repointing it is not a
+    configuration decision but a removal of protection from one lane.
+
+    A UNION IS THE SAFE DIRECTION. Ownership only ever grants the power
+    to cancel, so a claim that fails to arrive costs us a cancellation
+    we would have made; it can never cause one we should not. An
+    unreachable or stale registry therefore contributes NOTHING and is
+    reported, exactly as `l5_managed_lanes.lane_ids` does for lanes --
+    it never widens what is cancellable.
+
+    `last_refusal` aggregates the sources that gave nothing, because
+    "every registry says we own nothing" and "no registry could be
+    read" are opposite facts and the sweep has to tell them apart.
+    """
+
+    def __init__(self, oracles: Sequence[Any]) -> None:
+        if not oracles:
+            raise ValueError("CompositeOracle needs at least one oracle")
+        self.oracles = tuple(oracles)
+        self.last_refusal: Optional[str] = None
+
+    def claimed(self) -> Dict[str, Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        refusals, served = [], 0
+        for o in self.oracles:
+            try:
+                rows = o.claimed()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                refusals.append("%s:ORACLE_RAISED:%s"
+                                % (getattr(o, "url", "?"),
+                                   type(exc).__name__))
+                continue
+            why = getattr(o, "last_refusal", None)
+            if why:
+                refusals.append("%s:%s" % (getattr(o, "url", "?"), why))
+            if isinstance(rows, Mapping):
+                served += 1
+                #: FIRST CLAIM WINS. Two executors claiming one venue id
+                #: would be a ledger fault, not a merge to resolve
+                #: quietly, so it is recorded rather than overwritten.
+                for vid, row in rows.items():
+                    if vid in out and out[vid] != row:
+                        refusals.append("%s:DUPLICATE_CLAIM:%s"
+                                        % (getattr(o, "url", "?"), vid))
+                        continue
+                    out[vid] = row
+        self.last_refusal = "; ".join(refusals) if refusals else None
+        if served == 0:
+            #: nothing could be read at all: that is not "we own nothing"
+            self.last_refusal = (self.last_refusal
+                                 or "NO_REGISTRY_COULD_BE_READ")
+            return {}
+        return out
+
+
+def oracle_from_env() -> Optional[Any]:
+    """The executors' read-only registries, or None -- which disables cancel.
+
+    `L5_ORDER_REGISTRY_URL` takes a comma-separated list. ONE url builds
+    exactly the `OwnershipOracle` it always did, so an existing
+    deployment is byte-for-byte unchanged; several build a
+    `CompositeOracle` over them.
+    """
+    raw = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
+    urls = [u.strip() for u in raw.split(",") if u.strip()]
+    if not urls:
         return None
-    try:
-        return OwnershipOracle(url)
-    except BaseException:                                      # noqa: BLE001
+    built = []
+    for u in urls:
+        try:
+            built.append(OwnershipOracle(u))
+        except BaseException:                                  # noqa: BLE001
+            #: a url we cannot even construct an oracle for contributes
+            #: nothing; it must not take the others down with it
+            continue
+    if not built:
         return None
+    return built[0] if len(built) == 1 else CompositeOracle(built)
