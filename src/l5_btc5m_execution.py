@@ -72,6 +72,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 from src import l5_btc5m_controller as C
 from src import l5_live_authorization as AUTH
 from src import l5_origin as ORIGIN
+from src import l5_shared_reservation as RESV
 
 D = Decimal
 ZERO = D("0")
@@ -1303,6 +1304,32 @@ class Btc5mExecutor:
         except Exception as exc:                               # noqa: BLE001
             return refuse("AUTHORIZATION_UNAVAILABLE", client_order_id=coid,
                           detail=type(exc).__name__)
+        #: AFTER THE OWNER'S CLAIM, BEFORE THE VENUE. Authorization
+        #: precedes risk: shared budget is not spent on an order
+        #: nobody authorized. The cost is that a full budget burns
+        #: one single-use claim, which is bounded and shows in the
+        #: submission budget -- the other order would consume the
+        #: budget on unauthorized attempts instead.
+        #: THE ACCOUNT-WIDE RESERVATION, and the only place every lane
+        #: meets. The four lanes are separate processes with separate
+        #: ledgers, so `own_usd` above is this lane's alone: four lanes
+        #: each clearing a $10 cap against their own books commit $40
+        #: between them. This takes the worst case -- the WHOLE outlay,
+        #: because a losing contract pays nothing -- out of one shared
+        #: budget under an exclusive lock, before the venue is called.
+        #:
+        #: It is released by syncing to this ledger each step, never by a
+        #: timer: an order whose outcome is unknown keeps holding its
+        #: risk, because an uncertain order IS exposure.
+        resv = RESV.reserve(lane=STRATEGY, key=coid, usd=notional,
+                            now=now)
+        report["exposure"]["reservation"] = {
+            k: v for k, v in resv.items() if k != "ok"}
+        if not resv.get("ok"):
+            return refuse("SHARED_RESERVATION:%s" % resv.get("reason"),
+                          client_order_id=coid,
+                          detail={k: v for k, v in resv.items()
+                                  if k not in ("ok", "reason")})
         # THE LEDGER NEXT. If this write fails nothing is sent.
         self._ledger["orders"][coid] = {
             "client_order_id": coid, "market": market, "side": side,
@@ -1404,6 +1431,20 @@ class Btc5mExecutor:
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))
+
+    def sync_reservation(self) -> Dict[str, Any]:
+        """Release this lane's holds whose orders are no longer live.
+
+        ONE RULE FOR EVERY AWKWARD ENDING. A partial fill, a cancel that
+        raced a fill, a submission that timed out, a process that
+        restarted -- all of them are just "what does the durable ledger
+        still show OPEN", so none needs its own release call and none can
+        be forgotten on a path nobody thought about. It touches only this
+        lane's holds, so a sibling's room is never freed here.
+        """
+        live = [c for c, r in self._ledger["orders"].items()
+                if r.get("state") in OPEN]
+        return RESV.reconcile(lane=STRATEGY, live_keys=live)
 
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
              p_up: Any = None, p_source: Any = None,

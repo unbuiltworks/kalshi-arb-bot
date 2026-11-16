@@ -16,7 +16,9 @@ import collections
 import datetime as dt
 import inspect
 import json
+import os
 import re
+import tempfile
 from decimal import Decimal as D
 
 import pytest
@@ -244,6 +246,13 @@ def armed(monkeypatch, tmp_path):
                  starts=(W_1200, W_1205))
     for k, v in ARMED.items():
         monkeypatch.setenv(k, v)
+    #: THE SHARED ACCOUNT-WIDE RESERVATION. Every submission takes a hold
+    #: from it, and an UNSET path refuses -- a lane that cannot reach the
+    #: shared budget must not trade, because the per-lane caps alone
+    #: cannot bound the account. Each test gets its own file, so these
+    #: tests exercise the hold without sharing a budget between them.
+    monkeypatch.setenv("L5_SHARED_RESERVATION",
+                       str(tmp_path / "shared_reservation.json"))
 
 
 @pytest.fixture
@@ -1044,9 +1053,15 @@ class TestIsolationOfTheModule:
         # the pure controller, the authorization claim it must spend before
         # every submit, and the registry of strategy ids. Nothing that
         # holds a credential or builds a transport.
+        #
+        # `l5_shared_reservation` is on this list for the same reason as
+        # the others: stdlib-only, no credential, no venue schema. It is
+        # the only place all four lanes meet, and without it each lane's
+        # cap is its own books alone -- four lanes clearing one $10 cap
+        # against four separate ledgers commit $40 between them.
         assert re.findall(r"^from src import (.+)$", src, re.M) == [
             "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
-            "l5_origin as ORIGIN"]
+            "l5_origin as ORIGIN", "l5_shared_reservation as RESV"]
 
     def test_it_calls_only_the_six_transport_methods(self):
         """Five since this module was written, plus `account` -- the cash
@@ -1090,6 +1105,12 @@ def claim_locks(tmp_path):
 def locally_armed_only(monkeypatch):
     for k, v in ARMED.items():
         monkeypatch.setenv(k, v)
+    #: and the shared account-wide reservation, on its own file per call.
+    #: An UNSET path refuses every submission on purpose -- a lane that
+    #: cannot reach the shared budget must not trade -- so a test that
+    #: expects an order to reach the venue has to provide one.
+    monkeypatch.setenv("L5_SHARED_RESERVATION",
+                       os.path.join(tempfile.mkdtemp(), "resv.json"))
 
 
 class TestTheClaimGatesEverySubmit:

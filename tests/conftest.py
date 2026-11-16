@@ -15,6 +15,25 @@ def _reset_active_rung():
     ladder.set_active(None)
 
 
+@pytest.fixture(autouse=True)
+def _shared_reservation_file(tmp_path, monkeypatch):
+    """Every test gets its OWN account-wide reservation file.
+
+    `l5_shared_reservation` refuses every submission when its path is
+    unset -- deliberately, because a lane that cannot reach the shared
+    budget must not trade, and the per-lane caps alone cannot bound the
+    account. That makes an unset path a hard stop for any test that
+    expects an order to reach a venue.
+
+    Each test gets a fresh file, so no budget leaks between tests and a
+    hold taken in one cannot refuse an order in another. The fail-closed
+    behaviour itself is pinned in tests/test_l5_shared_reservation.py,
+    which sets the path explicitly and also covers it being unset.
+    """
+    monkeypatch.setenv("L5_SHARED_RESERVATION",
+                       str(tmp_path / "l5_shared_reservation.json"))
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
