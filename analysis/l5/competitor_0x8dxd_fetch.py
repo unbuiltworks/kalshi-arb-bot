@@ -12,7 +12,7 @@ import json, os, sys, time, urllib.parse, urllib.request
 
 BASE = "https://data-api.polymarket.com/v2"
 W = "0x63ce342161250d705dc0b16df89036c8e5f9ba9a"
-OUT = "/home/user/kalshi-arb-bot/data/l5/competitor_0x8dxd"
+OUT = os.environ.get("OUT_DIR") or "/home/user/kalshi-arb-bot/data/l5/competitor_0x8dxd"
 PAGE = 500
 
 
@@ -54,13 +54,19 @@ def page_all(route):
         cur = pg.get("next_cursor")
         if not cur:
             break
-        if pages > 300:
-            print("  %s: page cap reached" % route); break
+        if pages > PAGE_CAP:
+            print("  %s: page cap reached at %d pages" % (route, pages)); break
         time.sleep(0.2)
     return rows
 
 
-for route in ("trades", "activity", "positions"):
+#: a truncating cap is a data defect, not a safety limit -- it silently
+#: drops the OLDEST history because v2 pages newest-first. Raise it with
+#: PAGE_CAP and name the routes to re-capture on the command line.
+PAGE_CAP = int(os.environ.get("PAGE_CAP") or 300)
+ROUTES = tuple(sys.argv[1:]) or ("trades", "activity", "positions")
+
+for route in ROUTES:
     try:
         rows = page_all(route)
     except Exception as exc:
