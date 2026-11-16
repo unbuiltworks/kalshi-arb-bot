@@ -220,3 +220,74 @@ class TestTheFourFiveMinuteSeries:
             assert O.STRATEGY_COID_PREFIX[r.strategy] == r.coid_prefix
 
 
+
+
+# ======================================================================
+# ONE PROCESS, ONE SERIES -- CHOSEN BY CONFIGURATION
+# ======================================================================
+class TestTheExecutorsStrategyIsConfigurable:
+    """`L5_5M_STRATEGY` picks which 5-minute series this executor trades.
+
+    One process still trades ONE series; that is not negotiable, because
+    the client-order-id prefix is how the ownership registry tells lanes
+    apart. What changed is that the choice is configuration rather than a
+    welded-in constant, so ETH/SOL/XRP need another SERVICE, not another
+    executor."""
+
+    @staticmethod
+    def _reload(monkeypatch, value):
+        import importlib
+        from src import l5_btc5m_execution as X
+        if value is None:
+            monkeypatch.delenv("L5_5M_STRATEGY", raising=False)
+        else:
+            monkeypatch.setenv("L5_5M_STRATEGY", value)
+        return importlib.reload(X)
+
+    def test_unset_is_btc5m_so_every_deployment_is_unchanged(self, monkeypatch):
+        X = self._reload(monkeypatch, None)
+        assert (X.STRATEGY, X.COID_PREFIX, X.MARKET_PREFIX) == (
+            "BTC5M", "b5m-", "cpc-btc-updown-5m-")
+
+    @pytest.mark.parametrize("strategy,coid,prefix", [
+        ("ETH5M", "e5m-", "cpceth-eth-updown-5m-"),
+        ("SOL5M", "s5m-", "cpcsol-sol-updown-5m-"),
+        ("XRP5M", "x5m-", "cpcxrp-xrp-updown-5m-"),
+        ("eth5m", "e5m-", "cpceth-eth-updown-5m-"),      # case-insensitive
+    ])
+    def test_each_registered_5m_asset_can_be_selected(
+            self, monkeypatch, strategy, coid, prefix):
+        X = self._reload(monkeypatch, strategy)
+        assert X.STRATEGY == strategy.upper()
+        assert X.COID_PREFIX == coid and X.MARKET_PREFIX == prefix
+
+    def test_an_unregistered_name_refuses_at_import(self, monkeypatch):
+        """A service that cannot say which series it trades must not
+        start."""
+        with pytest.raises(ValueError, match="not a registered strategy"):
+            self._reload(monkeypatch, "DOGE5M")
+
+    def test_a_fifteen_minute_series_refuses(self, monkeypatch):
+        """The hazard this closes: pointing the FIVE-minute executor at the
+        15-minute lane would write b5m- orders into BTC15M's series, making
+        the two indistinguishable in the ownership registry -- which is
+        exactly what the watchdog latches on."""
+        with pytest.raises(ValueError, match="FIVE-MINUTE"):
+            self._reload(monkeypatch, "BTC15M")
+
+    def test_the_runner_follows_the_executor(self, monkeypatch):
+        """The runner must not keep its own idea of the series. It had two
+        hardcoded series="BTC5M" literals; both now read X.STRATEGY."""
+        import inspect
+        from src import l5_btc5m_runner as RN
+        src = inspect.getsource(RN)
+        assert 'series="BTC5M"' not in src
+        assert 'series=X.STRATEGY' in src
+
+    def test_selecting_an_asset_does_not_grant_it_capital(self, monkeypatch):
+        """Choosing a series is not funding one. Each still meets the same
+        $5 per-series ceiling, and arming is still a separate owner act."""
+        from src import l5_campaign_approval as CA
+        X = self._reload(monkeypatch, "ETH5M")
+        assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD[X.MARKET_PREFIX] == CA.D("5")
+        self._reload(monkeypatch, None)

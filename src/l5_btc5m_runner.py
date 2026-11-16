@@ -1227,7 +1227,7 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     # window of the evening. GET only; records the venue's own settlementPx.
     try:
         rec = recover_settlements(
-            ex, lambda slug: T.PmusTransport(market_slug=slug, series="BTC5M"))
+            ex, lambda slug: T.PmusTransport(market_slug=slug, series=X.STRATEGY))
         emit("L5_BTC5M_SETTLEMENT_RECOVERY", rec)
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -1276,7 +1276,7 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 os.environ[X.MARKET_ENV] = prev
 
     def _run_one(slug: str, max_windows: int) -> Dict[str, Any]:
-        t = T.PmusTransport(market_slug=slug, series="BTC5M")
+        t = T.PmusTransport(market_slug=slug, series=X.STRATEGY)
         # the socket stands in for a 404ing REST book, exactly as it does
         # for BTC15m. None leaves the old behaviour: the 404 simply fails.
         if auth_book is not None:

@@ -53,6 +53,11 @@ ORIGINS = tuple([r.strategy for r in _REG.REGISTRY]) + (MANUAL, UNKNOWN)
 #: "cpc-btc-updown-5m-" ended up in 34 files.
 STRATEGY_COID_PREFIX = {r.strategy: r.coid_prefix for r in _REG.REGISTRY}
 STRATEGY_SERIES = {r.strategy: r.prefix for r in _REG.REGISTRY}
+#: how long one window of each strategy's series lasts, in seconds. Exposed
+#: here so a consumer can check a horizon WITHOUT importing the registry --
+#: l5_btc5m_execution is pinned to importing only the controller, the
+#: authorization claim and this module.
+STRATEGY_HORIZON_S = {r.strategy: r.horizon_s for r in _REG.REGISTRY}
 
 #: cost-basis kinds, strongest first. Only the first is a measured cost.
 BASIS_AUTHENTICATED = "AUTHENTICATED_FILLS"

@@ -77,8 +77,45 @@ D = Decimal
 ZERO = D("0")
 CENT = D("0.01")
 
-#: this strategy's id prefix and series, from the one registry
-STRATEGY = ORIGIN.BTC5M
+#: WHICH 5-MINUTE STRATEGY THIS PROCESS IS.
+#:
+#: Was the constant ORIGIN.BTC5M. One process still trades ONE series --
+#: that has not changed and is not negotiable, because the coid prefix is
+#: how the ownership registry tells lanes apart. What changed is that the
+#: series is chosen by configuration instead of being welded in, so ETH,
+#: SOL and XRP need another SERVICE rather than another executor.
+#:
+#: UNSET IS BTC5M, so every existing deployment is unchanged.
+#:
+#: IT REFUSES AT IMPORT, which is deliberate: a service that cannot say
+#: which series it trades must not start, and a bad value here would
+#: otherwise surface as orders placed under the wrong strategy's coid
+#: prefix -- indistinguishable in the ownership registry, which is what
+#: the watchdog latches on.
+#:   * an unregistered name refuses;
+#:   * a name whose horizon is not 300s refuses, so this executor can
+#:     never be pointed at the 15-minute lane and write b5m- orders into
+#:     the other strategy's series.
+STRATEGY_ENV = "L5_5M_STRATEGY"
+
+
+def _strategy() -> str:
+    want = str(os.environ.get(STRATEGY_ENV, "")).strip().upper()
+    if not want:
+        return ORIGIN.BTC5M
+    if want not in ORIGIN.STRATEGY_SERIES:
+        raise ValueError(
+            "%s=%r is not a registered strategy; known: %s"
+            % (STRATEGY_ENV, want, sorted(ORIGIN.STRATEGY_SERIES)))
+    if ORIGIN.STRATEGY_HORIZON_S.get(want) != 300.0:
+        raise ValueError(
+            "%s=%r is a %ss series; this executor is the FIVE-MINUTE one "
+            "and must not trade another lane's series"
+            % (STRATEGY_ENV, want, ORIGIN.STRATEGY_HORIZON_S.get(want)))
+    return want
+
+
+STRATEGY = _strategy()
 COID_PREFIX = ORIGIN.STRATEGY_COID_PREFIX[STRATEGY]
 MARKET_PREFIX = ORIGIN.STRATEGY_SERIES[STRATEGY]
 LIVE_ENV = "L5_BTC5M_LIVE"
