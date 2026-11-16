@@ -71,6 +71,7 @@ ENTRY_MODES = (EDGE_GATED, ACCUMULATE, STRADDLE)
 
 from src import l5_late_favorite as LF          # noqa: E402  (pure, stdlib)
 from src import l5_strategy_arbiter as AR       # noqa: E402  (pure, stdlib)
+from src import l5_straddle_ev as SEV           # noqa: E402  (pure, stdlib)
 
 ZERO = D("0")
 ONE = D("1")
@@ -113,6 +114,18 @@ class Params:
     #: a zero clip buys nothing, a zero edge margin returns
     #: NO_EDGE_MARGIN_SET, and an unset continuation estimate returns
     #: NO_CONTINUATION_ESTIMATE rather than making a handoff look free.
+    #: STRADDLE ENTRY-EV GATE. Every rate defaults to None, which
+    #: REFUSES: the gate exists so a rung is bought because it is worth
+    #: buying, and a guessed rate would manufacture the edge it tests
+    #: for. Measured over 503 shadow windows, for the owner to set
+    #: deliberately: p_pair_natural 0.070, p_complete 0.131,
+    #: p_lone_win 0.0981 -- which price a 0.08/0.08 rung at +9.55c a
+    #: share against a 0.83 completion target.
+    straddle_p_pair_natural: Optional[Decimal] = None
+    straddle_p_complete: Optional[Decimal] = None
+    straddle_p_lone_win: Optional[Decimal] = None
+    straddle_fee_per_share: Decimal = D("0")
+    straddle_min_ev_per_share: Decimal = D("0")
     late_favorite_clip_usd: Decimal = D("0")
     late_favorite_fee_per_share: Decimal = D("0")
     late_favorite_min_edge_per_share: Decimal = D("0")
@@ -541,6 +554,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         ladder = sum(_rungs, ZERO)
         qty = _floor_qty(_dec(params.clip_usd) / ladder, params)
         want = []
+        ev_rungs = []
         why_s = "STRADDLE_RESTING"
         if qty <= 0:
             why_s = "CLIP_TOO_SMALL"
@@ -566,6 +580,40 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         continue                  # that rung already rests
                     if r * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"
+                        continue
+                    #: IS THIS RUNG WORTH BUYING? Priced before any room
+                    #: is committed. "The cap allows it" is not a reason
+                    #: to buy something -- the reflex that opened a rung
+                    #: whenever the clock and the cap permitted produced
+                    #: 15 consecutive lone legs live, each settling
+                    #: -0.16. A nonpositive OR UNKNOWN value refuses:
+                    #: "we could not tell" is not a reason either.
+                    _ev = SEV.entry_ev(
+                        price=r, other_price=r,
+                        pair_target=params.straddle_completion_pair_cost,
+                        p_pair_natural=params.straddle_p_pair_natural,
+                        #: ZERO WHEN COMPLETION IS OFF. A completion
+                        #: probability beside a disabled completion is a
+                        #: contradiction, and crediting one would price
+                        #: a payoff this configuration cannot collect.
+                        #: With it off the rung is worth its natural
+                        #: pair plus its lone leg, and nothing else.
+                        p_complete=(params.straddle_p_complete
+                                    if (_cpc is not None and _cpc > ZERO)
+                                    else ZERO),
+                        p_lone_win=params.straddle_p_lone_win,
+                        fee_per_share=params.straddle_fee_per_share)
+                    _ok = SEV.admits(
+                        _ev,
+                        min_ev_per_share=params.straddle_min_ev_per_share)
+                    ev_rungs.append({"price": str(r),
+                                     "ev_per_share": (
+                                         None if _ev.get("ev_per_share") is None
+                                         else str(_ev["ev_per_share"])),
+                                     "admitted": bool(_ok["ok"]),
+                                     "reason": _ok.get("reason")})
+                    if not _ok["ok"]:
+                        why_s = "ENTRY_EV_%s" % _ok["reason"]
                         continue
                     room -= r * qty
                     want.append(_place(side, r, qty, "STRADDLE_LEG",
@@ -732,6 +780,22 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             elif arb["why"] == "STRADDLE_AND_LATE_FAVORITE":
                 why_s = "STRADDLE_AND_LATE_FAVORITE"
         ev_s = {"completion": comp,
+                "entry_ev": {"rungs": ev_rungs,
+                             "rates": {
+                                 "p_pair_natural": (
+                                     None if params.straddle_p_pair_natural
+                                     is None else
+                                     str(params.straddle_p_pair_natural)),
+                                 "p_complete": (
+                                     None if params.straddle_p_complete is None
+                                     else str(params.straddle_p_complete)),
+                                 "p_lone_win": (
+                                     None if params.straddle_p_lone_win is None
+                                     else str(params.straddle_p_lone_win)),
+                                 "fee_per_share":
+                                     str(params.straddle_fee_per_share),
+                                 "min_ev_per_share":
+                                     str(params.straddle_min_ev_per_share)}},
                 "late_favorite": {k: v for k, v in late.items()
                                   if k != "order"},
                 "arbiter": None if arb is None else {

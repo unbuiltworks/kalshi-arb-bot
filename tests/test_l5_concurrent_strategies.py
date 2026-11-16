@@ -29,9 +29,16 @@ def _on(monkeypatch):
 
 
 def params(**kw):
+    #: the entry-EV gate is configured with the MEASURED rates because
+    #: these tests are about concurrency, not the gate. Unset rates
+    #: refuse every rung -- its own behaviour, covered in
+    #: tests/test_l5_straddle_ev.py.
     base = dict(entry_mode=C.STRADDLE, straddle_price=D("0.08"),
                 clip_usd=D("0.16"), hedge_enabled=False, reserve_mode="NONE",
                 max_exposure_usd=D("5.00"),
+                straddle_p_pair_natural=D("0.070"),
+                straddle_p_complete=D("0.131"),
+                straddle_p_lone_win=D("0.0981"),
                 late_favorite_clip_usd=D("1.94"),
                 late_favorite_fee_per_share=D("0"),
                 late_favorite_min_edge_per_share=D("0.005"),

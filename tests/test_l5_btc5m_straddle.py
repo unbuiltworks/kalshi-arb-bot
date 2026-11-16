@@ -38,9 +38,17 @@ FLAT = {C.UP: {"qty": "0", "cost": "0"}, C.DOWN: {"qty": "0", "cost": "0"}}
 
 
 def params(**kw):
+    #: THE ENTRY-EV GATE IS CONFIGURED HERE because these tests are
+    #: about the LADDER's mechanics, not about the gate. The rates are
+    #: the measured ones (503 shadow windows); an unset rate refuses
+    #: every rung, which is the gate's own behaviour and is covered in
+    #: tests/test_l5_straddle_ev.py instead.
     base = dict(entry_mode=C.STRADDLE, straddle_price=D("0.08"),
                 clip_usd=D("0.40"), hedge_enabled=False, reserve_mode="NONE",
-                max_exposure_usd=D("3.00"))
+                max_exposure_usd=D("3.00"),
+                straddle_p_pair_natural=D("0.070"),
+                straddle_p_complete=D("0.131"),
+                straddle_p_lone_win=D("0.0981"))
     base.update(kw)
     return C.Params(**base)
 

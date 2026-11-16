@@ -35,6 +35,7 @@ COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
 # import -- which is what test_the_image_ships_the_whole_closure pins.
 COPY src/l5_late_favorite.py src/l5_late_favorite.py
 COPY src/l5_strategy_arbiter.py src/l5_strategy_arbiter.py
+COPY src/l5_straddle_ev.py src/l5_straddle_ev.py
 COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
 COPY src/l5_5m_fleet.py src/l5_5m_fleet.py
 COPY src/l5_btc5m_runner.py src/l5_btc5m_runner.py
