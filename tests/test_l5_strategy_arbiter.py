@@ -29,7 +29,7 @@ def blocked_late(ev="0.06", coid=COID):
     return {"ok": False, "reason": "SIDE_ALREADY_WORKED", "order": None,
             "blocked_order": CAND, "ev_usd": ev,
             "conflicts": [{"side": "UP", "price": "0.08", "qty": "2",
-                           "client_order_id": coid}]}
+                           "id": coid}]}
 
 
 def call(**kw):
@@ -96,7 +96,7 @@ class TestTheHandoffIsAComparisonNotAClock:
     def test_a_clearly_better_candidate_cancels_the_exact_rung(self):
         r = call(late=blocked_late(ev="0.50"))
         assert r["action"] == A.HANDOFF
-        assert r["cancels"] == [{"op": "CANCEL", "client_order_id": COID}]
+        assert r["cancels"] == [{"op": "CANCEL", "id": COID}]
 
     def test_the_replacement_is_NOT_emitted_in_the_same_step(self):
         """The whole safety property: the order is deferred until a later
@@ -156,9 +156,9 @@ class TestCancellationIsExactOrItDoesNotHappen:
     def test_only_the_named_orders_are_cancelled(self):
         late = blocked_late(ev="99")
         late["conflicts"].append({"side": "UP", "price": "0.12", "qty": "2",
-                                  "client_order_id": "b5m-" + "z" * 24})
+                                  "id": "b5m-" + "z" * 24})
         r = call(late=late)
-        assert [c["client_order_id"] for c in r["cancels"]] == [
+        assert [c["id"] for c in r["cancels"]] == [
             COID, "b5m-" + "z" * 24]
 
     def test_the_opposite_side_is_never_cancelled(self):
@@ -167,7 +167,7 @@ class TestCancellationIsExactOrItDoesNotHappen:
         -- so no action here touches it."""
         late = blocked_late(ev="99")
         r = call(late=late)
-        assert all(c["client_order_id"] == COID for c in r["cancels"])
+        assert all(c["id"] == COID for c in r["cancels"])
         assert all("DOWN" not in str(c) for c in r["cancels"])
 
 

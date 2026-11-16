@@ -259,11 +259,15 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
             #: order and nothing else.
             out.update(ok=False, reason="SIDE_ALREADY_WORKED",
                        order=None, blocked_order=candidate,
+                       #: `id` is the key `l5_btc5m_controller._read_resting`
+                       #: normalises to and `_cancel_all` emits, so an exact
+                       #: cancel here uses the SAME identifier the executor
+                       #: already cancels by. A second naming would be a
+                       #: second chance to cancel the wrong order.
                        conflicts=[{"side": str((o or {}).get("side")),
                                    "price": str((o or {}).get("price")),
                                    "qty": str((o or {}).get("qty")),
-                                   "client_order_id": (
-                                       (o or {}).get("client_order_id"))}
+                                   "id": (o or {}).get("id")}
                                   for o in conflicts][:4])
             return out
         out.update(ok=True, reason=None, order=candidate)

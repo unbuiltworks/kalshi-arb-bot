@@ -230,7 +230,7 @@ class TestItWillNotStackOnASideTheStraddleIsWorking:
 
     def test_a_resting_order_on_the_favourite_refuses(self, on):
         r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
-                           "client_order_id": "b5m-" + "a" * 24}])
+                           "id": "b5m-" + "a" * 24}])
         assert r["ok"] is False and r["reason"] == "SIDE_ALREADY_WORKED"
         assert r["order"] is None
         assert [c["price"] for c in r["conflicts"]] == ["0.08"]
@@ -239,7 +239,7 @@ class TestItWillNotStackOnASideTheStraddleIsWorking:
         """The arbiter compares this candidate against the resting rung's
         continuation value. "Always refuse" is not a comparison."""
         r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
-                           "client_order_id": "b5m-" + "b" * 24}])
+                           "id": "b5m-" + "b" * 24}])
         assert r["blocked_order"]["side"] == "UP"
         assert r["blocked_order"]["post_only"] is True
         assert r["blocked_order"]["strategy"] == "LATE_FAVORITE"
@@ -249,10 +249,10 @@ class TestItWillNotStackOnASideTheStraddleIsWorking:
         """Exact-order cancellation needs the id, not a side."""
         coid = "b5m-" + "c" * 24
         r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
-                           "client_order_id": coid},
+                           "id": coid},
                           {"side": "DOWN", "price": "0.08", "qty": "2",
-                           "client_order_id": "b5m-" + "d" * 24}])
-        assert [c["client_order_id"] for c in r["conflicts"]] == [coid]
+                           "id": "b5m-" + "d" * 24}])
+        assert [c["id"] for c in r["conflicts"]] == [coid]
 
     def test_ev_usd_scales_with_the_clip(self, on):
         one = call(clip_usd="0.97", book=dict(BOOK, ask="0.99"))

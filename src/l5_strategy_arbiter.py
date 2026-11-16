@@ -154,15 +154,14 @@ def choose(*, straddle_orders: Any, completion_order: Any,
     #: STRIPPED, because a whitespace-only id is truthy and would emit a
     #: cancel carrying a blank id -- which the venue would either reject
     #: or, worse, interpret.
-    ids = [str(c.get("client_order_id") or "").strip() for c in conflicts]
+    ids = [str(c.get("id") or "").strip() for c in conflicts]
     if not ids or any(not i for i in ids):
         return pick(KEEP_STRADDLE, "CONFLICT_NOT_IDENTIFIED",
                     orders=s_orders, conflicts=conflicts)
     #: THE REPLACEMENT IS NOT EMITTED HERE. A later step places it, once
     #: `resting` no longer shows these ids.
     picked = pick(HANDOFF, "LATE_FAVORITE_BEATS_CONTINUATION",
-                  cancels=[{"op": "CANCEL", "client_order_id": i}
-                           for i in ids])
+                  cancels=[{"op": "CANCEL", "id": i} for i in ids])
     #: TOP-LEVEL, not inside `evaluation`: it is what the NEXT step will
     #: place, so the executor reads it as data rather than as commentary.
     #: It is deliberately NOT in `orders` -- nothing here may submit it.
