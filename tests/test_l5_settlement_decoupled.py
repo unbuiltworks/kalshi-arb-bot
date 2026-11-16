@@ -326,3 +326,86 @@ class TestReconciliationIsBoundedAndRolloverTakesPriority:
             passes += 1
         assert ex.pending_settlement() == []
         assert passes == 3                      # 20 markets, 8 a pass
+
+
+class TestTheSessionHonoursItsSettlementWait:
+    """These EXECUTE the real settle path.
+
+    Two NameErrors hid in it: `settle_wait_s` was threaded into the
+    Session call but not into `one_window`, and then not into `_run_one`
+    either. Both survived a green suite and a string-matching "call
+    graph check", because nothing ran the code. The second one killed a
+    four-lane shadow run on its first window. Asserting that a name
+    appears in a source file is not a test; calling the function is.
+    """
+
+    @staticmethod
+    def _session(transport, wait, now_s):
+        import types
+        return RUN.Session(
+            market="cpc-btc-updown-5m-2026-11-16-1600z",
+            executor=types.SimpleNamespace(), transport=transport,
+            root="/tmp", book_fn=lambda m: {}, p_fn=lambda m, w, n: {},
+            risk_fn=lambda n, o: {}, halt_fn=lambda: {},
+            clock=lambda: now_s, sleep=lambda s: None,
+            settle_wait_s=wait)
+
+    @staticmethod
+    def _after_window():
+        return dt.datetime(2026, 11, 16, 16, 10,
+                           tzinfo=dt.timezone.utc).timestamp()
+
+    def test_a_zero_wait_asks_the_venue_exactly_once(self):
+        """Not zero times -- a while-loop on an elapsed deadline would
+        report the window unsettled without ever asking."""
+        v = Venue()
+        got = self._session(v, 0.0, self._after_window()).settle()
+        assert len(v.asks) == 1
+        assert got["settled"] is False
+        assert got["reason"] == "VENUE_SETTLEMENT_NOT_SEEN"
+
+    def test_a_zero_wait_still_takes_a_ready_settlement(self):
+        """Closing fast must not mean refusing a settlement the venue is
+        already offering."""
+        import types
+        v = Venue()
+        m = "cpc-btc-updown-5m-2026-11-16-1600z"
+        v.ready[m] = "1"
+        seen = {}
+
+        def _settle(market, up_won):
+            seen["market"], seen["up_won"] = market, up_won
+            return {"settlement_pnl": D("0.84"), "provisional": False}
+        sess = self._session(v, 0.0, self._after_window())
+        sess.ex = types.SimpleNamespace(settle=_settle)
+        got = sess.settle()
+        assert len(v.asks) == 1
+        assert got["settled"] is True
+        assert seen == {"market": m, "up_won": True}
+
+    def test_the_default_is_still_the_long_wait(self):
+        """The bounded campaign trades a fixed list and has nothing to
+        miss by waiting, so its behaviour is unchanged."""
+        import types
+        sess = RUN.Session(
+            market="cpc-btc-updown-5m-2026-11-16-1600z",
+            executor=types.SimpleNamespace(), transport=Venue(),
+            root="/tmp", book_fn=lambda m: {}, p_fn=lambda m, w, n: {},
+            risk_fn=lambda n, o: {}, halt_fn=lambda: {},
+            clock=lambda: 0.0, sleep=lambda s: None)
+        assert sess.settle_wait_s == RUN.SETTLE_WAIT_S == 1800.0
+
+    def test_one_window_threads_the_wait_all_the_way_down(self):
+        """The signature chain `one_window` -> `_run_one` -> `Session`.
+        Both NameErrors lived in that chain; this walks it by signature
+        rather than by grep."""
+        import inspect
+        src = inspect.getsource(RUN.main)
+        #: every definition and call in the chain must carry the name
+        assert "def one_window(slug: str, max_windows: int,\n" in src
+        assert "settle_wait_s: float = SETTLE_WAIT_S" in src
+        assert "_run_one(slug, max_windows, settle_wait_s)" in src
+        assert "def _run_one(slug: str, max_windows: int,\n" in src
+        assert "settle_wait_s=settle_wait_s)" in src
+        #: and the persistent caller passes 0
+        assert "settle_wait_s=0.0" in src

@@ -1558,14 +1558,15 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         prev = os.environ.get(X.MARKET_ENV)
         os.environ[X.MARKET_ENV] = slug
         try:
-            return _run_one(slug, max_windows)
+            return _run_one(slug, max_windows, settle_wait_s)
         finally:
             if prev is None:
                 os.environ.pop(X.MARKET_ENV, None)
             else:
                 os.environ[X.MARKET_ENV] = prev
 
-    def _run_one(slug: str, max_windows: int) -> Dict[str, Any]:
+    def _run_one(slug: str, max_windows: int,
+                 settle_wait_s: float = SETTLE_WAIT_S) -> Dict[str, Any]:
         t = T.PmusTransport(market_slug=slug, series=X.STRATEGY)
         # the socket stands in for a 404ing REST book, exactly as it does
         # for BTC15m. None leaves the old behaviour: the 404 simply fails.
