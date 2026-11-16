@@ -301,3 +301,94 @@ class TestReadOnly:
         monkeypatch.setattr(REC, "_get", boom)
         row, health = row_at()
         assert row["market"] == SLUG and health["ok"] is True
+
+
+# ===================================================================
+# THE LATE-FAVOURITE CANDIDATES: the unbiased denominator
+# ===================================================================
+class TestTheRecordedCandidates:
+    """A competitor's +$310 over 40 SELECTED WINNING positions
+    establishes nothing: the losing and never-filled windows are missing
+    from it. These rows are written every poll of every window whatever
+    happens, so those windows are in the sample by construction.
+    """
+
+    @staticmethod
+    def _cand(p_up, up_bid, up_ask):
+        from decimal import Decimal as D
+        return REC._candidates({"ok": True, "p_up": p_up}, up_bid, up_ask)
+
+    def test_all_three_levels_are_priced(self):
+        c = self._cand(0.999, 0.90, 0.92)
+        assert [l["price"] for l in c["levels"]] == ["0.97", "0.98", "0.99"]
+
+    def test_the_ev_matches_the_live_gates_own_formula(self):
+        """One formula, not two: a second copy here would be a second
+        answer, and the recorded economics would drift from the gate."""
+        from decimal import Decimal as D
+        from src import l5_late_favorite as LF
+        c = self._cand(0.995, 0.90, 0.92)
+        for lvl in c["levels"]:
+            want = LF.ev_per_share(D("0.995"), D(lvl["price"]), D("0"))
+            assert D(lvl["ev_per_share"]) == want
+
+    def test_break_even_is_the_price_when_there_is_no_fee(self):
+        c = self._cand(0.999, 0.90, 0.92)
+        assert all(l["break_even_p"] == l["price"] for l in c["levels"])
+
+    def test_a_level_at_or_above_the_ask_is_marked_crossing(self):
+        c = self._cand(0.999, 0.96, 0.98)
+        by = {l["price"]: l for l in c["levels"]}
+        assert by["0.97"]["would_cross"] is False
+        assert by["0.98"]["would_cross"] is True
+        assert by["0.99"]["would_cross"] is True
+        assert by["0.98"]["inferred_opportunity"] is False
+
+    def test_a_thin_edge_is_not_an_opportunity(self):
+        """0.98 win on a 0.98 price is zero EV, so it is recorded and NOT
+        flagged."""
+        c = self._cand(0.98, 0.90, 0.995)
+        by = {l["price"]: l for l in c["levels"]}
+        assert by["0.98"]["inferred_opportunity"] is False
+        assert by["0.97"]["inferred_opportunity"] is True
+
+    def test_the_down_side_is_priced_off_the_up_bid(self):
+        c = self._cand(0.001, 0.02, 0.05)
+        assert c["side"] == "DOWN"
+        assert c["favourite_ask"] == "0.98"
+
+    def test_fillability_is_never_claimed(self):
+        """The public feed publishes no size, so queue position and fill
+        probability are unobservable. Writing a number here would
+        manufacture the evidence these rows exist to supply honestly."""
+        c = self._cand(0.999, 0.90, 0.92)
+        assert c["fillable"] is None
+        assert "no public size" in c["fillable_reason"]
+
+    def test_our_own_fill_is_never_claimed(self):
+        c = self._cand(0.999, 0.90, 0.92)
+        assert c["our_fill"] is None
+        assert "holds no account" in c["our_fill_reason"]
+
+    def test_the_three_are_distinct_fields(self):
+        """An inferred opportunity is a statement about the BOOK. It is
+        not a fill, and it is not OUR fill."""
+        c = self._cand(0.999, 0.90, 0.92)
+        #: the ask must sit ABOVE the level for a maker bid to rest
+        c = self._cand(0.9999, 0.98, 0.995)
+        assert any(l["inferred_opportunity"] for l in c["levels"])
+        assert c["fillable"] is None and c["our_fill"] is None
+
+    @pytest.mark.parametrize("p,bid,ask,reason", [
+        (None, 0.90, 0.92, "NO_PROBABILITY"),
+        (0.99, None, 0.92, "NO_TWO_SIDED_QUOTE"),
+        (0.99, 0.90, None, "NO_TWO_SIDED_QUOTE"),
+    ])
+    def test_a_missing_input_is_named_not_guessed(self, p, bid, ask, reason):
+        c = REC._candidates({"ok": p is not None, "p_up": p}, bid, ask)
+        assert c["reason"] == reason and c["levels"] == []
+        assert c["fillable"] is None
+
+    def test_an_unusable_probability_yields_no_levels(self):
+        c = REC._candidates({"ok": False, "p_up": 0.99}, 0.90, 0.92)
+        assert c["levels"] == [] and c["reason"] == "NO_PROBABILITY"

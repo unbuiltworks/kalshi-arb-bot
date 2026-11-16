@@ -44,6 +44,10 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_btc5m_controller as C
 from src import l5_btc5m_execution as X
+from src import l5_persistent_mode as PMODE
+from src import l5_shared_reservation as RESV
+from src import l5_live_safety as SAFE
+from src import l5_order_registry_server as REG
 from src import l5_live_authorization as AUTH
 
 D = Decimal
@@ -306,6 +310,42 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
 
     class H(BaseHTTPRequestHandler):
         def do_GET(self) -> None:                              # noqa: N802
+            #: THE OWNERSHIP REGISTRY, at the path the watchdog reads.
+            #:
+            #: The watchdog cancels nothing it cannot claim: an order
+            #: absent from `oracle.claimed()` is `not_ours:
+            #: NOT_IN_OWNERSHIP_REGISTRY`, the halt is asserted and the
+            #: order is LEFT RESTING. This lane served only
+            #: `/btc5m_fills`, so its venue ids could never be claimed
+            #: and the watchdog could halt for it but never cancel.
+            #:
+            #: `l5_order_registry_server.registry` is reused verbatim
+            #: rather than shaped here, so this document is the same one
+            #: the other executor publishes -- same terminal filtering
+            #: (`live_orders()` is NEW/LIVE/UNCERTAIN only, because
+            #: publishing a terminal id would let the watchdog act on an
+            #: order that no longer exists), same `readable: false` when
+            #: the ledger cannot be read, same `as_of_utc` so a wedged
+            #: publisher reads as STALE rather than as a fresh empty
+            #: claim, and the same `submission_disabled` lock.
+            #:
+            #: `risk` is deliberately NOT passed: the account-wide risk
+            #: block stays the responsibility of the service that
+            #: enforces those limits, and this lane is its consumer.
+            #: Publishing our own would give the account two answers.
+            #:
+            #: It does NOT claim `manages_own_resting`, so this lane is
+            #: never exempted from the watchdog's overdue/age latch. The
+            #: aim is coverage, and that flag would remove it.
+            if self.path.split("?", 1)[0].lstrip("/") == REG.REGISTRY_KEY:
+                body, code = json.dumps(REG.registry(ex),
+                                        default=str).encode(), 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path.split("?", 1)[0].lstrip("/") != "btc5m_fills":
                 body, code = b'{"error":"no such key"}', 404
             else:
@@ -709,6 +749,292 @@ def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]
 
 # ------------------------------------------------------------ the session
 
+#: ======================= PERSISTENT ROLLOVER =========================
+#:
+#: The bounded path gets its window list from the approval, which
+#: ENUMERATES every window by name -- so it cannot roll past its own list
+#: and stops at NOT_AFTER. Persistent rollover takes the window from the
+#: CLOCK instead, and asks before each one whether it may still trade.
+#:
+#: The latch is re-read EVERY window, not once at start. A STOP or a
+#: HALT written while window N is running stops window N+1, and the loop
+#: exits rather than idling: a process that keeps looping after a safety
+#: halt is one that will resume the moment somebody clears the latch for
+#: an unrelated reason.
+#:
+#: NOTHING HERE REARMS. The only exits are a latch, a lost envelope, or
+#: the operator stopping the process, and none of them is followed by a
+#: retry.
+ROLLOVER_GRACE_S = 20.0
+
+
+def persistent_next(*, now: dt.datetime, prefix: str,
+                    horizon_s: float = 300.0,
+                    grace_s: float = ROLLOVER_GRACE_S) -> Dict[str, Any]:
+    """The window this lane should trade now, or why there is none.
+
+    A window with less than `grace_s` left is NOT offered: entering one
+    about to close buys the worst of both ends -- no time to work an
+    order, and a settlement immediately after. The next one is offered
+    instead, with the seconds to wait for it.
+    """
+    if not isinstance(now, dt.datetime) or now.tzinfo is None:
+        return {"ok": False, "reason": "NOW_UNREADABLE", "market": None}
+    if not isinstance(prefix, str) or not prefix:
+        return {"ok": False, "reason": "PREFIX_UNREADABLE", "market": None}
+    try:
+        h = float(horizon_s)
+        g = float(grace_s)
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "HORIZON_UNREADABLE", "market": None}
+    if h <= 0 or g < 0 or g >= h:
+        return {"ok": False, "reason": "HORIZON_UNREADABLE", "market": None}
+    epoch = now.timestamp()
+    start = epoch - (epoch % h)
+    left = (start + h) - epoch
+    wait = 0.0
+    if left < g:
+        start += h
+        wait = start - epoch
+    at = dt.datetime.fromtimestamp(start, UTC)
+    return {"ok": True, "reason": None,
+            "market": "%s%s-%sz" % (prefix, at.strftime("%Y-%m-%d"),
+                                     at.strftime("%H%M")),
+            "window_start_utc": at.isoformat(),
+            "wait_s": round(wait, 2),
+            "seconds_left_now": round(left, 2)}
+
+
+def persistent_gate(*, now: dt.datetime) -> Dict[str, Any]:
+    """May this lane trade another window at all?
+
+    Re-read every window. The envelope AND the durable state must both
+    permit it, and a LATCHED state exits the loop rather than pausing
+    it -- see the module note above.
+    """
+    env = PMODE.envelope(now=now)
+    if not env.get("ok"):
+        return {"ok": False, "exit": True, "reason": str(env.get("reason"))}
+    st = PMODE.read_state()
+    if not st.get("ok"):
+        #: an unreadable state could be hiding a latch
+        return {"ok": False, "exit": True, "reason": str(st.get("reason"))}
+    if st["state"] in PMODE.LATCHED:
+        return {"ok": False, "exit": True, "reason": "STATE_%s" % st["state"],
+                "state": st["state"]}
+    if st["state"] != PMODE.ARMED:
+        #: MONITOR observes and submits nothing, so it waits rather than
+        #: exiting: an operator may arm it without restarting anything.
+        return {"ok": False, "exit": False, "reason": "STATE_NOT_ARMED",
+                "state": st["state"]}
+    return {"ok": True, "exit": False, "reason": None,
+            "state": st["state"], "scope": env["scope"]}
+
+
+#: HOW MUCH RECONCILIATION ONE ITERATION MAY DO.
+#:
+#: A backlog must never delay the next five-minute window. If the venue
+#: goes quiet for an hour, four lanes accumulate twelve pending markets
+#: each; attempting all of them with a slow venue would spend the gap
+#: between windows on settlement and miss the next market -- the stall
+#: this decoupling exists to remove, reappearing as a backlog instead of
+#: a single blocking poll.
+#:
+#: So a pass is bounded two ways and NEW MARKET ROLLOVER TAKES PRIORITY:
+#: at most RECONCILE_MAX_MARKETS attempts and at most RECONCILE_BUDGET_S
+#: of wall clock, whichever runs out first. Nothing is dropped -- the
+#: pending set is DERIVED from the ledger, so a market not reached this
+#: pass is simply reached in a later one.
+#:
+#: OLDEST FIRST, which is why starvation is impossible: slugs sort
+#: chronologically, a settled market leaves the set, so every pass makes
+#: progress on the front of the queue and no market can be skipped
+#: forever.
+RECONCILE_MAX_MARKETS = 8
+RECONCILE_BUDGET_S = 5.0
+
+
+def reconcile_pending(ex: Any, transport: Any, *,
+                      max_markets: int = RECONCILE_MAX_MARKETS,
+                      budget_s: float = RECONCILE_BUDGET_S,
+                      clock: Callable[[], float] = time.time
+                      ) -> Dict[str, Any]:
+    """ONE non-blocking settlement attempt per unsettled market.
+
+    This is what makes rollover possible: a window closes, stays
+    PENDING, and is settled here later while the loop trades the next
+    one. It reuses `Btc5mExecutor.settle`, which is already idempotent --
+    the same outcome twice writes nothing and the OTHER outcome raises,
+    so a duplicate settlement event cannot double-count and a
+    contradictory one cannot reverse a settled result.
+
+    THE PENDING SET IS DERIVED from the durable ledger -- filled orders
+    in a market absent from `settled` -- so a crash between closing and
+    settling loses nothing and a restart picks the window up again.
+
+    NOTHING IS RELEASED WITHOUT THE VENUE. A market the venue cannot
+    settle, or settles to something that is not 0 or 1, stays pending
+    and keeps its cost reserved. `up_won` is only ever the venue's own
+    settlement price, never a mark or a guess.
+    """
+    out: Dict[str, Any] = {"pending": [], "settled": [],
+                           "unreadable": [], "deferred": []}
+    try:
+        markets = list(ex.pending_settlement())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"pending": [], "settled": [], "unreadable": [],
+                "deferred": [], "error": type(exc).__name__}
+    started = clock()
+    out["considered"] = len(markets)
+    #: OLDEST FIRST: slugs sort chronologically, so the front of the
+    #: queue is the most overdue and progress is guaranteed.
+    for n, m in enumerate(sorted(markets)):
+        if n >= max(1, int(max_markets)):
+            out["deferred"] = [{"market": x, "why": "WORKLOAD_BUDGET"}
+                               for x in sorted(markets)[n:]]
+            break
+        if n and (clock() - started) >= float(budget_s):
+            out["deferred"] = [{"market": x, "why": "TIME_BUDGET"}
+                               for x in sorted(markets)[n:]]
+            break
+        verdict = None
+        try:
+            verdict = transport.settlement(m)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["pending"].append({"market": m,
+                                   "why": "VENUE_ERROR:%s" % type(exc).__name__})
+            continue
+        if not (isinstance(verdict, Mapping) and verdict.get("terminal")):
+            out["pending"].append({"market": m,
+                                   "why": "VENUE_SETTLEMENT_NOT_SEEN"})
+            continue
+        px = _dec(verdict.get("settlement_px"))
+        if px not in (D("0"), D("1")):
+            #: not binary is not a settlement
+            out["unreadable"].append({"market": m, "settlement_px": str(px)})
+            continue
+        try:
+            rec = ex.settle(m, px == D("1"))
+        except ValueError as exc:
+            out["unreadable"].append({"market": m, "error": str(exc)[:120]})
+            continue
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["unreadable"].append({"market": m,
+                                      "error": type(exc).__name__})
+            continue
+        if rec.get("provisional"):
+            #: an order of ours is still open in it, so it is not over
+            out["pending"].append({"market": m, "why": "ORDERS_UNRESOLVED"})
+            continue
+        out["settled"].append({"market": m,
+                               "settlement_pnl": str(rec.get("settlement_pnl")),
+                               "already": bool(rec.get("already_settled"))})
+    return out
+
+
+#: the refusal `_submit` emits when the shared hold cannot be taken
+BUDGET_REFUSAL = "SHARED_RESERVATION:RESERVATION_WOULD_EXCEED_CAP"
+
+
+def _budget_exhausted(events: Any) -> Dict[str, Any]:
+    """Every order this window lost to the shared budget, with its EV.
+
+    Read from the step records already emitted, so nothing new is
+    stored and a window that refused nothing reports a plain zero.
+    """
+    out: Dict[str, Any] = {"count": 0, "notional_usd": "0", "orders": [],
+                           "note": ("orders this lane was authorized to "
+                                    "place and could not fund because a "
+                                    "sibling lane held the room; the "
+                                    "allocation is arrival-order, so a "
+                                    "high count with high EV is the case "
+                                    "for ranking by expected value")}
+    total = D(0)
+    for rec in (events or ()):
+        if not isinstance(rec, Mapping):
+            continue
+        for r in (rec.get("refused") or ()):
+            if not isinstance(r, Mapping):
+                continue
+            if str(r.get("reason")) != BUDGET_REFUSAL:
+                continue
+            detail = r.get("detail") or {}
+            intent = r.get("order") or {}
+            n = _dec(detail.get("adding"))
+            if n is not None:
+                total += n
+            out["count"] += 1
+            out["orders"].append({
+                "side": intent.get("side"),
+                "price": str(intent.get("price")),
+                "qty": str(intent.get("qty")),
+                "strategy": intent.get("strategy") or intent.get("reason"),
+                "notional_usd": None if n is None else str(n),
+                "aggregate_at_the_time_usd": detail.get("aggregate_usd"),
+                "cap_usd": detail.get("cap_usd"),
+                "t_in_window_s": rec.get("t_in_window_s"),
+            })
+    out["notional_usd"] = str(total)
+    return out
+
+
+def _attribution_block(ex: Any, market: Any, settled: Any,
+                       fees: Any) -> Dict[str, Any]:
+    """`Btc5mExecutor.attribution` plus each strategy's own venue fees.
+
+    Returns {} rather than guessing when the market, the settlement
+    outcome or the fee set is unreadable: a wrong attribution is worse
+    than an absent one.
+    """
+    try:
+        won = (settled or {}).get("up_won")
+        rows = ex.attribution(str(market),
+                              won if isinstance(won, bool) else None)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"error": type(exc).__name__}
+    per_order = (fees or {}).get("per_order") or {}
+    complete = bool((fees or {}).get("complete"))
+    orders = getattr(ex, "_ledger", {}).get("orders") or {}
+    out: Dict[str, Any] = {}
+    for who, row in rows.items():
+        fee = D(0)
+        unreadable = []
+        for coid, r in orders.items():
+            if r.get("market") != str(market):
+                continue
+            if str(r.get("strategy") or "") != who:
+                continue
+            if coid in per_order:
+                try:
+                    fee += D(str(per_order[coid]))
+                except Exception:                              # noqa: BLE001
+                    unreadable.append(coid)
+        net = row.get("settled_net_usd")
+        out[who] = {
+            "filled_qty": str(row["filled_qty"]),
+            "cost_total_usd": str(row["cost_total"]),
+            "up_qty": str(row[C.UP]["qty"]),
+            "down_qty": str(row[C.DOWN]["qty"]),
+            "redemption_total_usd": (None if row["redemption_total"] is None
+                                     else str(row["redemption_total"])),
+            "venue_fees_usd": str(fee),
+            "fees_complete": complete and not unreadable,
+            #: settled NET of this strategy's own fees, and None unless
+            #: both the outcome and every fee it owes are readable.
+            "settled_net_usd": (None if net is None or not complete
+                                or unreadable else str(net - fee)),
+        }
+    return out
+
+
 class Session:
     """One window. Every collaborator is injectable; nothing is global."""
 
@@ -723,7 +1049,24 @@ class Session:
                  armed_fn: Optional[Callable[[], bool]] = None,
                  arm_fn: Optional[Callable[[Any], Any]] = None,
                  bounds_fn: Optional[Callable[[str], Any]] = None,
-                 max_windows: int = 1) -> None:
+                 max_windows: int = 1,
+                 settle_wait_s: float = SETTLE_WAIT_S) -> None:
+        #: HOW LONG CLOSING MAY WAIT FOR THE VENUE.
+        #:
+        #: The bounded campaign keeps the original 1800s: it trades a
+        #: fixed list and has nothing to miss by waiting. PERSISTENT
+        #: rollover passes 0, because `one_window` was SYNCHRONOUS
+        #: THROUGH SETTLEMENT and that made the loop unable to advance
+        #: while a prior window waited -- observed 2026-11-16: four lanes
+        #: entered 1520z, closed clean, and then sat in this poll for the
+        #: rest of a 23-minute run, completing 4 of 16 windows. Windows
+        #: are 5 minutes apart and this wait was bounded at 30, so any
+        #: settlement slower than the gap silently skipped windows.
+        #:
+        #: At 0 the window closes and the market stays PENDING; the loop
+        #: reconciles it out of band. Its cost stays reserved until the
+        #: venue settles it, so advancing never frees risk.
+        self.settle_wait_s = float(settle_wait_s)
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
@@ -943,12 +1286,48 @@ class Session:
                 book = self.book_fn(self.market)
                 est = self.p_fn(self.market, ws, now) or {}
                 p_up = est.get("p_up") if est.get("ok") else None
+                #: TOP-OF-BOOK SIZE, PROMOTED FROM THE LOG TO THE
+                #: DECISION. The PUBLIC market endpoint publishes no size
+                #: at any level -- depth is null in all 27,425 aligned
+                #: rows -- so a strategy that requires executable size on
+                #: the side it is buying could never be satisfied from it.
+                #: `book_depth()` reads the AUTHENTICATED socket this
+                #: session already runs, which does carry size, and until
+                #: now nothing but the log read it.
+                #:
+                #: Only the SIZES are taken. bid/ask still come from the
+                #: public endpoint, because replacing them would change
+                #: what the straddle prices against, and that is a
+                #: different change needing its own evidence. The auth
+                #: book's own quotes are recorded beside them so a
+                #: divergence is visible rather than silent.
+                #:
+                #: FAIL CLOSED: an unreadable socket yields no sizes, the
+                #: late favourite refuses NO_DEPTH, and nothing is placed.
+                #: Absent size is never read as unlimited size.
+                #: AND THE TWO SOURCES MUST DESCRIBE THE SAME BOOK.
+                #: `depth_for_pricing` compares the authenticated
+                #: snapshot's OWN bid/ask -- which this call used to
+                #: discard -- against the public quote we price against,
+                #: and enforces the freshness of both. A complementary
+                #: token, transposed sides, another market or a stale
+                #: socket each size NOTHING and are named individually,
+                #: so a wiring error is never reported as latency.
+                depth = self.book_depth()
+                sized = SAFE.depth_for_pricing(book=None, public=book,
+                                               auth=depth)
                 rep = self.ex.step(
                     market=self.market,
                     book={"bid": book.get("bid"), "ask": book.get("ask"),
-                          "age_s": book.get("age_s")},
+                          "age_s": book.get("age_s"),
+                          "bid_shares": sized.get("bid_shares"),
+                          "ask_shares": sized.get("ask_shares")},
                     t_in_window_s=now - ws, p_up=p_up,
                     p_source=("VENUE_INDEX" if p_up is not None else None),
+                    #: the index age the estimator already measured, and
+                    #: the account-wide loss room `gates()` already read
+                    p_age_s=est.get("index_age_s"),
+                    loss_room_usd=g.get("loss_room_usd"),
                     exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
                 self._log("L5_BTC5M_STEP", {
@@ -990,6 +1369,12 @@ class Session:
                     #: only feature class the gate sweep left untested and
                     #: the one the public tape cannot carry. Observational.
                     "depth": self.book_depth(),
+                    #: WHY SIZE WAS WITHHELD, when it was. Without this a
+                    #: window that placed nothing for want of trustworthy
+                    #: depth looks identical to one with no opportunity.
+                    "depth_for_pricing": {
+                        k: v for k, v in (sized or {}).items()
+                        if k != "checked"},
                     "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
                               ("why", "cap_usd", "completion_reserve_usd",
                                "room_usd", "price", "qty")},
@@ -1022,14 +1407,21 @@ class Session:
 
     def settle(self) -> Dict[str, Any]:
         ws = window_start(self.market).timestamp()
-        until = ws + WINDOW_S + SETTLE_WAIT_S
+        until = ws + WINDOW_S + self.settle_wait_s
         verdict = None
-        while self.clock() < until:
+        #: ALWAYS ONE ATTEMPT, then poll until the deadline. With
+        #: `settle_wait_s` 0 the deadline is already past, so a
+        #: while-loop would make NO attempt at all and report the window
+        #: unsettled without having asked -- which would leave every
+        #: persistent window pending even when the venue was ready.
+        while True:
             try:
                 verdict = self.t.settlement(self.market)
             except BaseException:                              # noqa: BLE001
                 verdict = None
             if verdict and verdict.get("terminal"):
+                break
+            if self.clock() >= until:
                 break
             self.sleep(SETTLE_POLL_S)
         if not (verdict and verdict.get("terminal")):
@@ -1187,6 +1579,30 @@ class Session:
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]
                                 else str(pnl - fee_total)),
+            #: PER STRATEGY, and EXACT rather than apportioned: every
+            #: share was bought by one order belonging to one strategy,
+            #: and a winning share redeems $1 whoever bought it. Fees are
+            #: keyed by order id, so they attribute exactly too. Pairing
+            #: is deliberately absent -- a matched pair can be one
+            #: strategy's leg against another's, so `matched_qty` and
+            #: `pair_cost` stay market-level facts above.
+            "by_strategy": _attribution_block(self.ex, self.market,
+                                              settled, fees),
+            #: OPPORTUNITIES LOST TO AN EXHAUSTED SHARED BUDGET.
+            #:
+            #: The four lanes are separate processes competing for one
+            #: reservation, so the room goes to whichever ASKS FIRST --
+            #: not to the best expected value. That is first-come-first-
+            #: served, and it is neither equal allocation nor EV
+            #: allocation. Before changing it, measure whether it costs
+            #: anything: these are the orders a lane wanted, was
+            #: authorized to place, and could not fund because a sibling
+            #: had the room.
+            #:
+            #: A high count with high rejected EV is the case for
+            #: cross-lane allocation. A count near zero means arrival
+            #: order never mattered and the work would be wasted.
+            "budget_exhausted": _budget_exhausted(self.events),
             "labels": (
                 "venue-confirmed orders and fills only. settled_net_usd is "
                 "settlement arithmetic on confirmed fills minus the venue's "
@@ -1205,6 +1621,7 @@ class Session:
 
 def main() -> int:            # pragma: no cover - the service entrypoint
     from src import l5_btc_reference as REF
+    from src import l5_series_registry as REG
     from src import l5_pmus_transport as T
     market = (os.getenv(X.MARKET_ENV) or "").strip()
     root = (os.getenv(AUTH.LEDGER_ENV) or "/state/btc5m/auth.jsonl")
@@ -1218,7 +1635,19 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
-    ref = REF.Reference(window_s=WINDOW_S)
+    #: THE FEED FOR THIS LANE'S ASSET. One Reference polls one index
+    #: series; the asset and its index symbol come from the one registry
+    #: table, together, because an index that did not belong to the asset
+    #: would price the wrong thing while looking healthy. BTC resolves to
+    #: btc/BRTI, so the existing lane is unchanged; ETH/SOL/XRP were
+    #: reporting p_up null with UNEXPECTED_INDEX purely because this
+    #: construction could only ever ask for Bitcoin's.
+    _row = REG.BY_STRATEGY[X.STRATEGY]
+    ref = REF.Reference(window_s=WINDOW_S, asset=_row.asset,
+                        index_symbol=_row.index_symbol)
+    print("L5_BTC5M_REFERENCE %s" % {
+        "strategy": X.STRATEGY, "asset": _row.asset,
+        "index_symbol": _row.index_symbol, "window_s": WINDOW_S}, flush=True)
 
     # SETTLEMENT RECOVERY, before the first window. A window whose process
     # died in the middle never recorded its settlement, and that market's
@@ -1250,7 +1679,9 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         emit("L5_BTC5M_AUTH_BOOK", {"started": False,
                                     "why": type(exc).__name__})
 
-    def one_window(slug: str, max_windows: int) -> Dict[str, Any]:
+    def one_window(slug: str, max_windows: int,
+                   settle_wait_s: float = SETTLE_WAIT_S
+                   ) -> Dict[str, Any]:
         # THE EXECUTOR'S OWN LOCK NAMES THIS WINDOW. `arming_refusal`
         # refuses every submission unless `L5_BTC5M_MARKET` is set AND
         # equals the market being traded -- an ADDITIONAL lock in front of
@@ -1268,14 +1699,15 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         prev = os.environ.get(X.MARKET_ENV)
         os.environ[X.MARKET_ENV] = slug
         try:
-            return _run_one(slug, max_windows)
+            return _run_one(slug, max_windows, settle_wait_s)
         finally:
             if prev is None:
                 os.environ.pop(X.MARKET_ENV, None)
             else:
                 os.environ[X.MARKET_ENV] = prev
 
-    def _run_one(slug: str, max_windows: int) -> Dict[str, Any]:
+    def _run_one(slug: str, max_windows: int,
+                 settle_wait_s: float = SETTLE_WAIT_S) -> Dict[str, Any]:
         t = T.PmusTransport(market_slug=slug, series=X.STRATEGY)
         # the socket stands in for a 404ing REST book, exactly as it does
         # for BTC15m. None leaves the old behaviour: the 404 simply fails.
@@ -1291,7 +1723,8 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 own_unaccounted=own),
             halt_fn=lambda: shared_halt(
                 (os.getenv(HALT_URL_ENV) or "").strip()),
-            max_windows=max_windows)
+            max_windows=max_windows,
+            settle_wait_s=settle_wait_s)
         return sess.run()
 
     # WHICH WINDOWS. Either the ONE the owner named, which is the original
@@ -1314,6 +1747,130 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                                utc=dt.datetime.now(UTC).isoformat()))
     if reach.get("ok") is False:
         emit("L5_BTC5M_BUDGET_SHORT", reach)
+
+    #: ============== PERSISTENT MODE TAKES OVER THE LOOP ===============
+    #:
+    #: Only when an envelope is configured. With none, everything below
+    #: is byte-for-byte the bounded campaign it has always been.
+    #:
+    #: It rolls on the CLOCK and asks `persistent_gate` before every
+    #: window, so a STOP or HALT written mid-window stops the next one.
+    #: A latch EXITS -- it does not idle and retry -- because a loop that
+    #: survives a safety halt resumes the moment the latch is cleared for
+    #: some other reason. MONITOR waits, submitting nothing, so an
+    #: operator can arm without a restart.
+    #:
+    #: THE PRIOR WINDOW IS RECONCILED BEFORE THE NEXT ONE GETS ANY
+    #: BUDGET: `sync_reservation` releases only holds the ledger shows
+    #: finished, so an uncertain order or unsettled inventory still
+    #: occupies the shared account cap when the next window asks for
+    #: room. Rolling forward never frees money that is still at risk.
+    if str(os.environ.get(PMODE.ENVELOPE_ENV) or "").strip():
+        row = REG.BY_STRATEGY[X.STRATEGY]
+        emit("L5_BTC5M_PERSISTENT_START",
+             {"strategy": X.STRATEGY, "series": row.prefix,
+              "utc": dt.datetime.now(UTC).isoformat()})
+        ref.start()
+        while True:
+            now_ = dt.datetime.now(UTC)
+            gate = persistent_gate(now=now_)
+            if not gate["ok"]:
+                emit("L5_BTC5M_PERSISTENT_GATE",
+                     dict(gate, utc=now_.isoformat()))
+                if gate.get("exit"):
+                    #: NOTHING REARMS. The loop ends; it does not wait
+                    #: for somebody to clear a latch.
+                    return 0
+                time.sleep(15.0)
+                continue
+            #: THE WATCHDOG'S HAND, TURNED INTO A DURABLE LATCH.
+            #:
+            #: The watchdog is a separate service and a Railway volume
+            #: attaches to ONE service, so it cannot write this lane's
+            #: state file -- its own docstring says so. What it CAN do is
+            #: assert the halt record over HTTP and cancel the exact ids
+            #: it observed resting, and it can never clear either.
+            #:
+            #: So its assertion is read here and converted into the
+            #: persistent latch plus a full unwind. That makes the
+            #: watchdog able to enforce the same safe halt an operator
+            #: can, through the only channel the architecture allows,
+            #: and the latch then outlives the HTTP record: a halt that
+            #: later becomes readable-and-clear does NOT resume trading.
+            wd = shared_halt((os.getenv(HALT_URL_ENV) or "").strip())
+            if not wd.get("ok"):
+                PMODE.write_state(
+                    PMODE.HALTED,
+                    why="WATCHDOG:%s" % wd.get("reason"),
+                    now=now_)
+                unwound = ex.stop(reason="WATCHDOG:%s" % wd.get("reason"),
+                                  now=now_)
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": wd.get("reason"), "source": "WATCHDOG",
+                      "stop": unwound, "utc": now_.isoformat()})
+                return 0
+            nxt = persistent_next(now=now_, prefix=row.prefix,
+                                  horizon_s=row.horizon_s)
+            if not nxt["ok"]:
+                emit("L5_BTC5M_PERSISTENT_GATE",
+                     {"reason": nxt["reason"], "utc": now_.isoformat()})
+                time.sleep(5.0)
+                continue
+            if nxt["wait_s"] > 0:
+                time.sleep(min(nxt["wait_s"], 30.0))
+                continue
+            #: settle_wait_s 0: close the window and move on. The market
+            #: stays PENDING and is settled out of band below, which is
+            #: what lets the loop reach the next five-minute window at
+            #: all. Its cost stays reserved meanwhile.
+            rep = one_window(nxt["market"], 1, settle_wait_s=0.0)
+            #: SETTLE WHAT THE VENUE IS READY TO SETTLE, for every window
+            #: still pending -- including ones from earlier iterations
+            #: and from before a restart. One attempt each, never a wait.
+            #: `ex.transport` -- `_run_one` builds a transport per window
+            #: and leaves it on the executor. `settlement(slug)` takes the
+            #: market as an ARGUMENT, so one instance can read a previous
+            #: window too, which is what reconciling a backlog needs.
+            recon = ({"pending": [], "settled": [], "unreadable": [],
+                      "deferred": [], "error": "NO_TRANSPORT"}
+                     if getattr(ex, "transport", None) is None
+                     else reconcile_pending(ex, ex.transport))
+            #: RECONCILE BEFORE THE NEXT WINDOW MAY SPEND ANYTHING. Only
+            #: markets the venue actually settled give their room back.
+            freed = ex.sync_reservation()
+            emit("L5_BTC5M_PERSISTENT_WINDOW",
+                 {"market": nxt["market"], "started": rep.get("started"),
+                  "reason": rep.get("reason"),
+                  "settlement": recon,
+                  "pending_count": len(recon.get("pending") or []),
+                  "reservation": freed,
+                  "reserved_usd": (RESV.aggregate() or {}).get("usd"),
+                  "utc": dt.datetime.now(UTC).isoformat()})
+            #: A LEDGER HALT IS A SAFETY HALT: latch it so every lane and
+            #: every restart sees it, then stop. It is never walked past.
+            if ex.halted_reason:
+                PMODE.write_state(
+                    PMODE.HALTED,
+                    why="LEDGER_HALTED:%s" % ex.halted_reason,
+                    now=dt.datetime.now(UTC))
+                unwound = ex.stop(
+                    reason="LEDGER_HALTED:%s" % ex.halted_reason,
+                    now=dt.datetime.now(UTC))
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": ex.halted_reason, "source": "LEDGER",
+                      "stop": unwound,
+                      "utc": dt.datetime.now(UTC).isoformat()})
+                return 0
+            if not (rep.get("close") or {}).get("clean", True):
+                PMODE.write_state(PMODE.HALTED, why="CLOSE_NOT_CLEAN",
+                                  now=dt.datetime.now(UTC))
+                unwound = ex.stop(reason="CLOSE_NOT_CLEAN",
+                                  now=dt.datetime.now(UTC))
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": "CLOSE_NOT_CLEAN", "source": "CLOSE",
+                      "stop": unwound,
+                      "utc": dt.datetime.now(UTC).isoformat()})
+                return 0
 
     if not plan["markets"]:
         emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED",

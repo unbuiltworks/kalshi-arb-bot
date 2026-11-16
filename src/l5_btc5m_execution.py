@@ -72,6 +72,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 from src import l5_btc5m_controller as C
 from src import l5_live_authorization as AUTH
 from src import l5_origin as ORIGIN
+from src import l5_persistent_mode as PMODE
+from src import l5_shared_reservation as RESV
 
 D = Decimal
 ZERO = D("0")
@@ -220,6 +222,28 @@ def _dec(x: Any) -> Optional[Decimal]:
     return d if d.is_finite() else None
 
 
+#: HOW AN ORDER'S STRATEGY IS DECIDED. The controller tags the late
+#: favourite explicitly; the straddle's own orders are identified by the
+#: reasons it has always emitted. An order we cannot place in either is
+#: attributed to UNKNOWN rather than silently to one of them, because a
+#: wrong attribution is worse than an absent one.
+STRATEGY_BY_REASON = {
+    "STRADDLE_LEG": "STRADDLE",
+    "STRADDLE_COMPLETION": "STRADDLE",
+    "LATE_FAVORITE": "LATE_FAVORITE",
+}
+UNATTRIBUTED = "UNKNOWN"
+
+
+def _strategy_of(order: Any) -> str:
+    """The strategy an order belongs to, from its own tag or its reason."""
+    tag = str((order or {}).get("strategy") or "").strip().upper()
+    if tag:
+        return tag
+    return STRATEGY_BY_REASON.get(
+        str((order or {}).get("reason") or "").strip().upper(), UNATTRIBUTED)
+
+
 def _s(d: Decimal) -> str:
     return format(d, "f")
 
@@ -288,6 +312,101 @@ def straddle_price(default: Decimal = D("0")) -> Decimal:
     """
     raw = _dec(os.environ.get(STRADDLE_PRICE_ENV))
     if raw is None or not (D("0") < raw < D("0.50")):
+        return default
+    return raw
+
+
+#: THE LATE-FAVORITE's inputs. None of these had an environment reader,
+#: so every one of them sat at its dataclass default of 0 and the
+#: strategy was disabled three ways over: no edge margin (refused as
+#: NO_EDGE_MARGIN_SET), no clip (qty 0), and a late window that could
+#: never be stepped. The module deliberately has NO safe default for a
+#: margin, and these keep that property: unreadable leaves 0, and 0
+#: refuses.
+LATE_WINDOW_ENV = "L5_LATE_FAVORITE_WINDOW_S"
+LATE_CLIP_ENV = "L5_LATE_FAVORITE_CLIP_USD"
+LATE_EDGE_ENV = "L5_LATE_FAVORITE_MIN_EDGE_PER_SHARE"
+LATE_FEE_ENV = "L5_LATE_FAVORITE_FEE_PER_SHARE"
+
+#: a late window must leave at least this much stepping time, or the
+#: strategy is unreachable however its other inputs are set. The session
+#: steps `while clock() < window_start + 300 - CANCEL_LEAD_S`, so a
+#: window of exactly CANCEL_LEAD_S fires from the first instant the loop
+#: has already stopped. `l5_live_safety.strategy_can_fire` is the gate
+#: that refuses the unreachable combination; this bound keeps a typo
+#: from producing one silently.
+LATE_WINDOW_MIN_S = D("36")
+#: HALF THE WINDOW, and not a round number chosen for comfort. At 150 the
+#: strategy becomes eligible from the window's exact midpoint, which is
+#: the widest band in which it is still a LATE strategy; past half the
+#: market it is simply a second opener competing with the straddle over
+#: the whole entry range, and the side-conflict rule would then refuse
+#: almost every candidate anyway because the straddle rests on both
+#: sides.
+#:
+#: Widening the band does NOT lower the bar -- it only gives the EV gate
+#: more moments to look at, and the gate is unchanged. What makes the
+#: midpoint interesting is the opposite of a weaker test: the settlement
+#: average is the 60 seconds ending at the close, so at t=150 none of it
+#: has formed and `p_up` still carries real diffusion. A level only
+#: clears break-even there when the move is ALREADY large -- and that is
+#: exactly when the book may not have repriced to 0.99 yet, so a 0.97
+#: maker bid can rest un-crossed. The edge, where it exists, is the gap
+#: between our model's confidence and the book's price, and that gap is
+#: widest before the book catches up.
+LATE_WINDOW_MAX_S = D("150")
+LATE_CLIP_MAX_USD = D("5.00")
+#: above this a "97c favourite" is not a favourite trade any more
+LATE_EDGE_MAX = D("0.20")
+
+
+def late_favorite_window_s(default: Decimal = D("0")) -> Decimal:
+    """How late the favourite may be bought, in seconds before close.
+
+    Bounded BELOW, not just above. A value at or under the cancel lead
+    describes a window the session has already stopped stepping in, and
+    the strategy would refuse TOO_EARLY on every step of every window
+    while reporting nothing unusual -- which is what the shipped default
+    of 30 did. Out of range keeps the default of 0, which refuses.
+    """
+    raw = _dec(os.environ.get(LATE_WINDOW_ENV))
+    if raw is None or not (LATE_WINDOW_MIN_S <= raw <= LATE_WINDOW_MAX_S):
+        return default
+    return raw
+
+
+def late_favorite_clip_usd(default: Decimal = D("0")) -> Decimal:
+    """Dollars one late-favourite order may spend. 0 places nothing."""
+    raw = _dec(os.environ.get(LATE_CLIP_ENV))
+    if raw is None or not (ZERO < raw <= LATE_CLIP_MAX_USD):
+        return default
+    return raw
+
+
+def late_favorite_min_edge_per_share(default: Decimal = D("0")) -> Decimal:
+    """The edge a level must clear after fees to be worth resting at.
+
+    THERE IS NO SAFE DEFAULT and this does not invent one. At 0.97 the
+    break-even win rate is about 97%: one loss cancels roughly 32 wins,
+    so the margin is the only thing standing between a modelled edge and
+    a correlated loss. Unreadable leaves 0, and the strategy refuses.
+    """
+    raw = _dec(os.environ.get(LATE_EDGE_ENV))
+    if raw is None or not (ZERO < raw <= LATE_EDGE_MAX):
+        return default
+    return raw
+
+
+def late_favorite_fee_per_share(default: Decimal = D("0")) -> Decimal:
+    """The venue's per-share commission, charged against every level.
+
+    Zero is legitimate here -- a maker order may genuinely pay no
+    commission -- so an unreadable value keeps the default rather than
+    refusing. It makes the EV gate STRICTER to overstate it, never
+    looser, and the gate still has to clear the margin above.
+    """
+    raw = _dec(os.environ.get(LATE_FEE_ENV))
+    if raw is None or raw < ZERO or raw > D("0.10"):
         return default
     return raw
 
@@ -771,6 +890,48 @@ class Btc5mExecutor:
                        "cost": D(str((legs.get(side) or {}).get("cost", "0")))}
                 for side in C.SIDES}
 
+    def attribution(self, market: str,
+                    up_won: Optional[bool] = None) -> Dict[str, Any]:
+        """Filled quantity, cost, fees and settled result PER STRATEGY.
+
+        DERIVED FROM THE ORDER ROWS, never from a second ledger. Each
+        share was bought by one order, which belongs to one strategy, and
+        a winning share redeems $1 whoever bought it -- so this is EXACT
+        arithmetic, not a pro-rata allocation.
+
+        WHAT IS NOT ATTRIBUTABLE, stated because the omission is
+        deliberate: `matched_qty` and `pair_cost`. A matched pair can be
+        one strategy's leg against another's, so pairing is a property of
+        the MARKET and is reported there, not split between strategies.
+        """
+        out: Dict[str, Any] = {}
+        for r in self._ledger["orders"].values():
+            if r.get("market") != market:
+                continue
+            q, c = _dec(r.get("filled_qty")), _dec(r.get("filled_cost"))
+            if q is None or c is None or q <= 0:
+                continue
+            who = str(r.get("strategy") or UNATTRIBUTED)
+            side = r.get("side")
+            if side not in C.SIDES:
+                continue
+            row = out.setdefault(who, {s: {"qty": ZERO, "cost": ZERO}
+                                       for s in C.SIDES})
+            row[side]["qty"] += q
+            row[side]["cost"] += c
+        for who, row in out.items():
+            cost = row[C.UP]["cost"] + row[C.DOWN]["cost"]
+            row["cost_total"] = cost
+            row["filled_qty"] = row[C.UP]["qty"] + row[C.DOWN]["qty"]
+            if up_won is None:
+                row["redemption_total"] = None
+                row["settled_net_usd"] = None
+            else:
+                red = row[C.UP]["qty"] if up_won else row[C.DOWN]["qty"]
+                row["redemption_total"] = red
+                row["settled_net_usd"] = red - cost
+        return out
+
     def _resting(self, market: str, now: Optional[dt.datetime]
                  ) -> List[Dict[str, Any]]:
         """Our possibly-working orders in `market`, as the controller reads
@@ -1239,6 +1400,95 @@ class Btc5mExecutor:
         except Exception as exc:                               # noqa: BLE001
             return refuse("AUTHORIZATION_UNAVAILABLE", client_order_id=coid,
                           detail=type(exc).__name__)
+        #: THE STANDING ENVELOPE, when one is configured. Checked BEFORE
+        #: the reservation because it has no side effect: a scope or
+        #: daily-loss refusal then leaks no hold. It enforces what the
+        #: reservation cannot -- which strategy, which market, which
+        #: DEPLOYMENT, maker-only, the per-market ceiling, and the
+        #: worst-case daily loss counting realized losses PLUS everything
+        #: already at risk PLUS this order.
+        #:
+        #: THE ACCOUNT-WIDE FIGURE IT JUDGES IS THE SHARED RESERVATION's,
+        #: not this lane's ledger: that is the whole point, since this
+        #: lane's books cannot see its siblings.
+        #:
+        #: An envelope that is absent leaves the bounded path exactly as
+        #: it was; one that is present and UNUSABLE refuses.
+        env_raw = os.environ.get(PMODE.ENVELOPE_ENV)
+        if env_raw is not None and str(env_raw).strip():
+            agg = RESV.aggregate()
+            if not agg.get("ok"):
+                return refuse("SHARED_RESERVATION:%s" % agg.get("reason"))
+            gate = PMODE.may_submit(
+                market=market, strategy=_strategy_of(order),
+                post_only=intent.get("post_only"),
+                notional_usd=notional,
+                market_exposure_usd=exp["total_exposure_usd"],
+                aggregate_exposure_usd=agg["usd"],
+                day_realized_usd=self.day_settled_pnl(now),
+                now=now)
+            report["exposure"]["envelope"] = {
+                k: v for k, v in gate.items() if k != "ok"}
+            if not gate.get("ok"):
+                return refuse("ENVELOPE:%s" % gate.get("reason"),
+                              client_order_id=coid,
+                              detail={k: v for k, v in gate.items()
+                                      if k not in ("ok", "reason")})
+        #: AFTER THE OWNER'S CLAIM, BEFORE THE VENUE. Authorization
+        #: precedes risk: shared budget is not spent on an order
+        #: nobody authorized. The cost is that a full budget burns
+        #: one single-use claim, which is bounded and shows in the
+        #: submission budget -- the other order would consume the
+        #: budget on unauthorized attempts instead.
+        #: THE ACCOUNT-WIDE RESERVATION, and the only place every lane
+        #: meets. The four lanes are separate processes with separate
+        #: ledgers, so `own_usd` above is this lane's alone: four lanes
+        #: each clearing a $10 cap against their own books commit $40
+        #: between them. This takes the worst case -- the WHOLE outlay,
+        #: because a losing contract pays nothing -- out of one shared
+        #: budget under an exclusive lock, before the venue is called.
+        #:
+        #: It is released by syncing to this ledger each step, never by a
+        #: timer: an order whose outcome is unknown keeps holding its
+        #: risk, because an uncertain order IS exposure.
+        #: THE CAP THE HOLD ENFORCES IS THE EFFECTIVE ONE, and this is
+        #: the difference between a bound and a hope.
+        #:
+        #: OBSERVED in the four-process test: `may_submit` checks the
+        #: worst-case daily loss against an aggregate it READ A MOMENT
+        #: AGO, outside the lock. Four lanes each passed that check on a
+        #: stale figure and together reserved $8 against a $5 daily-loss
+        #: budget. Every individual check was correct and the collective
+        #: result was not.
+        #:
+        #: So the daily-loss room is folded into the cap the RESERVATION
+        #: enforces, where it is evaluated under the same exclusive hold
+        #: as the aggregate. Only then is "$5 daily loss" a ceiling on
+        #: worst-case loss rather than a statement about settled losses.
+        _cap = RESV.MAX_AGGREGATE_USD
+        _env = PMODE.envelope(now=now)
+        if _env.get("ok"):
+            _scope = _env["scope"]
+            _day = self.day_settled_pnl(now)
+            if _day is None:
+                return refuse("DAY_RESULT_UNREADABLE", client_order_id=coid)
+            _lost = -_day if _day < ZERO else ZERO
+            _room = _scope["max_daily_loss_usd"] - _lost
+            _cap = min(_scope["max_aggregate_usd"], _room)
+            if _cap <= ZERO:
+                return refuse("WORST_CASE_DAILY_LOSS_EXHAUSTED",
+                              client_order_id=coid,
+                              detail={"realized_today_usd": _s(_day),
+                                      "halt_usd": _s(_scope["max_daily_loss_usd"])})
+        resv = RESV.reserve(lane=STRATEGY, key=coid, usd=notional,
+                            now=now, cap_usd=_cap)
+        report["exposure"]["reservation"] = {
+            k: v for k, v in resv.items() if k != "ok"}
+        if not resv.get("ok"):
+            return refuse("SHARED_RESERVATION:%s" % resv.get("reason"),
+                          client_order_id=coid,
+                          detail={k: v for k, v in resv.items()
+                                  if k not in ("ok", "reason")})
         # THE LEDGER NEXT. If this write fails nothing is sent.
         self._ledger["orders"][coid] = {
             "client_order_id": coid, "market": market, "side": side,
@@ -1246,7 +1496,13 @@ class Btc5mExecutor:
             "state": NEW, "filled_qty": "0", "filled_cost": "0",
             "created_at": now.isoformat() if now is not None else None,
             "reason": order.get("reason"), "slot": int(slot),
-            "klass": klass, "claim_sid": claim.get("sid")}
+            "klass": klass, "claim_sid": claim.get("sid"),
+            #: WHICH STRATEGY BOUGHT THIS. On the durable order row, not
+            #: in memory, so attribution survives a restart -- and on the
+            #: ORDER rather than the inventory aggregate, so a partial
+            #: fill attributes exactly what filled and a fill that races a
+            #: cancel attributes to whoever placed it.
+            "strategy": _strategy_of(order)}
         if not self._save_or_halt():
             del self._ledger["orders"][coid]
             return refuse("LEDGER_WRITE_FAILED")
@@ -1330,13 +1586,145 @@ class Btc5mExecutor:
                         straddle_rungs=straddle_rungs(
                             self.params.straddle_rungs),
                         clip_usd=clip_usd(self.params.clip_usd,
-                                          STRADDLE_CLIP_MAX_USD))
+                                          STRADDLE_CLIP_MAX_USD),
+                        #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because
+                        #: `decide()` evaluates it inside the straddle arm
+                        #: and the arbiter chooses between the two. Without
+                        #: these four it is evaluated and refuses every
+                        #: time, which reads identically to "no
+                        #: opportunity" in a log.
+                        late_favorite_window_s=late_favorite_window_s(
+                            self.params.late_favorite_window_s),
+                        late_favorite_clip_usd=late_favorite_clip_usd(
+                            self.params.late_favorite_clip_usd),
+                        late_favorite_min_edge_per_share=(
+                            late_favorite_min_edge_per_share(
+                                self.params.late_favorite_min_edge_per_share)),
+                        late_favorite_fee_per_share=late_favorite_fee_per_share(
+                            self.params.late_favorite_fee_per_share))
         else:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))
 
+    def stop(self, *, reason: Any, now: Optional[dt.datetime] = None
+             ) -> Dict[str, Any]:
+        """The operator STOP. Latch first, then unwind. IDEMPOTENT.
+
+        THE LATCH IS WRITTEN BEFORE ANYTHING IS CANCELLED, and the order
+        matters more than it looks. Cancellation talks to a venue and can
+        fail, hang or race a fill; if the latch came second, a STOP whose
+        cancels failed would leave a lane still able to submit. Latching
+        first means the worst case is "stopped with orders we could not
+        withdraw" -- bad, and visible -- rather than "still trading".
+        The latch is durable, so it survives the restart that a hung
+        cancel might otherwise invite.
+
+        IT NEVER BELIEVES A CANCEL REQUEST. `_cancel` sends by exact
+        venue id and then RE-READS the order; only the re-read decides,
+        and a fill that beat the cancel is booked by that same re-read.
+        So a partial fill or a fill racing the cancellation is reconciled
+        rather than lost, and an order the venue will not confirm
+        terminal is reported as still open instead of assumed gone.
+
+        HOLDS ARE NOT RELEASED BY STOPPING. An order whose state is
+        uncertain, and inventory that has not settled, both still carry
+        risk; freeing their budget here would let a restart re-spend
+        money that is still at stake. `sync_reservation` releases only
+        what the ledger shows is genuinely finished.
+
+        FAILS CLOSED. `ok` is True only when every order of ours reached
+        a terminal state AND the latch was written. Anything else leaves
+        `ok` False with the orders named, and the lane stays latched.
+        """
+        at = _utc(now) if now is not None else self._now()
+        latched = PMODE.write_state(PMODE.STOPPED, why=reason, now=at)
+        out: Dict[str, Any] = {
+            "ok": False, "latched": bool(latched.get("ok")),
+            "latch_reason": latched.get("reason"),
+            "cancelled": [], "still_open": [], "refused": [],
+            "fills_during_stop": [], "reservation": None,
+            "label": ("STOP latches first and never treats a cancel request "
+                      "as a confirmed cancellation: only the re-read of each "
+                      "order decides, and holds stay on anything still at "
+                      "risk")}
+        fills: List[Dict[str, Any]] = []
+        #: a snapshot, because cancelling mutates the ledger as it goes
+        open_now = [c for c, r in sorted(self._ledger["orders"].items())
+                    if r.get("state") in OPEN]
+        for coid in open_now:
+            res = self._cancel(coid, at, fills)
+            if res.get("refused"):
+                out["refused"].append({"id": coid,
+                                       "reason": res["refused"]})
+                continue
+            if res.get("filled", ZERO) > 0:
+                out["fills_during_stop"].append(
+                    {"id": coid, "qty": _s(res["filled"])})
+            if res.get("terminal"):
+                out["cancelled"].append(coid)
+            else:
+                out["still_open"].append(coid)
+        if fills:
+            out["fills_during_stop"].append({"booked": len(fills)})
+        self._refresh_halt()
+        saved = self._save_or_halt()
+        out["ledger_saved"] = bool(saved)
+        #: release only what is genuinely finished; uncertain orders and
+        #: unsettled inventory keep their holds.
+        out["reservation"] = self.sync_reservation()
+        out["ok"] = bool(latched.get("ok")) and saved \
+            and not out["still_open"] and not out["refused"]
+        return out
+
+    def pending_settlement(self) -> List[str]:
+        """Markets we hold fills in that the venue has not settled for us.
+
+        DERIVED, NOT STORED. A window is pending exactly when it has
+        filled orders and is absent from `settled`, both of which are
+        already on the durable ledger -- so the pending set survives a
+        restart with no second place to forget to write, and a crash
+        between closing a window and settling it loses nothing.
+        """
+        settled = self._ledger["settled"]
+        out = set()
+        for r in self._ledger["orders"].values():
+            q = _dec(r.get("filled_qty")) or ZERO
+            m = r.get("market")
+            if q > 0 and m and m not in settled:
+                out.add(str(m))
+        return sorted(out)
+
+    def sync_reservation(self) -> Dict[str, Any]:
+        """Release this lane's holds whose orders are no longer live.
+
+        A HOLD OUTLIVES ITS ORDER. An order that FILLED has left OPEN,
+        but its cost is now inventory we still own, and a losing contract
+        pays nothing -- so releasing on terminal order state would drop
+        exactly the risk that just became real. A hold is kept while the
+        order is open OR it filled into a market that has not settled.
+
+        ONE RULE FOR EVERY AWKWARD ENDING. A partial fill, a cancel that
+        raced a fill, a submission that timed out, a process that
+        restarted -- all are just "does this order still carry risk,
+        according to the durable ledger", so none needs its own release
+        call and none can be forgotten on a path nobody thought about. It
+        touches only this lane's holds, so a sibling's room is never
+        freed here.
+        """
+        settled = self._ledger["settled"]
+        live = []
+        for c, r in self._ledger["orders"].items():
+            if r.get("state") in OPEN:
+                live.append(c)                       # may still fill
+                continue
+            filled = _dec(r.get("filled_qty")) or ZERO
+            if filled > 0 and r.get("market") not in settled:
+                live.append(c)                       # inventory at risk
+        return RESV.reconcile(lane=STRATEGY, live_keys=live)
+
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
              p_up: Any = None, p_source: Any = None,
+             p_age_s: Any = None, loss_room_usd: Any = None,
              exposure_ceiling_usd: Any = None) -> Dict[str, Any]:
         """Poll, decide, cancel, place. One pass; returns what happened."""
         now = self._now()
@@ -1370,7 +1758,18 @@ class Btc5mExecutor:
                 inventory=self.inventory(market),
                 resting=self._resting(market, now),
                 params=self.effective_params(exposure_ceiling_usd),
-                p_up=p_up, p_source=p_source)
+                p_up=p_up, p_source=p_source,
+                #: BOTH OF THESE WERE DROPPED HERE, and the late
+                #: favourite cannot clear its own gates without them.
+                #: `decide` defaults each to None; `LF.evaluate` then
+                #: refuses PROBABILITY_STALE on an unreadable age and
+                #: BUDGET_UNREADABLE on an unreadable loss room. Worse
+                #: than refusing, it refused INVISIBLY: `why_s` keeps
+                #: whatever the straddle decided, so the step reported
+                #: ENTRY_EV_P_PAIR_NATURAL_NOT_SET and pointed the
+                #: investigation at the straddle's parameters while the
+                #: real cause was a value this signature never carried.
+                p_age_s=p_age_s, loss_room_usd=loss_room_usd)
         except Exception as exc:                               # noqa: BLE001
             report["action"], report["why"] = "CONTROLLER_ERROR", type(exc).__name__
             return done()
@@ -1381,6 +1780,31 @@ class Btc5mExecutor:
         report["hedge_eval"] = {k: (_s(v) if isinstance(v, Decimal) else v)
                                 for k, v in ((decision.get("evaluation") or {})
                                              .get("hedge") or {}).items()}
+        #: THE MISSED OPPORTUNITIES, which were being thrown away.
+        #:
+        #: Only `entry` and `hedge` were lifted out of the decision, so
+        #: the late favourite's own evaluation never reached the step
+        #: report or the log. That evaluation is the ONLY record of a
+        #: qualifying opportunity we did not take: it carries the side,
+        #: the favourite's ask and depth, and `considered` -- every one
+        #: of 0.97/0.98/0.99 with its EV per share, its break-even
+        #: probability and, when refused, whether it WOULD_CROSS or fell
+        #: EDGE_BELOW_MARGIN.
+        #:
+        #: Without it a window that passed up a fill is indistinguishable
+        #: from a window that had nothing to pass up, and the adverse-
+        #: selection question -- were the ones we skipped the ones that
+        #: would have lost? -- cannot be asked of the tape afterwards.
+        #: The arbiter's choice goes beside it for the same reason: a
+        #: candidate refused because a straddle rung outranked it is a
+        #: different fact from one that never qualified.
+        _ev = decision.get("evaluation") or {}
+        report["late_eval"] = {
+            k: (_s(v) if isinstance(v, Decimal) else v)
+            for k, v in (_ev.get("late_favorite") or {}).items()}
+        report["arbiter_eval"] = {
+            k: (_s(v) if isinstance(v, Decimal) else v)
+            for k, v in (_ev.get("arbiter") or {}).items()}
         if decision["action"] == C.DISABLED:
             return done()
         todo = [o for o in decision["orders"] if isinstance(o, Mapping)]

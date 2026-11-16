@@ -606,11 +606,27 @@ def test_the_image_ships_the_whole_closure_and_nothing_from_the_15m_runner():
     need = {("src/__init__.py" if m == "src" else m.replace(".", "/") + ".py")
             for m in out}
     assert need <= shipped, sorted(need - shipped)
-    # the 15-minute runner, its registry server and the watchdog are not in it
-    for absent in ("src/l5_pmus_live_runner.py",
-                   "src/l5_order_registry_server.py", "src/l5_watchdog.py",
+    # THE ISOLATION BOUNDARY: the other runner, the watchdog, and the
+    # cancel mechanism. None of them belongs in this image -- the first
+    # is a different executor, and the last two hold the cancel power
+    # over a shared account, which stays with the watchdog's own
+    # credential-free service.
+    for absent in ("src/l5_pmus_live_runner.py", "src/l5_watchdog.py",
                    "src/l5_cancel_mechanism.py"):
         assert absent not in shipped
+    # `l5_order_registry_server` USED to be denied alongside them, as
+    # "the 15-minute runner's registry server". That grouping was too
+    # broad: the module imports nothing local, holds no credential and
+    # knows no venue schema -- it is a pure document builder over
+    # `store.live_orders()`. This lane now publishes the same
+    # `l5/live_orders.json` through it, because the watchdog cancels
+    # nothing it cannot claim and a second shape maintained in parallel
+    # would drift from the one the other executor serves.
+    assert "src/l5_order_registry_server.py" in shipped
+    import src.l5_order_registry_server as _REG
+    assert not [m for m in vars(_REG).values()
+                if getattr(m, "__name__", "").startswith("src.")], \
+        "the registry builder must stay free of local imports"
     manifest = json.loads((root / "deploy" / "l5_btc5m_live"
                            / "railway.json").read_text())
     assert manifest["deploy"]["restartPolicyType"] == "NEVER"

@@ -109,7 +109,9 @@ def _fin(v: Any) -> Optional[float]:
 
 # =================================================================== strike
 def parse_strike(payload: Any, *, slug: str, window_start: float,
-                 window_s: float = WINDOW_S) -> Dict[str, Any]:
+                 window_s: float = WINDOW_S,
+                 index_symbol: str = INDEX_SYMBOL,
+                 asset: str = "btc") -> Dict[str, Any]:
     """The venue's own strike for EXACTLY this market and window, or why not.
 
     Every field that could make the strike belong to something else is
@@ -124,14 +126,21 @@ def parse_strike(payload: Any, *, slug: str, window_start: float,
     terms = m.get("assetPriceTerms")
     if not isinstance(terms, Mapping):
         return no("NO_ASSET_PRICE_TERMS")
-    if str(terms.get("indexSymbol")) != INDEX_SYMBOL:
-        return no("UNEXPECTED_INDEX", got=str(terms.get("indexSymbol")))
+    #: THE SERIES' OWN INDEX, from l5_series_registry, not BTC's. These
+    #: are NOT derivable from the asset -- btc is BRTI, every other asset
+    #: is <TICKER>USD_RTI -- so the caller passes what the registry says
+    #: and a mismatch still refuses. This check is what reported
+    #: ETH/SOL/XRP as UNEXPECTED_INDEX rather than pricing them against
+    #: Bitcoin's index, which would have been far worse than refusing.
+    if str(terms.get("indexSymbol")) != str(index_symbol):
+        return no("UNEXPECTED_INDEX", got=str(terms.get("indexSymbol")),
+                  expected=str(index_symbol))
     if str(terms.get("marketType")) != "ASSET_PRICE_MARKET_TYPE_UP_DOWN":
         return no("NOT_AN_UP_DOWN_MARKET", got=str(terms.get("marketType")))
     sym = (terms.get("asset") or {}).get("symbol") if isinstance(
         terms.get("asset"), Mapping) else None
-    if str(sym).lower() != "btc":
-        return no("NOT_BTC", got=str(sym))
+    if str(sym).lower() != str(asset).lower():
+        return no("UNEXPECTED_ASSET", got=str(sym), expected=str(asset).lower())
     ws, we = _epoch(terms.get("windowStart")), _epoch(terms.get("windowEnd"))
     if ws is None or we is None:
         return no("WINDOW_UNREADABLE")
@@ -150,7 +159,8 @@ def parse_strike(payload: Any, *, slug: str, window_start: float,
         return no("STRIKE_NOT_IN_USD", got=str(ptb.get("currency")))
     return {"ok": True, "slug": str(slug), "strike": k,
             "window_start": ws, "window_end": we,
-            "index": INDEX_SYMBOL, "source": "VENUE_PRICE_TO_BEAT"}
+            "index": str(index_symbol), "asset": str(asset).lower(),
+            "source": "VENUE_PRICE_TO_BEAT"}
 
 
 # ============================================================== probability
@@ -254,8 +264,17 @@ class Reference:
     def __init__(self, *, fetch: Callable[[str], Any] = _http_json,
                  clock: Callable[[], float] = time.time,
                  gateway: str = GATEWAY, poll_s: float = 1.0,
-                 window_s: float = WINDOW_S) -> None:
+                 window_s: float = WINDOW_S,
+                 asset: str = "btc",
+                 index_symbol: str = INDEX_SYMBOL) -> None:
         self._fetch, self._clock = fetch, clock
+        #: WHICH ASSET THIS FEED IS. One feed polls ONE index series and
+        #: prices ONE asset's markets; the defaults are BTC/BRTI so the
+        #: 15-minute and BTC 5-minute callers are unchanged. The pair is
+        #: passed together because an index that did not belong to the
+        #: asset would price the wrong thing while looking healthy.
+        self.asset = str(asset).lower()
+        self.index_symbol = str(index_symbol)
         #: the length of the markets this feed prices: 900 for BTC15m (the
         #: default, unchanged), 300 for the BTC5m runner. A strike for a
         #: window of any other length is refused.
@@ -311,15 +330,15 @@ class Reference:
         start = max(start, int(now) - KEEP_S)
         t0 = self._clock()
         doc = self._fetch(
-            "%s/v1/asset-prices/history?assets=crypto:btc"
+            "%s/v1/asset-prices/history?assets=crypto:%s"
             "&bucket=ASSET_PRICE_BUCKET_1S&from=%d&to=%d"
-            % (self._gateway, start, int(now) + 2))
+            % (self._gateway, self.asset, start, int(now) + 2))
         t1 = self._clock()
         rows: List[Tuple[int, float]] = []
         for s in (doc.get("series") or []) if isinstance(doc, Mapping) else []:
             asset = s.get("asset") if isinstance(s, Mapping) else None
             if not isinstance(asset, Mapping) or \
-                    str(asset.get("symbol")).lower() != "btc" or \
+                    str(asset.get("symbol")).lower() != self.asset or \
                     str(s.get("currency")) != "USD":
                 self.stats["index_series_rejected"] += 1
                 continue
@@ -356,7 +375,8 @@ class Reference:
         got = parse_strike(self._fetch("%s/v1/market/slug/%s"
                                        % (self._gateway, slug)),
                            slug=slug, window_start=ws,
-                           window_s=self.window_s)
+                           window_s=self.window_s,
+                           index_symbol=self.index_symbol, asset=self.asset)
         got["checked_t"] = self._clock()
         with self._lock:
             self._strikes[slug] = got

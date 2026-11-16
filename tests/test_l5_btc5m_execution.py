@@ -16,7 +16,9 @@ import collections
 import datetime as dt
 import inspect
 import json
+import os
 import re
+import tempfile
 from decimal import Decimal as D
 
 import pytest
@@ -244,6 +246,13 @@ def armed(monkeypatch, tmp_path):
                  starts=(W_1200, W_1205))
     for k, v in ARMED.items():
         monkeypatch.setenv(k, v)
+    #: THE SHARED ACCOUNT-WIDE RESERVATION. Every submission takes a hold
+    #: from it, and an UNSET path refuses -- a lane that cannot reach the
+    #: shared budget must not trade, because the per-lane caps alone
+    #: cannot bound the account. Each test gets its own file, so these
+    #: tests exercise the hold without sharing a budget between them.
+    monkeypatch.setenv("L5_SHARED_RESERVATION",
+                       str(tmp_path / "shared_reservation.json"))
 
 
 @pytest.fixture
@@ -1044,9 +1053,22 @@ class TestIsolationOfTheModule:
         # the pure controller, the authorization claim it must spend before
         # every submit, and the registry of strategy ids. Nothing that
         # holds a credential or builds a transport.
+        #
+        # `l5_shared_reservation` is on this list for the same reason as
+        # the others: stdlib-only, no credential, no venue schema. It is
+        # the only place all four lanes meet, and without it each lane's
+        # cap is its own books alone -- four lanes clearing one $10 cap
+        # against four separate ledgers commit $40 between them.
+        # `l5_persistent_mode` is on it too, same rationale: stdlib-only,
+        # no credential, no venue schema. It holds the standing envelope
+        # and the durable RUN/STOP state, and it is the only thing that
+        # can refuse an order for being outside the authorized strategy,
+        # market or DEPLOYMENT, or for breaching the worst-case daily
+        # loss once outstanding risk is counted.
         assert re.findall(r"^from src import (.+)$", src, re.M) == [
             "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
-            "l5_origin as ORIGIN"]
+            "l5_origin as ORIGIN", "l5_persistent_mode as PMODE",
+            "l5_shared_reservation as RESV"]
 
     def test_it_calls_only_the_six_transport_methods(self):
         """Five since this module was written, plus `account` -- the cash
@@ -1090,6 +1112,12 @@ def claim_locks(tmp_path):
 def locally_armed_only(monkeypatch):
     for k, v in ARMED.items():
         monkeypatch.setenv(k, v)
+    #: and the shared account-wide reservation, on its own file per call.
+    #: An UNSET path refuses every submission on purpose -- a lane that
+    #: cannot reach the shared budget must not trade -- so a test that
+    #: expects an order to reach the venue has to provide one.
+    monkeypatch.setenv("L5_SHARED_RESERVATION",
+                       os.path.join(tempfile.mkdtemp(), "resv.json"))
 
 
 class TestTheClaimGatesEverySubmit:
@@ -1566,3 +1594,124 @@ class TestAccountLaneSplit:
         assert X.lane_cap() == D("0.0986")
         monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "2")
         assert X.lane_cap() == D("0.04")                # floored, as intended
+
+
+# ======================================================================
+# 10. THE OPERATOR STOP
+# ======================================================================
+class TestTheOperatorStop:
+    """STOP latches FIRST, then unwinds. The order matters: cancellation
+    talks to a venue and can fail, hang or race a fill, and a STOP whose
+    cancels failed must still leave the lane unable to submit."""
+
+    def _stopped_state(self):
+        from src import l5_persistent_mode as P
+        return P.read_state()["state"]
+
+    def test_it_latches_before_it_cancels(self, rig, armed, monkeypatch,
+                                          tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        out = rig.ex.stop(reason="operator", now=rig.now)
+        assert out["latched"] is True
+        assert self._stopped_state() == P.STOPPED
+
+    def test_the_latch_holds_even_when_a_cancel_cannot_be_sent(
+            self, rig, armed, monkeypatch, tmp_path):
+        """The worst case must be 'stopped with orders we could not
+        withdraw', never 'still trading'."""
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+
+        def boom(*_a, **_k):
+            raise RuntimeError("venue down")
+        monkeypatch.setattr(rig.venue, "cancel", boom)
+        out = rig.ex.stop(reason="operator", now=rig.now)
+        assert out["latched"] is True
+        assert out["ok"] is False
+        assert self._stopped_state() == P.STOPPED
+
+    def test_it_cancels_our_order_by_its_exact_venue_id(self, rig, armed,
+                                                       monkeypatch, tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        rig.ex.stop(reason="operator", now=rig.now)
+        assert [c[0] for c in rig.venue.cancelled] == ["v1"]
+
+    def test_a_fill_that_beat_the_cancel_is_booked_not_lost(
+            self, rig, armed, monkeypatch, tmp_path):
+        """Only the re-read decides, so a fill racing the cancellation is
+        reconciled into inventory rather than discarded."""
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        rig.venue.fill_on_cancel.add("v1")
+        out = rig.ex.stop(reason="operator", now=rig.now)
+        inv = rig.ex.inventory(MARKET)
+        assert inv[C.UP]["qty"] > 0
+        assert out["fills_during_stop"]
+
+    def test_an_order_the_venue_will_not_confirm_is_reported_still_open(
+            self, rig, armed, monkeypatch, tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        #: the venue accepts the cancel but keeps reporting it live
+        monkeypatch.setattr(rig.venue, "cancel",
+                            lambda oid, market_slug=None: {"cancelled": oid})
+        out = rig.ex.stop(reason="operator", now=rig.now)
+        assert out["still_open"] == list(rig.ex.orders())
+        assert out["ok"] is False
+
+    def test_it_is_idempotent(self, rig, armed, monkeypatch, tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        first = rig.ex.stop(reason="operator", now=rig.now)
+        second = rig.ex.stop(reason="operator again", now=rig.now)
+        assert first["ok"] is True and second["ok"] is True
+        assert second["cancelled"] == []        # nothing left to cancel
+        assert len(rig.venue.cancelled) == 1    # and nothing re-sent
+
+    def test_the_latch_survives_a_restart(self, rig, armed, monkeypatch,
+                                          tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        rig.ex.stop(reason="operator", now=rig.now)
+        rig.restart()
+        assert P.read_state()["state"] == P.STOPPED
+
+    def test_stopping_does_not_release_a_hold_on_unsettled_inventory(
+            self, rig, armed, monkeypatch, tmp_path):
+        """A stopped lane still owns what it bought. Freeing the budget
+        here would let a restart re-spend money still at risk."""
+        from src import l5_persistent_mode as P
+        from src import l5_shared_reservation as R
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        opened(rig)
+        rig.venue.fill("v1")
+        rig.tick().step()                       # book the fill
+        #: the FILLED order's cost is what must survive. An unfilled
+        #: order that STOP successfully cancels SHOULD give its room
+        #: back -- that money is no longer at risk.
+        filled_cost = sum(
+            D(r["filled_cost"]) for r in rig.ex.orders().values()
+            if D(r["filled_qty"]) > 0)
+        assert filled_cost > 0
+        rig.ex.stop(reason="operator", now=rig.now)
+        after = R.aggregate()["usd"]
+        assert after == filled_cost
+        #: and it is still held because the market has not settled
+        assert R.aggregate()["holds"] == 1
+
+    def test_a_clean_stop_with_nothing_outstanding_succeeds(
+            self, rig, armed, monkeypatch, tmp_path):
+        from src import l5_persistent_mode as P
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        out = rig.ex.stop(reason="operator", now=rig.now)
+        assert out["ok"] is True
+        assert out["cancelled"] == [] and out["still_open"] == []

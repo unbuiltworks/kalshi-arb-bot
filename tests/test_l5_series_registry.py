@@ -84,7 +84,8 @@ class TestAddingARowIsOneChangeAndNotAPermission:
     #: a HYPOTHETICAL row. It must name an asset that is NOT registered,
     #: or every check below trips on the duplicate instead of the property
     #: under test.
-    ETH = R.Series("cpcdoge-doge-updown-5m-", "doge", 300.0, "DOGE5M", "d5m-")
+    ETH = R.Series("cpcdoge-doge-updown-5m-", "doge", 300.0, "DOGE5M", "d5m-",
+                   "DOGEUSD_RTI")
 
     def test_a_new_row_needs_nothing_else_to_be_recognised(self):
         R._check(R.REGISTRY + (self.ETH,))               # accepted
@@ -291,3 +292,55 @@ class TestTheExecutorsStrategyIsConfigurable:
         X = self._reload(monkeypatch, "ETH5M")
         assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD[X.MARKET_PREFIX] == CA.D("5")
         self._reload(monkeypatch, None)
+
+
+class TestEveryRowCarriesTheVenuesIndexSymbol:
+    """The probability engine asks the venue for a strike and checks the
+    returned `assetPriceTerms.indexSymbol` against the series it asked
+    about. That check is what reported ETH/SOL/XRP as UNEXPECTED_INDEX
+    instead of pricing them against BTC's index.
+
+    VERIFIED AGAINST THE VENUE 2026-11-16: 8 consecutive 5-minute windows
+    per asset, 32 of 32 exact -- the 1-second bucket ending at
+    windowStart, tickCount 60, equals priceToBeat to the cent.
+    """
+
+    def test_the_registered_symbols_are_the_ones_the_venue_reports(self):
+        got = {r.strategy: r.index_symbol for r in R.REGISTRY}
+        assert got == {"BTC15M": "BRTI", "BTC5M": "BRTI",
+                       "ETH5M": "ETHUSD_RTI", "SOL5M": "SOLUSD_RTI",
+                       "XRP5M": "XRPUSD_RTI"}
+
+    def test_it_is_not_derivable_from_the_asset(self):
+        """BTC is BRTI while the others are <TICKER>USD_RTI, so the table
+        must carry it rather than compute it."""
+        rows = {r.asset: r.index_symbol for r in R.REGISTRY}
+        assert rows["btc"] == "BRTI"
+        assert rows["eth"] == "ETHUSD_RTI"
+        assert rows["btc"] != "BTCUSD_RTI"
+
+    def test_a_row_without_one_is_refused(self):
+        bad = R.Series("cpcdoge-doge-updown-5m-", "doge", 300.0, "DOGE5M",
+                       "d5m-", "")
+        with pytest.raises(ValueError, match="index symbol"):
+            R._check(R.REGISTRY + (bad,))
+
+    @pytest.mark.parametrize("sym", ["brti", "B", "has space", "x" * 25, "1RTI"])
+    def test_a_symbol_outside_the_venues_shape_is_refused(self, sym):
+        bad = R.Series("cpcdoge-doge-updown-5m-", "doge", 300.0, "DOGE5M",
+                       "d5m-", sym)
+        with pytest.raises(ValueError, match="index symbol"):
+            R._check(R.REGISTRY + (bad,))
+
+    def test_one_asset_may_not_carry_two_index_symbols(self):
+        """btc 5m and 15m SHARE BRTI, which is correct. Disagreeing about
+        what the venue publishes for one asset is not."""
+        bad = R.Series("cpc-btc-updown-30m-", "btc", 1800.0, "BTC30M",
+                       "b30-", "BTCUSD_RTI")
+        with pytest.raises(ValueError, match="two index symbols"):
+            R._check(R.REGISTRY + (bad,))
+
+    def test_sharing_an_index_across_horizons_is_allowed(self):
+        ok = R.Series("cpc-btc-updown-30m-", "btc", 1800.0, "BTC30M",
+                      "b30-", "BRTI")
+        R._check(R.REGISTRY + (ok,))

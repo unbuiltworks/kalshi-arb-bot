@@ -69,6 +69,10 @@ ACCUMULATE = "ACCUMULATE"
 STRADDLE = "STRADDLE"
 ENTRY_MODES = (EDGE_GATED, ACCUMULATE, STRADDLE)
 
+from src import l5_late_favorite as LF          # noqa: E402  (pure, stdlib)
+from src import l5_strategy_arbiter as AR       # noqa: E402  (pure, stdlib)
+from src import l5_straddle_ev as SEV           # noqa: E402  (pure, stdlib)
+
 ZERO = D("0")
 ONE = D("1")
 HALF = D("0.5")
@@ -105,6 +109,36 @@ class Params:
     quote_ttl_s: float = 20.0
     stale_book_s: float = 3.0
     no_new_entry_after_s: float = 270.0
+    #: LATE-FAVOURITE KNOBS. Every default is the value that REFUSES, so
+    #: the second strategy cannot act until each is set deliberately:
+    #: a zero clip buys nothing, a zero edge margin returns
+    #: NO_EDGE_MARGIN_SET, and an unset continuation estimate returns
+    #: NO_CONTINUATION_ESTIMATE rather than making a handoff look free.
+    #: STRADDLE ENTRY-EV GATE. Every rate defaults to None, which
+    #: REFUSES: the gate exists so a rung is bought because it is worth
+    #: buying, and a guessed rate would manufacture the edge it tests
+    #: for. Measured over 503 shadow windows, for the owner to set
+    #: deliberately: p_pair_natural 0.070, p_complete 0.131,
+    #: p_lone_win 0.0981 -- which price a 0.08/0.08 rung at +9.55c a
+    #: share against a 0.83 completion target.
+    straddle_p_pair_natural: Optional[Decimal] = None
+    straddle_p_complete: Optional[Decimal] = None
+    straddle_p_lone_win: Optional[Decimal] = None
+    straddle_fee_per_share: Decimal = D("0")
+    straddle_min_ev_per_share: Decimal = D("0")
+    #: HOW LATE the favourite may be bought, in seconds before close.
+    #: 0 -- the default -- cannot fire and refuses, deliberately. The
+    #: module's own default of 30 is WORSE than refusing: the session
+    #: steps only while `t < window_s - CANCEL_LEAD_S` (270 of 300), and
+    #: a 30-second window fires from t=270, so the two never overlap. It
+    #: refused TOO_EARLY on every step of every window and looked like a
+    #: quiet market. Measured: zero steps at t>=270 across 20 windows.
+    late_favorite_window_s: Decimal = D("0")
+    late_favorite_clip_usd: Decimal = D("0")
+    late_favorite_fee_per_share: Decimal = D("0")
+    late_favorite_min_edge_per_share: Decimal = D("0")
+    late_favorite_continuation_usd: Optional[Decimal] = None
+    late_favorite_handoff_margin_usd: Optional[Decimal] = None
     window_s: float = 300.0
     taker_allowed: bool = False
     taker_fee_coef: Decimal = D("0.095")
@@ -431,7 +465,8 @@ def _place(side, price, qty, reason, *, post_only=True, intent="BUY", slot=0):
 
 
 def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
-           p_up=None, p_source=None) -> Dict[str, Any]:
+           p_up=None, p_source=None, p_age_s=None,
+           loss_room_usd=None) -> Dict[str, Any]:
     """One decision. See the module docstring; the steps are numbered below."""
     # 0. Off unless explicitly switched on.
     if not enabled():
@@ -527,6 +562,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         ladder = sum(_rungs, ZERO)
         qty = _floor_qty(_dec(params.clip_usd) / ladder, params)
         want = []
+        ev_rungs = []
         why_s = "STRADDLE_RESTING"
         if qty <= 0:
             why_s = "CLIP_TOO_SMALL"
@@ -552,6 +588,40 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         continue                  # that rung already rests
                     if r * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"
+                        continue
+                    #: IS THIS RUNG WORTH BUYING? Priced before any room
+                    #: is committed. "The cap allows it" is not a reason
+                    #: to buy something -- the reflex that opened a rung
+                    #: whenever the clock and the cap permitted produced
+                    #: 15 consecutive lone legs live, each settling
+                    #: -0.16. A nonpositive OR UNKNOWN value refuses:
+                    #: "we could not tell" is not a reason either.
+                    _ev = SEV.entry_ev(
+                        price=r, other_price=r,
+                        pair_target=params.straddle_completion_pair_cost,
+                        p_pair_natural=params.straddle_p_pair_natural,
+                        #: ZERO WHEN COMPLETION IS OFF. A completion
+                        #: probability beside a disabled completion is a
+                        #: contradiction, and crediting one would price
+                        #: a payoff this configuration cannot collect.
+                        #: With it off the rung is worth its natural
+                        #: pair plus its lone leg, and nothing else.
+                        p_complete=(params.straddle_p_complete
+                                    if (_cpc is not None and _cpc > ZERO)
+                                    else ZERO),
+                        p_lone_win=params.straddle_p_lone_win,
+                        fee_per_share=params.straddle_fee_per_share)
+                    _ok = SEV.admits(
+                        _ev,
+                        min_ev_per_share=params.straddle_min_ev_per_share)
+                    ev_rungs.append({"price": str(r),
+                                     "ev_per_share": (
+                                         None if _ev.get("ev_per_share") is None
+                                         else str(_ev["ev_per_share"])),
+                                     "admitted": bool(_ok["ok"]),
+                                     "reason": _ok.get("reason")})
+                    if not _ok["ok"]:
+                        why_s = "ENTRY_EV_%s" % _ok["reason"]
                         continue
                     room -= r * qty
                     want.append(_place(side, r, qty, "STRADDLE_LEG",
@@ -666,7 +736,85 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                                            "STRADDLE_COMPLETION"))
                         comp["why"] = None
                         why_s = "STRADDLE_COMPLETING"
+        #: 1b. THE SECOND STRATEGY, AND THE ONE CHOICE BETWEEN THEM.
+        #:
+        #: `want` and `room` already carry everything the straddle
+        #: decided THIS step, including a completion and the cheap rungs
+        #: it cancelled or withdrew. So the late favourite is offered the
+        #: room that is genuinely left, and the arbiter compares two
+        #: fully-formed plans rather than two wishes.
+        #:
+        #: A COMPLETION IN FLIGHT STANDS THE LATE FAVOURITE DOWN
+        #: ENTIRELY. The completion buys the side OPPOSITE our unmatched
+        #: leg; the favourite may be that same side. Letting both run
+        #: could buy one side twice in one step -- the 1925z defect in a
+        #: new costume -- and a pair is worth more than this candidate
+        #: anyway. So the straddle's plan is returned untouched and the
+        #: reason is recorded.
+        late = {"ok": False, "reason": "NOT_EVALUATED"}
+        arb = None
+        completing = (why_s == "STRADDLE_COMPLETING"
+                      or comp.get("why") == "COMPLETION_ALREADY_WORKING")
+        if completing:
+            late = {"ok": False, "reason": "COMPLETION_IN_FLIGHT"}
+        else:
+            late = LF.evaluate(
+                p_up=p_up, p_age_s=p_age_s,
+                t_in_window_s=t, window_s=params.window_s,
+                book={"bid": bid, "ask": ask,
+                      "bid_shares": (book or {}).get("bid_shares"),
+                      "ask_shares": (book or {}).get("ask_shares")},
+                inventory={s_: {"qty": inv[s_][0], "cost": inv[s_][1]}
+                           for s_ in SIDES},
+                resting=rest,
+                room_usd=max(ZERO, room),
+                loss_room_usd=loss_room_usd,
+                clip_usd=params.late_favorite_clip_usd,
+                fee_per_share=params.late_favorite_fee_per_share,
+                min_edge_per_share=params.late_favorite_min_edge_per_share,
+                late_window_s=params.late_favorite_window_s)
+            arb = AR.choose(
+                straddle_orders=want, completion_order=None,
+                completion_ev_usd=None, late=late,
+                continuation_usd=params.late_favorite_continuation_usd,
+                handoff_margin_usd=params.late_favorite_handoff_margin_usd)
+            #: THE ARBITER'S CHOICE IS WHAT GETS EMITTED. On a HANDOFF
+            #: that is the cancel ALONE: `deferred_order` is deliberately
+            #: left unsent, and a later step places it once `rest` no
+            #: longer shows the cancelled id -- the executor's
+            #: venue-confirmed view, not a hope.
+            want = list(arb["orders"]) + list(arb["cancels"])
+            if arb["action"] == AR.HANDOFF:
+                why_s = "LATE_FAVORITE_HANDOFF"
+            elif arb["why"] == "STRADDLE_AND_LATE_FAVORITE":
+                why_s = "STRADDLE_AND_LATE_FAVORITE"
         ev_s = {"completion": comp,
+                "entry_ev": {"rungs": ev_rungs,
+                             "rates": {
+                                 "p_pair_natural": (
+                                     None if params.straddle_p_pair_natural
+                                     is None else
+                                     str(params.straddle_p_pair_natural)),
+                                 "p_complete": (
+                                     None if params.straddle_p_complete is None
+                                     else str(params.straddle_p_complete)),
+                                 "p_lone_win": (
+                                     None if params.straddle_p_lone_win is None
+                                     else str(params.straddle_p_lone_win)),
+                                 "fee_per_share":
+                                     str(params.straddle_fee_per_share),
+                                 "min_ev_per_share":
+                                     str(params.straddle_min_ev_per_share)}},
+                "late_favorite": {k: v for k, v in late.items()
+                                  if k != "order"},
+                "arbiter": None if arb is None else {
+                    "action": arb["action"], "why": arb["why"],
+                    "evaluation": arb["evaluation"],
+                    "deferred_order": (
+                        None if not arb.get("deferred_order") else
+                        {"side": arb["deferred_order"]["side"],
+                         "price": str(arb["deferred_order"]["price"]),
+                         "qty": str(arb["deferred_order"]["qty"])})},
                 "entry": {"why": why_s, "price": str(_sx), "qty": str(qty),
                           "room_usd": str(max(ZERO, room)),
                           "cap_usd": str(_cap),
