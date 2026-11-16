@@ -600,7 +600,9 @@ class TestTheCompletionPairCostCeilingIsEnforcedInCode:
         from src import l5_btc5m_execution as X
         monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "1.00")
         assert X.completion_pair_cost() == X.COMPLETION_PAIR_COST_MAX
-        assert X.COMPLETION_PAIR_COST_MAX == D("0.96")
+        #: 0.96 until 2026-11-16, tightened to 0.90 once a 0.96 pair was
+        #: measured WORSE than completion off (+5.64 vs +7.10 c/share/window)
+        assert X.COMPLETION_PAIR_COST_MAX == D("0.90")
 
     @pytest.mark.parametrize("raw", ["0.50", "0.30", "0", "-1", "nonsense", ""])
     def test_at_or_below_the_cheap_rung_disables_rather_than_clamps_up(
@@ -616,8 +618,22 @@ class TestTheCompletionPairCostCeilingIsEnforcedInCode:
 
     def test_a_legal_value_passes_through(self, monkeypatch):
         from src import l5_btc5m_execution as X
-        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.94")
-        assert X.completion_pair_cost() == D("0.94")
+        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.83")
+        assert X.completion_pair_cost() == D("0.83")
+
+    def test_the_ceiling_refuses_the_region_measured_worse_than_off(
+            self, monkeypatch):
+        """0.96 was the ceiling until 2026-11-16 and is now clamped away.
+        On 536 shadow windows, with the cheap rung cancelled on completion,
+        a 0.96 pair is worth +5.64 c/share/window against +7.10 for
+        completion OFF -- so the old ceiling let an operator buy a
+        configuration that loses to doing nothing. The live 2026-11-15
+        campaign ran at exactly 0.96."""
+        from src import l5_btc5m_execution as X
+        assert X.COMPLETION_PAIR_COST_MAX == D("0.90")
+        for raw in ("0.96", "1.00", "0.93"):
+            monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, raw)
+            assert X.completion_pair_cost() == D("0.90"), raw
 
 
 # ======================================================================

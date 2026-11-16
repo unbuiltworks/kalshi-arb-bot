@@ -51,7 +51,13 @@ UNCORRECTED_ALLOWANCE = 4
 #: when --completion is used, the TOTAL a completed pair may cost. The
 #: engine clamps this to COMPLETION_PAIR_COST_MAX (0.96) regardless, so
 #: this only has to agree with it, never enforce it.
-COMPLETION_PAIR_COST = D("0.96")
+#: MEASURED OPTIMUM, 536 shadow windows, cheap rung cancelled on
+#: completion: a 0.83 pair (complete at 0.75) is worth +8.76 c/share/window
+#: against +7.10 for completion OFF. 0.96 -- the previous value, and what
+#: the live 2026-11-15 campaign ran -- measures +5.64, i.e. WORSE than not
+#: completing. The curve is flat from 0.83 to 0.78, so this is not a knife
+#: edge; above a 0.90 pair the engine refuses outright.
+COMPLETION_PAIR_COST = D("0.83")
 
 
 def shape(shares: int, completion: bool = False) -> dict:

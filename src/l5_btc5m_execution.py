@@ -155,10 +155,30 @@ COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
 #: stays locked until equivalent economics are source-confirmed for this
 #: account -- and puts spring discipline at "materially cheaper", 0.96.
 #: A larger value is clamped to this, so a typo or an eager operator cannot
-#: buy the locked behaviour. Measured difference: a 1.00 pair cost is worth
-#: +6.08 c/window against +4.79 at 0.96, so the lock costs about 1.3 c a
-#: window and that is the price of not unlocking it by accident.
-COMPLETION_PAIR_COST_MAX = D("0.96")
+#: buy the locked behaviour.
+#:
+#: TIGHTENED 0.96 -> 0.90 on 2026-11-16, because 0.96 is now MEASURED to be
+#: worse than not completing at all. On 536 shadow windows, with the cheap
+#: opposite rung cancelled when a completion is placed (which is what this
+#: engine does since the 1925z defect):
+#:
+#:     completion OFF                              +7.10 c/share/window
+#:     pair 1.00  (complete at 0.92)               +2.17 c
+#:     pair 0.96  (complete at 0.88)               +5.64 c
+#:     pair 0.93  (complete at 0.85)               +6.83 c
+#:     pair 0.88  (complete at 0.80)               +8.04 c
+#:     pair 0.83  (complete at 0.75)               +8.76 c
+#:
+#: Everything at or above a 0.90 pair is worse than leaving completion off,
+#: so the clamp now refuses that whole region rather than clamping INTO it.
+#: The old 0.96 ceiling let an operator buy a configuration the data says
+#: loses 1.5 c a window against doing nothing.
+#:
+#: WHY THE CHEAP PAIR IS STILL BETTER THAN ANY COMPLETION: it pays +0.84
+#: against +0.17 at a 0.83 pair. Completion earns its place by converting
+#: the COMMON outcome -- a stranded lone leg, 89% of windows -- not by
+#: beating the rare one.
+COMPLETION_PAIR_COST_MAX = D("0.90")
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.
