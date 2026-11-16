@@ -600,7 +600,9 @@ class TestTheCompletionPairCostCeilingIsEnforcedInCode:
         from src import l5_btc5m_execution as X
         monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "1.00")
         assert X.completion_pair_cost() == X.COMPLETION_PAIR_COST_MAX
-        assert X.COMPLETION_PAIR_COST_MAX == D("0.96")
+        #: 0.96 until 2026-11-16, tightened to 0.90 once a 0.96 pair was
+        #: measured WORSE than completion off (+5.64 vs +7.10 c/share/window)
+        assert X.COMPLETION_PAIR_COST_MAX == D("0.90")
 
     @pytest.mark.parametrize("raw", ["0.50", "0.30", "0", "-1", "nonsense", ""])
     def test_at_or_below_the_cheap_rung_disables_rather_than_clamps_up(
@@ -616,5 +618,108 @@ class TestTheCompletionPairCostCeilingIsEnforcedInCode:
 
     def test_a_legal_value_passes_through(self, monkeypatch):
         from src import l5_btc5m_execution as X
-        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.94")
-        assert X.completion_pair_cost() == D("0.94")
+        monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.83")
+        assert X.completion_pair_cost() == D("0.83")
+
+    def test_the_ceiling_refuses_the_region_measured_worse_than_off(
+            self, monkeypatch):
+        """0.96 was the ceiling until 2026-11-16 and is now clamped away.
+        On 536 shadow windows, with the cheap rung cancelled on completion,
+        a 0.96 pair is worth +5.64 c/share/window against +7.10 for
+        completion OFF -- so the old ceiling let an operator buy a
+        configuration that loses to doing nothing. The live 2026-11-15
+        campaign ran at exactly 0.96."""
+        from src import l5_btc5m_execution as X
+        assert X.COMPLETION_PAIR_COST_MAX == D("0.90")
+        for raw in ("0.96", "1.00", "0.93"):
+            monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, raw)
+            assert X.completion_pair_cost() == D("0.90"), raw
+
+
+# ======================================================================
+# THE 1925z DEFECT: COMPLETION AND THE CHEAP RUNG ARE NOT INDEPENDENT
+# ======================================================================
+class TestCompletionCancelsTheCheapOppositeRung:
+    """Completing while the cheap opposite rung still rests buys the SAME
+    side twice -- once at 0.08 and once at 0.88.
+
+    MEASURED LIVE 2026-11-15, cpc-btc-updown-5m-2026-11-15-1925z. UP filled
+    at 0.08 (t=234s), the completion bought DOWN at 0.88, and the cheap
+    DOWN rung filled too. The window ended holding 2 UP @0.08, 2 DOWN @0.08
+    and 2 DOWN @0.88: the cheap pair alone pays +1.68, the extra 0.88 leg
+    settled worthless at -1.76, realised -0.08. Completing destroyed 1.76.
+
+    The completion was written as "additive ... it can only ever add a
+    second way for the window to end matched". The two routes buy the same
+    side, so when both fill the expensive one is pure loss. They are now
+    mutually exclusive."""
+
+    HELD = {C.UP: {"qty": "2", "cost": "0.16"},     # filled at 0.08
+            C.DOWN: {"qty": "0", "cost": "0"}}
+    CHEAP_DOWN = {"id": "v-cheap-down", "side": C.DOWN, "price": D("0.08"),
+                  "qty": D("2"), "age_s": 120.0}
+
+    def _out(self, resting, **kw):
+        return decide(inventory=self.HELD, resting=resting, t=234.0,
+                      straddle_completion_pair_cost=D("0.96"),
+                      max_exposure_usd=D("10.00"), **kw)
+
+    def test_the_cheap_rung_is_cancelled_when_the_completion_is_placed(self):
+        out = self._out([self.CHEAP_DOWN])
+        ops = out["orders"]
+        placed = [o for o in ops if o["op"] == "PLACE"]
+        cancels = [o for o in ops if o["op"] == "CANCEL"]
+        # the completion goes on, at 0.96 - 0.08
+        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.88"))]
+        assert placed[0]["reason"] == "STRADDLE_COMPLETION"
+        # and the cheap DOWN rung is withdrawn by EXACT id in the same
+        # decision, so the window cannot buy DOWN twice
+        assert [o["id"] for o in cancels] == ["v-cheap-down"]
+        comp = out["evaluation"]["completion"]
+        assert comp["why"] is None
+        assert comp["cancelled_cheap_rungs"] == ["v-cheap-down"]
+
+    def test_a_rung_queued_in_the_same_decision_is_withdrawn(self):
+        """The straddle loop runs BEFORE the completion, so with nothing
+        resting the same decision would otherwise place the cheap DOWN rung
+        AND the 0.88 completion -- the 1925z defect built in one step."""
+        out = self._out([])
+        placed = [o for o in out["orders"] if o["op"] == "PLACE"]
+        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.88"))]
+        comp = out["evaluation"]["completion"]
+        assert comp["cancelled_cheap_rungs"] == []
+        assert comp["withdrew_pending_rungs"] == ["0.08"]
+
+    def test_the_rung_on_OUR_side_is_never_cancelled(self):
+        """Only the side being bought expensively is cleared. A resting
+        order on the side we already hold is not part of this hazard."""
+        ours = {"id": "v-up", "side": C.UP, "price": D("0.08"), "qty": D("2"),
+                "age_s": 120.0}
+        out = self._out([ours, self.CHEAP_DOWN])
+        cancels = [o["id"] for o in out["orders"] if o["op"] == "CANCEL"]
+        assert cancels == ["v-cheap-down"]
+
+    def test_an_unidentifiable_rung_never_reaches_the_completion_at_all(self):
+        """Every rung here is cancellable by exact id, because
+        `_read_resting` refuses the WHOLE decision when any resting order
+        lacks one. A guard inside the completion for an un-withdrawable
+        rung would be unreachable, so there is none -- this pins the outer
+        behaviour that makes it unnecessary."""
+        blind = {"id": None, "side": C.DOWN, "price": D("0.08"),
+                 "qty": D("2"), "age_s": 120.0}
+        out = self._out([blind])
+        assert out["why"] == "RESTING_UNREADABLE"
+        assert [o["op"] for o in out["orders"]] == []
+
+    def test_the_completion_itself_is_not_cancelled_once_working(self):
+        """The guard must not withdraw the completion it placed last step,
+        or it would churn its own order every interval."""
+        working = {"id": "v-comp", "side": C.DOWN, "price": D("0.88"),
+                   "qty": D("2"), "age_s": 30.0}
+        out = self._out([working])
+        comp = out["evaluation"]["completion"]
+        assert comp["why"] == "COMPLETION_ALREADY_WORKING"
+        # and the cheap rung is STILL kept off that side: the double-buy
+        # does not care which step placed the expensive leg
+        assert comp["withdrew_pending_rungs"] == ["0.08"]
+        assert out["orders"] == []

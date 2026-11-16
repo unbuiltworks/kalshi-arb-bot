@@ -542,8 +542,12 @@ def test_the_transport_defaults_to_btc15m_and_accepts_btc5m_by_name():
     assert T.SERIES["BTC5M"][1].match(M) and not T.SERIES["BTC5M"][1].match(M15)
     assert T.SERIES["BTC15M"][2:] == ("slug_is_btc15m_series",
                                       "market_series_is_btc15m")
+    # an UNREGISTERED series name is refused. "ETH5M" used to serve as the
+    # example here and became real on 2026-11-15, so this names an asset
+    # the registry does not carry.
+    assert "ETH5M" in T.SERIES and "DOGE5M" not in T.SERIES
     with pytest.raises(ValueError):
-        T.PmusTransport(market_slug=M, http=object(), series="ETH5M")
+        T.PmusTransport(market_slug=M, http=object(), series="DOGE5M")
 
 
 def test_a_5m_transport_refuses_a_15m_slug_at_preflight(monkeypatch):

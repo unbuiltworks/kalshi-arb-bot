@@ -655,9 +655,17 @@ def verify() -> Dict[str, Any]:
         # constant, still graded exactly: a third name here, or a missing
         # one, fails. One approval document names ONE of them, and every
         # claim refuses a market outside the document's own series.
+        # WIDENED 2026-11-15 by owner decision, after ETH/SOL/XRP 5m were
+        # confirmed MARKET_STATUS_OPEN on gateway.polymarket.us. The
+        # expected list is still written out IN FULL and graded exactly --
+        # a sixth name here, or a missing one, fails. Deriving it from
+        # CA.ALLOWED_SERIES would make this row self-satisfying and grade
+        # nothing, which is the whole point of restating it.
         _row("series_allowlist", "CA.ALLOWED_SERIES (code constant)",
              lambda: list(CA.ALLOWED_SERIES),
-             ["cpc-btc-updown-15m-", "cpc-btc-updown-5m-"]),
+             ["cpc-btc-updown-15m-", "cpc-btc-updown-5m-",
+              "cpceth-eth-updown-5m-", "cpcsol-sol-updown-5m-",
+              "cpcxrp-xrp-updown-5m-"]),
     ]
 
     # REPORTED, NOT REQUIRED. These are the activation switches: they are

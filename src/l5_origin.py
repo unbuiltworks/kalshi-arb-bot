@@ -38,13 +38,26 @@ import re
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
-BTC15M, BTC5M, MANUAL, UNKNOWN = "BTC15M", "BTC5M", "MANUAL", "UNKNOWN"
-ORIGINS = (BTC15M, BTC5M, MANUAL, UNKNOWN)
+from src import l5_series_registry as _REG
 
-#: the client-order-id prefix each automated strategy writes. THE registry.
-STRATEGY_COID_PREFIX = {BTC15M: "l5f-", BTC5M: "b5m-"}
-#: the market series each automated strategy trades
-STRATEGY_SERIES = {BTC15M: "cpc-btc-updown-15m-", BTC5M: "cpc-btc-updown-5m-"}
+BTC15M, BTC5M, MANUAL, UNKNOWN = "BTC15M", "BTC5M", "MANUAL", "UNKNOWN"
+#: every registered strategy, plus the two non-strategy origins. Derived,
+#: so a series added to the registry is attributable the moment it exists
+#: -- an unattributable order is a halt, and a row that could place but not
+#: be recognised would halt the account rather than fail safe.
+ORIGINS = tuple([r.strategy for r in _REG.REGISTRY]) + (MANUAL, UNKNOWN)
+
+#: the client-order-id prefix each automated strategy writes, and the
+#: series it trades. Both DERIVE from l5_series_registry, which is the one
+#: table an asset is added to; writing them literally here is how
+#: "cpc-btc-updown-5m-" ended up in 34 files.
+STRATEGY_COID_PREFIX = {r.strategy: r.coid_prefix for r in _REG.REGISTRY}
+STRATEGY_SERIES = {r.strategy: r.prefix for r in _REG.REGISTRY}
+#: how long one window of each strategy's series lasts, in seconds. Exposed
+#: here so a consumer can check a horizon WITHOUT importing the registry --
+#: l5_btc5m_execution is pinned to importing only the controller, the
+#: authorization claim and this module.
+STRATEGY_HORIZON_S = {r.strategy: r.horizon_s for r in _REG.REGISTRY}
 
 #: cost-basis kinds, strongest first. Only the first is a measured cost.
 BASIS_AUTHENTICATED = "AUTHENTICATED_FILLS"

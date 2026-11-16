@@ -77,8 +77,45 @@ D = Decimal
 ZERO = D("0")
 CENT = D("0.01")
 
-#: this strategy's id prefix and series, from the one registry
-STRATEGY = ORIGIN.BTC5M
+#: WHICH 5-MINUTE STRATEGY THIS PROCESS IS.
+#:
+#: Was the constant ORIGIN.BTC5M. One process still trades ONE series --
+#: that has not changed and is not negotiable, because the coid prefix is
+#: how the ownership registry tells lanes apart. What changed is that the
+#: series is chosen by configuration instead of being welded in, so ETH,
+#: SOL and XRP need another SERVICE rather than another executor.
+#:
+#: UNSET IS BTC5M, so every existing deployment is unchanged.
+#:
+#: IT REFUSES AT IMPORT, which is deliberate: a service that cannot say
+#: which series it trades must not start, and a bad value here would
+#: otherwise surface as orders placed under the wrong strategy's coid
+#: prefix -- indistinguishable in the ownership registry, which is what
+#: the watchdog latches on.
+#:   * an unregistered name refuses;
+#:   * a name whose horizon is not 300s refuses, so this executor can
+#:     never be pointed at the 15-minute lane and write b5m- orders into
+#:     the other strategy's series.
+STRATEGY_ENV = "L5_5M_STRATEGY"
+
+
+def _strategy() -> str:
+    want = str(os.environ.get(STRATEGY_ENV, "")).strip().upper()
+    if not want:
+        return ORIGIN.BTC5M
+    if want not in ORIGIN.STRATEGY_SERIES:
+        raise ValueError(
+            "%s=%r is not a registered strategy; known: %s"
+            % (STRATEGY_ENV, want, sorted(ORIGIN.STRATEGY_SERIES)))
+    if ORIGIN.STRATEGY_HORIZON_S.get(want) != 300.0:
+        raise ValueError(
+            "%s=%r is a %ss series; this executor is the FIVE-MINUTE one "
+            "and must not trade another lane's series"
+            % (STRATEGY_ENV, want, ORIGIN.STRATEGY_HORIZON_S.get(want)))
+    return want
+
+
+STRATEGY = _strategy()
 COID_PREFIX = ORIGIN.STRATEGY_COID_PREFIX[STRATEGY]
 MARKET_PREFIX = ORIGIN.STRATEGY_SERIES[STRATEGY]
 LIVE_ENV = "L5_BTC5M_LIVE"
@@ -118,10 +155,30 @@ COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
 #: stays locked until equivalent economics are source-confirmed for this
 #: account -- and puts spring discipline at "materially cheaper", 0.96.
 #: A larger value is clamped to this, so a typo or an eager operator cannot
-#: buy the locked behaviour. Measured difference: a 1.00 pair cost is worth
-#: +6.08 c/window against +4.79 at 0.96, so the lock costs about 1.3 c a
-#: window and that is the price of not unlocking it by accident.
-COMPLETION_PAIR_COST_MAX = D("0.96")
+#: buy the locked behaviour.
+#:
+#: TIGHTENED 0.96 -> 0.90 on 2026-11-16, because 0.96 is now MEASURED to be
+#: worse than not completing at all. On 536 shadow windows, with the cheap
+#: opposite rung cancelled when a completion is placed (which is what this
+#: engine does since the 1925z defect):
+#:
+#:     completion OFF                              +7.10 c/share/window
+#:     pair 1.00  (complete at 0.92)               +2.17 c
+#:     pair 0.96  (complete at 0.88)               +5.64 c
+#:     pair 0.93  (complete at 0.85)               +6.83 c
+#:     pair 0.88  (complete at 0.80)               +8.04 c
+#:     pair 0.83  (complete at 0.75)               +8.76 c
+#:
+#: Everything at or above a 0.90 pair is worse than leaving completion off,
+#: so the clamp now refuses that whole region rather than clamping INTO it.
+#: The old 0.96 ceiling let an operator buy a configuration the data says
+#: loses 1.5 c a window against doing nothing.
+#:
+#: WHY THE CHEAP PAIR IS STILL BETTER THAN ANY COMPLETION: it pays +0.84
+#: against +0.17 at a 0.83 pair. Completion earns its place by converting
+#: the COMMON outcome -- a stranded lone leg, 89% of windows -- not by
+#: beating the rare one.
+COMPLETION_PAIR_COST_MAX = D("0.90")
 
 #: What a contract that is not ours is charged at. Its cost is unknown to
 #: this ledger and a contract cannot cost more than $1, so $1 is the bound.

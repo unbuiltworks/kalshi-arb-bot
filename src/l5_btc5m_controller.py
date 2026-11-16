@@ -556,11 +556,37 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     room -= r * qty
                     want.append(_place(side, r, qty, "STRADDLE_LEG",
                                        slot=i))
-        #: PATIENT COMPLETION. Additive: no cancel is issued here and the
+        #: PATIENT COMPLETION, AND WHY IT IS NOT ADDITIVE.
+        #:
+        #: It was written as additive -- "no cancel is issued here and the
         #: cheap rung above is untouched, so this can only ever add a
-        #: second way for the window to end matched.
+        #: second way for the window to end matched". That reasoning is
+        #: wrong, and it cost money on its first live day.
+        #:
+        #: MEASURED 2026-11-15, window cpc-btc-updown-5m-2026-11-15-1925z.
+        #: UP filled at 0.08 (t=234s). The completion bought DOWN at 0.88.
+        #: The cheap DOWN rung was still resting, and it filled too. The
+        #: window ended holding 2 UP @0.08, 2 DOWN @0.08 and 2 DOWN @0.88:
+        #:   the cheap pair alone would have paid  +1.68
+        #:   the extra 0.88 leg settled worthless  -1.76
+        #:   realised                              -0.08
+        #: Completing destroyed 1.76 in one window. The two routes are not
+        #: independent chances at a pair; they are two purchases of the
+        #: SAME side, and when both fill the expensive one is pure loss.
+        #:
+        #: So they are now mutually exclusive: completing CANCELS the cheap
+        #: opposite rung in the same decision. Exactly one way to end
+        #: matched, never two.
+        #:
+        #: WHICH OF THE TWO IS BETTER is close to a coin flip and is NOT
+        #: what this fixes. Over 257 shadow windows the opposite side
+        #: reached 0.08 after the first fill in 19 of 245 (q = 7.76%), and
+        #: waiting beats completing only when q > 7.35%. Within that
+        #: margin either policy is defensible; doing BOTH is strictly worse
+        #: than either, which is the defect.
         comp = {"why": "COMPLETION_DISABLED", "side": None, "price": None,
-                "qty": None, "pair_cost": None}
+                "qty": None, "pair_cost": None, "cancelled_cheap_rungs": [],
+                "withdrew_pending_rungs": []}
         if _cpc is not None and _cpc > ZERO:
             exp_c = _exposure(inv, rest)
             cheld, cunm = exp_c["unmatched_side"], exp_c["unmatched_qty"]
@@ -586,14 +612,60 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 elif cqty <= ZERO:
                     comp["why"] = "QTY_BELOW_MIN"
                 elif already:
+                    #: A completion from an earlier step is still working,
+                    #: so the cheap rung on that side must STILL not be
+                    #: queued beside it -- the double-buy does not care
+                    #: which step placed the expensive leg.
+                    pending = [o for o in want
+                               if o.get("op") == "PLACE"
+                               and o.get("side") == cside
+                               and abs(o["price"] - cprice) > tick]
+                    for o in pending:
+                        want.remove(o)
+                        room += o["price"] * o["qty"]
+                    comp["withdrew_pending_rungs"] = [str(o["price"])
+                                                      for o in pending]
                     comp["why"] = "COMPLETION_ALREADY_WORKING"
                 elif cprice * cqty > room:
                     comp["why"] = "NO_EXPOSURE_ROOM"
                 else:
-                    room -= cprice * cqty
-                    want.append(_place(cside, cprice, cqty, "STRADDLE_COMPLETION"))
-                    comp["why"] = None
-                    why_s = "STRADDLE_COMPLETING"
+                    #: CANCEL THE CHEAP OPPOSITE RUNG FIRST. Every resting
+                    #: order on the side we are about to buy expensively is
+                    #: withdrawn by exact id, so the window cannot buy that
+                    #: side twice. A rung with no readable id cannot be
+                    #: withdrawn, and completing beside it would re-create
+                    #: the 1925z defect, so that refuses instead.
+                    #: `_read_resting` refuses the whole decision when any
+                    #: resting order lacks an id, so every entry in `rest`
+                    #: is cancellable by exact id here and no
+                    #: un-withdrawable rung can reach this point.
+                    stale = [o for o in rest if o["side"] == cside
+                             and abs(o["price"] - cprice) > tick]
+                    if True:
+                        #: A rung queued THIS step is withdrawn before it is
+                        #: ever sent -- the straddle loop above runs first,
+                        #: so without this the same decision would place the
+                        #: cheap rung and the completion together, which is
+                        #: the 1925z defect created in one step instead of
+                        #: two. Cancelling an id we have not sent is not
+                        #: possible, so it is dropped rather than cancelled.
+                        pending = [o for o in want
+                                   if o.get("op") == "PLACE"
+                                   and o.get("side") == cside
+                                   and abs(o["price"] - cprice) > tick]
+                        for o in pending:
+                            want.remove(o)
+                            room += o["price"] * o["qty"]
+                        comp["withdrew_pending_rungs"] = [str(o["price"])
+                                                          for o in pending]
+                        for o in stale:
+                            want.append({"op": "CANCEL", "id": o["id"]})
+                        comp["cancelled_cheap_rungs"] = [o["id"] for o in stale]
+                        room -= cprice * cqty
+                        want.append(_place(cside, cprice, cqty,
+                                           "STRADDLE_COMPLETION"))
+                        comp["why"] = None
+                        why_s = "STRADDLE_COMPLETING"
         ev_s = {"completion": comp,
                 "entry": {"why": why_s, "price": str(_sx), "qty": str(qty),
                           "room_usd": str(max(ZERO, room)),

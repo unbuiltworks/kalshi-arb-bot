@@ -194,5 +194,20 @@ def test_the_ceilings_are_the_authorized_envelope():
     # explicitly approved BTC5m markets"). It is a second NAME on the same
     # mechanism, with its own tighter exposure ceiling; the 15-minute
     # envelope asserted above is unchanged by it.
-    assert CA.ALLOWED_SERIES == ("cpc-btc-updown-15m-", "cpc-btc-updown-5m-")
-    assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD == {"cpc-btc-updown-5m-": D("5")}
+    #: WIDENED 2026-11-15 by owner decision, after ETH/SOL/XRP 5m were
+    #: confirmed MARKET_STATUS_OPEN on gateway.polymarket.us. An
+    #: owner-signed approval may now NAME one of those series; it still
+    #: grants nothing without a signed campaign and an armed service.
+    assert CA.ALLOWED_SERIES == ("cpc-btc-updown-15m-", "cpc-btc-updown-5m-",
+     "cpceth-eth-updown-5m-", "cpcsol-sol-updown-5m-",
+     "cpcxrp-xrp-updown-5m-")
+    #: and each of the three carries the SAME $5 exposure ceiling as
+    #: BTC5m. That row is required, not optional: with no entry a series
+    #: inherits the general $20, four times the approved figure.
+    for _s in ("cpceth-eth-updown-5m-", "cpcsol-sol-updown-5m-",
+               "cpcxrp-xrp-updown-5m-"):
+        assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD[_s] == D("5")
+        assert _s not in CA.SERIES_MAX_DAILY_LOSS_USD   # inherits tighter $5
+    assert CA.SERIES_MAX_TOTAL_EXPOSURE_USD == {
+        "cpc-btc-updown-5m-": D("5"), "cpceth-eth-updown-5m-": D("5"),
+        "cpcsol-sol-updown-5m-": D("5"), "cpcxrp-xrp-updown-5m-": D("5")}

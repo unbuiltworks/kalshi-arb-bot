@@ -31,6 +31,7 @@ RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/__init__.py src/__init__.py
 COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
 COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
+COPY src/l5_5m_fleet.py src/l5_5m_fleet.py
 COPY src/l5_btc5m_runner.py src/l5_btc5m_runner.py
 COPY src/l5_btc_reference.py src/l5_btc_reference.py
 COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
@@ -44,6 +45,7 @@ COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_order_body.py src/l5_order_body.py
+COPY src/l5_series_registry.py src/l5_series_registry.py
 COPY src/l5_origin.py src/l5_origin.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
