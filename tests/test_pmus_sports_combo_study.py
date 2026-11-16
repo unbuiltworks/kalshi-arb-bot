@@ -116,3 +116,24 @@ def test_study_has_no_order_path_and_is_off_by_default(monkeypatch):
         assert not hasattr(cs, name)
     monkeypatch.delenv(M.COMBO_STUDY_ENV, raising=False)
     assert M.start_combo_study(object()) is None
+
+
+def test_unreadable_leg_is_unpriced_not_fatal():
+    # live 11:46Z: a leg BBO read raised and killed the study thread
+    legs = [{"symbol": "aec-gone-a-b-2026-11-15", "side": "SIDE_BUY"},
+            {"symbol": "aec-nhl-c-d-2026-11-15", "side": "SIDE_BUY"}]
+
+    def pm(path):
+        if "gone" in path:
+            raise RuntimeError("404 market not found")
+        return {"marketData": {"bestBid": {"value": "0.49"},
+                               "bestAsk": {"value": "0.51"}}}
+    logs = []
+    cs = CS.ComboStudy(
+        fake_get([{"tradeId": "t9", "symbol": "c9", "price": "0.2",
+                   "qtyDecimal": "1", "executedTime": "2026-11-16T11:46:00Z"}],
+                 combos={"c9": legs}),
+        pm, lambda k, **kw: logs.append((k, kw)))
+    cs.poll_trades()
+    rec = [kw for k, kw in logs if k == "COMBO_STUDY_TRADE"][0]
+    assert rec["fair_now"] is None and "leg_bbo" in cs.summary()["errors"]

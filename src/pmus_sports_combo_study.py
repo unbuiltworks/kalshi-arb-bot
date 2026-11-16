@@ -112,8 +112,15 @@ class ComboStudy:
         return legs
 
     def mid(self, symbol: str) -> Optional[float]:
-        md = (self.pm_get(f"/v1/markets/{symbol}/bbo") or {}).get(
-            "marketData") or {}
+        # LIVE 2026-11-16 11:46Z: one leg's BBO read raised and killed the
+        # study thread after its first batch. A leg that cannot be read
+        # (closed, settled, unknown) is simply unpriced.
+        try:
+            md = (self.pm_get(f"/v1/markets/{symbol}/bbo") or {}).get(
+                "marketData") or {}
+        except Exception as exc:                          # noqa: BLE001
+            self.errors["leg_bbo"] = f"{type(exc).__name__}:{exc}"[:160]
+            return None
         b, a = _f(md.get("bestBid")), _f(md.get("bestAsk"))
         if b is None or a is None or a <= b:
             return None
@@ -211,11 +218,15 @@ class ComboStudy:
     def run(self) -> None:
         last_sum = 0.0
         while not self.stop:
-            self.poll_rfqs()
-            self.poll_trades()
-            if self.clock() - last_sum > self.summary_s:
-                self.log("COMBO_STUDY_SUMMARY", **self.summary())
-                last_sum = self.clock()
+            try:
+                self.poll_rfqs()
+                self.poll_trades()
+                if self.clock() - last_sum > self.summary_s:
+                    self.log("COMBO_STUDY_SUMMARY", **self.summary())
+                    last_sum = self.clock()
+            except Exception as exc:                      # noqa: BLE001
+                # never let one bad read end the study
+                self.errors["loop"] = f"{type(exc).__name__}:{exc}"[:160]
             time.sleep(self.poll_s)
 
     def start(self):
