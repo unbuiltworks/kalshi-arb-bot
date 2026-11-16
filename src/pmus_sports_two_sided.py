@@ -2866,13 +2866,21 @@ def start_xv_paper(venue: "Venue") -> Optional[Any]:
             except Exception:                           # noqa: BLE001
                 pass
             return out
+        kalshi = None
+        if os.getenv("PMUS_TWO_SIDED_XV_KALSHI", "1").strip() != "0":
+            # Kalshi FREE public market data: a second fair-value source,
+            # read-only GETs, no key, no account (src/pmus_sports_kalshi.py)
+            from src import pmus_sports_kalshi as KS
+            kalshi = KS.KalshiFair()
         xv = XV.XvPaper(targets, venue.gget, XV.gamma_get, log,
                         max_markets=int(os.getenv(
                             "PMUS_TWO_SIDED_XV_MARKETS", "20")),
                         tape_event=(TAPE.event if TAPE is not None
-                                    else None))
+                                    else None),
+                        kalshi=kalshi)
         xv.start()
-        log("xv_paper_enabled", label="PAPER ONLY: no orders")
+        log("xv_paper_enabled", kalshi=kalshi is not None,
+            label="PAPER ONLY: no orders")
         return xv
     except Exception as exc:                             # noqa: BLE001
         log("xv_paper_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")

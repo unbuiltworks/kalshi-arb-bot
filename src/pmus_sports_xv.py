@@ -282,7 +282,9 @@ class XvPaper(_IntlSocket):
                  gamma_get: Callable, log: Callable, *, max_markets: int = 20,
                  poll_gap_s: float = 0.35, intl_max_age_s: float = 30.0,
                  refresh_s: float = 300.0, summary_s: float = 600.0,
-                 tape_event: Optional[Callable] = None):
+                 tape_event: Optional[Callable] = None,
+                 kalshi: Optional[Any] = None,
+                 kalshi_max_age_s: float = 10.0):
         self.targets, self.pm_get, self.gamma_get = targets, pm_get, gamma_get
         self.log, self.tape_event = log, tape_event
         self.max_markets, self.gap = max_markets, poll_gap_s
@@ -290,12 +292,21 @@ class XvPaper(_IntlSocket):
         self.summary_s = summary_s
         self.intl = IntlBook()
         self.paper = PaperBook()
+        # second, independent fair-value source (src/pmus_sports_kalshi.py)
+        self.kalshi = kalshi
+        self.kalshi_max_age = kalshi_max_age_s
+        self.paper_k = PaperBook()
+        self.kt: Dict[str, str] = {}
+        self._kres: Dict[str, Optional[str]] = {}
         self.tokens: Dict[str, str] = {}
         self._lock = threading.Lock()
         self.stop = False
         self.ws_state = {"connected": False, "msgs": 0, "errors": 0,
                          "last_err": None}
-        self.stats = {"polls": 0, "edges": 0, "entries": 0, "no_intl": 0}
+        self.stats = {"polls": 0, "edges": 0, "entries": 0, "no_intl": 0,
+                      "k_edges": 0, "k_entries": 0, "no_kalshi": 0}
+        # intl vs Kalshi on the same market at the same moment
+        self.agree = {"both": 0, "abs_gap_sum": 0.0, "gap_ge_2c": 0}
 
     def _emit(self, kind: str, **kw: Any) -> None:
         self.log(kind, **kw)
@@ -308,18 +319,26 @@ class XvPaper(_IntlSocket):
     # ---------------------------------------------------------- discovery
     def refresh(self) -> None:
         found: Dict[str, str] = {}
+        kfound: Dict[str, str] = {}
         for tg in self.targets() or []:
             slug = str(tg.get("slug") or "")
             if not slug.startswith("aec-") or "cricket" in slug:
                 continue
-            if slug in self.tokens:
-                found[slug] = self.tokens[slug]
-            else:
+            need_intl = slug not in self.tokens
+            need_k = self.kalshi is not None and slug not in self._kres
+            m = None
+            if need_intl or need_k:
                 try:
                     md = self.pm_get(f"/v1/market/slug/{slug}") or {}
                     m = md.get("market") if isinstance(md, Mapping) and \
                         "market" in md else md
-                    po = m.get("outcomes") if isinstance(m, Mapping) else None
+                except Exception:                         # noqa: BLE001
+                    m = None
+            if not need_intl:
+                found[slug] = self.tokens[slug]
+            elif isinstance(m, Mapping):
+                try:
+                    po = m.get("outcomes")
                     if isinstance(po, str):
                         po = json.loads(po)
                     tok = resolve_token(self.gamma_get, slug, po)
@@ -327,15 +346,50 @@ class XvPaper(_IntlSocket):
                     tok = None
                 if tok:
                     found[slug] = tok
-            if len(found) >= self.max_markets:
+            if need_k and isinstance(m, Mapping):
+                try:
+                    self._kres[slug] = self.kalshi.resolve(slug, m)
+                except Exception:                         # noqa: BLE001
+                    pass                                  # retried next time
+            if self._kres.get(slug):
+                kfound[slug] = self._kres[slug]
+            if len(set(found) | set(kfound)) >= self.max_markets:
                 break
         with self._lock:
             self.tokens = found
-        self._emit("XV_PAPER_MARKETS", n=len(found),
-                   slugs=sorted(found)[:self.max_markets])
+            self.kt = kfound
+        if self.kalshi is not None:
+            self.kalshi.set_want(kfound.values())
+        self._emit("XV_PAPER_MARKETS", n=len(found), slugs=sorted(found),
+                   kalshi_n=len(kfound),
+                   kalshi_only=sorted(set(kfound) - set(found)))
 
     # ---------------------------------------------------------- PMUS poll
-    def step(self, slug: str, tok: str, now: float) -> None:
+    def _score(self, source: str, book: "PaperBook", slug: str,
+               pb, pa, fv: Optional[Mapping[str, Any]], now: float) -> None:
+        if fv is None:
+            self.stats["no_intl" if source == "intl" else "no_kalshi"] += 1
+            return
+        e = edge(pb, pa, fv["bid"], fv["ask"])
+        if e is None:
+            return
+        self.stats["edges" if source == "intl" else "k_edges"] += 1
+        rec = book.maybe_enter(slug, e, now, {
+            "source": source, "pm_bid": pb, "pm_ask": pa,
+            "fv_bid": fv["bid"], "fv_ask": fv["ask"],
+            "fv_age_s": round(now - fv["t"], 1)})
+        if rec is None:
+            return
+        self.stats["entries" if source == "intl" else "k_entries"] += 1
+        self._emit("XV_PAPER_ENTRY", slug=slug, source=source,
+                   side=e["side"], cost=e["cost"], edge=e["edge"],
+                   pm_bid=pb, pm_ask=pa, fv_bid=fv["bid"], fv_ask=fv["ask"],
+                   fv_age_s=rec["fv_age_s"],
+                   pull_signal=("resting PMUS %s ask at %s would be "
+                                "picked off" % (e["side"], e["cost"])),
+                   label="PAPER ONLY: no order placed")
+
+    def step(self, slug: str, tok: Optional[str], now: float) -> None:
         md = (self.pm_get(f"/v1/markets/{slug}/bbo") or {}).get(
             "marketData") or {}
 
@@ -348,32 +402,42 @@ class XvPaper(_IntlSocket):
                 return None
         pb, pa = f(md.get("bestBid")), f(md.get("bestAsk"))
         self.stats["polls"] += 1
-        for r in self.paper.mark(slug, pb, pa, now):
-            self._emit("XV_PAPER_RESULT", **r)
-        it = self.intl.fresh(tok, self.intl_max_age)
-        if it is None:
-            self.stats["no_intl"] += 1
-            return
-        e = edge(pb, pa, it["bid"], it["ask"])
-        if e is None:
-            return
-        self.stats["edges"] += 1
-        rec = self.paper.maybe_enter(slug, e, now, {
-            "pm_bid": pb, "pm_ask": pa, "intl_bid": it["bid"],
-            "intl_ask": it["ask"], "intl_age_s": round(now - it["t"], 1)})
-        if rec is not None:
-            self.stats["entries"] += 1
-            self._emit("XV_PAPER_ENTRY", slug=slug, side=e["side"],
-                       cost=e["cost"], edge=e["edge"], pm_bid=pb, pm_ask=pa,
-                       intl_bid=it["bid"], intl_ask=it["ask"],
-                       intl_age_s=rec["intl_age_s"],
-                       pull_signal=("resting PMUS %s ask at %s would be "
-                                    "picked off" % (e["side"], e["cost"])),
-                       label="PAPER ONLY: no order placed")
+        for src, book in (("intl", self.paper), ("kalshi", self.paper_k)):
+            for r in book.mark(slug, pb, pa, now):
+                self._emit("XV_PAPER_RESULT", source=src, **r)
+        it = self.intl.fresh(tok, self.intl_max_age) if tok else None
+        kq = None
+        if self.kalshi is not None and self.kt.get(slug):
+            kq = self.kalshi.fresh(self.kt[slug], self.kalshi_max_age)
+        if it and kq and it["bid"] is not None and it["ask"] is not None:
+            gap = abs((it["bid"] + it["ask"]) / 2 - (kq["bid"] + kq["ask"]) / 2)
+            self.agree["both"] += 1
+            self.agree["abs_gap_sum"] += gap
+            self.agree["gap_ge_2c"] += int(gap >= 0.02 - 1e-9)
+        if tok:
+            self._score("intl", self.paper, slug, pb, pa, it, now)
+        if self.kt.get(slug):
+            self._score("kalshi", self.paper_k, slug, pb, pa, kq, now)
+
+    def summary(self) -> Dict[str, Any]:
+        a = self.agree
+        return {"ws": dict(self.ws_state), "stats": dict(self.stats),
+                "paper_intl": self.paper.summary(),
+                "paper_kalshi": self.paper_k.summary(),
+                "kalshi": (dict(self.kalshi.stats) if self.kalshi is not None
+                           else None),
+                "intl_vs_kalshi": {
+                    "both_fresh": a["both"],
+                    "mean_abs_mid_gap": (round(a["abs_gap_sum"] / a["both"], 4)
+                                         if a["both"] else None),
+                    "gap_ge_2c": a["gap_ge_2c"]},
+                "label": "PAPER ONLY; theoretical; never P&L"}
 
     def run(self) -> None:
         threading.Thread(target=self._ws_thread, daemon=True,
                          name="xv-intl-ws").start()
+        if self.kalshi is not None:
+            self.kalshi.start()
         last_ref = last_sum = 0.0
         while not self.stop:
             now = time.time()
@@ -385,20 +449,19 @@ class XvPaper(_IntlSocket):
                                err=f"{type(exc).__name__}:{str(exc)[:120]}")
                 last_ref = now
             if now - last_sum > self.summary_s:
-                self._emit("XV_PAPER_SUMMARY", ws=dict(self.ws_state),
-                           stats=dict(self.stats), paper=self.paper.summary(),
-                           label="PAPER ONLY; theoretical; never P&L")
+                self._emit("XV_PAPER_SUMMARY", **self.summary())
                 last_sum = now
             with self._lock:
-                items = list(self.tokens.items())
-            if not items:
+                slugs = sorted(set(self.tokens) | set(self.kt))
+                toks = dict(self.tokens)
+            if not slugs:
                 time.sleep(5)
                 continue
-            for slug, tok in items:
+            for slug in slugs:
                 if self.stop:
                     break
                 try:
-                    self.step(slug, tok, time.time())
+                    self.step(slug, toks.get(slug), time.time())
                 except Exception as exc:                  # noqa: BLE001
                     self._emit("XV_PAPER_ERROR", at="step", slug=slug,
                                err=f"{type(exc).__name__}:{str(exc)[:120]}")
