@@ -269,3 +269,80 @@ def test_the_digest_distinguishes_both_documents(tmp_path):
     assert a != P.arm_digest(envelope(nonce="other"), campaign())
     assert a != P.arm_digest(envelope(), campaign(nonce="b5m-other-nonce-xx"))
     assert a == P.arm_digest(envelope(), campaign())
+
+
+# ---- the ceremony is the ONLY route into durable ARMED -----------------
+
+def test_only_enter_armed_writes_the_durable_armed_state():
+    """One writer, proved by walking the AST rather than by convention.
+
+    The mirror of the runner's one-`.arm()` invariant. ARMED is the state
+    that lets `may_submit` through, so a second writer anywhere -- a
+    helper, a repair script, a future convenience -- would be a second
+    arming mechanism with none of the checks. STOPPED and HALTED may be
+    written from anywhere, because writing a latch is always safe.
+    """
+    import ast
+    import pathlib
+
+    root = pathlib.Path(P.__file__).resolve().parents[1]
+    offenders, found = [], []
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in str(path) or path.name.startswith("test_"):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        #: the enclosing function of every write_state call whose first
+        #: argument names ARMED
+        for fn in [n for n in ast.walk(tree)
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            for call in ast.walk(fn):
+                if not isinstance(call, ast.Call):
+                    continue
+                name = (call.func.attr if isinstance(call.func, ast.Attribute)
+                        else getattr(call.func, "id", ""))
+                if name != "write_state" or not call.args:
+                    continue
+                a0 = call.args[0]
+                names = {a0.attr} if isinstance(a0, ast.Attribute) else set()
+                if isinstance(a0, ast.Name):
+                    names = {a0.id}
+                if isinstance(a0, ast.Constant):
+                    names = {str(a0.value)}
+                if "ARMED" in names:
+                    found.append("%s:%s" % (path.name, fn.name))
+                    if fn.name != "enter_armed":
+                        offenders.append("%s:%s" % (path.name, fn.name))
+    assert offenders == [], offenders
+    #: NOT VACUOUS. The scan must actually see the one legitimate writer,
+    #: or a future refactor could move it and the guard would still pass
+    #: while proving nothing.
+    assert found == ["l5_persistent_mode.py:enter_armed"], found
+
+
+def test_the_latched_states_may_still_be_written_from_anywhere():
+    #: the guard above must not have narrowed the ability to STOP or HALT
+    import ast
+    import pathlib
+
+    root = pathlib.Path(P.__file__).resolve().parents[1]
+    writers = set()
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in str(path) or path.name.startswith("test_"):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for call in ast.walk(tree):
+            if not isinstance(call, ast.Call) or not call.args:
+                continue
+            name = (call.func.attr if isinstance(call.func, ast.Attribute)
+                    else getattr(call.func, "id", ""))
+            a0 = call.args[0]
+            attr = a0.attr if isinstance(a0, ast.Attribute) else None
+            if name == "write_state" and attr in ("STOPPED", "HALTED"):
+                writers.add(path.name)
+    assert writers, "nothing can latch a halt or a stop any more"

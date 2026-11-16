@@ -236,6 +236,23 @@ def main(argv):
     if "--windows" in argv:
         global WINDOWS
         WINDOWS = int(argv[argv.index("--windows") + 1])
+    #: THE CAMPAIGN'S OWN DAILY STOP, overridable because the standing
+    #: envelope now COMPARES against it. `PMODE.enter_armed` refuses a
+    #: campaign whose max_daily_loss_usd exceeds the envelope's, so the
+    #: 11.00 default below cannot be armed under a 5.00 envelope -- it
+    #: returns CAMPAIGN_DAILY_LOSS_ABOVE_ENVELOPE and writes no state.
+    #: The looser default is therefore structurally unusable rather than
+    #: merely discouraged, and this flag is how the ceremony issues an
+    #: approval that matches the envelope it will be armed under.
+    #:
+    #: READ THE WARNING ON `DAILY_LOSS` BEFORE CHANGING IT: the request
+    #: is clamped by `max_daily_loss_for(series)`, and the figure is
+    #: judged against THIS LANE's own `day_settled_pnl` for the UTC day
+    #: -- not the account-wide result -- so a lane already past the
+    #: requested figure refuses every submission immediately.
+    if "--daily-loss" in argv:
+        global DAILY_LOSS
+        DAILY_LOSS = str(argv[argv.index("--daily-loss") + 1]).strip()
     completion = "--completion" in argv
     #: WHICH ASSETS. A comma list, validated against the one registry
     #: table, five-minute only -- the same rule `l5_5m_fleet` applies, so
