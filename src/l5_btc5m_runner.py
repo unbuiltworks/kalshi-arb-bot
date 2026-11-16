@@ -1205,6 +1205,7 @@ class Session:
 
 def main() -> int:            # pragma: no cover - the service entrypoint
     from src import l5_btc_reference as REF
+    from src import l5_series_registry as REG
     from src import l5_pmus_transport as T
     market = (os.getenv(X.MARKET_ENV) or "").strip()
     root = (os.getenv(AUTH.LEDGER_ENV) or "/state/btc5m/auth.jsonl")
@@ -1218,7 +1219,19 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
-    ref = REF.Reference(window_s=WINDOW_S)
+    #: THE FEED FOR THIS LANE'S ASSET. One Reference polls one index
+    #: series; the asset and its index symbol come from the one registry
+    #: table, together, because an index that did not belong to the asset
+    #: would price the wrong thing while looking healthy. BTC resolves to
+    #: btc/BRTI, so the existing lane is unchanged; ETH/SOL/XRP were
+    #: reporting p_up null with UNEXPECTED_INDEX purely because this
+    #: construction could only ever ask for Bitcoin's.
+    _row = REG.BY_STRATEGY[X.STRATEGY]
+    ref = REF.Reference(window_s=WINDOW_S, asset=_row.asset,
+                        index_symbol=_row.index_symbol)
+    print("L5_BTC5M_REFERENCE %s" % {
+        "strategy": X.STRATEGY, "asset": _row.asset,
+        "index_symbol": _row.index_symbol, "window_s": WINDOW_S}, flush=True)
 
     # SETTLEMENT RECOVERY, before the first window. A window whose process
     # died in the middle never recorded its settlement, and that market's

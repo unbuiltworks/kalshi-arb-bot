@@ -51,6 +51,19 @@ class Series(NamedTuple):
     horizon_s: float
     strategy: str
     coid_prefix: str
+    #: THE VENUE'S OWN INDEX SYMBOL for this asset, as `GET
+    #: /v1/market/slug/{slug}` reports it in
+    #: `assetPriceTerms.indexSymbol`. It is NOT derivable from the asset:
+    #: BTC is "BRTI" while every other asset is "<TICKER>USD_RTI", the
+    #: same irregularity the slug prefixes have.
+    #:
+    #: VERIFIED AGAINST THE VENUE 2026-11-16, 8 consecutive 5-minute
+    #: windows per asset, 32 of 32 exact: the 1-second bucket ending at
+    #: `windowStart`, with `tickCount` 60, equals `priceToBeat` to the
+    #: cent. So all four share one settlement convention -- a 60-second
+    #: average of this index, sampled at the window boundaries -- and
+    #: that was checked per asset rather than assumed from BTC.
+    index_symbol: str
 
     @property
     def slug_re(self) -> "re.Pattern[str]":
@@ -88,11 +101,14 @@ class Series(NamedTuple):
 #: variants all 404'd -- so each one is written down from the venue's own
 #: answer rather than derived.
 REGISTRY: Tuple[Series, ...] = (
-    Series("cpc-btc-updown-15m-", "btc", 900.0, "BTC15M", "l5f-"),
-    Series("cpc-btc-updown-5m-", "btc", 300.0, "BTC5M", "b5m-"),
-    Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-"),
-    Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-"),
-    Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-"),
+    Series("cpc-btc-updown-15m-", "btc", 900.0, "BTC15M", "l5f-", "BRTI"),
+    Series("cpc-btc-updown-5m-", "btc", 300.0, "BTC5M", "b5m-", "BRTI"),
+    Series("cpceth-eth-updown-5m-", "eth", 300.0, "ETH5M", "e5m-",
+           "ETHUSD_RTI"),
+    Series("cpcsol-sol-updown-5m-", "sol", 300.0, "SOL5M", "s5m-",
+           "SOLUSD_RTI"),
+    Series("cpcxrp-xrp-updown-5m-", "xrp", 300.0, "XRP5M", "x5m-",
+           "XRPUSD_RTI"),
 )
 
 def _check(rows: Tuple[Series, ...]) -> None:
@@ -115,6 +131,21 @@ def _check(rows: Tuple[Series, ...]) -> None:
                              % (r.prefix,))
         if r.horizon_s <= 0:
             raise ValueError("series horizon must be positive: %r" % (r,))
+        #: AN INDEX SYMBOL IS NOT OPTIONAL. Without it the probability
+        #: engine cannot tell whether the strike it fetched belongs to
+        #: the series it asked about, which is the check that caught
+        #: ETH/SOL/XRP as UNEXPECTED_INDEX rather than mispricing them.
+        if not re.match(r"^[A-Z][A-Z0-9_]{2,19}$", r.index_symbol or ""):
+            raise ValueError("series index symbol not in the venue's "
+                             "shape: %r" % (r.index_symbol,))
+    #: TWO ASSETS MAY SHARE AN INDEX (btc 5m and 15m both read BRTI), but
+    #: one asset must not carry two, which would mean the table disagrees
+    #: with itself about what the venue publishes.
+    by_asset: Dict[str, str] = {}
+    for r in rows:
+        if by_asset.setdefault(r.asset, r.index_symbol) != r.index_symbol:
+            raise ValueError("asset %r carries two index symbols: %r and %r"
+                             % (r.asset, by_asset[r.asset], r.index_symbol))
 
 
 _check(REGISTRY)

@@ -62,7 +62,7 @@ class TestTheStrike:
         (market(indexSymbol="CME_CF_BRR"), "UNEXPECTED_INDEX"),
         (market(marketType="ASSET_PRICE_MARKET_TYPE_RANGE"),
          "NOT_AN_UP_DOWN_MARKET"),
-        (market(asset={"symbol": "eth"}), "NOT_BTC"),
+        (market(asset={"symbol": "eth"}), "UNEXPECTED_ASSET"),
         (market(windowStart="garbage"), "WINDOW_UNREADABLE"),
         (market(windowStart="2026-11-10T18:00:00Z"),
          "STRIKE_WINDOW_MISALIGNED"),
