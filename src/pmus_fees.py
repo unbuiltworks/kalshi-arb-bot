@@ -36,6 +36,7 @@ which is where this account is.
 from __future__ import annotations
 
 import datetime as dt
+import os
 from decimal import Decimal as D, ROUND_HALF_EVEN
 from typing import Optional, Tuple
 
@@ -48,6 +49,35 @@ THETA_CHANGE_UTC = dt.datetime(2026, 9, 17, 4, 0, tzinfo=dt.timezone.utc)
 #: coefficient did not move; only the taker one did.
 THETA_BEFORE: Tuple[D, D] = (D("0.06"), D("0.0125"))
 THETA_FROM: Tuple[D, D] = (D("0.0695"), D("0.0125"))
+
+#: THE TIERED SCHEDULE. "Effective exchange-wide from 10:00 PM ET,
+#: Wednesday, October 28, 2026" (docs.polymarket.us/fees, fetched
+#: 2026-11-12). ET was UTC-4 on that date. From then the taker coefficient
+#: and the maker rebate are set by the ACCOUNT'S TIER, not by one number:
+#:   taker, trailing 30 completed ET days of taker volume:
+#:     Tier 1 < $10,000 -> 0.095 | Tier 2 < $50,000 -> 0.085 |
+#:     Tier 3 < $250,000 -> 0.075 | Tier 4 >= $250,000 -> 0.0695
+#:   maker rebate, qualifying maker volume (same window):
+#:     Tier 1 < $10,000,000 -> NO MAKER REBATE | Tier 2 -> 0.0035 |
+#:     Tier 3 ($50M+) -> 0.0070 | Tier 4 ($200M+) -> 0.0104
+#: "Maker rebates use the same tier coefficient in every market, including
+#: ... crypto." The coefficient is fixed when the ORDER IS INSERTED.
+TIER_SCHEDULE_UTC = dt.datetime(2026, 10, 29, 2, 0, tzinfo=dt.timezone.utc)
+TIER_SOURCE_FETCHED = "2026-11-12"
+TAKER_TIER_THETA = {1: D("0.095"), 2: D("0.085"), 3: D("0.075"), 4: D("0.0695")}
+MAKER_TIER_THETA = {1: D("0"), 2: D("0.0035"), 3: D("0.0070"), 4: D("0.0104")}
+#: this account's tiers. Volume-derived: our 30-day maker volume is a tiny
+#: fraction of $10M and our taker volume is below $10,000, so Tier 1 / Tier
+#: 1. A venue override or accelerated placement would be set here by the
+#: owner after it is confirmed; nothing infers a better tier.
+TAKER_TIER_ENV = "PMUS_TAKER_TIER"
+MAKER_TIER_ENV = "PMUS_MAKER_TIER"
+#: taker rebate under the tiered schedule: % of taker fees, paid WEEKLY
+TAKER_REBATE_TIERS_FROM_TIERED = ((D("50000000"), D("0.30")),
+                                  (D("25000000"), D("0.15")),
+                                  (D("10000000"), D("0.10")),
+                                  (D("1000000"), D("0.05")),
+                                  (D("250000"), D("0.03")))
 
 #: prices the venue will accept, and the published domain of the formula
 MIN_PRICE, MAX_PRICE = D("0.01"), D("0.99")
@@ -68,17 +98,43 @@ def _at(when: Optional[dt.datetime]) -> dt.datetime:
     return when
 
 
-def thetas(when: Optional[dt.datetime] = None) -> Tuple[D, D]:
-    """(taker, maker) coefficients in force at `when`; now by default."""
-    return THETA_FROM if _at(when) >= THETA_CHANGE_UTC else THETA_BEFORE
+def _tier(env: str, given: Optional[int]) -> int:
+    """The account tier: an explicit argument, else the env, else Tier 1.
+    Anything unreadable or out of range is Tier 1 -- the dearest taker fee
+    and no maker rebate -- so an error can only make economics look worse."""
+    raw = given if given is not None else os.environ.get(env, "")
+    try:
+        t = int(str(raw).strip() or 1)
+    except (TypeError, ValueError):
+        return 1
+    return t if t in (1, 2, 3, 4) else 1
 
 
-def taker_theta(when: Optional[dt.datetime] = None) -> D:
-    return thetas(when)[0]
+def account_tiers(taker_tier: Optional[int] = None,
+                  maker_tier: Optional[int] = None) -> Tuple[int, int]:
+    return _tier(TAKER_TIER_ENV, taker_tier), _tier(MAKER_TIER_ENV, maker_tier)
 
 
-def maker_theta(when: Optional[dt.datetime] = None) -> D:
-    return thetas(when)[1]
+def thetas(when: Optional[dt.datetime] = None, *,
+           taker_tier: Optional[int] = None,
+           maker_tier: Optional[int] = None) -> Tuple[D, D]:
+    """(taker, maker-rebate) coefficients in force at `when` (order
+    insertion time; now by default) for this account's tiers."""
+    t = _at(when)
+    if t < THETA_CHANGE_UTC:
+        return THETA_BEFORE
+    if t < TIER_SCHEDULE_UTC:
+        return THETA_FROM
+    tt, mt = account_tiers(taker_tier, maker_tier)
+    return TAKER_TIER_THETA[tt], MAKER_TIER_THETA[mt]
+
+
+def taker_theta(when: Optional[dt.datetime] = None, **tiers) -> D:
+    return thetas(when, **tiers)[0]
+
+
+def maker_theta(when: Optional[dt.datetime] = None, **tiers) -> D:
+    return thetas(when, **tiers)[1]
 
 
 def _fee(theta: D, contracts: D, price: D, *, cents: bool) -> D:
@@ -97,30 +153,37 @@ def _fee(theta: D, contracts: D, price: D, *, cents: bool) -> D:
 
 
 def taker_fee(price: D, contracts: D = D(1), *,
-              when: Optional[dt.datetime] = None, cents: bool = False) -> D:
+              when: Optional[dt.datetime] = None, cents: bool = False,
+              taker_tier: Optional[int] = None) -> D:
     """What a taker PAYS. Positive."""
-    return _fee(taker_theta(when), contracts, price, cents=cents)
+    return _fee(taker_theta(when, taker_tier=taker_tier), contracts, price,
+                cents=cents)
 
 
 def maker_rebate(price: D, contracts: D = D(1), *,
                  when: Optional[dt.datetime] = None,
-                 cents: bool = False) -> D:
+                 cents: bool = False,
+                 maker_tier: Optional[int] = None) -> D:
     """What a maker RECEIVES, credited at the point of trade. Positive.
 
     NEVER net this against a cost to make an action look affordable. It is
     reported on its own line and it is income only once credited.
     """
-    return _fee(maker_theta(when), contracts, price, cents=cents)
+    return _fee(maker_theta(when, maker_tier=maker_tier), contracts, price,
+                cents=cents)
 
 
-def taker_rebate_pct(prior_month_taker_notional_usd: D) -> D:
+def taker_rebate_pct(prior_month_taker_notional_usd: D,
+                     when: Optional[dt.datetime] = None) -> D:
     """Share of the taker fee rebated, from the published tier table.
 
     Returns 0 below the first tier. This account is below the first tier, so
     every economics figure in this programme carries 0 here.
     """
     v = D(str(prior_month_taker_notional_usd))
-    for floor, pct in TAKER_REBATE_TIERS:
+    table = (TAKER_REBATE_TIERS_FROM_TIERED
+             if _at(when) >= TIER_SCHEDULE_UTC else TAKER_REBATE_TIERS)
+    for floor, pct in table:
         if v >= floor:
             return pct
     return D("0")
@@ -128,7 +191,15 @@ def taker_rebate_pct(prior_month_taker_notional_usd: D) -> D:
 
 def provenance(when: Optional[dt.datetime] = None) -> dict:
     t, m = thetas(when)
+    tiered = _at(when) >= TIER_SCHEDULE_UTC
+    tt, mt = account_tiers()
     return {
+        "schedule": "TIERED" if tiered else "FLAT",
+        "taker_tier": tt if tiered else None,
+        "maker_tier": mt if tiered else None,
+        "maker_rebate_available_to_this_account": bool(m > 0),
+        "tier_schedule_effective_utc": TIER_SCHEDULE_UTC.isoformat(),
+        "tier_source_fetched": TIER_SOURCE_FETCHED,
         "source": SOURCE,
         "formula": "fee = theta * C * p * (1 - p)",
         "taker_theta": str(t),
