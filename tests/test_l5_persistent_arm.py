@@ -346,3 +346,65 @@ def test_the_latched_states_may_still_be_written_from_anywhere():
             if name == "write_state" and attr in ("STOPPED", "HALTED"):
                 writers.add(path.name)
     assert writers, "nothing can latch a halt or a stop any more"
+
+
+# ---- a finished campaign must not keep reporting ARMED -----------------
+
+def test_an_unreadable_deadline_is_never_read_as_no_deadline():
+    from src import l5_btc5m_runner as RUN
+    assert RUN._utc_or_none("not a time") is None
+    assert RUN._utc_or_none(None) is None
+    #: and a naive stamp is read as UTC rather than rejected
+    got = RUN._utc_or_none("2026-11-16T19:30:00")
+    assert got is not None and got.tzinfo is not None
+
+
+def test_a_passed_deadline_is_recognised_as_expired():
+    from src import l5_btc5m_runner as RUN
+    end = RUN._utc_or_none("2026-11-16T19:30:00Z")
+    assert end is not None
+    after = dt.datetime(2026, 11, 16, 20, 15, tzinfo=UTC)
+    before = dt.datetime(2026, 11, 16, 19, 25, tzinfo=UTC)
+    assert after >= end
+    assert not (before >= end)
+
+
+def test_returning_to_monitor_leaves_armed_with_one_writer(tmp_path):
+    """The lifecycle fix must not become a second way into ARMED.
+
+    It writes MONITOR, never ARMED, so the AST guard above still holds
+    and `enter_armed` remains the only route in.
+    """
+    path = str(tmp_path / "state.json")
+    assert do(tmp_path)["state"] == P.ARMED
+    P.write_state(P.MONITOR, why="CAMPAIGN_EXPIRED:2026-11-16T19:30:00Z",
+                  now=dt.datetime(2026, 11, 16, 20, 15, tzinfo=UTC), path=path)
+    st = P.read_state(path)
+    assert st["state"] == P.MONITOR
+    assert "CAMPAIGN_EXPIRED" in st["detail"]["why"]
+
+
+def test_an_expired_campaign_cannot_resubmit(tmp_path):
+    #: MONITOR is refused by the submit gate, which is the point
+    path = str(tmp_path / "state.json")
+    do(tmp_path)
+    P.write_state(P.MONITOR, why="CAMPAIGN_EXPIRED", now=NOW, path=path)
+    out = P.may_submit(
+        market="cpc-btc-updown-5m-2026-11-16-1910z", strategy="LATE_FAVORITE",
+        post_only=True, notional_usd=P.D("1.94"),
+        market_exposure_usd=P.D("0"), aggregate_exposure_usd=P.D("0"),
+        day_realized_usd=P.D("0"), now=FIRST,
+        raw=envelope(), deployment=SHA, path=path)
+    assert out["ok"] is False
+    assert out["reason"] == "STATE_NOT_ARMED"
+
+
+def test_a_latch_still_outranks_the_lifecycle_reset(tmp_path):
+    #: returning to MONITOR must never overwrite a HALT or a STOP; the
+    #: loop exits on those before it reaches the expiry check
+    path = str(tmp_path / "state.json")
+    P.write_state(P.STOPPED, why="operator", now=NOW, path=path)
+    assert P.read_state(path)["state"] == P.STOPPED
+    out = do(tmp_path)
+    assert out["reason"] == "STATE_STOPPED"
+    assert P.read_state(path)["state"] == P.STOPPED

@@ -382,8 +382,58 @@ def depth_for_pricing(*, public: Any, auth: Any, book: Any = None,
     pb, pa_ = _dec(public.get("bid")), _dec(public.get("ask"))
     if ab is None or aa is None:
         return no("AUTH_BOOK_ONE_SIDED")
+
+    #: A CROSSED AUTHENTICATED BOOK IS NOT A BOOK. Ask below bid is a
+    #: data fault, and it is the fault that matters: observed at 1915z
+    #: on 2026-11-16, ask 0.98 under bid 0.99 with `ask_shares` frozen
+    #: at 16.17 across every sample while bid size churned. Pricing
+    #: against that phantom offer is exactly the error this function
+    #: exists to prevent, so it is checked BEFORE the one-sided branch
+    #: below can decide to rely on the authenticated ask.
+    if aa < ab:
+        #: NAME THE TRANSPOSITION WHEN WE CAN STILL SEE IT. A crossed
+        #: book is the symptom; sides swapped against a readable public
+        #: quote is the cause, and reporting the symptom would send
+        #: someone hunting a venue data fault for a wiring one.
+        tol0 = _dec(max_divergence) or ZERO
+        if (pb is not None and pa_ is not None
+                and abs(ab - pa_) <= tol0 and abs(aa - pb) <= tol0):
+            return no("SIDES_TRANSPOSED",
+                      auth={"bid": str(ab), "ask": str(aa)},
+                      public={"bid": str(pb), "ask": str(pa_)})
+        return no("AUTH_BOOK_CROSSED", auth={"bid": str(ab), "ask": str(aa)},
+                  why=("ask below bid is a stale or phantom quote, not a "
+                       "tradable offer"))
+
     if pb is None or pa_ is None:
-        return no("PUBLIC_QUOTE_ONE_SIDED")
+        #: THE PUBLIC FEED DROPS A SIDE NEAR THE CLOSE; THE SOCKET DOES
+        #: NOT. Measured across the four windows of 2026-11-16: all 19
+        #: qualifying signals were refused PUBLIC_QUOTE_ONE_SIDED while
+        #: the authenticated book carried a real, uncrossed ask with
+        #: 814-38,728 shares behind it. Refusing there was a decision
+        #: about OUR FEED, not about the market.
+        #:
+        #: So a one-sided public quote no longer refuses outright. It
+        #: refuses the AGREEMENT CHECK -- there is nothing to agree
+        #: with -- and falls back to the authenticated book alone, which
+        #: has already been proved fresh and uncrossed above. The
+        #: fallback is reported, never silent, because an order priced
+        #: against one source is a weaker claim than one priced against
+        #: two and the log must say which it was.
+        side = "ask" if pa_ is None else "bid"
+        bs, asz = _dec(auth.get("bid_shares")), _dec(auth.get("ask_shares"))
+        if bs is None or asz is None or bs < ZERO or asz < ZERO:
+            return no("DEPTH_UNREADABLE")
+        st_ = auth.get("market_state")
+        if st_ is not None and str(st_).strip().upper() not in TRADABLE_STATES:
+            return no("MARKET_NOT_TRADABLE", market_state=str(st_)[:40])
+        return {"ok": True, "reason": None,
+                "bid_shares": str(bs), "ask_shares": str(asz),
+                "source": "AUTHENTICATED_ONLY",
+                "public_missing_side": side,
+                "auth": {"bid": str(ab), "ask": str(aa)},
+                "checked": {"stream_age_s": str(sa),
+                            "agreement": "NOT_CHECKED_PUBLIC_ONE_SIDED"}}
 
     tol = _dec(max_divergence)
     if tol is None or tol < ZERO:
