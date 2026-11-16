@@ -2820,10 +2820,32 @@ def main() -> int:
                 fallback="gateway_poll_only")
     start_xv_paper(venue)
     start_intl_guard(venue)
+    start_combo_study(venue)
     return Engine(venue, book).run()
 
 
 XV_PAPER_ENV = "PMUS_TWO_SIDED_XV_PAPER"
+COMBO_STUDY_ENV = "PMUS_TWO_SIDED_COMBO_STUDY"
+
+
+def start_combo_study(venue: "Venue") -> Optional[Any]:
+    """READ-ONLY combo (parlay) study (src/pmus_sports_combo_study.py),
+    default OFF. Given a signed-GET function and the public gateway GET --
+    never the venue -- so it can only read."""
+    if os.getenv(COMBO_STUDY_ENV, "0").strip() != "1":
+        return None
+    try:
+        from src import pmus_sports_combo_study as CS
+
+        def signed_get(path: str) -> Any:
+            return venue.q1.base._get_with_retry(venue.t, path)
+        cs = CS.ComboStudy(signed_get, venue.gget, log)
+        cs.start()
+        log("combo_study_enabled", label="READ-ONLY: nothing quoted")
+        return cs
+    except Exception as exc:                             # noqa: BLE001
+        log("combo_study_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
+        return None
 INTL_GUARD_ENV = "PMUS_TWO_SIDED_INTL_GUARD"
 
 

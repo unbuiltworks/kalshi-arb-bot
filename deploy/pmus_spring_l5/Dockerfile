@@ -116,6 +116,7 @@ COPY src/pmus_sports_tape.py src/pmus_sports_tape.py
 COPY src/pmus_sports_inventory.py src/pmus_sports_inventory.py
 COPY src/pmus_sports_xv.py src/pmus_sports_xv.py
 COPY src/pmus_sports_kalshi.py src/pmus_sports_kalshi.py
+COPY src/pmus_sports_combo_study.py src/pmus_sports_combo_study.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py
 # liquidity-program discovery/scoring for two-sided reward mode (2026-11-14).
 # Inert unless PMUS_TWO_SIDED_REWARDS=1; keyless public GETs, no order path.
