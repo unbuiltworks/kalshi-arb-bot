@@ -142,8 +142,10 @@ def _good(**over):
         halt={"ok": True},
         account_risk={"reachable": True, "age_s": D("4"),
                       "account_exposure_usd": D("1.50")},
-        watchdog_managed_urls=["http://l5-btc5m-live.railway.internal:8082"],
+        watchdog_managed_urls=[
+            "http://pmus-spring-l5-probe.railway.internal:8090"],
         this_lane_url="http://l5-btc5m-live.railway.internal:8082",
+        oracle_sees_lane=True,
         strategy_inputs={"min_edge_per_share": D("0.004"),
                          "clip_usd": D("2.00")},
         strategy_timing={"late_window_s": 45, "window_s": 300,
@@ -188,13 +190,27 @@ def test_reported_foreign_exposure_refuses_an_account_wide_claim():
     assert "FOREIGN_EXPOSURE_NOT_CHARGED" in out["failures"]
 
 
-def test_a_healthy_watchdog_watching_someone_else_is_not_coverage():
+def test_being_on_the_managed_list_is_the_failure_not_being_off_it():
+    #: THE READING THAT LOOKS RIGHT AND IS BACKWARDS. The watchdog's own
+    #: docstring: registering a lane "EXEMPTS from the overdue/age latch
+    #: only; it never makes an order cancellable". A managed lane is one
+    #: the watchdog is told to leave alone. During normal operation an
+    #: order rests ~15s against a 300s threshold, so that latch fires
+    #: exactly in the case worth covering -- a crashed lane leaving an
+    #: order resting -- and an exemption removes it.
     out = _good(watchdog_managed_urls=[
-        "http://pmus-spring-l5-probe.railway.internal:8090"])
+        "http://l5-btc5m-live.railway.internal:8082"])
     assert out["ok"] is False
-    assert "LANE_NOT_UNDER_WATCHDOG" in out["failures"]
-    assert out["detail"]["LANE_NOT_UNDER_WATCHDOG"]["managed"] == [
-        "http://pmus-spring-l5-probe.railway.internal:8090"]
+    assert "LANE_EXEMPT_FROM_WATCHDOG_AGE_LATCH" in out["failures"]
+
+
+def test_an_unclaimable_order_is_not_covered_however_healthy_the_watchdog():
+    #: the watchdog cancels nothing the oracle cannot claim: it reports
+    #: not_ours NOT_IN_OWNERSHIP_REGISTRY, asserts the halt, and leaves
+    #: the order resting
+    out = _good(oracle_sees_lane=False)
+    assert out["ok"] is False
+    assert "LANE_NOT_IN_OWNERSHIP_REGISTRY" in out["failures"]
 
 
 def test_a_stale_account_risk_document_refuses():
@@ -253,6 +269,7 @@ def test_every_failure_is_reported_not_just_the_first():
         env={}, state="MONITOR", envelope_scope=None,
         reservation_readable=False, halt=None, account_risk=None,
         watchdog_managed_urls=[], this_lane_url="",
+        oracle_sees_lane=False,
         strategy_inputs={"min_edge_per_share": None},
         strategy_timing={"late_window_s": 30, "window_s": 300,
                          "cancel_lead_s": 30, "step_s": 5})
@@ -263,7 +280,7 @@ def test_every_failure_is_reported_not_just_the_first():
                  "SHARED_RESERVATION_UNREADABLE",
                  "ACCOUNT_LANES_UNREADABLE",
                  "HALT_UNREADABLE_OR_ASSERTED", "ACCOUNT_RISK_UNREADABLE",
-                 "THIS_LANE_URL_UNKNOWN", "LANE_NOT_UNDER_WATCHDOG"):
+                 "THIS_LANE_URL_UNKNOWN", "LANE_NOT_IN_OWNERSHIP_REGISTRY"):
         assert name in out["failures"], name
 
 

@@ -149,15 +149,63 @@ Unset, the envelope gate is **skipped**: per-market, worst-case-loss and
 maker-only stop binding and only the $10 reservation remains. The
 variable is not on `l5-btc5m-live`.
 
-### 2.3 The lane is not under watchdog coverage
+### 2.3 Watchdog coverage — and why "add the lane" is backwards
 
-The production watchdog is healthy — 20s sweeps, `cancel_enabled: true`,
-`halted: null`, `read_error: null`, fresh heartbeat. Verified live.
+You asked me to add the intended lane to independent watchdog coverage.
+Having read the watchdog, **that would reduce its protection, not add
+it**, and I am not proposing it.
 
-Its `managed_lanes` names exactly one service:
-`http://pmus-spring-l5-probe.railway.internal:8090`. **A healthy
-watchdog watching someone else is not coverage.**
-`L5_WATCHDOG_MANAGED_LANE_URLS` needs this lane's fills URL.
+The production watchdog is healthy — 20s sweeps, `cancel_enabled:
+true`, `halted: null`, `read_error: null`, fresh heartbeat. Verified
+live. Its `managed_lanes` names one service,
+`pmus-spring-l5-probe:8090`.
+
+But `L5_WATCHDOG_MANAGED_LANE_URLS` is **not a coverage list — it is an
+exemption list.** The watchdog's own docstring:
+
+> a lane qualifies only if its document is readable, says
+> `manages_own_resting: true` […] This **EXEMPTS from the overdue/age
+> latch only**; it never makes an order cancellable.
+
+A managed lane is one the watchdog is told to leave alone because that
+lane manages its own resting orders. An *unregistered* lane has its
+orders judged by age: older than `max_order_age_s = 300` becomes
+`overdue` and is cancelled. During normal operation a late-favorite
+order rests ~15 seconds against that 300s threshold, so the latch fires
+in exactly one circumstance — **a crashed or wedged lane leaving an
+order resting** — which is precisely the case worth covering. Adding the
+lane to the list would remove it.
+
+Two further details would have made the registration a silent no-op in
+any case: the watchdog fetches `<base>/l5/live_orders.json`, while this
+lane's `serve_fills` answers only `/btc5m_fills` and 404s everything
+else; and `lane_ids` requires `manages_own_resting: true`, which
+`fills_document` does not emit. The lane would have read `UNREACHABLE`
+and been judged by age regardless — the right outcome, reached by
+accident.
+
+**What coverage actually requires is the ownership oracle.** The
+watchdog cancels nothing it cannot claim:
+
+```
+mine = claimed.get(vid)
+if mine is None:
+    out["not_ours"].append(dict(o, why="NOT_IN_OWNERSHIP_REGISTRY"))
+    continue
+```
+
+An order absent from `oracle.claimed()` is left **resting** while the
+halt is asserted. The oracle reads `L5_ORDER_REGISTRY_URL`, which is set
+on the watchdog service with its value redacted to this session. If it
+points at the probe's registry — which serves the probe's own ledger —
+then BTC5m orders would be `not_ours` and a stranded order would halt
+the system but not be withdrawn.
+
+**So the real requirement is: confirm the watchdog's ownership oracle can
+see this lane's orders, and leave the lane off the managed list.** The
+safety gate now checks both — being *on* the list is a failure
+(`LANE_EXEMPT_FROM_WATCHDOG_AGE_LATCH`), and so is an oracle that cannot
+claim the lane (`LANE_NOT_IN_OWNERSHIP_REGISTRY`).
 
 ### 2.4 `L5_ACCOUNT_RISK_URL` cannot be verified from here
 
@@ -188,8 +236,8 @@ permissive answer); `maker_only` not exactly `True`; any limit over its
 compiled ceiling; state not `ARMED`; an unset or unreadable shared
 reservation; unreadable lane count; `FOREIGN_EXPOSURE` not `CHARGED`; an
 unreadable or asserted halt; a risk document unreachable, stale, or
-without an exposure figure; **this lane absent from the watchdog's
-managed list**; any strategy input unset or zero; and a strategy-timing
+without an exposure figure; **this lane exempted from the watchdog's age latch, or absent
+from its ownership registry**; any strategy input unset or zero; and a strategy-timing
 combination that can never be stepped.
 
 Run against production as it stands today it returns **12 failures**:
@@ -199,7 +247,7 @@ ACCOUNT_LANES_UNREADABLE
 ACCOUNT_RISK_UNREADABLE
 ENVELOPE_ABSENT
 FOREIGN_EXPOSURE_NOT_CHARGED
-LANE_NOT_UNDER_WATCHDOG
+LANE_NOT_IN_OWNERSHIP_REGISTRY
 SHARED_RESERVATION_PATH_UNSET
 SHARED_RESERVATION_UNREADABLE
 STATE_NOT_ARMED
@@ -352,8 +400,10 @@ is whether an order survives the gate path to the venue.
 3. Setting `L5_PERSISTENT_ENVELOPE`, `L5_PERSISTENT_STATE`,
    `L5_SHARED_RESERVATION`, `L5_ACCOUNT_LANES=1`, `L5_LATE_FAVORITE=YES`
    and the four late-favorite inputs.
-4. **Adding this lane to `L5_WATCHDOG_MANAGED_LANE_URLS`** — a change to
-   the watchdog service's configuration.
+4. **Confirming `L5_ORDER_REGISTRY_URL` on the watchdog resolves to a
+   registry that includes this lane's orders** (§2.3). No change to
+   `L5_WATCHDOG_MANAGED_LANE_URLS`: adding this lane there would exempt
+   it from the age-cancel latch it needs.
 5. The **campaign start time** in UTC.
 
 I will not set any variable, touch `pmus-spring-l5-probe`, change the

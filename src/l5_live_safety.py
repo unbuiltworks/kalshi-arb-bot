@@ -148,6 +148,7 @@ def check(*, env: Mapping[str, str],
           account_risk: Any,
           watchdog_managed_urls: Any,
           this_lane_url: Any,
+          oracle_sees_lane: Any,
           strategy_inputs: Any,
           strategy_timing: Any) -> Dict[str, Any]:
     """`ok` only when every protection is present and binding.
@@ -226,12 +227,33 @@ def check(*, env: Mapping[str, str],
         need(_dec(account_risk.get("account_exposure_usd")) is not None,
              "ACCOUNT_RISK_HAS_NO_EXPOSURE_FIGURE")
 
-    # ---- 7. INDEPENDENT coverage: the watchdog must manage THIS lane.
+    # ---- 7. INDEPENDENT coverage, which is NOT the managed-lane list.
     #
-    #: Observed in production: the watchdog was sweeping healthily every
-    #: 20s with cancel_enabled, and its managed-lane list named exactly
-    #: one service -- not this one. A healthy watchdog watching someone
-    #: else is not coverage.
+    #: The obvious reading -- "add the lane to
+    #: L5_WATCHDOG_MANAGED_LANE_URLS" -- is backwards, and the
+    #: watchdog's own docstring says so: registering a lane "EXEMPTS
+    #: from the overdue/age latch only; it never makes an order
+    #: cancellable". A managed lane is one the watchdog is told to LEAVE
+    #: ALONE because that lane manages its own resting orders. Adding
+    #: this lane would therefore REMOVE the age-based protection, which
+    #: is the only protection that matters here: during normal operation
+    #: an order rests ~15s against a 300s threshold, so the latch fires
+    #: exactly in the case we want covered -- a crashed lane leaving an
+    #: order resting.
+    #:
+    #: Two further things would have made the registration a no-op
+    #: anyway: the watchdog fetches `<base>/l5/live_orders.json`, and
+    #: this lane's `serve_fills` answers only `/btc5m_fills` and 404s
+    #: everything else; and `lane_ids` requires
+    #: `manages_own_resting: true`, which `fills_document` does not
+    #: emit. The lane would have read UNREACHABLE and been judged by age
+    #: regardless -- the right outcome, reached by accident.
+    #:
+    #: What coverage ACTUALLY requires is the ownership oracle. Nothing
+    #: is cancelled unless `oracle.claimed()` names the venue order id;
+    #: anything else is `not_ours: NOT_IN_OWNERSHIP_REGISTRY` and is
+    #: left resting while the halt is asserted. So the oracle's registry
+    #: must be able to see THIS lane's orders.
     url = str(this_lane_url or "").strip()
     need(url != "", "THIS_LANE_URL_UNKNOWN")
     try:
@@ -239,9 +261,16 @@ def check(*, env: Mapping[str, str],
     except TypeError:
         managed = []
         fail.append("WATCHDOG_MANAGED_LIST_UNREADABLE")
-    need(url != "" and any(url == m or url in m for m in managed),
-         "LANE_NOT_UNDER_WATCHDOG",
-         this_lane_url=url, managed=managed)
+    #: being ON the list is the failure, not being off it
+    need(not (url != "" and any(url == m or url in m for m in managed)),
+         "LANE_EXEMPT_FROM_WATCHDOG_AGE_LATCH",
+         this_lane_url=url, managed=managed,
+         why=("the managed-lane list exempts a lane from the overdue/age "
+              "cancel; this lane needs that latch, not an exemption"))
+    need(oracle_sees_lane is True, "LANE_NOT_IN_OWNERSHIP_REGISTRY",
+         why=("the watchdog cancels nothing it cannot claim: an order "
+              "absent from the oracle's registry is left resting while "
+              "the halt is asserted"))
 
     # ---- 8. the strategy must have valid inputs AND be reachable.
     if not isinstance(strategy_inputs, Mapping):
