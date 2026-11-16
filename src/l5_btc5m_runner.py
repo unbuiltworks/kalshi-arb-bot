@@ -900,6 +900,52 @@ def reconcile_pending(ex: Any, transport: Any, *,
     return out
 
 
+#: the refusal `_submit` emits when the shared hold cannot be taken
+BUDGET_REFUSAL = "SHARED_RESERVATION:RESERVATION_WOULD_EXCEED_CAP"
+
+
+def _budget_exhausted(events: Any) -> Dict[str, Any]:
+    """Every order this window lost to the shared budget, with its EV.
+
+    Read from the step records already emitted, so nothing new is
+    stored and a window that refused nothing reports a plain zero.
+    """
+    out: Dict[str, Any] = {"count": 0, "notional_usd": "0", "orders": [],
+                           "note": ("orders this lane was authorized to "
+                                    "place and could not fund because a "
+                                    "sibling lane held the room; the "
+                                    "allocation is arrival-order, so a "
+                                    "high count with high EV is the case "
+                                    "for ranking by expected value")}
+    total = D(0)
+    for rec in (events or ()):
+        if not isinstance(rec, Mapping):
+            continue
+        for r in (rec.get("refused") or ()):
+            if not isinstance(r, Mapping):
+                continue
+            if str(r.get("reason")) != BUDGET_REFUSAL:
+                continue
+            detail = r.get("detail") or {}
+            intent = r.get("order") or {}
+            n = _dec(detail.get("adding"))
+            if n is not None:
+                total += n
+            out["count"] += 1
+            out["orders"].append({
+                "side": intent.get("side"),
+                "price": str(intent.get("price")),
+                "qty": str(intent.get("qty")),
+                "strategy": intent.get("strategy") or intent.get("reason"),
+                "notional_usd": None if n is None else str(n),
+                "aggregate_at_the_time_usd": detail.get("aggregate_usd"),
+                "cap_usd": detail.get("cap_usd"),
+                "t_in_window_s": rec.get("t_in_window_s"),
+            })
+    out["notional_usd"] = str(total)
+    return out
+
+
 def _attribution_block(ex: Any, market: Any, settled: Any,
                        fees: Any) -> Dict[str, Any]:
     """`Btc5mExecutor.attribution` plus each strategy's own venue fees.
@@ -1462,6 +1508,21 @@ class Session:
             #: `pair_cost` stay market-level facts above.
             "by_strategy": _attribution_block(self.ex, self.market,
                                               settled, fees),
+            #: OPPORTUNITIES LOST TO AN EXHAUSTED SHARED BUDGET.
+            #:
+            #: The four lanes are separate processes competing for one
+            #: reservation, so the room goes to whichever ASKS FIRST --
+            #: not to the best expected value. That is first-come-first-
+            #: served, and it is neither equal allocation nor EV
+            #: allocation. Before changing it, measure whether it costs
+            #: anything: these are the orders a lane wanted, was
+            #: authorized to place, and could not fund because a sibling
+            #: had the room.
+            #:
+            #: A high count with high rejected EV is the case for
+            #: cross-lane allocation. A count near zero means arrival
+            #: order never mattered and the work would be wasted.
+            "budget_exhausted": _budget_exhausted(self.events),
             "labels": (
                 "venue-confirmed orders and fills only. settled_net_usd is "
                 "settlement arithmetic on confirmed fills minus the venue's "
