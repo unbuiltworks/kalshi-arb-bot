@@ -45,6 +45,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 from src import l5_btc5m_controller as C
 from src import l5_btc5m_execution as X
 from src import l5_persistent_mode as PMODE
+from src import l5_shared_reservation as RESV
 from src import l5_live_authorization as AUTH
 
 D = Decimal
@@ -792,6 +793,73 @@ def persistent_gate(*, now: dt.datetime) -> Dict[str, Any]:
             "state": st["state"], "scope": env["scope"]}
 
 
+def reconcile_pending(ex: Any, transport: Any) -> Dict[str, Any]:
+    """ONE non-blocking settlement attempt per unsettled market.
+
+    This is what makes rollover possible: a window closes, stays
+    PENDING, and is settled here later while the loop trades the next
+    one. It reuses `Btc5mExecutor.settle`, which is already idempotent --
+    the same outcome twice writes nothing and the OTHER outcome raises,
+    so a duplicate settlement event cannot double-count and a
+    contradictory one cannot reverse a settled result.
+
+    THE PENDING SET IS DERIVED from the durable ledger -- filled orders
+    in a market absent from `settled` -- so a crash between closing and
+    settling loses nothing and a restart picks the window up again.
+
+    NOTHING IS RELEASED WITHOUT THE VENUE. A market the venue cannot
+    settle, or settles to something that is not 0 or 1, stays pending
+    and keeps its cost reserved. `up_won` is only ever the venue's own
+    settlement price, never a mark or a guess.
+    """
+    out: Dict[str, Any] = {"pending": [], "settled": [], "unreadable": []}
+    try:
+        markets = list(ex.pending_settlement())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"pending": [], "settled": [], "unreadable": [],
+                "error": type(exc).__name__}
+    for m in markets:
+        verdict = None
+        try:
+            verdict = transport.settlement(m)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["pending"].append({"market": m,
+                                   "why": "VENUE_ERROR:%s" % type(exc).__name__})
+            continue
+        if not (isinstance(verdict, Mapping) and verdict.get("terminal")):
+            out["pending"].append({"market": m,
+                                   "why": "VENUE_SETTLEMENT_NOT_SEEN"})
+            continue
+        px = _dec(verdict.get("settlement_px"))
+        if px not in (D("0"), D("1")):
+            #: not binary is not a settlement
+            out["unreadable"].append({"market": m, "settlement_px": str(px)})
+            continue
+        try:
+            rec = ex.settle(m, px == D("1"))
+        except ValueError as exc:
+            out["unreadable"].append({"market": m, "error": str(exc)[:120]})
+            continue
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["unreadable"].append({"market": m,
+                                      "error": type(exc).__name__})
+            continue
+        if rec.get("provisional"):
+            #: an order of ours is still open in it, so it is not over
+            out["pending"].append({"market": m, "why": "ORDERS_UNRESOLVED"})
+            continue
+        out["settled"].append({"market": m,
+                               "settlement_pnl": str(rec.get("settlement_pnl")),
+                               "already": bool(rec.get("already_settled"))})
+    return out
+
+
 def _attribution_block(ex: Any, market: Any, settled: Any,
                        fees: Any) -> Dict[str, Any]:
     """`Btc5mExecutor.attribution` plus each strategy's own venue fees.
@@ -857,7 +925,24 @@ class Session:
                  armed_fn: Optional[Callable[[], bool]] = None,
                  arm_fn: Optional[Callable[[Any], Any]] = None,
                  bounds_fn: Optional[Callable[[str], Any]] = None,
-                 max_windows: int = 1) -> None:
+                 max_windows: int = 1,
+                 settle_wait_s: float = SETTLE_WAIT_S) -> None:
+        #: HOW LONG CLOSING MAY WAIT FOR THE VENUE.
+        #:
+        #: The bounded campaign keeps the original 1800s: it trades a
+        #: fixed list and has nothing to miss by waiting. PERSISTENT
+        #: rollover passes 0, because `one_window` was SYNCHRONOUS
+        #: THROUGH SETTLEMENT and that made the loop unable to advance
+        #: while a prior window waited -- observed 2026-11-16: four lanes
+        #: entered 1520z, closed clean, and then sat in this poll for the
+        #: rest of a 23-minute run, completing 4 of 16 windows. Windows
+        #: are 5 minutes apart and this wait was bounded at 30, so any
+        #: settlement slower than the gap silently skipped windows.
+        #:
+        #: At 0 the window closes and the market stays PENDING; the loop
+        #: reconciles it out of band. Its cost stays reserved until the
+        #: venue settles it, so advancing never frees risk.
+        self.settle_wait_s = float(settle_wait_s)
         self.market, self.ex, self.t = market, executor, transport
         self.root = root
         self.book_fn, self.p_fn = book_fn, p_fn
@@ -1156,14 +1241,21 @@ class Session:
 
     def settle(self) -> Dict[str, Any]:
         ws = window_start(self.market).timestamp()
-        until = ws + WINDOW_S + SETTLE_WAIT_S
+        until = ws + WINDOW_S + self.settle_wait_s
         verdict = None
-        while self.clock() < until:
+        #: ALWAYS ONE ATTEMPT, then poll until the deadline. With
+        #: `settle_wait_s` 0 the deadline is already past, so a
+        #: while-loop would make NO attempt at all and report the window
+        #: unsettled without having asked -- which would leave every
+        #: persistent window pending even when the venue was ready.
+        while True:
             try:
                 verdict = self.t.settlement(self.market)
             except BaseException:                              # noqa: BLE001
                 verdict = None
             if verdict and verdict.get("terminal"):
+                break
+            if self.clock() >= until:
                 break
             self.sleep(SETTLE_POLL_S)
         if not (verdict and verdict.get("terminal")):
@@ -1406,7 +1498,9 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         emit("L5_BTC5M_AUTH_BOOK", {"started": False,
                                     "why": type(exc).__name__})
 
-    def one_window(slug: str, max_windows: int) -> Dict[str, Any]:
+    def one_window(slug: str, max_windows: int,
+                   settle_wait_s: float = SETTLE_WAIT_S
+                   ) -> Dict[str, Any]:
         # THE EXECUTOR'S OWN LOCK NAMES THIS WINDOW. `arming_refusal`
         # refuses every submission unless `L5_BTC5M_MARKET` is set AND
         # equals the market being traded -- an ADDITIONAL lock in front of
@@ -1447,7 +1541,8 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 own_unaccounted=own),
             halt_fn=lambda: shared_halt(
                 (os.getenv(HALT_URL_ENV) or "").strip()),
-            max_windows=max_windows)
+            max_windows=max_windows,
+            settle_wait_s=settle_wait_s)
         return sess.run()
 
     # WHICH WINDOWS. Either the ONE the owner named, which is the original
@@ -1542,13 +1637,25 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             if nxt["wait_s"] > 0:
                 time.sleep(min(nxt["wait_s"], 30.0))
                 continue
-            rep = one_window(nxt["market"], 1)
-            #: RECONCILE BEFORE THE NEXT WINDOW MAY SPEND ANYTHING.
+            #: settle_wait_s 0: close the window and move on. The market
+            #: stays PENDING and is settled out of band below, which is
+            #: what lets the loop reach the next five-minute window at
+            #: all. Its cost stays reserved meanwhile.
+            rep = one_window(nxt["market"], 1, settle_wait_s=0.0)
+            #: SETTLE WHAT THE VENUE IS READY TO SETTLE, for every window
+            #: still pending -- including ones from earlier iterations
+            #: and from before a restart. One attempt each, never a wait.
+            recon = reconcile_pending(ex, t)
+            #: RECONCILE BEFORE THE NEXT WINDOW MAY SPEND ANYTHING. Only
+            #: markets the venue actually settled give their room back.
             freed = ex.sync_reservation()
             emit("L5_BTC5M_PERSISTENT_WINDOW",
                  {"market": nxt["market"], "started": rep.get("started"),
                   "reason": rep.get("reason"),
+                  "settlement": recon,
+                  "pending_count": len(recon.get("pending") or []),
                   "reservation": freed,
+                  "reserved_usd": (RESV.aggregate() or {}).get("usd"),
                   "utc": dt.datetime.now(UTC).isoformat()})
             #: A LEDGER HALT IS A SAFETY HALT: latch it so every lane and
             #: every restart sees it, then stop. It is never walked past.

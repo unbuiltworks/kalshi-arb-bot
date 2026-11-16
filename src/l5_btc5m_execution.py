@@ -1566,6 +1566,24 @@ class Btc5mExecutor:
             and not out["still_open"] and not out["refused"]
         return out
 
+    def pending_settlement(self) -> List[str]:
+        """Markets we hold fills in that the venue has not settled for us.
+
+        DERIVED, NOT STORED. A window is pending exactly when it has
+        filled orders and is absent from `settled`, both of which are
+        already on the durable ledger -- so the pending set survives a
+        restart with no second place to forget to write, and a crash
+        between closing a window and settling it loses nothing.
+        """
+        settled = self._ledger["settled"]
+        out = set()
+        for r in self._ledger["orders"].values():
+            q = _dec(r.get("filled_qty")) or ZERO
+            m = r.get("market")
+            if q > 0 and m and m not in settled:
+                out.add(str(m))
+        return sorted(out)
+
     def sync_reservation(self) -> Dict[str, Any]:
         """Release this lane's holds whose orders are no longer live.
 
