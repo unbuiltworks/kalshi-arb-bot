@@ -38,6 +38,7 @@ COPY src/l5_strategy_arbiter.py src/l5_strategy_arbiter.py
 COPY src/l5_straddle_ev.py src/l5_straddle_ev.py
 COPY src/l5_shared_reservation.py src/l5_shared_reservation.py
 COPY src/l5_live_safety.py src/l5_live_safety.py
+COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY src/l5_persistent_mode.py src/l5_persistent_mode.py
 COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
 COPY src/l5_5m_fleet.py src/l5_5m_fleet.py

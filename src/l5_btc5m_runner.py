@@ -47,6 +47,7 @@ from src import l5_btc5m_execution as X
 from src import l5_persistent_mode as PMODE
 from src import l5_shared_reservation as RESV
 from src import l5_live_safety as SAFE
+from src import l5_order_registry_server as REG
 from src import l5_live_authorization as AUTH
 
 D = Decimal
@@ -309,6 +310,42 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
 
     class H(BaseHTTPRequestHandler):
         def do_GET(self) -> None:                              # noqa: N802
+            #: THE OWNERSHIP REGISTRY, at the path the watchdog reads.
+            #:
+            #: The watchdog cancels nothing it cannot claim: an order
+            #: absent from `oracle.claimed()` is `not_ours:
+            #: NOT_IN_OWNERSHIP_REGISTRY`, the halt is asserted and the
+            #: order is LEFT RESTING. This lane served only
+            #: `/btc5m_fills`, so its venue ids could never be claimed
+            #: and the watchdog could halt for it but never cancel.
+            #:
+            #: `l5_order_registry_server.registry` is reused verbatim
+            #: rather than shaped here, so this document is the same one
+            #: the other executor publishes -- same terminal filtering
+            #: (`live_orders()` is NEW/LIVE/UNCERTAIN only, because
+            #: publishing a terminal id would let the watchdog act on an
+            #: order that no longer exists), same `readable: false` when
+            #: the ledger cannot be read, same `as_of_utc` so a wedged
+            #: publisher reads as STALE rather than as a fresh empty
+            #: claim, and the same `submission_disabled` lock.
+            #:
+            #: `risk` is deliberately NOT passed: the account-wide risk
+            #: block stays the responsibility of the service that
+            #: enforces those limits, and this lane is its consumer.
+            #: Publishing our own would give the account two answers.
+            #:
+            #: It does NOT claim `manages_own_resting`, so this lane is
+            #: never exempted from the watchdog's overdue/age latch. The
+            #: aim is coverage, and that flag would remove it.
+            if self.path.split("?", 1)[0].lstrip("/") == REG.REGISTRY_KEY:
+                body, code = json.dumps(REG.registry(ex),
+                                        default=str).encode(), 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path.split("?", 1)[0].lstrip("/") != "btc5m_fills":
                 body, code = b'{"error":"no such key"}', 404
             else:
