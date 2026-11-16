@@ -3,6 +3,15 @@
 **Status: research. Nothing armed, nothing money-capable deployed, no live
 authorization requested or implied by this document.**
 
+> **⚠ MARCH FIGURES IN THIS DOCUMENT ARE SUPERSEDED.** They were
+> computed on a capture truncated by the 300-page cap, which held only a
+> fifth of March. The untruncated re-capture (`PAGE_CAP=1500`, 750,500
+> rows, 2026-03-12 → 2026-08-25) gives March 2,734 BTC5m windows and
+> 392,634 fills, not 421 and 87,320. Corrected figures, and the verified
+> latest trading date, are in `0X8DXD_VS_OUR_STRADDLE.md`. The AUGUST
+> era and every structural conclusion below were unchanged by the fuller
+> tape; only March's magnitudes moved.
+
 Accounting label for every figure below: **historical reconstruction from
 public venue data**. None of it is our realized P&L.
 
@@ -58,7 +67,8 @@ below use `activity.jsonl` alone.
 
 In 414 windows (all March) the redemption **exceeds** the tape's
 terminal inventory — $30,457 of settlement cash with no captured cost
-basis. The signature (one outcome positive, the other negative, sells
+basis. (On the untruncated tape this is **2,514 of 2,719** March
+windows, 92%.) The signature (one outcome positive, the other negative, sells
 exceeding buys) is consistent with **SPLIT** operations, which mint both
 tokens for $1 and appear as no trade on either route. These windows'
 cost basis is not recoverable from these APIs, so their P&L is reported
@@ -107,15 +117,19 @@ break-even. 0x8dxd's last BTC5m fill is 2026-08-24.
 411 of 421 March windows have missing cost basis (SPLIT). The +2.97% on
 those windows is an artifact of understated cost, not a measurement. The
 10 windows with verified cost basis are **−25.24%** on n=10. **The March
-strategy's profitability is UNKNOWN, in both directions.**
+strategy's profitability is UNKNOWN, in both directions, and is not
+recoverable from these APIs.**
 
 ### Whole-capture caution
 
-Across all 1,281 settled windows the total reads +$23,761, but on the
-**861 windows whose cost basis is fully verified it is −$1,495.53
-(−0.26%)**. The apparent profit lives entirely in windows where data is
-missing. **This capture does not support a claim that 0x8dxd was
-profitable on BTC5m.**
+The apparent profit lives entirely in windows where cost basis is
+missing. On the untruncated tape: the 1,056 windows whose cost basis is
+fully verified read **−$37,504**, while the 2,517 that do not reconcile
+read **+$193,820**. **Neither number is a valid estimate of the March
+era** — whether a window reconciles is determined by whether SPLIT was
+used in it, which is part of the strategy itself. **This capture does
+not support a claim that 0x8dxd was profitable on BTC5m**, and does not
+support the opposite claim for March either.
 
 ## 5. The 44-contract Down @ $0.99 fill, in context
 

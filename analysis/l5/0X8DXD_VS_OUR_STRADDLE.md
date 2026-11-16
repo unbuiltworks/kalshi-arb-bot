@@ -23,15 +23,16 @@ $2,110.80** unclaimed — consistent with abandonment, not rotation.
 
 ## 1. Monthly strategy breakdown
 
-Activity tape, complete from 2026-03-23 (the page cap truncates *older*
-data; a re-capture extending to 2026-03-07 is running and covers more of
-the same March era).
+**Re-captured untruncated (`PAGE_CAP=1500`, 750,500 rows, 2026-03-12 →
+2026-08-25); every figure below is from that tape.** The first capture
+had truncated March to a fifth of its real size, which moved several
+numbers — corrections are marked ⚠. The tape still ends at the
+1500-page cap, so March remains partial at its oldest edge.
 
 | month | series | windows | fills | fills/win | vwap | sell% | 2-sided% | med t+s |
 |---|---|---|---|---|---|---|---|---|
-| 2026-03 | BTC5m | 422 | 87,320 | **206.9** | 0.431 | 18.7% | **99.3%** | 93 |
-| 2026-03 | BTC15m | 139 | 39,779 | 286.2 | 0.424 | 14.3% | 97.8% | 383 |
-| 2026-03 | SOL / XRP / ETH / BTC-other | 143 | 13,837 | ~105 | 0.34–0.44 | 0% | 80–97% | — |
+| 2026-03 | BTC5m | **2,734** ⚠ | **392,634** ⚠ | **106 median** ⚠ | 0.440 | 17.3% | **95.8%** | 93 |
+| 2026-03 | BTC15m + SOL/XRP/ETH/other | — | 333,407 | — | 0.34–0.44 | — | 80–98% | — |
 | 2026-04 | other | 1 | 30 | 30.0 | 0.065 | 6.7% | 0% | — |
 | 2026-05 → 07 | — | **0** | **0** | — | — | — | — | — |
 | 2026-08 | BTC5m | 860 | 3,465 | **4.0** | **0.989** | **0%** | **0.3%** | **291** |
@@ -44,11 +45,11 @@ in August with a different, single-sided strategy.
 | income source | amount | note |
 |---|---|---|
 | REFERRAL_REWARD | **$49,435.87** | 91% of all incentives. Largest month is **April ($23,873) — a month with 30 fills.** Affiliate income, not a trading strategy, and not available to us. |
-| MAKER_REBATE | **$3,967.96** | $3,932.20 of it in **March** (the two-sided era); $35.75 in August. |
+| MAKER_REBATE | **$13,537.44** ⚠ | $13,501.69 of it in **March** (the two-sided era); $35.75 in August. |
 | REWARD | $583.13 | |
 | TAKER_REBATE | $122.25 | August only — **direct evidence they took liquidity**, so "maker-only" is not a safe description of them. |
 | **total incentives** | **$54,109.44** | |
-| **trading P&L, verified cost basis** | **−$1,495.53** | 861 windows whose cost reconciles to redemption. **Negative.** |
+| **trading P&L, August era** | **−$545.86** | 860 of 860 windows accounted — the one era that is cleanly measurable. |
 
 **Which strategy contributed the most realized net profit in the latest
 period? Neither.** August's single-sided 97–99¢ strategy produced
@@ -56,47 +57,53 @@ period? Neither.** August's single-sided 97–99¢ strategy produced
 accumulated +$1,534; six losing windows cost −$2,081) plus $158 of
 rebates. In the one era with verified economics, incentives were the
 business and trading was a cost. **0x8dxd is not a confirmed profitable
-BTC5m trader**, and the March era's trading P&L is unverifiable because
-411 of 421 windows have cost basis arriving outside the trade tape
-(SPLIT mints both tokens for $1 and appears as no trade).
+BTC5m trader**, and the March era's trading P&L is **unverifiable in both
+directions**: 2,514 of 2,719 March windows (92%) have cost basis arriving
+outside the trade tape, because a SPLIT mints both tokens for $1 and
+appears as no trade. The 205 March windows that *do* reconcile read
+−$39,038 (−30.2%); the 2,514 that do not read +$193,819 (+5.1%). **Neither
+is a valid estimate**, because whether a window reconciles is itself
+determined by whether SPLIT was used in it, which is part of the
+strategy. This gap is not closable from these APIs.
 
 The only source-confirmed economics in the straddle era:
-**$2,056,680 traded → $3,932.20 maker rebate = 19.1 bps of notional.**
+**$10,061,554 traded → $13,501.69 maker rebate = 13.42 bps of notional** ⚠
+(the truncated tape read 19.1 bps).
 
 ## 2. What 0x8dxd does (March two-sided era) vs what our bot does
 
 | dimension | 0x8dxd, measured | our STRADDLE, as coded |
 |---|---|---|
-| first entry timing | **t+5s** median (p90 t+13s) | t=0 onward, both legs rest all window |
-| simultaneous UP/DOWN | **99.3% of windows** | yes — fixed limit on both sides |
+| first entry timing | **t+7s** median (p90 t+23s) | t=0 onward, both legs rest all window |
+| simultaneous UP/DOWN | **95.8% of windows** | yes — fixed limit on both sides |
 | quoting span | **222s** of the 300s window | t=0 → t=270 (`CANCEL_LEAD_S=30`) |
-| placement price | BUY median **0.440**, p10 0.21, **p90 0.68** | fixed price bounded **(0, 0.50) exclusive**, ladder optional |
-| → reachability | **35.2% of their buy fills are at ≥0.50 — outside our band by construction** | — |
-| → deep-rung overlap | only **3.7%** of their buys at ≤0.10 | a 0.05 rung captures ~nothing |
-| repeated fills/window | **168 median**, p90 358, max 1,374 | a handful; `MAX_RESTING_ENTRIES` is **ACCUMULATE-only**, not wired to STRADDLE |
-| selling | **18.7% of fills**, SELL median 0.370 at t+127 vs BUY 0.440 at t+85 | **never sells** |
-| inventory imbalance at window end | **median 18.4%**, p90 56.5% — carries directional residual | completion targets a *matched* cheap pair |
-| pair economics | pair cost ≈ **1.00**; margin is spread + rebate | pair cost ceiling **0.90** (policy target 0.96) — a locked cheap pair |
+| placement price | BUY median **0.440**, p10 0.21, **p90 0.67** | fixed price bounded **(0, 0.50) exclusive**, ladder optional |
+| → reachability | **35.6% of their buy fills are at ≥0.50 — outside our band by construction** | — |
+| → deep-rung overlap | only **2.9%** of their buys at ≤0.10 | a 0.05 rung captures ~nothing |
+| repeated fills/window | **106 median**, p90 302, max 1,374 | a handful; `MAX_RESTING_ENTRIES` is **ACCUMULATE-only**, not wired to STRADDLE |
+| selling | **17.3% of fills**, SELL median 0.370 vs BUY median 0.440 | **never sells** |
+| inventory imbalance at window end | **median 21.2%** — carries directional residual | completion targets a *matched* cheap pair |
+| pair economics | pair cost ≈ **1.00**; margin is spread + a 13.42 bps rebate | pair cost ceiling **0.90** (policy target 0.96) — a locked cheap pair |
 | per-window deployment | **$990 median** | $4.50 (2 × $2.25 clip) — **~220× smaller** |
 
 ## 3. The three biggest behavioral gaps
 
 **Gap 1 — We quote where nobody trades.** Their liquidity sits at the
-money (BUY median 0.440, interquartile roughly 0.21–0.68). Our straddle
-rests at a fixed deep price below 0.50. Only 3.7% of their fills occurred
-at ≤0.10. A deep two-sided straddle is not a slow version of their
+money (BUY median 0.440, p10–p90 0.21–0.67). Our straddle rests at a
+fixed deep price below 0.50. Only 2.9% of their fills occurred at ≤0.10,
+and 35.6% were at ≥0.50, outside our band entirely. A deep two-sided straddle is not a slow version of their
 strategy; it is a different order that does not fill. This is the
 mechanical reason our straddle produces almost no fills.
 
-**Gap 2 — One shot versus 168.** They re-quote continuously for 222s and
-average 168 fills a window. Our straddle rests a fixed ladder and has no
+**Gap 2 — One shot versus 106.** They re-quote continuously for ~222s and
+take a median of 106 fills a window (p90 302, max 1,374). Our straddle rests a fixed ladder and has no
 re-quote-after-fill path (`MAX_RESTING_ENTRIES` governs ACCUMULATE only).
 Frequency, not size, is the dimension we are missing — which matches the
 standing `PATIENCE → FREQUENCY → SIZE → CONCURRENCY` order.
 
 **Gap 3 — They are a market maker; we are a pair-arbitrageur.** Their
 pair cost is ≈$1.00 and they end windows deliberately imbalanced (median
-18.4%), earning spread and a **19.1 bps maker rebate**. Our straddle is
+21.2%), earning spread and a **13.42 bps maker rebate**. Our straddle is
 built to lock a pair below $0.90. These are different businesses, and the
 difference is not a tuning value: near-$1 pair tolerance is **LOCKED** by
 `L5_OPERATING_MODEL.md` until equivalent economics are source-confirmed
@@ -107,13 +114,13 @@ for our account.
 **Nothing here is applied.** Priority order:
 
 1. **Confirm rebate eligibility for our account, before any executor
-   change.** This is the decisive question and it needs no code: at 19.1
-   bps, our existing $4.50/window × 288 windows = $1,296/day of notional
-   earns **$2.48/day** of rebate. If our account earns no maker rebate on
+   change.** This is the decisive question and it needs no code: at **13.42 bps**,
+   our existing $4.50/window × 288 windows = $1,296/day of notional earns
+   **$1.74/day** of rebate. If our account earns no maker rebate on
    PMUS, Gap 3 cannot be closed at any size and the March behavior should
-   not be replicated at all. Matching their $480/day-scale rebate income
-   would need ~$2.5M/day of notional — ~190× our limits — so this is a
-   *validation* path, not a profit path.
+   not be replicated at all. Matching a $480/day rebate income would need ~$3.6M/day of notional —
+   ~2,750× our daily notional — so this is a *validation* path, not a
+   profit path.
 2. **Gap 1 — config only, no code.** `L5_BTC5M_STRADDLE_PRICE` /
    `_RUNGS` already accept anything in (0, 0.50). Moving the rungs from
    deep toward the money is a variable change inside existing bounds and
@@ -150,7 +157,7 @@ that argues for leaving the cancel lead alone.
 own 860 windows, and abandoned by its author.
 
 **Not the March strategy on faith** — its trading P&L is unverifiable,
-and its one confirmed margin is a 19.1 bps maker rebate whose
+and its one confirmed margin is a 13.42 bps maker rebate whose
 availability to our account is unconfirmed.
 
 **Replicate the structure, in shadow, and measure our own fills:**
