@@ -793,7 +793,34 @@ def persistent_gate(*, now: dt.datetime) -> Dict[str, Any]:
             "state": st["state"], "scope": env["scope"]}
 
 
-def reconcile_pending(ex: Any, transport: Any) -> Dict[str, Any]:
+#: HOW MUCH RECONCILIATION ONE ITERATION MAY DO.
+#:
+#: A backlog must never delay the next five-minute window. If the venue
+#: goes quiet for an hour, four lanes accumulate twelve pending markets
+#: each; attempting all of them with a slow venue would spend the gap
+#: between windows on settlement and miss the next market -- the stall
+#: this decoupling exists to remove, reappearing as a backlog instead of
+#: a single blocking poll.
+#:
+#: So a pass is bounded two ways and NEW MARKET ROLLOVER TAKES PRIORITY:
+#: at most RECONCILE_MAX_MARKETS attempts and at most RECONCILE_BUDGET_S
+#: of wall clock, whichever runs out first. Nothing is dropped -- the
+#: pending set is DERIVED from the ledger, so a market not reached this
+#: pass is simply reached in a later one.
+#:
+#: OLDEST FIRST, which is why starvation is impossible: slugs sort
+#: chronologically, a settled market leaves the set, so every pass makes
+#: progress on the front of the queue and no market can be skipped
+#: forever.
+RECONCILE_MAX_MARKETS = 8
+RECONCILE_BUDGET_S = 5.0
+
+
+def reconcile_pending(ex: Any, transport: Any, *,
+                      max_markets: int = RECONCILE_MAX_MARKETS,
+                      budget_s: float = RECONCILE_BUDGET_S,
+                      clock: Callable[[], float] = time.time
+                      ) -> Dict[str, Any]:
     """ONE non-blocking settlement attempt per unsettled market.
 
     This is what makes rollover possible: a window closes, stays
@@ -812,15 +839,28 @@ def reconcile_pending(ex: Any, transport: Any) -> Dict[str, Any]:
     and keeps its cost reserved. `up_won` is only ever the venue's own
     settlement price, never a mark or a guess.
     """
-    out: Dict[str, Any] = {"pending": [], "settled": [], "unreadable": []}
+    out: Dict[str, Any] = {"pending": [], "settled": [],
+                           "unreadable": [], "deferred": []}
     try:
         markets = list(ex.pending_settlement())
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
         return {"pending": [], "settled": [], "unreadable": [],
-                "error": type(exc).__name__}
-    for m in markets:
+                "deferred": [], "error": type(exc).__name__}
+    started = clock()
+    out["considered"] = len(markets)
+    #: OLDEST FIRST: slugs sort chronologically, so the front of the
+    #: queue is the most overdue and progress is guaranteed.
+    for n, m in enumerate(sorted(markets)):
+        if n >= max(1, int(max_markets)):
+            out["deferred"] = [{"market": x, "why": "WORKLOAD_BUDGET"}
+                               for x in sorted(markets)[n:]]
+            break
+        if n and (clock() - started) >= float(budget_s):
+            out["deferred"] = [{"market": x, "why": "TIME_BUDGET"}
+                               for x in sorted(markets)[n:]]
+            break
         verdict = None
         try:
             verdict = transport.settlement(m)

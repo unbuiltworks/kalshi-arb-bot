@@ -245,3 +245,84 @@ class TestItNeverDoubleCountsOrGuesses:
                 raise RuntimeError("ledger unreadable")
         got = RUN.reconcile_pending(Bad(), Venue())
         assert got["settled"] == [] and got.get("error") == "RuntimeError"
+
+
+class TestReconciliationIsBoundedAndRolloverTakesPriority:
+    """A backlog must never delay the next five-minute window. If the
+    venue goes quiet for an hour, four lanes accumulate twelve pending
+    markets each; attempting all of them with a slow venue would spend
+    the inter-window gap on settlement and miss the next market -- the
+    stall this decoupling removes, reappearing as a backlog."""
+
+    def _many(self, ex, n):
+        rows = []
+        for i in range(n):
+            m = "cpc-btc-updown-5m-2026-11-16-%04dz" % (1800 + i * 5)
+            rows.append(row(oid(chr(ord("a") + i % 26)) + str(i), m,
+                            X.C.UP, "0.08", "2", "2", "0.16"))
+        ex._ledger["orders"] = dict(rows)
+        return [r[1]["market"] for r in rows]
+
+    def test_the_workload_per_pass_is_capped(self, ex):
+        self._many(ex, 20)
+        v = Venue()
+        got = RUN.reconcile_pending(ex, v, max_markets=8)
+        assert len(v.asks) == 8
+        assert got["considered"] == 20
+        assert len(got["deferred"]) == 12
+        assert all(d["why"] == "WORKLOAD_BUDGET" for d in got["deferred"])
+
+    def test_a_slow_venue_cannot_eat_the_window_gap(self, ex):
+        """Time budget, not just a count: ten markets at two seconds each
+        would be twenty seconds of a five-minute gap."""
+        self._many(ex, 20)
+        ticks = iter([0.0] + [float(i) for i in range(1, 60)])
+        v = Venue()
+        got = RUN.reconcile_pending(ex, v, max_markets=50, budget_s=5.0,
+                                    clock=lambda: next(ticks))
+        assert len(v.asks) <= 7
+        assert got["deferred"] and got["deferred"][0]["why"] == "TIME_BUDGET"
+
+    def test_at_least_one_market_is_always_attempted(self, ex):
+        """Even with no time left, a pass makes progress rather than
+        spinning forever on a backlog it never touches."""
+        self._many(ex, 5)
+        v = Venue()
+        got = RUN.reconcile_pending(ex, v, budget_s=0.0,
+                                    clock=lambda: 10.0)
+        assert len(v.asks) == 1
+        assert len(got["deferred"]) == 4
+
+    def test_nothing_deferred_is_lost(self, ex):
+        """The pending set is DERIVED from the ledger, so a market not
+        reached this pass is reached in a later one."""
+        ms = self._many(ex, 20)
+        v = Venue()
+        RUN.reconcile_pending(ex, v, max_markets=8)
+        assert sorted(ex.pending_settlement()) == sorted(ms)
+
+    def test_oldest_first_so_nothing_starves(self, ex):
+        """Slugs sort chronologically; a settled market leaves the set,
+        so every pass advances the front of the queue."""
+        ms = self._many(ex, 20)
+        v = Venue()
+        first = RUN.reconcile_pending(ex, v, max_markets=4)
+        assert v.asks == sorted(ms)[:4]
+        #: settle those four, and the next pass moves on
+        for m in v.asks:
+            v.ready[m] = "1"
+        RUN.reconcile_pending(ex, v, max_markets=4)
+        RUN.reconcile_pending(ex, v, max_markets=4)
+        assert sorted(v.asks)[-1] == sorted(ms)[7]
+
+    def test_a_whole_backlog_drains_over_consecutive_passes(self, ex):
+        ms = self._many(ex, 20)
+        v = Venue()
+        for m in ms:
+            v.ready[m] = "1"
+        passes = 0
+        while ex.pending_settlement() and passes < 10:
+            RUN.reconcile_pending(ex, v, max_markets=8)
+            passes += 1
+        assert ex.pending_settlement() == []
+        assert passes == 3                      # 20 markets, 8 a pass
