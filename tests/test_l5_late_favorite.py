@@ -229,9 +229,36 @@ class TestItWillNotStackOnASideTheStraddleIsWorking:
     directional position neither strategy chose."""
 
     def test_a_resting_order_on_the_favourite_refuses(self, on):
-        r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2"}])
+        r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
+                           "client_order_id": "b5m-" + "a" * 24}])
         assert r["ok"] is False and r["reason"] == "SIDE_ALREADY_WORKED"
-        assert r["resting"] == ["0.08"]
+        assert r["order"] is None
+        assert [c["price"] for c in r["conflicts"]] == ["0.08"]
+
+    def test_the_refusal_carries_the_order_it_would_have_placed(self, on):
+        """The arbiter compares this candidate against the resting rung's
+        continuation value. "Always refuse" is not a comparison."""
+        r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
+                           "client_order_id": "b5m-" + "b" * 24}])
+        assert r["blocked_order"]["side"] == "UP"
+        assert r["blocked_order"]["post_only"] is True
+        assert r["blocked_order"]["strategy"] == "LATE_FAVORITE"
+        assert D(r["ev_usd"]) > D("0")
+
+    def test_the_conflict_names_the_exact_order_to_cancel(self, on):
+        """Exact-order cancellation needs the id, not a side."""
+        coid = "b5m-" + "c" * 24
+        r = call(resting=[{"side": "UP", "price": "0.08", "qty": "2",
+                           "client_order_id": coid},
+                          {"side": "DOWN", "price": "0.08", "qty": "2",
+                           "client_order_id": "b5m-" + "d" * 24}])
+        assert [c["client_order_id"] for c in r["conflicts"]] == [coid]
+
+    def test_ev_usd_scales_with_the_clip(self, on):
+        one = call(clip_usd="0.97", book=dict(BOOK, ask="0.99"))
+        two = call(clip_usd="1.94", book=dict(BOOK, ask="0.99"))
+        assert two["order"]["qty"] == one["order"]["qty"] * 2
+        assert D(two["ev_usd"]) == D(one["ev_usd"]) * 2
 
     def test_a_resting_order_on_the_OTHER_side_does_not(self, on):
         """The underdog rung is the straddle's business and cannot

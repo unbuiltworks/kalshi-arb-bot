@@ -176,27 +176,27 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
         #: edge becomes a large correlated loss.
         return no("ALREADY_HOLD_FAVOURITE", qty=str(held))
 
-    #: NOTHING OF OURS MAY ALREADY REST ON THIS SIDE.
+    #: WHAT ALREADY RESTS ON THIS SIDE, read now and JUDGED LAST.
     #:
     #: The straddle rests a CHEAP rung on both sides. If one is still
     #: live on the favourite when this buys at 0.97 and the market then
     #: collapses, the cheap rung fills too and we hold two shares of the
     #: same side at wildly different prices -- a purely directional
     #: position neither strategy chose, and the residual inventory the
-    #: concurrent design exists to prevent. Refusing is the only rule
-    #: that cannot produce it; freeing the side instead is a change to
-    #: the straddle's own behaviour and is the OWNER'S call, not this
-    #: module's.
+    #: concurrent design exists to prevent.
+    #:
+    #: The conflict is checked AFTER a level has been priced, not before,
+    #: so the refusal can carry the order it WOULD have placed. The
+    #: arbiter needs that to compare this candidate against the resting
+    #: rung's continuation value; without it the only possible rule is
+    #: "always refuse", which is not a comparison.
     if resting is None:
         return no("RESTING_UNREADABLE")
     try:
-        mine = [o for o in resting
-                if str((o or {}).get("side")) == side]
+        conflicts = [o for o in resting
+                     if str((o or {}).get("side")) == side]
     except TypeError:
         return no("RESTING_UNREADABLE")
-    if mine:
-        return no("SIDE_ALREADY_WORKED",
-                  resting=[str((o or {}).get("price")) for o in mine][:4])
 
     fee = _dec(fee_per_share)
     margin = _dec(min_edge_per_share)
@@ -245,12 +245,28 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
             considered.append(row); continue
         row.update(qty=str(qty), cost_usd=str(cost))
         considered.append(row)
-        out.update(ok=True, reason=None, considered=considered,
-                   order={"op": "PLACE", "side": side, "price": px,
-                          "qty": qty, "post_only": True, "intent": "BUY",
-                          "reason": "LATE_FAVORITE", "slot": 0,
-                          "strategy": "LATE_FAVORITE"},
-                   ev_per_share=str(ev), cost_usd=str(cost))
+        candidate = {"op": "PLACE", "side": side, "price": px,
+                     "qty": qty, "post_only": True, "intent": "BUY",
+                     "reason": "LATE_FAVORITE", "slot": 0,
+                     "strategy": "LATE_FAVORITE"}
+        #: EV OF THE WHOLE CLIP, which is what the arbiter compares
+        #: against keeping the rung -- a per-share figure would make a
+        #: 2-share candidate look like a 1-share one.
+        out.update(considered=considered, ev_per_share=str(ev),
+                   ev_usd=str(ev * qty), cost_usd=str(cost))
+        if conflicts:
+            #: NAMED, not just counted: the arbiter cancels EXACTLY this
+            #: order and nothing else.
+            out.update(ok=False, reason="SIDE_ALREADY_WORKED",
+                       order=None, blocked_order=candidate,
+                       conflicts=[{"side": str((o or {}).get("side")),
+                                   "price": str((o or {}).get("price")),
+                                   "qty": str((o or {}).get("qty")),
+                                   "client_order_id": (
+                                       (o or {}).get("client_order_id"))}
+                                  for o in conflicts][:4])
+            return out
+        out.update(ok=True, reason=None, order=candidate)
         return out
     out["considered"] = considered
     return no("NO_LEVEL_QUALIFIED")
