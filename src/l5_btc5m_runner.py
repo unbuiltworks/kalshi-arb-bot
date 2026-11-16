@@ -46,6 +46,7 @@ from src import l5_btc5m_controller as C
 from src import l5_btc5m_execution as X
 from src import l5_persistent_mode as PMODE
 from src import l5_shared_reservation as RESV
+from src import l5_live_safety as SAFE
 from src import l5_live_authorization as AUTH
 
 D = Decimal
@@ -1267,15 +1268,23 @@ class Session:
                 #: FAIL CLOSED: an unreadable socket yields no sizes, the
                 #: late favourite refuses NO_DEPTH, and nothing is placed.
                 #: Absent size is never read as unlimited size.
+                #: AND THE TWO SOURCES MUST DESCRIBE THE SAME BOOK.
+                #: `depth_for_pricing` compares the authenticated
+                #: snapshot's OWN bid/ask -- which this call used to
+                #: discard -- against the public quote we price against,
+                #: and enforces the freshness of both. A complementary
+                #: token, transposed sides, another market or a stale
+                #: socket each size NOTHING and are named individually,
+                #: so a wiring error is never reported as latency.
                 depth = self.book_depth()
+                sized = SAFE.depth_for_pricing(book=None, public=book,
+                                               auth=depth)
                 rep = self.ex.step(
                     market=self.market,
                     book={"bid": book.get("bid"), "ask": book.get("ask"),
                           "age_s": book.get("age_s"),
-                          "bid_shares": (depth.get("bid_shares")
-                                         if depth.get("read") else None),
-                          "ask_shares": (depth.get("ask_shares")
-                                         if depth.get("read") else None)},
+                          "bid_shares": sized.get("bid_shares"),
+                          "ask_shares": sized.get("ask_shares")},
                     t_in_window_s=now - ws, p_up=p_up,
                     p_source=("VENUE_INDEX" if p_up is not None else None),
                     #: the index age the estimator already measured, and
@@ -1323,6 +1332,12 @@ class Session:
                     #: only feature class the gate sweep left untested and
                     #: the one the public tape cannot carry. Observational.
                     "depth": self.book_depth(),
+                    #: WHY SIZE WAS WITHHELD, when it was. Without this a
+                    #: window that placed nothing for want of trustworthy
+                    #: depth looks identical to one with no opportunity.
+                    "depth_for_pricing": {
+                        k: v for k, v in (sized or {}).items()
+                        if k != "checked"},
                     "entry": {k: (rep.get("entry_eval") or {}).get(k) for k in
                               ("why", "cap_usd", "completion_reserve_usd",
                                "room_usd", "price", "qty")},

@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 D = Decimal
 ZERO = D(0)
+ONE = D(1)
 
 #: the compiled ceilings a live envelope may clamp DOWN to, never past
 CEIL_AGGREGATE_USD = D("10.00")
@@ -292,3 +293,132 @@ def check(*, env: Mapping[str, str],
             "note": ("fail-closed: ok is True only when every protection is "
                      "present and binding. An absent protection is reported "
                      "as a failure, never assumed benign.")}
+
+
+# --------------------------------------------------------------------------
+# AUTHENTICATED DEPTH USED FOR PRICING MUST BE THE SAME BOOK AS THE QUOTE
+# --------------------------------------------------------------------------
+#: The runner prices against the PUBLIC endpoint's `bestBidQuote` /
+#: `bestAskQuote` and takes executable SIZE from the AUTHENTICATED
+#: socket, because the public endpoint publishes no size at any level.
+#: Those are two different sources, and nothing was checking that they
+#: describe the same thing.
+#:
+#: Four ways they can disagree, each of which would price an order
+#: against one book while sizing it from another:
+#:
+#:   WRONG MARKET -- the snapshot is keyed by slug, so this is right by
+#:     construction today, but a reader that trusts it silently inherits
+#:     any future change to that keying.
+#:   WRONG TOKEN -- a binary market has two tokens whose books are
+#:     complements. `apply_events` keeps ONE bid/ask per slug with no
+#:     token dimension, and `LF.evaluate` derives the DOWN side as
+#:     `1 - up_bid` on the assumption that both sources quote the same
+#:     token. If they did not, `ask_shares` would be the size resting on
+#:     the OPPOSITE side -- and a 0.97 bid would be sized against depth
+#:     that is not there.
+#:   WRONG SIDE -- bid and ask transposed reads a 0.03 market as a 0.97
+#:     one.
+#:   STALE -- a push socket sends nothing when nothing changes, so the
+#:     age of the last CHANGE proves nothing; the age of the last FRAME
+#:     on a connected socket does. A stale snapshot's sizes beside a
+#:     fresh quote is the same error as a wrong token, arriving slowly.
+#:
+#: ONE CHECK CATCHES ALL FOUR: the authenticated snapshot carries its own
+#: bid and ask, which the runner was discarding. If they agree with the
+#: quote we price against, the two sources describe the same book. If
+#: they do not, nothing is sized and nothing is placed.
+#:
+#: Tolerance exists because the two are read microseconds apart over
+#: different transports, not to paper over disagreement: one tick is the
+#: smallest difference the venue can represent.
+MAX_QUOTE_DIVERGENCE = D("0.01")
+#: a connected socket delivers frames continuously; 2s of silence while
+#: we are about to price off it is not freshness
+MAX_STREAM_AGE_S = D("2.0")
+#: the public quote we price against
+MAX_PUBLIC_QUOTE_AGE_S = D("2.0")
+#: market states in which an order may rest
+TRADABLE_STATES = ("OPEN", "ACTIVE", "TRADING", "MARKET_STATE_OPEN")
+
+
+def depth_for_pricing(*, public: Any, auth: Any, book: Any = None,
+                      max_divergence: Any = MAX_QUOTE_DIVERGENCE,
+                      max_stream_age_s: Any = MAX_STREAM_AGE_S,
+                      max_public_age_s: Any = MAX_PUBLIC_QUOTE_AGE_S
+                      ) -> Dict[str, Any]:
+    """Executable size for the quote we price against, or why there is none.
+
+    FAIL CLOSED. Every refusal returns `bid_shares`/`ask_shares` of None,
+    which `LF.evaluate` reads as NO_DEPTH and refuses. Absent size is
+    never read as unlimited size, and a disagreement is never resolved by
+    preferring one source.
+    """
+    out: Dict[str, Any] = {"ok": False, "reason": None,
+                           "bid_shares": None, "ask_shares": None}
+
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(out, **kw, reason=reason)
+
+    if not isinstance(auth, Mapping):
+        return no("AUTH_BOOK_UNREADABLE")
+    if auth.get("read") is not True:
+        return no("AUTH_BOOK_NOT_READ", detail=str(auth.get("reason"))[:40])
+    if not isinstance(public, Mapping):
+        return no("PUBLIC_QUOTE_UNREADABLE")
+
+    #: FRESHNESS FIRST, so a stale pair is never compared and then
+    #: accepted because two stale readings happen to agree.
+    sa = _dec(auth.get("stream_age_s"))
+    if sa is None or sa < ZERO or sa > _dec(max_stream_age_s):
+        return no("AUTH_BOOK_STALE", stream_age_s=None if sa is None
+                  else str(sa), max_s=str(max_stream_age_s))
+    pa = _dec(public.get("age_s"))
+    if pa is None or pa < ZERO or pa > _dec(max_public_age_s):
+        return no("PUBLIC_QUOTE_STALE", age_s=None if pa is None else str(pa),
+                  max_s=str(max_public_age_s))
+
+    ab, aa = _dec(auth.get("bid")), _dec(auth.get("ask"))
+    pb, pa_ = _dec(public.get("bid")), _dec(public.get("ask"))
+    if ab is None or aa is None:
+        return no("AUTH_BOOK_ONE_SIDED")
+    if pb is None or pa_ is None:
+        return no("PUBLIC_QUOTE_ONE_SIDED")
+
+    tol = _dec(max_divergence)
+    if tol is None or tol < ZERO:
+        return no("TOLERANCE_UNREADABLE")
+
+    agree = abs(ab - pb) <= tol and abs(aa - pa_) <= tol
+    if not agree:
+        #: NAME THE COMPLEMENT CASE. If the authenticated book is the
+        #: OTHER token's, its bid is about 1 - our ask. Reporting that as
+        #: a generic divergence would send someone hunting a latency bug
+        #: for a wiring one.
+        if abs(ab - (ONE - pa_)) <= tol and abs(aa - (ONE - pb)) <= tol:
+            return no("TOKEN_COMPLEMENT_MISMATCH",
+                      auth={"bid": str(ab), "ask": str(aa)},
+                      public={"bid": str(pb), "ask": str(pa_)},
+                      why=("the authenticated book is the complementary "
+                           "token's: its sizes belong to the opposite side"))
+        #: and the transposition case, for the same reason
+        if abs(ab - pa_) <= tol and abs(aa - pb) <= tol:
+            return no("SIDES_TRANSPOSED",
+                      auth={"bid": str(ab), "ask": str(aa)},
+                      public={"bid": str(pb), "ask": str(pa_)})
+        return no("QUOTE_DIVERGENCE",
+                  auth={"bid": str(ab), "ask": str(aa)},
+                  public={"bid": str(pb), "ask": str(pa_)},
+                  max_divergence=str(tol))
+
+    st = auth.get("market_state")
+    if st is not None and str(st).strip().upper() not in TRADABLE_STATES:
+        return no("MARKET_NOT_TRADABLE", market_state=str(st)[:40])
+
+    bs, asz = _dec(auth.get("bid_shares")), _dec(auth.get("ask_shares"))
+    if bs is None or asz is None or bs < ZERO or asz < ZERO:
+        return no("DEPTH_UNREADABLE")
+    return {"ok": True, "reason": None,
+            "bid_shares": str(bs), "ask_shares": str(asz),
+            "checked": {"stream_age_s": str(sa), "public_age_s": str(pa),
+                        "max_divergence": str(tol)}}

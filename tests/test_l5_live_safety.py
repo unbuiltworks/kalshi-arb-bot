@@ -297,3 +297,138 @@ def test_unreadable_inputs_refuse_rather_than_raise():
 
 def test_the_note_states_the_posture():
     assert "fail-closed" in _good()["note"]
+
+
+# ---------------- authenticated depth must be the SAME BOOK as the quote
+
+def _pub(bid="0.9600", ask="0.9850", age_s="0.2"):
+    return {"bid": D(bid), "ask": D(ask), "age_s": D(age_s)}
+
+
+def _auth(bid="0.9600", ask="0.9850", bid_shares="40", ask_shares="55",
+          stream_age_s="0.3", market_state="OPEN", read=True, **kw):
+    d = {"read": read, "bid": bid, "ask": ask, "bid_shares": bid_shares,
+         "ask_shares": ask_shares, "stream_age_s": stream_age_s,
+         "market_state": market_state}
+    d.update(kw)
+    return d
+
+
+def test_agreeing_sources_yield_the_size():
+    out = S.depth_for_pricing(public=_pub(), auth=_auth())
+    assert out["ok"] is True, out
+    assert out["bid_shares"] == "40"
+    assert out["ask_shares"] == "55"
+
+
+def test_the_complementary_token_is_named_not_reported_as_latency():
+    #: THE WIRING ERROR THAT MATTERS MOST. A binary market's two tokens
+    #: have complementary books: if the socket is serving the other one,
+    #: `ask_shares` is the size resting on the OPPOSITE side and a 0.97
+    #: bid would be sized against depth that is not there. Reporting
+    #: this as a generic divergence sends someone hunting a latency bug
+    #: for a wiring one.
+    out = S.depth_for_pricing(
+        public=_pub(bid="0.9600", ask="0.9850"),
+        auth=_auth(bid="0.0150", ask="0.0400"))      # 1 - ask, 1 - bid
+    assert out["ok"] is False
+    assert out["reason"] == "TOKEN_COMPLEMENT_MISMATCH"
+    assert out["bid_shares"] is None and out["ask_shares"] is None
+    assert "opposite side" in out["why"]
+
+
+def test_transposed_sides_are_named_too():
+    out = S.depth_for_pricing(public=_pub(bid="0.9600", ask="0.9850"),
+                              auth=_auth(bid="0.9850", ask="0.9600"))
+    assert out["reason"] == "SIDES_TRANSPOSED"
+
+
+def test_a_different_market_shows_up_as_divergence_and_sizes_nothing():
+    #: the snapshot is keyed by slug so this should not happen, but a
+    #: reader that trusts that silently inherits any change to it
+    out = S.depth_for_pricing(public=_pub(bid="0.9600", ask="0.9850"),
+                              auth=_auth(bid="0.4200", ask="0.4400"))
+    assert out["reason"] == "QUOTE_DIVERGENCE"
+    assert out["bid_shares"] is None
+
+
+def test_one_tick_of_divergence_is_tolerated():
+    #: the two are read microseconds apart over different transports
+    out = S.depth_for_pricing(public=_pub(bid="0.9600", ask="0.9850"),
+                              auth=_auth(bid="0.9700", ask="0.9750"))
+    assert out["ok"] is True
+
+
+def test_two_ticks_is_not():
+    out = S.depth_for_pricing(public=_pub(bid="0.9600", ask="0.9850"),
+                              auth=_auth(bid="0.9800", ask="0.9650"))
+    assert out["ok"] is False
+
+
+def test_a_stale_socket_sizes_nothing_however_well_it_agrees():
+    #: a push socket sends nothing when nothing changes, so the age of
+    #: the last CHANGE proves nothing; the age of the last FRAME does
+    out = S.depth_for_pricing(public=_pub(), auth=_auth(stream_age_s="9.0"))
+    assert out["reason"] == "AUTH_BOOK_STALE"
+    assert out["bid_shares"] is None
+
+
+def test_an_unmeasurable_stream_age_refuses():
+    out = S.depth_for_pricing(public=_pub(), auth=_auth(stream_age_s=None))
+    assert out["reason"] == "AUTH_BOOK_STALE"
+
+
+def test_a_stale_public_quote_refuses():
+    out = S.depth_for_pricing(public=_pub(age_s="9.0"), auth=_auth())
+    assert out["reason"] == "PUBLIC_QUOTE_STALE"
+
+
+def test_freshness_is_checked_before_agreement():
+    #: two stale readings that happen to agree must not pass: the
+    #: refusal has to name staleness, not silently accept it
+    out = S.depth_for_pricing(public=_pub(age_s="30"),
+                              auth=_auth(stream_age_s="30"))
+    assert out["reason"] in ("AUTH_BOOK_STALE", "PUBLIC_QUOTE_STALE")
+
+
+def test_an_unread_socket_sizes_nothing():
+    out = S.depth_for_pricing(public=_pub(),
+                              auth={"read": False, "reason": "NO_SNAPSHOT"})
+    assert out["reason"] == "AUTH_BOOK_NOT_READ"
+    assert out["detail"] == "NO_SNAPSHOT"
+
+
+def test_a_one_sided_book_sizes_nothing():
+    assert S.depth_for_pricing(public=_pub(), auth=_auth(bid=None)
+                               )["reason"] == "AUTH_BOOK_ONE_SIDED"
+    assert S.depth_for_pricing(public={"bid": None, "ask": D("0.98"),
+                                       "age_s": D("0.2")}, auth=_auth()
+                               )["reason"] == "PUBLIC_QUOTE_ONE_SIDED"
+
+
+def test_a_market_that_is_not_tradable_sizes_nothing():
+    out = S.depth_for_pricing(public=_pub(), auth=_auth(market_state="CLOSED"))
+    assert out["reason"] == "MARKET_NOT_TRADABLE"
+
+
+def test_absent_size_is_never_read_as_unlimited_size():
+    out = S.depth_for_pricing(public=_pub(), auth=_auth(ask_shares=None))
+    assert out["reason"] == "DEPTH_UNREADABLE"
+    assert out["ask_shares"] is None
+
+
+def test_garbage_refuses_rather_than_raising():
+    for pub, auth in (("nonsense", _auth()), (_pub(), "nonsense"),
+                      (None, None), (_pub(), {"read": True})):
+        out = S.depth_for_pricing(public=pub, auth=auth)
+        assert out["ok"] is False
+        assert out["bid_shares"] is None
+
+
+def test_strings_from_the_socket_are_handled():
+    #: `book_depth()` stringifies every field it returns
+    out = S.depth_for_pricing(
+        public={"bid": "0.9600", "ask": "0.9850", "age_s": "0.2"},
+        auth=_auth())
+    assert out["ok"] is True
+    assert out["ask_shares"] == "55"

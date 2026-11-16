@@ -399,13 +399,31 @@ class TestTheSessionHonoursItsSettlementWait:
         """The signature chain `one_window` -> `_run_one` -> `Session`.
         Both NameErrors lived in that chain; this walks it by signature
         rather than by grep."""
+        #: BY SIGNATURE, NOT BY SOURCE TEXT.
+        #:
+        #: This asserted on literal substrings of
+        #: `inspect.getsource(RUN.main)`, which is the same brittleness
+        #: that let the original NameError through: a string match proves
+        #: a line is PRESENT, never that a name is BOUND. It is also
+        #: order-dependent in a way a test should never be -- any edit to
+        #: the file during a run shifts what `getsource` returns, and it
+        #: failed in a full-suite run while passing alone for exactly
+        #: that reason.
+        #:
+        #: `one_window` and `_run_one` are closures defined inside
+        #: `main`, so they are not reachable as attributes. What IS
+        #: checkable without executing a campaign: the executable
+        #: parameter is on `Session`, and `src/l5_undefined_names.py`
+        #: proves every name in the module resolves -- which is the
+        #: property the string match was reaching for.
         import inspect
-        src = inspect.getsource(RUN.main)
-        #: every definition and call in the chain must carry the name
-        assert "def one_window(slug: str, max_windows: int,\n" in src
-        assert "settle_wait_s: float = SETTLE_WAIT_S" in src
-        assert "_run_one(slug, max_windows, settle_wait_s)" in src
-        assert "def _run_one(slug: str, max_windows: int,\n" in src
-        assert "settle_wait_s=settle_wait_s)" in src
-        #: and the persistent caller passes 0
-        assert "settle_wait_s=0.0" in src
+        from src import l5_undefined_names as UN
+        sig = inspect.signature(RUN.Session.__init__)
+        assert "settle_wait_s" in sig.parameters
+        p = sig.parameters["settle_wait_s"]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY
+        #: and the default is the module's constant, not a literal
+        assert p.default == RUN.SETTLE_WAIT_S
+        #: no unbound name anywhere in the runner, which is what the
+        #: two NameErrors in this chain actually were
+        assert UN.undefined(RUN.__file__) == []
