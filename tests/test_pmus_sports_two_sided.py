@@ -788,10 +788,16 @@ def test_tennis_pair_cap_is_tighter():
 # ------------------------------------------------- fee-aware exit (2026-11-15)
 def test_taker_fee_rounds_up_to_the_cent_per_order():
     assert M.EXIT_FEE_AWARE is True and M.EXIT_MAX_TAKER_QTY == D("0")
-    assert M.taker_fee(D("0.60"), D("1")) == D("0.02")      # 0.0144 -> 0.02
-    assert M.taker_fee(D("0.60"), D("2")) == D("0.03")      # 0.0288 -> 0.03
-    assert M.taker_fee(D("0.50"), D("10")) == D("0.15")     # exact
-    assert M.taker_fee(D("0.99"), D("1")) == D("0.01")      # 0.000594 -> 0.01
+    # PMUS fee schedule from 2026-11-14: Tier 1 taker coefficient 0.095
+    assert M.TAKER_FEE_RATE == D("0.095")
+    assert M.taker_fee(D("0.60"), D("1")) == D("0.03")      # 0.0228 -> 0.03
+    assert M.taker_fee(D("0.50"), D("10")) == D("0.24")     # 0.2375 -> 0.24
+    # the old 0.06 schedule, explicit
+    O = D("0.06")
+    assert M.taker_fee(D("0.60"), D("1"), O) == D("0.02")   # 0.0144 -> 0.02
+    assert M.taker_fee(D("0.60"), D("2"), O) == D("0.03")   # 0.0288 -> 0.03
+    assert M.taker_fee(D("0.50"), D("10"), O) == D("0.15")  # exact
+    assert M.taker_fee(D("0.99"), D("1"), O) == D("0.01")   # 0.000594 -> 0.01
 
 
 def _lone_yes(e, v):
@@ -803,7 +809,8 @@ def _lone_yes(e, v):
     e.b.d["markets"]["aec-x"]["lone_since"] -= M.EXIT_S + 1
 
 
-def test_fee_pushes_exit_over_cap_blocks_taker(eng, capsys):
+def test_fee_pushes_exit_over_cap_blocks_taker(eng, capsys, monkeypatch):
+    monkeypatch.setattr(M, "TAKER_FEE_RATE", D("0.06"))   # prices tuned to it
     e, v = eng
     _lone_yes(e, v)
     v.bid, v.ask = D("0.40"), D("0.42")     # 0.42 + 0.60 = 1.02, + 0.02 fee = 1.04
@@ -815,7 +822,8 @@ def test_fee_pushes_exit_over_cap_blocks_taker(eng, capsys):
     assert len(row) == 1 and '"pair_cost_with_fee":"1.04"' in row[0]
 
 
-def test_fee_under_cap_allows_exit_and_logs_fee(eng, capsys):
+def test_fee_under_cap_allows_exit_and_logs_fee(eng, capsys, monkeypatch):
+    monkeypatch.setattr(M, "TAKER_FEE_RATE", D("0.06"))   # prices tuned to it
     e, v = eng
     _lone_yes(e, v)
     v.bid, v.ask = D("0.41"), D("0.43")     # 0.42 + 0.59 = 1.01, + 0.02 fee = 1.03
@@ -854,6 +862,7 @@ def test_large_lone_leg_is_not_taker_exited(reng, capsys, monkeypatch):
 
 
 def test_small_lone_leg_still_exits_and_size_gate_can_be_disabled(eng, monkeypatch):
+    monkeypatch.setattr(M, "TAKER_FEE_RATE", D("0.06"))   # prices tuned to it
     e, v = eng
     monkeypatch.setattr(M, "EXIT_MAX_TAKER_QTY", D("0"))
     _lone_yes(e, v)

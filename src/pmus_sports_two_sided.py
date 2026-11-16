@@ -124,7 +124,13 @@ def exit_rule(slug: str) -> tuple:
 # PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY=0 removes the size gate.
 EXIT_FEE_AWARE = os.getenv("PMUS_TWO_SIDED_EXIT_FEE_AWARE", "1").strip() \
     not in ("0", "no", "false", "off")
-TAKER_FEE_RATE = _env_d("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.06")
+# PMUS fee schedule effective 2026-11-14 (docs.polymarket.us/fees): taker
+# coefficient by trailing-30-day taker volume -- Tier 1 (< $10k) 0.095,
+# Tier 2 0.085, Tier 3 0.075, Tier 4 0.0695. Was 0.06. Default is Tier 1,
+# the worst case for this account's volume; makers still pay nothing on
+# standard markets. The venue now rounds to the nearest cent (half-even);
+# rounding UP here stays conservative.
+TAKER_FEE_RATE = _env_d("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.095")
 # 0 = no size gate. The fee is per contract either way, and the gate only
 # turned 10-lot reward legs into permanent strands.
 EXIT_MAX_TAKER_QTY = _env_d("PMUS_TWO_SIDED_EXIT_MAX_TAKER_QTY", "0")

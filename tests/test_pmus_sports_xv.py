@@ -8,9 +8,12 @@ from src import pmus_sports_xv as X
 
 
 def test_taker_fee_rounds_up_per_contract():
-    assert X.taker_fee(0.50) == 0.02          # 0.015 -> 0.02
+    # PMUS Tier 1 coefficient 0.095 from 2026-11-14 (was 0.06)
+    assert X.TAKER_FEE_RATE == 0.095
+    assert X.taker_fee(0.50) == 0.03          # 0.02375 -> 0.03
     assert X.taker_fee(0.99) == 0.01
-    assert X.taker_fee(0.10) == 0.01          # 0.0054 -> 0.01
+    assert X.taker_fee(0.10) == 0.01          # 0.00855 -> 0.01
+    assert X.taker_fee(0.50, 0.06) == 0.02    # old schedule, explicit
 
 
 def test_no_edge_when_venues_agree():
@@ -21,7 +24,7 @@ def test_yes_edge_only_below_intl_bid_after_fee():
     # live 21:2xZ mia-ind: PMUS YES ask 0.1875 vs intl 0.26/0.27
     e = X.edge(0.17, 0.1875, 0.26, 0.27)
     assert e["side"] == "YES" and e["cost"] == 0.1875
-    assert abs(e["edge"] - (0.26 - 0.1875 - 0.01)) < 1e-9
+    assert abs(e["edge"] - (0.26 - 0.1875 - X.taker_fee(0.1875))) < 1e-9
     # inside the fee: no edge
     assert X.edge(0.27, 0.275, 0.28, 0.29) is None
 
@@ -30,7 +33,7 @@ def test_no_edge_mirrors_for_a_rich_pmus_bid():
     # PMUS 0.57/0.5725 vs intl 0.48/0.49 -> buy NO at 1-0.57 = 0.43
     e = X.edge(0.57, 0.5725, 0.48, 0.49)
     assert e["side"] == "NO" and abs(e["cost"] - 0.43) < 1e-9
-    assert abs(e["edge"] - (0.51 - 0.43 - 0.02)) < 1e-9
+    assert abs(e["edge"] - (0.51 - 0.43 - X.taker_fee(0.43))) < 1e-9
 
 
 def test_extreme_and_crossed_books_are_ignored():
@@ -67,10 +70,11 @@ def test_paper_marks_include_both_taker_fees_and_close_after_horizons():
     assert p.maybe_enter("m", e, 1, {}) is None           # one per market
     assert p.mark("m", 0.44, 0.45, 10) == []               # before horizon
     r = p.mark("m", 0.44, 0.45, 41)[0]
-    # 0.44 - 0.40 - fee(0.40)=0.02 - fee(0.44)=0.02
-    assert abs(r["pnl_after_both_fees"] - 0.00) < 1e-9
+    exp = 0.44 - 0.40 - X.taker_fee(0.40) - X.taker_fee(0.44)
+    assert abs(r["pnl_after_both_fees"] - round(exp, 4)) < 1e-9
     r = p.mark("m", 0.50, 0.51, 151)[0]
-    assert abs(r["pnl_after_both_fees"] - (0.50 - 0.40 - 0.02 - 0.02)) < 1e-9
+    exp = 0.50 - 0.40 - X.taker_fee(0.40) - X.taker_fee(0.50)
+    assert abs(r["pnl_after_both_fees"] - round(exp, 4)) < 1e-9
     assert "m" not in p.open and p.summary()["h150"]["n"] == 1
     assert p.maybe_enter("m", e, 30, {}) is None           # cooldown
     assert p.maybe_enter("m", e, 200, {}) is not None
@@ -81,7 +85,8 @@ def test_paper_no_exit_uses_one_minus_pmus_ask():
     p.maybe_enter("m", {"side": "NO", "cost": 0.43, "edge": 0.06}, 0, {})
     r = p.mark("m", 0.48, 0.49, 41)[0]
     assert r["exit"] == 0.51
-    assert abs(r["pnl_after_both_fees"] - (0.51 - 0.43 - 0.02 - 0.02)) < 1e-9
+    exp = 0.51 - 0.43 - X.taker_fee(0.43) - X.taker_fee(0.51)
+    assert abs(r["pnl_after_both_fees"] - round(exp, 4)) < 1e-9
 
 
 def test_token_resolution_requires_same_first_outcome():

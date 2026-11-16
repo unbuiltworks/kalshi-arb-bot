@@ -30,13 +30,16 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import threading
 import time
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 INTL_WS = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 GAMMA = "https://gamma-api.polymarket.com"
-TAKER_FEE_RATE = 0.06
+# PMUS taker coefficient from 2026-11-14: Tier 1 (< $10k 30-day taker
+# volume) 0.095 -- was 0.06, which overstated every paper taker edge
+TAKER_FEE_RATE = float(os.getenv("PMUS_TWO_SIDED_TAKER_FEE_RATE", "0.095"))
 
 
 def taker_fee(px: float, rate: float = TAKER_FEE_RATE) -> float:

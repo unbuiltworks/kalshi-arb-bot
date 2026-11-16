@@ -61,7 +61,7 @@ DEFAULTS = {
     # and is kept while it sits no deeper than keep_band_ticks under the bid
     "reprice_min_ticks": D("2"),
     "keep_band_ticks": D("1"),
-    "taker_fee_rate": D("0.06"),
+    "taker_fee_rate": D("0.095"),      # PMUS Tier 1 from 2026-11-14
 }
 
 

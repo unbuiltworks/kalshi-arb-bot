@@ -57,8 +57,12 @@ def test_late_game_raises_urgency_to_take():
 
 def test_partial_rebalance_when_taker_size_is_capped():
     d = dec(need=D("10"), taker_allowed=True, age_s=3600,
-            taker_chunk=D("4"))
+            taker_chunk=D("4"), params={"taker_fee_rate": D("0.06")})
     assert d["action"] == "PARTIAL_REBALANCE" and d["qty"] == D("4")
+
+
+def test_default_taker_fee_is_the_2026_11_14_tier_1_rate():
+    assert R.DEFAULTS["taker_fee_rate"] == D("0.095")
 
 
 def test_add_complementary_inventory_is_always_rejected():
