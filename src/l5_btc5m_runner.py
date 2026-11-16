@@ -1748,6 +1748,45 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     if reach.get("ok") is False:
         emit("L5_BTC5M_BUDGET_SHORT", reach)
 
+    #: ============ THE OWNER'S ARMING CEREMONY, ONCE AT STARTUP ========
+    #:
+    #: `may_submit` has always required the durable state to be ARMED and
+    #: nothing ever wrote it, so configuring an envelope made this lane
+    #: unable to submit at all -- permanently, because MONITOR is the
+    #: birth state and no path left it.
+    #:
+    #: THE AUTHORIZATION IS NOT NEW AND NOT HERE. It is the same two
+    #: documents the existing ceremony already sets: the standing
+    #: envelope and the campaign approval. `PMODE.arm` re-derives every
+    #: limit from them rather than restating any, so this adds no second
+    #: arming mechanism and no figure that could drift from the document
+    #: that authorized it.
+    #:
+    #: It runs where the state file is -- inside this process, on the
+    #: volume -- because an operator ceremony running elsewhere cannot
+    #: write it. Idempotent for the identical pair, so a restart finds
+    #: itself ARMED and proceeds; a latch refuses here as everywhere.
+    #:
+    #: With no envelope configured this is skipped entirely and the
+    #: bounded campaign below is byte-for-byte what it always was.
+    if (os.getenv(PMODE.ENVELOPE_ENV) or "").strip() and plan["markets"]:
+        _first = window_start(plan["markets"][0])
+        _armed = PMODE.enter_armed(
+            #: THE SAME VARIABLE THE AUTHORIZATION GATE READS. The fleet
+            #: maps each lane's `L5_CAMPAIGN_APPROVAL_<STRATEGY>` into its
+            #: child as this one, so resolving it any other way here could
+            #: arm against a document the gate does not use.
+            raw_campaign=os.getenv(AUTH.CAMPAIGN_APPROVAL_ENV),
+            first_window_utc=_first,
+            not_after_utc=(os.getenv(X.NOT_AFTER_ENV) or "").strip(),
+            now=dt.datetime.now(UTC))
+        emit("L5_BTC5M_ARM", {k: v for k, v in _armed.items()
+                              if k not in ("scope", "written")})
+        if not _armed.get("ok"):
+            #: an unarmed lane is not an error to march past: it observes
+            #: and submits nothing, exactly as MONITOR is meant to.
+            emit("L5_BTC5M_NOT_ARMED", {"reason": _armed.get("reason")})
+
     #: ============== PERSISTENT MODE TAKES OVER THE LOOP ===============
     #:
     #: Only when an envelope is configured. With none, everything below
