@@ -1986,6 +1986,58 @@ BTC5M_SERIES = "cpc-btc-updown-5m-"
 BTC5M_WINDOW_S = 300.0
 BTC5M_CLAIM_PREFIX = "b5m1."
 BTC5M_COID_RE = re.compile(r"b5m-[0-9a-f]{24}")
+
+#: WHICH 5-MINUTE SERIES THIS LANE MAY TRADE.
+#:
+#: These three gates were BTC-only literals, and the fleet's ETH, SOL and
+#: XRP lanes were refused every order -- OBSERVED 2026-11-16T12:02Z,
+#: AUTHORIZATION:BTC5M_MARKET_NOT_IN_SERIES on every submission, with the
+#: coid check waiting immediately behind it.
+#:
+#: THE SAFETY PROPERTY IS UNCHANGED AND SLIGHTLY STRONGER. It was "the
+#: market and the approval both equal this one constant". It is now "the
+#: market and the approval both equal THIS LANE'S series", so a lane
+#: still cannot trade a series its own approval does not name, and in
+#: addition cannot trade a sibling lane's series even with a valid
+#: approval for that sibling.
+#:
+#: UNSET IS BTC5M, so a single executor is byte-for-byte unchanged.
+#: ANYTHING UNRESOLVABLE REFUSES -- an unknown strategy, a non-5-minute
+#: one, or a registry that will not import -- because the permissive
+#: answer here is the one that lets a lane submit into a series nobody
+#: approved.
+LANE_STRATEGY_ENV = "L5_5M_STRATEGY"
+
+
+def _lane_row():
+    """This lane's registry row, or None if it cannot be resolved."""
+    want = str(os.environ.get(LANE_STRATEGY_ENV, "")).strip().upper()
+    if not want:
+        want = "BTC5M"
+    try:
+        from src import l5_series_registry as _REG   # stdlib-only table
+        row = _REG.BY_STRATEGY.get(want)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    if row is None or float(getattr(row, "horizon_s", 0)) != BTC5M_WINDOW_S:
+        return None
+    return row
+
+
+def lane_series() -> Optional[str]:
+    """The series prefix this lane may trade, or None (refuse)."""
+    row = _lane_row()
+    return None if row is None else str(row.prefix)
+
+
+def lane_coid_re():
+    """The client-order-id shape this lane may claim, or None (refuse)."""
+    row = _lane_row()
+    if row is None:
+        return None
+    return re.compile(re.escape(str(row.coid_prefix)) + r"[0-9a-f]{24}")
 #: the two shared locks, by the names the 15-minute service reads them
 #: under (`l5_pmus_live_runner.LIVE_HALT_ENV` / `SHADOW_ONLY_ENV`). Not
 #: imported: this module must not depend on the runner. A test pins the
@@ -2062,10 +2114,18 @@ def btc5m_authorization(market: Any, *,
         _dur = durability_refusal(path)
         if _dur is not None:
             return no(str(_dur["reason"]), **dict(_dur.get("detail") or {}))
-    # 3. a 5-minute market, by name
+    # 3. a 5-minute market, by name, in THIS LANE'S series
+    _series = lane_series()
+    if _series is None:
+        return no("BTC5M_LANE_SERIES_UNRESOLVED",
+                  env=LANE_STRATEGY_ENV,
+                  strategy=str(os.environ.get(LANE_STRATEGY_ENV, ""))[:40],
+                  note="an unresolvable lane may not submit: the "
+                       "permissive answer would authorize a series "
+                       "nobody approved")
     mkt = str(market or "").strip() if isinstance(market, str) else ""
-    if not mkt or not mkt.startswith(BTC5M_SERIES):
-        return no("BTC5M_MARKET_NOT_IN_SERIES", series=BTC5M_SERIES,
+    if not mkt or not mkt.startswith(_series):
+        return no("BTC5M_MARKET_NOT_IN_SERIES", series=_series,
                   market=str(market)[:80])
     # 4. the owner's approval: present, valid, for THIS series, with the
     #    windows enumerated, and this window one of them
@@ -2085,9 +2145,11 @@ def btc5m_authorization(market: Any, *,
         return no(str(verdict.get("reason") or "BTC5M_APPROVAL_NOT_VALID"),
                   **{"approval": dict(verdict.get("detail") or {})})
     scope = dict(verdict.get("scope") or {})
-    if str(scope.get("series") or "") != BTC5M_SERIES:
+    if str(scope.get("series") or "") != _series:
+        #: the approval must name THIS lane's series. A valid approval for
+        #: a sibling series is still a refusal here.
         return no("BTC5M_APPROVAL_SERIES_MISMATCH",
-                  series=str(scope.get("series"))[:60])
+                  series=str(scope.get("series"))[:60], expected=_series)
     if not scope.get("window_starts"):
         return no("BTC5M_WINDOWS_NOT_ENUMERATED",
                   note="the approval must list each window it authorizes; "
@@ -2158,7 +2220,15 @@ def claim_btc5m_submission(market: str, client_order_id: str,
     refuse_unauthorized_window(mkt)
     scope = dict(v.get("scope") or {})
     coid = str(client_order_id or "").strip()
-    if not BTC5M_COID_RE.fullmatch(coid):
+    #: THIS LANE'S id shape. `btc5m_authorization` above already refused
+    #: an unresolvable lane, so None here is belt and braces -- and it
+    #: refuses rather than falling back to the BTC pattern, which would
+    #: let one lane claim for another.
+    _coid_re = lane_coid_re()
+    if _coid_re is None:
+        raise Refused("BTC5M_LANE_SERIES_UNRESOLVED",
+                      {"env": LANE_STRATEGY_ENV})
+    if not _coid_re.fullmatch(coid):
         raise Refused("BTC5M_CLAIM_BAD_ORDER_ID",
                       {"client_order_id": coid[:40],
                        "note": "a 5-minute order carries the 5-minute "
