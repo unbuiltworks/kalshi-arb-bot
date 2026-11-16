@@ -163,6 +163,20 @@ def reduce_outcome(held_side: str, own_paid: D, qty: D,
                        .quantize(D("0.000001")))}
 
 
+def remaining_completion_ttl(frames: Sequence[Mapping[str, Any]],
+                             first_fill_index: int, quote_index: int,
+                             ttl_s: Optional[float]) -> Optional[float]:
+    """Return the unspent TTL measured from the authenticated first fill.
+
+    Quote search consumes this budget. Zero is a finite expiry, not None.
+    """
+    if ttl_s is None:
+        return None
+    elapsed = float(frames[quote_index]["t"]) - float(
+        frames[first_fill_index]["t"])
+    return max(0.0, float(ttl_s) - elapsed)
+
+
 def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                complete_depth: int, scenario: Tuple[str, str, D],
                qty: D = D(1), completion_ttl_s: Optional[float] = None,
@@ -267,7 +281,8 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                     pair = paid + comp_own
                     comp = QS.leg_outcome(want, comp_own, frames, start=k,
                                           queue_fraction=frac, own_qty=qty,
-                                          ttl_s=completion_ttl_s)
+                                          ttl_s=remaining_completion_ttl(
+                        frames, j, k, completion_ttl_s))
                     cf = QS.filled(comp, arm=arm)
                     rec.update(complement_px=str(comp_own),
                                pair_cost=str(pair),
@@ -342,7 +357,8 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 pair = paid + comp_own
                 comp = QS.leg_outcome(want, comp_own, frames, start=k,
                                       queue_fraction=frac, own_qty=qty,
-                                      ttl_s=completion_ttl_s)
+                                      ttl_s=remaining_completion_ttl(
+                        frames, j, k, completion_ttl_s))
                 cf = QS.filled(comp, arm=arm)
                 rec.update(complement_px=str(comp_own), pair_cost=str(pair),
                            complement_verdict=comp.get("verdict"),
