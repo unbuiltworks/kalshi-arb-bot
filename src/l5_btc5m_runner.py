@@ -1471,6 +1471,111 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     if reach.get("ok") is False:
         emit("L5_BTC5M_BUDGET_SHORT", reach)
 
+    #: ============== PERSISTENT MODE TAKES OVER THE LOOP ===============
+    #:
+    #: Only when an envelope is configured. With none, everything below
+    #: is byte-for-byte the bounded campaign it has always been.
+    #:
+    #: It rolls on the CLOCK and asks `persistent_gate` before every
+    #: window, so a STOP or HALT written mid-window stops the next one.
+    #: A latch EXITS -- it does not idle and retry -- because a loop that
+    #: survives a safety halt resumes the moment the latch is cleared for
+    #: some other reason. MONITOR waits, submitting nothing, so an
+    #: operator can arm without a restart.
+    #:
+    #: THE PRIOR WINDOW IS RECONCILED BEFORE THE NEXT ONE GETS ANY
+    #: BUDGET: `sync_reservation` releases only holds the ledger shows
+    #: finished, so an uncertain order or unsettled inventory still
+    #: occupies the shared account cap when the next window asks for
+    #: room. Rolling forward never frees money that is still at risk.
+    if str(os.environ.get(PMODE.ENVELOPE_ENV) or "").strip():
+        row = REG.BY_STRATEGY[X.STRATEGY]
+        emit("L5_BTC5M_PERSISTENT_START",
+             {"strategy": X.STRATEGY, "series": row.prefix,
+              "utc": dt.datetime.now(UTC).isoformat()})
+        ref.start()
+        while True:
+            now_ = dt.datetime.now(UTC)
+            gate = persistent_gate(now=now_)
+            if not gate["ok"]:
+                emit("L5_BTC5M_PERSISTENT_GATE",
+                     dict(gate, utc=now_.isoformat()))
+                if gate.get("exit"):
+                    #: NOTHING REARMS. The loop ends; it does not wait
+                    #: for somebody to clear a latch.
+                    return 0
+                time.sleep(15.0)
+                continue
+            #: THE WATCHDOG'S HAND, TURNED INTO A DURABLE LATCH.
+            #:
+            #: The watchdog is a separate service and a Railway volume
+            #: attaches to ONE service, so it cannot write this lane's
+            #: state file -- its own docstring says so. What it CAN do is
+            #: assert the halt record over HTTP and cancel the exact ids
+            #: it observed resting, and it can never clear either.
+            #:
+            #: So its assertion is read here and converted into the
+            #: persistent latch plus a full unwind. That makes the
+            #: watchdog able to enforce the same safe halt an operator
+            #: can, through the only channel the architecture allows,
+            #: and the latch then outlives the HTTP record: a halt that
+            #: later becomes readable-and-clear does NOT resume trading.
+            wd = shared_halt((os.getenv(HALT_URL_ENV) or "").strip())
+            if not wd.get("ok"):
+                PMODE.write_state(
+                    PMODE.HALTED,
+                    why="WATCHDOG:%s" % wd.get("reason"),
+                    now=now_)
+                unwound = ex.stop(reason="WATCHDOG:%s" % wd.get("reason"),
+                                  now=now_)
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": wd.get("reason"), "source": "WATCHDOG",
+                      "stop": unwound, "utc": now_.isoformat()})
+                return 0
+            nxt = persistent_next(now=now_, prefix=row.prefix,
+                                  horizon_s=row.horizon_s)
+            if not nxt["ok"]:
+                emit("L5_BTC5M_PERSISTENT_GATE",
+                     {"reason": nxt["reason"], "utc": now_.isoformat()})
+                time.sleep(5.0)
+                continue
+            if nxt["wait_s"] > 0:
+                time.sleep(min(nxt["wait_s"], 30.0))
+                continue
+            rep = one_window(nxt["market"], 1)
+            #: RECONCILE BEFORE THE NEXT WINDOW MAY SPEND ANYTHING.
+            freed = ex.sync_reservation()
+            emit("L5_BTC5M_PERSISTENT_WINDOW",
+                 {"market": nxt["market"], "started": rep.get("started"),
+                  "reason": rep.get("reason"),
+                  "reservation": freed,
+                  "utc": dt.datetime.now(UTC).isoformat()})
+            #: A LEDGER HALT IS A SAFETY HALT: latch it so every lane and
+            #: every restart sees it, then stop. It is never walked past.
+            if ex.halted_reason:
+                PMODE.write_state(
+                    PMODE.HALTED,
+                    why="LEDGER_HALTED:%s" % ex.halted_reason,
+                    now=dt.datetime.now(UTC))
+                unwound = ex.stop(
+                    reason="LEDGER_HALTED:%s" % ex.halted_reason,
+                    now=dt.datetime.now(UTC))
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": ex.halted_reason, "source": "LEDGER",
+                      "stop": unwound,
+                      "utc": dt.datetime.now(UTC).isoformat()})
+                return 0
+            if not (rep.get("close") or {}).get("clean", True):
+                PMODE.write_state(PMODE.HALTED, why="CLOSE_NOT_CLEAN",
+                                  now=dt.datetime.now(UTC))
+                unwound = ex.stop(reason="CLOSE_NOT_CLEAN",
+                                  now=dt.datetime.now(UTC))
+                emit("L5_BTC5M_PERSISTENT_HALTED",
+                     {"reason": "CLOSE_NOT_CLEAN", "source": "CLOSE",
+                      "stop": unwound,
+                      "utc": dt.datetime.now(UTC).isoformat()})
+                return 0
+
     if not plan["markets"]:
         emit("L5_BTC5M_IDLE", {"reason": "NO_MARKET_CONFIGURED",
                                "why": plan.get("why")})
