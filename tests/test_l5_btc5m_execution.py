@@ -1059,9 +1059,16 @@ class TestIsolationOfTheModule:
         # the only place all four lanes meet, and without it each lane's
         # cap is its own books alone -- four lanes clearing one $10 cap
         # against four separate ledgers commit $40 between them.
+        # `l5_persistent_mode` is on it too, same rationale: stdlib-only,
+        # no credential, no venue schema. It holds the standing envelope
+        # and the durable RUN/STOP state, and it is the only thing that
+        # can refuse an order for being outside the authorized strategy,
+        # market or DEPLOYMENT, or for breaching the worst-case daily
+        # loss once outstanding risk is counted.
         assert re.findall(r"^from src import (.+)$", src, re.M) == [
             "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
-            "l5_origin as ORIGIN", "l5_shared_reservation as RESV"]
+            "l5_origin as ORIGIN", "l5_persistent_mode as PMODE",
+            "l5_shared_reservation as RESV"]
 
     def test_it_calls_only_the_six_transport_methods(self):
         """Five since this module was written, plus `account` -- the cash

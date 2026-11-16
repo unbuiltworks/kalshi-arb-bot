@@ -72,6 +72,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 from src import l5_btc5m_controller as C
 from src import l5_live_authorization as AUTH
 from src import l5_origin as ORIGIN
+from src import l5_persistent_mode as PMODE
 from src import l5_shared_reservation as RESV
 
 D = Decimal
@@ -1304,6 +1305,40 @@ class Btc5mExecutor:
         except Exception as exc:                               # noqa: BLE001
             return refuse("AUTHORIZATION_UNAVAILABLE", client_order_id=coid,
                           detail=type(exc).__name__)
+        #: THE STANDING ENVELOPE, when one is configured. Checked BEFORE
+        #: the reservation because it has no side effect: a scope or
+        #: daily-loss refusal then leaks no hold. It enforces what the
+        #: reservation cannot -- which strategy, which market, which
+        #: DEPLOYMENT, maker-only, the per-market ceiling, and the
+        #: worst-case daily loss counting realized losses PLUS everything
+        #: already at risk PLUS this order.
+        #:
+        #: THE ACCOUNT-WIDE FIGURE IT JUDGES IS THE SHARED RESERVATION's,
+        #: not this lane's ledger: that is the whole point, since this
+        #: lane's books cannot see its siblings.
+        #:
+        #: An envelope that is absent leaves the bounded path exactly as
+        #: it was; one that is present and UNUSABLE refuses.
+        env_raw = os.environ.get(PMODE.ENVELOPE_ENV)
+        if env_raw is not None and str(env_raw).strip():
+            agg = RESV.aggregate()
+            if not agg.get("ok"):
+                return refuse("SHARED_RESERVATION:%s" % agg.get("reason"))
+            gate = PMODE.may_submit(
+                market=market, strategy=_strategy_of(order),
+                post_only=intent.get("post_only"),
+                notional_usd=notional,
+                market_exposure_usd=exp["total_exposure_usd"],
+                aggregate_exposure_usd=agg["usd"],
+                day_realized_usd=self.day_settled_pnl(now),
+                now=now)
+            report["exposure"]["envelope"] = {
+                k: v for k, v in gate.items() if k != "ok"}
+            if not gate.get("ok"):
+                return refuse("ENVELOPE:%s" % gate.get("reason"),
+                              client_order_id=coid,
+                              detail={k: v for k, v in gate.items()
+                                      if k not in ("ok", "reason")})
         #: AFTER THE OWNER'S CLAIM, BEFORE THE VENUE. Authorization
         #: precedes risk: shared budget is not spent on an order
         #: nobody authorized. The cost is that a full budget burns
@@ -1321,8 +1356,37 @@ class Btc5mExecutor:
         #: It is released by syncing to this ledger each step, never by a
         #: timer: an order whose outcome is unknown keeps holding its
         #: risk, because an uncertain order IS exposure.
+        #: THE CAP THE HOLD ENFORCES IS THE EFFECTIVE ONE, and this is
+        #: the difference between a bound and a hope.
+        #:
+        #: OBSERVED in the four-process test: `may_submit` checks the
+        #: worst-case daily loss against an aggregate it READ A MOMENT
+        #: AGO, outside the lock. Four lanes each passed that check on a
+        #: stale figure and together reserved $8 against a $5 daily-loss
+        #: budget. Every individual check was correct and the collective
+        #: result was not.
+        #:
+        #: So the daily-loss room is folded into the cap the RESERVATION
+        #: enforces, where it is evaluated under the same exclusive hold
+        #: as the aggregate. Only then is "$5 daily loss" a ceiling on
+        #: worst-case loss rather than a statement about settled losses.
+        _cap = RESV.MAX_AGGREGATE_USD
+        _env = PMODE.envelope(now=now)
+        if _env.get("ok"):
+            _scope = _env["scope"]
+            _day = self.day_settled_pnl(now)
+            if _day is None:
+                return refuse("DAY_RESULT_UNREADABLE", client_order_id=coid)
+            _lost = -_day if _day < ZERO else ZERO
+            _room = _scope["max_daily_loss_usd"] - _lost
+            _cap = min(_scope["max_aggregate_usd"], _room)
+            if _cap <= ZERO:
+                return refuse("WORST_CASE_DAILY_LOSS_EXHAUSTED",
+                              client_order_id=coid,
+                              detail={"realized_today_usd": _s(_day),
+                                      "halt_usd": _s(_scope["max_daily_loss_usd"])})
         resv = RESV.reserve(lane=STRATEGY, key=coid, usd=notional,
-                            now=now)
+                            now=now, cap_usd=_cap)
         report["exposure"]["reservation"] = {
             k: v for k, v in resv.items() if k != "ok"}
         if not resv.get("ok"):
@@ -1435,15 +1499,29 @@ class Btc5mExecutor:
     def sync_reservation(self) -> Dict[str, Any]:
         """Release this lane's holds whose orders are no longer live.
 
+        A HOLD OUTLIVES ITS ORDER. An order that FILLED has left OPEN,
+        but its cost is now inventory we still own, and a losing contract
+        pays nothing -- so releasing on terminal order state would drop
+        exactly the risk that just became real. A hold is kept while the
+        order is open OR it filled into a market that has not settled.
+
         ONE RULE FOR EVERY AWKWARD ENDING. A partial fill, a cancel that
         raced a fill, a submission that timed out, a process that
-        restarted -- all of them are just "what does the durable ledger
-        still show OPEN", so none needs its own release call and none can
-        be forgotten on a path nobody thought about. It touches only this
-        lane's holds, so a sibling's room is never freed here.
+        restarted -- all are just "does this order still carry risk,
+        according to the durable ledger", so none needs its own release
+        call and none can be forgotten on a path nobody thought about. It
+        touches only this lane's holds, so a sibling's room is never
+        freed here.
         """
-        live = [c for c, r in self._ledger["orders"].items()
-                if r.get("state") in OPEN]
+        settled = self._ledger["settled"]
+        live = []
+        for c, r in self._ledger["orders"].items():
+            if r.get("state") in OPEN:
+                live.append(c)                       # may still fill
+                continue
+            filled = _dec(r.get("filled_qty")) or ZERO
+            if filled > 0 and r.get("market") not in settled:
+                live.append(c)                       # inventory at risk
         return RESV.reconcile(lane=STRATEGY, live_keys=live)
 
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
