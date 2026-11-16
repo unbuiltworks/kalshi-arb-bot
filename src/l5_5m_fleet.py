@@ -69,6 +69,20 @@ APPROVAL_PREFIX = "L5_CAMPAIGN_APPROVAL_"
 #: an override cannot be used to make two lanes share a ledger.
 LEDGER_PREFIX = "L5_5M_LEDGER_"
 AUTH_PREFIX = "L5_5M_AUTH_"
+#: THE ONE PORT A CHILD BINDS. `l5_btc5m_runner.serve_fills` listens on
+#: it so the watchdog can read that lane's resting orders.
+#:
+#: OBSERVED 2026-11-16T11:56Z: all four children inherited the SAME
+#: L5_BTC5M_FILLS_PORT, the first bound it, and the rest died with
+#: OSError(98) "Address already in use". BTC5M happened to lose the race,
+#: so the fleet stopped every sibling and nothing traded. Ledgers, auth
+#: ledgers, approvals and coid prefixes were all made distinct; this was
+#: not, and it is just as much shared state as a ledger path.
+#:
+#: Each lane gets BASE + its index. `_distinct` checks the ports it
+#: actually hands out, exactly as it checks the paths.
+FILLS_PORT_ENV = "L5_BTC5M_FILLS_PORT"
+DEFAULT_FILLS_PORT = 8082
 
 
 def fleet() -> List[str]:
@@ -97,18 +111,41 @@ def fleet() -> List[str]:
     return out
 
 
-def child_env(strategy: str, root: str, lanes: int) -> Dict[str, str]:
+def fills_port_base() -> int:
+    """The first lane's fills port. Unreadable refuses rather than
+    guessing: a wrong port is a lane the watchdog cannot read."""
+    raw = (os.environ.get(FILLS_PORT_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_FILLS_PORT
+    if not raw.isdigit():
+        raise SystemExit("REFUSED: %s is %r, which is not a port"
+                         % (FILLS_PORT_ENV, raw))
+    n = int(raw)
+    if not (1024 <= n <= 65000):
+        raise SystemExit("REFUSED: %s is %d, outside 1024..65000"
+                         % (FILLS_PORT_ENV, n))
+    return n
+
+
+def child_env(strategy: str, root: str, children: List[str]) -> Dict[str, str]:
     """One child's environment. Everything that must not be shared is
     made distinct here, by construction rather than by configuration.
 
-    `lanes` is how many children this fleet is starting. It is REQUIRED
-    rather than defaulted because the default that would be natural --
-    one lane -- is the permissive one: it hands every child the whole
-    account ceiling, which is the defect this argument exists to close.
+    `children` is the whole fleet, not a count, because a lane needs both
+    HOW MANY there are (to divide the account ceiling) and WHICH ONE IT
+    IS (to get its own port). It is REQUIRED rather than defaulted
+    because the natural default -- one lane -- is the permissive one: it
+    hands every child the whole account ceiling.
     """
     row = REG.BY_STRATEGY[strategy]
+    lanes = len(children)
+    index = list(children).index(strategy)
     env = dict(os.environ)
     env["L5_5M_STRATEGY"] = strategy
+    #: ITS OWN PORT. Sharing one is OSError(98) for every lane but the
+    #: first, and under this fleet's fail-closed rule that stops all of
+    #: them. See FILLS_PORT_ENV.
+    env[FILLS_PORT_ENV] = str(fills_port_base() + index)
     #: EVERY CHILD IS TOLD THE SAME LANE COUNT, from one place, so the
     #: account ceiling is divided consistently. Each lane checks its own
     #: ledger against cap/lanes; a child that disagreed about `lanes`
@@ -141,7 +178,7 @@ def _distinct(children: List[str], root: str) -> None:
     seen: Dict[str, str] = {}
     for s in children:
         for key in ("L5_BTC5M_LEDGER", "L5_LIVE_AUTH_LEDGER"):
-            path = child_env(s, root, len(children))[key]
+            path = child_env(s, root, children)[key]
             if path in seen:
                 raise SystemExit("REFUSED: %s and %s would share %s"
                                  % (seen[path], s, path))
@@ -151,6 +188,14 @@ def _distinct(children: List[str], root: str) -> None:
         raise SystemExit("REFUSED: two children share a client-order-id "
                          "prefix; they would be indistinguishable in the "
                          "ownership registry")
+    #: AND THE PORTS. A shared one is OSError(98) at startup for every
+    #: lane but the first, which stops the whole fleet. Checked here so
+    #: it is a refusal with a reason rather than a race.
+    ports = [child_env(s, root, children)[FILLS_PORT_ENV] for s in children]
+    if len(set(ports)) != len(ports):
+        raise SystemExit("REFUSED: two children share fills port %s; only "
+                         "one could bind it and the rest would die with "
+                         "OSError(98)" % ",".join(sorted(ports)))
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -160,6 +205,9 @@ def main(argv: List[str] | None = None) -> int:
     print("L5_5M_FLEET_START %s" % {
         "strategies": children, "state_root": root,
         "account_lanes": len(children),
+        "fills_urls": {s: "http://%s:%s" % (
+            os.environ.get("RAILWAY_PRIVATE_DOMAIN", "localhost"),
+            child_env(s, root, children)[FILLS_PORT_ENV]) for s in children},
         "account_cap_usd": os.environ.get("L5_ACCOUNT_MAX_EXPOSURE_USD", ""),
         "restart_policy": "NONE -- a dead money-moving child is not revived",
         "on_child_exit": "the whole fleet stops"}, flush=True)
@@ -167,7 +215,7 @@ def main(argv: List[str] | None = None) -> int:
     for s in children:
         procs[s] = subprocess.Popen(
             [sys.executable, "-u", "-m", "src.l5_btc5m_runner"],
-            env=child_env(s, root, len(children)))
+            env=child_env(s, root, children))
         print("L5_5M_FLEET_CHILD %s" % {
             "strategy": s, "pid": procs[s].pid,
             "series": REG.BY_STRATEGY[s].prefix,
