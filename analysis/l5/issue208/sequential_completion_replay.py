@@ -282,7 +282,7 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                     comp = QS.leg_outcome(want, comp_own, frames, start=k,
                                           queue_fraction=frac, own_qty=qty,
                                           ttl_s=remaining_completion_ttl(
-                        frames, j, k, completion_ttl_s))
+                                              frames, j, k, completion_ttl_s))
                     cf = QS.filled(comp, arm=arm)
                     rec.update(complement_px=str(comp_own),
                                pair_cost=str(pair),
@@ -358,7 +358,7 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 comp = QS.leg_outcome(want, comp_own, frames, start=k,
                                       queue_fraction=frac, own_qty=qty,
                                       ttl_s=remaining_completion_ttl(
-                        frames, j, k, completion_ttl_s))
+                                      frames, j, k, completion_ttl_s))
                 cf = QS.filled(comp, arm=arm)
                 rec.update(complement_px=str(comp_own), pair_cost=str(pair),
                            complement_verdict=comp.get("verdict"),
