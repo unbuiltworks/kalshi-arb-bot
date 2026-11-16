@@ -1686,7 +1686,14 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             #: SETTLE WHAT THE VENUE IS READY TO SETTLE, for every window
             #: still pending -- including ones from earlier iterations
             #: and from before a restart. One attempt each, never a wait.
-            recon = reconcile_pending(ex, t)
+            #: `ex.transport` -- `_run_one` builds a transport per window
+            #: and leaves it on the executor. `settlement(slug)` takes the
+            #: market as an ARGUMENT, so one instance can read a previous
+            #: window too, which is what reconciling a backlog needs.
+            recon = ({"pending": [], "settled": [], "unreadable": [],
+                      "deferred": [], "error": "NO_TRANSPORT"}
+                     if getattr(ex, "transport", None) is None
+                     else reconcile_pending(ex, ex.transport))
             #: RECONCILE BEFORE THE NEXT WINDOW MAY SPEND ANYTHING. Only
             #: markets the venue actually settled give their room back.
             freed = ex.sync_reservation()
