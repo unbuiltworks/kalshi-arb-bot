@@ -336,7 +336,25 @@ LATE_FEE_ENV = "L5_LATE_FAVORITE_FEE_PER_SHARE"
 #: that refuses the unreachable combination; this bound keeps a typo
 #: from producing one silently.
 LATE_WINDOW_MIN_S = D("36")
-LATE_WINDOW_MAX_S = D("120")
+#: HALF THE WINDOW, and not a round number chosen for comfort. At 150 the
+#: strategy becomes eligible from the window's exact midpoint, which is
+#: the widest band in which it is still a LATE strategy; past half the
+#: market it is simply a second opener competing with the straddle over
+#: the whole entry range, and the side-conflict rule would then refuse
+#: almost every candidate anyway because the straddle rests on both
+#: sides.
+#:
+#: Widening the band does NOT lower the bar -- it only gives the EV gate
+#: more moments to look at, and the gate is unchanged. What makes the
+#: midpoint interesting is the opposite of a weaker test: the settlement
+#: average is the 60 seconds ending at the close, so at t=150 none of it
+#: has formed and `p_up` still carries real diffusion. A level only
+#: clears break-even there when the move is ALREADY large -- and that is
+#: exactly when the book may not have repriced to 0.99 yet, so a 0.97
+#: maker bid can rest un-crossed. The edge, where it exists, is the gap
+#: between our model's confidence and the book's price, and that gap is
+#: widest before the book catches up.
+LATE_WINDOW_MAX_S = D("150")
 LATE_CLIP_MAX_USD = D("5.00")
 #: above this a "97c favourite" is not a favourite trade any more
 LATE_EDGE_MAX = D("0.20")
@@ -1706,6 +1724,7 @@ class Btc5mExecutor:
 
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
              p_up: Any = None, p_source: Any = None,
+             p_age_s: Any = None, loss_room_usd: Any = None,
              exposure_ceiling_usd: Any = None) -> Dict[str, Any]:
         """Poll, decide, cancel, place. One pass; returns what happened."""
         now = self._now()
@@ -1739,7 +1758,18 @@ class Btc5mExecutor:
                 inventory=self.inventory(market),
                 resting=self._resting(market, now),
                 params=self.effective_params(exposure_ceiling_usd),
-                p_up=p_up, p_source=p_source)
+                p_up=p_up, p_source=p_source,
+                #: BOTH OF THESE WERE DROPPED HERE, and the late
+                #: favourite cannot clear its own gates without them.
+                #: `decide` defaults each to None; `LF.evaluate` then
+                #: refuses PROBABILITY_STALE on an unreadable age and
+                #: BUDGET_UNREADABLE on an unreadable loss room. Worse
+                #: than refusing, it refused INVISIBLY: `why_s` keeps
+                #: whatever the straddle decided, so the step reported
+                #: ENTRY_EV_P_PAIR_NATURAL_NOT_SET and pointed the
+                #: investigation at the straddle's parameters while the
+                #: real cause was a value this signature never carried.
+                p_age_s=p_age_s, loss_room_usd=loss_room_usd)
         except Exception as exc:                               # noqa: BLE001
             report["action"], report["why"] = "CONTROLLER_ERROR", type(exc).__name__
             return done()
@@ -1750,6 +1780,31 @@ class Btc5mExecutor:
         report["hedge_eval"] = {k: (_s(v) if isinstance(v, Decimal) else v)
                                 for k, v in ((decision.get("evaluation") or {})
                                              .get("hedge") or {}).items()}
+        #: THE MISSED OPPORTUNITIES, which were being thrown away.
+        #:
+        #: Only `entry` and `hedge` were lifted out of the decision, so
+        #: the late favourite's own evaluation never reached the step
+        #: report or the log. That evaluation is the ONLY record of a
+        #: qualifying opportunity we did not take: it carries the side,
+        #: the favourite's ask and depth, and `considered` -- every one
+        #: of 0.97/0.98/0.99 with its EV per share, its break-even
+        #: probability and, when refused, whether it WOULD_CROSS or fell
+        #: EDGE_BELOW_MARGIN.
+        #:
+        #: Without it a window that passed up a fill is indistinguishable
+        #: from a window that had nothing to pass up, and the adverse-
+        #: selection question -- were the ones we skipped the ones that
+        #: would have lost? -- cannot be asked of the tape afterwards.
+        #: The arbiter's choice goes beside it for the same reason: a
+        #: candidate refused because a straddle rung outranked it is a
+        #: different fact from one that never qualified.
+        _ev = decision.get("evaluation") or {}
+        report["late_eval"] = {
+            k: (_s(v) if isinstance(v, Decimal) else v)
+            for k, v in (_ev.get("late_favorite") or {}).items()}
+        report["arbiter_eval"] = {
+            k: (_s(v) if isinstance(v, Decimal) else v)
+            for k, v in (_ev.get("arbiter") or {}).items()}
         if decision["action"] == C.DISABLED:
             return done()
         todo = [o for o in decision["orders"] if isinstance(o, Mapping)]

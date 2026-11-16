@@ -1248,12 +1248,40 @@ class Session:
                 book = self.book_fn(self.market)
                 est = self.p_fn(self.market, ws, now) or {}
                 p_up = est.get("p_up") if est.get("ok") else None
+                #: TOP-OF-BOOK SIZE, PROMOTED FROM THE LOG TO THE
+                #: DECISION. The PUBLIC market endpoint publishes no size
+                #: at any level -- depth is null in all 27,425 aligned
+                #: rows -- so a strategy that requires executable size on
+                #: the side it is buying could never be satisfied from it.
+                #: `book_depth()` reads the AUTHENTICATED socket this
+                #: session already runs, which does carry size, and until
+                #: now nothing but the log read it.
+                #:
+                #: Only the SIZES are taken. bid/ask still come from the
+                #: public endpoint, because replacing them would change
+                #: what the straddle prices against, and that is a
+                #: different change needing its own evidence. The auth
+                #: book's own quotes are recorded beside them so a
+                #: divergence is visible rather than silent.
+                #:
+                #: FAIL CLOSED: an unreadable socket yields no sizes, the
+                #: late favourite refuses NO_DEPTH, and nothing is placed.
+                #: Absent size is never read as unlimited size.
+                depth = self.book_depth()
                 rep = self.ex.step(
                     market=self.market,
                     book={"bid": book.get("bid"), "ask": book.get("ask"),
-                          "age_s": book.get("age_s")},
+                          "age_s": book.get("age_s"),
+                          "bid_shares": (depth.get("bid_shares")
+                                         if depth.get("read") else None),
+                          "ask_shares": (depth.get("ask_shares")
+                                         if depth.get("read") else None)},
                     t_in_window_s=now - ws, p_up=p_up,
                     p_source=("VENUE_INDEX" if p_up is not None else None),
+                    #: the index age the estimator already measured, and
+                    #: the account-wide loss room `gates()` already read
+                    p_age_s=est.get("index_age_s"),
+                    loss_room_usd=g.get("loss_room_usd"),
                     exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
                 self._log("L5_BTC5M_STEP", {

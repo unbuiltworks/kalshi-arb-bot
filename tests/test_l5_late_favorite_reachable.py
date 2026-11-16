@@ -216,3 +216,63 @@ def test_the_readers_lower_bound_matches_what_the_gate_will_accept():
     assert v == X.LATE_WINDOW_MIN_S
     assert S.strategy_can_fire(late_window_s=v, window_s=300,
                                cancel_lead_s=30, step_s=5)["ok"] is True
+
+
+# ---------------------------------- midpoint eligibility (late_window_s=150)
+
+def test_the_midpoint_window_is_accepted_and_is_the_upper_bound():
+    #: 150 of 300 is the window's exact midpoint: the widest band in
+    #: which this is still a LATE strategy rather than a second opener.
+    os.environ[X.LATE_WINDOW_ENV] = "150"
+    assert X.late_favorite_window_s() == D("150")
+    assert X.LATE_WINDOW_MAX_S == D("150")
+    os.environ[X.LATE_WINDOW_ENV] = "151"
+    assert X.late_favorite_window_s() == D("0")
+
+
+def test_the_midpoint_window_gives_many_more_evaluations():
+    good = S.strategy_can_fire(late_window_s=150, window_s=300,
+                               cancel_lead_s=30, step_s=5)
+    assert good["ok"] is True
+    assert good["strategy_fires_from_s"] == "150"
+    #: 120s of resting before the cancel sweep: 24 steps against the 3
+    #: a 45-second band allows
+    assert good["rest_s"] == "120"
+
+
+def test_the_cancellation_lead_is_preserved_at_the_midpoint_window():
+    #: widening eligibility must not touch the 30-second lead, which is
+    #: what guarantees nothing is resting when the market closes
+    for lw in (45, 90, 150):
+        o = S.strategy_can_fire(late_window_s=lw, window_s=300,
+                                cancel_lead_s=30, step_s=5)
+        assert D(o["stepping_stops_before_s"]) == D("270")
+
+
+def test_widening_the_window_does_not_lower_the_ev_bar(monkeypatch):
+    #: THE POINT OF ITEM 6. A wider band gives the gate more moments; it
+    #: does not make a bad price good. The same marginal probability is
+    #: refused at the midpoint exactly as it is at t=265.
+    monkeypatch.setenv(LF.ENABLE_ENV, "YES")
+    for t in (D("155"), D("200"), D("265")):
+        out = _eval(p_up=D("0.970"), t_in_window_s=t, late_window_s=D("150"))
+        assert out["ok"] is False, t
+        assert out["reason"] == "NO_LEVEL_QUALIFIED"
+
+
+def test_a_confident_midpoint_move_does_qualify(monkeypatch):
+    #: and when the model IS confident early -- a large move the book has
+    #: not yet repriced to 0.99 -- the midpoint band is what lets us see
+    #: it at all
+    monkeypatch.setenv(LF.ENABLE_ENV, "YES")
+    out = _eval(p_up=D("0.995"), t_in_window_s=D("160"),
+                late_window_s=D("150"), book=_book(ask="0.9850"))
+    assert out["ok"] is True, out["reason"]
+    assert D(out["order"]["price"]) < D("0.9850")
+
+
+def test_at_the_old_window_the_same_midpoint_moment_is_invisible(monkeypatch):
+    monkeypatch.setenv(LF.ENABLE_ENV, "YES")
+    out = _eval(p_up=D("0.995"), t_in_window_s=D("160"),
+                late_window_s=D("45"), book=_book(ask="0.9850"))
+    assert out["reason"] == "TOO_EARLY"
