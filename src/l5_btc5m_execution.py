@@ -1496,6 +1496,76 @@ class Btc5mExecutor:
             over.update(entry_mode=C.EDGE_GATED, reserve_mode="COMPLETION")
         return type(self.params)(**dict(vars(self.params), **over))
 
+    def stop(self, *, reason: Any, now: Optional[dt.datetime] = None
+             ) -> Dict[str, Any]:
+        """The operator STOP. Latch first, then unwind. IDEMPOTENT.
+
+        THE LATCH IS WRITTEN BEFORE ANYTHING IS CANCELLED, and the order
+        matters more than it looks. Cancellation talks to a venue and can
+        fail, hang or race a fill; if the latch came second, a STOP whose
+        cancels failed would leave a lane still able to submit. Latching
+        first means the worst case is "stopped with orders we could not
+        withdraw" -- bad, and visible -- rather than "still trading".
+        The latch is durable, so it survives the restart that a hung
+        cancel might otherwise invite.
+
+        IT NEVER BELIEVES A CANCEL REQUEST. `_cancel` sends by exact
+        venue id and then RE-READS the order; only the re-read decides,
+        and a fill that beat the cancel is booked by that same re-read.
+        So a partial fill or a fill racing the cancellation is reconciled
+        rather than lost, and an order the venue will not confirm
+        terminal is reported as still open instead of assumed gone.
+
+        HOLDS ARE NOT RELEASED BY STOPPING. An order whose state is
+        uncertain, and inventory that has not settled, both still carry
+        risk; freeing their budget here would let a restart re-spend
+        money that is still at stake. `sync_reservation` releases only
+        what the ledger shows is genuinely finished.
+
+        FAILS CLOSED. `ok` is True only when every order of ours reached
+        a terminal state AND the latch was written. Anything else leaves
+        `ok` False with the orders named, and the lane stays latched.
+        """
+        at = _utc(now) if now is not None else self._now()
+        latched = PMODE.write_state(PMODE.STOPPED, why=reason, now=at)
+        out: Dict[str, Any] = {
+            "ok": False, "latched": bool(latched.get("ok")),
+            "latch_reason": latched.get("reason"),
+            "cancelled": [], "still_open": [], "refused": [],
+            "fills_during_stop": [], "reservation": None,
+            "label": ("STOP latches first and never treats a cancel request "
+                      "as a confirmed cancellation: only the re-read of each "
+                      "order decides, and holds stay on anything still at "
+                      "risk")}
+        fills: List[Dict[str, Any]] = []
+        #: a snapshot, because cancelling mutates the ledger as it goes
+        open_now = [c for c, r in sorted(self._ledger["orders"].items())
+                    if r.get("state") in OPEN]
+        for coid in open_now:
+            res = self._cancel(coid, at, fills)
+            if res.get("refused"):
+                out["refused"].append({"id": coid,
+                                       "reason": res["refused"]})
+                continue
+            if res.get("filled", ZERO) > 0:
+                out["fills_during_stop"].append(
+                    {"id": coid, "qty": _s(res["filled"])})
+            if res.get("terminal"):
+                out["cancelled"].append(coid)
+            else:
+                out["still_open"].append(coid)
+        if fills:
+            out["fills_during_stop"].append({"booked": len(fills)})
+        self._refresh_halt()
+        saved = self._save_or_halt()
+        out["ledger_saved"] = bool(saved)
+        #: release only what is genuinely finished; uncertain orders and
+        #: unsettled inventory keep their holds.
+        out["reservation"] = self.sync_reservation()
+        out["ok"] = bool(latched.get("ok")) and saved \
+            and not out["still_open"] and not out["refused"]
+        return out
+
     def sync_reservation(self) -> Dict[str, Any]:
         """Release this lane's holds whose orders are no longer live.
 
