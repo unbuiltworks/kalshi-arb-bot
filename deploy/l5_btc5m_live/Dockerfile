@@ -31,6 +31,7 @@ RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/__init__.py src/__init__.py
 COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
 COPY src/l5_btc5m_execution.py src/l5_btc5m_execution.py
+COPY src/l5_5m_fleet.py src/l5_5m_fleet.py
 COPY src/l5_btc5m_runner.py src/l5_btc5m_runner.py
 COPY src/l5_btc_reference.py src/l5_btc_reference.py
 COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
