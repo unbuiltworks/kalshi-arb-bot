@@ -44,6 +44,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_btc5m_controller as C
 from src import l5_btc5m_execution as X
+from src import l5_persistent_mode as PMODE
 from src import l5_live_authorization as AUTH
 
 D = Decimal
@@ -708,6 +709,88 @@ def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]
 
 
 # ------------------------------------------------------------ the session
+
+#: ======================= PERSISTENT ROLLOVER =========================
+#:
+#: The bounded path gets its window list from the approval, which
+#: ENUMERATES every window by name -- so it cannot roll past its own list
+#: and stops at NOT_AFTER. Persistent rollover takes the window from the
+#: CLOCK instead, and asks before each one whether it may still trade.
+#:
+#: The latch is re-read EVERY window, not once at start. A STOP or a
+#: HALT written while window N is running stops window N+1, and the loop
+#: exits rather than idling: a process that keeps looping after a safety
+#: halt is one that will resume the moment somebody clears the latch for
+#: an unrelated reason.
+#:
+#: NOTHING HERE REARMS. The only exits are a latch, a lost envelope, or
+#: the operator stopping the process, and none of them is followed by a
+#: retry.
+ROLLOVER_GRACE_S = 20.0
+
+
+def persistent_next(*, now: dt.datetime, prefix: str,
+                    horizon_s: float = 300.0,
+                    grace_s: float = ROLLOVER_GRACE_S) -> Dict[str, Any]:
+    """The window this lane should trade now, or why there is none.
+
+    A window with less than `grace_s` left is NOT offered: entering one
+    about to close buys the worst of both ends -- no time to work an
+    order, and a settlement immediately after. The next one is offered
+    instead, with the seconds to wait for it.
+    """
+    if not isinstance(now, dt.datetime) or now.tzinfo is None:
+        return {"ok": False, "reason": "NOW_UNREADABLE", "market": None}
+    if not isinstance(prefix, str) or not prefix:
+        return {"ok": False, "reason": "PREFIX_UNREADABLE", "market": None}
+    try:
+        h = float(horizon_s)
+        g = float(grace_s)
+    except (TypeError, ValueError):
+        return {"ok": False, "reason": "HORIZON_UNREADABLE", "market": None}
+    if h <= 0 or g < 0 or g >= h:
+        return {"ok": False, "reason": "HORIZON_UNREADABLE", "market": None}
+    epoch = now.timestamp()
+    start = epoch - (epoch % h)
+    left = (start + h) - epoch
+    wait = 0.0
+    if left < g:
+        start += h
+        wait = start - epoch
+    at = dt.datetime.fromtimestamp(start, UTC)
+    return {"ok": True, "reason": None,
+            "market": "%s%s-%sz" % (prefix, at.strftime("%Y-%m-%d"),
+                                     at.strftime("%H%M")),
+            "window_start_utc": at.isoformat(),
+            "wait_s": round(wait, 2),
+            "seconds_left_now": round(left, 2)}
+
+
+def persistent_gate(*, now: dt.datetime) -> Dict[str, Any]:
+    """May this lane trade another window at all?
+
+    Re-read every window. The envelope AND the durable state must both
+    permit it, and a LATCHED state exits the loop rather than pausing
+    it -- see the module note above.
+    """
+    env = PMODE.envelope(now=now)
+    if not env.get("ok"):
+        return {"ok": False, "exit": True, "reason": str(env.get("reason"))}
+    st = PMODE.read_state()
+    if not st.get("ok"):
+        #: an unreadable state could be hiding a latch
+        return {"ok": False, "exit": True, "reason": str(st.get("reason"))}
+    if st["state"] in PMODE.LATCHED:
+        return {"ok": False, "exit": True, "reason": "STATE_%s" % st["state"],
+                "state": st["state"]}
+    if st["state"] != PMODE.ARMED:
+        #: MONITOR observes and submits nothing, so it waits rather than
+        #: exiting: an operator may arm it without restarting anything.
+        return {"ok": False, "exit": False, "reason": "STATE_NOT_ARMED",
+                "state": st["state"]}
+    return {"ok": True, "exit": False, "reason": None,
+            "state": st["state"], "scope": env["scope"]}
+
 
 def _attribution_block(ex: Any, market: Any, settled: Any,
                        fees: Any) -> Dict[str, Any]:
