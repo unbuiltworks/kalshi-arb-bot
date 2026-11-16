@@ -383,3 +383,182 @@ def may_submit(*, market: Any, strategy: Any, post_only: Any,
     return {"ok": True, "reason": None, "state": cur,
             "strategy": strat, "worst_case_usd": str(worst),
             "envelope_digest": scope["digest"]}
+
+
+# ================================================ the owner's arming ceremony
+
+#: `why` recorded on an ARMED transition, so the audit trail names the
+#: mechanism rather than only the outcome.
+ARM_WHY = "OWNER_CEREMONY"
+
+
+def arm_digest(raw_envelope: Any, raw_campaign: Any) -> str:
+    """The identity of ONE approved campaign under ONE envelope.
+
+    Stored on the state record, so an already-ARMED lane can tell the
+    campaign it was armed for from a different one. Both documents are
+    included because either changing is a different authorization.
+    """
+    return digest("%s\n%s" % (str(raw_envelope or "").strip(),
+                              str(raw_campaign or "").strip()))
+
+
+def enter_armed(*, raw_campaign: Any, first_window_utc: Any, not_after_utc: Any,
+        now: Any, raw_envelope: Any = None, deployment: Any = None,
+        path: Optional[str] = None) -> Dict[str, Any]:
+    """MONITOR -> ARMED, and ONLY from the owner's approved documents.
+
+    NOT CALLED `arm`, deliberately. `l5_btc5m_runner` holds an invariant
+    that exactly ONE `.arm()` appears in it, inside
+    `arm_through_boundary` and after `AUTH.authorize_arming` -- that is
+    the TRANSPORT arming boundary, and a test walks the AST to keep it
+    single. This is a different operation: a durable state transition,
+    not permission to talk to a venue. Sharing the name would have made
+    that invariant ambiguous, and an ambiguous safety invariant is worse
+    than none.
+
+    WHY THIS EXISTS. `may_submit` has always required the durable state
+    to be ARMED, and nothing ever wrote it: the only `write_state`
+    callers write STOPPED and HALTED. So setting an envelope made a lane
+    unable to submit at all -- permanently, because MONITOR is the birth
+    state and no path left it. The gate was correct and unreachable.
+
+    WHAT IT IS NOT. It is not a second arming mechanism. The owner's
+    authorization still travels as the two documents the existing
+    ceremony already sets -- the standing envelope and the campaign
+    approval -- and every limit in them is re-derived here rather than
+    restated. This only makes the durable transition those documents
+    were always meant to cause.
+
+    FAIL CLOSED AT EVERY STEP, and the order is deliberate:
+
+      - the envelope must parse for THIS deployment and be unexpired.
+        `parse_envelope` already clamps the three ceilings to the
+        compiled maxima and refuses a missing one, so a campaign cannot
+        be armed above them;
+      - the campaign must be approved, name a series the envelope
+        authorizes, and declare limits no looser than the envelope's;
+      - its first window must still be AHEAD. An expired or
+        part-consumed campaign is never armed, because arming mid-flight
+        would authorize windows whose state nobody has audited;
+      - its end must not outlive the envelope;
+      - A LATCH IS NEVER WALKED PAST. HALTED and STOPPED refuse here as
+        they refuse everywhere; this cannot rearm them, cannot clear
+        them, and touches no loss accounting.
+
+    IDEMPOTENT FOR THE IDENTICAL CAMPAIGN AND NOTHING ELSE. A restart
+    re-runs this and finds ARMED with the same digest, so it proceeds;
+    a different envelope or a different approval finds ARMED with
+    another digest and REFUSES rather than silently re-arming into a
+    campaign the owner did not authorize twice.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, ok=False, reason=reason, state=None, armed=False)
+
+    at = _utc(now)
+    if at is None:
+        return no("NOW_UNREADABLE")
+
+    raw_env = (raw_envelope if raw_envelope is not None
+               else os.environ.get(ENVELOPE_ENV))
+    dep = (deployment if deployment is not None
+           else os.environ.get(DEPLOYMENT_ENV))
+    env = parse_envelope(raw_env, deployment=dep, now=at)
+    if not env.get("ok"):
+        return no("ENVELOPE:%s" % env.get("reason"))
+    scope = env["scope"]
+
+    #: THE CAMPAIGN DOCUMENT, read as the owner issued it.
+    doc: Any = raw_campaign
+    if isinstance(doc, (str, bytes)):
+        if not str(doc).strip():
+            return no("CAMPAIGN_ABSENT")
+        try:
+            doc = json.loads(doc)
+        except (ValueError, TypeError):
+            return no("CAMPAIGN_UNPARSEABLE")
+    if not isinstance(doc, Mapping):
+        return no("CAMPAIGN_NOT_AN_OBJECT")
+    if doc.get("approved") is not True:
+        return no("CAMPAIGN_NOT_APPROVED")
+    nonce = str(doc.get("nonce") or "").strip()
+    if len(nonce) < 8:
+        return no("CAMPAIGN_NONCE_TOO_SHORT")
+    series = str(doc.get("series") or "").strip()
+    if not series:
+        return no("CAMPAIGN_NAMES_NO_SERIES")
+    if series not in scope["series"]:
+        return no("CAMPAIGN_SERIES_NOT_IN_ENVELOPE", series=series[:40],
+                  envelope=list(scope["series"]))
+
+    #: THE CAMPAIGN MAY NOT BE LOOSER THAN THE ENVELOPE. Comparing rather
+    #: than restating: a figure copied here could drift from the document
+    #: that actually authorized it.
+    tot = _dec(doc.get("max_total_exposure_usd"))
+    loss = _dec(doc.get("max_daily_loss_usd"))
+    if tot is None or loss is None:
+        return no("CAMPAIGN_LIMITS_UNREADABLE")
+    if tot > scope["max_aggregate_usd"]:
+        return no("CAMPAIGN_EXPOSURE_ABOVE_ENVELOPE",
+                  campaign=str(tot), envelope=str(scope["max_aggregate_usd"]))
+    if loss > scope["max_daily_loss_usd"]:
+        return no("CAMPAIGN_DAILY_LOSS_ABOVE_ENVELOPE",
+                  campaign=str(loss),
+                  envelope=str(scope["max_daily_loss_usd"]))
+
+    #: WINDOWS: ahead of us, and inside the envelope's life.
+    first = _utc(first_window_utc)
+    end = _utc(not_after_utc)
+    if first is None or end is None:
+        return no("CAMPAIGN_WINDOWS_UNREADABLE")
+    if end <= first:
+        return no("CAMPAIGN_WINDOWS_INVERTED")
+    if first < at:
+        return no("CAMPAIGN_ALREADY_STARTED",
+                  first_window_utc=first.isoformat(), now=at.isoformat())
+    exp = scope.get("expires_utc")
+    if exp:
+        env_exp = _utc(exp)
+        if env_exp is None:
+            return no("ENVELOPE_EXPIRY_UNREADABLE")
+        if end > env_exp:
+            return no("CAMPAIGN_OUTLIVES_ENVELOPE",
+                      campaign_end=end.isoformat(),
+                      envelope_expires=env_exp.isoformat())
+
+    want = arm_digest(raw_env, raw_campaign)
+
+    st = read_state(path)
+    if not st.get("ok"):
+        return no("STATE:%s" % st.get("reason"))
+    cur = st["state"]
+    if cur in LATCHED:
+        #: A LATCH IS THE ONE THING THIS MUST NEVER UNDO.
+        return no("STATE_%s" % cur, state_was=cur,
+                  note="latched; arming cannot clear a halt or a stop")
+    if cur == ARMED:
+        #: `read_state` nests everything but `state` under `detail`, so the
+        #: digest lives there -- reading it off the top level would compare
+        #: "" against the wanted value and refuse every restart as if it
+        #: were a different campaign.
+        _seen = str((st.get("detail") or {}).get("latch_digest") or "")
+        if _seen == want:
+            return {"ok": True, "reason": None, "state": ARMED,
+                    "armed": True, "already": True, "digest": want,
+                    "scope": scope, "campaign_nonce": nonce}
+        return no("ARMED_FOR_ANOTHER_CAMPAIGN",
+                  state_was=ARMED, note="a different envelope or approval "
+                                        "is not a restart")
+    if cur != MONITOR:
+        return no("STATE_NOT_MONITOR", state_was=cur)
+
+    out = write_state(
+        ARMED, now=at, path=path, latch_digest=want,
+        why="%s dep=%s series=%s nonce=%s %s..%s" % (
+            ARM_WHY, str(dep)[:40], series, nonce[:32],
+            first.isoformat(), end.isoformat()))
+    if not out.get("ok"):
+        return no("STATE_NOT_WRITTEN:%s" % out.get("reason"))
+    return {"ok": True, "reason": None, "state": ARMED, "armed": True,
+            "already": False, "digest": want, "scope": scope,
+            "campaign_nonce": nonce, "written": out.get("written")}
