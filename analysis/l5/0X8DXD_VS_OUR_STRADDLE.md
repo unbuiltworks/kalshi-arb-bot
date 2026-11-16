@@ -83,7 +83,10 @@ The only source-confirmed economics in the straddle era:
 | repeated fills/window | **106 median**, p90 302, max 1,374 | a handful; `MAX_RESTING_ENTRIES` is **ACCUMULATE-only**, not wired to STRADDLE |
 | selling | **17.3% of fills**, SELL median 0.370 vs BUY median 0.440 | **never sells** |
 | inventory imbalance at window end | **median 21.2%** — carries directional residual | completion targets a *matched* cheap pair |
-| pair economics | pair cost ≈ **1.00**; margin is spread + a 13.42 bps rebate | pair cost ceiling **0.90** (policy target 0.96) — a locked cheap pair |
+| **repricing** | works a **0.310-wide band**, median **14 distinct 1¢ levels** per outcome per window | **one fixed price**, optional small ladder; no re-quote after fill |
+| **completion / pair cost** | median completed pair **0.9342**; **78.0%** of windows < 1.00, **62.2%** ≤ 0.96, **36.8%** ≤ 0.90 | completion ceiling **0.90** in code (`COMPLETION_PAIR_COST_MAX`), stated policy target 0.96 |
+| second leg timing | first Up buy to first Down buy: median **10s** (p90 54s) — both sides opened almost at once | both legs rest from t=0 |
+| matched fraction at window end | median **0.63** of the smaller side matched | completion aims at a fully matched pair |
 | per-window deployment | **$990 median** | $4.50 (2 × $2.25 clip) — **~220× smaller** |
 
 ## 3. The three biggest behavioral gaps
@@ -101,13 +104,23 @@ re-quote-after-fill path (`MAX_RESTING_ENTRIES` governs ACCUMULATE only).
 Frequency, not size, is the dimension we are missing — which matches the
 standing `PATIENCE → FREQUENCY → SIZE → CONCURRENCY` order.
 
-**Gap 3 — They are a market maker; we are a pair-arbitrageur.** Their
-pair cost is ≈$1.00 and they end windows deliberately imbalanced (median
-21.2%), earning spread and a **13.42 bps maker rebate**. Our straddle is
-built to lock a pair below $0.90. These are different businesses, and the
-difference is not a tuning value: near-$1 pair tolerance is **LOCKED** by
-`L5_OPERATING_MODEL.md` until equivalent economics are source-confirmed
-for our account.
+**Gap 3 — Our completion gate is set tighter than the pair economics
+they actually achieved, and we cannot sell.** ⚠ **This corrects an
+earlier claim of mine that 0x8dxd ran ≈$1.00 pairs and was therefore in a
+different business. Measured, they are in the same business as our
+straddle:** the combined cost of their matched pair is **median 0.9342**,
+with **78.0%** of two-sided windows below 1.00, **62.2% at or below
+0.96** — our stated spring target — and **36.8% at or below 0.90**. They
+reach it by working a wide moving band, not by resting deep.
+
+Two consequences. First, `COMPLETION_PAIR_COST_MAX = 0.90` in code is
+*tighter* than the 0.96 the operating model states as spring discipline,
+and it would refuse roughly **63%** of the pairs 0x8dxd actually
+completed. Second, **17.3% of their fills are SELLs** (median 0.370,
+later in the window than their buys) and they finish with a median
+matched fraction of 0.63 — they recycle and re-shape inventory
+intra-window. Our executor has **no sell action at all**, so a leg bought
+too expensively can only be held to settlement.
 
 ## 4. Smallest changes that would close them — and the gate that comes first
 
@@ -131,18 +144,73 @@ for our account.
    re-quote-after-fill path from ACCUMULATE to STRADDLE, bounded by the
    unchanged $5 per-market ceiling, which caps a window at ~2 clips
    regardless. No new strategy, no new service, no raised ceiling.
-4. **Gap 3 — do not attempt yet.** Requires both a confirmed rebate and
-   unlocking near-$1 pair tolerance, plus a SELL action the executor does
-   not have. Blocked on step 1.
+4. **Gap 3, part one — report only, needs your approval.** Aligning
+   `COMPLETION_PAIR_COST_MAX` from 0.90 to the 0.96 the operating model
+   already states would accept 62.2% of their observed pairs instead of
+   36.8%. That is a **code ceiling**, and your standing instruction is
+   not to raise code ceilings before the first live validation, so I have
+   **not** changed it and am not asking to. It is recorded here as the
+   measured reason the gate is mis-set relative to stated policy.
+5. **Gap 3, part two — a SELL action. Do not attempt yet.** It is new
+   execution capability, not a parameter, and it interacts with the
+   reservation, the ownership registry and settlement reconciliation.
+   Blocked behind step 1 and a separate design review.
 
-## 5. Validation: 20 reconstructed windows
+### What is NOT observable, and so is not claimed
 
-`analysis/l5/reports/0x8dxd_first20_settled_windows.txt` — 20 consecutive
-settled March windows, every fill, inventory after each fill, cost,
-redemption, net. 15 profitable, 5 losing, range −$831.64 to +$926.72.
-**19 of the 20 do not reconcile to their redemption**, so their stated
-net is overstated — which is precisely why the March era's profitability
-is reported as unknown rather than positive.
+Order placements, cancellations, order ids and the book are absent from
+both v2 routes: the tape holds **fills only**. So repricing is visible
+only as the price path of fills, which bounds it (a 0.310-wide band, 14
+distinct 1¢ levels) without showing the quotes that produced it. Whether
+any individual fill was maker or taker is likewise unobservable — and
+the account carries **both** MAKER_REBATE and TAKER_REBATE credits, so
+"maker-only" is not a safe description of them. Queue position, fill
+probability and adverse selection at our size cannot be read from
+another trader's fills at 220x our size.
+
+## 5. Settlement reconciliation, all completed windows (Priority 1)
+
+3,579 completed BTC5m windows accounted, losers included — resolution is
+the venue's winner flag, so a window where they held only the losing side
+is present rather than filtered out.
+
+| era | cost basis | n | BUY cost | SELL proceeds | redemption | net | win% |
+|---|---|---|---|---|---|---|---|
+| MARCH | reconciled | 205 | $129,163 | $13,578 | $76,546 | **−$39,038** | 23.9% |
+| MARCH | UNRECONCILED | 2,514 | $3,827,414 | $765,133 | $3,256,100 | **+$193,819** | 62.6% |
+| AUGUST | reconciled | 851 | $564,369 | $0 | $565,903 | **+$1,534** | 99.6% |
+| AUGUST | no-redeem | 6 | $4,181 | $0 | $2,100 | **−$2,081** | 50.0% |
+| AUGUST | UNRECONCILED | 3 | $821 | $0 | $822 | +$1 | 100% |
+
+Trading net on **verified** cost basis: **−$39,585**. On windows with
+cost basis **missing**: **+$193,820**, which is not a measurement.
+
+Observable incentives, kept strictly separate because the venue credits
+them as account-level rows naming no market: REFERRAL_REWARD $49,435.87,
+MAKER_REBATE $13,537.44, REWARD $583.13, TAKER_REBATE $122.25, YIELD
+$0.23 — **$63,678.92** total. **Per-trade fees are not observable at
+all** on either route (the TRADE row's `usdc_size` equals price x size
+exactly); that is not the same as zero.
+
+## 6. Validation: 20 reconstructed windows
+
+**Representative** (stratified across era x outcome x cost-basis
+integrity, so no behaviour on the tape is invisible):
+`0x8dxd_reconciliation_and_20_representative.txt`, with full fill tapes
+in `0x8dxd_20_representative_full_tapes.txt`. 14 March windows (48–308
+fills, BUY $526–$3,370, SELL proceeds up to $821, window-end imbalance
+1.1%–96.7%) and 6 August windows (1–19 fills, always 100% imbalanced,
+never any sell).
+
+The August rows show the risk shape in one glance: wins of **+$0.09,
++$0.64, +$0.93, +$1.20, +$9.35, +$10.00** against a single
+**−$889.97** — one 1-contract-type loss is 89x the largest win in the
+sample.
+
+**Chronological companion:** `0x8dxd_first20_settled_windows.txt` — the
+first 20 settled March windows, 15 profitable / 5 losing, −$831.64 to
++$926.72. **19 of the 20 do not reconcile**, which is why March is
+reported as unknown rather than positive.
 
 `analysis/l5/reports/0x8dxd_window_44at99_1787613900.txt` — the August
 window containing the verified 44-contract Down @ $0.99 fill, reconciling
@@ -151,7 +219,7 @@ Our `CANCEL_LEAD_S=30` sweeps at t=270, so our executor cannot reach any
 fill in that window — and since the August strategy is net negative,
 that argues for leaving the cancel lead alone.
 
-## 6. What to replicate next
+## 7. What to replicate next
 
 **Not the August strategy** — measurably net negative over its author's
 own 860 windows, and abandoned by its author.
