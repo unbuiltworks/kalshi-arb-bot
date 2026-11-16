@@ -43,6 +43,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+from decimal import Decimal as D
 import sys
 import time
 import urllib.request
@@ -50,7 +51,8 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
-from src import l5_btc_reference as REF        # noqa: E402
+from src import l5_btc_reference as REF
+from src import l5_late_favorite as LF        # noqa: E402
 
 GATEWAY = "https://gateway.polymarket.us"
 MARKET_URL = GATEWAY + "/v1/market/slug/"
@@ -102,6 +104,52 @@ def _q(v):
         return None if v is None else float(v)
     except (TypeError, ValueError):
         return None
+
+
+#: the margin a recorded opportunity must clear. Recording only; it
+#: gates nothing and places nothing.
+RECORD_MARGIN = D("0.005")
+#: what the recorder cannot know, and why. Never a number.
+FILLABLE_REASON = ("no public size at any level, so queue position and "
+                   "fill probability are unobservable from this feed")
+OUR_FILL_REASON = "this process holds no account and sees no fills"
+
+
+def _candidates(p, up_bid, up_ask):
+    """Each maker level priced at THIS poll's probability.
+
+    Uses `l5_late_favorite.ev_per_share` and `break_even_p`, so the
+    recorded economics and the live gate can never drift apart -- a
+    second formula here would be a second answer.
+    """
+    out = {"levels": [], "fillable": None, "fillable_reason": FILLABLE_REASON,
+           "our_fill": None, "our_fill_reason": OUR_FILL_REASON,
+           "margin_used": str(RECORD_MARGIN)}
+    pv = p.get("p_up") if p.get("ok") else None
+    if pv is None or up_bid is None or up_ask is None:
+        out["reason"] = "NO_PROBABILITY" if pv is None else "NO_TWO_SIDED_QUOTE"
+        return out
+    try:
+        pu = D(str(pv))
+    except Exception:                                          # noqa: BLE001
+        out["reason"] = "NO_PROBABILITY"
+        return out
+    side = "UP" if pu >= D("0.5") else "DOWN"
+    p_win = pu if side == "UP" else (D("1") - pu)
+    fav_ask = (D(str(up_ask)) if side == "UP"
+               else (D("1") - D(str(up_bid))))
+    out.update(side=side, p_win=str(p_win), favourite_ask=str(fav_ask))
+    for px in LF.DEFAULT_PRICES:
+        ev = LF.ev_per_share(p_win, px, D("0"))
+        out["levels"].append({
+            "price": str(px),
+            "ev_per_share": str(ev),
+            "break_even_p": str(LF.break_even_p(px, D("0"))),
+            "would_cross": bool(px >= fav_ask),
+            #: a statement about the BOOK, not about us
+            "inferred_opportunity": bool(px < fav_ask and ev >= RECORD_MARGIN),
+        })
+    return out
 
 
 def _depth(market, side):
@@ -226,6 +274,29 @@ def build_row(*, slug, start, now, market, market_rtt, market_error, index):
                  "sigma_per_second": p.get("sigma_per_second"),
                  "distance_to_strike": p.get("distance")},
         "closed": (market or {}).get("closed"),
+        #: THE LATE-FAVOURITE CANDIDATES, PRICED EVERY POLL.
+        #:
+        #: This is the UNBIASED DENOMINATOR. A competitor's +$310 over 40
+        #: SELECTED WINNING positions establishes nothing, because the
+        #: windows that lost and the windows that never filled are
+        #: missing from it. Every poll of every window is written here
+        #: whatever happens, so the losing and no-fill windows are in the
+        #: sample by construction.
+        #:
+        #: THREE SEPARATE THINGS, never collapsed into one:
+        #:   inferred_opportunity  the price was below the favourite's ask
+        #:                         and the EV cleared the margin. A
+        #:                         statement about the BOOK.
+        #:   fillable              whether our bid would actually be hit.
+        #:   our_fill              whether OUR order filled.
+        #: Only the first is knowable here. The public endpoint publishes
+        #: no size at any level (verified again 2026-11-16: every
+        #: orderbook/book/depth path 404s and the market record carries no
+        #: size key), so fill probability CANNOT be recorded -- it can
+        #: only be learned by resting real orders. Writing the second or
+        #: third as anything but null-with-a-reason would manufacture the
+        #: very evidence this row exists to supply honestly.
+        "late_favorite": _candidates(p, bid, ask),
         "settled_outcome": None,
         "fills": [],
         "fills_reason": FILLS_REASON,
