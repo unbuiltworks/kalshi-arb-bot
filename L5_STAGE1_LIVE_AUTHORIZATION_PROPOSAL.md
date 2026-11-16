@@ -1,310 +1,360 @@
 # L5 Stage 1 live-capital validation — authorization proposal
 
-**Status: PROPOSAL. Nothing is armed and nothing money-capable is deployed.**
-The deployed production SHA is unchanged and the four lanes are `IDLE`.
+**Status: PROPOSAL. Nothing is armed and nothing money-capable is
+deployed.** The deployed production SHA is unchanged and the four lanes
+are `IDLE` with `market: null`.
 
-This document is what you would be approving. It is written so that the
-things it cannot promise are as visible as the things it can.
+---
+
+## 0. A correction to what I told you earlier
+
+I previously reported that the $5 worst-case-loss budget **was not**
+account-wide, and recommended either stopping `pmus-spring-l5-probe`
+for the campaign window or accepting a weaker bound.
+
+**That was wrong, and the recommendation was backwards.**
+
+Account-wide loss accounting already exists and is correct.
+`l5_btc5m_runner.account_risk()` fetches a document over
+`L5_ACCOUNT_RISK_URL` and computes
+
+```
+loss_room_usd = min(daily_halt_usd   + utc_day_realized_usd,
+                    cumulative_ceiling + lifetime_realized_usd)
+```
+
+adding this lane's own settled losses that the serving service has not
+yet booked (`min(0, own_unaccounted)` — only losses, so the combination
+can bind earlier, never later). It refuses on a missing URL, an
+unreadable or undated document, a document older than
+`RISK_MAX_AGE_S = 30`, a document that declares itself unreadable,
+figures that will not parse, or a document for another UTC day.
+
+And the document is served by **`pmus-spring-l5-probe` itself**. Its
+producer's docstring is explicit: *"The ACCOUNT-WIDE loss figures and
+limits this service enforces, so a second strategy on the same account
+reads the same limit instead of holding its own copy."* A
+`registry_read` from that service was observed at 16:33:58Z.
+
+So stopping the probe is the one action that would **break** account-wide
+accounting: the risk document would go away and the lane would fail
+closed with `ACCOUNT_RISK_UNREADABLE`, placing nothing. The probe must
+stay up. I have not touched it.
 
 ---
 
 ## 1. Risk envelope (Option B, as you chose)
 
-| Bound | Value | Where it is enforced |
+| Bound | Value | Enforced by |
 |---|---|---|
-| Aggregate exposure, all assets and open orders | **$10.00** | `l5_shared_reservation` — one atomic hold on the shared volume, under an exclusive lock, taken before the venue is called |
+| Aggregate exposure, all assets and open orders | **$10.00** | `l5_shared_reservation` — one atomic hold under an exclusive lock, taken before the venue is called |
 | Per-market exposure | **$5.00** | `l5_persistent_mode.may_submit` |
-| Account-wide worst-case loss | **$5.00** | folded into the cap the reservation enforces, so it is checked under the same lock as the aggregate |
+| Worst-case loss, **account-wide** | **$5.00** | folded into the cap the reservation enforces, checked under the same lock; the account-wide figure comes from `account_risk()` above |
 | Order type | **maker only, taker disabled** | `may_submit` refuses a non-`post_only` intent |
-| Assets | **BTC, ETH, SOL, XRP** (4 lanes) | `L5_5M_FLEET` |
+| Assets | **BTC5m only** for Stage 1a | `L5_5M_FLEET="BTC5M"` |
 
-The compiled ceilings are unchanged: `MAX_AGGREGATE_USD = 10.00`,
-`MAX_PER_MARKET_USD = 5.00`, `MAX_DAILY_LOSS_USD = 5.00`. The standing
-envelope can only clamp **down**. Asking for more returns
-`ENVELOPE_EXCEEDS_CODE_CEILING` and submits nothing — this was
-demonstrated against your original $20/$10 figures.
+Compiled ceilings unchanged: `MAX_AGGREGATE_USD = 10.00`,
+`MAX_PER_MARKET_USD = 5.00`, `MAX_DAILY_LOSS_USD = 5.00`. The envelope
+can only clamp **down**; over-asking returns
+`ENVELOPE_EXCEEDS_CODE_CEILING` and submits nothing.
 
-### What "worst case" means here
+Worst case is the **whole outlay**, not a modelled loss — a losing
+contract pays nothing — so the reservation holds the full cost of every
+order from submission until settlement, released by syncing to the
+ledger and never by a timer.
 
-Worst case is the **whole outlay**, not a modelled loss: a losing
-contract pays nothing, so the reservation holds the full cost of every
-order from submission until settlement. A hold is released by syncing
-to the ledger, never by a timer. An order whose outcome is unknown
-keeps holding its risk.
+### Account-wide **exposure** needs one variable changed
 
----
+`account_exposure()` already reads the venue's own `open_orders()` and
+`positions()` for the entire account, excludes ours by client- and
+venue-order-id, and charges everything else at $1.00/contract. Whether
+that figure **binds** depends on one variable:
 
-## 2. Three things that must be true before this bound is real
+- `L5_BTC5M_FOREIGN_EXPOSURE=CHARGED` → `own + foreign ≤ $10`. Genuinely
+  account-wide.
+- `=REPORTED` → the ceiling bounds **our** exposure only; foreign
+  inventory is read and reported but charged to nobody.
 
-These are the gaps found while verifying production. **Two of them mean
-the $5 figure is not yet an account-wide maximum.**
+It is currently set on `l5-btc5m-live` but its value is redacted to this
+session. It was set to `REPORTED` by PR #235 to unblock a $52 sports
+position against a $17 ceiling. **For Stage 1 it must be `CHARGED`**, and
+the new safety gate refuses otherwise.
 
-### 2.1 Another live service is trading the same account
+### What the probe actually holds
 
-`pmus-spring-l5-probe` is **live** in the same Railway project and the
-same PMUS account, deployed today at 11:44Z from branch
-`feat/pmus-two-sided-fast-cancel-20261115` (`ae0a9041`). The production
-watchdog observes it holding 1–2 resting orders at a time right now.
+Read-only, from its own audit at 15:47:49Z and its live log:
 
-It does **not** use `L5_SHARED_RESERVATION`, so its exposure is
-invisible to the new reservation, and the reservation's exposure is
-invisible to it.
+- `venue_positions_nonzero: 0`
+- `unmatched_cost_open_usd: 0.0000`, `pending_resolution: 0.0000`
+- `open_gate: {"on": false}` with negative measured EV in **every** sport
+  — it is not opening new positions, only working existing inventory
+- transient 1–2 contract recovery orders (the watchdog sees them appear
+  and clear)
+- it is a **sports** book (esports, tennis, football), so there is no
+  market overlap with BTC5m
+- cumulative realized **−$21.62** over 39 settled markets since 11-14
 
-**Therefore:** with that service running, $10/$5/$5 bounds the four new
-lanes **as a group**, not the account. Calling it an account-wide
-maximum would be false. Your own standing instruction applies directly
-here: the $5 figure must not be represented as a hard maximum loss
-unless outstanding orders and positions are also bounded accordingly.
-
-Your options — I have not touched this service and will not without
-your say:
-- **(a)** stop `pmus-spring-l5-probe` for the Stage 1 window, after
-  which $5 is genuinely account-wide; or
-- **(b)** run Stage 1 alongside it and label the bound **per-lane-group,
-  not account-wide**, accepting that total account worst case is $5 plus
-  whatever that service carries.
-
-### 2.2 The watchdog does not manage the four lanes
-
-The production watchdog is healthy: sweeping every 20s,
-`cancel_enabled: true`, `halted: null`, `read_error: null`, heartbeat
-fresh. Verified live.
-
-But its `managed_lanes` list contains **only**
-`http://pmus-spring-l5-probe.railway.internal:8090`. The four BTC/ETH/
-SOL/XRP lanes are not in it, so the watchdog would not cancel their
-resting orders. `L5_WATCHDOG_MANAGED_LANE_URLS` on the live service
-needs the four lane URLs before Stage 1.
-
-### 2.3 The account-risk endpoint is unverified
-
-`L5_ACCOUNT_RISK_URL` is set on `l5-btc5m-live`, but its value is
-redacted to this session and the lanes are `IDLE` (`market: null`), so
-the endpoint is never exercised and I **cannot** confirm it serves a
-document within `RISK_MAX_AGE_S = 30`. `l5-e1-safety-monitor` is not it:
-it is a one-off from 10 October with no domain and no log output.
-
-This fails closed — a stale or unreadable risk document refuses the
-submit — so it is a **start-up blocker, not a safety hole**. It must be
-confirmed before the window, not during it.
+At $1/contract its contribution to our $10 is about **$1–2, transient**.
+Under `CHARGED` that directly reduces our room, which is the point.
 
 ---
 
-## 3. Configuration the new code needs and the deployed service lacks
+## 2. The precise remaining blockers
 
-`l5-btc5m-live` is missing every variable the new architecture reads.
-The five that decide whether the limits bind at all:
+Four. All are config except the first, which was a code defect and is
+now fixed on this branch.
 
-| Variable | Consequence if unset |
+### 2.1 ~~The strategy could never fire~~ — fixed, `ea67e6fff`
+
+The late-favorite was unreachable **four ways over**, and each one read
+in a log as "no opportunity in this market":
+
+1. **No environment readers existed.** `late_favorite_clip_usd`,
+   `_fee_per_share` and `_min_edge_per_share` were declared on `Params`
+   and populated by nothing — not in `effective_params`, not anywhere.
+   All three sat at 0, so every evaluation refused
+   `NO_EDGE_MARGIN_SET`.
+2. **The late window could never be stepped.** The session runs
+   `while clock() < window_start + 300 − CANCEL_LEAD_S`, i.e. `t < 270`.
+   The module's default window of 30 fires from `t ≥ 270`. **Disjoint.**
+   Measured: **zero steps at `t ≥ 270` across all 20 windows** of the
+   fifth run.
+3. A caller passing `None` reached `left > None` and raised.
+4. The concurrency tests called `decide()` directly at **`t = 275`** —
+   past the end of the stepping range. The concurrency they pin was
+   real; the reachability was not. Testing beyond `stop_at` is how this
+   survived a green suite.
+
+Now: the window is a `Param` with a reader bounded **below** (36s
+minimum — anything at or under the cancel lead describes a window the
+loop has already left) as well as above, defaulting to 0 which refuses
+as `NO_LATE_WINDOW_SET`.
+
+**At `late_window_s = 45` an order rests for 15 seconds before the
+cancel sweep.** That is the number that decides a maker strategy, and
+`l5_live_safety.strategy_can_fire` now reports it rather than implying
+it.
+
+A structural consequence you should know: `CANCEL_LEAD_S = 30` means
+**every** order is withdrawn 30 seconds before the window ends. The
+competitor evidence you supplied had 26% of fills in the final 10
+seconds and 27% after the end. **We cannot reproduce that** without
+changing the cancel lead, which is a safety-relevant change I am not
+proposing here. Stage 1a tests the 255–270s band only.
+
+### 2.2 `L5_PERSISTENT_ENVELOPE` is absent — three limits do not bind
+
+`_submit` reads it as `if env_raw is not None and str(env_raw).strip():`.
+Unset, the envelope gate is **skipped**: per-market, worst-case-loss and
+maker-only stop binding and only the $10 reservation remains. The
+variable is not on `l5-btc5m-live`.
+
+### 2.3 The lane is not under watchdog coverage
+
+The production watchdog is healthy — 20s sweeps, `cancel_enabled: true`,
+`halted: null`, `read_error: null`, fresh heartbeat. Verified live.
+
+Its `managed_lanes` names exactly one service:
+`http://pmus-spring-l5-probe.railway.internal:8090`. **A healthy
+watchdog watching someone else is not coverage.**
+`L5_WATCHDOG_MANAGED_LANE_URLS` needs this lane's fills URL.
+
+### 2.4 `L5_ACCOUNT_RISK_URL` cannot be verified from here
+
+The variable is set and the serving service is alive and being read. But
+its value is redacted to this OAuth session, and the lanes are `IDLE` so
+they never fetch it. I can confirm the producer runs; I **cannot**
+confirm that what this lane receives parses, is for today's UTC day, and
+is under 30 seconds old.
+
+This fails closed, so it is a start-up blocker and not a safety hole.
+It must be confirmed before the window, not during it.
+
+---
+
+## 3. The gate that refuses when a protection is merely absent
+
+`src/l5_live_safety.check()` — new, `d9d8378b1`, 35 tests.
+
+`ok` is True only when **every** protection is present and binding, and
+it reports **every** failure rather than the first: an operator fixing
+these one boot at a time is an operator arming late and guessing. It
+reads nothing itself — no network, no clock, no credential — so the
+decision is testable against exact states.
+
+It refuses on: an absent or whitespace envelope; an envelope missing any
+limit (a missing figure is never read as its ceiling — that is the
+permissive answer); `maker_only` not exactly `True`; any limit over its
+compiled ceiling; state not `ARMED`; an unset or unreadable shared
+reservation; unreadable lane count; `FOREIGN_EXPOSURE` not `CHARGED`; an
+unreadable or asserted halt; a risk document unreachable, stale, or
+without an exposure figure; **this lane absent from the watchdog's
+managed list**; any strategy input unset or zero; and a strategy-timing
+combination that can never be stepped.
+
+Run against production as it stands today it returns **12 failures**:
+
+```
+ACCOUNT_LANES_UNREADABLE
+ACCOUNT_RISK_UNREADABLE
+ENVELOPE_ABSENT
+FOREIGN_EXPOSURE_NOT_CHARGED
+LANE_NOT_UNDER_WATCHDOG
+SHARED_RESERVATION_PATH_UNSET
+SHARED_RESERVATION_UNREADABLE
+STATE_NOT_ARMED
+STRATEGY_CANNOT_FIRE:STRATEGY_WINDOW_NEVER_STEPPED
+STRATEGY_INPUT_UNSET:clip_usd
+STRATEGY_INPUT_UNSET:late_window_s
+STRATEGY_INPUT_UNSET:min_edge_per_share
+```
+
+with `strategy_timing` reporting `stepping_stops_before_s: 270`,
+`strategy_fires_from_s: 270`, `rest_s: 0`.
+
+Two caveats on that run, so it is not read as more than it is.
+`FOREIGN_EXPOSURE_NOT_CHARGED` assumes the value is still `REPORTED`
+as PR #235 set it — the actual value is redacted to this session.
+`ACCOUNT_RISK_UNREADABLE` means *unverifiable from here*, not known to
+be broken: the variable is set and the producer is alive and being
+read. Both must be confirmed by someone who can see the values.
+
+---
+
+## 4. Stage 1a campaign specification
+
+| | |
 |---|---|
-| `L5_PERSISTENT_ENVELOPE` | **the envelope gate is skipped entirely** — per-market $5, the $5 worst-case loss, maker-only and the armed-state check do not bind. Only the $10 aggregate reservation does. |
-| `L5_PERSISTENT_STATE` | no durable MONITOR/ARMED/HALTED latch across restarts |
-| `L5_SHARED_RESERVATION` | lanes do not meet on one budget |
-| `L5_ACCOUNT_LANES` | the cap is not split per lane |
-| `L5_LATE_FAVORITE` | the 97–99¢ strategy stays off (default-OFF by design) |
+| Lane | BTC5m only (`L5_5M_FLEET="BTC5M"`, `L5_ACCOUNT_LANES=1`) |
+| Windows | **4 consecutive**, 20 minutes |
+| Start / end UTC | you name the start; `L5_BTC5M_NOT_AFTER` = start + 20 min |
+| Aggregate exposure | $10.00 max |
+| Per-market exposure | $5.00 max |
+| Worst-case loss | $5.00, account-wide via `account_risk()` |
+| Order type | maker-only, taker disabled |
+| Outstanding orders | one per lane |
+| Strategy | late-favorite only; straddle EV inputs left **unset** so it places nothing |
+| Continuation | none — `restartPolicyType` is already `NEVER` |
+| SHA | pinned at authorization time (see §6) |
 
-Also absent: `L5_5M_FLEET_STATE_ROOT`, and the `L5_5M_AUTH_*` /
-`L5_5M_LEDGER_*` / `L5_CAMPAIGN_APPROVAL_*` entries for ETH5M, SOL5M and
-XRP5M (only the BTC5M ones exist).
+**BTC5m is not an arbitrary choice.** It is the only lane with a working
+settlement-probability model: PR #241 recorded `p_reason:
+UNEXPECTED_INDEX` / `p_up: null` on ETH, SOL and XRP. The late-favorite
+refuses `NO_PROBABILITY` without one, so the other three lanes
+*cannot* run this strategy today regardless of authorization.
 
-**The dangerous one is `L5_PERSISTENT_ENVELOPE`.** Deploying the new
-image without it would leave a single $10 bound and silently drop the
-other three. Arming must therefore verify the envelope is present and
-parses — the rollover preflight already checks this and refuses.
+Running late-favorite alone also removes straddle fills as a confounder
+for the evidence you actually want.
+
+### Why four windows may well produce zero fills
+
+Honest arithmetic, not discouragement. A 97¢ maker bid fills only when
+someone sells into it. From the fifth run's book snapshots the favourite
+side frequently showed a **99¢ bid with no ask** — a 97¢ bid is then
+behind a 99¢ bid and would never be hit. Our bid fills mainly when the
+market moves *against* the favourite, which is the adverse selection
+this strategy's economics live and die on.
+
+Four windows × 15 seconds of resting time = **one minute** of exposure
+to that event. Zero fills is the most likely outcome and would still be
+informative: it would confirm the gate path end-to-end and tell us the
+fill rate is low enough to need either more windows or a different band.
 
 ---
 
-## 4. The straddle will place nothing unless its EV inputs are set
+## 5. Promotion criteria
 
-The shadow run refused every straddle rung **504 times** with
-`ENTRY_EV_P_PAIR_NATURAL_NOT_SET`. That is the entry-EV gate working as
-specified — it refuses both negative EV and *unknown* EV. But it means
-that unless the measured probabilities are configured, Stage 1 runs
-**late-favorite only** and the straddle contributes nothing.
+Labels stay strict: `submitted → filled → settled → realized`.
 
-The measured values are `p_pair_natural = 0.070`,
-`p_complete = 0.131`, `p_lone_win = 0.0981`, which price an 0.08/0.08
-rung at **+9.55¢/share modelled**. That number is a model of entry EV,
-not realized profitability, and must not be reported as profit.
-
-Your call: set them and run both strategies, or leave them unset and
-make Stage 1 a clean late-favorite test. Given your stated next
-milestone is a venue-confirmed 97–99¢ maker fill, **leaving them unset
-is the cleaner experiment** — it removes straddle fills as a
-confounder. I recommend that.
-
----
-
-## 5. What the shadow runs do and do not prove
-
-**This is the most important section for your decision.**
-
-The fifth four-lane rollover run did what it was built to do: four lanes
-advanced through consecutive five-minute windows with **10 ms** entry
-latency, zero process exits, zero tracebacks, clean closes with no
-order left resting, and settlement decoupled from the window loop.
-Continuous operation is demonstrated.
-
-It did **not** exercise a single order decision through the risk gates,
-and no shadow run can. In `l5_btc5m_execution.py`, `arming_refusal`
-short-circuits at line 1238 and records the intent under
-`would_submit` — **before** the envelope gate at line 1322 and before
-the shared reservation at line 1389. A disarmed transport therefore
-never reaches either. On top of that, late-favorite was off (it is
-default-OFF by design) and the straddle refused every rung 504 times on
-`ENTRY_EV_P_PAIR_NATURAL_NOT_SET`, so the run considered **zero**
-orders.
-
-The gates are covered by tests, including a real four-process
-concurrency test that caught two genuine defects — a `flock` taken on
-the wrong inode after `os.replace`, and a stale aggregate read outside
-the lock that let four lanes reserve $8 against a $5 budget. Those were
-found because the test used real processes, not mocks. But tests are
-not the live path.
-
-**So the first live probe is itself the first end-to-end exercise of the
-gate path.** That argues for the smallest probe that can produce
-evidence, not the largest one the envelope permits.
-
-### Recommended: Stage 1a before Stage 1b
-
-**Stage 1a — one lane, one market, maker-only.**
-- BTC5m only, `L5_ACCOUNT_LANES=1`.
-- **4 windows** (20 minutes), explicit `L5_BTC5M_NOT_AFTER`.
-- One outstanding order.
-- Late-favorite ON, straddle EV inputs left unset, so the only thing
-  that can place is the 97–99¢ maker order you actually want evidence
-  for.
-- Purpose: prove the envelope gate, the reservation, the ledger write
-  and the venue round-trip on the live path, with one lane's worth of
-  risk. Compiled ceilings unchanged at $10/$5/$5 throughout.
-
-**Stage 1b — four lanes, 60 minutes**, only after 1a produces a
-venue-confirmed fill and a clean settlement reconciliation.
-
-If you would rather go straight to four lanes for an hour, say so and I
-will prepare that instead — but I would be arming an untested path at
-four times the concurrency, and I would rather say that now than
-explain it afterwards.
-
-### Campaign bounds, either way
-
-- Explicit UTC start you name; `L5_BTC5M_NOT_AFTER` set to the end.
-- **No automatic continuation.** The service's `restartPolicyType` is
-  already `NEVER`, so a crashed or completed money-moving session does
-  not relaunch itself.
-- Maker-first, taker disabled.
-- No rebate or reward assumption anywhere in the accounting.
-
-Operator stop: writing the `STOPPED` latch halts every lane and unwinds
-resting orders. The latch is written **before** cancellation is
-attempted, and a cancel's return value decides nothing — the order is
-re-read. A halt that later becomes readable-and-clear does not resume
-trading.
-
-Merging the PR arms nothing: the service's `watchPatterns` is exactly
-`deploy/l5_btc5m_live/DEPLOY_TRIGGER`, so a merge builds and deploys
-nothing until that file is touched.
-
-## 6. Promotion criteria
-
-Stage 1 is judged on venue-confirmed evidence only. Labels stay strict:
-`submitted → filled → settled → realized`.
-
-**Required to promote (all of them):**
+**Required to promote (all):**
 
 1. **≥ 1 venue-confirmed maker fill at 97–99¢** with a venue order id,
-   reconciled against the venue's own fill record — not an inferred or
-   modelled fill.
-2. **Settlement reconciliation on every filled market**, with
-   `settled_net` derived from order rows per strategy, and no market
-   left pending at the end of the window without its reservation still
-   held.
-3. **Zero breaches:** no window in which aggregate exposure exceeded
-   $10, per-market exceeded $5, or worst-case loss exceeded $5; no taker
-   fill; no order placed while `STOPPED` or `HALTED`.
-4. **Zero unexplained process exits** and no order left resting after
-   the campaign end.
+   reconciled against the venue's own fill record — not inferred, not
+   modelled.
+2. **Settlement reconciliation on every filled market**, `settled_net`
+   derived from order rows per strategy, no market left pending without
+   its reservation still held.
+3. **Zero breaches:** no window where aggregate exceeded $10, per-market
+   exceeded $5, or account-wide worst case exceeded $5; no taker fill;
+   no order placed while `STOPPED` or `HALTED`.
+4. **Zero unexplained process exits**; no order resting after the end.
 
 **Measured and reported, not pass/fail:**
 
-5. **Completion rate** — matched pairs ÷ first legs, per strategy.
-6. **Adverse selection on the late-favorite** — of the 97–99¢ fills,
-   the fraction that settled at 0. Breakeven at 0.97 is a **97% win
-   rate**; a single loss cancels roughly 32 wins. With the handful of
-   fills Stage 1 can produce, **no win rate estimated from it will be
-   statistically meaningful** — one loss is the difference between
-   "profitable" and "not". Stage 1 can establish that we *can get
-   filled* and that the plumbing settles correctly. It cannot establish
-   that the strategy is profitable, and I will not report it as having
-   done so.
-7. **Budget-exhaustion count** — orders refused because a sibling lane
-   held the room, now instrumented per window. This decides whether
-   first-come-first-served allocation needs replacing with EV ranking.
+5. Completion rate — matched pairs ÷ first legs, per strategy.
+6. **Adverse selection** — of the 97–99¢ fills, the fraction settling at
+   0. At 0.97 break-even is a **97% win rate**; one loss cancels roughly
+   32 wins. With the handful of fills four windows can produce, **no win
+   rate estimated from Stage 1a will be statistically meaningful.** It
+   can establish that we get filled and that settlement reconciles. It
+   cannot establish that the strategy is profitable, and I will not
+   report it as having done so.
+7. Budget-exhaustion count — orders refused because a sibling held the
+   room (instrumented in `63c84dd8c`). Decides whether first-come-
+   first-served allocation needs replacing with EV ranking. On one lane
+   this should be zero; it matters for the four-asset expansion.
 
 **Stop instead of promoting if:** any breach in (3), any fill that
-cannot be reconciled to a venue record, or settled net P&L materially
-worse than the modelled pair economics with no accounted reason.
+cannot be reconciled to a venue record, or settled net materially worse
+than modelled pair economics with no accounted reason.
+
+---
+
+## 6. Earliest eligible live window
+
+Every step below needs your explicit authorization; none has been taken.
+
+| Step | Duration |
+|---|---|
+| Open and merge the PR | ~5 min |
+| Touch `deploy/l5_btc5m_live/DEPLOY_TRIGGER`, build, deploy | ~8–12 min |
+| Set the variables in §2.2–2.4 and §4 | ~2 min |
+| `l5_live_safety.check()` returns `ok` | ~1 min |
+| Generate the 4-window approval document | ~2 min |
+| Wait for the next 5-minute boundary | ≤ 5 min |
+
+**Earliest eligible start ≈ 30 minutes after authorization, at the next
+5-minute boundary.** Merging alone arms nothing: the service's
+`watchPatterns` is exactly `deploy/l5_btc5m_live/DEPLOY_TRIGGER`, so a
+merge builds and deploys nothing until that file is touched.
 
 ---
 
 ## 7. Readiness verdict
 
-You asked whether the four-lane executor is actually ready for a bounded
-live validation. Split by what the evidence covers:
+**Ready — demonstrated by the fifth run (22 minutes, four lanes):** 20
+window entries, 10 ms median entry latency, 20 clean closes with
+`still_open=0` every time, 16 completed window reports each `pending=0`
+and `reserved=$0`, zero process exits, zero tracebacks, exit 0.
 
-**Ready — demonstrated by the fifth run (22 minutes, four lanes):**
-- 20 window entries, 5 per lane, **10 ms** median entry latency after
-  the boundary.
-- **20 clean closes**, every one with `still_open=0`, `cancelled=0`,
-  `filled_while_cancelling=0`. No order ever left resting.
-- 16 completed window reports, each `pending=0`, `reserved=$0`,
-  reservation OK.
-- **0 process exits, 0 tracebacks, 0 `NameError`.**
-- Settlement decoupled: the loop reached the next five-minute window
-  without waiting on settlement, which was the defect that stalled
-  earlier runs.
-- Exit code 0.
+**Not demonstrated by any run:**
+- The gate path has never run live. `arming_refusal` short-circuits in
+  `_submit` at line 1238 and records the intent under `would_submit`
+  **before** the envelope gate (1322) and the reservation (1389), so no
+  shadow run reaches either. They are covered by tests — including the
+  four-real-process concurrency test that caught a `flock` taken on the
+  wrong inode and a stale aggregate read outside the lock — but not by
+  the live path.
+- Risk carry-forward with real risk: every window reported `reserved=$0`
+  because nothing was placed.
 
-**Not ready — not covered by any run:**
-- **The gate path has never run live.** `arming_refusal` short-circuits
-  before the envelope and the reservation, so no shadow run reaches
-  them (§5).
-- **Risk carry-forward is untested with real risk.** Every window
-  reported `reserved=$0` because nothing was placed. The machinery that
-  holds a cost across a rollover and a restart is covered by tests, not
-  by this run.
-- **Three production configuration gaps** (§2): the watchdog does not
-  manage these lanes, the account-risk endpoint is unverified, and the
-  envelope variable is absent — without which three of the four limits
-  do not bind.
-- **Another live service is trading the same account** (§2.1), so $5 is
-  not account-wide today.
-
-**My verdict: ready for a one-lane bounded probe, not for four lanes.**
-The continuous-execution milestone is closed. The next unknown is
-whether an order survives the gate path and reaches the venue, and that
-is worth one lane and four windows, not four lanes and an hour.
+**Verdict: ready for the one-lane four-window probe in §4, not for four
+lanes.** The continuous-execution milestone is closed. The open unknown
+is whether an order survives the gate path to the venue.
 
 ---
 
 ## 8. What I am asking you to approve
 
-Nothing in this document is in effect. The lanes are `IDLE`, the
-deployed SHA is unchanged, and no money-capable change is deployed. To
-proceed I need, explicitly:
+1. The **exact SHA** (§6) — pinned after the regression comparison.
+2. **`L5_BTC5M_FOREIGN_EXPOSURE=CHARGED`**, accepting that the probe's
+   $1–2 transient inventory consumes part of our $10.
+3. Setting `L5_PERSISTENT_ENVELOPE`, `L5_PERSISTENT_STATE`,
+   `L5_SHARED_RESERVATION`, `L5_ACCOUNT_LANES=1`, `L5_LATE_FAVORITE=YES`
+   and the four late-favorite inputs.
+4. **Adding this lane to `L5_WATCHDOG_MANAGED_LANE_URLS`** — a change to
+   the watchdog service's configuration.
+5. The **campaign start time** in UTC.
 
-1. The **exact SHA** — named once the regression comparison finishes;
-   not yet pinned.
-2. **Stage 1a (one lane, 4 windows) or straight to four lanes**, and
-   your decision on §2.1: stop `pmus-spring-l5-probe` for the window,
-   or accept that the $5 bound covers the new lanes as a group rather
-   than the account.
-3. The **campaign start time** in UTC.
-4. Confirmation that I may set the five missing variables in §3 on
-   `l5-btc5m-live` — including `L5_PERSISTENT_ENVELOPE`, without which
-   the per-market, worst-case-loss and maker-only limits do not bind.
-
-I will not set any of them, touch `pmus-spring-l5-probe`, change the
-watchdog's managed-lane list, or touch `DEPLOY_TRIGGER` until you say
-so.
+I will not set any variable, touch `pmus-spring-l5-probe`, change the
+watchdog's configuration, or touch `DEPLOY_TRIGGER` until you say so.
