@@ -398,12 +398,48 @@ def test_an_unread_socket_sizes_nothing():
     assert out["detail"] == "NO_SNAPSHOT"
 
 
-def test_a_one_sided_book_sizes_nothing():
+def test_a_one_sided_AUTH_book_still_sizes_nothing():
     assert S.depth_for_pricing(public=_pub(), auth=_auth(bid=None)
                                )["reason"] == "AUTH_BOOK_ONE_SIDED"
-    assert S.depth_for_pricing(public={"bid": None, "ask": D("0.98"),
-                                       "age_s": D("0.2")}, auth=_auth()
-                               )["reason"] == "PUBLIC_QUOTE_ONE_SIDED"
+
+
+def test_a_one_sided_PUBLIC_quote_falls_back_to_the_socket():
+    #: MEASURED 2026-11-16: all 19 qualifying signals were refused
+    #: PUBLIC_QUOTE_ONE_SIDED while the authenticated book carried a
+    #: real, uncrossed ask with 814-38,728 shares behind it. Refusing
+    #: there was a decision about OUR FEED, not about the market.
+    out = S.depth_for_pricing(
+        public={"bid": D("0.99"), "ask": None, "age_s": D("0.2")},
+        auth=_auth(bid="0.9900", ask="0.9900"))
+    assert out["ok"] is True
+    assert out["source"] == "AUTHENTICATED_ONLY"
+    assert out["public_missing_side"] == "ask"
+    #: the weaker claim is REPORTED, never silent
+    assert out["checked"]["agreement"] == "NOT_CHECKED_PUBLIC_ONE_SIDED"
+
+
+def test_the_fallback_still_refuses_a_crossed_socket():
+    #: the 1915z phantom: ask 0.98 under bid 0.99, size frozen at 16.17
+    out = S.depth_for_pricing(
+        public={"bid": D("0.99"), "ask": None, "age_s": D("0.2")},
+        auth=_auth(bid="0.9900", ask="0.9800", ask_shares="16.17"))
+    assert out["ok"] is False
+    assert out["reason"] == "AUTH_BOOK_CROSSED"
+    assert out["bid_shares"] is None
+
+
+def test_the_fallback_still_refuses_a_stale_socket():
+    out = S.depth_for_pricing(
+        public={"bid": D("0.99"), "ask": None, "age_s": D("0.2")},
+        auth=_auth(stream_age_s="9.0"))
+    assert out["reason"] == "AUTH_BOOK_STALE"
+
+
+def test_the_fallback_still_refuses_an_untradable_market():
+    out = S.depth_for_pricing(
+        public={"bid": D("0.99"), "ask": None, "age_s": D("0.2")},
+        auth=_auth(market_state="CLOSED"))
+    assert out["reason"] == "MARKET_NOT_TRADABLE"
 
 
 def test_a_market_that_is_not_tradable_sizes_nothing():

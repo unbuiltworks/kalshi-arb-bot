@@ -768,6 +768,16 @@ def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]
 ROLLOVER_GRACE_S = 20.0
 
 
+def _utc_or_none(v: Any) -> Optional[dt.datetime]:
+    """An aware UTC datetime, or None. An unreadable deadline is never
+    read as 'no deadline': the caller halts on None."""
+    try:
+        d = dt.datetime.fromisoformat(str(v).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=UTC)
+
+
 def persistent_next(*, now: dt.datetime, prefix: str,
                     horizon_s: float = 300.0,
                     grace_s: float = ROLLOVER_GRACE_S) -> Dict[str, Any]:
@@ -1848,6 +1858,44 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                      {"reason": wd.get("reason"), "source": "WATCHDOG",
                       "stop": unwound, "utc": now_.isoformat()})
                 return 0
+            #: ============ A FINISHED CAMPAIGN IS NOT AN ARMED LANE ======
+            #:
+            #: Observed 2026-11-16: after NOT_AFTER 19:30Z the campaign
+            #: was over -- authorization refused every window and
+            #: `transport_armed` stayed false -- but the durable state
+            #: still read ARMED and this loop kept rolling windows for
+            #: fifty minutes, because the standing envelope was valid
+            #: until 20:30Z. No order could be placed, so nothing was at
+            #: risk; what was wrong is that the lane REPORTED ARMED
+            #: while being structurally unable to trade, and an operator
+            #: reading that state would have drawn the wrong conclusion
+            #: about what the system was doing.
+            #:
+            #: So a passed NOT_AFTER returns the lane to MONITOR -- the
+            #: existing disarmed-but-watching state -- and ends the
+            #: loop. MONITOR rather than a new state because that is
+            #: exactly what MONITOR means, and because ARMED must keep
+            #: its single writer. The latch states are untouched: this
+            #: never runs over a HALT or a STOP, which exit earlier.
+            _na = (os.getenv(X.NOT_AFTER_ENV) or "").strip()
+            if _na:
+                _end = _utc_or_none(_na)
+                if _end is None:
+                    PMODE.write_state(PMODE.HALTED, why="NOT_AFTER_UNREADABLE",
+                                      now=now_)
+                    emit("L5_BTC5M_PERSISTENT_HALTED",
+                         {"reason": "NOT_AFTER_UNREADABLE", "raw": _na[:40]})
+                    return 0
+                if now_ >= _end:
+                    PMODE.write_state(PMODE.MONITOR,
+                                      why="CAMPAIGN_EXPIRED:%s" % _na,
+                                      now=now_)
+                    emit("L5_BTC5M_CAMPAIGN_ENDED",
+                         {"not_after": _na, "state": PMODE.MONITOR,
+                          "armed": False,
+                          "note": ("the campaign window has passed; the lane "
+                                   "is DISARMED and stops rolling windows")})
+                    return 0
             nxt = persistent_next(now=now_, prefix=row.prefix,
                                   horizon_s=row.horizon_s)
             if not nxt["ok"]:

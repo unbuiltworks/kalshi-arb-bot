@@ -50,6 +50,40 @@ ENABLE_ENV = "L5_LATE_FAVORITE"
 #: the prices this strategy may rest at, cheapest first. 0.97 is the
 #: primary candidate; 0.98 and 0.99 are kept so the controller can record
 #: what each WOULD have cost and earned in the same window.
+#: MARKETABLE-LIMIT, PREPARED AND OFF.
+#:
+#: The maker ladder rests BELOW the ask and fills only if the market
+#: comes down to it. Measured over 11 windows, 120 live books: a 0.97
+#: limit rests at the front of the queue in 3 of 120 moments, and would
+#: CROSS in 80. So the same price is a 2.5% opportunity as a maker and a
+#: 67% one as a taker -- they are different strategies wearing one label.
+#:
+#: THE PRICE PAID IS THE ASK, NOT THE LIMIT. Across those 80 crossable
+#: moments the average offer was 0.8219, not 0.97. A limit of 0.97 does
+#: not buy a 97c favourite; it buys whatever is offered. So the edge is
+#: computed at the price we would ACTUALLY PAY, with the venue's real
+#: taker fee at that price, and never at the limit.
+#:
+#: OFF unless the variable is exactly "YES" AND the standing envelope
+#: says `taker_allowed`. Two independent switches, because crossing the
+#: spread is the one action that always fills and therefore the one that
+#: can lose money fastest while looking like success.
+MARKETABLE_ENV = "L5_LATE_FAVORITE_MARKETABLE"
+
+
+def marketable_enabled() -> bool:
+    """Exactly "YES", by the SAME rule as `enabled()`.
+
+    Deliberately not stricter. A case-sensitive variant here would make
+    `L5_LATE_FAVORITE=yes` work while
+    `L5_LATE_FAVORITE_MARKETABLE=yes` silently did not -- safe in
+    direction, but an operator trap, and two adjacent flags obeying two
+    rules is worse than one rule. The protection is the two INDEPENDENT
+    switches (this and the envelope's `taker_allowed`), not spelling.
+    """
+    return str(os.environ.get(MARKETABLE_ENV, "")).strip().upper() == "YES"
+
+
 DEFAULT_PRICES = (D("0.97"), D("0.98"), D("0.99"))
 #: HOW LATE THE WINDOW MUST BE. The edge is "most of the 60-second
 #: average is already observed", which is only true near the end.
@@ -102,6 +136,8 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
              room_usd: Any, loss_room_usd: Any,
              clip_usd: Any, fee_per_share: Any,
              min_edge_per_share: Any,
+             taker_allowed: Any = False,
+             taker_fee_fn: Any = None,
              prices: Sequence[Decimal] = DEFAULT_PRICES,
              late_window_s: Decimal = DEFAULT_WINDOW_S,
              min_qty: Any = CENT) -> Dict[str, Any]:
@@ -224,6 +260,26 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
     if room is None or loss_room is None or clip is None or mq is None or mq <= ZERO:
         return no("BUDGET_UNREADABLE")
 
+    #: ------------------------------------------------ marketable limit
+    #:
+    #: Considered BEFORE the maker ladder only in the sense that it is
+    #: priced here; the maker path still wins when both qualify, because
+    #: resting pays a rebate and crossing pays a fee. This exists for the
+    #: 67% of moments where the maker order would simply never fill.
+    out["marketable_enabled"] = marketable_enabled()
+    out["taker_allowed"] = bool(taker_allowed)
+    if out["marketable_enabled"] and out["taker_allowed"]:
+        lift = _marketable(
+            p_win=p_win, ask=ask, depth=depth, levels=levels,
+            fee_fn=taker_fee_fn, margin=_dec(min_edge_per_share),
+            room=_dec(room_usd), loss_room=_dec(loss_room_usd),
+            clip=_dec(clip_usd), min_qty=_dec(min_qty), side=side)
+        out["marketable"] = lift
+    else:
+        out["marketable"] = {"ok": False, "reason": (
+            "MARKETABLE_OFF" if not out["marketable_enabled"]
+            else "TAKER_NOT_AUTHORIZED_BY_ENVELOPE")}
+
     #: EVERY LEVEL IS PRICED, cheapest first, and the first that clears
     #: the margin AND fits both budgets wins. The rest are reported so a
     #: gated run still records what each would have been worth.
@@ -286,3 +342,78 @@ def evaluate(*, p_up: Any, p_age_s: Any, t_in_window_s: Any,
         return out
     out["considered"] = considered
     return no("NO_LEVEL_QUALIFIED")
+
+
+def _marketable(*, p_win: Decimal, ask: Optional[Decimal],
+                depth: Optional[Decimal], levels: Sequence[Decimal],
+                fee_fn: Any, margin: Optional[Decimal],
+                room: Optional[Decimal], loss_room: Optional[Decimal],
+                clip: Optional[Decimal], min_qty: Optional[Decimal],
+                side: str) -> Dict[str, Any]:
+    """Lift the offer, or the named reason not to.
+
+    THE EDGE IS MEASURED AT THE ASK. A limit of 0.99 that lifts an offer
+    at 0.84 is an 0.84 trade, and judging it at 0.99 would call a losing
+    purchase a winning one. Everything below -- the fee, the margin, the
+    size -- is computed against the price actually paid.
+
+    The venue's taker fee is `theta * p * (1-p)`, so it is LARGEST in the
+    middle of the range: about 1.03c at 0.82 against 0.20c at 0.97. At an
+    0.82 fill that moves break-even from 82% to roughly 83%, which is a
+    material share of a thin edge and is why it is charged here rather
+    than noted afterwards.
+
+    NO FEE FUNCTION, NO TRADE. An unknown cost is never zero.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, ok=False, reason=reason, order=None)
+
+    if ask is None or not (ZERO < ask <= ONE):
+        return no("NO_ASK_TO_LIFT")
+    if depth is None or depth <= ZERO:
+        return no("NO_DEPTH_TO_LIFT")
+    if margin is None or margin <= ZERO:
+        return no("NO_EDGE_MARGIN_SET")
+    if room is None or loss_room is None or clip is None or min_qty is None \
+            or min_qty <= ZERO:
+        return no("BUDGET_UNREADABLE")
+    #: THE LIMIT IS THE DEAREST LADDER LEVEL. We never pay more than the
+    #: strategy's own worst acceptable price, whatever is offered.
+    limit = max(levels) if levels else None
+    if limit is None:
+        return no("NO_PRICE_LEVELS")
+    if ask > limit:
+        return no("ASK_ABOVE_LIMIT", ask=str(ask), limit=str(limit))
+    if fee_fn is None:
+        return no("TAKER_FEE_UNKNOWN")
+    try:
+        fee = _dec(fee_fn(ask, ONE))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return no("TAKER_FEE_UNREADABLE", error=type(exc).__name__)
+    if fee is None or fee < ZERO:
+        return no("TAKER_FEE_UNREADABLE")
+
+    ev = p_win - ask - fee
+    row = {"price_paid": str(ask), "taker_fee_per_share": str(fee),
+           "ev_per_share": str(ev), "break_even_p": str(ask + fee),
+           "limit": str(limit), "p_win": str(p_win)}
+    if ev < margin:
+        return no("EDGE_BELOW_MARGIN", **row)
+
+    want = min(clip, room, loss_room) / ask
+    qty = (want // min_qty) * min_qty
+    if qty <= ZERO:
+        return no("NO_ROOM_FOR_ONE_LOT", **row)
+    qty = min(qty, depth)                 # never more than is offered
+    qty = (qty // min_qty) * min_qty
+    if qty <= ZERO:
+        return no("DEPTH_BELOW_ONE_LOT", **row, depth=str(depth))
+    return {"ok": True, "reason": None, **row, "qty": str(qty),
+            "cost_usd": str(qty * ask), "ev_usd": str(qty * ev),
+            "order": {"side": side, "price": str(ask), "qty": str(qty),
+                      "post_only": False, "intent": "BUY",
+                      "reason": "LATE_FAVORITE_MARKETABLE",
+                      "strategy": "LATE_FAVORITE",
+                      "execution": "MARKETABLE_LIMIT"}}
