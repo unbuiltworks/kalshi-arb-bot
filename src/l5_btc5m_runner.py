@@ -709,6 +709,57 @@ def recover_settlements(ex, transport_for, *, limit: int = 64) -> Dict[str, Any]
 
 # ------------------------------------------------------------ the session
 
+def _attribution_block(ex: Any, market: Any, settled: Any,
+                       fees: Any) -> Dict[str, Any]:
+    """`Btc5mExecutor.attribution` plus each strategy's own venue fees.
+
+    Returns {} rather than guessing when the market, the settlement
+    outcome or the fee set is unreadable: a wrong attribution is worse
+    than an absent one.
+    """
+    try:
+        won = (settled or {}).get("up_won")
+        rows = ex.attribution(str(market),
+                              won if isinstance(won, bool) else None)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"error": type(exc).__name__}
+    per_order = (fees or {}).get("per_order") or {}
+    complete = bool((fees or {}).get("complete"))
+    orders = getattr(ex, "_ledger", {}).get("orders") or {}
+    out: Dict[str, Any] = {}
+    for who, row in rows.items():
+        fee = D(0)
+        unreadable = []
+        for coid, r in orders.items():
+            if r.get("market") != str(market):
+                continue
+            if str(r.get("strategy") or "") != who:
+                continue
+            if coid in per_order:
+                try:
+                    fee += D(str(per_order[coid]))
+                except Exception:                              # noqa: BLE001
+                    unreadable.append(coid)
+        net = row.get("settled_net_usd")
+        out[who] = {
+            "filled_qty": str(row["filled_qty"]),
+            "cost_total_usd": str(row["cost_total"]),
+            "up_qty": str(row[C.UP]["qty"]),
+            "down_qty": str(row[C.DOWN]["qty"]),
+            "redemption_total_usd": (None if row["redemption_total"] is None
+                                     else str(row["redemption_total"])),
+            "venue_fees_usd": str(fee),
+            "fees_complete": complete and not unreadable,
+            #: settled NET of this strategy's own fees, and None unless
+            #: both the outcome and every fee it owes are readable.
+            "settled_net_usd": (None if net is None or not complete
+                                or unreadable else str(net - fee)),
+        }
+    return out
+
+
 class Session:
     """One window. Every collaborator is injectable; nothing is global."""
 
@@ -1187,6 +1238,15 @@ class Session:
             "venue_fees": fees,
             "settled_net_usd": (None if pnl is None or not fees["complete"]
                                 else str(pnl - fee_total)),
+            #: PER STRATEGY, and EXACT rather than apportioned: every
+            #: share was bought by one order belonging to one strategy,
+            #: and a winning share redeems $1 whoever bought it. Fees are
+            #: keyed by order id, so they attribute exactly too. Pairing
+            #: is deliberately absent -- a matched pair can be one
+            #: strategy's leg against another's, so `matched_qty` and
+            #: `pair_cost` stay market-level facts above.
+            "by_strategy": _attribution_block(self.ex, self.market,
+                                              settled, fees),
             "labels": (
                 "venue-confirmed orders and fills only. settled_net_usd is "
                 "settlement arithmetic on confirmed fills minus the venue's "

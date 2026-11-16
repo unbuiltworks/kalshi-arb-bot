@@ -220,6 +220,28 @@ def _dec(x: Any) -> Optional[Decimal]:
     return d if d.is_finite() else None
 
 
+#: HOW AN ORDER'S STRATEGY IS DECIDED. The controller tags the late
+#: favourite explicitly; the straddle's own orders are identified by the
+#: reasons it has always emitted. An order we cannot place in either is
+#: attributed to UNKNOWN rather than silently to one of them, because a
+#: wrong attribution is worse than an absent one.
+STRATEGY_BY_REASON = {
+    "STRADDLE_LEG": "STRADDLE",
+    "STRADDLE_COMPLETION": "STRADDLE",
+    "LATE_FAVORITE": "LATE_FAVORITE",
+}
+UNATTRIBUTED = "UNKNOWN"
+
+
+def _strategy_of(order: Any) -> str:
+    """The strategy an order belongs to, from its own tag or its reason."""
+    tag = str((order or {}).get("strategy") or "").strip().upper()
+    if tag:
+        return tag
+    return STRATEGY_BY_REASON.get(
+        str((order or {}).get("reason") or "").strip().upper(), UNATTRIBUTED)
+
+
 def _s(d: Decimal) -> str:
     return format(d, "f")
 
@@ -771,6 +793,48 @@ class Btc5mExecutor:
                        "cost": D(str((legs.get(side) or {}).get("cost", "0")))}
                 for side in C.SIDES}
 
+    def attribution(self, market: str,
+                    up_won: Optional[bool] = None) -> Dict[str, Any]:
+        """Filled quantity, cost, fees and settled result PER STRATEGY.
+
+        DERIVED FROM THE ORDER ROWS, never from a second ledger. Each
+        share was bought by one order, which belongs to one strategy, and
+        a winning share redeems $1 whoever bought it -- so this is EXACT
+        arithmetic, not a pro-rata allocation.
+
+        WHAT IS NOT ATTRIBUTABLE, stated because the omission is
+        deliberate: `matched_qty` and `pair_cost`. A matched pair can be
+        one strategy's leg against another's, so pairing is a property of
+        the MARKET and is reported there, not split between strategies.
+        """
+        out: Dict[str, Any] = {}
+        for r in self._ledger["orders"].values():
+            if r.get("market") != market:
+                continue
+            q, c = _dec(r.get("filled_qty")), _dec(r.get("filled_cost"))
+            if q is None or c is None or q <= 0:
+                continue
+            who = str(r.get("strategy") or UNATTRIBUTED)
+            side = r.get("side")
+            if side not in C.SIDES:
+                continue
+            row = out.setdefault(who, {s: {"qty": ZERO, "cost": ZERO}
+                                       for s in C.SIDES})
+            row[side]["qty"] += q
+            row[side]["cost"] += c
+        for who, row in out.items():
+            cost = row[C.UP]["cost"] + row[C.DOWN]["cost"]
+            row["cost_total"] = cost
+            row["filled_qty"] = row[C.UP]["qty"] + row[C.DOWN]["qty"]
+            if up_won is None:
+                row["redemption_total"] = None
+                row["settled_net_usd"] = None
+            else:
+                red = row[C.UP]["qty"] if up_won else row[C.DOWN]["qty"]
+                row["redemption_total"] = red
+                row["settled_net_usd"] = red - cost
+        return out
+
     def _resting(self, market: str, now: Optional[dt.datetime]
                  ) -> List[Dict[str, Any]]:
         """Our possibly-working orders in `market`, as the controller reads
@@ -1246,7 +1310,13 @@ class Btc5mExecutor:
             "state": NEW, "filled_qty": "0", "filled_cost": "0",
             "created_at": now.isoformat() if now is not None else None,
             "reason": order.get("reason"), "slot": int(slot),
-            "klass": klass, "claim_sid": claim.get("sid")}
+            "klass": klass, "claim_sid": claim.get("sid"),
+            #: WHICH STRATEGY BOUGHT THIS. On the durable order row, not
+            #: in memory, so attribution survives a restart -- and on the
+            #: ORDER rather than the inventory aggregate, so a partial
+            #: fill attributes exactly what filled and a fill that races a
+            #: cancel attributes to whoever placed it.
+            "strategy": _strategy_of(order)}
         if not self._save_or_halt():
             del self._ledger["orders"][coid]
             return refuse("LEDGER_WRITE_FAILED")
