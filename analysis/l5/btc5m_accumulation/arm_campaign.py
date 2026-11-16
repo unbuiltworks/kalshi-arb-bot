@@ -1,4 +1,16 @@
-"""Arm ONE bounded BTC5m straddle campaign. Checks first, then acts.
+"""Arm ONE bounded 5-minute straddle campaign, on one or more assets.
+
+ONE INVOCATION ARMS EVERY LANE, and that is not a convenience. The
+assets run as children of one service, so they SHARE L5_BTC5M_LIVE,
+L5_BTC5M_NOT_AFTER and the strategy parameters. Arming them one at a
+time would refuse the second ("already armed"), and a second deploy
+would orphan a window already in flight. So: N approvals, the shared
+variables once, ONE deploy.
+
+WHAT IS PER-ASSET is exactly the approval document -- one document
+names one series -- written as L5_CAMPAIGN_APPROVAL_<STRATEGY>, which
+is the name `l5_5m_fleet.child_env` hands to that child. A lane with no
+approval of its own refuses every order, which is the intended failure.
 
 Written after 2026-11-13, where every error was operational rather than
 strategic: variables set AFTER a deploy came up on stale values, a
@@ -18,6 +30,7 @@ never re-arms, and must not be scheduled: a completed or crashed
 money-moving session does not relaunch itself.
 
 Usage:  python3 -I analysis/l5/btc5m_accumulation/arm_campaign.py [--go]
+            [--strategy BTC5M,ETH5M,SOL5M,XRP5M] [--shares N] [--windows N]
 Without --go it runs every check and prints what it WOULD do.
 """
 from __future__ import annotations
@@ -224,6 +237,34 @@ def main(argv):
         global WINDOWS
         WINDOWS = int(argv[argv.index("--windows") + 1])
     completion = "--completion" in argv
+    #: WHICH ASSETS. A comma list, validated against the one registry
+    #: table, five-minute only -- the same rule `l5_5m_fleet` applies, so
+    #: a fleet cannot be armed into a shape it would refuse to start.
+    import sys as _sys
+    _sys.path.insert(0, os.getcwd())
+    from src import l5_origin as ORIGIN
+    from src import l5_series_registry as REG
+    strategies = [ORIGIN.BTC5M]
+    if "--strategy" in argv:
+        strategies = []
+        for part in argv[argv.index("--strategy") + 1].split(","):
+            name = part.strip().upper()
+            if not name:
+                continue
+            if name not in REG.BY_STRATEGY:
+                return refuse("--strategy names %r, not a registered "
+                              "strategy" % name)
+            if REG.BY_STRATEGY[name].horizon_s != 300.0:
+                return refuse("--strategy names %r, a %ss series; this "
+                              "arms the FIVE-MINUTE fleet"
+                              % (name, REG.BY_STRATEGY[name].horizon_s))
+            if name in strategies:
+                return refuse("--strategy names %r twice" % name)
+            strategies.append(name)
+        if not strategies:
+            return refuse("--strategy is set but names nothing")
+    lanes = len(strategies)
+    print("arming %d lane(s): %s" % (lanes, ",".join(strategies)))
     sh = shape(shares, completion=completion)
     print("shape: %d share(s) a side at %s -> clip %s, approval exposure %s"
           % (sh["shares"], PRICE, sh["clip_usd"], sh["exposure"]))
@@ -260,18 +301,27 @@ def main(argv):
     live, detail = attestation_live()
     print("venue cost attestation: %s (%s)"
           % ("LIVE" if live else "NOT LIVE", detail))
-    booked = sh["attested_worst_usd"] if live else sh["phantom_worst_usd"]
-    print("  booked worst case used: %s" % booked)
+    #: EVERY LANE BOOKS INTO THE SAME ACCOUNT. `shape` returns ONE lane's
+    #: figure; the daily halt this guards is account-wide and sees the sum,
+    #: so four lanes book four times as much against the same room. Without
+    #: this multiplication a four-lane arm passes here and then halts the
+    #: whole account a quarter of the way through its own campaign.
+    booked_lane = sh["attested_worst_usd"] if live else sh["phantom_worst_usd"]
+    booked = D(str(booked_lane)) * D(lanes)
+    print("  booked worst case used: %s a lane x %d = %s"
+          % (booked_lane, lanes, booked))
     if booked > room:
-        fits = int(room / D(sh["shares"])) if sh["shares"] else 0
+        per_lane_room = room / D(lanes)
+        fits = (int(per_lane_room / D(WINDOWS))
+                if WINDOWS and per_lane_room >= 1 else 0)
         return refuse(
-            "the LEDGER would book up to %s against %s of "
-            "room, so the account-wide daily halt would trip after about %d "
-            "window(s) and stop every lane. Real risk is only %s. Either run "
-            "%d share(s) a side, or fix the cost basis "
-            "(COST_BASIS_OVERSTATEMENT.md)."
-            % (booked, room, fits, sh["real_worst_usd"],
-               max(1, int(room / WINDOWS)) if room >= WINDOWS else 1))
+            "the LEDGER would book up to %s (%s a lane x %d lanes) against "
+            "%s of room, so the account-wide daily halt would trip partway "
+            "through and stop every lane. Real risk is only %s a lane. "
+            "Either run %d share(s) a side, arm fewer lanes, or fix the cost "
+            "basis (COST_BASIS_OVERSTATEMENT.md)."
+            % (booked, booked_lane, lanes, room, sh["real_worst_usd"],
+               max(1, fits)))
 
     # 3. account exposure headroom, under whichever rule the SERVICE will
     #    actually apply -- read from its own variables, not assumed here.
@@ -288,6 +338,14 @@ def main(argv):
     #    exists to prevent.
     cap = D(str(v.get("L5_ACCOUNT_MAX_EXPOSURE_USD") or "0"))
     NEED_EXPOSURE_HEADROOM = sh["need_exposure_headroom"]
+    #: EACH LANE IS BOUND BY ITS SHARE, not the whole ceiling -- see
+    #: `l5_btc5m_execution.lane_cap`, which the executor enforces. Checking
+    #: the undivided cap here would arm a fleet that then refuses every
+    #: window with ACCOUNT_EXPOSURE_CAP, which is the 2026-11-15 failure in
+    #: a new costume. Floored to the cent exactly as the executor floors it.
+    lane_cap = cap if lanes == 1 else (cap / D(lanes)).quantize(D("0.01"))
+    if lanes > 1:
+        print("account cap %s / %d lanes -> %s a lane" % (cap, lanes, lane_cap))
     mode = (v.get("L5_BTC5M_FOREIGN_EXPOSURE") or "CHARGED").strip().upper()
     mode = "REPORTED" if mode == "REPORTED" else "CHARGED"
     print("foreign exposure mode: %s" % mode)
@@ -300,19 +358,28 @@ def main(argv):
                 other = D(str(acct["other_usd"]))
                 break
     if mode == "REPORTED":
-        if NEED_EXPOSURE_HEADROOM > cap:
-            return refuse("our own worst instant %s exceeds cap %s"
-                          % (NEED_EXPOSURE_HEADROOM, cap))
+        if NEED_EXPOSURE_HEADROOM > lane_cap:
+            return refuse("our own worst instant %s exceeds this lane's "
+                          "share %s (cap %s / %d lanes). Arm fewer lanes or "
+                          "lower --shares."
+                          % (NEED_EXPOSURE_HEADROOM, lane_cap, cap, lanes))
         cash = cash_available()
         if cash is None:
             return refuse("buying power unreadable; the service will refuse "
                           "every order with ACCOUNT_CASH_UNREADABLE")
-        if cash < NEED_EXPOSURE_HEADROOM:
-            return refuse("buying power %s < worst instant %s "
-                          "(ACCOUNT_CASH_SHORT)" % (cash, NEED_EXPOSURE_HEADROOM))
-        print("ours %s within cap %s; buying power %s; foreign %s reported, "
-              "not charged" % (NEED_EXPOSURE_HEADROOM, cap, cash,
-                               "unknown" if other is None else other))
+        #: ALL LANES CAN BE AT THEIR WORST AT ONCE. They trade the same
+        #: 5-minute boundaries, so their worst instants coincide by
+        #: construction rather than by bad luck.
+        need_all = NEED_EXPOSURE_HEADROOM * D(lanes)
+        if cash < need_all:
+            return refuse("buying power %s < %d lanes x worst instant %s = "
+                          "%s (ACCOUNT_CASH_SHORT)"
+                          % (cash, lanes, NEED_EXPOSURE_HEADROOM, need_all))
+        print("ours %s within this lane's share %s (cap %s / %d); buying "
+              "power %s covers %d lane(s) at %s; foreign %s reported, not "
+              "charged" % (NEED_EXPOSURE_HEADROOM, lane_cap, cap, lanes,
+                           cash, lanes, need_all,
+                           "unknown" if other is None else other))
     elif other is None:
         print("NOTE: no recent armed step, so foreign exposure is unknown. "
               "It is only observable while armed; the first window will "
@@ -323,29 +390,51 @@ def main(argv):
     else:
         print("foreign exposure %s + %s within cap %s" % (other, NEED_EXPOSURE_HEADROOM, cap))
 
-    # 4. the approval, generated now so it is not stale, and self-checked
+    # 4. ONE APPROVAL PER LANE, generated now so none is stale, each
+    #    self-checked by the generator before it is used.
     here = os.path.dirname(os.path.abspath(__file__))
-    gen = subprocess.run(
-        [sys.executable, "-I", os.path.join(here, "make_approval.py"),
-         str(WINDOWS), "--exposure", sh["exposure"],
-         "--daily-loss", DAILY_LOSS],
-        capture_output=True, text=True, timeout=120)
-    doc = [x for x in gen.stdout.splitlines() if x.startswith('{"approved"')]
-    if "campaign planner accepted: YES" not in gen.stdout or not doc:
-        print(gen.stdout[-1500:])
-        return refuse("the generator's own self-check rejected the document")
-    approval = doc[0]
-    starts = json.loads(approval)["window_starts"]
+    approvals, starts, pinned_start = {}, None, None
+    for name in strategies:
+        cmd = [sys.executable, "-I", os.path.join(here, "make_approval.py"),
+               str(WINDOWS), "--strategy", name,
+               "--exposure", sh["exposure"], "--daily-loss", DAILY_LOSS]
+        #: PIN THE FIRST LANE'S START FOR EVERY OTHER LANE. Each
+        #: generation otherwise picks its own next boundary, so a run that
+        #: crosses a 5-minute boundary partway through would approve
+        #: DIFFERENT windows per asset -- and the shared NOT_AFTER would
+        #: then be wrong for at least one of them.
+        if pinned_start:
+            cmd += ["--start", pinned_start]
+        gen = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        doc = [x for x in gen.stdout.splitlines() if x.startswith('{"approved"')]
+        if "campaign planner accepted: YES" not in gen.stdout or not doc:
+            print(gen.stdout[-1500:])
+            return refuse("the generator's own self-check rejected the "
+                          "document for %s" % name)
+        approvals[name] = doc[0]
+        mine = json.loads(doc[0])["window_starts"]
+        if starts is None:
+            starts, pinned_start = mine, mine[0]
+        elif mine != starts:
+            return refuse("%s was approved for different windows than %s; "
+                          "they share one NOT_AFTER and cannot disagree"
+                          % (name, strategies[0]))
+        print("  approval ok: %-6s %d windows" % (name, len(mine)))
     not_after = starts[-1][:-1]
     import datetime as dt
     na = (dt.datetime.fromisoformat(not_after) + dt.timedelta(minutes=5))
     not_after = na.strftime("%Y-%m-%dT%H:%M:%SZ")
-    print("approval ok: %d windows, %s .. %s, NOT_AFTER %s"
-          % (len(starts), starts[0], starts[-1], not_after))
+    print("approvals ok: %d lane(s), %d windows, %s .. %s, NOT_AFTER %s"
+          % (lanes, len(starts), starts[0], starts[-1], not_after))
+    print("per-lane approved daily loss %s; the ACCOUNT-WIDE halt is the "
+          "one that binds across lanes" % DAILY_LOSS)
 
     plan = [("L5_BTC5M_COMPLETION_PAIR_COST",
              str(COMPLETION_PAIR_COST) if completion else ""),
-            ("L5_CAMPAIGN_APPROVAL", approval),
+            #: THE FLEET IS DECLARED BY WHAT WAS APPROVED, so the service
+            #: cannot start a lane this run did not arm, and `child_env`
+            #: divides the account ceiling by this same count.
+            ("L5_5M_FLEET", ",".join(strategies)),
             ("L5_BTC5M_NOT_AFTER", not_after),
             ("L5_BTC5M_ENTRY_MODE", "STRADDLE"),
             ("L5_BTC5M_STRADDLE_PRICE", str(PRICE)),
@@ -353,8 +442,18 @@ def main(argv):
             ("L5_BTC5M_CLIP_USD", sh["clip_usd"]),
             ("L5_BTC5M_CAMPAIGN", "ON"),
             ("L5_BTC5M_MARKET", ""),
-            ("L5_SHADOW_ONLY", "0"),
-            ("L5_BTC5M_LIVE", "ARMED_BY_OWNER")]
+            ("L5_SHADOW_ONLY", "0")]
+    #: ONE DOCUMENT PER LANE, under the name its child is handed.
+    for name in strategies:
+        plan.append(("L5_CAMPAIGN_APPROVAL_" + name, approvals[name]))
+    #: AND THE BARE NAME for a single BTC5M lane, which is what a plain
+    #: `l5_btc5m_runner` reads when it is not started by the fleet. Same
+    #: document, so the two can never disagree.
+    if strategies == [ORIGIN.BTC5M]:
+        plan.append(("L5_CAMPAIGN_APPROVAL", approvals[ORIGIN.BTC5M]))
+    #: LAST, ALWAYS. Nothing is armed until every approval and parameter
+    #: above is already set.
+    plan.append(("L5_BTC5M_LIVE", "ARMED_BY_OWNER"))
 
     if not go:
         print("\nDRY RUN. With --go it would set, THEN deploy once:")

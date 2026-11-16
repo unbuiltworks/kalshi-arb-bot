@@ -49,8 +49,13 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from src import l5_campaign_approval as CA        # noqa: E402
+from src import l5_origin as ORIGIN                # noqa: E402
+from src import l5_series_registry as REG          # noqa: E402
 
 UTC = dt.timezone.utc
+#: WHICH SERIES THIS DOCUMENT NAMES. One document names one series, so
+#: the asset is chosen here and nowhere else. `--strategy` rebinds it in
+#: `main`; the default keeps every existing invocation byte-identical.
 SERIES = CA.BTC5M_SERIES
 
 
@@ -124,7 +129,33 @@ def main(argv=None) -> int:
                          "claim layer (BTC5M_WINDOWS_NOT_ENUMERATED). The "
                          "15-minute lane accepts that form; this series "
                          "does not")
+    ap.add_argument("--strategy", default=ORIGIN.BTC5M,
+                    help="which 5-minute series this approval names, e.g. "
+                         "ETH5M. One document names ONE series, so arming "
+                         "four assets takes four documents. Default BTC5M.")
     a = ap.parse_args(argv)
+
+    #: REBIND THE SERIES BEFORE ANYTHING READS IT. `slug` and `build`
+    #: close over this module global, so it has to be set before either
+    #: runs -- which is why this sits at the top of main and not beside
+    #: the first use.
+    global SERIES
+    want = str(a.strategy).strip().upper()
+    if want not in REG.BY_STRATEGY:
+        print("--strategy %r is not a registered strategy; known: %s"
+              % (want, ",".join(sorted(REG.BY_STRATEGY))), file=sys.stderr)
+        return 2
+    row = REG.BY_STRATEGY[want]
+    if row.horizon_s != 300.0:
+        print("--strategy %r is a %ss series; this generator is the "
+              "FIVE-MINUTE one" % (want, row.horizon_s), file=sys.stderr)
+        return 2
+    SERIES = row.prefix
+    if SERIES not in CA.ALLOWED_SERIES:
+        print("series %r is not in the approval allowlist" % SERIES,
+              file=sys.stderr)
+        return 2
+    print("series: %s (%s)" % (SERIES, want))
 
     ceiling = CA.max_windows_for(SERIES)
     if not (1 <= a.n <= ceiling):

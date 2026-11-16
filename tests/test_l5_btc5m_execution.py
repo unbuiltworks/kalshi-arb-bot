@@ -1424,3 +1424,145 @@ class TestForeignExposureReportedMoneyPath:
         assert len(rep["placed"]) == 1 and calls == []
         assert rep["exposure"]["foreign_mode"] == X.FOREIGN_CHARGED
         assert "buying_power_usd" not in rep["exposure"]
+
+
+# ======================================================================
+# 9. THE ACCOUNT CEILING IS SHARED BETWEEN LANES
+# ======================================================================
+class TestAccountLaneSplit:
+    """Under FOREIGN_REPORTED the ceiling is checked against `own_usd`,
+    which each lane reads from its OWN ledger. Four lanes of the 5m fleet
+    therefore each saw $0 of sibling risk and could claim the whole
+    account between them. `account_lanes` divides the ceiling."""
+
+    CASH = {"balances": [{"buyingPower": "500.00"}]}
+
+    # ------------------------------------------------------- the reader
+
+    def test_unset_is_one_lane_so_a_single_executor_is_unchanged(self):
+        assert X.account_lanes() == 1
+
+    @pytest.mark.parametrize("raw,want", [
+        ("1", 1), ("4", 4), ("16", 16), (" 4 ", 4)])
+    def test_a_lane_count_is_read(self, monkeypatch, raw, want):
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, raw)
+        assert X.account_lanes() == want
+
+    @pytest.mark.parametrize("raw", ["0", "17", "-1", "4.0", "four", "4,4", "?"])
+    def test_an_unreadable_lane_count_refuses_rather_than_defaulting_to_one(
+            self, monkeypatch, raw):
+        """1 is the PERMISSIVE answer -- it hands this lane the whole
+        account -- so a typo must not land on it."""
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, raw)
+        assert X.account_lanes() is None
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        assert X.lane_cap() is None
+
+    # --------------------------------------------------------- the share
+
+    def test_four_lanes_split_the_ceiling(self, monkeypatch):
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "4")
+        assert X.lane_cap() == D("4.25")
+
+    def test_the_share_is_floored_to_the_cent_so_lanes_cannot_overcommit(
+            self, monkeypatch):
+        """$17/3 is 5.666...; three lanes at 5.66 fit, at 5.67 would not."""
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "3")
+        assert X.lane_cap() == D("5.66")
+        assert X.lane_cap() * 3 <= D("17.00")
+
+    def test_one_lane_is_the_whole_ceiling(self, monkeypatch):
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "1")
+        assert X.lane_cap() == X.account_cap() == D("17.00")
+
+    def test_no_cap_is_no_share(self, monkeypatch):
+        monkeypatch.delenv(X.ACCOUNT_CAP_ENV, raising=False)
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "4")
+        assert X.lane_cap() is None
+
+    # ------------------------------------------------------ enforcement
+
+    def _reported(self, rig, monkeypatch, cap, lanes=None):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, cap)
+        if lanes is not None:
+            monkeypatch.setenv(X.ACCOUNT_LANES_ENV, lanes)
+        rig.venue.account = lambda: self.CASH
+        monkeypatch.setattr(type(rig.venue), "buying_power",
+                            staticmethod(lambda _a: D("500")), raising=False)
+        scripted(monkeypatch, place())                      # 0.58 * 0.17
+
+    def test_the_whole_ceiling_admits_the_order(
+            self, rig, armed, monkeypatch):
+        """$0.0986 of our own risk under a $0.30 ceiling: it fits. This is
+        the control for the split test below."""
+        self._reported(rig, monkeypatch, "0.30")
+        assert len(rig.step()["placed"]) == 1
+
+    def test_the_same_ceiling_split_four_ways_refuses_it(
+            self, rig, armed, monkeypatch):
+        """$0.30/4 = $0.07, under the $0.0986 the same order commits. A
+        separate rig from the control, so the refusal is the cap and not
+        a duplicate intent."""
+        self._reported(rig, monkeypatch, "0.30", "4")
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_EXPOSURE_CAP"] and rig.venue.sent == []
+        r0 = rep["refused"][0]
+        assert D(str(r0["cap_usd"])) == D("0.07")           # the SHARE
+        assert D(str(r0["account_cap_usd"])) == D("0.30")   # and the whole
+        assert r0["account_lanes"] == 4
+
+    def test_the_share_is_reported_even_when_the_order_is_allowed(
+            self, rig, armed, monkeypatch):
+        monkeypatch.setenv(X.FOREIGN_EXPOSURE_ENV, "REPORTED")
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "4")
+        rig.venue.account = lambda: self.CASH
+        monkeypatch.setattr(type(rig.venue), "buying_power",
+                            staticmethod(lambda _a: D("500")), raising=False)
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert len(rep["placed"]) == 1
+        assert rep["exposure"]["account_lanes"] == 4
+        assert rep["exposure"]["lane_cap_usd"] == "4.25"
+
+    def test_an_unreadable_lane_count_sends_nothing(
+            self, rig, armed, monkeypatch):
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "17.00")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "four")
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_LANES_UNREADABLE"]
+        assert rig.venue.sent == []
+
+    def test_charged_keeps_the_undivided_ceiling(
+            self, rig, armed, monkeypatch):
+        """Under CHARGED a sibling lane IS foreign inventory and is
+        already counted at $1 a contract, so dividing as well would
+        charge it twice. The $3.05 ceiling still refuses 3 foreign
+        contracts with four lanes declared, and for the same reason."""
+        rig.venue.extra_positions = [{
+            "marketSlug": M15, "qtyBought": "3", "qtySold": "0",
+            "netPositionDecimal": "3"}]
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "3.05")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "4")
+        scripted(monkeypatch, place())
+        rep = rig.step()
+        assert reasons(rep) == ["ACCOUNT_EXPOSURE_CAP"]
+        r0 = rep["refused"][0]
+        assert D(str(r0["cap_usd"])) == D("3.05")    # undivided, on purpose
+        assert "account_lanes" not in r0
+
+    def test_one_lane_does_not_round_a_sub_cent_ceiling(self, monkeypatch):
+        """A $0.0986 ceiling admits exactly one 0.58 x 0.17 leg. Flooring
+        a single lane's share to $0.09 would refuse it, so dividing by
+        one returns the ceiling untouched."""
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.0986")
+        assert X.lane_cap() == D("0.0986")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "1")
+        assert X.lane_cap() == D("0.0986")
+        monkeypatch.setenv(X.ACCOUNT_LANES_ENV, "2")
+        assert X.lane_cap() == D("0.04")                # floored, as intended

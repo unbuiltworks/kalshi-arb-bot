@@ -52,13 +52,13 @@ class TestEachChildsStateIsItsOwn:
     FOUR = ["BTC5M", "ETH5M", "SOL5M", "XRP5M"]
 
     def test_ledgers_and_strategies_are_distinct(self):
-        led = {s: F.child_env(s, "/state")["L5_BTC5M_LEDGER"] for s in self.FOUR}
-        aut = {s: F.child_env(s, "/state")["L5_LIVE_AUTH_LEDGER"] for s in self.FOUR}
+        led = {s: F.child_env(s, "/state", 4)["L5_BTC5M_LEDGER"] for s in self.FOUR}
+        aut = {s: F.child_env(s, "/state", 4)["L5_LIVE_AUTH_LEDGER"] for s in self.FOUR}
         assert len(set(led.values())) == 4 and len(set(aut.values())) == 4
         assert led["ETH5M"] == "/state/eth/ledger.json"
         assert aut["XRP5M"] == "/state/xrp/auth.jsonl"
         for s in self.FOUR:
-            assert F.child_env(s, "/state")["L5_5M_STRATEGY"] == s
+            assert F.child_env(s, "/state", 4)["L5_5M_STRATEGY"] == s
 
     def test_the_distinctness_check_catches_a_collision(self, monkeypatch):
         """Pins the GUARD, by making two rows resolve to one asset dir."""
@@ -69,7 +69,7 @@ class TestEachChildsStateIsItsOwn:
 
     def test_a_child_never_forks_its_own_fleet(self, monkeypatch):
         monkeypatch.setenv(F.FLEET_ENV, "BTC5M,ETH5M")
-        assert F.FLEET_ENV not in F.child_env("ETH5M", "/state")
+        assert F.FLEET_ENV not in F.child_env("ETH5M", "/state", 4)
 
     def test_each_asset_carries_its_own_owner_approval(self, monkeypatch):
         """A fleet-wide approval names ONE series. Giving it to all four
@@ -77,10 +77,10 @@ class TestEachChildsStateIsItsOwn:
         softened, authorize four assets from one owner decision."""
         monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", "{btc-approval}")
         monkeypatch.setenv(F.APPROVAL_PREFIX + "ETH5M", "{eth-approval}")
-        assert F.child_env("ETH5M", "/state")["L5_CAMPAIGN_APPROVAL"] \
+        assert F.child_env("ETH5M", "/state", 4)["L5_CAMPAIGN_APPROVAL"] \
             == "{eth-approval}"
         # BTC keeps the existing variable, so today's deployment is unchanged
-        assert F.child_env("BTC5M", "/state")["L5_CAMPAIGN_APPROVAL"] \
+        assert F.child_env("BTC5M", "/state", 4)["L5_CAMPAIGN_APPROVAL"] \
             == "{btc-approval}"
 
     def test_an_asset_with_no_approval_gets_an_empty_one(self, monkeypatch):
@@ -88,9 +88,73 @@ class TestEachChildsStateIsItsOwn:
         gate, which is the safe direction."""
         monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", "{btc-approval}")
         monkeypatch.delenv(F.APPROVAL_PREFIX + "SOL5M", raising=False)
-        assert F.child_env("SOL5M", "/state")["L5_CAMPAIGN_APPROVAL"] == ""
+        assert F.child_env("SOL5M", "/state", 4)["L5_CAMPAIGN_APPROVAL"] == ""
 
     def test_coid_prefixes_stay_distinct_across_the_fleet(self):
         coids = [OG.STRATEGY_COID_PREFIX[s] for s in self.FOUR]
         assert len(set(coids)) == 4
         F._distinct(self.FOUR, "/state")        # does not raise
+
+
+class TestAccountLanesAreDeclaredByTheFleet:
+    """Each lane checks its own ledger against cap/lanes. The fleet is the
+    only thing that knows how many children there are, so it tells them."""
+
+    def test_every_child_is_told_the_same_lane_count(self):
+        envs = [F.child_env(s, "/state", 4) for s in
+                ("BTC5M", "ETH5M", "SOL5M", "XRP5M")]
+        assert {e["L5_ACCOUNT_LANES"] for e in envs} == {"4"}
+
+    def test_a_one_asset_fleet_declares_one_lane(self):
+        assert F.child_env("BTC5M", "/state", 1)["L5_ACCOUNT_LANES"] == "1"
+
+    def test_the_count_overrides_an_inherited_value(self, monkeypatch):
+        """A stale variable on the service must not out-vote the fleet's
+        own child count -- that is how lanes come to disagree."""
+        monkeypatch.setenv("L5_ACCOUNT_LANES", "1")
+        assert F.child_env("ETH5M", "/state", 4)["L5_ACCOUNT_LANES"] == "4"
+
+    def test_the_lane_count_is_required_not_defaulted(self):
+        """One lane is the permissive answer; it must not be reachable by
+        forgetting the argument."""
+        with pytest.raises(TypeError):
+            F.child_env("BTC5M", "/state")
+
+
+class TestExplicitLedgerPaths:
+    """A lane already trading has settled rows under the path it was
+    deployed with. Moving it to a derived path resets `day_settled_pnl`
+    to 0 -- readable-but-empty answers 0, not None -- so the day-loss
+    guard fails OPEN. These overrides keep the running lane where it is."""
+
+    LED, AUT = "/state/btc5m/btc5m_ledger.json", "/state/btc5m/auth.jsonl"
+
+    def test_an_explicit_path_wins_over_the_derived_one(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", self.LED)
+        monkeypatch.setenv(F.AUTH_PREFIX + "BTC5M", self.AUT)
+        e = F.child_env("BTC5M", "/state", 4)
+        assert e["L5_BTC5M_LEDGER"] == self.LED
+        assert e["L5_LIVE_AUTH_LEDGER"] == self.AUT
+
+    def test_it_only_moves_the_lane_it_names(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", self.LED)
+        e = F.child_env("ETH5M", "/state", 4)
+        assert e["L5_BTC5M_LEDGER"] == "/state/eth/ledger.json"
+
+    def test_unset_and_blank_keep_the_derived_path(self, monkeypatch):
+        monkeypatch.setenv(F.LEDGER_PREFIX + "BTC5M", "   ")
+        assert F.child_env("BTC5M", "/state", 4)["L5_BTC5M_LEDGER"] \
+            == "/state/btc/ledger.json"
+
+    def test_an_override_cannot_make_two_lanes_share_a_ledger(self, monkeypatch):
+        """The collision check runs on the paths actually handed out."""
+        monkeypatch.setenv(F.LEDGER_PREFIX + "ETH5M", "/state/btc/ledger.json")
+        with pytest.raises(SystemExit) as exc:
+            F._distinct(["BTC5M", "ETH5M"], "/state")
+        assert "share" in str(exc.value)
+
+    def test_an_override_colliding_on_the_auth_ledger_is_refused(self, monkeypatch):
+        monkeypatch.setenv(F.AUTH_PREFIX + "SOL5M", "/state/xrp/auth.jsonl")
+        with pytest.raises(SystemExit) as exc:
+            F._distinct(["SOL5M", "XRP5M"], "/state")
+        assert "share" in str(exc.value)

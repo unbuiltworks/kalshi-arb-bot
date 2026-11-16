@@ -66,7 +66,7 @@ import datetime as dt
 import hashlib
 import json
 import os
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_btc5m_controller as C
@@ -406,6 +406,65 @@ def account_cap() -> Optional[Decimal]:
     """The shared account ceiling in dollars, or None (unset or unreadable)."""
     cap = _dec(os.environ.get(ACCOUNT_CAP_ENV))
     return cap if cap is not None and cap >= 0 else None
+
+
+ACCOUNT_LANES_ENV = "L5_ACCOUNT_LANES"
+
+#: THE MOST LANES THAT MAY SHARE ONE ACCOUNT. Not a risk limit -- a
+#: typo guard. Sixteen $1 lanes already slice a $17 account past the
+#: point where any of them can buy a share.
+MAX_ACCOUNT_LANES = 16
+
+
+def account_lanes() -> Optional[int]:
+    """How many lanes share ACCOUNT_CAP_ENV, or None if unreadable.
+
+    WHY THIS EXISTS. Under FOREIGN_REPORTED the ceiling is checked
+    against `own_usd`, which is read from THIS lane's ledger. Each lane
+    of the 5-minute fleet has its own ledger -- that separation is what
+    stops two assets overwriting each other's orders -- so `own_usd`
+    for the ETH lane does not include the BTC lane's inventory. Four
+    lanes therefore each measured themselves against the WHOLE ceiling
+    and could commit 4x it between them.
+
+    UNSET IS ONE LANE, which is exactly today's behaviour for a single
+    executor and keeps this a no-op for the armed BTC5m deployment.
+
+    A VALUE THAT DOES NOT PARSE REFUSES rather than defaulting to 1,
+    because 1 is the most permissive answer: a typo must not quietly
+    hand this lane the entire account. `l5_5m_fleet` sets it from the
+    child count so the lanes cannot disagree about it.
+    """
+    raw = str(os.environ.get(ACCOUNT_LANES_ENV, "")).strip()
+    if not raw:
+        return 1
+    if not raw.isdigit():
+        return None
+    n = int(raw)
+    return n if 1 <= n <= MAX_ACCOUNT_LANES else None
+
+
+def lane_cap() -> Optional[Decimal]:
+    """This lane's SHARE of the account ceiling, or None if unreadable.
+
+    FLOORED TO THE CENT, so four lanes under a $17 ceiling get $4.25
+    each and never 4 x $4.2500000001. Unreadable either half -- no cap,
+    or a lane count that does not parse -- is None, and the caller
+    refuses on None exactly as it does for an unreadable cap.
+
+    ONE LANE IS THE CAP ITSELF, returned untouched. Not an optimisation:
+    the ceiling is set to sub-cent values in places (a $0.0986 ceiling
+    admitting exactly one 0.58 x 0.17 leg is a pinned case), and
+    flooring a single lane's share would move that boundary and refuse
+    an order the owner's ceiling allows. Dividing by one must not
+    change the number.
+    """
+    cap, lanes = account_cap(), account_lanes()
+    if cap is None or lanes is None:
+        return None
+    if lanes == 1:
+        return cap
+    return (cap / D(lanes)).quantize(CENT, rounding=ROUND_DOWN)
 
 
 #: HOW ANOTHER LANE'S INVENTORY COUNTS AGAINST OUR ACCOUNT CEILING.
@@ -1117,6 +1176,11 @@ class Btc5mExecutor:
         cap = account_cap()
         if cap is None:
             return refuse("ACCOUNT_CAP_UNSET_OR_UNREADABLE")
+        lanes = account_lanes()
+        lcap = lane_cap()
+        if lanes is None or lcap is None:
+            return refuse("ACCOUNT_LANES_UNREADABLE",
+                          lanes_raw=str(os.environ.get(ACCOUNT_LANES_ENV, "")))
         acct = self.account_exposure()
         report["exposure"]["account"] = acct
         if acct["unknown"]:
@@ -1127,9 +1191,18 @@ class Btc5mExecutor:
             #: OUR exposure against the owner's ceiling, and the venue's own
             #: buying power against what we are about to commit. Foreign
             #: inventory is reported above and charged to nobody here.
-            if acct["own_usd"] + notional > cap:
+            #: THIS LANE'S SHARE, not the whole ceiling. `own_usd` is read
+            #: from this lane's own ledger and sees none of its siblings'
+            #: inventory, so checking it against the undivided cap let
+            #: every lane claim the account independently. The CHARGED
+            #: branch below keeps the undivided cap on purpose: there a
+            #: sibling lane IS foreign inventory and is already counted.
+            report["exposure"]["account_lanes"] = lanes
+            report["exposure"]["lane_cap_usd"] = _s(lcap)
+            if acct["own_usd"] + notional > lcap:
                 return refuse("ACCOUNT_EXPOSURE_CAP",
-                              total_usd=acct["own_usd"], cap_usd=cap,
+                              total_usd=acct["own_usd"], cap_usd=lcap,
+                              account_cap_usd=_s(cap), account_lanes=lanes,
                               foreign_mode=mode,
                               other_usd_reported=_s(acct["other_usd"]))
             bp = _buying_power(self.transport)
