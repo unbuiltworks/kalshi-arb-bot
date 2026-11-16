@@ -81,12 +81,25 @@ def fleet() -> List[str]:
     return out
 
 
-def child_env(strategy: str, root: str) -> Dict[str, str]:
+def child_env(strategy: str, root: str, lanes: int) -> Dict[str, str]:
     """One child's environment. Everything that must not be shared is
-    made distinct here, by construction rather than by configuration."""
+    made distinct here, by construction rather than by configuration.
+
+    `lanes` is how many children this fleet is starting. It is REQUIRED
+    rather than defaulted because the default that would be natural --
+    one lane -- is the permissive one: it hands every child the whole
+    account ceiling, which is the defect this argument exists to close.
+    """
     row = REG.BY_STRATEGY[strategy]
     env = dict(os.environ)
     env["L5_5M_STRATEGY"] = strategy
+    #: EVERY CHILD IS TOLD THE SAME LANE COUNT, from one place, so the
+    #: account ceiling is divided consistently. Each lane checks its own
+    #: ledger against cap/lanes; a child that disagreed about `lanes`
+    #: would over- or under-claim its share. Set here rather than in the
+    #: service's variables because the fleet is the only thing that
+    #: knows how many children there actually are.
+    env["L5_ACCOUNT_LANES"] = str(int(lanes))
     env["L5_BTC5M_LEDGER"] = "%s/%s/ledger.json" % (root, row.asset)
     env["L5_LIVE_AUTH_LEDGER"] = "%s/%s/auth.jsonl" % (root, row.asset)
     #: each asset carries its OWN owner approval. A fleet-wide approval
@@ -109,7 +122,7 @@ def _distinct(children: List[str], root: str) -> None:
     seen: Dict[str, str] = {}
     for s in children:
         for key in ("L5_BTC5M_LEDGER", "L5_LIVE_AUTH_LEDGER"):
-            path = child_env(s, root)[key]
+            path = child_env(s, root, len(children))[key]
             if path in seen:
                 raise SystemExit("REFUSED: %s and %s would share %s"
                                  % (seen[path], s, path))
@@ -127,13 +140,15 @@ def main(argv: List[str] | None = None) -> int:
     _distinct(children, root)
     print("L5_5M_FLEET_START %s" % {
         "strategies": children, "state_root": root,
+        "account_lanes": len(children),
+        "account_cap_usd": os.environ.get("L5_ACCOUNT_MAX_EXPOSURE_USD", ""),
         "restart_policy": "NONE -- a dead money-moving child is not revived",
         "on_child_exit": "the whole fleet stops"}, flush=True)
     procs: Dict[str, subprocess.Popen] = {}
     for s in children:
         procs[s] = subprocess.Popen(
             [sys.executable, "-u", "-m", "src.l5_btc5m_runner"],
-            env=child_env(s, root))
+            env=child_env(s, root, len(children)))
         print("L5_5M_FLEET_CHILD %s" % {
             "strategy": s, "pid": procs[s].pid,
             "series": REG.BY_STRATEGY[s].prefix,
