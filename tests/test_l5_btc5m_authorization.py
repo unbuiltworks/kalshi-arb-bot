@@ -572,3 +572,59 @@ def test_the_claim_module_never_writes_the_approval_or_the_locks_it_reads():
     for forbidden in ("os.environ[", "putenv", "setenv", ".unlink(",
                       "os.remove", "shutil.rmtree"):
         assert forbidden not in block, forbidden
+
+
+class TestTheLaneMayOnlyTradeItsOwnSeries:
+    """The three series gates were BTC-only literals and the fleet's ETH,
+    SOL and XRP lanes were refused every order -- observed live
+    2026-11-16T12:02Z as AUTHORIZATION:BTC5M_MARKET_NOT_IN_SERIES.
+
+    The property these tests pin is NOT "ETH is allowed". It is "a lane
+    resolves exactly one series, and anything it cannot resolve refuses".
+    """
+
+    def test_unset_is_btc5m_so_a_single_executor_is_unchanged(self, monkeypatch):
+        monkeypatch.delenv(AUTH.LANE_STRATEGY_ENV, raising=False)
+        assert AUTH.lane_series() == AUTH.BTC5M_SERIES
+        #: compare BEHAVIOUR, not pattern text: re.escape escapes the
+        #: hyphen, so the strings differ while the language does not.
+        r = AUTH.lane_coid_re()
+        assert r.fullmatch("b5m-" + "a" * 24)
+        assert AUTH.BTC5M_COID_RE.fullmatch("b5m-" + "a" * 24)
+        assert not r.fullmatch("e5m-" + "a" * 24)
+        assert not r.fullmatch("b5m-" + "a" * 23)
+
+    def test_each_lane_resolves_its_own_series_and_id_shape(self, monkeypatch):
+        want = {"BTC5M": ("cpc-btc-updown-5m-", "b5m-"),
+                "ETH5M": ("cpceth-eth-updown-5m-", "e5m-"),
+                "SOL5M": ("cpcsol-sol-updown-5m-", "s5m-"),
+                "XRP5M": ("cpcxrp-xrp-updown-5m-", "x5m-")}
+        for strat, (series, coid) in want.items():
+            monkeypatch.setenv(AUTH.LANE_STRATEGY_ENV, strat)
+            assert AUTH.lane_series() == series
+            r = AUTH.lane_coid_re()
+            assert r.fullmatch(coid + "a" * 24)
+            assert not r.fullmatch("b5m-" + "a" * 24) or strat == "BTC5M"
+
+    def test_no_two_lanes_resolve_the_same_series_or_id_shape(self, monkeypatch):
+        seen_s, seen_c = set(), set()
+        for strat in ("BTC5M", "ETH5M", "SOL5M", "XRP5M"):
+            monkeypatch.setenv(AUTH.LANE_STRATEGY_ENV, strat)
+            seen_s.add(AUTH.lane_series())
+            seen_c.add(AUTH.lane_coid_re().pattern)
+        assert len(seen_s) == 4 and len(seen_c) == 4
+
+    @pytest.mark.parametrize("strat", ["BTC15M", "NOPE", "eth", "ETH15M", "  "])
+    def test_anything_unresolvable_or_not_five_minute_refuses(
+            self, monkeypatch, strat):
+        """The permissive answer here would let a lane submit into a
+        series nobody approved, so an unknown or wrong-horizon strategy
+        resolves to None rather than falling back to BTC."""
+        monkeypatch.setenv(AUTH.LANE_STRATEGY_ENV, strat)
+        if strat.strip() == "":
+            assert AUTH.lane_series() == AUTH.BTC5M_SERIES   # blank is unset
+            return
+        #: "eth" upper-cases to ETH, which is not a strategy name
+        #: (ETH5M is), so it is unresolvable like any other typo.
+        assert AUTH.lane_series() is None
+        assert AUTH.lane_coid_re() is None
