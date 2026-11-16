@@ -61,13 +61,13 @@ class CompletionTTLTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             pathlib.Path(root, "book.json").touch()
             with mock.patch.object(self.replay.QS, "load",
-                                   return_value={"market": frames}), \\
+                                   return_value={"market": frames}), \
                  mock.patch.object(self.replay.QS, "touches",
-                                   return_value=(D("0.50"), D("0.51"))), \\
+                                   return_value=(D("0.50"), D("0.51"))), \
                  mock.patch.object(self.replay.QS, "leg_outcome",
-                                   side_effect=leg), \\
+                                   side_effect=leg), \
                  mock.patch.object(self.replay.QS, "filled",
-                                   side_effect=filled), \\
+                                   side_effect=filled), \
                  mock.patch.object(self.replay, "_econ_gate",
                                    return_value=(1, D("0.49"), "TEST")):
                 rows = self.replay.sequential(
