@@ -142,5 +142,30 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertFalse(row["entry_fills_simultaneous"])
 
 
+    def test_unknown_entry_verdict_is_visible_without_invented_pnl(self):
+        # A missing queue verdict is not a known no-fill or a settled loss.
+        frames = [{"t": 100.0}, {"t": 106.0}, {"t": 112.0}]
+        def leg(side, price, observed, *, start, queue_fraction,
+                own_qty, ttl_s):
+            return {"verdict": None if side == self.replay.UP else "IMPOSSIBLE",
+                    "fill_index": None, "proven": False, "possible": False}
+        with tempfile.TemporaryDirectory() as root:
+            pathlib.Path(root, "book.json").touch()
+            with mock.patch.object(self.replay.QS, "load",
+                                   return_value={"market": frames}), \
+                 mock.patch.object(self.replay.QS, "touches",
+                                   return_value=(D("0.49"), D("0.50"))), \
+                 mock.patch.object(self.replay.QS, "leg_outcome",
+                                   side_effect=leg):
+                rows = self.replay.sequential(
+                    [("book.json", "test")], entry_depth=0,
+                    complete_depth=0, scenario=("base", "PROVEN", D("0.5")),
+                    root=root)
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r["state"] == "INDETERMINATE_ENTRY" for r in rows))
+        self.assertTrue(all(r["pnl"] is None for r in rows))
+        self.assertEqual(self.replay.summarise(rows), [])
+
+
 if __name__ == "__main__":
     unittest.main()
