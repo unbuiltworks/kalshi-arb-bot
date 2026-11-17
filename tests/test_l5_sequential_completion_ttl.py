@@ -167,5 +167,38 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertEqual(self.replay.summarise(rows), [])
 
 
+    def test_unknown_complement_verdict_is_not_scored_as_residual(self):
+        frames = [{"t": 100.0}, {"t": 106.0}, {"t": 112.0}]
+        def leg(side, price, observed, *, start, queue_fraction,
+                own_qty, ttl_s):
+            if start == 0:
+                return {"fill_index": 0 if side == self.replay.UP else None,
+                        "verdict": "PROVEN" if side == self.replay.UP else "IMPOSSIBLE"}
+            return {"fill_index": None, "verdict": None}
+        def filled(result, *, arm):
+            return (None if result["verdict"] is None
+                    else result["fill_index"] is not None)
+        with tempfile.TemporaryDirectory() as root:
+            pathlib.Path(root, "book.json").touch()
+            with mock.patch.object(self.replay.QS, "load",
+                                   return_value={"market": frames}), \
+                 mock.patch.object(self.replay.QS, "touches",
+                                   return_value=(D("0.49"), D("0.50"))), \
+                 mock.patch.object(self.replay.QS, "leg_outcome",
+                                   side_effect=leg), \
+                 mock.patch.object(self.replay.QS, "filled",
+                                   side_effect=filled), \
+                 mock.patch.object(self.replay, "_econ_gate",
+                                   return_value=(0, D("0.50"), "TEST")):
+                rows = self.replay.sequential(
+                    [("book.json", "test")], entry_depth=0,
+                    complete_depth=0, scenario=("base", "PROVEN", D("0.5")),
+                    root=root)
+        row = next(r for r in rows if r["frame"] == 0)
+        self.assertEqual(row["state"], "INDETERMINATE_COMPLEMENT")
+        self.assertIsNone(row["pnl"])
+        self.assertEqual(self.replay.summarise(rows), [])
+
+
 if __name__ == "__main__":
     unittest.main()
