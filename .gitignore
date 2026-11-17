@@ -78,3 +78,15 @@ analysis/gemini/p10_capture/
 # L5: data/l5_master is a 375MB derivation of data/l5/raw (the source of
 # truth), rebuilt on demand by scripts/l5_settlement_decomposition_audit.py.
 data/l5_master/
+
+# L5 competitor tapes: raw public-activity captures for the 0x8dxd study.
+# 236MB and 583MB on disk, with three single files (112MB, 117MB, 582MB)
+# over GitHub's 100MB hard per-file limit -- a `git add -A` swept these up
+# on 2026-11-17 and the push was rejected. They are the SOURCE OF TRUTH for
+# the competitor analysis and must be preserved on disk; they are not
+# publishable. Re-fetch via the competitor collector if a container is lost.
+data/l5/competitor_0x8dxd/
+data/l5/competitor_0x8dxd_full/
+
+# collector chatter, not evidence
+data/l5/phase_a/collector.log
