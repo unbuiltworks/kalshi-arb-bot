@@ -229,6 +229,46 @@ class Params:
     #: existing (0, 0.50) bound and on the tick grid; a shift that would
     #: leave either is clamped, never wrapped.
     straddle_reprice_ticks_per_clip: int = 0
+    #: ------------------------------------------------------------------
+    #: COMPLETION CROSSING. Whether a chosen completion may LIFT the
+    #: opposite side's offer instead of resting at the pair-cost ceiling.
+    #:
+    #: WHY THIS EXISTS. The patient completion below rests at
+    #: `straddle_completion_pair_cost - avg_cost_of_the_held_leg` -- a
+    #: BUDGET CEILING, not a market price. Nothing ever priced it against
+    #: the book, with two consequences:
+    #:
+    #:   1. When the offer is already BELOW the ceiling the completion
+    #:      still rests AT the ceiling, forgoing a strictly cheaper fill
+    #:      of the same side in the same size.
+    #:   2. A resting BUY only fills when a seller comes DOWN to it, so
+    #:      the patient completion fills precisely when that side is
+    #:      being marked down -- adverse selection by construction. The
+    #:      cheap fills it was supposed to catch are the ones it misses.
+    #:
+    #: This does not decide WHETHER to complete; the pair-cost gate below
+    #: already did that. It decides only HOW the completion it already
+    #: chose is executed: rest at the ceiling, or lift a cheaper offer.
+    #: That is a DOMINANCE comparison on one side, one size, fees
+    #: included -- not a directional bet -- so it needs no settlement
+    #: probability and makes none up.
+    #:
+    #: ZERO/False IS THE DEFAULT AND REFUSES, and crossing needs BOTH
+    #: this and the envelope's `taker_allowed`. Two independent switches,
+    #: because crossing spends the spread and a single flag flipped by
+    #: accident should not be able to do that.
+    completion_cross_enabled: bool = False
+    #: How far ABOVE the offer the crossing limit may sit, in ticks, so a
+    #: book that moves between decision and arrival can still fill. The
+    #: limit is capped by the ceiling regardless, so slippage can never
+    #: widen the pair beyond its budget. Zero -- the default -- prices the
+    #: limit exactly at the offer.
+    completion_cross_slippage_ticks: int = 0
+    #: The per-share saving, FEES INCLUDED, that crossing must beat the
+    #: resting ceiling by before it is worth spending the spread. Zero
+    #: permits any strict improvement; it is never permitted to cross for
+    #: a worse or equal all-in price than resting.
+    completion_cross_min_margin: Decimal = D("0")
     #: STRADDLE only: PATIENT COMPLETION of a lone leg. Zero disables it and
     #: is the default, so the mode's behaviour is byte-for-byte unchanged
     #: until an owner sets it.
@@ -568,6 +608,85 @@ def _place(side, price, qty, reason, *, post_only=True, intent="BUY", slot=0):
             "slot": int(slot)}
 
 
+def _completion_cross(*, ceiling, ask, held_avg, pair_target, params, tick):
+    """Should a chosen completion LIFT the offer instead of resting at the
+    pair-cost ceiling?
+
+    One side, one size, fees included: this is a DOMINANCE test, not a
+    forecast. Crossing is permitted only when the all-in cost of buying
+    the offer outright is STRICTLY cheaper than the ceiling the completion
+    would otherwise rest at -- and only when the resulting pair, fees
+    included, is still inside its budget. It needs no settlement
+    probability and invents none.
+
+    Returns a record whose `cross` is False unless every condition held,
+    with `why` naming the condition that refused. `limit_dec` is the
+    crossing limit as a Decimal for the caller to price the order at;
+    every other number is a string, for the step report.
+
+    THE FEE IS TAKEN AT ITS WORST POINT over the whole range the order
+    could fill in, not at the limit. `theta*p*(1-p)` peaks at p=0.50, so
+    for a completion priced well above the half the fee RISES as the fill
+    price falls, and charging it at the limit alone would understate the
+    cost of the cheaper fill this path exists to get.
+    """
+    out = {"cross": False, "why": "CROSS_DISABLED", "ask": None,
+           "limit": None, "limit_dec": None, "fee_per_share": None,
+           "saving_per_share": None}
+    if not params.completion_cross_enabled:
+        return out
+    #: BOTH SWITCHES, CHECKED HERE. `done()` refuses any non-post-only
+    #: order without `taker_allowed` as a last line of defence, but a
+    #: refusal there discards the whole decision; refusing here keeps the
+    #: resting completion and says why it was kept.
+    if not params.taker_allowed:
+        out["why"] = "TAKER_NOT_ALLOWED"
+        return out
+    a = _dec(ask)
+    if a is None or a <= ZERO or a >= ONE:
+        out["why"] = "NO_OFFER"
+        return out
+    out["ask"] = str(a)
+    ticks = int(params.completion_cross_slippage_ticks or 0)
+    if ticks < 0:
+        out["why"] = "SLIPPAGE_NEGATIVE"
+        return out
+    #: THE CEILING CAPS THE LIMIT, so slippage can never widen the pair
+    #: past its budget however many ticks were asked for.
+    limit = _floor_to(min(ceiling, a + ticks * tick), tick)
+    out["limit"] = str(limit)
+    if limit < a:
+        #: The offer is dearer than the whole completion budget. Resting
+        #: at the ceiling is the only thing left, which is what happens.
+        out["why"] = "OFFER_ABOVE_CEILING"
+        return out
+    if not (PRICE_MIN <= limit <= PRICE_MAX) or limit <= ZERO:
+        out["why"] = "LIMIT_OUT_OF_RANGE"
+        return out
+    pts = [a, limit]
+    if a <= HALF <= limit:
+        pts.append(HALF)
+    fee = max(params.taker_fee_coef * q * (ONE - q) for q in pts)
+    out["fee_per_share"] = str(fee)
+    allin = limit + fee
+    saving = ceiling - allin
+    out["saving_per_share"] = str(saving)
+    margin = _dec(params.completion_cross_min_margin) or ZERO
+    if saving <= ZERO or saving < margin:
+        #: Paying the spread buys nothing here: resting at the ceiling is
+        #: at least as cheap all-in, so the patient order keeps its place.
+        out["why"] = "NO_MARGIN_OVER_RESTING"
+        return out
+    if held_avg + allin > pair_target:
+        #: The pair-cost gate above priced the RESTING completion. The
+        #: crossing one is re-checked on its own all-in cost so a fee can
+        #: never carry the pair past the target it was admitted under.
+        out["why"] = "PAIR_ABOVE_TARGET_ALL_IN"
+        return out
+    out.update(cross=True, why=None, limit_dec=limit)
+    return out
+
+
 def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
            p_up=None, p_source=None, p_age_s=None,
            loss_room_usd=None) -> Dict[str, Any]:
@@ -801,7 +920,15 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: than either, which is the defect.
         comp = {"why": "COMPLETION_DISABLED", "side": None, "price": None,
                 "qty": None, "pair_cost": None, "cancelled_cheap_rungs": [],
-                "withdrew_pending_rungs": []}
+                "withdrew_pending_rungs": [],
+                #: HOW the completion would be executed. `cross` stays
+                #: False and `cross_why` carries the reason it was not
+                #: taken, so a window that rested at the ceiling says
+                #: WHY it rested rather than reading like a window with
+                #: no offer to lift.
+                "cross": False, "cross_why": "CROSS_DISABLED",
+                "cross_limit": None, "cross_ask": None,
+                "cross_fee_per_share": None, "cross_saving_per_share": None}
         if _cpc is not None and _cpc > ZERO:
             exp_c = _exposure(inv, rest)
             cheld, cunm = exp_c["unmatched_side"], exp_c["unmatched_qty"]
@@ -812,7 +939,47 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 cavg = inv[cheld][1] / inv[cheld][0]
                 cprice = _floor_to(_cpc - cavg, tick)
                 cqty = _floor_qty(cunm, params)
-                already = any(o["side"] == cside and abs(o["price"] - cprice) <= tick
+                #: THE CROSSING DECISION IS TAKEN HERE, before anything
+                #: reads the resting book, because WHICH PRICE the
+                #: completion would use decides which resting orders are
+                #: completions and which are cheap rungs.
+                #:
+                #: THE OFFER IS DERIVED FROM `bid`/`ask`, NOT `quote`.
+                #: That dict is built further down, AFTER this branch
+                #: returns -- the identical trap the `priced()` note
+                #: below records, and reading it here is an
+                #: UnboundLocalError the moment a completion is enabled.
+                #: DOWN's offer is one minus UP's bid, which is what
+                #: `quote` would have said.
+                c_ask = ask if cside == UP else ONE - bid
+                cx = _completion_cross(
+                    ceiling=cprice, ask=c_ask, held_avg=cavg,
+                    pair_target=_cpc, params=params, tick=tick)
+                comp.update(cross_why=cx["why"], cross_ask=cx["ask"],
+                            cross_limit=cx["limit"],
+                            cross_fee_per_share=cx["fee_per_share"],
+                            cross_saving_per_share=cx["saving_per_share"])
+
+                def _is_completion_rung(px):
+                    """Is this resting order a COMPLETION, or the cheap
+                    straddle rung?
+
+                    The ceiling alone was the discriminator while every
+                    completion rested AT the ceiling. A crossing
+                    completion rests at the OFFER if it fills only
+                    partly, and judging that by the ceiling would read
+                    the remainder as a cheap rung -- cancelling and
+                    re-placing our own working completion every step,
+                    losing its queue place and crossing again for the
+                    same shares. Both prices count.
+                    """
+                    if abs(px - cprice) <= tick:
+                        return True
+                    lim = cx.get("limit_dec")
+                    return lim is not None and abs(px - lim) <= tick
+
+                already = any(o["side"] == cside
+                              and _is_completion_rung(o["price"])
                               for o in rest)
                 comp.update(side=cside, price=str(cprice), qty=str(cqty),
                             pair_cost=str(cavg + cprice))
@@ -834,7 +1001,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     pending = [o for o in want
                                if o.get("op") == "PLACE"
                                and o.get("side") == cside
-                               and abs(o["price"] - cprice) > tick]
+                               and not _is_completion_rung(o["price"])]
                     for o in pending:
                         want.remove(o)
                         room += o["price"] * o["qty"]
@@ -855,7 +1022,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     #: is cancellable by exact id here and no
                     #: un-withdrawable rung can reach this point.
                     stale = [o for o in rest if o["side"] == cside
-                             and abs(o["price"] - cprice) > tick]
+                             and not _is_completion_rung(o["price"])]
                     if True:
                         #: A rung queued THIS step is withdrawn before it is
                         #: ever sent -- the straddle loop above runs first,
@@ -867,7 +1034,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         pending = [o for o in want
                                    if o.get("op") == "PLACE"
                                    and o.get("side") == cside
-                                   and abs(o["price"] - cprice) > tick]
+                                   and not _is_completion_rung(o["price"])]
                         for o in pending:
                             want.remove(o)
                             room += o["price"] * o["qty"]
@@ -876,11 +1043,34 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         for o in stale:
                             want.append({"op": "CANCEL", "id": o["id"]})
                         comp["cancelled_cheap_rungs"] = [o["id"] for o in stale]
+                        #: LIFT A CHEAPER OFFER, OR REST AT THE CEILING.
+                        #: `cprice` is the budget ceiling. If the offer on
+                        #: this side is already cheaper than the ceiling by
+                        #: more than the taker fee, buying it outright is
+                        #: the same side in the same size at a strictly
+                        #: lower ALL-IN price with certainty, instead of a
+                        #: resting bid that can only be hit on the way
+                        #: down. Every refusal keeps today's resting
+                        #: completion exactly as it was.
+                        c_px, c_only = cprice, True
+                        if cx["cross"]:
+                            comp["cross"] = True
+                            c_px, c_only = cx["limit_dec"], False
+                        #: ROOM IS CHARGED AT THE CEILING EITHER WAY. A
+                        #: crossing limit is bounded by the ceiling by
+                        #: construction, so the ceiling remains a valid
+                        #: upper bound on what this order can spend and
+                        #: the exposure check above does not change
+                        #: meaning when crossing is on.
                         room -= cprice * cqty
-                        want.append(_place(cside, cprice, cqty,
-                                           "STRADDLE_COMPLETION"))
+                        want.append(_place(cside, c_px, cqty,
+                                           "STRADDLE_COMPLETION",
+                                           post_only=c_only))
+                        comp["price"] = str(c_px)
+                        comp["pair_cost"] = str(cavg + c_px)
                         comp["why"] = None
-                        why_s = "STRADDLE_COMPLETING"
+                        why_s = ("STRADDLE_COMPLETING_CROSS" if cx["cross"]
+                                 else "STRADDLE_COMPLETING")
         #: 1b. THE SECOND STRATEGY, AND THE ONE CHOICE BETWEEN THEM.
         #:
         #: `want` and `room` already carry everything the straddle
@@ -898,7 +1088,12 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: reason is recorded.
         late = {"ok": False, "reason": "NOT_EVALUATED"}
         arb = None
-        completing = (why_s == "STRADDLE_COMPLETING"
+        #: PREFIX, NOT EQUALITY. A crossing completion reports
+        #: STRADDLE_COMPLETING_CROSS, and matching the resting spelling
+        #: alone would have let the late favourite run beside it -- the
+        #: 1925z double-buy this very branch exists to prevent, re-created
+        #: by a string comparison. Both spellings stand it down.
+        completing = (str(why_s or "").startswith("STRADDLE_COMPLETING")
                       or comp.get("why") == "COMPLETION_ALREADY_WORKING")
         if completing:
             late = {"ok": False, "reason": "COMPLETION_IN_FLIGHT"}
