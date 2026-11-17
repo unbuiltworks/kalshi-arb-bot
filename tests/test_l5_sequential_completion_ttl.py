@@ -114,5 +114,33 @@ class CompletionTTLTests(unittest.TestCase):
             frames, 0, k, 60.0), 1.0)
 
 
+    def test_entry_order_fills_report_staggered_timing(self):
+        # Both entry orders can fill, but at DIFFERENT frames. This must
+        # not be counted as a sequential rescue or a simultaneous fill.
+        frames = [{"t": 100.0}, {"t": 106.0}, {"t": 112.0}]
+        def leg(side, price, observed, *, start, queue_fraction,
+                own_qty, ttl_s):
+            return {"fill_index": 1 if side == self.replay.UP else 2,
+                    "verdict": "PROVEN"}
+        with tempfile.TemporaryDirectory() as root:
+            pathlib.Path(root, "book.json").touch()
+            with mock.patch.object(self.replay.QS, "load",
+                                   return_value={"market": frames}), \
+                 mock.patch.object(self.replay.QS, "touches",
+                                   return_value=(D("0.49"), D("0.50"))), \
+                 mock.patch.object(self.replay.QS, "leg_outcome",
+                                   side_effect=leg), \
+                 mock.patch.object(self.replay.QS, "filled",
+                                   side_effect=lambda result, *, arm: True):
+                rows = self.replay.sequential(
+                    [("book.json", "test")], entry_depth=0,
+                    complete_depth=0, scenario=("base", "PROVEN", D("0.5")),
+                    root=root)
+        row = next(r for r in rows if r["frame"] == 0)
+        self.assertEqual(row["state"], "PAIR_AT_ENTRY")
+        self.assertEqual((row["up_fill_frame"], row["down_fill_frame"]), (1, 2))
+        self.assertFalse(row["entry_fills_simultaneous"])
+
+
 if __name__ == "__main__":
     unittest.main()
