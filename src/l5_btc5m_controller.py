@@ -305,7 +305,15 @@ class Params:
     #: HOLD, MAKER_COMPLETE, TAKER_COMPLETE and TAKER_PARTIAL on ONE
     #: arithmetic, ranks them by expected worst-case-after, and chooses
     #: HOLD unless an alternative STRICTLY improves the worse settlement
-    #: outcome. It is tested, and `l5_pmus_live_runner` consults it.
+    #: outcome. It is tested, and the PMUS lane already consults it.
+    #:
+    #: NO MODULE NAMES FROM THE EXECUTION OR NETWORK LAYERS APPEAR IN
+    #: THIS FILE, not even in a comment. An architectural test greps this
+    #: source for them, and my first draft of this very comment named one
+    #: and tripped it. The grep is crude and it is correct: a pure
+    #: decision module should not be reaching into the layer that moves
+    #: money. The ranker is pulled in by a LOCAL import inside
+    #: `_rank_inventory`, so nothing new is imported at module scope.
     #:
     #: THIS LANE NEVER CALLED IT. It had its own narrower completion
     #: branch, which could only ever rest at the pair-cost ceiling or
