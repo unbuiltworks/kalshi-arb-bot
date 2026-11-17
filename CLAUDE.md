@@ -337,3 +337,38 @@ Log at DEBUG:
 - Every book update (if LOG_EVERY_SCAN=True)
 - Fee calculations
 - Filter rejections (why an opportunity was skipped)
+
+
+---
+
+# L5 / PMUS — Current Operating Directive (2026-11-16)
+
+**Scope and precedence:** This section governs the existing L5/Polymarket US BTC5m system. The older Kalshi single-platform arbitrage tutorial above is historical background, **not** authorization or a current deployment plan for L5. Where it conflicts with this section, follow this section for L5. Do not silently change the separate Kalshi bot's strategy.
+
+## Mission and strategy
+
+Build one continuously operating, demonstrably profitable L5 trading system using existing GitHub, Railway, execution, reconciliation, and independent watchdog infrastructure. Long-term target: **$480/day confirmed settled realized net profit**; never represent this as achieved or guaranteed.
+
+Use **k9Q2** (repeated maker fills, replenishment, inventory management) and **0x8dxd December 2025–March 2026** (two-sided accumulation, dynamic pricing, inventory balancing) as the primary *behavioral research candidates*. Use **0x1f0e** as a secondary benchmark and original L5 as an execution/pair-completion reference. These are hypotheses, not validated PMUS edges. Keep Attentive-Silica's longer-horizon directional approach deferred. Retire 0x8dxd's August 97–99¢ late-favorite approach as a primary strategy; never restart an unchanged losing campaign.
+
+## Execution priorities
+
+1. Quote UP and DOWN simultaneously **only when economics and risk gates allow**.
+2. Support repeated entries, order replenishment, and inventory-aware repricing, with explicit per-side and unmatched exposure ceilings.
+3. Use one inventory-aware controller to compare maker completion, repricing, bounded taker execution (only when separately authorized), risk reduction, and holding.
+4. Preserve exact-order cancellation, durable reconciliation, rollover reliability, independent watchdog, and existing hard capital/daily-loss limits. No implicit risk-limit expansion.
+5. Optimize **settled realized net P&L**, not trade count, turnover, theoretical pair margins, or rebate capture. Verify venue-specific fees/rebates and account tiers; do not import competitor economics from another venue.
+
+## Workflow and evidence
+
+Inspect current GitHub issues/PRs, deployed SHA, Railway health, active authorizations, and latest settled P&L before changing code. Reuse functioning components; fix the highest-impact root cause first. Claude Code is primary implementation agent. Implement and run regression tests, then propose the smallest executable live validation. **No prolonged shadow campaigns or new collection services by default**; bounded read-only diagnosis is acceptable when essential to an immediate decision. Never invent fill probabilities or disable an EV gate to create artificial profitability.
+
+Separate observed book data, hypothetical orders, submitted orders, venue-confirmed fills, and confirmed settlement. Report actual execution, fees, inventory, rebates, adverse selection, and net realized P&L. Do not infer maker/taker roles from incomplete public trades alone.
+
+## Authorization boundary
+
+Keep production disarmed unless an explicit owner-approved envelope authorizes a specific future UTC market/window, exact deployed SHA, exposure and loss ceilings, maker/taker permissions, watchdog, and automatic disarm. **Money-capable deployment, arming, taker authorization, and capital expansion each require explicit owner approval.** Documentation changes or read-only research do not constitute trading approval.
+
+## Reporting every work cycle
+
+Running mode and deployed SHA; actual code/config changes and regression results; venue-confirmed orders/fills; settled realized net P&L; biggest blocker; next action; authorization needed; incremental infrastructure cost. Never present shadow or WOULD_SUBMIT as profit.
