@@ -5,6 +5,10 @@
 #   src/l5_halt_gate.py     the latch: asserter (no clear), gate, FileStore
 #   src/l5_halt_server.py   GET-only HTTP for the executor to read the latch
 #   src/l5_watchdog.py      RegistryOrderSource + the sweep
+#   src/l5_managed_lanes.py ONE definition of managed-lane
+#                           freshness, shared with the reset
+#                           ceremony. No src/ dependencies, so
+#                           every image can carry it.
 #
 # AUTHENTICATED CANCEL-ONLY (OWNER 2026-10-18). This REVERSES the
 # credential-free rule of 2026-10-14, by explicit owner approval, and the
@@ -62,6 +66,7 @@ COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 # any deployed image.
 COPY src/l5_emergency_halt_marker.py src/l5_emergency_halt_marker.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
+COPY src/l5_managed_lanes.py  src/l5_managed_lanes.py
 # the ownership contract's constants (REGISTRY_KEY). The watchdog imports it
 # to name the key it reads; it serves nothing and holds no venue route.
 COPY src/l5_order_registry_server.py src/l5_order_registry_server.py

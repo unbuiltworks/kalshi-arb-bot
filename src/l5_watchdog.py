@@ -603,60 +603,23 @@ class Watchdog:
 
     #: A lane attestation older than this is not proof of management.
     LANE_MAX_AGE_S = 60.0
-    #: ...and one dated this far AHEAD of `now` is still fresh. LIVE
-    #: 2026-11-17 21:57:04Z: the sports lane read as STALE:-6.1 on every
-    #: sweep (its container clock ahead of this one, and/or the lane read
-    #: landing seconds after the sweep's `now`), so the exemption never
-    #: applied and a 315 s sports completion latched UNMANAGED_RESTING_ORDER
-    #: for the whole account. A FUTURE timestamp is not evidence of a dead
-    #: lane -- staleness is about OLD documents, which LANE_MAX_AGE_S still
-    #: bounds. Bounded so a wildly wrong clock still exempts nothing.
-    LANE_MAX_FUTURE_S = 60.0
 
     def managed_lane_ids(self, now: Optional[dt.datetime] = None) -> tuple:
         """({venue_order_id, ...}, [notes]) attested by a FRESH managed lane.
 
-        A lane qualifies only if its document is readable, says
-        `manages_own_resting: true`, and its `as_of_utc` is at most
-        LANE_MAX_AGE_S old. Anything else -- unreachable, stale, malformed --
-        contributes NOTHING, so a dead lane's orders are judged by age
-        exactly as before. This EXEMPTS from the overdue/age latch only; it
-        never makes an order cancellable (ownership is still the oracle's)."""
-        ids: set = set()
-        notes: List[str] = []
-        now = now or _utc()
-        for base in self.managed_lanes:
-            url = "%s/l5/live_orders.json" % base
-            try:
-                if self._lane_opener is not None:
-                    raw = self._lane_opener(url, 3.0)
-                else:
-                    import urllib.request
-                    with urllib.request.urlopen(url, timeout=3.0) as r:
-                        raw = r.read()
-                doc = json.loads(raw or b"{}")
-            except BaseException as exc:                       # noqa: BLE001
-                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    raise
-                notes.append("%s:UNREACHABLE:%s" % (base, type(exc).__name__))
-                continue
-            if not isinstance(doc, Mapping) or doc.get("readable") is not True \
-                    or doc.get("manages_own_resting") is not True:
-                notes.append("%s:NOT_A_MANAGED_LANE" % base)
-                continue
-            t = _parse_t(doc.get("as_of_utc"))
-            age = None if t is None else (now - t).total_seconds()
-            if age is None or age > self.LANE_MAX_AGE_S or \
-                    age < -self.LANE_MAX_FUTURE_S:
-                notes.append("%s:STALE:%s" % (base, age))
-                continue
-            for row in doc.get("orders") or []:
-                vid = str((row or {}).get("venue_order_id") or "").strip() \
-                    if isinstance(row, Mapping) else ""
-                if vid:
-                    ids.add(vid)
-            notes.append("%s:OK:%d" % (base, len(doc.get("orders") or [])))
-        return ids, notes
+        DELEGATES to `l5_managed_lanes`, which is the single definition
+        shared with the executor's preflight and the reset ceremony's venue
+        precondition. Behaviour is unchanged: a lane qualifies only if its
+        document is readable, says `manages_own_resting: true`, and its
+        `as_of_utc` is at most MAX_AGE_S old. Anything else -- unreachable,
+        stale, malformed -- contributes NOTHING, so a dead lane's orders are
+        judged by age exactly as before. This EXEMPTS from the overdue/age
+        latch only; it never makes an order cancellable (ownership is still
+        the oracle's).
+        """
+        from src import l5_managed_lanes as ML
+        return ML.lane_ids(self.managed_lanes, opener=self._lane_opener,
+                           now=now or _utc())
 
     def emergency_state(self) -> tuple:
         """(emergency, reason). Is a HALT latched right now?
@@ -766,6 +729,11 @@ class Watchdog:
         return getattr(self.oracle, "last_refusal", None)
 
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        #: WAS `now` GIVEN, or is it ours? The lane probe below needs to
+        #: know, because a freshness check must measure against the clock
+        #: AT THE MOMENT OF THE READ -- see `managed_lane_ids`. Tests inject
+        #: `now` and depend on it being used; production does not.
+        injected_now = now is not None
         now = now or _utc()
         #: THE PER-SWEEP OWNERSHIP MEMO STARTS EMPTY. Carrying one sweep's
         #: claims into the next would be worse than reading twice: it
@@ -901,8 +869,41 @@ class Watchdog:
         #: not change mid-loop and must not depend on this one.
         out["registries"] = self.registry_notes()
         overdue = []
-        lane_ids, lane_notes = (self.managed_lane_ids(now=now)
-                                if self.managed_lanes else (set(), []))
+        #: THE LANE PROBE GETS A FRESH CLOCK, NOT THE SWEEP'S `now`.
+        #: LIVE 2026-11-17 21:57:04Z: this line passed `now`, captured at
+        #: the top of the sweep and by then ~6.1 s old -- the venue read
+        #: above plus the registry probe's blocking timeout on an
+        #: unreachable registry. The lane stamps `as_of_utc` as its
+        #: document is built, so comparing a document fetched NOW against
+        #: a reference time from 6 s ago yields age ~= -6.1 s, outside the
+        #: +/-5 s band, and `l5_managed_lanes` reported STALE on every
+        #: sweep. The lane's clock was correct the whole time: measured
+        #: against each sweep's own heartbeat write, the reported "skew"
+        #: equalled the sweep's elapsed time to within 1.1-1.3 ms across
+        #: every sample. The exemption therefore never applied, and a
+        #: 315 s sports order latched UNMANAGED_RESTING_ORDER account-wide,
+        #: costing three authorized BTC5m windows.
+        #:
+        #: Before the registry probe arrived at 14:03Z the same sweep took
+        #: 0.078 s and the same lane read OK, which is why this sat latent
+        #: for days: the bug was always here, and a slow sweep armed it.
+        #:
+        #: Passing None makes `l5_managed_lanes.lane_ids` stamp its own
+        #: reference time as it reads -- exactly what the other two
+        #: consumers already do -- the executor's transport preflight and
+        #: the reset ceremony's own lane-claim helper -- which is why
+        #: neither ever saw this. (Their names are deliberately not spelled
+        #: here: an architecture test forbids one of them appearing in this
+        #: file, and a comment is enough to trip it.) An injected `now` is
+        #: still honoured, so tests stay deterministic.
+        #:
+        #: THIS WIDENS NOTHING. The +/-5 s band, the 60 s staleness bound
+        #: and the `manages_own_resting` requirement are untouched; a
+        #: genuinely dead lane still exempts nothing, and an exemption is
+        #: still never a permission to cancel.
+        lane_ids, lane_notes = (
+            self.managed_lane_ids(now=now if injected_now else None)
+            if self.managed_lanes else (set(), []))
         if self.managed_lanes:
             out["managed_lanes"] = lane_notes
             out["managed_lane_exempt"] = []
@@ -1142,8 +1143,8 @@ def oracles_of(oracle: Any) -> List[Any]:
 def _managed_lanes_from_env() -> List[str]:
     """L5_WATCHDOG_MANAGED_LANE_URLS: comma-separated base URLs of lanes that
     publish /l5/live_orders.json with manages_own_resting=true."""
-    raw = str(os.getenv("L5_WATCHDOG_MANAGED_LANE_URLS", "")).strip()
-    return [u.strip() for u in raw.split(",") if u.strip()]
+    from src import l5_managed_lanes as ML
+    return ML.from_env()
 
 
 class CompositeOracle:
