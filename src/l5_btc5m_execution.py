@@ -502,6 +502,153 @@ STRADDLE_CLIP_MAX_USD = D("2.25")
 #: a window can take -- matched inventory pays $1.00 a pair and cannot
 #: lose -- so it is held to one clip's worth, and the per-side cap to two.
 #: Over-asking is CLAMPED DOWN, never honoured: a typo must not widen risk.
+#: =====================================================================
+#: OPTIONAL TAKER PAIR COMPLETION.
+#:
+#: NOTHING HERE IS NEW EXECUTION MACHINERY. Three gates already existed
+#: and all three are kept:
+#:   1. `_order_fault` refuses every non-post_only order outright
+#:      (`TAKER_NEVER_SENT`) -- the adapter's hard block.
+#:   2. `l5_persistent_mode.may_submit` refuses a non-post_only order
+#:      unless the standing envelope grants `taker_allowed`.
+#:   3. `pmus_q1_executor.taker_completion_ok` prices the ALL-IN pair
+#:      including the real taker fee and requires >= 1c locked.
+#: The only change is that (1) gains a narrow, completion-only exception,
+#: and that the economics of (3) are re-checked here against executable
+#: depth and a slippage allowance before it is taken.
+#:
+#: WHY COMPLETION ONLY. A taker ENTRY pays the spread to acquire
+#: directional risk; a taker COMPLETION pays it to retire risk already
+#: held, and only when the resulting pair is locked profitable. The
+#: former is never permitted by this adapter at any setting.
+TAKER_COMPLETION_ENV = "L5_BTC5M_TAKER_COMPLETION"
+#: ticks of adverse move allowed for between pricing and arrival. Charged
+#: AGAINST us, so a larger value is more conservative, not less.
+#: HOW MUCH NOTIONAL A COMPLETION MAY SPEND, which is what makes an
+#: owner's LOSS ceiling hold unconditionally. Under the economics gate a
+#: completed pair cannot lose, so the loss is just the unmatched residual
+#: -- but that argument ASSUMES THE GATE IS RIGHT. This cap bounds the
+#: damage if it is not: with it, the worst case is the unmatched clip
+#: plus this figure plus the fee, even if every contract settled
+#: worthless. Zero is the default and REFUSES completion entirely.
+TAKER_COMPLETION_MAX_USD_ENV = "L5_BTC5M_TAKER_COMPLETION_MAX_USD"
+TAKER_COMPLETION_MAX_USD_CEILING = D("1.00")
+TAKER_SLIPPAGE_TICKS_ENV = "L5_BTC5M_TAKER_SLIPPAGE_TICKS"
+TAKER_SLIPPAGE_TICKS_DEFAULT = 1
+TAKER_SLIPPAGE_TICKS_CEILING = 5
+#: a book older than this cannot price a crossing order
+TAKER_BOOK_MAX_AGE_S = 3.0
+#: the reasons a completion is the ONLY thing that may cross
+TAKER_COMPLETION_REASONS = ("STRADDLE_COMPLETION",)
+
+
+def taker_completion_allowed(default: bool = False) -> bool:
+    """Whether a COMPLETION may cross the spread. Explicit YES only, and
+    this is still only one of three gates."""
+    raw = os.environ.get(TAKER_COMPLETION_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "YES"
+
+
+def taker_completion_max_usd(default: Decimal = D("0")) -> Decimal:
+    """Notional one completion may spend. Unreadable or non-positive keeps
+    the default of 0, which refuses completion rather than guessing a
+    bound; over-asking is CLAMPED DOWN to the code ceiling."""
+    raw = _dec(os.environ.get(TAKER_COMPLETION_MAX_USD_ENV))
+    if raw is None or raw <= ZERO:
+        return default
+    return min(raw, TAKER_COMPLETION_MAX_USD_CEILING)
+
+
+def taker_slippage_ticks(default: int = TAKER_SLIPPAGE_TICKS_DEFAULT) -> int:
+    raw = os.environ.get(TAKER_SLIPPAGE_TICKS_ENV)
+    if raw is None:
+        return default
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    if v < 0:
+        return default
+    return min(v, TAKER_SLIPPAGE_TICKS_CEILING)
+
+
+def completion_taker_fault(order: Mapping[str, Any],
+                           held_qty: Decimal,
+                           held_cost: Decimal) -> Optional[str]:
+    """Why this crossing COMPLETION may not be sent, or None.
+
+    `held_qty`/`held_cost` come from the executor's OWN ledger, never from
+    the order, because the first leg's cost is what decides whether the
+    pair is profitable and a caller that supplied it could make any
+    completion look good.
+
+    The order must carry the book it was priced against -- `ask`,
+    `ask_shares` and `age_s` -- and all three are checked:
+      * a stale book cannot price a crossing order;
+      * `ask_shares` must cover the whole clip, because a partial
+        completion leaves exactly the unmatched leg we were retiring;
+      * the ask is charged `taker_slippage_ticks` WORSE than quoted.
+    The economics then reuse `pmus_q1_executor.taker_completion_ok`,
+    which includes the venue's real taker fee at this account's tier.
+    """
+    if str(order.get("reason")) not in TAKER_COMPLETION_REASONS:
+        return "TAKER_ONLY_FOR_COMPLETION"
+    if held_qty is None or held_qty <= 0:
+        return "NOTHING_TO_COMPLETE"
+    qty = _dec(order.get("qty"))
+    if qty is None or qty <= 0:
+        return "ORDER_UNREADABLE"
+    if qty > held_qty:
+        #: completing MORE than is held would open new directional risk
+        #: on the other side under the name of a hedge
+        return "COMPLETION_EXCEEDS_HELD"
+    book = order.get("book")
+    if not isinstance(book, Mapping):
+        return "TAKER_BOOK_ABSENT"
+    ask = _dec(book.get("ask"))
+    shares = _dec(book.get("ask_shares"))
+    age = book.get("age_s")
+    try:
+        age = float(age)
+    except (TypeError, ValueError):
+        age = None
+    if ask is None or not (ZERO < ask < D("1")):
+        return "TAKER_ASK_UNREADABLE"
+    if age is None or age < 0 or age > TAKER_BOOK_MAX_AGE_S:
+        return "TAKER_BOOK_STALE"
+    if shares is None or shares < qty:
+        return "TAKER_DEPTH_SHORT"
+    #: WHAT WE COULD ACTUALLY PAY, which is the worse of the quoted ask
+    #: plus the slippage allowance and OUR OWN LIMIT. Pricing only
+    #: against the book would leave a hole: a limit set above that figure
+    #: can fill above it, and the economics would have been verified at a
+    #: price we never paid.
+    own = _dec(order.get("price"))
+    if own is None or not (ZERO < own < D("1")):
+        return "ORDER_UNREADABLE"
+    worst = max(ask + (CENT * taker_slippage_ticks()), own)
+    if worst >= D("1"):
+        return "TAKER_PRICE_OFF_GRID"
+    #: ECONOMICS FIRST, so an unprofitable pair is reported as one rather
+    #: than as a notional breach -- the refusal reason is what an operator
+    #: reads at 3am.
+    first_cost = held_cost / held_qty
+    from src import pmus_q1_executor as _q1
+    if not _q1.taker_completion_ok(first_cost, worst):
+        return "TAKER_PAIR_NOT_PROFITABLE"
+    #: THEN the notional cap, judged at the WORST price we could pay. This
+    #: is not an economic test -- it is the bound that makes the owner's
+    #: loss ceiling hold even if the economics above are wrong.
+    cap = taker_completion_max_usd()
+    if cap <= ZERO:
+        return "TAKER_COMPLETION_NOTIONAL_UNSET"
+    if worst * qty > cap:
+        return "TAKER_COMPLETION_NOTIONAL_CAP"
+    return None
+
+
 STRADDLE_MAX_SIDE_USD_CEILING = STRADDLE_CLIP_MAX_USD * D("2")
 STRADDLE_MAX_UNMATCHED_USD_CEILING = STRADDLE_CLIP_MAX_USD
 STRADDLE_REPRICE_TICKS_CEILING = 5
@@ -1344,9 +1491,19 @@ class Btc5mExecutor:
     # --------------------------------------------------------------- place
 
     @staticmethod
-    def _order_fault(order: Mapping[str, Any]) -> Optional[str]:
-        """Why this PLACE can never be sent by this adapter, or None."""
-        if order.get("post_only") is not True:
+    def _order_fault(order: Mapping[str, Any],
+                     taker_ok: bool = False) -> Optional[str]:
+        """Why this PLACE can never be sent by this adapter, or None.
+
+        `taker_ok` defaults False, so every existing caller keeps the
+        unconditional maker-only block. It is True only when the env
+        switch is on, the order is a COMPLETION, and its all-in pair
+        economics passed against executable depth -- see
+        `completion_taker_fault`. The standing envelope refuses a
+        crossing order separately in `may_submit`, so this is one of
+        three gates and not the only one.
+        """
+        if order.get("post_only") is not True and not taker_ok:
             return "TAKER_NEVER_SENT"
         if order.get("intent") != "BUY":
             return "ONLY_MAKER_BUY_SENT"
@@ -1368,7 +1525,28 @@ class Btc5mExecutor:
         def refuse(why: str, **more: Any) -> None:
             report["refused"].append(dict(more, order=dict(order), reason=why))
 
-        fault = self._order_fault(order)
+        #: THE CROSSING PERMISSION, computed here and nowhere else. A
+        #: maker order never reaches any of this. Held inventory comes
+        #: from our OWN ledger so the first leg's cost cannot be supplied
+        #: by the caller.
+        #: ONLY A COMPLETION ENTERS THE NEW PATH. Any other crossing order
+        #: -- a SELL, an exit, a flip, a taker entry -- falls through to
+        #: `_order_fault` and keeps its original TAKER_NEVER_SENT refusal,
+        #: unchanged. Narrowing it here rather than inside the gate keeps
+        #: every pre-existing refusal reason exactly as it was.
+        taker_ok = False
+        if (order.get("post_only") is not True
+                and str(order.get("reason")) in TAKER_COMPLETION_REASONS):
+            if not taker_completion_allowed():
+                return refuse("TAKER_COMPLETION_DISABLED")
+            inv = self.inventory(market)
+            opp = C.DOWN if order.get("side") == C.UP else C.UP
+            held = inv.get(opp) or (ZERO, ZERO)
+            tf = completion_taker_fault(order, held[0], held[1])
+            if tf:
+                return refuse(tf)
+            taker_ok = True
+        fault = self._order_fault(order, taker_ok)
         if fault:
             return refuse(fault)
         side, price, qty = order["side"], _dec(order["price"]), _dec(order["qty"])

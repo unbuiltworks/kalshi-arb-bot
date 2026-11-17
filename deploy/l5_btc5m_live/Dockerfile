@@ -66,5 +66,8 @@ COPY src/l5_taker_completion_policy.py src/l5_taker_completion_policy.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/pmus_fees.py src/pmus_fees.py
+#: reached lazily by l5_btc5m_execution.completion_taker_fault for the
+#: all-in taker pair economics; it imports only pmus_fees, shipped above
+COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 CMD ["python3", "-u", "-m", "src.l5_btc5m_runner"]
