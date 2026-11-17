@@ -221,8 +221,15 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                         "complete_depth": complete_depth,
                         "completion_ttl_s": completion_ttl_s}
                 if uf and df:
+                    # Both original entry orders eventually filled. They
+                    # need not have filled at the same instant; this is NOT
+                    # evidence of sequential rescue or simultaneous fills.
                     pair = up_own + dn_own
                     rows.append(dict(base, state="PAIR_AT_ENTRY",
+                                     up_fill_frame=up.get("fill_index"),
+                                     down_fill_frame=dn.get("fill_index"),
+                                     entry_fills_simultaneous=(
+                                         up.get("fill_index") == dn.get("fill_index")),
                                      pair_cost=str(pair),
                                      pnl=str(((D(1) - pair) * qty
                                               + rebate_per_fill * qty * 2)
