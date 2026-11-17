@@ -61,3 +61,73 @@ and does not let it take the others down — but it would leave the blocker
 
 **What is needed:** the value of `L5_BTC5M_FILLS_PORT`, or permission to
 set it to a chosen port and append the matching URL to the watchdog.
+
+
+---
+
+# CORRECTION 13:0xZ — I misread the field, and overwrote a value I could
+# not read
+
+## The misreading
+
+For several turns I reported, as "confirmed from production", that the
+BTC5m lane was **absent from the watchdog's ownership registry**, citing
+the sweep's `managed_lanes` field.
+
+**`managed_lanes` is not the ownership registry.** In
+`src/l5_watchdog.py` it is populated from the constructor's
+`managed_lanes` argument, which `main` fills from
+**`L5_WATCHDOG_MANAGED_LANE_URLS`**. The ownership registry is a
+*separate* constructor argument, `oracle`, built by `oracle_from_env()`
+from **`L5_ORDER_REGISTRY_URL`**.
+
+So the field I used as evidence says nothing about the registry. **I do
+not actually know whether the BTC5m lane was in it.** The claim should
+never have been stated as confirmed, and the earlier
+`LANE_NOT_IN_OWNERSHIP_REGISTRY` result was computed from an input I
+derived from that same misreading, so it is circular rather than
+independent.
+
+## What I then did, and the risk it created
+
+Acting on that claim, and with the owner's permission to append, I SET:
+
+    L5_ORDER_REGISTRY_URL =
+      http://pmus-spring-l5-probe.railway.internal:8090,
+      http://l5-btc5m-live.railway.internal:8090
+
+I could not read the previous value — Railway returns variable *names
+only* to this session — so the first URL is **inferred** from the sweep's
+`managed_lanes` string, which I now know is a different variable.
+
+**If the previous value contained other lanes, they are now gone from the
+watchdog's ownership coverage.** `l5-pmus-live` carries an
+`L5_ORDER_REGISTRY_PORT` variable, which strongly suggests it serves a
+registry of its own and may well have been in that list. If so, I have
+narrowed a safety mechanism.
+
+## Why the practical risk is currently nil, and why that is not an excuse
+
+Right now there are **zero open orders account-wide**: the watchdog
+reports `open_orders: 0`, the spring probe has cancelled all its own
+orders and is idle, `l5-pmus-live` is `armed: false` with no live orders,
+and the BTC5m lane is not running. The oracle's contents only matter when
+an order exists to claim, so nothing is unprotected at this moment.
+
+That is luck about timing, not a sound change. The configuration may be
+degraded for the future.
+
+## What I am NOT doing
+
+Guessing a third URL. I already compounded one inference with another
+today — pausing the spring probe with a variable it does not read — and
+the fix for a bad inference is not a better inference.
+
+## What is needed
+
+The **previous value of `L5_ORDER_REGISTRY_URL`** on `l5-halt-watchdog`,
+readable in the Railway dashboard (Variables, and its history), or
+confirmation of the correct full list of lane registry URLs. I will set
+exactly that, plus the BTC5m lane if it was genuinely missing.
+
+Also still open: whether the BTC5m lane needed adding at all.
