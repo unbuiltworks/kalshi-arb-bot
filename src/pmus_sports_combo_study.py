@@ -58,8 +58,14 @@ COMBO_TAKER_EXTRA = 0.06
 RESOLVED_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_RESOLVED",
                    "MARKET_STATE_SETTLED")
 SIGNED_RPS = float(os.getenv("PMUS_COMBO_STUDY_SIGNED_RPS", "1.5"))
+# LIVE 13:35Z: one shared bucket let the backfill starve live prints (mid
+# read 700 s+ late and growing). Live gets most of the budget, backfill the
+# rest, and live prints are sampled so ~0.85 new combos/s fit.
+BACKFILL_SHARE = 0.2
+LIVE_SAMPLE = int(os.getenv("PMUS_COMBO_STUDY_LIVE_SAMPLE", "2"))
+MAX_MID_LAG_S = 60.0
 BACKFILL_HOURS = float(os.getenv("PMUS_COMBO_STUDY_BACKFILL_HOURS", "24"))
-BACKFILL_SAMPLE = int(os.getenv("PMUS_COMBO_STUDY_BACKFILL_SAMPLE", "10"))
+BACKFILL_SAMPLE = int(os.getenv("PMUS_COMBO_STUDY_BACKFILL_SAMPLE", "20"))
 MAX_STORE_MB = float(os.getenv("PMUS_COMBO_STUDY_MAX_MB", "200"))
 LEG_RECHECK_S = 600.0
 PAGE = 100
@@ -193,13 +199,17 @@ class ComboStudy:
                  signed_rps: float = SIGNED_RPS,
                  backfill_hours: float = BACKFILL_HOURS,
                  backfill_sample: int = BACKFILL_SAMPLE,
+                 live_sample: Optional[int] = None,
                  sleep: Callable[[float], None] = time.sleep,
                  now: Callable[[], datetime] = lambda: datetime.now(
                      timezone.utc)):
         self.pm_get, self.log = pm_get, log
         self.poll_s, self.summary_s, self.clock = poll_s, summary_s, clock
         self.sleep, self.now = sleep, now
-        self.bucket = Bucket(signed_rps, sleep=sleep)
+        self.bucket = Bucket(signed_rps * (1 - BACKFILL_SHARE), sleep=sleep)
+        self.bf_bucket = Bucket(signed_rps * BACKFILL_SHARE, sleep=sleep)
+        self.live_sample = LIVE_SAMPLE if live_sample is None else live_sample
+        self._tl = threading.local()
         self._signed = signed_get
         self.legs: Dict[str, Optional[List[Mapping[str, Any]]]] = {}
         self.seen_rfq: set = set()
@@ -269,7 +279,8 @@ class ComboStudy:
 
     # ----------------------------------------------------------- reads
     def get(self, path: str) -> Any:
-        self.bucket.take()
+        (self.bf_bucket if getattr(self._tl, "backfill", False)
+         else self.bucket).take()
         return self._signed(path)
 
     def combo_legs(self, symbol: str) -> Optional[List[Mapping[str, Any]]]:
@@ -402,6 +413,10 @@ class ComboStudy:
                 return
             self.seen_trade.add(tid)
         self.agg["trades"] += 1
+        if live and not in_sample(tid, self.live_sample):
+            self.agg["live_unsampled"] = self.agg.get("live_unsampled",
+                                                      0) + 1
+            return
         self.record_trade(t, live=live)
 
     def record_trade(self, t: Mapping[str, Any], live: bool = True) -> None:
@@ -424,10 +439,15 @@ class ComboStudy:
             "executed": t.get("executedTime"), "fair_now": None,
             "source": "live" if live else "backfill"}
         if live:
-            mids = self.mids([str(l.get("symbol")) for l in legs])
-            fv = fair_value(legs, mids)
             ex = _ts(t.get("executedTime"))
             lag = (self.now() - ex).total_seconds() if ex else None
+            fv = None
+            if lag is not None and lag <= MAX_MID_LAG_S:
+                mids = self.mids([str(l.get("symbol")) for l in legs])
+                fv = fair_value(legs, mids)
+            else:
+                self.agg["too_late_to_price"] = self.agg.get(
+                    "too_late_to_price", 0) + 1
             rec.update(fair_now=fv, mid_lag_s=round(lag, 1) if lag else lag)
             if fv is not None and px is not None:
                 margin = sign * (px - fv)            # maker's side of it
@@ -604,6 +624,7 @@ class ComboStudy:
             time.sleep(self.poll_s)
 
     def _run_backfill(self) -> None:
+        self._tl.backfill = True
         try:
             self.backfill()
         except Exception as exc:                          # noqa: BLE001

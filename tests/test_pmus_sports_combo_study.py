@@ -2,6 +2,11 @@
 from src import pmus_sports_combo_study as CS
 from src import pmus_sports_two_sided as M
 
+# the pricing tests below use fixed historical print times and want every
+# print processed; sampling/lag behaviour has its own tests at the end
+CS.LIVE_SAMPLE = 1
+CS.MAX_MID_LAG_S = 1e12
+
 
 def test_published_combo_fee_formulas():
     # docs.polymarket.us/fees: 100 lots at $0.10 -> maker $0.27
@@ -284,3 +289,39 @@ def test_signed_reads_are_rate_limited():
 def test_executed_time_with_nanoseconds_parses():
     assert CS._ts("2026-11-17T12:49:43.413944485Z") == datetime(
         2026, 11, 17, 12, 49, 43, 413944, tzinfo=timezone.utc)
+
+
+def test_live_prints_are_sampled_and_late_prints_are_not_priced(monkeypatch):
+    monkeypatch.setattr(CS, "MAX_MID_LAG_S", 60.0)
+    trades = [tr(f"t{i}") for i in range(200)]
+    cs, logs = study(trades, settle_get({}, {A: 0.5, B: 0.5}),
+                     live_sample=2)
+    cs.poll_trades()
+    done = [k2 for k, k2 in logs if k == "COMBO_STUDY_TRADE"]
+    assert 60 < len(done) < 140                              # ~half
+    assert cs.agg["live_unsampled"] == 200 - len(done)
+    assert all(r["fair_now"] is not None for r in done)      # 30 s old
+    late = dict(tr("late"), executedTime="2026-11-17T12:50:00Z")
+    cs2, logs2 = study([late], settle_get({}, {A: 0.5, B: 0.5}),
+                       live_sample=1)
+    cs2.poll_trades()
+    r = [k2 for k, k2 in logs2 if k == "COMBO_STUDY_TRADE"][0]
+    assert r["fair_now"] is None and cs2.agg["too_late_to_price"] == 1
+    assert len(cs2.pending) == 1             # still scored at settlement
+
+
+def test_backfill_reads_never_draw_on_the_live_budget():
+    cs = CS.ComboStudy(lambda p: {}, lambda p: {}, lambda *a, **k: 0,
+                       signed_rps=1.5)
+    assert abs(cs.bucket.rps - 1.2) < 1e-9 and abs(cs.bf_bucket.rps - 0.3) \
+        < 1e-9
+    taken = []
+    cs.bucket.take = lambda: taken.append("live")
+    cs.bf_bucket.take = lambda: taken.append("bf")
+    cs.get("/x")
+    import threading
+    th = threading.Thread(target=lambda: (setattr(cs._tl, "backfill", True),
+                                          cs.get("/y")))
+    th.start()
+    th.join()
+    assert taken == ["live", "bf"]
