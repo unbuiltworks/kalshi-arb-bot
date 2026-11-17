@@ -67,3 +67,23 @@ def test_no_lanes_configured_is_unchanged(tmp_path):
 def test_from_env_reads_lane_urls(monkeypatch, tmp_path):
     monkeypatch.setenv("L5_WATCHDOG_MANAGED_LANE_URLS", "http://a:1, http://b:2/")
     assert W._managed_lanes_from_env() == ["http://a:1", "http://b:2/"]
+
+
+def test_a_lane_a_few_seconds_ahead_still_exempts(tmp_path):
+    # LIVE 2026-11-17 21:57:04Z: sports lane STALE:-6.1 -> a 315 s sports
+    # completion latched the account. A clock seconds ahead is still fresh.
+    import datetime as dt
+    ahead = (NOW + dt.timedelta(seconds=6.1)).isoformat()
+    v = Venue([open_row("SPORT1", created=OLD)])
+    out = mk(tmp_path, v, lane(doc(["SPORT1"], as_of=ahead))).sweep(now=NOW)
+    assert out["overdue"] == [] and out["managed_lane_exempt"] == ["SPORT1"]
+    assert gate(tmp_path).submissions_permitted() is True
+
+
+def test_a_lane_far_in_the_future_exempts_nothing(tmp_path):
+    import datetime as dt
+    way = (NOW + dt.timedelta(seconds=W.Watchdog.LANE_MAX_FUTURE_S + 5)
+           ).isoformat()
+    v = Venue([open_row("SPORT1", created=OLD)])
+    out = mk(tmp_path, v, lane(doc(["SPORT1"], as_of=way))).sweep(now=NOW)
+    assert out["overdue"] and out["halted"]

@@ -603,6 +603,15 @@ class Watchdog:
 
     #: A lane attestation older than this is not proof of management.
     LANE_MAX_AGE_S = 60.0
+    #: ...and one dated this far AHEAD of `now` is still fresh. LIVE
+    #: 2026-11-17 21:57:04Z: the sports lane read as STALE:-6.1 on every
+    #: sweep (its container clock ahead of this one, and/or the lane read
+    #: landing seconds after the sweep's `now`), so the exemption never
+    #: applied and a 315 s sports completion latched UNMANAGED_RESTING_ORDER
+    #: for the whole account. A FUTURE timestamp is not evidence of a dead
+    #: lane -- staleness is about OLD documents, which LANE_MAX_AGE_S still
+    #: bounds. Bounded so a wildly wrong clock still exempts nothing.
+    LANE_MAX_FUTURE_S = 60.0
 
     def managed_lane_ids(self, now: Optional[dt.datetime] = None) -> tuple:
         """({venue_order_id, ...}, [notes]) attested by a FRESH managed lane.
@@ -637,7 +646,8 @@ class Watchdog:
                 continue
             t = _parse_t(doc.get("as_of_utc"))
             age = None if t is None else (now - t).total_seconds()
-            if age is None or age > self.LANE_MAX_AGE_S or age < -5:
+            if age is None or age > self.LANE_MAX_AGE_S or \
+                    age < -self.LANE_MAX_FUTURE_S:
                 notes.append("%s:STALE:%s" % (base, age))
                 continue
             for row in doc.get("orders") or []:
