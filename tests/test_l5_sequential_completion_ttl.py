@@ -230,5 +230,39 @@ class CompletionTTLTests(unittest.TestCase):
 
 
 
+    def test_first_fill_without_frame_is_unscored(self):
+        # Queue evidence may say filled without identifying WHEN; a TTL,
+        # reduction price, and residual settlement cannot be inferred.
+        frames = [{"t": 100.0}, {"t": 106.0}, {"t": 112.0}]
+        def leg(side, price, observed, *, start, queue_fraction,
+                own_qty, ttl_s):
+            return {"verdict": "PROVEN" if side == self.replay.UP else "IMPOSSIBLE",
+                    "fill_index": None}
+        with tempfile.TemporaryDirectory() as root:
+            pathlib.Path(root, "book.json").touch()
+            with mock.patch.object(self.replay.QS, "load",
+                                   return_value={"market": frames}), \
+                 mock.patch.object(self.replay.QS, "touches",
+                                   return_value=(D("0.49"), D("0.50"))), \
+                 mock.patch.object(self.replay.QS, "leg_outcome",
+                                   side_effect=leg), \
+                 mock.patch.object(self.replay.QS, "filled",
+                                   side_effect=lambda result, *, arm:
+                                       result["verdict"] == "PROVEN"):
+                rows = self.replay.sequential(
+                    [("book.json", "test")], entry_depth=0,
+                    complete_depth=0, scenario=("base", "PROVEN", D("0.5")),
+                    completion_ttl_s=60.0, root=root)
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r["state"] == "INDETERMINATE_FIRST_FILL_TIME"
+                            for r in rows))
+        self.assertTrue(all(r["pnl"] is None for r in rows))
+        self.assertTrue(all("hold_pnl" not in r for r in rows))
+        summary = self.replay.summarise(rows)
+        self.assertEqual(summary[0]["unscored"], 2)
+        self.assertEqual(summary[0]["sequential"], 0)
+        self.assertIsNone(summary[0]["complete_pnl"])
+
+
 if __name__ == "__main__":
     unittest.main()
