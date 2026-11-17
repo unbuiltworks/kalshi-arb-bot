@@ -1213,6 +1213,25 @@ class CompositeOracle:
         return out
 
 
+def registry_urls(raw: Optional[str] = None) -> List[str]:
+    """`L5_ORDER_REGISTRY_URL` as a list. ONE definition of the split.
+
+    WHY THIS IS A FUNCTION. The sweep split this string on commas and the
+    reset ceremony did not: it passed the whole value to a single
+    `RegistryOrderSource`. With two registries configured, every reset
+    therefore failed its venue precondition on an unreachable host, and
+    the 2026-11-17 23:09Z clear could only be made to pass by temporarily
+    rewriting the variable to one url. Two readings of one variable, in
+    two guards that must agree about what the operator configured, is the
+    same defect class as the two lane-freshness copies above.
+
+    Empty entries are dropped, so a trailing comma is not a url.
+    """
+    if raw is None:
+        raw = os.getenv("L5_ORDER_REGISTRY_URL", "")
+    return [u.strip() for u in str(raw).strip().split(",") if u.strip()]
+
+
 def oracle_from_env() -> Optional[Any]:
     """The executors' read-only registries, or None -- which disables cancel.
 
@@ -1221,8 +1240,7 @@ def oracle_from_env() -> Optional[Any]:
     deployment is byte-for-byte unchanged; several build a
     `CompositeOracle` over them.
     """
-    raw = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
-    urls = [u.strip() for u in raw.split(",") if u.strip()]
+    urls = registry_urls()
     if not urls:
         return None
     built = []
