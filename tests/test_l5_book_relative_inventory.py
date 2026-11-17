@@ -248,13 +248,33 @@ class TestCompletionReservation:
 
 # ============================== the measured rates do not reach here
 
-class TestTheMeasuredRatesDoNotTransfer:
-    """THE EVIDENCE FOR MEASUREMENT MODE, as a test rather than a claim.
+class TestThePairIsPricedAsTheRealPair:
+    """A CORRECTION TO AN EARLIER CONCLUSION OF MINE.
 
-    The gate's three rates were measured at 0.08 rungs. Applied to a
-    book-relative pair they do not merely weaken -- they refuse. So
-    book-relative quoting cannot reach the venue on the measured rate
-    set, and no amount of configuration changes that.
+    This class used to assert that the measured rates "do not transfer"
+    to book-relative prices, because the gate refused every such quote
+    with EV_NOT_POSITIVE. That refusal was real but its cause was NOT a
+    transfer problem -- it was two wrong inputs of mine:
+
+      1. `p_lone_win` was the 0.08-measured constant 0.0981. A leg
+         bought at 0.69 does not win 9.8% of the time; it wins about
+         69%, because the price IS the implied probability. The 0.69
+         rung priced at -0.534367 a share on that constant.
+      2. `other_price` came from the FIXED ladder, so the gate valued
+         the pair at 0.30 + 0.08 = 0.38 while the real quoted pair was
+         0.99 -- inflating EV about sixtyfold once (1) was fixed, and
+         admitting rungs on a pair that did not exist.
+
+    Both are fixed: the lone leg's win rate is the rung's own price
+    (which makes its contribution exactly zero -- conservative), and the
+    opposite leg is the other side's BOOK quote. The gate now prices the
+    pair that is actually being quoted.
+
+    WHAT REMAINS UNMEASURED, and it is narrower than I claimed:
+    `p_pair_natural` -- how often the second leg also fills at its quote
+    -- was measured at 0.08 rungs and its value at the bid is unknown.
+    That single number is what the discovery campaign exists to measure,
+    and it is why the FILL_MODEL token is still warranted.
     """
 
     MEASURED = dict(straddle_p_pair_natural=D("0.070"),
@@ -262,21 +282,61 @@ class TestTheMeasuredRatesDoNotTransfer:
                     straddle_p_lone_win=D("0.0981"),
                     straddle_min_ev_per_share=D("0"))
 
-    def test_the_gate_refuses_book_relative_prices_on_measured_rates(self):
-        r = decide(**self.MEASURED)
-        assert legs(r) == []
-        assert "ENTRY_EV" in str(r["why"]), r["why"]
+    def test_the_gate_now_admits_and_prices_the_real_pair(self):
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        assert legs(r), r["evaluation"]["entry"]
+        assert rec(r)["pair_quote_cost"] == "0.99"
 
-    def test_lowering_the_edge_floor_does_not_rescue_it(self):
-        #: a nonpositive EV refuses whatever the floor is set to, so this
-        #: cannot be configured away -- only measured away.
-        r = decide(**dict(self.MEASURED, straddle_min_ev_per_share=D("-5")))
-        assert legs(r) == []
-        assert "ENTRY_EV" in str(r["why"])
+    def test_ev_is_p_pair_natural_times_the_spread(self):
+        #: the whole economics in one line: a matched pair costing
+        #: 1 - spread pays 1.00, so the edge is the spread, weighted by
+        #: how often the pair actually completes.
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == D("0.070") * D("0.01"), g
 
-    def test_the_same_rates_do_admit_the_fixed_008_rung(self):
-        #: the rates are not broken; they are simply about 0.08, which is
-        #: where they were measured.
+    def test_a_wider_spread_earns_proportionally_more(self):
+        wide = {"bid": "0.28", "ask": "0.31", "age_s": 0.1}
+        r = decide(book=wide, straddle_pair_ceiling=D("0.99"),
+                   straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        assert rec(r)["pair_quote_cost"] == "0.97"
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == D("0.070") * D("0.03"), g
+
+    def test_both_legs_are_priced_symmetrically(self):
+        #: a pair is one trade. If the two legs disagreed on what the
+        #: pair costs, one of them is being valued against a leg that
+        #: does not exist -- which is the bug this class records.
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        evs = {g["ev_per_share"] for g in r["evaluation"]["entry_ev"]["rungs"]}
+        assert len(evs) == 1, evs
+
+    def test_the_lone_leg_contributes_exactly_zero(self):
+        #: pw == px makes pw*(1-px) - (1-pw)*px vanish, so we neither
+        #: credit ourselves the half-spread we buy at the bid nor charge
+        #: a loss the market does not imply. The pair carries the
+        #: decision.
+        r = decide(straddle_completion_pair_cost=D("0"),
+                   straddle_p_pair_natural=D("0"),
+                   straddle_p_complete=D("0"),
+                   straddle_p_lone_win=D("0.0981"),
+                   straddle_min_ev_per_share=D("0"))
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == D("0"), g
+        assert legs(r) == [], "zero EV must not be admitted"
+
+    def test_an_unset_pair_rate_still_refuses(self):
+        #: the remaining unmeasured input is still mandatory.
+        r = decide(straddle_completion_pair_cost=D("0"),
+                   straddle_p_pair_natural=None,
+                   straddle_p_complete=D("0"),
+                   straddle_p_lone_win=D("0.0981"))
+        assert legs(r) == []
+        assert "P_PAIR_NATURAL_NOT_SET" in str(r["why"])
+
+    def test_the_fixed_008_rung_is_unaffected(self):
+        #: fixed mode keeps the measured constant, because that is where
+        #: it was measured.
         r = decide(straddle_book_relative=False, straddle_price=D("0.08"),
                    straddle_rungs=(D("0.08"),), clip_usd=D("0.40"),
                    **self.MEASURED)
