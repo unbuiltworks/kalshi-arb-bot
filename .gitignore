@@ -100,3 +100,7 @@ campaign_windows/
 data/l5/competitor_0x8dxd/*.jsonl
 #: the untruncated re-capture (PAGE_CAP=1500); same provenance, ~600MB
 data/l5/competitor_0x8dxd_full/*.jsonl
+#: Phase A read-only book tape (owner-authorized 2026-11-17); large,
+#: regenerable from analysis/l5/btc5m_maker_phase_a.py
+data/l5/phase_a/*.jsonl
+data/l5/phase_a/*.log
