@@ -317,7 +317,7 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 while k < len(frames) - 1:
                     if (completion_ttl_s is not None
                             and float(frames[k]["t"]) - float(frames[j]["t"])
-                            > completion_ttl_s):
+                            >= completion_ttl_s):
                         break        # no time left to even place it
                     age = (float(frames[k]["t"])
                            - float(frames[k - 1]["t"])) if k else 0.0
@@ -392,7 +392,7 @@ def _econ_gate(want: str, paid: D, qty: D,
     limit = D(1) - QS.RESIDUAL_PER_CONTRACT          # 1.0236
     for k in range(j, len(frames) - 1):
         if (ttl_s is not None
-                and float(frames[k]["t"]) - float(frames[j]["t"]) > ttl_s):
+                and float(frames[k]["t"]) - float(frames[j]["t"]) >= ttl_s):
             return k, None, "TTL_BEFORE_A_WORTHWHILE_COMPLEMENT"
         tt = QS.touches(frames[k])
         if tt is None:
