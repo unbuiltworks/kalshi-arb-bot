@@ -1,0 +1,67 @@
+CAPTURE /home/user/kalshi-arb-bot/data/l5/competitor_0x8dxd_full
+  tape begins 2026-03-12 15:42:11Z   ends 2026-08-24 23:25:00Z
+  BTC5m windows with fills 3594   completed & accounted 3579
+
+==============================================================================
+PRIORITY 1 -- SETTLEMENT RECONCILIATION, ALL COMPLETED WINDOWS
+Losers are included: resolution is the venue's winner flag, not redemption.
+
+era     cost basis        n    BUY cost  SELL proc   redemption         net   win%
+AUGUST  UNRECONCILED      3         821          0          822        0.82 100.0%
+AUGUST  no-redeem         6        4181          0         2100    -2080.51  50.0%
+AUGUST  reconciled      851      564369          0       565903     1533.83  99.6%
+MARCH   UNRECONCILED   2514     3827414     765133      3256100   193819.43  62.6%
+MARCH   reconciled      205      129163      13578        76546   -39038.25  23.9%
+
+  trading net, VERIFIED cost basis : $-39584.93
+  trading net, cost basis MISSING  : $+193820.26  <- not a measurement
+
+OBSERVABLE FEES AND REBATES (account-level rows; no market named, so
+never attributed to a window and never folded into a net above):
+    REFERRAL_REWARD   $  49435.87
+    MAKER_REBATE      $  13537.44
+    REWARD            $    583.13
+    TAKER_REBATE      $    122.25
+    YIELD             $      0.23
+    TOTAL             $  63678.92
+  NOTE: no per-trade fee field exists on either v2 route; the TRADE row's
+  usdc_size equals price*size exactly. Trading fees are NOT OBSERVABLE,
+  which is not the same as zero.
+
+==============================================================================
+PRIORITY 3 -- 20 REPRESENTATIVE COMPLETED WINDOWS
+
+stratified allocation (20 windows):
+   AUGUST  cost-basis=missing  PROFIT pool     3 -> 1 picked
+   AUGUST  cost-basis=verified LOSS   pool     6 -> 1 picked
+   AUGUST  cost-basis=verified PROFIT pool   851 -> 5 picked
+   MARCH   cost-basis=missing  LOSS   pool   940 -> 5 picked
+   MARCH   cost-basis=missing  PROFIT pool  1574 -> 6 picked
+   MARCH   cost-basis=verified LOSS   pool   156 -> 1 picked
+   MARCH   cost-basis=verified PROFIT pool    49 -> 1 picked
+
+window                     era      win   fills  buys sells   BUYcost  SELLproc    redeem       NET  imbal%  cost?
+btc-updown-5m-1773418500   MARCH    Down    121   113     8    999.56     76.76    751.63   -171.17   37.9%     OK
+btc-updown-5m-1773468900   MARCH    Down     48    48     0    860.05      0.00   1542.50   +682.45   96.7%   MISS
+btc-updown-5m-1773585300   MARCH    Down    182   150    32    941.65    103.35    991.93   +153.63    6.6%   MISS
+btc-updown-5m-1773607800   MARCH    Down     74    55    19    922.70    190.06    705.36    -27.28   16.1%   MISS
+btc-updown-5m-1773739500   MARCH    Up      308   241    67   2897.73    641.96   2499.64   +243.87    4.1%   MISS
+btc-updown-5m-1773903300   MARCH    Down    249   174    75   3120.04    668.78   2481.96    +30.70   47.2%   MISS
+btc-updown-5m-1773915300   MARCH    Up      114   104    10   1279.01    155.87   1041.76    -81.38   22.3%   MISS
+btc-updown-5m-1773929100   MARCH    Down     77    77     0    667.13      0.00   1043.11   +375.98   40.7%   MISS
+btc-updown-5m-1774058700   MARCH    Up       85    75    10    729.57    129.28    322.43   -277.86   44.7%   MISS
+btc-updown-5m-1774176300   MARCH    Down     77    77     0    526.04      0.00    647.07   +121.03    6.6%     OK
+btc-updown-5m-1774182900   MARCH    Down    113   113     0    939.14      0.00    786.02   -153.12   47.5%   MISS
+btc-updown-5m-1774290300   MARCH    Down    298   230    68   3369.89    820.89   2637.82    +88.81    1.1%   MISS
+btc-updown-5m-1774324200   MARCH    Up      124   113    11   1701.55    242.39    827.17   -632.00   38.0%   MISS
+btc-updown-5m-1786410000   AUGUST   Down      4     4     0    130.93      0.00    132.13     +1.20  100.0%     OK
+btc-updown-5m-1786445400   AUGUST   Up        7     7     0    990.65      0.00   1000.00     +9.35  100.0%     OK
+btc-updown-5m-1786500300   AUGUST   Up        1     1     0    999.07      0.00   1000.00     +0.93  100.0%     OK
+btc-updown-5m-1786541400   AUGUST   Up        1     1     0    889.97      0.00      0.00   -889.97  100.0%   none
+btc-updown-5m-1786944900   AUGUST   Down      1     1     0     99.91      0.00    100.00     +0.09  100.0%     OK
+btc-updown-5m-1787307300   AUGUST   Up       19    19     0    636.21      0.00    636.85     +0.64  100.0%   MISS
+btc-updown-5m-1787315400   AUGUST   Down      1     1     0    990.00      0.00   1000.00    +10.00  100.0%     OK
+
+  cost? OK = redemption reconciles to the tape; MISS = inventory arrived
+  outside the tape (SPLIT), so that row's NET is understated-cost and not
+  trustworthy; none = no redemption row (held only the losing side).

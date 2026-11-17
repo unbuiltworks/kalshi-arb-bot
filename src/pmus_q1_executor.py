@@ -99,10 +99,16 @@ def taker_fee(p: D) -> D:
     return _fees.taker_fee(p)
 
 
-def maker_rebate(p: D) -> D:
+def maker_rebate(p: D, *, when=None) -> D:
     """What the venue CREDITS a maker at the point of trade. Positive, and
-    never netted against a cost here -- it is reported on its own line."""
-    return _fees.maker_rebate(p)
+    never netted against a cost here -- it is reported on its own line.
+
+    `when` exists so evidence recorded under an earlier schedule can be
+    priced at the coefficient that applied to it. PMUS re-tiered on
+    2026-11-14 and this account is Maker Tier 1, which is credited
+    NOTHING, so the present-day answer is zero.
+    """
+    return _fees.maker_rebate(p, when=when)
 
 
 def armed() -> bool:

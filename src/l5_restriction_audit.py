@@ -69,9 +69,19 @@ RESTRICTIONS = [
      "ours": "30 s rest, then cancel; reprice cadence >= 30 s", "class": "(b) owner execution policy, not a venue requirement",
      "l5_field": "reprice_cadence_s", "ledger_refusal": None,
      "blocks": "L5's 2-6 s reprice; fills after 20 s are 22% of ours"},
-    {"id": "maker_only", "name": "Maker-only (post-only), taker disabled",
-     "where": "executor post_only=True everywhere; live_policy 'maker/post-only only; taker disabled'",
-     "ours": "0% taker", "class": "fee/risk policy (owner)",
+    {"id": "maker_only", "name": "Maker-first; taker COMPLETION only, behind three gates",
+     "where": ("entries are post_only=True always and a taker ENTRY is "
+               "refused by the adapter at every setting. A taker "
+               "COMPLETION is permitted only when ALL THREE hold: "
+               "L5_BTC5M_TAKER_COMPLETION=YES, the standing envelope "
+               "grants taker_allowed (l5_persistent_mode.may_submit), and "
+               "l5_btc5m_execution.completion_taker_fault passes -- fresh "
+               "book, depth covering the whole clip, slippage charged "
+               "against us, and an all-in pair locking >=1c after the "
+               "real taker fee at this account's tier"),
+     "ours": ("0% taker REALIZED to date; the capability exists and is "
+              "disabled by default on all three gates"),
+     "class": "fee/risk policy (owner)",
      "l5_field": "taker_share", "ledger_refusal": None,
      "blocks": "L5's taker actions (2-3% of actions by state, 15% of fills overall)"},
     {"id": "concurrency_1", "name": "Concurrency (markets worked at once)",

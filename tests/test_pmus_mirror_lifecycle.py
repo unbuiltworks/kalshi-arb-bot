@@ -127,7 +127,13 @@ def test_matched_settlement_is_one_dollar_a_pair_and_rebate_is_separate():
         # settlement = pairs * $1.00 - cost, and the rebate is its own line
         assert D(p["settlement_implied_pnl_matched_usd"]) == (
             D(p["matched_pairs"]) - D(p["avg_pair_cost"]) * p["matched_pairs"])
-        assert D(p["maker_rebate_accrual_usd"]) > 0
+        #: THE POINT IS THE SEPARATION, NOT THE SIGN. The rebate must be
+        #: its own line and never folded into settlement P&L. It is now
+        #: ZERO because PMUS re-tiered on 2026-11-14 and this account is
+        #: Maker Tier 1, which is credited nothing -- and a zero on its
+        #: own line is exactly the right reporting of that.
+        assert "maker_rebate_accrual_usd" in p
+        assert D(p["maker_rebate_accrual_usd"]) == 0
         assert p["taker_fees_usd"] == "0.0000"
         assert p["liquidity_rewards_usd"] == "0.00"
 

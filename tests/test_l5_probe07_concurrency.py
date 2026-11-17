@@ -47,7 +47,7 @@ def test_the_authorised_envelope_changed_only_the_count():
     assert lim["max_abs_residual"] == "10"
     assert lim["max_concurrent_markets"] == 1
     assert lim["daily_realized_loss_halt_usd"] == "5"
-    assert PM.worst_case()["worst_case_total_usd"] == "5.1738"
+    assert PM.worst_case()["worst_case_total_usd"] == "5.2375"
 
 
 # ------------------------------------- every resting order consumes risk

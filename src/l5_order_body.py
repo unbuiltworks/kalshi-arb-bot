@@ -108,28 +108,81 @@ def venue_price(outcome_side_str: str, price: D) -> D:
     return ONE - px if str(outcome_side_str).upper().endswith("NO") else px
 
 
+#: WHAT THE VENUE DOCUMENTS, read from docs.polymarket.us
+#: /api-reference/orders/create-order on 2026-11-17. Recorded here
+#: because this programme had been ASSUMING PMUS offered only
+#: GOOD_TILL_CANCEL, which is what this builder sent, and assuming no
+#: batch route existed. Both assumptions were wrong.
+#:
+#:   tif   TIME_IN_FORCE_DAY | GOOD_TILL_CANCEL | GOOD_TILL_DATE
+#:         | IMMEDIATE_OR_CANCEL | FILL_OR_KILL
+#:   type  ORDER_TYPE_LIMIT | ORDER_TYPE_MARKET
+#:   participateDontInitiate  "If true, order must rest on the book prior
+#:                             to matching (maker only)"
+#:   also documented: goodTillTime, synchronousExecution, maxBlockTime,
+#:   slippageTolerance {bips, ticks}
+#:   batch routes: POST /v1/orders/batched, /batched/cancel, /batched/modify
+#:
+#: DOCUMENTED IS NOT ACCEPTED. None of these has ever been sent by this
+#: adapter, and acceptance for THIS account and market is unverified: the
+#: credentials live on the Railway service, not in a research container,
+#: so it can only be checked through /v1/order/preview from inside the
+#: lane. Until it is, the proven body is what ships.
+TIF_GTC = "TIME_IN_FORCE_GOOD_TILL_CANCEL"
+TIF_FOK = "TIME_IN_FORCE_FILL_OR_KILL"
+TIF_IOC = "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL"
+DOCUMENTED_TIF = (TIF_GTC, TIF_FOK, TIF_IOC,
+                  "TIME_IN_FORCE_DAY", "TIME_IN_FORCE_GOOD_TILL_DATE")
+#: a crossing completion is the ONLY place a non-GTC tif is permitted
+COMPLETION_TIFS = (TIF_FOK, TIF_IOC)
+
+
 def build(*, slug: str, side: str, price: Any, qty: Any,
-          post_only: bool) -> Dict[str, Any]:
+          post_only: bool, tif: Any = None,
+          slippage_ticks: Any = None) -> Dict[str, Any]:
     """The venue-accepted order body. Proven representation, verbatim.
 
     Callers supply WHAT to trade -- market, outcome, price in that outcome's
     own terms, quantity, maker/taker. This decides HOW to say it.
+
+    `tif` and `slippage_ticks` DEFAULT TO ABSENT and the body is then
+    byte-identical to the one the venue has been accepting all along --
+    `test_the_default_body_is_byte_identical` asserts it. They exist so a
+    crossing COMPLETION can ask for FILL_OR_KILL, which is the venue's own
+    answer to partial completion: fill the whole clip or none of it, rather
+    than leaving half a hedge against the residual it was retiring.
     """
     q = D(str(qty))
     if q <= 0:
         raise ValueError("non-positive quantity %r" % (qty,))
     os_ = outcome_side(side)
-    return {
+    use_tif = TIF_GTC if tif is None else str(tif)
+    if use_tif not in DOCUMENTED_TIF:
+        raise ValueError("tif %r is not documented by the venue" % (tif,))
+    if use_tif != TIF_GTC and post_only:
+        #: "must rest on the book prior to matching" cannot be combined
+        #: with "fill immediately or kill"; the venue would be asked for
+        #: two contradictory things and the safe reading is to refuse
+        raise ValueError("post_only cannot be combined with %s" % use_tif)
+    body = {
         "marketSlug": slug,
         "type": "ORDER_TYPE_LIMIT",
         "price": {"value": str(venue_price(os_, price)), "currency": "USD"},
         "quantity": float(q),
-        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+        "tif": use_tif,
         "participateDontInitiate": bool(post_only),
         "outcomeSide": os_,
         "action": "ORDER_ACTION_BUY",
         "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
     }
+    if slippage_ticks is not None:
+        t = int(slippage_ticks)
+        if t < 0:
+            raise ValueError("negative slippage_ticks %r" % (slippage_ticks,))
+        #: VENUE-ENFORCED, rather than our own estimate of what we might
+        #: pay. It can only ever reject a worse fill than asked for.
+        body["slippageTolerance"] = {"ticks": t}
+    return body
 
 
 def from_intent(intent: Mapping[str, Any], market_slug: str) -> Dict[str, Any]:

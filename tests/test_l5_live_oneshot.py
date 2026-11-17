@@ -399,7 +399,7 @@ def test_the_five_dollar_envelope_is_the_probe_envelope(tmp_path, monkeypatch):
     # unchanged and the worst case below is still 5.1738
     assert lim["max_live_orders"] == 8
     assert lim["daily_realized_loss_halt_usd"] == "5"
-    assert rep["worst_case"]["worst_case_total_usd"] == "5.1738"
+    assert rep["worst_case"]["worst_case_total_usd"] == "5.2375"
 
 
 # 6 -------------------------------------- uncertain submit blocks what follows

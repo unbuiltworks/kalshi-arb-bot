@@ -455,7 +455,11 @@ def test_the_fee_estimate_is_schedule_derived_and_the_actual_is_pending(tmp_path
     assert f["venue_actual"] is None
     assert f["venue_actual_status"] == "PENDING"
     est = f["schedule_estimate"]
-    assert D(est["maker_rebate_usd"]) == D("0.0026")
+    #: ZERO, not 0.0026. The estimate is schedule-derived, and this
+    #: account is Maker Tier 1 after the 2026-11-14 re-tier, which is
+    #: credited nothing. A non-zero estimate here would be the engine
+    #: booking income it will not receive.
+    assert D(est["maker_rebate_usd"]) == D("0")
     assert est["maker_fee_usd"] == "0.0000"
     assert "no" in est["maker_fee_basis"] and "maker-fee" in est["maker_fee_basis"]
     assert est["provenance"]

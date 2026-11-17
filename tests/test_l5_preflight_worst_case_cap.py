@@ -21,14 +21,26 @@ floor, for an all-in worst case of $5.3301 -- the reported figure understated
 it by 90%.
 
 To hold the ALL-IN total at X the principal ceiling must be
-X / (1 + Theta*(1 - floor_p)), which for X = $5 is $4.69.
+X / (1 + Theta*(1 - floor_p)). At the Theta of 0.0695 these tests were
+written against that was $4.69.
+
+THETA IS NO LONGER A LITERAL HERE. PMUS re-tiered the schedule effective
+2026-11-14 and this account is Taker Tier 1 at 0.095, so every figure
+below is DERIVED from `pmus_fees` rather than pinned. A test that pins a
+coefficient stops testing the bound and starts testing the constant.
+
+THE ROUNDING DIRECTION IS PART OF THE BOUND. At 0.095 the exact
+principal is $4.5861, and rounding that to the nearest cent gives $4.59,
+whose all-in total is $5.004 -- through the ceiling. The quantisation
+must therefore be ROUND_FLOOR, and this is the kind of error that only
+shows up when the coefficient moves.
 
 Separately, the cap was HARDCODED, so a tightened ceiling would not have
 shown up in the evidence a campaign is activated on. These tests pin all of it.
 """
 from __future__ import annotations
 
-from decimal import Decimal as D
+from decimal import ROUND_FLOOR, Decimal as D
 
 import pytest
 
@@ -51,21 +63,44 @@ def _wc(monkeypatch, env=None):
     return _Bare().worst_case_from_venue({"tickSize": "0.01"})
 
 
+#: the band floor the preflight prices the fee at, and the coefficient in
+#: force for THIS ACCOUNT. Both read from source, never pinned.
+FLOOR_P = D("0.05")
+THETA = fees.taker_theta()
+
+
+def _expected_fee(cap):
+    """Theta * cap * (1 - floor_p), which is what the preflight computes."""
+    return fees.taker_fee(FLOOR_P, D(str(cap)) / FLOOR_P)
+
+
+def _safe_principal(ceiling):
+    """The largest principal whose ALL-IN total stays within `ceiling`.
+
+    ROUND_FLOOR, not nearest: at Theta 0.095 the exact figure is $4.5861
+    and the nearest cent, $4.59, has an all-in total of $5.004 -- through
+    the ceiling it exists to respect.
+    """
+    exact = D(str(ceiling)) / (D(1) + THETA * (D(1) - FLOOR_P))
+    return exact.quantize(D("0.01"), rounding=ROUND_FLOOR)
+
+
 def test_the_corrected_default_worst_case(monkeypatch):
     out = _wc(monkeypatch)
     assert out["max_committed_usd"] == "5"
     assert out["max_committed_source"] == "default"
     # the cheapest admissible price, not 0.50
     assert out["fee_maximising_price"] == "0.05"
-    assert out["max_taker_fee_usd"] == "0.3301"
-    assert out["worst_case_total_usd"] == "5.3301"
+    assert D(out["max_taker_fee_usd"]) == _expected_fee(5)
+    assert D(out["worst_case_total_usd"]) == D(5) + _expected_fee(5)
 
 
 def test_the_old_p_equals_half_figure_understated_the_fee(monkeypatch):
     """Pins the magnitude of the correction so it cannot silently regress."""
     out = _wc(monkeypatch)
     old_fee = fees.taker_fee(D("0.5"), D("5") / D("0.5"))
-    assert old_fee == D("0.1738")
+    #: the p=0.50 figure, whatever the coefficient: Theta * cap * 0.5
+    assert old_fee == (THETA * D(5) * D("0.5")).quantize(D("0.0001"))
     assert D(out["max_taker_fee_usd"]) > old_fee
     assert D(out["max_taker_fee_usd"]) / old_fee > D("1.8")
 
@@ -79,8 +114,9 @@ def test_the_fee_is_declared_to_be_outside_the_cash_ceiling(monkeypatch):
 
 def test_a_tightened_ceiling_now_shows_up_in_the_evidence(monkeypatch):
     """Previously hardcoded: the preflight would have kept reporting $5."""
-    out = _wc(monkeypatch, "4.69")
-    assert out["max_committed_usd"] == "4.69"
+    tightened = _safe_principal(5)
+    out = _wc(monkeypatch, str(tightened))
+    assert out["max_committed_usd"] == str(tightened)
     assert out["max_committed_source"] == "L5_MAX_CASH_DEPLOYED_USD"
     assert D(out["worst_case_total_usd"]) <= D("5")
 
@@ -90,19 +126,29 @@ def test_an_unusable_setting_falls_back_to_the_figure_it_always_reported(
         monkeypatch, bad):
     out = _wc(monkeypatch, bad)
     assert out["max_committed_usd"] == "5"
-    assert out["worst_case_total_usd"] == "5.3301"
+    assert D(out["worst_case_total_usd"]) == D(5) + _expected_fee(5)
 
 
-def test_the_all_in_principal_for_a_five_dollar_ceiling_is_4_69(monkeypatch):
-    """X / (1 + Theta*(1-floor_p)) with X=5, Theta=0.0695, floor_p=0.05."""
-    principal = (D(5) / (D(1) + D("0.0695") * (D(1) - D("0.05")))
-                 ).quantize(D("0.01"))
-    assert principal == D("4.69")
+def test_the_all_in_principal_for_a_five_dollar_ceiling(monkeypatch):
+    """X / (1 + Theta*(1-floor_p)) with X=5 and floor_p=0.05, at whatever
+    Theta is in force. At 0.0695 that was $4.69; at this account's 0.095
+    it is $4.58, and the WHOLE POINT is that the number follows the
+    schedule instead of being remembered."""
+    principal = _safe_principal(5)
     out = _wc(monkeypatch, str(principal))
     assert D(out["worst_case_total_usd"]) <= D("5")
-    # and the figure derived from the OLD, wrong maximum does not hold
-    out_wrong = _wc(monkeypatch, "4.83")
-    assert D(out_wrong["worst_case_total_usd"]) > D("5")
+    # one cent more breaches it, so the bound is tight and not merely safe
+    out_over = _wc(monkeypatch, str(principal + D("0.01")))
+    assert D(out_over["worst_case_total_usd"]) > D("5")
+
+
+def test_the_principal_tightens_when_the_coefficient_rises():
+    """The migration to this account's tier had to REDUCE the principal a
+    $5 ceiling admits. Pinning the direction, not the digits."""
+    at_top = (D(5) / (D(1) + D("0.0695") * (D(1) - FLOOR_P))).quantize(
+        D("0.01"), rounding=ROUND_FLOOR)
+    assert _safe_principal(5) < at_top
+    assert at_top == D("4.69")
 
 
 def test_the_fee_bound_is_taken_at_the_cheapest_price_under_fixed_principal(
@@ -143,11 +189,13 @@ def test_the_transport_does_not_import_the_probe():
 
 # ===== POINT 3: $4.69 holds an all-in $5 ceiling at EVERY permitted price
 
-PRINCIPAL = D("4.69")
+#: derived, not remembered: the largest principal whose all-in total
+#: stays within the ceiling at the coefficient actually in force.
 ALL_IN = D("5.00")
+PRINCIPAL = _safe_principal(ALL_IN)
 
 
-def test_4_69_holds_all_in_under_5_at_every_permitted_tick_price():
+def test_the_safe_principal_holds_all_in_under_5_at_every_tick_price():
     """Exhaustive over the venue band on 0.01 ticks, at FULL principal --
     which is the binding case, since a smaller size pays a smaller fee."""
     from src import l5_two_sided_probe as TSP
@@ -163,7 +211,8 @@ def test_4_69_holds_all_in_under_5_at_every_permitted_tick_price():
     floor_total = PRINCIPAL + fees.taker_fee(
         D(str(TSP.MIN_PRICE)), PRINCIPAL / D(str(TSP.MIN_PRICE)))
     assert worst == floor_total
-    assert worst == D("4.9997")
+    #: tight: within a cent of the ceiling it is derived from
+    assert D("4.99") <= worst <= ALL_IN
 
 
 def test_any_smaller_size_is_strictly_cheaper():
@@ -181,16 +230,18 @@ def test_one_cent_more_principal_breaches_the_ceiling():
     """So 4.69 is the binding value, not a round number chosen loosely."""
     from src import l5_two_sided_probe as TSP
     floor = D(str(TSP.MIN_PRICE))
-    over = D("4.70")
+    over = PRINCIPAL + D("0.01")
     assert over + fees.taker_fee(floor, over / floor) > ALL_IN
 
 
 def test_the_preflight_reports_that_same_ceiling(monkeypatch):
     """The evidence a campaign is activated on must show it."""
     out = _wc(monkeypatch, str(PRINCIPAL))
-    assert out["max_committed_usd"] == "4.69"
+    assert out["max_committed_usd"] == str(PRINCIPAL)
     assert out["max_committed_source"] == "L5_MAX_CASH_DEPLOYED_USD"
-    assert D(out["worst_case_total_usd"]) == D("4.9997")
+    assert D(out["worst_case_total_usd"]) == PRINCIPAL + _expected_fee(
+        PRINCIPAL)
+    assert D(out["worst_case_total_usd"]) <= ALL_IN
     assert out["fee_is_outside_the_cash_ceiling"] is True
 
 

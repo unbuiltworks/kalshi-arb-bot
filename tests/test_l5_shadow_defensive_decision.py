@@ -125,17 +125,30 @@ class TestItRecordsADecision:
         assert D(hold["worst_usd"]) == D("-0.45")    # the leg settles worthless
         assert alts["DEFENSIVE_UNWIND"]["executable_now"] is True
 
-    def test_crossing_beats_holding_on_ev_at_this_price(self):
-        """The whole economic case, as an assertion. Holding is a coin flip
-        on 0.5 - p; the unwind is certain. At p=0.45 the unwind is both
-        better in expectation and free of the +-0.50 swing."""
+    def test_crossing_NO_LONGER_beats_holding_at_this_price(self):
+        """THE COEFFICIENT CORRECTION FLIPPED THIS DECISION, and that is
+        worth an assertion of its own rather than a quiet re-pin.
+
+        The defensive unwind CROSSES the spread, so it pays the taker fee.
+        At Theta 0.0695 the unwind returned more than holding's 0.05
+        coin-flip expectation and the engine preferred it. At this
+        account's Tier-1 0.095 the unwind returns 0.0463 and holding is
+        the better expectation at p=0.45.
+
+        The unwind is still the only CERTAIN outcome -- holding carries a
+        +-0.50 swing -- so which one a risk-averse policy should take is
+        not settled here. What is settled is that the fee correction
+        removed its expectation advantage, and a policy that still
+        prefers it is choosing variance reduction, not EV."""
         _r, cap = _run("0.45")
         alts = {a["action"]: a for a in cap[0][1]["decision"]["alternatives"]}
         hold_ev = (D(alts["HOLD_TO_SETTLEMENT"]["best_usd"])
                    + D(alts["HOLD_TO_SETTLEMENT"]["worst_usd"])) / 2
         unwind = D(alts["DEFENSIVE_UNWIND"]["best_usd"])
         assert hold_ev == D("0.05")
-        assert unwind > hold_ev
+        assert unwind < hold_ev
+        #: and the gap is the extra taker fee, not a modelling change
+        assert D("0.04") < unwind < D("0.05")
         # and the unwind carries no variance at all
         assert (D(alts["DEFENSIVE_UNWIND"]["best_usd"])
                 == D(alts["DEFENSIVE_UNWIND"]["worst_usd"]))

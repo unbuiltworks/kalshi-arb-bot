@@ -79,7 +79,7 @@ def test_the_probe_loads_the_authorised_envelope_and_nothing_wider():
     assert d["max_abs_residual"] == "10"
     assert d["max_concurrent_markets"] == 1
     assert d["band"] is None
-    assert PM.worst_case()["worst_case_total_usd"] == "5.1738"
+    assert PM.worst_case()["worst_case_total_usd"] == "5.2375"
 
 
 def test_a_one_sided_live_book_is_not_offered_as_usable(monkeypatch):

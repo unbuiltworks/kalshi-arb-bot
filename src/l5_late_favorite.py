@@ -377,11 +377,29 @@ def _marketable(*, p_win: Decimal, ask: Optional[Decimal],
     if room is None or loss_room is None or clip is None or min_qty is None \
             or min_qty <= ZERO:
         return no("BUDGET_UNREADABLE")
-    #: THE LIMIT IS THE DEAREST LADDER LEVEL. We never pay more than the
-    #: strategy's own worst acceptable price, whatever is offered.
-    limit = max(levels) if levels else None
-    if limit is None:
+    #: THE ASK MUST LIE WITHIN THE LADDER, NOT MERELY UNDER ITS TOP.
+    #:
+    #: A ceiling alone admits anything cheaper, and that is how this went
+    #: wrong: with only `ask <= 0.99` the gate bought a 0.22 ask at 2145z
+    #: against a model reading 0.5025 -- a coin-flip called against a 22%
+    #: market, scored as +27c of "edge", and it lost. Three sampled
+    #: entries came in at 0.45, 0.42 and 0.89. None of those is a
+    #: 97-99c favourite; the strategy had quietly become "bet the index
+    #: model beats the market on near-even outcomes", which is a
+    #: different proposition with no evidence behind it.
+    #:
+    #: So the executable band is the LADDER's own range, floor and
+    #: ceiling. It is derived from `levels` rather than written as a new
+    #: constant, so changing the ladder moves the band with it and the
+    #: two can never disagree.
+    if not levels:
         return no("NO_PRICE_LEVELS")
+    floor_, limit = min(levels), max(levels)
+    if ask < floor_:
+        return no("ASK_BELOW_BAND", ask=str(ask), floor=str(floor_),
+                  limit=str(limit),
+                  why=("an offer under the ladder is not a favourite at "
+                       "this strategy's prices, whatever the model says"))
     if ask > limit:
         return no("ASK_ABOVE_LIMIT", ask=str(ask), limit=str(limit))
     if fee_fn is None:

@@ -47,11 +47,12 @@ def test_pmus_adapter_complement_uses_q1_bound_and_never_counts_rebate():
     px, econ = p.complement_price(D("0.48"), D("0.55"), D("0.005"))
     assert px == D("0.500")            # min(0.98-0.48, 0.51 hard, 0.545)
     assert p.maker_fee(D("0.5"), D("1")) == D("0")
-    # 0.0174, not the 0.0150 this line asserted before: PMUS republished the
-    # taker coefficient at 0.0695 effective 12 AM ET 2026-09-17 and this
-    # assertion was pinning the stale one. See tests/test_pmus_fees.py, which
-    # reproduces all 99 published price rows.
-    assert p.taker_fee(D("0.5"), D("1")) == D("0.0174")
+    # 0.0238 at this account's Taker Tier 1 coefficient of 0.095. The
+    # schedule has moved twice now -- 0.06, then 0.0695 effective
+    # 2026-09-17, then re-tiered exchange-wide on 2026-11-14 -- and each
+    # time a pinned literal here was quoting a coefficient the venue no
+    # longer charges us. See tests/test_pmus_fees.py.
+    assert p.taker_fee(D("0.5"), D("1")) == D("0.0238")
 
 
 def test_state_key_is_venue_free_and_inventory_units_are_behavioral():
