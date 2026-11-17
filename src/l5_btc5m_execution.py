@@ -157,6 +157,30 @@ STRADDLE_REPEAT_ENV = "L5_BTC5M_STRADDLE_REPEAT"
 #: straddle's clothes.
 STRADDLE_MAX_SIDE_USD_ENV = "L5_BTC5M_STRADDLE_MAX_SIDE_USD"
 STRADDLE_MAX_UNMATCHED_USD_ENV = "L5_BTC5M_STRADDLE_MAX_UNMATCHED_USD"
+#: STRADDLE only: THE ENTRY-EV GATE'S THREE MEASURED RATES.
+#:
+#: These had NO READER. `Params` declares all three as None and
+#: documents None as the value that REFUSES -- so the gate returned
+#: ENTRY_EV_P_PAIR_NATURAL_NOT_SET on every step of every window and the
+#: mode could not open a single leg. It is the same defect that silently
+#: disabled the late favourite, in the same module, for the same reason:
+#: a param with no env reader sits at its dataclass default forever, and
+#: "refused every time" reads identically to "no opportunity" in a log.
+#:
+#: THEY STAY REFUSING BY DEFAULT. The gate exists so a rung is bought
+#: because it is worth buying; a default rate would manufacture the very
+#: edge it tests for. The owner sets them deliberately. Measured over
+#: 503 shadow windows, for reference and NOT as a default:
+#: p_pair_natural 0.070, p_complete 0.131, p_lone_win 0.0981.
+STRADDLE_P_PAIR_NATURAL_ENV = "L5_BTC5M_STRADDLE_P_PAIR_NATURAL"
+STRADDLE_P_COMPLETE_ENV = "L5_BTC5M_STRADDLE_P_COMPLETE"
+STRADDLE_P_LONE_WIN_ENV = "L5_BTC5M_STRADDLE_P_LONE_WIN"
+#: the fee charged against a rung in the gate's arithmetic, and the edge
+#: a rung must clear after it. Both default to zero, which is the
+#: historical value and the conservative direction for the second
+#: (a zero minimum admits any non-negative EV; raising it narrows).
+STRADDLE_FEE_PER_SHARE_ENV = "L5_BTC5M_STRADDLE_FEE_PER_SHARE"
+STRADDLE_MIN_EV_ENV = "L5_BTC5M_STRADDLE_MIN_EV_PER_SHARE"
 #: STRADDLE only: inventory-aware repricing, in ticks per clip of
 #: imbalance. Absent or zero keeps the fixed limit that cannot drift.
 STRADDLE_REPRICE_TICKS_ENV = "L5_BTC5M_STRADDLE_REPRICE_TICKS"
@@ -440,6 +464,38 @@ def straddle_max_side_usd(default: Decimal = D("0")) -> Decimal:
     if raw is None or raw <= ZERO:
         return default
     return min(raw, STRADDLE_MAX_SIDE_USD_CEILING)
+
+
+def straddle_probability(env_name: str,
+                         default: Optional[Decimal] = None
+                         ) -> Optional[Decimal]:
+    """One of the entry-EV gate's measured rates.
+
+    An absent, unreadable or out-of-range value returns None, which
+    REFUSES the gate rather than guessing a rate. A probability outside
+    (0, 1] is not a probability, so it refuses too instead of being
+    clamped into one -- a clamped rate is a rate nobody measured.
+    """
+    raw = _dec(os.environ.get(env_name))
+    if raw is None or raw <= ZERO or raw > D("1"):
+        return default
+    return raw
+
+
+def straddle_fee_per_share(default: Decimal = D("0")) -> Decimal:
+    raw = _dec(os.environ.get(STRADDLE_FEE_PER_SHARE_ENV))
+    if raw is None or raw < ZERO:
+        return default
+    return raw
+
+
+def straddle_min_ev_per_share(default: Decimal = D("0")) -> Decimal:
+    """The edge a rung must clear. A NEGATIVE value would admit a rung
+    the gate priced as a loss, so it refuses to the default instead."""
+    raw = _dec(os.environ.get(STRADDLE_MIN_EV_ENV))
+    if raw is None or raw < ZERO:
+        return default
+    return raw
 
 
 def straddle_max_unmatched_usd(default: Decimal = D("0")) -> Decimal:
@@ -1941,8 +1997,36 @@ class Btc5mExecutor:
             # below is additive and lives in the straddle branch instead.
             over.update(entry_mode=C.STRADDLE, hedge_enabled=False,
                         reserve_mode="NONE",
+                        #: THE GATE'S RATES, which had no reader and so
+                        #: refused the mode on every step. Still refusing
+                        #: unless the owner sets them.
+                        straddle_p_pair_natural=straddle_probability(
+                            STRADDLE_P_PAIR_NATURAL_ENV,
+                            self.params.straddle_p_pair_natural),
+                        straddle_p_complete=straddle_probability(
+                            STRADDLE_P_COMPLETE_ENV,
+                            self.params.straddle_p_complete),
+                        straddle_p_lone_win=straddle_probability(
+                            STRADDLE_P_LONE_WIN_ENV,
+                            self.params.straddle_p_lone_win),
+                        straddle_fee_per_share=straddle_fee_per_share(
+                            self.params.straddle_fee_per_share),
+                        straddle_min_ev_per_share=straddle_min_ev_per_share(
+                            self.params.straddle_min_ev_per_share),
                         straddle_completion_pair_cost=completion_pair_cost(
                             self.params.straddle_completion_pair_cost),
+                        #: HOW that completion is executed. Driven by the
+                        #: SAME owner switches as the adapter's crossing
+                        #: gate on purpose: one variable to set, two
+                        #: independent places that enforce it. The
+                        #: controller decides against the book it was
+                        #: given; `completion_taker_fault` re-verifies
+                        #: against the live book at submit time with its
+                        #: own depth haircut and notional cap, and either
+                        #: refusing is enough to keep the order resting.
+                        completion_cross_enabled=taker_completion_allowed(),
+                        completion_cross_slippage_ticks=taker_slippage_ticks(),
+                        completion_cross_min_margin=taker_min_margin(),
                         straddle_price=straddle_price(
                             self.params.straddle_price),
                         straddle_rungs=straddle_rungs(
