@@ -728,6 +728,11 @@ class Watchdog:
         return getattr(self.oracle, "last_refusal", None)
 
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        #: WAS `now` GIVEN, or is it ours? The lane probe below needs to
+        #: know, because a freshness check must measure against the clock
+        #: AT THE MOMENT OF THE READ -- see `managed_lane_ids`. Tests inject
+        #: `now` and depend on it being used; production does not.
+        injected_now = now is not None
         now = now or _utc()
         #: THE PER-SWEEP OWNERSHIP MEMO STARTS EMPTY. Carrying one sweep's
         #: claims into the next would be worse than reading twice: it
@@ -863,8 +868,39 @@ class Watchdog:
         #: not change mid-loop and must not depend on this one.
         out["registries"] = self.registry_notes()
         overdue = []
-        lane_ids, lane_notes = (self.managed_lane_ids(now=now)
-                                if self.managed_lanes else (set(), []))
+        #: THE LANE PROBE GETS A FRESH CLOCK, NOT THE SWEEP'S `now`.
+        #: LIVE 2026-11-17 21:57:04Z: this line passed `now`, captured at
+        #: the top of the sweep and by then ~6.1 s old -- the venue read
+        #: above plus the registry probe's blocking timeout on an
+        #: unreachable registry. The lane stamps `as_of_utc` as its
+        #: document is built, so comparing a document fetched NOW against
+        #: a reference time from 6 s ago yields age ~= -6.1 s, outside the
+        #: +/-5 s band, and `l5_managed_lanes` reported STALE on every
+        #: sweep. The lane's clock was correct the whole time: measured
+        #: against each sweep's own heartbeat write, the reported "skew"
+        #: equalled the sweep's elapsed time to within 1.1-1.3 ms across
+        #: every sample. The exemption therefore never applied, and a
+        #: 315 s sports order latched UNMANAGED_RESTING_ORDER account-wide,
+        #: costing three authorized BTC5m windows.
+        #:
+        #: Before the registry probe arrived at 14:03Z the same sweep took
+        #: 0.078 s and the same lane read OK, which is why this sat latent
+        #: for days: the bug was always here, and a slow sweep armed it.
+        #:
+        #: Passing None makes `l5_managed_lanes.lane_ids` stamp its own
+        #: reference time as it reads -- exactly what the other two
+        #: consumers (`l5_pmus_transport._managed_lane_ids` and
+        #: `scripts/l5_halt_reset.managed_lane_claims`) already do, which
+        #: is why neither ever saw this. An injected `now` is still
+        #: honoured, so tests stay deterministic.
+        #:
+        #: THIS WIDENS NOTHING. The +/-5 s band, the 60 s staleness bound
+        #: and the `manages_own_resting` requirement are untouched; a
+        #: genuinely dead lane still exempts nothing, and an exemption is
+        #: still never a permission to cancel.
+        lane_ids, lane_notes = (
+            self.managed_lane_ids(now=now if injected_now else None)
+            if self.managed_lanes else (set(), []))
         if self.managed_lanes:
             out["managed_lanes"] = lane_notes
             out["managed_lane_exempt"] = []
