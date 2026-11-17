@@ -54,26 +54,43 @@ def test_the_flat_regime_coefficients_are_still_the_republished_ones():
     assert F.maker_theta(FLAT_INSTANT) == D("0.0125")
 
 
-def test_the_current_schedule_is_this_accounts_tier_and_not_the_top_tier():
-    """THE DEFECT THIS FIXES. 0.0695 is now Taker Tier 4. Reading it as the
-    current coefficient quotes the BEST tier to an account on the WORST,
-    understating the taker fee by 37% -- and the fee-safe complement bound
-    is derived from the taker fee, so understating it LOOSENS a bound."""
+def test_this_account_qualifies_for_the_worst_tier_on_both_schedules():
+    """THE DEFECT THIS DOCUMENTS. 0.0695 is now Taker Tier 4. This account
+    is Tier 1 on both schedules: 0.095 taker and NO maker rebate."""
     assert F.tiered() is True
-    assert F.taker_theta() == D("0.095")
-    assert F.maker_theta() == D("0")
+    assert F.account_thetas() == (D("0.095"), D("0"))
     # the top tier is still reachable, but only by asking for it
     assert F.thetas(taker_volume_usd=D("250000"),
                     maker_volume_usd=D("200000000")) == (D("0.0695"),
                                                          D("0.0104"))
 
 
-def test_an_unspecified_tier_resolves_to_the_worst_one_for_us():
-    """Guessing the best tier is unsafe in BOTH directions: it understates
-    what we pay and credits a rebate we do not receive."""
-    assert F.thetas() == (D("0.095"), D("0"))
-    assert F.taker_theta() == max(c for _f, c in F.TAKER_FEE_TIERS)
-    assert F.maker_theta() == min(c for _f, c in F.MAKER_REBATE_TIERS)
+def test_the_default_is_deliberately_UNCHANGED_so_no_risk_bound_moved():
+    """Resolving an unspecified tier to this account's Tier 1 is the right
+    economics and it MOVES RISK BOUNDS: the preflight's worst case under
+    the authorised $5 ceiling went $5.1738 -> $5.2375, through the
+    ceiling, and 28 tests across the preflight, envelope, probe-manifest,
+    complement-bound and rebate-accounting surfaces changed their answers
+    against a baseline with one pre-existing failure.
+
+    Changing what the risk gates believe a fee to be is money-capable
+    whatever file it lives in. So the default stays put until the owner
+    approves the migration, and this test is what stops it drifting."""
+    assert F.thetas() == (D("0.0695"), D("0.0125"))
+    assert F.taker_theta() == D("0.0695")
+    assert F.maker_theta() == D("0.0125")
+    assert F.taker_fee(D("0.50")) == D("0.0174")
+    # and the account figure is NOT the default, which is the whole point
+    assert F.account_thetas() != F.thetas()
+
+
+def test_the_account_figure_is_the_worst_tier_on_both_tables():
+    """What this account qualifies for is the extreme of each table: the
+    highest taker coefficient and the lowest (zero) maker rebate."""
+    at, am = F.account_thetas()
+    assert at == max(c for _f, c in F.TAKER_FEE_TIERS)
+    assert am == min(c for _f, c in F.MAKER_REBATE_TIERS)
+    assert am == D("0")
 
 
 @pytest.mark.parametrize("vol,coef", [
@@ -112,26 +129,28 @@ def test_the_tier_boundary_is_midnight_ET_expressed_in_UTC():
     """12:00 AM ET, Saturday 2026-11-14, when ET was UTC-5 (EST)."""
     assert F.TIER_REGIME_UTC == dt.datetime(
         2026, 11, 14, 5, 0, tzinfo=dt.timezone.utc)
-    assert F.taker_theta(F.TIER_REGIME_UTC) == D("0.095")
-    assert F.taker_theta(
-        F.TIER_REGIME_UTC - dt.timedelta(seconds=1)) == D("0.0695")
-    assert F.maker_theta(
-        F.TIER_REGIME_UTC - dt.timedelta(seconds=1)) == D("0.0125")
+    # the ACCOUNT figure is what moves at the boundary; the default does
+    # not, by design
+    assert F.account_thetas(F.TIER_REGIME_UTC) == (D("0.095"), D("0"))
+    assert F.account_thetas(
+        F.TIER_REGIME_UTC - dt.timedelta(seconds=1)) == (D("0.0695"),
+                                                          D("0.0125"))
 
 
-def test_the_taker_fee_actually_went_UP_for_this_account():
-    """The whole point: the bound tightened, it did not move cosmetically."""
-    before = F.taker_fee(D("0.44"), D(100), when=FLAT_INSTANT)
-    now = F.taker_fee(D("0.44"), D(100))
-    assert now > before
-    assert (now / before - 1) > D("0.36")
+def test_the_taker_fee_this_account_now_faces_is_materially_HIGHER():
+    """How much the migration would tighten bounds by, quantified."""
+    top = F.taker_fee(D("0.44"), D(100))
+    ours = F.taker_fee(D("0.44"), D(100),
+                       taker_volume_usd=F.ACCOUNT_TAKER_VOLUME_USD)
+    assert ours > top
+    assert (ours / top - 1) > D("0.36")
 
 
 def test_the_september_credits_are_not_evidence_of_a_tiered_rebate():
     """CREDITED_OBSERVED is from 2026-09-06/07, inside the FLAT regime. It
     must not be read as proof this account is paid a rebate today."""
     assert F.CREDITED_OBSERVED["rows"] == 25
-    assert F.maker_theta() == D("0")
+    assert F.account_thetas()[1] == D("0")
     assert F.provenance()["maker_rebate_available_to_this_account"] is False
 
 
@@ -156,7 +175,7 @@ def test_the_execution_path_reads_the_schedule_and_not_a_local_copy():
     assert q1.taker_fee(D("0.50")) == F.taker_fee(D("0.50"))
     assert q1.maker_rebate(D("0.50")) == F.maker_rebate(D("0.50"))
     # and the number actually moved, so this test would have failed before
-    assert q1.taker_fee(D("0.50")) == D("0.0238")   # Tier 1, 0.095
+    assert q1.taker_fee(D("0.50")) == D("0.0174")
 
 
 def test_no_execution_module_still_hardcodes_the_stale_coefficient():
@@ -202,6 +221,8 @@ def test_the_taker_rebate_is_zero_for_this_account():
     ("249999", "0"), ("250000", "0.03"), ("1000000", "0.05"),
     ("10000000", "0.10"), ("25000000", "0.15"), ("50000000", "0.30")])
 def test_the_tiered_taker_rebate_table(vol, pct):
+    """The taker-rebate table IS switched by date, because it is reporting
+    only -- no risk bound is derived from it."""
     assert F.taker_rebate_pct(D(vol)) == D(pct)
 
 
@@ -217,6 +238,9 @@ def test_the_maker_rebate_is_returned_as_a_positive_credit():
     current tier it is zero, which is asserted separately."""
     assert F.maker_rebate(D("0.50"), when=FLAT_INSTANT) > 0
     assert F.maker_rebate(D("0.50"), maker_volume_usd=D("200000000")) > 0
+    # ...and zero at this account's tier, which is asserted separately
+    assert F.maker_rebate(
+        D("0.50"), maker_volume_usd=F.ACCOUNT_MAKER_VOLUME_USD) == 0
 
 
 def test_the_crypto_adapter_reports_the_literal_clock_and_the_BRTI_rule():
@@ -243,7 +267,7 @@ def test_an_undeclared_product_is_refused():
 
 def test_the_adapter_quotes_the_live_coefficient_not_a_frozen_string():
     from src.l5_venue_adapter import PMUSAdapter
-    assert "0.095" in PMUSAdapter().provenance()["fees"]
+    assert "0.0695" in PMUSAdapter().provenance()["fees"]
 
 
 # --------------------------------------------------------------------------

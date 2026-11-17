@@ -260,13 +260,19 @@ def main():
     byw, settle = load()
     #: only windows we watched from the start are usable: a window whose
     #: insertion moment we missed cannot have a queue-at-insertion.
-    late = sorted(s for s in byw if byw[s] and byw[s][0]["t"] > MAX_JOIN_T)
-    usable = sorted((s for s in byw if byw[s]
-                     and byw[s][0]["t"] <= MAX_JOIN_T),
+    #: JOIN TIME, not first-available time. A window the venue served late
+    #: is still an unbiased sample if we were polling from its open; a
+    #: window WE picked up late is not. Rows written before `join_t`
+    #: existed fall back to the first sample's t.
+    def jt(s):
+        v = byw[s][0].get("join_t")
+        return byw[s][0]["t"] if v is None else v
+    late = sorted(s for s in byw if byw[s] and jt(s) > MAX_JOIN_T)
+    usable = sorted((s for s in byw if byw[s] and jt(s) <= MAX_JOIN_T),
                     key=lambda s: byw[s][0]["epoch"])
     if late:
-        print("EXCLUDED %d window(s) joined later than t+%ds (biased sample,"
-              " not a weaker one): %s"
+        print("EXCLUDED %d window(s) WE joined later than t+%ds (biased"
+              " sample, not a weaker one): %s"
               % (len(late), MAX_JOIN_T, ", ".join(x[-6:] for x in late[:8])))
     firsts = [byw[s][0]["t"] for s in usable]
     print("tape: %d windows sampled, %d settled" % (len(byw), len(settle)))

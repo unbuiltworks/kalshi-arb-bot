@@ -37,9 +37,20 @@ bias every quantity here, so a window is skipped unless it is picked up
 within `MAX_JOIN_T` seconds of its open, and the 200-window target
 counts clean windows only.
 
-MARKET-CREATION LATENCY IS ITSELF A MEASUREMENT. The venue does not
-create a BTC5m market until at or after its nominal open: polled at
-00:27:09Z, the 00:30z window returned "market with slug ... not found".
+MARKET-CREATION LATENCY IS ITSELF A MEASUREMENT, AND IT MUST NOT BE
+CONFLATED WITH OUR OWN RETRY COST. The venue answers an uncreated market
+with HTTP 404. The first version retried every failure three times with
+backoff, so each miss cost about five seconds and `first_available_t`
+read 125s and 166s on windows where the real latency was unknown -- the
+number was measuring our own politeness. A 404 is now a DEFINITE answer
+and is never retried, so the poll costs one request and the latency is
+the venue's.
+
+Equally, WHEN WE STARTED POLLING is a different thing from WHEN THE VENUE
+SERVED THE MARKET, and conflating them would discard every window for the
+venue's own latency. Each sample therefore carries `join_t` (how far into
+the window we picked it up, which decides whether the sample is unbiased)
+alongside `t` (the instant of the sample itself).
 So there is a window in which NO order can be inserted at all, and the
 queue we would join is whatever exists at the first queryable instant --
 not at t=0. The collector polls at 1 Hz from t=0 and records
@@ -65,7 +76,7 @@ RESUMABLE. Appends, and records the window slug on every row, so a
 container restart loses at most the window in flight. Re-running
 continues the same tape rather than starting a new one.
 """
-import json, os, sys, threading, time, urllib.request, datetime
+import json, os, sys, threading, time, urllib.error, urllib.request, datetime
 
 OUT = os.environ.get("PHASE_A_OUT") or \
     "/home/user/kalshi-arb-bot/data/l5/phase_a/btc5m_books.jsonl"
@@ -77,12 +88,21 @@ RUNGS = (0.40, 0.42, 0.47)
 MAX_JOIN_T = 30
 
 
+NOT_FOUND = {"__not_found__": True}
+
+
 def get(url, tries=3):
+    """A 404 is a DEFINITE answer -- the market does not exist yet -- and
+    retrying it would charge our own backoff to the venue's latency."""
     for i in range(tries):
         try:
             return json.load(urllib.request.urlopen(
                 urllib.request.Request(url, headers={"User-Agent": "research-client"}),
                 timeout=12))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return NOT_FOUND
+            time.sleep(0.4 * (i + 1))
         except Exception:
             time.sleep(0.4 * (i + 1))
     return None
@@ -115,7 +135,7 @@ def current_window():
     return "cpc-btc-updown-5m-" + n.strftime("%Y-%m-%d-%H%Mz"), int(n.timestamp())
 
 
-def sample(slug, epoch, fh):
+def sample(slug, epoch, fh, join_t=None):
     b = get("%s/v1/markets/%s/book" % (BASE, slug))
     q = get("%s/v1/markets/%s/bbo" % (BASE, slug))
     if not (b and isinstance(b.get("marketData"), dict)
@@ -126,7 +146,7 @@ def sample(slug, epoch, fh):
     offs = [[px(o), float(o.get("qty") or 0)] for o in (md.get("offers") or [])]
     rec = {
         "slug": slug, "epoch": epoch, "ts": int(time.time()),
-        "t": int(time.time()) - epoch,
+        "t": int(time.time()) - epoch, "join_t": join_t,
         "bids": [x for x in bids if x[0] is not None],
         "offers": [x for x in offs if x[0] is not None],
         "best_bid": val(qd, "bestBid"), "best_ask": val(qd, "bestAsk"),
@@ -215,7 +235,7 @@ def main():
             t = int(time.time()) - epoch
             if t >= 300:
                 break
-            got = sample(slug, epoch, fh)
+            got = sample(slug, epoch, fh, join_t)
             if got and first_t is None:
                 first_t = t
             if not got:

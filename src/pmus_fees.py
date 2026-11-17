@@ -57,14 +57,29 @@ is exactly the Tier-1 taker coefficient, and the maker rebate needs
 $10,000,000 of 30-day maker volume against this account's ~$38,880/month
 of capacity under its ceilings -- 257x short.
 
-WHY AN UNKNOWN TIER RESOLVES TO THE WORST ONE. Asking for a fee without
-saying what volume earned it used to be answerable; under a tiered
-schedule it is not. Defaulting to Tier 4 would understate our taker cost
-by 37% and overstate a rebate we do not receive -- both in the unsafe
-direction. So an unspecified volume returns the worst taker coefficient
-and no maker rebate. A caller that genuinely wants the published top tier
-must say so, which is what `tests/test_pmus_fees.py` does to reproduce
-the captured 99-row table.
+WHY THE DEFAULT STILL RETURNS THE PUBLISHED TOP-TIER COEFFICIENTS, FOR
+NOW. Resolving an unspecified tier to this account's Tier 1 is the
+*correct* economics and it was tried. It MOVES RISK BOUNDS: with taker
+0.095 the preflight's worst case under the authorised $5 ceiling goes
+from $5.1738 to $5.2375 -- through the ceiling -- and the all-in
+principal a $5 ceiling admits is no longer $4.69. Measured: 28 tests
+across the preflight, envelope, probe-manifest, complement-bound and
+rebate-accounting surfaces change their answers, against a baseline with
+one pre-existing failure.
+
+Changing what the risk gates believe a fee to be is a MONEY-CAPABLE
+change in effect, whatever file it lives in, so it is not made here.
+`thetas()` with no volumes therefore returns exactly what it returned
+before this module knew about tiers, and every existing caller is
+byte-for-byte unchanged.
+
+WHAT IS AVAILABLE INSTEAD. `account_thetas()` returns what this account
+actually qualifies for (0.095 taker, no maker rebate), and
+`thetas(taker_volume_usd=..., maker_volume_usd=...)` resolves any tier
+explicitly. Migrating the EV and risk path onto `account_thetas` is the
+change that makes the programme's numbers true, and it needs owner
+approval because it tightens live bounds. Until then the defect is
+DOCUMENTED AND TESTED here rather than silently applied.
 
 NOTE ON `CREDITED_OBSERVED` BELOW. Those 25 credits are from 2026-09-06/07,
 inside the FLAT regime, and they reproduce at 0.0125. They are not
@@ -155,21 +170,42 @@ def tiered(when: Optional[dt.datetime] = None) -> bool:
 def thetas(when: Optional[dt.datetime] = None, *,
            taker_volume_usd: Optional[D] = None,
            maker_volume_usd: Optional[D] = None) -> Tuple[D, D]:
-    """(taker, maker) coefficients in force at `when`; now by default.
+    """(taker, maker) coefficients at `when`; now by default.
 
-    Under the tiered schedule the volumes select the tier. An UNSPECIFIED
-    volume resolves to the WORST tier for us -- the highest taker
-    coefficient and no maker rebate -- because guessing the best tier
-    understates cost and overstates credit, and the fee-safe complement
-    bound is derived from the taker fee.
+    With volumes given, the tier tables resolve them. With volumes
+    OMITTED this returns the published top-tier/flat coefficients, which
+    is exactly what it returned before tiers existed -- deliberately, so
+    that no risk bound moves without approval. See the header, and use
+    `account_thetas()` for what this account qualifies for.
     """
     at = _at(when)
-    if at >= TIER_REGIME_UTC:
+    if at >= TIER_REGIME_UTC and (taker_volume_usd is not None
+                                  or maker_volume_usd is not None):
         tv = D("0") if taker_volume_usd is None else D(str(taker_volume_usd))
         mv = D("0") if maker_volume_usd is None else D(str(maker_volume_usd))
         return (_resolve(TAKER_FEE_TIERS, tv),
                 _resolve(MAKER_REBATE_TIERS, mv))
     return THETA_FROM if at >= THETA_CHANGE_UTC else THETA_BEFORE
+
+
+#: this account's qualifying volumes. Both are effectively zero against
+#: the schedule's thresholds; see ACCOUNT_TIER_BASIS.
+ACCOUNT_TAKER_VOLUME_USD = D("0")
+ACCOUNT_MAKER_VOLUME_USD = D("0")
+
+
+def account_thetas(when: Optional[dt.datetime] = None) -> Tuple[D, D]:
+    """(taker, maker) coefficients THIS ACCOUNT actually qualifies for.
+
+    Under the tier regime that is Taker Tier 1 (0.095) and Maker Tier 1
+    (no rebate at all). Before it, the flat schedule applied to everyone
+    and this equals `thetas`.
+
+    NOT yet wired into the EV or risk path: doing so tightens live bounds
+    and is a money-capable change pending owner approval.
+    """
+    return thetas(when, taker_volume_usd=ACCOUNT_TAKER_VOLUME_USD,
+                  maker_volume_usd=ACCOUNT_MAKER_VOLUME_USD)
 
 
 def taker_theta(when: Optional[dt.datetime] = None, *,
@@ -265,9 +301,11 @@ def provenance(when: Optional[dt.datetime] = None) -> dict:
         "account_tier_basis": ACCOUNT_TIER_BASIS if tiered(when) else None,
         "maker_rebate_available_to_this_account": (
             not tiered(when)),
-        "unspecified_tier_resolves_to": ("the worst tier for us: highest "
-                                         "taker coefficient, no maker "
-                                         "rebate"),
+        "account_thetas": [str(x) for x in account_thetas(when)],
+        "default_thetas_are_top_tier_pending_approval": (
+            "thetas() with no volumes returns the published top-tier "
+            "coefficients so no risk bound moves without approval; "
+            "account_thetas() is what this account qualifies for"),
     }
 
 
