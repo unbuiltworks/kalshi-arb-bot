@@ -76,7 +76,8 @@ RESUMABLE. Appends, and records the window slug on every row, so a
 container restart loses at most the window in flight. Re-running
 continues the same tape rather than starting a new one.
 """
-import json, os, sys, threading, time, urllib.error, urllib.request, datetime
+import collections, json, os, sys, threading, time, urllib.error
+import urllib.request, datetime
 
 OUT = os.environ.get("PHASE_A_OUT") or \
     "/home/user/kalshi-arb-bot/data/l5/phase_a/btc5m_books.jsonl"
@@ -90,10 +91,21 @@ MAX_JOIN_T = 30
 
 NOT_FOUND = {"__not_found__": True}
 
+#: WHY a poll failed, counted per window. Without this the collector
+#: cannot tell "the venue has not created the market" from "this
+#: container lost the network", and I guessed wrong once already: a
+#: window showed 75 failed polls and first availability at t+299, which I
+#: read as venue latency and then as rate limiting. Neither: 15
+#: consecutive 1 Hz polls of a live window all returned 200, and the
+#: container was being restarted at the time. A failure reason is cheap;
+#: a wrong inference is not.
+FAILS = collections.Counter()
+
 
 def get(url, tries=3):
     """A 404 is a DEFINITE answer -- the market does not exist yet -- and
     retrying it would charge our own backoff to the venue's latency."""
+    last = None
     for i in range(tries):
         try:
             return json.load(urllib.request.urlopen(
@@ -101,10 +113,14 @@ def get(url, tries=3):
                 timeout=12))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
+                FAILS["http_404"] += 1
                 return NOT_FOUND
+            last = "http_%d" % exc.code
             time.sleep(0.4 * (i + 1))
-        except Exception:
+        except Exception as exc:
+            last = type(exc).__name__
             time.sleep(0.4 * (i + 1))
+    FAILS[last or "unknown"] += 1
     return None
 
 
@@ -184,7 +200,8 @@ def settle_read(slug, epoch):
     return out
 
 
-def _settle_bg(slug, epoch, sfh, lock, first_t=None, unavailable=0):
+def _settle_bg(slug, epoch, sfh, lock, first_t=None, unavailable=0,
+               fail_reasons=None):
     try:
         out = settle_read(slug, epoch)
     except Exception as exc:
@@ -194,6 +211,9 @@ def _settle_bg(slug, epoch, sfh, lock, first_t=None, unavailable=0):
     #: the market at all
     out["first_available_t"] = first_t
     out["unavailable_polls"] = unavailable
+    #: 404 means the venue had not created the market; anything else is
+    #: OUR problem and must never be reported as venue latency.
+    out["fail_reasons"] = fail_reasons or {}
     with lock:
         sfh.write(json.dumps(out) + "\n")
         sfh.flush()
@@ -230,6 +250,7 @@ def main():
         ok_any = False
         first_t = None
         unavailable = 0
+        FAILS.clear()
         #: first 30s at 1Hz, then 5s, until the window closes
         while True:
             t = int(time.time()) - epoch
@@ -247,13 +268,14 @@ def main():
             #: OFF THE CRITICAL PATH. The sampler must be free to start the
             #: next window within the second; settlement arrives when it
             #: arrives. `lock` serialises the summary writes only.
+            why = dict(FAILS)
             threading.Thread(target=_settle_bg,
                              args=(slug, epoch, sfh, lock, first_t,
-                                   unavailable),
+                                   unavailable, why),
                              daemon=False).start()
-            print("[%3d/%d] %s first_available_t=%s (%d unavailable polls)"
-                  % (len(done), TARGET_WINDOWS, slug, first_t, unavailable),
-                  flush=True)
+            print("[%3d/%d] %s first_available_t=%s (%d failed polls: %s)"
+                  % (len(done), TARGET_WINDOWS, slug, first_t, unavailable,
+                     why or "none"), flush=True)
         else:
             #: never silently count a window we could not read
             print("skip (unreadable) %s" % slug, flush=True)
@@ -264,4 +286,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    #: CLAUDE.md: "Read-only collectors/recorders should self-recover and
+    #: run 24/7." A crash must not end a 200-window capture, and the tape
+    #: is append-only and resumable, so the loop simply re-enters. (A
+    #: CONTAINER restart still kills it and has done so twice; that needs
+    #: an external relaunch, not a wider except.)
+    while True:
+        try:
+            main()
+            break
+        except KeyboardInterrupt:
+            break
+        except Exception as exc:
+            print("collector crashed: %s: %s -- resuming in 10s"
+                  % (type(exc).__name__, exc), flush=True)
+            time.sleep(10)
