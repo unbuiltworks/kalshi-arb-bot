@@ -208,7 +208,7 @@ One window, not four.
 
 | | |
 |---|---|
-| **Code SHA** | **`7d163a672`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
+| **Code SHA** | **`8835b809c`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
 | **Prerequisite** | that SHA is **not on the branch production tracks**. Activation requires merging it into `integration/l5-safe-release-candidate-20261109` and deploying — both money-capable, both needing your approval. |
 | Market | BTC5m, **one** market |
 | Strategy | STRADDLE, **maker-only `post_only`, taker disabled** |
@@ -264,7 +264,7 @@ in, and the $0.40 worst case. Your call:
 
 ### The authorization statement I need
 
-> I authorize merging `7d163a672` into
+> I authorize merging `8835b809c` into
 > `integration/l5-safe-release-candidate-20261109`, deploying it to
 > `l5-btc5m-live`, and ONE live maker-only STRADDLE window on BTC5m at
 > rung 0.08 with a $0.40 per-side clip, repetition under a $0.80
