@@ -166,7 +166,7 @@ def reduce_outcome(held_side: str, own_paid: D, qty: D,
 def remaining_completion_ttl(frames: Sequence[Mapping[str, Any]],
                              first_fill_index: int, quote_index: int,
                              ttl_s: Optional[float]) -> Optional[float]:
-    """Return the unspent TTL measured from the authenticated first fill.
+    """Return the unspent TTL measured from the modeled first-fill frame.
 
     Quote search consumes this budget. Zero is a finite expiry, not None.
     """
@@ -257,7 +257,14 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 want = DOWN if uf else UP
                 leg = up if uf else dn
                 j = leg.get("fill_index")
-                if j is None or j >= len(frames) - 1:
+                if j is None:
+                    # A queue verdict without a fill timestamp cannot anchor
+                    # completion TTL or settlement. Do not score a residual.
+                    rows.append(dict(base, state="INDETERMINATE_FIRST_FILL_TIME",
+                                     held_side=held, held_px=str(paid),
+                                     pnl=None))
+                    continue
+                if j >= len(frames) - 1:
                     # no frame left to quote a complement into. HOLD and
                     # REDUCE are still the alternatives and are still
                     # reported, so the comparison columns cover every
@@ -445,7 +452,8 @@ def summarise(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
                                  "DECLINED_BY_CONTROLLER")]
         unknown = [r for r in sel if r["state"] in
                    ("INDETERMINATE_ENTRY", "INDETERMINATE_COMPLEMENT",
-                    "INDETERMINATE_ENTRY_LIFECYCLE")]
+                    "INDETERMINATE_ENTRY_LIFECYCLE",
+                    "INDETERMINATE_FIRST_FILL_TIME")]
         if not seq:
             # Do not silently drop a cell whose queue evidence is entirely
             # unknown. There is no denominator or P&L to estimate here.
