@@ -437,13 +437,7 @@ def summarise(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
                                  "DECLINED_BY_CONTROLLER")]
         unknown = [r for r in sel if r["state"] in
                    ("INDETERMINATE_ENTRY", "INDETERMINATE_COMPLEMENT")]
-        if not seq and not unknown:
-            continue
         if not seq:
-            out.append({"scenario": scen, "complete_depth": cd,
-                        "ttl": "hold" if ttl is None else ("%.0fs" % ttl),
-                        "sequential": 0, "unscored": len(unknown),
-                        "completion_rate": None, "complete_pnl": None})
             continue
         pairs = [r for r in seq if r["state"] == "PAIR_SEQUENTIAL"]
         resid = [r for r in seq if r["state"] != "PAIR_SEQUENTIAL"]
