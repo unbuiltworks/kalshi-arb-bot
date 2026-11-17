@@ -1070,6 +1070,23 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: Both legs are priced before either is considered, because the
         #: bound that matters is on the two of them TOGETHER: one leg at
         #: a time cannot see a pair that costs 1.02.
+        #: WHY EACH SIDE DID NOT GET AN ORDER, kept per side.
+        #:
+        #: `why_s` is one string and the loop overwrites it, so the LAST
+        #: side evaluated wins. Live window 1930z: the UP leg -- the
+        #: risk-reducing one that would have completed the pair -- was
+        #: refused COMPLETE_BUDGET_EXHAUSTED, while the reported why was
+        #: the DOWN side's UNMATCHED_CEILING. The decisive refusal sat
+        #: only in `refused`, and diagnosing it took far longer than it
+        #: should have.
+        #:
+        #: BOUND HERE, not inside the loop's branch. The refusal branches
+        #: (CLIP_TOO_SMALL, ENTRY_WINDOW_CLOSED, REPEAT_WITHOUT_BOUNDS,
+        #: FILL_MODEL_UNMEASURED) skip that branch and still build the
+        #: step report, so a definition in there is a NameError on every
+        #: one of those paths -- the identical mistake I made with `_bk`
+        #: a few lines below, in this same function.
+        _side_why: Dict[str, Any] = {s_: None for s_ in SIDES}
         _bk, _bk_why = {}, None
         if _bookrel:
             if not params.straddle_fill_model_measured:
@@ -1188,6 +1205,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         r_side = _repriced_rung(r, side, inv, qty, params)
                     if r_side is None:
                         why_s = "REPRICE_OUT_OF_BAND"
+                        _side_why[side] = "REPRICE_OUT_OF_BAND"
                         continue
                     if not _repeat:
                         if inv[side][0] > 0:
@@ -1198,15 +1216,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         #: hold, and how lopsided the book may get.
                         if _committed[side] + r_side * qty > _side_cap:
                             why_s = "SIDE_CAP_REACHED"
+                            _side_why[side] = "SIDE_CAP_REACHED"
                             continue
                         if _prospective_unmatched_usd(
                                 side, r_side, qty, inv, rest) > _unm_cap:
                             why_s = "UNMATCHED_CEILING"
+                            _side_why[side] = "UNMATCHED_CEILING"
                             continue
                     if r_side in live[side]:
                         continue                  # that rung already rests
                     if r_side * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"
+                        _side_why[side] = "NO_EXPOSURE_ROOM"
                         continue
                     #: IS THIS RUNG WORTH BUYING? Priced before any room
                     #: is committed. "The cap allows it" is not a reason
@@ -1577,7 +1598,24 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 why_s = "LATE_FAVORITE_HANDOFF"
             elif arb["why"] == "STRADDLE_AND_LATE_FAVORITE":
                 why_s = "STRADDLE_AND_LATE_FAVORITE"
+        #: NAME THE CONSTRAINT ON THE ACTION THAT MATTERED MOST.
+        #:
+        #: When inventory is lopsided the order worth having is the one
+        #: on the LIGHT side: it reduces unmatched exposure and completes
+        #: the pair. If that side was refused, its reason is the binding
+        #: one, whatever the heavy side happened to say last. In live
+        #: window 1930z the heavy side's UNMATCHED_CEILING was reported
+        #: while the light side's COMPLETE_BUDGET_EXHAUSTED -- the
+        #: refusal that actually stopped the pair completing -- sat only
+        #: in `refused`.
+        if not [o for o in want if o.get("op") == "PLACE"]:
+            _light = None
+            if inv[UP][0] != inv[DOWN][0]:
+                _light = UP if inv[UP][0] < inv[DOWN][0] else DOWN
+            if _light is not None and _side_why.get(_light):
+                why_s = _side_why[_light]
         ev_s = {"completion": comp,
+                "side_refusals": dict(_side_why),
                 "completion_reserve": _reserve,
                 "book_relative": {
                     "on": _bookrel,
