@@ -1220,8 +1220,24 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     #: symmetric one. NB `_other` is a module-level
                     #: function here; shadowing it with a local broke 44
                     #: tests on the first attempt.
-                    _r_other = _repriced_rung(r, _other(side), inv, qty,
-                                              params)
+                    #: THE OPPOSITE LEG AS IT WOULD ACTUALLY BE
+                    #: PRICED. In book-relative mode that is the other
+                    #: side's BOOK quote, not the fixed ladder's rung.
+                    #:
+                    #: Taking it from the fixed rung priced the pair at
+                    #: 0.30 + 0.08 = 0.38 while the real quoted pair was
+                    #: 0.99, which inflated EV from +0.0007 to +0.0434 a
+                    #: share -- about sixty times -- and admitted rungs
+                    #: on a pair that did not exist. Exactly the
+                    #: "confident wrong number" this gate is supposed to
+                    #: prevent, arriving through the gate itself.
+                    if _bookrel:
+                        _r_other = _repriced_rung(_bk[_other(side)],
+                                                  _other(side), inv, qty,
+                                                  params, hi=ONE)
+                    else:
+                        _r_other = _repriced_rung(r, _other(side), inv, qty,
+                                                  params)
                     _ev = SEV.entry_ev(
                         price=r_side,
                         other_price=(r_side if _r_other is None
@@ -1237,7 +1253,36 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         p_complete=(params.straddle_p_complete
                                     if (_cpc is not None and _cpc > ZERO)
                                     else ZERO),
-                        p_lone_win=params.straddle_p_lone_win,
+                        #: THE LONE LEG'S WIN RATE IS THE PRICE, in
+                        #: book-relative mode.
+                        #:
+                        #: WHY THE CONSTANT WAS WRONG. 0.0981 was
+                        #: measured at 0.08 rungs. A leg bought at 0.69
+                        #: does not win 9.8% of the time -- it wins about
+                        #: 69%, because in a prediction market THE PRICE
+                        #: IS THE IMPLIED PROBABILITY. Feeding the 0.08
+                        #: constant to a 0.69 rung priced it at
+                        #: -0.534367 a share and the gate refused every
+                        #: book-relative quote, which is why the
+                        #: authorized 1910z campaign would have submitted
+                        #: nothing. That was a wrong input, not a missing
+                        #: permission.
+                        #:
+                        #: NOTHING IS INVENTED: this is the venue's own
+                        #: price. And it is the CONSERVATIVE reading of
+                        #: it -- `lone_pay` is
+                        #: pw*(1-px) - (1-pw)*px, which at pw == px is
+                        #: exactly ZERO. So the lone leg contributes
+                        #: nothing either way: we neither credit
+                        #: ourselves the half-spread we actually buy at
+                        #: the bid, nor charge ourselves a loss the
+                        #: market does not imply. The decision is then
+                        #: carried entirely by the PAIR economics, which
+                        #: is the strategy, with `p_pair_natural` left as
+                        #: the genuinely unmeasured input the discovery
+                        #: campaign exists to measure.
+                        p_lone_win=(r_side if _bookrel
+                                    else params.straddle_p_lone_win),
                         fee_per_share=params.straddle_fee_per_share)
                     _ok = SEV.admits(
                         _ev,
