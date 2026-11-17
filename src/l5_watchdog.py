@@ -660,8 +660,79 @@ class Watchdog:
             return (True, "HALT_LATCHED:" + str(rec.get("reason") or "?")[:80])
         return (False, None)
 
+    def registry_notes(self) -> List[str]:
+        """One `url:STATUS:count` note per configured ownership registry.
+
+        ONE READ PER REGISTRY PER SWEEP, shared with the cancel path.
+        The first version read separately and broke the invariant that
+        `test_the_ownership_registry_is_read_once_per_sweep` exists to
+        protect -- a second read lets the answer change mid-sweep, and it
+        would also let the sweep REPORT one ownership and ACT on
+        another, which is how two records of one truth start disagreeing.
+        So the claims read here are memoised for this sweep and
+        `_cancel_targets` consumes them.
+
+        This exists so that "the registry is unreachable" is visible on a
+        quiet sweep instead of surfacing for the first time during an
+        incident.
+
+        `OK:n` means the registry answered and claims n ids -- n may
+        legitimately be 0 when that lane holds nothing. Any other status
+        is the registry's own refusal code, or PROBE_RAISED when the read
+        itself failed. It never raises: an observable that can fail a
+        sweep is worse than no observable.
+        """
+        if self.oracle is None:
+            return []
+        #: ONE READ, through the oracle the deployment actually
+        #: configured. Reading each member separately would bypass
+        #: `CompositeOracle.claimed`, which is what sets the aggregated
+        #: `last_refusal` the sweep already reports -- so the per-member
+        #: loop below only READS the state that read just set.
+        rows: Dict[str, Dict[str, Any]] = {}
+        try:
+            got = self.oracle.claimed()
+            if isinstance(got, Mapping):
+                rows = dict(got)
+            self._claims_this_sweep = (
+                rows, getattr(self.oracle, "last_refusal", None))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            #: the memo stays unset, so the cancel path reads for itself
+            #: rather than acting on an ownership we failed to obtain
+            return ["%s:PROBE_RAISED:%s" % (str(getattr(self.oracle, "url", "?")),
+                                            type(exc).__name__)]
+        notes: List[str] = []
+        for o in oracles_of(self.oracle):
+            why = getattr(o, "last_refusal", None)
+            notes.append("%s:%s" % (str(getattr(o, "url", "?")), why or "OK"))
+        return notes
+
+    def _claimed_once(self) -> Dict[str, Dict[str, Any]]:
+        """Ownership for THIS sweep, from the single read the probe made.
+
+        Falls back to reading the oracle when no probe ran -- the
+        emergency HALT path reaches `_cancel_targets` without a sweep, and
+        it must never be left without ownership.
+        """
+        memo = getattr(self, "_claims_this_sweep", None)
+        if memo is not None:
+            return memo[0]
+        return self.oracle.claimed()
+
+    def _claim_refusal(self) -> Optional[str]:
+        memo = getattr(self, "_claims_this_sweep", None)
+        if memo is not None:
+            return memo[1]
+        return getattr(self.oracle, "last_refusal", None)
+
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
         now = now or _utc()
+        #: THE PER-SWEEP OWNERSHIP MEMO STARTS EMPTY. Carrying one sweep's
+        #: claims into the next would be worse than reading twice: it
+        #: would cancel against ownership that is a poll interval old.
+        self._claims_this_sweep = None
         out: Dict[str, Any] = {
             "LABEL": "L5_WATCHDOG_SWEEP", "as_of_utc": now.isoformat(),
             "max_order_age_s": self.max_order_age_s,
@@ -774,6 +845,23 @@ class Watchdog:
                                        "own order report; it is not managing "
                                        "whatever it still has resting")})
                 return out
+        #: EVERY CONFIGURED REGISTRY, PROBED ON EVERY SWEEP.
+        #:
+        #: WHY. `claimed()` is read only inside the cancel path, which runs
+        #: only once an order is already overdue. So a registry url that
+        #: does not serve -- a wrong port, a renamed service, a lane that
+        #: never published -- is INDISTINGUISHABLE from "we own nothing"
+        #: until the emergency, and the sweep's own docstring says what
+        #: happens then: the order is recorded NOT_IN_OWNERSHIP_REGISTRY,
+        #: the halt is asserted, and the order is LEFT RESTING. Learning
+        #: that your cancel path is blind at the moment you need it is the
+        #: worst available time to learn it.
+        #:
+        #: This is OBSERVABILITY ONLY and cannot widen what is
+        #: cancellable. It is a separate, advisory read: the cancel path
+        #: keeps its own single read per sweep, because that answer must
+        #: not change mid-loop and must not depend on this one.
+        out["registries"] = self.registry_notes()
         overdue = []
         lane_ids, lane_notes = (self.managed_lane_ids(now=now)
                                 if self.managed_lanes else (set(), []))
@@ -853,7 +941,7 @@ class Watchdog:
             return out
         # OWNERSHIP, from the executor's own durable record. Read ONCE per
         # sweep: a per-id read would let the answer change mid-loop.
-        claimed = self.oracle.claimed()
+        claimed = self._claimed_once()
         out["claimed_ids"] = len(claimed)
         if not claimed:
             out["cancel_skipped"] = (
@@ -862,7 +950,7 @@ class Watchdog:
                 "RESTING")
             # WHY it named none. "We own nothing" and "we could not find out"
             # are opposite facts and must not arrive as the same empty dict.
-            out["claim_refused"] = getattr(self.oracle, "last_refusal", None)
+            out["claim_refused"] = self._claim_refusal()
             return out
         for o in targets:
             vid = o["venue_order_id"]
@@ -996,6 +1084,21 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
             os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
         oracle=oracle_from_env(),
         managed_lanes=_managed_lanes_from_env())
+
+
+def oracles_of(oracle: Any) -> List[Any]:
+    """The individual registries behind whatever `oracle_from_env` built.
+
+    One url builds a bare `OwnershipOracle`, several a `CompositeOracle`.
+    Callers that want to report per-registry health should not have to
+    know which.
+    """
+    if oracle is None:
+        return []
+    inner = getattr(oracle, "oracles", None)
+    if inner:
+        return list(inner)
+    return [oracle]
 
 
 def _managed_lanes_from_env() -> List[str]:
