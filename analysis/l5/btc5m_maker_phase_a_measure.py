@@ -46,6 +46,13 @@ Both follow from observables only; neither needs a model.
 (6) SETTLEMENT-ADJUSTED NET: pair cost where both legs fill, the whole
     outlay lost where a lone leg loses, $1.00 per winning contract.
 
+SETTLEMENT IS A TERMINAL MARK, NOT A BINARY PAYOUT. Observed values are
+0.0, 0.01 and 0.99 -- a binary payout would be exactly 0 or 1, so the
+field is the UP side's terminal value and it tracks the final quote. The
+win test is therefore a threshold, and any settlement strictly inside
+0.1..0.9 is AMBIGUOUS: it is counted, reported, and EXCLUDED from (5)
+and (6) rather than silently resolved by rounding.
+
 OUT-OF-SAMPLE. Windows are ordered chronologically and split in half.
 The first half is reported as in-sample and the second as out-of-sample,
 and both are printed. No window is excluded for being unfavourable.
@@ -57,10 +64,15 @@ TAPE = os.path.join(D, "btc5m_books.jsonl")
 WINS = os.path.join(D, "btc5m_books_windows.jsonl")
 RUNGS = [float(x) for x in (os.environ.get("PHASE_A_RUNGS") or "0.40,0.42,0.47").split(",")]
 CLIP = 2.00
-#: no fixed cutoff: the insertion moment is whenever the venue first
-#: served the market. A cutoff of our choosing would discard windows for
-#: the venue's latency and bias the sample.
+#: The insertion moment is whenever the venue first served the market, so
+#: there is no cutoff of our choosing WITHIN a window. But a window the
+#: collector only picked up late is a different and systematically worse
+#: sample -- joining after the price has moved fills only the side the
+#: move is running through -- so such windows are excluded wholesale.
+#: Measured on five of them: insertion at a median of t+136s, and the
+#: lone filled leg won 0 of 4 times.
 INSERT_BY_T = None
+MAX_JOIN_T = 30
 
 
 def load():
@@ -204,9 +216,15 @@ def report(byw, settle, slugs, label):
         pairs = []
         net = 0.0
         acc = 0
+        ambiguous = 0
         for s, u, d in rows:
             sp = settle.get(s)
             if sp is None:
+                continue
+            if 0.1 < sp < 0.9:
+                #: neither side clearly settled; resolving it by rounding
+                #: would invent the very quantity (5) measures
+                ambiguous += 1
                 continue
             acc += 1
             up_won = sp >= 0.5
@@ -219,8 +237,11 @@ def report(byw, settle, slugs, label):
             elif d["filled"]:
                 lone.append(not up_won)
                 net += (1.00 * oq if not up_won else 0.0) - X * oq
+        if ambiguous:
+            print("    settlement AMBIGUOUS (0.1<px<0.9) in %d window(s):"
+                  " excluded from (5) and (6)" % ambiguous)
         if acc == 0:
-            print("    (5)(6) no settled window yet")
+            print("    (5)(6) no unambiguously settled window yet")
         else:
             if lone:
                 print("    (5) P(lone filled leg WINS) = %5.1f%%  (n=%d)"
@@ -239,8 +260,14 @@ def main():
     byw, settle = load()
     #: only windows we watched from the start are usable: a window whose
     #: insertion moment we missed cannot have a queue-at-insertion.
-    usable = sorted((s for s in byw if byw[s]),
+    late = sorted(s for s in byw if byw[s] and byw[s][0]["t"] > MAX_JOIN_T)
+    usable = sorted((s for s in byw if byw[s]
+                     and byw[s][0]["t"] <= MAX_JOIN_T),
                     key=lambda s: byw[s][0]["epoch"])
+    if late:
+        print("EXCLUDED %d window(s) joined later than t+%ds (biased sample,"
+              " not a weaker one): %s"
+              % (len(late), MAX_JOIN_T, ", ".join(x[-6:] for x in late[:8])))
     firsts = [byw[s][0]["t"] for s in usable]
     print("tape: %d windows sampled, %d settled" % (len(byw), len(settle)))
     if firsts:

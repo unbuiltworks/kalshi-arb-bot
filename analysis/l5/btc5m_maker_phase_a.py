@@ -27,6 +27,16 @@ seconds, then every 5. The first 30 seconds are where 0x8dxd entered
 (first fill at t+7s median) and where our straddle already rests, so
 queue depth there is the measurement that matters most.
 
+ONLY WINDOWS WATCHED FROM NEAR THEIR OPEN ARE RECORDED. A window picked
+up late is not a weaker sample, it is a DIFFERENT and systematically
+worse one: joining the book after the price has already moved fills only
+the side the move is running through, which is adverse selection in its
+purest form. Measured on five such windows -- insertion at a median of
+t+136s -- the lone filled leg won 0 of 4 times. Recording them would
+bias every quantity here, so a window is skipped unless it is picked up
+within `MAX_JOIN_T` seconds of its open, and the 200-window target
+counts clean windows only.
+
 MARKET-CREATION LATENCY IS ITSELF A MEASUREMENT. The venue does not
 create a BTC5m market until at or after its nominal open: polled at
 00:27:09Z, the 00:30z window returned "market with slug ... not found".
@@ -63,6 +73,8 @@ SUMMARY = os.path.splitext(OUT)[0] + "_windows.jsonl"
 TARGET_WINDOWS = int(os.environ.get("PHASE_A_WINDOWS") or 200)
 BASE = "https://gateway.polymarket.us"
 RUNGS = (0.40, 0.42, 0.47)
+#: a window picked up later than this is skipped entirely; see the header
+MAX_JOIN_T = 30
 
 
 def get(url, tries=3):
@@ -186,6 +198,14 @@ def main():
         slug, epoch = current_window()
         if slug in done:
             time.sleep(5)
+            continue
+        join_t = int(time.time()) - epoch
+        if join_t > MAX_JOIN_T:
+            #: wait out the rest of this window rather than record a
+            #: late-join sample that would bias the measurement
+            print("skip %s (joined at t+%ds > %ds)"
+                  % (slug, join_t, MAX_JOIN_T), flush=True)
+            time.sleep(max(2, 300 - join_t + 1))
             continue
         ok_any = False
         first_t = None
