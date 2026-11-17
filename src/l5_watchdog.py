@@ -889,10 +889,12 @@ class Watchdog:
         #:
         #: Passing None makes `l5_managed_lanes.lane_ids` stamp its own
         #: reference time as it reads -- exactly what the other two
-        #: consumers (`l5_pmus_transport._managed_lane_ids` and
-        #: `scripts/l5_halt_reset.managed_lane_claims`) already do, which
-        #: is why neither ever saw this. An injected `now` is still
-        #: honoured, so tests stay deterministic.
+        #: consumers already do -- the executor's transport preflight and
+        #: the reset ceremony's own lane-claim helper -- which is why
+        #: neither ever saw this. (Their names are deliberately not spelled
+        #: here: an architecture test forbids one of them appearing in this
+        #: file, and a comment is enough to trip it.) An injected `now` is
+        #: still honoured, so tests stay deterministic.
         #:
         #: THIS WIDENS NOTHING. The +/-5 s band, the 60 s staleness bound
         #: and the `manages_own_resting` requirement are untouched; a
