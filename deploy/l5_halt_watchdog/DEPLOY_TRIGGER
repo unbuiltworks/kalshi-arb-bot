@@ -1,3 +1,5 @@
 2026-11-17T14:02:26Z
 
 2026-11-17T22:3xZ promote 2eb3a541f (managed lane clock-skew fix) + owner-gated boot reset of latch 6ea1bbc8 (UNMANAGED_RESTING_ORDER 21:57:04Z)
+
+2026-11-17T23:3xZ promote 402c28435 (2eb6c5d40: lane freshness measured at the read, 5 s skew band restored). Owner-approved watchdog-only deploy; sports session sole deployer. Halt NOT reset by this deploy.
