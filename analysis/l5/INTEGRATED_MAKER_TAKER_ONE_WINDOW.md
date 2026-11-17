@@ -191,7 +191,7 @@ and automatic disarm past the entry window.
 
 | | |
 |---|---|
-| **Code SHA** | **`<SHA>`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
+| **Code SHA** | **`d30182b26`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
 | **Prerequisite** | not on the deployed branch; needs a merge into `integration/l5-safe-release-candidate-20261109` **and** a deploy — both money-capable |
 | **Executor that owns submission** | **`l5-btc5m-live` only.** No migration, no new service. |
 | Market | BTC5m, one market, **ONE** window |
@@ -271,7 +271,7 @@ only added runtime cost is one more file in an existing image.
 
 ## 10. The authorization statement needed
 
-> I authorize merging `<SHA>` into
+> I authorize merging `d30182b26` into
 > `integration/l5-safe-release-candidate-20261109`, deploying it to
 > `l5-btc5m-live`, and ONE live BTC5m window owned solely by
 > `l5-btc5m-live`: maker entries at rung 0.08, $0.40 per side, $0.80
