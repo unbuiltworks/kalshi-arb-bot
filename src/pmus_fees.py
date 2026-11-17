@@ -32,6 +32,44 @@ THE TAKER REBATE IS NOT OURS. Tiers start at $250,000 of prior-calendar-month
 taker volume. `taker_rebate_pct` exists so the tier table is written down
 rather than remembered, and it returns 0 for any volume below the first tier,
 which is where this account is.
+
+=========================================================================
+THE SCHEDULE WAS RE-TIERED ON 2026-11-14, AND THE FLAT COEFFICIENTS ABOVE
+ARE NOW THE TOP TIER ONLY
+=========================================================================
+
+`docs.polymarket.us/fees`, read 2026-11-17, is headed "Effective
+exchange-wide from 12:00 AM ET, Saturday, November 14, 2026". It replaces
+the single taker/maker pair with THREE tier tables. The old numbers did
+not vanish -- 0.0695 is now **Taker Tier 4** and the maker coefficient
+moved 0.0125 -> 0.0104 at **Maker Tier 4** -- so code that kept reading a
+flat 0.0695 is now quoting the BEST tier in the schedule to an account
+that qualifies for the WORST one.
+
+This is the same failure this module was written for, one schedule later,
+and it is worse in the same direction: the fee-safe complement bound is
+derived from the taker fee, so understating it LOOSENS a risk bound.
+
+WHAT THIS ACCOUNT ACTUALLY QUALIFIES FOR. Taker Tier 1 (0.095) and Maker
+Tier 1 (NO REBATE AT ALL). Confirmed rather than assumed: the live market
+object for a current BTC5m window returns `feeCoefficient: 0.095`, which
+is exactly the Tier-1 taker coefficient, and the maker rebate needs
+$10,000,000 of 30-day maker volume against this account's ~$38,880/month
+of capacity under its ceilings -- 257x short.
+
+WHY AN UNKNOWN TIER RESOLVES TO THE WORST ONE. Asking for a fee without
+saying what volume earned it used to be answerable; under a tiered
+schedule it is not. Defaulting to Tier 4 would understate our taker cost
+by 37% and overstate a rebate we do not receive -- both in the unsafe
+direction. So an unspecified volume returns the worst taker coefficient
+and no maker rebate. A caller that genuinely wants the published top tier
+must say so, which is what `tests/test_pmus_fees.py` does to reproduce
+the captured 99-row table.
+
+NOTE ON `CREDITED_OBSERVED` BELOW. Those 25 credits are from 2026-09-06/07,
+inside the FLAT regime, and they reproduce at 0.0125. They are not
+evidence that this account receives a maker rebate under the tier regime,
+and must not be read as such.
 """
 from __future__ import annotations
 
@@ -52,10 +90,51 @@ THETA_FROM: Tuple[D, D] = (D("0.0695"), D("0.0125"))
 #: prices the venue will accept, and the published domain of the formula
 MIN_PRICE, MAX_PRICE = D("0.01"), D("0.99")
 
-#: prior-calendar-month TAKER notional -> share of the taker fee rebated
+#: prior-calendar-month TAKER notional -> share of the taker fee rebated.
+#: The FLAT-REGIME table, kept for dates before the re-tier.
 TAKER_REBATE_TIERS = ((D("10000000"), D("0.50")),
                       (D("1000000"), D("0.25")),
                       (D("250000"), D("0.10")))
+
+#: 12:00 AM ET, Saturday 2026-11-14. ET was UTC-5 (EST) on that date.
+TIER_REGIME_UTC = dt.datetime(2026, 11, 14, 5, 0, tzinfo=dt.timezone.utc)
+
+#: FROM the re-tier. Each table is (volume floor, coefficient), highest
+#: floor first, so the first match wins and anything below the last floor
+#: falls through to Tier 1.
+#: trailing-30-day TAKER volume -> taker coefficient
+TAKER_FEE_TIERS = ((D("250000"), D("0.0695")),     # Tier 4
+                   (D("50000"), D("0.075")),       # Tier 3
+                   (D("10000"), D("0.085")),       # Tier 2
+                   (D("0"), D("0.095")))           # Tier 1 <- this account
+#: qualifying MAKER volume -> maker rebate coefficient. Tier 1 is ZERO:
+#: not a small rebate, none at all.
+MAKER_REBATE_TIERS = ((D("200000000"), D("0.0104")),   # Tier 4
+                      (D("50000000"), D("0.0070")),    # Tier 3
+                      (D("10000000"), D("0.0035")),    # Tier 2
+                      (D("0"), D("0")))                # Tier 1 <- this account
+#: qualifying TAKER volume -> share of taker fees rebated, paid weekly
+TAKER_REBATE_TIERS_TIERED = ((D("50000000"), D("0.30")),
+                             (D("25000000"), D("0.15")),
+                             (D("10000000"), D("0.10")),
+                             (D("1000000"), D("0.05")),
+                             (D("250000"), D("0.03")),
+                             (D("0"), D("0")))
+
+#: what this account qualifies for under the tier regime, and the reason.
+ACCOUNT_TAKER_TIER = 1
+ACCOUNT_MAKER_TIER = 1
+ACCOUNT_TIER_BASIS = ("live market object returns feeCoefficient 0.095, the "
+                      "Tier-1 taker coefficient; maker Tier 2 needs "
+                      "$10,000,000 of 30-day maker volume against ~$38,880 "
+                      "of monthly capacity under this account's ceilings")
+
+
+def _resolve(tiers, volume):
+    for floor, coef in tiers:
+        if volume >= floor:
+            return coef
+    return tiers[-1][1]
 
 CENT = D("0.01")
 
@@ -68,17 +147,39 @@ def _at(when: Optional[dt.datetime]) -> dt.datetime:
     return when
 
 
-def thetas(when: Optional[dt.datetime] = None) -> Tuple[D, D]:
-    """(taker, maker) coefficients in force at `when`; now by default."""
-    return THETA_FROM if _at(when) >= THETA_CHANGE_UTC else THETA_BEFORE
+def tiered(when: Optional[dt.datetime] = None) -> bool:
+    """Whether the TIERED schedule is in force at `when`."""
+    return _at(when) >= TIER_REGIME_UTC
 
 
-def taker_theta(when: Optional[dt.datetime] = None) -> D:
-    return thetas(when)[0]
+def thetas(when: Optional[dt.datetime] = None, *,
+           taker_volume_usd: Optional[D] = None,
+           maker_volume_usd: Optional[D] = None) -> Tuple[D, D]:
+    """(taker, maker) coefficients in force at `when`; now by default.
+
+    Under the tiered schedule the volumes select the tier. An UNSPECIFIED
+    volume resolves to the WORST tier for us -- the highest taker
+    coefficient and no maker rebate -- because guessing the best tier
+    understates cost and overstates credit, and the fee-safe complement
+    bound is derived from the taker fee.
+    """
+    at = _at(when)
+    if at >= TIER_REGIME_UTC:
+        tv = D("0") if taker_volume_usd is None else D(str(taker_volume_usd))
+        mv = D("0") if maker_volume_usd is None else D(str(maker_volume_usd))
+        return (_resolve(TAKER_FEE_TIERS, tv),
+                _resolve(MAKER_REBATE_TIERS, mv))
+    return THETA_FROM if at >= THETA_CHANGE_UTC else THETA_BEFORE
 
 
-def maker_theta(when: Optional[dt.datetime] = None) -> D:
-    return thetas(when)[1]
+def taker_theta(when: Optional[dt.datetime] = None, *,
+                taker_volume_usd: Optional[D] = None) -> D:
+    return thetas(when, taker_volume_usd=taker_volume_usd)[0]
+
+
+def maker_theta(when: Optional[dt.datetime] = None, *,
+                maker_volume_usd: Optional[D] = None) -> D:
+    return thetas(when, maker_volume_usd=maker_volume_usd)[1]
 
 
 def _fee(theta: D, contracts: D, price: D, *, cents: bool) -> D:
@@ -97,30 +198,41 @@ def _fee(theta: D, contracts: D, price: D, *, cents: bool) -> D:
 
 
 def taker_fee(price: D, contracts: D = D(1), *,
-              when: Optional[dt.datetime] = None, cents: bool = False) -> D:
-    """What a taker PAYS. Positive."""
-    return _fee(taker_theta(when), contracts, price, cents=cents)
+              when: Optional[dt.datetime] = None, cents: bool = False,
+              taker_volume_usd: Optional[D] = None) -> D:
+    """What a taker PAYS. Positive.
+
+    Under the tiered schedule an unspecified volume prices at the WORST
+    tier; see `thetas`.
+    """
+    return _fee(taker_theta(when, taker_volume_usd=taker_volume_usd),
+                contracts, price, cents=cents)
 
 
 def maker_rebate(price: D, contracts: D = D(1), *,
                  when: Optional[dt.datetime] = None,
-                 cents: bool = False) -> D:
+                 cents: bool = False,
+                 maker_volume_usd: Optional[D] = None) -> D:
     """What a maker RECEIVES, credited at the point of trade. Positive.
 
     NEVER net this against a cost to make an action look affordable. It is
     reported on its own line and it is income only once credited.
     """
-    return _fee(maker_theta(when), contracts, price, cents=cents)
+    return _fee(maker_theta(when, maker_volume_usd=maker_volume_usd),
+                contracts, price, cents=cents)
 
 
-def taker_rebate_pct(prior_month_taker_notional_usd: D) -> D:
+def taker_rebate_pct(prior_month_taker_notional_usd: D, *,
+                     when: Optional[dt.datetime] = None) -> D:
     """Share of the taker fee rebated, from the published tier table.
 
     Returns 0 below the first tier. This account is below the first tier, so
     every economics figure in this programme carries 0 here.
     """
     v = D(str(prior_month_taker_notional_usd))
-    for floor, pct in TAKER_REBATE_TIERS:
+    table = (TAKER_REBATE_TIERS_TIERED if tiered(when)
+             else TAKER_REBATE_TIERS)
+    for floor, pct in table:
         if v >= floor:
             return pct
     return D("0")
@@ -141,8 +253,21 @@ def provenance(when: Optional[dt.datetime] = None) -> dict:
         "taker_rebate_reason": ("tiers start at $250,000 of prior-calendar-"
                                 "month taker notional; this account is below "
                                 "the first tier, so it is counted at zero"),
-        "verified_against": ("all 99 published price rows reproduce exactly; "
-                             "see tests/test_pmus_fees.py"),
+        "verified_against": ("all 99 published price rows reproduce exactly "
+                             "at the FLAT-regime coefficients; see "
+                             "tests/test_pmus_fees.py"),
+        "tiered": tiered(when),
+        "tier_regime_effective_utc": TIER_REGIME_UTC.isoformat(),
+        "tier_regime_label": ("12:00 AM ET, Saturday November 14, 2026, "
+                              "exchange-wide"),
+        "account_taker_tier": ACCOUNT_TAKER_TIER if tiered(when) else None,
+        "account_maker_tier": ACCOUNT_MAKER_TIER if tiered(when) else None,
+        "account_tier_basis": ACCOUNT_TIER_BASIS if tiered(when) else None,
+        "maker_rebate_available_to_this_account": (
+            not tiered(when)),
+        "unspecified_tier_resolves_to": ("the worst tier for us: highest "
+                                         "taker coefficient, no maker "
+                                         "rebate"),
     }
 
 

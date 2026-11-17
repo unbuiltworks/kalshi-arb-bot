@@ -33,16 +33,106 @@ def test_the_captured_table_is_the_whole_published_range():
     assert rows[0]["price"] == "0.01" and rows[-1]["price"] == "0.99"
 
 
+#: the captured table was published under the FLAT schedule, so it is
+#: reproduced AT that regime's instant. Re-rating it at today's tiered
+#: coefficients would corrupt evidence that was right when it was recorded,
+#: which is the same reason this module is effective-dated at all.
+FLAT_INSTANT = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
+
+
 @pytest.mark.parametrize("row", TABLE["rows"], ids=lambda r: r["price"])
 def test_every_published_row_reproduces_exactly(row):
     p = D(row["price"])
-    assert str(F.taker_fee(p, D(100), cents=True)) == row["taker_pays"]
-    assert str(F.maker_rebate(p, D(100), cents=True)) == row["maker_receives"]
+    assert str(F.taker_fee(p, D(100), cents=True, when=FLAT_INSTANT)) == \
+        row["taker_pays"]
+    assert str(F.maker_rebate(p, D(100), cents=True, when=FLAT_INSTANT)) == \
+        row["maker_receives"]
 
 
-def test_the_current_taker_coefficient_is_the_republished_one():
-    assert F.taker_theta() == D("0.0695")
-    assert F.maker_theta() == D("0.0125")
+def test_the_flat_regime_coefficients_are_still_the_republished_ones():
+    assert F.taker_theta(FLAT_INSTANT) == D("0.0695")
+    assert F.maker_theta(FLAT_INSTANT) == D("0.0125")
+
+
+def test_the_current_schedule_is_this_accounts_tier_and_not_the_top_tier():
+    """THE DEFECT THIS FIXES. 0.0695 is now Taker Tier 4. Reading it as the
+    current coefficient quotes the BEST tier to an account on the WORST,
+    understating the taker fee by 37% -- and the fee-safe complement bound
+    is derived from the taker fee, so understating it LOOSENS a bound."""
+    assert F.tiered() is True
+    assert F.taker_theta() == D("0.095")
+    assert F.maker_theta() == D("0")
+    # the top tier is still reachable, but only by asking for it
+    assert F.thetas(taker_volume_usd=D("250000"),
+                    maker_volume_usd=D("200000000")) == (D("0.0695"),
+                                                         D("0.0104"))
+
+
+def test_an_unspecified_tier_resolves_to_the_worst_one_for_us():
+    """Guessing the best tier is unsafe in BOTH directions: it understates
+    what we pay and credits a rebate we do not receive."""
+    assert F.thetas() == (D("0.095"), D("0"))
+    assert F.taker_theta() == max(c for _f, c in F.TAKER_FEE_TIERS)
+    assert F.maker_theta() == min(c for _f, c in F.MAKER_REBATE_TIERS)
+
+
+@pytest.mark.parametrize("vol,coef", [
+    ("0", "0.095"), ("9999.99", "0.095"),
+    ("10000", "0.085"), ("49999.99", "0.085"),
+    ("50000", "0.075"), ("249999.99", "0.075"),
+    ("250000", "0.0695"), ("99999999", "0.0695")])
+def test_every_taker_fee_tier_boundary(vol, coef):
+    assert F.taker_theta(taker_volume_usd=D(vol)) == D(coef)
+
+
+@pytest.mark.parametrize("vol,coef", [
+    ("0", "0"), ("9999999.99", "0"),
+    ("10000000", "0.0035"), ("49999999.99", "0.0035"),
+    ("50000000", "0.0070"), ("199999999.99", "0.0070"),
+    ("200000000", "0.0104")])
+def test_every_maker_rebate_tier_boundary(vol, coef):
+    """Tier 1 is ZERO, not a small rebate. $10,000,000 of 30-day maker
+    volume is the first threshold, against this account's ~$38,880 of
+    monthly capacity under its ceilings."""
+    assert F.maker_theta(maker_volume_usd=D(vol)) == D(coef)
+
+
+def test_a_lower_tier_never_costs_less_or_credits_more():
+    """Monotonicity, so a MIS-resolved tier can only ever err conservatively
+    in the direction this account cares about."""
+    vols = [D(v) for v in ("0", "10000", "50000", "250000", "10000000",
+                           "50000000", "200000000")]
+    takers = [F.taker_theta(taker_volume_usd=v) for v in vols]
+    makers = [F.maker_theta(maker_volume_usd=v) for v in vols]
+    assert takers == sorted(takers, reverse=True)
+    assert makers == sorted(makers)
+
+
+def test_the_tier_boundary_is_midnight_ET_expressed_in_UTC():
+    """12:00 AM ET, Saturday 2026-11-14, when ET was UTC-5 (EST)."""
+    assert F.TIER_REGIME_UTC == dt.datetime(
+        2026, 11, 14, 5, 0, tzinfo=dt.timezone.utc)
+    assert F.taker_theta(F.TIER_REGIME_UTC) == D("0.095")
+    assert F.taker_theta(
+        F.TIER_REGIME_UTC - dt.timedelta(seconds=1)) == D("0.0695")
+    assert F.maker_theta(
+        F.TIER_REGIME_UTC - dt.timedelta(seconds=1)) == D("0.0125")
+
+
+def test_the_taker_fee_actually_went_UP_for_this_account():
+    """The whole point: the bound tightened, it did not move cosmetically."""
+    before = F.taker_fee(D("0.44"), D(100), when=FLAT_INSTANT)
+    now = F.taker_fee(D("0.44"), D(100))
+    assert now > before
+    assert (now / before - 1) > D("0.36")
+
+
+def test_the_september_credits_are_not_evidence_of_a_tiered_rebate():
+    """CREDITED_OBSERVED is from 2026-09-06/07, inside the FLAT regime. It
+    must not be read as proof this account is paid a rebate today."""
+    assert F.CREDITED_OBSERVED["rows"] == 25
+    assert F.maker_theta() == D("0")
+    assert F.provenance()["maker_rebate_available_to_this_account"] is False
 
 
 def test_a_pre_change_instant_still_gets_the_old_coefficient():
@@ -66,7 +156,7 @@ def test_the_execution_path_reads_the_schedule_and_not_a_local_copy():
     assert q1.taker_fee(D("0.50")) == F.taker_fee(D("0.50"))
     assert q1.maker_rebate(D("0.50")) == F.maker_rebate(D("0.50"))
     # and the number actually moved, so this test would have failed before
-    assert q1.taker_fee(D("0.50")) == D("0.0174")
+    assert q1.taker_fee(D("0.50")) == D("0.0238")   # Tier 1, 0.095
 
 
 def test_no_execution_module_still_hardcodes_the_stale_coefficient():
@@ -105,15 +195,28 @@ def test_a_per_contract_fee_is_not_quantised_away():
 def test_the_taker_rebate_is_zero_for_this_account():
     assert F.taker_rebate_pct(D("0")) == D("0")
     assert F.taker_rebate_pct(D("249999")) == D("0")
-    assert F.taker_rebate_pct(D("250000")) == D("0.10")
-    assert F.taker_rebate_pct(D("10000000")) == D("0.50")
     assert F.provenance()["taker_rebate_available_to_this_account"] is False
+
+
+@pytest.mark.parametrize("vol,pct", [
+    ("249999", "0"), ("250000", "0.03"), ("1000000", "0.05"),
+    ("10000000", "0.10"), ("25000000", "0.15"), ("50000000", "0.30")])
+def test_the_tiered_taker_rebate_table(vol, pct):
+    assert F.taker_rebate_pct(D(vol)) == D(pct)
+
+
+def test_the_flat_regime_taker_rebate_table_is_preserved():
+    """Pre-2026-11-14 analyses were right at the old table."""
+    assert F.taker_rebate_pct(D("250000"), when=FLAT_INSTANT) == D("0.10")
+    assert F.taker_rebate_pct(D("10000000"), when=FLAT_INSTANT) == D("0.50")
 
 
 def test_the_maker_rebate_is_returned_as_a_positive_credit():
     """It is a credit reported on its own line, never a negative fee netted
-    into edge."""
-    assert F.maker_rebate(D("0.50")) > 0
+    into edge. Checked where a rebate exists at all -- at this account's
+    current tier it is zero, which is asserted separately."""
+    assert F.maker_rebate(D("0.50"), when=FLAT_INSTANT) > 0
+    assert F.maker_rebate(D("0.50"), maker_volume_usd=D("200000000")) > 0
 
 
 def test_the_crypto_adapter_reports_the_literal_clock_and_the_BRTI_rule():
@@ -140,7 +243,7 @@ def test_an_undeclared_product_is_refused():
 
 def test_the_adapter_quotes_the_live_coefficient_not_a_frozen_string():
     from src.l5_venue_adapter import PMUSAdapter
-    assert "0.0695" in PMUSAdapter().provenance()["fees"]
+    assert "0.095" in PMUSAdapter().provenance()["fees"]
 
 
 # --------------------------------------------------------------------------
