@@ -200,5 +200,20 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertEqual(self.replay.summarise(rows), [])
 
 
+    def test_summary_discloses_unscored_complement_alongside_scored_cases(self):
+        common = {"scenario": "base", "complete_depth": 0,
+                  "completion_ttl_s": 60.0}
+        rows = [dict(common, state="PAIR_SEQUENTIAL", pair_cost="0.97",
+                     pnl="0.03", hold_pnl="-0.02", reduce_pnl="-0.04"),
+                dict(common, state="INDETERMINATE_COMPLEMENT", pnl=None)]
+        summary = self.replay.summarise(rows)
+        self.assertEqual(len(summary), 1)
+        self.assertEqual(summary[0]["sequential"], 1)
+        self.assertEqual(summary[0]["unscored"], 1)
+        self.assertEqual(summary[0]["pairs"], 1)
+        self.assertEqual(summary[0]["complete_pnl"], "0.0300")
+
+
+
 if __name__ == "__main__":
     unittest.main()
