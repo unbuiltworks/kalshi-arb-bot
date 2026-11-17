@@ -216,7 +216,7 @@ arming time, and I will arm nothing if it returns any failure.
 
 | | |
 |---|---|
-| **Code SHA** | **`<SHA>`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
+| **Code SHA** | **`5d3a6b27a`** on `claude/btc5m-favorite-accumulation-wzh2xo` |
 | **Prerequisite** | not on the branch production tracks; activation needs a merge into `integration/l5-safe-release-candidate-20261109` **and** a deploy |
 | Market | BTC5m, **one** market, **ONE** window |
 | Maker | `post_only`, rung **0.08**, clip **$0.40/side**, side cap **$0.80**, unmatched ceiling **$0.40**, repricing **1 tick/clip** |
@@ -253,7 +253,7 @@ Concretely: authorized at 04:30Z → `cpc-btc-updown-5m-2026-11-17-0500z`,
 
 ### The statement I need
 
-> I authorize merging `<SHA>` into
+> I authorize merging `5d3a6b27a` into
 > `integration/l5-safe-release-candidate-20261109`, deploying it to
 > `l5-btc5m-live`, and ONE live BTC5m window: maker-only entries at rung
 > 0.08 with a $0.40 per-side clip, $0.80 per-side cap, $0.40 unmatched
