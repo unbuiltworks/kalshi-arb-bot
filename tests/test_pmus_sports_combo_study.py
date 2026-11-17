@@ -325,3 +325,42 @@ def test_backfill_reads_never_draw_on_the_live_budget():
     th.start()
     th.join()
     assert taken == ["live", "bf"]
+
+
+def test_only_hours_with_nothing_pending_count_as_complete(tmp_path):
+    t_old = dict(tr("o1"), executedTime="2026-11-17T11:10:00Z")
+    t_old2 = dict(tr("o2", sym="c2"), executedTime="2026-11-17T11:50:00Z")
+    t_mid = dict(tr("m1"), executedTime="2026-11-17T12:20:00Z")
+    cs, _ = study([t_old, t_old2, t_mid], settle_get({}), tmp_path)
+    for t in (t_old, t_old2, t_mid):
+        cs._ingest(t, live=False)
+    # the 12Z print's legs settle (maker wins early); 11Z still open
+    cs.pending["m1"]["legs"] = [{"symbol": "aec-x-y-z-2026-11-17",
+                                 "side": "SIDE_BUY"}]
+    cs.leg_px["aec-x-y-z-2026-11-17"] = 0.0
+    cs.settle_pass()
+    c = cs.cohorts()
+    assert c["by_hour_recorded_settled_pending"] == {
+        "2026-11-17T11Z": [2, 0, 2], "2026-11-17T12Z": [1, 1, 0]}
+    assert c["complete_hours"] == ["2026-11-17T12Z"]
+    assert c["complete"]["all"]["n"] == 1
+    # 11Z settles too -> both hours complete
+    cs.leg_px.update({A: 1.0, B: 0.0})
+    cs.settle_pass()
+    c = cs.cohorts()
+    assert c["complete_hours"] == ["2026-11-17T11Z", "2026-11-17T12Z"]
+    assert c["complete"]["all"]["n"] == 3
+    assert "cohorts" in cs.summary()
+
+
+def test_the_current_hour_is_never_complete(tmp_path):
+    t = dict(tr("n1"), executedTime="2026-11-17T13:00:00Z")   # NOW's hour
+    cs, _ = study([], settle_get({A: 0.0}), tmp_path)
+    cs._ingest(t, live=False)
+    cs.settle_pass()
+    assert cs.cohorts()["complete_hours"] == []
+
+
+def test_live_starts_at_now_not_in_the_past():
+    cs, _ = study([], settle_get({}))
+    assert cs.since == NOW

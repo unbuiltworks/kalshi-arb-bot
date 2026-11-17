@@ -214,7 +214,9 @@ class ComboStudy:
         self.legs: Dict[str, Optional[List[Mapping[str, Any]]]] = {}
         self.seen_rfq: set = set()
         self.seen_trade: set = set()
-        self.since = now() - timedelta(minutes=10)
+        # LIVE 13:48Z: starting 10 min back left the live loop a backlog it
+        # took ~1 h to clear; older prints are the backfill's job
+        self.since = now()
         self.backfill_hours, self.backfill_sample = (backfill_hours,
                                                      backfill_sample)
         self.stop = False
@@ -521,12 +523,13 @@ class ComboStudy:
             n += 1
         return n
 
-    def settled_summary(self) -> Dict[str, Any]:
+    def settled_summary(self, rows: Optional[List[Dict[str, Any]]] = None
+                        ) -> Dict[str, Any]:
         """SETTLED maker P&L per contract (and per $ of premium) of the
         prints a maker took the other side of: a modeled study of OTHER
         accounts' trades, not this account's realized P&L."""
         groups: Dict[str, List[Dict[str, Any]]] = {}
-        for r in self.settled:
+        for r in (self.settled if rows is None else rows):
             if r.get("void"):
                 continue
             for k in ("all", f"legs_{bucket_legs(r['legs'])}",
@@ -554,6 +557,49 @@ class ComboStudy:
                       "sum_payout_fair_rows": sum(r["payout"] for r in fair),
                       "n_fair": len(fair)}
         return out
+
+    def cohorts(self, hours: int = 48) -> Dict[str, Any]:
+        """Prints grouped by the UTC hour they EXECUTED in. A losing combo
+        settles as soon as one leg loses, a winning one only when every leg
+        has, so settled-so-far is biased toward the maker. Only an hour
+        with NOTHING left pending is an unbiased sample: "complete" sums
+        those hours alone."""
+        def hour(r: Mapping[str, Any]) -> Optional[str]:
+            t = _ts(r.get("executed"))
+            return t.strftime("%Y-%m-%dT%HZ") if t else None
+        with self.lock:
+            pend = list(self.pending.values())
+            done = list(self.settled)
+        by: Dict[str, Dict[str, Any]] = {}
+        for r in pend:
+            h = hour(r)
+            if h:
+                by.setdefault(h, {"pending": 0, "settled": []})["pending"] += 1
+        for r in done:
+            h = hour(r)
+            if h:
+                by.setdefault(h, {"pending": 0, "settled": []})[
+                    "settled"].append(r)
+        cutoff = (self.now() - timedelta(hours=hours)).strftime(
+            "%Y-%m-%dT%HZ")
+        current = self.now().strftime("%Y-%m-%dT%HZ")
+        table, complete_rows, complete_hours = {}, [], []
+        for h in sorted(by):
+            if h < cutoff:
+                continue
+            c = by[h]
+            table[h] = [len(c["settled"]) + c["pending"], len(c["settled"]),
+                        c["pending"]]                 # recorded, settled, pend
+            # the current hour can still gain prints: never complete
+            if c["pending"] == 0 and c["settled"] and h < current:
+                complete_hours.append(h)
+                complete_rows.extend(c["settled"])
+        return {"by_hour_recorded_settled_pending": table,
+                "complete_hours": complete_hours,
+                "complete": self.settled_summary(complete_rows)
+                if complete_rows else {},
+                "label": ("only COMPLETE hours (nothing pending) are an "
+                          "unbiased sample; settled-so-far favours makers")}
 
     # --------------------------------------------------------- backfill
     def backfill(self) -> None:
@@ -599,7 +645,8 @@ class ComboStudy:
         a["mean_mid_lag_s"] = round(a["mid_lag_s_sum"] / n, 1) if n else None
         a["pending_settlement"] = len(self.pending)
         a["settled"] = len(self.settled)
-        a["settled_maker"] = self.settled_summary()
+        a["settled_maker_so_far_BIASED"] = self.settled_summary()
+        a["cohorts"] = self.cohorts()
         a["errors"] = dict(self.errors)
         a["notes"] = dict(self.notes)
         a["label"] = ("READ-ONLY combo study of OTHER accounts' prints; "
