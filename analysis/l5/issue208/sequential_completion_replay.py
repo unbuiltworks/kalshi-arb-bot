@@ -226,6 +226,14 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                                      pnl=None))
                     continue
                 if uf and df:
+                    # A later second fill depends on the original order's
+                    # lifecycle. Book-only data cannot prove it stayed live.
+                    if up.get("fill_index") != dn.get("fill_index"):
+                        rows.append(dict(base, state="INDETERMINATE_ENTRY_LIFECYCLE",
+                                         up_fill_frame=up.get("fill_index"),
+                                         down_fill_frame=dn.get("fill_index"),
+                                         pnl=None))
+                        continue
                     # Both original entry orders eventually filled. They
                     # need not have filled at the same instant; this is NOT
                     # evidence of sequential rescue or simultaneous fills.
@@ -436,7 +444,8 @@ def summarise(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
                                  "RESIDUAL_NO_RUNWAY",
                                  "DECLINED_BY_CONTROLLER")]
         unknown = [r for r in sel if r["state"] in
-                   ("INDETERMINATE_ENTRY", "INDETERMINATE_COMPLEMENT")]
+                   ("INDETERMINATE_ENTRY", "INDETERMINATE_COMPLEMENT",
+                    "INDETERMINATE_ENTRY_LIFECYCLE")]
         if not seq:
             # Do not silently drop a cell whose queue evidence is entirely
             # unknown. There is no denominator or P&L to estimate here.
