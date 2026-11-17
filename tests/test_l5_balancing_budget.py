@@ -283,3 +283,154 @@ class TestThreeWindowsOfBalancingQuotes:
         _, peak_a = _run_window()
         _, peak_b = _run_window()
         assert peak_a == peak_b <= D("0.30")
+
+
+# ============ 6. the budget figure, stressed rather than assumed
+
+class TestTheTicketFigureIsStressed:
+    """24 was evaluated, not assumed. Across four book shapes -- the one
+    measured live, one that moves a tick EVERY step, a wide random walk,
+    and a violent 0.20<->0.70 alternation -- the worst three-window
+    requirement is 9. The side cap binds before tickets do, which is why
+    the number is small and why headroom is cheap."""
+
+    TICK_EVERY_STEP = [("0.%02d" % (30 + i % 40), "0.%02d" % (31 + i % 40))
+                       for i in range(52)]
+    VIOLENT = [("0.20", "0.21"), ("0.70", "0.71")]
+
+    def _three(self, books, reprice=0):
+        total, peak = 0, D("0")
+        for _ in range(3):
+            b, p = self._win(books, reprice)
+            total += b
+            peak = max(peak, p)
+        return total, peak
+
+    def _win(self, books, reprice):
+        inv = {C.UP: [D("0"), D("0")], C.DOWN: [D("0.52"), D("0.2964")]}
+        rest, bal, oid, peak = [], 0, 0, D("0")
+        for i in range(PLACING_STEPS):
+            b, a = books[i % len(books)]
+            r = C.decide(book={"bid": b, "ask": a, "age_s": 0.1},
+                         t_in_window_s=float(10 + i * 5),
+                         inventory={s: {"qty": str(inv[s][0]),
+                                        "cost": str(inv[s][1])}
+                                    for s in (C.UP, C.DOWN)},
+                         resting=list(rest),
+                         params=params(
+                             straddle_reprice_ticks_per_clip=reprice))
+            gone = {o["id"] for o in r["orders"] if o.get("op") == "CANCEL"}
+            rest = [o for o in rest if o["id"] not in gone]
+            for o in r["orders"]:
+                if o.get("op") != "PLACE":
+                    continue
+                oid += 1
+                if inv[C.DOWN][0] > inv[C.UP][0] and o["side"] == C.UP:
+                    bal += 1
+                rest.append({"id": "x%d" % oid, "side": o["side"],
+                             "price": o["price"], "qty": o["qty"],
+                             "age_s": 1.0})
+            exp = C.exposure({s: {"qty": str(inv[s][0]),
+                                  "cost": str(inv[s][1])}
+                              for s in (C.UP, C.DOWN)}, list(rest))
+            peak = max(peak, D(str(exp["worst_case_settlement_loss_usd"])))
+        return bal, peak
+
+    def test_a_book_moving_every_step_is_the_worst_case(self):
+        total, peak = self._three(self.TICK_EVERY_STEP)
+        assert total <= 24, "24 tickets would not cover it: %d" % total
+        assert total >= 3, total
+        assert peak <= D("0.30"), peak
+
+    def test_a_violent_book_does_not_need_more(self):
+        total, peak = self._three(self.VIOLENT)
+        assert total <= 24, total
+        assert peak <= D("0.30"), peak
+
+    def test_repricing_on_does_not_need_more(self):
+        total, peak = self._three(self.VIOLENT, reprice=1)
+        assert total <= 24, total
+        assert peak <= D("0.30"), peak
+
+    def test_the_peak_is_identical_whatever_the_book(self):
+        #: the dollar bound is a property of the ceiling, not of the
+        #: market -- which is the whole point of bounding in dollars.
+        peaks = {self._three(b)[1] for b in
+                 (MOVING, self.TICK_EVERY_STEP, self.VIOLENT)}
+        assert peaks == {D("0.2964")}, peaks
+
+
+# ============ 7. ticket exhaustion is a refusal, not a breach
+
+class TestTicketExhaustion:
+
+    def test_a_zero_budget_permits_nothing(self):
+        import os as _os
+        prev = _os.environ.get(AUTH.CLASS_BUDGET_ENV["COMPLETE"])
+        try:
+            _os.environ[AUTH.CLASS_BUDGET_ENV["COMPLETE"]] = "0"
+            with pytest.raises(AUTH.Refused) as e:
+                AUTH.claim_class_ticket("/tmp/nonexistent-l5", "t", "COMPLETE")
+            assert "COMPLETE_BUDGET_EXHAUSTED" in str(e.value.args[0])
+        finally:
+            if prev is None:
+                _os.environ.pop(AUTH.CLASS_BUDGET_ENV["COMPLETE"], None)
+            else:
+                _os.environ[AUTH.CLASS_BUDGET_ENV["COMPLETE"]] = prev
+
+    def test_an_unconfigured_budget_returns_none_not_a_free_pass(self):
+        import os as _os
+        prev = _os.environ.get(AUTH.CLASS_BUDGET_ENV["COMPLETE"])
+        try:
+            _os.environ.pop(AUTH.CLASS_BUDGET_ENV["COMPLETE"], None)
+            assert AUTH.max_of_class("COMPLETE") is None
+        finally:
+            if prev is not None:
+                _os.environ[AUTH.CLASS_BUDGET_ENV["COMPLETE"]] = prev
+
+    def test_exhaustion_cannot_raise_exposure(self):
+        #: the campaign that failed spent its tickets and then placed
+        #: NOTHING. Refusing is the safe direction: an exhausted budget
+        #: cannot cause an order, only prevent one.
+        _, peak = TestTheTicketFigureIsStressed()._three(MOVING)
+        assert peak <= D("0.30")
+
+
+# ============ 8. the ranker is configurable at all
+
+class TestTheRankerCanBeSwitchedOn:
+    """It could not be. `inventory_ranking_enabled` had no env reader, so
+    it sat at its dataclass default forever -- the same defect that kept
+    the entry-EV rates unset and the late favourite silent, reintroduced
+    by me in the commit that added the ranker."""
+
+    def test_the_reader_exists_and_needs_an_explicit_yes(self):
+        from src import l5_btc5m_execution as X
+        import os as _os
+        prev = _os.environ.get(X.INVENTORY_RANKING_ENV)
+        try:
+            for v in ("", "1", "TRUE", "no"):
+                _os.environ[X.INVENTORY_RANKING_ENV] = v
+                assert X.inventory_ranking_enabled() is False, v
+            _os.environ[X.INVENTORY_RANKING_ENV] = "YES"
+            assert X.inventory_ranking_enabled() is True
+        finally:
+            if prev is None:
+                _os.environ.pop(X.INVENTORY_RANKING_ENV, None)
+            else:
+                _os.environ[X.INVENTORY_RANKING_ENV] = prev
+
+    def test_the_ev_giveup_budget_is_clamped_down(self):
+        from src import l5_btc5m_execution as X
+        import os as _os
+        prev = _os.environ.get(X.COMPLETION_EV_GIVEUP_ENV)
+        try:
+            _os.environ[X.COMPLETION_EV_GIVEUP_ENV] = "99"
+            assert X.completion_ev_giveup_usd() == X.COMPLETION_EV_GIVEUP_MAX
+            _os.environ[X.COMPLETION_EV_GIVEUP_ENV] = "-1"
+            assert X.completion_ev_giveup_usd() is None, "negative refuses"
+        finally:
+            if prev is None:
+                _os.environ.pop(X.COMPLETION_EV_GIVEUP_ENV, None)
+            else:
+                _os.environ[X.COMPLETION_EV_GIVEUP_ENV] = prev

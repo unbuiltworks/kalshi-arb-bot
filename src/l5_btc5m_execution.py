@@ -157,6 +157,19 @@ STRADDLE_REPEAT_ENV = "L5_BTC5M_STRADDLE_REPEAT"
 #: straddle's clothes.
 STRADDLE_MAX_SIDE_USD_ENV = "L5_BTC5M_STRADDLE_MAX_SIDE_USD"
 STRADDLE_MAX_UNMATCHED_USD_ENV = "L5_BTC5M_STRADDLE_MAX_UNMATCHED_USD"
+#: THE ONE COMPARISON OVER EVERY ALTERNATIVE. Absent or not "YES" keeps
+#: the narrower completion branch, which is the historical behaviour.
+#: Without a reader this sat at its dataclass default forever -- the
+#: defect that kept the entry-EV rates unset and the late favourite
+#: silent, and that I reintroduced here.
+INVENTORY_RANKING_ENV = "L5_BTC5M_INVENTORY_RANKING"
+#: The expected value we will PAY to remove a worst case, in dollars.
+#: Absent means NO budget, which `rank` treats as refusing any
+#: alternative whose EV give-up cannot be measured.
+COMPLETION_EV_GIVEUP_ENV = "L5_BTC5M_COMPLETION_EV_GIVEUP_USD"
+#: a give-up larger than this is not a risk decision, it is a donation.
+COMPLETION_EV_GIVEUP_MAX = D("0.10")
+
 #: STRADDLE only: THE ENTRY-EV GATE'S THREE MEASURED RATES.
 #:
 #: These had NO READER. `Params` declares all three as None and
@@ -489,6 +502,28 @@ def straddle_max_side_usd(default: Decimal = D("0")) -> Decimal:
     if raw is None or raw <= ZERO:
         return default
     return min(raw, STRADDLE_MAX_SIDE_USD_CEILING)
+
+
+def inventory_ranking_enabled(default: bool = False) -> bool:
+    """Whether the one-arithmetic ranker decides the residual action."""
+    raw = os.environ.get(INVENTORY_RANKING_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "YES"
+
+
+def completion_ev_giveup_usd(default: Optional[Decimal] = None
+                             ) -> Optional[Decimal]:
+    """Dollars of expected value we will pay to remove a worst case.
+
+    None -- the default, and what an absent or negative value gives --
+    means no budget, and `rank` then refuses any alternative whose EV
+    give-up it cannot measure. Over-asking is CLAMPED DOWN.
+    """
+    raw = _dec(os.environ.get(COMPLETION_EV_GIVEUP_ENV))
+    if raw is None or raw < ZERO:
+        return default
+    return min(raw, COMPLETION_EV_GIVEUP_MAX)
 
 
 def straddle_book_relative(default: bool = False) -> bool:
@@ -2108,6 +2143,12 @@ class Btc5mExecutor:
                         #: these cannot sit at their dataclass defaults
                         #: forever -- the defect that kept the entry-EV
                         #: rates unset and the late favourite silent.
+                        inventory_ranking_enabled=(
+                            inventory_ranking_enabled(
+                                self.params.inventory_ranking_enabled)),
+                        max_completion_ev_giveup_usd=(
+                            completion_ev_giveup_usd(
+                                self.params.max_completion_ev_giveup_usd)),
                         straddle_book_relative=straddle_book_relative(
                             self.params.straddle_book_relative),
                         straddle_join_ticks=straddle_join_ticks(
