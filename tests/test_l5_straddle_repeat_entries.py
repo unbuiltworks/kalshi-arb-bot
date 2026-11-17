@@ -62,8 +62,13 @@ def legs(res, side=None):
                                                       or o["side"] == side)]
 
 
-def resting_order(side, price, qty, oid="o1"):
-    return {"id": oid, "side": side, "price": D(price), "qty": D(qty)}
+def resting_order(side, price, qty, oid="o1", age_s=1.0):
+    #: `age_s` IS REQUIRED. Omitting it made `_read_resting` return None,
+    #: the whole decision bailed with RESTING_UNREADABLE, and three tests
+    #: below passed vacuously because no legs are placed either way. A
+    #: test that cannot fail is not evidence.
+    return {"id": oid, "side": side, "price": D(price), "qty": D(qty),
+            "age_s": age_s}
 
 
 # ---------------------------------------------------------------- default
@@ -345,6 +350,19 @@ class TestTheEVGateIsNotBypassed:
 
 # ------------------------------------------------- reachability from env
 
+class TestTheRestingFixtureIsActuallyReadable:
+    """Guards the fixture itself: if the controller cannot read our
+    resting orders it bails before the logic under test, and every
+    assertion about resting behaviour becomes vacuous."""
+
+    def test_the_decision_is_not_RESTING_UNREADABLE(self):
+        res = decide(resting=[resting_order(C.UP, "0.08", "5")],
+                     straddle_repeat_enabled=True,
+                     straddle_max_side_usd=D("2.00"),
+                     straddle_max_unmatched_usd=D("2.00"))
+        assert res["why"] != "RESTING_UNREADABLE"
+
+
 class TestTheEnvReadersMakeTheModeReachable:
     """A parameter with no environment reader sits at its dataclass default
     forever, and "refused every time" reads identically to "no
@@ -417,3 +435,114 @@ class TestSettlementAccountingIsUnchanged:
         inv = {C.UP: (D("10"), D("0.80")), C.DOWN: (D("5"), D("0.40"))}
         unmatched = C._prospective_unmatched_usd(C.UP, D("0.08"), D("0"), inv)
         assert unmatched == D("0.40")        # 5 unmatched at 0.08 avg
+
+
+# ------------------------------------------- the three working TOGETHER
+
+class TestRepetitionRepricingAndReplenishmentCombined:
+    """The three changes interact, and testing each alone would miss that.
+
+    This threads ONE window's state through successive decisions --
+    place, fill, replenish at a repriced rung, partial fill, cancel --
+    and asserts the ceilings hold at every step. A rule that is correct
+    in isolation can still be wrong in sequence: repricing moves the
+    price the side cap is charged at, and replenishment is what creates
+    the second charge.
+    """
+
+    CFG = dict(straddle_repeat_enabled=True,
+               straddle_max_side_usd=D("0.80"),
+               straddle_max_unmatched_usd=D("0.40"),
+               straddle_reprice_ticks_per_clip=1,
+               max_exposure_usd=D("5.00"))
+
+    def test_the_full_sequence_holds_every_ceiling(self):
+        # 1. FLAT -> both sides quoted at the configured rung
+        s1 = decide(**self.CFG)
+        assert sorted((o["side"], str(o["price"])) for o in legs(s1)) == [
+            (C.DOWN, "0.08"), (C.UP, "0.08")]
+
+        # 2. UP FILLS one clip. AN UNMATCHED CEILING OF EXACTLY ONE CLIP
+        #    NOW CLOSES THAT SIDE, and this is the property worth having:
+        #    with one unmatched clip held, a second would breach the
+        #    ceiling, so the strategy can only add size while it stays
+        #    BALANCED. Repetition on the heavy side is impossible by
+        #    construction, not by timing.
+        held = inv(up_qty="5", up_cost="0.40")
+        s2 = decide(inventory=held, **self.CFG)
+        assert legs(s2, C.UP) == [], "one unmatched clip must close the side"
+        #: the LIGHT side is still quoted, because filling it REDUCES the
+        #: imbalance -- and it is repriced UP to close it faster.
+        assert [str(o["price"]) for o in legs(s2, C.DOWN)] == ["0.09"]
+
+        # 3. REPRICING ON BOTH SIDES, shown with the unmatched ceiling
+        #    widened to two clips so the heavy side is reachable at all.
+        wide = dict(self.CFG, straddle_max_unmatched_usd=D("0.80"))
+        s3 = decide(inventory=held, **wide)
+        by = {o["side"]: o for o in legs(s3)}
+        assert str(by[C.UP]["price"]) == "0.07", "heavy side must bid lower"
+        assert str(by[C.DOWN]["price"]) == "0.09", "light side must bid higher"
+        #: and the pair cost is unchanged at 0.16, so rebalancing did not
+        #: buy a more expensive pair
+        assert by[C.UP]["price"] + by[C.DOWN]["price"] == D("0.16")
+
+        # 4. PARTIAL FILL of half a clip does not move the quote, because
+        #    repricing counts WHOLE clips of imbalance. Shown on the wide
+        #    ceiling, since under the one-clip ceiling a half-filled side
+        #    cannot add at all -- the resulting unmatched would be $0.60.
+        s4 = decide(inventory=inv(up_qty="2.5", up_cost="0.20"), **wide)
+        assert [str(o["price"]) for o in legs(s4, C.UP)] == ["0.08"]
+        #: and under the TIGHT ceiling the same partial refuses, which is
+        #: the ceiling doing its job on a fragment rather than a clip
+        s4b = decide(inventory=inv(up_qty="2.5", up_cost="0.20"), **self.CFG)
+        assert legs(s4b, C.UP) == []
+
+        # 5. MATCHED inventory frees both sides again: no unmatched
+        #    exposure, so the ceiling does not bind, and with the book
+        #    balanced the quotes return to the configured rung.
+        s5 = decide(inventory=inv(up_qty="5", up_cost="0.40",
+                                  dn_qty="5", dn_cost="0.40"), **self.CFG)
+        assert {str(o["price"]) for o in legs(s5)} == {"0.08"}
+        assert len(legs(s5)) == 2
+
+        # 6. a RESTING order is not duplicated -- replenishment replaces a
+        #    consumed order, it does not stack at one price.
+        s6 = decide(inventory=inv(up_qty="5", up_cost="0.40",
+                                  dn_qty="5", dn_cost="0.40"),
+                    resting=[resting_order(C.UP, "0.08", "5")], **self.CFG)
+        assert legs(s6, C.UP) == []
+        assert len(legs(s6, C.DOWN)) == 1
+
+        # 7. at the SIDE CAP, with inventory matched so the unmatched
+        #    ceiling is slack, the side cap is what refuses.
+        s7 = decide(inventory=inv(up_qty="10", up_cost="0.80",
+                                  dn_qty="10", dn_cost="0.80"), **self.CFG)
+        assert legs(s7, C.UP) == []
+
+        # 8. ROLLOVER: past the entry window nothing is placed, whatever
+        #    the inventory, leaving the 30s cancel sweep its room.
+        s8 = decide(inventory=held, t=271.0, **self.CFG)
+        assert legs(s8) == []
+        assert s8["why"] == "ENTRY_WINDOW_CLOSED"
+
+    def test_no_step_of_the_sequence_exceeds_the_exposure_cap(self):
+        """The aggregate cap is the outer bound at every step, not just
+        at the first."""
+        for inventory in (FLAT,
+                          inv(up_qty="5", up_cost="0.40"),
+                          inv(up_qty="2.5", up_cost="0.20"),
+                          inv(up_qty="5", up_cost="0.40",
+                              dn_qty="5", dn_cost="0.40")):
+            res = decide(inventory=inventory,
+                         **dict(self.CFG, max_exposure_usd=D("0.40")))
+            placed = sum(o["price"] * o["qty"] for o in legs(res))
+            assert placed <= D("0.40"), inventory
+
+    def test_the_sequence_never_quotes_one_side_only_while_both_are_open(self):
+        """A half-built ladder is the one shape this strategy must never
+        hold, and repetition must not reintroduce it."""
+        for inventory in (FLAT, inv(up_qty="5", up_cost="0.40",
+                                    dn_qty="5", dn_cost="0.40")):
+            sides = {o["side"] for o in legs(decide(inventory=inventory,
+                                                    **self.CFG))}
+            assert sides == {C.UP, C.DOWN}, inventory
