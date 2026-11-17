@@ -164,7 +164,12 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertTrue(all(r["state"] == "INDETERMINATE_ENTRY" for r in rows))
         self.assertTrue(all(r["pnl"] is None for r in rows))
-        self.assertEqual(self.replay.summarise(rows), [])
+        summary = self.replay.summarise(rows)
+        self.assertEqual(len(summary), 1)
+        self.assertEqual(summary[0]["sequential"], 0)
+        self.assertEqual(summary[0]["unscored"], 2 if rows[0]["state"] == "INDETERMINATE_ENTRY" else 1)
+        self.assertEqual(summary[0]["completion_rate"], "N/A")
+        self.assertIsNone(summary[0]["complete_pnl"])
 
 
     def test_unknown_complement_verdict_is_not_scored_as_residual(self):
@@ -197,7 +202,12 @@ class CompletionTTLTests(unittest.TestCase):
         row = next(r for r in rows if r["frame"] == 0)
         self.assertEqual(row["state"], "INDETERMINATE_COMPLEMENT")
         self.assertIsNone(row["pnl"])
-        self.assertEqual(self.replay.summarise(rows), [])
+        summary = self.replay.summarise(rows)
+        self.assertEqual(len(summary), 1)
+        self.assertEqual(summary[0]["sequential"], 0)
+        self.assertEqual(summary[0]["unscored"], 2 if rows[0]["state"] == "INDETERMINATE_ENTRY" else 1)
+        self.assertEqual(summary[0]["completion_rate"], "N/A")
+        self.assertIsNone(summary[0]["complete_pnl"])
 
 
     def test_summary_discloses_unscored_complement_alongside_scored_cases(self):
