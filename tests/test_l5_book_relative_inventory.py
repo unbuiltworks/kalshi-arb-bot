@@ -499,3 +499,111 @@ class TestThroughTheRealExecutorPath:
         rig.step(bid="0.30", ask="0.31")
         for s in rig.venue.sent:
             assert s.get("post_only") is True, s
+
+
+# ============ the discovery permission overrides NOTHING but itself
+
+class TestDiscoveryPermissionCannotOverrideProtections:
+    """`straddle_fill_model_measured` says one thing only: that the rates
+    being fed to the EV gate are believed to describe these prices. It is
+    not a master switch, and these pin that it cannot reach any other
+    protection. Every case below has the permission GRANTED and is still
+    refused."""
+
+    def test_it_does_not_override_the_entry_ev_gate(self):
+        r = decide(straddle_min_ev_per_share=D("5.00"))
+        assert legs(r) == [] and "ENTRY_EV" in str(r["why"])
+
+    def test_it_does_not_override_the_pair_ceiling(self):
+        r = decide(straddle_pair_ceiling=D("0.50"))
+        assert legs(r) == [] and rec(r)["why"] == "PAIR_ABOVE_CEILING"
+
+    def test_it_does_not_override_the_exposure_cap(self):
+        r = decide(max_exposure_usd=D("0.05"))
+        assert legs(r) == []
+
+    def test_it_does_not_override_the_per_side_cap(self):
+        r = decide(inventory=inv(up=("13", "3.90")),
+                   straddle_completion_pair_cost=D("0"))
+        assert legs(r, C.UP) == []
+
+    def test_it_does_not_override_the_unmatched_ceiling(self):
+        r = decide(inventory=inv(up=("9", "2.70")),
+                   straddle_max_side_usd=D("40.00"),
+                   straddle_max_unmatched_usd=D("0.50"),
+                   straddle_completion_pair_cost=D("0"))
+        assert legs(r, C.UP) == []
+        assert r["evaluation"]["entry"]["why"] in (
+            "UNMATCHED_CEILING", "SIDE_CAP_REACHED", "NO_EXPOSURE_ROOM")
+
+    def test_it_does_not_override_stale_market_data(self):
+        r = decide(book={"bid": "0.30", "ask": "0.31", "age_s": 99.0})
+        assert r["why"] == "BOOK_STALE"
+        assert legs(r) == []
+
+    def test_it_does_not_override_an_unusable_book(self):
+        for bad in ({"bid": "0", "ask": "0.31", "age_s": 0.1},
+                    {"bid": "0.31", "ask": "0.30", "age_s": 0.1},
+                    {"bid": "0.30", "ask": "1.00", "age_s": 0.1}):
+            r = decide(book=bad)
+            assert r["why"] == "BOOK_UNUSABLE", bad
+
+    def test_it_does_not_override_the_entry_cutoff(self):
+        r = decide(t=290.0)
+        assert legs(r) == []
+        assert r["evaluation"]["entry"]["why"] == "ENTRY_WINDOW_CLOSED"
+
+    def test_it_does_not_enable_taker_anywhere(self):
+        #: post_only on every order, at every setting, with the
+        #: permission granted and taker_allowed left False.
+        for kw in ({}, {"inventory": inv(up=("2", "0.60"))},
+                   {"straddle_completion_reserve": True}):
+            r = decide(**kw)
+            for o in r["orders"]:
+                if o.get("op") == "PLACE":
+                    assert o["post_only"] is True, (kw, o)
+
+    def test_it_does_not_grant_itself_without_the_token(self):
+        from src import l5_btc5m_execution as X
+        import os as _os
+        prev = _os.environ.get(X.STRADDLE_FILL_MODEL_ENV)
+        try:
+            for v in ("YES", "1", "TRUE", "yes", "MEASURED", ""):
+                _os.environ[X.STRADDLE_FILL_MODEL_ENV] = v
+                assert X.straddle_fill_model_measured() is False, v
+            _os.environ[X.STRADDLE_FILL_MODEL_ENV] = X.FILL_MODEL_TOKEN
+            assert X.straddle_fill_model_measured() is True
+        finally:
+            if prev is None:
+                _os.environ.pop(X.STRADDLE_FILL_MODEL_ENV, None)
+            else:
+                _os.environ[X.STRADDLE_FILL_MODEL_ENV] = prev
+
+    def test_the_pair_ceiling_is_clamped_down_never_up(self):
+        from src import l5_btc5m_execution as X
+        import os as _os
+        prev = _os.environ.get(X.STRADDLE_PAIR_CEILING_ENV)
+        try:
+            for asked in ("1.00", "1.50", "9.99"):
+                _os.environ[X.STRADDLE_PAIR_CEILING_ENV] = asked
+                assert X.straddle_pair_ceiling() == X.STRADDLE_PAIR_CEILING_MAX
+            _os.environ[X.STRADDLE_PAIR_CEILING_ENV] = "0"
+            assert X.straddle_pair_ceiling() == D("0"), "zero disables"
+        finally:
+            if prev is None:
+                _os.environ.pop(X.STRADDLE_PAIR_CEILING_ENV, None)
+            else:
+                _os.environ[X.STRADDLE_PAIR_CEILING_ENV] = prev
+
+    def test_join_ticks_are_clamped_so_the_quote_cannot_be_pushed_up(self):
+        from src import l5_btc5m_execution as X
+        import os as _os
+        prev = _os.environ.get(X.STRADDLE_JOIN_TICKS_ENV)
+        try:
+            _os.environ[X.STRADDLE_JOIN_TICKS_ENV] = "99"
+            assert X.straddle_join_ticks() == X.STRADDLE_JOIN_TICKS_CEILING
+        finally:
+            if prev is None:
+                _os.environ.pop(X.STRADDLE_JOIN_TICKS_ENV, None)
+            else:
+                _os.environ[X.STRADDLE_JOIN_TICKS_ENV] = prev
