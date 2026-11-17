@@ -2118,6 +2118,27 @@ class Btc5mExecutor:
                 report["exposure"]["btc5m"] = C.exposure(
                     report["inventory"], self._resting(market, now))
             report["halted_reason"] = self.halted_reason
+            #: WHERE THE RESIDUAL IS, as one named phase. REPORTED, not
+            #: enforced: uncertainty is already enforced upstream by the
+            #: HALT_ORDER latch and the CANCEL_PENDING refusal, and a
+            #: second enforcement point over the same facts is how two
+            #: records of one truth start disagreeing. This is the
+            #: observable an operator reads.
+            if self._ledger_ok:
+                try:
+                    from src import l5_residual_phase as _rp
+                    report["residual_phase"] = _rp.phase(
+                        orders=[r for r in self._ledger["orders"].values()
+                                if r.get("market") == market],
+                        inventory=report["inventory"] or {},
+                        halted=bool(self.halted_reason),
+                        window_closed=bool(report.get("window_closed")),
+                        chosen_action=report.get("action"))
+                except Exception as exc:                   # noqa: BLE001
+                    #: an observable must never be able to fail a step
+                    report["residual_phase"] = {
+                        "phase": None,
+                        "why": "PHASE_UNAVAILABLE:%s" % type(exc).__name__}
             return report
 
         if not self._ledger_ok or not isinstance(market, str) or not market:

@@ -74,5 +74,7 @@ COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
 #: reimplemented so the two lanes cannot disagree about how much
 #: displayed depth to believe. Imports l5_two_sided_probe, shipped above.
 COPY src/l5_inventory_decision.py src/l5_inventory_decision.py
+#: the residual phase projection, read lazily in the step report
+COPY src/l5_residual_phase.py src/l5_residual_phase.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 CMD ["python3", "-u", "-m", "src.l5_btc5m_runner"]
