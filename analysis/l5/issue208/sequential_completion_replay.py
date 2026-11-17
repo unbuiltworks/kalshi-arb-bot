@@ -228,7 +228,8 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 if uf and df:
                     # A later second fill depends on the original order's
                     # lifecycle. Book-only data cannot prove it stayed live.
-                    if up.get("fill_index") != dn.get("fill_index"):
+                    if (up.get("fill_index") is None or dn.get("fill_index") is None
+                            or up.get("fill_index") != dn.get("fill_index")):
                         rows.append(dict(base, state="INDETERMINATE_ENTRY_LIFECYCLE",
                                          up_fill_frame=up.get("fill_index"),
                                          down_fill_frame=dn.get("fill_index"),
