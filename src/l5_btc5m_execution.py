@@ -533,6 +533,17 @@ TAKER_COMPLETION_ENV = "L5_BTC5M_TAKER_COMPLETION"
 #: worthless. Zero is the default and REFUSES completion entirely.
 TAKER_COMPLETION_MAX_USD_ENV = "L5_BTC5M_TAKER_COMPLETION_MAX_USD"
 TAKER_COMPLETION_MAX_USD_CEILING = D("1.00")
+#: the MINIMUM net settlement margin a completed pair must lock, on top
+#: of fees and slippage. `pmus_q1_executor.MIN_EDGE` (1c) is the FLOOR:
+#: this can only ask for MORE, never less, so a misconfiguration cannot
+#: loosen the economics.
+#: how much of DISPLAYED depth is believed when walking the book. The
+#: pmus-live lane prices against the same 0.25: displayed size is
+#: displayed, not guaranteed, and crossing is paying for certainty we
+#: have not got.
+TAKER_DEPTH_HAIRCUT = D("0.25")
+TAKER_MIN_MARGIN_ENV = "L5_BTC5M_TAKER_MIN_MARGIN"
+TAKER_MIN_MARGIN_CEILING = D("0.20")
 TAKER_SLIPPAGE_TICKS_ENV = "L5_BTC5M_TAKER_SLIPPAGE_TICKS"
 TAKER_SLIPPAGE_TICKS_DEFAULT = 1
 TAKER_SLIPPAGE_TICKS_CEILING = 5
@@ -549,6 +560,16 @@ def taker_completion_allowed(default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().upper() == "YES"
+
+
+def taker_min_margin() -> Decimal:
+    """Required locked margin per pair. Never below q1's 1c floor."""
+    from src import pmus_q1_executor as _q1
+    floor = _q1.MIN_EDGE
+    raw = _dec(os.environ.get(TAKER_MIN_MARGIN_ENV))
+    if raw is None or raw < floor:
+        return floor
+    return min(raw, TAKER_MIN_MARGIN_CEILING)
 
 
 def taker_completion_max_usd(default: Decimal = D("0")) -> Decimal:
@@ -576,13 +597,22 @@ def taker_slippage_ticks(default: int = TAKER_SLIPPAGE_TICKS_DEFAULT) -> int:
 
 def completion_taker_fault(order: Mapping[str, Any],
                            held_qty: Decimal,
-                           held_cost: Decimal) -> Optional[str]:
+                           basis_px: Optional[Decimal],
+                           resting_same_side_qty: Decimal = ZERO
+                           ) -> Optional[str]:
     """Why this crossing COMPLETION may not be sent, or None.
 
-    `held_qty`/`held_cost` come from the executor's OWN ledger, never from
-    the order, because the first leg's cost is what decides whether the
-    pair is profitable and a caller that supplied it could make any
-    completion look good.
+    `held_qty` and `basis_px` come from the executor's OWN ledger, never
+    from the order, because the first leg's cost is what decides whether
+    the pair is profitable and a caller that supplied it could make any
+    completion look good. `basis_px` is the DEAREST-LOT basis (see
+    `Btc5mExecutor.dearest_basis`), not a blended average that would let
+    cheap inventory subsidise dear inventory.
+
+    `resting_same_side_qty` is our own working quantity on the COMPLETING
+    side. A maker completion already resting would be retired by this
+    cross as well, so counting it is what stops one deficit being
+    completed twice and leaving fresh exposure on the other side.
 
     The order must carry the book it was priced against -- `ask`,
     `ask_shares` and `age_s` -- and all three are checked:
@@ -600,9 +630,20 @@ def completion_taker_fault(order: Mapping[str, Any],
     qty = _dec(order.get("qty"))
     if qty is None or qty <= 0:
         return "ORDER_UNREADABLE"
-    if qty > held_qty:
-        #: completing MORE than is held would open new directional risk
-        #: on the other side under the name of a hedge
+    #: DUPLICATE EXPOSURE. The deficit this cross may fill is what is
+    #: held MINUS whatever we already have working on the completing
+    #: side; ignoring our own resting completion would complete the same
+    #: deficit twice.
+    rest = _dec(resting_same_side_qty) or ZERO
+    if rest < 0:
+        return "RESTING_UNREADABLE"
+    completable = held_qty - rest
+    if completable <= 0:
+        return "COMPLETION_ALREADY_WORKING"
+    if qty > completable:
+        #: completing MORE than is held (net of what is working) would
+        #: open new directional risk on the other side under the name of
+        #: a hedge
         return "COMPLETION_EXCEEDS_HELD"
     book = order.get("book")
     if not isinstance(book, Mapping):
@@ -618,7 +659,31 @@ def completion_taker_fault(order: Mapping[str, Any],
         return "TAKER_ASK_UNREADABLE"
     if age is None or age < 0 or age > TAKER_BOOK_MAX_AGE_S:
         return "TAKER_BOOK_STALE"
-    if shares is None or shares < qty:
+    #: EXECUTABLE DEPTH AT THE ACTUAL QUANTITY, walked over the rungs
+    #: when the book gives them, rather than trusting a single
+    #: top-of-book size. Reuses `l5_inventory_decision.walk_own_side`,
+    #: which is the same walk the pmus-live lane prices against.
+    rungs = book.get("rungs")
+    if rungs:
+        from src import l5_inventory_decision as _inv
+        try:
+            walk = _inv.walk_own_side(
+                [(D(str(px_)), D(str(q_))) for px_, q_ in rungs], qty,
+                haircut=TAKER_DEPTH_HAIRCUT)
+        except Exception:
+            return "TAKER_DEPTH_UNREADABLE"
+        if not isinstance(walk, Mapping) or not walk.get("ok"):
+            return "TAKER_DEPTH_SHORT"
+        if not walk.get("clears_in_full"):
+            return "TAKER_DEPTH_SHORT"
+        vwap = _dec(walk.get("vwap"))
+        if vwap is None:
+            return "TAKER_DEPTH_UNREADABLE"
+        if vwap > ask:
+            #: walking the book costs more than the touch, so the
+            #: economics are priced on what the walk actually pays
+            ask = vwap
+    elif shares is None or shares < qty:
         return "TAKER_DEPTH_SHORT"
     #: WHAT WE COULD ACTUALLY PAY, which is the worse of the quoted ask
     #: plus the slippage allowance and OUR OWN LIMIT. Pricing only
@@ -634,9 +699,11 @@ def completion_taker_fault(order: Mapping[str, Any],
     #: ECONOMICS FIRST, so an unprofitable pair is reported as one rather
     #: than as a notional breach -- the refusal reason is what an operator
     #: reads at 3am.
-    first_cost = held_cost / held_qty
+    if basis_px is None or basis_px <= ZERO:
+        return "COST_BASIS_UNKNOWN"
     from src import pmus_q1_executor as _q1
-    if not _q1.taker_completion_ok(first_cost, worst):
+    if not _q1.taker_completion_ok(basis_px, worst,
+                                   min_edge=taker_min_margin()):
         return "TAKER_PAIR_NOT_PROFITABLE"
     #: THEN the notional cap, judged at the WORST price we could pay. This
     #: is not an economic test -- it is the bound that makes the owner's
@@ -1100,6 +1167,53 @@ class Btc5mExecutor:
                        "cost": D(str((legs.get(side) or {}).get("cost", "0")))}
                 for side in C.SIDES}
 
+    def held_lots(self, market: str, side: str) -> List[tuple]:
+        """Filled LOTS on one side as (price, qty), DEAREST FIRST.
+
+        Derived from the order rows, the same source `attribution` uses --
+        never a second ledger. Each filled order is one lot at its own
+        average fill price, which is what makes a lot-level cost basis
+        possible at all.
+        """
+        out = []
+        for r in self._ledger["orders"].values():
+            if r.get("market") != market or r.get("side") != side:
+                continue
+            q, c = _dec(r.get("filled_qty")), _dec(r.get("filled_cost"))
+            if q is None or c is None or q <= 0:
+                continue
+            out.append((c / q, q))
+        out.sort(key=lambda t: t[0], reverse=True)
+        return out
+
+    def dearest_basis(self, market: str, side: str,
+                      qty: Decimal) -> Optional[Decimal]:
+        """Weighted average price of the DEAREST `qty` contracts held.
+
+        WHY NOT THE BLENDED AVERAGE. Completing N contracts retires N held
+        contracts, and a blended average lets cheap inventory subsidise
+        dear inventory inside one number: a side holding 5 at 0.08 and 5
+        at 0.60 averages 0.34, so a completion priced against 0.34 looks
+        profitable while the 0.60 lot it is actually retiring is not. The
+        dearest lots are therefore the basis, which can only refuse
+        completions the average would have allowed -- never the reverse.
+        """
+        want = _dec(qty)
+        if want is None or want <= 0:
+            return None
+        taken, cost = ZERO, ZERO
+        for px, q in self.held_lots(market, side):
+            use = min(q, want - taken)
+            if use <= 0:
+                break
+            taken += use
+            cost += px * use
+            if taken >= want:
+                break
+        if taken < want or taken <= 0:
+            return None
+        return cost / taken
+
     def attribution(self, market: str,
                     up_won: Optional[bool] = None) -> Dict[str, Any]:
         """Filled quantity, cost, fees and settled result PER STRATEGY.
@@ -1541,8 +1655,15 @@ class Btc5mExecutor:
                 return refuse("TAKER_COMPLETION_DISABLED")
             inv = self.inventory(market)
             opp = C.DOWN if order.get("side") == C.UP else C.UP
-            held = inv.get(opp) or (ZERO, ZERO)
-            tf = completion_taker_fault(order, held[0], held[1])
+            leg = inv.get(opp) or {}
+            held_qty = _dec(leg.get("qty")) or ZERO
+            want = _dec(order.get("qty")) or ZERO
+            #: DEAREST-LOT basis for exactly the quantity being completed
+            basis = self.dearest_basis(market, opp, want)
+            #: our own working quantity on the COMPLETING side
+            working = sum((o["qty"] for o in self._resting(market, now)
+                           if o.get("side") == order.get("side")), ZERO)
+            tf = completion_taker_fault(order, held_qty, basis, working)
             if tf:
                 return refuse(tf)
             taker_ok = True

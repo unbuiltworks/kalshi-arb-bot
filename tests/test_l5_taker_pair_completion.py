@@ -51,8 +51,9 @@ def order(**kw):
     return base
 
 
-def fault(o=None, held_qty=D("5"), held_cost=D("0.40")):
-    return E.completion_taker_fault(o or order(), held_qty, held_cost)
+def fault(o=None, held_qty=D("5"), basis=D("0.08"), resting=D("0")):
+    """`basis` is the DEAREST-LOT price, not a blended average."""
+    return E.completion_taker_fault(o or order(), held_qty, basis, resting)
 
 
 # ------------------------------------------------------ default is off
@@ -106,7 +107,7 @@ class TestTheEconomicsMustBePositive:
     def test_a_dear_first_leg_is_refused(self):
         """The pair is what matters, not the completion price alone: a
         0.50 first leg plus a 0.55 ask cannot lock a cent."""
-        assert fault(held_cost=D("2.50")) == "TAKER_PAIR_NOT_PROFITABLE"
+        assert fault(basis=D("0.50")) == "TAKER_PAIR_NOT_PROFITABLE"
 
     def test_the_real_taker_fee_is_charged(self):
         """At this account's Tier-1 coefficient, not the top tier."""
@@ -139,10 +140,10 @@ class TestTheEconomicsMustBePositive:
         #: qty 1 so the NOTIONAL cap is not what binds -- this test is
         #: about which PRICE the economics are charged at
         ok = order(qty=D("1"), price=D("0.70"))     # above ask, still locks
-        assert fault(ok, held_qty=D("1"), held_cost=D("0.08")) is None
+        assert fault(ok, held_qty=D("1"), basis=D("0.08")) is None
         dear = order(qty=D("1"), price=D("0.93"))   # our own limit sinks it
         assert fault(dear, held_qty=D("1"),
-                     held_cost=D("0.08")) == "TAKER_PAIR_NOT_PROFITABLE"
+                     basis=D("0.08")) == "TAKER_PAIR_NOT_PROFITABLE"
 
     def test_an_unreadable_limit_is_refused(self):
         assert fault(order(price=D("0"))) == "ORDER_UNREADABLE"
@@ -195,7 +196,7 @@ class TestStaleBooksAndDepth:
 
 class TestInventoryLimits:
     def test_nothing_held_means_nothing_to_complete(self):
-        assert fault(held_qty=D("0"), held_cost=D("0")) == \
+        assert fault(held_qty=D("0"), basis=D("0.08")) == \
             "NOTHING_TO_COMPLETE"
 
     def test_completing_more_than_held_is_refused(self):
@@ -210,9 +211,9 @@ class TestInventoryLimits:
         """Held 1 after a partial fill: a 1.5-lot completion is refused,
         a 1-lot completion is not."""
         assert fault(order(qty=D("1.5")), held_qty=D("1"),
-                     held_cost=D("0.08")) == "COMPLETION_EXCEEDS_HELD"
+                     basis=D("0.08")) == "COMPLETION_EXCEEDS_HELD"
         assert fault(order(qty=D("1")), held_qty=D("1"),
-                     held_cost=D("0.08")) is None
+                     basis=D("0.08")) is None
 
     def test_the_first_leg_cost_is_taken_from_OUR_ledger_not_the_order(self):
         """A caller that supplied the first leg's cost could make any
@@ -220,7 +221,8 @@ class TestInventoryLimits:
         and `_place` passes our own inventory."""
         import inspect
         sig = inspect.signature(E.completion_taker_fault)
-        assert list(sig.parameters) == ["order", "held_qty", "held_cost"]
+        assert list(sig.parameters) == ["order", "held_qty", "basis_px",
+                                        "resting_same_side_qty"]
         src = inspect.getsource(E.Btc5mExecutor._place)
         assert "self.inventory(market)" in src
 
@@ -253,8 +255,19 @@ def _crossing(side=C.DOWN, qty="5", ask="0.55"):
 
 
 def _held(ex, monkeypatch, up=("5", "0.40"), down=("0", "0")):
+    """THE REAL SHAPE. `Btc5mExecutor.inventory` returns
+    {side: {"qty","cost"}}, not tuples -- an earlier version of this
+    helper returned tuples and only worked because the code under test
+    indexed them positionally. A double that does not match the real
+    return makes every assertion about it worthless."""
     monkeypatch.setattr(ex, "inventory", lambda _m: {
-        C.UP: (D(up[0]), D(up[1])), C.DOWN: (D(down[0]), D(down[1]))})
+        C.UP: {"qty": D(up[0]), "cost": D(up[1])},
+        C.DOWN: {"qty": D(down[0]), "cost": D(down[1])}})
+    #: lots too, so the dearest-lot basis is derivable
+    monkeypatch.setattr(ex, "dearest_basis",
+                        lambda _m, side, _q: (
+                            D(up[1]) / D(up[0]) if side == C.UP
+                            and D(up[0]) > 0 else None))
 
 
 class TestTheCrossingPathKeepsEveryDownstreamProtection:
@@ -423,3 +436,99 @@ class TestTheNotionalCap:
             self, monkeypatch, bad):
         monkeypatch.setenv(E.TAKER_COMPLETION_MAX_USD_ENV, bad)
         assert E.taker_completion_max_usd() == D("0")
+
+
+class TestLotLevelCostBasis:
+    """The owner's requirement: no optimistic average that hides expensive
+    inventory."""
+
+    def test_the_dearest_lot_decides_not_the_blend(self):
+        """A side holding 5 at 0.08 and 5 at 0.60 blends to 0.34. A
+        completion priced against 0.34 looks profitable while the 0.60 lot
+        it actually retires is not."""
+        assert fault(basis=D("0.34")) is None        # the blend would pass
+        assert fault(basis=D("0.60")) == "TAKER_PAIR_NOT_PROFITABLE"
+
+    def test_an_unknown_basis_refuses_rather_than_guessing(self):
+        assert fault(basis=None) == "COST_BASIS_UNKNOWN"
+        assert fault(basis=D("0")) == "COST_BASIS_UNKNOWN"
+
+    def test_dearest_basis_takes_the_expensive_lots_first(self, tmp_path):
+        """Unit test of the basis itself, over synthetic order rows."""
+        rig = Rig(tmp_path)
+        rig.ex._ledger["orders"].update({
+            "a": {"market": MARKET, "side": C.UP, "filled_qty": "5",
+                  "filled_cost": "0.40"},                      # 0.08
+            "b": {"market": MARKET, "side": C.UP, "filled_qty": "5",
+                  "filled_cost": "3.00"},                      # 0.60
+        })
+        lots = rig.ex.held_lots(MARKET, C.UP)
+        assert [str(px) for px, _q in lots] == ["0.60", "0.08"]
+        #: completing 5 retires the DEAR five
+        assert rig.ex.dearest_basis(MARKET, C.UP, D("5")) == D("0.60")
+        #: completing all ten is the true blend
+        assert rig.ex.dearest_basis(MARKET, C.UP, D("10")) == D("0.34")
+        #: asking for more than is held is unknowable, not approximated
+        assert rig.ex.dearest_basis(MARKET, C.UP, D("11")) is None
+
+
+class TestRestingOrdersPreventDuplicateExposure:
+    def test_a_completion_already_working_refuses(self):
+        assert fault(resting=D("5")) == "COMPLETION_ALREADY_WORKING"
+
+    def test_only_the_UNWORKED_deficit_may_be_crossed(self):
+        """5 held with 4 already working leaves 1 completable: 1.5 is
+        refused, 1 is allowed."""
+        assert fault(order(qty=D("1.5")), resting=D("4")) == \
+            "COMPLETION_EXCEEDS_HELD"
+        assert fault(order(qty=D("1")), resting=D("4")) is None
+
+    def test_the_place_path_sums_our_own_working_quantity(self):
+        import inspect
+        src = inspect.getsource(E.Btc5mExecutor._place)
+        assert "self._resting(market, now)" in src
+        assert "working" in src
+
+
+class TestExecutableDepthIsWalked:
+    RUNGS = [["0.55", "1.0"], ["0.56", "8.0"]]
+
+    def test_rungs_are_walked_with_a_haircut_on_displayed_size(self):
+        """Displayed size is displayed, not guaranteed. Only 25% is
+        believed -- the same haircut the pmus-live lane prices against."""
+        assert E.TAKER_DEPTH_HAIRCUT == D("0.25")
+        deep = order(book=dict(FRESH, rungs=self.RUNGS))
+        assert fault(deep) is None
+        thin = order(book=dict(FRESH, rungs=[["0.55", "1.0"]]))
+        #: 1.0 displayed is 0.25 usable, short of 1.5
+        assert fault(thin) == "TAKER_DEPTH_SHORT"
+
+    def test_the_walk_vwap_prices_the_economics_when_it_is_worse(self):
+        dear = order(qty=D("1"), price=D("0.95"),
+                     book=dict(FRESH, rungs=[["0.95", "40"]]))
+        assert fault(dear, held_qty=D("1")) == "TAKER_PAIR_NOT_PROFITABLE"
+
+    def test_unreadable_rungs_refuse(self):
+        bad = order(book=dict(FRESH, rungs=[["x", "y"]]))
+        assert fault(bad) in ("TAKER_DEPTH_UNREADABLE", "TAKER_DEPTH_SHORT")
+
+
+class TestTheMinimumMarginBuffer:
+    def test_it_cannot_go_below_the_one_cent_floor(self, monkeypatch):
+        monkeypatch.setenv(E.TAKER_MIN_MARGIN_ENV, "0.001")
+        assert E.taker_min_margin() == q1.MIN_EDGE
+        monkeypatch.setenv(E.TAKER_MIN_MARGIN_ENV, "-5")
+        assert E.taker_min_margin() == q1.MIN_EDGE
+
+    def test_it_can_only_ask_for_MORE(self, monkeypatch):
+        monkeypatch.setenv(E.TAKER_MIN_MARGIN_ENV, "0.15")
+        assert E.taker_min_margin() == D("0.15")
+        #: a pair locking ~12c passes at the 1c floor and fails at 15c
+        monkeypatch.delenv(E.TAKER_MIN_MARGIN_ENV, raising=False)
+        assert fault(basis=D("0.30")) is None
+        monkeypatch.setenv(E.TAKER_MIN_MARGIN_ENV, "0.15")
+        assert fault(basis=D("0.30")) == "TAKER_PAIR_NOT_PROFITABLE"
+
+    def test_it_is_clamped_at_the_ceiling(self, monkeypatch):
+        monkeypatch.setenv(E.TAKER_MIN_MARGIN_ENV, "9")
+        assert E.taker_min_margin() == E.TAKER_MIN_MARGIN_CEILING

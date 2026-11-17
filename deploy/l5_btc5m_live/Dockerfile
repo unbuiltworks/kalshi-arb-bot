@@ -69,5 +69,10 @@ COPY src/pmus_fees.py src/pmus_fees.py
 #: reached lazily by l5_btc5m_execution.completion_taker_fault for the
 #: all-in taker pair economics; it imports only pmus_fees, shipped above
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+#: reached lazily by completion_taker_fault for `walk_own_side` -- the
+#: depth walk the pmus-live lane prices against, reused rather than
+#: reimplemented so the two lanes cannot disagree about how much
+#: displayed depth to believe. Imports l5_two_sided_probe, shipped above.
+COPY src/l5_inventory_decision.py src/l5_inventory_decision.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 CMD ["python3", "-u", "-m", "src.l5_btc5m_runner"]
