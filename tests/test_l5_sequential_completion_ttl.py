@@ -137,9 +137,13 @@ class CompletionTTLTests(unittest.TestCase):
                     complete_depth=0, scenario=("base", "PROVEN", D("0.5")),
                     root=root)
         row = next(r for r in rows if r["frame"] == 0)
-        self.assertEqual(row["state"], "PAIR_AT_ENTRY")
+        self.assertEqual(row["state"], "INDETERMINATE_ENTRY_LIFECYCLE")
+        self.assertIsNone(row["pnl"])
+        summary = self.replay.summarise(rows)
+        self.assertEqual(summary[0]["unscored"], 1)
+        self.assertEqual(summary[0]["sequential"], 0)
         self.assertEqual((row["up_fill_frame"], row["down_fill_frame"]), (1, 2))
-        self.assertFalse(row["entry_fills_simultaneous"])
+        self.assertNotIn("entry_fills_simultaneous", row)
 
 
     def test_unknown_entry_verdict_is_visible_without_invented_pnl(self):
