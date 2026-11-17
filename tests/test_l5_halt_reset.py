@@ -991,3 +991,98 @@ def test_inspect_still_yields_the_digest_with_no_venue_credentials():
     assert out["preconditions"]["registry"]["ok"] is True
     assert out["would_clear"] is False
     assert store.puts == []
+
+
+# ---------------------------------------------------------------------------
+# LIVE 2026-11-17 23:09Z. `L5_ORDER_REGISTRY_URL` held two comma-separated
+# urls. The sweep split them; this gate did not, and passed the whole value
+# to one RegistryOrderSource. Every reset therefore refused
+# REGISTRY_UNREADABLE on a host that cannot resolve, and the clear could
+# only be made to pass by temporarily rewriting the variable to one url --
+# a configuration change made to satisfy a guard.
+# ---------------------------------------------------------------------------
+class TestCommaSeparatedRegistriesAreReadLikeTheSweepReadsThem:
+
+    def test_one_definition_of_the_split_is_shared_with_the_watchdog(self):
+        assert W.registry_urls("http://a:1,http://b:2") == [
+            "http://a:1", "http://b:2"]
+        assert W.registry_urls("http://a:1") == ["http://a:1"]
+        assert W.registry_urls("  ") == []
+        assert W.registry_urls("http://a:1,") == ["http://a:1"]
+
+    def test_two_healthy_registries_both_attest_and_the_gate_passes(self):
+        out = R.registry_evidence("http://a:8090,http://b:8090",
+                                  opener=fresh_registry(submission_disabled=True))
+        assert out["registry_readable"] is True
+        assert out["registry_count"] == 2
+        assert out["registry_live_orders"] == 0
+        assert len(out["registries"]) == 2
+
+    def test_a_single_url_is_unchanged_and_carries_no_count(self):
+        out = R.registry_evidence("http://a:8090",
+                                  opener=fresh_registry(submission_disabled=True))
+        assert out["registry_url"] == "http://a:8090"
+        assert "registry_count" not in out
+
+    def test_the_whole_comma_string_is_no_longer_treated_as_one_host(self):
+        """The live failure: it must not GET 'http://a:8090,http://b:8090'."""
+        seen = []
+
+        def opener(url, timeout_s):
+            seen.append(url)
+            return fresh_registry(submission_disabled=True)(url, timeout_s)
+        R.registry_evidence("http://a:8090,http://b:8090", opener=opener)
+        assert all("," not in u for u in seen), seen
+        #: each source is read more than once (fetch, then open_orders),
+        #: so assert on the DISTINCT hosts visited, not the call count.
+        assert sorted(set(seen)) == [
+            "http://a:8090/l5/live_orders.json",
+            "http://b:8090/l5/live_orders.json"], sorted(set(seen))
+
+    def test_one_unreadable_registry_refuses_the_whole_clear(self):
+        """A second executor's silence must not read as its consent."""
+        def opener(url, timeout_s):
+            if "b:" in url:
+                raise OSError("unreachable")
+            return fresh_registry(submission_disabled=True)(url, timeout_s)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("http://a:8090,http://b:8090", opener=opener)
+        assert "REGISTRY_UNREADABLE" in str(e.value)
+        assert "registry 2 of 2" in str(e.value)
+
+    def test_one_registry_still_claiming_orders_refuses(self):
+        def opener(url, timeout_s):
+            rows = [{"id": "D1"}] if "b:" in url else []
+            return fresh_registry(rows=rows, submission_disabled=True)(url,
+                                                                 timeout_s)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("http://a:8090,http://b:8090", opener=opener)
+        assert "EXECUTOR_STILL_CLAIMS_LIVE_ORDERS" in str(e.value)
+        assert "registry 2 of 2" in str(e.value)
+
+    def test_one_registry_not_proven_locked_refuses(self):
+        def opener(url, timeout_s):
+            locked = False if "b:" in url else True
+            return fresh_registry(submission_disabled=locked)(url, timeout_s)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("http://a:8090,http://b:8090", opener=opener)
+        assert "SUBMISSION_NOT_PROVEN_DISABLED" in str(e.value)
+
+    def test_one_stale_registry_refuses(self):
+        def opener(url, timeout_s):
+            age = 10_000.0 if "b:" in url else 1.0
+            return fresh_registry(age_s=age, submission_disabled=True)(url,
+                                                                 timeout_s)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("http://a:8090,http://b:8090", opener=opener)
+        assert "REGISTRY_STALE" in str(e.value)
+
+    def test_no_url_configured_still_refuses(self):
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("", opener=fresh_registry())
+        assert "NO_REGISTRY_URL" in str(e.value)
+
+    def test_a_comma_only_value_is_not_a_url(self):
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(" , ", opener=fresh_registry())
+        assert "NO_REGISTRY_URL" in str(e.value)

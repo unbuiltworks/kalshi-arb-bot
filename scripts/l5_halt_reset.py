@@ -477,12 +477,63 @@ def ownership(url: str, *, opener=None) -> Dict[str, Any]:
 
 
 def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
-    """Gate 4(c). READABLE, FRESH and EMPTY, or ResetRefused."""
-    if not url:
+    """Gate 4(c). EVERY configured registry READABLE, FRESH and EMPTY.
+
+    COMMA-SEPARATED URLS, READ THE SAME WAY THE SWEEP READS THEM. This
+    took the whole `L5_ORDER_REGISTRY_URL` value as one url while
+    `l5_watchdog.registry_urls` split it on commas. With both executors
+    configured the gate then tried to GET a host named
+    "http://a:8090,http://b:8090", which cannot resolve, so the reset
+    refused REGISTRY_UNREADABLE however healthy the registries were. The
+    2026-11-17 23:09Z clear could only be made to pass by temporarily
+    rewriting the variable to a single url -- a configuration change made
+    to satisfy a guard, which is how a precondition stops meaning what it
+    says.
+
+    EVERY REGISTRY MUST ATTEST, and that is the opposite direction from
+    the sweep's ownership union, deliberately. There, a claim only ever
+    GRANTS the power to cancel, so a union is the safe direction and a
+    missing claim costs a cancellation. Here the question is "could any
+    executor still send?", so one unreadable, stale, non-empty or
+    unlocked registry must refuse the clear. Anything else would let a
+    second executor's silence read as its consent.
+
+    With one url configured this is byte-for-byte the previous behaviour.
+    """
+    from src import l5_watchdog as W
+    urls = W.registry_urls(url)
+    if not urls:
         raise ResetRefused(
             "NO_REGISTRY_URL: %s must name the executor's GET-only report, "
             "which is the independent witness that it holds no live order"
             % REGISTRY_ENV)
+    if len(urls) > 1:
+        #: each one in turn, by the same rules; the FIRST refusal stands,
+        #: so the message names the registry that failed rather than a
+        #: merged verdict nobody can act on.
+        seen = []
+        for one in urls:
+            try:
+                seen.append(_one_registry_evidence(one, opener=opener))
+            except ResetRefused as exc:
+                #: name the registry that failed. A merged verdict would
+                #: tell the operator the clear was refused without saying
+                #: which executor to go and look at.
+                raise ResetRefused("%s [registry %s of %d: %s]"
+                                   % (exc, urls.index(one) + 1, len(urls),
+                                      one))
+        return {"registry_readable": True,
+                "registry_age_s": max(r["registry_age_s"] for r in seen),
+                "registry_live_orders": 0,
+                "registry_url": ",".join(urls),
+                "registries": seen,
+                "registry_count": len(seen),
+                "submission_disabled": True}
+    return _one_registry_evidence(urls[0], opener=opener)
+
+
+def _one_registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
+    """Gate 4(c) for exactly ONE registry. READABLE, FRESH and EMPTY."""
     from src import l5_watchdog as W
     src = W.RegistryOrderSource(url, opener=opener)
     try:
