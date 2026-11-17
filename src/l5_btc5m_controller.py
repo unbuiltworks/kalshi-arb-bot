@@ -298,6 +298,46 @@ class Params:
     #: small the SIZE IS SHRUNK to what the room can complete, and only a
     #: size below the venue minimum refuses, named COMPLETION_UNFUNDABLE.
     straddle_completion_reserve: bool = False
+    #: ==================================================================
+    #: ONE DECISION PROCESS OVER EVERY ALTERNATIVE (requirement 5).
+    #:
+    #: `src/l5_inventory_decision.rank()` already IS this: it prices
+    #: HOLD, MAKER_COMPLETE, TAKER_COMPLETE and TAKER_PARTIAL on ONE
+    #: arithmetic, ranks them by expected worst-case-after, and chooses
+    #: HOLD unless an alternative STRICTLY improves the worse settlement
+    #: outcome. It is tested, and `l5_pmus_live_runner` consults it.
+    #:
+    #: THIS LANE NEVER CALLED IT. It had its own narrower completion
+    #: branch, which could only ever rest at the pair-cost ceiling or
+    #: cross it -- it could not compare completing against reducing
+    #: against holding on one scale. So this is a WIRING change, not a
+    #: new strategy and not a second controller.
+    #:
+    #: IT REPLACES THE CHOICE, NOT THE GUARDS. Everything downstream
+    #: still applies in full: the pair-cost target, `_completion_cross`'s
+    #: all-in dominance test, the adapter's `completion_taker_fault`
+    #: (depth walk with haircut, slippage charged against us, dearest-lot
+    #: basis, >=1c locked, notional cap), the envelope's taker_allowed,
+    #: post-only enforcement, and every exposure and loss ceiling. A rank
+    #: that chooses TAKER_COMPLETE is a REQUEST, and any one of those
+    #: refusing keeps the completion resting.
+    #:
+    #: False -- the default -- keeps the existing branch exactly.
+    inventory_ranking_enabled: bool = False
+    #: THE EXPECTED VALUE WE WILL PAY TO REMOVE A WORST CASE.
+    #:
+    #: The ranking basis is expected WORST-case, not expected value --
+    #: deliberately, because an EV ranking prefers carrying every
+    #: unmatched leg (holding has EV zero; completing has EV minus the
+    #: fee). So the chosen action can be RISK-REDUCING YET EV-NEGATIVE:
+    #: it buys away the bad tail and pays for it.
+    #:
+    #: That is a real decision and it must be bought deliberately, so it
+    #: is bounded in dollars. None -- the default -- means NO budget,
+    #: which `rank` treats as refusing any alternative whose EV give-up
+    #: cannot be measured, and the step report labels every chosen action
+    #: POSITIVE_EV or RISK_REDUCING_EV_NEGATIVE either way.
+    max_completion_ev_giveup_usd: Optional[Decimal] = None
     #: ------------------------------------------------------------------
     #: COMPLETION CROSSING. Whether a chosen completion may LIFT the
     #: opposite side's offer instead of resting at the pair-cost ceiling.
@@ -517,7 +557,9 @@ def _side_committed_usd(side: str, inv: Dict[str, tuple],
 
 
 def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
-                               inv: Dict[str, tuple]) -> Decimal:
+                               inv: Dict[str, tuple],
+                               rest: Optional[List[Dict[str, Any]]] = None
+                               ) -> Decimal:
     """Cost of the unmatched portion if THIS clip filled and the opposite
     side did not move.
 
@@ -526,11 +568,34 @@ def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
     exists for. The unmatched quantity is valued at the heavy side's
     average cost, because what an unmatched contract loses is what was
     paid for it, not a dollar.
+
+    EVERY OUTSTANDING ORDER COUNTS, not just the one being placed.
+    Reasoning from inventory plus this clip alone left a real hole: once
+    repricing moves the quote, two same-side orders can rest at the same
+    time, and each was admitted against an inventory that did not include
+    the other. The reachable unmatched cost was therefore the ceiling
+    PLUS another clip, which is why a 3-window campaign at $0.30 clips
+    could not be proved inside a $1.00 ceiling and had to be cut to
+    $0.15. Counting the resting book closes that: the bound becomes the
+    ceiling itself.
+    #
+    #: It is DELIBERATELY PESSIMISTIC ON ONE SIDE ONLY -- our own
+    #: same-side orders are assumed to fill, while the opposite side's are
+    #: not. Crediting the opposite side's resting orders would net away
+    #: exactly the exposure this bound exists to measure.
+    #
+    #: `rest` is optional so the pure arithmetic stays callable without a
+    #: book; omitting it reproduces the old, looser answer.
     """
     other = _other(side)
     q_side, c_side = inv[side]
     q_side = q_side + qty
     c_side = c_side + price * qty
+    if rest:
+        for o in rest:
+            if o["side"] == side:
+                q_side = q_side + o["qty"]
+                c_side = c_side + o["price"] * o["qty"]
     q_other, c_other = inv[other]
     if q_side > q_other:
         heavy_q, heavy_c, unmatched = q_side, c_side, q_side - q_other
@@ -710,6 +775,88 @@ def _book_rung(side, bid, ask, params, tick):
         #: it would initiate rather than rest
         return None
     return px
+
+
+def _rank_inventory(*, inv, rest, deficient, deficit, bid, ask, age,
+                    ceiling, params, tick, room, t):
+    """ONE comparison over every executable alternative, via the existing
+    `l5_inventory_decision.rank`.
+
+    Returns `(chosen, record)`. `chosen` is one of HOLD,
+    MAKER_COMPLETE, TAKER_COMPLETE, TAKER_PARTIAL -- or HOLD whenever the
+    module could not price the question, because "we could not tell" is
+    not a reason to act.
+
+    THE RECORD CLASSIFIES THE CHOICE. `rank` ranks on expected WORST-case
+    after, so a chosen action can be risk-reducing and still EV-negative:
+    it removes the bad tail and pays expected value for the privilege.
+    `ev_class` says which it is -- POSITIVE_EV or
+    RISK_REDUCING_EV_NEGATIVE -- so a loss-realizing risk reduction can
+    never be reported as a profitable completion.
+    """
+    out = {"on": True, "chosen": None, "ev_class": None,
+           "ev_giveup_usd": None, "reason": None, "considered": [],
+           "ok": False}
+    try:
+        from src import l5_inventory_decision as ID
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "HOLD", dict(out, reason="RANKER_UNAVAILABLE")
+
+    def _px(side):
+        q, c = inv[side]
+        return (c / q) if q > 0 else ZERO
+
+    #: the deficient side's own offer, one level, as a single rung. UP's
+    #: offer is the book's; DOWN's is one minus the book's bid.
+    own_ask = ask if deficient == UP else ONE - bid
+    rungs = ((own_ask, deficit),) if (own_ask is not None
+                                      and ZERO < own_ask < ONE) else None
+    try:
+        rec = ID.rank(
+            up_qty=inv[UP][0], dn_qty=inv[DOWN][0],
+            up_cost_px=_px(UP), dn_cost_px=_px(DOWN),
+            deficient_side=deficient, deficit=deficit,
+            min_qty=_dec(params.min_qty), tick=tick,
+            taker_rungs=rungs, taker_own_px=ceiling,
+            #: THE RESTING COMPLETION, priced at the same budget ceiling
+            #: the patient path uses. Its fill rate is NOT supplied,
+            #: because it has not been measured at these prices -- `rank`
+            #: then reports MAKER_COMPLETE unavailable with
+            #: MAKER_FILL_RATE_UNKNOWN rather than inventing one.
+            maker_own_px=ceiling, maker_fill_rate=None,
+            seconds_to_settlement=(_dec(params.window_s) - _dec(str(t))
+                                   if t is not None else None),
+            up_mid_wire=((bid + ask) / 2),
+            cash_headroom=room,
+            worst_case_ceiling=_dec(params.straddle_max_unmatched_usd),
+            max_ev_giveup_usd=params.max_completion_ev_giveup_usd,
+            book_age_s=age, max_book_age_s=_dec(str(params.stale_book_s)))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "HOLD", dict(out, reason="RANKER_RAISED:%s"
+                            % type(exc).__name__)
+
+    chosen = str(rec.get("chosen") or "HOLD")
+    out.update(ok=bool(rec.get("ok")), chosen=chosen,
+               reason=rec.get("reason"),
+               considered=list(rec.get("considered") or []),
+               book_refused=rec.get("book_refused"),
+               why_hold=rec.get("why_hold"))
+    for alt in (rec.get("alternatives") or []):
+        if alt.get("alternative") == chosen:
+            g = alt.get("ev_giveup_usd")
+            out["ev_giveup_usd"] = g
+            if g is None:
+                out["ev_class"] = "EV_UNKNOWN"
+            else:
+                out["ev_class"] = ("RISK_REDUCING_EV_NEGATIVE"
+                                   if _dec(g) is not None and _dec(g) > ZERO
+                                   else "POSITIVE_EV")
+            break
+    return chosen, out
 
 
 def _completion_cross(*, ceiling, ask, held_avg, pair_target, params, tick):
@@ -1045,7 +1192,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                             why_s = "SIDE_CAP_REACHED"
                             continue
                         if _prospective_unmatched_usd(
-                                side, r_side, qty, inv) > _unm_cap:
+                                side, r_side, qty, inv, rest) > _unm_cap:
                             why_s = "UNMATCHED_CEILING"
                             continue
                     if r_side in live[side]:
@@ -1138,7 +1285,9 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 #: no offer to lift.
                 "cross": False, "cross_why": "CROSS_DISABLED",
                 "cross_limit": None, "cross_ask": None,
-                "cross_fee_per_share": None, "cross_saving_per_share": None}
+                "cross_fee_per_share": None, "cross_saving_per_share": None,
+                #: the one comparison over every alternative, when wired
+                "ranking": {"on": False}}
         if _cpc is not None and _cpc > ZERO:
             exp_c = _exposure(inv, rest)
             cheld, cunm = exp_c["unmatched_side"], exp_c["unmatched_qty"]
@@ -1161,6 +1310,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 #: UnboundLocalError the moment a completion is enabled.
                 #: DOWN's offer is one minus UP's bid, which is what
                 #: `quote` would have said.
+                #: ---------------- ONE DECISION OVER EVERY ALTERNATIVE.
+                #: Consulted BEFORE the completion is priced into the
+                #: plan, because its answer decides WHETHER to complete
+                #: at all and by which route. It replaces the choice; the
+                #: guards below are untouched and all still apply.
+                _rank_choice = None
+                if params.inventory_ranking_enabled:
+                    _rank_choice, comp["ranking"] = _rank_inventory(
+                        inv=inv, rest=rest, deficient=cside, deficit=cunm,
+                        bid=bid, ask=ask, age=_dec(str(age)),
+                        ceiling=cprice, params=params, tick=tick,
+                        room=room, t=t)
                 c_ask = ask if cside == UP else ONE - bid
                 cx = _completion_cross(
                     ceiling=cprice, ask=c_ask, held_avg=cavg,
@@ -1197,7 +1358,15 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 # after this branch returns, so calling it here is a
                 # NameError the moment a completion is enabled. The bound
                 # is inlined instead.
-                if not (PRICE_MIN <= cprice <= PRICE_MAX) or cprice <= ZERO:
+                if _rank_choice == "HOLD":
+                    #: THE RANKER CHOSE TO CARRY THE LEG. It chooses HOLD
+                    #: unless an alternative strictly improves the worse
+                    #: settlement outcome, so this is "nothing on offer
+                    #: is better than waiting", not an error. Acting here
+                    #: anyway would be taking a decision the one
+                    #: comparison declined to take.
+                    comp["why"] = "RANKED_HOLD"
+                elif not (PRICE_MIN <= cprice <= PRICE_MAX) or cprice <= ZERO:
                     comp["why"] = "PRICE_OUT_OF_RANGE"
                 elif cavg + cprice > _cpc:
                     comp["why"] = "PAIR_ABOVE_TARGET"
@@ -1263,9 +1432,26 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         #: down. Every refusal keeps today's resting
                         #: completion exactly as it was.
                         c_px, c_only = cprice, True
-                        if cx["cross"]:
+                        #: A RANKED TAKER CHOICE IS A REQUEST, NOT A
+                        #: PERMISSION. `_completion_cross` still has to
+                        #: find the offer strictly cheaper all-in than
+                        #: resting, the envelope still has to grant
+                        #: taker_allowed, and the adapter's
+                        #: `completion_taker_fault` still re-verifies
+                        #: against the live book with its own depth
+                        #: haircut, slippage charge and notional cap.
+                        #: Conversely a ranked MAKER_COMPLETE is NOT
+                        #: allowed to cross, whatever the dominance test
+                        #: says, because crossing was not the action that
+                        #: was ranked.
+                        _wants_taker = (_rank_choice is None
+                                        or str(_rank_choice).startswith(
+                                            "TAKER"))
+                        if cx["cross"] and _wants_taker:
                             comp["cross"] = True
                             c_px, c_only = cx["limit_dec"], False
+                        elif cx["cross"] and not _wants_taker:
+                            comp["cross_why"] = "RANKED_MAKER_COMPLETE"
                         #: ROOM IS CHARGED AT THE CEILING EITHER WAY. A
                         #: crossing limit is bounded by the ceiling by
                         #: construction, so the ceiling remains a valid
