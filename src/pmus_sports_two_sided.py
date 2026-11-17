@@ -2877,7 +2877,8 @@ def start_combo_study(venue: "Venue") -> Optional[Any]:
 
         def signed_get(path: str) -> Any:
             return venue.q1.base._get_with_retry(venue.t, path)
-        cs = CS.ComboStudy(signed_get, venue.gget, log)
+        cs = CS.ComboStudy(signed_get, venue.gget, log,
+                           state_dir=STATE_DIR / "combo_study")
         cs.start()
         log("combo_study_enabled", label="READ-ONLY: nothing quoted")
         return cs

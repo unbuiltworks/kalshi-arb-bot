@@ -137,3 +137,150 @@ def test_unreadable_leg_is_unpriced_not_fatal():
     cs.poll_trades()
     rec = [kw for k, kw in logs if k == "COMBO_STUDY_TRADE"][0]
     assert rec["fair_now"] is None and "leg_bbo" in cs.summary()["errors"]
+
+
+# ------------------------------------------- settlement scoring (11-17)
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+NOW = datetime(2026, 11, 17, 13, 0, tzinfo=timezone.utc)
+A, B = "aec-nba-a-b-2026-11-17", "aec-nhl-c-d-2026-11-17"
+LEGS = [{"symbol": A, "side": "SIDE_BUY"}, {"symbol": B, "side": "SIDE_SELL"}]
+
+
+def settle_get(final, mids=None):
+    """Gateway BBO: a resolved leg carries state + settlementPx."""
+    def g(path):
+        sym = path.split("/")[3]
+        if sym in final:
+            return {"marketData": {"marketSlug": sym,
+                                   "state": "MARKET_STATE_EXPIRED",
+                                   "settlementPx": {"value": str(final[sym])}}}
+        m = (mids or {}).get(sym, 0.5)
+        return {"marketData": {"marketSlug": sym, "state": "MARKET_STATE_OPEN",
+                               "bestBid": {"value": str(m - 0.005)},
+                               "bestAsk": {"value": str(m + 0.005)}}}
+    return g
+
+
+def study(trades, pm, tmp_path=None, **kw):
+    logs = []
+    cs = CS.ComboStudy(fake_get(trades, combos={"c1": LEGS, "c2": LEGS}), pm,
+                       lambda k, **k2: logs.append((k, k2)),
+                       state_dir=tmp_path, signed_rps=0, now=lambda: NOW,
+                       sleep=lambda s: None, **kw)
+    return cs, logs
+
+
+def tr(tid, sym="c1", px="0.30", qty="10", agg="SIDE_BUY"):
+    return {"tradeId": tid, "symbol": sym, "price": px, "qtyDecimal": qty,
+            "aggressorSide": agg, "executedTime": "2026-11-17T12:59:30Z"}
+
+
+def test_maker_margin_sign_follows_the_aggressor():
+    assert CS.maker_sign("SIDE_BUY") == 1 and CS.maker_sign("SIDE_SELL") == -1
+    cs, logs = study([tr("s1", px="0.30", agg="SIDE_SELL")],
+                     settle_get({}, {A: 0.5, B: 0.5}))
+    cs.poll_trades()
+    r = [k2 for k, k2 in logs if k == "COMBO_STUDY_TRADE"][0]
+    # fair 0.5 * (1 - 0.5) = 0.25; maker BOUGHT at 0.30 -> -0.05
+    assert abs(r["maker_margin"] + 0.05) < 1e-9
+
+
+def test_combo_payout_early_loss_full_win_and_void():
+    assert CS.combo_payout(LEGS, {A: 0.0}) == 0.0          # lost leg: done
+    assert CS.combo_payout(LEGS, {A: 1.0}) is None         # B still open
+    assert CS.combo_payout(LEGS, {A: 1.0, B: 0.0}) == 1.0  # sell leg won
+    assert CS.combo_payout(LEGS, {A: 1.0, B: 1.0}) == 0.0
+    assert CS.combo_payout(LEGS, {A: 0.5, B: 0.0}) == "void"
+
+
+def test_print_is_scored_at_settlement_and_survives_a_restart(tmp_path):
+    cs, _ = study([tr("t1"), tr("t2", sym="c2", px="0.20")],
+                  settle_get({}), tmp_path)
+    cs.poll_trades()
+    assert cs.settle_pass() == 0 and len(cs.pending) == 2   # games open
+    # restart: pending prints come back from disk, not re-counted
+    cs2, _ = study([tr("t1")], settle_get({A: 1.0, B: 0.0}), tmp_path)
+    assert len(cs2.pending) == 2
+    cs2.poll_trades()
+    assert cs2.agg["combo_trades"] == 0
+    assert cs2.settle_pass() == 2
+    s = cs2.settled_summary()["all"]
+    # taker won both: maker -> (0.30-1) - fee(0.30), (0.20-1) - fee(0.20)
+    exp = [(0.30 - 1) - CS.combo_maker_fee(0.30),
+           (0.20 - 1) - CS.combo_maker_fee(0.20)]
+    assert s["n"] == 2 and s["won_by_taker"] == 2
+    assert abs(s["mean_c"] - round(sum(exp) / 2 * 100, 3)) < 1e-6
+    assert abs(s["usd_pnl"] - round(10 * sum(exp), 2)) < 1e-9
+    cs3, _ = study([], settle_get({}), tmp_path)
+    assert not cs3.pending and len(cs3.settled) == 2
+
+
+def test_lost_leg_settles_the_maker_a_win_without_waiting(tmp_path):
+    cs, _ = study([tr("t1")], settle_get({A: 0.0}), tmp_path)
+    cs.poll_trades()
+    assert cs.settle_pass() == 1
+    r = cs.settled[0]
+    assert r["payout"] == 0.0
+    assert abs(r["maker_pnl"] - (0.30 - CS.combo_maker_fee(0.30))) < 1e-6
+
+
+def test_a_full_page_is_split_so_a_busy_minute_is_not_truncated():
+    calls = []
+
+    def g(path):
+        calls.append(path)
+        if path.startswith("/v1/rfqs/trades"):
+            q = dict(x.split("=") for x in path.split("?")[1].split("&"))
+            s = datetime.fromisoformat(q["startTime"].replace("Z", "+00:00"))
+            e = datetime.fromisoformat(q["endTime"].replace("Z", "+00:00"))
+            n = int((e - s).total_seconds() * 3)       # 3 prints a second
+            return {"trades": [{"tradeId": f"{s.timestamp()}-{i}",
+                                "executedTime": CS._iso(s)}
+                               for i in range(min(n, 100))]}
+        raise AssertionError(path)
+    cs = CS.ComboStudy(g, lambda p: {}, lambda *a, **k: 0, signed_rps=0)
+    rows = cs.fetch_window(NOW - timedelta(minutes=1), NOW)
+    assert len(rows) == 180 and len(calls) == 3       # 60s full -> 2x30s
+
+
+def test_ignored_end_time_stops_splitting_and_backfill():
+    calls = []
+
+    def g(path):
+        calls.append(path)
+        return {"trades": [{"tradeId": str(i),
+                            "executedTime": "2026-11-17T13:00:00Z"}
+                           for i in range(100)]}
+    logs = []
+    cs = CS.ComboStudy(g, lambda p: {}, lambda k, **kw: logs.append((k, kw)),
+                       signed_rps=0, now=lambda: NOW)
+    cs.fetch_window(NOW - timedelta(hours=1), NOW - timedelta(minutes=30))
+    assert len(calls) == 1 and cs.notes["endTime_ignored"]
+    cs.backfill()
+    assert logs[-1][1]["why"] == "endTime_ignored_by_venue"
+
+
+def test_backfill_sample_is_deterministic_and_unbiased_by_price():
+    ids = [f"t{i}" for i in range(5000)]
+    picked = [i for i in ids if CS.in_sample(i, 10)]
+    assert picked == [i for i in ids if CS.in_sample(i, 10)]
+    assert 400 < len(picked) < 600
+    assert all(CS.in_sample(i, 1) for i in ids[:10])
+
+
+def test_signed_reads_are_rate_limited():
+    t, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        t[0] += s
+    b = CS.Bucket(2.0, clock=lambda: t[0], sleep=sleep)
+    for _ in range(5):
+        b.take()
+    assert abs(sum(slept) - 2.0) < 1e-9                # 5 reads at 2/s
+
+
+def test_executed_time_with_nanoseconds_parses():
+    assert CS._ts("2026-11-17T12:49:43.413944485Z") == datetime(
+        2026, 11, 17, 12, 49, 43, 413944, tzinfo=timezone.utc)
