@@ -16,6 +16,30 @@ disarmed. This document asks for approval; it does not act on one.
 | correct the taker coefficient to the verified account value, taker disabled | **done** — `pmus_fees.thetas()` now returns Tier 1 (0.095); `taker_allowed` untouched and asserted False by test |
 | regression tests for repeated fills, partial fills, cancellations, inventory limits, rollover, settlement | **done** — 38 new tests |
 
+### Regression status, with the baseline stated correctly
+
+Full suite, same seed and ordering, before and after:
+
+| | failed | errors | passed |
+|---|---|---|---|
+| baseline (`70915b4ed`) | 34 | 14 | 22,157 |
+| **after this work** | **34** | **14** | **22,229** |
+
+The failing and erroring SETS are identical in both directions: nothing
+introduced, nothing incidentally fixed. The passed count rises by 72,
+which is this change's new tests.
+
+**A correction to my own earlier reporting.** I twice described the
+baseline as having "one pre-existing failure", including in two commit
+messages on this branch. That was wrong: the baseline carries 34 failures
+and 14 errors. The error came from reading the alphabetically-last line
+of a sorted failure list as though it were a total. The *diffs* I acted
+on were computed as set differences and are unaffected -- the 28
+failures the first coefficient attempt introduced really were introduced,
+and this change really introduces none -- but the baseline was never
+clean, and the 34+14 are pre-existing debt this work neither caused nor
+fixed.
+
 **The default is byte-for-byte the old behaviour.** `straddle_repeat_enabled`
 defaults False, which keeps the lockout exactly; the two dollar bounds
 default to zero, which **refuses the mode** (`REPEAT_WITHOUT_BOUNDS`)
