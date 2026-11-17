@@ -507,14 +507,14 @@ def main() -> int:
                           "  -- BC.decide; BLOCKED on this data, see GATES"))
     print("one leg filled, then the complement priced against the NEW touch")
     print()
-    hdr = ("  cd ttl   scenario      seq  pairs  <=.96  >.96 resid declin "
+    hdr = ("  cd ttl   scenario      seq unknown pairs  <=.96  >.96 resid declin "
            "rate   POLICY      HOLD      REDUCE   policy/leg")
     print(hdr)
     print("  " + "-" * (len(hdr) - 2))
     for s in summarise(rows):
-        print("  %-2d %-5s %-13s %4d %6d %6d %5d %5d %6d %6s %9s %9s %9s %12s"
+        print("  %-2d %-5s %-13s %4d %7d %6d %6d %5d %5d %6d %6s %9s %9s %9s %12s"
               % (s["complete_depth"], s["ttl"], s["scenario"],
-                 s["sequential"], s["pairs"], s["pairs_le_096"],
+                 s["sequential"], s["unscored"], s["pairs"], s["pairs_le_096"],
                  s["pairs_gt_096"], s["residual"], s["declined"],
                  s["completion_rate"], s["complete_pnl"], s["hold_pnl"],
                  s["reduce_pnl"], s["complete_per_leg"]))
