@@ -181,6 +181,31 @@ STRADDLE_P_LONE_WIN_ENV = "L5_BTC5M_STRADDLE_P_LONE_WIN"
 #: (a zero minimum admits any non-negative EV; raising it narrows).
 STRADDLE_FEE_PER_SHARE_ENV = "L5_BTC5M_STRADDLE_FEE_PER_SHARE"
 STRADDLE_MIN_EV_ENV = "L5_BTC5M_STRADDLE_MIN_EV_PER_SHARE"
+#: STRADDLE only: BOOK-RELATIVE TWO-SIDED QUOTING. Absent or not "YES"
+#: keeps the fixed-rung behaviour, which is the historical one.
+STRADDLE_BOOK_RELATIVE_ENV = "L5_BTC5M_STRADDLE_BOOK_RELATIVE"
+STRADDLE_JOIN_TICKS_ENV = "L5_BTC5M_STRADDLE_JOIN_TICKS"
+#: the COMBINED bound on the two quotes, replacing the per-leg 0.50.
+STRADDLE_PAIR_CEILING_ENV = "L5_BTC5M_STRADDLE_PAIR_CEILING"
+#: reserve the cost of completing what we are about to buy.
+STRADDLE_COMPLETION_RESERVE_ENV = "L5_BTC5M_STRADDLE_COMPLETION_RESERVE"
+#: ------------------------------------------------------------------
+#: THE MEASUREMENT PERMISSION, and why it is not a plain YES.
+#:
+#: The entry-EV gate's three rates were measured at 0.08 rungs. At
+#: book-relative prices they REFUSE (EV_NOT_POSITIVE), which is the gate
+#: working. Declaring them applicable is therefore a statement that
+#: someone has measured the fill model at these prices -- or that this is
+#: a deliberately bounded discovery run whose decisions are UNMEASURED.
+#:
+#: The token spells that out so it cannot be set by someone who thinks
+#: they are merely switching a feature on, and so it cannot silently
+#: become normal autonomous trading: it reads as what it is.
+STRADDLE_FILL_MODEL_ENV = "L5_BTC5M_STRADDLE_FILL_MODEL"
+FILL_MODEL_TOKEN = "UNMEASURED_DISCOVERY_AUTHORIZED"
+#: the ceiling must sit below 1.00 with room for fees, whatever is asked.
+STRADDLE_PAIR_CEILING_MAX = D("0.99")
+STRADDLE_JOIN_TICKS_CEILING = 3
 #: STRADDLE only: inventory-aware repricing, in ticks per clip of
 #: imbalance. Absent or zero keeps the fixed limit that cannot drift.
 STRADDLE_REPRICE_TICKS_ENV = "L5_BTC5M_STRADDLE_REPRICE_TICKS"
@@ -464,6 +489,61 @@ def straddle_max_side_usd(default: Decimal = D("0")) -> Decimal:
     if raw is None or raw <= ZERO:
         return default
     return min(raw, STRADDLE_MAX_SIDE_USD_CEILING)
+
+
+def straddle_book_relative(default: bool = False) -> bool:
+    """Whether both legs are priced from the live book. Explicit YES."""
+    raw = os.environ.get(STRADDLE_BOOK_RELATIVE_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "YES"
+
+
+def straddle_join_ticks(default: int = 0) -> int:
+    """Ticks ABOVE our own bid. 0 joins it. Clamped down, never up; a
+    negative or unreadable value keeps the default."""
+    raw = os.environ.get(STRADDLE_JOIN_TICKS_ENV)
+    if raw is None:
+        return default
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    if v < 0:
+        return default
+    return min(v, STRADDLE_JOIN_TICKS_CEILING)
+
+
+def straddle_pair_ceiling(default: Decimal = D("0")) -> Decimal:
+    """The COMBINED cost the two quotes may reach.
+
+    Zero -- the default, and what an absent or non-positive value gives
+    -- disables book-relative quoting entirely. Anything at or above
+    `STRADDLE_PAIR_CEILING_MAX` is CLAMPED DOWN: at 1.00 a matched pair
+    cannot profit before costs, so the owner's intent to quote is
+    honoured and the arithmetic is not.
+    """
+    raw = _dec(os.environ.get(STRADDLE_PAIR_CEILING_ENV))
+    if raw is None or raw <= ZERO:
+        return default
+    return min(raw, STRADDLE_PAIR_CEILING_MAX)
+
+
+def straddle_completion_reserve(default: bool = False) -> bool:
+    raw = os.environ.get(STRADDLE_COMPLETION_RESERVE_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "YES"
+
+
+def straddle_fill_model_measured(default: bool = False) -> bool:
+    """Whether the fill model at book-relative prices is declared
+    applicable. Needs the exact token, not YES -- see
+    `STRADDLE_FILL_MODEL_ENV`."""
+    raw = os.environ.get(STRADDLE_FILL_MODEL_ENV)
+    if raw is None:
+        return default
+    return raw.strip() == FILL_MODEL_TOKEN
 
 
 def straddle_probability(env_name: str,
@@ -2024,6 +2104,22 @@ class Btc5mExecutor:
                         #: against the live book at submit time with its
                         #: own depth haircut and notional cap, and either
                         #: refusing is enough to keep the order resting.
+                        #: BOOK-RELATIVE PLACEMENT. Readers exist so
+                        #: these cannot sit at their dataclass defaults
+                        #: forever -- the defect that kept the entry-EV
+                        #: rates unset and the late favourite silent.
+                        straddle_book_relative=straddle_book_relative(
+                            self.params.straddle_book_relative),
+                        straddle_join_ticks=straddle_join_ticks(
+                            self.params.straddle_join_ticks),
+                        straddle_pair_ceiling=straddle_pair_ceiling(
+                            self.params.straddle_pair_ceiling),
+                        straddle_completion_reserve=(
+                            straddle_completion_reserve(
+                                self.params.straddle_completion_reserve)),
+                        straddle_fill_model_measured=(
+                            straddle_fill_model_measured(
+                                self.params.straddle_fill_model_measured)),
                         completion_cross_enabled=taker_completion_allowed(),
                         completion_cross_slippage_ticks=taker_slippage_ticks(),
                         completion_cross_min_margin=taker_min_margin(),

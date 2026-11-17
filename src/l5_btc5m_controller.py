@@ -229,6 +229,75 @@ class Params:
     #: existing (0, 0.50) bound and on the tick grid; a shift that would
     #: leave either is clamped, never wrapped.
     straddle_reprice_ticks_per_clip: int = 0
+    #: ==================================================================
+    #: BOOK-RELATIVE TWO-SIDED QUOTING (k9Q2 / early-0x8dxd placement).
+    #:
+    #: WHY IT HAD TO BE ADDED RATHER THAN CONFIGURED. Two-sided quoting
+    #: lived ONLY in this mode, and this mode priced from a constant by
+    #: design. Worse, every rung was bounded to (0, 0.50) EXCLUSIVE --
+    #: and since UP + DOWN is about 1.00, one side is ALWAYS at or above
+    #: 0.50. So quoting both sides near the market was not merely
+    #: unconfigured, it was arithmetically impossible.
+    #:
+    #: THAT BOUND WAS A GENERALISATION ERROR. Its reasoning -- "a pair
+    #: costs twice this and pays 1.00, so 0.50 is a locked loss" -- is
+    #: true only for a SYMMETRIC pair. UP 0.30 + DOWN 0.69 = 0.99 is a
+    #: perfectly good pair that the per-rung bound forbids. The correct
+    #: invariant is on the COMBINED cost, not on each leg, and that is
+    #: what `straddle_pair_ceiling` enforces below.
+    #:
+    #: NECESSARY, NOT SUFFICIENT. A combined quote cost under 1.00 is
+    #: required for matched-pair economics before costs. It guarantees
+    #: NOTHING about fills or realized P&L. The entry-EV gate still
+    #: decides whether a rung is worth buying, and
+    #: `straddle_fill_model_measured` below refuses outright while the
+    #: fill model for these prices is unmeasured.
+    straddle_book_relative: bool = False
+    #: Where the quote sits relative to OUR OWN side's bid, in ticks.
+    #: 0 joins the bid (queue behind it); 1 improves it by a tick, taking
+    #: queue priority at a worse price. Never crosses: the price is built
+    #: from the bid, and a value that would reach the offer is refused.
+    straddle_join_ticks: int = 0
+    #: THE COMBINED BOUND, replacing the per-leg 0.50. The two quotes
+    #: together may not cost more than this; at or above 1.00 a matched
+    #: pair cannot profit before costs, so the ceiling must sit below it
+    #: with room for fees. Zero disables book-relative quoting, which is
+    #: the default.
+    straddle_pair_ceiling: Decimal = D("0")
+    #: HAS THE FILL MODEL FOR THESE PRICES BEEN MEASURED?
+    #:
+    #: The entry-EV gate's three rates were measured at 0.08 rungs. They
+    #: do not transfer to a quote sitting on the bid: the fill
+    #: probability, the natural-pair rate and the lone-leg win rate are
+    #: all different there, and feeding 0.08-measured rates into a 0.30
+    #: rung would not refuse -- it would return a CONFIDENT WRONG NUMBER.
+    #: That is worse than refusing, so this is an explicit, separate
+    #: permission. False -- the default -- refuses book-relative quoting
+    #: with FILL_MODEL_UNMEASURED.
+    #:
+    #: It is NOT a bypass of the EV gate. The gate still runs and still
+    #: has to admit the rung. This only says whether the rates it is
+    #: being given are believed to describe these prices.
+    straddle_fill_model_measured: bool = False
+    #: RESERVE THE COST OF COMPLETING WHAT WE ARE ABOUT TO BUY.
+    #:
+    #: Measured 2026-11-17 window 1500z: a 0.08 entry filled twice for
+    #: 3.74 shares, and completing it needed about $2.66 of the opposite
+    #: side against a $1.60 envelope. Completion cost roughly NINE TIMES
+    #: the entry, so entry and completion capital cannot be sized as if
+    #: comparable -- the completion was unfundable by construction and
+    #: never fired.
+    #:
+    #: Admitting qty q at price p reserves (ceiling - p) * q on top of
+    #: the p * q spent now, i.e. the pair costs at most ceiling * q in
+    #: total. The reserve therefore follows the ACTUAL entry price.
+    #:
+    #: IT GUARANTEES NOTHING. Reserved capital is capital, not a fill:
+    #: the completion still has to be available and economic. And it
+    #: must not silently stop all accumulation, so when the room is too
+    #: small the SIZE IS SHRUNK to what the room can complete, and only a
+    #: size below the venue minimum refuses, named COMPLETION_UNFUNDABLE.
+    straddle_completion_reserve: bool = False
     #: ------------------------------------------------------------------
     #: COMPLETION CROSSING. Whether a chosen completion may LIFT the
     #: opposite side's offer instead of resting at the pair-cost ceiling.
@@ -475,7 +544,8 @@ def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
 
 
 def _repriced_rung(r: Decimal, side: str, inv: Dict[str, tuple],
-                   qty: Decimal, params: "Params") -> Optional[Decimal]:
+                   qty: Decimal, params: "Params",
+                   hi: Optional[Decimal] = None) -> Optional[Decimal]:
     """The rung, shaded by how lopsided inventory already is.
 
     The heavy side bids LOWER and the light side HIGHER, by
@@ -496,12 +566,19 @@ def _repriced_rung(r: Decimal, side: str, inv: Dict[str, tuple],
     if clips == 0:
         return r
     tick = _dec(params.tick) or D("0.01")
+    #: THE UPPER BOUND IS THE CALLER'S. HALF is the fixed symmetric-pair
+    #: rule; a book-relative leg is bounded by the COMBINED pair ceiling
+    #: instead, which the caller checks, so it passes ONE here. Keeping
+    #: HALF hardcoded would have made every repriced DOWN quote above
+    #: 0.50 refuse, i.e. silently disabled repricing in exactly the mode
+    #: that needs it.
+    top = HALF if hi is None else hi
     out = r - (tick * per * clips)
-    if not (ZERO < out < HALF):
+    if not (ZERO < out < top):
         return None
     #: back onto the grid the venue will accept
     out = (out / tick).to_integral_value(rounding=ROUND_FLOOR) * tick
-    if not (ZERO < out < HALF):
+    if not (ZERO < out < top):
         return None
     return out
 
@@ -606,6 +683,33 @@ def _place(side, price, qty, reason, *, post_only=True, intent="BUY", slot=0):
     return {"op": "PLACE", "side": side, "price": price, "qty": qty,
             "post_only": post_only, "intent": intent, "reason": reason,
             "slot": int(slot)}
+
+
+def _book_rung(side, bid, ask, params, tick):
+    """This side's book-relative maker price, or None if it cannot be made.
+
+    Built from OUR OWN side's bid so it rests rather than crosses: UP's
+    bid is the book's bid, DOWN's is one minus the book's offer. Joining
+    means resting AT that bid, behind whatever is already queued there;
+    `straddle_join_ticks` improves on it instead, buying queue priority
+    at a worse price.
+
+    Returns None when the result is off-grid, outside (0, 1), or would
+    reach our own side's offer -- a maker order that would cross is not a
+    maker order, and this mode never crosses.
+    """
+    own_bid = bid if side == UP else ONE - ask
+    own_ask = ask if side == UP else ONE - bid
+    n = int(params.straddle_join_ticks or 0)
+    if n < 0:
+        return None
+    px = _floor_to(own_bid + n * tick, tick)
+    if not (PRICE_MIN <= px <= PRICE_MAX) or px <= ZERO:
+        return None
+    if px >= own_ask:
+        #: it would initiate rather than rest
+        return None
+    return px
 
 
 def _completion_cross(*, ceiling, ask, held_avg, pair_target, params, tick):
@@ -721,6 +825,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         # 0.50 the cheap rung already covers it, above 1.00 the pair is a
         # guaranteed loss. Out of range is a contradiction, not a setting.
         return hold("PARAMS_UNREADABLE", cancel=True)
+    #: BOOK-RELATIVE CONFIGURATION, validated before anything is priced.
+    #: Every contradiction refuses the mode rather than being clamped.
+    _bookrel = bool(straddle and params.straddle_book_relative)
+    _pceil = _dec(params.straddle_pair_ceiling)
+    if _bookrel:
+        if _pceil is None or not (ZERO < _pceil < ONE):
+            #: at or above 1.00 a matched pair cannot profit before
+            #: costs; zero means the mode was switched on without a
+            #: budget. Both are contradictions, not settings.
+            return hold("PARAMS_UNREADABLE", cancel=True)
+        if int(params.straddle_join_ticks or 0) < 0:
+            return hold("PARAMS_UNREADABLE", cancel=True)
     _rungs = ()
     if straddle:
         raw = params.straddle_rungs or (params.straddle_price,)
@@ -728,8 +844,15 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _rungs = tuple(sorted({_dec(r) for r in raw}))
         except TypeError:
             return hold("PARAMS_UNREADABLE", cancel=True)
-        if not _rungs or any(r is None or not (ZERO < r < HALF)
-                             for r in _rungs):
+        #: THE PER-LEG 0.50 BOUND IS A FIXED-MODE RULE ONLY. It is the
+        #: symmetric-pair bound and it is correct there: with both legs
+        #: at the same price, 0.50 each is a guaranteed loss. Applied to
+        #: independently priced legs it forbids valid pairs, so
+        #: book-relative mode is bounded on the COMBINED cost instead,
+        #: checked against `_pceil` once both prices are known.
+        if not _rungs or any(r is None for r in _rungs):
+            return hold("PARAMS_UNREADABLE", cancel=True)
+        if not _bookrel and any(not (ZERO < r < HALF) for r in _rungs):
             return hold("PARAMS_UNREADABLE", cancel=True)
     # "NONE" says nothing is kept back for a completing order, which is only
     # true when no completing order is ever placed. Asking for one without
@@ -782,12 +905,83 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: SIZED SO ONE SIDE'S WHOLE LADDER COSTS `clip_usd`, which keeps
         #: the single-rung case identical (sum == the one price) and makes
         #: the worst case exactly 2 x clip whatever the ladder's width.
-        ladder = sum(_rungs, ZERO)
+        #: ---------------- BOOK-RELATIVE PRICING, ONCE PER STEP, AND
+        #: BEFORE SIZING, because the clip is sized from the prices we
+        #: will actually quote. Sizing from the fixed ladder while
+        #: quoting from the book produced a 25-share clip at 0.30 -- a
+        #: $7.50 order from a $2.00 clip -- which the side cap then
+        #: refused, so the mode looked configured and quoted nothing.
+        #:
+        #: Both legs are priced before either is considered, because the
+        #: bound that matters is on the two of them TOGETHER: one leg at
+        #: a time cannot see a pair that costs 1.02.
+        _bk, _bk_why = {}, None
+        if _bookrel:
+            if not params.straddle_fill_model_measured:
+                #: THE HONEST REFUSAL. The gate's three rates were
+                #: measured at 0.08 rungs. Fed a 0.30 rung they do not
+                #: refuse -- they return a confident WRONG number, which
+                #: is worse than refusing. So this stops here until the
+                #: fill model for these prices is measured and that is
+                #: stated explicitly. The EV gate still runs below.
+                _bk_why = "FILL_MODEL_UNMEASURED"
+            else:
+                for s_ in SIDES:
+                    _bk[s_] = _book_rung(s_, bid, ask, params, tick)
+                if any(v is None for v in _bk.values()):
+                    _bk_why = "QUOTE_NOT_MAKEABLE"
+                elif sum(_bk.values()) > _pceil:
+                    #: NECESSARY CONDITION ON THE PAIR. Under 1.00 is
+                    #: required for matched-pair economics before costs;
+                    #: it promises nothing about fills, which is what the
+                    #: EV gate and the fill model are for.
+                    _bk_why = "PAIR_ABOVE_CEILING"
+        #: SIZED ON THE DEARER LEG so neither side's notional exceeds the
+        #: clip, and ONE quantity for both so a filled pair matches
+        #: exactly 1:1 -- unequal legs would manufacture residual on
+        #: purpose.
+        if _bookrel and not _bk_why:
+            ladder = max(_bk.values())
+        else:
+            ladder = sum(_rungs, ZERO)
         qty = _floor_qty(_dec(params.clip_usd) / ladder, params)
+        #: ---------------- RESERVE WHAT COMPLETING THIS WOULD COST.
+        #:
+        #: MEASURED, window 1500z, 2026-11-17: a 0.08 entry filled twice
+        #: for 3.74 shares and completing it needed about $2.66 of the
+        #: opposite side against a $1.60 envelope. Completion cost about
+        #: NINE TIMES the entry, the reserve did not exist, and the
+        #: completion was unfundable by construction -- it never fired.
+        #:
+        #: Buying q at p now and completing at up to (ceiling - p) later
+        #: costs at most `ceiling * q` in total, whatever p is. So the
+        #: room required follows the ACTUAL entry price without having to
+        #: guess the completion price.
+        #:
+        #: IT SHRINKS, IT DOES NOT BLOCK. Refusing outright whenever the
+        #: full clip cannot be completed would stop all accumulation on a
+        #: small envelope, which is the opposite of the intent. Only a
+        #: size below the venue minimum refuses, and it says so.
+        #:
+        #: IT GUARANTEES NOTHING. Reserved capital is capital, not a
+        #: fill: the completion still has to exist on the book and still
+        #: has to be economic when it is considered.
+        _reserve = {"applied": False, "ceiling": None, "clip_qty": str(qty),
+                    "qty_after": None, "why": None}
+        if _bookrel and params.straddle_completion_reserve and _pceil > ZERO:
+            _reserve.update(applied=True, ceiling=str(_pceil))
+            _afford = _floor_qty(room / _pceil, params)
+            if _afford < qty:
+                qty = _afford
+            _reserve["qty_after"] = str(qty)
+            if qty < min_qty:
+                _reserve["why"] = "COMPLETION_UNFUNDABLE"
         want = []
         ev_rungs = []
         why_s = "STRADDLE_RESTING"
-        if qty <= 0:
+        if _reserve.get("why"):
+            why_s = _reserve["why"]
+        elif qty <= 0:
             why_s = "CLIP_TOO_SMALL"
         elif t >= params.no_new_entry_after_s:
             why_s = "ENTRY_WINDOW_CLOSED"
@@ -812,15 +1006,31 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             live = {s: {o["price"] for o in rest if o["side"] == s}
                     for s in SIDES}
             _repeat = bool(params.straddle_repeat_enabled)
+            if _bk_why is not None:
+                why_s = _bk_why
+                _rungs = ()
             _side_cap = _dec(params.straddle_max_side_usd) or ZERO
             _unm_cap = _dec(params.straddle_max_unmatched_usd) or ZERO
             _committed = {s: _side_committed_usd(s, inv, rest)
                           for s in SIDES}
+            #: ---------------- BOOK-RELATIVE PRICING, ONCE PER STEP.
+            #:
+            #: Both legs are priced from the live book BEFORE either is
+            #: considered, because the bound that matters is on the two
+            #: of them TOGETHER. Checking one leg at a time cannot see a
+            #: pair that costs 1.02.
             for i, r in enumerate(_rungs):
                 for side in SIDES:
                     #: REPRICING. Shades the rung by existing imbalance;
-                    #: returns the rung unchanged when disabled.
-                    r_side = _repriced_rung(r, side, inv, qty, params)
+                    #: returns the rung unchanged when disabled. In
+                    #: book-relative mode the BASE is this side's live
+                    #: quote rather than a constant, and the leg is
+                    #: bounded by the pair ceiling rather than by 0.50.
+                    if _bookrel:
+                        r_side = _repriced_rung(_bk[side], side, inv, qty,
+                                                params, hi=ONE)
+                    else:
+                        r_side = _repriced_rung(r, side, inv, qty, params)
                     if r_side is None:
                         why_s = "REPRICE_OUT_OF_BAND"
                         continue
@@ -1129,6 +1339,20 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             elif arb["why"] == "STRADDLE_AND_LATE_FAVORITE":
                 why_s = "STRADDLE_AND_LATE_FAVORITE"
         ev_s = {"completion": comp,
+                "completion_reserve": _reserve,
+                "book_relative": {
+                    "on": _bookrel,
+                    "pair_ceiling": None if _pceil is None else str(_pceil),
+                    "join_ticks": int(params.straddle_join_ticks or 0),
+                    "fill_model_measured": bool(
+                        params.straddle_fill_model_measured),
+                    "quotes": {k: str(v) for k, v in _bk.items()
+                               if v is not None},
+                    "pair_quote_cost": (
+                        None if (not _bk or any(v is None
+                                                for v in _bk.values()))
+                        else str(sum(_bk.values()))),
+                    "why": _bk_why},
                 "entry_ev": {"rungs": ev_rungs,
                              "rates": {
                                  "p_pair_natural": (
