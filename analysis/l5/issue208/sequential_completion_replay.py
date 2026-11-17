@@ -438,6 +438,17 @@ def summarise(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         unknown = [r for r in sel if r["state"] in
                    ("INDETERMINATE_ENTRY", "INDETERMINATE_COMPLEMENT")]
         if not seq:
+            # Do not silently drop a cell whose queue evidence is entirely
+            # unknown. There is no denominator or P&L to estimate here.
+            if unknown:
+                out.append({"scenario": scen, "complete_depth": cd,
+                            "ttl": "hold" if ttl is None else ("%.0fs" % ttl),
+                            "sequential": 0, "unscored": len(unknown),
+                            "pairs": 0, "pairs_le_096": 0,
+                            "pairs_gt_096": 0, "residual": 0, "declined": 0,
+                            "completion_rate": "N/A",
+                            "complete_pnl": None, "hold_pnl": None,
+                            "reduce_pnl": None, "complete_per_leg": None})
             continue
         pairs = [r for r in seq if r["state"] == "PAIR_SEQUENTIAL"]
         resid = [r for r in seq if r["state"] != "PAIR_SEQUENTIAL"]
