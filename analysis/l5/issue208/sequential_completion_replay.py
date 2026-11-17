@@ -214,6 +214,11 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 uf = QS.filled(up, arm=arm)
                 df = QS.filled(dn, arm=arm)
                 if uf is None or df is None:
+                    # Missing queue verdict is not evidence of no fill.
+                    # Keep it visible but exclude it from P&L and pair counts.
+                    rows.append(dict(base, state="INDETERMINATE_ENTRY",
+                                     up_filled=uf, down_filled=df,
+                                     pnl=None))
                     continue
                 base = {"source": os.path.basename(path), "slug": slug,
                         "frame": i, "scenario": name, "gate": gate,
