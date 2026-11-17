@@ -62,6 +62,10 @@ DEFAULTS = {
     "reprice_min_ticks": D("2"),
     "keep_band_ticks": D("1"),
     "taker_fee_rate": D("0.095"),      # PMUS Tier 1 from 2026-11-14
+    # optional: a taker completion is allowed only if the WHOLE pair
+    # (lead cost + ask + taker fee) settles at or below this -- i.e. at a
+    # positive net margin (cheap-leg-first policy). None = old behaviour.
+    "taker_max_pair": None,
 }
 
 
@@ -111,8 +115,14 @@ def decide(*, lead: str, lead_px: D, need: D, bid: Optional[D],
 
     # --- taker / sell-taker (the same venue order)
     tq = need if taker_chunk is None else min(need, taker_chunk)
-    if taker_allowed and tq >= min_qty and cb["ask"] <= lock_cap:
-        fee = taker_fee_pc(cb["ask"], tq, p["taker_fee_rate"])
+    tmp = p.get("taker_max_pair")
+    t_fee = taker_fee_pc(cb["ask"], tq, p["taker_fee_rate"]) if tq > 0 \
+        else D(0)
+    t_profit_ok = tmp is None or \
+        D(lead_px) + cb["ask"] + t_fee <= D(str(tmp))
+    if taker_allowed and tq >= min_qty and cb["ask"] <= lock_cap and \
+            t_profit_ok:
+        fee = t_fee
         v = tq * (risk - (cb["ask"] - cb["mid"]) - fee)
         name = "COMPLETE_TAKER" if tq == need else "PARTIAL_REBALANCE"
         scores[name] = {"value": v, "px": cb["ask"], "qty": tq, "fee_pc": fee}
@@ -120,7 +130,8 @@ def decide(*, lead: str, lead_px: D, need: D, bid: Optional[D],
     else:
         scores["COMPLETE_TAKER"] = {"value": None, "why": (
             "not_authorized" if not taker_allowed else
-            "over_lock_loss_cap" if cb["ask"] > lock_cap else "below_min")}
+            "over_lock_loss_cap" if cb["ask"] > lock_cap else
+            "pair_not_profitable" if not t_profit_ok else "below_min")}
 
     # --- maker candidates: inside the spread, at the bid, one tick under
     cands = []

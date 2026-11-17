@@ -308,6 +308,12 @@ OPEN_EV_GATE = os.getenv("PMUS_TWO_SIDED_OPEN_EV_GATE", "0").strip() == "1"
 # OWNER 2026-11-15 "work every market until it's profitable": bounded
 # same-side EXTEND while a market is stranded (needs the recovery controller)
 EXTEND_ON = os.getenv("PMUS_TWO_SIDED_EXTEND", "0").strip() == "1"
+# OWNER 2026-11-17 cheap-leg-first: two_sided (default, unchanged) |
+# cheap_first | expensive_first (comparison arm) | auto (gated by the bot's
+# own episode evidence). See src/pmus_sports_open_policy.py.
+OPEN_POLICY = os.getenv("PMUS_TWO_SIDED_OPEN_POLICY",
+                        "two_sided").strip().lower()
+CHEAP_FIRST_BUFFER = D(os.getenv("PMUS_TWO_SIDED_CHEAP_FIRST_BUFFER", "0.02"))
 EXTEND_QTY = D(os.getenv("PMUS_TWO_SIDED_EXTEND_QTY", "1"))
 EXTEND_MAX_IMBALANCE = D(os.getenv("PMUS_TWO_SIDED_EXTEND_MAX_IMBALANCE",
                                    "2"))
@@ -1581,6 +1587,7 @@ class Engine:
                "actions": mk.get("recovery_actions", {})}
         ls = mk.pop("lone_start", None) or {}
         rec["controller"] = ls.get("controller", "legacy")
+        rec["open_policy"] = ls.get("open_policy", "two_sided")
         if outcome == "paired" and ls:
             lag = ls["lag"]
             dq = D(mk["pos"][lag]) - D(ls["qty0"])
@@ -1588,6 +1595,9 @@ class Engine:
                 paid = (D(mk["cost"][lag]) - D(ls["cost0"])) / dq
                 rec["completion_px"] = str(paid)
                 rec["start_taker_px"] = ls["taker_px"]
+                if ls.get("lead_px") is not None:
+                    rec["lead_px"] = ls["lead_px"]
+                    rec["pair_cost"] = str(D(ls["lead_px"]) + paid)
                 # improved: cheaper than taking at once when it went lone
                 rec["improved"] = paid < D(ls["taker_px"])
         lst = self.b.d.setdefault("recoveries", [])
@@ -1742,7 +1752,13 @@ class Engine:
             taker_chunk=(RECOVERY_TAKER_CHUNK if RECOVERY_TAKER_CHUNK > 0
                          else None),
             min_qty=spec["min_qty"],
-            params={"taker_fee_rate": TAKER_FEE_RATE})
+            params={"taker_fee_rate": TAKER_FEE_RATE,
+                    # cheap-leg-first episodes: a taker completion only at
+                    # a positive net settlement margin (owner 2026-11-17)
+                    "taker_max_pair": (
+                        D(1) - CHEAP_FIRST_BUFFER
+                        if (mk.get("lone_start") or {}).get("open_policy")
+                        == "cheap_first" else None)})
         act = dec["action"]
         acts = mk.setdefault("recovery_actions", {})
         key = f"{act}:{dec.get('px')}:{dec.get('qty')}"
@@ -2057,16 +2073,32 @@ class Engine:
             # HYSTERESIS: a resting leg AT its target or up to one tick
             # deeper stays put (no cancel/re-place churn on flicker); only a
             # leg closer than target, or 2+ ticks too deep, is re-set.
+            pol = {"policy": "two_sided", "sides": ("YES", "NO")}
+            if want is not None and not blocked and \
+                    OPEN_POLICY != "two_sided":
+                from src import pmus_sports_open_policy as OP
+                pol = OP.choose(OPEN_POLICY, want, bbo["bid"], bbo["ask"],
+                                records=self.b.d.get("recoveries") or [])
+                key = f"{pol['policy']}:{pol['why']}:{pol.get('cheap')}"
+                if mk.get("open_policy_logged") != key:
+                    mk["open_policy_logged"] = key
+                    log("open_policy", slug=slug, want={k: str(x) for k, x
+                                                        in want.items()},
+                        **{k: v for k, v in pol.items() if k != "sides"},
+                        sides=list(pol["sides"]))
+                if not pol["sides"]:
+                    want = None
+            sides = tuple(pol["sides"])
             in_place = (want is not None and not blocked and
-                        set(open_by_side) == {"YES", "NO"} and
+                        set(open_by_side) == set(sides) and
                         all(want[sd] - (tick if (not OPEN_LADDER and
                                                  not rewards_on()) else 0)
                             <= D(open_by_side[sd][1]["px"])
-                            <= want[sd] for sd in ("YES", "NO")) and
+                            <= want[sd] for sd in sides) and
                         (not rewards_on() or
                          all((D(open_by_side[sd][1]["qty"]) <= qty) if shrunk
                              else (D(open_by_side[sd][1]["qty"]) == qty)
-                             for sd in ("YES", "NO"))))
+                             for sd in sides)))
             if not in_place and rq is not None and reward_first_on() and \
                     want is not None and not blocked:
                 # REWARD-FIRST: time on book is the score; no step ladder,
@@ -2106,10 +2138,13 @@ class Engine:
             mk["partner_px"] = {k: str(v) for k, v in want.items()}
             stage = "two_sided_open_rewarded" if rq is not None \
                 else "two_sided_open"
+            if pol["policy"] != "two_sided":
+                stage = f"{stage}_{pol['policy']}"      # e.g. _cheap_first
+            mk["open_policy"] = pol["policy"]
             if self.ws is not None:
                 mk["quoted_bbo"] = {"bid": str(bbo["bid"]),
                                     "ask": str(bbo["ask"])}
-            for side in ("YES", "NO"):
+            for side in sides:
                 self.place(slug, side, want[side], qty, stage)
             return
         # unbalanced: the lagging side is the completion
@@ -2143,6 +2178,9 @@ class Engine:
             c_ask = bbo["ask"] if lag == "YES" else ONE - bbo["bid"]
             mk["lone_start"] = {"lag": lag, "cost0": mk["cost"][lag],
                                 "qty0": mk["pos"][lag],
+                                "lead_px": str(lead_px),
+                                "open_policy": mk.get("open_policy",
+                                                      "two_sided"),
                                 "taker_px": str(c_ask + taker_fee(
                                     c_ask, need) / need),
                                 "controller": "recovery" if RECOVERY_ON

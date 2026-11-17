@@ -51,6 +51,7 @@
       "src/pmus_sports_xv.py",
       "src/pmus_sports_kalshi.py",
       "src/pmus_sports_combo_study.py",
+      "src/pmus_sports_open_policy.py",
       "src/l5_halt_gate.py",
       "src/pmus_sports_rewards.py",
       "src/pmus_two_sided_ws.py",
