@@ -121,8 +121,25 @@ arithmetic and its bounds.
 ## 4. Regression
 
 Baseline before this work: **34 failed / 14 errors** (the figure I twice
-misreported as 1; corrected in `b0275cfa5`). Full-suite result after this
-work is recorded in the commit message. Targeted suites:
+misreported as 1; corrected in `b0275cfa5`).
+
+**Full suite after this work: 34 failed, 14 errors, 22,358 passed, 28
+skipped, 1 xfailed, in 940s.** The failure and error counts are the
+baseline unchanged, and passed moved 22,317 to 22,358 -- exactly the 41
+tests added here (16 + 25), which reconciles with nothing else having
+changed state.
+
+One precision, because I have twice overstated a baseline comparison: I
+kept only the summary line of that run, so what is verified is that the
+**counts** match, not that the failing **set** is identical. The
+independent evidence that the touched area is clean is that every
+targeted suite over it passes, and no failure or error in the run names a
+btc5m, straddle, completion, crossing or restriction test. This is not a
+clean suite and is not described as one: 34 failures and 14 errors remain,
+all pre-existing, none in live execution, risk controls or watchdog
+behaviour.
+
+Targeted suites:
 `test_l5_btc5m_straddle.py` 111 passed, `test_l5_btc5m_live_loop.py` 16,
 `test_l5_completion_crossing.py` 25, `test_l5_straddle_repeat_entries.py`
 + `test_l5_taker_pair_completion.py` + `test_l5_residual_phase.py` 126,
