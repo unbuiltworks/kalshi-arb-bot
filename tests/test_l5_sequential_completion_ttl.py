@@ -84,7 +84,7 @@ class CompletionTTLTests(unittest.TestCase):
         # a new queue TTL or credit a counterfactual pair.
         frames = [{"t": 100.0}, {"t": 161.0}, {"t": 162.0}]
         with mock.patch.object(self.replay.QS, "touches",
-                               return_value=(D("0.49"), D("0.50"))):
+                               side_effect=[(D("0.44"), D("0.45")), (D("0.49"), D("0.50"))]):
             k, own, reason = self.replay._econ_gate(
                 self.replay.DOWN, D("0.50"), D(1), frames, 0, 0, 60.0)
         self.assertEqual(k, 1)
