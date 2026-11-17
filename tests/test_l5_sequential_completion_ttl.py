@@ -91,6 +91,17 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertIsNone(own)
         self.assertEqual(reason, "TTL_BEFORE_A_WORTHWHILE_COMPLEMENT")
 
+    def test_econ_gate_rejects_quote_exactly_at_expiry(self):
+        # No time remains to place and rest a maker order at the deadline.
+        frames = [{"t": 100.0}, {"t": 160.0}, {"t": 161.0}]
+        with mock.patch.object(self.replay.QS, "touches",
+                               side_effect=[None]):
+            k, own, reason = self.replay._econ_gate(
+                self.replay.DOWN, D("0.50"), D(1), frames, 0, 0, 60.0)
+        self.assertEqual(k, 1)
+        self.assertIsNone(own)
+        self.assertEqual(reason, "TTL_BEFORE_A_WORTHWHILE_COMPLEMENT")
+
     def test_econ_gate_quote_with_one_second_left(self):
         frames = [{"t": 100.0}, {"t": 159.0}, {"t": 161.0}]
         with mock.patch.object(self.replay.QS, "touches",
