@@ -154,3 +154,23 @@ def test_cheap_first_never_bypasses_existing_stops(cf, monkeypatch):
     e.select(v.account())
     e.step_market("aec-x")
     assert resting(v) == []
+
+
+# ------------------------------------------- lean toward rebalancing
+def test_lean_moves_the_completion_to_the_touch_at_once():
+    # lead YES @0.45; YES 0.54/0.56 -> NO book 0.44/0.46, NO mid 0.45
+    base = dict(lead="YES", lead_px=D("0.45"), need=D("5"), bid=D("0.54"),
+                ask=D("0.56"), tick=D("0.01"), age_s=0, late=False)
+    d1 = R.decide(**base)
+    assert d1["action"] == "COMPLETE_MAKER" and D(d1["px"]) == D("0.43")
+    d3 = R.decide(**base, params={"lean": D("3")})
+    assert d3["action"] == "COMPLETE_MAKER" and D(d3["px"]) == D("0.45")
+    # the lock-loss cap is not moved by the lean: lead 0.95 -> cap 0.20
+    far = dict(base, lead_px=D("0.95"))
+    d = R.decide(**far, params={"lean": D("10")})
+    assert d["px"] is None or D(d["px"]) <= D("0.20")
+
+
+def test_lean_default_is_unchanged():
+    assert R.DEFAULTS["lean"] == D("1")
+    assert M.RECOVERY_LEAN == D("1")

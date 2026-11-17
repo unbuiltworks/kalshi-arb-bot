@@ -66,6 +66,11 @@ DEFAULTS = {
     # (lead cost + ask + taker fee) settles at or below this -- i.e. at a
     # positive net margin (cheap-leg-first policy). None = old behaviour.
     "taker_max_pair": None,
+    # OWNER 2026-11-17 "lean toward rebalancing": multiplies the holding-risk
+    # term, so a completion joins the touch (or steps inside the spread) as
+    # soon as a leg fills instead of starting a tick under the bid and
+    # chasing. 1 = the original behaviour. Never moves the lock-loss cap.
+    "lean": D("1"),
 }
 
 
@@ -109,7 +114,7 @@ def decide(*, lead: str, lead_px: D, need: D, bid: Optional[D],
     m = yes_mid if lead == "YES" else ONE - yes_mid      # P(lead wins)
     urgency = (ONE + D(str(age_s)) / p["age_scale_s"]) * \
         (p["late_mult"] if late else ONE)
-    risk = p["risk_k"] * m * (ONE - m) * urgency
+    risk = p["risk_k"] * D(str(p["lean"])) * m * (ONE - m) * urgency
     lock_cap = ONE + p["max_lock_loss"] - D(lead_px)     # max complement px
     scores: Dict[str, Any] = {}
 

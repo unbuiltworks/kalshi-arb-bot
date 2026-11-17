@@ -233,6 +233,10 @@ RECOVERY_ON = os.getenv("PMUS_TWO_SIDED_RECOVERY", "0").strip() == "1"
 RECOVERY_TAKER = os.getenv("PMUS_TWO_SIDED_RECOVERY_TAKER",
                            "0").strip() == "1"
 RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
+# OWNER 2026-11-17 "lean toward rebalancing": holding-risk multiplier for
+# the recovery decision (1 = unchanged). Higher -> the completion goes to
+# the touch at once. The lock-loss cap and every halt are untouched.
+RECOVERY_LEAN = _env_d("PMUS_TWO_SIDED_RECOVERY_LEAN", "1")
 # HALT_NEW_EXPOSURE: no new first legs anywhere while unmatched cost is
 # at/above this (recovery mode only).
 UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
@@ -1753,6 +1757,7 @@ class Engine:
                          else None),
             min_qty=spec["min_qty"],
             params={"taker_fee_rate": TAKER_FEE_RATE,
+                    "lean": RECOVERY_LEAN,
                     # cheap-leg-first episodes: a taker completion only at
                     # a positive net settlement margin (owner 2026-11-17)
                     "taker_max_pair": (
@@ -2672,7 +2677,7 @@ class Engine:
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         self.mark_recovery_start()
-        log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER,
+        log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
                               "unmatched_halt_usd": UNMATCHED_HALT_USD,
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
