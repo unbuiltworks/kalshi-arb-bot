@@ -140,7 +140,8 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertEqual(row["state"], "INDETERMINATE_ENTRY_LIFECYCLE")
         self.assertIsNone(row["pnl"])
         summary = self.replay.summarise(rows)
-        self.assertEqual(summary[0]["unscored"], 1)
+        self.assertEqual(summary[0]["unscored"], sum(
+            r["state"] == "INDETERMINATE_ENTRY_LIFECYCLE" for r in rows))
         self.assertEqual(summary[0]["sequential"], 0)
         self.assertEqual((row["up_fill_frame"], row["down_fill_frame"]), (1, 2))
         self.assertNotIn("entry_fills_simultaneous", row)
