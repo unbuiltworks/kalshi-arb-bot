@@ -213,6 +213,11 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                                     ttl_s=None)
                 uf = QS.filled(up, arm=arm)
                 df = QS.filled(dn, arm=arm)
+                base = {"source": os.path.basename(path), "slug": slug,
+                        "frame": i, "scenario": name, "gate": gate,
+                        "entry_depth": entry_depth,
+                        "complete_depth": complete_depth,
+                        "completion_ttl_s": completion_ttl_s}
                 if uf is None or df is None:
                     # Missing queue verdict is not evidence of no fill.
                     # Keep it visible but exclude it from P&L and pair counts.
@@ -220,11 +225,6 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                                      up_filled=uf, down_filled=df,
                                      pnl=None))
                     continue
-                base = {"source": os.path.basename(path), "slug": slug,
-                        "frame": i, "scenario": name, "gate": gate,
-                        "entry_depth": entry_depth,
-                        "complete_depth": complete_depth,
-                        "completion_ttl_s": completion_ttl_s}
                 if uf and df:
                     # Both original entry orders eventually filled. They
                     # need not have filled at the same instant; this is NOT
@@ -300,7 +300,9 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                                pair_cost=str(pair),
                                complement_verdict=comp.get("verdict"),
                                complement_queue_ahead=comp.get("queue_ahead"))
-                    if cf:
+                    if cf is None:
+                        rec.update(state="INDETERMINATE_COMPLEMENT", pnl=None)
+                    elif cf:
                         rec.update(state="PAIR_SEQUENTIAL",
                                    pnl=str(((D(1) - pair) * qty
                                             + rebate_per_fill * qty * 2)
@@ -375,7 +377,9 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 rec.update(complement_px=str(comp_own), pair_cost=str(pair),
                            complement_verdict=comp.get("verdict"),
                            complement_queue_ahead=comp.get("queue_ahead"))
-                if cf:
+                if cf is None:
+                    rec.update(state="INDETERMINATE_COMPLEMENT", pnl=None)
+                elif cf:
                     rec.update(state="PAIR_SEQUENTIAL",
                                pnl=str(((D(1) - pair) * qty
                                         + rebate_per_fill * qty * 2)
