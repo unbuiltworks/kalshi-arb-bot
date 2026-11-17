@@ -119,4 +119,4 @@ def test_the_daily_loss_halt_is_loaded_and_bounds_the_day():
     lim = PM.probe_limits()
     assert lim.daily_realized_loss_halt_usd == D("5")
     assert lim.max_concurrent_markets == 1
-    assert PM.worst_case()["worst_case_total_usd"] == "5.1738"
+    assert PM.worst_case()["worst_case_total_usd"] == "5.2375"

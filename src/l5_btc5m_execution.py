@@ -148,6 +148,18 @@ STRADDLE_PRICE_ENV = "L5_BTC5M_STRADDLE_PRICE"
 #: STRADDLE only: a comma-separated ladder, e.g. "0.05,0.06,0.07". Absent
 #: means the single `STRADDLE_PRICE_ENV` rung.
 STRADDLE_RUNGS_ENV = "L5_BTC5M_STRADDLE_RUNGS"
+#: STRADDLE only: BOUNDED REPEATED ENTRIES. Absent or not "YES" keeps the
+#: one-fill-per-side lockout, which is the historical behaviour.
+STRADDLE_REPEAT_ENV = "L5_BTC5M_STRADDLE_REPEAT"
+#: STRADDLE only, and BOTH are REQUIRED when repetition is enabled: the
+#: controller refuses the mode outright without them, because repeated
+#: entry with no unmatched ceiling is a directional bet wearing a
+#: straddle's clothes.
+STRADDLE_MAX_SIDE_USD_ENV = "L5_BTC5M_STRADDLE_MAX_SIDE_USD"
+STRADDLE_MAX_UNMATCHED_USD_ENV = "L5_BTC5M_STRADDLE_MAX_UNMATCHED_USD"
+#: STRADDLE only: inventory-aware repricing, in ticks per clip of
+#: imbalance. Absent or zero keeps the fixed limit that cannot drift.
+STRADDLE_REPRICE_TICKS_ENV = "L5_BTC5M_STRADDLE_REPRICE_TICKS"
 #: STRADDLE only; see `completion_pair_cost`. Absent means no completion,
 #: which is the mode's historical behaviour.
 COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
@@ -411,6 +423,48 @@ def late_favorite_fee_per_share(default: Decimal = D("0")) -> Decimal:
     return raw
 
 
+def straddle_repeat_enabled(default: bool = False) -> bool:
+    """Whether a side may take more than one clip. Matches the other
+    switches in this module: only an explicit YES turns it on."""
+    raw = os.environ.get(STRADDLE_REPEAT_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "YES"
+
+
+def straddle_max_side_usd(default: Decimal = D("0")) -> Decimal:
+    """Per-side filled+resting ceiling. Unreadable or non-positive keeps
+    the default of 0, which REFUSES the repetition mode rather than
+    guessing a bound."""
+    raw = _dec(os.environ.get(STRADDLE_MAX_SIDE_USD_ENV))
+    if raw is None or raw <= ZERO:
+        return default
+    return min(raw, STRADDLE_MAX_SIDE_USD_CEILING)
+
+
+def straddle_max_unmatched_usd(default: Decimal = D("0")) -> Decimal:
+    """The unmatched-inventory ceiling, which is the real directional
+    exposure and the window's worst-case loss. Same discipline."""
+    raw = _dec(os.environ.get(STRADDLE_MAX_UNMATCHED_USD_ENV))
+    if raw is None or raw <= ZERO:
+        return default
+    return min(raw, STRADDLE_MAX_UNMATCHED_USD_CEILING)
+
+
+def straddle_reprice_ticks(default: int = 0) -> int:
+    """Ticks per clip of imbalance. Unreadable keeps 0 (disabled)."""
+    raw = os.environ.get(STRADDLE_REPRICE_TICKS_ENV)
+    if raw is None:
+        return default
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    if v < 0:
+        return default
+    return min(v, STRADDLE_REPRICE_TICKS_CEILING)
+
+
 def completion_pair_cost(default: Decimal = D("0")) -> Decimal:
     """STRADDLE only: what a COMPLETED pair may cost, in total.
 
@@ -442,6 +496,15 @@ def completion_pair_cost(default: Decimal = D("0")) -> Decimal:
 #: accumulation by 5x as a side effect, which nobody asked for.
 CLIP_MAX_USD = D("0.45")
 STRADDLE_CLIP_MAX_USD = D("2.25")
+
+#: CODE CEILINGS ON THE REPETITION BOUNDS, enforced here and not left to
+#: whoever sets the variable. The unmatched ceiling IS the worst-case loss
+#: a window can take -- matched inventory pays $1.00 a pair and cannot
+#: lose -- so it is held to one clip's worth, and the per-side cap to two.
+#: Over-asking is CLAMPED DOWN, never honoured: a typo must not widen risk.
+STRADDLE_MAX_SIDE_USD_CEILING = STRADDLE_CLIP_MAX_USD * D("2")
+STRADDLE_MAX_UNMATCHED_USD_CEILING = STRADDLE_CLIP_MAX_USD
+STRADDLE_REPRICE_TICKS_CEILING = 5
 
 
 def clip_usd(default: Decimal = D("0.10"),
@@ -1585,6 +1648,21 @@ class Btc5mExecutor:
                             self.params.straddle_price),
                         straddle_rungs=straddle_rungs(
                             self.params.straddle_rungs),
+                        #: THE REPETITION BOUNDS RIDE HERE for the same
+                        #: reason the late-favorite's four do: a param
+                        #: with no env reader sits at its dataclass
+                        #: default forever, and "refused every time"
+                        #: reads identically to "no opportunity" in a log.
+                        straddle_repeat_enabled=straddle_repeat_enabled(
+                            self.params.straddle_repeat_enabled),
+                        straddle_max_side_usd=straddle_max_side_usd(
+                            self.params.straddle_max_side_usd),
+                        straddle_max_unmatched_usd=(
+                            straddle_max_unmatched_usd(
+                                self.params.straddle_max_unmatched_usd)),
+                        straddle_reprice_ticks_per_clip=(
+                            straddle_reprice_ticks(
+                                self.params.straddle_reprice_ticks_per_clip)),
                         clip_usd=clip_usd(self.params.clip_usd,
                                           STRADDLE_CLIP_MAX_USD),
                         #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because

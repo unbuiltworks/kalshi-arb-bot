@@ -65,23 +65,29 @@ def test_this_account_qualifies_for_the_worst_tier_on_both_schedules():
                                                          D("0.0104"))
 
 
-def test_the_default_is_deliberately_UNCHANGED_so_no_risk_bound_moved():
-    """Resolving an unspecified tier to this account's Tier 1 is the right
-    economics and it MOVES RISK BOUNDS: the preflight's worst case under
-    the authorised $5 ceiling went $5.1738 -> $5.2375, through the
-    ceiling, and 28 tests across the preflight, envelope, probe-manifest,
-    complement-bound and rebate-accounting surfaces changed their answers
-    against a baseline with one pre-existing failure.
+def test_the_default_IS_this_accounts_tier(monkeypatch):
+    """Owner instruction 2026-11-17: correct the coefficient to the
+    verified account value. The default and the account figure are now
+    the same thing, and the published TOP tier must be asked for."""
+    assert F.thetas() == F.account_thetas() == (D("0.095"), D("0"))
+    assert F.taker_theta() == D("0.095")
+    assert F.maker_theta() == D("0")
+    assert F.thetas(taker_volume_usd=D("250000")) != F.thetas()
 
-    Changing what the risk gates believe a fee to be is money-capable
-    whatever file it lives in. So the default stays put until the owner
-    approves the migration, and this test is what stops it drifting."""
-    assert F.thetas() == (D("0.0695"), D("0.0125"))
-    assert F.taker_theta() == D("0.0695")
-    assert F.maker_theta() == D("0.0125")
-    assert F.taker_fee(D("0.50")) == D("0.0174")
-    # and the account figure is NOT the default, which is the whole point
-    assert F.account_thetas() != F.thetas()
+
+def test_correcting_the_coefficient_did_not_permit_taker_execution():
+    """What the gates BELIEVE a taker fee costs is not permission to send
+    a taker order. The correction must not have touched that."""
+    from src import l5_btc5m_controller as C
+    assert C.Params().taker_allowed is False
+
+
+def test_history_is_still_priced_at_the_coefficient_that_applied(monkeypatch):
+    """The whole reason this module is effective-dated: evidence recorded
+    under the flat schedule must not be silently re-rated."""
+    assert F.thetas(FLAT_INSTANT) == (D("0.0695"), D("0.0125"))
+    before = dt.datetime(2026, 9, 16, tzinfo=dt.timezone.utc)
+    assert F.thetas(before) == (D("0.06"), D("0.0125"))
 
 
 def test_the_account_figure_is_the_worst_tier_on_both_tables():
@@ -137,11 +143,10 @@ def test_the_tier_boundary_is_midnight_ET_expressed_in_UTC():
                                                           D("0.0125"))
 
 
-def test_the_taker_fee_this_account_now_faces_is_materially_HIGHER():
-    """How much the migration would tighten bounds by, quantified."""
-    top = F.taker_fee(D("0.44"), D(100))
-    ours = F.taker_fee(D("0.44"), D(100),
-                       taker_volume_usd=F.ACCOUNT_TAKER_VOLUME_USD)
+def test_the_taker_fee_this_account_faces_is_materially_HIGHER():
+    """How much the correction tightened bounds by, quantified."""
+    top = F.taker_fee(D("0.44"), D(100), taker_volume_usd=D("250000"))
+    ours = F.taker_fee(D("0.44"), D(100))
     assert ours > top
     assert (ours / top - 1) > D("0.36")
 
@@ -175,7 +180,7 @@ def test_the_execution_path_reads_the_schedule_and_not_a_local_copy():
     assert q1.taker_fee(D("0.50")) == F.taker_fee(D("0.50"))
     assert q1.maker_rebate(D("0.50")) == F.maker_rebate(D("0.50"))
     # and the number actually moved, so this test would have failed before
-    assert q1.taker_fee(D("0.50")) == D("0.0174")
+    assert q1.taker_fee(D("0.50")) == D("0.0238")   # Tier 1, 0.095
 
 
 def test_no_execution_module_still_hardcodes_the_stale_coefficient():
@@ -267,7 +272,7 @@ def test_an_undeclared_product_is_refused():
 
 def test_the_adapter_quotes_the_live_coefficient_not_a_frozen_string():
     from src.l5_venue_adapter import PMUSAdapter
-    assert "0.0695" in PMUSAdapter().provenance()["fees"]
+    assert "0.095" in PMUSAdapter().provenance()["fees"]
 
 
 # --------------------------------------------------------------------------

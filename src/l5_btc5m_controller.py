@@ -198,6 +198,37 @@ class Params:
     #: its return on capital. Rungs at or above 0.50 are refused with the
     #: single price, for the same reason.
     straddle_rungs: tuple = ()
+    #: =====================================================================
+    #: BOUNDED REPEATED ENTRIES, replacing the one-fill-per-side lockout.
+    #:
+    #: The lockout was `if inv[side][0] > 0: continue` -- "this side is
+    #: done". It capped the strategy at two fills a window against the
+    #: 106-207 per window measured on the behaviour being replicated, and
+    #: it was ALSO the de-facto unmatched-inventory bound: one clip a side
+    #: means imbalance can never exceed one clip. So it cannot be removed
+    #: on its own, and these three parameters replace both of its jobs.
+    #:
+    #: DEFAULT IS THE OLD BEHAVIOUR, BYTE FOR BYTE. `False` keeps the
+    #: lockout exactly, so no configuration that exists today changes. The
+    #: two dollar bounds are REQUIRED when it is enabled and refuse the
+    #: whole mode when absent: repeated entry without an unmatched ceiling
+    #: is a directional bet wearing a straddle's clothes, which is the one
+    #: shape this strategy must never hold.
+    straddle_repeat_enabled: bool = False
+    #: per SIDE: filled cost + resting notional that side may reach.
+    straddle_max_side_usd: Decimal = D("0")
+    #: the cost of the UNMATCHED portion of inventory, whichever side is
+    #: heavy. This is the real directional exposure and it is bounded in
+    #: dollars rather than clips so a repriced rung cannot widen it.
+    straddle_max_unmatched_usd: Decimal = D("0")
+    #: INVENTORY-AWARE REPRICING. Per clip of net imbalance, the HEAVY
+    #: side's rung moves this many ticks DOWN (bidding less aggressively
+    #: for more of what we already hold) and the light side's moves UP.
+    #: Zero disables it and is the default, so a fixed limit still cannot
+    #: drift unless an owner asks for it. Prices stay inside the mode's
+    #: existing (0, 0.50) bound and on the tick grid; a shift that would
+    #: leave either is clamped, never wrapped.
+    straddle_reprice_ticks_per_clip: int = 0
     #: STRADDLE only: PATIENT COMPLETION of a lone leg. Zero disables it and
     #: is the default, so the mode's behaviour is byte-for-byte unchanged
     #: until an owner sets it.
@@ -361,6 +392,79 @@ def p_up_from_spot(spot: Any, strike: Any, t_left_s: Any,
 
 
 # -------------------------------------------------------------- exposure
+
+def _side_committed_usd(side: str, inv: Dict[str, tuple],
+                        rest: List[Dict[str, Any]]) -> Decimal:
+    """Filled cost plus resting notional ON ONE SIDE.
+
+    Resting notional counts because an order we have placed is money we
+    have already committed: a side cap that ignored resting orders could
+    be breached by fills we had already asked for.
+    """
+    filled = inv[side][1]
+    resting = sum((o["price"] * o["qty"] for o in rest
+                   if o["side"] == side), ZERO)
+    return filled + resting
+
+
+def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
+                               inv: Dict[str, tuple]) -> Decimal:
+    """Cost of the unmatched portion if THIS clip filled and the opposite
+    side did not move.
+
+    Judged before the order is placed, and judged on the assumption that
+    the clip fills and its hedge does not -- which is the case the bound
+    exists for. The unmatched quantity is valued at the heavy side's
+    average cost, because what an unmatched contract loses is what was
+    paid for it, not a dollar.
+    """
+    other = _other(side)
+    q_side, c_side = inv[side]
+    q_side = q_side + qty
+    c_side = c_side + price * qty
+    q_other, c_other = inv[other]
+    if q_side > q_other:
+        heavy_q, heavy_c, unmatched = q_side, c_side, q_side - q_other
+    elif q_other > q_side:
+        heavy_q, heavy_c, unmatched = q_other, c_other, q_other - q_side
+    else:
+        return ZERO
+    if heavy_q <= 0:
+        return ZERO
+    return (heavy_c / heavy_q) * unmatched
+
+
+def _repriced_rung(r: Decimal, side: str, inv: Dict[str, tuple],
+                   qty: Decimal, params: "Params") -> Optional[Decimal]:
+    """The rung, shaded by how lopsided inventory already is.
+
+    The heavy side bids LOWER and the light side HIGHER, by
+    `straddle_reprice_ticks_per_clip` ticks for each whole clip of net
+    imbalance. Returns None when the shift would leave the mode's
+    (0, 0.50) bound -- a clamped-to-the-edge rung would quietly become a
+    different trade from the one the owner configured, so it is refused
+    instead.
+    """
+    per = int(params.straddle_reprice_ticks_per_clip or 0)
+    if per <= 0 or qty <= 0:
+        return r
+    other = _other(side)
+    skew = (inv[side][0] - inv[other][0]) / qty
+    #: whole clips only: a partial fill should not nudge the quote
+    clips = int(skew.to_integral_value(rounding=ROUND_FLOOR)) if skew >= 0 \
+        else -int((-skew).to_integral_value(rounding=ROUND_FLOOR))
+    if clips == 0:
+        return r
+    tick = _dec(params.tick) or D("0.01")
+    out = r - (tick * per * clips)
+    if not (ZERO < out < HALF):
+        return None
+    #: back onto the grid the venue will accept
+    out = (out / tick).to_integral_value(rounding=ROUND_FLOOR) * tick
+    if not (ZERO < out < HALF):
+        return None
+    return out
+
 
 def _exposure(inv: Dict[str, tuple], rest: List[Dict[str, Any]]) -> Dict[str, Any]:
     (up_qty, up_cost), (down_qty, down_cost) = inv[UP], inv[DOWN]
@@ -568,6 +672,14 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             why_s = "CLIP_TOO_SMALL"
         elif t >= params.no_new_entry_after_s:
             why_s = "ENTRY_WINDOW_CLOSED"
+        elif (params.straddle_repeat_enabled
+              and not ((_dec(params.straddle_max_side_usd) or ZERO) > ZERO
+                       and (_dec(params.straddle_max_unmatched_usd)
+                            or ZERO) > ZERO)):
+            #: repeated entry without an unmatched ceiling is a
+            #: directional bet wearing a straddle's clothes. Refuse the
+            #: mode rather than inventing a bound.
+            why_s = "REPEAT_WITHOUT_BOUNDS"
         else:
             #: RUNGS OUTER, SIDES INNER -- so that any truncation falls
             #: EVENLY on both sides. Draining one side first (the original
@@ -580,13 +692,36 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             #: never hold.
             live = {s: {o["price"] for o in rest if o["side"] == s}
                     for s in SIDES}
+            _repeat = bool(params.straddle_repeat_enabled)
+            _side_cap = _dec(params.straddle_max_side_usd) or ZERO
+            _unm_cap = _dec(params.straddle_max_unmatched_usd) or ZERO
+            _committed = {s: _side_committed_usd(s, inv, rest)
+                          for s in SIDES}
             for i, r in enumerate(_rungs):
                 for side in SIDES:
-                    if inv[side][0] > 0:
-                        continue                  # this side is done
-                    if r in live[side]:
+                    #: REPRICING. Shades the rung by existing imbalance;
+                    #: returns the rung unchanged when disabled.
+                    r_side = _repriced_rung(r, side, inv, qty, params)
+                    if r_side is None:
+                        why_s = "REPRICE_OUT_OF_BAND"
+                        continue
+                    if not _repeat:
+                        if inv[side][0] > 0:
+                            continue              # this side is done
+                    else:
+                        #: BOUNDED REPETITION. Two dollar bounds replace
+                        #: the lockout's two jobs: how much one side may
+                        #: hold, and how lopsided the book may get.
+                        if _committed[side] + r_side * qty > _side_cap:
+                            why_s = "SIDE_CAP_REACHED"
+                            continue
+                        if _prospective_unmatched_usd(
+                                side, r_side, qty, inv) > _unm_cap:
+                            why_s = "UNMATCHED_CEILING"
+                            continue
+                    if r_side in live[side]:
                         continue                  # that rung already rests
-                    if r * qty > room:
+                    if r_side * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"
                         continue
                     #: IS THIS RUNG WORTH BUYING? Priced before any room
@@ -596,8 +731,17 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     #: 15 consecutive lone legs live, each settling
                     #: -0.16. A nonpositive OR UNKNOWN value refuses:
                     #: "we could not tell" is not a reason either.
+                    #: the opposite side's rung as it would actually be
+                    #: priced, so an asymmetric pair is not valued as a
+                    #: symmetric one. NB `_other` is a module-level
+                    #: function here; shadowing it with a local broke 44
+                    #: tests on the first attempt.
+                    _r_other = _repriced_rung(r, _other(side), inv, qty,
+                                              params)
                     _ev = SEV.entry_ev(
-                        price=r, other_price=r,
+                        price=r_side,
+                        other_price=(r_side if _r_other is None
+                                     else _r_other),
                         pair_target=params.straddle_completion_pair_cost,
                         p_pair_natural=params.straddle_p_pair_natural,
                         #: ZERO WHEN COMPLETION IS OFF. A completion
@@ -614,7 +758,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     _ok = SEV.admits(
                         _ev,
                         min_ev_per_share=params.straddle_min_ev_per_share)
-                    ev_rungs.append({"price": str(r),
+                    ev_rungs.append({"price": str(r_side),
                                      "ev_per_share": (
                                          None if _ev.get("ev_per_share") is None
                                          else str(_ev["ev_per_share"])),
@@ -623,8 +767,9 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     if not _ok["ok"]:
                         why_s = "ENTRY_EV_%s" % _ok["reason"]
                         continue
-                    room -= r * qty
-                    want.append(_place(side, r, qty, "STRADDLE_LEG",
+                    room -= r_side * qty
+                    _committed[side] += r_side * qty
+                    want.append(_place(side, r_side, qty, "STRADDLE_LEG",
                                        slot=i))
         #: PATIENT COMPLETION, AND WHY IT IS NOT ADDITIVE.
         #:
