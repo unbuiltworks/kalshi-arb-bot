@@ -58,7 +58,7 @@ import hashlib
 import json
 import os
 import sys
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Sequence
 
 CONFIRM_PHRASE = "RESET THE LATCHED HALT"
 
@@ -76,6 +76,13 @@ REASON_ENV = "L5_HALT_RESET_CONFIRM_REASON"
 #: rather than a formality -- the volume is not readable from anywhere else.
 INSPECT_ENV = "L5_HALT_RESET_INSPECT"
 REGISTRY_ENV = "L5_ORDER_REGISTRY_URL"
+
+#: OFFLINE-LANE ATTESTATION. All THREE are required together and the
+#: default (all unset) is the strict behaviour: every configured registry
+#: must answer. See `_offline_lane_exemption`.
+OFFLINE_LANE_ENV = "L5_HALT_RESET_OFFLINE_LANE"
+OFFLINE_PREFIX_ENV = "L5_HALT_RESET_OFFLINE_MARKET_PREFIX"
+OFFLINE_EXPECT_ENV = "L5_HALT_RESET_OFFLINE_EXPECT"
 STATE_ENV = "L5_WATCHDOG_STATE_DIR"
 
 #: the watchdog's GET-only halt server. Set this (and L5_HALT_RESET_VIA_HTTP)
@@ -395,6 +402,12 @@ def venue_evidence(transport: Any, *,
     positions, pos_err = _positions(transport)
     return {"l5_owned_working_orders": 0,
             "venue_working_orders_seen": len(working),
+            #: ADDITIVE, reporting only. The market of every working order,
+            #: so an offline-lane attestation can be verified against the
+            #: venue instead of against the lane's own silence. Adding a
+            #: key cannot change what blocks.
+            "venue_working_markets": sorted(
+                {str(r.get("marketSlug") or "") for r in working}),
             "owner_manual_orders_allowed": manual,
             "managed_lane_orders_allowed": lane,
             "account_positions": positions if pos_err is None else None,
@@ -476,7 +489,89 @@ def ownership(url: str, *, opener=None) -> Dict[str, Any]:
             "never guessed" % type(exc).__name__)
 
 
-def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
+def _offline_lane_exemption(url: str, refusal: str, *,
+                            halt_digest: Optional[str],
+                            venue_markets: Optional[Sequence[str]]
+                            ) -> Dict[str, Any]:
+    """May THIS registry's unreachability be excused? Fail closed.
+
+    STRICT IS THE DEFAULT. With the three attestation variables unset this
+    returns a refusal and `registry_evidence` re-raises, so behaviour is
+    exactly as it was: every configured registry must answer.
+
+    WHY IT EXISTS. `L5_ORDER_REGISTRY_URL` names every executor on the
+    account. A lane that is DELIBERATELY stopped -- l5-btc5m-live exits on
+    ENVELOPE_EXPIRED and its registry server dies with the process -- is
+    then indistinguishable from a wedged one, so after the multi-registry
+    fix no reset could pass while any lane was intentionally down. The
+    answer is not to trust silence; it is to require the owner to say
+    which lane is down and to VERIFY that claim against the venue.
+
+    FOUR CONDITIONS, ALL REQUIRED.
+
+      1. The owner names the EXACT lane url, matching a configured one
+         byte for byte. A prefix or a hostname is not enough.
+      2. The owner names the HALT FINGERPRINT this exemption is for, and
+         it must equal the latch being cleared. An exemption therefore
+         cannot be left in the environment and silently reused on the
+         next, different halt -- which is the failure mode that makes
+         standing exemptions dangerous.
+      3. The owner names the lane's MARKET PREFIX, and the venue must show
+         NO working order in any market carrying it. This is the
+         independent check: the lane's own `submission_disabled` is
+         unreadable by definition here, so the venue stands in for it. A
+         lane with nothing working cannot be mid-submission in a way that
+         this clear could strand.
+      4. The refusal must be UNREACHABILITY. A registry that answers and
+         reports live orders, staleness, or submission NOT disabled is
+         telling us something disqualifying, and that always blocks.
+
+    AN UNREACHABLE REGISTRY ALONE NEVER QUALIFIES: condition 4 is
+    necessary and on its own insufficient, and 1-3 cannot be satisfied by
+    anything the dead lane does or fails to do.
+    """
+    named = _env(OFFLINE_LANE_ENV)
+    prefix = _env(OFFLINE_PREFIX_ENV)
+    expect = _env(OFFLINE_EXPECT_ENV)
+    if not (named or prefix or expect):
+        return {"exempt": False, "why": "NO_OFFLINE_ATTESTATION"}
+    if not (named and prefix and expect):
+        return {"exempt": False, "why": "INCOMPLETE_OFFLINE_ATTESTATION",
+                "detail": ("all three of %s, %s and %s are required together"
+                           % (OFFLINE_LANE_ENV, OFFLINE_PREFIX_ENV,
+                              OFFLINE_EXPECT_ENV))}
+    if named != url:
+        return {"exempt": False, "why": "OFFLINE_LANE_NOT_THIS_ONE",
+                "attested": named, "refused": url}
+    if not str(refusal).startswith("REGISTRY_UNREADABLE"):
+        #: the lane ANSWERED. Whatever it said disqualifies the clear.
+        return {"exempt": False, "why": "LANE_ANSWERED_AND_DISQUALIFIES",
+                "refusal": str(refusal)[:160]}
+    if not halt_digest:
+        return {"exempt": False, "why": "NO_HALT_FINGERPRINT_AVAILABLE"}
+    if expect != halt_digest:
+        return {"exempt": False, "why": "OFFLINE_ATTESTATION_WRONG_HALT",
+                "attested": expect, "current": halt_digest}
+    if venue_markets is None:
+        #: never read as "nothing is working". Unknown is not empty.
+        return {"exempt": False, "why": "VENUE_MARKETS_UNREADABLE"}
+    hits = sorted(m for m in venue_markets if str(m).startswith(prefix))
+    if hits:
+        return {"exempt": False, "why": "LANE_STILL_HAS_WORKING_ORDERS",
+                "market_prefix": prefix, "markets": hits[:8]}
+    return {"exempt": True, "lane": url, "market_prefix": prefix,
+            "halt_sha256": halt_digest,
+            "venue_working_markets_checked": len(venue_markets),
+            "labels": ("owner-attested offline lane, verified against the "
+                       "venue: no working order carries this lane's market "
+                       "prefix. The lane's own submission lock was NOT "
+                       "readable and was NOT assumed.")}
+
+
+def registry_evidence(url: str, *, opener=None,
+                      halt_digest: Optional[str] = None,
+                      venue_markets: Optional[Sequence[str]] = None
+                      ) -> Dict[str, Any]:
     """Gate 4(c). EVERY configured registry READABLE, FRESH and EMPTY.
 
     COMMA-SEPARATED URLS, READ THE SAME WAY THE SWEEP READS THEM. This
@@ -511,23 +606,41 @@ def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
         #: each one in turn, by the same rules; the FIRST refusal stands,
         #: so the message names the registry that failed rather than a
         #: merged verdict nobody can act on.
-        seen = []
+        seen = []; exempt = []
         for one in urls:
             try:
                 seen.append(_one_registry_evidence(one, opener=opener))
             except ResetRefused as exc:
-                #: name the registry that failed. A merged verdict would
-                #: tell the operator the clear was refused without saying
-                #: which executor to go and look at.
-                raise ResetRefused("%s [registry %s of %d: %s]"
-                                   % (exc, urls.index(one) + 1, len(urls),
-                                      one))
+                ex = _offline_lane_exemption(
+                    one, str(exc), halt_digest=halt_digest,
+                    venue_markets=venue_markets)
+                if ex.get("exempt") is True:
+                    exempt.append(ex)
+                    continue
+                #: name the registry that failed, and why the exemption did
+                #: not apply. A merged verdict would tell the operator the
+                #: clear was refused without saying which executor to go
+                #: and look at, or what would have excused it.
+                raise ResetRefused(
+                    "%s [registry %s of %d: %s; offline-lane exemption not "
+                    "applied: %s]"
+                    % (exc, urls.index(one) + 1, len(urls), one,
+                       ex.get("why")))
+        if not seen:
+            #: every configured registry was exempted, so nothing attested
+            #: anything. An exemption excuses ONE dead lane, never the
+            #: absence of all evidence.
+            raise ResetRefused(
+                "NO_REGISTRY_ATTESTED: every configured registry was "
+                "exempted, so no executor published a submission lock. An "
+                "exemption excuses a dead lane, not the whole check.")
         return {"registry_readable": True,
                 "registry_age_s": max(r["registry_age_s"] for r in seen),
                 "registry_live_orders": 0,
                 "registry_url": ",".join(urls),
                 "registries": seen,
                 "registry_count": len(seen),
+                "offline_lanes_exempted": exempt,
                 "submission_disabled": True}
     return _one_registry_evidence(urls[0], opener=opener)
 
@@ -683,7 +796,11 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
     claimed = ownership(registry_url, opener=registry_opener)
     venue = venue_evidence(transport, claimed=claimed,
                            lane_ids=managed_lane_claims())
-    registry = registry_evidence(registry_url, opener=registry_opener)
+    #: the halt fingerprint and the venue's own working markets are what
+    #: make an offline-lane attestation verifiable rather than trusted.
+    registry = registry_evidence(
+        registry_url, opener=registry_opener, halt_digest=digest,
+        venue_markets=venue.get("venue_working_markets"))
     t = (now or _utc()).isoformat()
     entry = {
         # the honest pre-write state: an ATTEMPT, not an accomplished clear

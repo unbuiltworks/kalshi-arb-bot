@@ -1086,3 +1086,211 @@ class TestCommaSeparatedRegistriesAreReadLikeTheSweepReadsThem:
         with pytest.raises(R.ResetRefused) as e:
             R.registry_evidence(" , ", opener=fresh_registry())
         assert "NO_REGISTRY_URL" in str(e.value)
+
+
+# ---------------------------------------------------------------------------
+# OWNER 2026-11-18: an intentionally offline lane may be excused ONLY on
+# explicit attestation tied to the current halt fingerprint, the exact
+# lane, and independent venue verification. Strict stays the default and an
+# unreachable registry alone must never qualify.
+# ---------------------------------------------------------------------------
+TWO = ("http://pmus-spring-l5-probe.railway.internal:8090,"
+       "http://l5-btc5m-live.railway.internal:8090")
+DEAD = "http://l5-btc5m-live.railway.internal:8090"
+HALT = "a" * 64
+
+
+def _opener_btc_dead():
+    def opener(url, timeout):
+        if "l5-btc5m-live" in url:
+            raise OSError("URLError")
+        return fresh_registry(submission_disabled=True)(url, timeout)
+    return opener
+
+
+def _attest(monkeypatch, *, lane=DEAD, prefix="cpc-btc-updown-5m-",
+            expect=HALT):
+    for k, v in ((R.OFFLINE_LANE_ENV, lane),
+                 (R.OFFLINE_PREFIX_ENV, prefix),
+                 (R.OFFLINE_EXPECT_ENV, expect)):
+        if v is None:
+            monkeypatch.delenv(k, raising=False)
+        else:
+            monkeypatch.setenv(k, v)
+
+
+class TestStrictRemainsTheDefault:
+
+    def test_with_no_attestation_an_offline_lane_still_blocks(self, monkeypatch):
+        _attest(monkeypatch, lane=None, prefix=None, expect=None)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+        assert "REGISTRY_UNREADABLE" in str(e.value)
+        assert "NO_OFFLINE_ATTESTATION" in str(e.value)
+
+    def test_an_unreachable_registry_alone_never_qualifies(self, monkeypatch):
+        """The whole point: silence is not evidence."""
+        _attest(monkeypatch, lane=None, prefix=None, expect=None)
+        with pytest.raises(R.ResetRefused):
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+
+    def test_a_partial_attestation_blocks(self, monkeypatch):
+        _attest(monkeypatch, prefix=None)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+        assert "INCOMPLETE_OFFLINE_ATTESTATION" in str(e.value)
+
+    def test_single_url_behaviour_is_untouched(self, monkeypatch):
+        _attest(monkeypatch, lane=None, prefix=None, expect=None)
+        out = R.registry_evidence("http://a:8090",
+                                  opener=fresh_registry(submission_disabled=True))
+        assert out["registry_readable"] is True
+        assert "offline_lanes_exempted" not in out
+
+
+class TestTheExemptionIsTiedToAllThreeFacts:
+
+    def test_the_happy_path_exempts_exactly_one_lane(self, monkeypatch):
+        _attest(monkeypatch)
+        out = R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                  halt_digest=HALT, venue_markets=["aec-atp-x"])
+        assert out["registry_readable"] is True
+        assert out["registry_count"] == 1          # only the probe attested
+        ex = out["offline_lanes_exempted"]
+        assert len(ex) == 1 and ex[0]["lane"] == DEAD
+        assert ex[0]["halt_sha256"] == HALT
+
+    def test_a_different_lane_name_blocks(self, monkeypatch):
+        _attest(monkeypatch, lane="http://some-other-lane:8090")
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+        assert "OFFLINE_LANE_NOT_THIS_ONE" in str(e.value)
+
+    def test_a_hostname_without_the_port_is_not_the_exact_lane(self, monkeypatch):
+        _attest(monkeypatch, lane="http://l5-btc5m-live.railway.internal")
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+        assert "OFFLINE_LANE_NOT_THIS_ONE" in str(e.value)
+
+    def test_an_attestation_for_a_DIFFERENT_halt_blocks(self, monkeypatch):
+        """A standing exemption must not carry into the next halt."""
+        _attest(monkeypatch, expect="b" * 64)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=[])
+        assert "OFFLINE_ATTESTATION_WRONG_HALT" in str(e.value)
+
+    def test_no_halt_fingerprint_available_blocks(self, monkeypatch):
+        _attest(monkeypatch)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=None, venue_markets=[])
+        assert "NO_HALT_FINGERPRINT_AVAILABLE" in str(e.value)
+
+
+class TestTheVenueCheckIsIndependentAndFailsClosed:
+
+    def test_a_working_order_in_the_lanes_markets_blocks(self, monkeypatch):
+        _attest(monkeypatch)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(
+                TWO, opener=_opener_btc_dead(), halt_digest=HALT,
+                venue_markets=["aec-atp-x", "cpc-btc-updown-5m-2026-11-18-0200z"])
+        assert "LANE_STILL_HAS_WORKING_ORDERS" in str(e.value)
+
+    def test_unknown_venue_markets_is_not_empty(self, monkeypatch):
+        """Unreadable must never be read as 'nothing is working'."""
+        _attest(monkeypatch)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=_opener_btc_dead(),
+                                halt_digest=HALT, venue_markets=None)
+        assert "VENUE_MARKETS_UNREADABLE" in str(e.value)
+
+    def test_venue_evidence_reports_the_markets_it_saw(self):
+        """The input the exemption verifies against is real venue data.
+
+        It must come from the venue, not from the lane, or the exemption
+        would be verifying the dead lane's silence against itself.
+        """
+        rows = [{"id": "D1", "state": "ORDER_STATE_OPEN",
+                 "marketSlug": "cpc-btc-updown-5m-2026-11-18-0200z",
+                 "manualOrderIndicator": "MANUAL"},
+                {"id": "D2", "state": "ORDER_STATE_OPEN",
+                 "marketSlug": "aec-atp-someone-else-2026-11-18",
+                 "manualOrderIndicator": "MANUAL"}]
+        out = R.venue_evidence(FakeTransport(open_rows=rows), claimed={})
+        assert out["venue_working_markets"] == [
+            "aec-atp-someone-else-2026-11-18",
+            "cpc-btc-updown-5m-2026-11-18-0200z"]
+
+    def test_the_exemption_rejects_markets_taken_from_that_venue_read(
+            self, monkeypatch):
+        """End to end: venue_evidence's own output blocks the exemption."""
+        _attest(monkeypatch)
+        rows = [{"id": "D1", "state": "ORDER_STATE_OPEN",
+                 "marketSlug": "cpc-btc-updown-5m-2026-11-18-0200z",
+                 "manualOrderIndicator": "MANUAL"}]
+        markets = R.venue_evidence(
+            FakeTransport(open_rows=rows),
+            claimed={})["venue_working_markets"]
+        ex = R._offline_lane_exemption(
+            DEAD, "REGISTRY_UNREADABLE: URLError",
+            halt_digest=HALT, venue_markets=markets)
+        assert ex["exempt"] is False
+        assert ex["why"] == "LANE_STILL_HAS_WORKING_ORDERS"
+
+
+class TestAnAnsweringLaneAlwaysDisqualifies:
+
+    def _opener_answers(self, **kw):
+        def opener(url, timeout):
+            return fresh_registry(**kw)(url, timeout)
+        return opener
+
+    def test_a_lane_still_claiming_orders_is_never_exempted(self, monkeypatch):
+        _attest(monkeypatch)
+        def opener(url, timeout):
+            rows = [{"id": "D1"}] if "l5-btc5m-live" in url else []
+            return fresh_registry(rows=rows, submission_disabled=True)(url, timeout)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=opener, halt_digest=HALT,
+                                venue_markets=[])
+        assert "EXECUTOR_STILL_CLAIMS_LIVE_ORDERS" in str(e.value)
+        assert "LANE_ANSWERED_AND_DISQUALIFIES" in str(e.value)
+
+    def test_a_lane_not_proven_locked_is_never_exempted(self, monkeypatch):
+        _attest(monkeypatch)
+        def opener(url, timeout):
+            lock = False if "l5-btc5m-live" in url else True
+            return fresh_registry(submission_disabled=lock)(url, timeout)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=opener, halt_digest=HALT,
+                                venue_markets=[])
+        assert "SUBMISSION_NOT_PROVEN_DISABLED" in str(e.value)
+        assert "LANE_ANSWERED_AND_DISQUALIFIES" in str(e.value)
+
+    def test_a_stale_lane_is_never_exempted(self, monkeypatch):
+        _attest(monkeypatch)
+        def opener(url, timeout):
+            age = 10_000.0 if "l5-btc5m-live" in url else 1.0
+            return fresh_registry(age_s=age, submission_disabled=True)(url, timeout)
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence(TWO, opener=opener, halt_digest=HALT,
+                                venue_markets=[])
+        assert "REGISTRY_STALE" in str(e.value)
+        assert "LANE_ANSWERED_AND_DISQUALIFIES" in str(e.value)
+
+    def test_exempting_every_lane_attests_nothing_and_blocks(self, monkeypatch):
+        _attest(monkeypatch, lane="http://only:8090")
+        def dead(url, timeout):
+            raise OSError("URLError")
+        with pytest.raises(R.ResetRefused) as e:
+            R.registry_evidence("http://only:8090", opener=dead,
+                                halt_digest=HALT, venue_markets=[])
+        # single-url path: no exemption loop, so it refuses on unreadability
+        assert "REGISTRY_UNREADABLE" in str(e.value)
