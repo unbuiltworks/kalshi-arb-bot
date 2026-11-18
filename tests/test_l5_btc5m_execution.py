@@ -2056,3 +2056,88 @@ class TestInventoryLifecycle:
             per_side[s["side"]] = per_side.get(s["side"], D(0)) + \
                 D(str(s["price"])) * D(str(s["qty"]))
         assert all(v <= D("0.25") for v in per_side.values()), per_side
+
+    def test_STRADDLE_repeated_same_side_fills_accumulate_then_bound(
+            self, rig, armed, straddle):
+        """REPEATED FILLS ON ONE SIDE. Each fill is reconciled, the side's
+        cost accumulates, and the per-side ceiling eventually refuses --
+        which is what makes repetition bounded rather than directional."""
+        seen = []
+        for _ in range(6):
+            rig.step()
+            new = [o for o in rig.venue.by_oid
+                   if o not in rig.venue.full
+                   and rig.venue.by_oid[o]["side"] == C.DOWN]
+            for oid in new:
+                rig.venue.fill(oid)
+            rig.tick(1.0)
+            rep = rig.step()
+            inv = rep["inventory"]
+            seen.append(D(str(inv[C.DOWN]["cost"])))
+            rig.tick(1.0)
+        #: cost is monotone non-decreasing: every fill was reconciled
+        assert all(b >= a for a, b in zip(seen, seen[1:])), seen
+        #: and the per-side ceiling is respected throughout
+        assert seen[-1] <= D("1.00"), seen
+
+    def test_STRADDLE_partial_fill_on_the_opposite_side_completes_part(
+            self, rig, armed, straddle):
+        """PARTIAL PAIR COMPLETION. DOWN fills whole, UP fills half: the
+        matched quantity is the minimum of the two sides and the rest
+        stays unmatched, both accounted."""
+        rig.step()
+        down = next(o for o, v in rig.venue.by_oid.items()
+                    if v["side"] == C.DOWN)
+        up = next(o for o, v in rig.venue.by_oid.items()
+                  if v["side"] == C.UP)
+        rig.venue.fill(down)
+        half = D(str(rig.venue.by_oid[up]["qty"])) / 2
+        rig.venue.fill(up, qty=str(half))
+        rig.tick(1.0)
+        rep = rig.step()
+        inv = rep["inventory"]
+        dn, u = D(str(inv[C.DOWN]["qty"])), D(str(inv[C.UP]["qty"]))
+        assert u > 0 and dn > 0 and u < dn, (u, dn)
+        exp = rep["exposure"]["btc5m"]
+        assert exp["matched_qty"] == min(u, dn)
+        assert exp["unmatched_qty"] == dn - u
+        assert exp["unmatched_side"] == C.DOWN
+
+    def test_STRADDLE_unmatched_ceiling_binds_before_the_side_ceiling(
+            self, rig, armed, straddle, monkeypatch):
+        """The two ceilings are independent, and the TIGHTER one must
+        bind. With unmatched set very low, repeated one-sided fills stop
+        adding even though the per-side ceiling has room."""
+        monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, "0.02")
+        monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, "5.00")
+        for _ in range(4):
+            rig.step()
+            for oid in list(rig.venue.by_oid):
+                if (oid not in rig.venue.full
+                        and rig.venue.by_oid[oid]["side"] == C.DOWN):
+                    rig.venue.fill(oid)
+            rig.tick(1.0)
+            rep = rig.step()
+            rig.tick(1.0)
+        exp = rep["exposure"]["btc5m"]
+        assert D(str(exp["worst_case_settlement_loss_usd"])) <= D("0.25"), \
+            exp
+
+    def test_STRADDLE_survives_a_restart_mid_inventory(self, rig, armed,
+                                                        straddle):
+        """RESTART RECOVERY with inventory on the books: the ledger is the
+        record, so the rebuilt executor must see the same inventory and
+        must not re-send what is already resting."""
+        rig.step()
+        down = next(o for o, v in rig.venue.by_oid.items()
+                    if v["side"] == C.DOWN)
+        rig.venue.fill(down)
+        rig.tick(1.0)
+        before = rig.step()["inventory"]
+        n = len(rig.venue.sent)
+        rig.restart()
+        rig.tick(1.0)
+        after = rig.step()["inventory"]
+        assert str(after[C.DOWN]["qty"]) == str(before[C.DOWN]["qty"])
+        assert str(after[C.DOWN]["cost"]) == str(before[C.DOWN]["cost"])
+        assert len(rig.venue.sent) == n, rig.sent()
