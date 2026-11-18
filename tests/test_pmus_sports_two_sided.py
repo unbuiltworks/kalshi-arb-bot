@@ -1918,3 +1918,93 @@ class TestTheCancellationRaceThatLatchedTheAccount:
         assert doc["readable"] is True
         assert doc["manages_own_resting"] is True
         assert doc["as_of_utc"]
+
+
+# ------------------------------------------- market strand-loss re-entry guard
+def _resolve(e, slug, *, lead_px, paid_total, qty, prior_qty="0",
+             prior_cost="0"):
+    """Drive _recovery_resolved exactly as the engine does on a pair."""
+    mk = e.b.m(slug)
+    mk["lone_since"] = time.time() - 30
+    mk["lone_start"] = {"lag": "NO", "qty0": prior_qty, "cost0": prior_cost,
+                        "taker_px": "0.60", "lead_px": lead_px,
+                        "controller": "recovery", "open_policy": "two_sided"}
+    mk["pos"]["NO"] = str(D(prior_qty) + D(qty))
+    mk["cost"]["NO"] = str(D(prior_cost) + D(paid_total))
+    e._recovery_resolved(slug, mk, "paired")
+    return mk
+
+
+def test_strand_guard_off_by_default(eng):
+    assert M.MARKET_STRAND_LOSS_USD == D("0")
+    e, _v = eng
+    mk = _resolve(e, "aec-x", lead_px="0.55", paid_total="2.75", qty="5")
+    assert D(mk["strand_overpay_usd"]) == D("0.50")     # always recorded
+    assert M.market_strand_blocked(mk) is False         # but never blocks
+
+
+def test_overpay_recorded_only_above_par_and_per_completed_qty(eng):
+    e, _v = eng
+    # 5 completed at 0.40 against a 0.55 lead: pair 0.95, no overpay
+    mk = _resolve(e, "aec-x", lead_px="0.55", paid_total="2.00", qty="5")
+    assert mk.get("strand_overpay_usd") is None
+    # 3 MORE completed at 0.50 on top of 5 already held (partial strand):
+    # only the 3 new contracts count, pair 1.05 -> 3 * 0.05
+    mk = _resolve(e, "aec-x", lead_px="0.55", paid_total="1.50", qty="3",
+                  prior_qty="5", prior_cost="2.00")
+    assert D(mk["strand_overpay_usd"]) == D("0.15")
+    # accumulates across strands in the same market
+    mk = _resolve(e, "aec-x", lead_px="0.60", paid_total="0.45", qty="1",
+                  prior_qty="8", prior_cost="3.50")
+    assert D(mk["strand_overpay_usd"]) == D("0.20")
+
+
+def test_strand_guard_stops_new_opens_in_that_market_only(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len([o for o in v.orders.values() if o["open"]]) == 2
+    e.b.m("aec-x")["strand_overpay_usd"] = "0.05"
+    e.step_market("aec-x")
+    assert not [o for o in v.orders.values() if o["open"]]   # pulled
+    n = v.n
+    e.step_market("aec-x")
+    assert v.n == n                                          # nothing re-placed
+    # another market is unaffected
+    assert M.market_strand_blocked(e.b.m("aec-y")) is False
+
+
+def test_strand_guard_never_blocks_a_completion(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.b.m("aec-x")["strand_overpay_usd"] = "9"               # over budget
+    e.step_market("aec-x")
+    e.step_market("aec-x")
+    live = [o for o in v.orders.values() if o["open"]]
+    assert len(live) == 1 and live[0]["side"] == "NO"        # still completing
+    v.orders[next(k for k, o in v.orders.items() if o["open"])].update(
+        filled=D("1"), open=False)
+    e.step_market("aec-x")
+    assert e.b.m("aec-x")["pos"]["YES"] == e.b.m("aec-x")["pos"]["NO"]
+    assert not [o for o in v.orders.values() if o["open"]]   # no re-open
+
+
+def test_strand_guard_fails_closed_on_unreadable_ledger(monkeypatch):
+    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("1"))
+    assert M.market_strand_blocked({"strand_overpay_usd": "garbage"}) is True
+    assert M.market_strand_blocked({}) is False
+
+
+def test_strand_ledger_survives_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    v = FakeVenue()
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    _resolve(e, "aec-x", lead_px="0.60", paid_total="0.45", qty="1")
+    e.b.save()
+    e2 = M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
+    assert M.market_strand_blocked(e2.b.m("aec-x")) is True
