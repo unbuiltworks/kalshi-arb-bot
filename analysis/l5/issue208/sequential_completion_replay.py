@@ -177,6 +177,37 @@ def remaining_completion_ttl(frames: Sequence[Mapping[str, Any]],
     return max(0.0, float(ttl_s) - elapsed)
 
 
+def complement_fill_time_valid(frames: Sequence[Mapping[str, Any]],
+                               first_index: int, quote_index: int,
+                               fill_index: Any,
+                               ttl_s: Optional[float]) -> bool:
+    """Fail closed unless a modeled complement fill has an observable time.
+
+    A queue verdict alone cannot establish completion. TTL starts at the
+    first-leg fill, not when the complement was finally quoted.
+    """
+    if type(fill_index) is not int or type(first_index) is not int or type(quote_index) is not int:
+        return False
+    if not (0 <= first_index <= quote_index <= fill_index < len(frames)):
+        return False
+    try:
+        first_t = float(frames[first_index]["t"])
+        quote_t = float(frames[quote_index]["t"])
+        fill_t = float(frames[fill_index]["t"])
+        import math
+        if not all(math.isfinite(t) for t in (first_t, quote_t, fill_t)):
+            return False
+        if not (first_t <= quote_t <= fill_t):
+            return False
+        if ttl_s is not None and (not math.isfinite(float(ttl_s)) or
+                                  float(ttl_s) <= 0 or
+                                  fill_t - first_t >= float(ttl_s)):
+            return False
+    except (TypeError, ValueError, IndexError, KeyError, OverflowError):
+        return False
+    return True
+
+
 def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                complete_depth: int, scenario: Tuple[str, str, D],
                qty: D = D(1), completion_ttl_s: Optional[float] = None,
@@ -318,6 +349,10 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                                complement_queue_ahead=comp.get("queue_ahead"))
                     if cf is None:
                         rec.update(state="INDETERMINATE_COMPLEMENT", pnl=None)
+                    elif cf and not complement_fill_time_valid(
+                            frames, j, k, comp.get("fill_index"), completion_ttl_s):
+                        rec.update(state="INDETERMINATE_COMPLEMENT_TIME", pnl=None,
+                                   complement_fill_frame=comp.get("fill_index"))
                     elif cf:
                         rec.update(state="PAIR_SEQUENTIAL",
                                    pnl=str(((D(1) - pair) * qty
@@ -395,6 +430,10 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                            complement_queue_ahead=comp.get("queue_ahead"))
                 if cf is None:
                     rec.update(state="INDETERMINATE_COMPLEMENT", pnl=None)
+                elif cf and not complement_fill_time_valid(
+                        frames, j, k, comp.get("fill_index"), completion_ttl_s):
+                    rec.update(state="INDETERMINATE_COMPLEMENT_TIME", pnl=None,
+                               complement_fill_frame=comp.get("fill_index"))
                 elif cf:
                     rec.update(state="PAIR_SEQUENTIAL",
                                pnl=str(((D(1) - pair) * qty
