@@ -2346,7 +2346,23 @@ class InventoryStore:
         vid = str(venue_order_id or "").strip()
         if not vid:
             return False
+        #: THE DOCSTRING ABOVE WAS TRUE OF THE INTENT AND FALSE OF THE
+        #: CODE. `live_orders` is where `reconcile_from_venue` WRITES the
+        #: venue's open orders, adopted ones included, so consulting it
+        #: without reading provenance answered "did this ledger put that
+        #: id on the book" with "is that id on the book" -- which is yes
+        #: for every order the venue is holding, including the owner's.
+        #:
+        #: `submitted` is the permanent log of what WE sent. A row there
+        #: is positive evidence of ownership and settles it on its own,
+        #: which is what keeps the "we lost track of our own order" case
+        #: cancellable: an order of ours that reconciliation re-adopted
+        #: is still in `submitted` and is still ours.
+        #:
+        #: An ADOPTED row with no submit record is NOT ours, however many
+        #: reconciliations have copied it forward.
         buckets = ("live_orders", "pending_terminal", "quarantine", "submitted")
+        adopted_only = False
         for name in buckets:
             rows = self.state.get(name) or {}
             if isinstance(rows, dict):
@@ -2354,7 +2370,32 @@ class InventoryStore:
             for row in (rows or ()):
                 if not isinstance(row, Mapping):
                     continue
-                if str(row.get("venue_order_id") or "").strip() == vid:
+                if str(row.get("venue_order_id") or "").strip() != vid:
+                    continue
+                if name == "submitted" or not row.get("adopted"):
+                    return True
+                adopted_only = True
+        if adopted_only:
+            return False
+        return False
+
+    def adopted_not_ours(self, venue_order_id: Any) -> bool:
+        """Is this id present ONLY as an adopted, never-submitted order?
+
+        The positive form of the boundary, so a caller can REPORT a
+        foreign order it declined to touch instead of silently skipping
+        it. Silence is how an ownership breach goes unnoticed.
+        """
+        vid = str(venue_order_id or "").strip()
+        if not vid or self.owns_venue_order_id(vid):
+            return False
+        for name in ("live_orders", "pending_terminal", "quarantine"):
+            rows = self.state.get(name) or {}
+            if isinstance(rows, dict):
+                rows = rows.values()
+            for row in (rows or ()):
+                if isinstance(row, Mapping) and str(
+                        row.get("venue_order_id") or "").strip() == vid:
                     return True
         return False
 
@@ -6091,7 +6132,31 @@ class InventoryStore:
                                       or coid),
                 "client_order_id": coid,
                 "session_id": mine.get("session_id"),
-                "adopted": coid not in ours,
+                # PROVENANCE IS STICKY, AND IT IS NOT DECORATION.
+                #
+                # IT USED TO BE BOTH. Written here as `coid not in ours`
+                # and read NOWHERE, it also laundered itself: on the next
+                # reconciliation the adopted coid IS in `ours`, so the
+                # flag flipped to False and the order became
+                # indistinguishable from one we placed. That is how the
+                # owner's hand-placed 5 DOWN order on
+                # cpc-btc-updown-15m-2026-11-18-2215z became "ours" and
+                # was then cancelled by the unarmed orphan sweep, whose
+                # own label promises "a manual order is never one of
+                # them".
+                #
+                # Once foreign, always foreign: the only thing that makes
+                # an order ours is OUR OWN submit record, which
+                # `submitted` keeps permanently. Adoption keeps the order
+                # VISIBLE -- polled, counted against account-wide
+                # exposure at the $1 upper bound, published to the
+                # watchdog -- without making it OWNED. Visibility and
+                # ownership were the same field; they are now separate.
+                "adopted": bool(mine.get("adopted")) or coid not in ours,
+                "adopted_first_seen_utc": (
+                    mine.get("adopted_first_seen_utc")
+                    or (dt.datetime.now(dt.timezone.utc).isoformat()
+                        if coid not in ours else None)),
                 "market": _adopt_market,
                 # CANONICAL, always. Adoption used to copy the venue's own
                 # word straight through -- "ORDER_SIDE_SELL" -- and
@@ -6224,8 +6289,31 @@ class InventoryStore:
         # disputed its own book is authoritative again, so a stale floor
         # would over-bound it forever.
         floors = self.state.setdefault("risk_floor_usd", {})
+        #: A FLOOR OUTLIVES ITS UNCERTAINTY, AND UNKNOWN COST IS
+        #: UNCERTAINTY.
+        #:
+        #: Keying the floor's life to `disputed` alone deleted it at the
+        #: worst moment. Adoption RESOLVES the gross/net divergence by
+        #: construction -- it copies the venue's number into our book --
+        #: so the market stops being disputed in the same pass that
+        #: adopts it, and the floor the adoption raised is dropped
+        #: immediately. Observed on cpc-btc-updown-15m-2026-11-18-2215z:
+        #: at 22:22:56Z quarantined with a $5 floor, and by 22:28:12Z
+        #: `risk_floor_usd` was {} while `leg_cost_basis_unknown` still
+        #: named that market's DOWN leg.
+        #:
+        #: "Its own book is authoritative again" was the premise, and it
+        #: is false: the book agrees with the venue because the venue's
+        #: number was written into it, not because we know what the
+        #: shares cost. AGREEMENT REACHED BY ADOPTION IS NOT AUTHORITY.
+        #: The floor therefore stays while the cost basis is unknown, and
+        #: is released by the attestation path, which clears both
+        #: together after verifying fills against the venue.
+        _basis_unknown = {
+            str(k).rsplit("|", 1)[0]
+            for k in (self.state.get("leg_cost_basis_unknown") or [])}
         for m in list(floors):
-            if m not in disputed:
+            if m not in disputed and m not in _basis_unknown:
                 floors.pop(m, None)
         self.state[UNCERTAIN_CAUSE] = None
         if disputed or incoherent or pending or quarantine:
@@ -12438,6 +12526,9 @@ def deadman(store: InventoryStore, transport: Any, *,
     out: Dict[str, Any] = {
         "reason": reason, "cancelled": [], "errors": [], "unverified": [],
         "no_venue_id": [], "still_open": [], "filled": [],
+        #: ALWAYS PRESENT, so an empty list means "we checked and every id
+        #: was ours" rather than "this build does not check".
+        "refused_not_ours": [],
         "labels": ("cancelled means the VENUE reported a terminal state on "
                    "re-read, never that a cancel call returned. still_open "
                    "and unverified are failures and mark the book uncertain."),
@@ -12459,6 +12550,23 @@ def deadman(store: InventoryStore, transport: Any, *,
         market = str(row.get("market") or getattr(transport, "market_slug", "")
                      or "")
         side = str(row.get("side") or "")
+        #: OWNERSHIP IS CHECKED HERE, BEFORE THE CANCEL, NOT ASSUMED BY
+        #: BEING IN THIS LIST. Iterating `live_orders` was itself the
+        #: ownership test, and `reconcile_from_venue` writes the venue's
+        #: open orders into that same list -- so the sweep cancelled the
+        #: owner's hand-placed order and reported it as its own.
+        #: Cancelling only reduces OUR exposure; cancelling someone
+        #: else's order is not a reduction, it is an unauthorized change
+        #: to their position.
+        if vid and not store.owns_venue_order_id(vid):
+            out.setdefault("refused_not_ours", []).append(
+                {"client_order_id": coid, "venue_order_id": vid,
+                 "market": market, "side": side,
+                 "why": "NO_SUBMIT_RECORD_FOR_THIS_ID",
+                 "adopted": bool(row.get("adopted")),
+                 "adopted_first_seen_utc": row.get(
+                     "adopted_first_seen_utc")})
+            continue
         if not vid:
             # Never submitted-and-ACKed, or the ACK carried no id. There is
             # nothing to name in a cancel, and if it did rest and fill the

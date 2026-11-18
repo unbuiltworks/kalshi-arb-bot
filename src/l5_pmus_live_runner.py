@@ -7321,8 +7321,16 @@ class Runner:
                     "was NOT armed, which is the state a crash leaves behind. "
                     "Cancellation needs no authorization -- both locks gate "
                     "submission -- so it was withdrawn by VENUE id and proved "
-                    "by re-reading. Only orders in this ledger are touched; a "
-                    "manual order is never one of them. `cancelled` means the "
+                    "by re-reading. OWNERSHIP IS NOW VERIFIED PER ID, not "
+                    "inferred from being in this ledger: reconciliation "
+                    "writes the venue's open orders into `live_orders`, so "
+                    "presence there was never proof we placed it, and this "
+                    "label's old unconditional promise that 'a manual order "
+                    "is never one of them' was void -- the owner's "
+                    "hand-placed 2215z order was adopted and cancelled by "
+                    "this path. An id with no submit record of ours is "
+                    "refused and listed in `refused_not_ours`. `cancelled` "
+                    "means the "
                     "venue reported terminal; anything else marks the store "
                     "UNCERTAIN and is retried on the next sweep.")))
         return rec
