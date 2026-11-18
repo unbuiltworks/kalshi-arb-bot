@@ -2333,3 +2333,129 @@ def test_observe_mode_evaluates_and_logs_but_never_blocks(eng, risk_on,
     assert len(_opened(v)) == 2                            # nothing refused
     assert e.account_risk()["reason"] == "ACCOUNT_DAILY_LOSS_HALT"
     assert "ACCOUNT_RISK" in capsys.readouterr().out       # but logged
+
+
+# ------------------ PRIORITY 0: the two safety switches, COMPOSED
+#
+# WHY THESE EXIST, 2026-11-18. The account-wide ledger read
+# utc_day_realized -52.99 against a halt of 50 -- breached -- while the
+# sports lane kept quoting. Nothing failed: PMUS_TWO_SIDED_ACCOUNT_RISK
+# was "observe", so `account_risk_blocks` returned None by design
+# (`not ACCOUNT_RISK_ON`). The halt was evaluated, logged, and obeyed by
+# nobody.
+#
+# Each switch is already tested ALONE. Nothing tested them TOGETHER, and
+# nothing tested that either leaves the risk-REDUCING paths alone. Those
+# are exactly the properties an owner needs before arming both, because
+# a switch that also stops cancelling or reconciling would strand
+# inventory it cannot close.
+
+
+def _arm_both(monkeypatch, risk_on):
+    """Arm BOTH safety switches mid-test: EV gate refusing, halt breached."""
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(
+        M.Engine, "open_gate",
+        lambda self, slug: {"allow": False, "why": "ev", "ev": "-0.2393"})
+    risk_on["doc"] = _risk_doc(day="-60")
+
+
+@pytest.fixture
+def gate_blocks_everything(monkeypatch):
+    """EV gate ON and refusing: every sport's expected value is negative.
+
+    That is the LIVE measurement, not a contrivance -- all 20 measured
+    sports read between -0.115 and -0.393 on 2026-11-18.
+    """
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(
+        M.Engine, "open_gate",
+        lambda self, slug: {"allow": False, "why": "ev", "ev": "-0.2393"})
+
+
+def test_both_switches_armed_refuse_every_new_opening(
+        eng, risk_on, gate_blocks_everything):
+    """The configuration Priority 0 asks for: nothing new is opened."""
+    risk_on["doc"] = _risk_doc(day="-60")                  # halt breached
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert not _opened(v)
+    assert e.account_risk_blocks() == "ACCOUNT_DAILY_LOSS_HALT"
+
+
+def test_both_switches_armed_still_allow_a_completion(
+        eng, risk_on, monkeypatch):
+    """AUTHORIZED EXPOSURE REDUCTION SURVIVES BOTH. A held leg must still
+    be completable, or arming the switches converts open inventory into
+    inventory that can never be closed.
+
+    The inventory is established FIRST, while the account is clean and the
+    gate is off -- which is the real sequence: the legs we hold now were
+    opened before the breach. Arming the switches afterwards is the event
+    under test.
+    """
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")                                 # opened while clean
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)        # one leg held
+    _arm_both(monkeypatch, risk_on)
+    n = v.n
+    for stage in ("two_sided_complete", "two_sided_complete_taker",
+                  "two_sided_exit"):
+        e.place("aec-x", "NO", D("0.50"), D("1"), stage)
+    assert v.n == n + 3                                    # all three sent
+    for stage in ("two_sided_open", "two_sided_extend",
+                  "two_sided_open_rewarded"):
+        e.place("aec-x", "YES", D("0.40"), D("1"), stage)
+    assert v.n == n + 3                                    # none of these
+
+
+def test_both_switches_armed_never_block_a_cancel(
+        eng, risk_on, monkeypatch):
+    """CANCELLING IS NOT SUBMITTING. `place` is the only choke point, so a
+    cancel must be reachable under any breach -- the watchdog and the
+    abandon path both depend on it."""
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")                                 # resting, clean
+    live = [k for k, o in v.orders.items() if o["open"]]
+    assert live
+    _arm_both(monkeypatch, risk_on)
+    for oid in live:
+        assert e.v.cancel(oid) is True
+    assert not _opened(v)
+    e.cancel_all_own("priority0")                          # must not raise
+
+
+def test_both_switches_armed_leave_reconciliation_readable(
+        eng, risk_on, gate_blocks_everything):
+    """Reconciliation is a READ. A breach must not hide the book, or the
+    operator loses the figures the decision rests on."""
+    risk_on["doc"] = _risk_doc(day="-60")
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert e.own_exposure_usd() is not None
+    snap = e.open_gate_snapshot()
+    assert snap["on"] is True
+    v = e.account_risk()
+    assert v["reason"] == "ACCOUNT_DAILY_LOSS_HALT"
+    assert v["utc_day_realized_usd"] == "-60"              # figures visible
+
+
+@pytest.mark.parametrize("raw,on", [
+    ("1", True), ("observe", False), ("OBSERVE", False),
+    #: THE NEAR-MISSES. Each of these reads as "on" to a human and is OFF
+    #: in code. The live service was set to one of them.
+    ("0", False), ("", False), (" 1 ", True), ("ON", False),
+    ("on", False), ("true", False), ("True", False), ("yes", False),
+    ("enabled", False), ("enforce", False),
+])
+def test_only_the_exact_string_1_enforces(monkeypatch, raw, on):
+    """`ACCOUNT_RISK_ON` is `_MODE == "1"` after strip(). Anything else --
+    including every word that READS like enforcement -- is not enforcing.
+    An owner arming this must set exactly "1"."""
+    monkeypatch.setenv("PMUS_TWO_SIDED_ACCOUNT_RISK", raw)
+    assert (os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK", "0").strip() == "1") is on
