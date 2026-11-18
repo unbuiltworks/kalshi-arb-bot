@@ -333,3 +333,90 @@ class TestItRemainsPure:
         src = pathlib.Path("src/l5_completion_policy.py").read_text()
         assert src.count("os.environ.get") == 1
         assert "POLICY_ENV" in src
+
+
+# ---------------------------------------------------------------------------
+# SPORTS INTEGRATION, answering the sports session's 2026-11-18 questions.
+# A lane with a venue start time but no certain end would otherwise sit at
+# 0.99 for ever, making the policy a no-op there.
+# ---------------------------------------------------------------------------
+class TestAnObservedLateEventMayAdvanceAnUncertainMarket:
+
+    def test_uncertain_without_the_signal_stays_at_the_tightest_stage(self):
+        p = P.progress(now=1000, start=900, end=None)
+        assert P.stage_for(p)["stage"] == 0
+
+    def test_an_observed_late_signal_advances_to_BREAKEVEN(self):
+        p = P.progress(now=1000, start=900, end=None)
+        st = P.stage_for(p, event_late=True)
+        assert st["stage_name"] == "BREAKEVEN"
+        assert st["pair_ceiling"] == D("1.00")
+        assert st["capped_at_uncertain_max"] is True
+
+    def test_it_can_NEVER_reach_the_above_par_stage(self):
+        """The 41/41 claim is withdrawn, so nothing uncertain goes above par."""
+        assert P.UNCERTAIN_MAX_STAGE == 2
+        for why_end in (None, "x"):
+            p = P.progress(now=1000, start=900, end=why_end)
+            st = P.stage_for(p, event_late=True)
+            assert st["pair_ceiling"] <= D("1.00")
+            assert st["stage_name"] != "FINAL"
+
+    def test_an_estimated_end_time_plus_late_is_still_capped(self):
+        p = P.progress(now=1950, start=1000, end=2000,
+                       resolution_certain=False)
+        st = P.stage_for(p, event_late=True)
+        assert st["stage_name"] == "BREAKEVEN"
+
+    def test_a_certain_clock_ignores_the_flag_and_uses_the_clock(self):
+        """A real clock is better evidence than a flag."""
+        early = P.stage_for(P.progress(now=1010, start=1000, end=1300),
+                            event_late=True)
+        assert early["stage_name"] == "PATIENT"      # 3.3% elapsed
+        late = P.stage_for(P.progress(now=1290, start=1000, end=1300),
+                           event_late=True)
+        assert late["stage_name"] == "FINAL"         # a real clock may
+
+    def test_the_flag_flows_through_decide(self):
+        d = P.decide(held_side="YES", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.50", p_win="0.05",
+                     prog=P.progress(now=1000, start=900, end=None),
+                     event_late=True)
+        assert d["stage"]["stage_name"] == "BREAKEVEN"
+        assert d["options"]["MAKER_COMPLETE"]["permissible"] is True
+        assert d["action"] == "MAKER_COMPLETE"
+
+    def test_without_the_flag_the_same_state_refuses(self):
+        d = P.decide(held_side="YES", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.50", p_win="0.05",
+                     prog=P.progress(now=1000, start=900, end=None))
+        assert d["options"]["MAKER_COMPLETE"]["why"] \
+            == "PAIR_ABOVE_STAGE_CEILING"
+        assert d["action"] == "HOLD"
+
+
+class TestPWinProvenanceIsRecordedNotAssumed:
+
+    def test_an_undeclared_source_is_labelled_as_such(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.5", prog=prog("0.5"))
+        assert d["p_win_source"] == "UNDECLARED"
+        assert d["p_win"] == "0.5"
+
+    def test_a_caller_with_no_model_may_declare_an_executable_mid(self):
+        """Acceptable for a lane with no model, provided it SAYS so."""
+        d = P.decide(held_side="YES", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.52",
+                     p_win_source="HELD_SIDE_EXECUTABLE_MID",
+                     prog=prog("0.5"))
+        assert d["p_win_source"] == "HELD_SIDE_EXECUTABLE_MID"
+
+    def test_the_source_never_changes_the_decision(self):
+        """Provenance is a label, not an input to the arithmetic."""
+        a = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"))
+        b = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05",
+                     p_win_source="ANYTHING", prog=prog("0.5"))
+        assert a["action"] == b["action"]
+        assert a["expected_net_usd"] == b["expected_net_usd"]

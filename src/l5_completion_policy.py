@@ -154,19 +154,50 @@ def progress(*, now: Any, start: Any, end: Any,
             "why": None if resolution_certain else "RESOLUTION_ESTIMATED"}
 
 
-def stage_for(prog: Mapping[str, Any]) -> Dict[str, Any]:
+#: the furthest an UNCERTAIN market may advance, even on a strong
+#: event-state signal. BREAKEVEN, never FINAL: the above-par rung's only
+#: stated justification was the 41-of-41 claim, which did not survive
+#: verification, so nothing may reach it without a certain clock.
+UNCERTAIN_MAX_STAGE = 2
+
+
+def stage_for(prog: Mapping[str, Any], *,
+              event_late: bool = False) -> Dict[str, Any]:
     """The stage and its ceiling. Unknown or estimated -> stage 0.
 
     THE CONSERVATIVE DIRECTION IS EARLY. An unknown end time could mean
     the market closes in a minute or in three hours; only one of those
     mistakes unlocks paying above par on a market with hours to run.
+
+    `event_late` IS AN OBSERVED FACT, NOT A CLOCK ESTIMATE, and that is
+    why it is allowed to move the stage at all. A sports lane has a venue
+    `gameStartTime` but no certain end, so under the rule above every
+    live match would sit at 0.99 for ever and FINAL would be unreachable
+    -- which makes the policy a no-op there, and worse than the lane's
+    status quo. A caller that can observe the match STATE (final period,
+    late set, final frame) is supplying evidence of lateness rather than
+    a guess about it, so it may advance -- but only as far as
+    UNCERTAIN_MAX_STAGE. An uncertain market can therefore reach
+    breakeven and never above par.
+
+    Passing `event_late` on a CERTAIN market changes nothing: a real
+    clock is better evidence than a flag, and is used instead.
     """
     p = prog.get("progress")
     certain = prog.get("certain") is True
     if p is None or not certain:
+        if event_late:
+            idx = UNCERTAIN_MAX_STAGE
+            _u, ceil, name = STAGES[idx]
+            return {"stage": idx, "stage_name": name, "pair_ceiling": ceil,
+                    "progress": p, "event_late": True,
+                    "capped_at_uncertain_max": True,
+                    "why": ("advanced on an OBSERVED late-event signal and "
+                            "capped at %s; an uncertain market never "
+                            "reaches the above-par stage" % name)}
         idx, ceil, name = 0, STAGES[0][1], STAGES[0][2]
         return {"stage": idx, "stage_name": name, "pair_ceiling": ceil,
-                "progress": p,
+                "progress": p, "event_late": False,
                 "why": ("held at the tightest stage: %s"
                         % (prog.get("why") or "RESOLUTION_UNCERTAIN"))}
     for idx, (upper, ceil, name) in enumerate(STAGES):
@@ -243,6 +274,7 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
            fee_per_share: Any = "0", taker_authorized: bool = False,
            prog: Optional[Mapping[str, Any]] = None,
            stranded_now: Any = None, caller_max_stranded: Any = None,
+           event_late: bool = False, p_win_source: Optional[str] = None,
            ) -> Dict[str, Any]:
     """Rank the options on expected net dollars. HOLD unless beaten.
 
@@ -271,7 +303,8 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
                 "options": {}}
 
     st = stage_for(prog or {"progress": None, "certain": False,
-                            "why": "NO_PROGRESS_SUPPLIED"})
+                            "why": "NO_PROGRESS_SUPPLIED"},
+                   event_late=event_late)
     ceiling = st["pair_ceiling"]
     room = stranded_room(stranded_now=stranded_now if stranded_now is not None
                          else 0, caller_max=caller_max_stranded)
@@ -343,6 +376,12 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
     return {"action": best,
             "why": None if best != "HOLD" else "HOLD_NOT_BEATEN",
             "stage": st, "options": opts, "stranded": room,
+            #: WHERE p_win CAME FROM, recorded rather than assumed. A
+            #: caller with no model may pass an executable mid, but the
+            #: decision record then says so, because a probability and a
+            #: price are not the same object and the difference must not
+            #: vanish into a number.
+            "p_win": str(pw), "p_win_source": p_win_source or "UNDECLARED",
             "expected_net_usd": str(best_net),
             "hold_net_usd": str(base),
             "labels": ("expected values are MODELLED from the caller's "
