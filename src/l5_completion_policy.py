@@ -319,9 +319,39 @@ def stranded_room(*, stranded_now: Any, caller_max: Any = None
             "why": None if n < limit else "MAX_STRANDED_LEGS"}
 
 
-def opening_room(*, market_strand_loss_usd: Any,
+def opening_room(*, market_completion_overpay_usd: Any,
                  budget_usd: Any = None) -> Dict[str, Any]:
-    """May this market take a NEW opening leg? Per-market strand budget.
+    """May this market take a NEW opening leg? Per-market OVERPAY budget.
+
+    SUPERSEDED FOR INTEGRATION, owner 2026-11-18: the sports lane's
+    `aaf70a7f8` is retained, because it already has the ledger wired in
+    and the same semantics. This stays as the shared definition for when
+    the interface can be integrated WITHOUT changing those semantics; it
+    is deliberately not a second competing implementation and is wired
+    into no executor.
+
+    IT MEASURES COMPLETION OVERPAY, NOT REALIZED STRAND LOSS, and the
+    owner is right that the distinction is load-bearing. The quantity is
+    the running sum of qty * (pair_cost - 1) over a market's ABOVE-PAR
+    completions -- cents paid over par to close pairs. It is NOT the
+    market's settled P&L, and the two can diverge completely: a market
+    can lose several dollars on a stranded leg that settled worthless
+    while having overpaid nothing at all.
+    
+    THAT DIVERGENCE IS NOT HYPOTHETICAL. On the 10:29:21Z audit the worst
+    single market, aec-cs2-brute-eid-2026-11-15, realized -$6.00 -- four
+    times the lane's own $1.50 per-market cap, and far more than any
+    plausible overpay at 7.6c/contract on 1-5 contract clips. A budget on
+    overpay would not have stopped it. So this guard addresses re-entry
+    after overpaying; it does NOT address the largest observed losses,
+    and must not be described as if it did.
+
+    I ALSO NAMED THIS PARAMETER WRONGLY AT FIRST. It was
+    `market_strand_loss_usd`, which asserted the thing the owner had to
+    correct, and I then sized a budget off a realized-loss ratio
+    (-0.4994 vs -0.1732 per strand) while the budget is denominated in
+    overpay. Both were the same conflation. Renamed, and the refusal
+    reasons with it.
 
     THE LARGEST MEASURED LOSS IS HERE, NOT IN THE COMPLETION PRICE. Of
     the 36 settled sports strands of 2026-11-17, the 17 that followed an
@@ -339,7 +369,7 @@ def opening_room(*, market_strand_loss_usd: Any,
     inventory worked, and a guard that froze that would strand the
     inventory it was meant to protect.
 
-    `market_strand_loss_usd` is the market's own realized cost from its
+    `market_completion_overpay_usd` is the market's own realized cost from its
     above-par completions, i.e. the running sum of qty * (pair_cost - 1).
     It is the CALLER'S ledger: this module keeps no state and remembers
     nothing between calls.
@@ -361,15 +391,15 @@ def opening_room(*, market_strand_loss_usd: Any,
     if b is None or b <= ZERO:
         return {"room": True, "why": "NO_BUDGET_CONFIGURED",
                 "budget_usd": None}
-    loss = _d(market_strand_loss_usd)
-    if loss is None or loss < ZERO:
-        return {"room": False, "why": "STRAND_LEDGER_UNREADABLE",
+    overpay = _d(market_completion_overpay_usd)
+    if overpay is None or overpay < ZERO:
+        return {"room": False, "why": "OVERPAY_LEDGER_UNREADABLE",
                 "budget_usd": str(b),
                 "labels": ("a configured budget with an unreadable ledger "
                            "refuses: unseen history is not absent history")}
-    return {"room": loss < b, "market_strand_loss_usd": str(loss),
+    return {"room": overpay < b, "market_completion_overpay_usd": str(overpay),
             "budget_usd": str(b),
-            "why": None if loss < b else "MARKET_STRAND_LOSS_BUDGET"}
+            "why": None if overpay < b else "MARKET_OVERPAY_BUDGET"}
 
 
 # --------------------------------------------------------------- decision

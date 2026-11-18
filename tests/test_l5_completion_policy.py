@@ -683,7 +683,7 @@ class TestTheCorrectedDenominators:
         """
         doc = P.__doc__ or ""
         assert "NOT ported here" in doc          # the number, not the idea
-        off = P.opening_room(market_strand_loss_usd="999")
+        off = P.opening_room(market_completion_overpay_usd="999")
         assert off["room"] is True
         assert off["why"] == "NO_BUDGET_CONFIGURED"
         import inspect
@@ -701,47 +701,47 @@ class TestTheOpeningSideReEntryGuard:
     def test_it_is_off_until_a_budget_is_supplied(self):
         """Adopting the module cannot silently start refusing openings."""
         for loss in ("0", "5", "1000", None, "x"):
-            r = P.opening_room(market_strand_loss_usd=loss)
+            r = P.opening_room(market_completion_overpay_usd=loss)
             assert r["room"] is True
             assert r["why"] == "NO_BUDGET_CONFIGURED"
 
     def test_a_zero_or_negative_budget_is_off(self):
         for b in ("0", "-1"):
-            assert P.opening_room(market_strand_loss_usd="99",
+            assert P.opening_room(market_completion_overpay_usd="99",
                                   budget_usd=b)["room"] is True
 
     def test_under_the_budget_has_room(self):
-        r = P.opening_room(market_strand_loss_usd="0.40", budget_usd="1.00")
+        r = P.opening_room(market_completion_overpay_usd="0.40", budget_usd="1.00")
         assert r["room"] is True and r["why"] is None
 
     def test_at_the_budget_refuses(self):
-        r = P.opening_room(market_strand_loss_usd="1.00", budget_usd="1.00")
+        r = P.opening_room(market_completion_overpay_usd="1.00", budget_usd="1.00")
         assert r["room"] is False
-        assert r["why"] == "MARKET_STRAND_LOSS_BUDGET"
+        assert r["why"] == "MARKET_OVERPAY_BUDGET"
 
     def test_over_the_budget_refuses(self):
-        assert P.opening_room(market_strand_loss_usd="2.50",
+        assert P.opening_room(market_completion_overpay_usd="2.50",
                               budget_usd="1.00")["room"] is False
 
     def test_a_configured_budget_with_an_unreadable_ledger_FAILS_CLOSED(self):
         """Unseen history is not absent history."""
         for bad in (None, "x", "-3"):
-            r = P.opening_room(market_strand_loss_usd=bad, budget_usd="1.00")
+            r = P.opening_room(market_completion_overpay_usd=bad, budget_usd="1.00")
             assert r["room"] is False
-            assert r["why"] == "STRAND_LEDGER_UNREADABLE"
+            assert r["why"] == "OVERPAY_LEDGER_UNREADABLE"
 
     def test_the_sports_evidence_would_have_gated_the_losing_markets(self):
         """17 of 36 strands followed an above-par completion in the same
         market and carried $8.49 of the $11.78. A $0.50 per-market budget
         stops the re-entry once a market has cost that much."""
-        assert P.opening_room(market_strand_loss_usd="0.49",
+        assert P.opening_room(market_completion_overpay_usd="0.49",
                               budget_usd="0.50")["room"] is True
-        assert P.opening_room(market_strand_loss_usd="0.50",
+        assert P.opening_room(market_completion_overpay_usd="0.50",
                               budget_usd="0.50")["room"] is False
 
     def test_it_gates_OPENING_ONLY_and_never_a_completion(self):
         """A market that has hurt us still needs its inventory worked."""
-        assert P.opening_room(market_strand_loss_usd="99",
+        assert P.opening_room(market_completion_overpay_usd="99",
                               budget_usd="1.00")["room"] is False
         d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
                      complete_bid="0.50", p_win="0.05", prog=prog("0.5"))
@@ -755,6 +755,42 @@ class TestTheOpeningSideReEntryGuard:
 
     def test_the_module_still_keeps_no_state_between_calls(self):
         """The ledger is the caller's; this remembers nothing."""
-        a = P.opening_room(market_strand_loss_usd="5", budget_usd="1")
-        b = P.opening_room(market_strand_loss_usd="0", budget_usd="1")
+        a = P.opening_room(market_completion_overpay_usd="5", budget_usd="1")
+        b = P.opening_room(market_completion_overpay_usd="0", budget_usd="1")
         assert a["room"] is False and b["room"] is True
+
+
+class TestItMeasuresOverpayNotRealizedLoss:
+    """OWNER 2026-11-18: "the guard tracks completion overpay, not
+    necessarily total realized strand loss ... Its name, budget, and
+    decision logic must reflect exactly what it measures." """
+
+    def test_the_api_no_longer_calls_it_strand_loss(self):
+        import inspect
+        sig = inspect.signature(P.opening_room)
+        assert "market_completion_overpay_usd" in sig.parameters
+        assert "market_strand_loss_usd" not in sig.parameters
+
+    def test_the_refusal_reasons_name_overpay(self):
+        over = P.opening_room(market_completion_overpay_usd="2",
+                              budget_usd="1")
+        assert over["why"] == "MARKET_OVERPAY_BUDGET"
+        bad = P.opening_room(market_completion_overpay_usd=None,
+                             budget_usd="1")
+        assert bad["why"] == "OVERPAY_LEDGER_UNREADABLE"
+
+    def test_the_reported_key_names_overpay(self):
+        r = P.opening_room(market_completion_overpay_usd="0.40",
+                           budget_usd="1.00")
+        assert r["market_completion_overpay_usd"] == "0.40"
+        assert "market_strand_loss_usd" not in r
+
+    def test_the_divergence_from_realized_loss_is_documented(self):
+        doc = P.opening_room.__doc__ or ""
+        assert "NOT REALIZED STRAND LOSS" in doc
+        assert "brute-eid" in doc and "-$6.00" in doc
+
+    def test_it_is_marked_superseded_for_integration(self):
+        doc = P.opening_room.__doc__ or ""
+        assert "SUPERSEDED FOR INTEGRATION" in doc
+        assert "aaf70a7f8" in doc
