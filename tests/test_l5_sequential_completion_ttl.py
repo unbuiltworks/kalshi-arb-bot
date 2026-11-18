@@ -295,5 +295,42 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertIsNone(summary[0]["complete_pnl"])
 
 
+    def test_complement_timestamp_must_be_recorded_and_within_ttl(self):
+        frames = [{"t": 100.0}, {"t": 159.0}, {"t": 161.0}]
+        valid = self.replay.complement_fill_time_valid
+        self.assertTrue(valid(frames, 0, 1, 1, 60))
+        for index in (None, -1, 0, 2, 3, True, "1"):
+            with self.subTest(index=index):
+                self.assertFalse(valid(frames, 0, 1, index, 60))
+        self.assertTrue(valid(frames, 0, 1, 2, 120))
+        self.assertTrue(valid(frames, 0, 1, 2, None))
+        self.assertFalse(valid(frames, 0, 1, 1, 59))
+        self.assertFalse(valid([{"t": 100.0}, {"t": 99.0}], 0, 1, 1, None))
+
+    def test_econ_replay_rejects_positive_verdict_without_valid_fill_time(self):
+        frames = [{"t": 100.0}, {"t": 159.0}, {"t": 161.0}]
+        def leg(side, price, observed, *, start, queue_fraction, own_qty, ttl_s):
+            if start == 0:
+                return {"fill_index": 0 if side == self.replay.UP else None,
+                        "verdict": "PROVEN" if side == self.replay.UP else "IMPOSSIBLE"}
+            return {"fill_index": 2, "verdict": "PROVEN"}
+        with tempfile.TemporaryDirectory() as root:
+            pathlib.Path(root, "book.json").touch()
+            with mock.patch.object(self.replay.QS, "load", return_value={"market": frames}), \\
+                 mock.patch.object(self.replay.QS, "touches", return_value=(D("0.49"), D("0.50"))), \\
+                 mock.patch.object(self.replay.QS, "leg_outcome", side_effect=leg), \\
+                 mock.patch.object(self.replay.QS, "filled",
+                                   side_effect=lambda result, *, arm: result["fill_index"] is not None), \\
+                 mock.patch.object(self.replay, "_econ_gate",
+                                   return_value=(1, D("0.49"), "TEST")):
+                rows = self.replay.sequential(
+                    [("book.json", "test")], entry_depth=0, complete_depth=0,
+                    scenario=("base", "PROVEN", D("0.5")),
+                    completion_ttl_s=60, root=root)
+        row = next(r for r in rows if r["frame"] == 0)
+        self.assertEqual(row["state"], "INDETERMINATE_COMPLEMENT_TIME")
+        self.assertIsNone(row["pnl"])
+        self.assertEqual(self.replay.summarise(rows)[0]["sequential"], 0)
+
 if __name__ == "__main__":
     unittest.main()
