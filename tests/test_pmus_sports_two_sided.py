@@ -141,6 +141,13 @@ def test_flat_market_out_of_band_frees_its_slot(eng, monkeypatch):
     assert e.active() == []
 
 
+@pytest.fixture(autouse=True)
+def _fresh_registry_memory():
+    M._REGISTRY_SEEN.clear()
+    yield
+    M._REGISTRY_SEEN.clear()
+
+
 def test_registry_doc_lists_only_open_own_orders(eng):
     e, v = eng
     e.select(v.account())
@@ -1704,7 +1711,12 @@ def test_market_closed_keeps_unconfirmed_cancel_open_and_named(eng):
     assert set(oids) <= names                    # watchdog still sees them
     v.cancel = real_cancel                       # cancel now applies
     e.step_market(slug)
-    assert mk["done"] and not M.registry_doc(e.b)["orders"]
+    # listed as "closing" for the grace, then gone
+    assert mk["done"] and all(r.get("closing") for r in
+                              M.registry_doc(e.b)["orders"])
+    import time as _t
+    later = _t.time() + M.REGISTRY_GRACE_S + 1
+    assert not M.registry_doc(e.b, clock=lambda: later)["orders"]
 
 
 # ------------------------------------------------- pre-game mode (2026-11-15)
@@ -1756,3 +1768,46 @@ def test_pregame_mode_never_opens_a_market_without_a_start_time(eng, monkeypatch
 
 def test_pregame_off_by_default():
     assert M.PREGAME is False
+
+
+# ---------------------------------- registry grace after a cancel (11-17)
+def test_a_just_cancelled_order_stays_listed_as_closing(tmp_path):
+    # LIVE 23:40:11Z: the watchdog's venue read (23:40:05) still had two old
+    # quotes the bot cancelled at 23:40:10; reading this list ~6 s later it
+    # found them missing and latched the account. Listed, they are managed.
+    b = M.Book(tmp_path / "s.json")
+    o = {"side": "YES", "px": "0.6", "qty": "5", "filled": "0", "open": True}
+    b.m("cpceth-x")["orders"]["OLD1"] = o
+    t = [1000.0]
+    assert [r["venue_order_id"] for r in
+            M.registry_doc(b, clock=lambda: t[0])["orders"]] == ["OLD1"]
+    o["open"] = False                       # the bot cancels it (reprice)
+    b.m("cpceth-x")["orders"]["NEW1"] = dict(o, open=True, px="0.61")
+    t[0] = 1006.0
+    rows = {r["venue_order_id"]: r for r in
+            M.registry_doc(b, clock=lambda: t[0])["orders"]}
+    assert set(rows) == {"OLD1", "NEW1"}
+    assert rows["OLD1"]["closing"] and not rows["NEW1"].get("closing")
+    t[0] = 1000.0 + M.REGISTRY_GRACE_S + 1
+    assert [r["venue_order_id"] for r in
+            M.registry_doc(b, clock=lambda: t[0])["orders"]] == ["NEW1"]
+
+
+def test_grace_never_lists_an_order_the_bot_did_not_place(tmp_path):
+    b = M.Book(tmp_path / "s.json")
+    b.m("aec-y")["orders"]["DONE"] = {"side": "NO", "px": "0.4", "qty": "1",
+                                      "filled": "1", "open": False}
+    assert M.registry_doc(b)["orders"] == []     # never seen open: not listed
+
+
+def test_a_market_dropped_from_the_book_keeps_its_orders_for_the_grace(
+        tmp_path):
+    b = M.Book(tmp_path / "s.json")
+    b.m("aec-z")["orders"]["Z1"] = {"side": "YES", "px": "0.5", "qty": "1",
+                                    "filled": "0", "open": True}
+    M.registry_doc(b, clock=lambda: 50.0)
+    b.d["markets"].pop("aec-z")
+    assert [r["venue_order_id"] for r in
+            M.registry_doc(b, clock=lambda: 80.0)["orders"]] == ["Z1"]
+    assert M.registry_doc(b, clock=lambda: 50.0 + M.REGISTRY_GRACE_S + 1
+                          )["orders"] == []

@@ -2756,18 +2756,44 @@ REGISTRY_KEY = "l5/live_orders.json"      # same path as l5_order_registry_serve
 LANE = "pmus-sports-two-sided"
 
 
-def registry_doc(book: "Book") -> Dict[str, Any]:
+# an order listed as live stays listed this long after it closes (see below)
+REGISTRY_GRACE_S = float(os.getenv("PMUS_TWO_SIDED_REGISTRY_GRACE_S", "60"))
+_REGISTRY_SEEN: Dict[str, Any] = {}
+
+
+def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
     """The orders this bot placed and still believes live, in the shape the
     l5 watchdog's ownership oracle reads, plus its own freshness stamp. A
     fresh document is the bot attesting that it is ALIVE AND MANAGING these
     resting orders (maker bids that legitimately rest for minutes)."""
     rows = []
+    now = time.time() if clock is None else clock()
+    live = set()
     for slug, mk in (book.d.get("markets") or {}).items():
         for oid, o in (mk.get("orders") or {}).items():
             if o.get("open"):
-                rows.append({"venue_order_id": oid, "market": slug,
-                             "side": o.get("side"), "session_id": LANE,
-                             "price": o.get("px"), "qty": o.get("qty")})
+                row = {"venue_order_id": oid, "market": slug,
+                       "side": o.get("side"), "session_id": LANE,
+                       "price": o.get("px"), "qty": o.get("qty")}
+                rows.append(row)
+                live.add(oid)
+                _REGISTRY_SEEN[oid] = (dict(row), now)
+    # LIVE 2026-11-17 23:40:11Z: the watchdog read the venue's open orders at
+    # 23:40:05 and this document ~6 s later. In between the bot cancelled two
+    # 426 s-old ETH quotes (a routine reprice) and dropped them from this
+    # list, so the watchdog saw two "unmanaged" resting orders and latched
+    # the account-wide halt -- its own cancel then found them already
+    # CANCELED. An order this bot listed as live stays listed, marked
+    # "closing", for REGISTRY_GRACE_S after it stops being open, so a sweep
+    # that straddles the cancel still sees it as managed. Bounded and
+    # forgotten after the grace; never adds an id the bot did not place.
+    for oid, (row, seen) in list(_REGISTRY_SEEN.items()):
+        if oid in live:
+            continue
+        if now - seen > REGISTRY_GRACE_S:
+            _REGISTRY_SEEN.pop(oid, None)
+            continue
+        rows.append({**row, "closing": True})
     return {"readable": True, "lane": LANE, "manages_own_resting": True,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
             "orders": rows, "as_of_utc": now_iso(),
