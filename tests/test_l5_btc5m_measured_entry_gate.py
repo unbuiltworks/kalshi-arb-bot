@@ -217,3 +217,26 @@ def test_an_unreadable_inventory_is_treated_as_risk_adding():
             raise RuntimeError("boom")
     assert X.Btc5mExecutor._reduces_exposure(
         Broken(), "m", "UP", "1") is False
+
+
+def test_a_missing_module_is_reported_as_such_not_as_a_rows_problem(
+        monkeypatch, tmp_path):
+    """WHAT THE IMAGE-DEPS TEST CAUGHT. The module was not in
+    deploy/l5_btc5m_live/Dockerfile, so ON would have refused with
+    MEASURED_ENTRY_ROWS_UNREADABLE:ImportError -- safe, but it sends an
+    operator to the rows file for a problem in the image.
+
+    A None in sys.modules makes `import` raise ImportError, which is the
+    documented way to simulate an absent module without patching
+    __import__.
+    """
+    import sys
+    monkeypatch.setitem(sys.modules, "src.l5_measured_entry_rates", None)
+    monkeypatch.setenv(GATE, "ON")
+    monkeypatch.setenv(ROWS, _rows_file(tmp_path, [_paired()] * 30))
+    #: the concrete class is ModuleNotFoundError (an ImportError
+    #: subclass), which is also what a missing COPY raises in the image.
+    #: The CATEGORY is the property worth pinning, not the class name.
+    out = X.measured_entry_refusal()
+    assert out.startswith("MEASURED_ENTRY_MODULE_UNAVAILABLE:"), out
+    assert "ROWS_UNREADABLE" not in out

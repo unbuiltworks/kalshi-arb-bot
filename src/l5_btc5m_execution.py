@@ -181,8 +181,20 @@ def measured_entry_refusal() -> Optional[str]:
     path = str(os.environ.get(MEASURED_ENTRY_ROWS_ENV, "")).strip()
     if not path:
         return "MEASURED_ENTRY_ROWS_UNSET"
+    #: THE IMPORT IS ITS OWN FAILURE MODE, reported under its own name.
+    #: Folded in with the file read it surfaced as
+    #: MEASURED_ENTRY_ROWS_UNREADABLE:ImportError -- a refusal, so safe,
+    #: but one that sends an operator to look at the rows file for a
+    #: problem in the image. `test_lazy_src_imports_on_the_live_path_are_
+    #: shipped` caught the missing COPY; this keeps the diagnosis honest
+    #: if it ever happens again.
     try:
         from src import l5_measured_entry_rates as MER
+    except BaseException as exc:                           # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "MEASURED_ENTRY_MODULE_UNAVAILABLE:%s" % type(exc).__name__
+    try:
         rows = []
         with open(path) as fh:
             for line in fh:
