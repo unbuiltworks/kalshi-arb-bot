@@ -2085,3 +2085,94 @@ def test_stranded_market_is_tape_priority_until_paired(eng, monkeypatch,
     v.orders[cid].update(filled=D("1"), open=False)
     e.step_market("aec-x")
     assert "aec-x" not in tape.priority
+
+
+# ------------------------------- adverse-selection-adjusted opening cap
+def test_drift_cap_off_by_default_is_exactly_the_existing_cap():
+    assert M.DRIFT_CAP_ON is False
+    d = {"completion_drift": {"x": ["0.20"] * 10}}
+    assert M.open_cap(d, "aec-x-1") == M.pair_cap("aec-x-1")
+
+
+def test_drift_estimate_needs_min_n_and_uses_median(monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_MIN_N", 5)
+    d = {}
+    for x in ("0.03", "0.20", "0.10", "0.12"):
+        M.record_drift(d, "aec-itfwo-a-b", D(x))
+    assert M.drift_estimate(d, "aec-itfwo-a-b") is None       # n=4 < 5
+    M.record_drift(d, "aec-itfwo-c-d", D("0.08"))             # same sport
+    assert M.drift_estimate(d, "aec-itfwo-x") == D("0.10")    # median of 5
+    assert M.drift_estimate(d, "aec-cs2-x") is None           # other sport
+
+
+def test_drift_keep_is_bounded(monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_KEEP", 3)
+    d = {}
+    for i in range(10):
+        M.record_drift(d, "aec-nba-a", D(i))
+    assert d["completion_drift"]["nba"] == ["7", "8", "9"]
+
+
+def test_drift_cap_only_ever_tightens(monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_CAP_ON", True)
+    monkeypatch.setattr(M, "DRIFT_MIN_N", 1)
+    base = M.pair_cap("aec-nba-a")
+    assert M.open_cap({"completion_drift": {"nba": ["-0.05"]}},
+                      "aec-nba-a") == base                    # negative: no-op
+    assert M.open_cap({"completion_drift": {"nba": ["0.001"]}},
+                      "aec-nba-a") == min(base, D("0.989"))
+    assert M.open_cap({"completion_drift": {"nba": ["0.12"]}},
+                      "aec-nba-a") == D("0.87")
+    assert M.open_cap({"completion_drift": {"nba": ["junk"]}},
+                      "aec-nba-a") == base                    # unreadable: no-op
+
+
+def test_engine_opens_inside_the_drift_cap(eng, monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_CAP_ON", True)
+    monkeypatch.setattr(M, "DRIFT_MIN_N", 5)
+    e, v = eng
+    e.b.d["completion_drift"] = {"x": ["0.12"] * 5}
+    e.select(v.account())
+    e.step_market("aec-x")
+    opened = {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+    # default would be YES .42 + NO .52 = .94; the cap is 1 - .12 - .01, so
+    # it rests DEEPER instead of not quoting
+    assert opened and sum(opened.values()) <= D("0.87")
+    assert opened["YES"] < D("0.42") and opened["NO"] < D("0.52")
+
+
+def test_drift_cap_too_deep_to_fit_quotes_nothing(eng, monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_CAP_ON", True)
+    monkeypatch.setattr(M, "DRIFT_MIN_N", 5)
+    monkeypatch.setattr(M, "DRIFT_MAX_EXTRA_TICKS", 2)
+    e, v = eng
+    e.b.d["completion_drift"] = {"x": ["0.40"] * 5}        # cap 0.59
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert not [o for o in v.orders.values() if o["open"]]
+
+
+def test_strand_start_records_the_resting_complement_quote(eng):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    v.bid, v.ask = D("0.40"), D("0.42")
+    e.step_market("aec-x")
+    ls = e.b.m("aec-x").get("lone_start") or {}
+    assert ls.get("opp_quote_px") == "0.52"
+
+
+def test_resolution_records_completion_drift(eng):
+    e, _v = eng
+    mk = e.b.m("aec-x")
+    mk["lone_since"] = time.time() - 30
+    mk["lone_start"] = {"lag": "NO", "qty0": "0", "cost0": "0",
+                        "taker_px": "0.60", "lead_px": "0.45",
+                        "opp_quote_px": "0.48", "controller": "recovery",
+                        "open_policy": "two_sided"}
+    mk["pos"]["NO"], mk["cost"]["NO"] = "5", "2.75"          # paid 0.55
+    e._recovery_resolved("aec-x", mk, "paired")
+    assert e.b.d["completion_drift"]["x"] == ["0.07"]
+    assert e.b.d["recoveries"][-1]["completion_drift_px"] == "0.07"

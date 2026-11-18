@@ -296,6 +296,67 @@ def submission_locked() -> bool:
     return (os.getenv(SUBMISSION_LOCK_ENV) or "").strip() == "1"
 
 
+# ADVERSE-SELECTION-ADJUSTED OPENING CAP (2026-11-18, default OFF).
+# Evidence (23 strands 12:53-13:35Z, bot ORDER/FILL logs): when the first
+# leg filled, the two resting opening quotes summed to 0.88-0.93 (mean
+# 0.927) -- every opening was sound as quoted -- yet the completed pair
+# averaged 1.033, because the complement was bought on average 10.6c above
+# the quote that had been resting on that side (3c..22c; ITF tennis 7-19c,
+# setka/ATP 4-6c). A one-sided fill is itself evidence the price is
+# moving, so the quoted margin must cover the EXPECTED completion drift,
+# not just be under $1.
+#
+# With PMUS_TWO_SIDED_DRIFT_CAP=1 the opening pair cap for a sport becomes
+#   min(pair_cap(slug), 1 - median(recent drifts of that sport) - DRIFT_EDGE)
+# once that sport has DRIFT_MIN_N measured strands. It can only TIGHTEN the
+# existing cap (deeper quotes, or none if nothing fits); it never loosens
+# it, never touches completions, and a sport without enough evidence keeps
+# the existing cap unchanged.
+DRIFT_CAP_ON = os.getenv("PMUS_TWO_SIDED_DRIFT_CAP", "0").strip() == "1"
+DRIFT_EDGE = _env_d("PMUS_TWO_SIDED_DRIFT_EDGE", "0.01")
+DRIFT_MIN_N = int(os.getenv("PMUS_TWO_SIDED_DRIFT_MIN_N", "5"))
+DRIFT_KEEP = int(os.getenv("PMUS_TWO_SIDED_DRIFT_KEEP", "20"))
+DRIFT_MAX_EXTRA_TICKS = int(os.getenv("PMUS_TWO_SIDED_DRIFT_MAX_EXTRA_TICKS",
+                                      "8"))
+
+
+def sport_of(slug: str) -> str:
+    parts = str(slug).split("-")
+    return parts[1] if len(parts) > 1 else "?"
+
+
+def record_drift(d: Dict[str, Any], slug: str, drift: D) -> None:
+    lst = d.setdefault("completion_drift", {}).setdefault(sport_of(slug), [])
+    lst.append(str(drift))
+    del lst[:-DRIFT_KEEP]
+
+
+def drift_estimate(d: Mapping[str, Any], slug: str) -> Optional[D]:
+    """Median recent completion drift for this market's sport, or None when
+    fewer than DRIFT_MIN_N strands have been measured."""
+    lst = ((d.get("completion_drift") or {}).get(sport_of(slug)) or [])
+    try:
+        xs = sorted(D(str(x)) for x in lst)
+    except Exception:                                    # noqa: BLE001
+        return None
+    if len(xs) < max(1, DRIFT_MIN_N):
+        return None
+    m = len(xs) // 2
+    return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+
+
+def open_cap(d: Mapping[str, Any], slug: str) -> D:
+    """The opening pair cap: the existing pair_cap, tightened (never
+    loosened) by the sport's measured completion drift when enabled."""
+    base = pair_cap(slug)
+    if not DRIFT_CAP_ON:
+        return base
+    est = drift_estimate(d, slug)
+    if est is None or est <= 0:
+        return base
+    return min(base, ONE - est - DRIFT_EDGE)
+
+
 def market_overpay_blocked(mk: Mapping[str, Any]) -> bool:
     """True when the re-entry guard is ON and this market's recorded
     completion overpay has reached the budget. Off (0) -> never."""
@@ -1300,8 +1361,8 @@ class Engine:
             return None
         r = reward_open_prices(bbo["bid"], bbo["ask"], tick,
                                rp.get("maxSpread"),
-                               cap=pair_cap(slug) if reward_first_on()
-                               else None)
+                               cap=open_cap(self.b.d, slug)
+                               if reward_first_on() else None)
         self._log_reward(slug, mk, rp, bbo, tick, r)
         if r is None:
             return None
@@ -1689,6 +1750,10 @@ class Engine:
                     rec["pair_cost"] = str(D(ls["lead_px"]) + paid)
                 # improved: cheaper than taking at once when it went lone
                 rec["improved"] = paid < D(ls["taker_px"])
+                if ls.get("opp_quote_px") not in (None, "None"):
+                    drift = paid - D(str(ls["opp_quote_px"]))
+                    rec["completion_drift_px"] = str(drift)
+                    record_drift(self.b.d, slug, drift)
                 if ls.get("lead_px") is not None:
                     over = dq * (D(ls["lead_px"]) + paid - ONE)
                     if over > 0:
@@ -2155,11 +2220,21 @@ class Engine:
                 qty = max(REWARD_QTY, spec["min_qty"])
             else:
                 dmax = depth_ticks(tick)
+                cap = open_cap(self.b.d, slug)
                 for d in range(max(0, dmax - steps), dmax + 1):
                     want = open_prices(bbo["bid"], bbo["ask"], tick, depth=d,
-                                       cap=pair_cap(slug))
+                                       cap=cap)
                     if want is not None:
                         break
+                if want is None and cap < pair_cap(slug):
+                    # the drift cap tightened the pair: rest DEEPER (bounded)
+                    # rather than quote a pair whose margin the measured
+                    # completion drift would erase
+                    for d in range(dmax + 1, dmax + 1 + DRIFT_MAX_EXTRA_TICKS):
+                        want = open_prices(bbo["bid"], bbo["ask"], tick,
+                                           depth=d, cap=cap)
+                        if want is not None:
+                            break
                 qty = max(QTY, spec["min_qty"])
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES" or
@@ -2346,7 +2421,11 @@ class Engine:
                                 "taker_px": str(c_ask + taker_fee(
                                     c_ask, need) / need),
                                 "controller": "recovery" if RECOVERY_ON
-                                else "legacy"}
+                                else "legacy",
+                                # the complement quote resting when the first
+                                # leg filled: the pair the OPENING promised
+                                "opp_quote_px": (str(cur[1].get("px"))
+                                                 if cur else None)}
             self.b.save()
         lone_since = float(mk["lone_since"])
         if RECOVERY_ON:
@@ -2848,6 +2927,9 @@ class Engine:
                               "sports_cap": COMPLETION_SPORTS_CAP,
                               "max_stranded": MAX_STRANDED,
                               "market_overpay_budget_usd": MARKET_OVERPAY_BUDGET_USD,
+                              "drift_cap": {"on": DRIFT_CAP_ON,
+                                            "edge": DRIFT_EDGE,
+                                            "min_n": DRIFT_MIN_N},
                               "unmatched_halt_usd": UNMATCHED_HALT_USD,
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
