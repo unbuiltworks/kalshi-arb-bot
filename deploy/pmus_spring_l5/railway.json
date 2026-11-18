@@ -54,6 +54,7 @@
       "src/pmus_sports_open_policy.py",
       "src/pmus_sports_manual_study.py",
       "src/l5_completion_policy.py",
+      "src/l5_account_risk.py",
       "src/pmus_sports_completion.py",
       "src/pmus_sports_completion_replay.py",
       "src/l5_halt_gate.py",

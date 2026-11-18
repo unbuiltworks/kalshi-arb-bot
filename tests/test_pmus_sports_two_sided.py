@@ -2176,3 +2176,160 @@ def test_resolution_records_completion_drift(eng):
     e._recovery_resolved("aec-x", mk, "paired")
     assert e.b.d["completion_drift"]["x"] == ["0.07"]
     assert e.b.d["recoveries"][-1]["completion_drift_px"] == "0.07"
+
+
+# ------------------------------------------ account-wide risk (shared)
+import datetime as _dt
+
+
+def _risk_doc(day="-10", halt="50", life="-70", cum="200", retired=()):
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return {"as_of_utc": now.isoformat(),
+            "account_risk": {"readable": True,
+                             "utc_day": now.strftime("%Y-%m-%d"),
+                             "utc_day_realized_usd": day,
+                             "daily_halt_usd": halt,
+                             "lifetime_realized_usd": life,
+                             "cumulative_loss_ceiling_usd": cum,
+                             "retired_markets": list(retired)}}
+
+
+@pytest.fixture
+def risk_on(monkeypatch):
+    from src import l5_account_risk as AR
+    monkeypatch.setattr(M, "ACCOUNT_RISK_ON", True)
+    monkeypatch.setattr(M, "ACCOUNT_RISK_TTL_S", 0)
+    monkeypatch.setenv(AR.RISK_URL_ENV, "http://risk/l5/live_orders.json")
+    monkeypatch.setenv(AR.ACCOUNT_CAP_ENV, "20")
+    monkeypatch.setenv(AR.ACCOUNT_LANES_ENV, "2")
+    box = {"doc": _risk_doc()}
+    monkeypatch.setattr(AR, "fetch_json", lambda url, timeout=3.0: box["doc"])
+    return box
+
+
+def _opened(v):
+    return [o for o in v.orders.values() if o["open"]]
+
+
+def test_account_risk_off_by_default():
+    assert M.ACCOUNT_RISK_ON is False
+
+
+def test_healthy_shared_limits_allow_openings(eng, risk_on):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    assert e.account_risk()["lane_cap_usd"] == "10.00"
+
+
+@pytest.mark.parametrize("mutate,reason", [
+    (lambda b, mp: mp.delenv("L5_ACCOUNT_RISK_URL"), "ACCOUNT_RISK_URL_NOT_SET"),
+    (lambda b, mp: b.update(doc={}), "ACCOUNT_RISK_NOT_PUBLISHED"),
+    (lambda b, mp: b.update(doc=_risk_doc(day="-50")),
+     "ACCOUNT_DAILY_LOSS_HALT"),
+    (lambda b, mp: b.update(doc=_risk_doc(life="-200")),
+     "ACCOUNT_CUMULATIVE_LOSS_CEILING"),
+    (lambda b, mp: mp.delenv("L5_ACCOUNT_MAX_EXPOSURE_USD"),
+     "ACCOUNT_CAP_UNSET_OR_UNREADABLE"),
+    (lambda b, mp: mp.setenv("L5_ACCOUNT_LANES", "two"),
+     "ACCOUNT_CAP_UNSET_OR_UNREADABLE"),
+])
+def test_any_unverifiable_or_breached_limit_blocks_new_openings(
+        eng, risk_on, monkeypatch, mutate, reason):
+    e, v = eng
+    mutate(risk_on, monkeypatch)
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert not _opened(v)
+    assert e.account_risk_blocks() == reason
+
+
+def test_unreachable_risk_record_blocks(eng, risk_on, monkeypatch):
+    from src import l5_account_risk as AR
+
+    def down(url, timeout=3.0):
+        raise OSError("connection refused")
+    monkeypatch.setattr(AR, "fetch_json", down)
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert not _opened(v)
+    assert e.account_risk_blocks() == "ACCOUNT_RISK_UNREADABLE:OSError"
+
+
+def test_breach_never_blocks_a_completion(eng, risk_on):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    risk_on["doc"] = _risk_doc(day="-60")                  # halt breached
+    e.step_market("aec-x")
+    e.step_market("aec-x")
+    live = _opened(v)
+    assert len(live) == 1 and live[0]["side"] == "NO"      # still completing
+    n = v.n
+    e.place("aec-x", "NO", D("0.50"), D("1"), "two_sided_complete")
+    assert v.n == n + 1                                    # completion sent
+    e.place("aec-x", "YES", D("0.40"), D("1"), "two_sided_open")
+    e.place("aec-x", "YES", D("0.40"), D("1"), "two_sided_extend")
+    e.place("aec-x", "YES", D("0.40"), D("1"), "two_sided_open_rewarded")
+    assert v.n == n + 1                                    # none of these
+
+
+def test_lane_exposure_share_is_enforced_per_order(eng, risk_on,
+                                                   monkeypatch):
+    from src import l5_account_risk as AR
+    monkeypatch.setenv(AR.ACCOUNT_CAP_ENV, "1.80")         # 2 lanes -> 0.90
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    # the pair .42 + .52 = .94 does not fit .90: the second leg is refused
+    assert sum(o["px"] * o["qty"] for o in _opened(v)) <= D("0.90")
+    assert e.own_exposure_usd() <= D("0.90")
+
+
+def test_own_unbooked_losses_bind_earlier_booked_ones_are_not_doubled(
+        eng, risk_on):
+    e, v = eng
+    today = e._today()
+    for slug in ("aec-p", "aec-q"):
+        mk = e.b.m(slug)
+        mk["mark0"] = {"date": today, "value": "10"}
+        mk["mark"] = "-31"                                 # -41 each today
+    # aec-p is already in the shared ledger; only aec-q (-41) is added:
+    # -10 published + -41 = -51 <= -50 -> halt
+    risk_on["doc"] = _risk_doc(retired=["aec-p"])
+    assert e.account_risk_blocks() == "ACCOUNT_DAILY_LOSS_HALT"
+    # both booked already: nothing added, -10 published, room remains
+    risk_on["doc"] = _risk_doc(retired=["aec-p", "aec-q"])
+    assert e.account_risk_blocks() is None
+
+
+def test_existing_sports_daily_stop_still_applies_with_shared_risk_on(
+        eng, risk_on, monkeypatch):
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("15"))
+    e, v = eng
+    today = e._today()
+    mk = e.b.m("aec-q")
+    mk["mark0"] = {"date": today, "value": "0"}
+    mk["mark"] = "-16"
+    risk_on["doc"] = _risk_doc(retired=["aec-q"])          # shared: fine
+    assert e.account_risk_blocks() is None
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert not _opened(v)                                  # lane stop binds
+
+
+def test_observe_mode_evaluates_and_logs_but_never_blocks(eng, risk_on,
+                                                         monkeypatch, capsys):
+    monkeypatch.setattr(M, "ACCOUNT_RISK_ON", False)
+    monkeypatch.setattr(M, "ACCOUNT_RISK_OBSERVE", True)
+    risk_on["doc"] = _risk_doc(day="-60")                  # breached
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2                            # nothing refused
+    assert e.account_risk()["reason"] == "ACCOUNT_DAILY_LOSS_HALT"
+    assert "ACCOUNT_RISK" in capsys.readouterr().out       # but logged

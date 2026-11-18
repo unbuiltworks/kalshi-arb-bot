@@ -289,6 +289,33 @@ MARKET_OVERPAY_BUDGET_USD = overpay_budget_from(os.environ)
 # lane's lock (2026-11-18 12:53Z reset had to). Read live on every call, so
 # the published answer cannot drift from the enforced one. Cancels are never
 # blocked.
+# ACCOUNT-WIDE RISK (owner 2026-11-18, default OFF until deployed with its
+# config). With PMUS_TWO_SIDED_ACCOUNT_RISK=1 this lane obeys the SAME
+# account-wide daily-loss, lifetime-loss and exposure limits as BTC5m, read
+# through src/l5_account_risk.py from the same published record
+# (L5_ACCOUNT_RISK_URL) and the same split (L5_ACCOUNT_MAX_EXPOSURE_USD /
+# L5_ACCOUNT_LANES). Any unreadable, stale or breached state REFUSES new
+# opening and extension orders; completions are never blocked (they reduce
+# risk). The lane's own $DAILY_LOSS_USD stop is kept and still applies.
+# "1" ENFORCES. "observe" reads, evaluates and logs ACCOUNT_RISK exactly as
+# enforcement would, but refuses nothing -- the read-only first step, so the
+# published record's readability and figures are verified in production
+# before any order depends on them. Anything else is off.
+_ACCOUNT_RISK_MODE = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK", "0").strip()
+ACCOUNT_RISK_ON = _ACCOUNT_RISK_MODE == "1"
+ACCOUNT_RISK_OBSERVE = _ACCOUNT_RISK_MODE.lower() == "observe"
+ACCOUNT_RISK_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S", "10"))
+#: RISK-REDUCING stages: they buy the missing side of a held leg (or exit
+#: it) and are never refused by the account-wide limits. Everything else --
+#: two_sided_open, two_sided_open_rewarded, two_sided_extend -- adds risk.
+COMPLETION_STAGES = ("two_sided_complete", "two_sided_complete_taker",
+                     "two_sided_exit")
+
+
+def is_completion_stage(stage: str) -> bool:
+    return str(stage or "") in COMPLETION_STAGES
+
+
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
 
 
@@ -1827,7 +1854,8 @@ class Engine:
             return {"px": None, "why": "max_imbalance"}
         if os.getenv(ENABLED_ENV, "").upper() != "YES" or \
                 self.daily_stopped() or self.halt_new_exposure() or \
-                self.shared_halt() is not None:
+                self.shared_halt() is not None or \
+                self.account_risk_blocks() is not None:
             return {"px": None, "why": "blocked"}
         late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
             if LATE_CUTOFF else None
@@ -2082,8 +2110,112 @@ class Engine:
         self._halt_cache = (now, val)
         return val
 
+    # ------------------------------------------- account-wide risk (shared)
+    def own_exposure_usd(self) -> D:
+        """This lane's at-risk dollars: unpaired filled cost plus the
+        notional of every resting order it believes live."""
+        out = D(self.b.total_unmatched())
+        for mk in (self.b.d.get("markets") or {}).values():
+            for o in (mk.get("orders") or {}).values():
+                if o.get("open"):
+                    try:
+                        left = D(str(o.get("qty"))) - D(str(o.get("filled")
+                                                            or "0"))
+                        out += max(D(0), left) * D(str(o.get("px")))
+                    except Exception:                    # noqa: BLE001
+                        return D("Infinity")             # unknown: fail closed
+        return out
+
+    def own_unaccounted_losses(self, retired: set) -> D:
+        """Today's mark-to-market change of markets the shared ledger has NOT
+        yet booked (only losses count, in AR.evaluate)."""
+        today = self._today()
+        out = D(0)
+        for slug, mk in (self.b.d.get("markets") or {}).items():
+            if slug in retired:
+                continue
+            base = mk.get("mark0") or {}
+            if base.get("date") == today and mk.get("mark") is not None:
+                out += D(mk["mark"]) - D(base["value"])
+        return out
+
+    def account_risk(self) -> Dict[str, Any]:
+        """Cached shared-limit verdict; {"ok": True, "off": True} when the
+        switch is off. Logs every change of verdict."""
+        if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE):
+            return {"ok": True, "off": True}
+        now = time.monotonic()
+        hit = getattr(self, "_acct_risk", None)
+        if hit and now - hit[0] < ACCOUNT_RISK_TTL_S:
+            return hit[1]
+        from src import l5_account_risk as AR
+        url = (os.getenv(AR.RISK_URL_ENV) or "").strip()
+        doc_box: Dict[str, Any] = {}
+
+        def fetch(u: str) -> Any:
+            doc_box["doc"] = AR.fetch_json(u)
+            return doc_box["doc"]
+
+        try:
+            first = AR.account_risk(url=url, now=datetime.now(timezone.utc),
+                                    own_unaccounted=0, fetch=fetch)
+            if "doc" in doc_box and first.get("reason") not in (
+                    "ACCOUNT_RISK_URL_NOT_SET",):
+                own = self.own_unaccounted_losses(
+                    AR.retired_markets(doc_box["doc"]))
+                v = AR.evaluate(doc_box["doc"],
+                                now=datetime.now(timezone.utc),
+                                own_unaccounted=own)
+            else:
+                v = first
+            lane = AR.lane_cap()
+            expo = self.own_exposure_usd()
+            v = dict(v, lane_cap_usd=None if lane is None else str(lane),
+                     own_exposure_usd=str(expo))
+            if v.get("ok") and lane is None:
+                v = dict(v, ok=False, reason="ACCOUNT_CAP_UNSET_OR_UNREADABLE")
+            elif v.get("ok") and expo >= lane:
+                v = dict(v, ok=False, reason="ACCOUNT_EXPOSURE_CAP")
+        except Exception as exc:                         # noqa: BLE001
+            v = {"ok": False, "reason": "ACCOUNT_RISK_ERROR:%s"
+                 % type(exc).__name__}
+        prev = (hit[1] if hit else {}).get("reason", "init")
+        if v.get("reason") != prev:
+            log("ACCOUNT_RISK", **{k: v.get(k) for k in (
+                "ok", "reason", "utc_day_realized_usd", "daily_halt_usd",
+                "lifetime_realized_usd", "cumulative_loss_ceiling_usd",
+                "own_losses_not_yet_in_account_ledger_usd", "loss_room_usd",
+                "lane_cap_usd", "own_exposure_usd", "age_s")},
+                label="shared account-wide limits; refusals block NEW "
+                      "openings/extensions only, completions continue")
+        self._acct_risk = (now, v)
+        return v
+
+    def account_risk_blocks(self, px: Optional[D] = None,
+                            qty: Optional[D] = None) -> Optional[str]:
+        """Reason a NEW opening/extension is refused, or None."""
+        v = self.account_risk()
+        if v.get("off") or not ACCOUNT_RISK_ON:          # observe: log only
+            return None
+        if not v.get("ok"):
+            return str(v.get("reason"))
+        if px is not None and qty is not None:
+            try:
+                lane = D(str(v.get("lane_cap_usd")))
+                if self.own_exposure_usd() + D(str(px)) * D(str(qty)) > lane:
+                    return "ACCOUNT_EXPOSURE_CAP"
+            except Exception:                            # noqa: BLE001
+                return "ACCOUNT_EXPOSURE_UNREADABLE"
+        return None
+
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if not is_completion_stage(stage):
+            why = self.account_risk_blocks(px, qty)
+            if why:
+                log("place_refused_account_risk", slug=slug, side=side,
+                    px=px, qty=qty, stage=stage, reason=why)
+                return
         if submission_locked():
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
@@ -2239,7 +2371,8 @@ class Engine:
             blocked = (self.b.total_unmatched() >= TOTAL_CAP or
                        os.getenv(ENABLED_ENV, "").upper() != "YES" or
                        self.daily_stopped() or self.halt_new_exposure() or
-                       self.shared_halt() is not None)
+                       self.shared_halt() is not None or
+                       self.account_risk_blocks() is not None)
             late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
                 if LATE_CUTOFF else None
             if excluded(slug):
@@ -2927,6 +3060,11 @@ class Engine:
                               "sports_cap": COMPLETION_SPORTS_CAP,
                               "max_stranded": MAX_STRANDED,
                               "market_overpay_budget_usd": MARKET_OVERPAY_BUDGET_USD,
+                              "account_risk": {"on": ACCOUNT_RISK_ON,
+                                               "observe": ACCOUNT_RISK_OBSERVE,
+                                               "url_set": bool((os.getenv(
+                                                   "L5_ACCOUNT_RISK_URL")
+                                                   or "").strip())},
                               "drift_cap": {"on": DRIFT_CAP_ON,
                                             "edge": DRIFT_EDGE,
                                             "min_n": DRIFT_MIN_N},
