@@ -54,6 +54,118 @@ D = Decimal
 UTC = dt.timezone.utc
 WINDOW_S = 300.0
 STEP_S = 5.0
+
+#: SECONDS LEFT AT WHICH THE LATE-WINDOW DECISION BLOCK IS LOGGED.
+#:
+#: 45 because that is exactly where the two settlement-variance
+#: estimators start to differ: at and above it they agree to three
+#: decimals, below it the shipped linear ramp is up to 12x too wide in sd
+#: (see src/l5_btc_reference and tests/test_l5_btc_reference_exact_
+#: variance.py). Logging the whole window would be mostly rows in which
+#: the comparison is identically zero.
+#:
+#: VOLUME: the loop steps every STEP_S, so this is ceil(45/5) = 9 extra
+#: lines per 5-minute window, ~108/hour, ~2,600/day. It adds no venue
+#: call, no file, no volume and no order-path branch.
+LATE_LOG_S = 45.0
+
+#: STAY RESIDENT AND DISARMED WHEN THE ENVELOPE WILL NOT PERMIT TRADING.
+#: OFF unless exactly "YES".
+#:
+#: WHAT HAPPENS TODAY. `persistent_gate` returns exit=True for any
+#: envelope refusal and the loop does `return 0`, so the PROCESS ENDS.
+#: `serve_fills` runs on a daemon thread, so the registry dies with it.
+#: Observed: l5-btc5m-live exited 2026-11-17T23:05Z on ENVELOPE_EXPIRED
+#: with code 0 -- a designed dead-man, which Railway reports as CRASHED
+#: -- and has been down since. Every watchdog sweep that day read
+#: `l5-btc5m-live...:8090:REGISTRY_UNREACHABLE:URLError`, and because the
+#: ownership oracle requires EVERY registry to be readable before it will
+#: claim any id, a sports halt at 16:02Z could cancel NOTHING
+#: account-wide. A lane that is merely switched off degraded the
+#: protection the other lane depends on.
+#:
+#: THE PRECEDENT IS ALREADY HERE. `STATE_NOT_ARMED` returns exit=False
+#: and waits, with the note "an operator may arm it without restarting
+#: anything". This extends the same treatment to an envelope that will
+#: not permit trading, and to nothing else.
+#:
+#: IT IS NOT PERMISSION, and three independent things make that true:
+#:   1. the executor is constructed `Btc5mExecutor(None, ledger, ...)`
+#:      -- transport None. There is no object in the process that can
+#:      POST, so submission is impossible rather than merely refused.
+#:   2. the loop `continue`s. The trading body is never reached while the
+#:      gate refuses, exactly as for STATE_NOT_ARMED.
+#:   3. the SAME gate is re-evaluated every 15 s. An expired envelope
+#:      keeps refusing; nothing here can arm it.
+#:
+#: SCOPED TO ENVELOPE REASONS ONLY. A LATCHED state (HALTED, STOPPED) and
+#: an unreadable state still END the process, because those are latches
+#: and the existing note is explicit: "NOTHING REARMS. The loop ends; it
+#: does not wait for somebody to clear a latch."
+#:
+#: OFF BY DEFAULT because residency is not strictly safer in every sense:
+#: a process that exits cleanly is a simpler failure mode than one that
+#: stays up holding a volume and a port indefinitely. Enabling it is part
+#: of a deployment the owner reviews.
+RESIDENT_WHEN_DISARMED_ENV = "L5_BTC5M_RESIDENT_WHEN_DISARMED"
+
+#: THE REASONS THAT MEAN "THE OWNER HAS NOT AUTHORISED TRADING".
+#:
+#: THE PRINCIPLE, and it is the whole of the scoping: residency is for a
+#: lane that is BENIGNLY UNAUTHORISED -- no envelope, an expired one, one
+#: for another deployment, one that does not name this strategy. Those are
+#: expected states, and the right response is to sit disarmed while
+#: remaining readable.
+#:
+#: EVERYTHING ELSE EXITS, including every envelope reason that means
+#: SOMETHING IS BROKEN rather than merely absent: unparseable, not an
+#: object, an unreadable expiry or limits, a short nonce, an unknown
+#: deployment, an unreadable clock, an unavailable strategy registry. A
+#: process that cannot read its own configuration is one whose cleanest
+#: failure mode is to stop.
+#:
+#: MY FIRST VERSION OF THIS LIST WAS WRONG, and its own test caught it: I
+#: enumerated the reasons from truncated grep output and got 11 of the 22
+#: `parse_envelope` can return, which would have silently treated the
+#: other 11 as latches. The test below now asserts this is a SUBSET of
+#: the parser's reasons and that each excluded one still exits, so a new
+#: reason cannot land in either bucket by accident.
+UNAUTHORISED_REASONS = frozenset({
+    "ENVELOPE_ABSENT",
+    "ENVELOPE_EXPIRED",
+    "ENVELOPE_NOT_APPROVED",
+    "ENVELOPE_NOT_PERSISTENT",
+    "ENVELOPE_IS_FOR_ANOTHER_DEPLOYMENT",
+    "ENVELOPE_NAMES_NO_DEPLOYMENT",
+    "ENVELOPE_NAMES_NO_SERIES",
+    "ENVELOPE_NAMES_NO_STRATEGIES",
+    "ENVELOPE_UNKNOWN_SERIES",
+    "ENVELOPE_UNKNOWN_STRATEGY",
+    "ENVELOPE_TAKER_PERMISSION_UNSTATED",
+    "ENVELOPE_PER_MARKET_ABOVE_AGGREGATE",
+    "ENVELOPE_EXCEEDS_CODE_CEILING",
+    "ENVELOPE_LIMITS_NOT_POSITIVE",
+})
+
+
+def resident_when_disarmed() -> bool:
+    return str(os.environ.get(RESIDENT_WHEN_DISARMED_ENV, "")).strip() \
+        == "YES"
+
+
+def stay_resident(gate: Mapping[str, Any]) -> bool:
+    """Should this refusal keep the lane resident instead of ending it?
+
+    True only when the switch is on AND the reason means the owner has
+    not AUTHORISED trading. A latch, anything unreadable or unparseable,
+    and any reason this module does not recognise end the process as
+    before.
+    """
+    if not gate.get("exit"):
+        return False                      # already staying
+    if not resident_when_disarmed():
+        return False
+    return str(gate.get("reason") or "") in UNAUTHORISED_REASONS
 #: stop placing and start cancelling this long before the window ends
 CANCEL_LEAD_S = 30.0
 #: how long after the window end the cancel loop may keep re-reading
@@ -346,7 +458,78 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if self.path.split("?", 1)[0].lstrip("/") != "btc5m_fills":
+            _p = self.path.split("?", 1)[0].lstrip("/")
+            #: LIVENESS, and nothing more. "this process is answering" is
+            #: the only claim, so it cannot be mistaken for "this lane is
+            #: trading" or "this lane is well".
+            if _p in ("health", "healthz"):
+                body, code = b'{"ok":true,"serving":true}', 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            #: THE LANE'S OWN STATE, read from the durable record rather
+            #: than asserted. A DISARMED lane must SAY so here: reporting
+            #: a fabricated healthy or armed state is the failure this
+            #: endpoint exists to prevent, and `can_submit` is derived
+            #: from the absence of a transport rather than from a flag.
+            if _p in ("status", "l5/status.json"):
+                try:
+                    _st = PMODE.read_state()
+                except BaseException as _e:                    # noqa: BLE001
+                    if isinstance(_e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _st = {"ok": False,
+                           "reason": "STATE_READ_FAILED:%s"
+                                     % type(_e).__name__}
+                doc = {
+                    "strategy": X.STRATEGY,
+                    "state": _st.get("state"),
+                    "state_readable": bool(_st.get("ok")),
+                    "state_reason": _st.get("reason"),
+                    #: TWO SEPARATE FACTS, because conflating them is
+                    #: how a status endpoint overstates safety.
+                    #:
+                    #: `arm()` is what puts a POST-capable object in this
+                    #: process, so its ABSENCE is conclusive: nothing can
+                    #: be sent, whatever any gate says. Its PRESENCE is
+                    #: NOT conclusive the other way -- a transport is a
+                    #: capability, not a permission, and the campaign
+                    #: approval, the per-order authorization claim, the
+                    #: market lock, the shared halt and the account-wide
+                    #: risk gate each still refuse independently and are
+                    #: NOT evaluated here.
+                    #:
+                    #: So the endpoint reports the structural fact under
+                    #: its own name and makes only the claim it can
+                    #: establish. A single `can_submit` field invited
+                    #: exactly the wrong inference and is gone.
+                    "transport_present": bool(
+                        getattr(ex, "transport", None) is not None),
+                    "submission_structurally_impossible": bool(
+                        getattr(ex, "transport", None) is None),
+                    "armed_per_durable_state": _st.get("state") == PMODE.ARMED,
+                    "authorization_evaluated_here": False,
+                    "labels": ("the lane's durable state as recorded. "
+                               "submission_structurally_impossible true "
+                               "means nothing can be sent at all. FALSE "
+                               "does NOT mean submission is authorised: a "
+                               "transport is a capability, and the "
+                               "campaign approval, per-order claim, "
+                               "market lock, shared halt and account-wide "
+                               "risk gate are each separate and are not "
+                               "evaluated by this endpoint."),
+                }
+                body, code = json.dumps(doc, default=str).encode(), 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if _p != "btc5m_fills":
                 body, code = b'{"error":"no such key"}', 404
             else:
                 body, code = json.dumps(fills_document(ex),
@@ -1340,8 +1523,81 @@ class Session:
                     loss_room_usd=g.get("loss_room_usd"),
                     exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
+                #: THE LATE-WINDOW DECISION RECORD, reporting only.
+                #:
+                #: Everything here is already in hand: `est` is the
+                #: estimate this step ALREADY made and carries the strike,
+                #: the BRTI bucket and its age; `sized` is the depth the
+                #: pricing path ALREADY read; `rep` is the decision that
+                #: has ALREADY been taken. `corrected_p_up` is a pure
+                #: function of `est`. So this costs one dict and no venue
+                #: call, and it cannot alter a decision: it is built AFTER
+                #: `self.ex.step` has returned.
+                #:
+                #: The corrected probability is REPORTED, NEVER USED. The
+                #: engine priced this step on `p_up` whatever this says,
+                #: and `L5_BTC_REF_LATE_VARIANCE` stays off.
+                _late = None
+                try:
+                    #: LAZY, and inside the guard. `l5_btc_reference` is
+                    #: already COPYd into deploy/l5_btc5m_live (the runner
+                    #: imports it to build the poller), so this is shipped
+                    #: -- test_lazy_src_imports_on_the_live_path_are_
+                    #: shipped checks exactly that. If it ever were not,
+                    #: the except below drops the field and trading is
+                    #: untouched.
+                    from src import l5_btc_reference as REF_P
+                    _sl = est.get("seconds_left")
+                    if _sl is not None and 0 < float(_sl) <= LATE_LOG_S:
+                        _late = {
+                            "seconds_left": round(float(_sl), 2),
+                            "strike": est.get("strike"),
+                            "index": est.get("index"),
+                            "distance": est.get("distance"),
+                            #: official BRTI bucket and its freshness
+                            "bucket_t": est.get("bucket_t"),
+                            "index_age_s": est.get("index_age_s"),
+                            "receive_lag_s": est.get("receive_lag_s"),
+                            "source": est.get("source"),
+                            #: the two probabilities, side by side
+                            "p_up": p_up,
+                            "p_up_corrected": REF_P.corrected_p_up(est),
+                            "sd": est.get("sd"),
+                            "sigma_used": est.get("sigma_used"),
+                            #: executable prices and the depth behind them
+                            "yes_bid": book.get("bid"),
+                            "yes_ask": book.get("ask"),
+                            "bid_shares": sized.get("bid_shares"),
+                            "ask_shares": sized.get("ask_shares"),
+                            "book_age_s": book.get("age_s"),
+                            #: every candidate opening and its verdict
+                            "candidates": [
+                                {"side": w.get("side"),
+                                 "price": w.get("price"),
+                                 "qty": w.get("qty"),
+                                 "passed": False,
+                                 "reason": w.get("blocked_by")}
+                                for w in (rep.get("would_submit") or ())
+                            ] + [
+                                {"side": pl.get("side"),
+                                 "price": pl.get("price"),
+                                 "qty": pl.get("qty"),
+                                 "passed": True, "reason": None}
+                                for pl in (rep.get("placed") or ())
+                            ],
+                            "refusals": [r.get("reason")
+                                         for r in rep.get("refused") or ()],
+                        }
+                except BaseException as exc:            # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    #: REPORTING MUST NEVER BREAK TRADING. The decision is
+                    #: already made and already acted on by this point; a
+                    #: log field that cannot be built is named and dropped.
+                    _late = {"error": type(exc).__name__}
                 self._log("L5_BTC5M_STEP", {
                     "t_in_window_s": round(now - ws, 2),
+                    "late": _late,
                     "bid": book.get("bid"), "ask": book.get("ask"),
                     "p_up": p_up, "p_reason": est.get("reason"),
                     "action": rep.get("action"), "why": rep.get("why"),
@@ -1755,6 +2011,65 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                          X.live_order_bound())
     emit("L5_BTC5M_PLAN", dict(plan, budget_reach=reach,
                                utc=dt.datetime.now(UTC).isoformat()))
+
+    #: THE EFFECTIVE CONFIGURATION, EMITTED BEFORE THE ARMING GATE.
+    #:
+    #: WHY IT HAD TO EXIST. On 2026-11-17 this lane exited at boot with
+    #: ENVELOPE_EXPIRED -- code 0, a designed dead-man -- which Railway
+    #: reports as CRASHED. It has been down since. Asking "is bounded
+    #: repetition actually enabled in production?" was then unanswerable
+    #: from outside: the variables are present but their VALUES are
+    #: redacted to anything but a session token, and the lane exits
+    #: before it writes a single step report, so no effective-parameter
+    #: record ever reached the log.
+    #:
+    #: That is the whole point of placing it HERE, ahead of the arming
+    #: ceremony: the case where the configuration most needs reading is
+    #: exactly the case where the process is about to stop.
+    #:
+    #: IT PRINTS WHAT THE EXECUTOR WOULD RESOLVE, not what the dataclass
+    #: defaults to -- `effective_params` after the env readers, so a
+    #: default and a deployed value can be told apart. Probabilities are
+    #: reported as SET or NOT SET rather than by value: whether the gate
+    #: can run is the operational fact, and the numbers themselves are
+    #: the owner's.
+    #:
+    #: REPORTING ONLY. It reads no venue, writes nothing, and runs before
+    #: anything is armed.
+    try:
+        _ep = ex.effective_params()
+        emit("L5_BTC5M_EFFECTIVE_CONFIG", {
+            "entry_mode": X.entry_mode(),
+            "straddle_repeat_enabled": X.straddle_repeat_enabled(),
+            "straddle_max_side_usd": str(X.straddle_max_side_usd()),
+            "straddle_max_unmatched_usd":
+                str(X.straddle_max_unmatched_usd()),
+            "max_resting_entries": getattr(_ep, "max_resting_entries", None),
+            "live_order_bound": X.live_order_bound(),
+            "account_cap_usd": (None if X.account_cap() is None
+                                else str(X.account_cap())),
+            "account_lanes": X.account_lanes(),
+            "max_exposure_usd": str(_ep.max_exposure_usd),
+            "no_new_entry_after_s": _ep.no_new_entry_after_s,
+            "min_complement_shares": str(_ep.min_complement_shares),
+            #: set / not set, never the value
+            "p_pair_natural_set": _ep.straddle_p_pair_natural is not None,
+            "p_complete_set": _ep.straddle_p_complete is not None,
+            "p_lone_win_set": _ep.straddle_p_lone_win is not None,
+            "inventory_ranking": X.inventory_ranking_enabled(),
+            "taker_completion": X.taker_completion_allowed(),
+            "labels": ("what the executor WOULD resolve this window, "
+                       "emitted before the arming gate so it is on the "
+                       "record even when the lane exits at boot. "
+                       "Reporting only."),
+        })
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        #: an observable must never stop a lane from starting -- or from
+        #: refusing to
+        emit("L5_BTC5M_EFFECTIVE_CONFIG",
+             {"error": type(_exc).__name__})
     if reach.get("ok") is False:
         emit("L5_BTC5M_BUDGET_SHORT", reach)
 
@@ -1826,10 +2141,72 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             if not gate["ok"]:
                 emit("L5_BTC5M_PERSISTENT_GATE",
                      dict(gate, utc=now_.isoformat()))
-                if gate.get("exit"):
+                if gate.get("exit") and not stay_resident(gate):
                     #: NOTHING REARMS. The loop ends; it does not wait
                     #: for somebody to clear a latch.
                     return 0
+                if gate.get("exit"):
+                    #: THE EXPLICIT TRANSITION, through the SAME single
+                    #: writer the campaign-expiry path uses:
+                    #: write_state(MONITOR). Two things follow from it,
+                    #: and the second is the one that matters.
+                    #:
+                    #: 1. the lane's state SAYS disarmed, durably, so the
+                    #:    status endpoint and the next startup both read
+                    #:    it rather than inferring it.
+                    #: 2. NOTHING SILENTLY RESUMES. `persistent_gate`
+                    #:    requires state == ARMED. Once this is MONITOR,
+                    #:    a refreshed envelope is no longer sufficient:
+                    #:    the gate returns STATE_NOT_ARMED and keeps
+                    #:    waiting. Without this write the lane WOULD have
+                    #:    resumed the moment a new envelope appeared,
+                    #:    because the envelope was the only thing
+                    #:    refusing. Re-arming needs the startup ceremony.
+                    #:
+                    #: NEVER OVER A LATCH. HALTED and STOPPED exit above
+                    #: (`stay_resident` is False for them), and this
+                    #: re-checks rather than trusting that: a latch must
+                    #: not be downgraded to MONITOR by this path.
+                    try:
+                        _st_now = PMODE.read_state()
+                        _cur = _st_now.get("state")
+                        if _st_now.get("ok") and _cur not in PMODE.LATCHED \
+                                and _cur != PMODE.MONITOR:
+                            PMODE.write_state(
+                                PMODE.MONITOR,
+                                why="ENVELOPE:%s" % gate.get("reason"),
+                                now=now_)
+                            emit("L5_BTC5M_DISARMED_STATE",
+                                 {"from": _cur, "to": PMODE.MONITOR,
+                                  "why": "ENVELOPE:%s" % gate.get("reason"),
+                                  "note": ("re-arming now requires the "
+                                           "startup ceremony; a refreshed "
+                                           "envelope alone will not "
+                                           "resume trading")})
+                    except BaseException as _se:               # noqa: BLE001
+                        if isinstance(_se, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        #: a state write we cannot make is not a licence to
+                        #: carry on resident with state ARMED -- that is the
+                        #: one combination that could resume. Exit instead.
+                        emit("L5_BTC5M_DISARM_WRITE_FAILED",
+                             {"error": type(_se).__name__,
+                              "action": "exiting rather than staying "
+                                        "resident while still ARMED"})
+                        return 0
+                    #: RESIDENT AND DISARMED. The registry keeps serving
+                    #: so the watchdog can still claim and cancel this
+                    #: lane's ids; the transport is None so nothing can
+                    #: be sent; and this same gate refuses again in 15 s.
+                    emit("L5_BTC5M_RESIDENT_DISARMED",
+                         {"reason": gate.get("reason"),
+                          "serving_registry": bool(
+                              (os.getenv(FILLS_PORT_ENV) or "").strip()),
+                          "can_submit": False,
+                          "why": ("staying up so the shared watchdog can "
+                                  "read this lane's registry; an expired "
+                                  "envelope is not permission to trade"),
+                          "utc": now_.isoformat()})
                 time.sleep(15.0)
                 continue
             #: THE WATCHDOG'S HAND, TURNED INTO A DURABLE LATCH.

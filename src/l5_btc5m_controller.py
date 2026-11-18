@@ -109,6 +109,42 @@ class Params:
     quote_ttl_s: float = 20.0
     stale_book_s: float = 3.0
     no_new_entry_after_s: float = 270.0
+    #: MINIMUM EXECUTABLE DEPTH ON THE COMPLEMENT SIDE BEFORE A FIRST LEG.
+    #: Zero is OFF and is the shipped default.
+    #:
+    #: THE EVIDENCE, from the 290 recorded ladders of 2026-10-25 bucketed
+    #: by seconds remaining (analysis/l5/btc5m/):
+    #:
+    #:   tau 600-900  100% two-sided   bid 1133 / ask  972   50 ask levels
+    #:   tau 420-600  100% two-sided   bid  675 / ask  401   48
+    #:   tau 300-420  100% two-sided   bid  533 / ask  308   32
+    #:   tau 180-300  100% two-sided   bid  619 / ask  834   12
+    #:   tau 120-180  100% two-sided   bid  801 / ask  771    8
+    #:   tau  60-120   56% two-sided   bid 2102 / ask  768    1
+    #:   tau   0- 60    0% two-sided   NO ASK AT ALL          0
+    #:
+    #: The spread is 1.00c throughout and depth at the touch is 300-1100
+    #: contracts against clips of 0.17-2, so depth never binds EARLY. What
+    #: happens late is that one side disappears: ask levels fall 50 -> 0
+    #: while bid levels climb 40 -> 92. A pair cannot be completed against
+    #: a side that has no orders.
+    #:
+    #: AND THE ENGINE OPENS INTO EXACTLY THAT. `no_new_entry_after_s` is
+    #: 270 of a 300-second window, i.e. first legs are admitted down to
+    #: tau=30, where two-sided liquidity was observed 0% of the time. The
+    #: 0130z window is the recorded case: the first leg filled, the
+    #: complement had NO ASK in all eight late frames, the pair never
+    #: completed and it settled -$1.1594.
+    #:
+    #: WHAT THIS IS NOT. It is NOT the price test I proposed and then
+    #: withdrew -- requiring the complement to be CHEAP at entry would
+    #: have refused 7 of 7 recorded episodes, 6 of which completed below
+    #: par at 0.72-0.96, because the complement gets cheaper later. This
+    #: requires only that the complement EXISTS with depth. Those are
+    #: different claims and the evidence separates them.
+    #:
+    #: It can only ever REFUSE an opening, never admit one.
+    min_complement_shares: Decimal = D("0")
     #: LATE-FAVOURITE KNOBS. Every default is the value that REFUSES, so
     #: the second strategy cannot act until each is set deliberately:
     #: a zero clip buys nothing, a zero edge margin returns
@@ -1694,7 +1730,29 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
 
     late = t >= params.no_new_entry_after_s
 
-    def entry_block(price):
+    def complement_depth_block(side):
+        """Why a FIRST LEG on `side` is refused for want of a complement
+        book, or None. Off when `min_complement_shares` is 0.
+
+        The complement of UP is bought from the DOWN book, whose depth is
+        the UP side's BID depth, and vice versa -- the same identity the
+        rest of this module uses for prices. Unreadable depth refuses:
+        a book we cannot measure is not a book we can rely on completing
+        against.
+        """
+        need = _dec(params.min_complement_shares)
+        if need is None or need <= ZERO:
+            return None
+        avail = (book or {}).get("bid_shares") if side == UP \
+            else (book or {}).get("ask_shares")
+        got = _dec(avail)
+        if got is None:
+            return "COMPLEMENT_DEPTH_UNREADABLE"
+        if got < need:
+            return "COMPLEMENT_DEPTH_SHORT"
+        return None
+
+    def entry_block(price, side=None):
         """Why a favorite entry at `price` is refused, or None.
 
         ACCUMULATE judges the band on `price` -- what this order pays --
@@ -1703,6 +1761,9 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         """
         if late:
             return "ENTRY_WINDOW_CLOSED"
+        cd = complement_depth_block(side if side is not None else fav)
+        if cd:
+            return cd
         banded = price if accumulate else fav_bid
         if not (params.band_lo <= banded <= params.band_hi):
             return "OUT_OF_BAND"
@@ -1761,8 +1822,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             if purpose is None and on_fav:
                 if abs(o["price"] - target) > drift_tol:
                     why = "PRICE_DRIFT"
-                elif entry_block(o["price"]) is not None:
-                    why = entry_block(o["price"])
+                elif entry_block(o["price"], o["side"]) is not None:
+                    why = entry_block(o["price"], o["side"])
                 elif (accumulate and
                       kept_entries >= int(params.max_resting_entries)):
                     why = "MAX_RESTING_ENTRIES"

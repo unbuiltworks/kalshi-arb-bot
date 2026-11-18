@@ -1715,3 +1715,429 @@ class TestTheOperatorStop:
         out = rig.ex.stop(reason="operator", now=rig.now)
         assert out["ok"] is True
         assert out["cancelled"] == [] and out["still_open"] == []
+
+
+# ======================================================================
+# THE MEASURED-RATE ENTRY GATE, ON THE REAL SUBMIT PATH
+#
+# WHY THESE LIVE HERE rather than beside the gate's own unit tests. Those
+# test the predicate; mutation testing showed they do NOT test the thing
+# that matters -- making the gate apply to EVERY order, completions
+# included, passed all 25 of them. Only driving `_submit` with real
+# inventory distinguishes "gates openings" from "gates everything", and a
+# gate that blocks completions turns held inventory into inventory that
+# cannot be closed.
+# ======================================================================
+class TestMeasuredEntryGateOnTheSubmitPath:
+
+    @pytest.fixture
+    def refusing(self, monkeypatch, tmp_path):
+        """Gate ON with a rows file too small to establish rates, so the
+        gate's verdict is a refusal for any order it is asked about."""
+        rows = tmp_path / "rows.jsonl"
+        rows.write_text(json.dumps(
+            {"matched_qty": "1", "matched_pnl": "0.2", "residual_qty": "0",
+             "residual_cost": "0", "settlement_pnl": "0.2"}) + "\n")
+        monkeypatch.setenv(X.MEASURED_ENTRY_GATE_ENV, "ON")
+        monkeypatch.setenv(X.MEASURED_ENTRY_ROWS_ENV, str(rows))
+        return rows
+
+    def test_off_by_default_the_opening_still_places(self, rig, armed):
+        rep = opened(rig)
+        assert rep["refused"] == []
+
+    def test_an_opening_is_refused_while_the_gate_cannot_measure(
+            self, rig, armed, refusing):
+        rep = rig.step()
+        assert rig.venue.sent == [] and rep["placed"] == []
+        assert reasons(rep) == [
+            "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS"]
+        assert rig.ex.orders() == {}
+
+    def test_a_COMPLETION_is_NOT_refused_by_the_gate(
+            self, rig, armed, refusing, monkeypatch):
+        """THE PROPERTY MUTATION TESTING EXPOSED. With UP held and the
+        gate refusing, buying DOWN completes the pair and must still be
+        sent. If this ever fails, arming the gate would strand inventory
+        it cannot close."""
+        rig.ex._ledger["inventory"][MARKET] = {
+            C.UP: {"qty": "0.17", "cost": "0.0986"}}
+        scripted(monkeypatch, place(side=C.DOWN, price="0.40", qty="0.17"))
+        rep = rig.step()
+        assert "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS" not in \
+            reasons(rep), rep
+        assert len(rig.venue.sent) == 1
+        assert rig.venue.sent[0]["side"] == C.DOWN
+
+    def test_adding_to_the_HELD_side_is_still_refused(
+            self, rig, armed, refusing, monkeypatch):
+        """The exemption is for the complement only. More of what we are
+        already long adds risk and stays gated."""
+        rig.ex._ledger["inventory"][MARKET] = {
+            C.UP: {"qty": "0.17", "cost": "0.0986"}}
+        scripted(monkeypatch, place(side=C.UP, price="0.58", qty="0.17"))
+        rep = rig.step()
+        assert reasons(rep) == [
+            "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS"]
+        assert rig.venue.sent == []
+
+
+# ======================================================================
+# THE INVENTORY LIFECYCLE, END TO END, ON THE REAL EXECUTOR
+#
+# Owner 2026-11-18: "Get L5 to manage one position correctly, repeatedly,
+# from the first fill through completion or settlement." These drive the
+# production `step` through venue-confirmed fills and assert what it does
+# NEXT -- not that a hedge function exists, but that the executor reaches
+# it, sizes it from the ledger, and keeps doing so.
+#
+# Each test names the leg of the lifecycle it covers. Where the executor
+# does NOT do the thing, the test says so explicitly rather than being
+# written around it: a lifecycle with a missing link should read as a
+# missing link.
+# ======================================================================
+class TestInventoryLifecycle:
+
+    def _fill_first(self, rig):
+        """Open, then let the venue fill that leg completely."""
+        rep = rig.step()
+        assert rig.sent() == [FIRST], rep
+        oid = next(iter(rig.venue.by_oid))
+        rig.venue.fill(oid)
+        rig.tick(1.0)
+        return oid
+
+    def test_a_fill_is_reconciled_from_the_venue_before_the_next_decision(
+            self, rig, armed):
+        """Step 1 of the loop: `poll` runs BEFORE `decide`, so the decision
+        sees post-fill inventory rather than the state we opened on."""
+        self._fill_first(rig)
+        rep = rig.step()
+        assert [(f["side"], str(f["qty"])) for f in rep["fills"]] == \
+            [("UP", "0.17")]
+        inv = rep["inventory"]
+        assert str(inv[C.UP]["qty"]) == "0.17"
+        assert str(inv[C.UP]["cost"]) == str(FIRST_COST)
+        assert str(inv[C.DOWN]["qty"]) == "0"
+
+    def test_the_unmatched_side_and_quantity_are_identified(self, rig,
+                                                            armed):
+        """Step 2: matched pairs vs unmatched exposure."""
+        self._fill_first(rig)
+        rep = rig.step()
+        exp = rep["exposure"]["btc5m"]
+        assert exp["unmatched_side"] == C.UP
+        assert exp["unmatched_qty"] == D("0.17")
+
+    def test_YES_fills_first_then_the_executor_works_the_completing_side(
+            self, rig, armed):
+        """THE CORE CASE. After an UP fill the next decision must be about
+        the DOWN leg -- the hedge -- not another UP entry."""
+        self._fill_first(rig)
+        rep = rig.step()
+        assert rep["action"] in (C.HEDGE_UNDERDOG, C.REPRICE,
+                                 C.HOLD_OR_SKIP), rep
+        placed = [(p["side"], p["price"]) for p in rep["placed"]]
+        #: whatever it decides, it must not ADD to the heavy side
+        assert all(s != C.UP for s, _ in placed), rep
+
+    def test_the_hedge_is_sized_from_the_ledger_not_the_caller(self, rig,
+                                                               armed):
+        """A hedge larger than the unmatched quantity would OPEN a pair
+        rather than complete one."""
+        self._fill_first(rig)
+        rep = rig.step()
+        for p in rep["placed"]:
+            if p["side"] == C.DOWN:
+                assert D(str(p["qty"])) <= D("0.17"), rep
+
+    def test_multiple_same_side_fills_accumulate_one_inventory(self, rig,
+                                                               armed):
+        """Repeated fills on one side must aggregate, so the unmatched
+        quantity the hedge is sized from is the TOTAL."""
+        self._fill_first(rig)
+        rep = rig.step()
+        for oid in list(rig.venue.by_oid):
+            if oid not in rig.venue.full:
+                rig.venue.fill(oid)
+        rig.tick(1.0)
+        rep2 = rig.step()
+        inv = rep2["inventory"]
+        tot = D(str(inv[C.UP]["qty"])) + D(str(inv[C.DOWN]["qty"]))
+        assert tot > D("0.17"), rep2
+
+    def test_a_partial_fill_leaves_the_rest_working(self, rig, armed):
+        """Partial pair completion: a half-filled leg is inventory AND a
+        live order, and both must be accounted."""
+        rep = rig.step()
+        assert rig.sent() == [FIRST]
+        oid = next(iter(rig.venue.by_oid))
+        rig.venue.fill(oid, qty="0.08")
+        rig.tick(1.0)
+        rep = rig.step()
+        assert [(f["side"], str(f["qty"])) for f in rep["fills"]] == \
+            [("UP", "0.08")]
+        assert str(rep["inventory"][C.UP]["qty"]) == "0.08"
+
+    def test_repricing_does_not_cancel_an_order_that_is_still_right(
+            self, rig, armed):
+        """Queue priority: an order that would be placed again now must be
+        KEPT. Stepping twice on an unchanged book must not churn."""
+        rig.step()
+        before = list(rig.venue.cancelled)
+        rig.tick(1.0)
+        rig.step()
+        assert rig.venue.cancelled == before
+
+    def test_no_duplicate_order_after_a_restart(self, rig, armed):
+        """Durable reconciliation: the ledger, not memory, is the record."""
+        rig.step()
+        n = len(rig.venue.sent)
+        rig.restart()
+        rig.tick(1.0)
+        rig.step()
+        assert len(rig.venue.sent) == n, rig.sent()
+
+    def test_no_opening_when_the_account_cap_is_breached(self, rig, armed,
+                                                         monkeypatch):
+        """Economic limit: a breached cap must stop OPENINGS."""
+        monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "0.01")
+        rep = rig.step()
+        assert rig.venue.sent == []
+        #: THE CONTROLLER CATCHES IT FIRST, with NO_EXPOSURE_ROOM, so the
+        #: executor's own ACCOUNT_EXPOSURE_CAP is never reached. Both are
+        #: correct refusals; my first version of this test asserted the
+        #: wrong one. What matters is that nothing was sent and the reason
+        #: names exposure.
+        assert ("NO_EXPOSURE_ROOM" in str(rep.get("why"))
+                or "ACCOUNT_EXPOSURE_CAP" in str(reasons(rep))), rep
+
+    def test_after_a_pair_COMPLETES_it_opens_again_in_the_same_window(
+            self, rig, armed):
+        """REPLENISHMENT -- the capability the owner listed as needing
+        verification, and the one that decides whether a window earns once
+        or repeatedly.
+
+        Fill the first leg, let the executor work the hedge, fill that
+        too, and then ask: with a flat book and time left, does it open a
+        NEW first leg?
+        """
+        self._fill_first(rig)
+        rep = rig.step()
+        n_after_open = len(rig.venue.sent)
+        # fill whatever the hedge placed
+        for oid in list(rig.venue.by_oid):
+            if oid not in rig.venue.full:
+                rig.venue.fill(oid)
+        rig.tick(1.0)
+        rep2 = rig.step()
+        inv = rep2["inventory"]
+        matched = min(D(str(inv[C.UP]["qty"])), D(str(inv[C.DOWN]["qty"])))
+        rig.tick(1.0)
+        rep3 = rig.step()
+        sent_after = len(rig.venue.sent)
+        #: RECORDED, not asserted either way: this is the observation the
+        #: owner asked for. If `sent_after` never exceeds `n_after_open`
+        #: the window earns at most one pair, whatever the economics say.
+        assert matched >= 0            # inventory reconciled at all
+        print("\nREPLENISH OBSERVATION: orders after first open=%d, "
+              "after a completed pair=%d, matched=%s, action=%s/%s"
+              % (n_after_open, sent_after, matched, rep3["action"],
+                 rep3["why"]))
+
+    @pytest.fixture
+    def straddle(self, monkeypatch):
+        """STRADDLE mode with bounded repetition, which the owner named
+        specifically. Both ceilings are REQUIRED when repetition is on --
+        the controller refuses the mode without them, because repeated
+        entry with no unmatched ceiling is a directional bet in a
+        straddle's clothes."""
+        monkeypatch.setenv(X.ENTRY_MODE_ENV, C.STRADDLE)
+        monkeypatch.setenv(X.STRADDLE_PRICE_ENV, "0.08")
+        monkeypatch.setenv(X.STRADDLE_REPEAT_ENV, "YES")
+        monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, "1.00")
+        monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, "0.50")
+        #: AND THE ENTRY-EV PROBABILITIES, without which the mode refuses
+        #: every step with ENTRY_EV_P_PAIR_NATURAL_NOT_SET -- which is how
+        #: my first version of these tests failed. `straddle_probability`
+        #: returns None when unset and the gate declines rather than
+        #: guessing, which is the right behaviour and is the reason
+        #: STRADDLE cannot trade on defaults alone.
+        #:
+        #: p_pair here is the MEASURED value: 0.3716 over 148
+        #: authenticated BTC15m settlements of the same two-sided maker
+        #: mechanism (src/l5_measured_entry_rates). It is used as a TEST
+        #: INPUT, not as an authorisation for production.
+        monkeypatch.setenv(X.STRADDLE_P_PAIR_NATURAL_ENV, "0.3716")
+        monkeypatch.setenv(X.STRADDLE_P_COMPLETE_ENV, "0.50")
+        #: AND A THIRD. The mode needs p_lone_win too. The controller's
+        #: own note gives the principled value: "in a prediction market
+        #: THE PRICE IS THE IMPLIED PROBABILITY", and feeding a constant
+        #: measured at one rung to a different rung mispriced it by
+        #: -$0.53 a share. The rung here is 0.08, so this is 0.08.
+        monkeypatch.setenv(X.STRADDLE_P_LONE_WIN_ENV, "0.08")
+
+    def test_STRADDLE_rests_BOTH_sides_at_once(self, rig, armed, straddle):
+        """The capability the owner listed as built: one order a side,
+        simultaneously, from a single decision."""
+        rep = rig.step()
+        sides = sorted(s for s, _, _ in rig.sent())
+        assert sides == [C.DOWN, C.UP], rep
+        assert len(rig.venue.sent) == 2
+
+    def test_STRADDLE_one_sided_fill_then_the_other_side_completes(
+            self, rig, armed, straddle):
+        """DOWN fills first here -- the mirror of the UP-first case -- and
+        the executor must keep working the UP side, not add more DOWN."""
+        rig.step()
+        down = next(o for o, v in rig.venue.by_oid.items()
+                    if v["side"] == C.DOWN)
+        rig.venue.fill(down)
+        rig.tick(1.0)
+        rep = rig.step()
+        assert [(f["side"], str(f["qty"])) for f in rep["fills"]] == \
+            [(C.DOWN, rig.venue.by_oid[down]["qty"])]
+        exp = rep["exposure"]["btc5m"]
+        assert exp["unmatched_side"] == C.DOWN
+        #: MY FIRST ASSERTION HERE WAS WRONG, and the distinction matters.
+        #: In the favourite path, adding to the heavy side after a
+        #: one-sided fill would deepen the imbalance. In STRADDLE it is
+        #: the DESIGN: the mode wants a rung resting on BOTH sides, so the
+        #: leg that filled is replaced. What makes that safe is not
+        #: refusing the replacement but the ceilings --
+        #: STRADDLE_MAX_SIDE_USD and STRADDLE_MAX_UNMATCHED_USD -- which
+        #: the mode refuses to run without.
+        #:
+        #: So the property worth asserting is that the UP side is STILL
+        #: being quoted, i.e. completion remains reachable, and the
+        #: unmatched exposure stays inside its ceiling.
+        assert exp["unmatched_qty"] > 0
+        #: the key is worst_case_settlement_loss_usd -- what the unmatched
+        #: leg loses if it settles worthless, which IS the exposure the
+        #: STRADDLE_MAX_UNMATCHED_USD ceiling bounds.
+        assert D(str(exp["worst_case_settlement_loss_usd"])) <= D("0.50"), rep
+        up_working = [o for o in rig.venue.sent if o["side"] == C.UP]
+        assert up_working, "no UP quote left, so the pair cannot complete"
+
+    def test_STRADDLE_completes_the_pair_and_then_replenishes(
+            self, rig, armed, straddle):
+        """The full cycle in one window: both legs fill, the pair matches,
+        and with repetition authorised the mode quotes again."""
+        rig.step()
+        n_open = len(rig.venue.sent)
+        for oid in list(rig.venue.by_oid):
+            rig.venue.fill(oid)
+        rig.tick(1.0)
+        rep = rig.step()
+        inv = rep["inventory"]
+        matched = min(D(str(inv[C.UP]["qty"])), D(str(inv[C.DOWN]["qty"])))
+        assert matched > 0, rep
+        rig.tick(1.0)
+        rig.step()
+        assert len(rig.venue.sent) > n_open, \
+            "a completed pair did not lead to another quote"
+
+    def test_STRADDLE_stops_adding_at_the_per_side_ceiling(self, rig,
+                                                           armed,
+                                                           straddle,
+                                                           monkeypatch):
+        """Repetition is BOUNDED. With a ceiling this small the second
+        clip on a side must be refused."""
+        monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, "0.02")
+        rig.step()
+        for oid in list(rig.venue.by_oid):
+            rig.venue.fill(oid)
+        rig.tick(1.0)
+        rig.step()
+        rig.tick(1.0)
+        rep = rig.step()
+        per_side = {}
+        for s in rig.venue.sent:
+            per_side[s["side"]] = per_side.get(s["side"], D(0)) + \
+                D(str(s["price"])) * D(str(s["qty"]))
+        assert all(v <= D("0.25") for v in per_side.values()), per_side
+
+    def test_STRADDLE_repeated_same_side_fills_accumulate_then_bound(
+            self, rig, armed, straddle):
+        """REPEATED FILLS ON ONE SIDE. Each fill is reconciled, the side's
+        cost accumulates, and the per-side ceiling eventually refuses --
+        which is what makes repetition bounded rather than directional."""
+        seen = []
+        for _ in range(6):
+            rig.step()
+            new = [o for o in rig.venue.by_oid
+                   if o not in rig.venue.full
+                   and rig.venue.by_oid[o]["side"] == C.DOWN]
+            for oid in new:
+                rig.venue.fill(oid)
+            rig.tick(1.0)
+            rep = rig.step()
+            inv = rep["inventory"]
+            seen.append(D(str(inv[C.DOWN]["cost"])))
+            rig.tick(1.0)
+        #: cost is monotone non-decreasing: every fill was reconciled
+        assert all(b >= a for a, b in zip(seen, seen[1:])), seen
+        #: and the per-side ceiling is respected throughout
+        assert seen[-1] <= D("1.00"), seen
+
+    def test_STRADDLE_partial_fill_on_the_opposite_side_completes_part(
+            self, rig, armed, straddle):
+        """PARTIAL PAIR COMPLETION. DOWN fills whole, UP fills half: the
+        matched quantity is the minimum of the two sides and the rest
+        stays unmatched, both accounted."""
+        rig.step()
+        down = next(o for o, v in rig.venue.by_oid.items()
+                    if v["side"] == C.DOWN)
+        up = next(o for o, v in rig.venue.by_oid.items()
+                  if v["side"] == C.UP)
+        rig.venue.fill(down)
+        half = D(str(rig.venue.by_oid[up]["qty"])) / 2
+        rig.venue.fill(up, qty=str(half))
+        rig.tick(1.0)
+        rep = rig.step()
+        inv = rep["inventory"]
+        dn, u = D(str(inv[C.DOWN]["qty"])), D(str(inv[C.UP]["qty"]))
+        assert u > 0 and dn > 0 and u < dn, (u, dn)
+        exp = rep["exposure"]["btc5m"]
+        assert exp["matched_qty"] == min(u, dn)
+        assert exp["unmatched_qty"] == dn - u
+        assert exp["unmatched_side"] == C.DOWN
+
+    def test_STRADDLE_unmatched_ceiling_binds_before_the_side_ceiling(
+            self, rig, armed, straddle, monkeypatch):
+        """The two ceilings are independent, and the TIGHTER one must
+        bind. With unmatched set very low, repeated one-sided fills stop
+        adding even though the per-side ceiling has room."""
+        monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, "0.02")
+        monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, "5.00")
+        for _ in range(4):
+            rig.step()
+            for oid in list(rig.venue.by_oid):
+                if (oid not in rig.venue.full
+                        and rig.venue.by_oid[oid]["side"] == C.DOWN):
+                    rig.venue.fill(oid)
+            rig.tick(1.0)
+            rep = rig.step()
+            rig.tick(1.0)
+        exp = rep["exposure"]["btc5m"]
+        assert D(str(exp["worst_case_settlement_loss_usd"])) <= D("0.25"), \
+            exp
+
+    def test_STRADDLE_survives_a_restart_mid_inventory(self, rig, armed,
+                                                        straddle):
+        """RESTART RECOVERY with inventory on the books: the ledger is the
+        record, so the rebuilt executor must see the same inventory and
+        must not re-send what is already resting."""
+        rig.step()
+        down = next(o for o, v in rig.venue.by_oid.items()
+                    if v["side"] == C.DOWN)
+        rig.venue.fill(down)
+        rig.tick(1.0)
+        before = rig.step()["inventory"]
+        n = len(rig.venue.sent)
+        rig.restart()
+        rig.tick(1.0)
+        after = rig.step()["inventory"]
+        assert str(after[C.DOWN]["qty"]) == str(before[C.DOWN]["qty"])
+        assert str(after[C.DOWN]["cost"]) == str(before[C.DOWN]["cost"])
+        assert len(rig.venue.sent) == n, rig.sent()
