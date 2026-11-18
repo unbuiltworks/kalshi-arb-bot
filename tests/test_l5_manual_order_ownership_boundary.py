@@ -75,12 +75,14 @@ def adopted_row(vid=OWNER_VID, market=MARKET, first_seen="2026-11-18T22:22Z"):
     """A row exactly as reconciliation leaves an adopted foreign order."""
     return {"venue_order_id": vid, "market": market, "side": "UP",
             "adopted": True, "adopted_first_seen_utc": first_seen,
-            "client_order_id": "venue-" + vid}
+            #: keyed by the VENUE's id, which is what a row with no client
+            #: id of ours actually gets -- and it carries no OWN_COID_PREFIX
+            "client_order_id": vid}
 
 
 def our_row(vid=OURS_VID, market=MARKET):
     return {"venue_order_id": vid, "market": market, "side": "DOWN",
-            "adopted": False, "client_order_id": "l5x-abc123"}
+            "adopted": False, "client_order_id": "l5f-abc123"}
 
 
 def store(live=None, submitted=None, **extra):
@@ -96,12 +98,12 @@ class TestOwnershipRequiresOurSubmitRecord:
 
     def test_an_adopted_order_is_not_ours(self):
         """THE BREACH, as one assertion."""
-        s = store(live={"c1": adopted_row()})
+        s = store(live={OWNER_VID: adopted_row()})
         assert s.owns_venue_order_id(OWNER_VID) is False
 
     def test_an_order_we_submitted_is_ours(self):
-        s = store(live={"c2": our_row()},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={"l5f-abc123": our_row()},
+                  submitted={"l5f-abc123": our_row()})
         assert s.owns_venue_order_id(OURS_VID) is True
 
     def test_our_own_order_stays_ours_even_if_readopted(self):
@@ -109,13 +111,13 @@ class TestOwnershipRequiresOurSubmitRecord:
         record from live_orders, the venue still holds it, reconciliation
         re-adopts it. `submitted` is permanent, so it is still ours and
         still cancellable."""
-        s = store(live={"c2": dict(our_row(), adopted=True)},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={"l5f-abc123": dict(our_row(), adopted=True)},
+                  submitted={"l5f-abc123": our_row()})
         assert s.owns_venue_order_id(OURS_VID) is True
 
     def test_a_row_not_marked_adopted_is_ours(self):
         """Unchanged behaviour for every pre-existing row."""
-        s = store(live={"c2": our_row()})
+        s = store(live={"l5f-abc123": our_row()})
         assert s.owns_venue_order_id(OURS_VID) is True
 
     def test_an_unknown_id_is_not_ours(self):
@@ -123,18 +125,18 @@ class TestOwnershipRequiresOurSubmitRecord:
 
     @pytest.mark.parametrize("bad", [None, "", "   "])
     def test_an_empty_id_is_never_ours(self, bad):
-        assert store(live={"c1": adopted_row()}).owns_venue_order_id(
+        assert store(live={OWNER_VID: adopted_row()}).owns_venue_order_id(
             bad) is False
 
     def test_a_foreign_order_is_reported_positively_not_just_skipped(self):
         """Silence is how a breach goes unnoticed."""
-        s = store(live={"c1": adopted_row()})
+        s = store(live={OWNER_VID: adopted_row()})
         assert s.adopted_not_ours(OWNER_VID) is True
         assert s.adopted_not_ours("DTNOSUCH") is False
 
     def test_our_own_order_is_not_reported_as_foreign(self):
-        s = store(live={"c2": our_row()},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={"l5f-abc123": our_row()},
+                  submitted={"l5f-abc123": our_row()})
         assert s.adopted_not_ours(OURS_VID) is False
 
 
@@ -150,7 +152,8 @@ class TestProvenanceSurvivesReconciliation:
         src = inspect.getsource(LX.InventoryStore.reconcile_from_venue) \
             if hasattr(LX.InventoryStore, "reconcile_from_venue") \
             else inspect.getsource(LX)
-        assert 'bool(mine.get("adopted")) or coid not in ours' in src
+        assert 'bool(mine.get("adopted"))' in src
+        assert '(coid not in ours and not _known)' in src
 
     def test_a_second_pass_cannot_clear_the_flag(self):
         """Simulating the laundering directly on the expression used."""
@@ -187,7 +190,7 @@ class TestTheDisarmedSweepDoesNotTouchManualOrders:
 
     def test_the_owners_order_is_refused_and_named(self):
         """THE INCIDENT, end to end, through the real `deadman`."""
-        s = store(live={"c1": adopted_row()})
+        s = store(live={OWNER_VID: adopted_row()})
         t = FakeTransport()
         rec = LX.deadman(s, t, reason="orphan_unarmed", verify_attempts=1,
                          verify_sleeper=lambda _s: None)
@@ -202,8 +205,8 @@ class TestTheDisarmedSweepDoesNotTouchManualOrders:
     def test_our_own_resting_order_is_still_cancelled(self):
         """THE FIX MUST NOT STRAND OUR OWN ORDERS. An orphan of ours is
         exactly what this sweep exists for."""
-        s = store(live={"c2": our_row()},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={"l5f-abc123": our_row()},
+                  submitted={"l5f-abc123": our_row()})
         t = FakeTransport()
         rec = LX.deadman(s, t, reason="orphan_unarmed", verify_attempts=1,
                          verify_sleeper=lambda _s: None)
@@ -211,8 +214,9 @@ class TestTheDisarmedSweepDoesNotTouchManualOrders:
         assert rec["refused_not_ours"] == []
 
     def test_a_mixed_book_cancels_only_ours(self):
-        s = store(live={"c1": adopted_row(), "c2": our_row()},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={OWNER_VID: adopted_row(),
+                       "l5f-abc123": our_row()},
+                  submitted={"l5f-abc123": our_row()})
         t = FakeTransport()
         rec = LX.deadman(s, t, reason="orphan_unarmed", verify_attempts=1,
                          verify_sleeper=lambda _s: None)
@@ -222,14 +226,15 @@ class TestTheDisarmedSweepDoesNotTouchManualOrders:
 
     def test_the_refusal_key_is_always_present(self):
         """So an empty list means 'checked, all ours', never 'not checked'."""
-        s = store(live={"c2": our_row()},
-                  submitted={"l5x-abc123": our_row()})
+        s = store(live={"l5f-abc123": our_row()},
+                  submitted={"l5f-abc123": our_row()})
         rec = LX.deadman(s, FakeTransport(), reason="orphan_unarmed",
                          verify_attempts=1, verify_sleeper=lambda _s: None)
         assert "refused_not_ours" in rec
 
     def test_an_adopted_order_without_a_venue_id_is_not_cancelled(self):
-        s = store(live={"c1": dict(adopted_row(), venue_order_id="")})
+        s = store(live={"l5f-xyz": dict(our_row(), venue_order_id="")},
+                  submitted={"l5f-xyz": our_row()})
         t = FakeTransport()
         rec = LX.deadman(s, t, reason="orphan_unarmed", verify_attempts=1,
                          verify_sleeper=lambda _s: None)
