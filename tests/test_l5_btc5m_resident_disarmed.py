@@ -254,11 +254,38 @@ class TestTheServedEndpoints:
         assert '"state_readable"' in h
         assert '"state_reason"' in h
 
-    def test_can_submit_is_derived_from_the_absence_of_a_transport(self):
-        """Not a flag that could be stale: `arm()` is what puts a
-        POST-capable object in the process, so its absence IS the fact."""
+    def test_it_does_not_claim_a_single_can_submit_verdict(self):
+        """THE OWNER'S CHECK 4. A transport is a CAPABILITY, not a
+        PERMISSION. `can_submit: True` invited the inference that
+        authorization was fine, and `can_submit` as a field name claimed
+        to answer a question this endpoint cannot. It is gone."""
         h = self._handler()
-        assert 'getattr(ex, "transport", None)' in h
+        assert '"can_submit"' not in h
+
+    def test_absence_of_a_transport_is_reported_as_conclusive(self):
+        """The one claim the endpoint CAN establish: with no
+        POST-capable object, nothing can be sent whatever any gate
+        says."""
+        h = self._handler()
+        assert '"submission_structurally_impossible"' in h
+        assert 'getattr(ex, "transport", None) is None' in h
+
+    def test_presence_of_a_transport_is_NOT_reported_as_authorised(self):
+        """And the gates it does not evaluate are named, so a reader
+        cannot mistake capability for permission."""
+        h = self._handler()
+        assert '"transport_present"' in h
+        assert '"authorization_evaluated_here": False' in h
+        for gate in ("campaign approval", "per-order claim",
+                     "market lock", "shared halt", "account-wide"):
+            assert gate in h, gate
+
+    def test_the_armed_field_names_its_source(self):
+        """`armed` alone would read as "is trading possible"; it is only
+        what the durable state records."""
+        h = self._handler()
+        assert '"armed_per_durable_state"' in h
+        assert '"armed":' not in h
 
     def test_health_claims_only_that_it_is_answering(self):
         """It must not be mistakable for "trading" or "well"."""
@@ -292,3 +319,89 @@ def test_the_registry_reports_unreadable_rather_than_empty():
     src = _i.getsource(REG.registry)
     assert '"readable": False' in src
     assert "an empty list here would read as" in src
+
+
+# ============ checks 2 and 3, functionally rather than by inspection
+
+class TestNoResumptionAndAReadableRegistry:
+    """The owner's checks 2 and 3, driven through the real modules."""
+
+    @pytest.fixture
+    def env(self, tmp_path, monkeypatch):
+        import json
+        from src import l5_persistent_mode as P
+        dep = "sha-abc123"
+        monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
+        monkeypatch.setenv(P.DEPLOYMENT_ENV, dep)
+        monkeypatch.setenv(P.ENVELOPE_ENV, json.dumps({
+            "approved": True, "mode": "PERSISTENT", "deployment": dep,
+            "strategies": ["STRADDLE", "LATE_FAVORITE"],
+            "series": ["cpc-btc-updown-5m-"], "taker_allowed": False,
+            "max_aggregate_usd": "10.00", "max_per_market_usd": "5.00",
+            "max_daily_loss_usd": "5.00", "nonce": "persist-0001-abcdef"}))
+        return P
+
+    def test_a_FRESH_envelope_plus_MONITOR_still_refuses(self, env):
+        """CHECK 2. The envelope is valid and unexpired; the state is
+        MONITOR. Trading must not resume."""
+        import datetime as dt
+        now = dt.datetime(2026, 11, 16, 13, 0, tzinfo=dt.timezone.utc)
+        assert env.envelope(now=now)["ok"] is True
+        env.write_state(env.MONITOR, why="ENVELOPE:ENVELOPE_EXPIRED",
+                        now=now)
+        g = RUN.persistent_gate(now=now)
+        assert g["ok"] is False
+        assert g["reason"] == "STATE_NOT_ARMED"
+        assert g["exit"] is False          # waits, so it can be armed
+
+    def test_the_same_envelope_with_ARMED_does_permit(self, env):
+        """The control: the refusal above is the STATE, not the gate
+        being broken."""
+        import datetime as dt
+        now = dt.datetime(2026, 11, 16, 13, 0, tzinfo=dt.timezone.utc)
+        env.write_state(env.ARMED, why="t", now=now)
+        assert RUN.persistent_gate(now=now)["ok"] is True
+
+    def test_MONITOR_persists_across_a_reread(self, env):
+        """`read_state` reads the file on every call, which IS the
+        restart path."""
+        import datetime as dt
+        import json
+        import os
+        now = dt.datetime(2026, 11, 16, 13, 0, tzinfo=dt.timezone.utc)
+        env.write_state(env.ARMED, why="t", now=now)
+        env.write_state(env.MONITOR, why="ENVELOPE:X", now=now)
+        assert env.read_state()["state"] == env.MONITOR
+        on_disk = json.load(open(os.environ[env.STATE_PATH_ENV]))
+        assert on_disk["state"] == env.MONITOR
+        assert env.read_state()["state"] == env.MONITOR
+
+    def test_the_registry_publishes_UNCERTAIN_orders(self):
+        """CHECK 3. An uncertain order is exactly what the watchdog must
+        be able to claim, so it has to appear."""
+        from src import l5_order_registry_server as REG
+
+        class Store:
+            def live_orders(self):
+                return {
+                    "c1": {"venue_order_id": "v1", "market": "m",
+                           "side": "UP", "session_id": "s", "t": "t",
+                           "state": "NEW"},
+                    "c2": {"venue_order_id": "v2", "market": "m",
+                           "side": "DOWN", "session_id": "s", "t": "t",
+                           "state": "UNCERTAIN"},
+                }
+        doc = REG.registry(Store())
+        assert doc["readable"] is True
+        assert [r["venue_order_id"] for r in doc["orders"]] == ["v1", "v2"]
+        assert "submission_disabled" in doc
+
+    def test_an_unreadable_ledger_is_not_an_empty_one(self):
+        from src import l5_order_registry_server as REG
+
+        class Broken:
+            def live_orders(self):
+                raise OSError("ledger unreadable")
+        doc = REG.registry(Broken())
+        assert doc["readable"] is False
+        assert doc["orders"] == []

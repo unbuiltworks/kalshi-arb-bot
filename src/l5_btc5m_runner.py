@@ -489,15 +489,38 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
                     "state": _st.get("state"),
                     "state_readable": bool(_st.get("ok")),
                     "state_reason": _st.get("reason"),
-                    #: structural, not a flag: `arm()` is what puts a
-                    #: POST-capable object in this process
-                    "can_submit": bool(getattr(ex, "transport", None)
-                                       is not None),
-                    "armed": _st.get("state") == PMODE.ARMED,
+                    #: TWO SEPARATE FACTS, because conflating them is
+                    #: how a status endpoint overstates safety.
+                    #:
+                    #: `arm()` is what puts a POST-capable object in this
+                    #: process, so its ABSENCE is conclusive: nothing can
+                    #: be sent, whatever any gate says. Its PRESENCE is
+                    #: NOT conclusive the other way -- a transport is a
+                    #: capability, not a permission, and the campaign
+                    #: approval, the per-order authorization claim, the
+                    #: market lock, the shared halt and the account-wide
+                    #: risk gate each still refuse independently and are
+                    #: NOT evaluated here.
+                    #:
+                    #: So the endpoint reports the structural fact under
+                    #: its own name and makes only the claim it can
+                    #: establish. A single `can_submit` field invited
+                    #: exactly the wrong inference and is gone.
+                    "transport_present": bool(
+                        getattr(ex, "transport", None) is not None),
+                    "submission_structurally_impossible": bool(
+                        getattr(ex, "transport", None) is None),
+                    "armed_per_durable_state": _st.get("state") == PMODE.ARMED,
+                    "authorization_evaluated_here": False,
                     "labels": ("the lane's durable state as recorded. "
-                               "can_submit reflects whether a transport "
-                               "exists at all, so a disarmed lane cannot "
-                               "report itself able to trade."),
+                               "submission_structurally_impossible true "
+                               "means nothing can be sent at all. FALSE "
+                               "does NOT mean submission is authorised: a "
+                               "transport is a capability, and the "
+                               "campaign approval, per-order claim, "
+                               "market lock, shared halt and account-wide "
+                               "risk gate are each separate and are not "
+                               "evaluated by this endpoint."),
                 }
                 body, code = json.dumps(doc, default=str).encode(), 200
                 self.send_response(code)
