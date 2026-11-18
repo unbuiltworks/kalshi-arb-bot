@@ -77,6 +77,62 @@ MIN_HISTORY_S = 300
 #: annualised) and the estimate is multiplied by VOL_INFLATION.
 SIGMA_REL_FLOOR = 3.5e-5
 VOL_INFLATION = 1.25
+
+#: EXACT LATE-WINDOW VARIANCE. Off unless set to exactly "EXACT".
+#:
+#: WHAT WAS WRONG, and it was only ever the ramp. Write the forecast as
+#:
+#:   A(T) - A(t) = [ SUM_{j=1..tau} (tau-j+1) e_j            (future)
+#:                 + SUM_{k=0..58} min(59-k, tau) u_{t-k} ]  (past) / 60
+#:
+#: where e are the increments still to come and u those already past. The
+#: FUTURE term is independent of dA and contributes
+#: tau(tau+1)(2tau+1)/21600, which the code already had exactly right.
+#: The PAST term is the part of the settlement average that has ALREADY
+#: HAPPENED but which the published 60-second average does not reveal
+#: individually -- only its window sum is observed. Conditioning it on
+#: dA = (R(t)-R(t-60))/60 gives, with a_k = min(59-k, tau)/60,
+#:
+#:   Var[past | dA] = SUM a_k^2 - (SUM a_k)^2 / 60
+#:
+#: AT tau = 60 THAT IS 4.998611, which is the `5.0` the code has always
+#: carried for tau >= 60. So the constant was never a fitted pad -- it is
+#: this term, evaluated where the whole averaging window is unobserved,
+#: and it is correct there. What was wrong is scaling it LINEARLY as
+#: 5*tau/60 below a minute, when the right value falls away far faster:
+#: as tau -> 0 almost all of the settlement average is already inside
+#: A(t), so almost nothing is unobserved.
+#:
+#: MEASURED ERROR OF THE RAMP, in sd (exact linear algebra, confirmed by
+#: Monte Carlo): 12.3x too wide at tau=1, 3.83x at tau=5, 2.17x at
+#: tau=10, 1.60x at tau=15, 1.10x at tau=30, and exact from tau=45 up.
+#:
+#: IT ARRIVES OFF because it makes the engine MORE confident in the last
+#: half-minute, which is a change in willingness to act. Every capability
+#: in this executor arrives off; this one changes a number a money path
+#: reads, so it arrives off and stays off until the owner says otherwise.
+EXACT_LATE_VAR_ENV = "L5_BTC_REF_LATE_VARIANCE"
+EXACT_LATE_VAR = "EXACT"
+
+
+def exact_late_variance() -> bool:
+    return str(os.environ.get(EXACT_LATE_VAR_ENV, "")).strip() == \
+        EXACT_LATE_VAR
+
+
+def past_window_residual_var(tau: float) -> float:
+    """Var[past | dA] in units of sigma^2 -- the closed form above.
+
+    EXACT for 0 <= tau <= 60 against the full Gaussian conditioning, to
+    8 decimal places (tests/test_l5_btc_reference_exact_variance.py). At
+    tau >= 60 the whole window is unobserved and it is constant.
+    """
+    t = min(max(float(tau), 0.0), float(AVERAGING_S))
+    n_full = float(AVERAGING_S) - t          # lags carrying the full tau
+    s1 = (n_full * t + t * (t - 1.0) / 2.0) / AVERAGING_S
+    s2 = (n_full * t * t
+          + (t - 1.0) * t * (2.0 * t - 1.0) / 6.0) / (AVERAGING_S ** 2)
+    return s2 - s1 * s1 / float(AVERAGING_S)
 HTTP_TIMEOUT_S = 2.5
 
 
@@ -191,6 +247,11 @@ def settlement_distribution(*, a_now: float, a_prev: float, sigma: float,
     mean = a_now + da * tc * (119.0 - tc) / 120.0
     if tau >= AVERAGING_S:
         var = tau - 39.5 + 5.0
+    elif exact_late_variance():
+        #: the SAME future term, with the exact unobserved-past residual
+        #: in place of the linear ramp. See EXACT_LATE_VAR_ENV.
+        var = tau * (tau + 1.0) * (2.0 * tau + 1.0) / 21600.0 \
+            + past_window_residual_var(tau)
     else:
         var = tau * (tau + 1.0) * (2.0 * tau + 1.0) / 21600.0 \
             + 5.0 * tau / AVERAGING_S
