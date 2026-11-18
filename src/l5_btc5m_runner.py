@@ -1842,6 +1842,65 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                          X.live_order_bound())
     emit("L5_BTC5M_PLAN", dict(plan, budget_reach=reach,
                                utc=dt.datetime.now(UTC).isoformat()))
+
+    #: THE EFFECTIVE CONFIGURATION, EMITTED BEFORE THE ARMING GATE.
+    #:
+    #: WHY IT HAD TO EXIST. On 2026-11-17 this lane exited at boot with
+    #: ENVELOPE_EXPIRED -- code 0, a designed dead-man -- which Railway
+    #: reports as CRASHED. It has been down since. Asking "is bounded
+    #: repetition actually enabled in production?" was then unanswerable
+    #: from outside: the variables are present but their VALUES are
+    #: redacted to anything but a session token, and the lane exits
+    #: before it writes a single step report, so no effective-parameter
+    #: record ever reached the log.
+    #:
+    #: That is the whole point of placing it HERE, ahead of the arming
+    #: ceremony: the case where the configuration most needs reading is
+    #: exactly the case where the process is about to stop.
+    #:
+    #: IT PRINTS WHAT THE EXECUTOR WOULD RESOLVE, not what the dataclass
+    #: defaults to -- `effective_params` after the env readers, so a
+    #: default and a deployed value can be told apart. Probabilities are
+    #: reported as SET or NOT SET rather than by value: whether the gate
+    #: can run is the operational fact, and the numbers themselves are
+    #: the owner's.
+    #:
+    #: REPORTING ONLY. It reads no venue, writes nothing, and runs before
+    #: anything is armed.
+    try:
+        _ep = ex.effective_params()
+        emit("L5_BTC5M_EFFECTIVE_CONFIG", {
+            "entry_mode": X.entry_mode(),
+            "straddle_repeat_enabled": X.straddle_repeat_enabled(),
+            "straddle_max_side_usd": str(X.straddle_max_side_usd()),
+            "straddle_max_unmatched_usd":
+                str(X.straddle_max_unmatched_usd()),
+            "max_resting_entries": getattr(_ep, "max_resting_entries", None),
+            "live_order_bound": X.live_order_bound(),
+            "account_cap_usd": (None if X.account_cap() is None
+                                else str(X.account_cap())),
+            "account_lanes": X.account_lanes(),
+            "max_exposure_usd": str(_ep.max_exposure_usd),
+            "no_new_entry_after_s": _ep.no_new_entry_after_s,
+            "min_complement_shares": str(_ep.min_complement_shares),
+            #: set / not set, never the value
+            "p_pair_natural_set": _ep.straddle_p_pair_natural is not None,
+            "p_complete_set": _ep.straddle_p_complete is not None,
+            "p_lone_win_set": _ep.straddle_p_lone_win is not None,
+            "inventory_ranking": X.inventory_ranking_enabled(),
+            "taker_completion": X.taker_completion_allowed(),
+            "labels": ("what the executor WOULD resolve this window, "
+                       "emitted before the arming gate so it is on the "
+                       "record even when the lane exits at boot. "
+                       "Reporting only."),
+        })
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        #: an observable must never stop a lane from starting -- or from
+        #: refusing to
+        emit("L5_BTC5M_EFFECTIVE_CONFIG",
+             {"error": type(_exc).__name__})
     if reach.get("ok") is False:
         emit("L5_BTC5M_BUDGET_SHORT", reach)
 
