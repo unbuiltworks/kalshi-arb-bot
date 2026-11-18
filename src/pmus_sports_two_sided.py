@@ -256,19 +256,40 @@ MAX_STRANDED = int(os.getenv("PMUS_TWO_SIDED_MAX_STRANDED", "0"))
 # its paired strands) reaches this many dollars, it takes no NEW opening
 # legs. Existing legs are pulled through the late-cutoff path and
 # completions of any stranded leg continue unchanged.
-MARKET_STRAND_LOSS_USD = _env_d("PMUS_TWO_SIDED_MARKET_STRAND_LOSS_USD", "0")
+# NAMED FOR WHAT IT MEASURES (owner 2026-11-18): completion OVERPAY, not
+# total realized strand loss. The old name is still read so the live
+# deployment's variable keeps working; the new name wins when both are set.
+OVERPAY_BUDGET_STRICTEST = D("0.000001")
 
 
-def market_strand_blocked(mk: Mapping[str, Any]) -> bool:
+def overpay_budget_from(env: Mapping[str, str]) -> D:
+    """New name first, then the legacy name, else 0 (off). A SET but
+    unparseable value fails CLOSED to the strictest budget (any recorded
+    overpay stops new opens in that market), never silently off."""
+    for k in ("PMUS_TWO_SIDED_MARKET_OVERPAY_BUDGET_USD",
+              "PMUS_TWO_SIDED_MARKET_STRAND_LOSS_USD"):
+        v = (env.get(k) or "").strip()
+        if v:
+            try:
+                return D(v)
+            except Exception:                            # noqa: BLE001
+                return OVERPAY_BUDGET_STRICTEST
+    return D(0)
+
+
+MARKET_OVERPAY_BUDGET_USD = overpay_budget_from(os.environ)
+
+
+def market_overpay_blocked(mk: Mapping[str, Any]) -> bool:
     """True when the re-entry guard is ON and this market's recorded
     completion overpay has reached the budget. Off (0) -> never."""
-    if MARKET_STRAND_LOSS_USD <= 0:
+    if MARKET_OVERPAY_BUDGET_USD <= 0:
         return False
     try:
         spent = D(str(mk.get("strand_overpay_usd") or "0"))
     except Exception:                                    # noqa: BLE001
         return True              # unreadable ledger: fail closed (no opens)
-    return spent >= MARKET_STRAND_LOSS_USD
+    return spent >= MARKET_OVERPAY_BUDGET_USD
 
 
 def completion_policy_live() -> bool:
@@ -1657,7 +1678,7 @@ class Engine:
                     if over > 0:
                         mk["strand_overpay_usd"] = str(D(str(
                             mk.get("strand_overpay_usd") or "0")) + over)
-                        rec["market_strand_overpay_usd"] = \
+                        rec["market_completion_overpay_usd"] = \
                             mk["strand_overpay_usd"]
         lst = self.b.d.setdefault("recoveries", [])
         lst.append(rec)
@@ -2130,8 +2151,8 @@ class Engine:
                     late = "pregame_no_start_time"
                 elif time.time() >= float(gs) - PREGAME_CUTOFF_S:
                     late = "pregame_cutoff"
-            if not late and market_strand_blocked(mk):
-                late = "market_strand_loss"
+            if not late and market_overpay_blocked(mk):
+                late = "market_overpay_budget"
             if late:
                 if mk.get("late_logged") != late:
                     mk["late_logged"] = late
@@ -2802,7 +2823,7 @@ class Engine:
                               "shared_policy": completion_policy_live(),
                               "sports_cap": COMPLETION_SPORTS_CAP,
                               "max_stranded": MAX_STRANDED,
-                              "market_strand_loss_usd": MARKET_STRAND_LOSS_USD,
+                              "market_overpay_budget_usd": MARKET_OVERPAY_BUDGET_USD,
                               "unmatched_halt_usd": UNMATCHED_HALT_USD,
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(

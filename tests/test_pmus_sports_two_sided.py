@@ -1936,11 +1936,11 @@ def _resolve(e, slug, *, lead_px, paid_total, qty, prior_qty="0",
 
 
 def test_strand_guard_off_by_default(eng):
-    assert M.MARKET_STRAND_LOSS_USD == D("0")
+    assert M.MARKET_OVERPAY_BUDGET_USD == D("0")
     e, _v = eng
     mk = _resolve(e, "aec-x", lead_px="0.55", paid_total="2.75", qty="5")
     assert D(mk["strand_overpay_usd"]) == D("0.50")     # always recorded
-    assert M.market_strand_blocked(mk) is False         # but never blocks
+    assert M.market_overpay_blocked(mk) is False         # but never blocks
 
 
 def test_overpay_recorded_only_above_par_and_per_completed_qty(eng):
@@ -1961,7 +1961,7 @@ def test_overpay_recorded_only_above_par_and_per_completed_qty(eng):
 
 def test_strand_guard_stops_new_opens_in_that_market_only(eng, monkeypatch):
     e, v = eng
-    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    monkeypatch.setattr(M, "MARKET_OVERPAY_BUDGET_USD", D("0.01"))
     e.select(v.account())
     e.step_market("aec-x")
     assert len([o for o in v.orders.values() if o["open"]]) == 2
@@ -1972,12 +1972,12 @@ def test_strand_guard_stops_new_opens_in_that_market_only(eng, monkeypatch):
     e.step_market("aec-x")
     assert v.n == n                                          # nothing re-placed
     # another market is unaffected
-    assert M.market_strand_blocked(e.b.m("aec-y")) is False
+    assert M.market_overpay_blocked(e.b.m("aec-y")) is False
 
 
 def test_strand_guard_never_blocks_a_completion(eng, monkeypatch):
     e, v = eng
-    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    monkeypatch.setattr(M, "MARKET_OVERPAY_BUDGET_USD", D("0.01"))
     e.select(v.account())
     e.step_market("aec-x")
     yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
@@ -1995,16 +1995,31 @@ def test_strand_guard_never_blocks_a_completion(eng, monkeypatch):
 
 
 def test_strand_guard_fails_closed_on_unreadable_ledger(monkeypatch):
-    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("1"))
-    assert M.market_strand_blocked({"strand_overpay_usd": "garbage"}) is True
-    assert M.market_strand_blocked({}) is False
+    monkeypatch.setattr(M, "MARKET_OVERPAY_BUDGET_USD", D("1"))
+    assert M.market_overpay_blocked({"strand_overpay_usd": "garbage"}) is True
+    assert M.market_overpay_blocked({}) is False
 
 
 def test_strand_ledger_survives_restart(tmp_path, monkeypatch):
-    monkeypatch.setattr(M, "MARKET_STRAND_LOSS_USD", D("0.01"))
+    monkeypatch.setattr(M, "MARKET_OVERPAY_BUDGET_USD", D("0.01"))
     v = FakeVenue()
     e = M.Engine(v, M.Book(tmp_path / "s.json"))
     _resolve(e, "aec-x", lead_px="0.60", paid_total="0.45", qty="1")
     e.b.save()
     e2 = M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
-    assert M.market_strand_blocked(e2.b.m("aec-x")) is True
+    assert M.market_overpay_blocked(e2.b.m("aec-x")) is True
+
+
+def test_overpay_budget_reads_new_name_and_legacy_name(monkeypatch):
+    import importlib
+    monkeypatch.delenv("PMUS_TWO_SIDED_MARKET_OVERPAY_BUDGET_USD", raising=False)
+    monkeypatch.setenv("PMUS_TWO_SIDED_MARKET_STRAND_LOSS_USD", "0.01")
+    m = importlib.reload(M)
+    assert m.MARKET_OVERPAY_BUDGET_USD == D("0.01")
+    monkeypatch.setenv("PMUS_TWO_SIDED_MARKET_OVERPAY_BUDGET_USD", "0.25")
+    m = importlib.reload(M)
+    assert m.MARKET_OVERPAY_BUDGET_USD == D("0.25")
+    monkeypatch.delenv("PMUS_TWO_SIDED_MARKET_OVERPAY_BUDGET_USD")
+    monkeypatch.delenv("PMUS_TWO_SIDED_MARKET_STRAND_LOSS_USD")
+    m = importlib.reload(M)
+    assert m.MARKET_OVERPAY_BUDGET_USD == D("0")
