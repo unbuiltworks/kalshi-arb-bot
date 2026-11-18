@@ -134,6 +134,76 @@ ACCOUNT_CAP_ENV = "L5_ACCOUNT_MAX_EXPOSURE_USD"
 #: cap, both halts, the arm token and the per-order authorization claim are
 #: unchanged and still apply to each order in either mode.
 ENTRY_MODE_ENV = "L5_BTC5M_ENTRY_MODE"
+
+#: THE MEASURED-RATE ENTRY GATE. OFF unless exactly "ON".
+#:
+#: WHY IT EXISTS. `straddle_probability` reads p_pair_natural and
+#: p_complete from the environment; its docstring calls them "measured
+#: rates" and nothing measures them. Over 148 AUTHENTICATED BTC15m
+#: settlements the same two-sided maker mechanism prices at p_pair
+#: 0.3716, pair margin +$0.1746, residual -$0.1375, so EV -$0.0190 a
+#: market and a one-sigma lower bound of -$0.0750. On the bound that the
+#: $1/share placeholders imply it is -$0.3392 instead -- a 15.8x
+#: difference, and the gate must not be fed the wrong one.
+#:
+#: IT CAN ONLY EVER REFUSE. With no rate document it refuses; with rows
+#: it refuses unless `ev_lower` clears the floor. There is no input that
+#: makes it admit an order the existing chain would have refused, which
+#: is why switching it on cannot widen what this executor may do.
+#:
+#: NOT WIRED TO BTC5m's OWN HISTORY YET, because BTC5m has none: its
+#: ledger is on l5-btc5m-live's volume and holds one known fill (0.52
+#: DOWN at 0.5700, $0.2964, 1930z, never completed). Until that lane
+#: settles rows of its own, the honest setting is OFF, and ON refuses
+#: everything -- which is the correct answer to "may we open on
+#: unmeasured economics", not a malfunction.
+MEASURED_ENTRY_GATE_ENV = "L5_BTC5M_MEASURED_ENTRY_GATE"
+MEASURED_ENTRY_ROWS_ENV = "L5_BTC5M_MEASURED_ENTRY_ROWS"
+MEASURED_ENTRY_MIN_EV_ENV = "L5_BTC5M_MEASURED_ENTRY_MIN_EV_USD"
+
+
+def measured_entry_gate_on() -> bool:
+    """ON only on an exact match, like every other gate here."""
+    return str(os.environ.get(MEASURED_ENTRY_GATE_ENV, "")).strip() == "ON"
+
+
+def measured_entry_refusal() -> Optional[str]:
+    """Reason a new OPENING is refused on measured rates, or None.
+
+    FAIL CLOSED AT EVERY STEP: gate on but no rows path, an unreadable
+    path, a path that will not parse, too few authenticated rows, or an
+    `ev_lower` that does not clear the floor -- each refuses. Only a
+    readable file with enough authenticated rows AND a lower bound above
+    the floor returns None.
+    """
+    if not measured_entry_gate_on():
+        return None
+    path = str(os.environ.get(MEASURED_ENTRY_ROWS_ENV, "")).strip()
+    if not path:
+        return "MEASURED_ENTRY_ROWS_UNSET"
+    try:
+        from src import l5_measured_entry_rates as MER
+        rows = []
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+    except BaseException as exc:                           # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "MEASURED_ENTRY_ROWS_UNREADABLE:%s" % type(exc).__name__
+    try:
+        est = MER.estimate(rows)
+        floor = os.environ.get(MEASURED_ENTRY_MIN_EV_ENV, "0")
+        verdict = MER.entry_is_justified(est, min_ev_usd=floor)
+    except BaseException as exc:                           # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "MEASURED_ENTRY_UNAVAILABLE:%s" % type(exc).__name__
+    if verdict.get("justified"):
+        return None
+    return "MEASURED_ENTRY_EV:%s" % (verdict.get("why") or "REFUSED")
 #: ACCUMULATE only: how many of our own entry orders may rest at once.
 MAX_RESTING_ENV = "L5_BTC5M_MAX_RESTING_ENTRIES"
 #: dollars per entry. Tunable WITHOUT a code change because the clip trades
@@ -1523,6 +1593,24 @@ class Btc5mExecutor:
                 resting += (D(r["qty"]) - D(r["filled_qty"])) * D(r["price"])
         return {"resting": resting, "filled": filled}
 
+    def _reduces_exposure(self, market: str, side: str, qty: Any) -> bool:
+        """True when this order buys the side we are NOT already long.
+
+        Buying the complement of a held leg completes a pair and reduces
+        worst-case loss; buying more of the held side adds risk. An
+        unreadable inventory returns False, so an order of unknown effect
+        is treated as risk-adding and must pass the gate.
+        """
+        try:
+            inv = self.inventory(market)
+            exp = C.exposure(inv, [])
+            if exp is None:
+                return False
+            held = exp.get("unmatched_side")
+            return bool(held) and str(side) != str(held)
+        except BaseException:                              # noqa: BLE001
+            return False
+
     def account_exposure(self) -> Dict[str, Any]:
         """Dollars at risk on the whole account, every market.
 
@@ -1855,6 +1943,16 @@ class Btc5mExecutor:
         notional = price * qty
         if exp is None:
             return refuse("EXPOSURE_UNREADABLE")
+        #: OPENINGS ONLY. A hedge/completion REDUCES risk, and refusing it
+        #: would convert held inventory into inventory that cannot be
+        #: closed -- the same asymmetry the sports lane's
+        #: is_completion_stage draws. `klass` is computed below for the
+        #: authorization claim; the cheap structural test is whether this
+        #: order buys the side we are already long.
+        if not self._reduces_exposure(market, side, qty):
+            _mer = measured_entry_refusal()
+            if _mer:
+                return refuse(_mer)
         if exp["total_exposure_usd"] + notional > self.params.max_exposure_usd:
             return refuse("BTC5M_EXPOSURE_CAP",
                           exposure_usd=exp["total_exposure_usd"],

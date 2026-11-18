@@ -1715,3 +1715,68 @@ class TestTheOperatorStop:
         out = rig.ex.stop(reason="operator", now=rig.now)
         assert out["ok"] is True
         assert out["cancelled"] == [] and out["still_open"] == []
+
+
+# ======================================================================
+# THE MEASURED-RATE ENTRY GATE, ON THE REAL SUBMIT PATH
+#
+# WHY THESE LIVE HERE rather than beside the gate's own unit tests. Those
+# test the predicate; mutation testing showed they do NOT test the thing
+# that matters -- making the gate apply to EVERY order, completions
+# included, passed all 25 of them. Only driving `_submit` with real
+# inventory distinguishes "gates openings" from "gates everything", and a
+# gate that blocks completions turns held inventory into inventory that
+# cannot be closed.
+# ======================================================================
+class TestMeasuredEntryGateOnTheSubmitPath:
+
+    @pytest.fixture
+    def refusing(self, monkeypatch, tmp_path):
+        """Gate ON with a rows file too small to establish rates, so the
+        gate's verdict is a refusal for any order it is asked about."""
+        rows = tmp_path / "rows.jsonl"
+        rows.write_text(json.dumps(
+            {"matched_qty": "1", "matched_pnl": "0.2", "residual_qty": "0",
+             "residual_cost": "0", "settlement_pnl": "0.2"}) + "\n")
+        monkeypatch.setenv(X.MEASURED_ENTRY_GATE_ENV, "ON")
+        monkeypatch.setenv(X.MEASURED_ENTRY_ROWS_ENV, str(rows))
+        return rows
+
+    def test_off_by_default_the_opening_still_places(self, rig, armed):
+        rep = opened(rig)
+        assert rep["refused"] == []
+
+    def test_an_opening_is_refused_while_the_gate_cannot_measure(
+            self, rig, armed, refusing):
+        rep = rig.step()
+        assert rig.venue.sent == [] and rep["placed"] == []
+        assert reasons(rep) == [
+            "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS"]
+        assert rig.ex.orders() == {}
+
+    def test_a_COMPLETION_is_NOT_refused_by_the_gate(
+            self, rig, armed, refusing, monkeypatch):
+        """THE PROPERTY MUTATION TESTING EXPOSED. With UP held and the
+        gate refusing, buying DOWN completes the pair and must still be
+        sent. If this ever fails, arming the gate would strand inventory
+        it cannot close."""
+        rig.ex._ledger["inventory"][MARKET] = {
+            C.UP: {"qty": "0.17", "cost": "0.0986"}}
+        scripted(monkeypatch, place(side=C.DOWN, price="0.40", qty="0.17"))
+        rep = rig.step()
+        assert "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS" not in \
+            reasons(rep), rep
+        assert len(rig.venue.sent) == 1
+        assert rig.venue.sent[0]["side"] == C.DOWN
+
+    def test_adding_to_the_HELD_side_is_still_refused(
+            self, rig, armed, refusing, monkeypatch):
+        """The exemption is for the complement only. More of what we are
+        already long adds risk and stays gated."""
+        rig.ex._ledger["inventory"][MARKET] = {
+            C.UP: {"qty": "0.17", "cost": "0.0986"}}
+        scripted(monkeypatch, place(side=C.UP, price="0.58", qty="0.17"))
+        rep = rig.step()
+        assert reasons(rep) == [
+            "MEASURED_ENTRY_EV:TOO_FEW_AUTHENTICATED_MARKETS"]
+        assert rig.venue.sent == []
