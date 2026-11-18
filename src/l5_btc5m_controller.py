@@ -368,6 +368,28 @@ class Params:
     #:
     #: False -- the default -- keeps the existing branch exactly.
     inventory_ranking_enabled: bool = False
+    #: A RANKER THAT COULD PRICE NOTHING HAS EXPRESSED NO PREFERENCE.
+    #:
+    #: `_rank_inventory` passes `maker_fill_rate=None` on purpose -- the
+    #: rate has never been measured at these prices and inventing one is
+    #: forbidden -- so MAKER_COMPLETE comes back `available=False`. With
+    #: taker completion disabled by policy every taker route is
+    #: unavailable too. The ONLY available alternative is then HOLD, in
+    #: every book, forever, and the controller reads that as "RANKED_HOLD:
+    #: nothing on offer beats waiting" and withdraws the baseline
+    #: completion. Enabling the ranker therefore REMOVED the only
+    #: risk-reducing completion the controller had. Observed: with
+    #: cpc=0.96 and a lopsided UP leg, ranker OFF places DOWN @0.36x0.50
+    #: and ranker ON places nothing.
+    #:
+    #: True distinguishes the two HOLDs. A HOLD taken over at least one
+    #: AVAILABLE non-HOLD alternative is a real comparison and still
+    #: binds. A HOLD with no available alternative is a vacuous veto, and
+    #: the baseline completion proceeds -- through every guard below it,
+    #: unchanged: price range, pair target, min qty, already-working,
+    #: exposure room, and the side and unmatched caps. It widens no
+    #: bound, invents no fill rate and authorizes no taker.
+    ranker_vacuous_hold_falls_back: bool = False
     #: THE EXPECTED VALUE WE WILL PAY TO REMOVE A WORST CASE.
     #:
     #: The ranking basis is expected WORST-case, not expected value --
@@ -884,9 +906,24 @@ def _rank_inventory(*, inv, rest, deficient, deficit, bid, ask, age,
                             % type(exc).__name__)
 
     chosen = str(rec.get("chosen") or "HOLD")
+    #: `rank` reports its priced routes under `alternatives`. Reading
+    #: `considered` alone returned [] on every call -- the wrapper was
+    #: reporting an empty comparison while a real one had happened, and
+    #: it nearly cost me the diagnosis above. Prefer the real key and
+    #: keep the old one as a fallback.
+    _alts = list(rec.get("alternatives") or rec.get("considered") or [])
+    #: WAS THERE ANYTHING TO COMPARE AGAINST? Only an AVAILABLE non-HOLD
+    #: route makes a HOLD a choice rather than the absence of one.
+    _priceable = [a for a in _alts
+                  if str(a.get("alternative") or "") != "HOLD"
+                  and bool(a.get("available"))]
     out.update(ok=bool(rec.get("ok")), chosen=chosen,
                reason=rec.get("reason"),
-               considered=list(rec.get("considered") or []),
+               considered=_alts,
+               priceable_alternatives=len(_priceable),
+               priceable_names=[str(a.get("alternative")) for a in _priceable],
+               #: the distinction the controller acts on
+               hold_is_vacuous=bool(chosen == "HOLD" and not _priceable),
                book_refused=rec.get("book_refused"),
                why_hold=rec.get("why_hold"))
     for alt in (rec.get("alternatives") or []):
@@ -1468,13 +1505,30 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 # after this branch returns, so calling it here is a
                 # NameError the moment a completion is enabled. The bound
                 # is inlined instead.
-                if _rank_choice == "HOLD":
-                    #: THE RANKER CHOSE TO CARRY THE LEG. It chooses HOLD
-                    #: unless an alternative strictly improves the worse
-                    #: settlement outcome, so this is "nothing on offer
-                    #: is better than waiting", not an error. Acting here
-                    #: anyway would be taking a decision the one
-                    #: comparison declined to take.
+                #: A VACUOUS HOLD IS NOT A DECISION. When every non-HOLD
+                #: route came back `available=False` -- MAKER_COMPLETE
+                #: because its fill rate is deliberately unmeasured,
+                #: the taker routes because policy disables them -- the
+                #: ranker compared nothing and prefers nothing. Honouring
+                #: it then strands the leg forever, which is the one
+                #: outcome the unmatched bound exists to prevent.
+                #: Carrying naked inventory is not the fail-closed
+                #: direction; reducing it is.
+                _vacuous = bool(params.ranker_vacuous_hold_falls_back
+                                and isinstance(comp.get("ranking"), dict)
+                                and comp["ranking"].get("hold_is_vacuous"))
+                if _vacuous:
+                    comp["ranking_vacuous"] = True
+                    comp["ranker_note"] = (
+                        "RANKER_NO_PRICEABLE_ALTERNATIVE: every non-HOLD "
+                        "route was unavailable, so the baseline completion "
+                        "proceeds through the unchanged guards below")
+                if _rank_choice == "HOLD" and not _vacuous:
+                    #: THE RANKER CHOSE TO CARRY THE LEG, over at least
+                    #: one alternative it could actually price. That is
+                    #: "nothing on offer is better than waiting", not an
+                    #: error. Acting here anyway would be taking a
+                    #: decision the one comparison declined to take.
                     comp["why"] = "RANKED_HOLD"
                 elif not (PRICE_MIN <= cprice <= PRICE_MAX) or cprice <= ZERO:
                     comp["why"] = "PRICE_OUT_OF_RANGE"
