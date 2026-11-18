@@ -45,11 +45,19 @@ number in the permissive direction:
      arithmetic consequence of a partial one.
 
 WHAT IT DOES NOT DO. It computes no correction, writes no ledger key and
-authorizes nothing. Applying an authenticated cost basis is
-`InventoryStore.correct_cost_basis`, reached through
-`l5_cost_basis_audit.apply_cost_basis_corrections`, which is owner-gated
-and already has its own guards. This module only measures the gap those
-guards would close.
+authorizes nothing. Applying an authenticated cost basis is the
+InventoryStore verb that `l5_cost_basis_audit.apply_cost_basis_corrections`
+reaches, which is owner-gated and already has its own guards. This module
+only measures the gap those guards would close.
+
+THE VERB IS NAMED INDIRECTLY ABOVE, ON PURPOSE. Its own test module
+holds an architectural guard that greps every line of src/*.py for that
+identifier and requires the set of files containing it to equal the
+sanctioned callers. To a grep, a docstring mention is indistinguishable
+from a call -- so spelling the identifier here would add this module to
+that set, and the only ways out would be to widen the sanctioned list or
+to soften the guard. Both would weaken a real protection to accommodate a
+comment. Describing the verb in prose keeps the guard exact.
 """
 from __future__ import annotations
 
