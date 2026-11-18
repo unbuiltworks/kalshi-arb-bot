@@ -316,11 +316,11 @@ class CompletionTTLTests(unittest.TestCase):
             return {"fill_index": 2, "verdict": "PROVEN"}
         with tempfile.TemporaryDirectory() as root:
             pathlib.Path(root, "book.json").touch()
-            with mock.patch.object(self.replay.QS, "load", return_value={"market": frames}), \\
-                 mock.patch.object(self.replay.QS, "touches", return_value=(D("0.49"), D("0.50"))), \\
-                 mock.patch.object(self.replay.QS, "leg_outcome", side_effect=leg), \\
+            with mock.patch.object(self.replay.QS, "load", return_value={"market": frames}), \
+                 mock.patch.object(self.replay.QS, "touches", return_value=(D("0.49"), D("0.50"))), \
+                 mock.patch.object(self.replay.QS, "leg_outcome", side_effect=leg), \
                  mock.patch.object(self.replay.QS, "filled",
-                                   side_effect=lambda result, *, arm: result["fill_index"] is not None), \\
+                                   side_effect=lambda result, *, arm: result["fill_index"] is not None), \
                  mock.patch.object(self.replay, "_econ_gate",
                                    return_value=(1, D("0.49"), "TEST")):
                 rows = self.replay.sequential(
