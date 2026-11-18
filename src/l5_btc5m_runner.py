@@ -54,6 +54,20 @@ D = Decimal
 UTC = dt.timezone.utc
 WINDOW_S = 300.0
 STEP_S = 5.0
+
+#: SECONDS LEFT AT WHICH THE LATE-WINDOW DECISION BLOCK IS LOGGED.
+#:
+#: 45 because that is exactly where the two settlement-variance
+#: estimators start to differ: at and above it they agree to three
+#: decimals, below it the shipped linear ramp is up to 12x too wide in sd
+#: (see src/l5_btc_reference and tests/test_l5_btc_reference_exact_
+#: variance.py). Logging the whole window would be mostly rows in which
+#: the comparison is identically zero.
+#:
+#: VOLUME: the loop steps every STEP_S, so this is ceil(45/5) = 9 extra
+#: lines per 5-minute window, ~108/hour, ~2,600/day. It adds no venue
+#: call, no file, no volume and no order-path branch.
+LATE_LOG_S = 45.0
 #: stop placing and start cancelling this long before the window ends
 CANCEL_LEAD_S = 30.0
 #: how long after the window end the cancel loop may keep re-reading
@@ -1340,8 +1354,81 @@ class Session:
                     loss_room_usd=g.get("loss_room_usd"),
                     exposure_ceiling_usd=self.exposure_ceiling())
                 self.would_submit += len(rep.get("would_submit") or ())
+                #: THE LATE-WINDOW DECISION RECORD, reporting only.
+                #:
+                #: Everything here is already in hand: `est` is the
+                #: estimate this step ALREADY made and carries the strike,
+                #: the BRTI bucket and its age; `sized` is the depth the
+                #: pricing path ALREADY read; `rep` is the decision that
+                #: has ALREADY been taken. `corrected_p_up` is a pure
+                #: function of `est`. So this costs one dict and no venue
+                #: call, and it cannot alter a decision: it is built AFTER
+                #: `self.ex.step` has returned.
+                #:
+                #: The corrected probability is REPORTED, NEVER USED. The
+                #: engine priced this step on `p_up` whatever this says,
+                #: and `L5_BTC_REF_LATE_VARIANCE` stays off.
+                _late = None
+                try:
+                    #: LAZY, and inside the guard. `l5_btc_reference` is
+                    #: already COPYd into deploy/l5_btc5m_live (the runner
+                    #: imports it to build the poller), so this is shipped
+                    #: -- test_lazy_src_imports_on_the_live_path_are_
+                    #: shipped checks exactly that. If it ever were not,
+                    #: the except below drops the field and trading is
+                    #: untouched.
+                    from src import l5_btc_reference as REF_P
+                    _sl = est.get("seconds_left")
+                    if _sl is not None and 0 < float(_sl) <= LATE_LOG_S:
+                        _late = {
+                            "seconds_left": round(float(_sl), 2),
+                            "strike": est.get("strike"),
+                            "index": est.get("index"),
+                            "distance": est.get("distance"),
+                            #: official BRTI bucket and its freshness
+                            "bucket_t": est.get("bucket_t"),
+                            "index_age_s": est.get("index_age_s"),
+                            "receive_lag_s": est.get("receive_lag_s"),
+                            "source": est.get("source"),
+                            #: the two probabilities, side by side
+                            "p_up": p_up,
+                            "p_up_corrected": REF_P.corrected_p_up(est),
+                            "sd": est.get("sd"),
+                            "sigma_used": est.get("sigma_used"),
+                            #: executable prices and the depth behind them
+                            "yes_bid": book.get("bid"),
+                            "yes_ask": book.get("ask"),
+                            "bid_shares": sized.get("bid_shares"),
+                            "ask_shares": sized.get("ask_shares"),
+                            "book_age_s": book.get("age_s"),
+                            #: every candidate opening and its verdict
+                            "candidates": [
+                                {"side": w.get("side"),
+                                 "price": w.get("price"),
+                                 "qty": w.get("qty"),
+                                 "passed": False,
+                                 "reason": w.get("blocked_by")}
+                                for w in (rep.get("would_submit") or ())
+                            ] + [
+                                {"side": pl.get("side"),
+                                 "price": pl.get("price"),
+                                 "qty": pl.get("qty"),
+                                 "passed": True, "reason": None}
+                                for pl in (rep.get("placed") or ())
+                            ],
+                            "refusals": [r.get("reason")
+                                         for r in rep.get("refused") or ()],
+                        }
+                except BaseException as exc:            # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    #: REPORTING MUST NEVER BREAK TRADING. The decision is
+                    #: already made and already acted on by this point; a
+                    #: log field that cannot be built is named and dropped.
+                    _late = {"error": type(exc).__name__}
                 self._log("L5_BTC5M_STEP", {
                     "t_in_window_s": round(now - ws, 2),
+                    "late": _late,
                     "bid": book.get("bid"), "ask": book.get("ask"),
                     "p_up": p_up, "p_reason": est.get("reason"),
                     "action": rep.get("action"), "why": rep.get("why"),

@@ -259,6 +259,44 @@ def settlement_distribution(*, a_now: float, a_prev: float, sigma: float,
             "raw_ahead_of_average": mean - a_now}
 
 
+def corrected_p_up(est: Mapping[str, Any]) -> Optional[float]:
+    """The CORRECTED P(UP) for an estimate, recomputed read-only.
+
+    WHY IT NEEDS NOTHING NEW. The correction changes only the SPREAD, not
+    the centre, and `probability_up` already returns `expected_settlement`,
+    `strike`, `sigma_used` and `seconds_left`. So the corrected answer is
+    available from the estimate that has already been made: no second
+    venue call, no second series read, and -- the point -- NO TOGGLING OF
+    THE ENVIRONMENT. `exact_late_variance()` reads os.environ, and this
+    module polls on a daemon thread, so flipping the variable to compute a
+    comparison would race the poller against the caller. A pure function
+    of the estimate cannot.
+
+    Returns None when the estimate is unusable, when there is no spread to
+    rebuild, or at tau >= 60 where the two estimators are identical by
+    construction and a "corrected" number would be a false distinction.
+    """
+    if not isinstance(est, Mapping) or not est.get("ok"):
+        return None
+    tau = _fin(est.get("seconds_left"))
+    mean = _fin(est.get("expected_settlement"))
+    k = _fin(est.get("strike"))
+    sig = _fin(est.get("sigma_used"))
+    if tau is None or mean is None or k is None or sig is None:
+        return None
+    if tau <= 0 or tau >= AVERAGING_S or sig <= 0:
+        return None
+    var = (tau * (tau + 1.0) * (2.0 * tau + 1.0) / 21600.0
+           + past_window_residual_var(tau))
+    if var <= 0:
+        return None
+    sd = sig * math.sqrt(var)
+    p = 0.5 * math.erfc(-((mean - k) / sd) / math.sqrt(2.0))
+    if not math.isfinite(p):
+        return None
+    return min(1.0, max(0.0, p))
+
+
 def probability_up(*, series: List[Tuple[int, float]], strike: float,
                    window_end: float, now: float,
                    received_t: Optional[float] = None,
