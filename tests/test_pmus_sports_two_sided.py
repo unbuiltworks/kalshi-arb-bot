@@ -1811,3 +1811,110 @@ def test_a_market_dropped_from_the_book_keeps_its_orders_for_the_grace(
             M.registry_doc(b, clock=lambda: 80.0)["orders"]] == ["Z1"]
     assert M.registry_doc(b, clock=lambda: 50.0 + M.REGISTRY_GRACE_S + 1
                           )["orders"] == []
+
+
+# ---------------------------------------------------------------------------
+# OWNER 2026-11-18: regression-test the cancellation race, stale ownership,
+# offline-lane behaviour and restart behaviour around the closing-grace.
+#
+# These sit on top of c72263c70 and test the PROPERTY the watchdog depends
+# on, not the implementation: an id this bot placed and has just cancelled
+# must stay attributable for long enough that a sweep straddling the cancel
+# cannot read it as unmanaged -- and an id the bot never placed must never
+# become attributable, however the grace is configured.
+# ---------------------------------------------------------------------------
+class TestTheCancellationRaceThatLatchedTheAccount:
+
+    def _one_open(self, eng):
+        e, v = eng
+        e.select(v.account())
+        slug = next(iter(e.b.d["markets"]))
+        mk = e.b.d["markets"][slug]
+        mk["orders"] = {"DSJRWQX013ZD": {"open": True, "side": "YES",
+                                         "px": "0.43", "qty": "5"}}
+        return e, slug, mk
+
+    def test_the_sweep_that_straddles_a_cancel_still_sees_it_managed(self, eng):
+        """THE 23:40:11Z SHAPE. Venue read at T, lane read at T+6s, cancel
+        at T+5s. Before the grace the lane listed nothing and the account
+        latched UNMANAGED_RESTING_ORDER."""
+        e, slug, mk = self._one_open(eng)
+        t0 = 1_000_000.0
+        assert [r["venue_order_id"] for r in
+                M.registry_doc(e.b, clock=lambda: t0)["orders"]] \
+            == ["DSJRWQX013ZD"]
+        mk["orders"]["DSJRWQX013ZD"]["open"] = False      # the cancel
+        doc = M.registry_doc(e.b, clock=lambda: t0 + 6.0)
+        ids = [r["venue_order_id"] for r in doc["orders"]]
+        assert ids == ["DSJRWQX013ZD"], "the race is back"
+        assert doc["orders"][0]["closing"] is True
+
+    def test_a_closing_row_satisfies_everything_the_consumer_requires(self, eng):
+        """The property that matters, asserted as a CONTRACT.
+
+        `l5_managed_lanes.lane_ids` exempts an id when the document is
+        readable, claims `manages_own_resting`, carries a parseable
+        `as_of_utc` inside its freshness band, and names the id in
+        `venue_order_id`. It reads nothing else, so a `closing` row is a
+        full claim. That module is NOT on this branch -- it lives with the
+        watchdog -- so the contract is asserted here and the end-to-end
+        test belongs where both exist.
+        """
+        import datetime as dt
+        e, slug, mk = self._one_open(eng)
+        t0 = 2_000_000.0
+        M.registry_doc(e.b, clock=lambda: t0)
+        mk["orders"]["DSJRWQX013ZD"]["open"] = False
+        doc = M.registry_doc(e.b, clock=lambda: t0 + 6.0)
+        assert doc["readable"] is True
+        assert doc["manages_own_resting"] is True
+        stamped = dt.datetime.fromisoformat(doc["as_of_utc"])
+        assert stamped.tzinfo is not None
+        age = (dt.datetime.now(dt.timezone.utc) - stamped).total_seconds()
+        assert -5.0 <= age <= 60.0, age
+        assert [r["venue_order_id"] for r in doc["orders"]] == ["DSJRWQX013ZD"]
+
+    def test_the_grace_is_bounded_so_a_failed_cancel_still_latches(self, eng):
+        """A cancel that did NOT take must not be hidden forever."""
+        e, slug, mk = self._one_open(eng)
+        t0 = 3_000_000.0
+        M.registry_doc(e.b, clock=lambda: t0)
+        mk["orders"]["DSJRWQX013ZD"]["open"] = False
+        assert M.registry_doc(e.b, clock=lambda: t0 + M.REGISTRY_GRACE_S - 1)["orders"]
+        assert not M.registry_doc(e.b, clock=lambda: t0 + M.REGISTRY_GRACE_S + 1)["orders"]
+
+    def test_an_id_the_bot_never_placed_is_never_claimed(self, eng):
+        """STALE OWNERSHIP. The grace may only ever re-list the bot's own."""
+        e, slug, mk = self._one_open(eng)
+        t0 = 4_000_000.0
+        M.registry_doc(e.b, clock=lambda: t0)
+        ids = {r["venue_order_id"] for r in
+               M.registry_doc(e.b, clock=lambda: t0 + 1)["orders"]}
+        assert "DSHAHBP0144P" not in ids          # the 21:57Z tennis order
+        assert ids == {"DSJRWQX013ZD"}
+
+    def test_a_restart_forgets_the_grace_and_the_race_returns(self, eng):
+        """THE GAP THIS FIX DOES NOT CLOSE, pinned so it is not forgotten.
+
+        `_REGISTRY_SEEN` is in-memory. A bot that cancels and then restarts
+        before the watchdog's next lane read publishes no claim for the
+        just-cancelled id, so the 23:40:11Z race can still latch once
+        across a restart. Closing it would need the grace persisted; that
+        is a deliberate open item, not an accident.
+        """
+        e, slug, mk = self._one_open(eng)
+        t0 = 5_000_000.0
+        M.registry_doc(e.b, clock=lambda: t0)
+        mk["orders"]["DSJRWQX013ZD"]["open"] = False
+        M._REGISTRY_SEEN.clear()                   # the restart
+        assert M.registry_doc(e.b, clock=lambda: t0 + 6.0)["orders"] == []
+
+    def test_the_grace_default_is_sixty_seconds(self):
+        assert M.REGISTRY_GRACE_S == 60.0
+
+    def test_the_document_still_attests_management_and_freshness(self, eng):
+        e, slug, mk = self._one_open(eng)
+        doc = M.registry_doc(e.b, clock=lambda: 6_000_000.0)
+        assert doc["readable"] is True
+        assert doc["manages_own_resting"] is True
+        assert doc["as_of_utc"]
