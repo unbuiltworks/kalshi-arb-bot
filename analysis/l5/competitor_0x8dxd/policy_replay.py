@@ -39,6 +39,7 @@ results = {}
 for CEIL in CEILINGS:
   stages = collections.Counter(); acts = collections.Counter()
   strands = 0; refusals = collections.Counter(); locked = D(0)
+  relax_n = 0; relax_usd = D(0)
   for s in sorted(win)[:400]:
       rows = sorted(win[s])
       inv = {"UP": [D(0), D(0)], "DOWN": [D(0), D(0)]}
@@ -76,14 +77,14 @@ for CEIL in CEILINGS:
           if mc.get("permissible") is not True and mc.get("why"):
               refusals[mc["why"]] += 1
   results[str(CEIL)] = (dict(stages), dict(acts), strands,
-                        dict(refusals), str(locked))
+                        dict(refusals), (relax_n, str(relax_usd)))
 
 print("RECORDED strand decision points per run, 400 BTC5m windows")
 print("RECORDED: window, side, price, size, slug timing.")
 print("MODELLED: that a resting completion would have FILLED, the")
 print("complement price from the market identity, p_win from the held")
 print("side's own print. NO fill is claimed and no decision below is a fill.")
-for ceil, (stg, act, n, ref, _lk) in results.items():
+for ceil, (stg, act, n, ref, rx) in results.items():
     tag = "AUTHORIZED" if ceil == str(P.PATIENT_CEILING) else "COMPARATOR"
     print(f"\n=== patient ceiling {ceil}  ({tag}) ===")
     print(f"  decision points {n:,}")
@@ -95,3 +96,5 @@ for ceil, (stg, act, n, ref, _lk) in results.items():
     if ref:
         print("  refusals " + "  ".join(f"{k} {v:,}" for k, v in
                                         sorted(ref.items())))
+    print(f"  ceiling cost: {rx[0]:,} decisions, ${rx[1]} MODELLED "
+          f"opportunity cost (NOT realized, NOT a fill)")

@@ -299,6 +299,22 @@ def _net_if_completed(*, held_qty: D, held_avg: D, complete_px: D,
     return qty * (ONE - pair_cost)
 
 
+def _net_if_partial(*, held_qty: D, held_avg: D, complete_px: D,
+                    qty: D, fee_per_share: D, p_win: D) -> D:
+    """Net of completing only `qty` of `held_qty`, carrying the rest.
+
+    THE PAIR DOES NOT HAVE TO BE ALL OR NOTHING. Depth is finite, and a
+    completion sized to the depth that actually exists resolves part of
+    the strand at a known cost instead of leaving all of it exposed. The
+    remainder keeps its lone-leg expectation, so a partial is scored
+    against HOLD on exactly the same basis as a full completion.
+    """
+    pair_cost = held_avg + complete_px + fee_per_share
+    matched = qty * (ONE - pair_cost)
+    lone = (held_qty - qty) * (p_win - held_avg)
+    return matched + lone
+
+
 def _net_if_held(*, held_qty: D, held_avg: D, p_win: D) -> D:
     """Expected dollars of carrying the lone leg to settlement.
 
@@ -318,6 +334,7 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
            event_late: bool = False, p_win_source: Optional[str] = None,
            patient_ceiling: Optional[Any] = None,
            final_ceiling: Optional[Any] = None,
+           complete_depth: Any = None,
            ) -> Dict[str, Any]:
     """Rank the options on expected net dollars. HOLD unless beaten.
 
@@ -365,7 +382,8 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
     opts: Dict[str, Any] = {
         "HOLD": {"net": str(base), "permissible": True, "why": None}}
 
-    def consider(name: str, px: Optional[D], *, taker: bool) -> None:
+    def consider(name: str, px: Optional[D], *, taker: bool,
+                 qty: Optional[D] = None) -> None:
         if px is None:
             opts[name] = {"net": None, "permissible": False,
                           "why": "NO_PRICE"}
@@ -374,21 +392,59 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
             opts[name] = {"net": None, "permissible": False,
                           "why": "TAKER_NOT_AUTHORIZED"}
             return
+        n_qty = q if qty is None else qty
+        if n_qty <= ZERO:
+            opts[name] = {"net": None, "permissible": False,
+                          "why": "NO_DEPTH"}
+            return
         pair_cost = avg + px + fee
+        if n_qty >= q:
+            net = _net_if_completed(held_qty=q, held_avg=avg,
+                                    complete_px=px, qty=q,
+                                    fee_per_share=fee)
+        else:
+            net = _net_if_partial(held_qty=q, held_avg=avg, complete_px=px,
+                                  qty=n_qty, fee_per_share=fee, p_win=pw)
         if pair_cost > ceiling:
+            #: REFUSED, BUT STILL SCORED. The old code returned here with
+            #: net None, so a completion the schedule forbade carried no
+            #: economics at all -- and the number needed to judge whether
+            #: the ceiling was worth enforcing was destroyed by the
+            #: refusal itself. On the sports night of 2026-11-17 that
+            #: refusal is what separated a recorded -11.78 from a bounded
+            #: -17.77 at 0.99 and -20.17 at 0.97. The option stays
+            #: REFUSED and cannot be chosen; `net_if_permitted` records
+            #: what it would have been worth, so the cost of the ceiling
+            #: is measurable instead of invisible.
             opts[name] = {"net": None, "permissible": False,
                           "why": "PAIR_ABOVE_STAGE_CEILING",
                           "pair_cost": str(pair_cost),
-                          "ceiling": str(ceiling)}
+                          "ceiling": str(ceiling),
+                          "qty": str(n_qty),
+                          "net_if_permitted": str(net)}
             return
-        net = _net_if_completed(held_qty=q, held_avg=avg, complete_px=px,
-                                qty=q, fee_per_share=fee)
         opts[name] = {"net": str(net), "permissible": True, "why": None,
-                      "pair_cost": str(pair_cost), "price": str(px)}
+                      "pair_cost": str(pair_cost), "price": str(px),
+                      "qty": str(n_qty)}
 
     consider("MAKER_COMPLETE", _d(complete_bid), taker=False)
     consider("REPRICE", _d(complete_bid), taker=False)
     consider("TAKER_COMPLETE", _d(complete_ask), taker=True)
+
+    #: PARTIAL, SIZED TO THE DEPTH THAT ACTUALLY EXISTS. Only offered when
+    #: depth is readable AND short of the held quantity; with depth at or
+    #: above the strand a full completion is the same thing and is already
+    #: scored. Depth unreadable is NOT depth zero and is not assumed
+    #: either way: no partial is offered and nothing changes.
+    dep = _d(complete_depth)
+    if dep is not None and ZERO < dep < q:
+        consider("PARTIAL_COMPLETE", _d(complete_bid), taker=False, qty=dep)
+    else:
+        opts["PARTIAL_COMPLETE"] = {
+            "net": None, "permissible": False,
+            "why": ("DEPTH_UNREADABLE" if dep is None
+                    else "DEPTH_COVERS_FULL_STRAND" if dep >= q
+                    else "NO_DEPTH")}
 
     rb = _d(reduce_bid)
     if rb is None:
@@ -407,7 +463,8 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
     #: is the same price as MAKER_COMPLETE; it exists so a caller can see
     #: that moving an existing resting order is permissible.
     best, best_net = "HOLD", base
-    for name in ("MAKER_COMPLETE", "REDUCE", "TAKER_COMPLETE"):
+    for name in ("MAKER_COMPLETE", "PARTIAL_COMPLETE", "REDUCE",
+                 "TAKER_COMPLETE"):
         o = opts.get(name) or {}
         if o.get("permissible") is not True:
             continue
@@ -417,8 +474,44 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
         if n > best_net:
             best, best_net = name, n
 
+    #: WHAT THE CEILING COST, THIS DECISION. For every option the stage
+    #: ceiling refused, how much better it would have been than the action
+    #: actually chosen. This is the artefact the owner asked for: a
+    #: relaxation that is "separately identified, quantified, and
+    #: submitted for approval" rather than argued for in prose. It
+    #: ENABLES NOTHING -- the refused option is still refused and still
+    #: cannot be chosen -- and a caller that ignores this field behaves
+    #: exactly as before.
+    relax = None
+    best_refused, best_refused_net, best_refused_cost = None, None, None
+    for name, o in opts.items():
+        if o.get("permissible") is True:
+            continue
+        nip = _d(o.get("net_if_permitted"))
+        if nip is None:
+            continue
+        gain = nip - best_net
+        if gain > ZERO and (best_refused_net is None or nip > best_refused_net):
+            best_refused, best_refused_net, best_refused_cost = \
+                name, nip, gain
+    if best_refused is not None:
+        relax = {
+            "refused_action": best_refused,
+            "pair_cost": opts[best_refused].get("pair_cost"),
+            "ceiling": str(ceiling),
+            "stage": st.get("stage_name"),
+            "net_if_permitted": str(best_refused_net),
+            "chosen_net": str(best_net),
+            "ceiling_opportunity_cost_usd": str(best_refused_cost),
+            "status": "NOT_ENABLED_REQUIRES_OWNER_APPROVAL",
+            "labels": ("MODELLED opportunity cost of enforcing the stage "
+                       "ceiling on this decision. It is not a realized "
+                       "loss, not a fill, and not an authorization; the "
+                       "refused action remains refused.")}
+
     return {"action": best,
             "why": None if best != "HOLD" else "HOLD_NOT_BEATEN",
+            "ceiling_relaxation_would_gain": relax,
             "stage": st, "options": opts, "stranded": room,
             #: WHERE p_win CAME FROM, recorded rather than assumed. A
             #: caller with no model may pass an executable mid, but the

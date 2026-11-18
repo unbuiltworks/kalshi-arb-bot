@@ -519,3 +519,128 @@ class TestTheCeilingIsNotAnEconomicGate:
         assert mc["pair_cost"] == "1.00"
         assert mc["net"] == "0.00"
         assert d["action"] == "HOLD"        # holding at 0.60 is worth 1.10
+
+
+# ---------------------------------------------------------------------------
+# OWNER 2026-11-18 Priority 2C / Priority 5: partial completion sized to real
+# depth, and the cost of the ceiling made measurable instead of invisible.
+# ---------------------------------------------------------------------------
+class TestPartialCompletionIsSizedToRealDepth:
+
+    def test_depth_short_of_the_strand_offers_a_partial(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"),
+                     complete_depth="4")
+        pc = d["options"]["PARTIAL_COMPLETE"]
+        assert pc["permissible"] is True
+        assert pc["qty"] == "4"
+        # 4 matched at pair 0.90 = +0.40 ; 6 lone at (0.05-0.40) = -2.10
+        assert pc["net"] == "-1.70"
+
+    def test_a_partial_beats_holding_and_is_chosen_when_full_is_refused(self):
+        """Depth-limited completion resolves part of the strand."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"),
+                     complete_depth="4")
+        assert d["hold_net_usd"] == "-3.50"
+        assert d["action"] in ("MAKER_COMPLETE", "PARTIAL_COMPLETE")
+
+    def test_a_partial_must_still_beat_holding(self):
+        """The never-force rule applies to partials too."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.57", p_win="0.70", prog=prog("0.5"),
+                     complete_depth="4")
+        assert d["options"]["PARTIAL_COMPLETE"]["permissible"] is True
+        assert d["action"] == "HOLD"
+
+    def test_depth_covering_the_whole_strand_offers_no_partial(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"),
+                     complete_depth="10")
+        assert d["options"]["PARTIAL_COMPLETE"]["why"] \
+            == "DEPTH_COVERS_FULL_STRAND"
+
+    def test_unreadable_depth_is_NOT_depth_zero(self):
+        """Unknown depth must not be read as either empty or full."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"))
+        assert d["options"]["PARTIAL_COMPLETE"]["why"] == "DEPTH_UNREADABLE"
+        assert d["options"]["PARTIAL_COMPLETE"]["permissible"] is False
+
+    def test_zero_depth_offers_nothing(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"),
+                     complete_depth="0")
+        assert d["options"]["PARTIAL_COMPLETE"]["permissible"] is False
+
+    def test_a_partial_above_the_ceiling_is_still_refused(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.1"),
+                     complete_depth="4")
+        pc = d["options"]["PARTIAL_COMPLETE"]
+        assert pc["permissible"] is False
+        assert pc["why"] == "PAIR_ABOVE_STAGE_CEILING"
+
+
+class TestTheCostOfTheCeilingIsMeasurable:
+
+    def test_a_refused_completion_still_carries_its_economics(self):
+        """The defect: refusing used to destroy the number.
+
+        Held 10 UP at 0.50, p_win 0.05 -> holding is worth -4.50.
+        Completing at 0.54 is a pair of 1.04, worth -0.40: far better,
+        and refused by every authorized stage. The refusal stands, and
+        now it is priced.
+        """
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.54", p_win="0.05", prog=prog("0.95"))
+        mc = d["options"]["MAKER_COMPLETE"]
+        assert mc["permissible"] is False
+        assert mc["why"] == "PAIR_ABOVE_STAGE_CEILING"
+        assert mc["net_if_permitted"] == "-0.40"
+        assert d["action"] == "HOLD"
+        assert d["hold_net_usd"] == "-4.50"
+
+    def test_the_opportunity_cost_is_reported_and_quantified(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.54", p_win="0.05", prog=prog("0.95"))
+        r = d["ceiling_relaxation_would_gain"]
+        assert r is not None
+        assert r["refused_action"] == "MAKER_COMPLETE"
+        assert r["pair_cost"] == "1.04"
+        assert r["ceiling"] == "1.00"
+        assert r["net_if_permitted"] == "-0.40"
+        assert r["chosen_net"] == "-4.50"
+        assert r["ceiling_opportunity_cost_usd"] == "4.10"
+
+    def test_it_enables_nothing(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.54", p_win="0.05", prog=prog("0.95"))
+        assert d["action"] == "HOLD"
+        r = d["ceiling_relaxation_would_gain"]
+        assert r["status"] == "NOT_ENABLED_REQUIRES_OWNER_APPROVAL"
+        assert "not an authorization" in r["labels"]
+
+    def test_no_report_when_the_ceiling_cost_nothing(self):
+        """A refusal that was the right call is not reported as a cost."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.50",
+                     complete_bid="0.54", p_win="0.95", prog=prog("0.95"))
+        assert d["action"] == "HOLD"
+        assert d["ceiling_relaxation_would_gain"] is None
+
+    def test_no_report_when_a_permitted_action_already_wins(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"))
+        assert d["action"] == "MAKER_COMPLETE"
+        assert d["ceiling_relaxation_would_gain"] is None
+
+    def test_a_tighter_ceiling_reports_a_larger_cost(self):
+        """0.97 refuses more than 0.99, and now says what that costs."""
+        kw = dict(held_side="UP", held_qty="10", held_avg_cost="0.48",
+                  complete_bid="0.50", p_win="0.05", prog=prog("0.1"))
+        strict = P.decide(**kw)
+        loose = P.decide(**kw, patient_ceiling=P.COMPARATOR_PATIENT_CEILING)
+        assert strict["ceiling_relaxation_would_gain"] is not None
+        assert loose["ceiling_relaxation_would_gain"] is None
+        assert strict["action"] == "HOLD"
+        assert loose["action"] == "MAKER_COMPLETE"
