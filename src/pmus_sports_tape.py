@@ -72,20 +72,40 @@ class Tape:
         self.written = 0
         self.dropped = 0
         self.errors = 0
+        #: markets where the lane holds an UNPAIRED leg. Their book frames
+        #: are what a stranded-leg replay needs, so they are ESSENTIAL.
+        self.priority: set = set()
+        self.dropped_events = 0
 
     def _path(self, now: float) -> Path:
         day = datetime.fromtimestamp(now, timezone.utc).strftime("%Y%m%d")
         return self.root / f"tape_{day}.jsonl"
 
-    def _write(self, rec: Mapping[str, Any], now: float) -> None:
+    #: 2026-11-18: the 40 MB/day cap was spent on book frames before 12:50Z
+    #: (frames kept recording through a halt), after which EVERY row --
+    #: including the lane's own ORDER/FILL/RECOVERY events -- was dropped for
+    #: the rest of the UTC day: exactly the evening the replay needs. Now:
+    #: ordinary book frames may use only BOOK_SHARE of the cap; ESSENTIAL
+    #: rows (events, and frames of markets holding an unpaired leg) may use
+    #: the whole cap, and events alone may exceed it up to EVENT_HARD_X.
+    BOOK_SHARE = 0.6
+    EVENT_HARD_X = 2.0
+
+    def _write(self, rec: Mapping[str, Any], now: float, *,
+               essential: bool = False, is_event: bool = False) -> None:
         try:
             line = json.dumps(rec, default=str, separators=(",", ":")) + "\n"
             p = self._path(now)
             with self._lock:
                 self.root.mkdir(parents=True, exist_ok=True)
                 size = p.stat().st_size if p.exists() else 0
-                if size + len(line) > self.max_bytes:
+                limit = (self.max_bytes * self.EVENT_HARD_X if is_event
+                         else self.max_bytes if essential
+                         else self.max_bytes * self.BOOK_SHARE)
+                if size + len(line) > limit:
                     self.dropped += 1
+                    if is_event:
+                        self.dropped_events += 1
                     return
                 new_file = size == 0
                 with open(p, "a", encoding="utf-8") as fh:
@@ -119,15 +139,18 @@ class Tape:
                 continue
             self._last_book[slug] = (now, sig)
             self._write({"k": "book", "t": round(now, 3), "slug": slug,
-                         "bids": bids, "asks": asks}, now)
+                         "bids": bids, "asks": asks}, now,
+                        essential=slug in self.priority)
 
     def event(self, kind: str, payload: Mapping[str, Any]) -> None:
         if kind not in EVENT_KINDS:
             return
         now = self.clock()
         self._write({"k": "ev", "t": round(now, 3), "kind": kind,
-                     **payload}, now)
+                     **payload}, now, essential=True, is_event=True)
 
     def stats(self) -> Dict[str, int]:
         return {"written": self.written, "dropped": self.dropped,
+                "dropped_events": self.dropped_events,
+                "priority_markets": len(self.priority),
                 "errors": self.errors}

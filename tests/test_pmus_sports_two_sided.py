@@ -2065,3 +2065,23 @@ def test_shared_halt_alone_never_reports_submission_disabled(eng,
     e, _v = eng
     monkeypatch.setattr(M.Engine, "shared_halt", lambda self: "HALT")
     assert M.registry_doc(e.b)["submission_disabled"] is False
+
+
+def test_stranded_market_is_tape_priority_until_paired(eng, monkeypatch,
+                                                        tmp_path):
+    from src.pmus_sports_tape import Tape
+    tape = Tape(tmp_path / "tape")
+    monkeypatch.setattr(M, "TAPE", tape)
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert "aec-x" not in tape.priority
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    e.step_market("aec-x")
+    e.step_market("aec-x")
+    assert "aec-x" in tape.priority
+    cid = next(k for k, o in v.orders.items() if o["open"])
+    v.orders[cid].update(filled=D("1"), open=False)
+    e.step_market("aec-x")
+    assert "aec-x" not in tape.priority

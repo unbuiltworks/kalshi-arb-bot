@@ -42,3 +42,53 @@ def test_tape_prunes_old_days(tmp_path):
     tape = TP.Tape(tmp_path, keep_days=2)
     tape.event("ORDER", {})
     assert len(list(tmp_path.glob("tape_*.jsonl"))) == 2
+
+
+# ---- 2026-11-18: the cap must never silence events or stranded markets ----
+def _frame(slug, bid):
+    return {"marketSlug": slug, "bids": [{"px": str(bid), "qty": "5"}],
+            "offers": [{"px": str(bid + 0.02), "qty": "5"}]}
+
+
+def test_ordinary_books_stop_at_their_share_but_events_continue(tmp_path):
+    from src.pmus_sports_tape import Tape
+    t = {"now": 1_800_000_000.0}
+    tape = Tape(tmp_path, max_bytes_per_day=2000, book_min_gap_s=0,
+                clock=lambda: t["now"])
+    for i in range(200):
+        t["now"] += 1
+        tape.book(_frame("aec-a", 0.40 + (i % 50) / 1000))
+    size_books = sum(p.stat().st_size for p in tmp_path.glob("tape_*"))
+    assert size_books <= 2000 * Tape.BOOK_SHARE
+    assert tape.dropped > 0
+    before = tape.written
+    tape.event("FILL", {"slug": "aec-a", "px": "0.4"})
+    assert tape.written == before + 1 and tape.dropped_events == 0
+
+
+def test_stranded_market_books_are_kept_after_the_book_share(tmp_path):
+    from src.pmus_sports_tape import Tape
+    t = {"now": 1_800_000_000.0}
+    tape = Tape(tmp_path, max_bytes_per_day=4000, book_min_gap_s=0,
+                clock=lambda: t["now"])
+    for i in range(300):
+        t["now"] += 1
+        tape.book(_frame("aec-a", 0.40 + (i % 50) / 1000))
+    n0 = tape.written
+    tape.priority.add("aec-s")
+    t["now"] += 1
+    tape.book(_frame("aec-s", 0.30))
+    assert tape.written == n0 + 1             # essential frame still written
+    t["now"] += 1
+    tape.book(_frame("aec-a", 0.33))
+    assert tape.written == n0 + 1             # ordinary frame still dropped
+
+
+def test_events_have_a_hard_ceiling(tmp_path):
+    from src.pmus_sports_tape import Tape
+    tape = Tape(tmp_path, max_bytes_per_day=500, clock=lambda: 1.8e9)
+    for i in range(200):
+        tape.event("FILL", {"slug": "aec-a", "i": i})
+    size = sum(p.stat().st_size for p in tmp_path.glob("tape_*"))
+    assert size <= 500 * Tape.EVENT_HARD_X
+    assert tape.dropped_events > 0

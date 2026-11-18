@@ -2115,6 +2115,10 @@ class Engine:
             except Exception as exc:                  # noqa: BLE001
                 log("reward_estimate_error", slug=slug, err=str(exc)[:120])
         y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        if TAPE is not None:
+            # a market holding an unpaired leg records its book even when the
+            # day's ordinary-frame budget is spent (stranded-leg replay)
+            (TAPE.priority.discard if y == n else TAPE.priority.add)(slug)
         open_by_side = {o["side"]: (oid, o) for oid, o in mk["orders"].items()
                         if o.get("open")}
         if y == n:
