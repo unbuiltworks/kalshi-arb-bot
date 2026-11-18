@@ -3446,7 +3446,9 @@ def main() -> int:
     start_intl_guard(venue)
     start_combo_study(venue)
     start_completion_replay(venue)
-    return Engine(venue, book).run()
+    eng = Engine(venue, book)
+    start_combo_maker(venue, eng)
+    return eng.run()
 
 
 XV_PAPER_ENV = "PMUS_TWO_SIDED_XV_PAPER"
@@ -3526,6 +3528,79 @@ def start_completion_replay(venue: "Venue") -> Optional[Any]:
     th.start()
     log("completion_replay_started", label="READ-ONLY; no order path")
     return th
+
+
+def combo_maker_gates(eng: "Engine") -> Optional[str]:
+    """Why a LIVE combo-maker write is not allowed now, else None. The same
+    lane locks the sports opener obeys: its own submission lock, the shared
+    halt (any state but PERMITTED blocks), and -- when enforced -- the
+    account-wide risk verdict. Errors block."""
+    if submission_locked():
+        return "submission_lock"
+    if eng.shared_halt() is not None:
+        return "shared_halt"
+    why = eng.account_risk_blocks()
+    return "account_risk:%s" % why if why else None
+
+
+def start_combo_maker(venue: "Venue", eng: "Engine") -> Optional[Any]:
+    """Combo RFQ maker (src/pmus_combo_maker.py). PMUS_COMBO_MAKER=shadow
+    logs would-quotes; =live quotes and confirms in last look under hard
+    caps and combo_maker_gates; default OFF. Own thread and own state file
+    (STATE_DIR/combo_maker.json) so its caps survive restarts."""
+    from src import pmus_combo_maker as CM
+    if CM.MODE not in ("shadow", "live"):
+        return None
+    import threading
+    path = STATE_DIR / "combo_maker.json"
+    try:
+        state = json.loads(path.read_text()) if path.exists() else {}
+    except Exception:                                    # noqa: BLE001
+        state = {}
+
+    def save() -> None:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, default=str))
+        tmp.replace(path)
+
+    def get(path_: str) -> Any:
+        return venue.q1.base._get_with_retry(venue.t, path_)
+
+    def books(syms: List[str]) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for sy in syms:
+            try:
+                out[sy] = venue.bbo(sy)
+            except Exception:                            # noqa: BLE001
+                out[sy] = None
+        return out
+
+    mk = CM.ComboMaker(
+        get=get, post=lambda p, b: venue.t.request("POST", p, b),
+        put=lambda p, b: venue.t.request("PUT", p, b),
+        delete=lambda p: venue.t.request("DELETE", p),
+        books=books, log=log, gates=lambda: combo_maker_gates(eng),
+        state=state)
+
+    def run() -> None:
+        last_status = 0.0
+        while not getattr(eng, "stop", False):
+            try:
+                st = mk.pass_once()
+                if st["confirmed"] or st["quoted"] or st["declined"]:
+                    save()
+                if time.time() - last_status > 60:
+                    last_status = time.time()
+                    log("COMBO_MAKER_STATUS", **mk.status(), last_pass=st)
+                    save()
+            except Exception as exc:                     # noqa: BLE001
+                log("combo_maker_error", err=type(exc).__name__)
+            time.sleep(CM.POLL_S)
+
+    th = threading.Thread(target=run, daemon=True, name="combo-maker")
+    th.start()
+    log("combo_maker_enabled", mode=CM.MODE, **mk.status())
+    return mk
 
 
 def start_combo_study(venue: "Venue") -> Optional[Any]:

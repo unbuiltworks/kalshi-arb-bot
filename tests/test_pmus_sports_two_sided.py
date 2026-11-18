@@ -2456,3 +2456,27 @@ def test_sharp_shadow_skips_unmatched_and_out_of_window(eng, monkeypatch):
 
 def test_sharp_mode_off_by_default():
     assert M.SHARP_MODE in ("0", "")
+
+
+# ------------------------------------------------ combo maker lane gates
+def test_combo_maker_gates_follow_the_lane_locks(eng, monkeypatch):
+    e, _v = eng
+    monkeypatch.delenv(M.SUBMISSION_LOCK_ENV, raising=False)
+    monkeypatch.setattr(M.Engine, "shared_halt", lambda self: None)
+    assert M.combo_maker_gates(e) is None
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    assert M.combo_maker_gates(e) == "submission_lock"
+    monkeypatch.delenv(M.SUBMISSION_LOCK_ENV)
+    monkeypatch.setattr(M.Engine, "shared_halt", lambda self: "HALT")
+    assert M.combo_maker_gates(e) == "shared_halt"
+    monkeypatch.setattr(M.Engine, "shared_halt", lambda self: "UNAVAILABLE")
+    assert M.combo_maker_gates(e) == "shared_halt"
+    monkeypatch.setattr(M.Engine, "shared_halt", lambda self: None)
+    monkeypatch.setattr(M.Engine, "account_risk_blocks",
+                        lambda self, *a: "ACCOUNT_DAILY_LOSS_HALT")
+    assert M.combo_maker_gates(e) == "account_risk:ACCOUNT_DAILY_LOSS_HALT"
+
+
+def test_combo_maker_off_by_default(eng):
+    e, v = eng
+    assert M.start_combo_maker(v, e) is None

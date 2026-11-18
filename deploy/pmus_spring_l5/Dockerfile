@@ -122,6 +122,7 @@ COPY src/pmus_sports_manual_study.py src/pmus_sports_manual_study.py
 COPY src/l5_completion_policy.py src/l5_completion_policy.py
 COPY src/l5_account_risk.py src/l5_account_risk.py
 COPY src/pmus_sports_sharp.py src/pmus_sports_sharp.py
+COPY src/pmus_combo_maker.py src/pmus_combo_maker.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py
 COPY src/pmus_sports_completion_replay.py src/pmus_sports_completion_replay.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py
