@@ -64,7 +64,18 @@ MAX_LOSS_PER_QUOTE = _env_d("PMUS_COMBO_MAX_LOSS_PER_QUOTE", "2")
 MAX_OPEN_QUOTES = int(os.getenv("PMUS_COMBO_MAX_OPEN_QUOTES", "3"))
 MAX_WORST_TOTAL = _env_d("PMUS_COMBO_MAX_WORST_TOTAL_USD", "10")
 MAX_CONFIRMS_PER_DAY = int(os.getenv("PMUS_COMBO_MAX_CONFIRMS_PER_DAY", "10"))
-QUOTE_TTL_S = float(os.getenv("PMUS_COMBO_QUOTE_TTL_S", "60"))
+# Quote lifetime. "rfq" (default; owner 2026-11-18 "match the ttl to the
+# rfq lifetime"): a quote stays up while its RFQ is still listed OPEN, and
+# is withdrawn as soon as it is not. A number keeps the old fixed TTL. Either
+# way QUOTE_MAX_TTL_S is a hard ceiling. Staleness is safe: nothing trades
+# without our last-look confirm against FRESH leg books.
+_TTL_RAW = os.getenv("PMUS_COMBO_QUOTE_TTL_S", "rfq").strip().lower()
+try:
+    QUOTE_TTL_S: Optional[float] = (None if _TTL_RAW == "rfq"
+                                    else float(_TTL_RAW))
+except ValueError:
+    QUOTE_TTL_S = 60.0                         # garbled -> the old short TTL
+QUOTE_MAX_TTL_S = float(os.getenv("PMUS_COMBO_QUOTE_MAX_TTL_S", "1800"))
 POLL_S = float(os.getenv("PMUS_COMBO_POLL_S", "3"))
 
 
@@ -233,13 +244,28 @@ class ComboMaker:
         st["blocked"] = block
         if self.mode in ("shadow", "live"):
             self._last_look(st, block)
-            self._expire(st)
-            self._quote_new(st, block)
+            rfqs = self._open_rfqs()
+            self._expire(st, None if rfqs is None
+                         else {str(r.get("id") or "") for r in rfqs})
+            self._quote_new(st, block, rfqs or [])
         return st
 
-    def _quote_new(self, st: Dict[str, Any], block: Optional[str]) -> None:
-        d = self.get("/v1/rfqs?status=RFQ_STATUS_OPEN&limit=100") or {}
-        for r in d.get("rfqs") or []:
+    def _open_rfqs(self) -> Optional[List[Mapping[str, Any]]]:
+        """The open RFQ list, or None when it could not be read (then no
+        quote is treated as closed; only the hard ceiling applies)."""
+        try:
+            d = self.get("/v1/rfqs?status=RFQ_STATUS_OPEN&limit=100")
+        except Exception as exc:                         # noqa: BLE001
+            self.log("COMBO_MAKER_ERROR", op="list_rfqs",
+                     err=type(exc).__name__)
+            return None
+        if not isinstance(d, Mapping) or not isinstance(d.get("rfqs"), list):
+            return None
+        return d["rfqs"]
+
+    def _quote_new(self, st: Dict[str, Any], block: Optional[str],
+                   rfqs: List[Mapping[str, Any]]) -> None:
+        for r in rfqs:
             rid = str(r.get("id") or "")
             if not rid or rid in self.s["seen"]:
                 continue
@@ -271,7 +297,7 @@ class ComboMaker:
                     "postOnly": True}) or {}
             except Exception as exc:                     # noqa: BLE001
                 self.log("COMBO_MAKER_ERROR", op="create_quote", rfq_id=rid,
-                         err=type(exc).__name__)
+                         err=_err(exc))
                 continue
             qid = str(resp.get("quoteId") or "")
             if not qid:
@@ -322,7 +348,7 @@ class ComboMaker:
                     self.put("/v1/rfqs/%s/quotes/%s/confirm" % (rid, qid), {})
                 except Exception as exc:                 # noqa: BLE001
                     self.log("COMBO_MAKER_ERROR", op="confirm", quote_id=qid,
-                             err=type(exc).__name__)
+                             err=_err(exc))
                     continue
                 day["confirms"] += 1
                 self.s["confirmed"].append({
@@ -345,24 +371,38 @@ class ComboMaker:
                 self._delete(rid, qid, why)
                 st["declined"] += 1
 
-    def _expire(self, st: Dict[str, Any]) -> None:
+    def _expire(self, st: Dict[str, Any],
+                open_ids: Optional[set] = None) -> None:
         now = self.clock()
         for qid, rec in list(self.s["active"].items()):
-            if now - float(rec.get("t") or 0) > QUOTE_TTL_S:
-                self._delete(rec["rfq_id"], qid, "ttl")
+            age = now - float(rec.get("t") or 0)
+            why = None
+            if age > QUOTE_MAX_TTL_S:
+                why = "max_ttl"
+            elif QUOTE_TTL_S is not None:
+                if age > QUOTE_TTL_S:
+                    why = "ttl"
+            elif open_ids is not None and rec["rfq_id"] not in open_ids:
+                why = "rfq_closed"
+            if why:
+                self._delete(rec["rfq_id"], qid, why, age_s=round(age, 1))
                 st["expired"] += 1
         for rid, t in list(self.s["seen"].items()):
             if now - float(t) > 6 * 3600:
                 self.s["seen"].pop(rid, None)
 
-    def _delete(self, rid: str, qid: str, why: str) -> None:
+    def _delete(self, rid: str, qid: str, why: str, **kw: Any) -> None:
         try:
             self.delete("/v1/rfqs/%s/quotes/%s" % (rid, qid))
         except Exception as exc:                         # noqa: BLE001
-            self.log("COMBO_MAKER_ERROR", op="delete", quote_id=qid,
-                     err=type(exc).__name__)
+            # an RFQ that already closed took our quote with it; the delete
+            # failing then is expected, not an error worth alarming on
+            if why != "rfq_closed":
+                self.log("COMBO_MAKER_ERROR", op="delete", quote_id=qid,
+                         err=_err(exc))
         self.s["active"].pop(qid, None)
-        self.log("COMBO_MAKER_DECLINE", quote_id=qid, rfq_id=rid, why=why)
+        self.log("COMBO_MAKER_DECLINE", quote_id=qid, rfq_id=rid, why=why,
+                 **kw)
 
     def status(self) -> Dict[str, Any]:
         return {"mode": self.mode, "active_quotes": len(self.s["active"]),
@@ -377,6 +417,27 @@ class ComboMaker:
 def _fmt(rec: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: (str(v) if isinstance(v, D) else v) for k, v in rec.items()
             if k not in ("legs", "t")} | {"n_legs": len(rec.get("legs") or [])}
+
+
+def _err(exc: BaseException) -> str:
+    """Exception class plus HTTP status and a short body, never headers
+    (no credential ever reaches a log line)."""
+    out = type(exc).__name__
+    code = getattr(exc, "code", None) or getattr(exc, "status", None)
+    if code is not None:
+        out += ":%s" % code
+    body = None
+    try:
+        rd = getattr(exc, "read", None)
+        if callable(rd):
+            body = rd()
+    except Exception:                                    # noqa: BLE001
+        body = None
+    if isinstance(body, (bytes, bytearray)):
+        body = body.decode("utf-8", "replace")
+    if body:
+        out += ":" + " ".join(str(body).split())[:200]
+    return out
 
 
 def new_id() -> str:

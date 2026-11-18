@@ -211,14 +211,79 @@ def test_foreign_accepted_quote_is_ignored():
     assert st["confirmed"] == 0 and not api.puts
 
 
-def test_stale_quotes_expire_by_delete():
+def test_default_ttl_follows_the_rfq_lifetime():
+    assert CM.QUOTE_TTL_S is None                 # default "rfq"
     api = Api(rfqs=[RFQ])
     m, t = maker(api)
     m.pass_once()
-    t["now"] += CM.QUOTE_TTL_S + 1
-    api.rfqs = []
+    t["now"] += 600                               # long past the old 60 s
+    st = m.pass_once()
+    assert st["expired"] == 0 and not api.deletes and m.s["active"]
+    api.rfqs = []                                 # requester closed it
     st = m.pass_once()
     assert st["expired"] == 1 and len(api.deletes) == 1 and not m.s["active"]
+    assert any(k == "COMBO_MAKER_DECLINE" and kw["why"] == "rfq_closed"
+               for k, kw in api.logs)
+
+
+def test_open_list_unreadable_never_counts_as_closed():
+    api = Api(rfqs=[RFQ])
+    m, t = maker(api)
+    m.pass_once()
+    real = api.get
+
+    def flaky(path):
+        if path.startswith("/v1/rfqs?"):
+            raise OSError("down")
+        return real(path)
+    m.get = flaky
+    t["now"] += 120
+    st = m.pass_once()
+    assert st["expired"] == 0 and m.s["active"]
+
+
+def test_hard_ceiling_withdraws_even_an_open_rfq():
+    api = Api(rfqs=[RFQ])
+    m, t = maker(api)
+    m.pass_once()
+    t["now"] += CM.QUOTE_MAX_TTL_S + 1
+    st = m.pass_once()
+    assert st["expired"] == 1 and not m.s["active"]
+    assert any(k == "COMBO_MAKER_DECLINE" and kw["why"] == "max_ttl"
+               for k, kw in api.logs)
+
+
+def test_numeric_ttl_still_supported(monkeypatch):
+    monkeypatch.setattr(CM, "QUOTE_TTL_S", 60.0)
+    api = Api(rfqs=[RFQ])
+    m, t = maker(api)
+    m.pass_once()
+    t["now"] += 61
+    st = m.pass_once()                            # rfq still open
+    assert st["expired"] == 1 and len(api.deletes) == 1
+
+
+def test_failed_delete_of_a_closed_rfq_is_not_an_error():
+    api = Api(rfqs=[RFQ])
+    m, t = maker(api)
+    m.pass_once()
+
+    def gone(path):
+        raise OSError("404")
+    m.delete = gone
+    api.rfqs = []
+    m.pass_once()
+    assert not any(k == "COMBO_MAKER_ERROR" for k, _ in api.logs)
+    assert not m.s["active"]
+
+
+def test_error_text_carries_http_status_and_body():
+    class E(Exception):
+        code = 400
+
+        def read(self):
+            return b'{"message": "price  not aligned"}'
+    assert CM._err(E()) == 'E:400:{"message": "price not aligned"}'
 
 
 def test_errors_never_raise():
