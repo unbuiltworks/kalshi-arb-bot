@@ -226,11 +226,16 @@ def test_a_missing_module_is_reported_as_such_not_as_a_rows_problem(
     MEASURED_ENTRY_ROWS_UNREADABLE:ImportError -- safe, but it sends an
     operator to the rows file for a problem in the image.
 
-    A None in sys.modules makes `import` raise ImportError, which is the
-    documented way to simulate an absent module without patching
-    __import__.
+    `from src import l5_measured_entry_rates` resolves via the ATTRIBUTE
+    on the already-imported `src` package before it consults sys.modules,
+    so a None there alone is not enough under pytest (where sibling tests
+    have already imported it). Both the attribute and the sys.modules
+    entry have to go -- which is exactly why my first attempt passed
+    standalone and failed in the suite.
     """
     import sys
+    import src as src_pkg
+    monkeypatch.delattr(src_pkg, "l5_measured_entry_rates", raising=False)
     monkeypatch.setitem(sys.modules, "src.l5_measured_entry_rates", None)
     monkeypatch.setenv(GATE, "ON")
     monkeypatch.setenv(ROWS, _rows_file(tmp_path, [_paired()] * 30))
