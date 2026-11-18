@@ -237,6 +237,30 @@ RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
 # the recovery decision (1 = unchanged). Higher -> the completion goes to
 # the touch at once. The lock-loss cap and every halt are untouched.
 RECOVERY_LEAN = _env_d("PMUS_TWO_SIDED_RECOVERY_LEAN", "1")
+# OWNER 2026-11-18 "build it": PATIENT stranded-leg management (the owner's
+# manual style). Default OFF. The completion rests at the price that keeps
+# the WHOLE pair at/under a cap that steps up only with time since the fill
+# (PATIENT_SCHEDULE "secs:cap,..."), to PATIENT_LATE_CAP in the final stage
+# of the match; never chases the tick. MAX_STRANDED (0 = off) stops every
+# new first leg while that many markets hold an unpaired leg.
+RECOVERY_PATIENT = os.getenv("PMUS_TWO_SIDED_RECOVERY_PATIENT",
+                             "0").strip() == "1"
+
+
+def _schedule(raw: str):
+    out = []
+    for part in str(raw or "").split(","):
+        if ":" in part:
+            a_, b_ = part.split(":", 1)
+            out.append((float(a_), D(b_.strip())))
+    return tuple(sorted(out)) or ((0.0, D("0.97")), (600.0, D("0.99")),
+                                  (1800.0, D("1.00")))
+
+
+PATIENT_SCHEDULE = _schedule(os.getenv("PMUS_TWO_SIDED_PATIENT_SCHEDULE",
+                                       "0:0.97,600:0.99,1800:1.00"))
+PATIENT_LATE_CAP = _env_d("PMUS_TWO_SIDED_PATIENT_LATE_CAP", "1.03")
+MAX_STRANDED = int(os.getenv("PMUS_TWO_SIDED_MAX_STRANDED", "0"))
 # HALT_NEW_EXPOSURE: no new first legs anywhere while unmatched cost is
 # at/above this (recovery mode only).
 UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
@@ -1572,12 +1596,25 @@ class Engine:
             return False
         from src.pmus_sports_recovery import halt_new_exposure
         stop = halt_new_exposure(self.b.total_unmatched(), UNMATCHED_HALT_USD)
+        stranded = self.stranded_count()
+        # OWNER 2026-11-18: at most MAX_STRANDED unpaired legs at once
+        too_many = MAX_STRANDED > 0 and stranded >= MAX_STRANDED
+        stop = stop or too_many
         if stop != bool(self.b.d.get("halt_new_exposure")):
             self.b.d["halt_new_exposure"] = stop
             log("HALT_NEW_EXPOSURE" if stop else "resume_new_exposure",
                 unmatched_cost=self.b.total_unmatched(),
-                limit=UNMATCHED_HALT_USD)
+                limit=UNMATCHED_HALT_USD, stranded=stranded,
+                max_stranded=MAX_STRANDED,
+                why=("max_stranded" if too_many else "unmatched_cost")
+                if stop else None)
         return stop
+
+    def stranded_count(self) -> int:
+        """Markets currently holding an unpaired (lone) leg."""
+        return sum(1 for mk in (self.b.d.get("markets") or {}).values()
+                   if mk.get("lone_since") is not None
+                   and not mk.get("done"))
 
     def _recovery_resolved(self, slug: str, mk: Dict[str, Any],
                            outcome: str) -> None:
@@ -1758,6 +1795,9 @@ class Engine:
             min_qty=spec["min_qty"],
             params={"taker_fee_rate": TAKER_FEE_RATE,
                     "lean": RECOVERY_LEAN,
+                    "patient": RECOVERY_PATIENT,
+                    "patient_schedule": PATIENT_SCHEDULE,
+                    "patient_late_cap": PATIENT_LATE_CAP,
                     # cheap-leg-first episodes: a taker completion only at
                     # a positive net settlement margin (owner 2026-11-17)
                     "taker_max_pair": (
@@ -2687,6 +2727,11 @@ class Engine:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         self.mark_recovery_start()
         log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
+                              "patient": RECOVERY_PATIENT,
+                              "patient_schedule": [[a_, str(c_)] for a_, c_ in
+                                                   PATIENT_SCHEDULE],
+                              "patient_late_cap": PATIENT_LATE_CAP,
+                              "max_stranded": MAX_STRANDED,
                               "unmatched_halt_usd": UNMATCHED_HALT_USD,
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
