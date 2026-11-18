@@ -91,14 +91,52 @@ ZERO, ONE = D("0"), D("1")
 #: the switch. Anything but exactly "ON" is off, so a typo is off.
 POLICY_ENV = "L5_COMPLETION_POLICY"
 
-#: (progress_upper_bound, pair_ceiling, name). Owner candidates
-#: 2026-11-18. The first stage a progress falls into wins.
-STAGES: Tuple[Tuple[D, D, str], ...] = (
-    (D("0.30"), D("0.99"), "PATIENT"),
-    (D("0.60"), D("1.00"), "STEP"),
-    (D("0.85"), D("1.00"), "BREAKEVEN"),
-    (ONE,       D("1.03"), "FINAL"),
-)
+#: THE AUTHORIZED PATIENT CEILING. Owner 2026-11-18: "The $0.97 decision
+#: stands. Use it as the initial patient-stage ceiling, with $0.99
+#: retained as a replay comparator." 0.97 locks about 3c, which is the
+#: rationale his first message gave; 0.99 locks 1c, which is what his
+#: formal instruction said. He has resolved it to 0.97.
+PATIENT_CEILING = D("0.97")
+
+#: the comparator, for replay only. Callers pass it explicitly; nothing
+#: defaults to it. The replay decides which produces better NET outcomes
+#: after unmatched losses -- that question is open.
+COMPARATOR_PATIENT_CEILING = D("0.99")
+
+#: ABOVE-PAR COMPLETION IS NOT AUTHORIZED. Owner 2026-11-18: "There is no
+#: authorization to restore the $1.03 allowance." Its only stated
+#: justification was the 41-of-41 claim, which did not survive
+#: verification, so FINAL is par like the two stages before it and
+#: nothing in this module can pay above 1.00.
+#:
+#: READ CONSERVATIVELY AND ON PURPOSE. That sentence could have meant
+#: only "not for uncertain sports markets", which was already true via
+#: UNCERTAIN_MAX_STAGE. Taking the narrower reading would have left a
+#: certain-clock market able to pay 1.03 on no authorization at all, so
+#: the wider reading is the one implemented. Restoring it is one explicit
+#: argument -- `final_ceiling=` -- and it needs the owner's word.
+ABOVE_PAR_FINAL_CEILING = D("1.03")
+FINAL_CEILING = D("1.00")
+
+
+def stages(patient_ceiling: Optional[D] = None,
+           final_ceiling: Optional[D] = None
+           ) -> Tuple[Tuple[D, D, str], ...]:
+    """(progress_upper_bound, pair_ceiling, name). First match wins.
+
+    Both overrides exist for REPLAY and for an explicitly authorized
+    change; the defaults are the authorized numbers.
+    """
+    pc = PATIENT_CEILING if patient_ceiling is None else patient_ceiling
+    fc = FINAL_CEILING if final_ceiling is None else final_ceiling
+    return ((D("0.30"), pc,         "PATIENT"),
+            (D("0.60"), D("1.00"),  "STEP"),
+            (D("0.85"), D("1.00"),  "BREAKEVEN"),
+            (ONE,       fc,         "FINAL"))
+
+
+#: the authorized schedule, for callers that want it without a call.
+STAGES: Tuple[Tuple[D, D, str], ...] = stages()
 
 #: candidate cap on concurrent stranded legs. A caller's own stricter
 #: limit always wins; this never raises anyone's allowance.
@@ -162,7 +200,9 @@ UNCERTAIN_MAX_STAGE = 2
 
 
 def stage_for(prog: Mapping[str, Any], *,
-              event_late: bool = False) -> Dict[str, Any]:
+              event_late: bool = False,
+              patient_ceiling: Optional[Any] = None,
+              final_ceiling: Optional[Any] = None) -> Dict[str, Any]:
     """The stage and its ceiling. Unknown or estimated -> stage 0.
 
     THE CONSERVATIVE DIRECTION IS EARLY. An unknown end time could mean
@@ -183,29 +223,30 @@ def stage_for(prog: Mapping[str, Any], *,
     Passing `event_late` on a CERTAIN market changes nothing: a real
     clock is better evidence than a flag, and is used instead.
     """
+    sched = stages(_d(patient_ceiling), _d(final_ceiling))
     p = prog.get("progress")
     certain = prog.get("certain") is True
     if p is None or not certain:
         if event_late:
             idx = UNCERTAIN_MAX_STAGE
-            _u, ceil, name = STAGES[idx]
+            _u, ceil, name = sched[idx]
             return {"stage": idx, "stage_name": name, "pair_ceiling": ceil,
                     "progress": p, "event_late": True,
                     "capped_at_uncertain_max": True,
                     "why": ("advanced on an OBSERVED late-event signal and "
                             "capped at %s; an uncertain market never "
                             "reaches the above-par stage" % name)}
-        idx, ceil, name = 0, STAGES[0][1], STAGES[0][2]
+        idx, ceil, name = 0, sched[0][1], sched[0][2]
         return {"stage": idx, "stage_name": name, "pair_ceiling": ceil,
                 "progress": p, "event_late": False,
                 "why": ("held at the tightest stage: %s"
                         % (prog.get("why") or "RESOLUTION_UNCERTAIN"))}
-    for idx, (upper, ceil, name) in enumerate(STAGES):
+    for idx, (upper, ceil, name) in enumerate(sched):
         if p <= upper:
             return {"stage": idx, "stage_name": name, "pair_ceiling": ceil,
                     "progress": p, "why": None}
-    upper, ceil, name = STAGES[-1]
-    return {"stage": len(STAGES) - 1, "stage_name": name,
+    upper, ceil, name = sched[-1]
+    return {"stage": len(sched) - 1, "stage_name": name,
             "pair_ceiling": ceil, "progress": p, "why": None}
 
 
@@ -275,6 +316,8 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
            prog: Optional[Mapping[str, Any]] = None,
            stranded_now: Any = None, caller_max_stranded: Any = None,
            event_late: bool = False, p_win_source: Optional[str] = None,
+           patient_ceiling: Optional[Any] = None,
+           final_ceiling: Optional[Any] = None,
            ) -> Dict[str, Any]:
     """Rank the options on expected net dollars. HOLD unless beaten.
 
@@ -304,7 +347,8 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
 
     st = stage_for(prog or {"progress": None, "certain": False,
                             "why": "NO_PROGRESS_SUPPLIED"},
-                   event_late=event_late)
+                   event_late=event_late, patient_ceiling=patient_ceiling,
+                   final_ceiling=final_ceiling)
     ceiling = st["pair_ceiling"]
     room = stranded_room(stranded_now=stranded_now if stranded_now is not None
                          else 0, caller_max=caller_max_stranded)
@@ -384,6 +428,16 @@ def decide(*, held_side: str, held_qty: Any, held_avg_cost: Any,
             "p_win": str(pw), "p_win_source": p_win_source or "UNDECLARED",
             "expected_net_usd": str(best_net),
             "hold_net_usd": str(base),
+            #: THE CEILING IS NOT AN ECONOMIC GATE. Owner 2026-11-18:
+            #: "$1.00 is only breakeven before fees and other execution
+            #: costs. The actual economic gate must remain
+            #: authoritative." `fee_per_share` is charged into every pair
+            #: cost here, but this module cannot see the caller's other
+            #: execution costs, rebates, slippage or capital charges. A
+            #: permissible completion is one the SCHEDULE allows, never
+            #: one the economics have cleared; the caller's own gate
+            #: decides that and this never substitutes for it.
+            "ceiling_is_not_an_economic_gate": True,
             "labels": ("expected values are MODELLED from the caller's "
                        "executable prices and p_win; they are not realized "
                        "P&L and a completion here is a recommendation, not "

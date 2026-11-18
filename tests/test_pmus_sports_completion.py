@@ -25,9 +25,16 @@ def on(monkeypatch):
 # ------------------------------------------------------------- adapter
 def test_effective_ceiling_is_stricter_only_and_never_above_par():
     s0 = CP.stage_for({"progress": None, "certain": False})
+    # shared default (9c338374f) is the authorized 0.97: a looser sports
+    # cap can never widen it
+    assert s0["pair_ceiling"] == CP.PATIENT_CEILING == D("0.97")
     assert SC.effective_ceiling(s0, D("0.97")) == D("0.97")
-    assert SC.effective_ceiling(s0, D("0.99")) == D("0.99")
-    assert SC.effective_ceiling(s0, D("1.05")) == D("0.99")   # never looser
+    assert SC.effective_ceiling(s0, D("0.99")) == D("0.97")   # never looser
+    # the comparator only runs when passed explicitly as patient_ceiling
+    s99 = CP.stage_for({"progress": None, "certain": False},
+                       patient_ceiling=CP.COMPARATOR_PATIENT_CEILING)
+    assert SC.effective_ceiling(s99, D("0.99")) == D("0.99")
+    assert SC.effective_ceiling(s99, D("1.05")) == D("0.99")  # never looser
     late = CP.stage_for({"progress": None, "certain": False},
                         event_late=True)
     assert SC.effective_ceiling(late, D("0.97")) == D("1.00")
@@ -56,6 +63,27 @@ def test_late_reaches_par_never_above(on):
     d = SC.decide(**far, late=True)
     assert d["effective_ceiling"] == "1.00"
     assert d["px"] is None or D("0.40") + d["px"] <= D("1.00")
+
+
+def test_no_stage_pays_above_par_and_records_not_an_economic_gate(on):
+    """Shared 9c338374f: FINAL is par; the ceiling is never the gate."""
+    assert CP.FINAL_CEILING == D("1.00")
+    assert max(c for _u, c, _n in CP.STAGES) == D("1.00")
+    for cap in (D("0.97"), D("0.99"), D("1.03")):
+        for late in (False, True):
+            d = SC.decide(**BASE, late=late, sports_cap=cap)
+            assert D(d["effective_ceiling"]) <= D("1.00")
+            if d["px"] is not None:
+                assert BASE["lead_px"] + d["px"] <= D("1.00")
+                assert d["policy"]["ceiling_is_not_an_economic_gate"] is True
+
+
+def test_comparator_cap_really_runs_at_099(on):
+    d97 = SC.decide(**BASE, late=False, sports_cap=D("0.97"))
+    d99 = SC.decide(**BASE, late=False, sports_cap=D("0.99"))
+    assert d97["effective_ceiling"] == "0.97"
+    assert d99["effective_ceiling"] == "0.99"
+    assert d99["px"] > d97["px"]
 
 
 def test_keep_and_reprice(on):

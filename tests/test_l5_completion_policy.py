@@ -46,11 +46,11 @@ class TestProgressIsMeasuredFromMarketStart:
         assert p["progress"] == D("0.3")
         assert P.stage_for(p)["stage_name"] == "PATIENT"
 
-    def test_the_same_window_at_260s_is_FINAL(self):
+    def test_the_same_window_at_260s_is_FINAL_and_FINAL_IS_PAR(self):
         p = P.progress(now=1000 + 260, start=1000, end=1300)
         st = P.stage_for(p)
         assert st["stage_name"] == "FINAL"
-        assert st["pair_ceiling"] == D("1.03")
+        assert st["pair_ceiling"] == D("1.00"), "above-par is not authorized"
 
     def test_progress_does_not_depend_on_when_the_leg_filled(self):
         """Two legs, same market, different fill times, SAME stage."""
@@ -63,11 +63,11 @@ class TestProgressIsMeasuredFromMarketStart:
         assert P.progress(now=9999, start=1000, end=1300)["progress"] == D("1")
 
     @pytest.mark.parametrize("p,name,ceil", [
-        ("0.00", "PATIENT", "0.99"), ("0.30", "PATIENT", "0.99"),
+        ("0.00", "PATIENT", "0.97"), ("0.30", "PATIENT", "0.97"),
         ("0.31", "STEP", "1.00"), ("0.60", "STEP", "1.00"),
         ("0.61", "BREAKEVEN", "1.00"), ("0.85", "BREAKEVEN", "1.00"),
-        ("0.86", "FINAL", "1.03"), ("1.00", "FINAL", "1.03")])
-    def test_the_owner_candidate_schedule(self, p, name, ceil):
+        ("0.86", "FINAL", "1.00"), ("1.00", "FINAL", "1.00")])
+    def test_the_authorized_schedule(self, p, name, ceil):
         st = P.stage_for(prog(p))
         assert (st["stage_name"], st["pair_ceiling"]) == (name, D(ceil))
 
@@ -79,7 +79,7 @@ class TestUncertainResolutionIsTreatedAsEarly:
         assert p["progress"] is None
         assert p["why"] == "RESOLUTION_TIME_UNKNOWN"
         st = P.stage_for(p)
-        assert st["stage"] == 0 and st["pair_ceiling"] == D("0.99")
+        assert st["stage"] == 0 and st["pair_ceiling"] == D("0.97")
 
     def test_an_ESTIMATED_end_time_does_not_advance_the_stage(self):
         """A tennis match ends when it ends. 95% of an estimate is not FINAL."""
@@ -88,7 +88,7 @@ class TestUncertainResolutionIsTreatedAsEarly:
         assert p["progress"] == D("0.95")
         st = P.stage_for(p)
         assert st["stage"] == 0, "an estimate must not unlock above-par"
-        assert st["pair_ceiling"] == D("0.99")
+        assert st["pair_ceiling"] == D("0.97")
         assert "tightest" in st["why"]
 
     def test_an_inverted_market_window_is_uncertain(self):
@@ -112,27 +112,28 @@ class TestALaterStageNeverForcesACompletion:
         """The rule that makes an above-par ceiling safe.
 
         Held 10 UP at 0.40, p_win 0.70 -> holding is worth
-        10*(0.70-0.40) = +3.00. Completing at 0.62 costs a pair of 1.02,
-        worth 10*(1-1.02) = -0.20. Permissible at FINAL, and still refused.
+        10*(0.70-0.40) = +3.00. Completing at 0.57 costs a pair of 0.97,
+        worth 10*(1-0.97) = +0.30. Permissible at FINAL, still refused
+        because holding is worth more.
         """
         d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
-                     complete_bid="0.62", p_win="0.70", prog=prog("0.95"))
+                     complete_bid="0.57", p_win="0.70", prog=prog("0.95"))
         assert d["stage"]["stage_name"] == "FINAL"
         assert d["options"]["MAKER_COMPLETE"]["permissible"] is True
-        assert d["options"]["MAKER_COMPLETE"]["pair_cost"] == "1.02"
+        assert d["options"]["MAKER_COMPLETE"]["pair_cost"] == "0.97"
         assert d["action"] == "HOLD"
         assert d["why"] == "HOLD_NOT_BEATEN"
 
-    def test_at_FINAL_an_above_par_completion_IS_taken_when_it_beats_holding(self):
-        """The case the final rung exists for: the leg is probably worthless.
+    def test_at_FINAL_a_par_completion_IS_taken_when_it_beats_holding(self):
+        """The case the final stage exists for: the leg is probably worthless.
 
         Held 10 UP at 0.40, p_win 0.05 -> holding is worth -3.50.
-        Completing at 0.62 (pair 1.02) is worth -0.20. Completing wins.
+        Completing at 0.60 (pair 1.00) is worth 0.00. Completing wins.
         """
         d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
-                     complete_bid="0.62", p_win="0.05", prog=prog("0.95"))
+                     complete_bid="0.60", p_win="0.05", prog=prog("0.95"))
         assert d["action"] == "MAKER_COMPLETE"
-        assert d["expected_net_usd"] == "-0.20"
+        assert d["expected_net_usd"] == "0.00"
         assert d["hold_net_usd"] == "-3.50"
 
     def test_reaching_a_later_stage_alone_changes_no_action(self):
@@ -163,7 +164,7 @@ class TestTheCeilingBinds:
         mc = d["options"]["MAKER_COMPLETE"]
         assert mc["permissible"] is False
         assert mc["why"] == "PAIR_ABOVE_STAGE_CEILING"
-        assert mc["pair_cost"] == "1.00" and mc["ceiling"] == "0.99"
+        assert mc["pair_cost"] == "1.00" and mc["ceiling"] == "0.97"
         assert d["action"] == "HOLD"
 
     def test_the_same_completion_is_permissible_at_STEP(self):
@@ -420,3 +421,101 @@ class TestPWinProvenanceIsRecordedNotAssumed:
                      p_win_source="ANYTHING", prog=prog("0.5"))
         assert a["action"] == b["action"]
         assert a["expected_net_usd"] == b["expected_net_usd"]
+
+
+# ---------------------------------------------------------------------------
+# OWNER 2026-11-18: "The $0.97 decision stands ... with $0.99 retained as a
+# replay comparator" and "There is no authorization to restore the $1.03
+# allowance."
+# ---------------------------------------------------------------------------
+class TestTheAuthorizedCeilingsAndTheComparator:
+
+    def test_the_patient_ceiling_is_the_authorized_097(self):
+        assert P.PATIENT_CEILING == D("0.97")
+        assert P.stage_for(prog("0.1"))["pair_ceiling"] == D("0.97")
+
+    def test_097_locks_three_cents_which_was_the_stated_rationale(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.57", p_win="0.05", prog=prog("0.1"))
+        assert d["options"]["MAKER_COMPLETE"]["pair_cost"] == "0.97"
+        assert d["options"]["MAKER_COMPLETE"]["net"] == "0.30"   # 3c x 10
+
+    def test_the_comparator_exists_and_nothing_defaults_to_it(self):
+        assert P.COMPARATOR_PATIENT_CEILING == D("0.99")
+        assert P.PATIENT_CEILING != P.COMPARATOR_PATIENT_CEILING
+
+    def test_a_replay_may_pass_the_comparator_explicitly(self):
+        st = P.stage_for(prog("0.1"),
+                         patient_ceiling=P.COMPARATOR_PATIENT_CEILING)
+        assert st["pair_ceiling"] == D("0.99")
+
+    def test_the_comparator_admits_a_098_pair_the_authorized_ceiling_refuses(self):
+        """The whole point of running both: 0.97 is strictly tighter."""
+        kw = dict(held_side="UP", held_qty="10", held_avg_cost="0.48",
+                  complete_bid="0.50", p_win="0.05", prog=prog("0.1"))
+        strict = P.decide(**kw)
+        loose = P.decide(**kw, patient_ceiling=P.COMPARATOR_PATIENT_CEILING)
+        assert strict["options"]["MAKER_COMPLETE"]["permissible"] is False
+        assert loose["options"]["MAKER_COMPLETE"]["permissible"] is True
+        assert strict["action"] == "HOLD"
+        assert loose["action"] == "MAKER_COMPLETE"
+
+
+class TestAboveParIsNotAuthorized:
+
+    def test_the_default_final_ceiling_is_par(self):
+        assert P.FINAL_CEILING == D("1.00")
+        assert P.stage_for(prog("0.99"))["pair_ceiling"] == D("1.00")
+
+    def test_no_stage_can_pay_above_par_by_default(self):
+        for p in ("0.0", "0.3", "0.5", "0.7", "0.9", "1.0"):
+            assert P.stage_for(prog(p))["pair_ceiling"] <= D("1.00")
+
+    def test_an_above_par_completion_is_refused_at_every_stage(self):
+        for p in ("0.1", "0.5", "0.8", "0.99"):
+            d = P.decide(held_side="UP", held_qty="10",
+                         held_avg_cost="0.40", complete_bid="0.62",
+                         p_win="0.00", prog=prog(p))
+            assert d["options"]["MAKER_COMPLETE"]["permissible"] is False
+            assert d["action"] == "HOLD"
+
+    def test_restoring_it_takes_one_explicit_argument(self):
+        """So the owner's word is the only thing that enables it."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.62", p_win="0.00", prog=prog("0.99"),
+                     final_ceiling=P.ABOVE_PAR_FINAL_CEILING)
+        assert d["stage"]["pair_ceiling"] == D("1.03")
+        assert d["options"]["MAKER_COMPLETE"]["permissible"] is True
+        assert d["action"] == "MAKER_COMPLETE"      # -0.20 beats -4.00
+
+    def test_even_then_it_never_forces_a_loss(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.62", p_win="0.70", prog=prog("0.99"),
+                     final_ceiling=P.ABOVE_PAR_FINAL_CEILING)
+        assert d["action"] == "HOLD"
+
+    def test_the_withdrawn_justification_is_recorded_next_to_the_constant(self):
+        import pathlib
+        src = pathlib.Path("src/l5_completion_policy.py").read_text()
+        assert "ABOVE-PAR COMPLETION IS NOT AUTHORIZED" in src
+        assert "41-of-41" in src
+
+
+class TestTheCeilingIsNotAnEconomicGate:
+
+    def test_every_decision_says_so(self):
+        """Owner: '$1.00 is only breakeven before fees ... the actual
+        economic gate must remain authoritative.'"""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.5", prog=prog("0.5"))
+        assert d["ceiling_is_not_an_economic_gate"] is True
+
+    def test_a_par_pair_with_fees_is_a_loss_and_is_refused_on_economics(self):
+        """1.00 all-in is exactly breakeven; add a fee and it is negative."""
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.49",
+                     complete_bid="0.50", fee_per_share="0.01",
+                     p_win="0.60", prog=prog("0.5"))
+        mc = d["options"]["MAKER_COMPLETE"]
+        assert mc["pair_cost"] == "1.00"
+        assert mc["net"] == "0.00"
+        assert d["action"] == "HOLD"        # holding at 0.60 is worth 1.10

@@ -26,6 +26,11 @@ HOW A SPORTS STRAND IS PRICED
     it) -- patient, never chasing the touch.
   * p_win: the held side's executable mid, declared as such.
   * Taker is never authorized here; REDUCE is reported, never executed.
+  * The schedule ceiling is NOT an economic gate (shared policy 9c338374f,
+    owner: "$1.00 is only breakeven before fees and other execution
+    costs"). A completion is only returned when the policy's never-force
+    rule (beats holding at the held mid) also passes; nothing here relaxes
+    the lane's own gates.
 Nothing here places, cancels or authorizes anything.
 """
 from __future__ import annotations
@@ -87,7 +92,11 @@ def decide(*, lead: str, lead_px: Any, need: Any, yes_bid: Any, yes_ask: Any,
     bk = books(lead, D(str(yes_bid)), D(str(yes_ask)))
     prog = {"progress": None, "certain": False,
             "why": "SPORTS_END_UNCERTAIN", "start": game_start, "now": now}
-    stage = policy.stage_for(prog, event_late=bool(late))
+    # the sports cap is passed AS the policy's patient ceiling (so the 0.99
+    # comparator really runs at 0.99 now the shared default is 0.97) and is
+    # ALSO applied on top below, so it can only ever tighten.
+    stage = policy.stage_for(prog, event_late=bool(late),
+                             patient_ceiling=D(str(sports_cap)))
     ceil = effective_ceiling(stage, sports_cap)
     px = rest_price(ceil, D(str(lead_px)), bk["comp"]["ask"], tick,
                     bk["comp"]["mid"])
@@ -103,7 +112,7 @@ def decide(*, lead: str, lead_px: Any, need: Any, yes_bid: Any, yes_ask: Any,
         p_win=bk["held"]["mid"], fee_per_share="0", taker_authorized=False,
         prog=prog, stranded_now=stranded_now,
         caller_max_stranded=caller_max_stranded, event_late=bool(late),
-        p_win_source=P_WIN_SOURCE)
+        p_win_source=P_WIN_SOURCE, patient_ceiling=D(str(sports_cap)))
     out["policy"] = res
     act = res.get("action")
     if act == "MAKER_COMPLETE":
