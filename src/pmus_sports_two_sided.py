@@ -237,6 +237,26 @@ RECOVERY_TAKER_CHUNK = _env_d("PMUS_TWO_SIDED_RECOVERY_TAKER_CHUNK", "0")
 # the recovery decision (1 = unchanged). Higher -> the completion goes to
 # the touch at once. The lock-loss cap and every halt are untouched.
 RECOVERY_LEAN = _env_d("PMUS_TWO_SIDED_RECOVERY_LEAN", "1")
+# OWNER 2026-11-18: the SHARED stranded-leg policy (src/l5_completion_policy
+# via src/pmus_sports_completion). Default OFF; live only when BOTH this and
+# L5_COMPLETION_POLICY=ON. COMPLETION_SPORTS_CAP is the owner's candidate
+# stage-0 pair cap (stricter-only); a sports market never completes above
+# 1.00. MAX_STRANDED (0 = off): no new first leg while that many markets
+# hold an unpaired leg.
+COMPLETION_POLICY_ON = os.getenv("PMUS_TWO_SIDED_COMPLETION_POLICY",
+                                 "0").strip() == "1"
+COMPLETION_SPORTS_CAP = _env_d("PMUS_TWO_SIDED_COMPLETION_SPORTS_CAP", "0.97")
+MAX_STRANDED = int(os.getenv("PMUS_TWO_SIDED_MAX_STRANDED", "0"))
+
+
+def completion_policy_live() -> bool:
+    if not COMPLETION_POLICY_ON:
+        return False
+    try:
+        from src import l5_completion_policy as CP
+        return bool(CP.enabled())
+    except Exception:                                    # noqa: BLE001
+        return False
 # HALT_NEW_EXPOSURE: no new first legs anywhere while unmatched cost is
 # at/above this (recovery mode only).
 UNMATCHED_HALT_USD = _env_d("PMUS_TWO_SIDED_UNMATCHED_HALT_USD", "2")
@@ -1572,11 +1592,17 @@ class Engine:
             return False
         from src.pmus_sports_recovery import halt_new_exposure
         stop = halt_new_exposure(self.b.total_unmatched(), UNMATCHED_HALT_USD)
+        stranded = self.stranded_count()
+        too_many = MAX_STRANDED > 0 and stranded >= MAX_STRANDED
+        stop = stop or too_many
         if stop != bool(self.b.d.get("halt_new_exposure")):
             self.b.d["halt_new_exposure"] = stop
             log("HALT_NEW_EXPOSURE" if stop else "resume_new_exposure",
                 unmatched_cost=self.b.total_unmatched(),
-                limit=UNMATCHED_HALT_USD)
+                limit=UNMATCHED_HALT_USD, stranded=stranded,
+                max_stranded=MAX_STRANDED,
+                why=("max_stranded" if too_many else "unmatched_cost")
+                if stop else None)
         return stop
 
     def _recovery_resolved(self, slug: str, mk: Dict[str, Any],
@@ -1748,6 +1774,10 @@ class Engine:
             rem = D(cur[1]["qty"]) - D(cur[1]["filled"])
             if rem == need and cur[1].get("stage") != "two_sided_exit":
                 resting_px = D(cur[1]["px"])
+        if completion_policy_live():
+            return self._recover_shared(slug, mk, spec, bbo, tick, lead, lag,
+                                        need, lead_px, cur, lone_since, late,
+                                        resting_px)
         dec = RC.decide(
             lead=lead, lead_px=lead_px, need=need, bid=bbo.get("bid"),
             ask=bbo.get("ask"), tick=tick, age_s=time.time() - lone_since,
@@ -1798,6 +1828,57 @@ class Engine:
                        post_only=False)
             return
         self.place(slug, lag, dec["px"], dec["qty"], "two_sided_complete")
+
+    def _recover_shared(self, slug, mk, spec, bbo, tick, lead, lag, need,
+                        lead_px, cur, lone_since, late, resting_px) -> None:
+        """The SHARED stranded-leg policy (owner 2026-11-18). Maker only:
+        rest the completion at the effective pair cap and wait; HOLD
+        removes any resting completion. Taker never; REDUCE never."""
+        from src import pmus_sports_completion as SC
+        dec = SC.decide(lead=lead, lead_px=lead_px, need=need,
+                        yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
+                        late=late, sports_cap=COMPLETION_SPORTS_CAP,
+                        game_start=mk.get("game_start"), now=time.time(),
+                        stranded_now=self.stranded_count(),
+                        caller_max_stranded=MAX_STRANDED or None,
+                        resting_px=resting_px)
+        act = dec["action"]
+        key = f"shared:{act}:{dec.get('px')}"
+        if mk.get("recovery_logged") != key:
+            mk["recovery_logged"] = key
+            acts = mk.setdefault("recovery_actions", {})
+            acts[act] = acts.get(act, 0) + 1
+            pol = dec.get("policy") or {}
+            log("RECOVERY_DECISION", slug=slug, lead=lead, lead_px=lead_px,
+                need=need, age_s=round(time.time() - lone_since), late=late,
+                controller="shared_policy",
+                decision={"action": act, "px": dec.get("px"),
+                          "qty": dec.get("qty"), "why": dec.get("why"),
+                          "effective_ceiling": dec.get("effective_ceiling"),
+                          "stage": (dec.get("stage") or {}).get("stage_name"),
+                          "p_win": pol.get("p_win"),
+                          "p_win_source": pol.get("p_win_source"),
+                          "expected_net_usd": pol.get("expected_net_usd"),
+                          "hold_net_usd": pol.get("hold_net_usd")},
+                label="shared policy; values MODELLED, never P&L")
+        if act == "KEEP":
+            return
+        if cur:
+            self.v.cancel(cur[0])
+            st = self.v.status(cur[0])
+            self._record_fill(slug, lag, cur[0], st)
+            cur[1]["open"] = st["open"]
+            self.b.save()
+            return                       # re-decide on the reconciled book
+        if act == "HOLD" or dec["qty"] < spec["min_qty"]:
+            return
+        self.place(slug, lag, dec["px"], dec["qty"], "two_sided_complete")
+
+    def stranded_count(self) -> int:
+        """Markets currently holding an unpaired (lone) leg."""
+        return sum(1 for mk in (self.b.d.get("markets") or {}).values()
+                   if mk.get("lone_since") is not None
+                   and not mk.get("done"))
 
     def active(self) -> list:
         return [s for s, mk in self.b.d["markets"].items() if not mk["done"]]
@@ -2687,6 +2768,9 @@ class Engine:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         self.mark_recovery_start()
         log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
+                              "shared_policy": completion_policy_live(),
+                              "sports_cap": COMPLETION_SPORTS_CAP,
+                              "max_stranded": MAX_STRANDED,
                               "unmatched_halt_usd": UNMATCHED_HALT_USD,
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
@@ -2899,11 +2983,87 @@ def main() -> int:
     start_xv_paper(venue)
     start_intl_guard(venue)
     start_combo_study(venue)
+    start_completion_replay(venue)
     return Engine(venue, book).run()
 
 
 XV_PAPER_ENV = "PMUS_TWO_SIDED_XV_PAPER"
 COMBO_STUDY_ENV = "PMUS_TWO_SIDED_COMBO_STUDY"
+COMPLETION_REPLAY_ENV = "PMUS_TWO_SIDED_COMPLETION_REPLAY"
+
+
+def _public_settlement(venue: "Venue", slug: str) -> Optional[D]:
+    """YES settlement price (0/1) from the KEYLESS gateway, or None."""
+    try:
+        md = (venue.gget(f"/v1/markets/{slug}/bbo") or {}).get(
+            "marketData") or {}
+    except Exception:                                    # noqa: BLE001
+        return None
+    if md.get("state") not in ("MARKET_STATE_EXPIRED",
+                               "MARKET_STATE_RESOLVED",
+                               "MARKET_STATE_SETTLED"):
+        return None
+    v = md.get("settlementPx")
+    v = v.get("value") if isinstance(v, Mapping) else v
+    try:
+        px = D(str(v))
+    except Exception:                                    # noqa: BLE001
+        return None
+    return px if px in (D(0), D(1)) else None
+
+
+def start_completion_replay(venue: "Venue") -> Optional[Any]:
+    """READ-ONLY replay of the lane's own stranded legs (owner 2026-11-18):
+    production recovery vs the shared policy at sports caps 0.97 / 0.99.
+    Default OFF. Reads the tape files on this volume and keyless public
+    settlement prices; logs COMPLETION_REPLAY lines; places, cancels and
+    authorizes nothing. Refuses while the live shared policy is on."""
+    if os.getenv(COMPLETION_REPLAY_ENV, "0").strip() != "1":
+        return None
+    if completion_policy_live():
+        log("COMPLETION_REPLAY", ok=False, why="live_policy_on_refused")
+        return None
+    import threading
+
+    def run() -> None:
+        try:
+            from src import pmus_sports_completion_replay as RP
+            files = sorted((STATE_DIR / "tape").glob("tape_*.jsonl"))
+            lines = []
+            for f in files:
+                with open(f, encoding="utf-8") as fh:
+                    lines.extend(fh)
+            books, events = RP.load(lines)
+            st = RP.strands(events)
+            slugs = sorted({s["slug"] for s in st})
+            settle = {sl: _public_settlement(venue, sl) for sl in slugs}
+            res = RP.run(books, events, settle)
+            log("COMPLETION_REPLAY", ok=True, tape_files=[f.name for f in files],
+                tape_lines=len(lines), book_markets=len(books),
+                strands=len(st), markets=len(slugs),
+                settled_markets=sum(1 for v in settle.values()
+                                    if v is not None), **res)
+            rows = []
+            for s in st:
+                rows.append({"slug": s["slug"], "lead": s["lead"],
+                             "lead_px": str(s["lead_px"]),
+                             "need": str(s["need"]),
+                             "prod_outcome": s["outcome"],
+                             "prod_pair_cost": str(s["pair_cost"]),
+                             "late_seen": s["late_t"] is not None,
+                             "yes_settle": str(settle.get(s["slug"])),
+                             "frames": len(books.get(s["slug"]) or [])})
+            for i in range(0, len(rows), 25):
+                log("COMPLETION_REPLAY_ROWS", part=i // 25, rows=rows[i:i + 25],
+                    label="RECORDED strand inputs for the replay above")
+        except Exception as exc:                          # noqa: BLE001
+            log("COMPLETION_REPLAY", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:200]}")
+
+    th = threading.Thread(target=run, daemon=True, name="completion-replay")
+    th.start()
+    log("completion_replay_started", label="READ-ONLY; no order path")
+    return th
 
 
 def start_combo_study(venue: "Venue") -> Optional[Any]:
