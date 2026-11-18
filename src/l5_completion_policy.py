@@ -319,6 +319,59 @@ def stranded_room(*, stranded_now: Any, caller_max: Any = None
             "why": None if n < limit else "MAX_STRANDED_LEGS"}
 
 
+def opening_room(*, market_strand_loss_usd: Any,
+                 budget_usd: Any = None) -> Dict[str, Any]:
+    """May this market take a NEW opening leg? Per-market strand budget.
+
+    THE LARGEST MEASURED LOSS IS HERE, NOT IN THE COMPLETION PRICE. Of
+    the 36 settled sports strands of 2026-11-17, the 17 that followed an
+    earlier above-par completion in the SAME market carry $8.49 of the
+    $11.78 -- 47% of the strands and 72% of the loss. Every pair-cost
+    ceiling tried on that night made the result WORSE (recorded -11.78,
+    bounded -17.77 at 0.99, -20.17 at 0.97), because the ceiling
+    tightens the completion while the loss is being made by RE-OPENING a
+    market that has already demonstrated it strands you. This gates the
+    valve the evidence actually points at.
+
+    WHAT IT GATES, AND WHAT IT MUST NOT. Opening legs only. Completions,
+    repricing, reduction and every risk-reducing action continue
+    untouched -- a market that has hurt us still needs its existing
+    inventory worked, and a guard that froze that would strand the
+    inventory it was meant to protect.
+
+    `market_strand_loss_usd` is the market's own realized cost from its
+    above-par completions, i.e. the running sum of qty * (pair_cost - 1).
+    It is the CALLER'S ledger: this module keeps no state and remembers
+    nothing between calls.
+
+    OFF UNLESS BUDGETED, and unreadable FAILS CLOSED. No budget means no
+    gating, so adopting this module cannot silently start refusing
+    openings. But a budget that is configured and a ledger that cannot
+    be read is the one combination that must refuse: the whole point is
+    that the market has a history, and "I cannot see the history" is not
+    "there is no history".
+
+    NO THRESHOLD IS BAKED IN. The sports figures above are evidence for
+    the MECHANISM, not a default for anyone. Each lane supplies its own
+    budget, because the two lanes' strands behave oppositely: BTC5m's
+    1,170 resolvable strands won 67.9% at a 0.5987 basis, so a budget
+    calibrated on in-play tennis would be meaningless there.
+    """
+    b = _d(budget_usd)
+    if b is None or b <= ZERO:
+        return {"room": True, "why": "NO_BUDGET_CONFIGURED",
+                "budget_usd": None}
+    loss = _d(market_strand_loss_usd)
+    if loss is None or loss < ZERO:
+        return {"room": False, "why": "STRAND_LEDGER_UNREADABLE",
+                "budget_usd": str(b),
+                "labels": ("a configured budget with an unreadable ledger "
+                           "refuses: unseen history is not absent history")}
+    return {"room": loss < b, "market_strand_loss_usd": str(loss),
+            "budget_usd": str(b),
+            "why": None if loss < b else "MARKET_STRAND_LOSS_BUDGET"}
+
+
 # --------------------------------------------------------------- decision
 def _net_if_completed(*, held_qty: D, held_avg: D, complete_px: D,
                       qty: D, fee_per_share: D) -> D:

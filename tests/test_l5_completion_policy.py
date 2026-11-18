@@ -667,10 +667,94 @@ class TestTheCorrectedDenominators:
         assert "RE-ENTRY, NOT COMPLETION PRICE" in doc
         assert "$8.49" in doc and "$11.78" in doc
 
-    def test_the_sports_re_entry_guard_is_not_ported_here(self):
-        """BTC5m strands carry the opposite sign; no cross-lane transfer."""
+    def test_no_sports_derived_THRESHOLD_is_baked_in(self):
+        """I CHANGED THIS TEST, and on purpose.
+
+        It used to assert the string MARKET_STRAND_LOSS was absent from
+        the module -- i.e. that the sports re-entry guard was not ported
+        at all. The owner then asked for the guard to be the improvement
+        that gets made, so the MECHANISM now lives here, lane-agnostic,
+        in `opening_room`. What must still never be ported is the sports
+        lane's NUMBER: its strands and BTC5m's behave oppositely, so a
+        budget calibrated on in-play tennis would be meaningless on a
+        300 s crypto window. So the assertion is now the one I actually
+        mean: the mechanism exists, carries NO default threshold, and is
+        off until a caller supplies one.
+        """
         doc = P.__doc__ or ""
-        assert "NOT ported here" in doc
-        import pathlib
-        src = pathlib.Path("src/l5_completion_policy.py").read_text()
-        assert "MARKET_STRAND_LOSS" not in src
+        assert "NOT ported here" in doc          # the number, not the idea
+        off = P.opening_room(market_strand_loss_usd="999")
+        assert off["room"] is True
+        assert off["why"] == "NO_BUDGET_CONFIGURED"
+        import inspect
+        src = inspect.getsource(P.opening_room)
+        assert "budget_usd: Any = None" in src
+
+
+# ---------------------------------------------------------------------------
+# OWNER 2026-11-18 "Do it. Make it work!" -- the re-entry guard, which the
+# evidence says carries 72% of the measured sports loss, built into the
+# shared interface rather than forked per lane.
+# ---------------------------------------------------------------------------
+class TestTheOpeningSideReEntryGuard:
+
+    def test_it_is_off_until_a_budget_is_supplied(self):
+        """Adopting the module cannot silently start refusing openings."""
+        for loss in ("0", "5", "1000", None, "x"):
+            r = P.opening_room(market_strand_loss_usd=loss)
+            assert r["room"] is True
+            assert r["why"] == "NO_BUDGET_CONFIGURED"
+
+    def test_a_zero_or_negative_budget_is_off(self):
+        for b in ("0", "-1"):
+            assert P.opening_room(market_strand_loss_usd="99",
+                                  budget_usd=b)["room"] is True
+
+    def test_under_the_budget_has_room(self):
+        r = P.opening_room(market_strand_loss_usd="0.40", budget_usd="1.00")
+        assert r["room"] is True and r["why"] is None
+
+    def test_at_the_budget_refuses(self):
+        r = P.opening_room(market_strand_loss_usd="1.00", budget_usd="1.00")
+        assert r["room"] is False
+        assert r["why"] == "MARKET_STRAND_LOSS_BUDGET"
+
+    def test_over_the_budget_refuses(self):
+        assert P.opening_room(market_strand_loss_usd="2.50",
+                              budget_usd="1.00")["room"] is False
+
+    def test_a_configured_budget_with_an_unreadable_ledger_FAILS_CLOSED(self):
+        """Unseen history is not absent history."""
+        for bad in (None, "x", "-3"):
+            r = P.opening_room(market_strand_loss_usd=bad, budget_usd="1.00")
+            assert r["room"] is False
+            assert r["why"] == "STRAND_LEDGER_UNREADABLE"
+
+    def test_the_sports_evidence_would_have_gated_the_losing_markets(self):
+        """17 of 36 strands followed an above-par completion in the same
+        market and carried $8.49 of the $11.78. A $0.50 per-market budget
+        stops the re-entry once a market has cost that much."""
+        assert P.opening_room(market_strand_loss_usd="0.49",
+                              budget_usd="0.50")["room"] is True
+        assert P.opening_room(market_strand_loss_usd="0.50",
+                              budget_usd="0.50")["room"] is False
+
+    def test_it_gates_OPENING_ONLY_and_never_a_completion(self):
+        """A market that has hurt us still needs its inventory worked."""
+        assert P.opening_room(market_strand_loss_usd="99",
+                              budget_usd="1.00")["room"] is False
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.50", p_win="0.05", prog=prog("0.5"))
+        assert d["action"] == "MAKER_COMPLETE"
+
+    def test_reduction_also_survives_a_closed_market(self):
+        d = P.decide(held_side="UP", held_qty="10", held_avg_cost="0.40",
+                     complete_bid="0.95", reduce_bid="0.39",
+                     p_win="0.05", prog=prog("0.5"))
+        assert d["options"]["REDUCE"]["permissible"] is True
+
+    def test_the_module_still_keeps_no_state_between_calls(self):
+        """The ledger is the caller's; this remembers nothing."""
+        a = P.opening_room(market_strand_loss_usd="5", budget_usd="1")
+        b = P.opening_room(market_strand_loss_usd="0", budget_usd="1")
+        assert a["room"] is False and b["room"] is True
