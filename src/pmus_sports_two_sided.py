@@ -2463,6 +2463,15 @@ class Engine:
             mine.append(r)
             t = str(r.get("type") or "?")
             types[t] = types.get(t, 0) + 1
+        try:
+            # OWNER 2026-11-18: study the owner's MANUAL sports fills from
+            # this same walk -- read-only, no extra venue call
+            from src import pmus_sports_manual_study as MS
+            log("MANUAL_FILL_STUDY", **MS.summarize(walk.get("rows") or [],
+                                                    ours))
+        except Exception as exc:                          # noqa: BLE001
+            log("MANUAL_FILL_STUDY", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
         from src import pmus_sports_pnl as PNL
         vr = PNL.venue_realized(mine, ours)
         try:
