@@ -2333,3 +2333,54 @@ def test_observe_mode_evaluates_and_logs_but_never_blocks(eng, risk_on,
     assert len(_opened(v)) == 2                            # nothing refused
     assert e.account_risk()["reason"] == "ACCOUNT_DAILY_LOSS_HALT"
     assert "ACCOUNT_RISK" in capsys.readouterr().out       # but logged
+
+
+# ---------------------------------------------------- drift seed (preload)
+SEED = ('{"itfwo":["0.11","0.19","0.19","0.07","0.18","0.08","0.12",'
+        '"0.17","0.09"],"itfme":["0.14","0.09","0.08","0.08","0.11"],'
+        '"atp":["0.04"]}')
+
+
+def test_seed_loads_measured_drift_and_drives_the_cap(monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_CAP_ON", True)
+    monkeypatch.setattr(M, "DRIFT_MIN_N", 5)
+    d = {}
+    out = M.seed_drift(d, SEED)
+    assert out["seeded"] == {"itfwo": 9, "itfme": 5, "atp": 1}
+    assert M.drift_estimate(d, "aec-itfwo-a-b") == D("0.12")
+    assert M.open_cap(d, "aec-itfwo-a-b") == D("0.87")
+    assert M.open_cap(d, "aec-itfme-a-b") == D("0.90")
+    # one ATP strand is below DRIFT_MIN_N: its cap is unchanged
+    assert M.open_cap(d, "aec-atp-a-b") == M.pair_cap("aec-atp-a-b")
+
+
+def test_seed_never_overwrites_live_history():
+    d = {"completion_drift": {"itfwo": ["0.02"]}}
+    out = M.seed_drift(d, SEED)
+    assert "itfwo" in out["kept_live"]
+    assert d["completion_drift"]["itfwo"] == ["0.02"]
+    assert d["completion_drift"]["itfme"]                   # others seeded
+
+
+def test_seed_rolls_out_as_live_strands_arrive(monkeypatch):
+    monkeypatch.setattr(M, "DRIFT_KEEP", 5)
+    d = {}
+    M.seed_drift(d, '{"cs2":["0.20","0.20","0.20","0.20","0.20"]}')
+    for _ in range(5):
+        M.record_drift(d, "aec-cs2-x", D("0.01"))
+    assert d["completion_drift"]["cs2"] == ["0.01"] * 5
+
+
+def test_seed_bad_input_seeds_nothing():
+    for raw in ("", None, "not json", "[1,2]", '{"x":["abc"]}'):
+        d = {}
+        out = M.seed_drift(d, raw)
+        assert not out["seeded"]
+        assert not (d.get("completion_drift") or {}).get("x")
+
+
+def test_seed_alone_changes_nothing_while_cap_is_off():
+    d = {}
+    M.seed_drift(d, SEED)
+    assert M.DRIFT_CAP_ON is False
+    assert M.open_cap(d, "aec-itfwo-a-b") == M.pair_cap("aec-itfwo-a-b")

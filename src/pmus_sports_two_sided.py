@@ -358,6 +358,36 @@ def record_drift(d: Dict[str, Any], slug: str, drift: D) -> None:
     del lst[:-DRIFT_KEEP]
 
 
+def seed_drift(d: Dict[str, Any], raw: Optional[str]) -> Dict[str, Any]:
+    """PRELOAD measured completion drifts so the drift cap can act from the
+    first minute (owner 2026-11-18 "prepare it"). `raw` is JSON
+    {sport: ["0.11", ...]} -- MEASURED values only (the 23 strands of
+    12:53-13:35Z reconstructed from ORDER/FILL logs). A sport that already
+    has live history is NEVER overwritten: live measurements always win and
+    the seed rolls out of the DRIFT_KEEP window as new strands arrive.
+    Unparseable input seeds nothing and is reported, never guessed."""
+    out = {"seeded": {}, "kept_live": [], "error": None}
+    if not raw or not str(raw).strip():
+        return out
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, Mapping):
+            raise ValueError("not an object")
+        clean = {str(k): [str(D(str(x))) for x in v]
+                 for k, v in data.items() if isinstance(v, list)}
+    except Exception as exc:                             # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}"
+        return out
+    hist = d.setdefault("completion_drift", {})
+    for sport, xs in clean.items():
+        if hist.get(sport):
+            out["kept_live"].append(sport)
+            continue
+        hist[sport] = xs[-DRIFT_KEEP:]
+        out["seeded"][sport] = len(hist[sport])
+    return out
+
+
 def drift_estimate(d: Mapping[str, Any], slug: str) -> Optional[D]:
     """Median recent completion drift for this market's sport, or None when
     fewer than DRIFT_MIN_N strands have been measured."""
@@ -3055,6 +3085,11 @@ class Engine:
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         self.mark_recovery_start()
+        seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))
+        if seed["seeded"] or seed["error"] or seed["kept_live"]:
+            self.b.save()
+            log("drift_seed", **seed, label="measured completion drift "
+                "preloaded for sports with no live history")
         log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
                               "shared_policy": completion_policy_live(),
                               "sports_cap": COMPLETION_SPORTS_CAP,
