@@ -163,3 +163,132 @@ def test_the_exit_check_runs_before_the_resident_check():
     i_ret = src.index("not stay_resident(gate)")
     i_res = src.index('emit("L5_BTC5M_RESIDENT_DISARMED"')
     assert i_ret < i_res
+
+
+# ================= the explicit DISARMED transition, and no resumption
+
+class TestTheDisarmedTransition:
+    """The state write is BOTH requirements at once.
+
+    It makes the lane SAY disarmed durably, and -- because
+    `persistent_gate` requires state == ARMED -- it is the mechanism that
+    stops a refreshed envelope resuming trading. Without it the lane
+    would have resumed the moment a new envelope appeared, since the
+    envelope was the only thing refusing.
+    """
+
+    def _branch(self):
+        src = inspect.getsource(RUN)
+        i = src.index('if gate.get("exit"):\n                    #: THE '
+                      'EXPLICIT TRANSITION')
+        return src[i:src.index('emit("L5_BTC5M_RESIDENT_DISARMED"')]
+
+    def test_it_writes_MONITOR_through_the_existing_single_writer(self):
+        b = self._branch()
+        assert "PMODE.write_state(" in b
+        assert "PMODE.MONITOR" in b
+        assert 'why="ENVELOPE:%s"' in b
+
+    def test_a_latch_is_never_downgraded_to_MONITOR(self):
+        """HALTED and STOPPED exit above, and the branch RE-CHECKS rather
+        than trusting that."""
+        b = self._branch()
+        assert "not in PMODE.LATCHED" in b
+
+    def test_an_already_MONITOR_state_is_not_rewritten(self):
+        b = self._branch()
+        assert "!= PMODE.MONITOR" in b
+
+    def test_a_failed_state_write_EXITS_instead_of_staying_armed(self):
+        """THE ONE COMBINATION THAT COULD RESUME is resident + still
+        ARMED. If the write fails we exit rather than risk it."""
+        b = self._branch()
+        assert "L5_BTC5M_DISARM_WRITE_FAILED" in b
+        assert "return 0" in b
+
+    def test_the_gate_requires_ARMED_so_MONITOR_cannot_trade(self):
+        """The mechanism, stated against the gate itself: with the state
+        no longer ARMED, a VALID envelope is not sufficient."""
+        src = inspect.getsource(RUN)
+        i = src.index("def persistent_gate")
+        gate = src[i:src.index("\ndef ", i + 10)]
+        assert 'st["state"] != PMODE.ARMED' in gate
+        assert '"exit": False' in gate
+        assert "STATE_NOT_ARMED" in gate
+
+    def test_rearming_is_a_startup_ceremony_not_a_loop_action(self):
+        """Nothing inside the persistent loop writes ARMED."""
+        src = inspect.getsource(RUN)
+        i = src.index('emit("L5_BTC5M_PERSISTENT_START"')
+        loop = src[i:]
+        assert "write_state(PMODE.ARMED" not in loop
+        assert "PMODE.write_state(\n                                PMODE.ARMED" \
+            not in loop
+
+
+# ============================ the endpoints, honest about being disarmed
+
+class TestTheServedEndpoints:
+
+    def _handler(self):
+        src = inspect.getsource(RUN)
+        i = src.index("def serve_fills")
+        return src[i:src.index("\ndef ", i + 10)]
+
+    def test_the_ownership_registry_is_still_served(self):
+        assert "REG.REGISTRY_KEY" in self._handler()
+        assert "REG.registry(ex)" in self._handler()
+
+    def test_the_fills_document_is_still_served(self):
+        assert '"btc5m_fills"' in self._handler()
+        assert "fills_document(ex)" in self._handler()
+
+    def test_health_and_status_are_served(self):
+        h = self._handler()
+        assert '("health", "healthz")' in h
+        assert '("status", "l5/status.json")' in h
+
+    def test_status_reports_the_DURABLE_state_not_an_assertion(self):
+        h = self._handler()
+        assert "PMODE.read_state()" in h
+        assert '"state_readable"' in h
+        assert '"state_reason"' in h
+
+    def test_can_submit_is_derived_from_the_absence_of_a_transport(self):
+        """Not a flag that could be stale: `arm()` is what puts a
+        POST-capable object in the process, so its absence IS the fact."""
+        h = self._handler()
+        assert 'getattr(ex, "transport", None)' in h
+
+    def test_health_claims_only_that_it_is_answering(self):
+        """It must not be mistakable for "trading" or "well"."""
+        h = self._handler()
+        i = h.index('("health", "healthz")')
+        block = h[i:i + 400]
+        assert b'{"ok":true,"serving":true}'.decode() in block
+        for leak in ("armed", "can_submit", "ARMED"):
+            assert leak not in block, leak
+
+    def test_an_unreadable_state_is_reported_not_fabricated(self):
+        """REQ 4: no fabricated healthy state. An unreadable state says
+        so rather than defaulting to something reassuring."""
+        h = self._handler()
+        assert "STATE_READ_FAILED" in h
+        i = h.index("STATE_READ_FAILED")
+        assert '"state_readable": bool(_st.get("ok"))' in h
+
+    def test_an_unknown_path_is_still_404(self):
+        assert 'b\'{"error":"no such key"}\', 404' in self._handler()
+
+
+# ============================ the registry itself is not fabricated
+
+def test_the_registry_reports_unreadable_rather_than_empty():
+    """REQ 4, at the source: `l5_order_registry_server.registry` returns
+    readable=False when the ledger cannot be read, because an empty list
+    would read as "we own nothing" -- a different and dangerous claim."""
+    import inspect as _i
+    from src import l5_order_registry_server as REG
+    src = _i.getsource(REG.registry)
+    assert '"readable": False' in src
+    assert "an empty list here would read as" in src

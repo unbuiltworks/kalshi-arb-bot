@@ -458,7 +458,55 @@ def serve_fills(ex: "X.Btc5mExecutor", port: int):
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if self.path.split("?", 1)[0].lstrip("/") != "btc5m_fills":
+            _p = self.path.split("?", 1)[0].lstrip("/")
+            #: LIVENESS, and nothing more. "this process is answering" is
+            #: the only claim, so it cannot be mistaken for "this lane is
+            #: trading" or "this lane is well".
+            if _p in ("health", "healthz"):
+                body, code = b'{"ok":true,"serving":true}', 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            #: THE LANE'S OWN STATE, read from the durable record rather
+            #: than asserted. A DISARMED lane must SAY so here: reporting
+            #: a fabricated healthy or armed state is the failure this
+            #: endpoint exists to prevent, and `can_submit` is derived
+            #: from the absence of a transport rather than from a flag.
+            if _p in ("status", "l5/status.json"):
+                try:
+                    _st = PMODE.read_state()
+                except BaseException as _e:                    # noqa: BLE001
+                    if isinstance(_e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _st = {"ok": False,
+                           "reason": "STATE_READ_FAILED:%s"
+                                     % type(_e).__name__}
+                doc = {
+                    "strategy": X.STRATEGY,
+                    "state": _st.get("state"),
+                    "state_readable": bool(_st.get("ok")),
+                    "state_reason": _st.get("reason"),
+                    #: structural, not a flag: `arm()` is what puts a
+                    #: POST-capable object in this process
+                    "can_submit": bool(getattr(ex, "transport", None)
+                                       is not None),
+                    "armed": _st.get("state") == PMODE.ARMED,
+                    "labels": ("the lane's durable state as recorded. "
+                               "can_submit reflects whether a transport "
+                               "exists at all, so a disarmed lane cannot "
+                               "report itself able to trade."),
+                }
+                body, code = json.dumps(doc, default=str).encode(), 200
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if _p != "btc5m_fills":
                 body, code = b'{"error":"no such key"}', 404
             else:
                 body, code = json.dumps(fills_document(ex),
@@ -2075,6 +2123,54 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                     #: for somebody to clear a latch.
                     return 0
                 if gate.get("exit"):
+                    #: THE EXPLICIT TRANSITION, through the SAME single
+                    #: writer the campaign-expiry path uses:
+                    #: write_state(MONITOR). Two things follow from it,
+                    #: and the second is the one that matters.
+                    #:
+                    #: 1. the lane's state SAYS disarmed, durably, so the
+                    #:    status endpoint and the next startup both read
+                    #:    it rather than inferring it.
+                    #: 2. NOTHING SILENTLY RESUMES. `persistent_gate`
+                    #:    requires state == ARMED. Once this is MONITOR,
+                    #:    a refreshed envelope is no longer sufficient:
+                    #:    the gate returns STATE_NOT_ARMED and keeps
+                    #:    waiting. Without this write the lane WOULD have
+                    #:    resumed the moment a new envelope appeared,
+                    #:    because the envelope was the only thing
+                    #:    refusing. Re-arming needs the startup ceremony.
+                    #:
+                    #: NEVER OVER A LATCH. HALTED and STOPPED exit above
+                    #: (`stay_resident` is False for them), and this
+                    #: re-checks rather than trusting that: a latch must
+                    #: not be downgraded to MONITOR by this path.
+                    try:
+                        _st_now = PMODE.read_state()
+                        _cur = _st_now.get("state")
+                        if _st_now.get("ok") and _cur not in PMODE.LATCHED \
+                                and _cur != PMODE.MONITOR:
+                            PMODE.write_state(
+                                PMODE.MONITOR,
+                                why="ENVELOPE:%s" % gate.get("reason"),
+                                now=now_)
+                            emit("L5_BTC5M_DISARMED_STATE",
+                                 {"from": _cur, "to": PMODE.MONITOR,
+                                  "why": "ENVELOPE:%s" % gate.get("reason"),
+                                  "note": ("re-arming now requires the "
+                                           "startup ceremony; a refreshed "
+                                           "envelope alone will not "
+                                           "resume trading")})
+                    except BaseException as _se:               # noqa: BLE001
+                        if isinstance(_se, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        #: a state write we cannot make is not a licence to
+                        #: carry on resident with state ARMED -- that is the
+                        #: one combination that could resume. Exit instead.
+                        emit("L5_BTC5M_DISARM_WRITE_FAILED",
+                             {"error": type(_se).__name__,
+                              "action": "exiting rather than staying "
+                                        "resident while still ARMED"})
+                        return 0
                     #: RESIDENT AND DISARMED. The registry keeps serving
                     #: so the watchdog can still claim and cancel this
                     #: lane's ids; the transport is None so nothing can
