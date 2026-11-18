@@ -36,7 +36,7 @@ import time
 from datetime import datetime, timezone
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal as D
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 ONE = D("1")
 
@@ -314,6 +314,18 @@ COMPLETION_STAGES = ("two_sided_complete", "two_sided_complete_taker",
 
 def is_completion_stage(stage: str) -> bool:
     return str(stage or "") in COMPLETION_STAGES
+
+
+# PRE-GAME SHARP-ODDS MODE (owner 2026-11-18, default OFF). "shadow" runs
+# src/pmus_sports_sharp.py against live pre-game markets and The Odds API
+# (ODDS_API_KEY) and LOGS what it would quote plus MODELLED touch-fills; it
+# places, cancels and authorizes nothing. Free-tier budget: a few sports,
+# odds polled every PMUS_SHARP_POLL_S (default 3 h).
+SHARP_MODE = os.getenv("PMUS_TWO_SIDED_SHARP", "0").strip().lower()
+SHARP_SHADOW_EVERY_S = float(os.getenv("PMUS_SHARP_SHADOW_EVERY_S", "600"))
+SHARP_SPORTS = tuple(s.strip() for s in os.getenv(
+    "PMUS_SHARP_SPORTS", "nba,nhl").split(",") if s.strip())
+SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 
 
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
@@ -2140,6 +2152,108 @@ class Engine:
         self._halt_cache = (now, val)
         return val
 
+    # ------------------------------------- pre-game sharp mode (SHADOW)
+    def sharp_candidates(self, now: float) -> List[Mapping[str, Any]]:
+        """Pre-game moneyline markets in the sharp window, from the public
+        gateway (no key). Only SHARP_SPORTS with a known odds sport key."""
+        from src import pmus_sports_sharp as SH
+        lo = datetime.fromtimestamp(now + SH.CUTOFF_S, timezone.utc)
+        hi = datetime.fromtimestamp(now + SH.MAX_LEAD_S, timezone.utc)
+        d = self.v.gget("/v1/events?active=true&closed=false&categories=sports"
+                        "&limit=500&startDateMin=%s&startDateMax=%s" % (
+                            lo.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            hi.strftime("%Y-%m-%dT%H:%M:%SZ")))
+        evs = d.get("events") if isinstance(d, Mapping) else d
+        out = []
+        for ev in evs or []:
+            for m in (ev.get("markets") or []) if isinstance(ev, Mapping) \
+                    else []:
+                if not isinstance(m, Mapping):
+                    continue
+                slug = str(m.get("slug") or "")
+                code = SH.sport_code(slug)
+                if not slug.startswith("aec-") or code not in SHARP_SPORTS \
+                        or code not in SH.SPORT_KEYS:
+                    continue
+                if str(m.get("sportsMarketType") or "") == "futures":
+                    continue
+                if SH.market_teams(m) is None:
+                    continue
+                if not SH.in_window(m.get("gameStartTime"), now):
+                    continue
+                out.append(m)
+        return out[:SHARP_MAX_MARKETS]
+
+    def sharp_shadow_tick(self, now: Optional[float] = None) -> Dict[str, Any]:
+        """SHADOW ONLY: what the sharp mode would quote now, plus MODELLED
+        touch-fills of the previous tick's would-quotes. Places nothing."""
+        from src import pmus_sports_sharp as SH
+        now = time.time() if now is None else now
+        if getattr(self, "_odds", None) is None:
+            self._odds = SH.OddsClient()
+        state = self.b.d.setdefault("sharp_shadow", {})
+        rows, fills = 0, 0
+        cands = self.sharp_candidates(now)
+        by_sport: Dict[str, List[Mapping[str, Any]]] = {}
+        for m in cands:
+            by_sport.setdefault(SH.sport_code(m["slug"]), []).append(m)
+        for code, ms in by_sport.items():
+            events = self._odds.fetch(SH.SPORT_KEYS[code])
+            for m in ms:
+                slug = m["slug"]
+                fy = SH.fair_yes(m, events, now=now)
+                bbo = self.v.bbo(slug)
+                prev = state.get(slug) or {}
+                # MODELLED fills of what we WOULD have had resting
+                if bbo and prev.get("q"):
+                    pq = prev["q"]
+                    hit = []
+                    if pq.get("YES") is not None and \
+                            D(str(bbo["ask"])) <= D(str(pq["YES"])):
+                        hit.append(("YES", pq["YES"]))
+                    if pq.get("NO") is not None and \
+                            ONE - D(str(bbo["bid"])) <= D(str(pq["NO"])):
+                        hit.append(("NO", pq["NO"]))
+                    for side, px in hit:
+                        fills += 1
+                        log("SHARP_SHADOW_FILL", slug=slug, side=side, px=px,
+                            fair_yes_at_quote=prev.get("fair_yes"),
+                            fair_yes_now=None if fy is None
+                            else str(fy["fair_yes"]),
+                            label="MODELLED touch-fill of a shadow quote; "
+                                  "nothing was placed; not P&L")
+                if fy is None or not bbo:
+                    log("SHARP_SHADOW", slug=slug, sport=code,
+                        start=m.get("gameStartTime"),
+                        skipped="no_fair" if fy is None else "no_book")
+                    state.pop(slug, None)
+                    continue
+                tick = (self.v.spec(slug) or {}).get("tick") or D("0.01")
+                q = SH.quote(fy["fair_yes"], bbo["bid"], bbo["ask"], tick)
+                mid = (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2
+                log("SHARP_SHADOW", slug=slug, sport=code,
+                    start=m.get("gameStartTime"),
+                    fair_yes=str(round(fy["fair_yes"], 4)),
+                    source=fy["source"], odds_age_s=fy["age_s"],
+                    bid=bbo["bid"], ask=bbo["ask"],
+                    mid_minus_fair=str(round(mid - fy["fair_yes"], 4)),
+                    mode=q["mode"], yes_px=q["YES"], no_px=q["NO"],
+                    pair=q["pair"], why=q["why"],
+                    label="SHADOW: would-quote only; nothing placed")
+                rows += 1
+                state[slug] = {"t": now, "fair_yes": str(fy["fair_yes"]),
+                               "q": {"YES": None if q["YES"] is None
+                                     else str(q["YES"]),
+                                     "NO": None if q["NO"] is None
+                                     else str(q["NO"])}}
+        for slug in [k for k, v in state.items()
+                     if now - float(v.get("t") or 0) > 6 * 3600]:
+            state.pop(slug, None)
+        st = dict(self._odds.status(), candidates=len(cands), rows=rows,
+                  modelled_fills=fills)
+        log("SHARP_STATUS", **st)
+        return st
+
     # ------------------------------------------- account-wide risk (shared)
     def own_exposure_usd(self) -> D:
         """This lane's at-risk dollars: unpaired filled cost plus the
@@ -3100,6 +3214,10 @@ class Engine:
                                                "url_set": bool((os.getenv(
                                                    "L5_ACCOUNT_RISK_URL")
                                                    or "").strip())},
+                              "sharp": {"mode": SHARP_MODE,
+                                        "sports": list(SHARP_SPORTS),
+                                        "key_set": bool((os.getenv(
+                                            "ODDS_API_KEY") or "").strip())},
                               "drift_cap": {"on": DRIFT_CAP_ON,
                                             "edge": DRIFT_EDGE,
                                             "min_n": DRIFT_MIN_N},
@@ -3154,6 +3272,14 @@ class Engine:
                     self._last_reward = time.monotonic()
                     self.reward_check()
                     self.account_audit()
+                if SHARP_MODE == "shadow" and time.monotonic() - getattr(
+                        self, "_last_sharp", -1e9) > SHARP_SHADOW_EVERY_S:
+                    self._last_sharp = time.monotonic()
+                    try:
+                        self.sharp_shadow_tick()
+                    except Exception as exc:          # noqa: BLE001
+                        log("sharp_shadow_error",
+                            err=type(exc).__name__)
                 if time.monotonic() - getattr(self, "_last_orphan", 0) > 30:
                     self._last_orphan = time.monotonic()
                     self.orphan_sweep()

@@ -2180,6 +2180,7 @@ def test_resolution_records_completion_drift(eng):
 
 # ------------------------------------------ account-wide risk (shared)
 import datetime as _dt
+from datetime import datetime, timezone
 
 
 def _risk_doc(day="-10", halt="50", life="-70", cum="200", retired=()):
@@ -2384,3 +2385,74 @@ def test_seed_alone_changes_nothing_while_cap_is_off():
     M.seed_drift(d, SEED)
     assert M.DRIFT_CAP_ON is False
     assert M.open_cap(d, "aec-itfwo-a-b") == M.pair_cap("aec-itfwo-a-b")
+
+
+# ------------------------------------------- pre-game sharp mode (shadow)
+def _sharp_setup(e, v, monkeypatch, start_in=3 * 3600):
+    from src import pmus_sports_sharp as SH
+    now = time.time()
+    start = datetime.fromtimestamp(now + start_in, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    mkt = {"slug": "aec-nba-mil-mia-x", "gameStartTime": start,
+           "sportsMarketType": "basketball_team_full_game_winner",
+           "marketSides": [{"long": True, "team": {"name": "Milwaukee Bucks"}},
+                           {"long": False, "team": {"name": "Miami Heat"}}]}
+    v.gget = lambda path: {"events": [{"markets": [mkt]}]}
+    v.bid, v.ask = D("0.53"), D("0.57")
+    ev = {"id": "e1", "commence_time": start, "home_team": "Miami Heat",
+          "away_team": "Milwaukee Bucks", "bookmakers": [{
+              "key": "pinnacle", "markets": [{
+                  "key": "h2h",
+                  "last_update": datetime.fromtimestamp(
+                      now - 60, timezone.utc).isoformat(),
+                  "outcomes": [{"name": "Milwaukee Bucks", "price": 1.80},
+                               {"name": "Miami Heat", "price": 2.10}]}]}]}
+
+    class Odds:
+        calls = 0
+
+        def fetch(self, key):
+            Odds.calls += 1
+            return [ev]
+
+        def status(self):
+            return {"configured": True, "calls": Odds.calls}
+    e._odds = Odds()
+    return now
+
+
+def test_sharp_shadow_logs_quotes_and_never_places(eng, monkeypatch, capsys):
+    from datetime import datetime as _d, timezone as _tz  # noqa: F401
+    e, v = eng
+    now = _sharp_setup(e, v, monkeypatch)
+    n = v.n
+    st = e.sharp_shadow_tick(now)
+    assert st["rows"] == 1 and st["modelled_fills"] == 0
+    assert v.n == n                                      # nothing placed
+    out = capsys.readouterr().out
+    assert "SHARP_SHADOW" in out and "would-quote only" in out
+    q = e.b.d["sharp_shadow"]["aec-nba-mil-mia-x"]["q"]
+    assert q["YES"] is not None and q["NO"] is not None
+
+
+def test_sharp_shadow_models_a_touch_fill_next_tick(eng, monkeypatch, capsys):
+    e, v = eng
+    now = _sharp_setup(e, v, monkeypatch)
+    e.sharp_shadow_tick(now)
+    yes_q = D(e.b.d["sharp_shadow"]["aec-nba-mil-mia-x"]["q"]["YES"])
+    v.bid, v.ask = yes_q - D("0.02"), yes_q          # ask falls to our quote
+    st = e.sharp_shadow_tick(now + 600)
+    assert st["modelled_fills"] == 1
+    assert "MODELLED touch-fill" in capsys.readouterr().out
+    assert v.n == 0
+
+
+def test_sharp_shadow_skips_unmatched_and_out_of_window(eng, monkeypatch):
+    e, v = eng
+    now = _sharp_setup(e, v, monkeypatch, start_in=60)      # inside cutoff
+    st = e.sharp_shadow_tick(now)
+    assert st["candidates"] == 0 and st["rows"] == 0
+
+
+def test_sharp_mode_off_by_default():
+    assert M.SHARP_MODE in ("0", "")
