@@ -1,5 +1,36 @@
 # Managed-lane wiring and FOREIGN_EXPOSURE=REPORTED — audit, 2026-11-18
 
+> ## CORRECTION, 2026-11-18T14:30Z — SECTION 1 IS WRONG
+>
+> Section 1 concluded that setting `L5_WATCHDOG_MANAGED_LANE_URLS` would
+> be inert, that no publisher emits `manages_own_resting`, and that the
+> sports lane serves no HTTP document. **The live watchdog contradicts all
+> three.** Its sweeps read
+> `managed_lanes: ["http://pmus-spring-l5-probe.railway.internal:8090:OK:13"]`,
+> the variable **is** set on `l5-halt-watchdog`, and `managed_lane_exempt`
+> currently names 5-16 live sports order ids — so the exemption is ACTIVE
+> in production and those orders are outside the 300 s age latch.
+>
+> `OK:n` is unreachable unless the document carries
+> `manages_own_resting: true`, so something does emit it. I could not find
+> the emitter in the deployed sports SHA `ac18a20bf` either, so the
+> mechanism is **confirmed working and unexplained in source** — an open
+> item.
+>
+> My error: I searched one branch (`claude/btc5m-favorite-accumulation-wzh2xo`),
+> found no emitter and no registry server in `deploy/pmus_spring_l5/`, and
+> generalised that to the deployment. Establishing deployed state first is
+> exactly what `analysis/l5/CLAUDE.md` stage gate 1 requires.
+>
+> WHAT SURVIVES: the narrow mechanical fact that
+> `l5_order_registry_server.registry()` omits the key, so pointing the
+> variable at a plain `registry()` endpoint exempts nothing silently
+> (`tests/test_l5_managed_lane_publisher_gap.py`, rescoped). Section 1's
+> recommendation — change no configuration — is unchanged, but it no
+> longer rests on "there is nothing to point it at".
+>
+> Section 2 (FOREIGN_EXPOSURE) and Section 3 are unaffected.
+
 Read-only. No variable was set, no service deployed. Every claim below
 names the file and line, or the live log line, it comes from.
 

@@ -1,28 +1,33 @@
-"""No shipped publisher attests `manages_own_resting`, so the consumer
-variable cannot be wired into something that WORKS.
+"""`l5_order_registry_server.registry()` does not attest
+`manages_own_resting`, so a lane served by THAT function alone is not a
+managed lane.
 
-WHY THIS FILE EXISTS. On 2026-11-18 `l5-pmus-live` (BTC15m) failed
-preflight 29 times in one window on `no_unexpected_open_orders` and
-placed nothing. The obvious remedy -- "set
-L5_WATCHDOG_MANAGED_LANE_URLS at the sports lane" -- is INERT, and
-inert in a way that LOOKS configured: `l5_managed_lanes.lane_ids`
-requires `manages_own_resting: true`, and the only document any service
-publishes (`l5_order_registry_server.registry`) does not emit that key
-at all. The lane reads NOT_A_MANAGED_LANE, contributes zero ids, and
-the gate refuses exactly as before -- while an operator reading the
-variable list believes the exemption is live.
+CORRECTION, 2026-11-18. This file first claimed the stronger thing: that
+NO shipped publisher emits the key, that the sports lane serves no
+document, and that wiring `L5_WATCHDOG_MANAGED_LANE_URLS` would be inert.
+**That was wrong about production.** The live watchdog sweep reads
 
-These tests pin BOTH halves of that, so the gap is a failing test the
-day somebody closes it rather than a silent non-event:
+    managed_lanes: ["http://pmus-spring-l5-probe.railway.internal:8090:OK:13"]
+    managed_lane_exempt: ["DSZEBSVG13YY", "DSZJRM4G144P", ...]
 
-  1. the registry document, fed verbatim to the consumer, is rejected;
-  2. adding the one missing key is what makes it accepted.
+`OK:n` is only reachable when the document carries
+`manages_own_resting: true`, `L5_WATCHDOG_MANAGED_LANE_URLS` IS set on
+`l5-halt-watchdog`, and 5-16 live sports order ids are being exempted
+from the 300 s age latch right now. The error was mine: I searched one
+branch for the emitter, found none, and generalised to the deployment.
+The emitter is NOT located in `ac18a20bf` either, so the mechanism is
+confirmed working in production and unexplained in source -- an open
+item, not a settled fact.
 
-(2) is NOT a recommendation. The attestation costs that lane the
-watchdog's overdue/age latch -- `l5_live_safety` refuses with
-LANE_EXEMPT_FROM_WATCHDOG_AGE_LATCH for precisely that reason -- so it
-belongs only to a lane that rests orders for minutes BY DESIGN and
-whose owner has accepted losing the latch.
+WHAT THESE TESTS STILL ESTABLISH, which is narrower and true: the
+document `registry()` builds lacks the one key the consumer requires, so
+anyone pointing the variable at a plain `registry()` endpoint gets an
+exemption that silently does nothing. That is a real trap and worth
+pinning. It is NOT a statement about every publisher on the account.
+
+Adding the key is not a recommendation: the attestation costs that lane
+the watchdog's overdue/age latch -- `l5_live_safety` refuses with
+LANE_EXEMPT_FROM_WATCHDOG_AGE_LATCH for exactly that reason.
 """
 from __future__ import annotations
 
@@ -58,12 +63,13 @@ def test_the_registry_document_names_the_order_and_is_fresh():
     assert -ML.MAX_SKEW_S < age <= ML.MAX_AGE_S
 
 
-def test_no_shipped_publisher_emits_manages_own_resting():
+def test_this_publisher_does_not_emit_manages_own_resting():
     assert "manages_own_resting" not in REG.registry(_Store())
 
 
-def test_so_the_live_document_is_not_a_managed_lane():
-    """THE PROPERTY THAT MATTERS: wiring the variable exempts NOTHING."""
+def test_so_a_document_from_this_publisher_is_not_a_managed_lane():
+    """Pointing the variable at a plain `registry()` endpoint exempts
+    nothing -- silently. Scoped to this publisher, NOT to production."""
     ids, notes = _lane(REG.registry(_Store()))
     assert ids == set()
     assert notes == ["http://lane.internal:8081:NOT_A_MANAGED_LANE"]
