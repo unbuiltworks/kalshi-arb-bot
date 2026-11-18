@@ -32,7 +32,7 @@ simple and are to be calibrated from the recovery records the bot keeps.
 """
 from __future__ import annotations
 
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal as D
+from decimal import ROUND_CEILING, Decimal as D
 from typing import Any, Dict, Mapping, Optional
 
 ONE = D(1)
@@ -71,62 +71,7 @@ DEFAULTS = {
     # soon as a leg fills instead of starting a tick under the bid and
     # chasing. 1 = the original behaviour. Never moves the lock-loss cap.
     "lean": D("1"),
-    # OWNER 2026-11-18 "build it": PATIENT stranded-leg management, the
-    # owner's manual style. Off unless params["patient"] is truthy.
-    "patient": False,
-    # (seconds since the fill, max WHOLE-PAIR cost): rest the completion at
-    # the price that keeps the pair at or under the cap, step up only by
-    # time, never by the tick
-    "patient_schedule": ((0, D("0.97")), (600, D("0.99")), (1800, D("1.00"))),
-    # final stage of the match: every one of 41 held lone legs settled at 0,
-    # so accept a small locked loss rather than ride the leg
-    "patient_late_cap": D("1.03"),
 }
-
-
-def patient_pair_cap(age_s: float, late: bool, schedule=None,
-                     late_cap=None) -> D:
-    """Highest WHOLE-PAIR cost patient mode accepts at this age."""
-    schedule = schedule or DEFAULTS["patient_schedule"]
-    cap = D(str(schedule[0][1]))
-    for after_s, c in sorted(schedule, key=lambda x: float(x[0])):
-        if float(age_s) >= float(after_s):
-            cap = D(str(c))
-    if late:
-        cap = max(cap, D(str(late_cap if late_cap is not None
-                             else DEFAULTS["patient_late_cap"])))
-    return cap
-
-
-def _patient(p: Mapping[str, Any], *, lead_px: D, need: D, cb: Mapping[str, D],
-             tick: D, age_s: float, late: bool,
-             resting_px: Optional[D]) -> Dict[str, Any]:
-    """Rest the completion at the price that keeps the pair at/under the
-    time-stepped cap, and LEAVE it there: it moves only when the cap steps
-    (or the book makes the rest price uncrossable), never with the tick."""
-    cap = patient_pair_cap(age_s, late, p.get("patient_schedule"),
-                           p.get("patient_late_cap"))
-    raw = cap - D(lead_px)
-    px = (raw / tick).to_integral_value(rounding=ROUND_FLOOR) * tick
-    px = min(px, cb["ask"] - tick)               # post-only: below the ask
-    out: Dict[str, Any] = {"action": "HOLD", "px": None, "qty": D(0),
-                           "reason": "", "mode": "patient",
-                           "pair_cap": str(cap), "scores": {}}
-    if px < tick:
-        out["reason"] = "patient_cap_below_one_tick"
-        return out
-    out["px"], out["qty"] = px, need
-    out["scores"] = {"COMPLETE_MAKER": {"value": "patient", "px": str(px),
-                                        "qty": str(need)}}
-    if resting_px is not None and D(resting_px) == px:
-        out["action"], out["reason"] = "KEEP", "patient: resting at the cap"
-    elif resting_px is not None:
-        out["action"] = "REPRICE_COMPLETION"
-        out["reason"] = "patient: cap stepped or book moved through it"
-    else:
-        out["action"] = "COMPLETE_MAKER"
-        out["reason"] = "patient: rest at the pair cap and wait"
-    return out
 
 
 def taker_fee_pc(px: D, qty: D, rate: D) -> D:
@@ -165,9 +110,6 @@ def decide(*, lead: str, lead_px: D, need: D, bid: Optional[D],
         out["reason"] = "no_usable_book"
         return out
     cb = complement_book(lead, D(bid), D(ask))
-    if p.get("patient"):
-        return _patient(p, lead_px=D(lead_px), need=need, cb=cb, tick=tick,
-                        age_s=age_s, late=late, resting_px=resting_px)
     yes_mid = (D(bid) + D(ask)) / 2
     m = yes_mid if lead == "YES" else ONE - yes_mid      # P(lead wins)
     urgency = (ONE + D(str(age_s)) / p["age_scale_s"]) * \
