@@ -68,6 +68,104 @@ STEP_S = 5.0
 #: lines per 5-minute window, ~108/hour, ~2,600/day. It adds no venue
 #: call, no file, no volume and no order-path branch.
 LATE_LOG_S = 45.0
+
+#: STAY RESIDENT AND DISARMED WHEN THE ENVELOPE WILL NOT PERMIT TRADING.
+#: OFF unless exactly "YES".
+#:
+#: WHAT HAPPENS TODAY. `persistent_gate` returns exit=True for any
+#: envelope refusal and the loop does `return 0`, so the PROCESS ENDS.
+#: `serve_fills` runs on a daemon thread, so the registry dies with it.
+#: Observed: l5-btc5m-live exited 2026-11-17T23:05Z on ENVELOPE_EXPIRED
+#: with code 0 -- a designed dead-man, which Railway reports as CRASHED
+#: -- and has been down since. Every watchdog sweep that day read
+#: `l5-btc5m-live...:8090:REGISTRY_UNREACHABLE:URLError`, and because the
+#: ownership oracle requires EVERY registry to be readable before it will
+#: claim any id, a sports halt at 16:02Z could cancel NOTHING
+#: account-wide. A lane that is merely switched off degraded the
+#: protection the other lane depends on.
+#:
+#: THE PRECEDENT IS ALREADY HERE. `STATE_NOT_ARMED` returns exit=False
+#: and waits, with the note "an operator may arm it without restarting
+#: anything". This extends the same treatment to an envelope that will
+#: not permit trading, and to nothing else.
+#:
+#: IT IS NOT PERMISSION, and three independent things make that true:
+#:   1. the executor is constructed `Btc5mExecutor(None, ledger, ...)`
+#:      -- transport None. There is no object in the process that can
+#:      POST, so submission is impossible rather than merely refused.
+#:   2. the loop `continue`s. The trading body is never reached while the
+#:      gate refuses, exactly as for STATE_NOT_ARMED.
+#:   3. the SAME gate is re-evaluated every 15 s. An expired envelope
+#:      keeps refusing; nothing here can arm it.
+#:
+#: SCOPED TO ENVELOPE REASONS ONLY. A LATCHED state (HALTED, STOPPED) and
+#: an unreadable state still END the process, because those are latches
+#: and the existing note is explicit: "NOTHING REARMS. The loop ends; it
+#: does not wait for somebody to clear a latch."
+#:
+#: OFF BY DEFAULT because residency is not strictly safer in every sense:
+#: a process that exits cleanly is a simpler failure mode than one that
+#: stays up holding a volume and a port indefinitely. Enabling it is part
+#: of a deployment the owner reviews.
+RESIDENT_WHEN_DISARMED_ENV = "L5_BTC5M_RESIDENT_WHEN_DISARMED"
+
+#: THE REASONS THAT MEAN "THE OWNER HAS NOT AUTHORISED TRADING".
+#:
+#: THE PRINCIPLE, and it is the whole of the scoping: residency is for a
+#: lane that is BENIGNLY UNAUTHORISED -- no envelope, an expired one, one
+#: for another deployment, one that does not name this strategy. Those are
+#: expected states, and the right response is to sit disarmed while
+#: remaining readable.
+#:
+#: EVERYTHING ELSE EXITS, including every envelope reason that means
+#: SOMETHING IS BROKEN rather than merely absent: unparseable, not an
+#: object, an unreadable expiry or limits, a short nonce, an unknown
+#: deployment, an unreadable clock, an unavailable strategy registry. A
+#: process that cannot read its own configuration is one whose cleanest
+#: failure mode is to stop.
+#:
+#: MY FIRST VERSION OF THIS LIST WAS WRONG, and its own test caught it: I
+#: enumerated the reasons from truncated grep output and got 11 of the 22
+#: `parse_envelope` can return, which would have silently treated the
+#: other 11 as latches. The test below now asserts this is a SUBSET of
+#: the parser's reasons and that each excluded one still exits, so a new
+#: reason cannot land in either bucket by accident.
+UNAUTHORISED_REASONS = frozenset({
+    "ENVELOPE_ABSENT",
+    "ENVELOPE_EXPIRED",
+    "ENVELOPE_NOT_APPROVED",
+    "ENVELOPE_NOT_PERSISTENT",
+    "ENVELOPE_IS_FOR_ANOTHER_DEPLOYMENT",
+    "ENVELOPE_NAMES_NO_DEPLOYMENT",
+    "ENVELOPE_NAMES_NO_SERIES",
+    "ENVELOPE_NAMES_NO_STRATEGIES",
+    "ENVELOPE_UNKNOWN_SERIES",
+    "ENVELOPE_UNKNOWN_STRATEGY",
+    "ENVELOPE_TAKER_PERMISSION_UNSTATED",
+    "ENVELOPE_PER_MARKET_ABOVE_AGGREGATE",
+    "ENVELOPE_EXCEEDS_CODE_CEILING",
+    "ENVELOPE_LIMITS_NOT_POSITIVE",
+})
+
+
+def resident_when_disarmed() -> bool:
+    return str(os.environ.get(RESIDENT_WHEN_DISARMED_ENV, "")).strip() \
+        == "YES"
+
+
+def stay_resident(gate: Mapping[str, Any]) -> bool:
+    """Should this refusal keep the lane resident instead of ending it?
+
+    True only when the switch is on AND the reason means the owner has
+    not AUTHORISED trading. A latch, anything unreadable or unparseable,
+    and any reason this module does not recognise end the process as
+    before.
+    """
+    if not gate.get("exit"):
+        return False                      # already staying
+    if not resident_when_disarmed():
+        return False
+    return str(gate.get("reason") or "") in UNAUTHORISED_REASONS
 #: stop placing and start cancelling this long before the window ends
 CANCEL_LEAD_S = 30.0
 #: how long after the window end the cancel loop may keep re-reading
@@ -1972,10 +2070,24 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             if not gate["ok"]:
                 emit("L5_BTC5M_PERSISTENT_GATE",
                      dict(gate, utc=now_.isoformat()))
-                if gate.get("exit"):
+                if gate.get("exit") and not stay_resident(gate):
                     #: NOTHING REARMS. The loop ends; it does not wait
                     #: for somebody to clear a latch.
                     return 0
+                if gate.get("exit"):
+                    #: RESIDENT AND DISARMED. The registry keeps serving
+                    #: so the watchdog can still claim and cancel this
+                    #: lane's ids; the transport is None so nothing can
+                    #: be sent; and this same gate refuses again in 15 s.
+                    emit("L5_BTC5M_RESIDENT_DISARMED",
+                         {"reason": gate.get("reason"),
+                          "serving_registry": bool(
+                              (os.getenv(FILLS_PORT_ENV) or "").strip()),
+                          "can_submit": False,
+                          "why": ("staying up so the shared watchdog can "
+                                  "read this lane's registry; an expired "
+                                  "envelope is not permission to trade"),
+                          "utc": now_.isoformat()})
                 time.sleep(15.0)
                 continue
             #: THE WATCHDOG'S HAND, TURNED INTO A DURABLE LATCH.

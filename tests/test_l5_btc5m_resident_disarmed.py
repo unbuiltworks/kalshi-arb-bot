@@ -1,0 +1,165 @@
+"""An expired envelope should disarm the lane, not blind the watchdog.
+
+WHAT HAPPENED. `l5-btc5m-live` exited 2026-11-17T23:05Z on
+ENVELOPE_EXPIRED with code 0 -- a designed dead-man, which Railway
+reports as CRASHED -- and stayed down. `serve_fills` runs on a DAEMON
+thread, so the registry died with the process. Every watchdog sweep that
+day then read
+
+    l5-btc5m-live.railway.internal:8090:REGISTRY_UNREACHABLE:URLError
+
+and because the ownership oracle requires EVERY registry to be readable
+before it will claim any id, the sports halt at 16:02Z could cancel
+NOTHING account-wide. A lane that was merely switched off degraded the
+protection the other lane depends on.
+
+THE DEAD-MAN IS PRESERVED. These tests are mostly about proving that
+staying resident is not permission:
+
+  - the executor is built `Btc5mExecutor(None, ledger, ...)`, transport
+    None, so no object in the process can POST;
+  - the loop `continue`s and never reaches the trading body;
+  - the same gate refuses again every 15 s;
+  - and a LATCH still ends the process, because "NOTHING REARMS".
+"""
+from __future__ import annotations
+
+import inspect
+
+import pytest
+
+from src import l5_btc5m_runner as RUN
+
+
+# ----------------------------------------------------- off by default
+
+def test_off_by_default():
+    assert RUN.resident_when_disarmed() is False
+
+
+@pytest.mark.parametrize("raw,want", [
+    ("YES", True), (" YES ", True),
+    ("yes", False), ("Yes", False), ("1", False), ("TRUE", False),
+    ("ON", False), ("", False), ("NO", False),
+])
+def test_only_the_exact_string_YES_enables_it(monkeypatch, raw, want):
+    monkeypatch.setenv(RUN.RESIDENT_WHEN_DISARMED_ENV, raw)
+    assert RUN.resident_when_disarmed() is want
+
+
+def test_while_off_every_exit_still_exits(monkeypatch):
+    monkeypatch.delenv(RUN.RESIDENT_WHEN_DISARMED_ENV, raising=False)
+    for reason in ("ENVELOPE_EXPIRED", "STATE_HALTED", "anything"):
+        assert RUN.stay_resident({"exit": True, "reason": reason}) is False
+
+
+# --------------------------------- ON: envelope reasons, and only those
+
+@pytest.fixture
+def on(monkeypatch):
+    monkeypatch.setenv(RUN.RESIDENT_WHEN_DISARMED_ENV, "YES")
+
+
+@pytest.mark.parametrize("reason", sorted(RUN.UNAUTHORISED_REASONS))
+def test_a_benignly_unauthorised_lane_stays_resident(on, reason):
+    """No envelope, an expired one, one for another deployment, one that
+    does not name this strategy: expected states, so sit disarmed and
+    stay readable."""
+    assert RUN.stay_resident({"exit": True, "reason": reason}) is True
+
+
+@pytest.mark.parametrize("reason", [
+    "ENVELOPE_UNPARSEABLE", "ENVELOPE_NOT_AN_OBJECT",
+    "ENVELOPE_EXPIRY_UNREADABLE", "ENVELOPE_LIMITS_UNREADABLE",
+    "ENVELOPE_NONCE_TOO_SHORT", "DEPLOYMENT_UNKNOWN", "NOW_UNREADABLE",
+    "REGISTRY_UNAVAILABLE",
+])
+def test_a_BROKEN_configuration_still_ends_the_process(on, reason):
+    """THE OTHER HALF OF THE RULE. A lane that cannot read its own
+    envelope, its clock or its strategy registry is not benignly
+    unauthorised -- it is broken, and its cleanest failure mode is to
+    stop. Residency is for the first case only."""
+    assert RUN.stay_resident({"exit": True, "reason": reason}) is False
+
+
+@pytest.mark.parametrize("reason", [
+    "STATE_HALTED", "STATE_STOPPED", "STATE_PATH_UNSET",
+    "STATE_UNREADABLE", "WATCHDOG:HALT", "", None, "SOMETHING_NEW",
+])
+def test_a_latch_or_an_unknown_reason_still_ends_the_process(on, reason):
+    """THE PROPERTY THAT MATTERS MOST. A latch must not be downgraded to
+    a pause, and a reason this module does not recognise must not be
+    treated as benign."""
+    assert RUN.stay_resident({"exit": True, "reason": reason}) is False
+
+
+def test_a_gate_that_is_not_exiting_is_left_alone(on):
+    assert RUN.stay_resident({"exit": False,
+                              "reason": "STATE_NOT_ARMED"}) is False
+    assert RUN.stay_resident({"ok": True, "exit": False,
+                              "reason": None}) is False
+
+
+def test_every_unauthorised_reason_is_one_the_parser_can_actually_return():
+    """THIS TEST CAUGHT MY OWN BAD LIST. My first version enumerated the
+    reasons from truncated grep output and got 11 of the 22
+    `parse_envelope` returns, which would have left the other 11 treated
+    as latches. Asserting the SUBSET relation means a typo or an invented
+    reason fails here, and a NEW parser reason defaults to exiting --
+    the safe side -- until somebody adds it deliberately."""
+    import re
+    src = inspect.getsource(
+        __import__("src.l5_persistent_mode", fromlist=["x"]))
+    i = src.index("def parse_envelope")
+    j = src.index("\ndef ", i + 10)
+    known = {m for m in re.findall(r'"([A-Z_]{6,})"', src[i:j])
+             if m != "PERSISTENT"}
+    invented = sorted(set(RUN.UNAUTHORISED_REASONS) - known)
+    assert not invented, invented
+    #: and the parser has reasons we deliberately do NOT treat as benign
+    assert known - set(RUN.UNAUTHORISED_REASONS)
+
+
+# ------------------------------- staying resident is not permission
+
+def test_the_executor_is_constructed_without_a_transport():
+    """STRUCTURAL, not gated: with transport None there is no object in
+    the process that can POST, so residency cannot become submission."""
+    src = inspect.getsource(RUN)
+    assert "X.Btc5mExecutor(None, ledger," in src
+
+
+def test_the_resident_branch_does_not_reach_the_trading_body():
+    """It emits and falls through to the sleep/continue, exactly as
+    STATE_NOT_ARMED does."""
+    src = inspect.getsource(RUN)
+    i = src.index('emit("L5_BTC5M_RESIDENT_DISARMED"')
+    tail = src[i:i + 1200]
+    assert "time.sleep(15.0)" in tail
+    assert "continue" in tail
+    #: and nothing in the branch places or arms
+    #: CALLS, not substrings. "submit" matched my own `"can_submit":
+    #: False` field -- the fourth time this session a string check hit
+    #: prose or a key name rather than code.
+    code = "\n".join(ln for ln in tail.splitlines()
+                      if not ln.strip().startswith("#"))
+    for forbidden in ("ex.step(", ".arm(", ".submit("):
+        assert forbidden not in code, forbidden
+
+
+def test_the_emitted_line_states_it_cannot_submit():
+    src = inspect.getsource(RUN)
+    i = src.index('emit("L5_BTC5M_RESIDENT_DISARMED"')
+    block = src[i:i + 900]
+    assert '"can_submit": False' in block
+    assert "serving_registry" in block
+    assert "not permission to trade" in block
+
+
+def test_the_exit_check_runs_before_the_resident_check():
+    """Source order: the `return 0` path is evaluated first, so a reason
+    that does not qualify can never fall into residency."""
+    src = inspect.getsource(RUN)
+    i_ret = src.index("not stay_resident(gate)")
+    i_res = src.index('emit("L5_BTC5M_RESIDENT_DISARMED"')
+    assert i_ret < i_res
