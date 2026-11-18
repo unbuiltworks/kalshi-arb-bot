@@ -245,6 +245,8 @@ STRADDLE_MAX_UNMATCHED_USD_ENV = "L5_BTC5M_STRADDLE_MAX_UNMATCHED_USD"
 #: defect that kept the entry-EV rates unset and the late favourite
 #: silent, and that I reintroduced here.
 INVENTORY_RANKING_ENV = "L5_BTC5M_INVENTORY_RANKING"
+#: a ranker that could price nothing must not veto the completion
+RANKER_VACUOUS_ENV = "L5_BTC5M_RANKER_VACUOUS_HOLD"
 #: The expected value we will PAY to remove a worst case, in dollars.
 #: Absent means NO budget, which `rank` treats as refusing any
 #: alternative whose EV give-up cannot be measured.
@@ -592,6 +594,24 @@ def inventory_ranking_enabled(default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().upper() == "YES"
+
+
+def ranker_vacuous_hold_falls_back(default: bool = False) -> bool:
+    """Does a HOLD with NO priceable alternative fall back to baseline?
+
+    OFF unless the value is exactly "FALLBACK". The ranker passes
+    `maker_fill_rate=None` deliberately, so MAKER_COMPLETE is always
+    `available=False`; with taker completion disabled the only available
+    route is HOLD, in every book. Honouring that as a decision withdrew
+    the baseline risk-reducing completion and stranded the leg.
+
+    This invents no fill rate, widens no cap and authorizes no taker: it
+    only stops a comparison that compared nothing from vetoing one.
+    """
+    raw = os.environ.get(RANKER_VACUOUS_ENV)
+    if raw is None:
+        return default
+    return raw.strip().upper() == "FALLBACK"
 
 
 def completion_ev_giveup_usd(default: Optional[Decimal] = None
@@ -2256,6 +2276,10 @@ class Btc5mExecutor:
                         inventory_ranking_enabled=(
                             inventory_ranking_enabled(
                                 self.params.inventory_ranking_enabled)),
+                        ranker_vacuous_hold_falls_back=(
+                            ranker_vacuous_hold_falls_back(
+                                self.params
+                                .ranker_vacuous_hold_falls_back)),
                         max_completion_ev_giveup_usd=(
                             completion_ev_giveup_usd(
                                 self.params.max_completion_ev_giveup_usd)),
