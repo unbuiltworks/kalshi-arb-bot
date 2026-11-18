@@ -438,6 +438,14 @@ class RegistryOrderSource:
 
 
 AUTOMATIC = "MANUAL_ORDER_INDICATOR_AUTOMATIC"
+#: The venue's EXPLICIT manual literal. Only this exact value exempts an order
+#: from the age latch (owner 2026-11-18: the owner's own resting manual
+#: orders latched UNMANAGED_RESTING_ORDER at 16:02:13Z and stopped every
+#: lane). Absent, empty, unparseable or any other value still latches: the
+#: cancellation guard's `!= AUTOMATIC` test is correct for "do not cancel"
+#: but would be FAIL-OPEN for "do not latch", so it is deliberately not
+#: reused here.
+MANUAL = "MANUAL_ORDER_INDICATOR_MANUAL"
 
 
 class OwnershipOracle:
@@ -907,8 +915,22 @@ class Watchdog:
         if self.managed_lanes:
             out["managed_lanes"] = lane_notes
             out["managed_lane_exempt"] = []
+        #: REPORTED, never silent: an invisible exemption is the shape that
+        #: looks configured while being inert or permissive.
+        out["manual_exempt"] = []
         for r in rows:
             if is_terminal(r):
+                continue
+            if str(r.get("manualOrderIndicator") or "") == MANUAL:
+                # the VENUE says a person placed this by hand: its age is
+                # not evidence that an executor stopped managing it. It is
+                # still never cancellable by this process (see the
+                # VENUE_SAYS_MANUAL guard), and the open-order count and
+                # every executor's own preflight still see it.
+                out["manual_exempt"].append({
+                    "venue_order_id": str(r.get("id") or ""),
+                    "market": str(r.get("marketSlug") or ""),
+                    "age_s": order_age_s(r, now=now)})
                 continue
             if str(r.get("id") or "") in lane_ids:
                 # a fresh lane is managing this resting order: its age is

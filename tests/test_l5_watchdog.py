@@ -654,3 +654,51 @@ def test_a_failed_cancel_on_one_leg_does_not_abandon_the_other(tmp_path):
     reported = {o["venue_order_id"] for o in
                 (out["still_open"] + out["unverified"])}
     assert "D1PAIRUP" in reported, out
+
+
+# ---- 2026-11-18: an explicit venue-MANUAL order must not latch the halt ----
+def test_an_old_explicitly_manual_order_does_not_latch_and_is_reported(
+        tmp_path):
+    """LIVE 16:02:13Z: the owner's own resting manual NBA order latched
+    UNMANAGED_RESTING_ORDER and stopped every lane."""
+    v = Venue([open_row(indicator=W.MANUAL)])            # 20 min old
+    w, _ = wd(tmp_path, v, max_order_age_s=300)
+    out = w.sweep(now=NOW)
+    assert out["overdue"] == [] and out["halted"] is None
+    assert [m["venue_order_id"] for m in out["manual_exempt"]] == ["D1W00001"]
+    assert out["open_orders"] == 1                 # still visible to preflights
+    assert v.cancelled == []                       # never cancelled
+    assert gate(tmp_path).submissions_permitted() is True
+
+
+@pytest.mark.parametrize("indicator", ["", "MANUAL", "manual",
+                                       "MANUAL_ORDER_INDICATOR_UNSPECIFIED",
+                                       "SOMETHING_NEW"])
+def test_anything_but_the_exact_manual_literal_still_latches(tmp_path,
+                                                             indicator):
+    row = open_row()
+    row["manualOrderIndicator"] = indicator
+    v = Venue([row])
+    w, _ = wd(tmp_path, v, max_order_age_s=300)
+    out = w.sweep(now=NOW)
+    assert out["overdue"] and out["manual_exempt"] == []
+    assert gate(tmp_path).submissions_permitted() is False
+
+
+def test_an_absent_indicator_still_latches(tmp_path):
+    row = open_row()
+    row.pop("manualOrderIndicator")
+    v = Venue([row])
+    w, _ = wd(tmp_path, v, max_order_age_s=300)
+    out = w.sweep(now=NOW)
+    assert out["overdue"] and out["manual_exempt"] == []
+
+
+def test_a_manual_order_alongside_an_unmanaged_automatic_one_still_latches(
+        tmp_path):
+    v = Venue([open_row("D1MAN", indicator=W.MANUAL), open_row("D1AUTO")])
+    w, _ = wd(tmp_path, v, max_order_age_s=300)
+    out = w.sweep(now=NOW)
+    assert [o["venue_order_id"] for o in out["overdue"]] == ["D1AUTO"]
+    assert [m["venue_order_id"] for m in out["manual_exempt"]] == ["D1MAN"]
+    assert gate(tmp_path).submissions_permitted() is False
