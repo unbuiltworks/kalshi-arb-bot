@@ -2023,3 +2023,45 @@ def test_overpay_budget_reads_new_name_and_legacy_name(monkeypatch):
     monkeypatch.delenv("PMUS_TWO_SIDED_MARKET_STRAND_LOSS_USD")
     m = importlib.reload(M)
     assert m.MARKET_OVERPAY_BUDGET_USD == D("0")
+
+
+# ------------------------------------------------ independent submission lock
+def test_submission_lock_off_by_default_and_published(eng, monkeypatch):
+    monkeypatch.delenv(M.SUBMISSION_LOCK_ENV, raising=False)
+    e, v = eng
+    assert M.registry_doc(e.b)["submission_disabled"] is False
+    for val in ("true", "yes", "on", "0", " 2 "):
+        monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, val)
+        assert M.submission_locked() is False          # only exactly "1"
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    assert M.registry_doc(e.b)["submission_disabled"] is True
+
+
+def test_submission_lock_refuses_every_order_including_completions(
+        eng, monkeypatch):
+    e, v = eng
+    e.select(v.account())
+    e.step_market("aec-x")
+    yes = next(k for k, o in v.orders.items() if o["side"] == "YES")
+    v.orders[yes].update(filled=D("1"), open=False)
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    n = v.n
+    for _ in range(3):
+        e.step_market("aec-x")                          # wants a completion
+    assert v.n == n                                     # nothing sent
+    # cancels are never blocked: the opposite opening leg was cancelled or
+    # is still open, but no NEW order id exists
+    e.place("aec-x", "NO", D("0.50"), D("1"), "test")
+    assert v.n == n
+    monkeypatch.delenv(M.SUBMISSION_LOCK_ENV)
+    e.place("aec-x", "NO", D("0.50"), D("1"), "test")
+    assert v.n == n + 1                                 # resumes when unlocked
+
+
+def test_shared_halt_alone_never_reports_submission_disabled(eng,
+                                                             monkeypatch):
+    """A reset must not be able to prove 'disabled' via the latch it clears."""
+    monkeypatch.delenv(M.SUBMISSION_LOCK_ENV, raising=False)
+    e, _v = eng
+    monkeypatch.setattr(M.Engine, "shared_halt", lambda self: "HALT")
+    assert M.registry_doc(e.b)["submission_disabled"] is False

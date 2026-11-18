@@ -280,6 +280,22 @@ def overpay_budget_from(env: Mapping[str, str]) -> D:
 MARKET_OVERPAY_BUDGET_USD = overpay_budget_from(os.environ)
 
 
+# SUBMISSION LOCK (2026-11-18, default OFF). A lock INDEPENDENT of the shared
+# halt: exactly "1" refuses EVERY order this lane would send -- openings,
+# extensions AND completions -- at the single placement choke point
+# (Engine.place), and the ownership registry publishes it as
+# submission_disabled. It exists so an owner-gated halt reset can verify THIS
+# lane cannot send while the latch is cleared, instead of substituting another
+# lane's lock (2026-11-18 12:53Z reset had to). Read live on every call, so
+# the published answer cannot drift from the enforced one. Cancels are never
+# blocked.
+SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
+
+
+def submission_locked() -> bool:
+    return (os.getenv(SUBMISSION_LOCK_ENV) or "").strip() == "1"
+
+
 def market_overpay_blocked(mk: Mapping[str, Any]) -> bool:
     """True when the re-entry guard is ON and this market's recorded
     completion overpay has reached the budget. Off (0) -> never."""
@@ -2003,6 +2019,10 @@ class Engine:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if submission_locked():
+            log("place_refused_submission_lock", slug=slug, side=side, px=px,
+                qty=qty, stage=stage)
+            return
         if self.shared_halt() == "HALT":
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
@@ -2942,6 +2962,10 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
         rows.append({**row, "closing": True})
     return {"readable": True, "lane": LANE, "manages_own_resting": True,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
+            # True ONLY under the lane's own independent lock (above); the
+            # shared halt is deliberately NOT counted, since a reset that
+            # proved "disabled" via the very latch it clears proves nothing
+            "submission_disabled": submission_locked(),
             "orders": rows, "as_of_utc": now_iso(),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "
