@@ -644,3 +644,33 @@ class TestTheCostOfTheCeilingIsMeasurable:
         assert loose["ceiling_relaxation_would_gain"] is None
         assert strict["action"] == "HOLD"
         assert loose["action"] == "MAKER_COMPLETE"
+
+
+class TestTheCorrectedDenominators:
+    """My 4x claim was wrong and the record says so."""
+
+    def test_the_corrected_ratio_is_recorded_not_the_wrong_one(self):
+        doc = P.__doc__ or ""
+        assert "I GOT THIS WRONG FIRST" in doc
+        assert "1.63x" in doc
+        assert "7.6c/contract" in doc and "12.4c/contract" in doc
+
+    def test_the_arithmetic_in_the_docstring_ties_out(self):
+        """7.6c vs 12.4c over 125 contracts == the -11.78 / -17.77 gap."""
+        comp = D("0.076") * 125
+        hold = D("0.124") * 125
+        assert hold - comp == D("6.000")
+        assert abs((D("-11.78") - D("-17.77")) - (hold - comp)) <= D("0.01")
+
+    def test_the_re_entry_finding_is_recorded_as_the_largest_loss(self):
+        doc = P.__doc__ or ""
+        assert "RE-ENTRY, NOT COMPLETION PRICE" in doc
+        assert "$8.49" in doc and "$11.78" in doc
+
+    def test_the_sports_re_entry_guard_is_not_ported_here(self):
+        """BTC5m strands carry the opposite sign; no cross-lane transfer."""
+        doc = P.__doc__ or ""
+        assert "NOT ported here" in doc
+        import pathlib
+        src = pathlib.Path("src/l5_completion_policy.py").read_text()
+        assert "MARKET_STRAND_LOSS" not in src

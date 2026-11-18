@@ -71,6 +71,39 @@ originally offered in support of them did not survive verification:
   -7.5723 (n=33), against CS2 -5.3490 / -5.9500 (n=18) and table tennis
   (setkameua) -3.0900 / -3.4800 (n=10).
 
+DENOMINATORS, CORRECTED 2026-11-18 -- AND I GOT THIS WRONG FIRST.
+
+I reported that completion was "about 4x cheaper, not 2x" than holding.
+That was my own denominator error, of exactly the kind the owner asked me
+to check for. I compared 3.8c -- the mean overpay across ALL 34 completed
+pairs, derived from their mean pair cost of 1.038 -- against a holding
+cost measured on the 25 ABOVE-PAR strands only. Two different
+populations.
+
+On matched denominators, the same 25 above-par strands (125 contracts):
+
+    completing cost          7.6c/contract   ($9.50)
+    holding would have cost 12.4c/contract  ($15.50)
+    completion is cheaper by 4.8c/contract  ($6.00), a ratio of 1.63x
+
+That ties to the independently reported nets: recorded production -11.78
+against the bounded -17.77 at 0.99 is a gap of $5.99, and 7.6c vs 12.4c
+over 125 contracts predicts $6.00. The earlier 16c figure mixed in 3
+legs outside that population.
+
+So the direction stands and the magnitude does not: completing above par
+was cheaper than holding on that night, by about 1.6x rather than 4x.
+
+THE LARGEST SPORTS LOSS WAS RE-ENTRY, NOT COMPLETION PRICE. Of the 36
+settled strands, the 17 that followed an earlier above-par completion in
+the SAME market account for $8.49 of the $11.78 -- 47% of the strands and
+72% of the loss. That points at the opening side, not the ceiling: the
+expensive mistake is re-opening a market that has already demonstrated it
+strands you. The sports lane gates this with a per-market strand-loss
+budget (aaf70a7f8, default off). It is NOT ported here: the evidence is
+17 markets of in-play tennis and esports, and BTC5m strands carry the
+opposite sign (see below).
+
 A LIVE OBSERVATION THAT BEARS ON STAGE 0. In the sports lane's own
 measured episodes, completions land at a pair cost of 1.0001 (cheap leg
 first) to 1.0177 (dearer first). Both are AT OR ABOVE par, so a 0.99
