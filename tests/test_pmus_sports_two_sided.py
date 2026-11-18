@@ -2480,3 +2480,19 @@ def test_combo_maker_gates_follow_the_lane_locks(eng, monkeypatch):
 def test_combo_maker_off_by_default(eng):
     e, v = eng
     assert M.start_combo_maker(v, e) is None
+
+
+def test_combo_maker_starts_and_logs_without_crashing(eng, monkeypatch,
+                                                       tmp_path):
+    """LIVE 2026-11-18 16:36Z: the start log passed mode= twice (also in
+    status()) and crash-looped the bot. Start it for real here."""
+    from src import pmus_combo_maker as CM
+    e, v = eng
+    monkeypatch.setattr(CM, "MODE", "shadow")
+    monkeypatch.setattr(M, "STATE_DIR", tmp_path)
+    v.t = type("T", (), {"request": lambda *a, **k: {}})()
+    v.q1 = type("Q", (), {"base": type("B", (), {
+        "_get_with_retry": staticmethod(lambda t, p: {})})})()
+    e.stop = True                                  # thread exits at once
+    mk = M.start_combo_maker(v, e)
+    assert mk is not None and mk.mode == "shadow"

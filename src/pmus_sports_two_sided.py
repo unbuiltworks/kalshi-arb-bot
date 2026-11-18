@@ -3599,7 +3599,7 @@ def start_combo_maker(venue: "Venue", eng: "Engine") -> Optional[Any]:
 
     th = threading.Thread(target=run, daemon=True, name="combo-maker")
     th.start()
-    log("combo_maker_enabled", mode=CM.MODE, **mk.status())
+    log("combo_maker_enabled", **mk.status())
     return mk
 
 
