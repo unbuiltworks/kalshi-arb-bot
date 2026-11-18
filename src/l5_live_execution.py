@@ -2361,6 +2361,24 @@ class InventoryStore:
         #:
         #: An ADOPTED row with no submit record is NOT ours, however many
         #: reconciliations have copied it forward.
+        #: THE DURABLE LINK IS POSITIVE PROOF AND OUTLIVES THE ROW.
+        #: `tracked_coid_for_venue_order` answers "do we already track
+        #: this venue order" from the coid books plus the booking-time
+        #: link map, so an order of ours whose live_orders record was
+        #: lost is still recognised here even before reconciliation
+        #: rewrites its key.
+        #: ...BUT ONLY UNDER ONE OF *OUR* COIDS. `tracked_coid_for_venue_order`
+        #: searches `live_orders` too, which is where adopted rows live, so
+        #: using it unqualified returned the owner's own adopted order and
+        #: re-opened the hole this method exists to close. Our coids carry
+        #: OWN_COID_PREFIX; an adopted foreign order is keyed by the venue's
+        #: own id and carries no such prefix.
+        try:
+            _tracked = tracked_coid_for_venue_order(vid, self.state)
+        except BaseException:                                  # noqa: BLE001
+            _tracked = None
+        if _tracked and str(_tracked).startswith(OWN_COID_PREFIX):
+            return True
         buckets = ("live_orders", "pending_terminal", "quarantine", "submitted")
         adopted_only = False
         for name in buckets:
@@ -5832,7 +5850,18 @@ class InventoryStore:
                 # exposure at the $1 upper bound, published to the
                 # watchdog -- without making it OWNED. Visibility and
                 # ownership were the same field; they are now separate.
-                "adopted": bool(mine.get("adopted")) or coid not in ours,
+                #: `_known` IS WHAT DISTINGUISHES THE TWO CASES, and my
+                #: first version of this ignored it. An order of OURS
+                #: whose file record was lost comes back with its venue
+                #: id mapping to one of our own coids, so `_known` is set
+                #: and `coid` has already been rewritten to it -- it is
+                #: NOT adopted, and marking it so stranded it behind the
+                #: ownership guard below, which is the very failure
+                #: adoption exists to prevent. The owner's hand-placed
+                #: order has no tracked coid, so `_known` is None and it
+                #: is adopted, visible, and never ours.
+                "adopted": (bool(mine.get("adopted"))
+                            or (coid not in ours and not _known)),
                 "adopted_first_seen_utc": (
                     mine.get("adopted_first_seen_utc")
                     or (dt.datetime.now(dt.timezone.utc).isoformat()
@@ -12019,7 +12048,15 @@ def deadman(store: InventoryStore, transport: Any, *,
         #: Cancelling only reduces OUR exposure; cancelling someone
         #: else's order is not a reduction, it is an unauthorized change
         #: to their position.
-        if vid and not store.owns_venue_order_id(vid):
+        #: A store that cannot answer ownership is read through the row's
+        #: own sticky provenance instead of crashing the sweep: an
+        #: AttributeError here would abort a cancel we DO own, which is
+        #: the opposite of fail-closed. Either route refuses an adopted
+        #: row.
+        _owns = getattr(store, "owns_venue_order_id", None)
+        _not_ours = ((not _owns(vid)) if callable(_owns)
+                     else bool(row.get("adopted")))
+        if vid and _not_ours:
             out.setdefault("refused_not_ours", []).append(
                 {"client_order_id": coid, "venue_order_id": vid,
                  "market": market, "side": side,

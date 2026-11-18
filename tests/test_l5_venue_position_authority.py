@@ -116,7 +116,19 @@ def test_uncertainty_and_the_floor_clear_when_the_books_agree_again():
     assert st.orders_uncertain()
     assert M in st.state["risk_floor_usd"]
     # a later read where our book matches the venue is authoritative again
+    #: THE COST BECOMING KNOWN IS TWO FACTS, NOT ONE. Writing `leg_cost`
+    #: alone left the market still named in `leg_cost_basis_unknown`, and
+    #: the floor is now held by an unknown basis as well as by dispute --
+    #: because adoption RESOLVES dispute by construction, so keying the
+    #: floor to dispute alone deleted it in the same pass that raised it
+    #: (cpc-btc-updown-15m-2026-11-18-2215z, 2026-11-18: $5 floor at
+    #: 22:22:56Z, risk_floor_usd {} by 22:28:12Z, basis still unknown).
+    #: The real path that learns a cost -- the attestation in
+    #: `attest_other_strategy_cost` -- clears BOTH together and pops the
+    #: floor itself, so no production state has a known cost still
+    #: flagged unknown. This fixture now matches that.
     st.state["leg_cost"] = {UP: "1.20"}
+    st.state["leg_cost_basis_unknown"] = []
     out = st.reconcile_from_venue([venue("10.34")], [])
     assert out["uncertainty_cleared"] is True
     assert not st.state["risk_floor_usd"]
