@@ -330,6 +330,34 @@ class Params:
     #:
     #: Zero -- the default -- disables all of it, byte for byte.
     straddle_requote_ticks: int = 0
+    #: ==================================================================
+    #: THE WINDOW'S WORST-CASE SETTLEMENT LOSS, BOUNDED DIRECTLY.
+    #:
+    #: WHY THE EXISTING BOUNDS DO NOT ADD UP TO ONE. The pair ceiling
+    #: bounds the two prices QUOTED TOGETHER in one step. It says nothing
+    #: about an UP leg filled at 0.97 at t=20s and a DOWN leg filled at
+    #: 0.97 at t=200s after the market reversed: that is a MATCHED pair
+    #: costing 1.94 and paying 1.00, the unmatched ceiling does not see it
+    #: because nothing is unmatched, and each quote was under the pair
+    #: ceiling when it was made. Bounded only by the per-side caps, a
+    #: window could lose S * (2 - 1/0.99), about 0.99 of ONE side's cap --
+    #: $1.19 at $1.20 a side -- while every existing check passed. An
+    #: earlier proposal for this mode stated $0.55 from "unmatched cap
+    #: plus a clip". That was wrong for exactly this reason.
+    #:
+    #: WHAT IS BOUNDED. A window settles UP or DOWN, so what it can lose
+    #: is  total cost - min(UP shares, DOWN shares).  Before any leg is
+    #: placed, that figure is taken over EVERY subset of the orders that
+    #: could still fill -- everything resting, including orders with a
+    #: cancel in flight, everything queued this step, and the leg itself
+    #: -- and the leg is refused, WINDOW_LOSS_CEILING, if any subset
+    #: exceeds this. Cost minus a minimum is convex in the fill
+    #: fractions, so the maximum is at full-or-nothing fills and partial
+    #: fills cannot exceed it. By induction no reachable inventory does.
+    #:
+    #: It can only ADD a refusal. Zero -- the default -- disables it and
+    #: changes nothing.
+    straddle_max_window_loss_usd: Decimal = D("0")
     #: THE COMBINED BOUND, replacing the per-leg 0.50. The two quotes
     #: together may not cost more than this; at or above 1.00 a matched
     #: pair cannot profit before costs, so the ceiling must sit below it
@@ -714,6 +742,32 @@ def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
     if heavy_q <= 0:
         return ZERO
     return (heavy_c / heavy_q) * unmatched
+
+
+def worst_case_loss_usd(inv: Dict[str, tuple],
+                        could_fill: List[tuple]) -> Decimal:
+    """The most this window can lose at settlement: cost minus the smaller
+    side's shares, maximised over every subset of `could_fill`.
+
+    `inv` is {side: (qty, cost)}; `could_fill` is [(side, price, qty)].
+    Exhaustive over subsets -- at most the live-order limit plus what one
+    step queues, so a few hundred cases -- because the worst subset is not
+    monotone: adding a fill on the LIGHT side can lower the loss.
+    """
+    best = None
+    n = len(could_fill)
+    for mask in range(1 << n):
+        q = {UP: inv[UP][0], DOWN: inv[DOWN][0]}
+        cost = inv[UP][1] + inv[DOWN][1]
+        for i in range(n):
+            if mask >> i & 1:
+                s_, p_, q_ = could_fill[i]
+                q[s_] += q_
+                cost += p_ * q_
+        loss = cost - min(q[UP], q[DOWN])
+        if best is None or loss > best:
+            best = loss
+    return best if best is not None else ZERO
 
 
 def _repriced_rung(r: Decimal, side: str, inv: Dict[str, tuple],
@@ -1343,6 +1397,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 why_s = _bk_why
                 _rungs = ()
             _side_cap = _dec(params.straddle_max_side_usd) or ZERO
+            _wl_cap = _dec(params.straddle_max_window_loss_usd) or ZERO
             _unm_cap = _dec(params.straddle_max_unmatched_usd) or ZERO
             _committed = {s: _side_committed_usd(s, inv, rest)
                           for s in SIDES}
@@ -1402,6 +1457,20 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                             continue
                     if r_side in live[side]:
                         continue                  # that rung already rests
+                    if _wl_cap > ZERO:
+                        _could = ([(o["side"], o["price"], o["qty"])
+                                   for o in rest]
+                                  + [(o["side"], o["price"], o["qty"])
+                                     for o in want if o.get("op") == "PLACE"]
+                                  + [(side, r_side, qty)])
+                        #: bounded so a pathological resting book cannot
+                        #: turn this into 2**n work; over the bound it
+                        #: refuses rather than guesses.
+                        if len(_could) > 12 or worst_case_loss_usd(
+                                inv, _could) > _wl_cap:
+                            why_s = "WINDOW_LOSS_CEILING"
+                            _side_why[side] = "WINDOW_LOSS_CEILING"
+                            continue
                     if r_side * qty > room:
                         why_s = "NO_EXPOSURE_ROOM"
                         _side_why[side] = "NO_EXPOSURE_ROOM"

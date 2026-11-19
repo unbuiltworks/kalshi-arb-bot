@@ -2052,6 +2052,23 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             "straddle_max_side_usd": str(X.straddle_max_side_usd()),
             "straddle_max_unmatched_usd":
                 str(X.straddle_max_unmatched_usd()),
+            #: the book-relative / requote / loss-ceiling settings, read
+            #: off the SAME effective params the controller is handed, so
+            #: "is the requote actually on in production?" is answerable
+            #: from the log and a clamped value shows as what it became.
+            "clip_usd": str(_ep.clip_usd),
+            "straddle_book_relative": bool(_ep.straddle_book_relative),
+            "straddle_pair_ceiling": str(_ep.straddle_pair_ceiling),
+            "straddle_join_ticks": int(_ep.straddle_join_ticks or 0),
+            "straddle_reprice_ticks_per_clip":
+                int(_ep.straddle_reprice_ticks_per_clip or 0),
+            "straddle_requote_ticks": int(_ep.straddle_requote_ticks or 0),
+            "straddle_max_window_loss_usd":
+                str(_ep.straddle_max_window_loss_usd),
+            "straddle_completion_pair_cost":
+                str(_ep.straddle_completion_pair_cost),
+            "straddle_fill_model_measured":
+                bool(_ep.straddle_fill_model_measured),
             "max_resting_entries": getattr(_ep, "max_resting_entries", None),
             "live_order_bound": X.live_order_bound(),
             "account_cap_usd": (None if X.account_cap() is None

@@ -315,6 +315,11 @@ STRADDLE_REPRICE_TICKS_ENV = "L5_BTC5M_STRADDLE_REPRICE_TICKS"
 #: unreadable, zero or negative keeps requoting OFF. Over-asking is clamped.
 STRADDLE_REQUOTE_TICKS_ENV = "L5_BTC5M_STRADDLE_REQUOTE_TICKS"
 STRADDLE_REQUOTE_TICKS_CEILING = 5
+#: STRADDLE only; see `Params.straddle_max_window_loss_usd`. The most one
+#: window may lose at settlement, checked before every leg. Absent,
+#: unreadable, zero or negative keeps it OFF. Over-asking is clamped to the
+#: ceiling below (set where the other straddle ceilings are defined).
+STRADDLE_MAX_WINDOW_LOSS_USD_ENV = "L5_BTC5M_STRADDLE_MAX_WINDOW_LOSS_USD"
 #: STRADDLE only; see `completion_pair_cost`. Absent means no completion,
 #: which is the mode's historical behaviour.
 COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
@@ -780,6 +785,15 @@ def straddle_reprice_ticks(default: int = 0) -> int:
     return min(v, STRADDLE_REPRICE_TICKS_CEILING)
 
 
+def straddle_max_window_loss_usd(default: Decimal = D("0")) -> Decimal:
+    """Worst-case settlement loss one window may reach. Unreadable or not
+    positive keeps the default (0, disabled); over-asking is clamped."""
+    raw = _dec(os.environ.get(STRADDLE_MAX_WINDOW_LOSS_USD_ENV))
+    if raw is None or not raw.is_finite() or raw <= 0:
+        return default
+    return min(raw, STRADDLE_MAX_WINDOW_LOSS_USD_CEILING)
+
+
 def straddle_requote_ticks(default: int = 0) -> int:
     """Ticks a resting quote may trail the book before it is withdrawn.
     Unreadable keeps the default (0, disabled)."""
@@ -1049,6 +1063,9 @@ def completion_taker_fault(order: Mapping[str, Any],
 STRADDLE_MAX_SIDE_USD_CEILING = STRADDLE_CLIP_MAX_USD * D("2")
 STRADDLE_MAX_UNMATCHED_USD_CEILING = STRADDLE_CLIP_MAX_USD
 STRADDLE_REPRICE_TICKS_CEILING = 5
+#: no looser than the unmatched ceiling: a window may not be allowed to lose
+#: more in total than it may hold unmatched.
+STRADDLE_MAX_WINDOW_LOSS_USD_CEILING = STRADDLE_MAX_UNMATCHED_USD_CEILING
 
 
 #: THE SMALLEST CLIP THAT CAN STILL BUY A VENUE LOT. The venue's verified
@@ -2545,6 +2562,9 @@ class Btc5mExecutor:
                                 self.params.straddle_reprice_ticks_per_clip)),
                         straddle_requote_ticks=straddle_requote_ticks(
                             self.params.straddle_requote_ticks),
+                        straddle_max_window_loss_usd=(
+                            straddle_max_window_loss_usd(
+                                self.params.straddle_max_window_loss_usd)),
                         clip_usd=clip_usd(self.params.clip_usd,
                                           STRADDLE_CLIP_MAX_USD),
                         #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because

@@ -331,3 +331,347 @@ def test_no_order_is_ever_a_taker_and_no_pair_reaches_one_dollar(
         at(rig, 5.0 + 2 * i, b, "%.2f" % (float(b) + 0.02))
     assert all(s["post_only"] and s["mode"] == "MAKER" for s in rig.venue.sent)
     assert X.STRADDLE_PAIR_CEILING_MAX < D("1.00")
+
+
+# ============ 5. THE MOST A WINDOW CAN LOSE, UNDER AN ADVERSARY
+#
+# A window settles UP or DOWN, so its loss is
+#       total cost  -  min(UP shares, DOWN shares).
+# NOT "the unmatched cap plus a clip", which an earlier proposal claimed:
+# that reasoning assumed a matched pair costs what was QUOTED together, and
+# a leg filled at 0.97 before a reversal pairs with a leg filled at 0.97
+# after it. The adversary below controls the book AND chooses which of our
+# resting orders fill, in full or in part, including fills that beat a
+# cancel. Figures are read from the executor's own ledger and the venue.
+
+import random                                           # noqa: E402
+
+SIDE_CAP, UNM_CAP, LOSS_CAP = D("1.20"), D("0.45"), D("0.45")
+
+
+@pytest.fixture
+def probe(monkeypatch, bonereaper):
+    """The profile proposed for the one-window probe, minus the loss gate."""
+    monkeypatch.setenv(X.CLIP_USD_ENV, "0.10")
+    monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, str(SIDE_CAP))
+    monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, str(UNM_CAP))
+    monkeypatch.setenv(X.ACCOUNT_CAP_ENV, "3.00")
+
+
+@pytest.fixture
+def gated(monkeypatch, probe):
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, str(LOSS_CAP))
+
+
+def _held(rig):
+    inv = rig.ex.inventory(MARKET)
+    return {s: (D(str(inv[s]["qty"])), D(str(inv[s]["cost"])))
+            for s in C.SIDES}
+
+
+def _open(rig):
+    """(side, price, remaining qty) of everything the venue still works."""
+    out = []
+    for o in rig.working():
+        i = rig.venue.by_oid[o]
+        left = D(str(i["qty"])) - D(rig.venue.cum[o])
+        if left > 0:
+            out.append((i["side"], D(i["price"]), left))
+    return out
+
+
+def realized_worst(rig):
+    """Loss if the window settled NOW against us."""
+    return C.worst_case_loss_usd(_held(rig), [])
+
+
+def potential_worst(rig):
+    """Loss if any subset of what is still working ALSO filled first."""
+    return C.worst_case_loss_usd(_held(rig), _open(rig))
+
+
+def gross(rig):
+    h = _held(rig)
+    return (h[C.UP][1] + h[C.DOWN][1]
+            + sum((p * q for _, p, q in _open(rig)), D(0)))
+
+
+def whipsaw(rig, steps=120):
+    """Fill whichever side is quoted HIGH, then reverse the market."""
+    peak = pot = exp = D(0)
+    hi = True
+    rig.go(t=2.0, bid="0.96", ask="0.98")
+    for i in range(steps):
+        side = C.UP if hi else C.DOWN
+        hit = [o for o in working(rig, side, LEG)
+               if px(rig, o) >= D("0.90")]
+        for o in hit:
+            rig.venue.fill(o)
+        if hit:
+            hi = not hi
+        bid = "0.96" if hi else "0.02"
+        at(rig, 4.0 + 2 * i, bid, "%.2f" % (float(bid) + 0.02))
+        peak, pot, exp = (max(peak, realized_worst(rig)),
+                          max(pot, potential_worst(rig)),
+                          max(exp, gross(rig)))
+    return peak, pot, exp
+
+
+def test_without_the_loss_gate_a_reversal_loses_far_more_than_the_unmatched_cap(
+        rig, armed, probe):
+    """THE CORRECTION. Every existing check passes at every step, nothing is
+    unmatched beyond its cap, and the window still loses about a whole
+    side's cap. The provable bound without the gate is the per-side cap:
+    cost_up + cost_down - min(shares) <= max(cost_up, cost_down), because
+    every share costs under a dollar."""
+    peak, pot, exp = whipsaw(rig)
+    assert peak > D("0.55"), "the old 0.55 claim would have held: %s" % peak
+    assert peak > UNM_CAP * 2
+    assert pot <= SIDE_CAP, pot
+    assert exp <= SIDE_CAP * 2
+    assert all(s["post_only"] for s in rig.venue.sent)
+
+
+def test_with_the_loss_gate_the_same_adversary_is_held_to_the_ceiling(
+        rig, armed, gated):
+    peak, pot, exp = whipsaw(rig)
+    assert pot <= LOSS_CAP, pot
+    assert peak <= LOSS_CAP
+    #: and it was the gate that stopped it, by name
+    rep = at(rig, 262.0, "0.96", "0.98")
+    assert rep["why"] == "WINDOW_LOSS_CEILING", rep["why"]
+    assert rig.working() == [] or potential_worst(rig) <= LOSS_CAP
+    #: it did not simply refuse to trade: most of the budget was used
+    assert peak > D("0.30"), "the gate stopped the mode from trading at all"
+
+
+def test_the_loss_gate_counts_orders_already_resting(rig, armed, stacking,
+                                                     monkeypatch):
+    """Without requoting, quotes stack. Each new one alone is inside the
+    ceiling; together with what already rests they are not. The gate must
+    see the resting book, and then every fill the adversary can choose
+    stays inside it."""
+    monkeypatch.setenv(X.CLIP_USD_ENV, "0.10")
+    monkeypatch.setenv(X.STRADDLE_MAX_SIDE_USD_ENV, "1.20")
+    monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, "2.00")
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, "0.25")
+    rig.go(t=2.0, bid="0.50", ask="0.52")
+    whys = []
+    for i, b in enumerate(["0.55", "0.60", "0.65", "0.70", "0.75"]):
+        whys.append(at(rig, 4.0 + 2 * i, b,
+                       "%.2f" % (float(b) + 0.02))["why"])
+        assert potential_worst(rig) <= D("0.25"), (b, _open(rig))
+    assert "WINDOW_LOSS_CEILING" in whys
+    assert len(working(rig, C.UP)) >= 2, "nothing stacked; the test is vacuous"
+    #: the adversary takes every UP order and no DOWN order
+    for o in working(rig, C.UP):
+        rig.venue.fill(o)
+    at(rig, 20.0, "0.75", "0.77")
+    assert realized_worst(rig) <= D("0.25")
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_no_fill_order_race_or_partial_fill_exceeds_the_ceiling(
+        tmp_path, armed, gated, seed):
+    """A random adversary: random walk of the book over the whole range,
+    each resting order filled in full, in part or not at all, and a fill
+    armed to beat any cancel. Checked at EVERY step, on realized inventory
+    and on everything still working."""
+    rng = random.Random(seed)
+    rig = Rig6(tmp_path, max_live_orders=6)
+    bid = rng.randint(3, 95)
+    rig.go(t=2.0, bid="0.%02d" % bid, ask="0.%02d" % (bid + 2))
+    fills = 0
+    for i in range(130):
+        for o in list(rig.working()):
+            r = rng.random()
+            left = (D(str(rig.venue.by_oid[o]["qty"]))
+                    - D(rig.venue.cum[o]))
+            if r < 0.30:
+                rig.venue.fill(o)
+                fills += 1
+            elif r < 0.40 and left > D("0.01"):
+                rig.venue.fill(o, qty=D(rig.venue.cum[o]) + D("0.01"))
+                fills += 1
+            elif r < 0.55:
+                rig.venue.fill_on_cancel.add(o)
+        bid = max(2, min(96, bid + rng.choice(
+            [-40, -9, -3, -1, 0, 0, 1, 3, 9, 40])))
+        at(rig, 4.0 + 2 * i, "0.%02d" % bid, "0.%02d" % (bid + 2))
+        assert potential_worst(rig) <= LOSS_CAP, (seed, i, _held(rig),
+                                                  _open(rig))
+        assert gross(rig) <= SIDE_CAP * 2, (seed, i)
+        for side in C.SIDES:
+            assert len(working(rig, side, LEG)) <= 1, (seed, i)
+    rig.tick(2).go(t=301.0, bid="0.50", ask="0.52")
+    assert rig.working() == []
+    assert realized_worst(rig) <= LOSS_CAP
+    assert all(s["post_only"] and s["action"] == "BUY"
+               for s in rig.venue.sent)
+    coids = [s["client_order_id"] for s in rig.venue.sent]
+    assert len(coids) == len(set(coids))
+    assert fills >= 5, "seed %d never filled anything" % seed
+
+
+def test_the_loss_arithmetic_is_the_settlement_arithmetic(rig, armed, gated):
+    """`worst_case_loss_usd` on held inventory equals the worse of the
+    executor's own two settlement results, so the bound is on the number
+    the ledger will actually report."""
+    whipsaw(rig, steps=40)
+    up = rig.ex.settlement_arithmetic(MARKET, True)
+    dn = rig.ex.settlement_arithmetic(MARKET, False)
+    key = [k for k in up if "pnl" in k.lower() or "net" in k.lower()]
+    assert key, sorted(up)
+    worst = min(D(str(up[key[0]])), D(str(dn[key[0]])))
+    assert -worst == realized_worst(rig), (up, dn)
+
+
+def test_a_maker_fill_pays_no_fee_and_earns_no_rebate_at_our_tier():
+    """So cost is price x quantity and nothing else. If the venue ever
+    charges makers, this fails and the bound must be re-derived."""
+    from src import pmus_fees as F
+    for p in ("0.02", "0.50", "0.98"):
+        assert F.maker_rebate(D(p), D("1")) == 0
+
+
+@pytest.mark.parametrize("raw,want", [
+    ("0.45", "0.45"), ("99", str(X.STRADDLE_MAX_WINDOW_LOSS_USD_CEILING)),
+    ("0", "0"), ("-1", "0"), ("x", "0"), ("", "0"), ("NaN", "0")])
+def test_the_loss_ceiling_setting_is_clamped_and_fails_off(monkeypatch, raw,
+                                                           want):
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, raw)
+    assert X.straddle_max_window_loss_usd() == D(want)
+
+
+def test_worst_case_loss_is_exhaustive_not_greedy():
+    """Adding a light-side fill can LOWER the loss, so the worst subset is
+    not 'everything fills'. Hand-checked."""
+    inv = {C.UP: (D("1"), D("0.90")), C.DOWN: (D("0"), D("0"))}
+    could = [(C.DOWN, D("0.05"), D("1")), (C.UP, D("0.90"), D("1"))]
+    #: nothing more fills: 0.90. Only DOWN: 0.95 - 1 = -0.05. Only UP: 1.80.
+    #: Both: 1.85 - 1 = 0.85.
+    assert C.worst_case_loss_usd(inv, could) == D("1.80")
+    assert C.worst_case_loss_usd(inv, could[:1]) == D("0.90")
+    assert C.worst_case_loss_usd(inv, []) == D("0.90")
+
+
+def test_the_loss_gate_counts_orders_queued_in_the_same_step(rig, armed,
+                                                             two_sided,
+                                                             monkeypatch):
+    """A LADDER queues several same-side rungs in ONE decision, before any
+    of them rests. Each alone is inside the ceiling; the gate must add up
+    what this step has already asked for."""
+    monkeypatch.setenv(X.STRADDLE_RUNGS_ENV, "0.10,0.20,0.30,0.40")
+    monkeypatch.setenv(X.CLIP_USD_ENV, "0.10")
+    monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, "1.00")
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, "0.05")
+    rep = rig.go(t=5.0)
+    assert len(rig.venue.sent) >= 2, rep["why"]
+    assert len(working(rig, C.UP)) < 4, "every rung was admitted"
+    assert potential_worst(rig) <= D("0.05"), _open(rig)
+
+
+# ============ 6. THE SETTINGS REACH THE CONTROLLER IN PRODUCTION
+
+import os                                               # noqa: E402
+import re                                               # noqa: E402
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _read(rel):
+    with open(os.path.join(_ROOT, rel), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def test_both_settings_default_off_in_the_dataclass_and_the_executor(rig):
+    assert C.Params().straddle_requote_ticks == 0
+    assert C.Params().straddle_max_window_loss_usd == 0
+    ep = rig.ex.effective_params()
+    assert ep.straddle_requote_ticks == 0
+    assert ep.straddle_max_window_loss_usd == 0
+
+
+def test_the_environment_reaches_the_params_the_controller_is_handed(
+        rig, two_sided, monkeypatch):
+    """`effective_params` is what `step` passes to `decide`. STRADDLE mode
+    is required: the straddle readers are only consulted in that branch."""
+    monkeypatch.setenv(X.STRADDLE_REQUOTE_TICKS_ENV, "3")
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, "0.45")
+    ep = rig.ex.effective_params()
+    assert ep.straddle_requote_ticks == 3
+    assert ep.straddle_max_window_loss_usd == D("0.45")
+    #: and a clamped value arrives clamped, not as typed
+    monkeypatch.setenv(X.STRADDLE_REQUOTE_TICKS_ENV, "50")
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, "50")
+    ep = rig.ex.effective_params()
+    assert ep.straddle_requote_ticks == X.STRADDLE_REQUOTE_TICKS_CEILING
+    assert (ep.straddle_max_window_loss_usd
+            == X.STRADDLE_MAX_WINDOW_LOSS_USD_CEILING)
+
+
+def test_outside_straddle_mode_neither_setting_is_picked_up(rig,
+                                                            monkeypatch):
+    monkeypatch.setenv(X.STRADDLE_REQUOTE_TICKS_ENV, "3")
+    monkeypatch.setenv(X.STRADDLE_MAX_WINDOW_LOSS_USD_ENV, "0.45")
+    ep = rig.ex.effective_params()
+    assert ep.straddle_requote_ticks == 0
+    assert ep.straddle_max_window_loss_usd == 0
+
+
+def test_the_loss_ceiling_cannot_be_set_looser_than_the_unmatched_ceiling():
+    assert (X.STRADDLE_MAX_WINDOW_LOSS_USD_CEILING
+            <= X.STRADDLE_MAX_UNMATCHED_USD_CEILING)
+
+
+def test_the_runner_reports_the_resolved_settings_before_arming():
+    """So "is the requote on in production, and at what value?" is read
+    from the boot log, from the SAME effective params the controller gets."""
+    s = _read("src/l5_btc5m_runner.py")
+    i = s.index('emit("L5_BTC5M_EFFECTIVE_CONFIG"')
+    j = s.index('emit("L5_BTC5M_ARM"')
+    assert i < j
+    block = s[i:j]
+    for field in ("straddle_requote_ticks", "straddle_max_window_loss_usd",
+                  "straddle_book_relative", "straddle_pair_ceiling",
+                  "straddle_join_ticks", "clip_usd"):
+        assert re.search(r'"%s":\s*\S*\(?\s*_ep\.%s' % (field, field),
+                         block), field
+
+
+def test_the_runner_builds_the_same_executor_class_and_step_these_tests_drive():
+    s = _read("src/l5_btc5m_runner.py")
+    assert "X.Btc5mExecutor(" in s
+    assert re.search(r"\.step\(", s)
+
+
+def test_the_live_image_ships_every_module_the_new_code_runs_in():
+    """The image copies files one by one. A module left out is an
+    ImportError at boot, which Railway reports as a crash."""
+    df = _read("deploy/l5_btc5m_live/Dockerfile")
+    for mod in ("l5_btc5m_controller", "l5_btc5m_execution",
+                "l5_btc5m_runner", "l5_straddle_ev",
+                "l5_venue_constraints"):
+        assert "COPY src/%s.py" % mod in df, mod
+    #: and the new code imports nothing the image lacks
+    ctl = _read("src/l5_btc5m_controller.py")
+    for imp in re.findall(r"^from src import (\w+)", ctl, re.M):
+        assert "COPY src/%s.py" % imp in df, imp
+
+
+def test_a_restart_mid_window_keeps_the_loss_ceiling_and_the_inventory(
+        rig, armed, gated):
+    """The bound is computed from the LEDGER, so a rebuilt executor is held
+    by fills made before it existed."""
+    whipsaw(rig, steps=30)
+    before = _held(rig)
+    assert realized_worst(rig) > 0
+    rig.restart()
+    assert _held(rig) == before
+    for i in range(60):
+        side = C.UP if i % 2 else C.DOWN
+        for o in working(rig, side, LEG):
+            rig.venue.fill(o)
+        bid = "0.96" if i % 2 else "0.02"
+        at(rig, 70.0 + 2 * i, bid, "%.2f" % (float(bid) + 0.02))
+        assert potential_worst(rig) <= LOSS_CAP, i
