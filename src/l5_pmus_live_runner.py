@@ -3696,6 +3696,15 @@ class Runner:
                    "refused_by_gate": pre["blocked_by"],
                    "intent_provenance": GATE.L5_FOLLOWED,
                    "L5_NATIVE": FT.l5_native(row)}
+        elif LX.continuous_inventory_enabled() and Runner.continuous_owns(
+                self, slug):
+            # ONE CONTROLLER: the continuous inventory pass owns this
+            # market's orders, so an L5 action is observed, not followed.
+            rec = {"action_key": row["action_key"], "market": slug,
+                   "refused_by_layer": "CONTINUOUS_INVENTORY",
+                   "refused_reason": "CONTINUOUS_INVENTORY_OWNS_MARKET",
+                   "intent_provenance": GATE.L5_FOLLOWED,
+                   "L5_NATIVE": FT.l5_native(row)}
         else:
             if self.first_action_t is None:
                 self.first_action_t = float(r.get("timestamp") or recv)
@@ -7780,6 +7789,11 @@ class Runner:
         slug = getattr(t, "market_slug", None)
         if not slug:
             return None
+        # the continuous inventory controller completes this market itself
+        if LX.continuous_inventory_enabled() and Runner.continuous_owns(
+                self, slug):
+            self.stats["book_completion:CONTINUOUS_INVENTORY_OWNS"] += 1
+            return None
         row = self._last_action_row.get(slug)
         controller_route = False
         # ---------- WHO OPENED WHAT WE HOLD DECIDES THE ROUTE ----------
@@ -8677,6 +8691,447 @@ class Runner:
                        % type(exc).__name__] += 1
             return None
 
+    # =================================== ONE CONTINUOUS INVENTORY CONTROLLER
+    #
+    # L5_TS_CONTINUOUS_INVENTORY=YES (explicit; default OFF) makes
+    # `l5_continuous_inventory.decide_pass` the single per-pass decision for
+    # the two-sided market: both maker quotes, replenishment after a fill,
+    # bounded ADD, per-contract completion, and exact-id cancel/replace when
+    # the touch moves. The other discretionary order paths (the timer
+    # opening, Route B book completion, the completion requote and the L5
+    # ingest) stand down for that market, so no second controller can place
+    # or cancel beside it. Deadlines, the halt deadman, orphan cancellation,
+    # reconciliation and the watchdog are NOT discretionary and still run.
+    #
+    # NOTHING HERE TOUCHES THE VENUE DIRECTLY. Placements go through
+    # `executor.handle(None, book, controller=...)` -- every gate, claim and
+    # limit -- and cancellations through `LX.deadman(..., only=[coid])`, the
+    # same exact-id, re-read-proved route the requote uses.
+
+    CONTINUOUS_SKEW_ENV = "L5_CI_SKEW_TICKS"
+    CONTINUOUS_REPRICE_TICKS_ENV = "L5_CI_REPRICE_TICKS"
+    CONTINUOUS_ADD_BAND_ENV = "L5_CI_ADD_BAND_CONTRACTS"
+    CONTINUOUS_HAIRCUT_ENV = "L5_CI_HAIRCUT_TICKS"
+    #: seconds a resting bid must rest before it may be moved. Default 0:
+    #: the owner's "move the bid constantly". The claim budget
+    #: (L5_ACC_MAX_ROUNDS) still bounds how many placements a side gets.
+    CONTINUOUS_MIN_REST_ENV = "L5_CI_REPRICE_MIN_REST_S"
+    #: exactly YES keeps a still-valid order instead of following the touch
+    #: down (issue #233 Track A reading). Unset: follow the touch both ways.
+    CONTINUOUS_KEEP_VALID_ENV = "L5_CI_KEEP_VALID_ORDERS"
+
+    def continuous_owns(self, slug: Any) -> bool:
+        """Does the continuous controller own this market's order flow?"""
+        from src import l5_two_sided_probe as TSP
+        if not slug or not LX.continuous_inventory_enabled():
+            return False
+        try:
+            return bool(self.controller_open_enabled()
+                        and TSP.active(str(slug)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    @staticmethod
+    def _env_int(name: str, default: int, lo: int, hi: int) -> int:
+        raw = (os.getenv(name) or "").strip()
+        try:
+            v = int(raw) if raw else default
+        except ValueError:
+            return default
+        return max(lo, min(hi, v))
+
+    def continuous_inputs(self, slug: str, ws: float, now: float,
+                          book: Mapping[str, Any]) -> Dict[str, Any]:
+        """Every input `decide_pass` takes, read from durable state.
+
+        Resting orders are read ONCE from the ledger and passed as rows, so
+        cash, worst case and the residual cap each count them exactly once.
+        Cash committed is the validation gates' own filled-cash figure plus
+        every still-fillable order's notional, account-wide.
+        """
+        from src import l5_two_sided_probe as TSP
+        from src import l5_book_completion as BC
+        t = self.transport
+        st = self.store
+        rows = []
+        for coid, o in sorted((st.live_orders() or {}).items()):
+            if str((o or {}).get("market") or "") != str(slug):
+                continue
+            sub = None
+            try:
+                _t = dt.datetime.fromisoformat(str(o.get("t")))
+                if _t.tzinfo is not None:
+                    sub = _t.timestamp()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                sub = None
+            rows.append({"coid": str(coid), "side": o.get("side"),
+                         "price": o.get("price"),
+                         "remaining": LX.InventoryStore.worst_case_remaining(o),
+                         "submitted_s": sub})
+        vg = getattr(self.executor, "validation_gates", None)
+        cash_cost = None
+        if vg is not None:
+            # THE GATE'S OWN ARITHMETIC, not a copy of it: resting orders and
+            # a proposed one are reserved exactly as `ValidationGates`
+            # reserves them when the order reaches it (a DOWN buy at $1 a
+            # share unless it hedges confirmed unmatched UP).
+            outs = self.executor.outstanding_for_gates()
+            inv = self.executor.inventory_for_gates(slug)
+            filled_cash = vg.cash_committed(self.executor.cash_legs_for_gates())
+            resting_cash = vg.reserved_cash(
+                outstanding=outs, order_qty=D(0), order_price=D(0),
+                order_intent="ORDER_INTENT_BUY_LONG",
+                inventory=inv)["resting"]
+            cash_cap = vg.max_cash_deployed_usd
+            abs_cap = min(LX.ABS_RESIDUAL_CAP_CONTRACTS,
+                          vg.max_unmatched_contracts)
+
+            def cash_cost(side, px, q, _o=outs, _i=inv, _v=vg):
+                return _v.reserved_cash(
+                    outstanding=_o, order_qty=q, order_price=px,
+                    order_intent=("ORDER_INTENT_BUY_LONG"
+                                  if str(side).upper() == "UP"
+                                  else "ORDER_INTENT_BUY_SHORT"),
+                    inventory=_i)["this_order"]
+        else:
+            lc_all = st.committed() or {}
+            filled_cash = sum((D(str(v)) for v in lc_all.values()), D(0))
+            resting_cash = sum((v for v in (st.outstanding_by_market() or {}
+                                            ).values()), D(0))
+            cash_cap = D(str(os.getenv("L5_MAX_CASH_DEPLOYED_USD", "0")))
+            abs_cap = LX.ABS_RESIDUAL_CAP_CONTRACTS
+        lc = st.leg_cost(slug)
+        end = float(ws) + TSP.WINDOW_S
+        try:
+            stranded = st.stranded_since(slug)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            stranded = None
+        up_q, dn_q = st.position(slug, "UP"), st.position(slug, "DOWN")
+        led = self.replenish()
+        rpl_on = DQ.replenish_enabled(ws)
+        return dict(
+            market=str(slug), bid=book.get("bid"), ask=book.get("ask"),
+            tick=getattr(t, "tick_size", None),
+            up_q=up_q, dn_q=dn_q,
+            up_cost=lc.get("UP", D(0)), dn_cost=lc.get("DOWN", D(0)),
+            resting=rows, now_s=float(now),
+            entry_refusal=TSP.may_enter(float(now), float(ws), end),
+            complete_refusal=TSP.may_complete(float(now), float(ws), end),
+            clip=TSP.opening_leg_max_contracts(),
+            qty_increment=getattr(t, "quantity_increment", None) or D("0.01"),
+            depth_ticks=self._env_int("L5_TS_DEPTH_TICKS", 2, 0, 50),
+            complete_depth_ticks=int(BC.completion_depth_ticks()),
+            skew_ticks=self._env_int(self.CONTINUOUS_SKEW_ENV, 0, 0, 10),
+            cash_committed=filled_cash + resting_cash, cash_cap=cash_cap,
+            cash_cost=cash_cost,
+            max_worst_loss=self.limits.max_total_exposure_usd,
+            residual_k=getattr(self.executor, "residual_cap_k", None),
+            clip_hist=st.max_clip(slug), abs_residual_cap=abs_cap,
+            imbalance_cap=D(self._env_int(self.CONTINUOUS_ADD_BAND_ENV,
+                                          0, 0, 5)),
+            pair_ceiling=TSP.max_pair_cost(),
+            complete_target=TSP.maker_completion_target(),
+            complete_ceiling=TSP.completion_pair_ceiling(),
+            reprice_ticks=self._env_int(self.CONTINUOUS_REPRICE_TICKS_ENV,
+                                        1, 1, 50),
+            reprice_min_rest_s=float(self._env_int(
+                self.CONTINUOUS_MIN_REST_ENV, 0, 0, 120)),
+            keep_valid_orders=(os.getenv(self.CONTINUOUS_KEEP_VALID_ENV)
+                               or "").strip().upper() == "YES",
+            stranded_since_s=stranded,
+            replenish_permitted=(not rpl_on) or led.may_open(ws),
+            traded_before=bool(up_q > 0 or dn_q > 0),
+            orders_uncertain=st.orders_uncertain(),
+            slots_left={s: self.executor.continuous_slots_left(slug, s)
+                        for s in ("UP", "DOWN")},
+            bid_shares=book.get("bid_shares"),
+            ask_shares=book.get("ask_shares"),
+            haircut_ticks=self._env_int(self.CONTINUOUS_HAIRCUT_ENV, 1, 0, 20))
+
+    def maybe_continuous_inventory(self, now: float
+                                   ) -> Optional[Dict[str, Any]]:
+        """One pass of the continuous inventory controller, or None.
+
+        CANCEL FIRST, THEN DECIDE AGAIN. A cancel is by exact id through the
+        deadman, which proves it on a re-read and books any fill that beat
+        it; the pass is then recomputed from the state that cancel left, so
+        a replacement is sized against what is actually held and resting.
+        An unconfirmed cancel marks the store uncertain, and the second
+        decision then holds every side.
+        """
+        from src import l5_continuous_inventory as CI
+        t = self.transport
+        slug = getattr(t, "market_slug", None) if t is not None else None
+        if not self.continuous_owns(slug):
+            return None
+        slug = str(slug)
+        # THE OPERATOR HALT, read here as well: the tick's own halt branch
+        # disarms the transport, and this makes the pass place nothing in
+        # the same tick rather than relying on that ordering.
+        if self.halted():
+            self.stats["continuous:OPERATOR_HALT"] += 1
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            self.stats["continuous:WINDOW_START_UNKNOWN"] += 1
+            return None
+        self._ci_window_rollover(slug, now)
+        self._ci_observe_orders(slug, now)
+        plan: Optional[Dict[str, Any]] = None
+        repriced: Set[str] = set()
+        for _iter in range(2):
+            book = self.book.snapshot(slug) if self.book is not None else None
+            if not isinstance(book, Mapping) or not book:
+                self.stats["continuous:NO_AUTHENTICATED_BOOK"] += 1
+                return plan
+            try:
+                plan = CI.decide_pass(**self.continuous_inputs(slug, ws, now,
+                                                               book))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # FAIL CLOSED: a pass we cannot compute places nothing.
+                self.stats["continuous:INPUTS_UNREADABLE:%s"
+                           % type(exc).__name__] += 1
+                return None
+            for s, why in sorted((plan.get("holds") or {}).items()):
+                self.stats["continuous:hold:%s:%s" % (s, why)] += 1
+            emit("L5_CONTINUOUS_INVENTORY", {
+                "market": slug, "window_start": float(ws), "iteration": _iter,
+                "phase": plan.get("phase"),
+                "decision": self._ci_decision_line(plan, ws, now),
+                "actions": [{k: str(v) for k, v in a.items()}
+                            for a in plan.get("actions") or ()],
+                "holds": plan.get("holds"), "evaluated": plan.get("evaluated"),
+                "state": plan.get("state"),
+                "labels": ("OUR decision from the authenticated book and the "
+                           "durable inventory. A PLACE is an intent the "
+                           "executor still gates; a CANCEL is by exact id. "
+                           "REDUCE_BY_SELLING is evaluated only, never sent.")})
+            cancels = [a for a in plan.get("actions") or ()
+                       if a.get("kind") == CI.CANCEL]
+            if cancels and _iter == 0:
+                if not getattr(t, "armed", False):
+                    self.stats["continuous:CANCEL_SKIPPED_NOT_LIVE"] += 1
+                    return plan
+                for a in cancels:
+                    _t0 = time.time()
+                    self._ci_note(str(a["coid"]), "cancel_decision_t", now)
+                    out = LX.deadman(self.store, t,
+                                     reason="continuous_%s"
+                                     % str(a.get("reason")).lower(),
+                                     only=[str(a["coid"])])
+                    self._ci_note(str(a["coid"]), "cancel_ack_latency_s",
+                                  round(time.time() - _t0, 4))
+                    self._ci_note(str(a["coid"]), "cancel_outcome", (
+                        "CONFIRMED" if str(a["coid"]) in {
+                            str((r or {}).get("client_order_id"))
+                            for r in ((out or {}).get("cancelled") or [])
+                            if isinstance(r, Mapping)}
+                        else "NOT_CONFIRMED"))
+                    self._requote_note_cancel_outcome(
+                        str(a["coid"]), out if isinstance(out, Mapping)
+                        else {})
+                    self.stats["continuous:cancel:%s" % a.get("reason")] += 1
+                    repriced.add(str(a.get("side")))
+                continue                  # decide again on what is left
+            self._continuous_place(plan, slug, ws, repriced)
+            break
+        return plan
+
+    # ------------------------------------------- cheap lifecycle telemetry
+    #
+    # Per order: decision time, submit-ack and cancel-ack latencies (wall
+    # clock around the call, MEASURED), first observed resting, partial and
+    # full fill observation times, terminal state. One small dict per order,
+    # emitted once when the order leaves the ledger; nothing is written on
+    # every tick and nothing heavy runs at a window rollover.
+
+    def _ci_note(self, coid: str, key: str, val: Any) -> None:
+        lc = self.__dict__.setdefault("_ci_lifecycle", {})
+        lc.setdefault(str(coid), {})[key] = val
+
+    def _ci_observe_orders(self, slug: str, now: float) -> None:
+        try:
+            lc = self.__dict__.setdefault("_ci_lifecycle", {})
+            live = {str(c): o for c, o in (self.store.live_orders() or {}
+                                           ).items()
+                    if str((o or {}).get("market") or "") == slug}
+            for c, o in live.items():
+                rec = lc.setdefault(c, {})
+                rec.setdefault("resting_observed_t", float(now))
+                rem = LX.InventoryStore.worst_case_remaining(o)
+                q = LX.venue_decimal(o.get("qty"))
+                if q is not None and rem < q and "partial_fill_t" not in rec:
+                    rec["partial_fill_t"] = float(now)
+            for c in [c for c in lc if c not in live
+                      and "resting_observed_t" in lc[c]]:
+                rec = lc.pop(c)
+                rec["terminal_observed_t"] = float(now)
+                for k in ("decision_t", "resting_observed_t",
+                          "partial_fill_t"):
+                    if isinstance(rec.get(k), (int, float)):
+                        rec[k + "_to_terminal_s"] = round(
+                            float(now) - float(rec[k]), 3)
+                emit("L5_CI_ORDER_LIFECYCLE", dict(
+                    rec, client_order_id=c, market=slug,
+                    labels=("measured: *_latency_s are wall-clock around the "
+                            "call; *_t are tick-clock observations, so a "
+                            "fill time is when the poll SAW it")))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["continuous:lifecycle_error:%s"
+                       % type(exc).__name__] += 1
+
+    def _ci_window_rollover(self, slug: str, now: float) -> None:
+        """One line per finished window: its settled result if the ledger
+        has settled it, else UNSETTLED. Read-only, O(1)."""
+        prev = getattr(self, "_ci_window_slug", None)
+        if prev == slug:
+            return
+        self._ci_window_slug = slug
+        if prev is None:
+            return
+        try:
+            row = (self.store.state.get("retired_markets") or {}).get(prev)
+            emit("L5_CI_WINDOW_SUMMARY", {
+                "market": prev, "observed_t": float(now),
+                "settled_pnl": (None if not row
+                                else row.get("settlement_pnl")),
+                "status": "SETTLED" if row else "UNSETTLED",
+                "labels": "settlement-backed only; UNSETTLED is not zero"})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["continuous:summary_error:%s"
+                       % type(exc).__name__] += 1
+
+    @staticmethod
+    def _ci_decision_line(plan: Mapping[str, Any], ws: float,
+                          now: float) -> Dict[str, Any]:
+        """The per-decision instrument: matched, residual and its basis,
+        worst outcome, the decision and why, paired cost, time left."""
+        st = plan.get("state") or {}
+        try:
+            up, dn = D(st.get("up_q", "0")), D(st.get("dn_q", "0"))
+            uc, dc = D(st.get("up_cost", "0")), D(st.get("dn_cost", "0"))
+            matched = min(up, dn)
+            heavy = st.get("heavy")
+            hq, hc = (up, uc) if heavy == "UP" else (dn, dc)
+            paired = (None if matched <= 0 or up <= 0 or dn <= 0
+                      else str(uc / up + dc / dn))
+            alt = (plan.get("evaluated") or {}).get("alternatives") or {}
+            return {"matched": str(matched), "residual_side": heavy,
+                    "residual_qty": str(abs(up - dn)),
+                    "residual_basis": (str(hc / hq) if heavy and hq > 0
+                                       else None),
+                    "worst_outcome_pnl": str(min(up, dn) - uc - dc),
+                    "paired_cost_per_contract": paired,
+                    "decision": alt.get("chosen") or (
+                        "PLACE" if any(a.get("kind") == "PLACE"
+                                       for a in plan.get("actions") or ())
+                        else "HOLD"),
+                    "reason": alt.get("reason") or plan.get("holds"),
+                    "time_left_s": round(float(ws) + 900.0 - float(now), 1),
+                    "order_states": [
+                        "%s@%s:%s" % (r.get("side"), r.get("price"),
+                                      r.get("remaining"))
+                        for r in st.get("resting") or ()]}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__}
+
+    def _continuous_place(self, plan: Mapping[str, Any], slug: str,
+                          ws: float, repriced: Set[str] = frozenset()
+                          ) -> None:
+        """Hand each PLACE to the executor, one full `handle` call each."""
+        from src import l5_continuous_inventory as CI
+        from src import l5_two_sided_probe as TSP
+        places = [a for a in plan.get("actions") or ()
+                  if a.get("kind") == CI.PLACE]
+        if not places:
+            return
+        rpl_on = DQ.replenish_enabled(ws)
+        opening_attempted = False
+        for a in places:
+            intent = str(a.get("intent"))
+            # A REPLACEMENT IS NOT A RE-OPEN: the side's own order was
+            # cancelled by exact id in this pass to be repriced, so its
+            # replacement is not charged a replenishment credit -- the same
+            # rule the timer path applies to a pair's complement.
+            opening = (intent in (CI.OPEN, CI.REPLENISH, CI.ADD)
+                       and str(a.get("side")) not in repriced)
+            # REPLENISHMENT ACCOUNTING, when the owner turned it on: every
+            # opening after the window's first must be paid for by a credit
+            # a confirmed fill or terminal cancel issued. A completion never
+            # needs one -- it removes exposure.
+            if opening and rpl_on and not opening_attempted \
+                    and not self.replenish().may_open(ws):
+                self.stats["continuous:REPLENISH_UNPAID:%s"
+                           % self.replenish().refuse_reason()] += 1
+                continue
+            try:
+                if int(self.store.still_fillable_order_count()) >= \
+                        int(max_live_orders()):
+                    self.stats["continuous:NO_ORDER_SLOT"] += 1
+                    break
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["continuous:LEDGER_UNREADABLE:%s"
+                           % type(exc).__name__] += 1
+                break
+            book = self.book.snapshot(slug) if self.book is not None else {}
+            # the decision handed to the translation gate is PROVISIONAL, as
+            # on the timer path: the size is the opening cap, so the gate's
+            # lambda scaling cannot refuse a small, correctly sized intent
+            # before the continuous branch adopts the real price and qty.
+            dec = {"side": str(a["side"]), "price": a["price"],
+                   "l5_size": TSP.opening_leg_max_contracts(),
+                   "relation": "continuous"}
+            _t0 = time.time()
+            try:
+                rec = self.executor.handle(
+                    None, book, market=slug, window=str(ws),
+                    controller={"provenance": LX.CONTROLLER_GENERATED,
+                                "decision": dec, "maker_class": None,
+                                "continuous": dict(a)})
+            finally:
+                self.executor._probe_leg_pending = None
+                self.executor._probe_round_pending = None
+                self.executor._continuous_key_pending = None
+            _o = (rec or {}).get("ORDER") or {}
+            if _o.get("submitted") and _o.get("client_order_id"):
+                _c = str(_o["client_order_id"])
+                self._ci_note(_c, "decision_t", self.now_t)
+                self._ci_note(_c, "submit_ack_latency_s",
+                              round(time.time() - _t0, 4))
+                self._ci_note(_c, "intent", intent)
+                self._ci_note(_c, "side", str(a.get("side")))
+                self._ci_note(_c, "price", str(a.get("price")))
+                self._ci_note(_c, "qty", str(a.get("qty")))
+            if opening:
+                opening_attempted = True
+            why = str((rec or {}).get("refused_reason") or "")
+            self.stats["continuous:place:%s:%s" % (
+                intent, why or "SUBMITTED_OR_SUPPRESSED")] += 1
+        if opening_attempted and rpl_on:
+            try:
+                self.replenish().spend(ws)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["replenish_spend_error:%s"
+                           % type(exc).__name__] += 1
+
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
 
@@ -8706,6 +9161,11 @@ class Runner:
         from src import l5_two_sided_probe as TSP
         if not self.controller_open_enabled():
             return None
+        # ONE INVENTORY CONTROLLER. With L5_TS_CONTINUOUS_INVENTORY=YES the
+        # continuous pass decides this market's quotes in place of the
+        # opening below. Default OFF: this line is never taken.
+        if LX.continuous_inventory_enabled():
+            return self.maybe_continuous_inventory(now)
         t = self.transport
         if t is None:
             return None
@@ -10253,6 +10713,11 @@ class Runner:
         """
         from src import l5_two_sided_probe as TSP
         if not completion_requote_enabled():
+            return None
+        # the continuous inventory controller reprices its own quotes
+        if LX.continuous_inventory_enabled() and Runner.continuous_owns(
+                self, getattr(self.transport, "market_slug", None)):
+            self.stats["requote_refused:CONTINUOUS_INVENTORY_OWNS"] += 1
             return None
         try:
             t = self.transport
