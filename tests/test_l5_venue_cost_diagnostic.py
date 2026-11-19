@@ -1,0 +1,515 @@
+"""The venue-cost DIAGNOSTIC reads; it never writes.
+
+It exists to show, for the rows the attestation gave up on, the venue's
+quantities beside the ledger's. Its whole value depends on it being unable
+to change a cost basis, a settlement, a realized figure, an attempt counter,
+a risk gate or an order -- so most of this file is about what it cannot do.
+
+Offline: the fake activity feed and the REAL InventoryStore, settlement path
+and attestation from test_l5_venue_cost_attestation.
+"""
+from __future__ import annotations
+
+import ast
+import copy
+import hashlib
+import inspect
+import json
+import re
+from decimal import Decimal as D
+from pathlib import Path
+
+import pytest
+
+from src import l5_live_execution as LX
+from src import l5_venue_cost_attestation as VCA
+from src import l5_venue_cost_diagnostic as VCD
+
+from tests.test_l5_venue_cost_attestation import (      # noqa: E402
+    Feed, M0035, M1605, M1610, M1615, M_OLD, _no_retry_spacing, day,  # noqa: F401
+    day_fixture_fills, deposit, fill, retire, run_until_idle,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+MX = "cpc-btc-updown-5m-2026-11-13-1700z"        # venue has MORE than ledger
+MY = "cpc-btc-updown-5m-2026-11-13-1705z"        # venue has LESS than ledger
+MZ = "cpc-btc-updown-5m-2026-11-13-1710z"        # no venue fills at all
+
+
+@pytest.fixture
+def on(monkeypatch):
+    monkeypatch.setenv(VCD.GATE_ENV, VCD.GATE_TOKEN)
+
+
+def mismatch_fills():
+    return [
+        fill(MX, "UP", "3", "0.08", "T-X1", "VX1", t="2026-11-13T17:01:00Z"),
+        fill(MX, "UP", "4", "0.10", "T-X2", "VX2", t="2026-11-13T17:00:30Z"),
+        fill(MY, "DOWN", "2", "0.20", "T-Y1", "VY1",
+             t="2026-11-13T17:06:00Z", fee="0.01"),
+    ]
+
+
+@pytest.fixture
+def kept(tmp_path):
+    """A real ledger in which the REAL attestation has exhausted its attempts
+    on three rows -- the production state this diagnostic is for."""
+    s = LX.InventoryStore(str(tmp_path / "inv.json"))
+    for k in ("realized_attributed", "realized_unattributed",
+              "realized_today"):
+        s.state[k] = "0"
+    retire(s, M_OLD, up="5", yes="0", t="2026-11-12T23:06:00+00:00")
+    retire(s, MX, up="5", yes="0", t="2026-11-13T17:06:00+00:00")
+    retire(s, MY, dn="5", yes="1", t="2026-11-13T17:11:00+00:00")
+    retire(s, MZ, up="5", yes="0", t="2026-11-13T17:16:00+00:00")
+    feed = Feed([mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]])
+    run_until_idle(s, feed)
+    book = s.state[VCA.STATE_KEY]["markets"]
+    assert {m: book[m]["status"] for m in (MX, MY, MZ)} == {
+        MX: "UPPER_BOUND_KEPT", MY: "UPPER_BOUND_KEPT",
+        MZ: "UPPER_BOUND_KEPT"}
+    assert book[MX]["last_reason"] == "VENUE_QTY_NE_LEDGER_QTY"
+    return s
+
+
+def drive(store, feed, *, steps=60):
+    d = VCD.Diagnostic()
+    now, outs = 5_000.0, []
+    for _ in range(steps):
+        now += VCA.STEP_INTERVAL_S + 1
+        out = d.step(store, feed, now)
+        outs.append(out)
+        if out.get("idle") in ("NOTHING_LEFT", "DISABLED"):
+            break
+    return d, outs
+
+
+def reports(outs):
+    return {r["market"]: r for o in outs for r in (o.get("compared") or [])}
+
+
+def digest(store):
+    return hashlib.sha256(Path(store.path).read_bytes()).hexdigest()
+
+
+# ============ 1. IT SHOWS WHAT THE ATTESTATION THREW AWAY
+
+def test_it_reports_venue_and_ledger_quantities_side_by_side(kept, on):
+    _d, outs = drive(kept, Feed([mismatch_fills()]))
+    r = reports(outs)
+    assert set(r) == {MX, MY, MZ}
+    x = r[MX]
+    assert x["attestation_last_reason"] == "VENUE_QTY_NE_LEDGER_QTY"
+    assert x["ledger"]["up_qty"] == "5" and x["ledger"]["down_qty"] == "0"
+    assert D(x["ledger"]["cost_total"]) == D("5")          # the $1 bound
+    assert x["venue"]["up"]["qty"] == "7"
+    assert D(x["venue"]["up"]["fill_derived_cost"]) == D("0.64")   # 3*.08+4*.10
+    assert x["venue"]["up"]["fills"] == 2
+    assert x["difference"]["up_qty_venue_minus_ledger"] == "2"
+    assert x["difference"]["up"] == "VENUE_MORE"
+    assert x["form"] == "QUANTITY_MISMATCH"
+    y = r[MY]
+    assert y["venue"]["down"]["qty"] == "2"
+    assert D(y["venue"]["down"]["fees"]) == D("0.01")
+    assert y["difference"]["down"] == "VENUE_LESS"
+    assert r[MZ]["form"] == "VENUE_FILLS_UNREADABLE"
+    assert r[MZ]["venue"]["reason"] == "NO_VENUE_FILLS_FOUND"
+
+
+def test_the_hypothetical_is_labelled_and_never_applied(kept, on):
+    _d, outs = drive(kept, Feed([mismatch_fills()]))
+    h = reports(outs)[MX]["hypothetical_if_venue_fills_were_the_position"]
+    assert h["applied"] is False
+    assert D(h["settlement_pnl"]) == D("-0.64")            # UP lost: 0 - cost
+    assert D(h["minus_booked_pnl"]) == D("4.36")           # booked -5.00
+    line = [o for o in outs if o.get("compared")][0]
+    assert "Nothing was corrected" in line["labels"]
+    #: and the row itself still says the bound
+    row = kept.state["retired_markets"][MX]
+    assert row["pnl_provenance"] == VCA.UPPER_BOUND
+    assert D(str(row["settlement_pnl"])) == D("-5")
+
+
+def test_only_rows_the_attestation_gave_up_on_are_reported(kept, on):
+    """Not rows before the approved floor, not rows already corrected, not
+    rows the attestation is still working on."""
+    assert set(VCD.targets(kept)) == {MX, MY, MZ}
+    assert M_OLD not in VCD.targets(kept)
+
+
+def test_a_feed_that_stops_short_reports_no_comparison(kept, on,
+                                                       monkeypatch):
+    """A truncated walk can only MISS fills, so a quantity taken from it
+    would be a false mismatch. Nothing is compared. Truncated here by the
+    page bound: page one is read, more remain, and the walk has proved
+    nothing about how far back it reached."""
+    monkeypatch.setattr(VCA, "MAX_WALK_PAGES", 1)
+    feed = Feed([mismatch_fills()[:1], mismatch_fills()[1:]])
+    _d, outs = drive(kept, feed)
+    assert reports(outs) == {}
+    short = [o for o in outs if o.get("walk_insufficient")]
+    assert short and short[0]["walk_insufficient"]["sufficient"] is False
+    assert set(short[0]["markets"]) == {MX, MY, MZ}
+
+
+def test_a_transport_error_backs_off_and_reports_nothing(kept, on):
+    feed = Feed([mismatch_fills()], fail=ConnectionError("429"))
+    d, outs = drive(kept, feed, steps=5)
+    assert reports(outs) == {}
+    assert any(o.get("walk_failed") for o in outs)
+    assert d.next_allowed > 0
+
+
+# ============ 2. IT CHANGES NOTHING
+
+def test_the_ledger_is_identical_before_and_after_in_memory_and_on_disk(
+        kept, on):
+    before_state = copy.deepcopy(kept.state)
+    before_disk = digest(kept)
+    before_lines = copy.deepcopy(kept.realized_lines())
+    _d, outs = drive(kept, Feed([mismatch_fills()]))
+    assert len(reports(outs)) == 3, "it did not run; the test is vacuous"
+    assert kept.state == before_state
+    assert digest(kept) == before_disk
+    assert kept.realized_lines() == before_lines
+
+
+def test_attempt_counters_statuses_and_corrections_do_not_move(kept, on):
+    book0 = copy.deepcopy(kept.state[VCA.STATE_KEY])
+    corr0 = copy.deepcopy(kept.state.get("cost_basis_corrections") or [])
+    drive(kept, Feed([mismatch_fills()]))
+    assert kept.state[VCA.STATE_KEY] == book0
+    assert (kept.state.get("cost_basis_corrections") or []) == corr0
+    #: so the attestation still considers them exhausted and re-opens none
+    assert VCA.candidates(kept) == []
+    hb = VCA.Attestor().heartbeat(kept)
+    assert hb["still_upper_bound"]["kept_after_max_attempts"] == 3
+    assert hb["corrections_applied"] == 0
+
+
+def test_a_row_that_WOULD_match_is_still_not_corrected(tmp_path, on):
+    """The strongest form of read-only: hand it a row whose venue fills
+    reconcile exactly. The attestation would correct it. This must not."""
+    s = LX.InventoryStore(str(tmp_path / "inv.json"))
+    for k in ("realized_attributed", "realized_unattributed",
+              "realized_today"):
+        s.state[k] = "0"
+    retire(s, M1610, up="5", yes="0", t="2026-11-13T16:16:00+00:00")
+    s.state.setdefault(VCA.STATE_KEY, {}).setdefault("markets", {})[M1610] = {
+        "status": "UPPER_BOUND_KEPT", "attempts": 3,
+        "last_reason": "VENUE_QTY_NE_LEDGER_QTY"}
+    s.save()
+    before = copy.deepcopy(s.state)
+    _d, outs = drive(s, Feed([[fill(M1610, "UP", "5", "0.08", "T-1610",
+                                    "DPT1RZAG14F1",
+                                    t="2026-11-13T16:11:00Z")]]))
+    r = reports(outs)[M1610]
+    assert r["form"] == "GROSS_MATCH"
+    assert s.state == before
+    assert D(str(s.state["retired_markets"][M1610]["settlement_pnl"])) == D("-5")
+
+
+class Frozen(dict):
+    """A mapping that raises on ANY mutation, recursively."""
+
+    def _no(self, *a, **k):
+        raise AssertionError("the diagnostic tried to WRITE the ledger")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = \
+        update = _no
+
+    def __getitem__(self, k):
+        return _freeze(dict.__getitem__(self, k))
+
+    def get(self, k, default=None):
+        return _freeze(dict.get(self, k, default))
+
+    def items(self):
+        return [(k, _freeze(v)) for k, v in dict.items(self)]
+
+    def values(self):
+        return [_freeze(v) for v in dict.values(self)]
+
+
+def _freeze(v):
+    if isinstance(v, Frozen):
+        return v
+    if isinstance(v, dict):
+        return Frozen(v)
+    if isinstance(v, list):
+        return tuple(_freeze(x) for x in v)
+    return v
+
+
+class ReadOnlyStore:
+    """Exposes `state` and NOTHING else. Any method the diagnostic reached
+    for -- save, attest, note an attempt, settle -- is an AttributeError
+    turned into a failure."""
+
+    def __init__(self, real):
+        object.__setattr__(self, "state", Frozen(copy.deepcopy(real.state)))
+
+    def __getattr__(self, name):
+        raise AssertionError("the diagnostic called store.%s" % name)
+
+    def __setattr__(self, name, value):
+        raise AssertionError("the diagnostic assigned store.%s" % name)
+
+
+class GetOnlyTransport:
+    """The feed's GET and nothing else."""
+
+    def __init__(self, feed):
+        object.__setattr__(self, "feed", feed)
+        object.__setattr__(self, "calls", [])
+
+    def _get(self, path):
+        self.calls.append(path)
+        return self.feed._get(path)
+
+    def __getattr__(self, name):
+        raise AssertionError("the diagnostic reached for transport.%s" % name)
+
+
+def test_it_runs_to_completion_on_a_store_that_cannot_be_written(kept, on):
+    ro = ReadOnlyStore(kept)
+    tr = GetOnlyTransport(Feed([mismatch_fills()]))
+    _d, outs = drive(ro, tr)
+    assert len(reports(outs)) == 3
+    assert tr.calls and all(p.startswith("/v1/portfolio/activities")
+                            for p in tr.calls)
+
+
+def _code_only(module):
+    """The module's executable code: comments and docstrings removed, so a
+    sentence explaining what it must NOT do cannot fail the check."""
+    tree = ast.parse(inspect.getsource(module))
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body \
+                and isinstance(body[0], ast.Expr) \
+                and isinstance(getattr(body[0], "value", None), ast.Constant) \
+                and isinstance(body[0].value.value, str):
+            node.body = body[1:] or [ast.Pass()]
+    return ast.unparse(tree)
+
+
+def test_the_module_names_no_mutating_verb_and_no_store_method():
+    code = _code_only(VCD)
+    assert "def compare" in code and "class Diagnostic" in code
+    for verb in ("attest_retired_market_cost", "note_venue_cost_attempt",
+                 ".save(", "retire_settled_market", "submit", "cancel",
+                 "place_order", "_post", "_put", "_delete", "setdefault",
+                 "realized_attributed", "open(", "os.environ[", "putenv"):
+        assert verb not in code, verb
+    #: every attribute it takes from `store` is `state`
+    #: `store.state` appears only in prose; the code reaches it by getattr
+    called = set(re.findall(r"\bstore\.(\w+)\(", code))
+    assert called == set(), called
+    assert set(re.findall(r"\bstore\.(\w+)", code)) <= {"state"}
+    assert re.findall(r"getattr\(store, '(\w+)'", code) == ["state"] * 3
+
+
+def test_it_imports_only_the_reader_and_the_attestation_constants():
+    src = inspect.getsource(VCD)
+    assert re.findall(r"^from src import (.+)$", src, re.M) == [
+        "l5_cost_basis_audit as CBA", "l5_venue_cost_attestation as VCA"]
+    mods = set(re.findall(r"^(?:from|import)\s+([\w.]+)", src, re.M))
+    assert mods == {"__future__", "datetime", "os", "decimal", "typing",
+                    "src"}
+
+
+def test_compare_does_not_alter_its_arguments():
+    row = {"up_qty": "5", "dn_qty": "0", "cost_total": "5",
+           "settlement_pnl": "-5", "yes_value": "0",
+           "unverified_cost_basis_keys": ["m|UP"], "t": "x"}
+    got = {"ok": True, "legs": {"UP": {"qty": "7", "cost": "0.64",
+                                       "fees": "0", "fills": [{}, {}]}}}
+    r0, g0 = copy.deepcopy(row), copy.deepcopy(got)
+    out = VCD.compare("m", row, got, last_reason="R")
+    assert row == r0 and got == g0
+    json.dumps(out)                                   # plain, loggable
+
+
+# ============ 3. OFF BY DEFAULT, AND IT CANNOT STOP A TICK
+
+@pytest.mark.parametrize("raw", [None, "", "1", "YES", "true", "read_only",
+                                 "READ_ONLY ", " READ_ONLY", "ON"])
+def test_anything_but_the_exact_token_is_off(kept, monkeypatch, raw):
+    if raw is None:
+        monkeypatch.delenv(VCD.GATE_ENV, raising=False)
+    else:
+        monkeypatch.setenv(VCD.GATE_ENV, raw)
+    want = (raw or "").strip() == VCD.GATE_TOKEN
+    assert VCD.enabled() is want
+    if not want:
+        tr = GetOnlyTransport(Feed([mismatch_fills()]))
+        _d, outs = drive(kept, tr)
+        assert outs == [{"idle": "DISABLED"}]
+        assert tr.calls == [], "it read the venue while switched off"
+
+
+def _runner_src():
+    return (ROOT / "src" / "l5_pmus_live_runner.py").read_text(
+        encoding="utf-8")
+
+
+def test_the_runner_hook_is_gated_swallows_everything_and_gates_nothing():
+    s = _runner_src()
+    i = s.index("    def maybe_diagnose_venue_costs(self, now: float)")
+    j = s.index("    def venue_cost_attestation_lines(self)", i)
+    hook = s[i:j]
+    assert "if not VCD.enabled():\n                return" in hook
+    assert "except BaseException" in hook
+    assert "return" in hook and "raise" in hook       # only KeyboardInterrupt
+    code = "\n".join(l for l in hook.split("\n")
+                     if not l.strip().startswith("#"))
+    code = re.sub(r'"""(?:.|\n)*?"""', "", code)
+    for word in ("self.halt", "refuse", "self.limits", "validation_gates",
+                 "self.store.", "submit", "cancel"):
+        assert word not in code, word
+    assert code.count("self.store") == 1              # passed in, never called
+    #: called once per tick, right after the attestation it reads beside
+    assert s.count("self.maybe_diagnose_venue_costs(now)") == 1
+    a = s.index("self.maybe_attest_venue_costs(now)\n")
+    b = s.index("self.maybe_diagnose_venue_costs(now)\n")
+    assert 0 < b - a < 80
+
+
+def test_nothing_else_in_the_service_reads_the_diagnostic():
+    """No gate, heartbeat or decision may depend on it."""
+    hits = []
+    for p in sorted((ROOT / "src").glob("*.py")):
+        t = p.read_text(encoding="utf-8")
+        if "l5_venue_cost_diagnostic" in t or "_venue_cost_diagnostic" in t:
+            hits.append(p.name)
+    assert hits == ["l5_pmus_live_runner.py"]
+    s = _runner_src()
+    #: held on the runner in exactly one attribute, set in one place
+    assert s.count("self._venue_cost_diagnostic") == 1
+    assert s.count('getattr(self, "_venue_cost_diagnostic", None)') == 1
+    assert "venue_cost_diagnostic" not in s[s.index(
+        "    def venue_cost_attestation_lines(self)"):
+        s.index("    def venue_cost_attestation_lines(self)") + 1500]
+
+
+def test_the_live_image_ships_the_module():
+    df = (ROOT / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
+    assert "COPY src/l5_venue_cost_diagnostic.py " \
+           "src/l5_venue_cost_diagnostic.py" in df
+    for mod in ("l5_cost_basis_audit", "l5_venue_cost_attestation"):
+        assert "COPY src/%s.py" % mod in df
+
+
+def test_running_the_diagnostic_does_not_change_what_the_attestation_does(
+        tmp_path, on):
+    """Two identical ledgers. On one the diagnostic runs first. The
+    attestation must then do exactly the same thing on both."""
+    def build(name):
+        s = LX.InventoryStore(str(tmp_path / name))
+        for k in ("realized_attributed", "realized_unattributed",
+                  "realized_today"):
+            s.state[k] = "0"
+        retire(s, M1610, up="5", yes="0", t="2026-11-13T16:16:00+00:00")
+        retire(s, MX, up="5", yes="0", t="2026-11-13T17:06:00+00:00")
+        return s
+    feed_rows = [fill(M1610, "UP", "5", "0.08", "T-1610", "DPT1RZAG14F1",
+                      t="2026-11-13T16:11:00Z")] + mismatch_fills()
+    a, b = build("a.json"), build("b.json")
+    drive(b, Feed([feed_rows]))                        # diagnostic first on b
+    run_until_idle(a, Feed([feed_rows]))
+    run_until_idle(b, Feed([feed_rows]))
+
+    def view(s):
+        return ({m: (r.get("pnl_provenance"), str(r.get("settlement_pnl")))
+                 for m, r in s.state["retired_markets"].items()},
+                {m: (r.get("status"), r.get("attempts"), r.get("last_reason"))
+                 for m, r in s.state[VCA.STATE_KEY]["markets"].items()},
+                s.realized_lines()["realized_attributed"])
+    assert view(a) == view(b)
+
+
+def test_a_row_the_attestation_is_still_working_on_is_not_a_target(kept, on):
+    """In scope and at the bound, but not exhausted: the attestation may
+    still correct it, and a comparison printed now could be read as final."""
+    fresh = "cpc-btc-updown-5m-2026-11-13-1800z"
+    retire(kept, fresh, up="5", yes="0", t="2026-11-13T18:06:00+00:00")
+    assert fresh in [m for _t, m in VCA.candidates(kept)]
+    assert fresh not in VCD.targets(kept)
+    kept.state[VCA.STATE_KEY]["markets"][fresh] = {"status": "CORRECTED"}
+    assert fresh not in VCD.targets(kept)
+
+
+# --- the re-anchor: which rows the gate's total no longer holds -------------
+
+def _corrected(tmp_path):
+    """A real ledger with one row the REAL attestation corrected."""
+    s = LX.InventoryStore(str(tmp_path / "inv2.json"))
+    for k in ("realized_attributed", "realized_unattributed",
+              "realized_today"):
+        s.state[k] = "0"
+    retire(s, MX, up="7", yes="0", t="2026-11-13T17:06:00+00:00")
+    retire(s, MZ, up="5", yes="0", t="2026-11-13T17:16:00+00:00")
+    run_until_idle(s, Feed([mismatch_fills()
+                            + [deposit("2026-11-13T05:00:00Z")]]))
+    row = s.state["retired_markets"][MX]
+    assert row["pnl_provenance"] == s.VENUE_ATTESTED_COST
+    return s, row
+
+
+def test_no_rebase_means_no_overlap_is_claimed(kept):
+    out = VCD.rebase_overlap(kept)
+    assert out == {"last_rebase_t": None, "applied": False}
+
+
+def test_a_correction_posted_after_a_rebase_for_an_earlier_row_is_counted(
+        tmp_path):
+    s, row = _corrected(tmp_path)
+    delta = (D(row["settlement_pnl"])
+             - D(row["cost_superseded"]["settlement_pnl"]))
+    assert delta > 0
+    # re-anchored AFTER both rows settled, BEFORE the correction was posted
+    s.state["accounting_rebase_log"] = [
+        {"t": "2026-11-13T12:00:00+00:00"},
+        {"t": "2026-11-13T18:00:00+00:00"}]
+    assert row["cost_corrected_at"] > "2026-11-13T18:00:00+00:00"
+    before = copy.deepcopy(s.state)
+    out = VCD.rebase_overlap(s)
+    assert s.state == before
+    assert out["last_rebase_t"] == "2026-11-13T18:00:00+00:00"
+    assert out["rows_settled_before_rebase"] == 2
+    assert out["of_which_still_at_bound"] == 1
+    assert out["of_which_corrected_after_rebase"] == 1
+    assert D(out["delta_added_after_rebase_for_rows_settled_before_it"]) \
+        == delta
+    assert out["applied"] is False
+
+
+def test_rows_settled_after_the_rebase_are_not_counted(tmp_path):
+    s, _row = _corrected(tmp_path)
+    s.state["accounting_rebase_log"] = [{"t": "2026-11-13T17:00:00+00:00"}]
+    out = VCD.rebase_overlap(s)
+    assert out["rows_settled_before_rebase"] == 0
+    assert out["of_which_corrected_after_rebase"] == 0
+    assert D(out["delta_added_after_rebase_for_rows_settled_before_it"]) == 0
+
+
+def test_a_correction_posted_before_the_rebase_is_not_counted(tmp_path):
+    s, _row = _corrected(tmp_path)
+    s.state["accounting_rebase_log"] = [{"t": "2999-01-01T00:00:00+00:00"}]
+    out = VCD.rebase_overlap(s)
+    assert out["rows_settled_before_rebase"] == 2
+    assert out["of_which_corrected_after_rebase"] == 0
+
+
+def test_each_report_says_which_side_of_the_rebase_the_row_settled(kept, on):
+    kept.state["accounting_rebase_log"] = [
+        {"t": "2026-11-13T17:10:00+00:00"}]
+    before = digest(kept)
+    _d, outs = drive(kept, Feed([mismatch_fills()
+                                 + [deposit("2026-11-13T05:00:00Z")]]))
+    assert digest(kept) == before
+    by = reports(outs)
+    assert by[MX]["ledger"]["settled_before_last_rebase"] is True
+    assert by[MZ]["ledger"]["settled_before_last_rebase"] is False
+    assert any("rebase_overlap" in o for o in outs)

@@ -2887,6 +2887,37 @@ class Runner:
             except BaseException:                              # noqa: BLE001
                 pass
 
+    def maybe_diagnose_venue_costs(self, now: float) -> None:
+        """READ-ONLY: print the venue's fills beside this ledger's figures
+        for the rows the attestation gave up on.
+
+        OFF unless `L5_VENUE_COST_DIAGNOSTIC=READ_ONLY`. It calls no store
+        method and writes nothing; its only transport call is the activity
+        feed's GET. It is deliberately NOT in the heartbeat and no gate
+        reads it. ANY failure is swallowed -- this can never stop a tick.
+        See `l5_venue_cost_diagnostic`.
+        """
+        try:
+            from src import l5_venue_cost_diagnostic as VCD
+            if not VCD.enabled():
+                return
+            diag = getattr(self, "_venue_cost_diagnostic", None)
+            if diag is None:
+                diag = VCD.Diagnostic()
+                self._venue_cost_diagnostic = diag
+            out = diag.step(self.store, self.transport, float(now))
+            if out.get("compared") or out.get("walk_failed") \
+                    or out.get("walk_insufficient"):
+                emit("L5_VENUE_COST_DIAGNOSTIC", out)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["venue_cost_diagnostic_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
     def venue_cost_attestation_lines(self) -> Dict[str, Any]:
         """The heartbeat block for `maybe_attest_venue_costs`. Never raises."""
         try:
@@ -11451,6 +11482,7 @@ class Runner:
             self.resolve_pending_terminal(now)
         self.sweep_settlements()
         self.maybe_attest_venue_costs(now)
+        self.maybe_diagnose_venue_costs(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)
