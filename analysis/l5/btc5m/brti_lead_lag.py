@@ -330,6 +330,78 @@ def conditional(wins, h=5):
     print()
 
 
+def latency(wins, h=15):
+    """ORDER LATENCY. The scan above pays `ask(t)` on a signal observed at
+    `t`, which no real system can do: seeing the index move at t and having
+    an order accepted at t costs zero time. With latency D we pay whatever
+    the offer is at t+D, and the signal's own information is D seconds older
+    by then.
+
+    This is the honest version of the entry, and it can only be worse than
+    the instantaneous one -- which is the point of measuring it rather than
+    asserting it. D=0 is the unrealistic baseline, kept for comparison.
+    """
+    print("=" * 78)
+    print("ORDER LATENCY: pay the offer at t+D, not at t (h=%ds after entry)"
+          % h)
+    print("=" * 78)
+    allm = sorted(abs(r["m15"]) for w in wins for r in w["rows"])
+    thr = allm[int(0.90 * len(allm))]
+    print("  signal |m15| >= %.2f USD; D=0 is unachievable, shown for"
+          " comparison" % thr)
+    print("%8s %7s %8s %11s %11s %-22s"
+          % ("latency", "windows", "n", "markout", "settle P&L", "95% CI settle"))
+    for D in (0, 1, 2, 5):
+        per_mk, per_se, n = [], [], 0
+        for w in wins:
+            gm, gs = [], []
+            #: a second-indexed view so t+D can be looked up
+            grid = {int(r["t"]): r for r in w["rows"]}
+            for r in w["rows"]:
+                if abs(r["m15"]) < thr:
+                    continue
+                #: the quote we can actually hit, D seconds later
+                ent = None
+                for back in range(0, 4):
+                    cand = grid.get(int(r["t"]) + D + back)
+                    if cand is not None:
+                        ent = cand
+                        break
+                if ent is None or ent.get("bid%d" % h) is None:
+                    continue
+                m = r["m15"]
+                if m > 0:
+                    pay, exitbid = ent["ask"], ent["bid%d" % h]
+                    won = ent["truth"] == 1
+                else:
+                    pay, exitbid = 1.0 - ent["bid"], 1.0 - ent["ask%d" % h]
+                    won = ent["truth"] == 0
+                if not (0.0 < pay < 1.0):
+                    continue
+                fee = taker_fee(pay)
+                gm.append(exitbid - pay - fee)
+                gs.append((1.0 if won else 0.0) - pay - fee)
+                n += 1
+            if gs:
+                per_mk.append(sum(gm) / len(gm))
+                per_se.append(sum(gs) / len(gs))
+        if len(per_se) < 20:
+            print("%8d %7d  too few" % (D, len(per_se)))
+            continue
+        m1, _, _ = boot_mean(per_mk)
+        m2, lo, hi = boot_mean(per_se)
+        print("%8ds %7d %8d %+11.4f %+11.4f [%+0.4f, %+0.4f] %s"
+              % (D, len(per_se), n, m1, m2, lo, hi,
+                 "POSITIVE" if lo > 0 else ""))
+    print()
+    print("  EXECUTABLE DEPTH IS NOT MEASURABLE on this feed: BTC5M_QUOTE")
+    print("  carries bid and ask prices and no size field, so the quantity")
+    print("  available at the offer is unknown. Every number above therefore")
+    print("  assumes the displayed offer absorbs our whole clip, which is the")
+    print("  most favourable possible assumption about liquidity.")
+    print()
+
+
 def main(quotes_path, brti_path):
     wins, skipped = build(quotes_path, brti_path)
     nq = sum(len(w["rows"]) for w in wins)
@@ -349,6 +421,7 @@ def main(quotes_path, brti_path):
     taker_scan(wins)
     window_clustered(wins)
     conditional(wins)
+    latency(wins)
     print("Hypothetical executions against recorded public data."
           " NOT fills, NOT realized P&L.")
     return 0

@@ -73,4 +73,20 @@ CONDITIONAL TAKER SETTLEMENT P&L (h=5s), window-clustered
   entry <= 0.40 (longshot side)        59 windows  +0.0107  [-0.0975, +0.1233] 
   entry > 0.60 (favourite side)       242 windows  -0.0291  [-0.0672, +0.0073] 
 
+==============================================================================
+ORDER LATENCY: pay the offer at t+D, not at t (h=15s after entry)
+==============================================================================
+  signal |m15| >= 12.31 USD; D=0 is unachievable, shown for comparison
+ latency windows        n     markout  settle P&L 95% CI settle         
+       0s     148     2681     -0.0337     -0.0377 [-0.0851, +0.0064] 
+       1s     147     2638     -0.0330     -0.0358 [-0.0828, +0.0085] 
+       2s     147     2638     -0.0330     -0.0358 [-0.0832, +0.0092] 
+       5s     145     2564     -0.0316     -0.0330 [-0.0808, +0.0121] 
+
+  EXECUTABLE DEPTH IS NOT MEASURABLE on this feed: BTC5M_QUOTE
+  carries bid and ask prices and no size field, so the quantity
+  available at the offer is unknown. Every number above therefore
+  assumes the displayed offer absorbs our whole clip, which is the
+  most favourable possible assumption about liquidity.
+
 Hypothetical executions against recorded public data. NOT fills, NOT realized P&L.
