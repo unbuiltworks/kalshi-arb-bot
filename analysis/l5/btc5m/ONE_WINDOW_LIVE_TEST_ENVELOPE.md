@@ -51,6 +51,31 @@ me. This is the 19:30z failure mode exactly -- COMPLETE was 2 while the
 controller needed more, so the risk-REDUCING leg starved. **Confirm
 COMPLETE has at least ~8 tickets of headroom before arming.**
 
+## 1. The window
+
+| | |
+|---|---|
+| Market slug | `cpc-btc-updown-5m-2026-11-19-0335z` |
+| Window | 2026-11-19 **03:35:00Z → 03:40:00Z** |
+| Deployed SHA | `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf` (deployment `ccc80612`) |
+| Count | ONE window. No automatic repeat, no roll to the next. |
+
+Computed from 03:16:25Z plus 15 minutes for approval, the variable set,
+the redeploy those variables trigger, boot and the arming ceremony,
+rounded up to the next 5-minute boundary.
+
+**If 03:35:00Z has already opened when the variables are set, use the next
+unopened window and name it explicitly** — do not let the lane roll:
+
+| fallback | slug | window |
+|---|---|---|
+| 1 | `cpc-btc-updown-5m-2026-11-19-0340z` | 03:40:00Z → 03:45:00Z |
+| 2 | `cpc-btc-updown-5m-2026-11-19-0345z` | 03:45:00Z → 03:50:00Z |
+| 3 | `cpc-btc-updown-5m-2026-11-19-0350z` | 03:50:00Z → 03:55:00Z |
+
+The lane currently names a stale `cpc-btc-updown-5m-2026-11-17-2225z`
+(confirmed in `L5_BTC5M_PLAN` at 03:09:33Z), which must be overwritten.
+
 ## 2. Configuration to set (none of it is set now)
 
 ```
