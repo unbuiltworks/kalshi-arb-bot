@@ -1,8 +1,8 @@
 From 0ecf46d0a2cc7ea21a956a35d5ef7219614112c2 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 19 Nov 2026 22:52:58 +0000
-Subject: [PATCH] l5-pmus-live: read-only diagnostic for the rows venue cost
- attestation gave up on
+Subject: [PATCH 1/2] l5-pmus-live: read-only diagnostic for the rows venue
+ cost attestation gave up on
 
 For each settled row still at the assumed $1.00 bound that the attestation
 exhausted its attempts on, log the ledger's quantities and cost beside the
@@ -925,6 +925,281 @@ index 000000000..6e1fba3a6
 +    assert by[MX]["ledger"]["settled_before_last_rebase"] is True
 +    assert by[MZ]["ledger"]["settled_before_last_rebase"] is False
 +    assert any("rebase_overlap" in o for o in outs)
+-- 
+2.43.0
+
+
+From 3390246e03203e7b13ec33ba587fdee399ea2ba1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 19 Nov 2026 23:49:05 +0000
+Subject: [PATCH 2/2] l5-pmus-live diagnostic: list deposits and transfers the
+ same walk passes over; prove a restart cannot correct an exhausted row
+
+FeedTap is a GET-only pass-through that records the feed's non-trading
+rows (deposits, transfers, bonuses) so the ledger total can be checked
+against the venue balance since the re-anchor. It returns the venue's
+answer untouched; amounts are listed as served and compared with nothing.
+
+New test: a fresh process on the saved ledger, with a feed that now
+reconciles exactly, reads nothing for exhausted rows and corrects nothing.
+
+36 tests. Not deployed.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_venue_cost_diagnostic.py        | 110 ++++++++++++++++++++++++-
+ tests/test_l5_venue_cost_diagnostic.py | 100 ++++++++++++++++++++++
+ 2 files changed, 208 insertions(+), 2 deletions(-)
+
+diff --git a/src/l5_venue_cost_diagnostic.py b/src/l5_venue_cost_diagnostic.py
+index 25ce461fb..cfdef7158 100644
+--- a/src/l5_venue_cost_diagnostic.py
++++ b/src/l5_venue_cost_diagnostic.py
+@@ -151,6 +151,107 @@ def rebase_overlap(store: Any) -> Dict[str, Any]:
+     return out
+ 
+ 
++#: activity kinds that are trading, not money moving in or out of the account
++_TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
++    ("activity_type_position_resolution", "position_resolution"))
++MAX_CASH_ROWS = 200
++
++
++class FeedTap:
++    """A GET-only pass-through that remembers the feed's NON-trading rows.
++
++    WHY. Whether the ledger total is right can be checked against the venue
++    balance only if deposits, withdrawals, transfers and bonuses over the
++    same period are known. The feed this diagnostic already reads carries
++    them; the attestation's reader drops every row that is not a fill for a
++    market it wants. This keeps a small record of the rest. It exposes one
++    verb, `_get`, forwards it unchanged and returns the venue's answer
++    untouched, so the walk reads exactly what it would have read.
++    """
++
++    def __init__(self, transport: Any) -> None:
++        self._t = transport
++        self.rows: Dict[str, Dict[str, Any]] = {}
++        self.dropped = 0
++
++    def _get(self, path: str) -> Any:
++        body = CBA._get(self._t, path)
++        try:
++            self._note(body)
++        except Exception:                                      # noqa: BLE001
++            self.dropped += 1
++        return body
++
++    def _note(self, body: Any) -> None:
++        if not isinstance(body, Mapping):
++            return
++        page = body.get("activities")
++        if not isinstance(page, list):
++            page = body.get("rows") if isinstance(body.get("rows"), list) \
++                else []
++        for r in page:
++            if not isinstance(r, Mapping):
++                continue
++            kind = str(r.get("type") or r.get("kind") or "").lower()
++            if not kind or kind in _TRADING_KINDS:
++                continue
++            inner = None
++            for v in r.values():
++                if isinstance(v, Mapping):
++                    inner = v
++                    break
++            inner = inner if inner is not None else r
++            t = VCA.row_time(r) or VCA.row_time(inner)
++            rec = {"type": kind,
++                   "time": None if t is None else t.isoformat(),
++                   "amount": _s(inner.get("amount")),
++                   "id": _s(inner.get("id") or r.get("id"))}
++            key = "|".join(str(rec[k]) for k in ("type", "time", "amount",
++                                                 "id"))
++            if key in self.rows:
++                continue
++            if len(self.rows) >= MAX_CASH_ROWS:
++                self.dropped += 1
++                continue
++            self.rows[key] = rec
++
++    def summary(self, since: Optional[str]) -> Dict[str, Any]:
++        """Non-trading rows seen so far, split at `since` (the re-anchor)."""
++        cut = VCA.parse_time(since) if since else None
++        by: Dict[str, Dict[str, Any]] = {}
++        listed = []
++        for rec in self.rows.values():
++            t = VCA.parse_time(rec["time"]) if rec["time"] else None
++            after = None if (cut is None or t is None) else bool(t >= cut)
++            if rec["type"] not in by:
++                by[rec["type"]] = {
++                    "rows": 0, "since_rebase": 0, "undated": 0,
++                    "amount_since_rebase": "0", "amount_unreadable": 0}
++            b = by[rec["type"]]
++            b["rows"] += 1
++            if t is None:
++                b["undated"] += 1
++            if after:
++                b["since_rebase"] += 1
++                a = CBA._d(rec["amount"])
++                if a is None:
++                    b["amount_unreadable"] += 1
++                else:
++                    b["amount_since_rebase"] = str(
++                        D(b["amount_since_rebase"]) + a)
++                listed.append(rec)
++        return {"since": since, "by_type": by,
++                "rows_since_rebase": sorted(
++                    listed, key=lambda x: str(x["time"]))[:40],
++                "not_recorded": self.dropped,
++                "labels": ("ONLY what the walk has read so far: complete "
++                           "back to the walk's oldest dated row and no "
++                           "further. `amount` is the venue's field as "
++                           "served, sign and meaning NOT interpreted here. "
++                           "Nothing is added to or compared with any "
++                           "ledger figure.")}
++
++
+ def _side_word(venue: D, ledger: D) -> str:
+     if venue == ledger:
+         return "EQUAL"
+@@ -243,6 +344,7 @@ class Diagnostic:
+         self.last_error: Optional[str] = None
+         self.reported = 0
+         self.forms: Dict[str, int] = {}
++        self.tap: Optional[FeedTap] = None
+ 
+     def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
+         if not enabled():
+@@ -261,8 +363,10 @@ class Diagnostic:
+             self.walk = VCA.Walk(todo[:VCA.MAX_MARKETS_PER_WALK],
+                                  started_at=dt.datetime.now(dt.timezone.utc))
+         w = self.walk
++        if self.tap is None or self.tap._t is not transport:
++            self.tap = FeedTap(transport)
+         if not w.sufficient and w.ended is None:
+-            w.step(transport, VCA.PAGES_PER_STEP)
++            w.step(self.tap, VCA.PAGES_PER_STEP)
+         if not w.sufficient:
+             if w.ended is None:
+                 return {"walking": w.proof()}
+@@ -304,4 +408,6 @@ class Diagnostic:
+             self.walk = None
+         return {"compared": out, "walk": proof, "reported": self.reported,
+                 "forms": dict(self.forms),
+-                "rebase_overlap": rebase_overlap(store), "labels": LABEL}
++                "rebase_overlap": rebase_overlap(store),
++                "cash_movements_seen": self.tap.summary(last_rebase_t(st)),
++                "labels": LABEL}
+diff --git a/tests/test_l5_venue_cost_diagnostic.py b/tests/test_l5_venue_cost_diagnostic.py
+index 6e1fba3a6..10f152cfa 100644
+--- a/tests/test_l5_venue_cost_diagnostic.py
++++ b/tests/test_l5_venue_cost_diagnostic.py
+@@ -513,3 +513,103 @@ def test_each_report_says_which_side_of_the_rebase_the_row_settled(kept, on):
+     assert by[MX]["ledger"]["settled_before_last_rebase"] is True
+     assert by[MZ]["ledger"]["settled_before_last_rebase"] is False
+     assert any("rebase_overlap" in o for o in outs)
++
++
++# --- deposits and withdrawals the same walk passes over ---------------------
++
++def _transfer(t, amount, kind="activity_type_transfer", rid="X1"):
++    return {"type": kind, "transfer": {"time": t, "amount": amount,
++                                       "id": rid}}
++
++
++def test_non_trading_rows_since_the_rebase_are_listed_not_interpreted(
++        kept, on):
++    kept.state["accounting_rebase_log"] = [
++        {"t": "2026-11-13T10:00:00+00:00"}]
++    before = digest(kept)
++    feed = Feed([mismatch_fills() + [
++        _transfer("2026-11-13T16:00:00Z", "-25", rid="W1"),
++        {"type": "activity_type_account_deposit",
++         "accountBalanceChange": {"time": "2026-11-13T12:00:00Z",
++                                  "amount": "40"}},
++        deposit("2026-11-13T05:00:00Z")]])
++    _d, outs = drive(kept, feed)
++    assert digest(kept) == before
++    seen = [o["cash_movements_seen"] for o in outs
++            if "cash_movements_seen" in o][-1]
++    by = seen["by_type"]
++    assert by["activity_type_transfer"]["since_rebase"] == 1
++    assert D(by["activity_type_transfer"]["amount_since_rebase"]) == D("-25")
++    dep = by["activity_type_account_deposit"]
++    assert dep["rows"] == 2 and dep["since_rebase"] == 1
++    assert D(dep["amount_since_rebase"]) == D("40")
++    assert [r["amount"] for r in seen["rows_since_rebase"]] == ["40", "-25"]
++    assert all(str(p).startswith("/v1/portfolio/activities")
++               for p in feed.reads)
++
++
++def test_the_tap_returns_the_venue_answer_untouched_and_counts_no_fill():
++    page = mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]
++    feed = Feed([page])
++    tap = VCD.FeedTap(feed)
++    body = tap._get("/v1/portfolio/activities")
++    assert body == Feed([page])._get("/v1/portfolio/activities")
++    assert [r["type"] for r in tap.rows.values()] == [
++        "activity_type_account_deposit"]
++    tap._get("/v1/portfolio/activities")          # a re-read adds nothing
++    assert len(tap.rows) == 1
++    assert [n for n in dir(tap) if not n.startswith("__")
++            and callable(getattr(tap, n))] == ["_get", "_note", "summary"]
++
++
++def test_a_malformed_page_never_breaks_the_walk():
++    class Bad(dict):
++        def get(self, *a, **k):
++            raise RuntimeError("venue served something odd")
++
++    class Odd:
++        def _get(self, path):
++            return {"activities": [{"type": "activity_type_transfer",
++                                    "transfer": Bad(amount="1")}]}
++    tap = VCD.FeedTap(Odd())
++    assert "activities" in tap._get("/v1/portfolio/activities")
++    assert tap.dropped == 1 and tap.rows == {}
++
++
++def test_the_walk_reads_the_same_pages_with_or_without_the_tap(kept, on):
++    f1 = Feed([mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]])
++    drive(kept, f1)
++    w = VCA.Walk(VCD.targets(kept), started_at=__import__(
++        "datetime").datetime.now(__import__("datetime").timezone.utc))
++    f2 = Feed([mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]])
++    while not w.sufficient and w.ended is None:
++        w.step(f2, VCA.PAGES_PER_STEP)
++    assert f1.reads[:len(f2.reads)] == f2.reads
++
++
++# --- what a RESTART does, with the diagnostic on -----------------------------
++
++def test_a_restart_cannot_correct_a_row_the_attestation_gave_up_on(
++        kept, on, tmp_path):
++    """Deploying this restarts the service, and the attestation runs from
++    boot. A fresh process, a fresh Attestor, the ledger re-read from disk,
++    and a feed that NOW reconciles exactly: the exhausted rows must still
++    not be read for, corrected, or moved in the gate's total."""
++    kept.save()
++    reborn = LX.InventoryStore(str(tmp_path / "inv.json"))
++    before = copy.deepcopy(reborn.state)
++    lines = reborn.realized_lines()
++    now_matching = Feed([[
++        fill(MX, "UP", "5", "0.08", "T-R1", "VR1", t="2026-11-13T17:01:00Z"),
++        fill(MY, "DOWN", "5", "0.20", "T-R2", "VR2",
++             t="2026-11-13T17:06:00Z"),
++        fill(MZ, "UP", "5", "0.10", "T-R3", "VR3", t="2026-11-13T17:11:00Z"),
++        deposit("2026-11-13T05:00:00Z")]])
++    run_until_idle(reborn, now_matching)                # the attestation
++    assert now_matching.reads == []                     # it asked nothing
++    assert reborn.state == before
++    _d, outs = drive(reborn, now_matching)              # then the diagnostic
++    assert {r["form"] for r in reports(outs).values()} == {"GROSS_MATCH"}
++    assert reborn.state == before
++    assert reborn.realized_lines() == lines
++    assert VCA.Attestor().heartbeat(reborn)["corrections_applied"] == 0
 -- 
 2.43.0
 

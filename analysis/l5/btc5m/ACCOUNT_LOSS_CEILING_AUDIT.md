@@ -239,3 +239,65 @@ One thing a deploy does besides the diagnostic: the attestation itself runs
 again from boot as it does on every restart. Rows it has already exhausted
 stay exhausted (that record is durable), so no new correction is expected
 from the restart alone.
+
+## Update 2026-11-19 23:55Z — release candidates, restart check, and what blocks a BTC5m window
+
+**Two candidate commits for the diagnostic, both local, neither pushed as a
+release branch.** Both are in the one patch file (two commits on `c9f9f87`).
+
+| commit | tree | contents |
+|---|---|---|
+| `0ecf46d0a2cc7ea21a956a35d5ef7219614112c2` | `ecf74aaf8dcdfbefa125e56a5791da916cac07bb` | the diagnostic as first reviewed |
+| `3390246e03203e7b13ec33ba587fdee399ea2ba1` | `b770ed2bac551929dd0e0181cbc9763a10cf1568` | plus: deposits/transfers seen by the same walk, listed since the re-anchor; a restart test |
+
+The second is the one worth deploying: without the deposit and transfer rows
+the ledger total cannot be checked against the venue balance. Its tree is
+**not** the one named in the review, so it needs its own look.
+
+**Restart check.** A new test starts a fresh process on the saved ledger with
+a feed that now reconciles exactly: the attestation makes no request for
+exhausted rows and corrects nothing; the gate's total is unchanged. The
+heartbeat of 23:42Z shows `pending: 0`, so on restart the attestation has
+nothing to do. The boot-time repairs and re-anchors are idempotent by id and
+have already run on this build; the patch adds none.
+
+**Load.** At most 2 feed pages per 5 seconds, through the service's own
+rate-limited read, in the same loop as everything else. The service has 0
+live orders and is disarmed; the watchdog is a separate process.
+
+**Tests on `3390246e`:** 36 diagnostic + 41 attestation pass; applied to a
+clean checkout of `c9f9f87` the same 77 pass; regression subset 12 failed /
+2350 passed, the same twelve as the base. Sixteen deliberate breakages, each
+fails at least one test except one that is equivalent code.
+
+### State read 23:40-23:43Z
+
+| | |
+|---|---|
+| `l5-btc5m-live` | `35224ec`, deployment `c6f44539`, `can_submit: false` (`ENVELOPE_EXPIRED`) |
+| `l5-pmus-live` | `c9f9f87`, `armed: false`, `halt: true`, shadow lock on, 0 live orders |
+| watchdog | `faebeca`, sweeping every 20s, not halted, cancel enabled, 0 open orders, 3 registries OK, managed lane OK |
+| sports lane | combo maker `shadow`, 0 quotes; two-sided maker refusing on `submission_lock` (22:59Z, 23:35Z) |
+| daily loss | -0.60 of 50.00 |
+| cumulative loss | -136.7845 against 75: **blocks BTC5m at arming** |
+| portfolio drawdown | 15.2018 against 15 (cash 321.4782, anchor 336.68): tripped. Read only by `l5-pmus-live`; `l5-btc5m-live` reads the daily and cumulative figures and not this one |
+
+### BTC5m window packet (nothing applied)
+
+Window `cpc-btc-updown-5m-2026-11-20-1500z`, 15:00:00Z-15:05:00Z,
+`L5_BTC5M_NOT_AFTER=2026-11-20T15:05:00Z`. Any later single window can be
+substituted. Build: `35224ec55fcda5a8bf568bb3616b3e1f64f398e4`, already
+deployed; the release branch has no later commit, so a variable change
+redeploys the same SHA.
+
+Configuration diff: as in `BEHAVIOUR_PROBE_READINESS.md` section 2, with the
+market and not-after above, plus:
+
+* `L5_LIVE_AUTH_MAX_SUBMISSIONS=60`. Its current value is not logged anywhere
+  and was not read (reading variables exposes the account's API secrets).
+  Setting it makes the unknown irrelevant. A simulated window used at most 52.
+* Class budgets are 90 / 90 / 90 (boot log, `open_budget: 90`). A new campaign
+  approval carries a new nonce and so starts every counter at zero
+  (`l5_live_authorization.experiment_id`): nothing to reset.
+
+Unchanged: clip 0.05, per-side 0.30, unmatched 0.10, two live orders.
