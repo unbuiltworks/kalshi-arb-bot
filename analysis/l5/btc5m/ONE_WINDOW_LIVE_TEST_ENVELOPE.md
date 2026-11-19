@@ -73,7 +73,7 @@ not drift on its own.
 Computed from 03:23:53Z plus **25** minutes -- widened from 15 after the
 03:35z proposal expired before it could be acted on.
 
-**If 03:35:00Z has already opened when the variables are set, use the next
+**If 03:50:00Z has already opened when the variables are set, use the next
 unopened window and name it explicitly** — do not let the lane roll:
 
 | fallback | slug | window |
