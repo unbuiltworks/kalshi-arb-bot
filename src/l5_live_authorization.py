@@ -339,6 +339,13 @@ def not_after_status(now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     return out
 
 
+#: the running worst-case deficit limit, read for the preflight row only.
+#: Named here rather than imported from the runner so this module keeps no
+#: dependency on it; the runner's own `DEFICIT_ENV` is the same string and
+#: `test_the_deficit_env_name_matches_the_runners` pins that they agree.
+DEFICIT_LIMIT_ENV = "L5_MAX_WORST_CASE_DEFICIT_USD"
+
+
 def authorization_preflight(market: str = "", *,
                             now: Optional[dt.datetime] = None,
                             root: Optional[str] = None) -> Dict[str, Any]:
@@ -620,6 +627,65 @@ def authorization_preflight(market: str = "", *,
         # operator hunting for an authorization problem that does not exist.
         row("residual_ceiling", "NOT_EVALUATED", error=type(exc).__name__,
             note="telemetry only; the gate computes the applied cap itself")
+
+    # 8b. THE WORST-CASE DEFICIT BOUND, when the approval names one.
+    #
+    # Mirrors the step-14 refusal so an operator sees it BEFORE spending a
+    # window rather than after. NOT_EVALUATED when no campaign names a
+    # deficit, which is every existing configuration: this row can only turn
+    # a preflight red for a campaign that asked for the bound.
+    try:
+        _dscope = {}
+        try:
+            from src import l5_campaign_approval as _CA3
+            _dd = _CA3.campaign_decision(market or "", root=root, now=t,
+                                         reserve=False)
+            _dsc = (_dd or {}).get("scope") or {}
+            _dscope = _dsc if isinstance(_dsc, dict) else {}
+        except BaseException:                                  # noqa: BLE001
+            _dscope = {}
+        _dappr = _dec_or_none(_dscope.get("max_worst_case_deficit_usd"))
+        if _dappr is None:
+            # NO ROW AT ALL, deliberately. `not_evaluated` means "this
+            # preflight cannot answer it", and this one CAN be answered: no
+            # approval asks for a deficit bound, so none is required and
+            # nothing is pending. Emitting NOT_EVALUATED would put it in a
+            # list that two tests rightly enumerate as the things that need
+            # a venue read or live arming, which it is not.
+            #
+            # The bound is still visible either way: the heartbeat's
+            # `effective_cash_gate` always reports
+            # `max_worst_case_deficit_usd` and says
+            # NOT_CONFIGURED_NO_CHECK_RUNS when it is absent. This row's job
+            # is narrower -- whether an APPROVAL that asked for one would be
+            # honoured -- so it appears only when an approval asks.
+            pass
+        else:
+            _draw = (os.getenv(DEFICIT_LIMIT_ENV) or "").strip()
+            _drun = _dec_or_none(_draw) if _draw else None
+            if _drun is None or _drun <= 0:
+                row("worst_case_deficit_bound", "FAIL",
+                    env=DEFICIT_LIMIT_ENV,
+                    set=bool(_draw),
+                    note=("the approval names a deficit bound and the "
+                          "running limit is unset, unreadable or "
+                          "non-positive. An unset bound does not WIDEN the "
+                          "deficit check -- it REMOVES it, so arming "
+                          "refuses CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT"))
+            elif _drun > _dappr:
+                row("worst_case_deficit_bound", "FAIL",
+                    env=DEFICIT_LIMIT_ENV,
+                    note=("running limit is wider than the approval; step "
+                          "14 refuses CAMPAIGN_LIMITS_WIDER_THAN_APPROVED"))
+            else:
+                row("worst_case_deficit_bound", "PASS",
+                    env=DEFICIT_LIMIT_ENV,
+                    note="set, positive and inside the approval")
+    except BaseException as exc:                               # noqa: BLE001
+        # UNKNOWN, not PASS: this is an arming blocker, so a fault reading
+        # it must hold the preflight red rather than wave it through.
+        row("worst_case_deficit_bound", "UNKNOWN",
+            error=type(exc).__name__)
 
     # 9. what cannot be answered here, named rather than assumed PASS
     for n, why in (
@@ -2110,6 +2176,7 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      require_durable: bool = True,
                      transport_armable: Optional[bool] = None,
                      promotion_evidence: Optional[Mapping[str, Any]] = None,
+                     gates: Any = None,
                      now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     """THE ONLY PLACE ARMING IS DECIDED. Returns the claim, or raises.
 
@@ -2401,6 +2468,55 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                                  "running_exposure": str(_run_exp),
                                  "approved_daily_loss": str(_appr_loss),
                                  "running_daily_loss": str(_run_loss)})
+
+        # THE WORST-CASE DEFICIT BOUND, REQUIRED ONLY WHEN THE APPROVAL
+        # NAMES IT -- and then absolutely.
+        #
+        # WHY THIS IS NEEDED. The deficit gate is written
+        # `if self.max_worst_case_deficit_usd is not None:`, so an UNSET
+        # limit does not loosen the bound -- it removes the check entirely.
+        # The Stage 1 preflight found exactly that in production: the
+        # heartbeat's `effective_cash_gate` enumerated the gates in force
+        # and the deficit bound was not among them, so a risk profile
+        # specified as "$1 maximum worst-case deficit" would have armed with
+        # no deficit bound at all and a `max_usd_per_market` of 20.
+        #
+        # WHY IT IS OPT-IN, AND WHY THAT IS NOT A LOOPHOLE. The requirement
+        # is declared in the CAMPAIGN SCOPE, which is the owner-signed
+        # document. A campaign that does not name a deficit says nothing
+        # here and every existing configuration is untouched -- so this
+        # introduces no new live limit by itself. A campaign that DOES name
+        # one cannot then be armed without it, which is the property the
+        # Stage 1 profile needs.
+        #
+        # THREE WAYS TO FAIL, all refusals, because an absent bound is not a
+        # wide bound -- it is no bound:
+        #   absent / unreadable -> CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT
+        #   non-positive        -> CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT
+        #   wider than approved -> CAMPAIGN_LIMITS_WIDER_THAN_APPROVED
+        _appr_def = _dec_or_none(_scope.get("max_worst_case_deficit_usd"))
+        if _appr_def is not None:
+            _run_def = None
+            try:
+                _run_def = _dec_or_none(
+                    getattr(gates, "max_worst_case_deficit_usd", None))
+            except BaseException:                              # noqa: BLE001
+                _run_def = None
+            if _run_def is None or _run_def <= 0:
+                raise ArmingRefusal(
+                    "CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT",
+                    {"approved_worst_case_deficit": str(_appr_def),
+                     "running_worst_case_deficit": (
+                         None if _run_def is None else str(_run_def)),
+                     "note": ("the approval names a worst-case deficit "
+                              "bound; an unset or non-positive running "
+                              "limit REMOVES the deficit check rather than "
+                              "widening it, so arming is refused")})
+            if _run_def > _appr_def:
+                raise ArmingRefusal(
+                    "CAMPAIGN_LIMITS_WIDER_THAN_APPROVED",
+                    {"approved_worst_case_deficit": str(_appr_def),
+                     "running_worst_case_deficit": str(_run_def)})
     # 3. the halt latch
     if halted:
         raise ArmingRefusal("HALTED", {"note": "halt latch is set"})

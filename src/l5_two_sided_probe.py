@@ -2880,6 +2880,33 @@ REQUOTE_MIN_TICKS_BEHIND = 2
 #: l5_defensive_completion's DEFENSIVE_MIN_EXECUTION_S.
 REQUOTE_MIN_RUNWAY_S = 15.0
 
+#: HOW LONG A COMPLETION MUST HAVE RESTED before a DISCRETIONARY requote may
+#: cancel it, in seconds.
+#:
+#: MEASURED FROM OUR OWN ORDERS, not from a recorded-book model. 34
+#: venue-confirmed `l5f-` orders across three campaigns, in
+#: `analysis/l5/issue206/own_order_lifecycles.py`. Fourteen did not fill and
+#: almost none of them "failed to" -- they were cancelled BY US, several
+#: inside two seconds. Treating those as non-fills understates the fill
+#: rate and dropping them overstates it; they are RIGHT-CENSORED durations
+#: and the Kaplan-Meier product-limit estimator is what handles them.
+#:
+#: It puts P(fill) at 81.8% out to 73.4s with a MEDIAN FILL TIME of 17.1s
+#: (14.5s on the holdout fit set). Against that curve, five of 2015z's nine
+#: cancellations fired between 1.1s and 6.8s, each with a 76-81% conditional
+#: chance of still filling. `recover_stale_leg` already refuses TOO_YOUNG
+#: below `recover_min_rest_s`; the requote path had no rest floor at all and
+#: could cancel a quote one second after placing it.
+#:
+#: THE VALUE IS THE FIT SET'S MEDIAN FILL TIME, 14.5s, ROUNDED DOWN TO 14.0.
+#: Deliberately a distributional statistic rather than a threshold fitted to
+#: the individual cancels it would have prevented: picking 25s to clear the
+#: three complement cancels at 13.6/19.5/21.0s would be fitting to three
+#: points. Those three are addressed by PRESERVE (PR #202) instead, which
+#: holds any resting completion inside the pair ceiling for its own reason
+#: and needs no timer.
+REQUOTE_MIN_REST_S = 14.0
+
 #: A QUEUE DEEPER THAN THIS MANY TIMES OUR NEED IS NOT PLAUSIBLY CLEARABLE,
 #: so joining it is not an execution improvement however good the price is.
 #:
@@ -2910,6 +2937,7 @@ def completion_requote(*, side: str, resting_own_px: Any,
                        require_queue_evidence: bool = False,
                        queue_gate_binds: bool = True,
                        cancel_unresolved: Any = None,
+                       resting_rest_s: Any = None,
                        min_ticks_behind: Any = None) -> Dict[str, Any]:
     """Move a non-filling completion toward the touch, or say why not.
 
@@ -2979,6 +3007,27 @@ def completion_requote(*, side: str, resting_own_px: Any,
     if runway < REQUOTE_MIN_RUNWAY_S:
         return no("INSUFFICIENT_REQUOTE_RUNWAY", runway_s=str(round(runway, 1)),
                   required_s=str(REQUOTE_MIN_RUNWAY_S))
+
+    # HOW LONG HAS IT ACTUALLY RESTED? Runway is time left in the WINDOW and
+    # says nothing about the order's own age, so this site could cancel a
+    # quote one second after placing it -- and at 2015z it did, five times
+    # between 1.1s and 6.8s, each with a 76-81% conditional chance of still
+    # filling against our own measured curve. See REQUOTE_MIN_REST_S.
+    #
+    # `None` LEAVES BEHAVIOUR UNCHANGED, and that is a deliberate contract
+    # rather than a fail-open: refusing here is the SAFE direction (the
+    # order keeps resting under the existing controls), so the only caller
+    # that matters is the money path, which always passes the age --
+    # `test_the_runner_passes_the_resting_age_to_the_requote` pins that.
+    # Pure-function callers that do not pass it are unaffected.
+    if resting_rest_s is not None:
+        rr = _d(resting_rest_s)
+        if rr is None or rr < 0:
+            return no("RESTING_AGE_UNREADABLE",
+                      resting_rest_s=str(resting_rest_s)[:40])
+        if rr < D(str(REQUOTE_MIN_REST_S)):
+            return no("TOO_YOUNG_TO_REQUOTE", rest_s=str(rr),
+                      min_rest_s=str(REQUOTE_MIN_REST_S))
 
     # THE SIDE MUST REDUCE, AND THE SIZE MAY NOT OVERSHOOT. `unmatched` is
     # what is genuinely one-sided; the requote carries no more than the part

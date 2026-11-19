@@ -64,6 +64,14 @@ class RunnerStub:
         self.stats = collections.Counter()
 
 
+#: How long the complement has RESTED when these tests requote it. Above
+#: `TSP.REQUOTE_MIN_REST_S`, because the floor measured from our own 34
+#: venue-confirmed orders refuses a discretionary cancel inside our own
+#: fill-latency distribution -- and these tests are about the requote
+#: MECHANICS, not about whether it is patient enough to fire.
+RESTED_S = 30.0
+
+
 @pytest.fixture()
 def wired(probe, tmp_path, monkeypatch):
     H, E = probe
@@ -77,8 +85,15 @@ def wired(probe, tmp_path, monkeypatch):
     t = H.FakeTransport(fill_qty="0")        # nothing fills unless we say so
     t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
     t.market_slug = SLUG
-    ex = E.FaithfulExecutor(H.store(tmp_path), H.limits(max_live_orders=1),
-                            transport=t, now_fn=H.NOW)
+    # THE STORE MUST SHARE THE EXECUTOR'S CLOCK. `H.store` builds an
+    # InventoryStore with no `now_fn`, so `record_submit` stamped the row's
+    # `t` from the WALL clock while every deadline in this harness reads the
+    # frozen `H.NOW` -- 45 days apart. Harmless until something measured an
+    # order's AGE, which `completion_requote`'s rest floor now does.
+    # Production has one clock and never saw this.
+    ex = E.FaithfulExecutor(
+        E.InventoryStore(str(tmp_path / "inv.json"), now_fn=H.NOW),
+        H.limits(max_live_orders=1), transport=t, now_fn=H.NOW)
     ex.validation_gates = gates()
     return H, E, ex, t, emitted, monkeypatch
 
@@ -104,7 +119,7 @@ def test_the_replacement_is_submitted_on_the_TICK_AFTER_the_cancel(wired):
     book = Book("0.4400", "0.4600")
     st = RunnerStub(ex, t, book)
     sent_before = len(t.sent)
-    rec = R.Runner.maybe_completion_requote(st, H.NOW().timestamp())
+    rec = R.Runner.maybe_completion_requote(st, H.NOW().timestamp() + RESTED_S)
     assert rec is not None, st.stats
     assert len(t.sent) == sent_before, "the cancel half must submit nothing"
     assert t.cancelled, "it must cancel by venue id"
@@ -132,10 +147,10 @@ def test_the_replacement_carries_the_remaining_completion_runway(wired):
     ex.handle(_row(H), _book(), market=SLUG, window="21:00")
     book = Book("0.4400", "0.4600")
     st = RunnerStub(ex, t, book)
-    now = H.NOW().timestamp()
+    now = H.NOW().timestamp() + RESTED_S
     rec = R.Runner.maybe_completion_requote(st, now)
     assert rec is not None
-    ws = now - 60.0
+    ws = now - 60.0 - RESTED_S      # the window started before the rest
     assert TSP.may_complete(now, ws, ws + TSP.WINDOW_S) is None
     assert float(rec["runway_s"]) >= TSP.REQUOTE_MIN_RUNWAY_S
 
@@ -154,7 +169,7 @@ def test_a_cancel_whose_replacement_is_REFUSED_carries_the_residual(wired):
     book = Book("0.4400", "0.4600")
     st = RunnerStub(ex, t, book)
     assert R.Runner.maybe_completion_requote(
-        st, H.NOW().timestamp()) is not None
+        st, H.NOW().timestamp() + RESTED_S) is not None
     assert ex.store.live_order_count() == 0
 
     # now make the replacement impossible: a stale book refuses it
@@ -186,7 +201,7 @@ def test_a_cancel_that_cannot_be_PROVED_marks_uncertain_and_blocks(wired):
                                                      "currency": "USD"}}
     t.order = still_working
     st = RunnerStub(ex, t, Book("0.4400", "0.4600"))
-    R.Runner.maybe_completion_requote(st, H.NOW().timestamp())
+    R.Runner.maybe_completion_requote(st, H.NOW().timestamp() + RESTED_S)
     assert ex.store.orders_uncertain() is not None
     sent_before = len(t.sent)
     ex.handle(_row(H), _book(), market=SLUG, window="21:00")
@@ -212,7 +227,7 @@ def test_a_fill_found_WHILE_cancelling_is_booked_with_its_basis(wired):
                                                      "currency": "USD"}}
     t.order = filled_on_reread
     st = RunnerStub(ex, t, Book("0.4400", "0.4600"))
-    R.Runner.maybe_completion_requote(st, H.NOW().timestamp())
+    R.Runner.maybe_completion_requote(st, H.NOW().timestamp() + RESTED_S)
     # the fill is on the books, with a basis, and the residual shrank
     assert ex.store.position(SLUG, "DOWN") == D("1.00")
     assert ex.store.leg_cost(SLUG).get("DOWN") is not None
@@ -248,7 +263,7 @@ def test_the_replacement_can_never_exceed_the_cancelled_obligation(wired):
     ex.handle(_row(H), _book(), market=SLUG, window="21:00")
     cancelled_qty = D(t.sent[-1]["qty"])
     st = RunnerStub(ex, t, Book("0.4400", "0.4600"))
-    rec = R.Runner.maybe_completion_requote(st, H.NOW().timestamp())
+    rec = R.Runner.maybe_completion_requote(st, H.NOW().timestamp() + RESTED_S)
     assert rec is not None
     assert D(rec["qty"]) <= cancelled_qty
     r2 = ex.handle(_row(H),
@@ -266,7 +281,7 @@ def test_the_cash_envelope_still_refuses_an_oversized_replacement(wired):
     _hold_up(ex, E)
     ex.handle(_row(H), _book(), market=SLUG, window="21:00")
     st = RunnerStub(ex, t, Book("0.4400", "0.4600"))
-    R.Runner.maybe_completion_requote(st, H.NOW().timestamp())
+    R.Runner.maybe_completion_requote(st, H.NOW().timestamp() + RESTED_S)
     ex.validation_gates = gates(cash="0.50")        # below q * $1
     sent_before = len(t.sent)
     rec = ex.handle(_row(H),
@@ -294,7 +309,7 @@ def test_an_EXTREME_move_is_refused_by_the_PLAN_gate_before_the_rescue(wired):
     ex.handle(_row(H), _book(), market=SLUG, window="21:00")
     st = RunnerStub(ex, t, Book("0.2000", "0.2100"))
     assert R.Runner.maybe_completion_requote(
-        st, H.NOW().timestamp()) is not None
+        st, H.NOW().timestamp() + RESTED_S) is not None
     sent_before = len(t.sent)
     rec = ex.handle(_row(H), _book(bid="0.2000", ask="0.2100"),
                     market=SLUG, window="21:00")

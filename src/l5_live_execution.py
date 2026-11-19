@@ -2845,6 +2845,21 @@ class InventoryStore:
             "manual_unavailable_reason": manual_reason,
             "unknown_unattributed_realized": (
                 None if unreadable else str(unknown_total)),
+            # THE ACTIONABLE PART, BESIDE THE CONSERVATIVE ONE.
+            #
+            # `unknown_unattributed_realized` deliberately folds in the
+            # WHOLE pre-baseline total, because its L5 share is unknown by
+            # construction. That makes it the right number for "how much
+            # of this account can we not attribute" and the WRONG number
+            # for "how much is still fixable": read beside an
+            # L5-ledger-scoped `account_wide_realized`, the two look like
+            # an unexplained gap, and that reading cost a review cycle.
+            #
+            # So the post-baseline component is reported on its own. It is
+            # the set an attestation can still close, and it is the only
+            # one a live probe can land in.
+            "unknown_post_baseline_only": (
+                None if unreadable else str(unknown_total - (pre_dec or D(0)))),
             "unknown_detail": {
                 "post_baseline_settlements_not_attested": unattested,
                 "pre_baseline_total_l5_share_unknown": (
@@ -2852,8 +2867,22 @@ class InventoryStore:
                 "legs_priced_at_one_dollar_upper_bound": placeholder_keys,
                 "count": len(placeholder_keys),
             },
+            # THE IDENTITY HOLDS ONLY WHERE THE POPULATIONS MATCH, and
+            # it is stated with its precondition because it was stated
+            # without one and read as a balance that should tie out.
+            # `account_wide_realized` is L5-ledger-scoped;
+            # `unknown_unattributed_realized` includes pre-baseline
+            # history that is outside that scope. So the identity ties
+            # only when the pre-baseline total is zero, and
+            # `identity_holds` false below is ordinarily that, not a fault.
             "identity": ("account_wide = verified_l5 + manual + "
-                         "unknown_unattributed"),
+                         "unknown_unattributed, and ONLY where the "
+                         "pre-baseline total is zero: that total is "
+                         "inside unknown_unattributed and outside "
+                         "account_wide, so a non-zero one breaks the "
+                         "identity by construction rather than by error"),
+            "identity_precondition_met": (
+                None if unreadable else bool(pre_dec in (None, D(0)))),
             "identity_holds": bool(
                 account is not None and l5 is not None and manual is not None
                 and not unreadable and account == l5 + manual + unknown_total),
@@ -5935,6 +5964,284 @@ class FaithfulExecutor:
                 return r
         return None
 
+    def probe_reopen_decision(self, market: str, rnd: int, plan: Any, *,
+                              bid: Any, ask: Any, tick: Any,
+                              depth_ticks: Any,
+                              now_s: Any, window_end_s: Any
+                              ) -> Dict[str, Any]:
+        """Price a round beyond the first. Delegates; adds no economics here.
+
+        `probe_round` walks rounds and returns the first incomplete one, with
+        no economics at all -- which is exactly how 1230z opened round 1 into
+        a flat book two minutes after round 0 had locked its pair, filled one
+        leg of it, and settled the window at -$0.4100. The round COUNT was
+        never the defect; the MISSING DECISION was. The decision itself lives
+        in `l5_unmatched_disposition.reopen_decision` beside `decide`, because
+        one module owns inventory economics and a second opinion computed
+        here would drift from it.
+
+        THIS ONLY EVER GATES OPENING, and that distinction is the whole
+        safety argument. A round with ANY leg already claimed is being
+        COMPLETED -- its exposure is already standing, and refusing the
+        complement would strand precisely the unmatched leg this gate exists
+        to prevent. So a partially-claimed round returns `reopen: True`
+        without consulting the economics at all.
+
+        FAILS CLOSED. Anything unreadable refuses the reopening, because the
+        safe direction for ADDING exposure is to stop. A refusal never
+        touches inventory already held; `decide` still works that.
+        """
+        def no(reason: str, **kw: Any) -> Dict[str, Any]:
+            return dict(kw, reopen=False, reason=reason,
+                        market=str(market), round=rnd)
+        try:
+            rnd_i = int(rnd)
+        except (TypeError, ValueError):
+            return no("ROUND_INDEX_UNREADABLE")
+
+        # A RETIRED ROUND IS NOT A ROUND USED, and the round INDEX is
+        # therefore the wrong thing to count. Retirement abandons a plan the
+        # book has walked away from -- `probe_round_is_safe_to_retire`
+        # refuses while anything is live or filled -- so the round after one
+        # is still the FIRST attempt to take exposure in this market, just
+        # at a repriced plan. Gating it would stop the engine re-planning
+        # after a 0330z-style frozen plan, which is a different defect and
+        # one this branch already fixed.
+        #
+        # What counts is rounds that actually SPENT legs. Any residual a
+        # retirement did leave behind is not lost either: it is reserved
+        # against the headroom below, as held inventory.
+        try:
+            used = sum(1 for r in range(max(rnd_i, 0))
+                       if not self.probe_round_retired(market, r))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            used = rnd_i          # unreadable: judge it as a reopening
+        if used <= 0:
+            return {"reopen": True,
+                    "reason": "FIRST_EXPOSURE_TAKING_ROUND_NOT_A_REOPENING",
+                    "market": str(market), "round": rnd,
+                    "rounds_used": used,
+                    "retired_rounds_do_not_count": True}
+
+        # ---- THE PLAN'S OWN LEGS, read before anything that depends on
+        #      them. THE DEARER LEG IS THE WORST CASE: which leg fills
+        #      alone is not ours to choose, so capacity prices the dear one.
+        try:
+            _legs = list((plan or {}).get("legs") or [])
+            pxs = [D(str(l["price"])) for l in _legs]
+            qtys = [D(str(l.get("qty") or 0)) for l in _legs]
+            if not pxs:
+                return no("PLAN_HAS_NO_LEGS")
+            worst_px = max(pxs)
+            qty = max(qtys) if qtys else D(0)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("PLAN_UNREADABLE")
+
+        # ---- STANDING EXPOSURE FIRST, FROM DURABLE INVENTORY, and this
+        #      ordering is the whole safety argument for the claim read
+        #      below. A leg that actually FILLED is in the store and on the
+        #      venue; a claim FILE only says a leg was once submitted. So
+        #      the thing that protects real inventory from being stranded is
+        #      this check, not the claim read -- which means the claim read
+        #      is then free to fail CLOSED without stranding anything.
+        #
+        #      NEVER ON THE SIGNED NET. On 1415z UP 2.17 was HELD while a
+        #      DOWN 2.17 completion was RESTING; the signed net came to
+        #      exactly 0.00, a gate read the book as FLAT and exempted an
+        #      UP 2.08 as a genuine opening leg. The completion was
+        #      cancelled unfilled and the position reached UP 4.25 against a
+        #      3-contract ceiling. So the question is per side: is there
+        #      residual NOT ALREADY BEING WORKED.
+        try:
+            held = D(str(self.store.residual(market)))
+            up_live = D(str(self.store.outstanding_on_side(market, UP)))
+            dn_live = D(str(self.store.outstanding_on_side(market, DOWN)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("PROSPECTIVE_RESIDUAL_UNREADABLE")
+
+        # PROSPECTIVE PER-SIDE TOTALS are the quantity that answers this,
+        # and one rule covers every case. For each side: what we HOLD plus
+        # every live order on it as if it filled. The side with the SMALLER
+        # total is the one a new leg REDUCES; the side with the larger total
+        # is the one it would deepen.
+        #
+        # This is deliberately not the signed net. On 1415z UP 2.17 was HELD
+        # while a DOWN 2.17 completion was RESTING; the net came to exactly
+        # 0.00, a gate read the book as FLAT and exempted an UP 2.08 as a
+        # genuine opening leg. The completion was cancelled unfilled and the
+        # position reached UP 4.25 against a 3-contract ceiling. Per side
+        # those totals are 2.17 and 2.17 -- EQUAL, no side is smaller, so
+        # there is nothing to reduce and the UP is gated as the opening it
+        # was. The same arithmetic also admits the cases that must not be
+        # stranded: a filled leg with nothing working against it, and a leg
+        # SUBMITTED but not yet filled -- which reads as UNCLAIMED by
+        # design, since an unfilled leg is deliberately replaceable, and so
+        # would otherwise fall through to the economics and have its
+        # complement refused.
+        try:
+            prosp = {}
+            for _s in (UP, DOWN):
+                prosp[_s] = (abs(D(str(self.store.position(market, _s) or 0)))
+                             + (up_live if _s == UP else dn_live))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("PROSPECTIVE_RESIDUAL_UNREADABLE")
+
+        smaller = UP if prosp[UP] < prosp[DOWN] else DOWN
+        gap = abs(prosp[UP] - prosp[DOWN])
+        if gap > 0:
+            # A GAP EXISTING IS NOT ENOUGH. The exemption has to establish
+            # that THIS plan's leg actually closes it: the smaller side must
+            # be IN the plan, and the quantity that would really be
+            # submitted -- after `probe_leg_qty_cap`, the authority on it --
+            # must be positive and no larger than the gap. Anything else is
+            # an opening wearing a completion's clothes, and it falls
+            # through to the full economics below.
+            red_leg = None
+            for _l in _legs:
+                try:
+                    if canonical_side(_l.get("side"),
+                                      doing="reading a plan leg") == smaller:
+                        red_leg = _l
+                        break
+                except UnknownSide:
+                    continue
+            if red_leg is not None:
+                try:
+                    want = D(str(red_leg.get("qty") or 0))
+                    capped = self.probe_leg_qty_cap(market, smaller, want)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    return no("REDUCING_LEG_QTY_UNREADABLE")
+                if capped > 0 and capped <= gap:
+                    return {"reopen": True, "round": rnd,
+                            "market": str(market),
+                            "reason":
+                                "RESIDUAL_HELD_NEXT_LEG_REDUCES_NOT_OPENS",
+                            "held_residual": str(held),
+                            "prospective_up": str(prosp[UP]),
+                            "prospective_down": str(prosp[DOWN]),
+                            "reducing_side": smaller,
+                            "imbalance_gap": str(gap),
+                            "reducing_leg_qty_requested": str(want),
+                            "reducing_leg_qty_after_cap": str(capped),
+                            "verified_reduces_not_opens": True}
+
+        # ---- THE CLAIM READ, AND IT FAILS CLOSED.
+        #
+        # A round with a leg already standing is a COMPLETION, not a
+        # reopening, and must not be gated. But an UNREADABLE claim is a
+        # missing state, and a missing state may not AUTHORIZE NEW
+        # EXPOSURE. My first version returned reopen=True here, reasoning
+        # from `acc_stale_by_distance` that one must never veto on a failed
+        # read. That lesson is about CANCELLING -- a veto there strands
+        # inventory. This is the opposite direction: permitting here ADDS
+        # risk. The two cases pull apart and I had them conflated.
+        #
+        # Failing closed is safe precisely because of the ordering above:
+        # real filled inventory was already established from the durable
+        # store and the venue's own resting orders, neither of which
+        # depends on a claim file. So nothing that actually exists can be
+        # stranded by refusing here -- only an unverified opening is.
+        try:
+            claimed = self.probe_legs_claimed(market, rnd) or {}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("CLAIMS_UNREADABLE_NO_UNVERIFIED_OPENING",
+                      detail=str(exc)[:120],
+                      durable_inventory_already_checked=True)
+        if any(claimed.values()):
+            return {"reopen": True, "round": rnd, "market": str(market),
+                    "reason": ("ROUND_ALREADY_HAS_A_LEG_"
+                               "COMPLETING_NOT_OPENING"),
+                    "claimed": {str(k): bool(v)
+                                for k, v in claimed.items()}}
+
+        # the budget actually enforced, not a second opinion of it
+        try:
+            room = self.probe_budget_headroom()
+            ceil = self.probe_loss_ceiling()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("BUDGET_UNREADABLE")
+        # None from either means "not configured" upstream, which the
+        # planner treats as unconstrained. For ADDING exposure that is not
+        # good enough: an unbounded reopening is the one this gate refuses.
+        if room is None and ceil is None:
+            return no("NO_CONFIGURED_EXPOSURE_BOUND_TO_REOPEN_AGAINST")
+        bound = ceil if room is None else (
+            room if ceil is None else min(room, ceil))
+
+        # THE WORST CASE RESERVED HERE covers held inventory AND live orders
+        # on EITHER side filling alone -- `max`, not the sum, because if
+        # both sides fill they match each other, and not the net, for the
+        # 1415z reason above. On 1130z four legs each calling itself the
+        # opening one filled inside seven seconds, so what we have ALREADY
+        # COMMITTED TO is the bound, not what we hold.
+        outstanding = abs(held) + max(up_live, dn_live)
+
+        # locked pair economics are REPORTED and never financed against
+        try:
+            locked = self.probe_locked_pair_pnl(market)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            locked = None
+
+        from src import l5_unmatched_disposition as UDP
+        try:
+            return dict(UDP.reopen_decision(
+                market=market, rounds_used=used,
+                locked_pair_pnl_usd=locked,
+                worst_leg_own_px=worst_px, qty=qty,
+                bid=bid, ask=ask, tick=tick, depth_ticks=depth_ticks,
+                now_s=now_s, window_end_s=window_end_s,
+                exposure_headroom_usd=bound,
+                outstanding_worst_case_usd=outstanding * worst_px,
+                daily_loss_room_usd=ceil), round=rnd)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("REOPEN_DECISION_RAISED", detail=str(exc)[:120])
+
+    def probe_locked_pair_pnl(self, market: str) -> Optional[D]:
+        """Matched-pair P&L already locked in this market, for the RECORD.
+
+        Reported by the reopening decision and deliberately excluded from
+        both of its tests. "We are +$0.045 up, so a -$0.455 risk is
+        affordable" is the reasoning that lost 1230z, and it is wrong twice:
+        the locked profit was a tenth of the risk, and netting them spends a
+        realized gain as a loss reserve. None when it cannot be established,
+        which changes no decision because no decision reads it.
+        """
+        try:
+            up = D(str(self.store.position(market, UP) or 0))
+            dn = D(str(self.store.position(market, DOWN) or 0))
+            matched = min(abs(up), abs(dn))
+            if matched <= 0:
+                return D(0)
+            if up == 0 or dn == 0:
+                return None
+            costs = self.store.leg_cost(market) or {}
+            cu = D(str(costs.get(UP) or 0))
+            cd = D(str(costs.get(DOWN) or 0))
+            basis = (cu / abs(up)) + (cd / abs(dn))
+            return (matched * (D(1) - basis)).quantize(D("0.0001"))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
     # ============================= WHAT KIND OF ORDER IS THIS, AND MAY IT GO
     #
     # A flat "N submissions per authorization" bound cannot tell an order
@@ -8313,6 +8620,33 @@ class FaithfulExecutor:
                                "already resting, so neither is placed. Leg "
                                "one can never spend leg two's headroom.")})
                 return prov.refuse("TWO_SIDED_PROBE", bad[:120])
+
+            # ============== IS ANOTHER OPENING ROUND WORTH ITS WORST CASE
+            #
+            # 1230z. Round 0 locked a 0.9550 pair at 12:30:49 for +$0.0450.
+            # Round 1 then opened UP 0.4600 and DOWN 0.4900 at 12:32:54
+            # because `probe_round` returns the first INCOMPLETE round and
+            # asked nothing else. The UP filled at 12:33:57, the DOWN never
+            # did, and the window settled -$0.4100. The round count was not
+            # the defect; nobody priced the round.
+            #
+            # NOT A CAP. This gates round >= 1 ONLY when that round has no
+            # leg claimed yet, so completing a round already underway is
+            # never blocked -- and the gate is arithmetic, not a counter, so
+            # repeated rounds stay available wherever the economics support
+            # them. The record carries `breakeven_single_outcome_usd` so a
+            # refusal always states what would have to be true instead.
+            _reopen = self.probe_reopen_decision(
+                market, rnd, plan, bid=ts_book.get("bid"),
+                ask=ts_book.get("ask"), tick=_tick, depth_ticks=_dticks,
+                now_s=_tnow, window_end_s=float(ws) + TS.WINDOW_S)
+            prov.stage("TWO_SIDED_REOPEN", _reopen)
+            if not _reopen.get("reopen"):
+                return prov.refuse(
+                    "TWO_SIDED_PROBE",
+                    ("REOPENING_NOT_JUSTIFIED:%s"
+                     % (_reopen.get("reason") or "UNSTATED"))[:120])
+
             claimed = self.probe_legs_claimed(market, rnd)
             legs = {l["side"]: l for l in plan["legs"]}
             # deterministic: the CHEAPER leg first, because a cheap leg

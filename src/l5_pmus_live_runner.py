@@ -72,6 +72,7 @@ from src import l5_fidelity_mode as FID
 from src import l5_replenish as RPL
 from src import l5_pmus_transport as T
 from src import l5_fill_calibration as CALIB
+from src import l5_completion_latency as LAT
 from src import l5_intent_gate as GATE
 from src import l5_shadow_controller as SHADOW
 from src import pmus_q1_executor as Q1
@@ -90,6 +91,23 @@ MANIFEST_LAMBDA = D("0.04518752824220514525")
 #: dollar. The dollar bound was never the problem; the count bound did not
 #: exist. The pilot default is 1; a deployment that wants the old behaviour
 #: must say 8 out loud.
+def _lat(obj: Any, meth: str, *a: Any, **kw: Any) -> None:
+    """Note one latency observation on `obj`, if it can take one.
+
+    LOOKED UP, NOT CALLED BY NAME, for the same reason the observer
+    heartbeat is: `maybe_book_completion` and `poll_orders` are both driven
+    by test rigs that are not fully built Runners, and a bare
+    `self._latency_safe(...)` broke ten end-to-end window tests with an
+    AttributeError the instant it was added. Reporting-only telemetry must
+    never be the thing that stops a cancellation path from running, in a
+    rig or in a half-built process.
+    """
+    f = getattr(obj, "_latency_safe", None)
+    if f is None:
+        return
+    f(meth, *a, **kw)
+
+
 def max_live_orders() -> int:
     raw = (os.getenv("L5_MAX_LIVE_ORDERS") or "").strip()
     try:
@@ -1333,6 +1351,19 @@ class Runner:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             self.stats["fill_calib_init_error:%s" % type(exc).__name__] += 1
+        #: WHERE THE TIME GOES between a first-leg fill and a second-leg
+        #: quote. In-memory, pure, holds no transport and no clock of its
+        #: own; every figure is reporting only and `_latency_safe` swallows
+        #: its faults. See `src/l5_completion_latency.py` for which of the
+        #: six questions it can answer and which it can only bound.
+        self.completion_latency = None
+        self._latency_last_slug = None
+        try:
+            self.completion_latency = LAT.CompletionLatency()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_init_error:%s" % type(exc).__name__] += 1
         # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
@@ -1687,11 +1718,35 @@ class Runner:
             "max_unmatched_contracts": str(getattr(
                 vg, "max_unmatched_contracts", "") or ""),
             "max_usd_per_market": str(self.limits.max_usd_per_market),
+            # THE WORST-CASE DEFICIT BOUND, REPORTED EVEN WHEN ABSENT.
+            #
+            # This line used to omit it entirely, and that omission is how
+            # the Stage 1 blocker stayed invisible: the deficit gate reads
+            # `if self.max_worst_case_deficit_usd is not None:`, so an unset
+            # limit REMOVES the check rather than widening it -- and the
+            # heartbeat enumerated the gates in force without saying that
+            # one was not among them. A limit an operator cannot see is a
+            # limit nobody can verify.
+            #
+            # `null` here means NO DEFICIT CHECK RUNS AT ALL. That is a
+            # different and more serious statement than a large number, so
+            # it is spelled out rather than left to inference.
+            "max_worst_case_deficit_usd": (
+                None if getattr(vg, "max_worst_case_deficit_usd", None)
+                is None
+                else str(getattr(vg, "max_worst_case_deficit_usd"))),
+            "worst_case_deficit_check": (
+                "ACTIVE" if getattr(vg, "max_worst_case_deficit_usd", None)
+                is not None else "NOT_CONFIGURED_NO_CHECK_RUNS"),
             "distinction": ("max_cash_deployed_usd is the run-scoped GROSS "
                             "CASH OUT bound (the mandate). max_usd_per_market "
-                            "is a per-market WORST-CASE LOSS ceiling. They are "
+                            "is a per-market WORST-CASE LOSS ceiling. "
+                            "max_worst_case_deficit_usd bounds "
+                            "C - min(up, dn), the most the book can lose "
+                            "HOWEVER the window resolves, and when it is "
+                            "null that check does not run. They are "
                             "different quantities and the smaller one binds; "
-                            "neither is the other's default."),
+                            "none is another's default."),
         }
 
     def roll(self, now: float) -> None:
@@ -3019,6 +3074,14 @@ class Runner:
                     getattr(self, "executor", None), "halt_gate", None)
                 is not None,
                 reconciled=self.reconciled,
+                # THE VALIDATION GATES, so step 14 can see the worst-case
+                # deficit bound. getattr twice: a runner with no executor,
+                # or an executor with no gates, passes None and step 14
+                # then refuses CAMPAIGN_REQUIRES_WORST_CASE_DEFICIT for any
+                # campaign that names one -- which is the fail-closed
+                # direction. A campaign that names none is unaffected.
+                gates=getattr(getattr(self, "executor", None),
+                              "validation_gates", None),
                 unresolved=unresolved_discrepancies(self.store),
                 # getattr on SELF too: a runner without an executor has no
                 # capital envelope at all, and the boundary must refuse that
@@ -3518,6 +3581,9 @@ class Runner:
                        "state", "error")} if order else None,
             "intent": order.get("intent"),
             "decision_role": _role,
+            # the reopening decision 1230z did not make; see
+            # `probe_reopen_decision`. Carries its own break-even.
+            "two_sided_reopen": rec.get("TWO_SIDED_REOPEN"),
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
@@ -4219,6 +4285,10 @@ class Runner:
             if self.now_t - self.last_order_poll.get(coid, 0.0) < interval:
                 continue
             self.last_order_poll[coid] = self.now_t
+            # REPORTING ONLY: realized poll cadence, which is the only
+            # bound available on fill->detection latency.
+            _lat(self, "note_poll",
+                 getattr(t, "market_slug", "") or "", self.now_t)
             try:
                 row = t.order(str(vid))
             except BaseException as exc:                       # noqa: BLE001
@@ -5174,6 +5244,159 @@ class Runner:
                 self.stats["shadow_error:%s:%s"
                            % (name, type(exc).__name__)] += 1
 
+    #: the accumulator's key for the OBSERVER itself, as distinct from any
+    #: one market. Observer continuity is a property of the process across a
+    #: window roll, so it cannot be keyed by the market that just changed.
+    LATENCY_OBSERVER_KEY = "__observer__"
+
+    def _latency_report(self) -> Optional[Dict[str, Any]]:
+        """The latency report, or None, and never an exception."""
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return None
+        try:
+            rs = acc.reports()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:report:%s" % type(exc).__name__] += 1
+            return None
+        obs = next((r for r in rs
+                    if r.get("market") == self.LATENCY_OBSERVER_KEY), None)
+        return {"observer": obs,
+                "markets": [r for r in rs
+                            if r.get("market") != self.LATENCY_OBSERVER_KEY]}
+
+    def _latency_safe(self, meth: str, *a: Any, **kw: Any) -> None:
+        """Call the latency accumulator and never let it matter.
+
+        Same contract as `_calib_safe`: observational, swallows its own
+        faults, counts them, and cannot refuse or alter anything. An
+        accumulator that raises must not be able to stop a cancellation.
+        """
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return
+        try:
+            getattr(acc, meth)(*a, **kw)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:%s:%s" % (meth, type(exc).__name__)] += 1
+
+    def _latency_observer_note(self) -> None:
+        """One observer heartbeat, and a rollover when the slug changes."""
+        acc = getattr(self, "completion_latency", None)
+        if acc is None:
+            return
+        try:
+            slug = getattr(self.transport, "market_slug", None)
+            k = self.LATENCY_OBSERVER_KEY
+            prev = getattr(self, "_latency_last_slug", None)
+            if slug and prev and str(slug) != str(prev):
+                self._latency_safe("note_rollover", k, self.now_t)
+            if slug:
+                self._latency_last_slug = str(slug)
+            self._latency_safe("note_observation", k, self.now_t)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_error:observer:%s" % type(exc).__name__] += 1
+
+    def calibration_live_tick(self, now: float) -> None:
+        """Lifetime observations for the orders the venue is actually holding.
+
+        THE GAP THIS CLOSES, and it is the whole reason a live window could
+        have been spent for nothing. `observe` -- the only producer of
+        `lifetime_observation`, one of the five REQUIRED_CAPTURE categories,
+        and the only source of `prints_at_our_price` -- was reached ONLY from
+        `calibration_shadow_tick`, with `shadow|...` coids. So:
+
+            shadow records  observations, and NO venue-confirmed terminal
+            live records    ack, fill, fees, venue terminal, and NO observations
+
+        Neither half could ever be `usable_for_calibration`, and the two
+        never met. An `l5f-` order that rested for two minutes produced a
+        record with four of five categories present and not one reading of
+        the queue it was sitting in.
+
+        IT RUNS FROM THE MAIN TICK, AND THAT IS THE POINT. The first
+        version was called from `shadow_tick`, which returns early on
+        `not cs or self.ws is None`; `calibration_shadow_tick` additionally
+        bails on `_shadow_off`. Either would have stood between a live order
+        and the record of the queue it sat in -- the same shape as the
+        defect this method exists to close, where observation was reachable
+        only through the shadow.
+
+        I then claimed moving it here broke 111 tests and reverted it. It
+        broke NONE: both runs behind that claim were contaminated by my own
+        edits to the runner while they were in flight. A clean run of the
+        relocated tree is byte-identical to the baseline.
+
+        SELF-SUFFICIENT. The slug comes from the TRANSPORT -- the market our
+        orders are actually in, not the shadow's `AB.slug_for(self.ws)` grid
+        slug, which can differ -- and the book and prints are its own reads.
+        Each guard returns before anything is read, so an object that is not
+        a fully built Runner cannot be made to raise here; about forty tests
+        invoke `tick`, and this is why they are unaffected.
+
+        OBSERVATIONAL, exactly like every other recorder call on this path:
+        it cannot refuse or alter a submission and swallows its own faults.
+        `observe` itself filters the coids it is given to those it already
+        knows and whose slug matches, so handing it every live order is safe.
+        """
+        cal = self.fill_calibration
+        if cal is None:
+            return
+        # REPORTING ONLY, and ABOVE every other guard on purpose: this is
+        # the record that the observer stage ran at all, and it has to be
+        # taken on the ticks where there is nothing to observe too --
+        # otherwise "the observer continued across the rollover" could not
+        # be distinguished from "the observer stopped and there happened to
+        # be no orders". A window roll is read as a change of the
+        # transport's slug, which is the market our orders are in.
+        # LOOKED UP, NOT CALLED BY NAME. This method's contract is that an
+        # object which is not a fully built Runner cannot be made to raise
+        # here -- about forty tests drive `tick` with partial rigs, and a
+        # Runner whose __init__ failed midway is the same shape. A bare
+        # `self._latency_observer_note()` broke seven of those rigs with an
+        # AttributeError the instant it was added, which is the contract
+        # catching the mistake rather than a reason to weaken the rigs.
+        _note = getattr(self, "_latency_observer_note", None)
+        if _note is not None:
+            _note()
+        try:
+            store = getattr(getattr(self, "executor", None), "store", None)
+            if store is None:
+                return
+            live = [c for c in (store.live_orders() or {})
+                    if str(c).startswith("l5f-")]
+            if not live:
+                return
+            slug = getattr(self.transport, "market_slug", None)
+            if not slug:
+                return
+            book = self.book.snapshot(slug)
+            try:
+                prints = self.book.trades(slug)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # an absent print feed is recorded AS absent by `observe`,
+                # never as "no prints", so this is reported and not guessed
+                prints = None
+                self.stats["calib_live_prints_error:%s"
+                           % type(exc).__name__] += 1
+            n = cal.observe(now, slug=slug, book=book,
+                            ladder=self.shadow_ladder, prints=prints,
+                            open_coids=live)
+            self.stats["calib_live_observations"] += int(n)
+            self.stats["calib_live_orders_seen"] = len(live)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["calib_live_error:%s" % type(exc).__name__] += 1
+
     def calibration_shadow_tick(self, now: float, *, slug: str,
                                 book: Any = None,
                                 prints: Any = None) -> None:
@@ -5875,15 +6098,65 @@ class Runner:
         Reporting only -- `authorize_arming` still decides.
         """
         try:
-            pf = AUTH.authorization_preflight(
-                str(getattr(self.transport, "market_slug", "") or ""),
-                root=self.root)
+            _mkt = str(getattr(self.transport, "market_slug", "") or "")
+            pf = AUTH.authorization_preflight(_mkt, root=self.root)
+            # THE MARKET IT WAS EVALUATED AGAINST, AND WHY EACH CHECK
+            # FAILED.
+            #
+            # WHAT THIS COST. The full L5_AUTHORIZATION_PREFLIGHT line is
+            # emitted ONCE AT STARTUP, when the transport has no slug yet;
+            # `authorization_preflight` then deliberately evaluates the
+            # campaign DOCUMENT alone and reports coverage as
+            # NOT_EVALUATED, so it says campaign_approval PASS. This
+            # verdict is emitted CONTINUOUSLY, with the slug of whatever
+            # window is current -- and a campaign authorizing only the NEXT
+            # window correctly says FAIL for this one.
+            #
+            # Both are right. But `fail: ["campaign_approval"]` with no
+            # market and no reason is indistinguishable from a broken
+            # approval, and that ambiguity cost a review cycle: the two
+            # lines were compared as though they disagreed about the same
+            # question when they were answering different ones.
+            #
+            # So the market and the reasons travel with the verdict, and
+            # the one benign case -- a valid campaign whose window has not
+            # arrived -- is named outright. Reporting only: no gate, limit
+            # or decision is touched, and `authorize_arming` still decides.
+            # BOUNDED. The heartbeat has a hard size budget -- it already
+            # exceeded the log transport's per-line limit once, which is
+            # why the full rows live on their own line and why `hb_reduced`
+            # exists to drop the largest field rather than truncate the
+            # safety state. So this reads the rows and embeds only a SMALL
+            # reason map: at most six entries, each reason clipped. The
+            # rows themselves are never carried.
+            _by = {str(r.get("check")): r
+                   for r in (pf.get("rows") or [])
+                   if isinstance(r, Mapping)}
+            _why = {}
+            for k in (pf.get("fail") or [])[:6]:
+                _r = str((_by.get(k) or {}).get("reason") or "")[:80]
+                if _r:
+                    _why[k] = _r
+            _camp = (_by.get("campaign_approval") or {})
+            _awaiting = (str(_camp.get("reason") or "")
+                         == "WINDOW_NOT_IN_AUTHORIZED_SET")
             return {"ok": pf.get("ok"), "fail": pf.get("fail"),
                     "unknown": pf.get("unknown"),
+                    "evaluated_market": _mkt or None,
+                    "fail_reasons": _why or None,
+                    "awaiting_authorized_window": _awaiting,
                     "labels": ("compact verdict; full rows on the "
                                "L5_AUTHORIZATION_PREFLIGHT line. ok false "
                                "means arming WILL refuse for the named "
-                               "check, whatever the campaign says.")}
+                               "check, whatever the campaign says. "
+                               "`evaluated_market` is the window this "
+                               "verdict was computed FOR -- the startup "
+                               "line has no slug and so evaluates the "
+                               "document alone, which is why the two can "
+                               "differ without disagreeing. "
+                               "`awaiting_authorized_window` true means "
+                               "the campaign is VALID and this is simply "
+                               "not its window yet.")}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -5935,6 +6208,11 @@ class Runner:
             "auth_book": self.book.status(),
             "fill_calibration": (None if self.fill_calibration is None
                                  else self.fill_calibration.report()),
+            # WHERE THE TIME GOES, on every heartbeat. The one figure the
+            # 6.4-6.9s recorded ladders could never supply: the age of the
+            # book the completion controller actually evaluated, measured
+            # on this process's own clock. Reporting only.
+            "completion_latency": self._latency_report(),
             "frame_fanout": (self.fanout.status() if self.fanout else None),
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
@@ -7051,6 +7329,21 @@ class Runner:
             return None
         held, other = ("UP", "DOWN") if up > dn else ("DOWN", "UP")
         held_qty, def_qty = (up, dn) if held == "UP" else (dn, up)
+        # REPORTING ONLY: the first tick on which we SAW a HELD POSITION.
+        #
+        # THE `held_qty > 0` GUARD IS THE WHOLE POINT, and leaving it out
+        # was a real defect in production. With up == dn == 0, `up > dn` is
+        # False, so `held` is "DOWN" and `held_qty` is 0 -- a flat market
+        # reads as a held DOWN leg. The first deployed heartbeat showed it
+        # exactly: 256 decisions, every one of them NO_INVENTORY or
+        # DECIDE_COOLDOWN, and `detection_to_decision_s` n 256 median
+        # 451.7 s. That figure was not a fill-to-decision latency at all;
+        # it was time since the first tick of the window.
+        #
+        # Not the fill either -- see l5_completion_latency on why that
+        # interval is a bound and not a measurement.
+        if held_qty > 0:
+            _lat(self, "note_fill_detected", slug, held, now)
         book = self.book.snapshot(slug) or {}
         gates = getattr(self.executor, "validation_gates", None)
         # HOISTED, because the guard below now needs the same rows the
@@ -7104,9 +7397,62 @@ class Runner:
             last_decide_t=self._book_completion_t)
         # THE CADENCE IS STAMPED EVEN ON A REFUSAL, so a refused decision
         # cannot be retried every tick.
+        # ADAPTIVE COMPLETION DEPTH, DEFAULT OFF, AND ONLY ON A CAP REFUSAL.
+        #
+        # A completion fixed AT THE TOUCH cannot clear the fee-safe cap: a
+        # touch pair is `1 - spread`, 0.99 on a one-tick book, against the
+        # 0.96 ceiling. Replayed over 13 out-of-sample windows that shape
+        # completes ZERO pairs in 652 entries -- all 311 filled first legs
+        # refuse on the cap, which is why rescued legs never complete.
+        # Walking OUTWARD to the shallowest depth whose pair clears the cap
+        # converted 12 of 66 strands into pairs on the queue-independent
+        # PROVEN arm (+0.0012 net per entry), and a bounded taker
+        # completion recovered NONE of the remaining 54.
+        #
+        # WHAT THIS CANNOT DO. It retries ONLY a pair-cap refusal, only at
+        # depths `adaptive_depth_candidates()` offers, shallowest first,
+        # and stops on the first outcome that is not a cap refusal. It
+        # cannot relax the cap, the band, the freshness limit, a budget or
+        # any gate -- every retry is a full `BC.decide` with the same
+        # inputs and one different depth. With the flag off the candidate
+        # list is exactly the deployed depth, so this loop runs zero extra
+        # decisions and the path is byte-identical.
+        _CAP_REFUSALS = ("PAIR_ABOVE_REDEMPTION", "COMPLEMENT_PAIR_ABOVE_CAP")
+        if (not rec.get("ok")) and str(rec.get("reason")) in _CAP_REFUSALS:
+            for _d2 in BC.adaptive_depth_candidates():
+                if _d2 == BC.completion_depth_ticks():
+                    continue            # already tried, above
+                _alt = BC.decide(
+                    market=slug, held_side=held,
+                    held_qty=held_qty, held_cost_usd=legs.get(held),
+                    deficient_qty=def_qty,
+                    deficient_cost_usd=legs.get(other),
+                    book=book, now_t=now, window_start=float(ws),
+                    resting=_rows, outstanding_qty=_outstanding,
+                    tick=getattr(t, "tick_size", None) or "0.01",
+                    min_qty=getattr(t, "quantity_increment", None) or "0.01",
+                    depth_ticks=_d2,
+                    residual_budget_usd=getattr(
+                        gates, "max_worst_case_deficit_usd", None),
+                    submissions_left=AUTH.max_submissions(),
+                    last_decide_t=self._book_completion_t)
+                self.stats["book_completion:adaptive_try:d%d:%s"
+                           % (_d2, _alt.get("reason") or "OK")] += 1
+                if str(_alt.get("reason")) not in _CAP_REFUSALS:
+                    rec = dict(_alt, adaptive_depth_ticks=_d2,
+                               adaptive_from_depth=(
+                                   BC.completion_depth_ticks()))
+                    break
         if rec.get("reason") != "DECIDE_COOLDOWN":
             self._book_completion_t = now
         self.stats["book_completion:%s" % rec.get("reason")] += 1
+        # REPORTING ONLY. The decision, the reason it reached, and the age
+        # of the book it was taken on -- which `decide` now carries on
+        # every outcome rather than only on a stale refusal.
+        _lat(self, "note_decision", slug, now,
+            action=("COMPLETE" if rec.get("ok") else "NO"),
+            reason=(rec.get("reason") or "OK"),
+            book_age_s=rec.get("stream_age_s"))
 
         # ============ A REFUSED COMPLETION IS NAMED, NOT JUST COUNTED.
         #
@@ -7551,13 +7897,63 @@ class Runner:
         # way.
         px_up = LX.controller_provisional_price("UP", book, tick)
         px_dn = LX.controller_provisional_price("DOWN", book, tick)
-        if px_up is None or px_dn is None:
+        # ONE UNREADABLE SIDE USED TO DISQUALIFY BOTH, and production
+        # counted it 9 times. `controller_provisional_price` returns None
+        # when `touch - tick <= 0`, so an UP price is unreadable once the
+        # ask is down to a single tick and a DOWN price is unreadable once
+        # the bid is within a tick of 1.00. BTC15m books run to those
+        # extremes routinely as a window resolves -- and the OTHER side is
+        # perfectly restable at that moment. Refusing to open at all
+        # because the side we were not going to choose is pinned is the
+        # defect; the readable side is used instead, and the fact that the
+        # choice was FORCED rather than cheaper is recorded so the
+        # economics stay auditable.
+        #
+        # THIS WIDENS WHEN THE CONTROLLER OPENS and is flagged for review
+        # as such. It does not widen WHAT may be placed: this price feeds
+        # the translation gate only, `TS.build_orders` still builds the
+        # real order from the same authenticated book, and every economic,
+        # campaign, slot and authorization gate downstream is untouched.
+        # DEFAULT OFF, because this widening has never run in production.
+        # The repair below is correct -- refusing a restable side because
+        # the OTHER side is pinned is a defect -- but it changes WHEN the
+        # controller opens, and a capped one-or-two-window probe has one
+        # opening to spend. At `ask 0.01` the forced side is DOWN at own
+        # 0.99: legal, gated downstream, and a poor use of the probe's only
+        # entry. So the repair is opt-in and the deployed default stays
+        # byte-identical to the behaviour already observed running.
+        #
+        # ONE REFUSAL SITE, DELIBERATELY. A sibling test enumerates the
+        # early returns that report a skip, and splitting this into two
+        # returns would add an eighth for no behavioural gain.
+        _forced_ok = (os.getenv("L5_PROVISIONAL_FORCED_SIDE")
+                      or "").strip().lower() in ("1", "yes", "true", "on")
+        _both_unreadable = px_up is None and px_dn is None
+        if _both_unreadable or (not _forced_ok
+                                and (px_up is None or px_dn is None)):
+            # HOISTED, so the skip note and its `return None` stay
+            # adjacent: a sibling test requires the return within a few
+            # lines of the note, because a note AFTER the return would be
+            # dead code. Worth keeping intact.
+            _detail = {"bid": str(book.get("bid")),
+                       "ask": str(book.get("ask")),
+                       "unreadable": ("BOTH" if _both_unreadable
+                                      else "UP" if px_up is None else "DOWN"),
+                       "forced_side_enabled": _forced_ok}
             self.stats["controller_open:PROVISIONAL_PRICE_UNREADABLE"] += 1
             self._note_open_skip("PROVISIONAL_PRICE_UNREADABLE", slug, ws,
-                                 {"bid": str(book.get("bid")),
-                                  "ask": str(book.get("ask"))})
+                                 _detail)
             return None
-        side, px = ("UP", px_up) if px_up <= px_dn else ("DOWN", px_dn)
+        if px_dn is None:
+            side, px, _forced = "UP", px_up, "DOWN"
+        elif px_up is None:
+            side, px, _forced = "DOWN", px_dn, "UP"
+        else:
+            side, px, _forced = (("UP", px_up, None) if px_up <= px_dn
+                                 else ("DOWN", px_dn, None))
+        if _forced is not None:
+            self.stats["controller_open:PROVISIONAL_SIDE_FORCED:%s"
+                       % _forced] += 1
         size = TSP.opening_leg_max_contracts()
         if size is None or size <= 0:
             self.stats["controller_open:OPENING_CAP_UNREADABLE"] += 1
@@ -8683,9 +9079,18 @@ class Runner:
             _qmk = getattr(self, "_requote_queue_ahead_fn", None)
             _qfn = (_qmk(slug, comp) if callable(_qmk) else None)
             vg = getattr(self.executor, "validation_gates", None)
-            rec = UDP.decide(
+            # ONE CONTROLLER. `decide_inventory` dispatches over the whole
+            # action set -- the six dispositions plus OPEN / REPLENISH /
+            # ACCUMULATE_FAVORED / ACQUIRE_UNFAVORED -- and defers every
+            # price to `decide`, `reopen_decision` and
+            # `weighted_inventory_decision`. Holding inventory puts us in
+            # the disposition family, whose record it returns MERGED, so
+            # the tape, the heartbeat and `controller_preserves` read
+            # exactly the keys they always did.
+            rec = UDP.decide_inventory(
                 market=slug, held_side=held,
                 held_qty=self.store.position(slug, held),
+                disposition_kwargs=dict(
                 held_cost_usd=legs.get(held),
                 deficient_qty=self.store.position(slug, comp),
                 deficient_cost_usd=legs.get(comp),
@@ -8712,7 +9117,7 @@ class Runner:
                 # crossing actions are then still PRICED, because the whole
                 # point of the record is to state what declining them
                 # costs, but they can never be selected.
-                taker_enabled=self._taker_route_open())
+                taker_enabled=self._taker_route_open()))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -8909,7 +9314,36 @@ class Runner:
             _qfn = (_qmk(str(slug), str(side)) if callable(_qmk) else None)
             if _qfn is None:
                 self.stats["requote_without_queue_evidence"] += 1
+            # HOW LONG THIS QUOTE HAS ACTUALLY RESTED, from the row's own
+            # submit stamp -- the same field and the same parse the
+            # distance-recovery path uses. Our 34 venue-confirmed orders put
+            # the median fill at 17.1s while five of 2015z's cancellations
+            # fired between 1.1s and 6.8s, each with a 76-81% conditional
+            # chance of still filling. See TSP.REQUOTE_MIN_REST_S.
+            #
+            # AN AGE WE CANNOT ESTABLISH LEAVES THE OLD BEHAVIOUR STANDING,
+            # and the stat records that the move was decided without it.
+            # Same judgement as `require_queue_evidence` directly below: a
+            # floor we cannot evaluate must not disable completion
+            # repricing entirely rather than make it careful -- that would
+            # re-create the 0330z frozen-plan failure, where a quote the
+            # book had left behind was re-proposed 32 times and never
+            # moved. The floor binds wherever the row carries its stamp,
+            # which in production it does: the distance-recovery path
+            # parses the same field and its recoveries fire live.
+            _rest_s = None
+            try:
+                _st = dt.datetime.fromisoformat(str(row.get("t")))
+                if _st.tzinfo is not None:
+                    _rest_s = float(now) - _st.timestamp()
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _rest_s = None
+            if _rest_s is None:
+                self.stats["requote_without_resting_age"] += 1
             res = TSP.completion_requote(
+                resting_rest_s=_rest_s,
                 side=side, resting_own_px=row.get("price"),
                 resting_qty=qty, resting_filled_qty=filled,
                 bid=snap.get("bid"), ask=snap.get("ask"),
@@ -9299,6 +9733,14 @@ class Runner:
         # slot a completion needed.
         self.maybe_controller_open(now)
         _sc.mark("maybe_ts_completion")
+        # LIFETIME OBSERVATIONS FOR WHATEVER IS ACTUALLY RESTING, and here
+        # rather than on the shadow tick so that no shadow guard stands
+        # between a live order and the record of the queue it sat in. It is
+        # MARKED because this module exists for exactly that reason: the
+        # 93-second rollover hid in an unmeasured gap, so a new stage is
+        # declared and timed rather than folded into its neighbour's cost.
+        self.calibration_live_tick(now)
+        _sc.mark("calibration_live_tick")
         # AFTER the completion decision and BEFORE the terminal sweep. After,
         # because a completion that can act on the book as it stands should
         # do so rather than be cancelled first; before, because a quote the

@@ -46,6 +46,17 @@ def _book(**over):
     return b
 
 
+#: A book wide enough that ANOTHER opening round is economically justified.
+#: `probe_reopen_decision` prices every round past the first exposure-taking
+#: one, and at the usual ONE-TICK spread that arithmetic refuses a
+#: reopening -- see `test_l5_reopening_decision.py`, which owns the pricing.
+#: The multi-round tests below are about the round MECHANISM (key
+#: namespacing, leg balance, maker mode), so they run on a book where the
+#: economics permit the round.
+def _wide_book(**over):
+    return _book(**dict({"bid": "0.50", "ask": "0.70"}, **over))
+
+
 def gates(cash="8", deficit="3", cum="10"):
     return ValidationGates(max_cash_deployed_usd=D(cash),
                            max_unmatched_contracts=D("5"),
@@ -530,7 +541,7 @@ class TestMultiplePairingRoundsInOneWindow:
         monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "3")
         ex, t = mk(H, E, tmp_path, orders=16)
         for _ in range(8):
-            tick(ex, E)
+            tick(ex, E, book=_wide_book())
         sides = [s["side"] for s in t.sent]
         assert len(sides) >= 4 and len(sides) % 2 == 0, sides
         assert sides.count("UP") == sides.count("DOWN"), sides
@@ -543,7 +554,7 @@ class TestMultiplePairingRoundsInOneWindow:
         monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "3")
         ex, t = mk(H, E, tmp_path, orders=16)
         for _ in range(8):
-            tick(ex, E)
+            tick(ex, E, book=_wide_book())
         rounds = {str(s["action_key"]).split("|")[3] for s in t.sent}
         assert len(rounds) >= 2, [s["action_key"] for s in t.sent]
 

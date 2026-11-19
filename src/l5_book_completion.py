@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import os
 from decimal import Decimal as D
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_two_sided_probe as TS
 
@@ -91,6 +91,49 @@ REDEMPTION_PAIR = D("1.00")
 #: and nothing in this module treats a resting completion as a hedge.
 COMPLETION_DEPTH_TICKS_ENV = "L5_COMPLETION_DEPTH_TICKS"
 COMPLETION_DEPTH_TICKS = 0
+
+
+#: how far outward the adaptive search may walk, in ticks. A bound, not a
+#: target: the walk stops at the FIRST admissible depth.
+ADAPTIVE_MAX_DEPTH_TICKS = 5
+ADAPTIVE_ENV = "L5_COMPLETION_ADAPTIVE_DEPTH"
+_TRUE_ADAPT = ("1", "yes", "true", "on")
+
+
+def adaptive_depth_enabled() -> bool:
+    """DEFAULT OFF. The deployed completion depth stays 0 unless set.
+
+    WHY IT EXISTS, measured. Replaying 13 out-of-sample windows, a
+    completion fixed AT THE TOUCH completes ZERO pairs in 652 entries:
+    all 311 filled first legs refuse with the pair above the cap, because
+    a touch pair is `1 - spread` -- 0.99 on a one-tick book -- and the
+    fee-safe ceiling is 0.96. The depth is not a preference there; at 0 it
+    makes completion arithmetically impossible.
+
+    Walking OUTWARD to the shallowest depth whose pair clears the cap
+    converted 12 of 66 stranded legs into pairs on the queue-independent
+    PROVEN arm -- an 18% reduction in strands, +0.0012 net per entry --
+    and a bounded taker completion recovered NONE of the remaining 54,
+    every one of which fails the cap again after fees.
+
+    DEFAULT OFF because it changes a money-path decision while #206's
+    deployment freeze stands. The ceiling, the band and every other gate
+    are untouched: this only chooses WHERE to rest a complement the
+    economics already permit.
+    """
+    return (os.getenv(ADAPTIVE_ENV) or "").strip().lower() in _TRUE_ADAPT
+
+
+def adaptive_depth_candidates() -> List[int]:
+    """The depths to try, shallowest first. Just the fixed depth when off."""
+    base = completion_depth_ticks()
+    if not adaptive_depth_enabled():
+        return [base]
+    out = [base]
+    for d in range(0, ADAPTIVE_MAX_DEPTH_TICKS + 1):
+        if d not in out:
+            out.append(d)
+    return out
 
 
 def completion_depth_ticks() -> int:
@@ -388,11 +431,17 @@ def decide(*, market: str, held_side: str,
     age = _d(book.get("stream_age_s"))
     if age is None:
         return _no("BOOK_AGE_UNKNOWN", **rec)
+    # REPORTING ONLY, and deliberately before the freshness test: the age
+    # used to be recorded only when it FAILED, so a passing evaluation
+    # carried no evidence of how fresh the book it acted on was. That made
+    # the 2-second requirement unauditable in exactly the case that
+    # matters -- the one where we traded. Carried on every outcome now.
+    rec["stream_age_s"] = str(age)
     # NEGATIVE IS STALE, not fresh. A future-dated stream age means the
     # snapshot is dated ahead of us, which is the one reading that must
     # never pass a freshness test. Same guard as l5_two_sided_probe.
     if age < 0 or age > D(str(TS.MAX_BOOK_AGE_S)):
-        return _no("STALE_BOOK", stream_age_s=str(age), **rec)
+        return _no("STALE_BOOK", **rec)
     if book.get("gap_suspected"):
         return _no("BOOK_GAP_SUSPECTED", **rec)
     bid, ask = _d(book.get("bid")), _d(book.get("ask"))
@@ -577,17 +626,48 @@ def decide(*, market: str, held_side: str,
             if str(r.get("side", "")).upper() == want
             and str(r.get("market") or market) == str(market)]
     if mine:
-        best = min((_d(r.get("price")) or D(9)) for r in mine)
-        if best is not None:
-            rest_own = best if want == "UP" else (D(1) - best)
-            if own >= rest_own:
-                return _no("ALREADY_RESTING_AT_OR_BETTER",
-                           resting_own=str(rest_own), quote_own=str(own),
-                           **rec)
-            rec["replaces_resting_own"] = str(rest_own)
-            return dict(rec, action="REPRICE", ok=True,
-                        reason="CHEAPER_THAN_RESTING", leg=leg,
-                        key=decision_key(market, want, need, px))
+        # AN UNREADABLE RESTING PRICE FAILS CLOSED, and it did not used to.
+        #
+        # This read was `min((_d(r.get("price")) or D(9)) for r in mine)`.
+        # The `or D(9)` sentinel was meant to stand for "so dear that ours
+        # is better", but the comparison happens in OWN terms and the
+        # conversion is side-dependent, so 9 is only dear on one side:
+        #
+        #   want UP    rest_own = 9       own >= 9 is False  -> REPRICE
+        #   want DOWN  rest_own = 1 - 9   own >= -8 is True   -> HOLD
+        #
+        # So a row whose price could not be read refused safely when we
+        # wanted DOWN and, when we wanted UP, CANCELLED AND REPLACED an
+        # order whose price was unknown -- forfeiting its queue position,
+        # possibly chasing upward, which is the one thing the downward-only
+        # rule exists to forbid, and recording `CHEAPER_THAN_RESTING` with
+        # nothing to support it. The asymmetry was an accident of the
+        # sentinel, and the safe branch was the accidental one.
+        #
+        # Declining is the safe direction here because the order ALREADY
+        # EXISTS at the venue: leaving it resting may fill, while replacing
+        # it destroys a position we cannot evaluate. It is the same
+        # fail-closed reasoning as the unreadable book age above.
+        #
+        # (`if best is not None` was unreachable under the sentinel. Had it
+        # ever been reached it would have fallen through to COMPLETE, which
+        # is a DUPLICATE order against a row we knew was resting.)
+        prices = [_d(r.get("price")) for r in mine]
+        if any(p is None for p in prices):
+            return _no("RESTING_PRICE_UNREADABLE",
+                       resting_rows=len(mine),
+                       unreadable_rows=sum(1 for p in prices if p is None),
+                       **rec)
+        best = min(prices)
+        rest_own = best if want == "UP" else (D(1) - best)
+        if own >= rest_own:
+            return _no("ALREADY_RESTING_AT_OR_BETTER",
+                       resting_own=str(rest_own), quote_own=str(own),
+                       **rec)
+        rec["replaces_resting_own"] = str(rest_own)
+        return dict(rec, action="REPRICE", ok=True,
+                    reason="CHEAPER_THAN_RESTING", leg=leg,
+                    key=decision_key(market, want, need, px))
     return dict(rec, action="COMPLETE", ok=True,
                 reason=("PAIR_BEATS_CARRY" if rec["within_preferred_target"]
                         else "RISK_REDUCING_COMPLETION"),

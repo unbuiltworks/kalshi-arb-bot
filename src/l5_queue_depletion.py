@@ -134,7 +134,11 @@ def queue_ahead(side: str, own_px: Any, *, bids: Any = None,
     if p is None:
         return None
     w = wire_of(side, p)
-    book = _levels(bids if rests_on(side) == "BID" else asks)
+    # Tombstone-only ladders contain no displayed queue and cannot attest
+    # a zero-ahead position. Preserve zero when real worse-priced liquidity
+    # exists, because that is a legitimate empty queue at our price.
+    book = [(px, sz) for px, sz in _levels(
+        bids if rests_on(side) == "BID" else asks) if sz > 0]
     if not book:
         return None
     # a BID at wire w is beaten by HIGHER bids; an ASK at wire w by LOWER
@@ -158,10 +162,12 @@ def _crossed_by_other_side(side: str, own_px: D,
     sell against the best bid. None when that side is unreadable.
     """
     w = wire_of(side, own_px)
+    # Zero-size ladder rows are not executable liquidity. Treat an entirely
+    # empty opposite side as unreadable rather than a crossing/fill proof.
     if rests_on(side) == "BID":
-        a = _levels(frame.get("asks"))
+        a = [(px, sz) for px, sz in _levels(frame.get("asks")) if sz > 0]
         return None if not a else (min(px for px, _ in a) <= w)
-    b = _levels(frame.get("bids"))
+    b = [(px, sz) for px, sz in _levels(frame.get("bids")) if sz > 0]
     return None if not b else (max(px for px, _ in b) >= w)
 
 
@@ -258,6 +264,70 @@ def _own_level_size(side: str, own_px: D,
     return sum((sz for px, sz in book if px == w), D(0))
 
 
+
+def lifecycle_aware_verdict(
+    side: str,
+    own_px: Any,
+    frames: Sequence[Mapping[str, Any]],
+    *,
+    start: int = 0,
+    end: Optional[int] = None,
+    lifecycle: Sequence[Mapping[str, Any]] = (),
+) -> Dict[str, Any]:
+    """Bound book evidence to an authenticated resting-order interval.
+
+    Frame indices in lifecycle events refer to the same ordered snapshots as
+    `frames`. An ACK alone does not establish that an order was resting.
+    Missing/contradictory lifecycle evidence fails closed. This is a research
+    replay helper, never an order submission or a venue fill assertion.
+    """
+    if not frames or start < 0 or start >= len(frames):
+        return {"verdict": None, "reason": "NO_FRAMES"}
+    stop = len(frames) if end is None else end
+    if not isinstance(stop, int) or stop <= start or stop > len(frames):
+        return {"verdict": None, "reason": "INVALID_END"}
+    if not lifecycle:
+        return {"verdict": None, "reason": "LIFECYCLE_UNATTESTED"}
+    resting_at = None
+    terminal_at = None
+    last_at = -1
+    for event in lifecycle:
+        if not isinstance(event, Mapping):
+            return {"verdict": None, "reason": "LIFECYCLE_UNREADABLE"}
+        at = event.get("frame")
+        state = event.get("state")
+        if not isinstance(at, int) or at < 0 or at >= len(frames) or at < last_at:
+            return {"verdict": None, "reason": "LIFECYCLE_UNORDERED"}
+        last_at = at
+        if state == "RESTING":
+            if resting_at is not None or terminal_at is not None:
+                return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+            resting_at = at
+        elif state in ("CANCELED", "EXPIRED", "REJECTED", "FILLED"):
+            if terminal_at is not None:
+                return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+            terminal_at = at
+        elif state not in ("ACK", "PARTIAL_FILL"):
+            return {"verdict": None, "reason": "LIFECYCLE_UNKNOWN_STATE"}
+        if terminal_at is not None and state in ("ACK", "PARTIAL_FILL"):
+            return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+        if state == "PARTIAL_FILL" and (resting_at is None or terminal_at is not None):
+            return {"verdict": None, "reason": "LIFECYCLE_CONTRADICTORY"}
+    if resting_at is None or resting_at > start:
+        return {"verdict": None, "reason": "RESTING_NOT_AT_JOIN"}
+    if terminal_at is not None:
+        stop = min(stop, terminal_at)
+    if stop <= start + 1:
+        return {"verdict": None, "reason": "NO_ELIGIBLE_OBSERVATION"}
+    result = fill_verdict(side, own_px, frames[:stop], start=start)
+    result["eligible_end_exclusive"] = stop
+    result["lifecycle_attested"] = True
+    result["venue_fill_confirmed"] = False
+    result["book_only"] = True
+    return result
+
+
+
 # ======================================================= PAIR ECONOMICS
 #
 # The identity that makes the depth choice an economic one rather than a
@@ -266,7 +336,10 @@ def _own_level_size(side: str, own_px: D,
 # leg d ticks behind its own touch gives 1 - spread - 2*d*tick.
 
 def touch_pair(bids: Any, asks: Any) -> Optional[D]:
-    b, a = _levels(bids), _levels(asks)
+    # Ignore zero-size tombstones: they cannot establish executable touch
+    # prices, and must not manufacture favorable pair economics.
+    b = [(px, sz) for px, sz in _levels(bids) if sz > 0]
+    a = [(px, sz) for px, sz in _levels(asks) if sz > 0]
     if not b or not a:
         return None
     bb, ba = max(px for px, _ in b), min(px for px, _ in a)

@@ -60,6 +60,26 @@ def _book(**over):
     return b
 
 
+#: A book wide enough that ANOTHER opening round is economically justified.
+#:
+#: WHY THESE TESTS NEED ONE. `probe_reopen_decision` prices every round past
+#: the first exposure-taking one: the pair identity gives an edge of
+#: `spread + 2*d*tick`, and a leg that fills alone realizes the measured
+#: adverse-selection constant of -$0.2440 about 42% of the time. At the
+#: usual ONE-TICK spread that arithmetic refuses a reopening, which is the
+#: correct reading of the evidence and is pinned by
+#: `test_l5_reopening_decision.py`. The tests below are about the round
+#: MECHANISM -- claim namespacing, restart recovery, leg ordering -- so they
+#: run on a book where the economics permit the round, leaving the pricing
+#: itself to the suite that owns it. A 20-cent spread is rare but real: the
+#: spread was one tick in 217 of 220 recorded samples, not 220 of 220.
+WIDE = {"bid": "0.50", "ask": "0.70"}
+
+
+def _wide_book(**over):
+    return _book(**dict(WIDE, **over))
+
+
 def mk(H, E, tmp_path, t=None, g=None):
     t = t or H.FakeTransport(fill_all=False)
     t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
@@ -109,7 +129,7 @@ def test_accumulation_keeps_working_pairs_past_the_first(probe, tmp_path,
     ex.limits = H.limits(max_live_orders=16)
     seen = []
     for _ in range(8):
-        seen.append(ex.handle(_row(H), _book(), market="m",
+        seen.append(ex.handle(_row(H), _wide_book(), market="m",
                               window="21:00").get("refused_reason"))
     # MORE THAN ONE PAIR, which is the whole point.
     #

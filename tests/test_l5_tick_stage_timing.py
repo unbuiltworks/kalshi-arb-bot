@@ -147,4 +147,9 @@ def test_every_pre_preflight_call_has_a_mark():
         "maybe_unmatched_disposition",
         "maybe_completion_requote", "maybe_ts_deadline",
         "model_advance", "two_sided_advance", "two_sided_settle",
-        "venue_cooling", "roll_diagnostics"}, sorted(marked)
+        "venue_cooling", "roll_diagnostics",
+        # the seventeenth: lifetime observations for resting orders, moved
+        # off the shadow tick so no shadow guard can stand between a live
+        # order and the record of the queue it sat in. Declared here because
+        # that is what this guard is for.
+        "calibration_live_tick"}, sorted(marked)
