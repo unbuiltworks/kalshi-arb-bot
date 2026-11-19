@@ -33,12 +33,12 @@ the clip fix.
 | `pmus-ws-evidence-recorder` | — | authenticated, BTC15m ladder OK |
 
 Live limits: exposure $3.00, per-market $20, 1 concurrent market, 6 live
-orders, daily-loss halt $50 (**authorization unestablished — see §2a**), cash $2.70, unmatched 5 contracts. No campaign
+orders, daily-loss halt $50 (owner-approved — see §2a), cash $2.70, unmatched 5 contracts. No campaign
 authorization. **Settled realized net: −$136.78 all-time** (BTC15M origin
 −$3.62 / 193 markets; UNKNOWN −$211.87 / 275; today −$0.60). BTC5m lane has
 **never traded**.
 
-## 2a. The daily-loss ceiling is THREE numbers, and $50 is not approved for BTC5m
+## 2a. The daily-loss ceiling is THREE numbers; the $50 account-wide halt is owner-approved
 
 Verified 2026-11-19 from the code and the live `l5-pmus-live` heartbeat.
 
@@ -53,15 +53,15 @@ Verified 2026-11-19 from the code and the live `l5-pmus-live` heartbeat.
 * BTC5m's account gate (`l5_btc5m_runner`, `ACCOUNT_DAILY_LOSS_HALT`) reads the
   halt from `l5-pmus-live`, so its account-wide backstop is **$50**. The $5
   envelope figure binds only while an envelope is active.
-* **No record that raising it to $50 was explicitly authorized was found in
-  this repository.** Documents from 2026-11-18 onward state $50 as in force; none
-  records the decision. Only the owner can settle this.
+* **The owner confirmed on 2026-11-19 that the $50 account-wide halt was
+  approved.** The repository held no record of that decision before this
+  line; this is the record.
 
-STANDING RULE until the owner settles it: the production $50 is NOT an
-approved BTC5m limit. Any future live approval must state its own effective
-daily-loss ceiling in the approval document, and enforcement of THAT figure
-must be verified on the running service before arming. Do not inherit a
-number from this table.
+STANDING RULE, unchanged by that confirmation: $50 is the ACCOUNT-WIDE
+backstop, not a per-campaign budget. Any future live approval must still
+state its own effective daily-loss ceiling in the approval document, and
+enforcement of THAT figure must be verified on the running service before
+arming.
 
 ## 3. Regression baseline — 13 failures, all pre-existing
 
