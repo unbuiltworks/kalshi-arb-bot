@@ -1690,6 +1690,51 @@ def test_open_gate_off_by_default_and_blocks_negative_ev_when_on(eng, monkeypatc
     assert len(v.orders) == 2                           # off: unchanged
 
 
+def test_open_gate_allow_sports_lets_only_listed_sports_through(eng, monkeypatch, capsys):
+    """OWNER 2026-11-19 bounded rewards test: listed sports bypass the
+    open-EV gate; every other sport stays gated."""
+    assert M.OPEN_GATE_ALLOW_SPORTS == frozenset()
+    e, v = eng
+    for sp in ("x", "y"):
+        for i in range(12):                             # settled losers
+            m = e.b.m(f"aec-{sp}-r{i}-q")
+            m.update(pos={"YES": "1", "NO": "0"},
+                     cost={"YES": "0.55", "NO": "0"}, settle_px="0",
+                     done=True)
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"x"}))
+    v.bid, v.ask = D("0.48"), D("0.50")
+    assert e.open_gate("aec-y-new-q")["allow"] is False
+    g = e.open_gate("aec-x-new-q")
+    assert g["allow"] is True and g["why"] == "owner_allow_sport"
+    e.b.m("aec-y-new-q")
+    e.step_market("aec-y-new-q")
+    assert v.orders == {}                               # y still gated
+    e.b.m("aec-x-new-q")
+    e.step_market("aec-x-new-q")
+    assert len(v.orders) == 2                           # x allowed
+    snap = e.open_gate_snapshot()
+    assert snap["allow_sports"] == ["x"]
+
+
+def test_allow_sports_selection_skips_gated_sports(eng, monkeypatch):
+    e, v = eng
+    for i in range(12):
+        m = e.b.m(f"aec-y-r{i}-q")
+        m.update(pos={"YES": "1", "NO": "0"},
+                 cost={"YES": "0.55", "NO": "0"}, settle_px="0", done=True)
+    v.targets = [{"slug": "aec-y-a-b", "market_meta": {
+                     "bestBidQuote": "0.48", "bestAskQuote": "0.49"}},
+                 {"slug": "aec-x-a-b", "market_meta": {
+                     "bestBidQuote": "0.44", "bestAskQuote": "0.46"}}]
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"x"}))
+    e.select(v.account())
+    assert "aec-x-a-b" in e.b.d["markets"]
+    assert "aec-y-a-b" not in e.b.d["markets"]       # gated: no slot taken
+
+
+
 def test_market_closed_keeps_unconfirmed_cancel_open_and_named(eng):
     """LIVE 2026-11-15 20:03:34Z: the market went inactive, the cancel did
     not take, the book marked the order closed and dropped the market; the

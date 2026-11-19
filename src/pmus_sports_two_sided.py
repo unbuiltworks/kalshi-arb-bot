@@ -534,6 +534,13 @@ EXTEND_STEP_PX = D(os.getenv("PMUS_TWO_SIDED_EXTEND_STEP_PX", "0.03"))
 EXTEND_MAX_USD = D(os.getenv("PMUS_TWO_SIDED_EXTEND_MAX_USD", "1.50"))
 OPEN_EV_MIN = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN", "0")
 OPEN_EV_MIN_MARKETS = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN_MARKETS", "10")
+# OWNER 2026-11-19 "Get me liquidity rewards": a bounded live test lets ONLY
+# these sports past the open-EV gate (comma list of slug sport codes, e.g.
+# "dota2,utr"). Every other sport stays gated exactly as before. Empty
+# (default) = no exception. The gate's own statistics are unchanged.
+OPEN_GATE_ALLOW_SPORTS = frozenset(
+    x.strip().lower() for x in os.getenv(
+        "PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS", "").split(",") if x.strip())
 SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
@@ -1761,14 +1768,18 @@ class Engine:
 
     def open_gate(self, slug: str) -> Dict[str, Any]:
         from src import pmus_sports_open_gate as G
-        return G.allow_open(G.sport_of(slug), self._gate_stats(),
+        sport = G.sport_of(slug)
+        if sport in OPEN_GATE_ALLOW_SPORTS:
+            return {"allow": True, "why": "owner_allow_sport", "sport": sport}
+        return G.allow_open(sport, self._gate_stats(),
                             min_ev=OPEN_EV_MIN,
                             min_markets=OPEN_EV_MIN_MARKETS)
 
     def open_gate_snapshot(self) -> Dict[str, Any]:
         from src import pmus_sports_open_gate as G
         st = self._gate_stats()
-        out = {"on": OPEN_EV_GATE}
+        out = {"on": OPEN_EV_GATE,
+               "allow_sports": sorted(OPEN_GATE_ALLOW_SPORTS)}
         for sp in sorted(k for k in st if k != "*"):
             e = G.expected_open_value(sp, st)
             if e:
@@ -2854,6 +2865,9 @@ class Engine:
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
                 continue
+            if OPEN_EV_GATE and OPEN_GATE_ALLOW_SPORTS and \
+                    not self.open_gate(slug)["allow"]:
+                continue         # would be gated at open: don't take a slot
             scored.append((a - b, abs(b - D("0.5")), slug))
         scored.sort()
         if self.guard is not None:
