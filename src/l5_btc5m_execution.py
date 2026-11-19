@@ -1643,6 +1643,85 @@ class Btc5mExecutor:
         except BaseException:                              # noqa: BLE001
             return False
 
+    #: HOW MANY per-order lookups one exposure read may make. A venue that
+    #: omits the quantity on every row must not become an unbounded request
+    #: storm on the submit path; past the bound the read refuses, which is
+    #: where it started.
+    FOREIGN_QTY_LOOKUP_MAX = 8
+
+    def _foreign_remaining(self, vid: Any) -> Dict[str, Any]:
+        """Remaining quantity for ONE foreign order, from `/v1/order/{id}`.
+
+        READ-ONLY AND FAIL-CLOSED. Returns {"ok": True, "remaining": Decimal}
+        only when the venue's own numbers are present, non-negative and
+        mutually consistent. Every other outcome is {"ok": False, "why": ...}
+        and the caller keeps its refusal.
+
+        NOTHING HERE CLAIMS OWNERSHIP. It is called only for orders this
+        ledger does NOT own, it submits nothing, cancels nothing, and the
+        quantity it returns is charged at the foreign upper bound exactly as
+        a readable row would be.
+
+        CONSISTENCY IS CHECKED, not assumed. `leavesQuantity` is preferred,
+        and where `quantity` and `cumQuantity` are also present their
+        difference must agree with it -- a venue answer that contradicts
+        itself is less trustworthy than no answer, so it refuses.
+        """
+        out: Dict[str, Any] = {"ok": False, "why": None}
+        if vid is None or not str(vid).strip():
+            out["why"] = "NO_VENUE_ORDER_ID"
+            return out
+        used = int(getattr(self, "_foreign_qty_lookups", 0))
+        if used >= int(self.FOREIGN_QTY_LOOKUP_MAX):
+            out["why"] = "LOOKUP_BUDGET_EXHAUSTED"
+            return out
+        self._foreign_qty_lookups = used + 1
+        #: NO SECOND ALIAS. `t = self.transport` exists exactly once in this
+        #: module and the architecture guard pins that, plus the fact that
+        #: the alias only ever reads open_orders/positions. Aliasing here
+        #: broke both clauses for no benefit, so this reads the attribute
+        #: directly -- `order` is already in the guard's permitted set.
+        if self.transport is None or not hasattr(self.transport, "order"):
+            out["why"] = "NO_ORDER_READ_AVAILABLE"
+            return out
+        try:
+            row = self.transport.order(str(vid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["why"] = "ORDER_READ_FAILED:%s" % type(exc).__name__
+            return out
+        if not isinstance(row, Mapping) or not row:
+            out["why"] = "ORDER_READ_NOT_A_ROW"
+            return out
+        leaves = _dec(_first(row, ("leavesQuantity", "leaves_quantity")))
+        total = _dec(_first(row, ("quantity", "orderQuantity")))
+        cum = _dec(_first(row, ("cumQuantity", "cum_quantity",
+                                "filledQuantity")))
+        #: a derived value is used ONLY when leaves is absent
+        derived = None
+        if total is not None and cum is not None:
+            if total < 0 or cum < 0 or cum > total:
+                out["why"] = "ORDER_READ_QUANTITIES_INCOHERENT"
+                return out
+            derived = total - cum
+        if leaves is None and derived is None:
+            out["why"] = "ORDER_READ_NO_QUANTITY"
+            return out
+        if leaves is not None and leaves < 0:
+            out["why"] = "ORDER_READ_NEGATIVE_LEAVES"
+            return out
+        if leaves is not None and derived is not None and leaves != derived:
+            #: the venue disagreeing with itself is not a basis for charging
+            #: a number against a risk limit
+            out["why"] = "ORDER_READ_LEAVES_DISAGREES_WITH_FILLS"
+            return out
+        remaining = leaves if leaves is not None else derived
+        out.update(ok=True, remaining=remaining, why=None,
+                   basis=("leavesQuantity" if leaves is not None
+                          else "quantity-cumQuantity"))
+        return out
+
     def account_exposure(self) -> Dict[str, Any]:
         """Dollars at risk on the whole account, every market.
 
@@ -1652,6 +1731,10 @@ class Btc5mExecutor:
         an unknown account refuses every submission.
         """
         own = self._own_exposure()
+        #: PER-READ, not per-process. Left cumulative it would refuse every
+        #: exposure read forever once eight lifetime lookups had happened,
+        #: which is a slow-acting permanent halt rather than a bound.
+        self._foreign_qty_lookups = 0
         out: Dict[str, Any] = {
             "own_usd": own["resting"] + own["filled"],
             "own_resting_usd": own["resting"], "own_filled_cost_usd": own["filled"],
@@ -1686,7 +1769,37 @@ class Btc5mExecutor:
             left = _dec(_first(row, ("remainingQuantity", "remaining_qty",
                                      "leavesQuantity", "qty", "quantity")))
             if left is None or left < 0:
-                return unknown("OPEN_ORDER_QUANTITY_UNREADABLE")
+                #: THE OPEN-ORDERS LIST DOES NOT ALWAYS CARRY A QUANTITY.
+                #: Measured 2026-11-19: the owner's hand-placed
+                #: DT0VCZR013ZK came back with every one of those five
+                #: fields absent, so account exposure read UNKNOWN and
+                #: BTC5m refused every submission -- correctly, but
+                #: permanently, because nothing was going to change that
+                #: row.
+                #:
+                #: `/v1/order/{id}` is the authoritative single-order
+                #: read and DOES carry quantity, cumQuantity and
+                #: leavesQuantity. It is a GET and mutates nothing. This
+                #: asks it, for FOREIGN orders only, and only when the
+                #: list left the quantity unreadable.
+                #:
+                #: IT WIDENS NOTHING. The outcome is either a real number
+                #: charged at the foreign $1-a-contract basis exactly as
+                #: a readable row would be, or the same refusal as
+                #: before. A missing, negative or self-contradictory
+                #: answer is NOT read as zero.
+                _looked = self._foreign_remaining(vid)
+                if _looked.get("ok"):
+                    left = _looked["remaining"]
+                    out.setdefault("foreign_qty_recovered", []).append(
+                        {"venue_order_id": str(vid), "remaining": str(left),
+                         "source": "GET /v1/order/{id}",
+                         "basis": _looked.get("basis")})
+                else:
+                    out["foreign_qty_lookup_failed"] = {
+                        "venue_order_id": None if vid is None else str(vid),
+                        "why": _looked.get("why")}
+                    return unknown("OPEN_ORDER_QUANTITY_UNREADABLE")
             out["other_open_order_contracts"] += left
         for row in pos_rows:
             if not isinstance(row, Mapping):
