@@ -69,9 +69,43 @@ legitimately tripped by twenty cents.
 | of which origin BTC15M (the service's own strategy) | −$3.62 over 193 markets |
 | of which origin UNKNOWN (positions other services opened) | −$211.87 over 275 markets |
 
-The gate's figure and the rows it is supposed to summarise differ by $78.70
-and this audit did not find why. It is consistent with corrections applied
-to one total and not the other, but that is a guess.
+**Explained, 2026-11-19 (code and commit history, deployed lineage `c9f9f87`).**
+The difference is exactly **$78.6836**, and it is the owner-approved
+re-anchor of 2026-11-15:
+
+* Commit `e8ea99bb2` added the rebase `upper-basis-contamination-20261115`:
+  the total then read −78.6836 and was replaced, at the owner's instruction
+  ("--from-now"), so that measurement restarted from the balance of $338.3456.
+  A second entry, `residual-zeroing-20261116`, set both lines to zero at
+  2026-11-16 00:11Z. The heartbeat's `cash_anchor` is that entry's.
+* A rebase replaces `realized_attributed` / `realized_unattributed`, which
+  the gate reads. It deliberately keeps the old scalar `realized_today`, and
+  it does not touch the per-market rows. Every later settlement and
+  correction moves all three together.
+* So: old scalar −215.4681, minus the superseded −78.6836, equals the gate's
+  −136.7845 to the last digit. The row sum (−215.49) is the old scalar less a
+  $0.02 settlement adjustment that is added to the totals but not to its row.
+
+No arithmetic is wrong. The two totals count different periods.
+
+**What that changes in this audit:**
+
+1. **−$136.78 is what the ledger has posted since 2026-11-16 00:11Z**, not a
+   lifetime figure. Over the same period the venue balance went from $338.35
+   to $321.48: **−$16.87 in cash against −$136.78 in the ledger**, a gap of
+   about $120, assuming no deposit or withdrawal in those four days (not
+   verified). That gap is the $1.00 bound on positions settled since the
+   re-anchor.
+2. **The 62 rows before 2026-11-13 are not in the gate's figure at all.**
+   They were wiped by the re-anchor. Correcting them now would add a credit
+   to a total that no longer holds their loss. Step 3 below ("move the floor
+   back") is withdrawn.
+3. **Possible credit already in the figure, size unknown.** The attestation
+   corrects rows from 2026-11-13 on and does not know about the re-anchor.
+   Any row that settled between 2026-11-13 and the re-anchor and was
+   corrected afterwards added its improvement to a total its loss had already
+   left. That would make −136.78 too favourable by that amount. The state
+   needed to size it is on the service's volume; the diagnostic reports it.
 
 ## Why the ceiling was exceeded
 
@@ -133,8 +167,75 @@ crypto 15m, and smaller groups.
    correction is to take both quantity and cost from the venue where the
    settlement cashflow also reconciles. If the mismatch is something else,
    the bound should stay. This cannot be decided before step 1.
-3. *Move the floor back* to cover the 62 older rows, under the same rule.
-4. *Explain the $78.70* between the gate's total and the sum of its rows.
+3. ~~Move the floor back to cover the 62 older rows.~~ Withdrawn: those rows
+   predate the re-anchor and are not in the gate's figure (Finding 3).
+4. ~~Explain the $78.70.~~ Done, Finding 3.
 
 Until then the comparison with $75 remains a comparison with a bound, and
 BTC5m remains blocked at arming.
+
+## The read-only diagnostic — built and tested, NOT deployed (2026-11-19)
+
+Owner approved building and testing only. Nothing is deployed, no ledger
+figure is changed, no limit is touched.
+
+**Where the code is.** `l5-pmus-live` runs a different line of history from
+this branch, so the change is kept here as a patch that applies cleanly to
+the deployed commit:
+`analysis/l5/btc5m/patches/pmus-live-venue-cost-diagnostic.on-c9f9f879f.patch`.
+Applied to `c9f9f879f1f752d2f4ca2b50cf158b7942631b00` it gives tree
+`ecf74aaf8dcdfbefa125e56a5791da916cac07bb` (verified by applying it to a clean
+checkout). No release branch has been pushed; that needs permission.
+
+**What it logs** (`L5_VENUE_COST_DIAGNOSTIC`), for each row the attestation
+gave up on:
+
+* ledger: UP and DOWN quantity, cost, booked P&L, settlement value, time,
+  origin, and whether it settled before the last re-anchor;
+* venue: UP and DOWN quantity, fill-derived cost, fees, fill count, average
+  price, or why the fills could not be read;
+* the difference per side, and the form: `GROSS_MATCH`, `VENUE_NET_MATCH`,
+  `QUANTITY_MISMATCH`, `VENUE_FILLS_UNREADABLE`;
+* the attestation's own last refusal reason;
+* a hypothetical P&L if the venue's fills were the position, marked
+  `applied: false`;
+* once per batch, the count and total of corrections posted after the
+  re-anchor for rows that settled before it (item 3 of Finding 3).
+
+**Why it cannot change anything.** It calls no method of the ledger, never
+saves it, keeps its progress in memory, makes only the activity feed's GET,
+and nothing reads its output. Off unless the variable is exactly
+`READ_ONLY`; the hook swallows every exception.
+
+**Tests** (`tests/test_l5_venue_cost_diagnostic.py`, 31): ledger identical in
+memory and on disk after a full run; runs to completion against a ledger
+that raises on any write and a transport that raises on anything but GET;
+attempt counters, statuses and corrections unmoved; a row that *would*
+reconcile is still not corrected; the attestation behaves identically with
+the diagnostic on or off; gate off by default and for every near-miss value;
+source checks that the module names no mutating call. Eleven deliberate
+breakages each fail at least one test. Service regression subset on the
+deployed lineage: 12 failed / 2315 passed before, 12 failed / 2346 passed
+after, the same twelve (pre-existing).
+
+**Not shown:** anything against the real venue feed or the real ledger.
+
+### Deployment proposal — for separate approval
+
+| | |
+|---|---|
+| service | `l5-pmus-live` only |
+| now | deployment `46c928f1-b3bd-428b-893c-0c46d7755d21`, commit `c9f9f87`, branch `release/l5-pmus-live-registry-claim-20261119`, `armed: false`, `halt: true` |
+| to deploy | `c9f9f87` plus the one patch above. The commit SHA is fixed when the release branch is created; the tree must be `ecf74aaf…` |
+| needs | permission to push one release branch; permission to deploy it; permission to set one variable |
+| variable | `L5_VENUE_COST_DIAGNOSTIC=READ_ONLY`. Not money-capable. Setting it restarts the service |
+| arming | unchanged: stays disarmed and halted. No other variable changes |
+| venue load | the activity feed only, paced by the attestation's own constants (one step per interval, a few pages a step), then idle |
+| done when | the log reads `NOTHING_LEFT`; about 97 rows in batches of 8 |
+| rollback | Railway rollback to deployment `46c928f1…`; or unset the variable, which disables it on the new build |
+| restart risk | startup reconciliation runs as on any restart. Venue shows 0 open orders and the lane is disarmed |
+
+One thing a deploy does besides the diagnostic: the attestation itself runs
+again from boot as it does on every restart. Rows it has already exhausted
+stay exhausted (that record is durable), so no new correction is expected
+from the restart alone.
