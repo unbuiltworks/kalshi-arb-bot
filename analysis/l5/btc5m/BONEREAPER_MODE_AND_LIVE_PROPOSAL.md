@@ -125,6 +125,12 @@ What would change the answer, each an owner decision:
    the normal economic gate. It needs an explicit instruction to build it,
    and a second explicit approval to use it.
 
+**Update, same day:** the owner chose option 2 for engineering only. The
+campaign class is built at `7182a43` and described in
+`analysis/l5/btc5m/BEHAVIOUR_PROBE.md`. It is not deployed, armed or used,
+and the deployment SHA for any future probe is `7182a43`, not the `cab8e12`
+named below.
+
 ## 5. Packet for owner review (conditional on §4 being resolved)
 
 | item | value |
