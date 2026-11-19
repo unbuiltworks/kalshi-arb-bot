@@ -1288,8 +1288,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             #: considered, because the bound that matters is on the two
             #: of them TOGETHER. Checking one leg at a time cannot see a
             #: pair that costs 1.02.
+            #: LIGHT SIDE FIRST. The executor's live-order limit refuses
+            #: whatever is asked for LAST, and repricing never cancels the
+            #: light side's older rungs, so they hold the slots. In fixed
+            #: UP-then-DOWN order an UP-heavy book therefore had its
+            #: balancing DOWN order refused step after step while the UP
+            #: order that deepens the imbalance was placed (UP 0.14 against
+            #: DOWN 0 in the test that found this); a DOWN-heavy book
+            #: stopped correctly, by accident of the order. Equal inventory
+            #: keeps the original order, so a balanced book is unchanged.
+            _order = tuple(sorted(SIDES, key=lambda s: inv[s][0]))
             for i, r in enumerate(_rungs):
-                for side in SIDES:
+                for side in _order:
                     #: REPRICING. Shades the rung by existing imbalance;
                     #: returns the rung unchanged when disabled. In
                     #: book-relative mode the BASE is this side's live

@@ -91,6 +91,40 @@ def main(path, asset="BTC", minutes="5"):
     print("  GAP (total - components) %+8.2f  reported gap +232"
           % (tot - (mp + rp)))
 
+    #: WHERE THE GAP IS. Per window, the table's P&L against its own
+    #: components. Added 2026-11-19: the gap had been put down to a
+    #: "matching convention". It is not one.
+    print("\nWHERE THE GAP IS, window by window")
+    off = []
+    cash = D(0)
+    for r in rows:
+        t = dec(r["pnl_derived_resolution"])
+        mq, mc = dec(r["matched_qty"]) or D(0), dec(r["matched_pair_cost"]) or D(0)
+        rq, rc = dec(r["residual_qty_abs"]) or D(0), dec(r["residual_cost"]) or D(0)
+        side = (r.get("residual_side") or "").strip().upper()
+        won = (r.get("winning_outcome") or "").strip().upper()
+        comp = (mq - mc) + ((rq if (side and side == won) else D(0)) - rc)
+        if won:
+            held = dec(r["final_up_qty" if won == "UP" else "final_down_qty"]) or D(0)
+            cash += held - (dec(r["total_dollars_bought"]) or D(0))
+        if t is None or abs(t - comp) > D("0.01"):
+            off.append((r["market_slug"], t, comp, mq - mc, rq, side, rc))
+    print("  windows where table != components   %d" % len(off))
+    for slug, t, comp, m, rq, side, rc in off:
+        print("    %s  table=%s  components=%+.2f" % (slug, t, comp))
+        print("      UNRESOLVED: the table omits it; the components sum scored")
+        print("      its residual as a total loss. Matched part %+.2f is"
+              % m)
+        print("      certain. Residual %.2f %s cost %.2f settles at %+.2f or"
+              % (rq, side, rc, -rc))
+        print("      %+.2f, so the window is %+.2f or %+.2f."
+              % (rq - rc, m - rc, m + rq - rc))
+    print("  gap explained by those windows      %+8.2f"
+          % sum((t or D(0)) - comp for _s, t, comp, *_ in off))
+    print("  CASH IDENTITY over resolved windows (winning shares held minus")
+    print("  all cash paid)                      %+12.2f" % cash)
+    print("  -> the table total is exact; nothing else is unreconciled.")
+
     print("\nANOMALIES AND RESOLUTION SOURCES")
     an = collections.Counter((r.get("anomalies") or "").strip() for r in rows)
     for k, n in an.most_common(6):
@@ -100,23 +134,36 @@ def main(path, asset="BTC", minutes="5"):
     for k, n in rs.most_common(6):
         print("  resolution_source=%-21s %d" % (k or "(none)", n))
 
-    print("\nHOW THIS TRADER WAS PAID -- the part a pair-cost table cannot show")
-    tk = sum(1 for r in rows if (r.get("first_action") or "").upper() == "TAKER")
-    print("  windows whose first action was TAKER   %d of %d" % (tk, len(rows)))
+    print("\nWHAT THIS WALLET IS AND IS NOT EVIDENCE OF")
     ge90 = sum(1 for r in rows
                if (r.get("any_buy_ge_90c") or "").strip().lower()
                in ("true", "1", "yes"))
     print("  windows with a buy at 90c or above     %d (%.0f%%)"
           % (ge90, 100.0 * ge90 / len(rows)))
-    print("  NOTE: workup.json for this wallet records, across ALL assets,")
-    print("  derived_trading_pnl -14562.84 against incentives of")
-    print("  TAKER_REBATE 6466.66 + MAKER_REBATE 1087.80 + REWARD 143.83")
-    print("  and merge_usdc 39613.33 over 35 merge events. The trading leg")
-    print("  LOST money; the account was made whole by incentives and merges.")
-    print("  This account is maker Tier 1, where the maker rebate is ZERO and")
-    print("  Tier 2 needs $10,000,000 of 30-day maker volume against roughly")
-    print("  $38,880 a month (src/pmus_fees.py). That component is therefore")
-    print("  not available to us at any size.")
+    print("  maker/taker per window                 NOT IN THIS TABLE.")
+    print("    `first_action` holds BUY for every row, so the earlier line")
+    print("    \"0 of 304 first actions were TAKER\" measured nothing.")
+    print("    workup.json puts 49.67% of this wallet's dollars as taker.")
+    print("  fees                                   NOT IN THIS DATA. Every")
+    print("    row is a buy at a price; P&L here is before any fee.")
+    print("  ACROSS ALL ASSETS (workup.json, 1,560 windows):")
+    print("    derived trading P&L                 -14562.84")
+    print("    TAKER_REBATE 6466.66 + MAKER_REBATE 1087.80 + REWARD 143.83")
+    print("                                         +7698.29")
+    print("    NET AFTER INCENTIVES                 -6864.55")
+    print("  MERGES ARE NOT INCOME. merge_usdc 39613.33 (35 events) is")
+    print("    matched UP+DOWN pairs handed back for $1.00 each. The trading")
+    print("    P&L above already pays every matched pair $1.00, so adding")
+    print("    merges would count the same dollars twice. An earlier version")
+    print("    of this file said the account was \"made whole by incentives")
+    print("    and merges\". It was not: it is net NEGATIVE after incentives.")
+    print("  Incentives are an all-asset total and cannot be allocated to")
+    print("    BTC 5m from this data.")
+    print("  CONCLUSION: this wallet lost money trading, lost money after")
+    print("    rebates we cannot earn (maker Tier 1 pays zero), and half its")
+    print("    volume is taker. It is NOT evidence of a profitable strategy")
+    print("    and must not be cited as one. Its fill pattern remains a")
+    print("    description of what is mechanically possible, nothing more.")
     return 0
 
 

@@ -33,10 +33,35 @@ the clip fix.
 | `pmus-ws-evidence-recorder` | — | authenticated, BTC15m ladder OK |
 
 Live limits: exposure $3.00, per-market $20, 1 concurrent market, 6 live
-orders, daily-loss halt $50, cash $2.70, unmatched 5 contracts. No campaign
+orders, daily-loss halt $50 (**authorization unestablished — see §2a**), cash $2.70, unmatched 5 contracts. No campaign
 authorization. **Settled realized net: −$136.78 all-time** (BTC15M origin
 −$3.62 / 193 markets; UNKNOWN −$211.87 / 275; today −$0.60). BTC5m lane has
 **never traded**.
+
+## 2a. The daily-loss ceiling is THREE numbers, and $50 is not approved for BTC5m
+
+Verified 2026-11-19 from the code and the live `l5-pmus-live` heartbeat.
+
+| figure | what it is | where |
+|---|---|---|
+| **$50** | account-wide daily realized-loss halt **in force in production** | `L5_DAILY_REALIZED_LOSS_HALT_USD`; heartbeat `day_realized.halt_usd: 50` |
+| **$5** | the code default for that halt; ceiling of a standing BTC5m envelope; ceiling of a non-BTC5m campaign approval; the figure in every signed-mandate example | `daily_realized_loss_halt()`, `l5_persistent_mode.MAX_DAILY_LOSS_USD`, `l5_campaign_approval.MAX_DAILY_LOSS_USD`, `docs/OWNER_MANDATE_SIGNING.md` |
+| **$11** | ceiling of a BTC5m campaign approval | `l5_campaign_approval.SERIES_MAX_DAILY_LOSS_USD` |
+
+* The halt became configurable (floor $5, cap $50) in `31cbe364a`, 2026-10-15.
+  Production is set to the cap.
+* BTC5m's account gate (`l5_btc5m_runner`, `ACCOUNT_DAILY_LOSS_HALT`) reads the
+  halt from `l5-pmus-live`, so its account-wide backstop is **$50**. The $5
+  envelope figure binds only while an envelope is active.
+* **No record that raising it to $50 was explicitly authorized was found in
+  this repository.** Documents from 2026-11-18 onward state $50 as in force; none
+  records the decision. Only the owner can settle this.
+
+STANDING RULE until the owner settles it: the production $50 is NOT an
+approved BTC5m limit. Any future live approval must state its own effective
+daily-loss ceiling in the approval document, and enforcement of THAT figure
+must be verified on the running service before arming. Do not inherit a
+number from this table.
 
 ## 3. Regression baseline — 13 failures, all pre-existing
 
@@ -76,17 +101,33 @@ pairing volume. We need a 5.16 ratio and achieve 1.01; they need 2.03 and
 achieve 2.27. Exit *timing* does not fix it — a time-gated cut reduces
 residual loss and destroys pairs in the same proportion.
 
-**Bonereaper ≠ 0x8dxd.** Bonereaper's BTC5m: median pair cost **1.0199**,
-total **−$9,727.10** (both reproduce exactly from
-`analysis/traders/bonereaper/l5_windows_summary.csv`, 304 BTC5m windows).
-Trading leg lost **−$14,563** across all assets; the account was made whole by
-`TAKER_REBATE 6466.66 + MAKER_REBATE 1087.80 + REWARD 143.83` and
-`merge_usdc 39613.33`. **We are maker Tier 1 where the rebate is ZERO** (Tier 2
-needs $10M/30-day volume vs our ~$38,880/month), so that component is
-unavailable at any size. The "missing 304th window" is
-`btc-updown-5m-1788140700` (`resolution_source: none`). The component gap is a
-**matching convention**, not missing data — do not calibrate thresholds on the
-component split; the total and pair-cost distribution are sound.
+**Bonereaper ≠ 0x8dxd, and Bonereaper is CLOSED as evidence** (revised
+2026-11-19 after an independent recomputation; regenerate with
+`python3 analysis/traders/bonereaper/reconcile_btc5m.py`).
+
+* BTC5m: median pair cost **1.0199**, volume-weighted **1.0389**, total
+  **−$9,727.10** over 303 resolved windows. That total is exact — it equals
+  winning shares held minus all cash paid, window by window.
+* The **$74.64 gap** between that total and matched+residual components is
+  ONE window, `btc-updown-5m-1788140700`, which never resolved in the harvest.
+  The table omits it; the components sum scored its residual as a total loss.
+  It is worth −$74.64 or +$214.75 depending on a result we do not hold. An
+  earlier version of this section called the gap a "matching convention". It
+  is not one, and nothing else is unreconciled.
+* All assets: trading **−$14,562.84**, incentives **+$7,698.29**
+  (`TAKER_REBATE 6466.66 + MAKER_REBATE 1087.80 + REWARD 143.83`), **net
+  −$6,864.55**. Incentives cannot be allocated to BTC5m from this data.
+* **Merges are not income.** `merge_usdc 39613.33` is matched pairs handed
+  back for $1.00 each, and the trading P&L already pays every matched pair
+  $1.00. An earlier version said the account was "made whole by incentives
+  and merges". It was not; it is net negative after incentives.
+* The data carries **no fees and no per-fill maker/taker flag**; 49.67% of the
+  wallet's dollars are taker. It says nothing about a maker-only strategy.
+* **We are maker Tier 1 where the rebate is ZERO** (Tier 2 needs $10M/30-day
+  volume vs our ~$38,880/month).
+
+**Do not cite this wallet as evidence of a profitable strategy.** Its fill
+pattern describes what is mechanically possible and nothing more.
 
 **Scaling reality:** 0x8dxd's edge is **0.84% of turnover** at $2,603/window.
 $480/day needs ~$596/window — ~220× our cash cap. At $2.70 the same behaviour

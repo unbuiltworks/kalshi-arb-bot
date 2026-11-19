@@ -6,15 +6,15 @@ participation, median 33s to the opposite-side fill, 50.5 fills a window,
 early imbalance, continuous replenishment, large residual held to settlement.
 
 THE PATTERN IS A CAPABILITY SPEC, NOT A TARGET. The same harvest shows that
-wallet's trading leg LOST money -- median matched-pair unit cost 1.0199,
-pnl_derived_resolution -$9,727.10 over the 304 BTC5m windows, and
--$14,562.84 across all assets, with the account made whole by
-TAKER_REBATE $6,466.66 + MAKER_REBATE $1,087.80 + REWARD $143.83 and
-merge_usdc $39,613.33 (analysis/traders/bonereaper/). This account is maker
-Tier 1 where the rebate is ZERO. So these tests verify the MECHANICS are
-available and the ECONOMIC GATES still refuse; nothing here copies that
-wallet's residual size or its above-$1 pair purchases, and two tests pin that
-we cannot.
+wallet's trading LOST money -- median matched-pair unit cost 1.0199,
+pnl_derived_resolution -$9,727.10 over the BTC5m windows, and -$14,562.84
+across all assets, still -$6,864.55 after TAKER_REBATE $6,466.66 +
+MAKER_REBATE $1,087.80 + REWARD $143.83. Its merge_usdc $39,613.33 is matched
+pairs handed back at $1.00, already counted in that P&L, and is NOT income
+(analysis/traders/bonereaper/). This account is maker Tier 1 where the rebate
+is ZERO. So these tests verify the MECHANICS are available and the ECONOMIC
+GATES still refuse; nothing here copies that wallet's residual size or its
+above-$1 pair purchases.
 
 Driven through the REAL path: `l5_btc5m_runner.public_book` for the book with
 the venue's own constraints carried, the real `Btc5mExecutor`, the audited
@@ -373,3 +373,252 @@ def test_directional_accumulation_stays_gated(rig, armed, two_sided,
     rep = rig.go(t=5.0)
     assert rig.venue.sent == []
     assert "NOT_SET" in str(rep.get("why")), rep.get("why")
+
+
+# ============ 7. THE PATHS SECTIONS 3 AND 5 CLAIMED BUT NEVER REACHED
+#
+# An independent audit of this file (2026-11-19) found that three tests above
+# pass without exercising what their names say:
+#
+#   * `test_repricing_never_leaves_more_than_the_order_limit_working` moves
+#     the BOOK, but the fixed straddle reprices on INVENTORY IMBALANCE only,
+#     so nothing was repriced and at most two orders were ever live;
+#   * `test_a_cancel_is_always_by_exact_order_id` loops over zero cancels;
+#   * `test_the_six_order_limit_binds_across_the_window` never has more than
+#     two orders live, so the limit is never approached.
+#
+# They are left in place as the weak checks they are. The tests below reach
+# each path for real and assert that they did, so they cannot pass vacuously.
+
+def _side(rig, side):
+    return [o for o in rig.working() if rig.venue.by_oid[o]["side"] == side]
+
+
+@pytest.fixture
+def repricing(monkeypatch, two_sided):
+    """A rung at 0.20 that shades one tick per clip of imbalance, two lots a
+    clip -- room to reprice many times without leaving the (0, 0.50) band."""
+    monkeypatch.setenv(X.STRADDLE_REPRICE_TICKS_ENV, "1")
+    monkeypatch.setenv(X.STRADDLE_PRICE_ENV, "0.20")
+    monkeypatch.setenv(X.CLIP_USD_ENV, "0.0020")
+
+
+def _drive_one_sided(rig, heavy, steps):
+    """Fill only `heavy`, step, and return every step's report."""
+    reps = [rig.go(t=5.0)]
+    for i in range(steps):
+        for o in _side(rig, heavy):
+            rig.venue.fill(o)
+        reps.append(rig.tick(2).go(t=10.0 + 2 * i))
+    return reps
+
+
+def test_an_imbalance_really_reprices_both_sides(rig, armed, repricing):
+    """Heavy side bids LOWER, light side HIGHER, one tick per clip."""
+    _drive_one_sided(rig, C.UP, 2)
+    px = {s: [D(x["price"]) for x in rig.venue.sent if x["side"] == s]
+          for s in (C.UP, C.DOWN)}
+    assert px[C.UP] == [D("0.20"), D("0.19"), D("0.18")], px
+    assert px[C.DOWN] == [D("0.20"), D("0.21"), D("0.22")], px
+
+
+def test_repricing_is_additive_and_cancels_nothing(rig, armed, repricing):
+    """WHAT "REPRICING" MEANS HERE, pinned because the name suggests
+    otherwise: the light side's older rungs are NOT cancelled, they keep
+    resting below the new one. So there is no cancel/replace race on this
+    path at all -- and the order limit is what bounds the stack."""
+    _drive_one_sided(rig, C.UP, 3)
+    assert rig.venue.cancelled == []
+    resting = sorted(D(rig.venue.by_oid[o]["price"])
+                     for o in _side(rig, C.DOWN))
+    assert resting == [D("0.20"), D("0.21"), D("0.22"), D("0.23")], resting
+
+
+@pytest.mark.parametrize("heavy", [C.UP, C.DOWN])
+def test_the_order_limit_is_reached_and_refuses(rig, armed, repricing, heavy):
+    """The limit is REACHED (six live), a placement is REFUSED for it by
+    name, and it is never exceeded."""
+    reps = _drive_one_sided(rig, heavy, 10)
+    refusals = []
+    for rep in reps:
+        refusals += [r for r in (rep.get("refused") or [])
+                     if r["reason"] == "MAX_LIVE_ORDERS"]
+    assert len(rig.ex.live_orders()) == 6
+    assert len(rig.working()) == 6
+    assert refusals, "the six-order limit was never the reason for a refusal"
+
+
+@pytest.mark.parametrize("limit", [3, 6])
+def test_the_order_limit_is_never_exceeded_at_any_step(tmp_path, armed,
+                                                       repricing, limit):
+    rig = Rig6(tmp_path, max_live_orders=limit)
+    rig.go(t=5.0)
+    seen = 0
+    for i in range(12):
+        for o in _side(rig, C.UP):
+            rig.venue.fill(o)
+        rig.tick(2).go(t=10.0 + 2 * i)
+        seen = max(seen, len(rig.working()))
+        assert len(rig.ex.live_orders()) <= limit, i
+        assert len(rig.working()) <= limit, i
+    assert seen == limit, "the limit of %d was never reached" % limit
+
+
+@pytest.mark.parametrize("heavy", [C.UP, C.DOWN])
+def test_at_the_order_limit_the_heavy_side_stops_growing(rig, armed,
+                                                         repricing, heavy):
+    """THE DEFECT THESE TESTS FOUND. Sides were visited UP then DOWN, and
+    the limit refuses whatever is asked for last. With UP heavy, the DOWN
+    order that would BALANCE the book was refused every step while the UP
+    order that deepens the imbalance was placed: UP reached 0.14 against
+    DOWN 0 in 14 steps. With DOWN heavy it stopped at 0.05, by accident of
+    the order. The light side now goes first, so both directions stop."""
+    _drive_one_sided(rig, heavy, 14)
+    inv = rig.ex.inventory(MARKET)
+    light = C.DOWN if heavy == C.UP else C.UP
+    assert D(str(inv[light]["qty"])) == 0
+    assert D(str(inv[heavy]["qty"])) <= D("0.05"), inv
+    #: and what was refused for the limit is the HEAVY side, never the light
+    rep = rig.tick(2).go(t=60.0)
+    lim = [r["order"]["side"] for r in (rep.get("refused") or [])
+           if r["reason"] == "MAX_LIVE_ORDERS"]
+    assert light not in lim, lim
+
+
+def test_a_balanced_book_is_still_visited_up_then_down(rig, armed, two_sided):
+    """The light-side-first ordering changes nothing when inventory is
+    equal: the first decision still sends UP and then DOWN."""
+    rig.go(t=5.0)
+    assert [s["side"] for s in rig.venue.sent] == [C.UP, C.DOWN]
+
+
+# ---- cancels that actually happen
+
+def test_a_stale_book_cancels_exactly_the_working_orders(rig, armed,
+                                                         two_sided):
+    rig.go(t=5.0)
+    working = set(rig.working())
+    assert len(working) == 2
+    book = rig.book()
+    book["age_s"] = 999
+    rep = rig.tick(2).ex.step(market=MARKET, book=book, t_in_window_s=20.0,
+                              p_up="0.50", p_source="TEST")
+    assert rep["why"] == "BOOK_STALE"
+    assert {oid for oid, _ in rig.venue.cancelled} == working
+    assert all(slug == MARKET for _, slug in rig.venue.cancelled)
+    assert len(rig.ex.live_orders()) == 0
+
+
+def test_the_window_end_cancels_exactly_the_working_orders(rig, armed,
+                                                           repricing):
+    """With a real stack resting: every working id is cancelled once, and
+    nothing that had already filled is cancelled."""
+    _drive_one_sided(rig, C.UP, 3)
+    working, filled = set(rig.working()), set(rig.venue.full)
+    assert len(working) >= 4 and filled
+    rep = rig.tick(2).go(t=301.0)
+    assert rep["why"] == "WINDOW_OVER"
+    ids = [oid for oid, _ in rig.venue.cancelled]
+    assert set(ids) == working
+    assert len(ids) == len(set(ids)), "an order was cancelled twice"
+    assert not set(ids) & filled
+    assert len(rig.ex.live_orders()) == 0
+
+
+@pytest.fixture
+def completing(monkeypatch, two_sided):
+    monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, "0.96")
+    monkeypatch.setenv(X.STRADDLE_REPEAT_ENV, "NO")
+
+
+def _open_a_completion(rig):
+    rig.go(t=5.0)
+    rig.venue.fill(_side(rig, C.UP)[0])
+    rig.tick(2).go(t=40.0, bid="0.60", ask="0.61")
+    comp = [o for o in rig.working()
+            if rig.venue.by_oid[o]["reason"] == "STRADDLE_COMPLETION"]
+    assert len(comp) == 1, rig.venue.sent
+    return comp[0]
+
+
+def test_a_completion_is_cancel_replaced_by_exact_id(rig, armed, completing):
+    """THE ONE REAL CANCEL/REPLACE on this path. The book moves, the resting
+    completion is cancelled by its own id and exactly one replaces it."""
+    old = _open_a_completion(rig)
+    rig.tick(2).go(t=50.0, bid="0.40", ask="0.41")
+    assert old in [oid for oid, _ in rig.venue.cancelled]
+    comp = [o for o in rig.working()
+            if rig.venue.by_oid[o]["reason"] == "STRADDLE_COMPLETION"]
+    assert len(comp) == 1 and comp[0] != old
+    assert D(rig.venue.by_oid[comp[0]]["price"]) != \
+        D(rig.venue.by_oid[old]["price"])
+    known = set(rig.venue.by_oid)
+    assert all(oid in known for oid, _ in rig.venue.cancelled)
+
+
+def test_a_completion_that_fills_during_its_cancel_is_not_replaced(
+        rig, armed, completing):
+    """THE RACE, on the path that really cancels and replaces. The fill
+    beats the cancel; the pair is complete; a replacement would buy the
+    second leg TWICE. Nothing more may be sent."""
+    old = _open_a_completion(rig)
+    sent_before = len(rig.venue.sent)
+    rig.venue.fill_on_cancel.add(old)
+    for i in range(3):
+        rig.tick(2).go(t=50.0 + i, bid="0.40", ask="0.41")
+    assert old in [oid for oid, _ in rig.venue.cancelled]
+    assert len(rig.venue.sent) == sent_before, rig.venue.sent[sent_before:]
+    inv = rig.ex.inventory(MARKET)
+    assert D(str(inv[C.UP]["qty"])) == D(str(inv[C.DOWN]["qty"])) == LOT
+    assert len(rig.ex.live_orders()) == 0
+
+
+# ---- the completion target, stated as it actually behaves
+
+@pytest.mark.parametrize("target", ["1.02", "1.00", "0.96"])
+def test_an_over_asked_completion_target_is_clamped_not_refused(
+        rig, armed, two_sided, monkeypatch, target):
+    """CORRECTS `test_an_above_one_pair_cost_is_unreachable`, which holds no
+    inventory when it looks and so would pass whatever the target did. A
+    target above COMPLETION_PAIR_COST_MAX does NOT disable completion: the
+    reader clamps it to 0.90 and a completion IS sent. What is unreachable
+    is a PAIR COST above 0.90 -- not the order."""
+    monkeypatch.setenv(X.COMPLETION_PAIR_COST_ENV, target)
+    assert X.completion_pair_cost() == X.COMPLETION_PAIR_COST_MAX
+    rig.go(t=5.0)
+    oid = _side(rig, C.UP)[0]
+    rig.venue.fill(oid)
+    held = D(rig.venue.by_oid[oid]["price"])
+    rig.tick(2).go(t=40.0, bid="0.60", ask="0.61")
+    comp = [s for s in rig.venue.sent if s["reason"] == "STRADDLE_COMPLETION"]
+    assert len(comp) == 1, rig.venue.sent
+    assert held + D(comp[0]["price"]) <= X.COMPLETION_PAIR_COST_MAX
+    assert comp[0]["post_only"] is True and comp[0]["side"] == C.DOWN
+
+
+# ---- the two caps whose first tests could not fail
+
+@pytest.mark.parametrize("cap,n_sent,why", [
+    ("1.00", 3, "STRADDLE_RESTING"),        # loose: a third order goes out
+    ("0.0008", 2, "UNMATCHED_CEILING"),     # tight: nothing does, by name
+])
+def test_the_unmatched_cap_is_what_stops_the_next_order(
+        rig, armed, two_sided, monkeypatch, cap, n_sent, why):
+    """The same scenario at two caps, so the cap is shown to be the cause."""
+    monkeypatch.setenv(X.STRADDLE_MAX_UNMATCHED_USD_ENV, cap)
+    rig.go(t=5.0)
+    rig.venue.fill(_side(rig, C.UP)[0])
+    rep = rig.tick(2).go(t=20.0)
+    assert (len(rig.venue.sent), rep["why"]) == (n_sent, why)
+
+
+def test_a_partial_fill_leaves_its_remainder_working(rig, armed, two_sided,
+                                                     monkeypatch):
+    monkeypatch.setenv(X.CLIP_USD_ENV, "0.0040")      # five lots a side
+    rig.go(t=5.0)
+    oid = rig.working()[0]
+    rig.venue.fill(oid, qty=D("0.02"))
+    rig.tick(2).go(t=10.0)
+    assert oid in rig.working(), "the partly filled order was pulled"
+    assert rig.venue.cancelled == []
+    assert D(rig.venue.order(oid)["leavesQuantity"]) == D("0.03")
