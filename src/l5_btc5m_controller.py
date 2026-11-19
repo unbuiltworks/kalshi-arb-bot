@@ -295,6 +295,41 @@ class Params:
     #: queue priority at a worse price. Never crosses: the price is built
     #: from the bid, and a value that would reach the offer is refused.
     straddle_join_ticks: int = 0
+    #: ==================================================================
+    #: REQUOTE: FOLLOW THE BOOK INSTEAD OF STACKING BEHIND IT (issue #247).
+    #:
+    #: WHAT WAS MISSING. Book-relative mode priced a fresh quote from the
+    #: live book every step and NEVER withdrew the previous one. Measured
+    #: through the real executor on a book walking 0.50 -> 0.60 -> 0.45:
+    #: six orders resting at six stale prices after four moves, every
+    #: later quote refused MAX_LIVE_ORDERS, and UP 0.60 resting beside
+    #: DOWN 0.53 -- a 1.13 pair under a 0.99 ceiling, because the ceiling
+    #: was checked on each step's two quotes and never on what was
+    #: actually left working. The trader being replicated holds ONE live
+    #: opinion a side and moves it; this is that.
+    #:
+    #: THE RULE, per side, on STRADDLE_LEG orders only (a completion is
+    #: managed by the completion block and is never touched here):
+    #:   * resting ABOVE this step's quote  -> cancel. It is bidding more
+    #:     than we now would, which is the adversely-selected direction,
+    #:     and it is what let a resting pair exceed the ceiling. No
+    #:     tolerance: with this, resting <= quote on both sides, so the
+    #:     resting pair can never cost more than the quoted pair.
+    #:   * resting BELOW it by at least this many ticks -> cancel. It has
+    #:     been left behind.
+    #:   * resting below it by LESS -> keep. QUEUE-AWARE: a one-tick drift
+    #:     is not worth surrendering queue position for.
+    #:   * no quote can be made this step (pair above ceiling, not
+    #:     makeable) -> cancel: nothing justifies the order any more.
+    #:
+    #: NEVER CANCEL AND REPLACE IN ONE STEP. A side with a cancel issued
+    #: gets no new order until a later step has seen the cancel land, so
+    #: the old and the new quote are never both live and a fill that beats
+    #: the cancel is booked before anything is re-bought. One order a side
+    #: at most: a side that already has a kept quote is not quoted again.
+    #:
+    #: Zero -- the default -- disables all of it, byte for byte.
+    straddle_requote_ticks: int = 0
     #: THE COMBINED BOUND, replacing the per-leg 0.50. The two quotes
     #: together may not cost more than this; at or above 1.00 a matched
     #: pair cannot profit before costs, so the ceiling must sit below it
@@ -569,8 +604,14 @@ def _read_resting(resting: Any) -> Optional[List[Dict[str, Any]]]:
             return None
         if not (ZERO < price < ONE) or qty <= 0 or age < 0:
             return None
-        out.append({"id": o["id"], "side": o["side"], "price": price,
-                    "qty": qty, "age_s": age})
+        row = {"id": o["id"], "side": o["side"], "price": price,
+               "qty": qty, "age_s": age}
+        if o.get("reason") is not None:
+            #: optional, and only ever read to tell a straddle leg from a
+            #: completion when requoting. Absent means "unknown", and an
+            #: unknown order is never requoted.
+            row["reason"] = str(o["reason"])
+        out.append(row)
     return out
 
 
@@ -1247,6 +1288,29 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 _reserve["why"] = "COMPLETION_UNFUNDABLE"
         want = []
         ev_rungs = []
+        #: ---------------- REQUOTE, decided before anything is placed.
+        _rq = int(params.straddle_requote_ticks or 0) if _bookrel else 0
+        _rq_cancel = {s: [] for s in SIDES}
+        _rq_kept = {s: False for s in SIDES}
+        if _rq > 0 and _bk_why in (None, "PAIR_ABOVE_CEILING",
+                                   "QUOTE_NOT_MAKEABLE"):
+            for s_ in SIDES:
+                _tgt = None
+                if _bk_why is None:
+                    _tgt = _repriced_rung(_bk[s_], s_, inv, qty, params,
+                                          hi=ONE)
+                for o in rest:
+                    if o["side"] != s_ \
+                            or o.get("reason") != "STRADDLE_LEG":
+                        continue
+                    if (_tgt is None or o["price"] > _tgt
+                            or _tgt - o["price"] >= _rq * tick):
+                        _rq_cancel[s_].append(o)
+                    else:
+                        _rq_kept[s_] = True
+        for s_ in SIDES:
+            for o in _rq_cancel[s_]:
+                want.append({"op": "CANCEL", "id": o["id"]})
         why_s = "STRADDLE_RESTING"
         if _reserve.get("why"):
             why_s = _reserve["why"]
@@ -1300,6 +1364,12 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _order = tuple(sorted(SIDES, key=lambda s: inv[s][0]))
             for i, r in enumerate(_rungs):
                 for side in _order:
+                    if _rq > 0 and (_rq_cancel[side] or _rq_kept[side]):
+                        #: a cancel is in flight, or a quote within
+                        #: tolerance already works this side
+                        if _rq_cancel[side]:
+                            _side_why[side] = "REQUOTE_CANCEL_PENDING"
+                        continue
                     #: REPRICING. Shades the rung by existing imbalance;
                     #: returns the rung unchanged when disabled. In
                     #: book-relative mode the BASE is this side's live
@@ -1794,6 +1864,16 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: while the light side's COMPLETE_BUDGET_EXHAUSTED -- the
         #: refusal that actually stopped the pair completing -- sat only
         #: in `refused`.
+        #: one CANCEL per id: the requote pass and the completion block can
+        #: both decide to withdraw the same leg.
+        _seen_c, _dedup = set(), []
+        for o in want:
+            if o.get("op") == "CANCEL":
+                if o.get("id") in _seen_c:
+                    continue
+                _seen_c.add(o.get("id"))
+            _dedup.append(o)
+        want = _dedup
         if not [o for o in want if o.get("op") == "PLACE"]:
             _light = None
             if inv[UP][0] != inv[DOWN][0]:

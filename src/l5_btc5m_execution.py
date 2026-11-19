@@ -311,6 +311,10 @@ STRADDLE_JOIN_TICKS_CEILING = 3
 #: STRADDLE only: inventory-aware repricing, in ticks per clip of
 #: imbalance. Absent or zero keeps the fixed limit that cannot drift.
 STRADDLE_REPRICE_TICKS_ENV = "L5_BTC5M_STRADDLE_REPRICE_TICKS"
+#: STRADDLE book-relative only; see `Params.straddle_requote_ticks`. Absent,
+#: unreadable, zero or negative keeps requoting OFF. Over-asking is clamped.
+STRADDLE_REQUOTE_TICKS_ENV = "L5_BTC5M_STRADDLE_REQUOTE_TICKS"
+STRADDLE_REQUOTE_TICKS_CEILING = 5
 #: STRADDLE only; see `completion_pair_cost`. Absent means no completion,
 #: which is the mode's historical behaviour.
 COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
@@ -774,6 +778,21 @@ def straddle_reprice_ticks(default: int = 0) -> int:
     if v < 0:
         return default
     return min(v, STRADDLE_REPRICE_TICKS_CEILING)
+
+
+def straddle_requote_ticks(default: int = 0) -> int:
+    """Ticks a resting quote may trail the book before it is withdrawn.
+    Unreadable keeps the default (0, disabled)."""
+    raw = os.environ.get(STRADDLE_REQUOTE_TICKS_ENV)
+    if raw is None:
+        return default
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    if v < 0:
+        return default
+    return min(v, STRADDLE_REQUOTE_TICKS_CEILING)
 
 
 def completion_pair_cost(default: Decimal = D("0")) -> Decimal:
@@ -1627,7 +1646,8 @@ class Btc5mExecutor:
             age = ((now - made).total_seconds()
                    if now is not None and made is not None else 0.0)
             out.append({"id": coid, "side": r["side"], "price": D(r["price"]),
-                        "qty": left, "age_s": max(0.0, age)})
+                        "qty": left, "age_s": max(0.0, age),
+                        "reason": r.get("reason")})
         return out
 
     def _seq(self, market: str) -> int:
@@ -2523,6 +2543,8 @@ class Btc5mExecutor:
                         straddle_reprice_ticks_per_clip=(
                             straddle_reprice_ticks(
                                 self.params.straddle_reprice_ticks_per_clip)),
+                        straddle_requote_ticks=straddle_requote_ticks(
+                            self.params.straddle_requote_ticks),
                         clip_usd=clip_usd(self.params.clip_usd,
                                           STRADDLE_CLIP_MAX_USD),
                         #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because
