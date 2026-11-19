@@ -6,57 +6,50 @@ Running SHA is already `38b243c247d8480892bae025f7fe86cb2656e2ae`
 
 ---
 
-## 0. THE BLOCKER, AND THE FIX THAT IS NOT YET DEPLOYED
+## 0. THE BLOCKER HAS CLEARED, AND THE RELEASE IS DEPLOYED
 
-BTC5m's `account_exposure()` returns
-`unknown("OPEN_ORDER_QUANTITY_UNREADABLE")` whenever a foreign open order
-has an unreadable remaining quantity, and `_submit` then refuses
-`ACCOUNT_STATE_UNKNOWN`. Measured on l5-pmus-live at
-2026-11-19T02:42:55Z:
+Both conditions this envelope was gated on are now satisfied by evidence,
+not by assumption.
+
+**Deployed:** `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf`, deployment
+`ccc80612-89f6-48df-bd09-137cea517239`, SUCCESS at 2026-11-19T03:09:10Z,
+from `release/l5-btc5m-foreign-qty-20261119`. Disarmed:
+`L5_BTC5M_ARM {armed: false, reason: "ENVELOPE:ENVELOPE_EXPIRED"}`,
+`can_submit: false`, `serving_registry: true`.
+
+**Exposure, at 2026-11-19T03:14:28Z:**
 
 ```
-account_exposure {ok: false, reason: "FOREIGN_ORDER_UNREADABLE:DT0VCZR013ZK"}
-foreign_orders   {"DT0VCZR013ZK": {origin: "UNKNOWN",
-                                   market: "aec-nba-mil-mia-2026-11-18",
-                                   remaining: ""}}
+account_exposure {ok: true, account_total_worst_case_usd: "0",
+                  capacity_usd: "3.00", markets_counted: []}
+foreign_orders   {}                      <- DT0VCZR013ZK is gone
+preflight        PASSED                  <- was FAILED
 ```
 
-**The other order did not vanish — it FILLED.** `DT0VA9S013YY` is now a
-5-contract UP position: `venue_net 5.0000`, `gross_net_agrees true`,
-`leg_cost_basis_unknown` naming its UP leg, and `risk_floor_usd` **held
-at 5.0000** — the `c9f9f879` fix doing its job; the old code dropped that
-floor in the same pass that adopted the position.
+The unreadable-quantity blocker cleared on its own: `DT0VCZR013ZK`
+resolved and its market settled for -$0.60. **So the deployed
+foreign-quantity recovery is not what cleared it** -- it is insurance
+against the venue omitting a quantity again mid-window, which on the
+previous SHA would have refused every submission and wasted the window.
 
-**The fix for the unreadable quantity is written and tested but NOT
-DEPLOYED:** release `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf`. It asks
-`/v1/order/{id}` — a GET — for foreign orders only, and only when the
-list omitted the quantity.
+`DT0VA9S013YY` had FILLED earlier (5 contracts UP) and has since settled;
+it is gone from `positions`. The two remaining legs in PMUS's book are
+phantoms -- its own `drift` reports `venue: 0` for both -- and BTC5m's
+reader consults the VENUE, so its foreign exposure is 0.
 
-**UNVERIFIED, AND IT GATES EVERYTHING BELOW:** whether
-`/v1/order/DT0VCZR013ZK` actually carries
-`quantity`/`cumQuantity`/`leavesQuantity` cannot be checked without venue
-credentials, which this session does not hold. If that read also omits
-them, the gate stays UNKNOWN and says `ORDER_READ_NO_QUANTITY`. **Order
-of operations: deploy the release, observe `account_exposure.ok: true`,
-and only then name a window.** A window named before that is a guess.
+**WHAT IS STILL NOT DIRECTLY VERIFIED.** BTC5m's OWN
+`account_exposure()` has never been executed: it runs only inside
+`_submit`, and the lane is disarmed. The judgement above is inferred from
+PMUS's reads of the SAME venue endpoints plus BTC5m's code. Its first
+real execution is at arming, where it fails closed.
 
-The daily halt has rolled clear: `utc_day 2026-11-19`,
-`utc_day_realized_usd 0`, `would_halt false`, `room_usd 50`.
-
-## 1. The window — a rule, because the clock moves
-
-| | |
-|---|---|
-| Slug form | `cpc-btc-updown-5m-YYYY-MM-DD-HHMMz` |
-| Selection | the first 5-minute window whose START is **at least 15 minutes after arming completes** |
-| Worked example | armed by 03:00Z on 2026-11-19 → `cpc-btc-updown-5m-2026-11-19-0315z`, **03:15:00Z → 03:20:00Z** |
-| Count | ONE window. No automatic repeat, no roll to the next. |
-
-The 15 minutes covers deploy, boot, the arming ceremony and a margin. The
-slug must name a window that has **not yet opened** when the variables
-are set; if it has, re-name it explicitly rather than letting the lane
-roll. The lane currently names a stale `2026-11-17-2225z`, which must be
-overwritten.
+**ONE PRE-ARM CHECK I CANNOT MAKE.** `budget_reach` preflights the OPEN
+class only (`open_budget: 90`, `orders_per_window: 2`,
+`windows_payable: 45`, `ok: true`). BTC5m's `L5_LIVE_AUTH_MAX_COMPLETE`
+and `_MAX_REPLACE` are not preflighted and their values are redacted to
+me. This is the 19:30z failure mode exactly -- COMPLETE was 2 while the
+controller needed more, so the risk-REDUCING leg starved. **Confirm
+COMPLETE has at least ~8 tickets of headroom before arming.**
 
 ## 2. Configuration to set (none of it is set now)
 
