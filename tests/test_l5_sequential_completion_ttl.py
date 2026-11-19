@@ -332,8 +332,6 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertIsNone(row["pnl"])
         self.assertEqual(self.replay.summarise(rows)[0]["sequential"], 0)
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 
@@ -369,3 +367,6 @@ class CausalBookRegressionTests(unittest.TestCase):
         self.assertEqual(book["last_update_t"], 100.0)
         self.assertEqual(book["stream_age_s"], 1.5)
         self.assertEqual(book["bid"], "0.48")
+
+if __name__ == "__main__":
+    unittest.main()
