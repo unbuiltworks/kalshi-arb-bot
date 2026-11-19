@@ -197,13 +197,12 @@ def run(path):
           " exits are TAKER sales at the visible bid")
     print("=" * 76)
     policies = [("HOLD", None), ("CUT_NOW", None),
-                ("CUT_STOP", 0.05), ("CUT_STOP", 0.10),
-                ("COMPLETE", 0.96), ("COMPLETE", 0.98), ("COMPLETE", 1.00)]
+                ("COMPLETE", 0.96)]
     print("%6s %-13s %6s %5s %5s %5s %10s %10s %10s"
           % ("dist", "policy", "wins", "pair", "cut", "lone",
              "mean P&L", "pair P&L", "resid P&L"))
     best = None
-    for d in (0.00, 0.01, 0.02, 0.05, 0.08, 0.12, 0.20):
+    for d in (0.00, 0.05, 0.12, 0.20, 0.25, 0.30, 0.35, 0.40):
         for pol, stop in policies:
             n = pair = cut = lone = 0
             tot = pair_tot = resid_tot = 0.0

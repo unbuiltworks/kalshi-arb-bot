@@ -1,0 +1,29 @@
+BTC5m taker-longshot measurement
+Source: 25,432 BTC5M_QUOTE rows / 230 windows from l5-btc5m-public-recorder,
+2026-11-11T21:00Z..2026-11-19T04:35Z. Regenerate per unmatched_exit_value.py.
+
+==============================================================================
+BTC5m TAKER LONGSHOT -- 226 settled windows (4 undecided, discarded)
+buy the cheaper side at its OFFER, pay the taker fee, hold to settlement
+==============================================================================
+    t  maxpx      n   mean/sh        se 95% CI                1st half  2nd half
+   60   0.20     43   -0.0375    0.0499 [-0.1268, +0.0670]   -0.1070   +0.0126 
+   60   0.30    105   +0.0055    0.0404 [-0.0705, +0.0856]   -0.0022   +0.0120 
+   60   0.40    153   +0.0020    0.0354 [-0.0641, +0.0728]   -0.0087   +0.0112 
+
+  120   0.20    113   +0.0226    0.0316 [-0.0366, +0.0878]   +0.0449   +0.0036 <== both halves positive
+  120   0.30    157   +0.0168    0.0297 [-0.0399, +0.0759]   +0.0594   -0.0242 
+  120   0.40    196   +0.0246    0.0285 [-0.0297, +0.0810]   +0.0563   -0.0058 
+
+  180   0.20    148   +0.0251    0.0243 [-0.0204, +0.0756]   +0.0408   +0.0075 <== both halves positive
+  180   0.30    184   +0.0275    0.0247 [-0.0187, +0.0779]   +0.0216   +0.0339 <== both halves positive
+  180   0.40    207   +0.0217    0.0245 [-0.0249, +0.0724]   +0.0224   +0.0210 <== both halves positive
+
+  240   0.20    195   -0.0022    0.0129 [-0.0257, +0.0249]   -0.0253   +0.0216 
+  240   0.30    205   +0.0046    0.0146 [-0.0222, +0.0351]   -0.0129   +0.0232 
+  240   0.40    220   +0.0060    0.0162 [-0.0242, +0.0394]   -0.0052   +0.0177 
+
+==============================================================================
+A cell is only interesting if BOTH halves are positive: the grid
+was searched, so one good cell in isolation is a selection effect.
+Hypothetical executions against a recorded quote tape. NOT fills, NOT realized P&L.
