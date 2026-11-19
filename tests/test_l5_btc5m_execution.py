@@ -1968,6 +1968,13 @@ class TestInventoryLifecycle:
         #: authenticated BTC15m settlements of the same two-sided maker
         #: mechanism (src/l5_measured_entry_rates). It is used as a TEST
         #: INPUT, not as an authorisation for production.
+        #: THE BASIS MUST BE ATTESTED, or all three rates read as None and
+        #: the entry gate declines -- which is the new default and is
+        #: correct. These tests exercise the inventory LIFECYCLE, not the
+        #: basis gate, so they declare their rates conditional-on-fill;
+        #: `test_l5_btc5m_conditional_probability_basis.py` is what pins
+        #: the refusing behaviour.
+        monkeypatch.setenv(X.STRADDLE_P_BASIS_ENV, X.P_BASIS_CONDITIONAL)
         monkeypatch.setenv(X.STRADDLE_P_PAIR_NATURAL_ENV, "0.3716")
         monkeypatch.setenv(X.STRADDLE_P_COMPLETE_ENV, "0.50")
         #: AND A THIRD. The mode needs p_lone_win too. The controller's

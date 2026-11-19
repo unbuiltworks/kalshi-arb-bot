@@ -272,6 +272,11 @@ COMPLETION_EV_GIVEUP_MAX = D("0.10")
 STRADDLE_P_PAIR_NATURAL_ENV = "L5_BTC5M_STRADDLE_P_PAIR_NATURAL"
 STRADDLE_P_COMPLETE_ENV = "L5_BTC5M_STRADDLE_P_COMPLETE"
 STRADDLE_P_LONE_WIN_ENV = "L5_BTC5M_STRADDLE_P_LONE_WIN"
+#: WHAT BASIS THOSE THREE RATES WERE MEASURED ON. The entry-EV gate needs
+#: them CONDITIONAL ON OUR ORDER HAVING FILLED; an unconditional rate is a
+#: different number and using one is the defect below.
+STRADDLE_P_BASIS_ENV = "L5_BTC5M_STRADDLE_P_BASIS"
+P_BASIS_CONDITIONAL = "CONDITIONAL_ON_FILL"
 #: the fee charged against a rung in the gate's arithmetic, and the edge
 #: a rung must clear after it. Both default to zero, which is the
 #: historical value and the conservative direction for the second
@@ -683,6 +688,33 @@ def straddle_fill_model_measured(default: bool = False) -> bool:
     return raw.strip() == FILL_MODEL_TOKEN
 
 
+def straddle_p_basis_attested() -> bool:
+    """Has someone attested these rates are CONDITIONAL ON A FILL?
+
+    THE DEFECT THIS CLOSES, measured 2026-11-19 on two hours of real
+    1-second BRTI across 20 complete BTC5m windows. The gate was fed
+    `p_lone_win = 0.0981` -- a sound UNCONDITIONAL estimate for a leg
+    bought at 0.08, since in a prediction market the price is roughly the
+    probability. But the EV needs the rate CONDITIONAL ON OUR RESTING
+    ORDER HAVING BEEN FILLED, and those differ by exactly the adverse
+    selection: a 0.08 leg is reached BECAUSE its probability collapsed, so
+    all 20 reached legs settled worthless. Fed the unconditional rate the
+    gate returned +0.0785 a share and ADMITTED; fed conditional estimates
+    it returns -0.0643 and REFUSES.
+
+    So the gate was never wrong. Its INPUT was unconditional where
+    conditional is required, and nothing in the configuration said so.
+
+    OFF BY DEFAULT MEANS REFUSE. Absent this attestation the three rates
+    read as None and the entry gate declines, which is the correct state
+    while no conditional estimate exists. 0/20 is NOT installed as a
+    universal probability -- nothing is installed at all; the gate simply
+    stops pricing with a number that does not mean what it is used for.
+    """
+    return (os.environ.get(STRADDLE_P_BASIS_ENV) or "").strip().upper() \
+        == P_BASIS_CONDITIONAL
+
+
 def straddle_probability(env_name: str,
                          default: Optional[Decimal] = None
                          ) -> Optional[Decimal]:
@@ -692,7 +724,13 @@ def straddle_probability(env_name: str,
     REFUSES the gate rather than guessing a rate. A probability outside
     (0, 1] is not a probability, so it refuses too instead of being
     clamped into one -- a clamped rate is a rate nobody measured.
+
+    AND AN UNATTESTED BASIS REFUSES TOO. See
+    `straddle_p_basis_attested`: a rate that is not conditional on a fill
+    cannot price a resting order, however carefully it was measured.
     """
+    if not straddle_p_basis_attested():
+        return default
     raw = _dec(os.environ.get(env_name))
     if raw is None or raw <= ZERO or raw > D("1"):
         return default
