@@ -297,12 +297,29 @@ class TestRepeatedEntries:
         monkeypatch.setenv(X.CLIP_USD_ENV, "0.15")
         assert X.clip_usd() == D("0.15")
 
-    @pytest.mark.parametrize("junk", ["0.01", "0.46", "-0.10", "lots", "",
+    @pytest.mark.parametrize("junk", ["0.46", "-0.10", "lots", "",
                                       "1e9", "nan"])
     def test_an_out_of_range_clip_keeps_the_default(self, monkeypatch, junk):
-        """A typo must never widen the size this strategy trades in."""
+        """A typo must never widen the size this strategy trades in.
+
+        "0.01" LEFT THIS LIST deliberately. The old floor was $0.02 and a
+        cent was therefore "out of range", so this test asserted that a
+        configured $0.01 became $0.10 -- a TENFOLD WIDENING of exactly the
+        thing the docstring says must never widen. The venue's verified
+        minimumTradeQty is 0.01 shares, so a cent buys a legal lot at any
+        price up to 1.00 and there is nothing out of range about it. It is
+        now honoured at its own size, and a clip genuinely too small to buy
+        one lot REFUSES rather than defaulting: see
+        tests/test_l5_btc5m_small_order_accounting.py.
+        """
         monkeypatch.setenv(X.CLIP_USD_ENV, junk)
         assert X.clip_usd() == D("0.10")
+
+    def test_a_one_cent_clip_is_honoured_not_widened(self, monkeypatch):
+        """The case that moved. $0.01 buys one venue lot at any price."""
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.01")
+        assert X.clip_usd() == D("0.01")
+        assert X.clip_usd_refusal() is None
 
     def test_the_clip_env_reaches_the_controller(self, armed, acc, rig45,
                                                  monkeypatch):

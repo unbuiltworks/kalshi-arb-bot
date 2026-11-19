@@ -1,0 +1,44 @@
+bonereaper BTC5m reconciliation -- generated 2026-11-19T17:23:30Z
+Source: analysis/traders/bonereaper/l5_windows_summary.csv (1,560 windows,
+of which exactly 304 are BTC 5m). Regenerate:
+  python3 analysis/traders/bonereaper/reconcile_btc5m.py
+
+==============================================================================
+bonereaper BTC 5m -- 304 windows
+==============================================================================
+MATCHED-PAIR COST
+  windows with a matched pair     296 of 304
+  median unit cost                1.0199      reported 1.020
+  below 1.00                      126/296 = 42.6%   reported 41%
+
+P&L, BY THE TABLE'S OWN COLUMNS
+  pnl_derived_resolution                 n=303  total     -9727.10
+      MISSING in 1 window(s): btc-updown-5m-1788140700
+  pnl_polymarket_positions               n=  1  total        +0.00
+      MISSING in 303 window(s): btc-updown-5m-1774422600, btc-updown-5m-1774422900, btc-updown-5m-1774423200, btc-updown-5m-1774423500
+  realized_trading_pnl_within_window     n=304  total        +0.00
+
+COMPONENTS (matched vs residual), as the table allocates them
+  matched-pair P&L       -8077.66  over 296 windows
+  residual P&L           -1724.07  over 304 windows
+  components total       -9801.74      reported -9959
+  table total            -9727.10      reported -9727
+  GAP (total - components)   +74.64  reported gap +232
+
+ANOMALIES AND RESOLUTION SOURCES
+  anomalies=(none)                       304
+  resolution_source=gamma_outcome_prices  303
+  resolution_source=none                  1
+
+HOW THIS TRADER WAS PAID -- the part a pair-cost table cannot show
+  windows whose first action was TAKER   0 of 304
+  windows with a buy at 90c or above     176 (58%)
+  NOTE: workup.json for this wallet records, across ALL assets,
+  derived_trading_pnl -14562.84 against incentives of
+  TAKER_REBATE 6466.66 + MAKER_REBATE 1087.80 + REWARD 143.83
+  and merge_usdc 39613.33 over 35 merge events. The trading leg
+  LOST money; the account was made whole by incentives and merges.
+  This account is maker Tier 1, where the maker rebate is ZERO and
+  Tier 2 needs $10,000,000 of 30-day maker volume against roughly
+  $38,880 a month (src/pmus_fees.py). That component is therefore
+  not available to us at any size.

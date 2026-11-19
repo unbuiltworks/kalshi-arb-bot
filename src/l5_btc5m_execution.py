@@ -1032,14 +1032,59 @@ STRADDLE_MAX_UNMATCHED_USD_CEILING = STRADDLE_CLIP_MAX_USD
 STRADDLE_REPRICE_TICKS_CEILING = 5
 
 
+#: THE SMALLEST CLIP THAT CAN STILL BUY A VENUE LOT. The venue's verified
+#: `minimumTradeQty` is 0.01 shares (live 2026-11-19), so one lot at the
+#: cheapest tradeable price of 0.01 costs $0.0001. The previous floor here
+#: was $0.02 with the comment "two cents buys at least one share at any
+#: eligible price" -- which was true when a share was the lot, and is 200x
+#: too high now that a hundredth of a share is.
+CLIP_MIN_USD = D("0.0001")
+
+
+def clip_usd_refusal(max_usd: Decimal = CLIP_MAX_USD) -> Optional[str]:
+    """Why a CONFIGURED clip may not be used, or None.
+
+    THE DEFECT THIS CLOSES, measured against this module. `clip_usd` fell
+    back to its $0.10 DEFAULT whenever the configured value sat outside
+    [0.02, max]. Its docstring justified that as "a typo must never widen
+    the size this strategy trades in" -- but a value BELOW the floor is a
+    request to trade SMALLER, and defaulting widened it. Measured: with
+    L5_BTC5M_CLIP_USD=0.0008 the straddle sent 1.25 shares a side at 0.08,
+    $0.10 a leg against $0.0008 asked -- 125 TIMES the configured size, with
+    no refusal and nothing in the report saying the value had been ignored.
+
+    A configured-but-unusable clip now REFUSES. An ABSENT variable still
+    takes the default, because that is a choice not to configure rather than
+    a configuration that cannot be honoured.
+    """
+    raw_s = os.environ.get(CLIP_USD_ENV)
+    if raw_s is None or not str(raw_s).strip():
+        return None
+    raw = _dec(raw_s)
+    if raw is None:
+        return "CLIP_USD_UNREADABLE:%s" % str(raw_s)[:24]
+    if raw <= ZERO:
+        return "CLIP_USD_NOT_POSITIVE:%s" % raw
+    if raw < CLIP_MIN_USD:
+        return "CLIP_USD_BELOW_VENUE_LOT:%s<%s" % (raw, CLIP_MIN_USD)
+    if raw > max_usd:
+        return "CLIP_USD_ABOVE_MODE_CEILING:%s>%s" % (raw, max_usd)
+    return None
+
+
 def clip_usd(default: Decimal = D("0.10"),
              max_usd: Decimal = CLIP_MAX_USD) -> Decimal:
-    """Dollars per entry. An unreadable or out-of-range value keeps the
-    default: a typo must never widen the size this strategy trades in. The
-    floor is $0.02 (two cents buys at least one share at any eligible
-    price); the ceiling is `max_usd`, which is per mode."""
+    """Dollars per entry. An ABSENT variable keeps the default.
+
+    A configured value outside [CLIP_MIN_USD, max_usd] is NOT silently
+    replaced by the default any more -- see `clip_usd_refusal`, which the
+    submit path consults so such a configuration refuses instead of trading
+    at a size nobody asked for. This function still returns the default for
+    one so that every existing caller keeps a Decimal to compute with; the
+    refusal is what stops the order.
+    """
     raw = _dec(os.environ.get(CLIP_USD_ENV))
-    if raw is None or not (D("0.02") <= raw <= max_usd):
+    if raw is None or not (CLIP_MIN_USD <= raw <= max_usd):
         return default
     return raw
 
@@ -2136,6 +2181,16 @@ class Btc5mExecutor:
             _mer = measured_entry_refusal()
             if _mer:
                 return refuse(_mer)
+            #: A CONFIGURED CLIP THAT CANNOT BE HONOURED REFUSES, rather than
+            #: silently reverting to the $0.10 default -- which, for a value
+            #: BELOW the floor, traded 125x the size that was asked for.
+            #: Openings only: a completion or hedge reduces risk and must not
+            #: be blocked by the size of an entry it is not.
+            _cur = clip_usd_refusal(
+                STRADDLE_CLIP_MAX_USD
+                if self.params.entry_mode == C.STRADDLE else CLIP_MAX_USD)
+            if _cur:
+                return refuse(_cur)
         if exp["total_exposure_usd"] + notional > self.params.max_exposure_usd:
             return refuse("BTC5M_EXPOSURE_CAP",
                           exposure_usd=exp["total_exposure_usd"],
