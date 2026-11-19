@@ -36,6 +36,7 @@ COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
 COPY src/l5_late_favorite.py src/l5_late_favorite.py
 COPY src/l5_strategy_arbiter.py src/l5_strategy_arbiter.py
 COPY src/l5_straddle_ev.py src/l5_straddle_ev.py
+COPY src/l5_venue_constraints.py src/l5_venue_constraints.py
 COPY src/l5_measured_entry_rates.py src/l5_measured_entry_rates.py
 COPY src/l5_shared_reservation.py src/l5_shared_reservation.py
 COPY src/l5_live_safety.py src/l5_live_safety.py

@@ -42,6 +42,7 @@ import urllib.request
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from src import l5_venue_constraints as VC
 from src import l5_btc5m_controller as C
 from src import l5_btc5m_execution as X
 from src import l5_persistent_mode as PMODE
@@ -246,10 +247,17 @@ def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
     if not isinstance(m, Mapping) or str(m.get("slug")) != str(market):
         return {"bid": None, "ask": None, "age_s": None,
                 "reason": "BOOK_FOR_ANOTHER_MARKET"}
-    return {"bid": _dec(m.get("bestBidQuote")),
-            "ask": _dec(m.get("bestAskQuote")),
-            "age_s": max(0.0, time.time() - t0),
-            "closed": bool(m.get("closed"))}
+    #: CARRY THE VENUE'S OWN ORDER CONSTRAINTS. They arrive in THIS response
+    #: -- `minimumTradeQty`, `orderPriceMinTickSize`, `feeCoefficient` -- and
+    #: were being discarded, which left `Params.tick` and `Params.min_qty` as
+    #: unverified defaults. No extra request is made: these are three fields
+    #: of a document we already fetched.
+    out = {"bid": _dec(m.get("bestBidQuote")),
+           "ask": _dec(m.get("bestAskQuote")),
+           "age_s": max(0.0, time.time() - t0),
+           "closed": bool(m.get("closed"))}
+    out.update(VC.carry(m))
+    return out
 
 
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,

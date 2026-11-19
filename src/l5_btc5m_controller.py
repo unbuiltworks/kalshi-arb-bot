@@ -71,7 +71,8 @@ ENTRY_MODES = (EDGE_GATED, ACCUMULATE, STRADDLE)
 
 from src import l5_late_favorite as LF          # noqa: E402  (pure, stdlib)
 from src import l5_strategy_arbiter as AR       # noqa: E402  (pure, stdlib)
-from src import l5_straddle_ev as SEV           # noqa: E402  (pure, stdlib)
+from src import l5_straddle_ev as SEV
+from src import l5_venue_constraints as VC     # noqa: E402  (pure, stdlib)
 
 ZERO = D("0")
 ONE = D("1")
@@ -1037,6 +1038,29 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     tick, min_qty = _dec(params.tick), _dec(params.min_qty)
     if tick is None or tick <= 0 or min_qty is None or min_qty <= 0:
         return hold("PARAMS_UNREADABLE", cancel=True)
+    #: THE VENUE'S OWN GRID, when we are required to have verified it.
+    #:
+    #: `params.tick` and `params.min_qty` are DEFAULTS and nothing checked
+    #: them against the venue, while `l5_btc5m_runner.book()` was already
+    #: fetching the market object that carries `orderPriceMinTickSize` and
+    #: `minimumTradeQty` and discarding both. Verified live 2026-11-19: tick
+    #: 0.01, minimumTradeQty 0.01, feeCoefficient 0.095 -- so the defaults
+    #: are currently right, which is why a silent change to either would
+    #: otherwise be invisible.
+    #:
+    #: OFF unless the environment says REQUIRE, so an unset variable leaves
+    #: every existing decision byte-identical. When required, an unverified
+    #: or implausible constraint HOLDS rather than falling back to the
+    #: default, because a default standing in for the venue is the defect.
+    _vspec = None
+    if VC.required():
+        _vspec = VC.from_book(book)
+        if not _vspec["ok"]:
+            return hold(_vspec["reason"], cancel=False)
+        if _vspec["tick"] != tick or _vspec["min_qty"] != min_qty:
+            return hold("VENUE_CONSTRAINTS_DISAGREE:tick=%s/%s,minq=%s/%s"
+                        % (_vspec["tick"], tick,
+                           _vspec["min_qty"], min_qty), cancel=False)
     if params.reserve_mode not in ("FIXED", "COMPLETION", "NONE"):
         return hold("PARAMS_UNREADABLE", cancel=True)
     if params.entry_mode not in ENTRY_MODES:
@@ -2080,6 +2104,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 if not priced(o["price"]) or o["qty"] < min_qty:
                     return _result(HOLD_OR_SKIP, "ORDER_OUT_OF_RANGE", list(cancel_all),
                                    evaluation, exp, fav, p, source)
+                #: AND AGAINST THE VENUE'S OWN GRID, when we were required
+                #: to verify it. The checks above use `params`; this one
+                #: uses what the venue said. It REFUSES the decision rather
+                #: than resizing the order: rounding a sub-minimum quantity
+                #: up to the minimum is how a penny intent becomes a
+                #: ten-penny order, so nothing here rounds at all.
+                if _vspec is not None:
+                    _vbad = VC.check_order(o["price"], o["qty"], _vspec)
+                    if _vbad:
+                        return _result(HOLD_OR_SKIP, "VENUE_%s" % _vbad,
+                                       list(cancel_all), evaluation, exp,
+                                       fav, p, source)
         return _result(action, why, orders, evaluation, exp, fav, p, source)
 
     if hedge["chosen"]:
