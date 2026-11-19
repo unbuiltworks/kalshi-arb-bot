@@ -334,3 +334,38 @@ class CompletionTTLTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class CausalBookRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("sequential_completion_causal", MODULE)
+        cls.replay = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.replay)
+
+    def test_future_book_age_rejected_before_touch_lookup(self):
+        with mock.patch.object(self.replay.QS, "touches") as touches:
+            self.assertIsNone(self.replay.book_for_decide({"t": 100.0}, -0.2))
+            touches.assert_not_called()
+
+    def test_nonfinite_and_missing_timestamps_fail_closed(self):
+        for frame, age in [
+            ({"t": 100.0}, float("nan")),
+            ({"t": 100.0}, float("inf")),
+            ({"t": float("inf")}, 0.1),
+            ({"t": float("nan")}, 0.1),
+            ({}, 0.1),
+            ({"t": "invalid"}, 0.1),
+        ]:
+            with self.subTest(frame=frame, age=age):
+                self.assertIsNone(self.replay.book_for_decide(frame, age))
+
+    def test_valid_causal_book_preserves_age_and_timestamp(self):
+        with mock.patch.object(self.replay.QS, "touches",
+                               return_value=(D("0.48"), D("0.51"))):
+            book = self.replay.book_for_decide({"t": 100.0}, 1.5)
+        self.assertEqual(book["observed_t"], 100.0)
+        self.assertEqual(book["last_update_t"], 100.0)
+        self.assertEqual(book["stream_age_s"], 1.5)
+        self.assertEqual(book["bid"], "0.48")
