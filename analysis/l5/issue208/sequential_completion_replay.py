@@ -121,14 +121,25 @@ def book_for_decide(frame: Mapping[str, Any],
     `stream_age_s` is the real gap to the previous frame, so a stale book is
     stale here too rather than being presented as fresh.
     """
+    # A future-dated or non-finite book is not a causal observation.
+    # Never normalize negative age to zero: that would turn look-ahead
+    # into a seemingly fresh quote in controller-mode research.
+    import math
+    try:
+        observed_t = float(frame["t"])
+        age = float(age_s)
+    except (TypeError, ValueError, KeyError, OverflowError):
+        return None
+    if not (math.isfinite(observed_t) and math.isfinite(age)) or age < 0:
+        return None
     tt = QS.touches(frame)
     if tt is None:
         return None
     bid, ask = tt
     return {"bid": str(bid), "ask": str(ask), "spread": str(ask - bid),
-            "stream_age_s": age_s, "age_s": age_s,
-            "observed_t": float(frame["t"]),
-            "last_update_t": float(frame["t"])}
+            "stream_age_s": age, "age_s": age,
+            "observed_t": observed_t,
+            "last_update_t": observed_t}
 
 
 def taker_fee(price: Any, qty: Any = D(1)) -> D:
