@@ -43,35 +43,60 @@ reader consults the VENUE, so its foreign exposure is 0.
 PMUS's reads of the SAME venue endpoints plus BTC5m's code. Its first
 real execution is at arming, where it fails closed.
 
-**ONE PRE-ARM CHECK I CANNOT MAKE.** `budget_reach` preflights the OPEN
-class only (`open_budget: 90`, `orders_per_window: 2`,
-`windows_payable: 45`, `ok: true`). BTC5m's `L5_LIVE_AUTH_MAX_COMPLETE`
-and `_MAX_REPLACE` are not preflighted and their values are redacted to
-me. This is the 19:30z failure mode exactly -- COMPLETE was 2 while the
-controller needed more, so the risk-REDUCING leg starved. **Confirm
-COMPLETE has at least ~8 tickets of headroom before arming.**
+**THE COMPLETE/REPLACE BUDGETS ARE NOW MEASURED, not assumed.** The
+lane's own read-only reporter, from `L5_BTC5M_START`:
+
+```
+submission_budget {COMPLETE: {binds: true, max: 90, remaining: 90, spent: 0},
+                   OPEN:     {binds: true, max: 90, remaining: 90, spent: 0},
+                   REPLACE:  {binds: true, max: 90, remaining: 90, spent: 0},
+                   readable: true}
+```
+
+90 tickets a class, against the ~8 this window could need -- so the
+19:30z failure mode (COMPLETE sized at 2 while the controller needed
+more, starving the risk-REDUCING leg) is not present here. Two caveats:
+the reading is from 2026-11-17T21:45Z, and `spent` is counted PER
+EXPERIMENT, so a new experiment id starts from 0 while reusing the old
+one carries its spend forward. `max` comes from the environment and does
+not drift on its own.
 
 ## 1. The window
 
 | | |
 |---|---|
-| Market slug | `cpc-btc-updown-5m-2026-11-19-0335z` |
-| Window | 2026-11-19 **03:35:00Z → 03:40:00Z** |
+| Market slug | `cpc-btc-updown-5m-2026-11-19-0350z` |
+| Window | 2026-11-19 **03:50:00Z → 03:55:00Z** |
 | Deployed SHA | `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf` (deployment `ccc80612`) |
 | Count | ONE window. No automatic repeat, no roll to the next. |
 
-Computed from 03:16:25Z plus 15 minutes for approval, the variable set,
-the redeploy those variables trigger, boot and the arming ceremony,
-rounded up to the next 5-minute boundary.
+Computed from 03:23:53Z plus **25** minutes -- widened from 15 after the
+03:35z proposal expired before it could be acted on.
 
 **If 03:35:00Z has already opened when the variables are set, use the next
 unopened window and name it explicitly** — do not let the lane roll:
 
 | fallback | slug | window |
 |---|---|---|
-| 1 | `cpc-btc-updown-5m-2026-11-19-0340z` | 03:40:00Z → 03:45:00Z |
-| 2 | `cpc-btc-updown-5m-2026-11-19-0345z` | 03:45:00Z → 03:50:00Z |
-| 3 | `cpc-btc-updown-5m-2026-11-19-0350z` | 03:50:00Z → 03:55:00Z |
+| 1 | `cpc-btc-updown-5m-2026-11-19-0355z` | 03:55:00Z → 04:00:00Z |
+| 2 | `cpc-btc-updown-5m-2026-11-19-0400z` | 04:00:00Z → 04:05:00Z |
+| 3 | `cpc-btc-updown-5m-2026-11-19-0405z` | 04:05:00Z → 04:10:00Z |
+
+**A FIXED TIME KEEPS EXPIRING, so prefer this:** authorize the SET
+`{03:50:00Z, 03:55:00Z, 04:00:00Z}` in the campaign approval and set
+`L5_BTC5M_NOT_AFTER` to `2026-11-19T04:05:00Z` so the grant self-expires.
+`L5_BTC5M_MARKET` still names ONE slug and `max_windows` is 1, so exactly
+one window trades whichever one is live when arming completes. The
+trade-off, stated: the approval document then permits three starts rather
+than one, bounded on the far end by NOT_AFTER.
+
+**TWO THINGS SETTING `L5_BTC5M_MARKET` ALONE CANNOT DO.** The campaign
+approval carries an explicit SET of authorized window starts -- arming
+refuses `WINDOW_NOT_IN_AUTHORIZED_SET`, and did exactly that on 11-17 at
+2140z and 2145z -- and the risk envelope is currently EXPIRED
+(`L5_BTC5M_ARM {armed: false, reason: "ENVELOPE:ENVELOPE_EXPIRED"}`). Both
+must be refreshed for the chosen window, and neither is a variable I have
+set or would set.
 
 The lane currently names a stale `cpc-btc-updown-5m-2026-11-17-2225z`
 (confirmed in `L5_BTC5M_PLAN` at 03:09:33Z), which must be overwritten.
