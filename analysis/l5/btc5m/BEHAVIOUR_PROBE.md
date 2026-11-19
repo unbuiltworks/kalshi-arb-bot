@@ -1,7 +1,7 @@
 # Behaviour probe — one BTC5m window, entry EV stated unproven (issue #247)
 
-**Status 2026-11-19: BUILT, NOT DEPLOYED, NOT ARMED, NEVER USED.** Code at
-`7182a43a1e308b7d53bf250a6bc53fa8548fef85`. Production runs `3f50258`, which
+**Status 2026-11-19: BUILT, NOT DEPLOYED, NOT ARMED, NEVER USED.** First built at
+`7182a43`; superseded by the release-review commit (see that section). Production runs `3f50258`, which
 contains none of this. Zero venue-confirmed BTC5m fills. This document
 authorizes nothing.
 
@@ -88,7 +88,7 @@ document, which is reported only as set or not set.
 
 ## What remains before any use — each a separate owner approval
 
-1. **Deploy** `7182a43` to `l5-btc5m-live`, disarmed. Read the boot log and
+1. **Deploy** the release-review commit to `l5-btc5m-live`, disarmed. Read the boot log and
    confirm every row above.
 2. Run `l5_btc5m_campaign_preflight`; require READY.
 3. **Arm:** the existing campaign approval for the window, the arm token,
@@ -100,12 +100,47 @@ Rollback: Railway rollback of `l5-btc5m-live` to deployment
 `ccc80612-89f6-48df-bd09-137cea517239` (`3f50258`). Removing the document
 variable disables the probe on any SHA without a redeploy.
 
+## Release review, 2026-11-19 — what a deploy of this branch actually ships
+
+Production `l5-btc5m-live` runs `3f50258`, a cherry-pick line. Compared file
+by file against everything the live image copies, moving to this branch
+ships **thirteen commits**, not the four that built this mode:
+
+| commit | change | effect on the BTC5m lane | verdict |
+|---|---|---|---|
+| `d90c4e9`, `d7c7ff3`, `d55abe4` | manual-order ownership boundary; registry disclaims adopted rows | already live on `l5-pmus-live`. BTC5m ledger rows never carry `adopted`, so every BTC5m order is still claimed for the watchdog; the registry gains one key the watchdog already reads from the other lane. The `l5_live_execution` changes are not on any BTC5m code path | no interaction |
+| `eed1011` | EV rates read as unset unless the basis is attested conditional-on-fill | adds a refusal only | safe; **exposed a gap in the probe, fixed below** |
+| `9c9a2a4` | 6¢ adverse-selection charge on the lone leg in the EV gate | adds a refusal only; one caller, updated | safe |
+| `4d14ef2` | a maker completion whose ceiling crosses the offer rests one tick under it | completion path only, lowers the price paid; the probe forbids completion | safe |
+| `1aa266a` | venue tick / minimum-quantity verification, off unless `REQUIRE` | adds holds; **its holds cancel nothing, which exposed a gap in the age limit, fixed below** | safe after fix |
+| `ddd486d` | clip floor 0.02 → 0.0001; an out-of-range clip refuses at submit instead of silently using the default | fail-closed | safe |
+| `7ecadb6`, `f1d7ada`, `cab8e12`, `7182a43`, this commit | light-side-first, requote, window-loss gate, behaviour probe, review fixes | all default off | this session |
+
+Nothing in the deployed build is lost: the only deployed lines absent here
+are ones later commits rewrote. No commit changes a limit, the arming chain,
+the reservation, or reconciliation.
+
+**Two gaps found by this review and closed in this commit:**
+
+1. *Age limit bypassed in a non-cancelling hold.* When the venue grid cannot
+   be verified the lane holds and deliberately cancels nothing. A leg could
+   rest through that hold past its age limit, toward the watchdog's 300s.
+   The age limit now applies in every state, including those holds, and no
+   longer depends on the requote setting.
+2. *A leftover rate variable.* After `eed1011`, a rate set without the basis
+   attestation reads as unset — so a number left in the environment from an
+   earlier campaign passed the probe's "no rate is set" check. The probe now
+   refuses if any of the three rate variables is set at all.
+
+**Consequence: `7182a43` is superseded.** The release SHA is the commit that
+contains this section.
+
 ## What has and has not been shown
 
-Shown, against a venue double: 78 tests in `tests/test_l5_behaviour_probe.py`
+Shown, against a venue double: 85 tests in `tests/test_l5_behaviour_probe.py`
 and 82 in `tests/test_l5_btc5m_bonereaper_mode.py`; under the probe an
 adversary that fills the dear side and reverses the market is held to the
-$0.45 ceiling; sixteen deliberate breakages of the probe's checks each fail
+$0.45 ceiling; nineteen deliberate breakages of the probe's checks each fail
 at least one test.
 
 Not shown: anything on PMUS. The loss bound assumes the ledger's fills are

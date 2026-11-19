@@ -528,3 +528,71 @@ def test_the_boot_report_says_whether_a_document_is_set_never_its_contents():
     assert re.search(r'"behaviour_probe_document_set": bool\(\s*'
                      r'\(os\.environ\.get\(PROBE\.DOC_ENV\) or ""\)'
                      r'\.strip\(\)\)', block)
+
+
+# ============ 9. FOUND REVIEWING THE RELEASE: TWO WAYS ROUND, BOTH CLOSED
+
+def test_the_rate_variable_names_match_the_executors():
+    assert P.RATE_ENVS == RATES
+
+
+@pytest.mark.parametrize("env", RATES)
+def test_a_leftover_rate_the_gate_ignores_still_makes_the_probe_refuse(
+        rig, armed, approved, monkeypatch, env):
+    """Since the conditional-basis attestation, a rate set WITHOUT it reads
+    as None -- so the effective params say 'no rate' while a number from an
+    earlier campaign still sits in the environment. The probe must not run
+    beside it."""
+    monkeypatch.delenv(X.STRADDLE_P_BASIS_ENV, raising=False)
+    monkeypatch.setenv(env, "0.76")
+    assert getattr(rig.ex.effective_params(), {
+        RATES[0]: "straddle_p_pair_natural", RATES[1]: "straddle_p_complete",
+        RATES[2]: "straddle_p_lone_win"}[env]) is None
+    rep = rig.go(t=2.0, bid="0.50", ask="0.52")
+    assert rig.venue.sent == []
+    assert rep["behaviour_probe"]["reason"] == \
+        "PROBE_REFUSES_WHILE_AN_EV_RATE_IS_SET"
+
+
+def test_the_age_limit_holds_while_the_venue_grid_cannot_be_verified(
+        rig, armed, approved):
+    """The venue-constraint hold deliberately cancels nothing. A leg must
+    still be withdrawn at its age limit while the lane sits in that hold."""
+    rig.go(t=2.0, bid="0.50", ask="0.52")
+    first = set(rig.working())
+    assert len(first) == 2
+    bare = {"bid": "0.50", "ask": "0.52", "age_s": 0.1}     # no venue grid
+    why = None
+    for t in range(7, 262, 5):
+        rep = rig.tick(5).ex.step(market=MARKET, book=bare,
+                                  t_in_window_s=float(t), p_up="0.50",
+                                  p_source="TEST")
+        why = rep["why"]
+        if (rig.now - T0).total_seconds() < 235:
+            assert set(rig.working()) == first, t
+    assert why == "VENUE_CONSTRAINTS_UNVERIFIED"
+    assert set(cancelled(rig)) == first, cancelled(rig)
+    assert rig.working() == []
+    assert len(rig.venue.sent) == 2, "it re-quoted on an unverified grid"
+
+
+def test_the_age_limit_does_not_need_the_requote_setting(rig, armed, gated,
+                                                         monkeypatch):
+    monkeypatch.setenv(X.STRADDLE_REQUOTE_TICKS_ENV, "0")
+    monkeypatch.setenv(X.STRADDLE_LEG_MAX_AGE_S_ENV, "60")
+    rig.go(t=2.0, bid="0.50", ask="0.52")
+    first = set(rig.working())
+    for t in range(7, 80, 5):
+        rig.tick(5).go(t=float(t), bid="0.50", ask="0.52")
+    assert first <= set(cancelled(rig))
+
+
+def test_with_no_age_limit_the_venue_hold_still_cancels_nothing(rig, armed,
+                                                                gated):
+    """Default unchanged: the hold's deliberate no-cancel is preserved."""
+    rig.go(t=2.0, bid="0.50", ask="0.52")
+    bare = {"bid": "0.50", "ask": "0.52", "age_s": 0.1}
+    for t in range(7, 262, 5):
+        rig.tick(5).ex.step(market=MARKET, book=bare, t_in_window_s=float(t),
+                            p_up="0.50", p_source="TEST")
+    assert cancelled(rig) == [] and len(rig.working()) == 2

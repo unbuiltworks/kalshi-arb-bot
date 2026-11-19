@@ -359,8 +359,8 @@ class Params:
     #: changes nothing.
     straddle_max_window_loss_usd: Decimal = D("0")
     #: WITHDRAW A LEG THAT HAS RESTED THIS LONG, by exact id, and quote
-    #: afresh on a later step. Part of the requote pass, so it needs
-    #: `straddle_requote_ticks` on. It exists because the independent
+    #: afresh on a later step. Independent of the requote setting and of
+    #: every hold, so no state can keep a leg past it. It exists because the independent
     #: watchdog latches the ACCOUNT-WIDE halt on any order older than
     #: 300s: a quote that sat unmoved on a quiet book from the open would
     #: be about 298s old when the window's end cancels it -- inside the
@@ -665,6 +665,31 @@ def _read_resting(resting: Any) -> Optional[List[Dict[str, Any]]]:
             #: unknown order is never requoted.
             row["reason"] = str(o["reason"])
         out.append(row)
+    return out
+
+
+def _aged_leg_cancels(resting: Any, params: "Params") -> List[Dict[str, Any]]:
+    """A CANCEL for every STRADDLE_LEG at or past `straddle_leg_max_age_s`.
+
+    Read from the RAW resting list, before it is validated, so it works on
+    the early holds. An order whose age or reason cannot be read is left to
+    the paths that handle unreadable orders; this never guesses.
+    """
+    try:
+        limit = float(params.straddle_leg_max_age_s or 0)
+    except (TypeError, ValueError):
+        return []
+    if not (limit > 0) or not isinstance(resting, (list, tuple)):
+        return []
+    out, seen = [], set()
+    for o in resting:
+        if not isinstance(o, dict) or o.get("id") is None \
+                or o.get("reason") != "STRADDLE_LEG" or o["id"] in seen:
+            continue
+        age = _num(o.get("age_s"))
+        if age is not None and age >= limit:
+            seen.add(o["id"])
+            out.append({"op": "CANCEL", "id": o["id"]})
     return out
 
 
@@ -1187,8 +1212,16 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
     exp = exposure(inventory, resting)
     cancel_all = _cancel_all(resting)
 
+    #: THE LEG AGE LIMIT HOLDS THROUGH A NON-CANCELLING HOLD. Two holds
+    #: below deliberately leave orders resting (the venue's grid could not
+    #: be verified this step). Left at that, a leg could sit through such a
+    #: hold past the age the limit exists to enforce. Empty unless
+    #: `straddle_leg_max_age_s` is set, so nothing changes by default.
+    _aged = _aged_leg_cancels(resting, params)
+
     def hold(why, *, cancel=False, evaluation=None):
-        return _result(HOLD_OR_SKIP, why, list(cancel_all) if cancel else [],
+        return _result(HOLD_OR_SKIP, why,
+                       list(cancel_all) if cancel else list(_aged),
                        evaluation or {}, exp)
 
     tick, min_qty = _dec(params.tick), _dec(params.min_qty)
@@ -1411,22 +1444,28 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _max_age = 0.0
         _rq_cancel = {s: [] for s in SIDES}
         _rq_kept = {s: False for s in SIDES}
-        if _rq > 0 and _bk_why in (None, "PAIR_ABOVE_CEILING",
-                                   "QUOTE_NOT_MAKEABLE"):
+        #: the price rule needs a requote setting and a state in which a
+        #: target exists or is known not to; the AGE rule needs neither and
+        #: applies in every state, so no hold can keep a leg past its limit.
+        _rq_live = _rq > 0 and _bk_why in (None, "PAIR_ABOVE_CEILING",
+                                            "QUOTE_NOT_MAKEABLE")
+        if _rq_live or _max_age > 0:
             for s_ in SIDES:
                 _tgt = None
-                if _bk_why is None:
+                if _rq_live and _bk_why is None:
                     _tgt = _repriced_rung(_bk[s_], s_, inv, qty, params,
                                           hi=ONE)
                 for o in rest:
                     if o["side"] != s_ \
                             or o.get("reason") != "STRADDLE_LEG":
                         continue
-                    if (_tgt is None or o["price"] > _tgt
-                            or _tgt - o["price"] >= _rq * tick
-                            or (_max_age > 0 and o["age_s"] >= _max_age)):
+                    _old = _max_age > 0 and o["age_s"] >= _max_age
+                    _moved = _rq_live and (
+                        _tgt is None or o["price"] > _tgt
+                        or _tgt - o["price"] >= _rq * tick)
+                    if _old or _moved:
                         _rq_cancel[s_].append(o)
-                    else:
+                    elif _rq_live:
                         _rq_kept[s_] = True
         for s_ in SIDES:
             for o in _rq_cancel[s_]:
@@ -1485,7 +1524,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _order = tuple(sorted(SIDES, key=lambda s: inv[s][0]))
             for i, r in enumerate(_rungs):
                 for side in _order:
-                    if _rq > 0 and (_rq_cancel[side] or _rq_kept[side]):
+                    if _rq_cancel[side] or _rq_kept[side]:
                         #: a cancel is in flight, or a quote within
                         #: tolerance already works this side
                         if _rq_cancel[side]:

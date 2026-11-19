@@ -71,6 +71,13 @@ MAX_DOC_AGE_S = 6 * 3600
 #: the ~2s a leg resting from the open to the close would have.
 MAX_LEG_AGE_S = 240.0
 
+#: the entry-EV gate's three rate variables, by NAME. Spelled here because
+#: this module may not import the executor; a test holds them equal to
+#: `l5_btc5m_execution`'s. See `evaluate`.
+RATE_ENVS = ("L5_BTC5M_STRADDLE_P_PAIR_NATURAL",
+             "L5_BTC5M_STRADDLE_P_COMPLETE",
+             "L5_BTC5M_STRADDLE_P_LONE_WIN")
+
 SERIES_PREFIX = "cpc-btc-updown-5m-"
 _SLUG = re.compile(r"^cpc-btc-updown-5m-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})z$")
 
@@ -257,6 +264,18 @@ def evaluate(*, market: Any, now: dt.datetime, params: Any,
             return doc
         if not doc.get("ok"):
             return doc
+        #: A RATE VARIABLE THAT IS SET AT ALL REFUSES, even one the gate is
+        #: ignoring. Since the conditional-basis attestation was added, a
+        #: rate without it reads as None in the effective params -- so a
+        #: leftover number from an earlier campaign would pass the check in
+        #: `preconditions` while still sitting in the environment. "No
+        #: invented rates" is then a statement about the configuration the
+        #: owner can see, not only about what the gate happened to read.
+        _env = os.environ if env is None else env
+        _set = [k for k in RATE_ENVS if (_env.get(k) or "").strip()]
+        if _set:
+            return _no("PROBE_REFUSES_WHILE_AN_EV_RATE_IS_SET",
+                       market=doc["market"], variables=_set)
         why = preconditions(params, doc)
         if why is not None:
             return _no(why, market=doc["market"])
