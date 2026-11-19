@@ -295,6 +295,19 @@ class CompletionTTLTests(unittest.TestCase):
         self.assertIsNone(summary[0]["complete_pnl"])
 
 
+    def test_causal_fill_frame_rejects_invalid_indices_and_clock_reversal(self):
+        valid = self.replay.causal_fill_frame
+        frames = [{"t": 100.0}, {"t": 106.0}, {"t": 112.0}]
+        self.assertTrue(valid(frames, 0, 0))
+        self.assertTrue(valid(frames, 0, 2))
+        for index in (None, -1, 3, True, "1", 1.0):
+            with self.subTest(index=index):
+                self.assertFalse(valid(frames, 0, index))
+        self.assertFalse(valid(frames, 1, 0))
+        self.assertFalse(valid([{"t": 100.0}, {"t": 99.0}], 0, 1))
+        self.assertFalse(valid([{"t": 100.0}, {"t": float("nan")}], 0, 1))
+        self.assertFalse(valid([{"t": 100.0}, {}], 0, 1))
+
     def test_complement_timestamp_must_be_recorded_and_within_ttl(self):
         frames = [{"t": 100.0}, {"t": 159.0}, {"t": 161.0}]
         valid = self.replay.complement_fill_time_valid
