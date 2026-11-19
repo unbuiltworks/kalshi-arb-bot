@@ -6,48 +6,57 @@ Running SHA is already `38b243c247d8480892bae025f7fe86cb2656e2ae`
 
 ---
 
-## 0. A HARD BLOCKER COMES FIRST
-
-**The probe cannot submit anything today, whatever is approved.**
+## 0. THE BLOCKER, AND THE FIX THAT IS NOT YET DEPLOYED
 
 BTC5m's `account_exposure()` returns
-`unknown("OPEN_ORDER_QUANTITY_UNREADABLE")` the moment any foreign open
-order has an unreadable remaining quantity, and `_submit` then refuses
-`ACCOUNT_STATE_UNKNOWN`. The owner's two hand-placed sports orders are in
-that state right now — `l5-pmus-live` reports it directly:
+`unknown("OPEN_ORDER_QUANTITY_UNREADABLE")` whenever a foreign open order
+has an unreadable remaining quantity, and `_submit` then refuses
+`ACCOUNT_STATE_UNKNOWN`. Measured on l5-pmus-live at
+2026-11-19T02:42:55Z:
 
 ```
-account_exposure: {ok: false, reason: "FOREIGN_ORDER_UNREADABLE:DT0VA9S013YY"}
-foreign_orders:   DT0VA9S013YY, DT0VCZR013ZK   (aec-nba-mil-mia-2026-11-18,
-                                                remaining: "")
+account_exposure {ok: false, reason: "FOREIGN_ORDER_UNREADABLE:DT0VCZR013ZK"}
+foreign_orders   {"DT0VCZR013ZK": {origin: "UNKNOWN",
+                                   market: "aec-nba-mil-mia-2026-11-18",
+                                   remaining: ""}}
 ```
 
-Both lanes read the same venue open-orders endpoint, so BTC5m hits the
-same row. This is fail-closed and correct — an unknown account refuses
-every submission — but it is a precondition, not a detail.
+**The other order did not vanish — it FILLED.** `DT0VA9S013YY` is now a
+5-contract UP position: `venue_net 5.0000`, `gross_net_agrees true`,
+`leg_cost_basis_unknown` naming its UP leg, and `risk_floor_usd` **held
+at 5.0000** — the `c9f9f879` fix doing its job; the old code dropped that
+floor in the same pass that adopted the position.
 
-**It clears when those two orders stop being unreadable**: the owner
-cancels them, they fill, they expire, or the venue starts reporting their
-`remaining`. Nothing in this envelope touches them, and I have not.
+**The fix for the unreadable quantity is written and tested but NOT
+DEPLOYED:** release `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf`. It asks
+`/v1/order/{id}` — a GET — for foreign orders only, and only when the
+list omitted the quantity.
 
-The same cause blocks sports expansion, which the owner already gated on
-"shared account and RFQ liabilities correctly bounded". **One fact blocks
-both.** Clearing it is the single highest-value action available.
+**UNVERIFIED, AND IT GATES EVERYTHING BELOW:** whether
+`/v1/order/DT0VCZR013ZK` actually carries
+`quantity`/`cumQuantity`/`leavesQuantity` cannot be checked without venue
+credentials, which this session does not hold. If that read also omits
+them, the gate stays UNKNOWN and says `ORDER_READ_NO_QUANTITY`. **Order
+of operations: deploy the release, observe `account_exposure.ok: true`,
+and only then name a window.** A window named before that is a guess.
 
----
+The daily halt has rolled clear: `utc_day 2026-11-19`,
+`utc_day_realized_usd 0`, `would_halt false`, `room_usd 50`.
 
-## 1. The window
+## 1. The window — a rule, because the clock moves
 
 | | |
 |---|---|
-| Market | `cpc-btc-updown-5m-2026-11-19-0130z` |
-| Window | 2026-11-19 **01:30:00Z → 01:35:00Z** |
+| Slug form | `cpc-btc-updown-5m-YYYY-MM-DD-HHMMz` |
+| Selection | the first 5-minute window whose START is **at least 15 minutes after arming completes** |
+| Worked example | armed by 03:00Z on 2026-11-19 → `cpc-btc-updown-5m-2026-11-19-0315z`, **03:15:00Z → 03:20:00Z** |
 | Count | ONE window. No automatic repeat, no roll to the next. |
 
-The slug must name a window that has **not yet opened** when the
-variables are set. If 0130z has passed by then, re-name it explicitly to
-the next `…-19-HHMMz` — do not let the lane roll. The lane currently
-names a stale `2026-11-17-2225z`, which must be overwritten.
+The 15 minutes covers deploy, boot, the arming ceremony and a margin. The
+slug must name a window that has **not yet opened** when the variables
+are set; if it has, re-name it explicitly rather than letting the lane
+roll. The lane currently names a stale `2026-11-17-2225z`, which must be
+overwritten.
 
 ## 2. Configuration to set (none of it is set now)
 
@@ -194,17 +203,31 @@ profit.
 
 ## 11. The approval required, precisely
 
-One approval covering exactly:
+Two approvals, in order. They are separate on purpose.
 
-> Set `L5_BTC5M_MARKET`, `L5_BTC5M_CLIP_USD=0.08`,
+**(a) The safety release, disarmed:**
+
+> Deploy `3f50258699b3b4ea5c32d546fcf6ff55c4e2f9bf` to `l5-btc5m-live`,
+> strictly disarmed, changing no variable, no limit, no capital and no
+> trading authorization.
+
+**(b) The window, only after (a) shows `account_exposure.ok: true`:**
+
+> Set `L5_BTC5M_MARKET` (per §1), `L5_BTC5M_CLIP_USD=0.08`,
 > `L5_BTC5M_COMPLETION_PAIR_COST=0.96`,
-> `L5_BTC5M_RANKER_VACUOUS_HOLD=FALLBACK` on `l5-btc5m-live` at SHA
-> `38b243c247d8480892bae025f7fe86cb2656e2ae`, then arm for the single
-> window named in §1 and no other, with every limit in §3 unchanged and
-> taker execution disabled.
+> `L5_BTC5M_RANKER_VACUOUS_HOLD=FALLBACK` on `l5-btc5m-live` at that SHA,
+> and arm for that single window and no other, with every limit in §3
+> unchanged and taker execution disabled.
 
-It does **not** cover: a second window, a capital increase, taker
+**Automatic disarming at window end** is already the deployed behaviour,
+not something this envelope adds: the campaign envelope expires, the
+persistent state latches to MONITOR, `can_submit` returns false, and the
+lane stays resident serving its registry. A refreshed envelope alone
+cannot re-arm it — re-arming requires the startup ceremony.
+
+Neither approval covers: a second window, a capital increase, taker
 execution, relaxing any gate, resetting a halt, or re-arming after the
 window ends.
 
-**And it cannot take effect until §0 clears.**
+**(b) cannot take effect until §0 clears — which the release is intended
+to achieve but has not yet demonstrated in production.**
