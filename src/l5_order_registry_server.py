@@ -103,16 +103,49 @@ def registry(store: Any, risk: Any = None) -> Dict[str, Any]:
                 "labels": ("the ledger could not be read, so ownership is "
                            "UNKNOWN; an empty list here would read as 'we "
                            "own nothing', which is a different claim")}
+    not_ours: List[Dict[str, Any]] = []
     for coid, row in sorted(live.items()):
         vid = str((row or {}).get("venue_order_id") or "").strip()
         if not vid:
             continue                 # nothing to name, nothing to publish
+        #: PROVENANCE IS HONOURED HERE TOO, because THIS is the claim the
+        #: watchdog cancels on.
+        #:
+        #: `reconcile_from_venue` writes the venue's open orders into
+        #: `live_orders`, adopted ones included, and this loop published
+        #: every row with an id as OURS. The ownership boundary added to
+        #: `owns_venue_order_id` and `deadman` closed the lane's OWN
+        #: cancel path and left this one open: an adopted order -- the
+        #: owner's hand-placed one among them -- was still announced to
+        #: the watchdog as ours to cancel.
+        #:
+        #: The watchdog additionally requires the venue's row to report
+        #: AUTOMATIC, so a MANUAL order survived that second check. This
+        #: is therefore defence in depth rather than the only guard --
+        #: but a claim here is what makes an order cancellable at all,
+        #: and an in-series FOREIGN order the venue calls AUTOMATIC had
+        #: nothing else standing between it and a cancel.
+        #:
+        #: Adopted rows are still REPORTED, under a name that invites no
+        #: action, so nothing becomes invisible: exposure accounting
+        #: reads positions, never this.
+        if row.get("adopted"):
+            not_ours.append({"venue_order_id": vid,
+                             "market": str(row.get("market") or ""),
+                             "side": str(row.get("side") or ""),
+                             "adopted_first_seen_utc": str(
+                                 row.get("adopted_first_seen_utc") or "")})
+            continue
         rows.append({"venue_order_id": vid,
                      "market": str(row.get("market") or ""),
                      "side": str(row.get("side") or ""),
                      "session_id": str(row.get("session_id") or ""),
                      "t": str(row.get("t") or "")})
     return {"readable": True, "orders": rows,
+            #: ADOPTED ROWS, NAMED SO NOTHING IS HIDDEN AND NOTHING IS
+            #: INVITED. Present even when empty, so an absent list means
+            #: "this build does not separate them", not "there are none".
+            "adopted_not_ours": not_ours,
             # THE LOCK, PUBLISHED. Read by the owner-gated HALT reset, which
             # refuses unless this is true: a clear must never run while this
             # executor could send a new order.

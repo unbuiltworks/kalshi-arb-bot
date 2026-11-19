@@ -417,10 +417,19 @@ def test_a_broken_registry_server_alarms_and_never_stops_the_executor():
     from src import l5_pmus_live_runner as RUN
     src = inspect.getsource(RUN.Runner.__init__)
     i = src.index("l5_order_registry_server")
-    tail = src[i:i + 1400]
+    #: WIDENED from 1400. The window was arbitrary and a second alarm was
+    #: added between the import and the `except`: a REQUESTED port that
+    #: produced no listener. `serve_from_env` swallows its own exceptions
+    #: and returns None, so a failed bind used to emit nothing at all --
+    #: which is why l5-pmus-live read UNREACHABLE with no log saying why.
+    #: The assertions are about PRESENCE, not position.
+    tail = src[i:i + 2600]
     assert "except Exception" in tail
     assert "order_registry_unavailable" in tail
     assert "cannot cancel" in tail
+    #: both failure modes are now loud, and an UNSET port stays silent
+    assert "order_registry_not_listening" in tail
+    assert "if _want:" in tail
 
 
 def test_the_image_carries_the_registry_key_and_no_venue_route():

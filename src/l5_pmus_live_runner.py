@@ -1414,6 +1414,24 @@ class Runner:
             from src import l5_order_registry_server as REG
             self.registry_server = REG.serve_from_env(
                 self.store, risk=self.account_risk_line)
+            if self.registry_server is None:
+                #: A PORT WAS ASKED FOR AND NO LISTENER EXISTS. `serve_from_env`
+                #: swallows its own exceptions and returns None, and the
+                #: `except` below only catches an IMPORT failure -- so a bind
+                #: that failed emitted NOTHING AT ALL. The watchdog then read
+                #: UNREACHABLE and no log on this side said why.
+                #:
+                #: An unset port is the documented off switch and stays
+                #: silent; a port that is set and did not bind is an alarm.
+                _want = str(os.getenv(REG.PORT_ENV) or "").strip()
+                if _want:
+                    emit("L5_LIVE_ALARM", {
+                        "kind": "order_registry_not_listening",
+                        "port_requested": _want,
+                        "labels": ("L5_ORDER_REGISTRY_PORT is set but no "
+                                   "listener was created, so the watchdog "
+                                   "cannot establish ownership and cannot "
+                                   "cancel. It can still latch the halt.")})
             if self.registry_server is not None:
                 emit("L5_LIVE_ORDER_REGISTRY", {
                     "serving": "/" + REG.REGISTRY_KEY,
