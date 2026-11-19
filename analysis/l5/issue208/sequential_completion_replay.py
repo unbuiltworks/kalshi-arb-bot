@@ -219,6 +219,22 @@ def complement_fill_time_valid(frames: Sequence[Mapping[str, Any]],
     return True
 
 
+def causal_fill_frame(frames: Sequence[Mapping[str, Any]],
+                      entry_index: int, fill_index: Any) -> bool:
+    """Require a real, ordered observation before scoring a modeled fill."""
+    import math
+    if type(entry_index) is not int or type(fill_index) is not int:
+        return False
+    if not (0 <= entry_index <= fill_index < len(frames)):
+        return False
+    try:
+        start = float(frames[entry_index]["t"])
+        finish = float(frames[fill_index]["t"])
+    except (KeyError, TypeError, ValueError, OverflowError, IndexError):
+        return False
+    return math.isfinite(start) and math.isfinite(finish) and finish >= start
+
+
 def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                complete_depth: int, scenario: Tuple[str, str, D],
                qty: D = D(1), completion_ttl_s: Optional[float] = None,
@@ -270,7 +286,8 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 if uf and df:
                     # A later second fill depends on the original order's
                     # lifecycle. Book-only data cannot prove it stayed live.
-                    if (up.get("fill_index") is None or dn.get("fill_index") is None
+                    if (not causal_fill_frame(frames, i, up.get("fill_index"))
+                            or not causal_fill_frame(frames, i, dn.get("fill_index"))
                             or up.get("fill_index") != dn.get("fill_index")):
                         rows.append(dict(base, state="INDETERMINATE_ENTRY_LIFECYCLE",
                                          up_fill_frame=up.get("fill_index"),
@@ -300,7 +317,7 @@ def sequential(sources: Sequence[Tuple[str, str]], *, entry_depth: int,
                 want = DOWN if uf else UP
                 leg = up if uf else dn
                 j = leg.get("fill_index")
-                if j is None:
+                if not causal_fill_frame(frames, i, j):
                     # A queue verdict without a fill timestamp cannot anchor
                     # completion TTL or settlement. Do not score a residual.
                     rows.append(dict(base, state="INDETERMINATE_FIRST_FILL_TIME",
