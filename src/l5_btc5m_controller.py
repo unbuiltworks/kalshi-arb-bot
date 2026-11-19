@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as _dc_replace
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
@@ -358,6 +358,31 @@ class Params:
     #: It can only ADD a refusal. Zero -- the default -- disables it and
     #: changes nothing.
     straddle_max_window_loss_usd: Decimal = D("0")
+    #: WITHDRAW A LEG THAT HAS RESTED THIS LONG, by exact id, and quote
+    #: afresh on a later step. Part of the requote pass, so it needs
+    #: `straddle_requote_ticks` on. It exists because the independent
+    #: watchdog latches the ACCOUNT-WIDE halt on any order older than
+    #: 300s: a quote that sat unmoved on a quiet book from the open would
+    #: be about 298s old when the window's end cancels it -- inside the
+    #: limit by two seconds, and outside it on one slow step. Zero -- the
+    #: default -- disables it.
+    straddle_leg_max_age_s: float = 0.0
+    #: ==================================================================
+    #: THE BEHAVIOUR-PROBE WAIVER. INERT UNLESS IT HOLDS THE EXACT TOKEN.
+    #:
+    #: Set ONLY by `Btc5mExecutor.step`, per step, when
+    #: `l5_behaviour_probe.evaluate` has validated the owner's
+    #: one-window document for the market being stepped. It has no env
+    #: reader of its own and no default but None.
+    #:
+    #: WHAT IT DOES. A leg the entry-EV gate refused SOLELY because a rate
+    #: is not set (`*_NOT_SET`) is admitted, on the window loss ceiling
+    #: instead of on expected value. It cannot turn a NEGATIVE EV into an
+    #: admission, cannot admit anything while a rate is set, and is
+    #: re-checked HERE against the loss ceiling, book-relative mode and the
+    #: requote being in force -- so a waiver that arrived without them, by
+    #: whatever route, admits nothing.
+    straddle_ev_waiver: Optional[str] = None
     #: THE COMBINED BOUND, replacing the per-leg 0.50. The two quotes
     #: together may not cost more than this; at or above 1.00 a matched
     #: pair cannot profit before costs, so the ceiling must sit below it
@@ -742,6 +767,42 @@ def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
     if heavy_q <= 0:
         return ZERO
     return (heavy_c / heavy_q) * unmatched
+
+
+#: the one value of `Params.straddle_ev_waiver` that means anything. Spelled
+#: here and in `l5_behaviour_probe.CLASS`; a test holds them equal.
+EV_WAIVER_TOKEN = "BEHAVIOUR_PROBE_EV_UNPROVEN"
+
+
+def with_ev_waiver(params: "Params") -> "Params":
+    """A copy of `params` carrying the behaviour-probe token. The ONLY way
+    the token is ever attached, and it is called from exactly one place:
+    `Btc5mExecutor.step`, after the injected probe function said yes."""
+    return _dc_replace(params, straddle_ev_waiver=EV_WAIVER_TOKEN)
+
+
+def _ev_waived(params: "Params", verdict: Dict[str, Any], bookrel: bool,
+               requote: int, loss_cap: Decimal) -> bool:
+    """May a leg the EV gate refused be admitted under the behaviour probe?
+
+    ONLY when the refusal is "no rate has been set" and nothing else. Every
+    structural condition is re-checked here rather than trusted from the
+    caller: the exact token, book-relative quoting, the requote, and above
+    all a window loss ceiling in force.
+    """
+    if params.straddle_ev_waiver != EV_WAIVER_TOKEN:
+        return False
+    if not str(verdict.get("reason") or "").endswith("_NOT_SET"):
+        #: EV_NOT_POSITIVE, EV_BELOW_FLOOR, unreadable inputs: the gate was
+        #: able to answer, or something is broken. Neither is waived.
+        return False
+    if not (bookrel and requote > 0 and loss_cap > ZERO):
+        return False
+    if (params.straddle_p_pair_natural is not None
+            or params.straddle_p_complete is not None
+            or params.straddle_p_lone_win is not None):
+        return False
+    return True
 
 
 def worst_case_loss_usd(inv: Dict[str, tuple],
@@ -1344,6 +1405,10 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         ev_rungs = []
         #: ---------------- REQUOTE, decided before anything is placed.
         _rq = int(params.straddle_requote_ticks or 0) if _bookrel else 0
+        try:
+            _max_age = float(params.straddle_leg_max_age_s or 0)
+        except (TypeError, ValueError):
+            _max_age = 0.0
         _rq_cancel = {s: [] for s in SIDES}
         _rq_kept = {s: False for s in SIDES}
         if _rq > 0 and _bk_why in (None, "PAIR_ABOVE_CEILING",
@@ -1358,7 +1423,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                             or o.get("reason") != "STRADDLE_LEG":
                         continue
                     if (_tgt is None or o["price"] > _tgt
-                            or _tgt - o["price"] >= _rq * tick):
+                            or _tgt - o["price"] >= _rq * tick
+                            or (_max_age > 0 and o["age_s"] >= _max_age)):
                         _rq_cancel[s_].append(o)
                     else:
                         _rq_kept[s_] = True
@@ -1580,7 +1646,15 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                                          else str(_ev["ev_per_share"])),
                                      "admitted": bool(_ok["ok"]),
                                      "reason": _ok.get("reason")})
-                    if not _ok["ok"]:
+                    if not _ok["ok"] and _ev_waived(params, _ok, _bookrel,
+                                                    _rq, _wl_cap):
+                        #: admitted on the loss ceiling, which has
+                        #: ALREADY refused this leg above if it did not
+                        #: fit. Said out loud in the evaluation.
+                        ev_rungs[-1].update(
+                            admitted=True, reason=EV_WAIVER_TOKEN,
+                            gate_said=_ok.get("reason"))
+                    elif not _ok["ok"]:
                         why_s = "ENTRY_EV_%s" % _ok["reason"]
                         continue
                     room -= r_side * qty

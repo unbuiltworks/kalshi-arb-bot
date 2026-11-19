@@ -320,6 +320,11 @@ STRADDLE_REQUOTE_TICKS_CEILING = 5
 #: unreadable, zero or negative keeps it OFF. Over-asking is clamped to the
 #: ceiling below (set where the other straddle ceilings are defined).
 STRADDLE_MAX_WINDOW_LOSS_USD_ENV = "L5_BTC5M_STRADDLE_MAX_WINDOW_LOSS_USD"
+#: STRADDLE only; see `Params.straddle_leg_max_age_s`. Seconds a leg may
+#: rest before the requote pass withdraws it. Absent, unreadable or not
+#: positive keeps it OFF; over-asking is clamped below the watchdog's 300s.
+STRADDLE_LEG_MAX_AGE_S_ENV = "L5_BTC5M_STRADDLE_LEG_MAX_AGE_S"
+STRADDLE_LEG_MAX_AGE_S_CEILING = 280.0
 #: STRADDLE only; see `completion_pair_cost`. Absent means no completion,
 #: which is the mode's historical behaviour.
 COMPLETION_PAIR_COST_ENV = "L5_BTC5M_COMPLETION_PAIR_COST"
@@ -792,6 +797,19 @@ def straddle_max_window_loss_usd(default: Decimal = D("0")) -> Decimal:
     if raw is None or not raw.is_finite() or raw <= 0:
         return default
     return min(raw, STRADDLE_MAX_WINDOW_LOSS_USD_CEILING)
+
+
+def straddle_leg_max_age_s(default: float = 0.0) -> float:
+    raw = os.environ.get(STRADDLE_LEG_MAX_AGE_S_ENV)
+    if raw is None:
+        return default
+    try:
+        v = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    if not (v == v) or v <= 0 or v == float("inf"):
+        return default
+    return min(v, STRADDLE_LEG_MAX_AGE_S_CEILING)
 
 
 def straddle_requote_ticks(default: int = 0) -> int:
@@ -1323,7 +1341,17 @@ class Btc5mExecutor:
     def __init__(self, transport: Any, ledger_path: str,
                  params: Optional[C.Params] = None,
                  now_fn: Optional[Callable[[], Any]] = None,
-                 max_live_orders: int = 2) -> None:
+                 max_live_orders: int = 2,
+                 ev_waiver_fn: Optional[Callable[..., Any]] = None) -> None:
+        #: THE BEHAVIOUR-PROBE HOOK, and why it is injected rather than
+        #: imported. This module may import only the stdlib and five named
+        #: modules -- a guard its own test suite enforces -- and an
+        #: exception to the economic gate is the last thing that should be
+        #: reachable from every construction of the executor. So the
+        #: executor knows nothing about probes: whoever builds it may hand
+        #: it a function, the service entrypoint does, and with None --
+        #: the default -- the hook does not exist.
+        self._ev_waiver_fn = ev_waiver_fn
         self.transport = transport
         self.ledger_path = str(ledger_path)
         self.params = params if params is not None else C.Params()
@@ -2565,6 +2593,8 @@ class Btc5mExecutor:
                         straddle_max_window_loss_usd=(
                             straddle_max_window_loss_usd(
                                 self.params.straddle_max_window_loss_usd)),
+                        straddle_leg_max_age_s=straddle_leg_max_age_s(
+                            self.params.straddle_leg_max_age_s),
                         clip_usd=clip_usd(self.params.clip_usd,
                                           STRADDLE_CLIP_MAX_USD),
                         #: THE LATE-FAVORITE RIDES IN THIS BRANCH, because
@@ -2754,11 +2784,30 @@ class Btc5mExecutor:
         report["fills"].extend(self.poll()["fills"])
         # 2. the pure decision, on the ledger's inventory and resting orders
         try:
+            _params = self.effective_params(exposure_ceiling_usd)
+            #: THE BEHAVIOUR PROBE. With no document in the environment
+            #: this is one dict lookup and changes nothing -- not even the
+            #: report. With one, the verdict is ALWAYS reported, and the
+            #: waiver is attached only when the document is valid for THIS
+            #: market at THIS instant and the effective configuration meets
+            #: every precondition. It arms nothing: `_place` and the whole
+            #: arming chain below are untouched.
+            if self._ev_waiver_fn is not None:
+                _probe = self._ev_waiver_fn(market=market, now=now,
+                                            params=_params)
+                if isinstance(_probe, Mapping) and _probe.get("present"):
+                    report["behaviour_probe"] = {
+                        k: _probe.get(k) for k in (
+                            "present", "ok", "reason", "class", "market",
+                            "max_window_loss_usd", "expires_utc")
+                        if k in _probe}
+                    if _probe.get("ok") is True:
+                        _params = C.with_ev_waiver(_params)
             decision = C.decide(
                 book=book, t_in_window_s=t_in_window_s,
                 inventory=self.inventory(market),
                 resting=self._resting(market, now),
-                params=self.effective_params(exposure_ceiling_usd),
+                params=_params,
                 p_up=p_up, p_source=p_source,
                 #: BOTH OF THESE WERE DROPPED HERE, and the late
                 #: favourite cannot clear its own gates without them.

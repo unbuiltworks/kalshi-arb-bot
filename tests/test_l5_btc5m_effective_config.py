@@ -50,7 +50,10 @@ def test_the_line_is_emitted_before_the_arming_ceremony():
 def test_it_cannot_stop_the_lane_from_starting_or_refusing():
     s = _src()
     i = s.index('emit("L5_BTC5M_EFFECTIVE_CONFIG"')
-    block = s[i:i + 3000]
+    #: up to the arming emit, NOT a fixed 3000 characters: the report grew
+    #: (requote, loss ceiling, probe fields) past that arbitrary window while
+    #: the guard it looks for was still there. The property is unchanged.
+    block = s[i:s.index('emit("L5_BTC5M_ARM"', i)]
     assert "except BaseException" in block
     assert '{"error": type(_exc).__name__}' in block
 

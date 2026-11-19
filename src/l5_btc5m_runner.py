@@ -44,6 +44,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_venue_constraints as VC
 from src import l5_btc5m_controller as C
+from src import l5_behaviour_probe as PROBE
 from src import l5_btc5m_execution as X
 from src import l5_persistent_mode as PMODE
 from src import l5_shared_reservation as RESV
@@ -1904,8 +1905,12 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     # The executor's live-order bound follows the entry rule: 2 as before,
     # and in ACCUMULATE whatever `L5_BTC5M_MAX_RESTING_ENTRIES` allows, so
     # the controller's plan is not silently clipped by a smaller bound.
+    #: `ev_waiver_fn` is the behaviour probe's ONLY entry into the executor.
+    #: It is a read: with no `L5_BTC5M_BEHAVIOUR_PROBE` document set it
+    #: returns "not present" and nothing about a step changes.
     ex = X.Btc5mExecutor(None, ledger,
-                         max_live_orders=X.live_order_bound())
+                         max_live_orders=X.live_order_bound(),
+                         ev_waiver_fn=PROBE.evaluate)
     port = (os.getenv(FILLS_PORT_ENV) or "").strip()
     if port:
         serve_fills(ex, int(port))
@@ -2063,6 +2068,12 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             "straddle_reprice_ticks_per_clip":
                 int(_ep.straddle_reprice_ticks_per_clip or 0),
             "straddle_requote_ticks": int(_ep.straddle_requote_ticks or 0),
+            "straddle_leg_max_age_s": float(_ep.straddle_leg_max_age_s or 0),
+            #: whether a behaviour-probe document is SET, never what it
+            #: says. Whether it is valid is judged per step, against the
+            #: market being stepped, and reported in that step's report.
+            "behaviour_probe_document_set": bool(
+                (os.environ.get(PROBE.DOC_ENV) or "").strip()),
             "straddle_max_window_loss_usd":
                 str(_ep.straddle_max_window_loss_usd),
             "straddle_completion_pair_cost":

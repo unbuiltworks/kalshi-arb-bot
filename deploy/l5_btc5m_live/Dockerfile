@@ -30,6 +30,7 @@ ENV PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/__init__.py src/__init__.py
 COPY src/l5_btc5m_controller.py src/l5_btc5m_controller.py
+COPY src/l5_behaviour_probe.py src/l5_behaviour_probe.py
 # the controller's two candidate generators. Pure, stdlib-only, and
 # imported by it, so the image must carry them or the runner dies on
 # import -- which is what test_the_image_ships_the_whole_closure pins.
