@@ -1490,6 +1490,31 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         ceiling=cprice, params=params, tick=tick,
                         room=room, t=t)
                 c_ask = ask if cside == UP else ONE - bid
+                #: A CEILING IS NOT A RESTING PRICE.
+                #:
+                #: `cprice` is `pair_target - our_average_cost` and reads
+                #: NOTHING from the book. When the completion side's own
+                #: offer sits below it, resting at the ceiling is an order
+                #: THROUGH the offer, which `post_only` rejects outright --
+                #: so the completion never rests, never fills, and the
+                #: residual it exists to convert stays residual.
+                #:
+                #: MEASURED on the production defaults: holding UP at 0.30
+                #: with DOWN's own ask at 0.40 and a 0.96 target, it posted
+                #: DOWN at 0.66. That order cannot rest. Worse, the pair it
+                #: was reaching for was available to a MAKER at DOWN's own
+                #: bid of 0.38 -- a pair cost of 0.68 against the 0.96 it
+                #: asked for, so 28 cents a share of locked pair economics
+                #: was left on the table by a price that could not fill.
+                #:
+                #: Capping one tick inside the offer fixes both at once: the
+                #: order rests, and it pays STRICTLY LESS than the ceiling,
+                #: so the achieved pair cost can only improve. It is not a
+                #: taker route: it never reaches the offer.
+                c_cap_px = None
+                _cap = _floor_to(c_ask - tick, tick)
+                if cprice >= c_ask and _cap > ZERO and _cap < cprice:
+                    c_cap_px = _cap
                 cx = _completion_cross(
                     ceiling=cprice, ask=c_ask, held_avg=cavg,
                     pair_target=_cpc, params=params, tick=tick)
@@ -1512,6 +1537,14 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     same shares. Both prices count.
                     """
                     if abs(px - cprice) <= tick:
+                        return True
+                    #: the MAKER-CAPPED price is a third price this order
+                    #: can legitimately rest at. Omitting it would make the
+                    #: controller fail to recognise its OWN working
+                    #: completion, cancelling and re-placing it every step
+                    #: and losing its queue place each time -- the same
+                    #: failure this closure was widened to prevent.
+                    if c_cap_px is not None and abs(px - c_cap_px) <= tick:
                         return True
                     lim = cx.get("limit_dec")
                     return lim is not None and abs(px - lim) <= tick
@@ -1636,6 +1669,15 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                             c_px, c_only = cx["limit_dec"], False
                         elif cx["cross"] and not _wants_taker:
                             comp["cross_why"] = "RANKED_MAKER_COMPLETE"
+                        if c_only and c_cap_px is not None:
+                            #: maker path only. A crossing taker limit is
+                            #: already bounded by the ceiling and was
+                            #: separately authorized; this touches neither.
+                            comp["maker_capped_from"] = str(c_px)
+                            comp["maker_cap_why"] = "CEILING_CROSSED_THE_OFFER"
+                            c_px = c_cap_px
+                            comp["price"] = str(c_px)
+                            comp["pair_cost"] = str(cavg + c_px)
                         #: ROOM IS CHARGED AT THE CEILING EITHER WAY. A
                         #: crossing limit is bounded by the ceiling by
                         #: construction, so the ceiling remains a valid

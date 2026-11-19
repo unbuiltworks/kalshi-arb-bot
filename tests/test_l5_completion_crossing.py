@@ -119,7 +119,14 @@ class TestDefaultIsByteForByteTheOldBehaviour:
         o = completion(decide())
         assert o is not None, "the patient completion must still be placed"
         assert o["post_only"] is True
-        assert o["price"] == D("0.88")      # 0.96 - 0.08
+        #: 0.88 was the ceiling, and DOWN's own offer here is 1 - 0.15 =
+        #: 0.85, so the ceiling was THROUGH the book -- which is this
+        #: file's own point 1 ("an offer already cheaper than the ceiling
+        #: was never lifted"). The maker path now caps one tick inside the
+        #: offer, which captures that saving WITHOUT taker authorization.
+        #: The taker route below is unchanged and still separately gated.
+        assert o["price"] == D("0.84")      # 0.85 - 1 tick, rests
+        assert o["price"] <= D("0.96") - D("0.08")   # still under the ceiling
         assert o["side"] == C.DOWN
 
     def test_the_reason_string_is_unchanged(self):

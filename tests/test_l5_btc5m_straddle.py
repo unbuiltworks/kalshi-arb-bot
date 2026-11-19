@@ -565,10 +565,22 @@ class TestPatientCompletionOfALoneLeg:
         assert len(comp) == 1
         o = comp[0]
         assert o["side"] == C.DOWN          # the side we do NOT hold
-        assert o["price"] == D("0.88")      # 0.96 - 0.08 paid
+        #: 0.96 - 0.08 = 0.88 was the BUDGET CEILING. DOWN's own offer in
+        #: this fixture is 1 - 0.60 = 0.40, so the ceiling was through the
+        #: book and the controller paid 0.88 for a side available at 0.39.
+        #: The completion is now capped one tick inside the offer, so the
+        #: pair costs 0.47 instead of 0.96 -- 49 cents a share. The CEILING
+        #: still bounds it; it is no longer mistaken for a price.
+        assert o["price"] == D("0.39")
+        assert o["price"] <= D("0.96") - D("0.08")      # still under budget
+        assert o["price"] < D("1") - D("0.60")          # and it rests
         assert o["post_only"] is True
         ev = (out.get("evaluation") or {}).get("completion") or {}
-        assert ev["pair_cost"] == "0.96"
+        #: the reported pair cost is now what we would ACTUALLY pay, not the
+        #: budget we were willing to pay. 0.08 held + 0.39 capped = 0.47.
+        assert ev["pair_cost"] == "0.47"
+        assert ev["maker_capped_from"] == "0.88"
+        assert ev["maker_cap_why"] == "CEILING_CROSSED_THE_OFFER"
 
     def test_the_cheap_rung_is_not_cancelled_which_is_the_whole_point(self):
         """Forfeiting the cheap pair measured WORSE than doing nothing."""
@@ -701,7 +713,9 @@ class TestCompletionCancelsTheCheapOppositeRung:
         placed = [o for o in ops if o["op"] == "PLACE"]
         cancels = [o for o in ops if o["op"] == "CANCEL"]
         # the completion goes on, at 0.96 - 0.08
-        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.88"))]
+        #: price now capped inside DOWN's own offer (1 - 0.60 = 0.40); the
+        #: point of this test is the CANCEL, which is unchanged.
+        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.39"))]
         assert placed[0]["reason"] == "STRADDLE_COMPLETION"
         # and the cheap DOWN rung is withdrawn by EXACT id in the same
         # decision, so the window cannot buy DOWN twice
@@ -711,12 +725,16 @@ class TestCompletionCancelsTheCheapOppositeRung:
         assert comp["cancelled_cheap_rungs"] == ["v-cheap-down"]
 
     def test_a_rung_queued_in_the_same_decision_is_withdrawn(self):
+        #: the completion's price is capped inside the offer now; this test
+        #: is about the WITHDRAWAL of the same-step rung, not the price.
         """The straddle loop runs BEFORE the completion, so with nothing
         resting the same decision would otherwise place the cheap DOWN rung
         AND the 0.88 completion -- the 1925z defect built in one step."""
         out = self._out([])
         placed = [o for o in out["orders"] if o["op"] == "PLACE"]
-        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.88"))]
+        #: price now capped inside DOWN's own offer (1 - 0.60 = 0.40); the
+        #: point of this test is the CANCEL, which is unchanged.
+        assert [(o["side"], o["price"]) for o in placed] == [(C.DOWN, D("0.39"))]
         comp = out["evaluation"]["completion"]
         assert comp["cancelled_cheap_rungs"] == []
         assert comp["withdrew_pending_rungs"] == ["0.08"]
