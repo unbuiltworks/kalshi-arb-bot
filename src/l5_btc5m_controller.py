@@ -1377,7 +1377,27 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         #: campaign exists to measure.
                         p_lone_win=(r_side if _bookrel
                                     else params.straddle_p_lone_win),
-                        fee_per_share=params.straddle_fee_per_share)
+                        fee_per_share=params.straddle_fee_per_share,
+                        #: THE COST THIS GATE WAS MISSING. This module's own
+                        #: header states a passive maker buy at x is worth
+                        #: `p_s - x - adverse_selection_per_share`, and
+                        #: `ev_at` charges exactly that on the EDGE_GATED
+                        #: path. The straddle path did not, and with the
+                        #: venue's maker fee at 0 and `p_lone_win` pinned to
+                        #: the price in book-relative mode -- which makes the
+                        #: lone leg a FAIR BET, worth exactly zero -- EV
+                        #: collapsed to `p_pair_natural * (1 - pair_cost)`.
+                        #: That is positive for any p_pair_natural above
+                        #: zero: MEASURED on a 0.52/0.46 quote, 0.001
+                        #: admitted two legs.
+                        #:
+                        #: But a resting buy is filled PRECISELY when the
+                        #: price moves against it, so an unmatched leg is not
+                        #: a fair bet, and the unmatched leg is the owner's
+                        #: whole stated failure mode. Charged on the lone
+                        #: branch only: a filled pair is locked and cannot be
+                        #: adversely selected.
+                        adverse_per_share=params.adverse_selection_per_share)
                     _ok = SEV.admits(
                         _ev,
                         min_ev_per_share=params.straddle_min_ev_per_share)

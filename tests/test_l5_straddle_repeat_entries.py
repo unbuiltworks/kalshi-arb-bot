@@ -338,13 +338,15 @@ class TestTheEVGateIsNotBypassed:
                             p_pair_natural=D("0.070"),
                             p_complete=D("0.131"),
                             p_lone_win=D("0.0981"),
-                            fee_per_share=D("0"))
+                            fee_per_share=D("0"),
+                            adverse_per_share=D("0"))
         sym = C.SEV.entry_ev(price=D("0.07"), other_price=D("0.07"),
                              pair_target=D("0.90"),
                              p_pair_natural=D("0.070"),
                              p_complete=D("0.131"),
                              p_lone_win=D("0.0981"),
-                             fee_per_share=D("0"))
+                             fee_per_share=D("0"),
+                             adverse_per_share=D("0"))
         assert ev["ev_per_share"] < sym["ev_per_share"]
 
 

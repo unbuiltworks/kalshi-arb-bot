@@ -156,7 +156,7 @@ def test_the_measured_conditional_inputs_make_the_gate_refuse():
         got = SEV.entry_ev(price=D("0.08"), other_price=D("0.08"),
                            pair_target=D("0.96"), p_pair_natural=D(ppn),
                            p_complete=D("0.131"), p_lone_win=D(plw),
-                           fee_per_share=D("0"))
+                           fee_per_share=D("0"), adverse_per_share=D("0"))
         return D(str(got.get("ev_per_share") if isinstance(got, dict)
                      else got))
 

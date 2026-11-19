@@ -20,7 +20,12 @@ PN, PC, PW = D("0.070"), D("0.131"), D("0.0981")
 def ev(**kw):
     base = dict(price=D("0.08"), other_price=D("0.08"),
                 pair_target=D("0.83"), p_pair_natural=PN,
-                p_complete=PC, p_lone_win=PW, fee_per_share=D("0"))
+                p_complete=PC, p_lone_win=PW, fee_per_share=D("0"),
+                #: REQUIRED since the lone leg is charged adverse selection.
+                #: Zero here keeps every pre-existing assertion about the
+                #: OTHER inputs exactly as it was; the charge itself has its
+                #: own tests in test_l5_straddle_adverse_selection.py.
+                adverse_per_share=D("0"))
     base.update(kw)
     return S.entry_ev(**base)
 

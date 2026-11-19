@@ -48,7 +48,17 @@ def params(**kw):
                 max_exposure_usd=D("3.00"),
                 straddle_p_pair_natural=D("0.070"),
                 straddle_p_complete=D("0.131"),
-                straddle_p_lone_win=D("0.0981"))
+                straddle_p_lone_win=D("0.0981"),
+                #: AND THE ADVERSE-SELECTION CHARGE IS NEUTRALISED, for the
+                #: same reason the rates are fixed: these are mechanics
+                #: tests. At the default 0.06 the DEAREST ladder rungs stop
+                #: clearing the gate -- correctly, since a 0.10 rung has a
+                #: smaller pair payoff and a larger lone-leg cost than a
+                #: 0.05 one -- and five ladder-structure tests then measured
+                #: the gate instead of the ladder. The charge's own
+                #: behaviour, including that truncation, is pinned in
+                #: tests/test_l5_straddle_adverse_selection.py.
+                adverse_selection_per_share=D("0"))
     base.update(kw)
     return C.Params(**base)
 
@@ -251,6 +261,19 @@ class TestTheLadder:
 
     LADDER = (D("0.05"), D("0.06"), D("0.07"), D("0.08"), D("0.09"),
               D("0.10"))
+
+    def test_the_charge_truncates_the_ladder_from_the_dear_end(self):
+        """NOT HIDDEN BY THE FIXTURE ABOVE. With the adverse-selection
+        charge at its production default the dearest rungs stop clearing
+        the entry-EV gate, and they go in order: a 0.10 rung pays less on a
+        pair and costs more when left alone than a 0.05 rung does."""
+        out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"),
+                     adverse_selection_per_share=D("0.06"))
+        kept = sorted({o["price"] for o in out["orders"]})
+        assert kept, "the cheap end still clears"
+        assert kept == sorted(self.LADDER)[:len(kept)], \
+            "whatever survives must be the CHEAPEST rungs, contiguously"
+        assert D("0.10") not in kept, "the dearest rung is the first to go"
 
     def test_one_order_per_rung_per_side(self):
         out = decide(straddle_rungs=self.LADDER, clip_usd=D("0.45"))

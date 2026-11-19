@@ -31,7 +31,31 @@ to test for.
 
 FEES ARE CHARGED ON EVERY SHARE, win or lose, so they sit outside the
 bracket. Rebates are NOT included: an uncredited rebate is not income,
-and this module is given a net fee or nothing.
+and this module is given a net fee or nothing. On this venue the maker fee
+is 0 and the maker rebate is Tier 1, which is ZERO -- Tier 2 needs
+$10,000,000 of 30-day maker volume against this account's ~$38,880/month
+(`pmus_fees`). So for a maker-only strategy the fee term is genuinely zero,
+and it is NOT the cost that decides these quotes.
+
+ADVERSE SELECTION IS, AND IT IS CHARGED ON THE LONE LEG.
+
+`l5_btc5m_controller`'s own header states the value of a passive maker buy
+at x: `p_s - x - adverse_selection_per_share`, from a measured ~6 cents a
+share on a proxy. Its EDGE_GATED path charges that. The straddle path did
+not, and with the maker fee at 0 the consequence was that EV reduced to
+`p_pair_natural * (1 - pair_cost)`, which is positive for ANY p_pair_natural
+above zero. MEASURED on a 0.52/0.46 quote: p_pair_natural = 0.001 -- one
+tenth of one percent -- still admitted two legs. A gate that admits on any
+epsilon is arithmetic, not a decision.
+
+WHY THE LONE BRANCH AND ONLY THE LONE BRANCH. A natural pair is locked once
+both legs fill: it pays 1 - (both costs) whatever the index then does, so
+nothing can adversely select it. A completion is bought deliberately at a
+known pair cost. The leg that ends up ALONE is the one we were filled on
+because the price moved against us, and that is the whole of the owner's
+stated failure mode -- "profitable completed pairs are overwhelmed by losses
+on unmatched inventory". Charging it anywhere else would either double-count
+or miss it.
 """
 from __future__ import annotations
 
@@ -57,12 +81,18 @@ def _dec(x: Any) -> Optional[Decimal]:
 
 def entry_ev(*, price: Any, other_price: Any, pair_target: Any,
              p_pair_natural: Any, p_complete: Any, p_lone_win: Any,
-             fee_per_share: Any) -> Dict[str, Any]:
+             fee_per_share: Any, adverse_per_share: Any) -> Dict[str, Any]:
     """Expected net dollars per share of a cheap rung, or why unknown.
 
     `other_price` is the opposite rung's price, because a natural pair
-    costs BOTH legs and a 0.08/0.08 pair is a different trade from a
-    0.08/0.20 one. `pair_target` is the completion's total pair cost.
+    costs BOTH legs and a 0.08/0.20 pair is a different trade from a
+    0.08/0.08 one. `pair_target` is the completion's total pair cost.
+
+    `adverse_per_share` is REQUIRED and has no default, like the three
+    rates and for the same reason: a default of zero is the assumption
+    that being filled tells us nothing, which is the assumption that
+    emptied this gate. A caller that has not measured it must say so and
+    be refused, not quietly credited the optimistic case.
     """
     def no(reason: str, **kw: Any) -> Dict[str, Any]:
         return dict(kw, ok=False, reason=reason, ev_per_share=None)
@@ -70,6 +100,7 @@ def entry_ev(*, price: Any, other_price: Any, pair_target: Any,
     px, opx = _dec(price), _dec(other_price)
     tgt = _dec(pair_target)
     fee = _dec(fee_per_share)
+    adv = _dec(adverse_per_share)
     pn, pc, pw = (_dec(p_pair_natural), _dec(p_complete), _dec(p_lone_win))
     if px is None or not (ZERO < px < ONE):
         return no("PRICE_UNREADABLE")
@@ -77,6 +108,11 @@ def entry_ev(*, price: Any, other_price: Any, pair_target: Any,
         return no("OTHER_PRICE_UNREADABLE")
     if fee is None or fee < ZERO:
         return no("FEE_UNREADABLE")
+    if adv is None or adv < ZERO:
+        #: UNSET IS REFUSED, not read as zero. Zero adverse selection is a
+        #: claim about the venue, and it is the claim that made every
+        #: book-relative quote admissible.
+        return no("ADVERSE_UNREADABLE")
     for name, v in (("P_PAIR_NATURAL", pn), ("P_COMPLETE", pc),
                     ("P_LONE_WIN", pw)):
         if v is None or not (ZERO <= v <= ONE):
@@ -94,7 +130,9 @@ def entry_ev(*, price: Any, other_price: Any, pair_target: Any,
 
     pair_pay = ONE - (px + opx)
     comp_pay = ZERO if pc == ZERO else ONE - tgt
-    lone_pay = pw * (ONE - px) - (ONE - pw) * px
+    #: the lone leg pays its fair bet LESS the adverse selection that put
+    #: us in it. See the module docstring for why it is charged here only.
+    lone_pay = pw * (ONE - px) - (ONE - pw) * px - adv
     ev = pn * pair_pay + pc * comp_pay + p_lone * lone_pay - fee
     return {"ok": True, "reason": None, "ev_per_share": ev,
             "breakdown": {
@@ -104,7 +142,8 @@ def entry_ev(*, price: Any, other_price: Any, pair_target: Any,
                                "contributes": str(pc * comp_pay)},
                 "lone_leg": {"p": str(p_lone), "pays": str(lone_pay),
                              "contributes": str(p_lone * lone_pay),
-                             "p_win": str(pw)},
+                             "p_win": str(pw),
+                             "adverse_per_share": str(adv)},
                 "fee_per_share": str(fee)},
             "note": ("rebates are excluded: an uncredited rebate is not "
                      "income")}
