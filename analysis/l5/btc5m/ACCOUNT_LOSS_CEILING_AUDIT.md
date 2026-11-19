@@ -105,3 +105,36 @@ resumes is the owner's decision on a true number.
 refuse at arming with `ACCOUNT_CUMULATIVE_LOSS_CEILING`. That has not been
 observed on the lane itself, because the disarmed loop stops at the envelope
 gate first.
+
+## Preparation for correcting the remaining rows (owner-approved to PREPARE, 2026-11-19)
+
+Nothing below has been applied. The ledger is unchanged.
+
+The 159 rows still at the assumed $1.00 are three different problems:
+
+| rows | why the existing attestation left them | what correcting them needs |
+|---|---|---|
+| **62** | settled before the attestation's start day (`retro_floor_utc_day: 2026-11-13`), so never attempted. Mostly 2026-10-15 and 10-16 | moving that floor back. A configuration decision |
+| **94** | `VENUE_QTY_NE_LEDGER_QTY`: the venue's fills do not add up to the quantity this ledger holds for the position, and the rule corrects only on an exact match (`src/l5_live_execution.py`, about line 3465) | first, the two quantities side by side. They are computed and then discarded: the heartbeat carries only the count |
+| **3** | `COST_CROSSCHECK_FAILED` | the same per-row figures |
+
+By market family, the uncorrected keys in the heartbeat are spread across the
+account: 25 BTC 15m, 25 BTC 5m, 22 college football, 17 CS2, 12 ATP, 31 other
+crypto 15m, and smaller groups.
+
+**Proposed order, each step its own approval:**
+
+1. *Read-only diagnostic.* Have `l5-pmus-live` log, for each of the 97 rows it
+   already walks, the venue quantity, ledger quantity, venue-derived cost and
+   fees. It changes no figure and no gate. It is a code change and a deploy of
+   a money-capable service, so it needs approval.
+2. *Decide the mismatch rule on that evidence.* If the venue's fills are
+   simply the true position and the ledger's quantity is the stale one, the
+   correction is to take both quantity and cost from the venue where the
+   settlement cashflow also reconciles. If the mismatch is something else,
+   the bound should stay. This cannot be decided before step 1.
+3. *Move the floor back* to cover the 62 older rows, under the same rule.
+4. *Explain the $78.70* between the gate's total and the sum of its rows.
+
+Until then the comparison with $75 remains a comparison with a bound, and
+BTC5m remains blocked at arming.
