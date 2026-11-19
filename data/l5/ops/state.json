@@ -1,8 +1,8 @@
 {
- "last_ts": 1795114669.3396225,
- "rows_collected_total": 773100,
- "runs": 1839,
- "last_run_utc": "2026-11-19T18:57:49Z",
- "shadow_ts": 1795114663,
- "last_shadow_utc": "2026-11-19T18:57:53Z"
+ "last_ts": 1795115200.9724355,
+ "rows_collected_total": 773140,
+ "runs": 1840,
+ "last_run_utc": "2026-11-19T19:06:41Z",
+ "shadow_ts": 1795115185,
+ "last_shadow_utc": "2026-11-19T19:06:46Z"
 }
