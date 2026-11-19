@@ -513,3 +513,103 @@ def test_each_report_says_which_side_of_the_rebase_the_row_settled(kept, on):
     assert by[MX]["ledger"]["settled_before_last_rebase"] is True
     assert by[MZ]["ledger"]["settled_before_last_rebase"] is False
     assert any("rebase_overlap" in o for o in outs)
+
+
+# --- deposits and withdrawals the same walk passes over ---------------------
+
+def _transfer(t, amount, kind="activity_type_transfer", rid="X1"):
+    return {"type": kind, "transfer": {"time": t, "amount": amount,
+                                       "id": rid}}
+
+
+def test_non_trading_rows_since_the_rebase_are_listed_not_interpreted(
+        kept, on):
+    kept.state["accounting_rebase_log"] = [
+        {"t": "2026-11-13T10:00:00+00:00"}]
+    before = digest(kept)
+    feed = Feed([mismatch_fills() + [
+        _transfer("2026-11-13T16:00:00Z", "-25", rid="W1"),
+        {"type": "activity_type_account_deposit",
+         "accountBalanceChange": {"time": "2026-11-13T12:00:00Z",
+                                  "amount": "40"}},
+        deposit("2026-11-13T05:00:00Z")]])
+    _d, outs = drive(kept, feed)
+    assert digest(kept) == before
+    seen = [o["cash_movements_seen"] for o in outs
+            if "cash_movements_seen" in o][-1]
+    by = seen["by_type"]
+    assert by["activity_type_transfer"]["since_rebase"] == 1
+    assert D(by["activity_type_transfer"]["amount_since_rebase"]) == D("-25")
+    dep = by["activity_type_account_deposit"]
+    assert dep["rows"] == 2 and dep["since_rebase"] == 1
+    assert D(dep["amount_since_rebase"]) == D("40")
+    assert [r["amount"] for r in seen["rows_since_rebase"]] == ["40", "-25"]
+    assert all(str(p).startswith("/v1/portfolio/activities")
+               for p in feed.reads)
+
+
+def test_the_tap_returns_the_venue_answer_untouched_and_counts_no_fill():
+    page = mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]
+    feed = Feed([page])
+    tap = VCD.FeedTap(feed)
+    body = tap._get("/v1/portfolio/activities")
+    assert body == Feed([page])._get("/v1/portfolio/activities")
+    assert [r["type"] for r in tap.rows.values()] == [
+        "activity_type_account_deposit"]
+    tap._get("/v1/portfolio/activities")          # a re-read adds nothing
+    assert len(tap.rows) == 1
+    assert [n for n in dir(tap) if not n.startswith("__")
+            and callable(getattr(tap, n))] == ["_get", "_note", "summary"]
+
+
+def test_a_malformed_page_never_breaks_the_walk():
+    class Bad(dict):
+        def get(self, *a, **k):
+            raise RuntimeError("venue served something odd")
+
+    class Odd:
+        def _get(self, path):
+            return {"activities": [{"type": "activity_type_transfer",
+                                    "transfer": Bad(amount="1")}]}
+    tap = VCD.FeedTap(Odd())
+    assert "activities" in tap._get("/v1/portfolio/activities")
+    assert tap.dropped == 1 and tap.rows == {}
+
+
+def test_the_walk_reads_the_same_pages_with_or_without_the_tap(kept, on):
+    f1 = Feed([mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]])
+    drive(kept, f1)
+    w = VCA.Walk(VCD.targets(kept), started_at=__import__(
+        "datetime").datetime.now(__import__("datetime").timezone.utc))
+    f2 = Feed([mismatch_fills() + [deposit("2026-11-13T05:00:00Z")]])
+    while not w.sufficient and w.ended is None:
+        w.step(f2, VCA.PAGES_PER_STEP)
+    assert f1.reads[:len(f2.reads)] == f2.reads
+
+
+# --- what a RESTART does, with the diagnostic on -----------------------------
+
+def test_a_restart_cannot_correct_a_row_the_attestation_gave_up_on(
+        kept, on, tmp_path):
+    """Deploying this restarts the service, and the attestation runs from
+    boot. A fresh process, a fresh Attestor, the ledger re-read from disk,
+    and a feed that NOW reconciles exactly: the exhausted rows must still
+    not be read for, corrected, or moved in the gate's total."""
+    kept.save()
+    reborn = LX.InventoryStore(str(tmp_path / "inv.json"))
+    before = copy.deepcopy(reborn.state)
+    lines = reborn.realized_lines()
+    now_matching = Feed([[
+        fill(MX, "UP", "5", "0.08", "T-R1", "VR1", t="2026-11-13T17:01:00Z"),
+        fill(MY, "DOWN", "5", "0.20", "T-R2", "VR2",
+             t="2026-11-13T17:06:00Z"),
+        fill(MZ, "UP", "5", "0.10", "T-R3", "VR3", t="2026-11-13T17:11:00Z"),
+        deposit("2026-11-13T05:00:00Z")]])
+    run_until_idle(reborn, now_matching)                # the attestation
+    assert now_matching.reads == []                     # it asked nothing
+    assert reborn.state == before
+    _d, outs = drive(reborn, now_matching)              # then the diagnostic
+    assert {r["form"] for r in reports(outs).values()} == {"GROSS_MATCH"}
+    assert reborn.state == before
+    assert reborn.realized_lines() == lines
+    assert VCA.Attestor().heartbeat(reborn)["corrections_applied"] == 0

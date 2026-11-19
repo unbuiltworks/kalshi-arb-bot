@@ -151,6 +151,107 @@ def rebase_overlap(store: Any) -> Dict[str, Any]:
     return out
 
 
+#: activity kinds that are trading, not money moving in or out of the account
+_TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
+    ("activity_type_position_resolution", "position_resolution"))
+MAX_CASH_ROWS = 200
+
+
+class FeedTap:
+    """A GET-only pass-through that remembers the feed's NON-trading rows.
+
+    WHY. Whether the ledger total is right can be checked against the venue
+    balance only if deposits, withdrawals, transfers and bonuses over the
+    same period are known. The feed this diagnostic already reads carries
+    them; the attestation's reader drops every row that is not a fill for a
+    market it wants. This keeps a small record of the rest. It exposes one
+    verb, `_get`, forwards it unchanged and returns the venue's answer
+    untouched, so the walk reads exactly what it would have read.
+    """
+
+    def __init__(self, transport: Any) -> None:
+        self._t = transport
+        self.rows: Dict[str, Dict[str, Any]] = {}
+        self.dropped = 0
+
+    def _get(self, path: str) -> Any:
+        body = CBA._get(self._t, path)
+        try:
+            self._note(body)
+        except Exception:                                      # noqa: BLE001
+            self.dropped += 1
+        return body
+
+    def _note(self, body: Any) -> None:
+        if not isinstance(body, Mapping):
+            return
+        page = body.get("activities")
+        if not isinstance(page, list):
+            page = body.get("rows") if isinstance(body.get("rows"), list) \
+                else []
+        for r in page:
+            if not isinstance(r, Mapping):
+                continue
+            kind = str(r.get("type") or r.get("kind") or "").lower()
+            if not kind or kind in _TRADING_KINDS:
+                continue
+            inner = None
+            for v in r.values():
+                if isinstance(v, Mapping):
+                    inner = v
+                    break
+            inner = inner if inner is not None else r
+            t = VCA.row_time(r) or VCA.row_time(inner)
+            rec = {"type": kind,
+                   "time": None if t is None else t.isoformat(),
+                   "amount": _s(inner.get("amount")),
+                   "id": _s(inner.get("id") or r.get("id"))}
+            key = "|".join(str(rec[k]) for k in ("type", "time", "amount",
+                                                 "id"))
+            if key in self.rows:
+                continue
+            if len(self.rows) >= MAX_CASH_ROWS:
+                self.dropped += 1
+                continue
+            self.rows[key] = rec
+
+    def summary(self, since: Optional[str]) -> Dict[str, Any]:
+        """Non-trading rows seen so far, split at `since` (the re-anchor)."""
+        cut = VCA.parse_time(since) if since else None
+        by: Dict[str, Dict[str, Any]] = {}
+        listed = []
+        for rec in self.rows.values():
+            t = VCA.parse_time(rec["time"]) if rec["time"] else None
+            after = None if (cut is None or t is None) else bool(t >= cut)
+            if rec["type"] not in by:
+                by[rec["type"]] = {
+                    "rows": 0, "since_rebase": 0, "undated": 0,
+                    "amount_since_rebase": "0", "amount_unreadable": 0}
+            b = by[rec["type"]]
+            b["rows"] += 1
+            if t is None:
+                b["undated"] += 1
+            if after:
+                b["since_rebase"] += 1
+                a = CBA._d(rec["amount"])
+                if a is None:
+                    b["amount_unreadable"] += 1
+                else:
+                    b["amount_since_rebase"] = str(
+                        D(b["amount_since_rebase"]) + a)
+                listed.append(rec)
+        return {"since": since, "by_type": by,
+                "rows_since_rebase": sorted(
+                    listed, key=lambda x: str(x["time"]))[:40],
+                "not_recorded": self.dropped,
+                "labels": ("ONLY what the walk has read so far: complete "
+                           "back to the walk's oldest dated row and no "
+                           "further. `amount` is the venue's field as "
+                           "served, sign and meaning NOT interpreted here. "
+                           "Nothing is added to or compared with any "
+                           "ledger figure.")}
+
+
 def _side_word(venue: D, ledger: D) -> str:
     if venue == ledger:
         return "EQUAL"
@@ -243,6 +344,7 @@ class Diagnostic:
         self.last_error: Optional[str] = None
         self.reported = 0
         self.forms: Dict[str, int] = {}
+        self.tap: Optional[FeedTap] = None
 
     def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
         if not enabled():
@@ -261,8 +363,10 @@ class Diagnostic:
             self.walk = VCA.Walk(todo[:VCA.MAX_MARKETS_PER_WALK],
                                  started_at=dt.datetime.now(dt.timezone.utc))
         w = self.walk
+        if self.tap is None or self.tap._t is not transport:
+            self.tap = FeedTap(transport)
         if not w.sufficient and w.ended is None:
-            w.step(transport, VCA.PAGES_PER_STEP)
+            w.step(self.tap, VCA.PAGES_PER_STEP)
         if not w.sufficient:
             if w.ended is None:
                 return {"walking": w.proof()}
@@ -304,4 +408,6 @@ class Diagnostic:
             self.walk = None
         return {"compared": out, "walk": proof, "reported": self.reported,
                 "forms": dict(self.forms),
-                "rebase_overlap": rebase_overlap(store), "labels": LABEL}
+                "rebase_overlap": rebase_overlap(store),
+                "cash_movements_seen": self.tap.summary(last_rebase_t(st)),
+                "labels": LABEL}
