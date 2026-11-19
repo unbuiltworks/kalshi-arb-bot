@@ -23,7 +23,7 @@ APPROVED_ENV = {
     "L5_LIVE_AUTH_MAX_WINDOWS": "8",
     "L5_TS_CANCEL_MARGIN_S": "300",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
-    "L5_MAX_LIVE_ORDERS": "2",
+    "L5_MAX_LIVE_ORDERS": "4",
     # THE APPROVED AGGREGATE CEILING, and it has to be HERE rather than
     # left to the code default. `R.PROBE_LIMITS` defaults to the $20 of the
     # earlier eight-window mandate, so omitting this variable tested the
@@ -343,7 +343,9 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["defensive_guard_opens_s"] == 540.0
     assert V.APPROVED["defensive_last_actionable_s"] == 585.0
     assert V.APPROVED["max_windows"] == 8
-    assert V.APPROVED["max_live_orders"] == 2
+    # raised 2 -> 4 by owner decision 2026-11-10 (the four-order
+    # configuration, deployed disarmed; no live trading authorized by it)
+    assert V.APPROVED["max_live_orders"] == 4
     assert V.APPROVED["defensive_execution_enabled"] is False
 
 
@@ -369,7 +371,7 @@ APPROVED_SNAPSHOT = {
     # configuration fails its own prediction. Production already holds 2, so
     # this is NOT one of the rows the owner must still change and
     # CURRENT_SNAPSHOT inherits it unchanged.
-    "L5_MAX_LIVE_ORDERS": "2",
+    "L5_MAX_LIVE_ORDERS": "4",
     "L5_SHADOW_ONLY": "1",
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
     # RAISED WITH THE OWNER-AUTHORIZED LIMIT 2026-11-02: the snapshot has to
@@ -660,3 +662,62 @@ def test_a_tighter_ceiling_than_the_code_constant_still_passes(approved):
     assert out["PASS"] is True, out["failed"]
     assert row(out, "aggregate_exposure_usd")["effective"] == "5"
     assert row(out, "approval_exposure_ceiling_usd")["effective"] == "20"
+
+
+# ---------------------------------------------------------------------------
+# A TIGHTER CAMPAIGN LOSS BUDGET IS INSIDE THE APPROVAL (2026-11-11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", ["0.30", "0.01", "5.00", "10.00"])
+def test_a_campaign_loss_budget_at_or_below_the_ceiling_passes(approved,
+                                                               value):
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", value)
+    out = V.verify()
+    r = row(out, "campaign_additional_loss_usd")
+    assert r["ok"] is True, r
+    assert D(r["effective"]) == D(value)
+    assert "campaign_additional_loss_usd" not in out["failed"]
+
+
+def test_an_unset_campaign_loss_budget_still_fails(approved):
+    approved.delenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", raising=False)
+    out = V.verify()
+    assert row(out, "campaign_additional_loss_usd")["ok"] is False
+    assert out["PASS"] is False
+
+
+@pytest.mark.parametrize("value", ["0", "zero", "-1"])
+def test_a_zero_or_unreadable_campaign_loss_budget_still_fails(approved,
+                                                               value):
+    """Unreadable reads as $0, the bound that refuses every order. That is
+    a broken configuration, not a tight one."""
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", value)
+    out = V.verify()
+    r = row(out, "campaign_additional_loss_usd")
+    assert r["ok"] is False, r
+    assert D(r["effective"]) == 0
+
+
+def test_a_budget_above_the_ceiling_is_clamped_to_it_not_honoured(approved):
+    approved.setenv("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", "25")
+    r = row(V.verify(), "campaign_additional_loss_usd")
+    assert D(r["effective"]) == D("10.00") and r["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# THE ORDER LIMIT: THE APPROVED FOUR, OR THE PREPARED EIGHT (2026-11-11)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value,ok", [("4", True), ("8", True), ("2", False),
+                                      ("6", False), ("9", False),
+                                      ("eight", False)])
+def test_the_order_limit_passes_at_four_or_eight_and_nothing_else(
+        approved, value, ok):
+    approved.setenv("L5_MAX_LIVE_ORDERS", value)
+    r = row(V.verify(), "max_live_orders")
+    assert r["ok"] is ok, r
+
+
+def test_the_approved_order_limit_is_still_recorded_as_four():
+    assert V.APPROVED["max_live_orders"] == 4
+    assert V.MAX_LIVE_ORDERS_PREPARED == 8

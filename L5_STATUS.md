@@ -1621,3 +1621,136 @@ pair-cost ceiling" on the live gate is independently confirmed.
 
 Detail: `analysis/l5/RUN_LENGTH_PREREGISTRATION.md` (frozen before scoring),
 `analysis/l5/RUN_LENGTH_FINDINGS.md`.
+
+---
+
+## 2026-11-13: BTC5m cannot run concurrently with BTC15m under the $8 cap
+
+An owner-authorized straddle campaign (8 windows, 5 shares a side at 0.08,
+`STRADDLE` only) was armed live at 15:10z. It placed **zero orders** across
+every window, refusing each leg with `ACCOUNT_EXPOSURE_CAP`:
+
+```
+account:  other_position_contracts 15,  other_usd "15.00",  own_usd "0"
+L5_ACCOUNT_MAX_EXPOSURE_USD = 8.00
+```
+
+This is not a fault and not a loss-limit problem. The cause is structural:
+
+`ExecutionAdapter.account_exposure()` reads the venue live on every step and
+charges **every foreign contract at `FOREIGN_USD_PER_CONTRACT` = $1.00**, on
+a **gross** basis: `held = abs(qtyBought) + abs(qtySold)`. The BTC15m lane
+was holding `matched=6.56` pairs plus a 1.00 residual in a single CLOSED
+market, which is ~15 contracts gross -> $15.00 charged against an $8.00
+account-wide cap, by a lane whose matched pairs always redeem at exactly
+$1.00 and therefore carry near-zero risk.
+
+The conservatism is deliberate (`FOREIGN_BASIS`): this adapter cannot know
+another lane's pairing or economics from position rows, so it assumes the
+worst. The consequence is that **while BTC15m holds any material matched
+inventory, BTC5m has no room to place a single order**, regardless of how
+small or how well hedged the BTC5m order is.
+
+Options, none taken unilaterally -- all three are owner/cross-session calls:
+
+1. raise `L5_ACCOUNT_MAX_EXPOSURE_USD` (account-wide, affects every lane);
+2. run BTC5m only while BTC15m is flat (BTC15m runs continuously, so this
+   is close to never);
+3. make the foreign basis matched-aware (a change to a SHARED safety
+   control that would weaken it, and the pairing is not reliably derivable
+   from `qtyBought`/`qtySold`, which are per outcome token, not per side).
+
+Owner's call 2026-11-13: first **leave armed, change no limit**, then
+**raise `L5_ACCOUNT_MAX_EXPOSURE_USD` 8.00 -> 17.00**. Note the cap is
+BTC5m-LOCAL: only `l5_btc5m_execution.py` reads it, so raising it grants the
+15m lane nothing -- it raises BTC5m's own refusal threshold, measured
+against total account exposure. There is no code clamp (`account_cap()`
+accepts any value >= 0).
+
+### RESULT of the armed campaign (approval b5m-12cfb0ae, 1510z-1545z)
+
+| window | outcome | settled |
+|---|---|---|
+| 1510z, 1515z, 1520z | refused `ACCOUNT_EXPOSURE_CAP` (15m lane held $15 vs $8) | 0 |
+| **1525z** | **PAIR -- UP and DOWN both filled 0.08 x 5** | **+4.20** |
+| 1530z | UP only filled | -0.40 |
+| 1535z | UP only filled | -0.40 |
+| 1540z, 1545z | refused `AUTHORIZATION:BTC5M_DAILY_LOSS_LIMIT` | 0 |
+
+**Campaign net +3.40**, all closes clean, no unresolved orders.
+
+Three things this run actually established, none of them flattering to the
+tidy story:
+
+1. **The pair came BEFORE the raise, not because of it.** During 1525z
+   `account_total_usd` was `7.40` -- under the ORIGINAL 8.00 cap, because
+   the 15m lane had just settled. The raise bought windows 1530z and
+   1535z, and both LOST. Credit the 15m lane settling, not the cap change.
+2. **A redeploy orphaned the winning window.** The cap-raise redeploy
+   killed 1525z mid-flight before it recorded settlement, leaving $0.80
+   stranded. `recover_settlements()` booked the +4.20 at next boot
+   (`already_settled: false`). Without it that win was invisible.
+3. **The daily-loss stop fired on a stale figure.** 1540z/1545z were
+   refused on `BTC5M_DAILY_LOSS_LIMIT` computed WITHOUT the unbooked
+   +4.20, i.e. a day figure $4.20 too pessimistic. The limit worked; its
+   input was stale because settlement booking lags an orphaned window.
+
+Sample size: ONE pair in THREE windows that actually placed. The tape says
+10.2%. Three windows cannot distinguish 33% from 10%, and this is not
+evidence the straddle works.
+
+
+**Two corrections this run produced** (detail in
+`LIVE_RUNBOOK_20261113.md`): the `$55` cumulative-loss raise was never
+needed -- the gate already passes at the existing ceiling of 20, proven by
+a shadow probe giving 20 STEP and 0 BLOCKED records -- and the service that
+raise targets, `l5-pmus-live`, is the **live BTC15m trader**, so the change
+was never BTC5m-local.
+
+**Shadow cannot see this refusal.** The `account` block reads all-null
+without the arm token, so a campaign can look perfectly clean in shadow and
+place nothing live. Read `account.other_usd` against the cap before arming.
+
+### Run 2, 2026-11-13 1605z-1640z (straddle, 5 shares/side @ 0.08)
+
+| window | outcome | settled |
+|---|---|---|
+| **1605z** | **PAIR -- both legs filled** | **+4.20** |
+| 1610z | UP only | -0.40 |
+| 1615z | UP only | -0.40 |
+| 1620z-1640z | blocked `EXPOSURE_CEILING_EXCEEDS_LOSS_ROOM` | 0 |
+
+**Run 2 net +3.40.** Identical shape to run 1: one pair, two singles.
+
+**Combined straddle live, 2026-11-13: +6.80 over 6 placing windows, 2
+pairs.** 2/6 = 33% pair rate against a 10.2% tape rate. Six windows cannot
+distinguish those, and the live shadow's own observed rate was 2.8%. This
+is NOT evidence the edge is real; it is evidence the mechanism executes.
+
+**Why it stopped, and it was not us.** The account-wide risk doc at 1620z:
+
+```
+daily_halt_usd        40.00   utc_day_realized_usd   -39.5296
+cumulative_ceiling    75.00   lifetime_realized_usd  -59.7762
+loss_room_usd          0.4704  (= min(40-39.5296, 75-59.7762))
+```
+
+The binding limit is the DAILY halt: the account has lost $39.53 today
+against a $40.00 halt. BTC5m's own contribution is not the cause
+(`btc5m_losses_not_yet_in_account_ledger_usd: 0`, and the straddle is UP on
+the day). `exposure_ceiling() = 1.00 > 0.4704`, so the gate refuses to open
+any window. Correct fail-closed behaviour.
+
+**Correction to the earlier entry above:** the cumulative loss ceiling is
+**75.00**, not 20. The 20 was read from `L5_MAX_L5_CUMULATIVE_LOSS_USD` on
+`l5-pmus-live`; the PUBLISHED risk doc says 75.00 and the doc is what the
+gate reads. The conclusion ("the gate already passes, no raise needed") was
+right; the number attached to it was wrong. Read the published doc, not the
+env var.
+
+**Operational note:** martingale sizing on the loss branch was considered
+and rejected. The loss branch is ~87% likely, so P(8 consecutive) = 33% and
+the stake at step 8 is $51.20 against a $17 account cap -- the authorization
+layer refuses at about step 3. More fundamentally, settlement P&L is linear
+in legs, so neither martingale nor a higher pair rate at a smaller prize
+adds any expected value; both only reshape variance.

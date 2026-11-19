@@ -37,6 +37,7 @@ is confirmed, not when a closing leg fills.
 """
 from __future__ import annotations
 
+import os
 from decimal import Decimal as D, ROUND_CEILING, InvalidOperation
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
@@ -52,6 +53,18 @@ def _d(v: Any) -> D:
     if v is None:
         return D(0)
     return D(str(v))
+
+
+HEDGE_CASH_ENV = "L5_HEDGE_CASH_AT_LIMIT"
+
+
+def hedge_cash_at_limit() -> bool:
+    """Is a hedging DOWN order reserved at its limit cost, not $1 a share?
+
+    Exactly "ON" and nothing else. Unset, misspelt or any other value is
+    the $1-a-share reading every earlier deployment had.
+    """
+    return str(os.getenv(HEDGE_CASH_ENV, "")).strip() == "ON"
 
 
 #: set-but-invalid is a CONFIGURATION ERROR, never a silent disable
@@ -241,6 +254,7 @@ class ValidationGates:
                 "max_worst_case_deficit_usd": (
                     None if self.max_worst_case_deficit_usd is None
                     else str(self.max_worst_case_deficit_usd)),
+                "hedge_cash_at_limit": hedge_cash_at_limit(),
                 "fee_theta_worst": str(self.fee_theta_worst),
                 "fee_extra_per_order_usd": str(self.fee_extra_per_order_usd),
                 "fee_model": ("taker Theta, rounded UP to the cent once per "
@@ -302,6 +316,120 @@ class ValidationGates:
             else:
                 total += qty * px
         return total
+
+    def hedge_allowance(self, inventory: Any) -> Optional[D]:
+        """Venue-confirmed UNMATCHED UP quantity a DOWN order can still hedge.
+
+        None when the ledger cannot say -- no inventory, no market, a
+        quantity that is not a finite non-negative number. None is never an
+        allowance: the caller keeps the $1-a-share reading.
+        """
+        if not isinstance(inventory, Mapping):
+            return None
+        if not str(inventory.get("market") or "").strip():
+            return None
+        try:
+            up = _d(inventory.get("up_qty"))
+            dn = _d(inventory.get("dn_qty"))
+        except (ValueError, ArithmeticError, TypeError):
+            return None
+        if inventory.get("up_qty") is None or inventory.get("dn_qty") is None:
+            return None
+        if not (up.is_finite() and dn.is_finite()) or up < 0 or dn < 0:
+            return None
+        return max(D(0), up - dn)
+
+    def reserved_cash(self, *,
+                      outstanding: Sequence[Mapping[str, Any]],
+                      order_qty: Any, order_price: Any, order_intent: str,
+                      inventory: Any = None) -> Dict[str, Any]:
+        """Cash every still-fillable order can take, ONE snapshot, one pass.
+
+        The resting orders and the proposed one are priced together from the
+        same inventory, as if ALL of them fill in full -- so two orders can
+        never each be given headroom only one of them can use.
+
+        WHAT CHANGES (owner decision 2026-11-10, `L5_HEDGE_CASH_AT_LIMIT=ON`;
+        anything else is the reading below, unchanged). A DOWN order was
+        always reserved at $1 a share. A DOWN buy at own price `p` can take
+        at most `qty * p` plus its fee -- the venue books exactly that, and
+        `cash_committed` already charges a FILLED DOWN leg that way. So the
+        part of a DOWN order that offsets venue-confirmed unmatched UP
+        inventory in the SAME market is reserved at its limit-price cost
+        plus the worst-case (taker) fee, rounded up.
+
+        WHAT DOES NOT. Only the hedged quantity. A DOWN order with nothing
+        unmatched behind it, the part of one beyond the imbalance, an order
+        in another market, an order with an unreadable price, and every UP
+        order are reserved exactly as before. The ceiling is not touched.
+
+        ONE ALLOWANCE, SPENT ONCE. The unmatched quantity is shared by every
+        DOWN order in that market, resting and proposed, and handed out
+        highest limit price first -- the allocation that saves least -- so
+        the total is the most those orders can cost whichever of them the
+        imbalance ends up absorbing. A resting hedge whose cancellation the
+        venue has not confirmed is still in `outstanding`, still holds its
+        share and still holds its reservation: a replacement placed beside
+        it finds the allowance already spent and is charged $1 a share.
+        """
+        q = _d(order_qty)
+        px = _d(order_price)
+        short = str(order_intent or "").upper().endswith("BUY_SHORT")
+        this_order = q if short else q * px
+        resting = self.pending_obligation(outstanding)
+        out: Dict[str, Any] = {"resting": resting, "this_order": this_order,
+                               "basis": "DOLLAR_A_SHARE",
+                               "hedge_allowance": None,
+                               "hedged_resting": D(0), "hedged_this": D(0)}
+        if not hedge_cash_at_limit():
+            return out
+        allowance = self.hedge_allowance(inventory)
+        out["hedge_allowance"] = allowance
+        if allowance is None:
+            out["basis"] = "DOLLAR_A_SHARE:INVENTORY_UNREADABLE"
+            return out
+        if allowance <= 0:
+            out["basis"] = "DOLLAR_A_SHARE:NOTHING_UNMATCHED_TO_HEDGE"
+            return out
+        mkt = str(inventory.get("market")).strip()
+
+        def usable(qty: D, p: D) -> bool:
+            return (qty.is_finite() and p.is_finite() and qty > 0
+                    and D(0) < p < D(1))
+
+        cands = []                       # (price, qty, is_this, position)
+        for i, o in enumerate(outstanding):
+            if not str(o.get("intent") or "").upper().endswith("BUY_SHORT"):
+                continue
+            if str(o.get("market") or "").strip() != mkt:
+                continue                 # another market, or not stated
+            try:
+                oq = _d(o.get("qty")); op = _d(o.get("price"))
+            except (ValueError, ArithmeticError, TypeError):
+                continue
+            if usable(oq, op):
+                cands.append((op, oq, False, i))
+        if short and usable(q, px):
+            cands.append((px, q, True, len(cands)))
+        cands.sort(key=lambda c: (-c[0], c[2], c[3]))
+        left = allowance
+        for p, qty, is_this, _i in cands:
+            if left <= 0:
+                break
+            h = min(qty, left)
+            left -= h
+            at_limit = h * p + max(D(0), self.fee_worst(h, p))
+            # was reserved `h` dollars; is now reserved `at_limit`
+            if is_this:
+                this_order += at_limit - h
+                out["hedged_this"] += h
+            else:
+                resting += at_limit - h
+                out["hedged_resting"] += h
+        out["resting"] = resting
+        out["this_order"] = this_order
+        out["basis"] = "HEDGE_AT_LIMIT_PLUS_FEE"
+        return out
 
     # ------------------------------------------- worst-case settlement
 
@@ -663,10 +791,17 @@ class ValidationGates:
                         (strategy_loss, self.max_strategy_loss_usd))
 
         # 3. cash commitment, including this order as if it filled in full
-        this_order = (q if str(order_intent or "").upper()
-                      .endswith("BUY_SHORT") else q * px)
-        committed = (self.cash_committed(filled_legs)
-                     + self.pending_obligation(outstanding) + this_order)
+        #    ONE RESERVATION for the resting orders and this one, priced
+        #    together from the same inventory (see `reserved_cash`). With
+        #    L5_HEDGE_CASH_AT_LIMIT unset these are exactly the two figures
+        #    that stood here before: `pending_obligation(outstanding)` and
+        #    the order at qty * price, or qty for a short.
+        _rsv = self.reserved_cash(
+            outstanding=outstanding, order_qty=q, order_price=px,
+            order_intent=order_intent, inventory=inventory)
+        this_order = _rsv["this_order"]
+        _pending = _rsv["resting"]
+        committed = self.cash_committed(filled_legs) + _pending + this_order
         if committed > self.max_cash_deployed_usd:
             return ("CASH_COMMITMENT:%s>%s"
                     % (committed, self.max_cash_deployed_usd))
@@ -725,7 +860,7 @@ class ValidationGates:
                 self.campaign_id,
                 account_wide_realized=cumulative_realized,
                 open_worst_case_usd=(self.cash_committed(filled_legs)
-                                     + self.pending_obligation(outstanding)))
+                                     + _pending))
             if not _cs.get("ok"):
                 return str(_cs.get("reason") or "CAMPAIGN_BASELINE_UNKNOWN")
             campaign_used = _d(_cs.get("additional_loss_usd"))

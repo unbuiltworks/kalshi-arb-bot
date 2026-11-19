@@ -142,6 +142,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # reduces the residual. Like the two rules below and above it, an ENTRY
     # rule -- it can never refuse a completion.
     "TWO_SIDED_PROBE:PAST_ENTRY_CUTOFF_NOT_A_COMPLETION",
+    # the portfolio controller's steer, present only in
+    # L5_PORTFOLIO_CONTROLLER=STEER: an opening leg it does not want is
+    # refused by name (or PORTFOLIO_STEER_UNREADABLE). It can only narrow a
+    # choice the executor already made, and never refuses a leg that
+    # reduces filled inventory.
+    "TWO_SIDED_PROBE:PORTFOLIO_SIDE_NOT_WANTED",
     # the two refusals `Verify the complement before adopting it` added to
     # `handle`: a complement priced from another market's book, and one on
     # the side we already hold. Registered here because that commit added
@@ -163,6 +169,18 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # a pair cost judged on venue-confirmed fills, and one strategy per
     # authorized window so two of them cannot share one cash envelope.
     "PAIR_COST_CEILING",
+    # THE OWNER'S FAVORITE-ONLY TEST, 2026-11-11, at the same boundary and
+    # immediately before the ceiling. Off unless L5_PORTFOLIO_PROFILE is
+    # exactly FAVORITE_ONLY; then every order that is not the favorite the
+    # steer wants at that moment is refused -- second legs, hedges and
+    # every completion route included. It only ever refuses.
+    "FAVORITE_ONLY",
+    # INVENTORY RECOVERY'S OWN GUARD, 2026-11-11, at the same boundary.
+    # Off unless completions rest at their target (L5_INVENTORY_RECOVERY or
+    # L5_TS_COMPLETION_RESTS_AT_CEILING); then an order that would buy
+    # more of the side already held unmatched is refused unless the
+    # portfolio controller's steer wants that side. It only ever refuses.
+    "HELD_SIDE_ADD",
     # ADDED WITH THE GUARD, and this inventory is where that is
     # reviewed. PAIR_COST_CEILING is judged on CONFIRMED FILLS and so
     # never engages while both legs are merely submitted;
@@ -204,6 +222,16 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # efficiency guard, not a safety control -- it fails OPEN on a book it
     # cannot read, because every risk gate above has already run.
     "PRESEND_CROSS:PRESEND_WOULD_CROSS",
+    # the pre-send BEHIND re-check, beside the crossing one and in the same
+    # position. The guard above declines a leg the book has made too
+    # AGGRESSIVE, which the venue rejects post-only; this declines one the
+    # book has left too PASSIVE, which is perfectly placeable and never
+    # fills while holding a live-order slot for its whole TTL. Also an
+    # efficiency guard and not a safety control: it fails OPEN on an
+    # unreadable book, price or round state, and it runs ONLY while the
+    # round holds nothing, so a complement matching held inventory is never
+    # declined.
+    "PRESEND_BEHIND:PRESEND_LEFT_BEHIND",
     # the disarmed pre-check, in the same position and for the same reason
     # as PRESEND_CROSS above: the claim on the next line is never returned,
     # and a disarmed transport raises NotArmed out of submit() without

@@ -182,7 +182,13 @@ def test_complement_bound_and_taker_rule():
     assert ex.entry_ok(D("0.80")) and not ex.entry_ok(D("0.805"))
     assert ex.complement_bound(D("0.79")) == D("0.20")   # exactly at band
     assert ex.complement_bound(D("0.80")) is None        # <0.20 -> no band
-    assert ex.taker_completion_ok(D("0.45"), D("0.52")) is True
+    #: THE FEE-SAFE COMPLETION BOUND TIGHTENED, and that is the point of
+    #: correcting the coefficient. 0.52 against a 0.45 leg used to pass at
+    #: Theta 0.0695; at this account's Tier-1 0.095 the taker fee eats the
+    #: margin and it is refused. The gate still ADMITS a cheaper
+    #: completion, so this is a tightening and not a blanket refusal.
+    assert ex.taker_completion_ok(D("0.45"), D("0.51")) is True
+    assert ex.taker_completion_ok(D("0.45"), D("0.52")) is False
     assert ex.taker_completion_ok(D("0.45"), D("0.55")) is False
 
 

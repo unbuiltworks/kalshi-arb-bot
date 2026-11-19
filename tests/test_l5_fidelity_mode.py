@@ -26,7 +26,7 @@ TODAY = {
     "opening_leg_max_contracts": "3",
     "order_ttl_s": 120.0,
     "concurrent_opening_orders": 1,
-    "round_allocations_max": 4,
+    "round_allocations_max": 12,        # 4 until 2026-11-11; see POLICY
 }
 WIDE_ENV = {
     "L5_TS_ENTRY_CUTOFF_S": "860",
@@ -73,7 +73,10 @@ def test_a_wide_environment_is_still_clamped_away_when_off(monkeypatch):
     assert TS.complete_cutoff_s() == 720.0
     assert str(TS.opening_leg_max_contracts()) == "3"
     assert TS.order_ttl_s() == 120.0
-    assert TS.round_allocations() == 1      # 11 is out of range -> default
+    # 11 was out of range until 2026-11-11, when the allocation ceiling
+    # became 12 outside fidelity mode as well. A divisor only makes clips
+    # SMALLER, so honouring it loosens nothing.
+    assert TS.round_allocations() == 11
 
 
 # ------------------------------------------------- fail closed on the token

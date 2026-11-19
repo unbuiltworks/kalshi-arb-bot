@@ -98,10 +98,39 @@ COMPLETION_DEPTH_TICKS = 0
 ADAPTIVE_MAX_DEPTH_TICKS = 5
 ADAPTIVE_ENV = "L5_COMPLETION_ADAPTIVE_DEPTH"
 _TRUE_ADAPT = ("1", "yes", "true", "on")
+#: the ONLY spellings that turn the adaptive walk off, now that it is the
+#: default. Anything else -- including a typo -- keeps it on.
+_FALSE_ADAPT = ("0", "no", "false", "off")
 
 
 def adaptive_depth_enabled() -> bool:
-    """DEFAULT OFF. The deployed completion depth stays 0 unless set.
+    """DEFAULT ON since the 2026-11-09 15:30Z live window. Set it to a
+    false value to pin the completion depth again.
+
+    THE DEFAULT FLIPPED BECAUSE THE PREDICTION CAME TRUE WITH MONEY ON IT.
+    Everything below was measured in replay and said a completion fixed at
+    the touch can never complete. The owner-authorized live window
+    `cpc-btc-updown-15m-2026-11-09-1530z` then ran with this OFF and
+    produced exactly the predicted shape: ONE filled first leg (0.7 DOWN,
+    venue-reconciled `ours 0.7 / venue 0.7000`), ZERO completions, and
+    -$0.3080 settled. The arithmetic of that window, from its own decision
+    lines: DOWN own 0.44, so a complement must rest at own <= 0.52 to keep
+    the pair inside the 0.96 cap, and the bid never fell below 0.53 after
+    the fill. At depth 0 the complement could only rest at own 0.53, a pair
+    of 0.97 the cap refuses. ONE tick behind -- own 0.52, pair exactly 0.96
+    -- already clears it. The miss was a single tick wide.
+
+    "DEFAULT OFF because it changes a money-path decision while #206's
+    deployment freeze stands" was right when written. That freeze has since
+    been lifted for an executed live window, and leaving the validated
+    shape behind an unset variable is how the window was spent proving a
+    configuration nobody intended to trade.
+
+    IT STILL WIDENS NOTHING. The fee-safe ceiling, the entry band, the
+    exposure and loss limits, the maker-only restriction and every other
+    gate are untouched. This chooses only WHERE to rest a complement whose
+    economics those gates have already permitted, and the walk stops at the
+    FIRST admissible depth rather than seeking the deepest.
 
     WHY IT EXISTS, measured. Replaying 13 out-of-sample windows, a
     completion fixed AT THE TOUCH completes ZERO pairs in 652 entries:
@@ -116,12 +145,14 @@ def adaptive_depth_enabled() -> bool:
     and a bounded taker completion recovered NONE of the remaining 54,
     every one of which fails the cap again after fees.
 
-    DEFAULT OFF because it changes a money-path decision while #206's
-    deployment freeze stands. The ceiling, the band and every other gate
-    are untouched: this only chooses WHERE to rest a complement the
-    economics already permit.
     """
-    return (os.getenv(ADAPTIVE_ENV) or "").strip().lower() in _TRUE_ADAPT
+    raw = (os.getenv(ADAPTIVE_ENV) or "").strip().lower()
+    if not raw:
+        return True
+    # AN UNREADABLE VALUE IS NOT AN OFF SWITCH. Only the explicit false
+    # spellings disable it; a typo leaves the validated shape in force
+    # rather than silently restoring the one that completes nothing.
+    return raw not in _FALSE_ADAPT
 
 
 def adaptive_depth_candidates() -> List[int]:

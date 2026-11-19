@@ -198,10 +198,20 @@ def test_sized_preflight_for_r4_still_requires_the_deployed_worst_case(monkeypat
 
 def test_r4_rebate_arithmetic_supports_par_and_no_further():
     """The measured rebate (0.0125 x p(1-p) per share) pays for a pair up to
-    ~1.002-1.003 at p in [0.2, 0.5]; the owner keeps the live ceiling at par."""
+    ~1.002-1.003 at p in [0.2, 0.5]; the owner keeps the live ceiling at par.
+
+    PRICED AT THE FLAT REGIME, which is when that arithmetic was measured.
+    PMUS re-tiered on 2026-11-14 and this account is Maker Tier 1, which
+    receives nothing -- so the rebate no longer pays for ANY part of a
+    pair, and the par ceiling is now the only thing holding the rung.
+    """
+    import datetime as _dt
+    flat = _dt.datetime(2026, 10, 1, tzinfo=_dt.timezone.utc)
     for p in ("0.20", "0.30", "0.45", "0.50"):
-        per_share = q1.maker_rebate(D(p))
+        per_share = q1.maker_rebate(D(p), when=flat)
         assert D("0.0020") <= per_share <= D("0.0032")
+        #: and today it supports nothing at all
+        assert q1.maker_rebate(D(p)) == 0
     assert ladder.pair_cost_max(ladder.rung("R4")) == D("1.00")
 
 

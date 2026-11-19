@@ -118,7 +118,7 @@ def preflight(*, heartbeat: Mapping[str, Any],
     age = _d(book.get("stream_age_s"))
     rows.append(_row("authenticated_book_connected_and_fresh",
                      bool(book.get("connected")) and age is not None
-                     and age >= 0 and not book.get("gap_suspected"),
+                     and 0 <= age <= D("2") and not book.get("gap_suspected"),
                      connected=book.get("connected"),
                      stream_age_s=book.get("stream_age_s"),
                      gap_suspected=book.get("gap_suspected"),
@@ -171,14 +171,86 @@ def preflight(*, heartbeat: Mapping[str, Any],
         rows.append(_row("recorder_can_calibrate", UNKNOWN,
                          why="no calibration report supplied"))
     else:
-        orders = int(calibration.get("orders") or 0)
-        rows.append(_row("recorder_has_observed_something", orders > 0,
-                         orders=orders,
-                         events_appended=calibration.get("events_appended")))
+        try:
+            orders = int(calibration.get("orders") or 0)
+        except (TypeError, ValueError, OverflowError):
+            orders = 0
+        # Orders seen in memory do not prove that their events survived a write.
+        # A missing or zero append count must fail closed before live arming.
+        appended_raw = calibration.get("events_appended")
+        try:
+            appended = int(appended_raw) if appended_raw is not None else None
+        except (TypeError, ValueError, OverflowError):
+            appended = None
+        rows.append(_row("recorder_has_observed_something",
+                         orders > 0 and appended is not None and appended > 0,
+                         orders=orders, events_appended=appended_raw))
         errs = dict(calibration.get("errors") or {})
+        try:
+            write_failures = int(errs.get("ledger_write_failed", 0))
+        except (TypeError, ValueError, OverflowError):
+            write_failures = None
         rows.append(_row("recorder_has_no_write_failures",
-                         int(errs.get("ledger_write_failed", 0)) == 0,
-                         errors=errs))
+                         write_failures == 0, errors=errs))
+        # ========== DURABILITY IS A READ-BACK, NOT A COUNTER
+        #
+        # #212 closed the first half of this: `orders > 0` alone could pass
+        # with `events_appended` zero or missing. The owner named the
+        # remaining half -- "append counts alone are insufficient" -- and it
+        # is a property of the counter itself. `CalibrationRecorder.appended` is
+        # initialised to 0 in `__init__` and incremented only in `_append`,
+        # so it counts what THIS PROCESS wrote and is zeroed by every
+        # restart. It can therefore be satisfied by a process whose writes
+        # nothing has read back, and refused by a process holding a fully
+        # durable ledger it has just reloaded. Neither direction is
+        # durability.
+        #
+        # `CalibrationRecorder.verify_readback()` re-opens the file and reports
+        # what parses back, and `events_replayed_from_disk` counts events a
+        # PREVIOUS process wrote that this one recovered -- the only field
+        # in the report that cannot be true without a surviving write.
+        #
+        # ABSENT IS UNKNOWN, NOT CLEAN. A calibration report from before
+        # this field existed must not read as a pass, and must not read as
+        # a failure either: it is a report that cannot answer.
+        rb = calibration.get("readback")
+        if rb is None:
+            rows.append(_row("recorder_ledger_reads_back", UNKNOWN,
+                             why="no readback report supplied"))
+            rows.append(_row("recorder_events_survive_a_restart", UNKNOWN,
+                             why="no readback report supplied"))
+        elif not isinstance(rb, Mapping):
+            rows.append(_row("recorder_ledger_reads_back", False,
+                             why="readback report is not a mapping",
+                             got=str(type(rb).__name__)))
+            rows.append(_row("recorder_events_survive_a_restart", False,
+                             why="readback report is not a mapping"))
+        else:
+            _readable = rb.get("readable") is True
+            _ev = _int_or_none(rb.get("events_readable"))
+            _ord = _int_or_none(rb.get("orders_readable"))
+            _bad = _int_or_none(rb.get("unreadable_lines"))
+            # An UNREADABLE ledger is a refusal and never an empty one: the
+            # difference between "nothing was written" and "we cannot tell"
+            # is the whole point of this gate.
+            rows.append(_row(
+                "recorder_ledger_reads_back",
+                bool(_readable and _ev is not None and _ev > 0
+                     and _ord is not None and _ord > 0
+                     and _bad == 0),
+                readable=rb.get("readable"), error=rb.get("error"),
+                events_readable=rb.get("events_readable"),
+                orders_readable=rb.get("orders_readable"),
+                unreadable_lines=rb.get("unreadable_lines")))
+            _rep = _int_or_none(rb.get("events_replayed_from_disk"))
+            rows.append(_row(
+                "recorder_events_survive_a_restart",
+                bool(_readable and _rep is not None and _rep > 0),
+                events_replayed_from_disk=rb.get("events_replayed_from_disk"),
+                events_appended_this_process=rb.get(
+                    "events_appended_this_process"),
+                why=("a per-process append count cannot establish this; "
+                     "only events recovered from a previous process can")))
 
     unknown = [r for r in rows if r["ok"] is UNKNOWN]
     failed = [r for r in rows if r["ok"] is False]
@@ -193,6 +265,55 @@ def preflight(*, heartbeat: Mapping[str, Any],
                    "and clearing them is an owner decision. An UNKNOWN is "
                    "never a pass."),
     }
+
+
+def _int_or_none(v: Any) -> Optional[int]:
+    """An int, or None for anything that is not one. Never a silent zero:
+    a missing count and a count of zero must be distinguishable, because
+    one is "we cannot tell" and the other is "nothing is there"."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def exact_window_consistency(*, heartbeat: Mapping[str, Any],
+                             plan: Mapping[str, Any],
+                             market: str) -> Dict[str, Any]:
+    """Fail-closed, read-only market identity gate for a live probe.
+
+    The runner's heartbeat market is the transport's active market_slug.
+    A startup/document-only authorization verdict is not market coverage.
+    This gate must be called by the live-probe orchestrator before arming;
+    it does not itself authorize or submit anything.
+    """
+    hb = heartbeat or {}
+    wanted = str(market or "").strip()
+    active = str(hb.get("market") or "").strip()
+    planned = str((plan or {}).get("market") or "").strip()
+    verdict = hb.get("authorization_preflight") or {}
+    evaluated = str(verdict.get("evaluated_market") or "").strip()
+    camp = hb.get("campaign") or {}
+    checks = [
+        _row("exact_target_present", bool(wanted), target=wanted),
+        _row("executor_active_market_matches", bool(wanted) and active == wanted,
+             active=active, target=wanted),
+        _row("plan_market_matches_executor", bool(wanted) and planned == wanted,
+             plan_market=planned, target=wanted),
+        _row("authorization_evaluated_same_market",
+             bool(wanted) and evaluated == wanted,
+             evaluated_market=evaluated, target=wanted),
+        _row("campaign_permits_exact_window",
+             camp.get("permits_this_window") is True,
+             permits_this_window=camp.get("permits_this_window")),
+        _row("authorization_verdict_passes", verdict.get("ok") is True,
+             authorization_ok=verdict.get("ok")),
+    ]
+    return {"ok": all(row["ok"] is True for row in checks),
+            "checks": checks,
+            "failed": [row["check"] for row in checks if row["ok"] is not True]}
 
 
 # ------------------------------------------------------------------ after

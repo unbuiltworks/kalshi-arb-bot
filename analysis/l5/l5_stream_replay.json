@@ -1,0 +1,779 @@
+{
+ "evidence_class": "L5's VENUE-CONFIRMED Polymarket fills and redemptions, taken or skipped by our controller -- assumes we could have had his fills; not PMUS fills and not our own",
+ "rows": {
+  "BALANCE with a 0.96 pair ceiling on hedges": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.8738168334888131,
+    "contracts_per_window": 89.1254853898305,
+    "fills_per_window": 5.110169491525424,
+    "matched_net_total": 655.3856400839744,
+    "matched_share": 0.8488549345553302,
+    "net_per_contract": 0.0053221871271037224,
+    "net_per_contract_ci95": [
+     -0.013866982641401345,
+     0.021811510971125058
+    ],
+    "net_per_window": 0.47434251103862685,
+    "net_per_window_ci95": [
+     -1.1268973201517285,
+     2.0866768989644413
+    ],
+    "net_total": 55.97241630255797,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 28.0824305,
+    "residual_net_total": -599.4132237814165,
+    "residual_on_winner_share": 0.02586206896551724,
+    "windows": 118,
+    "worst_window": -20.27124
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.8696961412765616,
+    "contracts_per_window": 81.81803532857143,
+    "fills_per_window": 5.042857142857143,
+    "matched_net_total": 372.6525410689273,
+    "matched_share": 0.8453175130044368,
+    "net_per_contract": 0.008687698245350178,
+    "net_per_contract_ci95": [
+     -0.01572360180724342,
+     0.027798439413170055
+    ],
+    "net_per_window": 0.7108104019620289,
+    "net_per_window_ci95": [
+     -1.1391607761428553,
+     2.503443896055457
+    ],
+    "net_total": 49.75672813734202,
+    "peak_residual_max": 30.0,
+    "peak_residual_median": 27.913043000000002,
+    "residual_net_total": -322.8958129315853,
+    "residual_on_winner_share": 0.02857142857142857,
+    "windows": 70,
+    "worst_window": -18.799590000000002
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.882780885640556,
+    "contracts_per_window": 99.78218339583333,
+    "fills_per_window": 5.208333333333333,
+    "matched_net_total": 282.7330990150472,
+    "matched_share": 0.8530849277035149,
+    "net_per_contract": 0.0012977617750485723,
+    "net_per_contract_ci95": [
+     -0.0327753930030438,
+     0.025898569272874053
+    ],
+    "net_per_window": 0.12949350344199884,
+    "net_per_window_ci95": [
+     -2.7141101113496684,
+     2.9953621637499985
+    ],
+    "net_total": 6.215688165215944,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 29.676852,
+    "residual_net_total": -276.5174108498312,
+    "residual_on_winner_share": 0.021739130434782608,
+    "windows": 48,
+    "worst_window": -20.27124
+   }
+  },
+  "BALANCE with a 1.00 pair ceiling on hedges": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.8992144075111772,
+    "contracts_per_window": 113.06734457627118,
+    "fills_per_window": 6.466101694915254,
+    "matched_net_total": 640.5051424038603,
+    "matched_share": 0.8745359209823134,
+    "net_per_contract": 0.002876034186045679,
+    "net_per_contract_ci95": [
+     -0.012631181887445992,
+     0.01656205002749347
+    ],
+    "net_per_window": 0.3251855483267624,
+    "net_per_window_ci95": [
+     -1.2833616088873394,
+     2.0499875168525916
+    ],
+    "net_total": 38.37189470255796,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 28.1297515,
+    "residual_net_total": -602.1332477013024,
+    "residual_on_winner_share": 0.017241379310344827,
+    "windows": 118,
+    "worst_window": -20.27124
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.8916342963217119,
+    "contracts_per_window": 97.34453881428571,
+    "fills_per_window": 6.071428571428571,
+    "matched_net_total": 343.5551085498945,
+    "matched_share": 0.8693757680793527,
+    "net_per_contract": 0.0010026630256616705,
+    "net_per_contract_ci95": [
+     -0.017180292547347185,
+     0.01600086758306932
+    ],
+    "net_per_window": 0.09760376981917163,
+    "net_per_window_ci95": [
+     -1.5518531274850293,
+     1.6634046032167995
+    ],
+    "net_total": 6.832263887342014,
+    "peak_residual_max": 30.216328000000004,
+    "peak_residual_median": 27.595903999999997,
+    "residual_net_total": -336.7228446625525,
+    "residual_on_winner_share": 0.014285714285714285,
+    "windows": 70,
+    "worst_window": -17.4
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.9151109160039878,
+    "contracts_per_window": 135.9964363125,
+    "fills_per_window": 7.041666666666667,
+    "matched_net_total": 296.9500338539658,
+    "matched_share": 0.8799223809562988,
+    "net_per_contract": 0.004831565148323455,
+    "net_per_contract_ci95": [
+     -0.020698610504958533,
+     0.02623097824579076
+    ],
+    "net_per_window": 0.6570756419836655,
+    "net_per_window_ci95": [
+     -2.4038989293749995,
+     4.128036379275332
+    ],
+    "net_total": 31.539630815215943,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 29.914893500000005,
+    "residual_net_total": -265.41040303874985,
+    "residual_on_winner_share": 0.021739130434782608,
+    "windows": 48,
+    "worst_window": -20.27124
+   }
+  },
+  "BALANCE without balance-first (no residual cap)": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.9518528504361365,
+    "contracts_per_window": 611.1301643135594,
+    "fills_per_window": 33.19491525423729,
+    "matched_net_total": 1045.0966646831512,
+    "matched_share": 0.9734016504396469,
+    "net_per_contract": 0.012789829178851542,
+    "net_per_contract_ci95": [
+     0.005012465786880945,
+     0.020756618305408082
+    ],
+    "net_per_window": 7.816250407613899,
+    "net_per_window_ci95": [
+     3.095802079577715,
+     12.511626257639733
+    ],
+    "net_total": 922.31754809844,
+    "peak_residual_max": 268.4754560000001,
+    "peak_residual_median": 122.66018749999998,
+    "residual_net_total": -122.7791165847112,
+    "residual_on_winner_share": 0.2966101694915254,
+    "windows": 118,
+    "worst_window": -68.40998988999996
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.9364566340920639,
+    "contracts_per_window": 511.24583492857147,
+    "fills_per_window": 29.214285714285715,
+    "matched_net_total": 706.1405831104161,
+    "matched_share": 0.9644187688750027,
+    "net_per_contract": 0.01807945154032751,
+    "net_per_contract_ci95": [
+     0.005389814623331781,
+     0.03003787213713402
+    ],
+    "net_per_window": 9.243044297785385,
+    "net_per_window_ci95": [
+     2.7524624406799516,
+     15.406183942744848
+    ],
+    "net_total": 647.013100844977,
+    "peak_residual_max": 239.60355099999998,
+    "peak_residual_median": 120.3212065,
+    "residual_net_total": -59.12748226543911,
+    "residual_on_winner_share": 0.3,
+    "windows": 70,
+    "worst_window": -68.40998988999996
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.9653078281736125,
+    "contracts_per_window": 756.7948113333333,
+    "fills_per_window": 39.0,
+    "matched_net_total": 338.9560815727352,
+    "matched_share": 0.9822512600634752,
+    "net_per_contract": 0.007578684779399541,
+    "net_per_contract_ci95": [
+     -0.0019108082270356634,
+     0.016732074867555444
+    ],
+    "net_per_window": 5.735509317780481,
+    "net_per_window_ci95": [
+     -1.3853571584854107,
+     12.540690233677283
+    ],
+    "net_total": 275.3044472534631,
+    "peak_residual_max": 268.4754560000001,
+    "peak_residual_median": 124.8408325,
+    "residual_net_total": -63.65163431927209,
+    "residual_on_winner_share": 0.2916666666666667,
+    "windows": 48,
+    "worst_window": -66.69698147999998
+   }
+  },
+  "BALANCE without late hedging (stop at 600s)": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.9814109656227463,
+    "contracts_per_window": 229.61681506779664,
+    "fills_per_window": 11.85593220338983,
+    "matched_net_total": 162.3175803989914,
+    "matched_share": 0.9416598250934405,
+    "net_per_contract": 0.003918659960833667,
+    "net_per_contract_ci95": [
+     -0.0027254738593397603,
+     0.010339998280152845
+    ],
+    "net_per_window": 0.8997902195403231,
+    "net_per_window_ci95": [
+     -0.6221896240385386,
+     2.3751515749640517
+    ],
+    "net_total": 106.17524590575813,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 29.568527000000014,
+    "residual_net_total": -56.14233449323328,
+    "residual_on_winner_share": 0.4358974358974359,
+    "windows": 118,
+    "worst_window": -27.44919
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.9787991788876839,
+    "contracts_per_window": 180.54693408571427,
+    "fills_per_window": 9.771428571428572,
+    "matched_net_total": 65.57147924185227,
+    "matched_share": 0.9209513264270262,
+    "net_per_contract": 0.003621761832661149,
+    "net_per_contract_ci95": [
+     -0.0076247901377710595,
+     0.014148885176549744
+    ],
+    "net_per_window": 0.6538979948756283,
+    "net_per_window_ci95": [
+     -1.3718065992672275,
+     2.588531745769743
+    ],
+    "net_total": 45.77285964129398,
+    "peak_residual_max": 30.216328000000004,
+    "peak_residual_median": 29.081779,
+    "residual_net_total": -19.798619600558286,
+    "residual_on_winner_share": 0.44285714285714284,
+    "windows": 70,
+    "worst_window": -27.44919
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.9862735434596217,
+    "contracts_per_window": 301.17705816666665,
+    "fills_per_window": 14.895833333333334,
+    "matched_net_total": 96.74610115713914,
+    "matched_share": 0.959763787873597,
+    "net_per_contract": 0.00417821680986062,
+    "net_per_contract_ci95": [
+     -0.003157205387944184,
+     0.011128379370905574
+    ],
+    "net_per_window": 1.2583830471763364,
+    "net_per_window_ci95": [
+     -0.9027662658333268,
+     3.282593554660673
+    ],
+    "net_total": 60.40238626446415,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 30.0,
+    "residual_net_total": -36.34371489267499,
+    "residual_on_winner_share": 0.425531914893617,
+    "windows": 48,
+    "worst_window": -20.355824899999988
+   }
+  },
+  "BALANCE without the 0.30 floor": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.9793703888265963,
+    "contracts_per_window": 349.1283560762712,
+    "fills_per_window": 18.24576271186441,
+    "matched_net_total": 379.7088884239208,
+    "matched_share": 0.958750487757119,
+    "net_per_contract": 0.004628992549178533,
+    "net_per_contract_ci95": [
+     0.00031502763686681585,
+     0.008731558583270415
+    ],
+    "net_per_window": 1.6161125589840089,
+    "net_per_window_ci95": [
+     0.11042229014550863,
+     3.1347109655326353
+    ],
+    "net_total": 190.70128196011305,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 29.67005300000001,
+    "residual_net_total": -189.0076064638078,
+    "residual_on_winner_share": 0.24786324786324787,
+    "windows": 118,
+    "worst_window": -26.623636900000008
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.9784691053480922,
+    "contracts_per_window": 292.02439811428576,
+    "fills_per_window": 15.842857142857143,
+    "matched_net_total": 180.32476692838085,
+    "matched_share": 0.9522456894353657,
+    "net_per_contract": 0.0037056226815680503,
+    "net_per_contract_ci95": [
+     -0.0018547468966058007,
+     0.009056276779777698
+    ],
+    "net_per_window": 1.0821322332235552,
+    "net_per_window_ci95": [
+     -0.533774437938242,
+     2.6074005776268865
+    ],
+    "net_total": 75.74925632564887,
+    "peak_residual_max": 30.216328000000004,
+    "peak_residual_median": 29.5980885,
+    "residual_net_total": -104.57551060273198,
+    "residual_on_winner_share": 0.2571428571428571,
+    "windows": 70,
+    "worst_window": -18.457680110000013
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.980591673143385,
+    "contracts_per_window": 432.40496143750005,
+    "fills_per_window": 21.75,
+    "matched_net_total": 199.38412149554,
+    "matched_share": 0.9651569623436331,
+    "net_per_contract": 0.005538405154795664,
+    "net_per_contract_ci95": [
+     -0.0005093226461936811,
+     0.011428362186593677
+    ],
+    "net_per_window": 2.3948338673846705,
+    "net_per_window_ci95": [
+     -0.20386848415766531,
+     5.271196883333338
+    ],
+    "net_total": 114.95202563446418,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 30.0,
+    "residual_net_total": -84.43209586107582,
+    "residual_on_winner_share": 0.23404255319148937,
+    "windows": 48,
+    "worst_window": -26.623636900000008
+   }
+  },
+  "L5 as traded": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.9242165576995057,
+    "contracts_per_window": 1056.6040528474575,
+    "fills_per_window": 58.73728813559322,
+    "matched_net_total": 3771.739363071346,
+    "matched_share": 0.8791970498779236,
+    "net_per_contract": 0.006638735373438809,
+    "net_per_contract_ci95": [
+     -0.0017398768721243229,
+     0.015433465610993947
+    ],
+    "net_per_window": 7.014514701357226,
+    "net_per_window_ci95": [
+     -1.9035885022554926,
+     16.196768444698012
+    ],
+    "net_total": 827.7127347601527,
+    "peak_residual_max": 397.94624999999985,
+    "peak_residual_median": 178.07257899999996,
+    "residual_net_total": -2944.0266283111932,
+    "residual_on_winner_share": 0.2711864406779661,
+    "windows": 118,
+    "worst_window": -119.94792456000005
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.9210251095018305,
+    "contracts_per_window": 926.3660378714285,
+    "fills_per_window": 53.84285714285714,
+    "matched_net_total": 2203.632299860083,
+    "matched_share": 0.8688839236726972,
+    "net_per_contract": 0.010369822141882623,
+    "net_per_contract_ci95": [
+     -0.003283652950704079,
+     0.024682335905297233
+    ],
+    "net_per_window": 9.606251051007217,
+    "net_per_window_ci95": [
+     -3.0516535796527413,
+     22.838501161864002
+    ],
+    "net_total": 672.4375735705052,
+    "peak_residual_max": 361.6698530000001,
+    "peak_residual_median": 177.70135399999998,
+    "residual_net_total": -1531.1947262895778,
+    "residual_on_winner_share": 0.35714285714285715,
+    "windows": 70,
+    "worst_window": -119.94792456000005
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.9374052323066386,
+    "contracts_per_window": 1246.5344913541667,
+    "fills_per_window": 65.875,
+    "matched_net_total": 1568.1070632112626,
+    "matched_share": 0.8903740552558786,
+    "net_per_contract": 0.002595114065345094,
+    "net_per_contract_ci95": [
+     -0.006617409576454466,
+     0.01278626656342251
+    ],
+    "net_per_window": 3.23489919145099,
+    "net_per_window_ci95": [
+     -8.257378024997,
+     15.577970716142765
+    ],
+    "net_total": 155.27516118964752,
+    "peak_residual_max": 397.94624999999985,
+    "peak_residual_median": 182.11413699999997,
+    "residual_net_total": -1412.8319020216152,
+    "residual_on_winner_share": 0.14583333333333334,
+    "windows": 48,
+    "worst_window": -84.04791915999988
+   }
+  },
+  "controller, BALANCE profile": {
+   "ALL": {
+    "aggregate_pair_cost_median": 0.9791736497773802,
+    "contracts_per_window": 345.3170751779661,
+    "fills_per_window": 18.076271186440678,
+    "matched_net_total": 375.00152919869817,
+    "matched_share": 0.9595696456765291,
+    "net_per_contract": 0.00521249314128331,
+    "net_per_contract_ci95": [
+     0.0007889140931131226,
+     0.009537849362239854
+    ],
+    "net_per_window": 1.7999628859331613,
+    "net_per_window_ci95": [
+     0.2720804375982718,
+     3.3822202397354824
+    ],
+    "net_total": 212.39562054011304,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 29.6305705,
+    "residual_net_total": -162.60590865858515,
+    "residual_on_winner_share": 0.24786324786324787,
+    "windows": 118,
+    "worst_window": -26.623636900000008
+   },
+   "IS": {
+    "aggregate_pair_cost_median": 0.9791048381363837,
+    "contracts_per_window": 289.8717038142857,
+    "fills_per_window": 15.757142857142858,
+    "matched_net_total": 175.4851495802799,
+    "matched_share": 0.9518094152820461,
+    "net_per_contract": 0.004401936215245373,
+    "net_per_contract_ci95": [
+     -0.0014243365277117797,
+     0.010274211807283058
+    ],
+    "net_per_window": 1.2759967507949845,
+    "net_per_window_ci95": [
+     -0.41158816442851703,
+     2.9424951169436286
+    ],
+    "net_total": 89.31977255564892,
+    "peak_residual_max": 30.216328000000004,
+    "peak_residual_median": 29.487560000000016,
+    "residual_net_total": -86.16537702463097,
+    "residual_on_winner_share": 0.2571428571428571,
+    "windows": 70,
+    "worst_window": -18.457680110000013
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": 0.980591673143385,
+    "contracts_per_window": 426.1749084166667,
+    "fills_per_window": 21.458333333333332,
+    "matched_net_total": 199.51637961841828,
+    "matched_share": 0.9672671397756373,
+    "net_per_contract": 0.006016497254306037,
+    "net_per_contract_ci95": [
+     -0.0002449084662452853,
+     0.012064150661307844
+    ],
+    "net_per_window": 2.564080166343002,
+    "net_per_window_ci95": [
+     -0.09611908490699787,
+     5.4488670989426735
+    ],
+    "net_total": 123.0758479844641,
+    "peak_residual_max": 31.153847,
+    "peak_residual_median": 30.0,
+    "residual_net_total": -76.44053163395418,
+    "residual_on_winner_share": 0.23404255319148937,
+    "windows": 48,
+    "worst_window": -26.623636900000008
+   }
+  },
+  "controller, MODEL_EDGE profile (current)": {
+   "ALL": {
+    "aggregate_pair_cost_median": null,
+    "contracts_per_window": 0.0,
+    "fills_per_window": 0.0,
+    "matched_net_total": 0.0,
+    "matched_share": null,
+    "net_per_contract": null,
+    "net_per_contract_ci95": null,
+    "net_per_window": 0.0,
+    "net_per_window_ci95": [
+     0.0,
+     0.0
+    ],
+    "net_total": 0.0,
+    "peak_residual_max": 0.0,
+    "peak_residual_median": 0.0,
+    "residual_net_total": 0.0,
+    "residual_on_winner_share": null,
+    "windows": 118,
+    "worst_window": 0.0
+   },
+   "IS": {
+    "aggregate_pair_cost_median": null,
+    "contracts_per_window": 0.0,
+    "fills_per_window": 0.0,
+    "matched_net_total": 0.0,
+    "matched_share": null,
+    "net_per_contract": null,
+    "net_per_contract_ci95": null,
+    "net_per_window": 0.0,
+    "net_per_window_ci95": [
+     0.0,
+     0.0
+    ],
+    "net_total": 0.0,
+    "peak_residual_max": 0.0,
+    "peak_residual_median": 0.0,
+    "residual_net_total": 0.0,
+    "residual_on_winner_share": null,
+    "windows": 70,
+    "worst_window": 0.0
+   },
+   "OOS": {
+    "aggregate_pair_cost_median": null,
+    "contracts_per_window": 0.0,
+    "fills_per_window": 0.0,
+    "matched_net_total": 0.0,
+    "matched_share": null,
+    "net_per_contract": null,
+    "net_per_contract_ci95": null,
+    "net_per_window": 0.0,
+    "net_per_window_ci95": [
+     0.0,
+     0.0
+    ],
+    "net_total": 0.0,
+    "peak_residual_max": 0.0,
+    "peak_residual_median": 0.0,
+    "residual_net_total": 0.0,
+    "residual_on_winner_share": null,
+    "windows": 48,
+    "worst_window": 0.0
+   }
+  }
+ },
+ "vs_as_traded": {
+  "BALANCE with a 0.96 pair ceiling on hedges": {
+   "ALL": {
+    "ci95": [
+     -15.307820423946007,
+     2.1504244286791296
+    ],
+    "mean": -6.540172190318598
+   },
+   "IS": {
+    "ci95": [
+     -21.530651775917256,
+     3.246742371859648
+    ],
+    "mean": -8.895440649045186
+   },
+   "OOS": {
+    "ci95": [
+     -14.54951353602389,
+     8.207041773837345
+    ],
+    "mean": -3.1054056880089913
+   }
+  },
+  "BALANCE with a 1.00 pair ceiling on hedges": {
+   "ALL": {
+    "ci95": [
+     -15.547048116086764,
+     2.0337924819139155
+    ],
+    "mean": -6.689329153030464
+   },
+   "IS": {
+    "ci95": [
+     -22.111780723847218,
+     2.562518321867959
+    ],
+    "mean": -9.508647281188045
+   },
+   "OOS": {
+    "ci95": [
+     -14.192079391250076,
+     8.95037263091218
+    ],
+    "mean": -2.577823549467325
+   }
+  },
+  "BALANCE without balance-first (no residual cap)": {
+   "ALL": {
+    "ci95": [
+     -8.067446753925529,
+     8.68337256641584
+    ],
+    "mean": 0.8017357062566729
+   },
+   "IS": {
+    "ci95": [
+     -13.650602634117186,
+     11.349636412239967
+    ],
+    "mean": -0.3632067532218311
+   },
+   "OOS": {
+    "ci95": [
+     -8.058399732728747,
+     12.138577489182703
+    ],
+    "mean": 2.5006101263294913
+   }
+  },
+  "BALANCE without late hedging (stop at 600s)": {
+   "ALL": {
+    "ci95": [
+     -15.146415765359224,
+     2.4948885554457068
+    ],
+    "mean": -6.114724481816903
+   },
+   "IS": {
+    "ci95": [
+     -21.798025243744796,
+     3.43302292653699
+    ],
+    "mean": -8.952353056131589
+   },
+   "OOS": {
+    "ci95": [
+     -13.979464153773185,
+     9.282864002225788
+    ],
+    "mean": -1.976516144274654
+   }
+  },
+  "BALANCE without the 0.30 floor": {
+   "ALL": {
+    "ci95": [
+     -14.324256453897254,
+     3.1498693474253554
+    ],
+    "mean": -5.398402142373217
+   },
+   "IS": {
+    "ci95": [
+     -21.294650795475757,
+     3.7268219299293053
+    ],
+    "mean": -8.52411881778366
+   },
+   "OOS": {
+    "ci95": [
+     -13.017075902576527,
+     10.956278428006664
+    ],
+    "mean": -0.8400653240663197
+   }
+  },
+  "L5 as traded": {
+   "ALL": {
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "mean": 0.0
+   },
+   "IS": {
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "mean": 0.0
+   },
+   "OOS": {
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "mean": 0.0
+   }
+  },
+  "controller, BALANCE profile": {
+   "ALL": {
+    "ci95": [
+     -14.121227189989362,
+     3.3138925768460465
+    ],
+    "mean": -5.214551815424064
+   },
+   "IS": {
+    "ci95": [
+     -20.898910191950964,
+     3.7792571681280864
+    ],
+    "mean": -8.330254300212232
+   },
+   "OOS": {
+    "ci95": [
+     -12.860441534301506,
+     11.151794602992837
+    ],
+    "mean": -0.6708190251079876
+   }
+  },
+  "controller, MODEL_EDGE profile (current)": {
+   "ALL": {
+    "ci95": [
+     -16.196768444698012,
+     1.9035885022554926
+    ],
+    "mean": -7.014514701357226
+   },
+   "IS": {
+    "ci95": [
+     -22.838501161864002,
+     3.0516535796527413
+    ],
+    "mean": -9.606251051007217
+   },
+   "OOS": {
+    "ci95": [
+     -15.577970716142765,
+     8.257378024997
+    ],
+    "mean": -3.23489919145099
+   }
+  }
+ },
+ "windows": {
+  "ALL": 118,
+  "IS": 70,
+  "OOS": 48
+ }
+}

@@ -39,7 +39,7 @@ import json
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Optional
 
 #: the one served path.
 REGISTRY_KEY = "l5/live_orders.json"
@@ -67,7 +67,25 @@ def submission_disabled() -> bool:
     return str(os.getenv("L5_SHADOW_ONLY", "1")).strip() != "0"
 
 
-def registry(store: Any) -> Dict[str, Any]:
+def _risk_block(risk: Any) -> Optional[Dict[str, Any]]:
+    """The ACCOUNT-WIDE loss figures and limits this service enforces, so a
+    second strategy on the same account reads the same limit instead of
+    holding its own copy. None when not supplied; a failure is REPORTED as
+    unreadable, never as a clean figure."""
+    if risk is None:
+        return None
+    try:
+        got = risk()
+        return dict(got) if isinstance(got, Mapping) else {
+            "readable": False, "reason": "RISK_NOT_A_MAPPING"}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"readable": False,
+                "reason": "RISK_READ_FAILED:%s" % type(exc).__name__}
+
+
+def registry(store: Any, risk: Any = None) -> Dict[str, Any]:
     """The ids this executor ACKed, with the market each belongs to.
 
     Only orders the ledger still believes are LIVE. A terminal order needs no
@@ -105,6 +123,11 @@ def registry(store: Any) -> Dict[str, Any]:
             # safe, and "the executor has stopped publishing" is the wedged
             # signal. Without this field they are indistinguishable.
             "as_of_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            # THE ACCOUNT-WIDE LOSS STATE, read-only. Absent unless the
+            # service supplies it. The BTC5m runner refuses to submit
+            # without a fresh, readable copy of this block.
+            **({"account_risk": _risk_block(risk)} if risk is not None
+               else {}),
             "labels": ("venue order ids this executor ACKed and still "
                        "believes live. A claim here is NECESSARY and NOT "
                        "SUFFICIENT: the watchdog also requires the venue's "
@@ -113,7 +136,7 @@ def registry(store: Any) -> Dict[str, Any]:
                        "by that path.")}
 
 
-def make_handler(store: Any):
+def make_handler(store: Any, risk: Any = None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "l5-order-registry/1"
@@ -124,7 +147,8 @@ def make_handler(store: Any):
                 return self._send(200, b'{"ok":true}')
             if path != REGISTRY_KEY:
                 return self._send(404, b'{"error":"no such key"}')
-            body = json.dumps(registry(store), sort_keys=True).encode()
+            body = json.dumps(registry(store, risk), sort_keys=True,
+                              default=str).encode()
             return self._send(200, body)
 
         def _send(self, code: int, body: bytes) -> None:
@@ -140,8 +164,10 @@ def make_handler(store: Any):
     return Handler
 
 
-def serve(store: Any, *, port: int, background: bool = True):
-    httpd = ThreadingHTTPServer(("0.0.0.0", int(port)), make_handler(store))
+def serve(store: Any, *, port: int, background: bool = True,
+          risk: Any = None):
+    httpd = ThreadingHTTPServer(("0.0.0.0", int(port)),
+                                make_handler(store, risk))
     if not background:
         httpd.serve_forever()
         return httpd
@@ -149,12 +175,12 @@ def serve(store: Any, *, port: int, background: bool = True):
     return httpd
 
 
-def serve_from_env(store: Any):
+def serve_from_env(store: Any, risk: Any = None):
     """Serve only when a port is configured. Unset changes nothing."""
     port = str(os.getenv(PORT_ENV, "")).strip()
     if not port:
         return None
     try:
-        return serve(store, port=int(port))
+        return serve(store, port=int(port), risk=risk)
     except BaseException:                                      # noqa: BLE001
         return None

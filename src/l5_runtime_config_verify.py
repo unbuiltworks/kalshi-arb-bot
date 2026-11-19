@@ -120,7 +120,16 @@ APPROVED: Dict[str, Any] = {
     # FILL_CONTINGENT_WORST_CASE basis that refuses to net the opposite side,
     # so two same-side resting legs are refused at ANY slot count. Pinned in
     # tests/test_l5_two_order_slot_safety.py.
-    "max_live_orders": 2,
+    # RAISED 2 -> 4 BY OWNER DECISION, 2026-11-10: "I approve preparing the
+    # four-order configuration and deploying it disarmed after regression
+    # tests. This does not authorize live trading or waive the
+    # profitability gate." Four slots are two price levels a side
+    # (L5_TS_CONCURRENT_ROUNDS=2). STILL AN EXACT MATCH, for the reason
+    # above: a typo of 40 is caught here. Cash, exposure and the daily halt
+    # are unchanged, the second level opens only when the own-settled-
+    # evidence gate allows it, and the same-side worst-case basis described
+    # above still prices every resting order as though it fills alone.
+    "max_live_orders": 4,
     "window_strategy": "TWO_SIDED",
     "campaign_duration_ceiling_s": 14400.0,
     # RAISED 5 -> 20 by owner decision for the eight-window sequential
@@ -150,6 +159,11 @@ APPROVED: Dict[str, Any] = {
 
 #: the full window length these clocks are measured against
 WINDOW_S = 900.0
+
+
+#: An order limit the configuration has been made ready for and the owner
+#: has NOT yet activated. See the `max_live_orders` row.
+MAX_LIVE_ORDERS_PREPARED = 8
 
 
 def _row(name: str, source: str, read: Callable[[], Any],
@@ -542,10 +556,20 @@ def verify() -> Dict[str, Any]:
         _row("aggregate_exposure_usd",
              "R.max_total_exposure_usd() (the variable)",
              lambda: R.max_total_exposure_usd(), exp_usd),
+        # AT OR BELOW THE APPROVED CEILING, AND ABOVE ZERO (2026-11-11).
+        # This row demanded exactly the approved $10.00, so an owner who
+        # set a TIGHTER budget for one bounded test -- which the gate
+        # enforces as written -- would have read as a failing
+        # configuration. A smaller loss bound is inside the approval, not a
+        # departure from it. Unset (None) still fails: the bound would be
+        # inert. Zero still fails: that is the fail-closed value an
+        # unreadable setting produces, and it refuses every order.
         _row("campaign_additional_loss_usd",
              "CBL.limit_from_env() clamped by CBL.MAX_ADDITIONAL_LOSS_USD",
              lambda: CBL.limit_from_env(),
-             A["campaign_additional_loss_usd"]),
+             A["campaign_additional_loss_usd"],
+             compare=lambda got, req: (got is not None
+                                       and D(0) < got <= req)),
         _row("opening_notional_budget_usd",
              "TS.opening_notional_budget_usd() clamped by "
              "TS.OPENING_NOTIONAL_MAX_USD",
@@ -559,8 +583,15 @@ def verify() -> Dict[str, Any]:
         _row("daily_realized_loss_halt_usd",
              "R.daily_realized_loss_halt()",
              R.daily_realized_loss_halt, daily_usd),
+        # THE APPROVED NUMBER, OR THE PREPARED CEILING (2026-11-11). Four is
+        # what the owner approved; eight is the limit the four-concurrent-
+        # round configuration needs and was asked to be made READY, not
+        # active. The row passes at either and at nothing else, so a typo
+        # still fails; which of the two is running is the owner's variable,
+        # written only under an explicit authorization.
         _row("max_live_orders", "R.max_live_orders()",
-             R.max_live_orders, A["max_live_orders"]),
+             R.max_live_orders, A["max_live_orders"],
+             compare=lambda got, req: got in (req, MAX_LIVE_ORDERS_PREPARED)),
 
         # ------------------------------------------------- pair ceilings
         _row("maker_pair_ceiling", "TS.max_pair_cost()",
@@ -619,8 +650,22 @@ def verify() -> Dict[str, Any]:
         _row("window_strategy", "env L5_WINDOW_STRATEGY",
              lambda: str(os.getenv("L5_WINDOW_STRATEGY", "")).strip().upper(),
              A["window_strategy"]),
+        # TWO SERIES since the owner's decision of 2026-11-11 to authorize
+        # the 5-minute strategy through this same mechanism. Still a code
+        # constant, still graded exactly: a third name here, or a missing
+        # one, fails. One approval document names ONE of them, and every
+        # claim refuses a market outside the document's own series.
+        # WIDENED 2026-11-15 by owner decision, after ETH/SOL/XRP 5m were
+        # confirmed MARKET_STATUS_OPEN on gateway.polymarket.us. The
+        # expected list is still written out IN FULL and graded exactly --
+        # a sixth name here, or a missing one, fails. Deriving it from
+        # CA.ALLOWED_SERIES would make this row self-satisfying and grade
+        # nothing, which is the whole point of restating it.
         _row("series_allowlist", "CA.ALLOWED_SERIES (code constant)",
-             lambda: list(CA.ALLOWED_SERIES), ["cpc-btc-updown-15m-"]),
+             lambda: list(CA.ALLOWED_SERIES),
+             ["cpc-btc-updown-15m-", "cpc-btc-updown-5m-",
+              "cpceth-eth-updown-5m-", "cpcsol-sol-updown-5m-",
+              "cpcxrp-xrp-updown-5m-"]),
     ]
 
     # REPORTED, NOT REQUIRED. These are the activation switches: they are

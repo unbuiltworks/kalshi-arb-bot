@@ -29,6 +29,8 @@ approval is a refusal.
 """
 from __future__ import annotations
 
+from src import l5_series_registry as _REG
+
 import datetime as dt
 import hashlib
 import json
@@ -66,7 +68,130 @@ MAX_WINDOWS = 8
 MAX_CAMPAIGN_S = 4 * 3600.0
 #: instrument families an approval may name. Not a pattern the document
 #: supplies -- an allowlist the code holds.
-ALLOWED_SERIES = ("cpc-btc-updown-15m-",)
+#:
+#: THE 5-MINUTE SERIES JOINED THIS LIST BY OWNER DECISION, 2026-11-11: "extend
+#: the existing single-use authorization mechanism to recognize explicitly
+#: approved BTC5m markets. Do not create a second, weaker authorization
+#: path." So it is the SAME document, the same nonce, the same window ledger
+#: and the same durable claims -- one more series name here, and nothing
+#: that existed for the 15-minute series is loosened by it.
+#:
+#: ONE DOCUMENT NAMES ONE SERIES, so an approval for one strategy can never
+#: authorize the other: `authorize_window`, `reserve_window` and every
+#: pre-wire claim refuse a market outside the document's own series.
+#: DERIVED from l5_series_registry -- the one table an asset is added to.
+BTC15M_SERIES = _REG.BY_STRATEGY["BTC15M"].prefix
+BTC5M_SERIES = _REG.BY_STRATEGY["BTC5M"].prefix
+ALLOWED_SERIES = _REG.prefixes()
+#: which strategy a series belongs to. A series with no entry has no
+#: strategy and nothing may be claimed for it.
+SERIES_STRATEGY = {r.prefix: r.strategy for r in _REG.REGISTRY}
+#: how long one window of the series lasts, in seconds
+SERIES_WINDOW_S = {r.prefix: r.horizon_s for r in _REG.REGISTRY}
+#: PER-SERIES ceilings, each TIGHTER than the general one above and never
+#: looser. The 5-minute strategy was approved for preparation at $5 of
+#: exposure; a document asking for more gets $5.
+#: ETH/SOL/XRP 5m get the SAME $5 ceiling as BTC5m, and this entry is
+#: REQUIRED rather than optional: with no row a series inherits the
+#: general MAX_TOTAL_EXPOSURE_USD of $20, which is FOUR TIMES what the
+#: 5-minute strategy is approved for. The per-series table is tighter than
+#: the general one everywhere else, so a missing row fails OPEN here and
+#: that is the one place in this file where it does.
+SERIES_MAX_TOTAL_EXPOSURE_USD = {
+    s: D("5") for s in _REG.prefixes(300.0)}
+#: Daily loss is deliberately NOT granted to the new three. BTC5m has an
+#: owner-approved $11; they inherit the general $5, which is tighter.
+#: PER-SERIES WINDOW COUNT. Unlike SERIES_MAX_TOTAL_EXPOSURE_USD above,
+#: this is the ONE per-series value that is LOOSER than the general
+#: ceiling, so the argument has to be made rather than assumed.
+#:
+#: WHY IT IS SAFE -- the same argument that took MAX_WINDOWS from four to
+#: eight: exposure is bounded by MAX_TOTAL_EXPOSURE_USD and by
+#: SERIES_MAX_TOTAL_EXPOSURE_USD at EVERY INSTANT, not by how many windows
+#: may be worked. More windows buys more OPPORTUNITIES to deploy the same
+#: $5, never more dollars at risk at once.
+#:
+#: IT CANNOT EXTEND A CAMPAIGN, ONLY FILL ONE. MAX_CAMPAIGN_S still caps a
+#: single approval at four hours, and 48 five-minute windows IS four hours
+#: exactly, so this ceiling can never reach past the duration ceiling --
+#: `last_open > eff_expires` still refuses anything that would.
+#:
+#: WHAT STILL BINDS, untouched: both instantaneous exposure ceilings, the
+#: campaign duration ceiling, MAX_DAILY_LOSS_USD (which acts as the
+#: campaign's own stop-loss and halts it after roughly twelve consecutive
+#: losing windows), the account-wide daily realized halt, the series
+#: allowlist, the class budgets, the completion reserve, the watchdog and
+#: the HALT latch.
+#:
+#: BTC15m IS DELIBERATELY ABSENT and keeps MAX_WINDOWS = 8.
+SERIES_MAX_WINDOWS = {BTC5M_SERIES: 48}
+
+#: PER-SERIES DAILY LOSS CAP. The SECOND per-series value that is LOOSER
+#: than the general ceiling, so, like SERIES_MAX_WINDOWS above, the
+#: argument has to be made rather than assumed -- and it is a DIFFERENT
+#: argument, weaker than that one, which is why it is written out here
+#: instead of borrowed.
+#:
+#: SERIES_MAX_WINDOWS could say "more windows buys more OPPORTUNITIES to
+#: deploy the same $5 and never more dollars at risk at once". THAT
+#: ARGUMENT DOES NOT TRANSFER AND IS NOT CLAIMED HERE. This raises the
+#: dollars the 5-minute strategy may lose in one UTC day from $5 to $11.
+#: It is a risk increase, stated as one.
+#:
+#: WHY $11, 2026-11-14T03:00Z, BY EXPLICIT OWNER DECISION, reaffirmed after
+#: being shown the day's figures and declined twice by this session. The
+#: number is the arithmetic of ONE further campaign, not a round figure:
+#: BTC5m's settled day loss stood at -5.00 when this was set, and an
+#: 8-share 8-window straddle at 0.08 has a REAL worst case of 5.12
+#: (8 * 0.08 * 8). 5.00 + 5.12 = 10.12, so $11 permits exactly that one
+#: campaign to run its full worst case and refuses the next. A larger
+#: number would permit a second campaign nobody approved.
+#:
+#: WHAT STILL BINDS, untouched: MAX_TOTAL_EXPOSURE_USD and
+#: SERIES_MAX_TOTAL_EXPOSURE_USD at every instant, the campaign worst-case
+#: budget in l5_campaign_budget (DEFAULT_BUDGET_USD $5, which is SEPARATE
+#: and still refuses first on worst case), the account-wide daily realized
+#: halt, the account-wide cumulative ceiling, MAX_CAMPAIGN_S, the series
+#: allowlist, the class budgets, the completion reserve, the watchdog and
+#: the HALT latch.
+#:
+#: BTC15m IS DELIBERATELY ABSENT and keeps the general $5. A series with no
+#: entry here gets MAX_DAILY_LOSS_USD, never a per-series value.
+SERIES_MAX_DAILY_LOSS_USD = {BTC5M_SERIES: D("11")}
+
+
+def max_daily_loss_for(series: Any) -> D:
+    """The daily loss ceiling for one series.
+
+    `MAX_DAILY_LOSS_USD` unless the series has its own entry. An absent,
+    empty or malformed series gets the GENERAL ceiling, never a per-series
+    one, so an unreadable document can never buy the wider cap.
+    """
+    return SERIES_MAX_DAILY_LOSS_USD.get(str(series or ""), MAX_DAILY_LOSS_USD)
+
+
+def max_windows_for(series: Any) -> int:
+    """The window-count ceiling for one series.
+
+    `MAX_WINDOWS` unless the series has its own entry. An absent, empty or
+    malformed series gets the GENERAL ceiling, never a per-series one, so
+    an unreadable document can never buy the wider count.
+    """
+    return int(SERIES_MAX_WINDOWS.get(str(series or ""), MAX_WINDOWS))
+
+
+def series_of(market: Any) -> Optional[str]:
+    """The allowed series this market slug belongs to, or None."""
+    m = str(market or "")
+    for s in ALLOWED_SERIES:
+        if m.startswith(s):
+            return s
+    return None
+
+
+def strategy_of(market: Any) -> Optional[str]:
+    """BTC15M or BTC5M for a slug in an allowed series, else None."""
+    return SERIES_STRATEGY.get(series_of(market) or "")
 #: a document older than this is stale even if its campaign has not expired,
 #: so a forgotten endpoint cannot keep authorizing.
 DEFAULT_MAX_AGE_S = 3600.0
@@ -151,6 +276,8 @@ class ApprovalGate:
                              str(MAX_TOTAL_EXPOSURE_USD),
                              "max_daily_loss_usd": str(MAX_DAILY_LOSS_USD),
                              "max_windows": MAX_WINDOWS,
+                             "series_max_windows":
+                             dict(SERIES_MAX_WINDOWS),
                              "max_campaign_s": MAX_CAMPAIGN_S,
                              "allowed_series": list(ALLOWED_SERIES)},
                 "labels": ("ceilings are code constants; an approval is the "
@@ -253,9 +380,11 @@ class ApprovalGate:
         if starts is not None and starts >= expires:
             return no("approval_start_after_expiry")
 
-        eff_w = min(want_w, MAX_WINDOWS)
-        eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD)
-        eff_loss = min(want_loss, MAX_DAILY_LOSS_USD)
+        eff_w = min(want_w, max_windows_for(series))
+        eff_exp = min(want_exp, MAX_TOTAL_EXPOSURE_USD,
+                      SERIES_MAX_TOTAL_EXPOSURE_USD.get(
+                          series, MAX_TOTAL_EXPOSURE_USD))
+        eff_loss = min(want_loss, max_daily_loss_for(series))
         eff_expires = min(expires, issued + dt.timedelta(seconds=MAX_CAMPAIGN_S))
         if (eff_expires - now).total_seconds() <= 0:
             return no("approval_campaign_ceiling_expired")
@@ -299,9 +428,10 @@ class ApprovalGate:
                     return no("approval_window_starts_unusable")
                 parsed.append(t)
             win_starts = sorted(set(parsed))
-            if len(win_starts) > MAX_WINDOWS:
+            if len(win_starts) > max_windows_for(series):
                 return no("approval_window_starts_above_ceiling",
-                          count=len(win_starts), ceiling=MAX_WINDOWS)
+                          count=len(win_starts),
+                          ceiling=max_windows_for(series))
         # ABSENT IS NOT REFUSED HERE, AND IS STILL NOT PERMISSIVE.
         #
         # WHERE THE LINE GOES, and why it is not here. Requirement: preserve
@@ -736,6 +866,45 @@ def reserve_window(market: str, *,
         return {"ok": False, "reason": "APPROVAL_NOT_VALID",
                 "detail": {"why": st.get("why")}}
     scope = dict(st.get("scope") or {})
+    # THE DOCUMENT'S OWN SERIES, before anything is spent. Two series can
+    # share a window start (15:00Z opens a 15-minute and a 5-minute window),
+    # so the start alone cannot say which strategy's window this is.
+    _series = str(scope.get("series") or "")
+    if not _series or not str(market).startswith(_series):
+        return {"ok": False, "reason": "CAMPAIGN_SERIES_MISMATCH",
+                "detail": {"series": _series, "attempted": str(market)[:80],
+                           "note": "a window of another series cannot "
+                                   "spend this approval's budget"},
+                "spent": False, "reserved_now": False}
+    # ===== THE WINDOW MUST BE IN THE GRANT BEFORE IT CAN BE SPENT
+    #
+    # THE HOLE THIS CLOSES, found by
+    # `tests/test_l5_arming_market_mismatch.py`. This function spends one
+    # of the owner's windows and it never asked whether the market it is
+    # spending it on is a window the approval covers. `opening_refusal`'s
+    # own docstring says "ONE DEFINITION, TWO CALLERS ... because 'may this
+    # window be opened' and 'may this order be sent into it' must never be
+    # able to disagree" -- and the third caller, the one that actually
+    # consumes the budget, was not asking. Called with the PREVIOUS
+    # window's slug it returned `ok: True`, `reserved_now: True`, and the
+    # owner's single authorized window was gone.
+    #
+    # NOT REACHABLE THROUGH THE RUNNER TODAY: it calls `reserve_window`
+    # only after `authorize_arming` has RETURNED, and that boundary already
+    # refuses `WINDOW_NOT_IN_AUTHORIZED_SET`. So this is a latent hole
+    # rather than a live loss -- but the protection was standing entirely
+    # on one caller's ordering, and the thing being protected is the
+    # owner's one window.
+    #
+    # THE SAME FUNCTION, so no second opinion is introduced. An unreadable
+    # window start refuses here exactly as it refuses at the claim.
+    _no = opening_refusal(scope, str(market))
+    if _no is not None:
+        return {"ok": False, "reason": str(_no.get("reason")),
+                "detail": dict(_no.get("detail") or {},
+                               note=("a window outside the grant cannot "
+                                     "spend the grant's budget")),
+                "spent": False, "reserved_now": False}
     try:
         return dict(WindowLedger(root).reserve(
             str(scope.get("nonce_sid")), str(market),

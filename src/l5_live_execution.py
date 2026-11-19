@@ -59,6 +59,7 @@ from src import l5_defensive_completion as DEF
 from src import l5_taker_completion_policy as TCP
 from src import l5_two_sided_probe as TS
 from src import l5_execution_translations as X
+from src import l5_origin as ORIGIN
 
 #: the pipeline, in order. A record names the furthest stage it reached.
 STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
@@ -518,6 +519,29 @@ ACC_MAX_ROUNDS_ENV = "L5_ACC_MAX_ROUNDS"
 ACC_MAX_ROUNDS_DEFAULT = 8
 #: no configuration may exceed this, whatever the environment says
 ACC_MAX_ROUNDS_HARD_CAP = 64
+
+#: A ROUND IS SPENT BY AN ORDER, NOT BY A PROPOSAL (owner decision 2026-11-10).
+#:
+#: MEASURED, 2026-11-10 2145z, eight rounds permitted. Round 0 was retired at
+#: 21:45:10 before any order existed (`LEG_WOULD_CROSS:DOWN`). Rounds 1 and 2
+#: traded and matched. Rounds 3 to 7 were then spent in about 100 seconds
+#: without one order: each reopening was refused on its economics, its plan
+#: stayed frozen, the book moved, the frozen plan stopped being placeable and
+#: the round was retired for it. From 21:47:53 the window answered
+#: ACCUMULATION_EXHAUSTED 223 times.
+#:
+#: The freeze exists so leg two matches leg one. A round in which no leg was
+#: ever submitted has no leg one. With this set, such a round's stored plan
+#: is dropped and the pair is priced again from the current book, in the
+#: SAME round, every time it is considered -- so it can neither go stale nor
+#: be retired, and the round count advances only past rounds that submitted.
+#:
+#: Exactly "ON". Anything else is the behaviour every earlier deployment had.
+ROUND_ON_SUBMISSION_ENV = "L5_TS_ROUND_CHARGED_ON_SUBMISSION"
+
+
+def round_charged_on_submission() -> bool:
+    return str(os.getenv(ROUND_ON_SUBMISSION_ENV, "")).strip() == "ON"
 
 
 def client_order_id(action_key: str, attempt: int = 0) -> str:
@@ -1164,6 +1188,20 @@ OWNED_COID_BOOKS = ("live_orders", "pending_terminal", "quarantine",
 #: order the first one's record is gone from every row-book and the
 #: duplicate guard has nothing to compare. This map outlives the order.
 VENUE_ORDER_LINK = "venue_order_ids"
+#: which ORDER an `orders_uncertain` mark is about, when it is about one.
+#: Evidence for `resolve_cancel_uncertainty`; never read as permission.
+UNCERTAIN_CAUSE = "orders_uncertain_cause"
+#: the only causes the venue's terminal read of that order can end: both
+#: say "we cancelled it and could not see it finish".
+CANCEL_UNCERTAINTY_KINDS = ("CANCEL_STILL_OPEN", "CANCEL_UNVERIFIED")
+#: a reconciliation mark whose WHOLE content is "these orders left the
+#: venue's open list and their final fill is not booked yet". Resolving each
+#: of them from the venue's own order row answers it in full -- provided
+#: nothing was booked, so the positions that reconciliation just verified
+#: are still the positions. See `resolve_pending_uncertainty`.
+RECONCILE_PENDING_ONLY = "RECONCILE_PENDING_ONLY"
+#: audit rows kept for resolved marks. Bounded so the ledger cannot grow.
+UNCERTAIN_RESOLVED_KEEP = 50
 
 
 def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
@@ -1186,6 +1224,72 @@ def venue_order_id_for_coid(state: Mapping[str, Any], coid: str,
         if vid:
             return vid
     return None
+
+
+#: ANOTHER STRATEGY'S ORDERS ON THE SAME VENUE ACCOUNT ARE NOT OURS.
+#:
+#: Reconciliation rebuilds `live_orders` from the venue's open list, and it
+#: adopts every row it finds -- that is right for an order of ours the file
+#: lost, and wrong for an order a second strategy placed. Run beside the
+#: BTC 5m adapter, a reconciliation adopted its resting `b5m-` order:
+#: `owns_venue_order_id` then answered True for it, it counted against the
+#: live-order ceiling, and the terminal sweep CANCELLED it
+#: (tests/test_l5_btc5m_btc15m_isolation.py records this).
+#:
+#: MANDATORY, BY OWNER DECISION (2026-11-11): "Make the BTC15m ownership
+#: filter mandatory before simultaneous execution, not an optional feature.
+#: Neither strategy should adopt, cancel, or settle another strategy's
+#: orders." So the prefixes of every OTHER registered strategy
+#: (`l5_origin.STRATEGY_COID_PREFIX`) are foreign ALWAYS -- a code registry,
+#: with no variable that has to be set for it to hold and none that can turn
+#: it off. The variable below can only ADD further prefixes.
+#:
+#: THE VENUE DOES NOT ECHO OUR CLIENT IDS, so the prefix alone is not
+#: enough. `l5_order_body.build` -- the body actually posted -- carries no
+#: client order id at all: the id lives in each strategy's own ledger, and a
+#: real `/v1/orders/open` row names only the venue's id and the market. A
+#: rule that needs the prefix on the row therefore holds against a test
+#: double that echoes it and NOT against the venue. What every real row
+#: does carry is `marketSlug`, and the registered strategies trade disjoint
+#: series. So an order this ledger does not already track, resting in a
+#: market of ANOTHER registered strategy's series, is foreign too -- decided
+#: on the venue's own field. (An untracked order in OUR OWN series is still
+#: adopted, as before: this ledger cannot tell a hand-placed order there
+#: from one of its own that its file lost, and losing track of its own
+#: order is the worse error.)
+#:
+#: Our own prefix can never be named foreign, and a token that is not a
+#: short lowercase prefix ending in "-" is ignored. Foreign orders are
+#: listed in `foreign_orders` with their origin and are never adopted, never
+#: counted against OUR order ceiling and never cancelled by us. They ARE
+#: counted in account-wide exposure, at $1 a contract -- see
+#: `account_wide_risk_by_market`. POSITIONS are a separate matter: a market
+#: this ledger did not trade is still adopted at its upper bound, so the
+#: account-wide exposure and loss limits still see it.
+FOREIGN_COID_PREFIXES_ENV = "L5_FOREIGN_COID_PREFIXES"
+OWN_STRATEGY = ORIGIN.BTC15M
+OWN_COID_PREFIX = ORIGIN.STRATEGY_COID_PREFIX[OWN_STRATEGY]
+_FOREIGN_PREFIX_RE = re.compile(r"[a-z0-9]{2,8}-")
+#: how many markets `foreign_orders_seen` remembers. It is evidence for a
+#: label on a later settlement, so it only has to outlive a window or two.
+FOREIGN_SEEN_KEEP = 64
+
+
+def foreign_coid_prefixes() -> Tuple[str, ...]:
+    out: List[str] = [p for p in ORIGIN.other_strategy_prefixes(OWN_STRATEGY)
+                      if p != OWN_COID_PREFIX]
+    for tok in (os.getenv(FOREIGN_COID_PREFIXES_ENV) or "").split(","):
+        tok = tok.strip()
+        if _FOREIGN_PREFIX_RE.fullmatch(tok) and tok != OWN_COID_PREFIX \
+                and tok not in out:
+            out.append(tok)
+    return tuple(out)
+
+
+def is_foreign_coid(coid: Any) -> bool:
+    c = str(coid or "")
+    return bool(c) and not c.startswith(OWN_COID_PREFIX) and any(
+        c.startswith(p) for p in foreign_coid_prefixes())
 
 
 def tracked_coid_for_venue_order(venue_order_id: Optional[str],
@@ -1585,7 +1689,40 @@ def venue_order_price(row: Mapping[str, Any]) -> Optional[D]:
 #: bounding risk. A share cannot settle above $1, so $1 is the worst it can
 #: have cost us -- and the one thing that must never happen is reading an
 #: unknown price as free.
+def venue_order_avg_price(row: Mapping[str, Any]) -> Optional[D]:
+    """The venue's average fill price on an order row (WIRE terms), or None
+    when the row states none. Never a limit price standing in for it."""
+    if not isinstance(row, Mapping):
+        return None
+    px = venue_decimal(row.get("avgPx"))
+    return px if px is not None and D(0) < px < D(1) else None
+
+
 UNKNOWN_PRICE_WORST_CASE = D(1)
+
+#: A RE-QUOTE KEEPS ITS ROUND. Exactly "ON" or it is off. See `probe_round`.
+REQUOTE_KEEPS_ROUND_ENV = "L5_TS_REQUOTE_KEEPS_ROUND"
+#: at most this many unfilled re-quotes are walked past per permitted round,
+#: and never more than the hard cap in all: the walk is bounded whatever
+#: the market does, and the submission budgets bound the orders themselves.
+ACC_REQUOTES_PER_ROUND = 16
+ACC_ROUND_INDEX_HARD_CAP = 512
+
+
+def requote_keeps_round() -> bool:
+    return (os.getenv(REQUOTE_KEEPS_ROUND_ENV) or "") == "ON"
+
+
+#: THE FAVORITE-ONLY TEST, as the portfolio controller names it. Read here
+#: as a variable so the submission gate needs no import of that module.
+FAVORITE_ONLY_PROFILE_ENV = "L5_PORTFOLIO_PROFILE"
+FAVORITE_ONLY_PROFILE = "FAVORITE_ONLY"
+
+#: how many consecutive reconciliations a difference that our own unbooked
+#: fills can explain is left for the order read to book before the venue's
+#: position is adopted at the bound anyway. Reconciliations are about 13 s
+#: apart in production; the order read that resolved 0415z took 1.7 s.
+FILL_IN_FLIGHT_MAX_DEFERRALS = 2
 
 
 class UnknownMarket(RuntimeError):
@@ -2060,9 +2197,101 @@ class InventoryStore:
         """
         return self.state.get("orders_uncertain") or None
 
-    def mark_uncertain(self, why: str) -> None:
+    def mark_uncertain(self, why: str, *,
+                       cause: Optional[Mapping[str, Any]] = None) -> None:
+        """Record that the book is uncertain, and optionally WHICH ORDER.
+
+        `cause` is evidence, not permission. It names the one order whose
+        unknown state IS the uncertainty, so that the venue's own later
+        answer about that same order can end it (see
+        `resolve_cancel_uncertainty`). A mark without a cause -- every caller
+        but the deadman's two cancel branches -- is cleared only by a full
+        reconciliation, exactly as before, and any later mark replaces the
+        cause along with the reason.
+        """
         self.state["orders_uncertain"] = str(why)
+        self.state[UNCERTAIN_CAUSE] = (
+            dict(cause, why=str(why)) if isinstance(cause, Mapping) else None)
         self.save()
+
+    def resolve_cancel_uncertainty(self, coid: str, prog: Mapping[str, Any]
+                                   ) -> Optional[Dict[str, Any]]:
+        """End an uncertainty that ONE cancelled order caused, on the venue's
+        own word that the order is finished. Returns the record, or None.
+
+        WHAT WAS WRONG, 2026-11-10 0200z. The requote cancelled UP order
+        DMG2WQZG344P at 02:00:35.9. The deadman's three re-reads (0.6 s in
+        all) still saw it working, so it marked the store uncertain:
+        "deadman cancelled DMG2WQZG344P but the venue still reports it live".
+        The order poll read it CANCELED 0.3 s later and booked that -- and
+        the mark stayed, because only a full account reconciliation cleared
+        it. Every submission was refused BOOK_UNCERTAIN until 02:00:48 while
+        0.6 DOWN sat unhedged, and the replacement landed at 0.55 where pairs
+        at 0.94-0.95 had been on the book.
+
+        The question the mark asks -- "is that order still resting?" -- had
+        been answered by the venue. Waiting for a reconciliation to repeat
+        the answer bought nothing and cost the complement.
+
+        EVERY CONDITION MUST HOLD, and failing any one leaves the mark alone:
+
+          * the venue reports THIS order terminal;
+          * the mark carries a cause, of a cancel kind, naming this client
+            order id and the venue id this ledger linked to it;
+          * the reason in force is BYTE-FOR-BYTE the one that cause was
+            recorded with. Any later uncertainty, from any writer, changes
+            the reason and is not this function's to clear;
+          * the order is no longer live here, and nothing is parked in
+            `pending_terminal` or quarantined -- those are uncertainties of
+            their own that a reconciliation would re-raise.
+
+        IT CLEARS ONLY WHAT IT CAN PROVE. The periodic reconciliation still
+        runs, still compares the whole account, and still re-marks on any
+        divergence. This never clears a mark it did not see the cause of.
+        """
+        try:
+            if not bool(prog.get("terminal")):
+                return None
+            cause = self.state.get(UNCERTAIN_CAUSE)
+            if not isinstance(cause, Mapping):
+                return None
+            if str(cause.get("kind")) not in CANCEL_UNCERTAINTY_KINDS:
+                return None
+            if str(cause.get("coid") or "") != str(coid):
+                return None
+            why = self.state.get("orders_uncertain")
+            if not why or str(why) != str(cause.get("why")):
+                return None
+            vid = str(cause.get("venue_order_id") or "")
+            linked = str((self.state.get(VENUE_ORDER_LINK) or {}).get(coid)
+                         or "")
+            if not vid or vid != linked:
+                return None
+            if coid in (self.state.get("live_orders") or {}):
+                return None
+            if (self.state.get("pending_terminal") or {}) or \
+                    (self.state.get("quarantine") or {}):
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                 # unreadable is not resolved
+        rec = {"coid": str(coid), "venue_order_id": vid,
+               "kind": str(cause.get("kind")),
+               "venue_state": prog.get("state"),
+               "cum_qty": str(prog.get("cum_qty")),
+               "was": str(why),
+               "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "labels": ("cleared by the venue's terminal read of the SAME "
+                          "order whose unknown state was the uncertainty; "
+                          "the periodic reconciliation is unchanged")}
+        self.state["orders_uncertain"] = None
+        self.state[UNCERTAIN_CAUSE] = None
+        log = self.state.setdefault("uncertain_resolved", [])
+        if isinstance(log, list):
+            log.append(rec)
+            del log[:-UNCERTAIN_RESOLVED_KEEP]
+        return rec
 
     # ------------------------------------------- the defensive loss budget
 
@@ -2951,6 +3180,57 @@ class InventoryStore:
                        "either. A zero commission is NOT a rebate."),
         }
 
+    def realized_by_origin(self) -> Dict[str, Any]:
+        """Settled results split BTC15M / BTC5M / MANUAL / UNKNOWN, beside
+        the account-wide lines exactly as `realized_lines` reports them.
+
+        READ-ONLY. The split is over the `retired_markets` rows this ledger
+        still holds; the account-wide figures are the ledger's own and are
+        what every loss limit reads. Nothing here feeds a gate.
+        """
+        out = ORIGIN.realized_by_origin(
+            self.state.get("retired_markets") or {}, own=OWN_STRATEGY,
+            seen=self.state.get("foreign_orders_seen") or {})
+        out["account_wide"] = {
+            "realized_attributed": str(
+                D(str(self.state.get("realized_attributed") or 0))),
+            "realized_unattributed": str(
+                D(str(self.state.get("realized_unattributed") or 0))),
+            "labels": ("the account-wide lines, unchanged by the split "
+                       "above. The loss limits read these.")}
+        return out
+
+    def position_origins(self) -> Dict[str, Any]:
+        """Every held position leg with its origin and cost-basis kind.
+
+        READ-ONLY. A leg this ledger booked from its own order fills is
+        this strategy's at an authenticated cost. A leg in
+        `adopted_unattributed` came from the venue's position list with no
+        price, is held at $1 a contract, and is labelled from evidence only:
+        the owner's attestation, or a registered strategy's order the venue
+        listed in that market. Otherwise UNKNOWN.
+        """
+        unattributed = self.state.get("adopted_unattributed") or {}
+        unknown = set(str(k) for k in
+                      (self.state.get("leg_cost_basis_unknown") or []))
+        seen = self.state.get("foreign_orders_seen") or {}
+        lc = self.state.get("leg_cost") or {}
+        legs: Dict[str, Any] = {}
+        for key, qty in sorted((self.state.get("positions") or {}).items()):
+            market = str(key).rsplit("|", 1)[0]
+            own = str(key) not in unattributed and str(key) not in unknown
+            got = ORIGIN.origin_of_position(
+                market, own=OWN_STRATEGY, booked_by_own_fills=own,
+                other_strategy_order_seen=seen.get(market))
+            legs[str(key)] = dict(got, qty=str(qty),
+                                  booked_cost_usd=(None if key not in lc
+                                                   else str(lc.get(key))))
+        return {"legs": legs,
+                "labels": ("booked_cost_usd of an UPPER_BOUND leg is $1 a "
+                           "contract, a bound and not a cost. Every leg "
+                           "here is in account-wide exposure whatever its "
+                           "label.")}
+
     def rebase_session_accounting(self, *, attributed: D, cash_delta: D,
                                   anchor: Mapping[str, Any],
                                   reason: str) -> Dict[str, Any]:
@@ -3464,8 +3744,18 @@ class InventoryStore:
         # somewhere else. `apply_fill` is the single writer of `positions`
         # on the fill path, which is why this belongs here and nowhere else.
         _res_before = self.residual(own_market)
+        # THE POSITION UPDATE CAN ARRIVE BEFORE THE FILL. 0415z, 2026-11-11:
+        # the venue's position showed our 0.44 UP at 04:15:20.8, the order
+        # row that prices it at 0.32 was read at 04:15:22.5. In between the
+        # 0.44 was adopted at the $1/share bound; the fill was then ADDED to
+        # it (0.88 against the venue's 0.44), the next reconciliation
+        # adopted again, and settlement priced the bound: -$0.4400 booked
+        # against -$0.1408 paid. `absorbed` is the part of this fill the
+        # adopted quantity already contains: it replaces that much of the
+        # bound with the measured cost and adds no quantity.
+        absorbed = self.absorb_into_adopted(k, qty, own, coid)
         self.state["positions"][k] = str(
-            D(str(self.state["positions"].get(k, 0))) + qty)
+            D(str(self.state["positions"].get(k, 0))) + qty - absorbed)
         self._note_stranding(own_market, _res_before,
                              self.residual(own_market))
         # both of these are CASH OUT in the leg's own terms now. They used to
@@ -3473,7 +3763,8 @@ class InventoryStore:
         self.state["committed"][own_market] = str(
             D(str(self.state["committed"].get(own_market, 0))) + own * qty)
         lc = self.state.setdefault("leg_cost", {})
-        lc[k] = str(D(str(lc.get(k, 0))) + own * qty)
+        lc[k] = str(D(str(lc.get(k, 0))) + own * qty
+                    - absorbed * UNKNOWN_PRICE_WORST_CASE)
         # HOW MANY FILLS BUILT THIS LEG. A leg with shares and no cost is
         # either a genuine fill at $0.00 -- rare but real, and attested by
         # this counter -- or quantity that arrived from the venue's net
@@ -3503,6 +3794,53 @@ class InventoryStore:
                 o["state"] = "PARTIALLY_FILLED"
         self.save()
 
+
+    def absorb_into_adopted(self, key: str, qty: D, own_px: D,
+                            coid: Optional[str]) -> D:
+        """How much of this fill the ADOPTED position already contains.
+
+        Zero unless the leg was adopted from the venue's position with no
+        cost basis and this is a fill of an order WE track -- an anonymous
+        fill proves nothing about what the venue's number was made of. The
+        absorbed quantity comes off `adopted_unattributed`; when none is
+        left the leg is no longer listed in `leg_cost_basis_unknown`,
+        because every share of it now has a measured cost. Each absorption
+        is appended to `adoption_attributions`, so the bound that was
+        replaced, and by which order, stays on the record.
+
+        IF IT IS WRONG IT IS WRONG IN THE SAFE DIRECTION. A fill that
+        happened AFTER the adopted read is not in the adopted quantity;
+        absorbing it leaves our book short of the venue's, the next
+        reconciliation sees that and adopts at the bound again.
+        """
+        if not coid:
+            return D(0)
+        book = self.state.get("adopted_unattributed") or {}
+        if key not in book:
+            return D(0)
+        try:
+            have = D(str(book.get(key) or 0))
+        except Exception:                                      # noqa: BLE001
+            return D(0)
+        take = min(D(str(qty)), have)
+        if take <= 0:
+            return D(0)
+        left = have - take
+        if left > 0:
+            book[key] = str(left)
+        else:
+            book.pop(key, None)
+            unknown = self.state.get("leg_cost_basis_unknown") or []
+            if key in unknown:
+                unknown.remove(key)
+        self.state.setdefault("adoption_attributions", []).append({
+            "key": key, "coid": str(coid), "qty": str(take),
+            "own_price": str(own_px),
+            "bound_replaced_usd": str(take * UNKNOWN_PRICE_WORST_CASE),
+            "measured_usd": str(take * D(str(own_px))),
+            "still_at_the_bound": str(max(left, D(0))),
+            "at": dt.datetime.now(dt.timezone.utc).isoformat()})
+        return take
 
     def leg_cost(self, market: str) -> Dict[str, D]:
         market = canonical_market(market, doing="reading leg cost")
@@ -3994,6 +4332,11 @@ class InventoryStore:
                              state=str(prog.get("state") or "TERMINAL"),
                              reason="venue_order_progress",
                              venue_confirmed=True)
+            # AFTER the fill is booked and the row released, never before:
+            # the venue has now answered for this order in full.
+            _cleared = self.resolve_cancel_uncertainty(coid, prog)
+            if _cleared is not None:
+                out["uncertainty_cleared"] = _cleared
         self.save()
         return out
 
@@ -4254,11 +4597,338 @@ class InventoryStore:
             self.save()
             return dict(out, coid=coid, resolved=False)
         pend.pop(coid, None)
+        _cleared = self.resolve_pending_uncertainty(
+            coid, out, venue_terminal=bool(prog.get("terminal")))
+        if _cleared is not None:
+            out = dict(out, uncertainty_cleared=_cleared)
         self.save()
         return dict(out, coid=coid, resolved=True, market=market, side=side,
                     labels=("final fill booked from the venue's own order "
                             "row; this is the reconstruction that resolves "
                             "a lost cost basis, not an assumption about it"))
+
+    def resolve_pending_uncertainty(self, coid: str,
+                                    booked: Mapping[str, Any], *,
+                                    venue_terminal: bool = False
+                                    ) -> Optional[Dict[str, Any]]:
+        """End a reconciliation mark that was ONLY about parked orders, once
+        the venue has answered for every one of them. The record, or None.
+
+        WHAT WAS WRONG, 2026-11-10 1300z, live. The order-age deadline
+        cancelled DOWN order DMSGYZH013ZD at 13:02:14.3 and the deadman's
+        re-reads still saw it working. A reconciliation ran in the SAME tick,
+        found it gone from the venue's open list, parked it, and replaced the
+        deadman's mark with its own: "unbooked terminal orders [...]". The
+        venue's order row said CANCELED, nothing filled, at 13:02:18.3 -- and
+        the mark stood until the next reconciliation at 13:02:29.7.
+
+        That is `resolve_cancel_uncertainty`'s defect one writer over: the
+        mark asked whether those orders were finished, the venue said yes,
+        and nothing listened. It was not covered there because a
+        reconciliation's mark carried no cause.
+
+        EVERY CONDITION MUST HOLD:
+
+          * the mark in force is byte-for-byte the one this cause was
+            recorded with, so anything marked since is left alone;
+          * it was about parked orders ONLY -- reconciliation records a cause
+            only when there was no divergence, no incoherent book and no
+            quarantine;
+          * the venue's OWN order row said terminal. A parked order is
+            booked as final on any readable row, because leaving the open
+            list is terminal there -- but a row still reading NEW is the
+            venue's lag, not its answer, and this shortcut waits for the
+            answer;
+          * this order is one of them, and it resolved with NOTHING BOOKED.
+            A fill that arrives here changes the positions the
+            reconciliation had just verified, so it is left for the next
+            reconciliation to confirm: that case forfeits the shortcut for
+            the whole mark;
+          * every order the mark named has now resolved that way, and
+            nothing is parked or quarantined.
+
+        The periodic reconciliation is untouched and still re-marks.
+        """
+        try:
+            cause = self.state.get(UNCERTAIN_CAUSE)
+            if not isinstance(cause, dict):
+                return None
+            if str(cause.get("kind")) != RECONCILE_PENDING_ONLY:
+                return None
+            why = self.state.get("orders_uncertain")
+            if not why or str(why) != str(cause.get("why")):
+                return None
+            named = [str(c) for c in (cause.get("pending") or [])]
+            if str(coid) not in named:
+                return None
+            delta = D(str(booked.get("filled_delta")
+                          or booked.get("delta") or 0))
+            if delta != 0 or not venue_terminal:
+                cause["fill_booked"] = True      # wait for a reconciliation
+                return None
+            if cause.get("fill_booked"):
+                return None
+            done = [str(c) for c in (cause.get("resolved_unfilled") or [])]
+            if str(coid) not in done:
+                done.append(str(coid))
+            cause["resolved_unfilled"] = done
+            if set(named) - set(done):
+                return None                      # others still unanswered
+            if (self.state.get("pending_terminal") or {}) or \
+                    (self.state.get("quarantine") or {}):
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                 # unreadable is not resolved
+        rec = {"coid": str(coid), "kind": RECONCILE_PENDING_ONLY,
+               "orders": list(named), "was": str(why),
+               "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "labels": ("cleared because every order the reconciliation "
+                          "parked has been answered by the venue's own "
+                          "order row with nothing booked, so the positions "
+                          "it verified are unchanged")}
+        self.state["orders_uncertain"] = None
+        self.state[UNCERTAIN_CAUSE] = None
+        log = self.state.setdefault("uncertain_resolved", [])
+        if isinstance(log, list):
+            log.append(rec)
+            del log[:-UNCERTAIN_RESOLVED_KEEP]
+        return rec
+
+    def own_settled_round_evidence(self, *,
+                                   series: str = "cpc-btc-updown-15m-",
+                                   last_n: int = 50) -> Dict[str, Any]:
+        """What OUR OWN venue-settled windows actually paid, per contract.
+
+        Read-only, and the only inputs are rows this ledger wrote when the
+        venue settled a market: quantities, cost and redemption. One window
+        is one observation. The figure is
+
+            sum(settlement_pnl) / sum(max(up_qty, dn_qty))
+
+        over the last `last_n` settled windows of this series -- the realized
+        result per contract that took a FIRST fill, pairs and stranded legs
+        together, which is what one more round buys.
+
+        ONLY ROWS WHOSE MONEY IS KNOWN. A row settled at the venue's own
+        price with every cost basis verified is counted; one carrying
+        `unverified_cost_basis_keys`, another resolution source or an
+        unreadable number is skipped and reported, never estimated.
+
+        It is evidence, not a forecast: it mixes whatever configurations
+        produced those windows, and a small sample is a wide interval. The
+        caller decides how many windows it needs before listening.
+        """
+        used: List[Tuple[str, D, D, D, D]] = []
+        skipped = 0
+        for mkt, row in (self.state.get("retired_markets") or {}).items():
+            try:
+                if not str(mkt).startswith(series):
+                    continue
+                if str(row.get("resolution_source")) != "VENUE_SETTLEMENT_PX" \
+                        or row.get("unverified_cost_basis_keys"):
+                    skipped += 1
+                    continue
+                up, dn = D(str(row["up_qty"])), D(str(row["dn_qty"]))
+                pnl = D(str(row["settlement_pnl"]))
+                if up < 0 or dn < 0 or max(up, dn) <= 0:
+                    skipped += 1
+                    continue
+                # THE SAME WINDOW, SPLIT: what its pairs paid and what its
+                # unmatched leg paid. Absent or unreadable on a row is None,
+                # and one None makes the whole split unknown below -- never
+                # a smaller sample that happens to read better.
+                try:
+                    split = (D(str(row["matched_qty"])),
+                             D(str(row["matched_pnl"])),
+                             D(str(row["residual_qty"])),
+                             D(str(row["residual_pnl"])))
+                    if not all(x.is_finite() for x in split) \
+                            or split[0] < 0 or split[2] < 0:
+                        split = None
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    split = None
+                used.append((str(row.get("t") or ""), up, dn, pnl,
+                             max(up, dn), split))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                skipped += 1
+        used.sort(key=lambda r: r[0])
+        used = used[-max(1, int(last_n)):]
+        units = sum((r[4] for r in used), D(0))
+        net = sum((r[3] for r in used), D(0))
+        # WHAT A FIRST FILL BECAME ON THIS VENUE: how often it paired, what
+        # a pair paid and what an unmatched contract paid. Reported only
+        # when EVERY window in the sample states its split and both kinds
+        # occurred; otherwise the reason, and no figure.
+        cond: Dict[str, Any] = {"status": "UNKNOWN"}
+        if not used:
+            cond["reason"] = "NO_SETTLED_WINDOWS"
+        elif any(r[5] is None for r in used):
+            cond["reason"] = "A_WINDOW_DOES_NOT_STATE_ITS_SPLIT"
+        else:
+            m = sum((r[5][0] for r in used), D(0))
+            mp = sum((r[5][1] for r in used), D(0))
+            u = sum((r[5][2] for r in used), D(0))
+            rp = sum((r[5][3] for r in used), D(0))
+            if m <= 0 or u <= 0:
+                cond["reason"] = ("NO_PAIR_IN_THE_SAMPLE" if m <= 0
+                                  else "NO_UNMATCHED_LEG_IN_THE_SAMPLE")
+            else:
+                cond = {
+                    "status": "MEASURED",
+                    "first_leg_contracts": str(m + u),
+                    "p_pair_given_first_fill": str(
+                        (m / (m + u)).quantize(D("0.0001"))),
+                    "pair_net_per_contract": str(
+                        (mp / m).quantize(D("0.0001"))),
+                    "unmatched_net_per_contract": str(
+                        (rp / u).quantize(D("0.0001"))),
+                    "labels": ("this venue's settled windows only. A "
+                               "pairing rate GIVEN a first fill; it says "
+                               "nothing about how often an order fills.")}
+        return {
+            "conditional": cond,
+            "windows": len(used), "skipped": skipped,
+            "contracts": str(units), "net_usd": str(net),
+            "net_per_contract": (None if units <= 0
+                                 else str((net / units).quantize(
+                                     D("0.0001")))),
+            "windows_with_a_pair": sum(1 for r in used
+                                       if min(r[1], r[2]) > 0),
+            "windows_with_a_stranded_leg": sum(1 for r in used
+                                               if r[1] != r[2]),
+            "from": (used[0][0] if used else None),
+            "to": (used[-1][0] if used else None),
+            "series": series, "last_n": int(last_n),
+            "labels": ("venue-settled, cost basis verified, realized. "
+                       "Net per contract that took a first fill; pairs and "
+                       "stranded legs together."),
+        }
+
+    def attest_other_strategy_cost(self, market: str,
+                                   fills: Sequence[Mapping[str, Any]],
+                                   venue_rows: Mapping[str, Any],
+                                   *, source: str) -> Dict[str, Any]:
+        """Replace the $1 bound on ANOTHER strategy's position with its real
+        cost -- only when the evidence closes exactly. Otherwise nothing.
+
+        THE DEFECT. This ledger is the account-wide one, and it never sees a
+        5-minute fill's price: a 5-minute position it adopts from the venue
+        is held at $1 a contract, so at settlement a matched 5-minute pair
+        is booked as a loss of its whole quantity. Conservative, and wrong
+        enough to trip the daily halt on a strategy that made money.
+
+        THE EVIDENCE, two independent sources that must agree:
+          `fills`       the other strategy's own ledger rows for this market:
+                        venue_order_id, side, filled_qty, price (its limit:
+                        a post-only maker buy fills at its limit);
+          `venue_rows`  the VENUE's own `/v1/order/{id}` row for each of
+                        those ids, read by this service with its own
+                        credentials.
+        Every id must be read, name this market, and report a cumulative
+        quantity equal to the other ledger's; where the venue states an
+        average price it must equal the stated price (in own-outcome terms);
+        and per side the sum must equal EXACTLY what this ledger holds. Any
+        miss leaves the position at the bound and says which check failed.
+
+        Only for a market in ANOTHER registered strategy's series, and only
+        for a market this ledger holds at the bound. It writes quantity and
+        cost together, records its source, and never touches realized P&L:
+        settlement posts the result through the one ordinary path.
+        """
+        def no(reason: str, **kw: Any) -> Dict[str, Any]:
+            return dict(kw, attested=False, market=market, reason=reason)
+
+        try:
+            market = canonical_market(market, doing="attesting a cost")
+        except UnknownMarket:
+            return no("MARKET_UNREADABLE")
+        owner = ORIGIN.strategy_of_market(market)
+        if owner is None or owner == OWN_STRATEGY:
+            return no("NOT_ANOTHER_STRATEGYS_MARKET")
+        if not str(source).strip():
+            return no("NO_SOURCE")
+        unknown = [str(k) for k in
+                   (self.state.get("leg_cost_basis_unknown") or [])
+                   if str(k).rsplit("|", 1)[0] == market]
+        if not unknown:
+            return no("NOT_HELD_AT_THE_BOUND")
+        pos = self.state.get("positions") or {}
+        held = {side: D(str(pos.get("%s|%s" % (market, side), 0)))
+                for side in (UP, DOWN)}
+        got = {UP: [D(0), D(0)], DOWN: [D(0), D(0)]}
+        seen = set()
+        for f in fills or ():
+            if not isinstance(f, Mapping):
+                return no("FILL_ROW_UNREADABLE")
+            vid = str(f.get("venue_order_id") or "").strip()
+            if not vid or vid in seen:
+                return no("FILL_ID_MISSING_OR_REPEATED", venue_order_id=vid)
+            seen.add(vid)
+            try:
+                side = canonical_side(f.get("side"), doing="attesting a cost")
+            except UnknownSide:
+                return no("FILL_SIDE_UNREADABLE", venue_order_id=vid)
+            qty, px = venue_decimal(f.get("filled_qty")), venue_decimal(
+                f.get("price"))
+            if qty is None or px is None or qty < 0 or not (D(0) < px < D(1)):
+                return no("FILL_NUMBERS_UNREADABLE", venue_order_id=vid)
+            if qty == 0:
+                continue
+            row = venue_rows.get(vid) if isinstance(venue_rows, Mapping) \
+                else None
+            if not isinstance(row, Mapping):
+                return no("VENUE_ORDER_NOT_READ", venue_order_id=vid)
+            vm = row.get("marketSlug") or row.get("market_slug") \
+                or row.get("market")
+            if vm is not None and str(vm) != market:
+                return no("VENUE_ORDER_IN_ANOTHER_MARKET", venue_order_id=vid,
+                          venue_market=str(vm))
+            cum = venue_decimal(row.get("cumQuantity"))
+            if cum is None or cum != qty:
+                return no("VENUE_QUANTITY_DISAGREES", venue_order_id=vid,
+                          venue_cum=None if cum is None else str(cum),
+                          ledger_qty=str(qty))
+            avg = venue_order_avg_price(row)
+            if avg is not None:
+                own = own_outcome_price(side, avg, basis=WIRE)
+                if abs(own - px) > D("0.0001"):
+                    return no("VENUE_PRICE_DISAGREES", venue_order_id=vid,
+                              venue_own_price=str(own), ledger_price=str(px))
+            got[side][0] += qty
+            got[side][1] += qty * px
+        for side in (UP, DOWN):
+            if got[side][0] != held[side]:
+                return no("FILLS_DO_NOT_ACCOUNT_FOR_THE_POSITION", side=side,
+                          held=str(held[side]), fills=str(got[side][0]))
+        lc = self.state.setdefault("leg_cost", {})
+        for side in (UP, DOWN):
+            k = "%s|%s" % (market, side)
+            if held[side] > 0:
+                lc[k] = str(got[side][1])
+        self.state["leg_cost_basis_unknown"] = [
+            k for k in (self.state.get("leg_cost_basis_unknown") or [])
+            if str(k).rsplit("|", 1)[0] != market]
+        for k in list((self.state.get("adopted_unattributed") or {})):
+            if str(k).rsplit("|", 1)[0] == market:
+                self.state["adopted_unattributed"].pop(k, None)
+        (self.state.get("risk_floor_usd") or {}).pop(market, None)
+        rec = {"t": dt.datetime.now(dt.timezone.utc).isoformat(),
+               "market": market, "origin": owner, "source": str(source),
+               "orders": sorted(seen),
+               "legs": {side: {"qty": str(got[side][0]),
+                               "cost": str(got[side][1])}
+                        for side in (UP, DOWN)}}
+        self.state.setdefault("other_strategy_cost_attested", {})[market] = rec
+        self.state.setdefault("cost_reconstructions", []).append(
+            dict(rec, side="BOTH"))
+        self.save()
+        return dict(rec, attested=True)
 
     def reconstruct_cost_basis(self, market: str, side: str, *, qty: D,
                                cost: D, source: str) -> Dict[str, Any]:
@@ -4429,8 +5099,41 @@ class InventoryStore:
                 return {"ok": False,
                         "reason": "EXPOSURE_UNREADABLE:%s:%s"
                         % (m, type(exc).__name__)}
+        # ANOTHER STRATEGY'S RESTING ORDERS ARE ACCOUNT EXPOSURE TOO.
+        #
+        # They are deliberately not in `live_orders` -- this strategy must
+        # never adopt, poll or cancel them -- so the per-market figure above
+        # does not see them. But they can fill, and the account-wide ceiling
+        # is about the account. Their price is the other strategy's
+        # business and is not read here: each remaining contract is charged
+        # at $1, the most a contract can cost, which is the same bound an
+        # unreadable price gets everywhere else in this module.
+        #
+        # FAILS CLOSED like everything above: a foreign order whose
+        # remaining quantity cannot be read makes the whole figure
+        # unavailable. Reading it as zero would understate the account.
+        foreign_usd = D(0)
+        foreign_by_origin: Dict[str, D] = {}
+        for _fc, _fo in (self.state.get("foreign_orders") or {}).items():
+            _rem = venue_decimal((_fo or {}).get("remaining")) \
+                if isinstance(_fo, Mapping) else None
+            if _rem is None or not _rem.is_finite() or _rem < 0:
+                return {"ok": False,
+                        "reason": "FOREIGN_ORDER_UNREADABLE:%s"
+                        % str(_fc)[:40]}
+            _charge = _rem * UNKNOWN_PRICE_WORST_CASE
+            _fm = str((_fo or {}).get("market") or "").strip() \
+                or "FOREIGN_ORDERS_MARKET_UNSTATED"
+            out[_fm] = out.get(_fm, D(0)) + _charge
+            markets.add(_fm)
+            foreign_usd += _charge
+            _og = str((_fo or {}).get("origin") or ORIGIN.UNKNOWN)
+            foreign_by_origin[_og] = foreign_by_origin.get(_og, D(0)) + _charge
         return {"ok": True, "risk_by_market": out,
                 "markets": sorted(markets),
+                "foreign_orders_usd": str(foreign_usd),
+                "foreign_orders_usd_by_origin": {
+                    k: str(v) for k, v in sorted(foreign_by_origin.items())},
                 "total_usd": str(sum(out.values(), D(0)))}
 
     def markets_with_exposure(self) -> List[str]:
@@ -4630,7 +5333,28 @@ class InventoryStore:
         # keep the legacy scalar moving too, for anything still reading it
         self.state["realized_today"] = str(
             D(str(self.state.get("realized_today") or 0)) + pnl)
+        # WHOSE RESULT THIS IS. A LABEL ON THE ROW, and nothing else: the
+        # account-wide lines above have just been moved by the full amount
+        # and the label does not touch them. Written here, inside the one
+        # writer of `retired_markets`, so there is still exactly one. See
+        # `l5_origin` and `realized_by_origin`.
+        _att = (self.state.get("other_strategy_cost_attested") or {}).get(
+            market)
+        if isinstance(_att, Mapping) and not unknown_basis_at_settlement:
+            _og = {"origin": str(_att.get("origin")),
+                   "cost_basis": ORIGIN.BASIS_AUTHENTICATED,
+                   "evidence": "OTHER_STRATEGY_FILLS_CONFIRMED_BY_VENUE_"
+                               "ORDER_READS"}
+        else:
+            _og = ORIGIN.origin_of_settlement(
+                market, own=OWN_STRATEGY, verified_own=bool(verified_l5),
+                unknown_basis=bool(unknown_basis_at_settlement),
+                other_strategy_order_seen=(
+                    self.state.get("foreign_orders_seen") or {}).get(market))
         self.state.setdefault("retired_markets", {})[market] = {
+            "origin": _og["origin"],
+            "origin_cost_basis": _og["cost_basis"],
+            "origin_evidence": _og["evidence"],
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "yes_value": str(v), "settlement_pnl": str(pnl),
             "resolution_source": (dict(resolution).get("source")
@@ -4743,11 +5467,20 @@ class InventoryStore:
             pos.pop(k, None)
             lc.pop(k, None)
         unknown = self.state.setdefault("leg_cost_basis_unknown", [])
+        # HOW MUCH OF EACH LEG IS STILL PRICED AT THE BOUND. `apply_fill`
+        # reads this: a fill of OUR OWN order that is read after the venue's
+        # position already contained it replaces that much of the bound with
+        # the measured cost instead of being added on top. See
+        # `absorb_into_adopted`.
+        unattributed = self.state.setdefault("adopted_unattributed", {})
+        for k in keys:
+            unattributed.pop(k, None)
         for k, v in rows.items():
             if k.rsplit("|", 1)[0] != market:
                 continue
             pos[k] = str(v)
             lc[k] = str(D(str(v)) * UNKNOWN_PRICE_WORST_CASE)
+            unattributed[k] = str(v)
             if k not in unknown:
                 unknown.append(k)
         new_risk: Optional[D] = None
@@ -4758,6 +5491,78 @@ class InventoryStore:
         floor = max([r for r in (prior_risk, new_risk) if r is not None]
                     or [D(0)])
         self.state.setdefault("risk_floor_usd", {})[market] = str(floor)
+
+    def fills_in_flight(self, gross: Mapping[str, Mapping[str, D]],
+                        net: Mapping[str, D],
+                        open_orders: Sequence[Mapping[str, Any]]
+                        ) -> Dict[str, Dict[str, Any]]:
+        """Markets whose whole difference our own unbooked fills can explain.
+
+        For every order we track with a venue id -- live, or absent from the
+        venue's open orders and awaiting its final read -- the most it can
+        have filled without our having booked it is:
+
+            still open at the venue   qty - venue remaining - booked
+            no longer open            qty - booked
+
+        A market qualifies when the venue's net differs from ours and the
+        difference lies inside what those orders could add on that side.
+        An order with no venue id, an unreadable quantity or an unknown side
+        contributes NOTHING, so anything we cannot account for exactly is
+        still adopted at the bound.
+        """
+        open_rem: Dict[str, D] = {}
+        for o in open_orders or ():
+            vid = str(o.get("id") or o.get("order_id") or "").strip()
+            rem = o.get("remaining_qty", o.get("remainingQuantity"))
+            try:
+                if vid and rem is not None:
+                    open_rem[vid] = D(str(rem))
+            except Exception:                                  # noqa: BLE001
+                continue
+        cap: Dict[str, Dict[str, Any]] = {}
+        submitted = self.state.get("submitted") or {}
+        seen = set()
+        for book in ("live_orders", "pending_terminal"):
+            for coid, o in (self.state.get(book) or {}).items():
+                if coid in seen or not isinstance(o, Mapping):
+                    continue
+                seen.add(coid)
+                vid = str(o.get("venue_order_id") or "").strip()
+                side = venue_side(o.get("side"))
+                market = o.get("market")
+                sub = submitted.get(coid) or {}
+                try:
+                    qty = D(str(o.get("qty") if o.get("qty") is not None
+                                else sub.get("qty")))
+                    done = self.applied_fill_qty(coid)
+                except Exception:                              # noqa: BLE001
+                    continue
+                if not vid or side is None or not market or qty <= 0:
+                    continue
+                if book == "live_orders" and vid in open_rem:
+                    could = qty - open_rem[vid] - done
+                else:
+                    could = qty - done
+                if could <= 0:
+                    continue
+                c = cap.setdefault(str(market), {UP: D(0), DOWN: D(0),
+                                                 "orders": []})
+                c[side] += could
+                c["orders"].append({"coid": str(coid), "venue_order_id": vid,
+                                    "side": side, "unbooked_at_most":
+                                    str(could)})
+        out: Dict[str, Dict[str, Any]] = {}
+        for m, c in cap.items():
+            if m not in net:
+                continue
+            ours = (gross.get(m) or {}).get("net", D(0))
+            diff = net[m] - ours
+            if diff == 0 or not (-c[DOWN] <= diff <= c[UP]):
+                continue
+            out[m] = {"venue_net": str(net[m]), "our_net": str(ours),
+                      "difference": str(diff), "orders": c["orders"]}
+        return out
 
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]
@@ -4817,12 +5622,38 @@ class InventoryStore:
         # THE VENUE'S ROWS BECOME THE POSITION OF RECORD. This is the line the
         # docstring always promised and did not do; see adopt_venue_position
         # for what is preserved and what is bounded.
+        # A FILL OF OUR OWN ORDER THAT WE HAVE NOT READ YET IS NOT A
+        # CONTRADICTION. The venue updates the position the instant an
+        # order trades; we learn the price only when we read the order.
+        # Adopting in between throws away the book -- matched pairs
+        # included -- for a difference the next order read explains in
+        # full. Where the whole difference fits inside what our own tracked
+        # orders could have filled and not yet booked, the book is LEFT
+        # ALONE for a bounded number of reconciliations and the order read
+        # books the fill at its real price. Past the bound it is adopted
+        # exactly as before.
+        flight = self.fills_in_flight(gross, net, open_orders)
+        fstate = self.state.setdefault("fill_in_flight", {})
+        deferred: List[str] = []
+        for m in sorted(flight):
+            n = int((fstate.get(m) or {}).get("deferrals") or 0)
+            if n >= FILL_IN_FLIGHT_MAX_DEFERRALS:
+                continue
+            fstate[m] = dict(
+                flight[m], deferrals=n + 1,
+                first_seen=((fstate.get(m) or {}).get("first_seen")
+                            or dt.datetime.now(dt.timezone.utc).isoformat()))
+            deferred.append(m)
+        for m in list(fstate):
+            if m not in deferred and m not in flight:
+                fstate.pop(m, None)
+        disputed = [m for m in disputed if m not in deferred]
         for m in list(disputed):
             self.adopt_venue_position(
                 m, after, why="venue net contradicts our gross")
         for k, v in after.items():
             m = k.rsplit("|", 1)[0]
-            if m in agrees:
+            if m in agrees or m in deferred:
                 continue
             # a market the venue holds and we have never booked: adopt it the
             # same way, so risk sees the shares AND can price them, rather
@@ -4847,10 +5678,53 @@ class InventoryStore:
         ours = dict(self.state.get("live_orders") or {})
         rebuilt: Dict[str, Any] = {}
         quarantined_now: Dict[str, Any] = {}
+        foreign_now: Dict[str, Any] = {}
+        self.state["foreign_orders"] = foreign_now
         for o in open_orders:
             coid = str(o.get("client_order_id") or o.get("clientOrderId")
                        or o.get("order_id") or o.get("id") or "")
             if not coid:
+                continue
+            # NOT OURS, BY NAME. Decided on the venue's own client id, before
+            # any mapping back to a tracked order, and never for an id our
+            # file already holds. See `FOREIGN_COID_PREFIXES_ENV`.
+            _f_market = (o.get("marketSlug") or o.get("market_slug")
+                         or o.get("market"))
+            _f_series = ORIGIN.strategy_of_market(_f_market)
+            _f_by_series = (_f_series is not None
+                            and _f_series != OWN_STRATEGY)
+            _f_tracked = coid in ours or bool(tracked_coid_for_venue_order(
+                o.get("id") or o.get("order_id"), self.state))
+            if not _f_tracked and (is_foreign_coid(coid) or _f_by_series):
+                _f_origin = ORIGIN.origin_of_coid(coid)
+                foreign_now[coid] = {
+                    "venue_order_id": str(o.get("id") or o.get("order_id")
+                                          or ""),
+                    # by the id's prefix when the row carries one; a real
+                    # venue row does not, and then WHOSE it is stays
+                    # UNKNOWN -- only that it is not ours is established
+                    "origin": _f_origin,
+                    "series_strategy": _f_series,
+                    "foreign_because": ("CLIENT_ID_PREFIX"
+                                        if is_foreign_coid(coid)
+                                        else "MARKET_SERIES"),
+                    "market": _f_market,
+                    "remaining": str(o.get("remaining_qty", o.get(
+                        "remainingQuantity", o.get("qty", "")))),
+                    "labels": "another strategy's order: listed, never "
+                              "adopted, never cancelled and never counted "
+                              "against this strategy's own order ceiling. "
+                              "Its remaining quantity IS counted in "
+                              "account-wide exposure at $1 a contract."}
+                # EVIDENCE FOR A LATER LABEL, not a claim about a position:
+                # the venue listed a registered strategy's order in this
+                # market. Bounded, oldest dropped first.
+                if _f_market and _f_origin in ORIGIN.STRATEGY_COID_PREFIX:
+                    _seen = self.state.setdefault("foreign_orders_seen", {})
+                    _seen.pop(str(_f_market), None)
+                    _seen[str(_f_market)] = _f_origin
+                    while len(_seen) > FOREIGN_SEEN_KEEP:
+                        _seen.pop(next(iter(_seen)))
                 continue
             # OUR ORDER, UNDER OUR OWN KEY. A venue row that states no client
             # order id falls through to the venue's id above, and keying it
@@ -4989,6 +5863,10 @@ class InventoryStore:
                 "venue_order_id": was.get("venue_order_id"),
                 "market": was.get("market"),
                 "side": was.get("side"),
+                # what it was FOR, kept so `fills_in_flight` can bound what
+                # this order may have filled once it is off the live map
+                "qty": (was.get("qty") if was.get("qty") is not None
+                        else prior.get("qty")),
                 "session_id": was.get("session_id"),
                 "applied": str(self.applied_fill_qty(coid)),
                 "first_seen_missing": prior.get("first_seen_missing")
@@ -5029,12 +5907,22 @@ class InventoryStore:
         for m in list(floors):
             if m not in disputed:
                 floors.pop(m, None)
+        self.state[UNCERTAIN_CAUSE] = None
         if disputed or incoherent or pending or quarantine:
-            self.state["orders_uncertain"] = (
+            _why = (
                 "gross/net divergence %s; incoherent book %s; "
                 "unbooked terminal orders %s; quarantined orders %s"
                 % (sorted(set(disputed)), sorted(incoherent), pending,
                    quarantine))
+            self.state["orders_uncertain"] = _why
+            # WHICH ORDERS, when they are the whole of it. Evidence for
+            # `resolve_pending_uncertainty`; a divergence, an incoherent
+            # book or a quarantine records NO cause and is cleared only by
+            # the next reconciliation, exactly as before.
+            if pending and not (disputed or incoherent or quarantine):
+                self.state[UNCERTAIN_CAUSE] = {
+                    "kind": RECONCILE_PENDING_ONLY, "why": _why,
+                    "pending": list(pending), "resolved_unfilled": []}
         # THE DWELL ANCHOR IS RECONCILED HERE TOO, after the venue has
         # overwritten our positions. A stamp for a market the venue says is
         # flat is dropped; a market that holds inventory with NO stamp is
@@ -5050,7 +5938,10 @@ class InventoryStore:
                 "venue_net": {m: str(v) for m, v in net.items()},
                 "gross_net_agrees": agrees,
                 "gross_detail_lost": sorted(m for m, ok in agrees.items()
-                                            if not ok),
+                                            if not ok and m not in deferred),
+                # our own unbooked fills explain these; nothing was adopted
+                "fills_in_flight_deferred": {
+                    m: dict(fstate.get(m) or {}) for m in deferred},
                 "labels_inventory": (
                     "the venue reports a NET position; our book is GROSS. "
                     "Where they agree the matched pair is preserved. Where "
@@ -5519,10 +6410,15 @@ class FaithfulExecutor:
         if not isinstance(counts, dict):
             counts = {"UP": 0, "DOWN": 0, "total": 0}
             self.presend_cross_skips = counts
+        return self._presend_record("PRESEND_WOULD_CROSS", side, own, wire,
+                                    bid, ask, book, counts)
+
+    def _presend_record(self, reason, side, own, wire, bid, ask, book,
+                        counts):
         counts[side] = int(counts.get(side) or 0) + 1
         counts["total"] = int(counts.get("total") or 0) + 1
         return {
-            "reason": "PRESEND_WOULD_CROSS:%s" % side,
+            "reason": "%s:%s" % (reason, side),
             "side": side,
             "own_px": str(own),
             "wire_px": None if wire is None else str(wire),
@@ -5530,12 +6426,91 @@ class FaithfulExecutor:
             "stream_age_s": (None if book.get("stream_age_s") is None
                              else str(book.get("stream_age_s"))),
             "skips": dict(counts),
-            "labels": ("a post-only leg the book has left is rejected by the "
-                       "venue and its submission claim is never returned, so "
-                       "this declines it BEFORE the claim is consumed. No "
-                       "price, size, depth, TTL or cutoff is changed; the "
-                       "order is simply not sent."),
+            "labels": ("a post-only leg the book has left, declined BEFORE "
+                       "the submission claim is consumed. No price, size, "
+                       "depth, TTL or cutoff is changed; the order is "
+                       "simply not sent, and the next tick prices a fresh "
+                       "one."),
         }
+
+    def presend_behind_refusal(self, market: str,
+                               intent: Mapping[str, Any],
+                               tr: Mapping[str, Any],
+                               rnd: Any = None
+                               ) -> Optional[Dict[str, Any]]:
+        """None to send; a record when this MAKER leg is now FAR BEHIND.
+
+        THE OTHER HALF OF `presend_cross_refusal`, and the asymmetry it
+        closes is the same one `TS.replan_drift_ticks` documents at the
+        plan. That guard declines a leg the book has made too AGGRESSIVE --
+        the venue would reject it post-only. Nothing declined a leg the
+        book has left too PASSIVE, because such a leg is perfectly
+        placeable: it rests far behind the touch, never fills, and holds
+        one of the two live-order slots for its whole TTL.
+
+        THE PLAN-LEVEL RE-PRICE DOES NOT COVER THIS. It recomputes from the
+        mirror as the plan is read; this reads the mirror again immediately
+        before the wire, which is the only snapshot that describes the book
+        the order will actually land in.
+
+        ONLY WHEN THE ROUND HOLDS NOTHING, read through
+        `probe_round_is_safe_to_retire` -- the same durable-state predicate
+        the plan-level re-price and retirement both use. A complement
+        matching a HELD leg must never be declined: declining it would
+        strand the inventory it was going to match, which is a far worse
+        outcome than a quote that fills slowly. Any answer but None sends.
+
+        FAILS OPEN ON EVERY UNKNOWN, exactly like the crossing guard, and
+        for the same reason: every risk control has already run by the call
+        site, so this can only decline an order that was not going to fill.
+        A missing book, an unreadable price, an unreadable round state or a
+        raising helper returns None and the order proceeds.
+
+        IT CHANGES NO PRICE, SIZE, DEPTH, TTL OR CUTOFF. It either lets the
+        order through untouched or does not send it.
+        """
+        if str(tr.get("mode") or "").upper() != FT.MAKER:
+            return None
+        side = str(intent.get("side") or "")
+        if side not in (UP, DOWN):
+            return None
+        own = intent.get("price")
+        if own is None:
+            return None
+        try:
+            # a round that holds anything is never declined here
+            if self.probe_round_is_safe_to_retire(
+                    market, int(rnd or 0)) is not None:
+                return None
+            book = self.ts_authenticated_book(market, {}) or {}
+            bid, ask = book.get("bid"), book.get("ask")
+            if bid is None or ask is None:
+                return None
+            drift = TS.plan_drift_ticks(
+                {"legs": [{"side": side, "price": own},
+                          {"side": (DOWN if side == UP else UP),
+                           "price": own}]},
+                bid=bid, ask=ask,
+                tick=getattr(self.transport, "tick_size", None),
+                depth_ticks=(int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                             + self.probe_level_offset(market)),
+                spent_sides=[(DOWN if side == UP else UP)])
+            if drift is None or drift < D(TS.replan_drift_ticks()):
+                return None
+            wire = TS.wire_price(side, own)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                      # unreadable is not a refusal
+        counts = getattr(self, "presend_behind_skips", None)
+        if not isinstance(counts, dict):
+            counts = {"UP": 0, "DOWN": 0, "total": 0}
+            self.presend_behind_skips = counts
+        rec = self._presend_record("PRESEND_LEFT_BEHIND", side, own, wire,
+                                   bid, ask, book, counts)
+        rec["drift_ticks"] = str(drift)
+        rec["allow_ticks"] = TS.replan_drift_ticks()
+        return rec
 
     def probe_plan(self, market: str,
                    authenticated: Mapping[str, Any],
@@ -5549,13 +6524,96 @@ class FaithfulExecutor:
             ask_depth=authenticated.get("ask_shares"),
             tick=getattr(self.transport, "tick_size", None),
             min_qty=getattr(self.transport, "quantity_increment", None),
-            depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")),
+            depth_ticks=(int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                         + self.probe_level_offset(market)),
             cash_envelope=self.probe_cash_envelope(),
             max_worst_case_loss=(self.probe_loss_ceiling()
                                  if loss_ceiling is None else loss_ceiling),
             budget_headroom=self.probe_budget_headroom(),
             book_age_s=authenticated.get("stream_age_s"),
             gap_suspected=bool(authenticated.get("gap_suspected")))
+
+    def probe_resting_in_market(self, market: str) -> int:
+        """Orders of THIS market still on the ledger's live map."""
+        return sum(1 for o in (self.store.live_orders() or {}).values()
+                   if str((o or {}).get("market") or "") == str(market))
+
+    def probe_level_offset(self, market: str) -> int:
+        """Extra opening depth for a pair laddered behind resting ones.
+
+        Zero unless `L5_TS_CONCURRENT_ROUNDS` is above one, so every existing
+        configuration prices exactly as it did. An unreadable ledger is zero
+        too: the level is a price choice, and the gates that bound the order
+        -- pair ceiling, cash, exposure, order count -- do not depend on it.
+        """
+        extra = self.portfolio_steer_extra_depth()
+        try:
+            return int(TS.level_offset_ticks(
+                self.probe_resting_in_market(market))) + extra
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return extra
+
+    #: THE PORTFOLIO CONTROLLER'S STEER, for ONE timer-path placement. The
+    #: runner sets it immediately before that `handle` call and clears it
+    #: in a `finally` immediately after, so it exists for no other call --
+    #: not an L5 action, not a completion, not a requote. None, which is
+    #: what it is in every configuration that does not set
+    #: L5_PORTFOLIO_CONTROLLER=STEER, leaves every path byte-for-byte as it
+    #: was.
+    portfolio_steer: Optional[Mapping[str, Any]] = None
+    PORTFOLIO_STEER_MAX_EXTRA_TICKS = 10
+
+    def portfolio_steer_extra_depth(self) -> int:
+        """Extra opening depth the steer asks for: zero or more, bounded.
+
+        IT CAN ONLY DEEPEN. A negative or unreadable value is zero, so the
+        steer can make an opening more patient than the owner's approved
+        depth and never more aggressive."""
+        st = self.portfolio_steer
+        if not isinstance(st, Mapping):
+            return 0
+        try:
+            n = int(st.get("extra_depth_ticks") or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, min(n, self.PORTFOLIO_STEER_MAX_EXTRA_TICKS))
+
+    def portfolio_held_reducing_side(self, market: str) -> Optional[str]:
+        """The side that reduces FILLED inventory, or None when there is
+        none -- or when the ledger cannot say. Resting orders do not count:
+        an order that has not filled is not a position to hedge."""
+        try:
+            held = D(str(self.store.residual(market)))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if held == 0:
+            return None
+        return DOWN if held > 0 else UP
+
+    def portfolio_steer_refusal(self, side: str,
+                                reducing: Optional[str]) -> Optional[str]:
+        """Why the steer does not want this leg OPENED, or None.
+
+        A LEG THAT REDUCES A HELD RESIDUAL IS NEVER REFUSED HERE. The steer
+        chooses which exposure to take on; it has no say over taking
+        exposure off. And an unreadable steer refuses, because a steer that
+        cannot be read is not permission to open."""
+        st = self.portfolio_steer
+        if st is None:
+            return None
+        if reducing is not None and str(side) == str(reducing):
+            return None
+        try:
+            wanted = st["sides"][str(side)].get("wanted") is True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "PORTFOLIO_STEER_UNREADABLE"
+        return None if wanted else "PORTFOLIO_SIDE_NOT_WANTED"
 
     def probe_cash_envelope(self) -> Optional[D]:
         vg = self.validation_gates
@@ -5694,6 +6752,113 @@ class FaithfulExecutor:
         plans = self.store.state.setdefault("probe_plans", {})
         plans[self.probe_plan_key(market, rnd)] = dict(plan)
         self.store.save()
+
+    def probe_round_never_placed(self, market: str, rnd: int) -> bool:
+        """True only when NO order was ever submitted in this round.
+
+        Read from the claim files on disk -- the same durable record
+        `probe_legs_claimed` reads. A claim is taken BEFORE the order is
+        sent, so a claim that exists means an order may exist, whatever
+        became of it; and a later attempt is only ever claimed after
+        attempt zero. No claim on either leg therefore means no order, no
+        fill and nothing to match. Unreadable is False: a round we cannot
+        prove empty keeps its frozen plan.
+        """
+        from src import l5_live_authorization as AUTH
+        try:
+            if not str(market):
+                return False
+            for leg in AUTH.PROBE_LEGS:
+                if AUTH.claim_held(AUTH.accumulation_sid(
+                        AUTH.experiment_id(), str(market), int(rnd), leg)):
+                    return False
+            return True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def round_lifecycle(self, market: str) -> Dict[str, Any]:
+        """Rounds SPENT against orders SUBMITTED, for one market. Read-only.
+
+        Everything here is read from the durable claim files and the
+        retirement register, so it survives a restart and cannot disagree
+        with what `probe_round` will do next. An unreadable claim counts as
+        a submission, which is the reading that under-states what is left.
+        """
+        from src import l5_live_authorization as AUTH
+        out: Dict[str, Any] = {
+            "market": str(market),
+            "charged_on_submission": round_charged_on_submission(),
+            "rounds_permitted": None}
+        try:
+            n = int(self.acc_max_rounds())
+            legs = 0
+            with_order, retired_no_order, retired_with_order = [], [], []
+            _keep = requote_keeps_round()
+            requoted: List[int] = []
+            for r in range(self.probe_round_index_cap() if _keep else n):
+                held = 0
+                for leg in AUTH.PROBE_LEGS:
+                    try:
+                        held += bool(AUTH.claim_held(AUTH.accumulation_sid(
+                            AUTH.experiment_id(), str(market), r, leg)))
+                    except BaseException as exc:               # noqa: BLE001
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        held += 1
+                legs += held
+                ret = self.probe_round_retired(market, r)
+                if _keep and (ret or held >= len(AUTH.PROBE_LEGS)) and \
+                        self.probe_round_never_filled(market, r):
+                    requoted.append(r)
+                if held:
+                    with_order.append(r)
+                    if ret:
+                        retired_with_order.append(r)
+                elif ret:
+                    retired_no_order.append(r)
+            spent = len((set(with_order) | set(retired_no_order))
+                        - set(requoted))
+            if _keep:
+                out["requote_keeps_round"] = True
+                out["rounds_requoted_without_a_fill"] = len(requoted)
+            out.update({
+                "rounds_permitted": n,
+                "rounds_with_a_submitted_order": len(with_order),
+                "legs_submitted": legs,
+                "rounds_retired_without_an_order": len(retired_no_order),
+                "rounds_retired_after_an_order": len(retired_with_order),
+                "rounds_spent": spent,
+                "rounds_left": max(0, n - spent),
+                "next_round": self.probe_round(market),
+                "proposals_repriced_since_start": int(
+                    (self.__dict__.get("round_repriced") or {}
+                     ).get(str(market), 0)),
+                "labels": ("rounds_spent counts a round an order was "
+                           "submitted in, plus any round retired without "
+                           "one. With charged_on_submission true the second "
+                           "kind cannot occur for a round that never "
+                           "submitted; a proposal priced again is counted "
+                           "in proposals_repriced_since_start and spends "
+                           "nothing.")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+        return out
+
+    def probe_discard_plan(self, market: str, rnd: int) -> bool:
+        """Drop a stored plan that was never acted on. Deletes nothing else.
+
+        Not saved here: the plan that replaces it is saved by
+        `probe_store_plan`, and if none does, a restart finds the same
+        never-placed round and drops the same plan again.
+        """
+        plans = self.store.state.get("probe_plans")
+        if not isinstance(plans, dict):
+            return False
+        return plans.pop(self.probe_plan_key(market, rnd), None) is not None
 
     def probe_legs_claimed(self, market: str = "", rnd: int = 0
                            ) -> Dict[str, bool]:
@@ -5947,6 +7112,43 @@ class FaithfulExecutor:
             return qty
         return min(qty, abs(signed))
 
+    def probe_round_never_filled(self, market: str, rnd: int) -> bool:
+        """Did every order this round ever sent end with nothing booked?
+
+        True only when the round's orders are ON RECORD, every one of them
+        is finished at the venue, and each booked zero. A round with no
+        record -- one from before the record existed, or one whose record
+        cannot be read -- is NOT known to be unfilled and answers False,
+        which is the reading that charges it.
+        """
+        try:
+            coids = (self.store.state.get("probe_round_orders") or {}).get(
+                "%s|%d" % (str(market), int(rnd)))
+            if not coids:
+                return False
+            working = set(self.store.state.get("live_orders") or {}) | set(
+                self.store.state.get("pending_terminal") or {})
+            for c in coids:
+                # AN ORDER STILL AT THE VENUE, or one that has left it and
+                # still owes its final read, may yet turn out to have
+                # filled. Only an order that is finished AND booked nothing
+                # counts as a quote that came to nothing.
+                if str(c) in working:
+                    return False
+                if self.store.applied_fill_qty(str(c)) != D(0):
+                    return False
+            return True
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def probe_round_index_cap(self) -> int:
+        """How far the round walk may go when a re-quote keeps its round."""
+        n = int(self.acc_max_rounds())
+        return max(n, min(ACC_ROUND_INDEX_HARD_CAP,
+                          n * (1 + ACC_REQUOTES_PER_ROUND)))
+
     def probe_round(self, market: str) -> Optional[int]:
         """The first round of this market with a leg still unspent, or None.
 
@@ -5955,13 +7157,44 @@ class FaithfulExecutor:
         is started -- the opposite leg of an existing position always takes
         priority over opening another. None means every permitted round for
         this market is spent, and the caller refuses.
+
+        A RE-QUOTE IS NOT AN OPENING. A round abandoned because the book
+        left its plan, whose orders were all cancelled with nothing filled,
+        took no exposure: it was one opening, quoted again. Counting each
+        re-quote against `L5_ACC_MAX_ROUNDS` spent 16 rounds in about four
+        minutes at a 15-second quote and then stopped the engine. With the
+        owner's switch such a round is walked past WITHOUT being charged;
+        a round that filled anything, or that is still working, is charged
+        exactly as before. The walk itself is bounded, and every order
+        still passes the submission budgets and every other gate.
         """
-        for r in range(self.acc_max_rounds()):
+        budget = int(self.acc_max_rounds())
+        if not requote_keeps_round():
+            for r in range(budget):
+                if self.probe_round_retired(market, r):
+                    continue       # abandoned: its plan is not coming back
+                claimed = self.probe_legs_claimed(market, r)
+                if not all(claimed.values()):
+                    return r
+            return None
+        charged = 0
+        for r in range(self.probe_round_index_cap()):
             if self.probe_round_retired(market, r):
-                continue           # abandoned: its plan is not coming back
+                if not self.probe_round_never_filled(market, r):
+                    charged += 1
+                continue
+            if charged >= budget:
+                return None
             claimed = self.probe_legs_claimed(market, r)
             if not all(claimed.values()):
                 return r
+            # BOTH LEGS SPENT. If every order they sent was cancelled with
+            # nothing filled, this round was a quote that came to nothing
+            # -- with rounds resting side by side the attempt axis cannot
+            # re-place a leg, so each re-quote arrives here as a whole
+            # round -- and it is not charged. Anything else is.
+            if not self.probe_round_never_filled(market, r):
+                charged += 1
         return None
 
     def probe_reopen_decision(self, market: str, rnd: int, plan: Any, *,
@@ -6018,7 +7251,16 @@ class FaithfulExecutor:
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             used = rnd_i          # unreadable: judge it as a reopening
-        if used <= 0:
+        # THE FIRST ROUND WAS NEVER PRICED. With the owner's switch it is
+        # priced below like any other; without it, nothing changes.
+        try:
+            from src import l5_unmatched_disposition as _UDP0
+            _first_priced = bool(_UDP0.first_opening_priced())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("FIRST_OPENING_SWITCH_UNREADABLE")
+        if used <= 0 and not _first_priced:
             return {"reopen": True,
                     "reason": "FIRST_EXPOSURE_TAKING_ROUND_NOT_A_REOPENING",
                     "market": str(market), "round": rnd,
@@ -6198,7 +7440,63 @@ class FaithfulExecutor:
                 raise
             locked = None
 
+        # ---- A PAIR OPENED BESIDE RESTING ONES IS A LADDER LEVEL, and it
+        #      needs a free level and room for BOTH legs. This is the same
+        #      test the runner's timer path asks, repeated here because an
+        #      L5 action reaches this method without passing through it.
+        #
+        #      AT THE ORDER CAP IT SAYS NOTHING. A fresh round with no order
+        #      slot left is stopped by MAX_LIVE_ORDERS further down, by that
+        #      name, and four existing suites and the dashboards read that
+        #      name. My first version ran this unconditionally and renamed
+        #      the refusal -- same outcome, different string -- which the
+        #      full suite caught.
+        #
+        #      WITH A SLOT FREE AND THE LADDER OFF IT REFUSES, and that is a
+        #      tightening the runner harness found: once the owner's order
+        #      limit is above two, the pass loop's second call opened the
+        #      first leg of a NEW round beside a resting pair, and nothing
+        #      could then place its complement. A pair that can only have
+        #      one leg is not opened.
+        concurrent = False
+        ladder_on = TS.concurrent_rounds() > 1
+        try:
+            resting_here = self.probe_resting_in_market(market)
+            slot_free = (int(self.store.still_fillable_order_count())
+                         < int(self.limits.max_live_orders))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            if ladder_on:
+                return no("LIVE_ORDERS_UNREADABLE",
+                          detail=type(exc).__name__)
+            resting_here, slot_free = 0, False
+        if resting_here > 0 and (ladder_on or slot_free):
+            concurrent = ladder_on
+            _lane = TS.concurrent_round_slot_refusal(
+                market=market, live_orders=self.store.live_orders(),
+                max_live_orders=self.limits.max_live_orders)
+            if _lane is not None:
+                return no("CONCURRENT_ROUND_REFUSED:%s" % _lane,
+                          resting_in_market=resting_here,
+                          concurrent_rounds=TS.concurrent_rounds(),
+                          max_live_orders=self.limits.max_live_orders)
+
         from src import l5_unmatched_disposition as UDP
+        # WHAT OUR OWN SETTLED WINDOWS PAID. A ledger with no such reader
+        # (a double, an older store) contributes nothing and the decision
+        # stands on its priors as before; a reader that RAISES is an
+        # unreadable record, and an unreadable record does not open a round.
+        own_evidence = None
+        _own = getattr(self.store, "own_settled_round_evidence", None)
+        if callable(_own):
+            try:
+                own_evidence = _own()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return no("OWN_SETTLED_EVIDENCE_UNREADABLE",
+                          detail=type(exc).__name__)
         try:
             return dict(UDP.reopen_decision(
                 market=market, rounds_used=used,
@@ -6208,7 +7506,9 @@ class FaithfulExecutor:
                 now_s=now_s, window_end_s=window_end_s,
                 exposure_headroom_usd=bound,
                 outstanding_worst_case_usd=outstanding * worst_px,
-                daily_loss_room_usd=ceil), round=rnd)
+                daily_loss_room_usd=ceil,
+                own_evidence=own_evidence, concurrent=concurrent),
+                round=rnd, concurrent=concurrent)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -7462,6 +8762,92 @@ class FaithfulExecutor:
                            "it costs. Resting orders are counted as "
                            "potential exposure and never as protection.")}
 
+    def favorite_only_refusal(self, dec: Mapping[str, Any]
+                              ) -> Optional[Dict[str, Any]]:
+        """None unless the favorite-only test is on and this order is not
+        the favorite the steer wants RIGHT NOW.
+
+        FAILS CLOSED. In the test, an order with no steer behind it -- every
+        completion, requote and defensive route, which run with none -- is
+        refused, and so is one whose steer cannot be read or does not name
+        this side as the FAVORITE.
+        """
+        # THE VARIABLE, NOT THE CONTROLLER MODULE. This file does not import
+        # the portfolio controller, by design; the profile's name is one
+        # exact token and a test pins that both files read the same one.
+        if os.getenv(FAVORITE_ONLY_PROFILE_ENV, "") != FAVORITE_ONLY_PROFILE:
+            return None
+        side = str(dec.get("side") or "")
+        st = self.portfolio_steer
+        if not isinstance(st, Mapping):
+            return {"why": "FAVORITE_ONLY_NO_STEER", "side": side}
+        try:
+            v = (st.get("sides") or {}).get(side) or {}
+            ok = v.get("wanted") is True and v.get("role") == "FAVORITE"
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "FAVORITE_ONLY_STEER_UNREADABLE", "side": side}
+        if not ok:
+            return {"why": "FAVORITE_ONLY_NOT_THE_FAVORITE", "side": side,
+                    "steer": {k: (x or {}).get("reason") or (x or {}).get(
+                        "role") for k, x in (st.get("sides") or {}).items()}}
+        return None
+
+    def held_side_add_refusal(self, market: str, dec: Mapping[str, Any]
+                              ) -> Optional[Dict[str, Any]]:
+        """None unless completions rest at their target (inventory recovery,
+        or L5_TS_COMPLETION_RESTS_AT_CEILING alone) and this order would BUY
+        MORE of the side already held unmatched, with no steer asking for it.
+
+        WHAT IT CLOSES, found by replaying recorded venue books through the
+        runner. With recovery on, a completion rests for as long as inventory
+        is unmatched. The controller's opening path read that resting
+        completion as the first leg of a new pair and granted the "complement"
+        its slot -- on the side ALREADY HELD. 2026-11-03 00:30Z book: holding
+        0.62 DOWN bought at 0.50 with UP resting at 0.48 and the market at
+        0.79/0.80, it posted DOWN at 0.18, which filled. The two orders were
+        never a pair (UP was 31 ticks from the touch); the DOWN order was a
+        directional add to a losing position that nothing had decided to make.
+
+        Without recovery the same tick is refused upstream, because the
+        opening pair is priced at the touch and fails the opening ceiling;
+        resting the completion at its target is what let it through.
+
+        A deliberate add still has a route: the portfolio controller's steer
+        names the side it wants, and an order it wants is not refused here.
+        FAILS CLOSED: unreadable inventory refuses.
+        """
+        # keyed on RESTING, which is what creates the opening: the master
+        # switch turns it on, and so does its own switch alone
+        if not TS.completion_rests_at_ceiling():
+            return None
+        side = str(dec.get("side") or "")
+        try:
+            realised = D(str(self.store.residual(str(market))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "HELD_SIDE_ADD_INVENTORY_UNREADABLE", "side": side}
+        if not realised.is_finite():
+            return {"why": "HELD_SIDE_ADD_INVENTORY_UNREADABLE", "side": side}
+        if realised == 0:
+            return None
+        held = "UP" if realised > 0 else "DOWN"
+        if side != held:
+            return None
+        st = self.portfolio_steer
+        try:
+            if isinstance(st, Mapping) and (
+                    (st.get("sides") or {}).get(side) or {}
+                    ).get("wanted") is True:
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+        return {"why": "HELD_SIDE_ADD_WHILE_UNMATCHED", "side": side,
+                "unmatched_contracts": str(abs(realised))}
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -7610,6 +8996,25 @@ class FaithfulExecutor:
                                "at all.")}
         cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
         eff = cost_after / matched_after
+        # A PARTIAL COMPLETION, PER CONTRACT. `cost_after / matched_after`
+        # charges the pairs this order creates with the cost of the part of
+        # the held leg that stays unmatched, so one clip of a several-clip
+        # leg can never clear any ceiling. With the owner's switch, and only
+        # for an order that reduces an unmatched leg without reaching past
+        # it, each side is taken at its own average: what the matched
+        # contracts cost, which is what they redeem $1.00 against. A full
+        # completion is the same number either way.
+        try:
+            if (TS.partial_completion_per_contract()
+                    and held[other] > held[side]
+                    and after[side] < held[other]
+                    and (lc.get(other) is not None)):
+                eff = (((lc.get(side) or D(0)) + px * qty) / after[side]
+                       + D(str(lc.get(other))) / held[other])
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # unreadable: keep the stricter whole-cost figure
         # THE DEFENSIVE CEILING IS SEPARATE AND LOOSER, AND ONLY HERE.
         # Normal completion stays capped at 0.96: a pair above $1.00 buys a
         # certain loss and is never an edge. Unwinding a leg that would
@@ -7692,6 +9097,7 @@ class FaithfulExecutor:
         if len(legs) != 2:
             return "PROBE_PLAN_NOT_TWO_LEGS"
         both = [{"qty": D(l["qty"]), "price": D(l["price"]),
+                 "market": str(market),
                  "intent": ("ORDER_INTENT_BUY_SHORT" if l["side"] == DOWN
                             else "ORDER_INTENT_BUY_LONG")}
                 for l in legs]
@@ -7815,11 +9221,113 @@ class FaithfulExecutor:
         """
         retired = self.store.state.get("retired_markets") or {}
         legs: List[Dict[str, Any]] = []
+        recycle = self.cash_recycles_completed_pairs()
         for mkt, usd in sorted(self.store.committed().items()):
             legs.append({"market": mkt, "cash_out": usd,
                          "settled": mkt in retired,
                          "closing": False})
+            if not recycle or mkt in retired:
+                continue
+            # A COMPLETED PAIR'S CASH, RETURNED WHEN THE VENUE RETURNS IT.
+            # See `matched_pair_cost`. A credit leg, so the cash gate's own
+            # policy switch decides whether it counts; never more than the
+            # market was charged, and nothing at all when the matched cost
+            # cannot be vouched for.
+            credit = self.matched_pair_cost(mkt)
+            if credit is None or credit <= 0:
+                continue
+            # ONLY WHAT THE VENUE'S BUYING POWER HAS CONFIRMED. The runner
+            # records, per market, the matched quantity for which a fresh
+            # balance read showed the cash back (`confirm_recycled_cash`).
+            # Quantity matched since then earns nothing until the next read
+            # agrees; nothing recorded -- a restart, an uncertain ledger, a
+            # reading that disagreed -- earns nothing at all.
+            share = self.recycle_confirmed_share(mkt)
+            if share <= 0:
+                continue
+            legs.append({"market": mkt,
+                         "cash_out": -min(credit * share, usd),
+                         "settled": False, "closing": True,
+                         "basis": "VENUE_BUYING_POWER_CONFIRMED_PAIR"})
         return legs
+
+    def recycle_confirmed_share(self, market: str) -> D:
+        """The fraction of this market's matched quantity the venue's
+        buying power has confirmed returned: 0 to 1, and 0 on any doubt."""
+        try:
+            rec = (self.__dict__.get("recycle_confirmed") or {}).get(market)
+            if not isinstance(rec, Mapping):
+                return D(0)
+            conf = D(str(rec.get("matched")))
+            m = min(D(str(self.store.position(market, UP))),
+                    D(str(self.store.position(market, DOWN))))
+            if not (conf.is_finite() and m.is_finite()) or conf <= 0 \
+                    or m <= 0:
+                return D(0)
+            return min(conf, m) / m
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return D(0)
+
+    def cash_recycles_completed_pairs(self) -> bool:
+        """Is the cash gate's policy RECYCLE_ON_COMPLETE? Off otherwise."""
+        try:
+            from src import l5_live_validation_gates as _VG
+            return (getattr(self.validation_gates, "cash_policy", None)
+                    == _VG.RECYCLE_ON_COMPLETE)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def matched_pair_cost(self, market: str) -> Optional[D]:
+        """What the MATCHED part of this market's inventory cost, or None.
+
+        WHY THIS MAY LEAVE THE CASH FIGURE. On this venue DOWN is a sale of
+        the same contract UP buys, so equal UP and DOWN quantity is a FLAT
+        position and the venue holds no cash against it. Observed on the
+        venue's own balance, four times out of four:
+
+          2026-11-11 0030z  340.42775 -> 340.33975 on the UP fill (-0.0880)
+                            -> 340.43375 on the DOWN fill, 14 minutes before
+                            settlement: all of it back, plus the pair's 0.6c.
+          2026-11-11 0045z  340.43375 -> 340.34375 -> 340.44375, the same.
+          2026-11-10 2145z  both pairs' cash and profit were in the balance
+                            at 21:59:20, before the 22:00 settlement.
+
+        The ledger's `committed` keeps the full cost until settlement, which
+        is right for accounting and wrong as a measure of cash deployed.
+
+        ONLY THE MATCHED QUANTITY, at each side's average cost, and only
+        when both sides' cost basis is attested. The unmatched remainder
+        keeps its full charge. Unreadable, unattested or incoherent is None,
+        which releases nothing.
+        """
+        try:
+            up = self.store.position(market, UP)
+            dn = self.store.position(market, DOWN)
+            if up is None or dn is None:
+                return None
+            up, dn = D(str(up)), D(str(dn))
+            if not (up.is_finite() and dn.is_finite()) or up < 0 or dn < 0:
+                return None
+            m = min(up, dn)
+            if m <= 0:
+                return D(0)
+            for side in (UP, DOWN):
+                if not (self.store.basis_attestation(market, side)
+                        or {}).get("ok"):
+                    return None
+            lc = self.store.leg_cost(market)
+            uc, dc = D(str(lc.get("UP"))), D(str(lc.get("DOWN")))
+            if not (uc.is_finite() and dc.is_finite()) or uc < 0 or dc < 0:
+                return None
+            return (uc * m / up) + (dc * m / dn)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
 
     def outstanding_for_gates(self) -> List[Dict[str, Any]]:
         """Every live order's still-fillable obligation, account-wide.
@@ -7842,7 +9350,10 @@ class FaithfulExecutor:
                     o.get("side"), doing="pricing an outstanding order") == UP
             except UnknownSide:
                 is_up = False
+            # `market` lets the cash gate tell a hedge from an order in
+            # some other market. A row without one is never read as a hedge.
             out.append({"coid": coid, "qty": rem, "price": px,
+                        "market": str(o.get("market") or ""),
                         "intent": ("ORDER_INTENT_BUY_LONG" if is_up
                                    else "ORDER_INTENT_BUY_SHORT")})
         return out
@@ -8363,7 +9874,8 @@ class FaithfulExecutor:
             # lifecycle below. `authenticated` is deliberately NOT reassigned.
             ts_book = self.ts_authenticated_book(market, authenticated)
             _tick = getattr(self.transport, "tick_size", None)
-            _dticks = int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+            _dticks = (int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+                       + self.probe_level_offset(market))
             # ============ THE COMPLEMENT'S OWN DEPTH, NOT THE OPENING'S
             #
             # THE DEFECT, from the venue record of 2026-11-02 2245z. At
@@ -8409,6 +9921,33 @@ class FaithfulExecutor:
             if rnd is None:
                 return prov.refuse("TWO_SIDED_PROBE",
                                    "ACCUMULATION_EXHAUSTED")
+
+            # A ROUND NOBODY HAS PLACED AN ORDER IN IS PRICED FROM THE BOOK
+            # AS IT IS NOW. See ROUND_ON_SUBMISSION_ENV. Its stored plan is
+            # dropped here, so nothing below can find it stale, retire the
+            # round for it, or re-propose prices the market has left; the
+            # planning loop prices the pair afresh and every gate that ran
+            # on the old plan runs again on the new one. A round with a
+            # claim on either leg is untouched, and so is everything when
+            # the switch is not exactly ON.
+            if round_charged_on_submission():
+                try:
+                    if (self.probe_round_never_placed(market, rnd)
+                            and self.probe_discard_plan(market, rnd)):
+                        # telemetry only: proposals priced again, per
+                        # market, since this process started
+                        _rr = self.__dict__.setdefault("round_repriced", {})
+                        _rr[str(market)] = _rr.get(str(market), 0) + 1
+                        prov.stage("TWO_SIDED_ROUND_REPRICED", {
+                            "round": rnd,
+                            "labels": ("no order was ever submitted in this "
+                                       "round, so its plan is priced again "
+                                       "from the current book and the round "
+                                       "is not spent")})
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    # unreadable: the frozen plan stands, as before
 
             # RETIRE A ROUND THE MARKET HAS LEFT BEHIND, and only then.
             #
@@ -8564,6 +10103,80 @@ class FaithfulExecutor:
                         "TWO_SIDED_PROBE",
                         "DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY")
 
+            # ============== A FROZEN PLAN THE BOOK HAS LEFT IS RE-PRICED
+            #
+            # See `TS.replan_drift_ticks` for the measurement and for why
+            # this is safe. In short: `plan_executable` only notices a leg
+            # left behind past 6 ticks, and the only remedy for it is
+            # retiring the round -- which at the deployed
+            # `ts_round_allocations` of 1 ENDS THE WINDOW. So nothing
+            # re-prices a drifted plan, and the engine rests at a price the
+            # book has walked away from, where it cannot fill.
+            #
+            # THE THREE CONDITIONS, all required, all fail-closed:
+            #
+            #   * the round holds NOTHING -- no live order, nothing
+            #     fillable, no unmatched fill -- read through
+            #     `probe_round_is_safe_to_retire`, the same durable-state
+            #     predicate retirement itself uses. Any answer but None
+            #     keeps the frozen plan, so a resting or partly filled
+            #     round behaves exactly as before and leg two still
+            #     matches leg one. Nothing is cancelled here, so this
+            #     cannot churn orders: it runs only when none exist.
+            #   * the drift is at least `replan_drift_ticks()` (2), so a
+            #     plan already where the planner would price it is left
+            #     alone. An unreadable drift is not a drift.
+            #   * the fresh plan is `ok`. A plan that will not price is NOT
+            #     substituted for one that already did, so this can never
+            #     take the engine from a placeable plan to none.
+            #
+            # The replacement goes through `probe_precheck` and every gate
+            # below exactly as a first plan does. It adds no capability and
+            # moves no limit.
+            _rp_plan = self.probe_stored_plan(market, rnd)
+            if _rp_plan is not None:
+                try:
+                    _rp_blocked = self.probe_round_is_safe_to_retire(
+                        market, rnd)
+                    _rp_spent = [k for k, v in
+                                 (self.probe_legs_claimed(market, rnd)
+                                  or {}).items() if v]
+                    _rp_drift = TS.plan_drift_ticks(
+                        _rp_plan, bid=ts_book.get("bid"), ask=ts_book.get("ask"),
+                        tick=_tick, depth_ticks=_dticks,
+                        spent_sides=_rp_spent)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _rp_blocked, _rp_drift = "REPLAN_STATE_UNREADABLE", None
+                _rp_allow = TS.replan_drift_ticks()
+                if (_rp_blocked is None and _rp_drift is not None
+                        and _rp_drift >= D(_rp_allow)):
+                    _rp_fresh = self.probe_plan(market, authenticated)
+                    _rp_ok = bool(_rp_fresh.get("ok"))
+                    prov.stage("TWO_SIDED_REPLAN", {
+                        "round": rnd,
+                        "drift_ticks": str(_rp_drift),
+                        "allow_ticks": _rp_allow,
+                        "repriced": _rp_ok,
+                        "refused": (None if _rp_ok
+                                    else str(_rp_fresh.get("reason"))[:80]),
+                        "was": [{"side": str(l.get("side")),
+                                 "price": str(l.get("price"))}
+                                for l in (_rp_plan.get("legs") or ())],
+                        "now": [{"side": str(l.get("side")),
+                                 "price": str(l.get("price"))}
+                                for l in (_rp_fresh.get("legs") or ())],
+                        "labels": ("the round holds nothing, so there is no "
+                                   "sibling leg to match and no order to "
+                                   "cancel. A plan that will not price is "
+                                   "never substituted for one that did.")})
+                    if _rp_ok:
+                        # STORED, not assigned. The canonical read below is
+                        # left exactly where it was so that the atomic
+                        # re-reservation it anchors is unmoved; it simply
+                        # reads the plan this repaired.
+                        self.probe_store_plan(market, _rp_fresh, rnd)
             plan = self.probe_stored_plan(market, rnd)
             bad = None
             if plan is not None:
@@ -8659,6 +10272,48 @@ class FaithfulExecutor:
                 # probe_round only returns an INCOMPLETE round, so this is
                 # unreachable unless the claim state changed underneath us.
                 return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
+            # ============ THE PORTFOLIO CONTROLLER'S STEER, IF THERE IS ONE
+            #
+            # Absent -- every configuration that does not set
+            # L5_PORTFOLIO_CONTROLLER=STEER -- this block does not run. When
+            # present it can only NARROW the choice already made: among the
+            # legs this round has not claimed it prefers one the controller
+            # wants opened, and if it wants none of them the placement is
+            # refused by name. It never offers a leg the order above did not
+            # contain, and a reducing leg is never the steer's to refuse.
+            if self.portfolio_steer is not None:
+                # A HEDGE MEANS FILLED INVENTORY. `_reducing` counts a
+                # RESTING order as though it had filled, which is right for
+                # choosing the next leg and wrong here: under it the second
+                # leg of a pair is always "reducing" the first, and the
+                # steer could never decline it.
+                _held_red = self.portfolio_held_reducing_side(market)
+                # ...AND A HEDGE THAT IS STILL NEEDED. If resting orders
+                # already cover the filled inventory, `_reducing` -- which
+                # counts them -- is None, and another order on that side is
+                # not a hedge any more: it is the first leg of a new round,
+                # and the steer decides it like any other opening. At
+                # 21:31:42Z on 2026-11-10 that second order was placed
+                # beside a resting hedge while its pair's other leg was
+                # refused, leaving a round with one leg.
+                if _held_red is not None and _held_red != _reducing:
+                    _held_red = None
+                _wanted = [k for k in order if not claimed.get(k)
+                           and self.portfolio_steer_refusal(
+                               k, _held_red) is None]
+                if not _wanted:
+                    _why = (self.portfolio_steer_refusal(nxt, _held_red)
+                            or "PORTFOLIO_SIDE_NOT_WANTED")
+                    prov.stage("TWO_SIDED_PROBE", {
+                        "refused": _why, "leg_to_place": nxt,
+                        "reducing_side": _held_red,
+                        "labels": ("the portfolio controller does not want "
+                                   "this side opened on this book and "
+                                   "inventory. Not a limit and not a "
+                                   "fault: an opening it judged not worth "
+                                   "its risk.")})
+                    return prov.refuse("TWO_SIDED_PROBE", _why)
+                nxt = _wanted[0]
             # PAST THE ENTRY CUTOFF, ONLY A COMPLETION. `_entry_shut` means
             # `may_enter` has closed and we are here on the completion
             # deadline instead; the one leg that may be placed is the
@@ -9492,6 +11147,35 @@ class FaithfulExecutor:
             #
             # A submitted order is never a hedge. Only `leg_cost`, which is
             # written from venue-confirmed fills, counts here.
+            # THE FAVORITE-ONLY TEST ADMITS ONE KIND OF ORDER. Checked here,
+            # at the one boundary every order passes, so no completion,
+            # requote or defensive route can hedge a favorite that the
+            # owner's test holds to settlement. Off unless the profile is
+            # named exactly; then it only ever refuses.
+            _fav_bad = self.favorite_only_refusal(dec)
+            if _fav_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "FAVORITE_ONLY", "detail": _fav_bad,
+                    "labels": ("the favorite-only test submits the market's "
+                               "favorite and nothing else: no second leg, "
+                               "no hedge, no pair.")})
+                return prov.refuse("FAVORITE_ONLY",
+                                   str(_fav_bad.get("why"))[:120])
+            # NO ACCIDENTAL ADD TO THE SIDE ALREADY HELD. Inert unless
+            # completions rest at their target; then it only ever refuses. See
+            # `held_side_add_refusal`.
+            _add_bad = self.held_side_add_refusal(market, dec)
+            if _add_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "HELD_SIDE_ADD", "detail": _add_bad,
+                    "labels": ("with unmatched inventory held, recovery "
+                               "works the completing side only; buying more "
+                               "of the held side needs the portfolio "
+                               "controller to ask for it.")})
+                return prov.refuse("HELD_SIDE_ADD",
+                                   str(_add_bad.get("why"))[:120])
             _pair_bad = self.pair_cost_refusal(market, dec, tr)
             if _pair_bad:
                 prov.stage("ORDER", {
@@ -9651,6 +11335,20 @@ class FaithfulExecutor:
                 return prov.refuse("PRESEND_CROSS",
                                    str(_xr.get("reason"))[:120])
 
+            # AND THE OTHER DIRECTION. The guard above declines a leg the
+            # book has made too AGGRESSIVE; this declines one it has left
+            # too PASSIVE, which is placeable, never fills, and holds a
+            # live-order slot for its whole TTL. Same fail-open discipline,
+            # and it only ever runs while the round holds nothing -- see
+            # `presend_behind_refusal`.
+            _br = self.presend_behind_refusal(
+                market, intent, tr,
+                rnd=getattr(self, "_probe_round_pending", None))
+            if _br is not None:
+                prov.stage("PRESEND_BEHIND", _br)
+                return prov.refuse("PRESEND_BEHIND",
+                                   str(_br.get("reason"))[:120])
+
             # LAST, and for the same reason PRESEND_CROSS is here: the next
             # statement consumes a claim that is never returned. A disarmed
             # transport cannot reach the venue, so spending one on it records
@@ -9738,6 +11436,21 @@ class FaithfulExecutor:
         # the send and the ack, the order may still be live at the venue, and
         # a store that never recorded it would hand the whole envelope to the
         # next decision.
+        # WHICH ROUND THIS ORDER BELONGS TO, on the durable record, so a
+        # round whose orders all end unfilled can later be told apart from
+        # one that took exposure. Written with the submission record and
+        # read by `probe_round_never_filled`; an order with no round (every
+        # non-accumulation path) records nothing.
+        try:
+            _rp = getattr(self, "_probe_round_pending", None)
+            if TS.active(market) and _rp is not None:
+                self.store.state.setdefault("probe_round_orders", {}
+                    ).setdefault("%s|%d" % (str(market), int(_rp)), []
+                    ).append(str(coid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # unrecorded: the round then reads as charged, never as free
         self.store.record_submit(
             coid, intent,
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
@@ -10122,6 +11835,24 @@ def _verify_cancelled(transport: Any, vid: str, *,
             "terminal": bool(prog is not None and prog.get("terminal"))}
 
 
+def _mark_cancel_uncertain(store: Any, why: str, *, kind: str, coid: Any,
+                           vid: Any) -> None:
+    """Mark the book uncertain, and name the order IF the store can hold it.
+
+    THE MARK IS THE SAFETY CONTROL; THE CAUSE IS A CONVENIENCE. A store that
+    does not accept a cause -- an older ledger, a test double -- must still
+    be marked, so a refused keyword falls back to the bare mark instead of
+    propagating. Losing the cause only means this uncertainty waits for a
+    full reconciliation, as every uncertainty did before; losing the MARK
+    would let a replacement race an order that may still be resting.
+    """
+    try:
+        store.mark_uncertain(why, cause={"kind": str(kind), "coid": str(coid),
+                                         "venue_order_id": str(vid)})
+    except TypeError:
+        store.mark_uncertain(why)
+
+
 def deadman(store: InventoryStore, transport: Any, *,
             reason: str, only: Optional[Iterable[str]] = None,
             verify_attempts: int = VERIFY_ATTEMPTS,
@@ -10223,9 +11954,11 @@ def deadman(store: InventoryStore, transport: Any, *,
                                       "verify_error": (ver["errors"] or [None])[0],
                                       "verify_attempts": ver["attempts"],
                                       "verify_errors": list(ver["errors"])})
-            store.mark_uncertain(
+            _mark_cancel_uncertain(
+                store,
                 "deadman could not verify the cancel of %s (%s, %d attempts)"
-                % (vid, (ver["errors"] or ["?"])[0], ver["attempts"]))
+                % (vid, (ver["errors"] or ["?"])[0], ver["attempts"]),
+                kind="CANCEL_UNVERIFIED", coid=coid, vid=vid)
             continue
         res = store.apply_order_progress(coid, prog, market=market, side=side)
         booked = D(str(res.get("filled_delta") or res.get("delta") or 0))
@@ -10254,9 +11987,11 @@ def deadman(store: InventoryStore, transport: Any, *,
             # that must never read as success: an unmanaged resting order is
             # exactly what a deadman exists to prevent.
             out["still_open"].append(rec)
-            store.mark_uncertain(
+            _mark_cancel_uncertain(
+                store,
                 "deadman cancelled %s but the venue still reports it live"
-                % vid)
+                % vid,
+                kind="CANCEL_STILL_OPEN", coid=coid, vid=vid)
         if ack_error:
             out["errors"].append({"client_order_id": coid,
                                   "venue_order_id": vid, "error": ack_error,

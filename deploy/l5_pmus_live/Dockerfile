@@ -55,6 +55,12 @@ COPY src/__init__.py src/__init__.py
 # image it raises ModuleNotFoundError on the first tick with
 # L5_BOOK_COMPLETION set.
 COPY src/l5_book_completion.py src/l5_book_completion.py
+# The paired-entry economics the opening pair ceiling consults. Imported
+# at module level by l5_two_sided_probe, so its absence would be a boot
+# ModuleNotFoundError rather than a degraded decision.
+COPY src/l5_second_leg_economics.py src/l5_second_leg_economics.py
+# Read-only per-window settlement observation, emitted by close_window.
+COPY src/l5_settlement_observer.py src/l5_settlement_observer.py
 COPY src/l5_completion_latency.py src/l5_completion_latency.py
 COPY src/l5_roll_diagnostics.py src/l5_roll_diagnostics.py
 # The bounded taker-completion authorization. The runner imports it
@@ -71,6 +77,9 @@ COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_series_registry.py src/l5_series_registry.py
+COPY src/l5_origin.py src/l5_origin.py
 # The shared arming boundary. The runner now imports it at module scope, so
 # an image without it cannot boot -- the same incomplete-closure defect that
 # bit the preflight and live-probe images. test_the_image_copies_every_module
@@ -136,6 +145,15 @@ COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 # the residual would go back to settling with no decision record at all --
 # which is the exact silence the module exists to end.
 COPY src/l5_unmatched_disposition.py src/l5_unmatched_disposition.py
+COPY src/l5_entry_economics.py src/l5_entry_economics.py
+# THE PORTFOLIO CONTROLLER'S DECISION MODULE. Pure: it imports nothing that
+# can trade. The runner's recorded-only stage imports it lazily, and only
+# records when the owner sets L5_PORTFOLIO_CONTROLLER=SHADOW.
+COPY src/l5_portfolio_controller.py src/l5_portfolio_controller.py
+# THE LIVE BTC REFERENCE: the venue's own settlement index and each market's
+# own strike, read from the public gateway. Read-only, no credential, and
+# inert unless the owner sets L5_BTC_REFERENCE=VENUE_INDEX.
+COPY src/l5_btc_reference.py src/l5_btc_reference.py
 # policy ceilings read by l5_two_sided_probe and the runner. Inert with
 # L5_FIDELITY_MODE unset, but the IMPORT is unconditional, so the image
 # must carry it or the entrypoint cannot start at all.
@@ -203,6 +221,7 @@ COPY src/l5_shadow_controller.py src/l5_shadow_controller.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_managed_lanes.py src/l5_managed_lanes.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
@@ -249,6 +268,7 @@ COPY config/cost_basis_batch_manifest_20261016.json config/cost_basis_batch_mani
 COPY config/cost_basis_batch_manifest_20261016b.json config/cost_basis_batch_manifest_20261016b.json
 COPY config/cost_basis_batch_manifest_20261016c.json config/cost_basis_batch_manifest_20261016c.json
 COPY config/cost_basis_batch_manifest_20261016d.json config/cost_basis_batch_manifest_20261016d.json
+COPY config/cost_basis_batch_manifest_20261112_manual1915z.json config/cost_basis_batch_manifest_20261112_manual1915z.json
 
 ENV PMUS_SERVICE_ROLE=l5-pmus-live \
     L5_LIVE_ROOT=/state/l5-live \

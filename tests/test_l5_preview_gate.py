@@ -271,7 +271,7 @@ def test_risk_limits_are_untouched():
     assert str(lim.daily_realized_loss_halt_usd) == "5"
     assert str(lim.max_abs_residual) == "10"
     assert lim.max_concurrent_markets == 1
-    assert PM.worst_case()["worst_case_total_usd"] == "5.1738"
+    assert PM.worst_case()["worst_case_total_usd"] == "5.2375"
 
 
 def test_the_frozen_engine_is_byte_identical():

@@ -19,6 +19,9 @@ COPY src/l5_preview_session.py src/l5_preview_session.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_series_registry.py src/l5_series_registry.py
+COPY src/l5_origin.py src/l5_origin.py
 # the frozen engine, needed only because the probe envelope imports through
 # it. Pure decision code: no transport, no endpoint, no credential.
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/btc5m_straddle_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/btc5m_straddle_shadow/**",
+      "analysis/l5/btc5m_accumulation/straddle_shadow.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -I -u /app/straddle_shadow.py --price 0.08",
+    "restartPolicyType": "ALWAYS",
+    "numReplicas": 1
+  },
+  "_status": "BTC 5-minute STRADDLE SHADOW: read-only. Polls the public gateway, records what a resting 8c buy on BOTH sides WOULD have filled, and writes one summary row per window to its log. It holds no venue credentials, has no order path and no POST-capable module in its image, so it cannot place, price or cancel anything -- its own output is labelled SHADOW and is never realized P&L. restartPolicyType ALWAYS because a recorder that stops recording is the one failure mode that matters here; it is not money-capable, so an automatic restart carries no risk. WHY THIS FILE EXISTS: owner 5556354536 requires every deploy dir to name its own start command, because a service with no manifest fell through to the generic order-capable Kalshi startup. This directory had a Dockerfile and no railway.json, which test_every_deploy_dir_has_an_explicit_non_bot_manifest flags as exactly that fall-through risk."
+}

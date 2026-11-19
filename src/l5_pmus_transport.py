@@ -40,10 +40,27 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_auth as Q1
 from src.l5_live_execution import NotArmed
+from src import l5_series_registry as _REG
 
-#: the series the faithful probe is scoped to. A different series fails.
-BTC15M_SERIES = "btc-updown-15m"
-BTC15M_SLUG_RE = re.compile(r"^cpc-btc-updown-15m-\d{4}-\d{2}-\d{2}-\d{4}z$")
+#: THE SERIES A TRANSPORT MAY BE SCOPED TO, derived from
+#: l5_series_registry. A transport is built for ONE series and preflight
+#: refuses a slug or a venue market outside it; the default is BTC15M, so
+#: every existing caller is unchanged.
+#:
+#: The marker and the slug pattern are BOTH taken from the registry row, so
+#: a new asset cannot end up with a pattern that disagrees with its own
+#: prefix -- the failure mode of keeping two literals in step by hand.
+BTC15M_SERIES = _REG.BY_STRATEGY["BTC15M"].venue_marker
+BTC15M_SLUG_RE = _REG.BY_STRATEGY["BTC15M"].slug_re
+BTC5M_SERIES = _REG.BY_STRATEGY["BTC5M"].venue_marker
+BTC5M_SLUG_RE = _REG.BY_STRATEGY["BTC5M"].slug_re
+#: name -> (venue series marker, slug pattern, the two preflight gate names)
+SERIES = {
+    r.strategy: (r.venue_marker, r.slug_re,
+                 "slug_is_%s_series" % r.strategy.lower(),
+                 "market_series_is_%s" % r.strategy.lower())
+    for r in _REG.REGISTRY
+}
 
 #: the two outcomes, and the ONLY mapping this engine accepts
 OUTCOMES = ("UP", "DOWN")
@@ -708,7 +725,11 @@ class PmusTransport:
     name = "PMUS"
 
     def __init__(self, *, market_slug: str, http: Optional[Any] = None,
-                 now_fn=None, limiter: Optional["RateLimiter"] = None) -> None:
+                 now_fn=None, limiter: Optional["RateLimiter"] = None,
+                 series: str = "BTC15M") -> None:
+        if series not in SERIES:
+            raise ValueError("unknown series %r" % (series,))
+        self.series = series
         self.market_slug = market_slug
         #: the durable ledger's ownership test, installed by the runner.
         #: None means ownership cannot be established and cancel refuses.
@@ -1162,8 +1183,9 @@ class PmusTransport:
                            % (expect_account, fp))
 
         # 3/4. intended series and current market slug
-        ok &= gate("slug_is_btc15m_series",
-                   bool(BTC15M_SLUG_RE.match(self.market_slug or "")),
+        _ser, _ser_re, _g_slug, _g_market = SERIES[
+            getattr(self, "series", "BTC15M")]
+        ok &= gate(_g_slug, bool(_ser_re.match(self.market_slug or "")),
                    self.market_slug)
         mk: Dict[str, Any] = {}
         if ok:
@@ -1172,9 +1194,9 @@ class PmusTransport:
             except Exception as exc:                           # noqa: BLE001
                 return self._fail(checks, gate, "market_readable", exc)
             ok &= gate("market_resolves", bool(mk), mk.get("slug"))
-            ok &= gate("market_series_is_btc15m",
-                       BTC15M_SERIES in str(mk.get("seriesSlug")
-                                            or mk.get("slug") or ""),
+            ok &= gate(_g_market,
+                       _ser in str(mk.get("seriesSlug")
+                                   or mk.get("slug") or ""),
                        mk.get("seriesSlug") or mk.get("slug"))
 
         # 5. open / tradable. This resource reports tradability as
@@ -1304,7 +1326,36 @@ class PmusTransport:
             oo = self.open_orders()
         except Exception as exc:                               # noqa: BLE001
             return self._fail(checks, gate, "positions_readable", exc)
-        ok &= gate("no_unexpected_open_orders", len(oo) == 0, len(oo))
+        #: A SHARED ACCOUNT MAKES len(oo)==0 THE WRONG TEST, and this gate
+        #: was written before the account was shared. On 2026-11-14 the
+        #: sports two-sided lane held 8 resting completions by owner
+        #: direction; this gate counted them as unexpected and refused to
+        #: arm -- six attempts from t=3.6s to t=75.3s -- so BTC5m placed
+        #: nothing all window while $0 was ever at risk. It refused
+        #: CORRECTLY on a rule whose premise had changed.
+        #:
+        #: ONE DEFINITION, THREE GUARDS. The same
+        #: L5_WATCHDOG_MANAGED_LANE_URLS contract already exempts these ids
+        #: from the watchdog's age latch (l5_watchdog.managed_lane_ids) and
+        #: from the reset ceremony's venue precondition
+        #: (l5_halt_reset.managed_lane_claims). A lane qualifies only if it
+        #: publishes /l5/live_orders.json with readable=true,
+        #: manages_own_resting=true and an as_of_utc at most 60s old.
+        #:
+        #: FAIL CLOSED, identically to the other two: unreachable, stale,
+        #: malformed or not-a-managed-lane contributes NOTHING, so the gate
+        #: stays exactly as strict as it is today. Unset means unchanged.
+        #:
+        #: WHAT IS NOT EXEMPTED: anything a lane does not name. An order we
+        #: cannot attribute still refuses to arm. This narrows "unexpected"
+        #: to "unaccounted for"; it does not stop counting.
+        lane_ids, lane_notes = self._managed_lane_ids()
+        unexpected = [r for r in oo
+                      if str(r.get("id") or "").strip() not in lane_ids]
+        ok &= gate("no_unexpected_open_orders", len(unexpected) == 0,
+                   {"unexpected": len(unexpected), "venue_open": len(oo),
+                    "managed_lane_exempt": len(oo) - len(unexpected),
+                    "managed_lanes": lane_notes})
         if known_positions is not None:
             venue = {"%s|%s" % (p.get("market"), p.get("side")): str(p.get("qty"))
                      for p in pos}
@@ -1510,6 +1561,37 @@ class PmusTransport:
                 "transport is DISARMED. Preflight status: %s; owner arm: %s"
                 % ((self.preflight_report or {}).get("preflight", "NOT_RUN"),
                    "present" if Q1.armed() else "absent"))
+
+    def _managed_lane_ids(self) -> tuple:
+        """({venue_order_id, ...}, [notes]) from FRESH managed lanes.
+
+        Delegates to `l5_watchdog.Watchdog.managed_lane_ids` rather than
+        re-implementing the freshness and shape rules, so the executor, the
+        watchdog's age latch and the reset ceremony cannot drift apart in
+        what counts as a managed lane.
+
+        NEVER RAISES. Any failure contributes no ids and a note, leaving the
+        caller exactly as strict as it was before this existed -- a preflight
+        that crashes is a preflight that cannot refuse.
+        """
+        #: `l5_managed_lanes` rather than `l5_watchdog`, and the distinction
+        #: is a shipped-image fact rather than a style choice: this image
+        #: does not carry l5_watchdog (which pulls l5_order_registry_server
+        #: behind it), so importing it here raises ImportError at runtime,
+        #: fails closed, and leaves the exemption permanently inert while
+        #: LOOKING like it works. Caught by
+        #: test_l5_btc5m_image_deps.test_lazy_src_imports_on_the_live_path_
+        #: are_shipped before it shipped.
+        try:
+            from src import l5_managed_lanes as ML
+            urls = ML.from_env()
+            if not urls:
+                return set(), []
+            return ML.lane_ids(urls)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return set(), ["MANAGED_LANES_UNAVAILABLE:%s" % type(exc).__name__]
 
     def arm(self) -> Dict[str, Any]:
         """Arm ONLY if preflight passed in this process AND the owner armed."""

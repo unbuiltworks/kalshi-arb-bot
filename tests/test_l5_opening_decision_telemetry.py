@@ -39,6 +39,9 @@ SKIP_REASONS = (
     # reason on purpose -- the specific cause rides in the detail, because
     # an interpolated reason could not be checked by this enumeration.
     "REPLENISH_UNPAID",
+    # the portfolio controller's steer (L5_PORTFOLIO_CONTROLLER=STEER
+    # only): flat, nothing resting, and no side it would pay to open.
+    "PORTFOLIO_NOTHING_WANTED",
 )
 
 

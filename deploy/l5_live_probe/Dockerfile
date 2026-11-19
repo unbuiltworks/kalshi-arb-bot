@@ -35,8 +35,12 @@ COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
 # the proven execution transport: preflight, arm, preview-then-submit, cancel
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
+COPY src/l5_managed_lanes.py src/l5_managed_lanes.py
 # inventory, exposure reservation, safety overlay, venue reconciliation
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# imported at module level by l5_live_execution (order/position origin)
+COPY src/l5_series_registry.py src/l5_series_registry.py
+COPY src/l5_origin.py src/l5_origin.py
 # the SECOND treatment. Reads the frozen rule's output and turns the actions
 # it refused STRICT_NOT_EVALUABLE -- restable, but unprovable in replay --
 # into genuine resting-order intents. It adds nothing to L5_NATIVE's decision.

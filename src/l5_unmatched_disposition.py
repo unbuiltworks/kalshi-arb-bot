@@ -60,6 +60,7 @@ from __future__ import annotations
 
 from decimal import Decimal as D
 from decimal import InvalidOperation
+import os
 from typing import Any, Dict, List, Mapping, Optional
 
 from src import l5_two_sided_probe as TS
@@ -691,6 +692,106 @@ REOPEN_SINGLE_OUTCOME_USD = D("-0.0236")
 #: is worth opening fresh exposure. One tick on a one-contract pair.
 REOPEN_MIN_EDGE_USD = D("0.01")
 
+#: THE FLOOR IS "ONE TICK ON A ONE-CONTRACT PAIR", and it was being compared
+#: with the expectancy of whatever size the round happens to be.
+#:
+#: MEASURED, 2026-11-10 2145z, round 7: qty 0.21, pair edge 0.21 * 0.05 =
+#: $0.0105, expectancy 0.727 * 0.0105 + 0.273 * (0.21 * -0.0236) = $0.0063,
+#: refused against $0.01. Per contract that is +$0.0299 -- the very figure
+#: the note above `REOPEN_SINGLE_OUTCOME_USD` says clears the floor. At the
+#: deployed d=2 and a one-tick spread the expectancy is 0.0299 a contract,
+#: so no round under 0.335 contracts can ever pass, and production clips are
+#: 0.21 to 0.31: every reopening is refused whatever the book does.
+#:
+#: Exactly "ON" compares like with like: the floor is one cent PER CONTRACT
+#: of the proposed round, so it scales down for a clip under one contract
+#: and UP for a larger one. The probabilities, the adverse-selection figure
+#: and every capacity bound are untouched, and an expectancy at or below
+#: zero still refuses at any size. Anything else is the comparison every
+#: earlier deployment made.
+REOPEN_FLOOR_PER_CONTRACT_ENV = "L5_REOPEN_FLOOR_PER_CONTRACT"
+
+
+def reopen_floor_per_contract() -> bool:
+    return str(os.getenv(REOPEN_FLOOR_PER_CONTRACT_ENV, "")).strip() == "ON"
+
+#: OUR OWN SETTLED RECORD OUTRANKS A PRIOR, ONCE THERE IS ENOUGH OF IT.
+#:
+#: The expectancy above multiplies two things this program has never
+#: measured on its own money: `pair_edge` is the PLANNED edge, 1 minus the
+#: pair cost the legs were quoted at, and the single-leg figure is L5's
+#: residual. Three independent records now disagree with both, in the same
+#: direction (`analysis/l5/PAIR_COMPLETION_REPLAY.md`):
+#:
+#:   * every pair this engine has completed since the pair ceiling settled
+#:     at 0.96 -- 2015z, 0200z, 1300z -- completed at 0.987-0.99, not 0.95;
+#:   * a path replay over 526 settled windows puts the median completed pair
+#:     at 0.99, 7% of pairs at plan, 25% of first fills stranded at -0.33,
+#:     and the result at -0.073 per first fill, negative in every month,
+#:     at every depth and for every completion ceiling;
+#:   * the shadow controller on live PMUS books measured -0.083 per filled
+#:     contract over 956 fills, 92% of them adverse.
+#:
+#: The mechanism is one sentence: a resting leg fills when the market trades
+#: THROUGH it, so it is already under water at the fill (4.5 cents, mean),
+#: and the complement is then only reachable near redemption.
+#:
+#: So a further round must ALSO clear what the ledger says rounds have
+#: actually paid, per contract that took a first fill. This can only REFUSE:
+#: a favourable record never rescues a round the arithmetic above declined.
+#: Below this many settled windows the record is too thin to listen to and
+#: the decision stands on its priors, exactly as before.
+OWN_EVIDENCE_MIN_WINDOWS = 20
+
+#: A PAIR LADDERED BESIDE RESTING ONES NEEDS THE RECORD TO SAY YES.
+#:
+#: A further round opened one at a time is refused by a losing record and
+#: allowed by a thin one. A CONCURRENT round is held to more: it multiplies
+#: the orders exposed to the same move, so it opens only when the ledger's
+#: own settled record is usable AND clears the floor. No record is not
+#: permission to ladder.
+#:
+#: THE OWNER MAY WAIVE THE RECORD, and only the owner, by setting this to
+#: the exact token below -- for a bounded validation of the mechanism, with
+#: the expected value stated. It waives this stage alone: the arithmetic
+#: above, the capacity test and every limit still bind, and every decision
+#: made under it says so.
+#: THE FIRST OPENING OF A WINDOW IS PRICED LIKE EVERY OTHER. Exactly "ON" or
+#: it is off.
+#:
+#: `probe_reopen_decision` returned `reopen: True` for the first
+#: exposure-taking round before any economics were consulted, so the one
+#: order every window always sent was the one order nothing had priced:
+#: not the capacity test, not the expectancy floor, and not what our own
+#: settled windows on this venue have paid. On 108 settled markets with a
+#: measured cost (2026-10-25 to 11-11) a first-leg contract paired 62% of
+#: the time for +5.6c and stranded 38% of the time for -7.0c -- +0.8c a
+#: contract overall, -2.4c over the later half -- and each window opened
+#: regardless.
+#:
+#: With the switch the first round goes through `reopen_decision` exactly
+#: as a later round does, so it must clear the same three tests, and the
+#: owner's `L5_TS_OWN_EVIDENCE_GATE=WAIVED_BY_OWNER` applies to it exactly
+#: as it does to them. It can only REFUSE an opening: a leg already claimed
+#: is a completion and is never priced here, and nothing about inventory
+#: already held changes.
+FIRST_OPENING_PRICED_ENV = "L5_TS_FIRST_OPENING_PRICED"
+
+
+def first_opening_priced() -> bool:
+    return (os.getenv(FIRST_OPENING_PRICED_ENV) or "") == "ON"
+
+
+OWN_EVIDENCE_GATE_ENV = "L5_TS_OWN_EVIDENCE_GATE"
+OWN_EVIDENCE_WAIVER_TOKEN = "WAIVED_BY_OWNER"
+
+
+def own_evidence_gate_waived() -> bool:
+    """True only for the exact token. A typo leaves the gate enforced."""
+    return (os.getenv(OWN_EVIDENCE_GATE_ENV) or "").strip() == \
+        OWN_EVIDENCE_WAIVER_TOKEN
+
+
 #: A round needs time to place two legs, see one fill, and work the other.
 #: Below this the second leg cannot realistically be completed.
 REOPEN_MIN_RUNWAY_S = 180.0
@@ -709,7 +810,9 @@ def reopen_decision(*, market: Any, rounds_used: int,
                     depth_ticks: Optional[int] = None,
                     p_pair: Any = None, p_single: Any = None,
                     single_outcome_usd: Any = None,
-                    min_edge_usd: Any = None) -> Dict[str, Any]:
+                    min_edge_usd: Any = None,
+                    own_evidence: Optional[Mapping[str, Any]] = None,
+                    concurrent: bool = False) -> Dict[str, Any]:
     """Is ANOTHER opening round economically justified? Read-only.
 
     Returns `{"reopen": bool, "reason": str, ...}`. `reopen` is True only
@@ -799,7 +902,11 @@ def reopen_decision(*, market: Any, rounds_used: int,
     #      it. Gating round 0 would turn the strategy off, which is not what
     #      "decide whether to reopen" asks for, and the executor's own cash,
     #      deficit and exposure gates already own the first leg.
-    if used_rounds <= 0:
+    # WITH `L5_TS_FIRST_OPENING_PRICED=ON` IT IS PRICED BELOW LIKE ANY OTHER
+    # ROUND. That can turn the strategy off, and it should when the tests
+    # below say an opening is not worth making: the first round is the one
+    # exposure every window takes, and it was the only one nothing priced.
+    if used_rounds <= 0 and not first_opening_priced():
         return dict(reopen=True, reason="FIRST_ROUND_NOT_A_REOPENING",
                     market=(None if market is None else str(market)),
                     rounds_used=used_rounds,
@@ -875,6 +982,10 @@ def reopen_decision(*, market: Any, rounds_used: int,
     pair_edge = q * (spread + (2 * D(d_ticks) * tk))
     single_total = q * single
     expectancy = (pp * pair_edge) + (ps * single_total)
+    _per_contract = reopen_floor_per_contract()
+    _floor_one_contract = floor
+    if _per_contract:
+        floor = floor * q
     # the number worth quoting: how cheap an unmatched leg must be for this
     # round to pay. Always reported, including on a refusal.
     breakeven = (((floor - (pp * pair_edge)) / ps) / q) if ps > 0 else None
@@ -892,6 +1003,9 @@ def reopen_decision(*, market: Any, rounds_used: int,
         "worst_case_is_not_expectancy": True,
         "expectancy_usd": str(expectancy.quantize(D("0.0001"))),
         "min_edge_usd": str(floor),
+        "min_edge_basis": ("PER_CONTRACT_OF_THIS_ROUND" if _per_contract
+                           else "FIXED_DOLLARS_WHATEVER_THE_SIZE"),
+        "min_edge_one_contract_usd": str(_floor_one_contract),
         "breakeven_single_outcome_usd": (
             None if breakeven is None
             else str(breakeven.quantize(D("0.0001")))),
@@ -905,7 +1019,107 @@ def reopen_decision(*, market: Any, rounds_used: int,
     })
     if expectancy <= floor:
         return no("INCREMENTAL_EXPECTANCY_BELOW_FLOOR", **rec)
+
+    # ---- 3. OUR OWN SETTLED RECORD, when there is enough of it. Reached
+    #         only by a round the priors already permitted, so it can only
+    #         refuse. See OWN_EVIDENCE_MIN_WINDOWS.
+    own = own_settled_verdict(own_evidence, qty=q, floor=floor)
+    waived = own_evidence_gate_waived()
+    rec["own_settled_evidence"] = own
+    rec["own_evidence_gate"] = ("WAIVED_BY_OWNER" if waived else "ENFORCED")
+    rec["concurrent_round"] = bool(concurrent)
+    if not waived:
+        if own["usable"] and not own["clears_floor"]:
+            return no("OWN_SETTLED_EXPECTANCY_BELOW_FLOOR", **rec)
+        if concurrent and not own["usable"]:
+            return no("CONCURRENT_ROUND_NEEDS_OWN_SETTLED_EVIDENCE", **rec)
     return dict(rec, reopen=True, reason=None)
+
+
+def entry_economics(own_evidence: Optional[Mapping[str, Any]], *,
+                    floor_per_contract: Any) -> Dict[str, Any]:
+    """This venue's conditional opening economics, or UNKNOWN. Read-only.
+
+    Feeds `l5_entry_economics.evaluate_opening` with the three figures the
+    settled record states -- P(pair | first fill), pair net and unmatched
+    net, per contract -- and nothing else. No book, no queue position, no
+    fill model, no fee or rebate beyond what the venue settled. UNKNOWN
+    when the record does not state them; never a default.
+    """
+    try:
+        from src import l5_entry_economics as EE
+        c = (own_evidence or {}).get("conditional")
+        if not isinstance(c, Mapping) or c.get("status") != "MEASURED":
+            return {"status": "UNKNOWN",
+                    "reason": ("RECORD_DOES_NOT_STATE_THE_SPLIT:%s" % (
+                        (c or {}).get("reason") if isinstance(c, Mapping)
+                        else "ABSENT"))[:120]}
+        out = dict(EE.evaluate_opening(
+            completed_net_per_contract=c.get("pair_net_per_contract"),
+            residual_net_per_contract=c.get("unmatched_net_per_contract"),
+            completion_probability_given_first_fill=c.get(
+                "p_pair_given_first_fill"),
+            minimum_net_edge_per_contract=floor_per_contract))
+        out["source"] = "OWN_VENUE_SETTLED_WINDOWS"
+        out["first_leg_contracts"] = c.get("first_leg_contracts")
+        return out
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"status": "UNKNOWN",
+                "reason": "ENTRY_ECONOMICS_RAISED:%s" % type(exc).__name__}
+
+
+def own_settled_verdict(own_evidence: Optional[Mapping[str, Any]], *,
+                        qty: Any, floor: Any) -> Dict[str, Any]:
+    """What our settled windows say one more round of `qty` is worth.
+
+    `usable` is False -- and the caller ignores this -- when no record was
+    supplied, when it holds fewer than OWN_EVIDENCE_MIN_WINDOWS windows, or
+    when any figure in it is unreadable. An unreadable record is NOT read as
+    a favourable one: it simply does not vote, and the priors' verdict
+    stands on its own.
+    """
+    out: Dict[str, Any] = {"usable": False, "clears_floor": None,
+                           "min_windows": OWN_EVIDENCE_MIN_WINDOWS,
+                           "windows": None, "net_per_contract": None,
+                           "expectancy_usd": None, "why_not_used": None}
+    if not isinstance(own_evidence, Mapping):
+        return dict(out, why_not_used="NO_RECORD_SUPPLIED")
+    try:
+        n = int(own_evidence.get("windows"))
+    except (TypeError, ValueError):
+        return dict(out, why_not_used="WINDOW_COUNT_UNREADABLE")
+    out["windows"] = n
+    if n < OWN_EVIDENCE_MIN_WINDOWS:
+        return dict(out, why_not_used="TOO_FEW_SETTLED_WINDOWS")
+    per, q, fl = _d(own_evidence.get("net_per_contract")), _d(qty), _d(floor)
+    if per is None or q is None or fl is None:
+        return dict(out, why_not_used="RECORD_UNREADABLE")
+    e = q * per
+    clears = bool(e > fl)
+    # THE SAME RECORD, STATED AS CONDITIONAL ECONOMICS, by the independent
+    # calculator of PR #220: how often a first fill paired on this venue,
+    # what a pair and an unmatched contract paid, and the pairing rate at
+    # which an opening breaks even. It can only AGREE or REFUSE: when it
+    # can compute a figure and that figure does not clear the floor, the
+    # opening is not cleared whatever the aggregate says; when it cannot
+    # (the record does not state the split), it does not vote. Its own
+    # `admissible` is never read -- nothing here authorizes an order.
+    entry = entry_economics(own_evidence, floor_per_contract=(
+        fl / q if q > 0 else None))
+    if entry.get("status") == "SCENARIO_ONLY" and \
+            entry.get("scenario_clears_edge") is not True:
+        clears = False
+    return dict(out, usable=True, why_not_used=None,
+                net_per_contract=str(per),
+                expectancy_usd=str(e.quantize(D("0.0001"))),
+                clears_floor=clears,
+                entry_economics=entry,
+                windows_with_a_pair=own_evidence.get("windows_with_a_pair"),
+                windows_with_a_stranded_leg=own_evidence.get(
+                    "windows_with_a_stranded_leg"),
+                span=[own_evidence.get("from"), own_evidence.get("to")])
 
 
 # ============================================ UNEQUAL INVENTORY, PRICED

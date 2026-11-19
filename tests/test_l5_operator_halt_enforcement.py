@@ -123,12 +123,44 @@ def test_two_per_tick_sweeps_disarm_an_armed_halted_transport():
 
 
 def test_halted_is_the_local_env_var_and_nothing_else():
+    """UPDATED FOR THE DELEGATION, with the same intent and a stronger
+    check. `Runner.halted` no longer names the variable itself: it calls
+    the module-level `operator_halted()`, which the authorization preflight
+    calls too, so the readiness verdict and `try_arm` cannot disagree about
+    whether the halt is engaged -- the 2026-11-09 08:30Z defect.
+
+    Asserting on the literal's LOCATION would now fail for a refactor that
+    made the property stronger. So this asserts the property: `halted`
+    delegates and reads no environment of its own, the delegate reads that
+    one variable and nothing else, and any non-empty value still halts.
+    """
     s = _src("src/l5_pmus_live_runner.py")
     i = s.index("def halted(")
-    block = s[i:i + 400]
-    assert "L5_LIVE_HALT" in block
+    block = s[i:i + 600]
+    assert "operator_halted()" in block
+    assert "getenv" not in block          # it reads no env of its own
+
+    j = s.index("def operator_halted(")
+    delegate = s[j:j + 2600]
+    assert "LIVE_HALT_ENV" in delegate
     # any non-empty value halts; clearing requires an EMPTY value
-    assert ".strip()" in block
+    assert ".strip()" in delegate
+    assert s.index('LIVE_HALT_ENV = "L5_LIVE_HALT"') > 0
+
+    # and the behaviour itself, not only the source
+    import os
+    from src import l5_pmus_live_runner as _R
+    before = os.environ.get("L5_LIVE_HALT")
+    try:
+        for raw, want in (("1", True), ("0", True), ("", False),
+                          ("   ", False), ("anything", True)):
+            os.environ["L5_LIVE_HALT"] = raw
+            assert _R.operator_halted() is want, raw
+    finally:
+        if before is None:
+            os.environ.pop("L5_LIVE_HALT", None)
+        else:
+            os.environ["L5_LIVE_HALT"] = before
 
 
 # --------------------------------- submission_gate() is REPORTING, not a gate

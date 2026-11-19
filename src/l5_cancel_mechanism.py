@@ -285,13 +285,22 @@ def is_terminal(row: Mapping[str, Any]) -> bool:
                for h in TERMINAL_HINTS)
 
 
-def worst_case_total_usd(qty: D, price: D, *, fee_theta: D = D("0.0695")) -> D:
+def worst_case_total_usd(qty: D, price: D, *, fee_theta: D = None) -> D:
     """Premium plus the TAKER fee, rounded up to the cent.
+
+    `fee_theta` defaults to the schedule module rather than a literal.
+    The literal here was 0.0695, which the venue re-tiered on 2026-11-14
+    into Taker Tier 4 -- a bound built on it was quoting the best tier in
+    the schedule to an account on the worst, and understating a taker fee
+    LOOSENS this bound.
 
     The venue bills commission in whole cents, so an exact-Decimal fee can
     sit just under the cent actually taken. Rounding up is the only safe
     direction for a bound.
     """
+    if fee_theta is None:
+        from src import pmus_fees as _fees
+        fee_theta = _fees.taker_theta()
     notional = qty * price
     raw = fee_theta * qty * price * (D(1) - price)
     if raw > 0:

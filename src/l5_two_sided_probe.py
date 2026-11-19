@@ -270,7 +270,15 @@ ROUND_ALLOCATIONS = 1
 ROUND_ALLOCATIONS_ENV = "L5_TS_ROUND_ALLOCATIONS"
 #: a divisor beyond this would size rounds below anything the venue grid can
 #: express at our clip, so it is refused rather than silently floored to zero.
-ROUND_ALLOCATIONS_MAX = 4
+#:
+#: RAISED 4 -> 12 (2026-11-11) so a larger cash envelope can be split into
+#: clips small enough for several rounds to rest at once inside the
+#: worst-case deficit bound: $10 in 12 parts is a 0.56-contract clip at an
+#: even book. The danger this removes is in the fallback, not the size: a
+#: value above the maximum reads as ONE allocation -- the LARGEST clip the
+#: envelope can fund -- so "12" on the old bound would have sized twelve
+#: times what was asked for.
+ROUND_ALLOCATIONS_MAX = 12
 
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
@@ -706,6 +714,173 @@ def second_leg_slot_refusal(*, market: Any, side: str,
     return None
 
 
+# ============================================ SEVERAL PAIRS RESTING AT ONCE
+#
+# WHAT WAS MISSING. Rounds already repeat, and `probe_round` already walks
+# past a round whose two legs are both placed -- so nothing in the round
+# model says "one pair at a time". What says it is the ORDER COUNT: the
+# runner's timer path refuses any tick while an order rests, and the owner's
+# `max_live_orders` is 2. A window therefore holds one pair, waits for it,
+# and opens the next.
+#
+# WHAT THIS ADDS: a bounded LADDER. Up to `concurrent_rounds()` pairs may
+# rest together, each one `level_step_ticks()` further behind the touch than
+# the last, so they are different price levels and not the same quote twice.
+#
+# WHAT IT DOES NOT ADD. Not a slot: every order still counts against the
+# owner's `max_live_orders`, and a ladder of K pairs needs that limit to be
+# at least 2K -- the owner raises it or the ladder stays one pair deep. Not
+# headroom: each resting order is still priced as though it fills in full by
+# the cash, exposure, residual and loss gates. Not a decision to trade:
+# every round after the first is still priced by `reopen_decision`.
+#
+# DEFAULT 1, which is exactly today's behaviour.
+CONCURRENT_ROUNDS_ENV = "L5_TS_CONCURRENT_ROUNDS"
+#: the most price levels a side may hold, whatever the environment says.
+MAX_CONCURRENT_ROUNDS = 6
+LEVEL_STEP_ENV = "L5_TS_LEVEL_STEP_TICKS"
+MAX_LEVEL_STEP_TICKS = 5
+
+
+def concurrent_rounds() -> int:
+    """How many pairs may rest at once. 1 unless the owner set more.
+
+    Unset, blank, unreadable or below one is ONE -- the tightest reading --
+    and anything above the ceiling is the ceiling.
+    """
+    raw = (os.getenv(CONCURRENT_ROUNDS_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        return 1
+    return max(1, min(n, MAX_CONCURRENT_ROUNDS))
+
+
+def level_step_ticks() -> int:
+    """Ticks between one resting pair and the next one out. Default 1."""
+    raw = (os.getenv(LEVEL_STEP_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        return 1
+    return max(1, min(n, MAX_LEVEL_STEP_TICKS))
+
+
+def level_offset_ticks(resting_in_market: Any) -> int:
+    """Extra depth for a pair opened while `resting_in_market` orders rest.
+
+    Whole pairs already resting set the level, so both legs of one pair are
+    priced at the SAME level: with 2 resting the first leg of the next pair
+    sees 2 and its complement sees 3, and both read level 1. Zero when the
+    ladder is off, so an unset environment prices exactly as before.
+    """
+    k = concurrent_rounds()
+    if k <= 1:
+        return 0
+    try:
+        n = max(0, int(resting_in_market))
+    except (TypeError, ValueError):
+        return 0
+    return min(k - 1, n // 2) * level_step_ticks()
+
+
+def concurrent_round_slot_refusal(*, market: Any,
+                                  live_orders: Optional[Mapping[str, Any]],
+                                  max_live_orders: Any) -> Optional[str]:
+    """None if a NEW pair may be opened beside the ones resting, else why.
+
+    It decides one thing: whether the ladder has a free level and the
+    owner's order limit has room for BOTH legs. It places nothing and says
+    nothing about whether the pair is worth opening.
+
+      * the ladder is on (`concurrent_rounds()` above one) and the second
+        maker slot is on -- a pair needs both;
+      * every resting order is in THIS market. Another market's order is
+        another strategy's exposure and is never laddered onto;
+      * neither side already holds `concurrent_rounds()` resting orders:
+        that is the bound on price levels;
+      * and there is room under `max_live_orders` for two more. A pair that
+        can only place one leg is a stranded leg by construction.
+
+    FAIL CLOSED on an unreadable ledger, row or limit.
+    """
+    k = concurrent_rounds()
+    if k <= 1:
+        return "CONCURRENT_ROUNDS_DISABLED"
+    if not two_order_pair_enabled():
+        return "TWO_ORDER_PAIR_DISABLED"
+    if live_orders is None:
+        return "LIVE_ORDERS_UNREADABLE"
+    try:
+        rows = list(live_orders.values())
+        limit = int(max_live_orders)
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDERS_UNREADABLE"
+    up = dn = 0
+    for row in rows:
+        try:
+            r_market = str(row.get("market") or "")
+            r_side = str(row.get("side") or "").strip().upper()
+        except BaseException:                                  # noqa: BLE001
+            return "LIVE_ORDER_ROW_UNREADABLE"
+        if not r_market or r_market != str(market):
+            return "RESTING_ORDER_IS_ANOTHER_MARKET"
+        if r_side == UP:
+            up += 1
+        elif r_side == DOWN:
+            dn += 1
+        else:
+            return "RESTING_ORDER_SIDE_UNREADABLE"
+    if max(up, dn) >= k:
+        return "PRICE_LEVELS_FULL"
+    if len(rows) + 2 > limit:
+        return "NO_ORDER_SLOTS_FOR_A_PAIR"
+    return None
+
+
+def ladder_complement_refusal(*, market: Any,
+                              live_orders: Optional[Mapping[str, Any]],
+                              max_live_orders: Any) -> Optional[str]:
+    """None if a HALF-PLACED pair may have its other leg while a ladder
+    rests, else why not.
+
+    `second_leg_slot_refusal` answers this for one resting order. With
+    several pairs resting it cannot -- it refuses anything but exactly one
+    row -- and the complement of the newest pair would wait behind the
+    ladder, which is a stranded first leg by construction.
+
+    The caller has already established that the current round has exactly
+    one leg placed. What is left to decide is narrow: the ladder is on,
+    every resting order is in this market, and the owner's order limit has
+    room for ONE more. Whether that first leg is still resting or has
+    already filled does not matter: either way the missing leg is the one
+    that REDUCES what is open.
+
+    FAIL CLOSED on an unreadable ledger, row or limit.
+    """
+    if concurrent_rounds() <= 1:
+        return "CONCURRENT_ROUNDS_DISABLED"
+    if not two_order_pair_enabled():
+        return "TWO_ORDER_PAIR_DISABLED"
+    if live_orders is None:
+        return "LIVE_ORDERS_UNREADABLE"
+    try:
+        rows = list(live_orders.values())
+        limit = int(max_live_orders)
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDERS_UNREADABLE"
+    for row in rows:
+        try:
+            r_market = str(row.get("market") or "")
+        except BaseException:                                  # noqa: BLE001
+            return "LIVE_ORDER_ROW_UNREADABLE"
+        if not r_market or r_market != str(market):
+            return "RESTING_ORDER_IS_ANOTHER_MARKET"
+    if len(rows) + 1 > limit:
+        return "NO_ORDER_SLOT_FOR_THE_COMPLEMENT"
+    return None
+
+
 def first_leg_entry_refusal(*, side: str, own_px: Any,
                             legs_claimed: Optional[Mapping[str, Any]] = None,
                             held_up: Any = 0,
@@ -805,6 +980,90 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
                          "and inventory management are never blocked by "
                          "it.")}
     return None
+
+
+#: THE ADVERSE-SELECTION SKEW, and it is OFF unless configured.
+#:
+#: `max_pair_cost` is a fee-safety number: 0.96 against a BREAKEVEN_PAIR of
+#: 0.9532. It says nothing about WHICH leg fills. A resting two-sided quote
+#: fills on the side the market runs THROUGH, so the leg that fills alone is
+#: the adversely selected one, and the 2026-11-09 15:30Z window is the
+#: worked example: pair 0.95, inside the cap, DOWN filled alone, the bid ran
+#: 0.53 -> 0.98, UP settled, the DOWN leg paid nothing, -$0.3080 settled.
+#:
+#: Priced through the validated paired-entry economics on the PROVEN arm of
+#: the recorded books, that entry is positive-expectancy only while the
+#: conditional settlement skew is under 0.0871. It was not.
+#:
+#: DEFAULT OFF, and deliberately. The skew has ONE live observation behind
+#: it and one observation is not an estimate, so no value is promoted here
+#: as calibrated truth. Unset leaves the deployed decision byte-identical.
+ADVERSE_SKEW_ENV = "L5_TS_ADVERSE_SKEW"
+
+#: Joint fill distribution, MEASURED: the queue-independent PROVEN arm of
+#: the recorded-book replay at depth 2, out of sample. The venue-confirmed
+#: own-order comparison is 11 rounds with a first fill, 8 paired (72.7%),
+#: so PROVEN is the conservative end of a bracket that contains our own
+#: behaviour rather than a guess.
+PROVEN_P_BOTH = D("0.525")
+PROVEN_P_SINGLE = D("0.423")
+
+
+def adverse_skew() -> Optional[D]:
+    """The configured skew, or None meaning the gate is not engaged.
+
+    UNREADABLE IS NOT ENGAGED. A typo must not silently start refusing
+    entries on a number nobody chose -- it leaves the existing ceiling in
+    force, which is the behaviour that has been regression-tested.
+    """
+    raw = (os.getenv(ADVERSE_SKEW_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return None
+    if not v.is_finite() or v < 0 or v > D("0.5"):
+        return None
+    return v
+
+
+def effective_pair_ceiling() -> Dict[str, Any]:
+    """The opening pair ceiling actually applied, and which bound set it.
+
+    `min(max_pair_cost(), admissible_pair_ceiling(...))`. It can only
+    TIGHTEN: at a skew of 0 the economics return 1.0000, looser than 0.96,
+    and the min keeps 0.96. Every existing gate -- the fee floor, the entry
+    band, exposure, loss, residual, maker-only, the locks and the watchdog
+    -- is untouched and still applies.
+
+    FAIL SAFE, NOT FAIL OPEN: if the economics cannot be imported or
+    evaluated, the existing ceiling stands and the reason is reported.
+    """
+    base = max_pair_cost()
+    skew = adverse_skew()
+    out: Dict[str, Any] = {"ceiling": base, "base": base, "skew": skew,
+                           "bound_by": "max_pair_cost", "economic": None,
+                           "error": None}
+    if skew is None:
+        return out
+    try:
+        from src import l5_second_leg_economics as SLE
+        econ = SLE.admissible_pair_ceiling(
+            p_both=str(PROVEN_P_BOTH),
+            p_up_only=str(PROVEN_P_SINGLE / D(2)),
+            p_down_only=str(PROVEN_P_SINGLE / D(2)),
+            adverse_skew=str(skew))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:80])
+        return out
+    out["economic"] = econ
+    if econ < base:
+        out["ceiling"] = econ
+        out["bound_by"] = "adverse_selection"
+    return out
 
 
 def max_pair_cost() -> D:
@@ -1016,6 +1275,81 @@ def active(market: Optional[str] = None) -> bool:
     if market is None:
         return True
     return market_authorized(market)
+
+
+#: The variable that NAMES the owner of a window. `l5_live_execution` reads
+#: it to exclude the non-owning strategy; the arming boundary reads it here
+#: to refuse a window whose owner cannot act.
+WINDOW_STRATEGY_ENV = "L5_WINDOW_STRATEGY"
+WINDOW_OWNER_INACTIVE = "WINDOW_OWNER_INACTIVE_FOR_MARKET"
+
+
+def window_strategy() -> str:
+    return str(os.getenv(WINDOW_STRATEGY_ENV, "")).strip().upper()
+
+
+def window_owner_refusal(market: Optional[str]) -> Optional[Dict[str, Any]]:
+    """None when the strategy that owns the window can act in `market`.
+
+    THE 2026-11-09 20:00Z WINDOW, AND IT COST AN OWNER AUTHORIZATION. The
+    campaign approval named `...-2000z`, the preflight PASSED, the executor
+    ARMED and claimed the one authorized window -- and then refused all 61
+    decisions and placed nothing:
+
+        34  SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER
+        18  STRATEGY_EXCLUSIVE_TWO_SIDED
+         9  VALIDATION_GATES:CASH_COMMITMENT (1.12 / 1.25 / 1.35 > 0.90)
+
+    Every one of those refusals was CORRECT. `L5_WINDOW_STRATEGY=TWO_SIDED`
+    names the two-sided engine as the only strategy allowed to submit, and
+    `L5_TS_MARKET` still named `...-1530z`, so `active("...-2000z")` was
+    False and the engine that owned the window never ran -- `two_sided` is
+    null on all 61 decision lines. What remained was the L5-following path,
+    which exclusivity bars, whose taker translations maker-only bars, and
+    whose unclipped sizes the cash envelope bars.
+
+    So nothing was wrong with any gate. What was wrong is that ARMING DID
+    NOT ASK whether the window's owner could act, and a window was spent on
+    a configuration in which no order was possible. Same class as the
+    08:30Z operator halt: a prerequisite the readiness verdict never read.
+
+    This is that question, in one expression, for the arming boundary and
+    the preflight to share. It refuses ONLY the inert-owner case:
+
+      * no owner named            -> None. Nothing is exclusive, and the
+                                     pre-existing behaviour is unchanged.
+      * owner is L5_FOLLOWING     -> None. That path needs no market binding.
+      * owner is TWO_SIDED and the engine is active for this market -> None.
+      * owner is TWO_SIDED and it is NOT -> the refusal, with what it read.
+
+    An unrecognised owner value is refused too: `l5_live_execution` treats
+    only the two exact tokens as meaningful, so a typo names an owner that
+    enforces nothing while the operator believes it does.
+    """
+    owner = window_strategy()
+    if not owner or owner == "L5_FOLLOWING":
+        return None
+    if owner != "TWO_SIDED":
+        return {"reason": "WINDOW_OWNER_UNRECOGNISED", "owner": owner[:40],
+                "env": WINDOW_STRATEGY_ENV,
+                "recognised": ["TWO_SIDED", "L5_FOLLOWING"]}
+    if market and active(str(market)):
+        return None
+    return {
+        "reason": WINDOW_OWNER_INACTIVE,
+        "owner": owner,
+        "market": (str(market) if market else None),
+        "named_market": named_market() or None,
+        "experiment_named": bool(experiment_id()),
+        "env": {"owner": WINDOW_STRATEGY_ENV, "market": MARKET_ENV,
+                "experiment": EXPERIMENT_ENV},
+        "note": ("the window is exclusive to the two-sided engine and that "
+                 "engine is not active for this market, so no order can be "
+                 "placed in it. Arming would spend the window and buy "
+                 "nothing. Bind %s to this market (the launcher derives it "
+                 "from the approval document) or name another owner."
+                 % MARKET_ENV),
+    }
 
 
 # --------------------------------------------------------------- timing
@@ -1520,10 +1854,18 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             return no("PRICE_NOT_ON_TICK", price=str(px))
 
     pair = up_px + dn_px
-    cap_px = max_pair_cost()
+    _ceil = effective_pair_ceiling()
+    cap_px = _ceil["ceiling"]
     if pair > cap_px:
         return no("PAIR_COST_ABOVE_CAP", pair_cost=str(pair),
-                  max_pair_cost=str(cap_px))
+                  max_pair_cost=str(cap_px),
+                  ceiling_bound_by=_ceil["bound_by"],
+                  base_ceiling=str(_ceil["base"]),
+                  adverse_skew=(None if _ceil["skew"] is None
+                                else str(_ceil["skew"])),
+                  economic_ceiling=(None if _ceil["economic"] is None
+                                    else str(_ceil["economic"])),
+                  ceiling_error=_ceil["error"])
     floor = fee_floor(up_px, dn_px)
     edge = floor["edge"]
     if not floor["ok"]:
@@ -1991,6 +2333,114 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
 #: placement offset and well inside the 51-cent move that exposed this.
 STALE_DRIFT_TICKS = 6
 STALE_DRIFT_ENV = "L5_TS_STALE_DRIFT_TICKS"
+
+#: HOW FAR A FROZEN PLAN MAY DRIFT BEHIND THE TOUCH BEFORE IT IS RE-PRICED.
+#
+# THE GAP THIS CLOSES, and it is a gap between two working mechanisms rather
+# than a fault in either. `plan_executable` already detects a leg left
+# behind -- `PRICE_LEFT_BEHIND` -- but only past `STALE_DRIFT_TICKS` (6),
+# and the only remedy the caller has for it is RETIRING the round. At the
+# deployed `ts_round_allocations` of 1, retiring round 0 makes
+# `probe_round` return None and the window ends on ACCUMULATION_EXHAUSTED.
+# So in production there is no path at all that re-prices a drifted plan:
+# under 6 ticks it is reused verbatim, and over 6 it costs the window.
+#
+# MEASURED ON THE REAL PATH. `tests/test_l5_release_candidate_lifecycle.py`
+# drives the executor with both legs cancelled at zero fill and the bid
+# then moving 0.42 -> 0.46. At that instant `probe_plan` prices UP at 0.44
+# from the current mirror and the engine sends UP at **0.40** -- the frozen
+# price, four ticks behind, resting six ticks off a 0.46 touch where
+# nothing fills. It does not cross, so the crossing guard never sees it,
+# and 4 < 6, so the drift guard never sees it either.
+#
+# ASYMMETRIC, WHICH IS WHY IT SURVIVED. A book moving AGAINST us makes a
+# leg cross and the plan is re-planned; a book moving IN OUR FAVOUR leaves
+# the leg far behind the touch, which is perfectly placeable and never
+# fills. Only one of those two was being repaired.
+#
+# WHY RE-PRICING IS SAFE WHERE RE-PLANNING WAS NOT. The freeze exists so
+# leg two matches leg one -- "re-planning each tick gave legs of 1.89 and
+# 0.98, which is not a matched pair". That reason applies only while a leg
+# of the round is resting or filled. The caller re-prices ONLY when
+# `probe_round_is_safe_to_retire` says the round holds nothing live and
+# nothing filled, so there is no sibling leg to mismatch and no order to
+# cancel -- which is also why this cannot cause order churn: it never runs
+# while an order is outstanding.
+REPLAN_DRIFT_TICKS = 2
+REPLAN_DRIFT_ENV = "L5_TS_REPLAN_DRIFT_TICKS"
+
+
+def replan_drift_ticks() -> int:
+    """Ticks of drift at which a plan holding nothing may be re-priced.
+
+    Clamped into 1..STALE_DRIFT_TICKS. The upper clamp matters: a value
+    above the retirement tolerance would put re-pricing BEHIND retirement
+    again and restore the gap this exists to close. The lower clamp of 1
+    keeps a plan that is exactly where the book would price it from being
+    rewritten for nothing.
+    """
+    raw = (os.getenv(REPLAN_DRIFT_ENV) or "").strip()
+    try:
+        v = int(raw) if raw else REPLAN_DRIFT_TICKS
+    except ValueError:
+        return REPLAN_DRIFT_TICKS
+    if v < 1:
+        return 1
+    return min(STALE_DRIFT_TICKS, v)
+
+
+def plan_drift_ticks(plan: Mapping[str, Any], *, bid: Any, ask: Any,
+                     tick: Any, depth_ticks: int,
+                     spent_sides: Optional[Sequence[str]] = None
+                     ) -> Optional[D]:
+    """How far the WORST unspent leg of this frozen plan is from where the
+    current book would price it, in ticks. None when it cannot be judged.
+
+    READ-ONLY, and it decides nothing. It reuses `quote_own_price` -- the
+    same function `build_orders` prices a leg with -- so the comparison is
+    against the price the planner WOULD emit now, not against a touch.
+
+    A SPENT LEG IS NOT JUDGED, for the 2215z reason `plan_executable`
+    documents at length: its price is history and will never be sent again.
+
+    None rather than zero on anything unreadable, so a caller cannot read
+    "I could not tell" as "it has not drifted".
+    """
+    tk = _d(tick)
+    b, a = _d(bid), _d(ask)
+    # NON-FINITE IS UNJUDGEABLE, AND IT IS CHECKED BEFORE ANY COMPARISON.
+    # `_d("nan")` returns Decimal("NaN"), which is not None and which
+    # RAISES InvalidOperation on `<=` -- a crash in the decision path
+    # rather than a refusal. Caught by this file's own parametrised case.
+    if tk is None or b is None or a is None:
+        return None
+    if not (tk.is_finite() and b.is_finite() and a.is_finite()):
+        return None
+    if tk <= 0 or b <= 0 or a <= 0:
+        return None
+    if a <= b:
+        return None                 # crossed or locked: no fair price to use
+    legs = list(plan.get("legs") or ())
+    if len(legs) != 2:
+        return None
+    _spent = {str(x).strip().upper() for x in (spent_sides or ())}
+    worst: Optional[D] = None
+    for leg in legs:
+        side = str(leg.get("side"))
+        if side.strip().upper() in _spent:
+            continue
+        own = _d(leg.get("price"))
+        if own is None or not own.is_finite():
+            return None
+        now_px = quote_own_price(side, bid=b, ask=a, tick=tk,
+                                 depth_ticks=depth_ticks)
+        if now_px is None or not now_px.is_finite():
+            return None
+        d = (now_px - own) / tk
+        if d < 0:
+            d = -d
+        worst = d if worst is None else max(worst, d)
+    return worst
 
 # ===================================== RECOVERING A RESTING FIRST LEG
 #
@@ -2577,6 +3027,77 @@ BREAKEVEN_PAIR = D("0.9532")
 COMPLETION_CEILINGS_IN_FORCE = ("improves", "within_budget")
 
 
+#: REST THE MISSING LEG AT THE CEILING instead of refusing it when the
+#: touch is dearer than the ceiling permits. Exactly "ON" or it is off.
+#: It moves no ceiling: the resting price is the dearest one that
+#: `completion_ceiling` and the owner's `completion_pair_ceiling` both
+#: already permit, and the submission gate still judges the order.
+COMPLETION_RESTS_AT_CEILING_ENV = "L5_TS_COMPLETION_RESTS_AT_CEILING"
+
+#: PRICE A PARTIAL COMPLETION PER CONTRACT. Completing q contracts of a held
+#: leg at price p creates q pairs that each cost (average held cost + p)
+#: and each redeem $1.00. The engine divided the WHOLE leg's cost by the q
+#: pairs instead, so one clip of a three-clip leg read as a pair of 1.9 at
+#: any price and could never be completed. Exactly "PER_CONTRACT" or it is
+#: off. The ceilings themselves -- 0.96 opening, the owner's completion
+#: pair ceiling -- are not moved; only what is divided by what.
+PARTIAL_COMPLETION_BASIS_ENV = "L5_PARTIAL_COMPLETION_BASIS"
+
+
+def partial_completion_per_contract() -> bool:
+    return ((os.getenv(PARTIAL_COMPLETION_BASIS_ENV) or "") == "PER_CONTRACT"
+            or inventory_recovery())
+
+
+#: INVENTORY RECOVERY, ONE SWITCH. Exactly "ON" turns on the three parts of
+#: the existing completion path that recover an unmatched leg -- the
+#: missing leg rests at the maker target instead of being refused, a
+#: one-clip completion is priced per contract, and a stale opening quote
+#: is re-priced the moment its other leg fills. Each of the first two also
+#: has its own variable; this names them together. It moves no ceiling and
+#: no limit.
+INVENTORY_RECOVERY_ENV = "L5_INVENTORY_RECOVERY"
+
+
+def inventory_recovery() -> bool:
+    return (os.getenv(INVENTORY_RECOVERY_ENV) or "") == "ON"
+
+
+def completion_rests_at_ceiling() -> bool:
+    return ((os.getenv(COMPLETION_RESTS_AT_CEILING_ENV) or "") == "ON"
+            or inventory_recovery())
+
+
+def reprice_missing_leg_on_fill() -> bool:
+    """May a quote placed as an OPENING leg be re-priced as a completion
+    at once when its other leg fills, without the minimum rest a
+    completion quote otherwise serves? Only with the recovery switch."""
+    return inventory_recovery()
+
+
+def maker_completion_target() -> D:
+    """The pair cost a RESTING completion is priced to: the owner's maker
+    target (`L5_TS_COMPLETION_MAX_PAIR`, the opening ceiling when unset),
+    never above the hard completion pair ceiling."""
+    return min(completion_pair_ceiling(), completion_max_pair())
+
+
+def rest_at_ceiling_price(ceil: Any, quoted: Any, tick: Any) -> Optional[D]:
+    """The dearest on-grid price at or below `ceil`, or None.
+
+    None when there is no ceiling, when that price is not strictly cheaper
+    than the quote it replaces (nothing to rest behind), or when it falls
+    outside the engine's price band. Rounds DOWN: never a tick dearer than
+    the ceiling."""
+    c, q0, tk = _d(ceil), _d(quoted), _d(tick)
+    if c is None or q0 is None or tk is None or tk <= 0:
+        return None
+    px = (c / tk).to_integral_value(rounding="ROUND_FLOOR") * tk
+    if px >= q0 or px < MIN_PRICE or px > MAX_PRICE:
+        return None
+    return px
+
+
 def completion_ceiling(**kw: Any) -> Optional[D]:
     """The dearest own price at which completing is permissible, or None.
 
@@ -2593,7 +3114,19 @@ def completion_ceiling(**kw: Any) -> Optional[D]:
             raise
         return None
     if not rep.get("ok"):
-        return None
+        # `ok` means EVERY test passed at some price, including the two
+        # that are not in force. For a PARTIAL completion -- one clip of a
+        # leg that holds several -- `positive_both` can never pass, because
+        # the rest of the leg is still unmatched afterwards, so `ok` was
+        # false and this returned None although both ceilings in force
+        # were satisfiable. On 2026-11-11 0400z that refused every
+        # one-clip completion of a three-clip leg, 68 requotes and 154
+        # complements. With the owner's switch the ceilings in force are
+        # read on their own, which is what this function always said it
+        # did; any other failure is still None.
+        if not (partial_completion_per_contract()
+                and rep.get("reason") == "NO_PERMISSIBLE_PRICE"):
+            return None
     ceilings = rep.get("ceilings") or {}
     vals = []
     for name in COMPLETION_CEILINGS_IN_FORCE:
@@ -2723,7 +3256,34 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     if px is None:
         return no("PRICE_UNDERIVABLE")
     if px < MIN_PRICE or px > MAX_PRICE:
-        return no("PRICE_OUT_OF_BAND", price=str(px))
+        # A TOUCH ABOVE THE BAND IS NOT A REASON TO REST NOTHING. The band
+        # is a bound on the price WE quote. With completions resting at
+        # their target, the price we would quote is the target, not the
+        # touch -- yet this test was applied to the touch, so once the
+        # other side traded above 0.95 the completion was refused outright
+        # and nothing rested. Live, 2026-11-11 19:00Z: holding UP at 0.47,
+        # the DOWN touch reached 0.97-0.99 and the completion (0.51, well
+        # inside the band) was not re-placed for the last 66 seconds
+        # before the cancel time. It could not have filled there; the
+        # point is that the refusal named the wrong price.
+        #
+        # ONLY UPWARD, ONLY WHEN RESTING IS ON, and only when the target
+        # itself is a valid in-band price: `rest_at_ceiling_price` returns
+        # None otherwise and the refusal stands exactly as before. A touch
+        # BELOW the band is still refused -- there the touch is the price
+        # we would pay.
+        _rest_px = None
+        if px > MAX_PRICE and ceil is not None and paid is not None \
+                and completion_rests_at_ceiling():
+            try:
+                _rest_px = rest_at_ceiling_price(
+                    min(ceil, maker_completion_target() - paid), px, tk)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _rest_px = None
+        if _rest_px is None:
+            return no("PRICE_OUT_OF_BAND", price=str(px))
     if (px / tk) != (px / tk).to_integral_value():
         return no("PRICE_NOT_ON_TICK", price=str(px))
     if leg_crosses(side, px, bid=b, ask=a):
@@ -2795,13 +3355,46 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     # inside the ceiling at the TAKER coefficient, the worst case should no
     # maker rebate be credited.
     judged = "OPENING"
+    rested_ticks = None
     if opening_no is not None:
-        if ceil is None or px > ceil:
+        # THE TOUCH IS DEARER THAN THE COMPLETION CEILINGS PERMIT. Without
+        # the switch this either refuses here (`px > ceil`) or returns a
+        # touch-priced leg that the submission gate then refuses for a pair
+        # above the owner's completion pair ceiling -- and either way the
+        # controller has no permitted order for as long as the price stays
+        # away: 462 s in each of the two windows of 2026-11-11 04:00Z, 365
+        # refusals, not one resting quote. With the owner's switch ON the
+        # missing leg RESTS at the owner's MAKER TARGET (never above the
+        # hard completion pair ceiling) -- behind the touch, so it cannot
+        # cross, and never dearer than a completion the gate accepts
+        # today. It moves no ceiling. OFF, no inventory context, or
+        # anything unreadable is today's behaviour.
+        rest = None
+        if completion_rests_at_ceiling() and ceil is not None:
+            try:
+                rest = rest_at_ceiling_price(
+                    min(ceil, maker_completion_target() - paid), px, tk)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                rest = None
+        if rest is not None:
+            rested_ticks = int(((px - rest) / tk).to_integral_value(
+                rounding="ROUND_FLOOR"))
+            px = rest
+            up_px, dn_px = ((paid, px) if side == DOWN else (px, paid))
+            floor = fee_floor(up_px, dn_px)
+            pair = up_px + dn_px
+            econ = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
+                                  dn_price=dn_px, theta=MAKER_THETA)
+            judged = "COMPLETION_RESTING_AT_CEILING"
+        elif ceil is None or px > ceil:
             return dict(opening_no,
                         completion_ceiling=(None if ceil is None
                                             else str(ceil)),
                         completion_rescue_available=False)
-        judged = "COMPLETION"
+        else:
+            judged = "COMPLETION"
     econ_taker = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
                                 dn_price=dn_px, theta=TAKER_THETA)
     return {"ok": True, "provenance": "DERIVED_FROM_CURRENT_BOOK",
@@ -2827,6 +3420,10 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
             # are reported either way, so a completion that would ALSO have
             # cleared the opening tests is visible as such.
             "judged_as": judged,
+            # how far behind the price the engine would otherwise have
+            # quoted this leg rests; None unless it was rested at the
+            # ceiling because that price was not permitted.
+            "rested_behind_quote_ticks": rested_ticks,
             "completion_ceiling": (None if ceil is None else str(ceil)),
             "clears_opening_pair_cap": bool(pair <= cap_px),
             "edge_per_contract": str(floor["edge"]),

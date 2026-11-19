@@ -64,10 +64,30 @@ def test_a_small_enough_clip_is_completable():
     assert "COMPLETABLE" in s and "NOT_COMPLETABLE" not in s, s
 
 
+def test_no_clip_earns_a_maker_rebate_at_this_accounts_tier():
+    """The exclusivity below is now VACUOUS and that is the finding.
+
+    PMUS re-tiered on 2026-11-14 and this account is Maker Tier 1, which
+    is credited nothing, so there is no rebate floor to clear at any
+    size. `rebate_floor_contracts` returns None rather than a number,
+    which is the correct answer to "how big must a clip be to earn a
+    rebate" when the answer is "no size will".
+    """
+    assert FEES.maker_theta() == D("0")
+    assert FEES.rebate_floor_contracts(D("0.50")) is None
+
+
 def test_the_two_bounds_are_genuinely_mutually_exclusive():
-    """A clip cannot both earn the rebate and be crossable at $1.50."""
+    """A clip cannot both earn the rebate and be crossable at $1.50.
+
+    PRICED AT THE FLAT REGIME, when a rebate existed to be earned. Kept
+    because it is the arithmetic that justified the clip ceiling, and
+    that ceiling has not moved.
+    """
+    import datetime as _dt
+    flat = _dt.datetime(2026, 10, 1, tzinfo=_dt.timezone.utc)
     cap = D("1.50")
-    floor = FEES.rebate_floor_contracts(D("0.50"))
+    floor = FEES.rebate_floor_contracts(D("0.50"), flat)
     worst_at_floor = floor * D("0.99") + FEES.taker_fee(
         D("0.99"), floor, cents=True)
     assert worst_at_floor > cap, (floor, worst_at_floor)

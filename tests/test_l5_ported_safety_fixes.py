@@ -99,6 +99,7 @@ class TestTheCashCapIsAggregate:
         ex.validation_gates = self.gates()
         assert ex.outstanding_for_gates() == [
             {"coid": "c1", "qty": D("2"), "price": D("0.45"),
+             "market": st.live_orders()["c1"]["market"],
              "intent": "ORDER_INTENT_BUY_LONG"}]
         rec = ex.handle(row(), {}, market=MARKET, window="16:15")
         assert rec["refused_by_layer"] == "VALIDATION_GATES"
@@ -588,7 +589,11 @@ class TestTheExistingAuthorizationIsUntouched:
                         and isinstance(n.func, ast.Attribute)
                         and n.func.attr == "arm" and not n.args):
                     sites.setdefault(str(f), []).append(n.lineno)
+        # THE THIRD SITE is the BTC 5-minute session (owner-directed,
+        # 2026-11-12). Added here deliberately, and it arms only inside
+        # `arm_through_boundary`, after `authorize_arming` returns.
         assert set(sites) == {"src/l5_pmus_live_runner.py",
-                              "scripts/l5_pmus_live_oneshot.py"}, sites
+                              "scripts/l5_pmus_live_oneshot.py",
+                              "src/l5_btc5m_runner.py"}, sites
         for f in sites:
             assert "authorize_arming" in _p.Path(f).read_text(), f

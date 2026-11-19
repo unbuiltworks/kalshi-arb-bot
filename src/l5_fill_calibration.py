@@ -171,7 +171,14 @@ class CalibrationRecorder:
         #: coid -> folded record
         self.orders: Dict[str, Dict[str, Any]] = {}
         self.errors: Dict[str, int] = {}
+        #: events THIS PROCESS wrote. Reset to zero by every restart, which
+        #: is why it cannot evidence durability across one -- see
+        #: `verify_readback`.
         self.appended = 0
+        #: events a PREVIOUS process wrote and this one read back off the
+        #: volume. Non-zero is only possible if a write survived a process
+        #: boundary, so this is the counter a restart-durability gate wants.
+        self.replayed = 0
         self._load()
 
     # ------------------------------------------------------------ durability
@@ -189,7 +196,22 @@ class CalibrationRecorder:
                     except ValueError:
                         self._bump("ledger_line_unreadable")
                         continue
+                    # VALID JSON IS NOT NECESSARILY AN EVENT, and this
+                    # crashed the recorder at construction. `_fold` calls
+                    # `ev.get("coid")`, so a line holding a JSON list,
+                    # string or number raised AttributeError out of
+                    # `_load` -- out of `__init__` -- and the recorder is
+                    # built in `Runner.__init__`, so ONE such line in the
+                    # durable ledger took the whole process down at boot.
+                    # A ledger is the thing most likely to hold a torn or
+                    # foreign line, and refusing to start because of one
+                    # is the opposite of fail-safe: the recorder observes,
+                    # it does not decide anything.
+                    if not isinstance(ev, Mapping):
+                        self._bump("ledger_line_not_a_mapping")
+                        continue
                     self._fold(ev, replay=True)
+                    self.replayed += 1
         except OSError:
             return
 
@@ -233,6 +255,12 @@ class CalibrationRecorder:
 
     # ------------------------------------------------------------- the folds
     def _fold(self, ev: Mapping[str, Any], *, replay: bool = False) -> None:
+        # a non-mapping cannot carry an order identity, so it is not an
+        # event. Checked here as well as in `_load` because the live path
+        # reaches this too and a fold must never raise into a decision.
+        if not isinstance(ev, Mapping):
+            self._bump("fold_not_a_mapping")
+            return
         coid = str(ev.get("coid") or "")
         if not coid:
             return
@@ -687,6 +715,13 @@ class CalibrationRecorder:
                 "usable_for_calibration": usable,
                 "not_usable": len(self.orders) - usable,
                 "events_appended": self.appended,
+                # THE RESTART-DURABILITY FACTS. `events_appended` counts
+                # only what this process wrote and is zeroed by a restart;
+                # `events_replayed_from_disk` can only be non-zero if a
+                # previous process's write survived into this one, and
+                # `readback` is a re-read of the file rather than a counter.
+                "events_replayed_from_disk": self.replayed,
+                "readback": self.verify_readback(),
                 # orders whose events span more than one process. Reported
                 # because such a record is the one most likely to be trusted
                 # wrongly.
@@ -696,6 +731,96 @@ class CalibrationRecorder:
                 "labels": ("observational only: holds no transport, no "
                            "credentials and no executor, and cannot submit, "
                            "cancel, amend or price anything")}
+
+    def verify_readback(self, *, sample: int = 8) -> Dict[str, Any]:
+        """RE-READ the ledger off the volume and say what comes back.
+
+        WHY A COUNTER WAS NOT ENOUGH, and it is the owner's finding.
+        `events_appended` is incremented in `_append` and initialised to
+        zero in `__init__`, so it counts what THIS PROCESS wrote and is
+        reset by every restart. A gate reading it can therefore be
+        satisfied by a process that has written events nothing has ever
+        read back, and can equally be REFUSED by a process sitting on a
+        fully durable ledger it has just reloaded. Neither direction says
+        anything about durability.
+
+        WHAT THIS ESTABLISHES INSTEAD. It opens the file again, now, parses
+        every line, and reports: how many events came back, how many
+        distinct order identities they carry, how many of those identities
+        carry the complete `REQUIRED_CAPTURE` set, and how many lines would
+        not parse. `events_replayed_from_disk` is reported beside it and is
+        the stronger fact of the two: it can only be non-zero if a write
+        from a PREVIOUS process survived into this one.
+
+        IDENTITY, NOT JUST VOLUME. `sample` order identities are returned
+        with their event counts so a caller can assert that a specific
+        `coid` it wrote is the one that came back, rather than that some
+        number of events exists.
+
+        READ-ONLY and it cannot raise: an unreadable ledger returns
+        `readable: False` with the reason named, which a gate must treat as
+        a refusal rather than as an empty ledger.
+        """
+        out: Dict[str, Any] = {
+            "path": self.path, "readable": False, "error": None,
+            "events_readable": 0, "orders_readable": 0,
+            "orders_with_full_capture": 0, "unreadable_lines": 0,
+            "events_appended_this_process": self.appended,
+            "events_replayed_from_disk": self.replayed,
+            "sample": {},
+            "labels": ("a re-read of the durable ledger, not a counter. "
+                       "events_replayed_from_disk > 0 is the only field "
+                       "here that can ONLY be true if a write survived a "
+                       "process boundary. readable False is a REFUSAL and "
+                       "never an empty ledger."),
+        }
+        per: Dict[str, int] = {}
+        caps: Dict[str, Dict[str, Any]] = {}
+        try:
+            with open(self.path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except ValueError:
+                        out["unreadable_lines"] += 1
+                        continue
+                    if not isinstance(ev, Mapping):
+                        out["unreadable_lines"] += 1
+                        continue
+                    coid = str(ev.get("coid") or "")
+                    if not coid:
+                        out["unreadable_lines"] += 1
+                        continue
+                    out["events_readable"] += 1
+                    per[coid] = per.get(coid, 0) + 1
+                    caps.setdefault(coid, {})[str(ev.get("kind") or "")] = True
+        except OSError as exc:
+            out["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:80])
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+            return out
+        out["readable"] = True
+        out["orders_readable"] = len(per)
+        # FULL CAPTURE IS JUDGED FROM THE FOLDED RECORD, not from the raw
+        # kinds, so this agrees with `completeness` rather than inventing a
+        # second opinion about what a complete record is.
+        full = 0
+        for coid in per:
+            rec = self.orders.get(coid)
+            if not isinstance(rec, Mapping):
+                continue
+            cap = rec.get("capture") or {}
+            if all(cap.get(k) == PRESENT for k in REQUIRED_CAPTURE):
+                full += 1
+        out["orders_with_full_capture"] = full
+        out["sample"] = {k: per[k] for k in sorted(per)[:max(0, int(sample))]}
+        return out
 
     def _publish(self, key: str, payload: Mapping[str, Any]) -> None:
         if self._emit is None:

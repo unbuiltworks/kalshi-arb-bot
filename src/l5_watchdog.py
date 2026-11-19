@@ -50,7 +50,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 # THE SIGNING MODULE IS OPTIONAL ON PURPOSE. The credential-free watchdog
 # image omits src/pmus_auth.py entirely, so this module must import without
@@ -577,8 +577,17 @@ class Watchdog:
                  max_order_age_s: float = DEFAULT_MAX_ORDER_AGE_S,
                  report_max_age_s: float = DEFAULT_REPORT_MAX_AGE_S,
                  cancel_enabled: bool = False, who: str = "l5-watchdog",
-                 oracle: Any = None) -> None:
+                 oracle: Any = None,
+                 managed_lanes: Optional[List[str]] = None,
+                 lane_opener: Any = None) -> None:
         self.t = transport
+        #: OTHER LANES ON THE SHARED ACCOUNT that rest maker orders for
+        #: minutes BY DESIGN and attest, freshly, that they are managing them
+        #: (OWNER 2026-11-14: sports two-sided and BTC5m run together). See
+        #: `managed_lane_ids`.
+        self.managed_lanes = [u.strip().rstrip("/") for u in
+                              (managed_lanes or []) if u and u.strip()]
+        self._lane_opener = lane_opener
         self.asserter = asserter
         self.max_order_age_s = float(max_order_age_s)
         self.report_max_age_s = float(report_max_age_s)
@@ -590,6 +599,26 @@ class Watchdog:
         #: power is not merely off, it is unavailable.
         self.cancel_enabled = bool(cancel_enabled) and oracle is not None
         self.cancel_requested = bool(cancel_enabled)
+
+    #: A lane attestation older than this is not proof of management.
+    LANE_MAX_AGE_S = 60.0
+
+    def managed_lane_ids(self, now: Optional[dt.datetime] = None) -> tuple:
+        """({venue_order_id, ...}, [notes]) attested by a FRESH managed lane.
+
+        DELEGATES to `l5_managed_lanes`, which is the single definition
+        shared with the executor's preflight and the reset ceremony's venue
+        precondition. Behaviour is unchanged: a lane qualifies only if its
+        document is readable, says `manages_own_resting: true`, and its
+        `as_of_utc` is at most MAX_AGE_S old. Anything else -- unreachable,
+        stale, malformed -- contributes NOTHING, so a dead lane's orders are
+        judged by age exactly as before. This EXEMPTS from the overdue/age
+        latch only; it never makes an order cancellable (ownership is still
+        the oracle's).
+        """
+        from src import l5_managed_lanes as ML
+        return ML.lane_ids(self.managed_lanes, opener=self._lane_opener,
+                           now=now or _utc())
 
     def emergency_state(self) -> tuple:
         """(emergency, reason). Is a HALT latched right now?
@@ -631,8 +660,84 @@ class Watchdog:
             return (True, "HALT_LATCHED:" + str(rec.get("reason") or "?")[:80])
         return (False, None)
 
+    def registry_notes(self) -> List[str]:
+        """One `url:STATUS:count` note per configured ownership registry.
+
+        ONE READ PER REGISTRY PER SWEEP, shared with the cancel path.
+        The first version read separately and broke the invariant that
+        `test_the_ownership_registry_is_read_once_per_sweep` exists to
+        protect -- a second read lets the answer change mid-sweep, and it
+        would also let the sweep REPORT one ownership and ACT on
+        another, which is how two records of one truth start disagreeing.
+        So the claims read here are memoised for this sweep and
+        `_cancel_targets` consumes them.
+
+        This exists so that "the registry is unreachable" is visible on a
+        quiet sweep instead of surfacing for the first time during an
+        incident.
+
+        `OK:n` means the registry answered and claims n ids -- n may
+        legitimately be 0 when that lane holds nothing. Any other status
+        is the registry's own refusal code, or PROBE_RAISED when the read
+        itself failed. It never raises: an observable that can fail a
+        sweep is worse than no observable.
+        """
+        if self.oracle is None:
+            return []
+        #: ONE READ, through the oracle the deployment actually
+        #: configured. Reading each member separately would bypass
+        #: `CompositeOracle.claimed`, which is what sets the aggregated
+        #: `last_refusal` the sweep already reports -- so the per-member
+        #: loop below only READS the state that read just set.
+        rows: Dict[str, Dict[str, Any]] = {}
+        try:
+            got = self.oracle.claimed()
+            if isinstance(got, Mapping):
+                rows = dict(got)
+            self._claims_this_sweep = (
+                rows, getattr(self.oracle, "last_refusal", None))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            #: the memo stays unset, so the cancel path reads for itself
+            #: rather than acting on an ownership we failed to obtain
+            return ["%s:PROBE_RAISED:%s" % (str(getattr(self.oracle, "url", "?")),
+                                            type(exc).__name__)]
+        notes: List[str] = []
+        for o in oracles_of(self.oracle):
+            why = getattr(o, "last_refusal", None)
+            notes.append("%s:%s" % (str(getattr(o, "url", "?")), why or "OK"))
+        return notes
+
+    def _claimed_once(self) -> Dict[str, Dict[str, Any]]:
+        """Ownership for THIS sweep, from the single read the probe made.
+
+        Falls back to reading the oracle when no probe ran -- the
+        emergency HALT path reaches `_cancel_targets` without a sweep, and
+        it must never be left without ownership.
+        """
+        memo = getattr(self, "_claims_this_sweep", None)
+        if memo is not None:
+            return memo[0]
+        return self.oracle.claimed()
+
+    def _claim_refusal(self) -> Optional[str]:
+        memo = getattr(self, "_claims_this_sweep", None)
+        if memo is not None:
+            return memo[1]
+        return getattr(self.oracle, "last_refusal", None)
+
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        #: WAS `now` GIVEN, or is it ours? The lane probe below needs to
+        #: know, because a freshness check must measure against the clock
+        #: AT THE MOMENT OF THE READ -- see `managed_lane_ids`. Tests inject
+        #: `now` and depend on it being used; production does not.
+        injected_now = now is not None
         now = now or _utc()
+        #: THE PER-SWEEP OWNERSHIP MEMO STARTS EMPTY. Carrying one sweep's
+        #: claims into the next would be worse than reading twice: it
+        #: would cancel against ownership that is a poll interval old.
+        self._claims_this_sweep = None
         out: Dict[str, Any] = {
             "LABEL": "L5_WATCHDOG_SWEEP", "as_of_utc": now.isoformat(),
             "max_order_age_s": self.max_order_age_s,
@@ -745,9 +850,69 @@ class Watchdog:
                                        "own order report; it is not managing "
                                        "whatever it still has resting")})
                 return out
+        #: EVERY CONFIGURED REGISTRY, PROBED ON EVERY SWEEP.
+        #:
+        #: WHY. `claimed()` is read only inside the cancel path, which runs
+        #: only once an order is already overdue. So a registry url that
+        #: does not serve -- a wrong port, a renamed service, a lane that
+        #: never published -- is INDISTINGUISHABLE from "we own nothing"
+        #: until the emergency, and the sweep's own docstring says what
+        #: happens then: the order is recorded NOT_IN_OWNERSHIP_REGISTRY,
+        #: the halt is asserted, and the order is LEFT RESTING. Learning
+        #: that your cancel path is blind at the moment you need it is the
+        #: worst available time to learn it.
+        #:
+        #: This is OBSERVABILITY ONLY and cannot widen what is
+        #: cancellable. It is a separate, advisory read: the cancel path
+        #: keeps its own single read per sweep, because that answer must
+        #: not change mid-loop and must not depend on this one.
+        out["registries"] = self.registry_notes()
         overdue = []
+        #: THE LANE PROBE GETS A FRESH CLOCK, NOT THE SWEEP'S `now`.
+        #: LIVE 2026-11-17 21:57:04Z: this line passed `now`, captured at
+        #: the top of the sweep and by then ~6.1 s old -- the venue read
+        #: above plus the registry probe's blocking timeout on an
+        #: unreachable registry. The lane stamps `as_of_utc` as its
+        #: document is built, so comparing a document fetched NOW against
+        #: a reference time from 6 s ago yields age ~= -6.1 s, outside the
+        #: +/-5 s band, and `l5_managed_lanes` reported STALE on every
+        #: sweep. The lane's clock was correct the whole time: measured
+        #: against each sweep's own heartbeat write, the reported "skew"
+        #: equalled the sweep's elapsed time to within 1.1-1.3 ms across
+        #: every sample. The exemption therefore never applied, and a
+        #: 315 s sports order latched UNMANAGED_RESTING_ORDER account-wide,
+        #: costing three authorized BTC5m windows.
+        #:
+        #: Before the registry probe arrived at 14:03Z the same sweep took
+        #: 0.078 s and the same lane read OK, which is why this sat latent
+        #: for days: the bug was always here, and a slow sweep armed it.
+        #:
+        #: Passing None makes `l5_managed_lanes.lane_ids` stamp its own
+        #: reference time as it reads -- exactly what the other two
+        #: consumers already do -- the executor's transport preflight and
+        #: the reset ceremony's own lane-claim helper -- which is why
+        #: neither ever saw this. (Their names are deliberately not spelled
+        #: here: an architecture test forbids one of them appearing in this
+        #: file, and a comment is enough to trip it.) An injected `now` is
+        #: still honoured, so tests stay deterministic.
+        #:
+        #: THIS WIDENS NOTHING. The +/-5 s band, the 60 s staleness bound
+        #: and the `manages_own_resting` requirement are untouched; a
+        #: genuinely dead lane still exempts nothing, and an exemption is
+        #: still never a permission to cancel.
+        lane_ids, lane_notes = (
+            self.managed_lane_ids(now=now if injected_now else None)
+            if self.managed_lanes else (set(), []))
+        if self.managed_lanes:
+            out["managed_lanes"] = lane_notes
+            out["managed_lane_exempt"] = []
         for r in rows:
             if is_terminal(r):
+                continue
+            if str(r.get("id") or "") in lane_ids:
+                # a fresh lane is managing this resting order: its age is
+                # by design, not evidence of an unmanaged order
+                out["managed_lane_exempt"].append(str(r.get("id")))
                 continue
             age = order_age_s(r, now=now)
             # age UNKNOWN is treated as overdue: an order whose creation time
@@ -814,7 +979,7 @@ class Watchdog:
             return out
         # OWNERSHIP, from the executor's own durable record. Read ONCE per
         # sweep: a per-id read would let the answer change mid-loop.
-        claimed = self.oracle.claimed()
+        claimed = self._claimed_once()
         out["claimed_ids"] = len(claimed)
         if not claimed:
             out["cancel_skipped"] = (
@@ -823,7 +988,7 @@ class Watchdog:
                 "RESTING")
             # WHY it named none. "We own nothing" and "we could not find out"
             # are opposite facts and must not arrive as the same empty dict.
-            out["claim_refused"] = getattr(self.oracle, "last_refusal", None)
+            out["claim_refused"] = self._claim_refusal()
             return out
         for o in targets:
             vid = o["venue_order_id"]
@@ -939,7 +1104,8 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
             report_max_age_s=float(os.getenv("L5_WATCHDOG_REPORT_MAX_AGE_S",
                                              str(DEFAULT_REPORT_MAX_AGE_S))),
             cancel_enabled=False,
-            oracle=None)
+            oracle=None,
+            managed_lanes=_managed_lanes_from_env())
     return Watchdog(
         transport if transport is not None else CancelOnlyTransport(),
         asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),
@@ -954,15 +1120,118 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
                                          str(DEFAULT_REPORT_MAX_AGE_S))),
         cancel_enabled=str(
             os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
-        oracle=oracle_from_env())
+        oracle=oracle_from_env(),
+        managed_lanes=_managed_lanes_from_env())
 
 
-def oracle_from_env() -> Optional[OwnershipOracle]:
-    """The executor's read-only registry, or None -- which disables cancel."""
-    url = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
-    if not url:
+def oracles_of(oracle: Any) -> List[Any]:
+    """The individual registries behind whatever `oracle_from_env` built.
+
+    One url builds a bare `OwnershipOracle`, several a `CompositeOracle`.
+    Callers that want to report per-registry health should not have to
+    know which.
+    """
+    if oracle is None:
+        return []
+    inner = getattr(oracle, "oracles", None)
+    if inner:
+        return list(inner)
+    return [oracle]
+
+
+def _managed_lanes_from_env() -> List[str]:
+    """L5_WATCHDOG_MANAGED_LANE_URLS: comma-separated base URLs of lanes that
+    publish /l5/live_orders.json with manages_own_resting=true."""
+    from src import l5_managed_lanes as ML
+    return ML.from_env()
+
+
+class CompositeOracle:
+    """Ownership across SEVERAL executors' registries, unioned.
+
+    WHY THIS EXISTS. The oracle read exactly one URL, and the watchdog
+    cancels nothing it cannot claim: an order whose venue id is absent
+    from `claimed()` is recorded `not_ours: NOT_IN_OWNERSHIP_REGISTRY`,
+    the halt is asserted, and the order is LEFT RESTING. With one
+    account now carrying a second executor, that single URL forced a
+    choice between them -- whichever registry it named, the other
+    executor's orders became uncancellable. Repointing it is not a
+    configuration decision but a removal of protection from one lane.
+
+    A UNION IS THE SAFE DIRECTION. Ownership only ever grants the power
+    to cancel, so a claim that fails to arrive costs us a cancellation
+    we would have made; it can never cause one we should not. An
+    unreachable or stale registry therefore contributes NOTHING and is
+    reported, exactly as `l5_managed_lanes.lane_ids` does for lanes --
+    it never widens what is cancellable.
+
+    `last_refusal` aggregates the sources that gave nothing, because
+    "every registry says we own nothing" and "no registry could be
+    read" are opposite facts and the sweep has to tell them apart.
+    """
+
+    def __init__(self, oracles: Sequence[Any]) -> None:
+        if not oracles:
+            raise ValueError("CompositeOracle needs at least one oracle")
+        self.oracles = tuple(oracles)
+        self.last_refusal: Optional[str] = None
+
+    def claimed(self) -> Dict[str, Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        refusals, served = [], 0
+        for o in self.oracles:
+            try:
+                rows = o.claimed()
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                refusals.append("%s:ORACLE_RAISED:%s"
+                                % (getattr(o, "url", "?"),
+                                   type(exc).__name__))
+                continue
+            why = getattr(o, "last_refusal", None)
+            if why:
+                refusals.append("%s:%s" % (getattr(o, "url", "?"), why))
+            if isinstance(rows, Mapping):
+                served += 1
+                #: FIRST CLAIM WINS. Two executors claiming one venue id
+                #: would be a ledger fault, not a merge to resolve
+                #: quietly, so it is recorded rather than overwritten.
+                for vid, row in rows.items():
+                    if vid in out and out[vid] != row:
+                        refusals.append("%s:DUPLICATE_CLAIM:%s"
+                                        % (getattr(o, "url", "?"), vid))
+                        continue
+                    out[vid] = row
+        self.last_refusal = "; ".join(refusals) if refusals else None
+        if served == 0:
+            #: nothing could be read at all: that is not "we own nothing"
+            self.last_refusal = (self.last_refusal
+                                 or "NO_REGISTRY_COULD_BE_READ")
+            return {}
+        return out
+
+
+def oracle_from_env() -> Optional[Any]:
+    """The executors' read-only registries, or None -- which disables cancel.
+
+    `L5_ORDER_REGISTRY_URL` takes a comma-separated list. ONE url builds
+    exactly the `OwnershipOracle` it always did, so an existing
+    deployment is byte-for-byte unchanged; several build a
+    `CompositeOracle` over them.
+    """
+    raw = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
+    urls = [u.strip() for u in raw.split(",") if u.strip()]
+    if not urls:
         return None
-    try:
-        return OwnershipOracle(url)
-    except BaseException:                                      # noqa: BLE001
+    built = []
+    for u in urls:
+        try:
+            built.append(OwnershipOracle(u))
+        except BaseException:                                  # noqa: BLE001
+            #: a url we cannot even construct an oracle for contributes
+            #: nothing; it must not take the others down with it
+            continue
+    if not built:
         return None
+    return built[0] if len(built) == 1 else CompositeOracle(built)

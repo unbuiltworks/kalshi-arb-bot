@@ -16,7 +16,7 @@ from src.l5_live_execution import SafetyLimits
 def test_the_worst_case_is_exactly_the_authorised_number():
     wc = M.worst_case()
     assert wc["principal_usd"] == "5"
-    assert wc["worst_case_total_usd"] == "5.1738"
+    assert wc["worst_case_total_usd"] == "5.2375"
 
 
 def test_the_defaults_are_NOT_the_envelope():

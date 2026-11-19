@@ -27,6 +27,7 @@ These tests pin the arithmetic, not a profit claim.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 from decimal import Decimal as D
 
@@ -53,6 +54,25 @@ def test_the_credited_rate_is_what_the_rows_actually_say():
     assert abs(total / qty - D("0.003515")) < D("0.00001")
 
 
+#: THE REGIME THESE CREDITS WERE EARNED UNDER. The 25 rows are from
+#: 2026-09-06/07, when a single maker coefficient of 0.0125 applied to
+#: everyone. PMUS re-tiered the schedule on 2026-11-14 and this account is
+#: Maker Tier 1, which receives NO rebate -- so `maker_theta()` is now 0
+#: and every figure below would divide by it. Pricing this evidence at
+#: today's coefficient would be re-rating history, which is the precise
+#: thing this module is effective-dated to prevent.
+FLAT = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
+
+
+def test_this_account_is_paid_no_maker_rebate_today():
+    """The counterpart to everything below: these credits are real and
+    historical, and they are NOT evidence of income now."""
+    assert FEES.maker_theta() == D("0")
+    assert FEES.maker_rebate(D("0.50"), D("100")) == 0
+    assert FEES.rebate_floor_contracts(D("0.50")) is None
+    assert FEES.rebate_rounding_uplift(D("0.50"), D("100")) is None
+
+
 def test_every_credited_row_is_consistent_with_the_published_formula():
     """Each cent must be reachable by `0.0125*C*p*(1-p)` at SOME legal p.
 
@@ -62,7 +82,7 @@ def test_every_credited_row_is_consistent_with_the_published_formula():
     `p*(1-p) > 0.25` could not come from this schedule at all.
     """
     d = json.load(open("analysis/l5/venue_rebate_credits.json"))
-    theta = FEES.maker_theta()
+    theta = FEES.maker_theta(FLAT)
     for r in d["rows"]:
         q = D(r["qty"]); c = -D(r["our_commission"])
         lo = (c - D("0.005")) / (theta * q)
@@ -72,27 +92,28 @@ def test_every_credited_row_is_consistent_with_the_published_formula():
 
 def test_the_floor_is_price_dependent_and_a_unit_clip_never_clears_it():
     """1.61 contracts at the money, 2.09 at p=0.26, 4.45 at p=0.10."""
-    assert FEES.rebate_floor_contracts(D("0.50")) == D("1.6")
-    f26 = FEES.rebate_floor_contracts(D("0.26"))
-    f10 = FEES.rebate_floor_contracts(D("0.10"))
+    assert FEES.rebate_floor_contracts(D("0.50"), FLAT) == D("1.6")
+    f26 = FEES.rebate_floor_contracts(D("0.26"), FLAT)
+    f10 = FEES.rebate_floor_contracts(D("0.10"), FLAT)
     assert D("2.07") < f26 < D("2.09"), f26
     assert D("4.44") < f10 < D("4.45"), f10
     # a unit clip is below the floor at EVERY legal price, so it is
     # credited nothing anywhere
     for cents_price in range(1, 100):
         p = D(cents_price) / D(100)
-        assert FEES.maker_rebate(p, D(1), cents=True) == D("0.00"), p
+        assert FEES.maker_rebate(p, D(1), cents=True, when=FLAT) == \
+            D("0.00"), p
 
 
 def test_the_rounding_uplift_exists_and_is_bounded():
     """Just above the floor the venue pays about twice the accrual."""
-    up = FEES.rebate_rounding_uplift(D("0.50"), D("1.61"))
+    up = FEES.rebate_rounding_uplift(D("0.50"), D("1.61"), FLAT)
     assert D("1.9") < up < D("2.1"), up
     # and it is NOT free money at every size: below the floor it is zero,
     # and above it the whole cent gets diluted
-    assert FEES.rebate_rounding_uplift(D("0.50"), D("1")) == 0
-    assert FEES.rebate_rounding_uplift(D("0.26"), D("2")) == 0
-    assert FEES.rebate_rounding_uplift(D("0.50"), D("10.49")) < 1
+    assert FEES.rebate_rounding_uplift(D("0.50"), D("1"), FLAT) == 0
+    assert FEES.rebate_rounding_uplift(D("0.26"), D("2"), FLAT) == 0
+    assert FEES.rebate_rounding_uplift(D("0.50"), D("10.49"), FLAT) < 1
 
 
 def test_a_two_contract_clip_is_not_assumed_to_earn_a_penny():
@@ -102,8 +123,13 @@ def test_a_two_contract_clip_is_not_assumed_to_earn_a_penny():
     So 'two contracts earns a cent' is FALSE as a general claim, and the
     evidence floor stays at the smallest clip actually credited, 2.52.
     """
-    assert FEES.maker_rebate(D("0.50"), D("2"), cents=True) == D("0.01")
-    assert FEES.maker_rebate(D("0.26"), D("2"), cents=True) == D("0.00")
+    assert FEES.maker_rebate(D("0.50"), D("2"), cents=True,
+                             when=FLAT) == D("0.01")
+    assert FEES.maker_rebate(D("0.26"), D("2"), cents=True,
+                             when=FLAT) == D("0.00")
+    #: and today the claim is false at EVERY price, because the rebate is
+    #: zero rather than small
+    assert FEES.maker_rebate(D("0.50"), D("2"), cents=True) == D("0.00")
     assert FEES.CREDITED_OBSERVED[
         "smallest_credited_clip_contracts"] == D("2.52")
 

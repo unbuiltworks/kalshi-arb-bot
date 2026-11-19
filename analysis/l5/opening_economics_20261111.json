@@ -1,0 +1,77 @@
+{
+ "all_settled_including_bound_rows": {
+  "n": 112,
+  "first_leg_contracts": "330.1400",
+  "p_pair_given_first_fill": "0.613",
+  "pair_net": "0.0557",
+  "unmatched_net": "-0.1070",
+  "ev_per_first_leg_contract": "-0.0073",
+  "break_even_p_pair": "0.719",
+  "clears_the_floor": false,
+  "settled_total": "-2.41170000"
+ },
+ "measured": {
+  "n": 108,
+  "first_leg_contracts": "325.11",
+  "p_pair_given_first_fill": "0.622",
+  "pair_net": "0.0557",
+  "unmatched_net": "-0.0705",
+  "ev_per_first_leg_contract": "0.0081",
+  "break_even_p_pair": "0.638",
+  "clears_the_floor": false,
+  "settled_total": "2.618300"
+ },
+ "earlier_half": {
+  "n": 54,
+  "first_leg_contracts": "195.31",
+  "p_pair_given_first_fill": "0.712",
+  "pair_net": "0.0646",
+  "unmatched_net": "-0.0589",
+  "ev_per_first_leg_contract": "0.0290",
+  "break_even_p_pair": "0.558",
+  "clears_the_floor": true,
+  "settled_total": "5.672500"
+ },
+ "later_half": {
+  "n": 54,
+  "first_leg_contracts": "129.80",
+  "p_pair_given_first_fill": "0.487",
+  "pair_net": "0.0362",
+  "unmatched_net": "-0.0802",
+  "ev_per_first_leg_contract": "-0.0235",
+  "break_even_p_pair": "0.775",
+  "clears_the_floor": false,
+  "settled_total": "-3.054200"
+ },
+ "the_gate_today": {
+  "p_pair": "0.727",
+  "unmatched_net": "-0.0236",
+  "source": "pairing from 11 of our own rounds; unmatched value from L5's Polymarket fills"
+ },
+ "walk_forward": {
+  "too_early_to_decide": {
+   "windows": 20,
+   "settled": "0.226200",
+   "profitable_windows": 13,
+   "losing_windows": 7,
+   "profit_in_profitable": "4.432600",
+   "loss_in_losing": "-4.206400"
+  },
+  "would_have_opened": {
+   "windows": 64,
+   "settled": "1.490400",
+   "profitable_windows": 30,
+   "losing_windows": 32,
+   "profit_in_profitable": "21.361900",
+   "loss_in_losing": "-19.871500"
+  },
+  "would_have_refused": {
+   "windows": 24,
+   "settled": "0.901700",
+   "profitable_windows": 12,
+   "losing_windows": 12,
+   "profit_in_profitable": "5.413500",
+   "loss_in_losing": "-4.511800"
+  }
+ }
+}

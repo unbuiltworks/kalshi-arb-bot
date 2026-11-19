@@ -69,7 +69,12 @@ class TestPaidIsAPerContractPriceNotTotalCash:
         import inspect
         from src import l5_live_execution as LX
         src = inspect.getsource(LX.InventoryStore.apply_fill)
-        assert "lc[k] = str(D(str(lc.get(k, 0))) + own * qty)" in src
+        # still `own * qty`, never the wire number. Since 2026-11-11 the
+        # same statement also takes off the $1/share bound that a fill
+        # replaces (see tests/test_l5_fill_after_position_update.py), so
+        # this pins the own-terms accumulation and not the closing bracket.
+        assert "lc[k] = str(D(str(lc.get(k, 0))) + own * qty" in src
+        assert "wire * qty" not in src
         assert "own = own_outcome_price(own_side, price, basis=basis)" in src
         wire_basis = FILL_QTY * FILL_WIRE
         assert wire_basis != FILL_CASH

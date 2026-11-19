@@ -1412,7 +1412,8 @@ class Runner:
         self.registry_server = None
         try:
             from src import l5_order_registry_server as REG
-            self.registry_server = REG.serve_from_env(self.store)
+            self.registry_server = REG.serve_from_env(
+                self.store, risk=self.account_risk_line)
             if self.registry_server is not None:
                 emit("L5_LIVE_ORDER_REGISTRY", {
                     "serving": "/" + REG.REGISTRY_KEY,
@@ -1579,8 +1580,33 @@ class Runner:
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
         """The LOCAL env halt only. Not the effective gate -- see
-        `submission_gate`, which is what refuses a submission."""
-        return bool(os.getenv("L5_LIVE_HALT", "").strip())
+        `submission_gate`, which is what refuses a submission.
+
+        DELEGATES to the module-level `operator_halted()` so that this and
+        the authorization preflight cannot read the halt differently. See
+        that function for why one expression matters.
+        """
+        return operator_halted()
+
+    def origin_line(self) -> Dict[str, Any]:
+        """Settled results and held legs split BTC15M / BTC5M / MANUAL /
+        UNKNOWN. READ-ONLY, reported for verification; a failure to compute
+        it is reported as such and changes nothing else."""
+        try:
+            return {"ok": True,
+                    "realized": self.store.realized_by_origin(),
+                    "positions": self.store.position_origins(),
+                    "foreign_orders": {
+                        c: {"origin": (o or {}).get("origin"),
+                            "market": (o or {}).get("market"),
+                            "remaining": (o or {}).get("remaining")}
+                        for c, o in (self.store.state.get("foreign_orders")
+                                     or {}).items()}}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False,
+                    "reason": "ORIGIN_REPORT_FAILED:%s" % type(exc).__name__}
 
     def account_exposure_lines(self) -> Dict[str, Any]:
         """Account-wide worst-case exposure and the capacity left under it.
@@ -1642,9 +1668,24 @@ class Runner:
         it.
         """
         out: Dict[str, Any] = {"blocked": True, "reason": "UNKNOWN",
+                               "operator_halt": None,
                                "shadow_lock": None, "halt_latch": None,
                                "owner_arm_token": None, "armed": None}
         try:
+            # THE OWNER'S KILL SWITCH, REPORTED HERE TOO.
+            #
+            # It was absent from this reader entirely, so the EFFECTIVE
+            # gate could report `blocked: false, reason: OPEN` while
+            # `L5_LIVE_HALT` was engaged. The env halt does refuse a
+            # submission -- `OPERATOR_HALT` in the intent chain, and the
+            # tick deadman disarms the transport -- but a reporter that
+            # disagrees with the refusal is how the 08:30Z window was
+            # lost: the halt was in the heartbeat and the blockers I read
+            # off this gate did not name it.
+            #
+            # Same expression as `halted()` and the authorization
+            # preflight, so the three cannot disagree.
+            out["operator_halt"] = operator_halted()
             out["shadow_lock"] = shadow_only()
             out["owner_arm_token"] = bool(Q1.armed())
             out["armed"] = bool(self.transport and self.transport.armed)
@@ -1676,7 +1717,12 @@ class Runner:
                     out["halt_latch"] = "UNREADABLE"
                     out["halt_error"] = "%s: %s" % (type(exc).__name__,
                                                     str(exc)[:80])
-            if out["shadow_lock"]:
+            if out["operator_halt"]:
+                # FIRST, ahead of the structural lock: this is the switch
+                # an operator reaches for, and it must be the reason they
+                # are shown.
+                out["reason"] = "OPERATOR_HALT"
+            elif out["shadow_lock"]:
                 out["reason"] = "SHADOW_ONLY_LOCK"
             elif out["halt_latch"] in ("HALT", "UNREADABLE", "NO_GATE"):
                 out["reason"] = "HALT_GATE:%s:%s" % (
@@ -1694,7 +1740,11 @@ class Runner:
                          "true means no order can reach the venue. An "
                          "unreadable latch is BLOCKED, as the gate itself "
                          "fails closed. Cancellation is NOT gated by any of "
-                         "these and stays available while blocked.")
+                         "these and stays available while blocked. "
+                         "operator_halt is the LOCAL L5_LIVE_HALT env "
+                         "switch; halt_latch is the INDEPENDENT durable "
+                         "latch a watchdog writes. They are separate "
+                         "mechanisms and either one alone blocks.")
         return out
 
     def effective_cash_gate(self) -> Dict[str, Any]:
@@ -1718,6 +1768,13 @@ class Runner:
             "max_unmatched_contracts": str(getattr(
                 vg, "max_unmatched_contracts", "") or ""),
             "max_usd_per_market": str(self.limits.max_usd_per_market),
+            # WHAT THIS PROCESS READ, not what the dashboard holds: true
+            # only when a hedging DOWN order is reserved at its limit cost
+            # plus fee rather than $1 a share. The ceiling above is the same
+            # either way.
+            "hedge_cash_at_limit": bool(
+                __import__("src.l5_live_validation_gates", fromlist=["x"]
+                           ).hedge_cash_at_limit()),
             # THE WORST-CASE DEFICIT BOUND, REPORTED EVEN WHEN ABSENT.
             #
             # This line used to omit it entirely, and that omission is how
@@ -2729,6 +2786,11 @@ class Runner:
                 if why and why != "STATE_NOT_TERMINAL":
                     self.stats["awaiting_settlement:%s" % why] += 1
                 continue
+            # ANOTHER STRATEGY'S POSITION, held here at the $1 bound: before
+            # it is settled, try to replace the bound with its real cost.
+            # Off unless the other strategy's fills feed is configured; any
+            # failure leaves the bound and the ordinary settlement runs.
+            self.attest_other_strategy_cost(market, t)
             try:
                 out = self.store.retire_settled_market(
                     market, yes_value=rep["settlement_px"],
@@ -3214,6 +3276,130 @@ class Runner:
                 emit("L5_LIVE_DISARMED", {"market": t.market_slug,
                                           "why": str(exc)[:300]})
 
+    def _note_cycle_peaks(self, slug: str, port: Mapping[str, Any]) -> None:
+        """Remember the most that rested at once in this window. Telemetry.
+
+        Sampled where the portfolio is already assembled (every few
+        seconds), from the ledger's own live orders -- so a peak here is a
+        lower bound on the true one, never an invention. Never raises.
+        """
+        try:
+            peaks = getattr(self, "_cycle_peaks", None)
+            if peaks is None:
+                peaks = self._cycle_peaks = {}
+            pk = peaks.setdefault(slug, {
+                "samples": 0, "peak_resting_orders": 0,
+                "peak_resting_up": 0, "peak_resting_down": 0,
+                "samples_with_both_sides_resting": 0,
+                "peak_committed_usd": "0",
+                "peak_worst_case_with_resting_usd": "0"})
+            if len(peaks) > 8:                      # a few windows, no more
+                for k in sorted(peaks)[:-8]:
+                    peaks.pop(k, None)
+            orders = list(port.get("orders") or ())
+            up = sum(1 for o in orders if str(o.get("side")).upper() == "UP")
+            dn = len(orders) - up
+            pk["samples"] += 1
+            pk["peak_resting_orders"] = max(pk["peak_resting_orders"],
+                                            len(orders))
+            pk["peak_resting_up"] = max(pk["peak_resting_up"], up)
+            pk["peak_resting_down"] = max(pk["peak_resting_down"], dn)
+            if up and dn:
+                pk["samples_with_both_sides_resting"] += 1
+            for key, src in (("peak_committed_usd", "committed_usd"),
+                             ("peak_worst_case_with_resting_usd",
+                              "worst_case_with_resting")):
+                try:
+                    v = D(str(port.get(src)))
+                    # worst case is a P&L: the peak LOSS is the most negative
+                    v = -v if src == "worst_case_with_resting" else v
+                    if v.is_finite() and v > D(pk[key]):
+                        pk[key] = str(v)
+                except (ArithmeticError, ValueError, TypeError):
+                    pass
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["cycle_peaks_error:%s" % type(exc).__name__] += 1
+
+    def cycle_report(self, slug: Any, brief: bool = False) -> Dict[str, Any]:
+        """One window's trading cycle, from the ledger. Read-only telemetry.
+
+        WHAT THE NEXT LIVE WINDOW HAS TO SHOW, in one record: orders
+        submitted against rounds spent, proposals priced again rather than
+        charged, how many orders rested together, how many pairs were
+        opened after the first, what cash and exposure the book reserved,
+        and what the matched and unmatched inventory cost. Rebates are not
+        here: only a venue cash credit confirms one.
+        """
+        if not slug:
+            return {"market": None}
+        out: Dict[str, Any] = {"market": str(slug)}
+        try:
+            ex = self.executor
+            rl = ex.round_lifecycle(str(slug))
+            out["rounds"] = rl
+            if brief:
+                return out
+            st = self.store
+            up, dn = st.position(str(slug), "UP"), st.position(str(slug), "DOWN")
+            lc = st.leg_cost(str(slug))
+            uc, dc = D(str(lc.get("UP", 0))), D(str(lc.get("DOWN", 0)))
+            matched = min(up, dn)
+            pair = ((uc / up) + (dc / dn)) if up > 0 and dn > 0 else None
+            out["inventory"] = {
+                "up_qty": str(up), "dn_qty": str(dn),
+                "up_cost_usd": str(uc), "dn_cost_usd": str(dc),
+                "matched_contracts": str(matched),
+                "average_pair_cost": None if pair is None else str(pair),
+                "locked_pair_pnl_usd": (None if pair is None
+                                        else str(matched * (D(1) - pair))),
+                "unmatched_contracts": str(abs(up - dn)),
+                "unmatched_side": ("UP" if up > dn else
+                                   "DOWN" if dn > up else None),
+                "labels": ("ledger quantities and what fills charged. The "
+                           "residual's P&L is known only at settlement.")}
+            n_orders = int(rl.get("rounds_with_a_submitted_order") or 0)
+            out["pairs_opened_after_the_first"] = max(0, n_orders - 1)
+            vg = getattr(ex, "validation_gates", None)
+            if vg is not None:
+                held = vg.cash_committed(ex.cash_legs_for_gates())
+                rest = ex.outstanding_for_gates()
+                rsv = vg.reserved_cash(
+                    outstanding=rest, order_qty=D(0), order_price=D(0),
+                    order_intent="ORDER_INTENT_BUY_LONG",
+                    inventory=ex.inventory_for_gates(str(slug)))
+                out["reservations"] = {
+                    "cash_held_in_fills_usd": str(held),
+                    "cash_reserved_for_resting_usd": str(rsv["resting"]),
+                    "basis": rsv["basis"],
+                    "hedged_resting_contracts": str(rsv["hedged_resting"]),
+                    "max_cash_deployed_usd": str(vg.max_cash_deployed_usd),
+                    "exposure_worst_case_usd": str(
+                        st.risk_exposure_usd(str(slug)))}
+            out["resting_peaks"] = dict(
+                (getattr(self, "_cycle_peaks", None) or {}).get(str(slug))
+                or {"samples": 0})
+            # what the venue's buying power has confirmed returned, and how
+            # each balance read was judged. Counts are since process start.
+            _anchor = getattr(self, "_bp_anchor", None)
+            out["recycling"] = {
+                "policy": str(getattr(vg, "cash_policy", None) or ""),
+                "anchor_usd": None if _anchor is None else str(_anchor),
+                "confirmed_matched": {
+                    m: str((v or {}).get("matched")) for m, v in
+                    (ex.__dict__.get("recycle_confirmed") or {}).items()},
+                "confirmed_share_this_market": str(
+                    ex.recycle_confirmed_share(str(slug))),
+                "checks": {k.split(":", 1)[1]: v
+                           for k, v in self.stats.items()
+                           if k.startswith("recycle_check:") and v}}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+        return out
+
     def close_window(self) -> None:
         t = self.transport
         slug = t.market_slug if t else None
@@ -3222,6 +3408,7 @@ class Runner:
             "preflight": self.preflight_status,
             "armed": bool(t and t.armed),
             "observability": self.book.window_report(slug) if slug else None,
+            "cycle": self.cycle_report(slug),
         }
         if slug and self.first_action_t is not None:
             obs = out["observability"]
@@ -3230,6 +3417,43 @@ class Runner:
             fb = obs.get("first_book_offset_s")
             out["book_before_first_l5_action"] = (
                 fb is not None and fb <= out["first_l5_action_offset_s"])
+        # WHICH SIDE THIS WINDOW SETTLED ON, observed and never inferred.
+        #
+        # The paired-entry economics need P(UP settles | one leg filled
+        # alone) -- the adverse-selection term that decided the 15:30Z loss
+        # -- and the recorded tapes do not carry it: four of ten windows in
+        # the replay sources end between 31% and 59% of the way through, so
+        # their terminal book never shows which side won. Six determined
+        # observations put a 50% estimate at 0.19..0.81, against an entry
+        # threshold that needs +/-0.09.
+        #
+        # So this records one line per window the executor already watches.
+        # It places no order, calls no venue, computes no probability, and
+        # an early or ambiguous book is recorded UNDETERMINED with its
+        # reason rather than becoming a weak point that calibrates money.
+        #
+        # It can never interfere with closing a window: every failure is
+        # swallowed into the record itself.
+        try:
+            from src import l5_settlement_observer as SO
+            _snap = self.book.snapshot(slug) if slug else None
+            out["settlement_observed"] = SO.observe(
+                market=slug or "",
+                window_start_utc=(
+                    dt.datetime.fromtimestamp(AB.slug_start(slug),
+                                              dt.timezone.utc).isoformat()
+                    if slug and AB.slug_start(slug) is not None else ""),
+                observed_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                bid=(_snap or {}).get("bid"),
+                ask=(_snap or {}).get("ask"),
+                frames_seen=(_snap or {}).get("book_updates"))
+        except BaseException as _exc:                          # noqa: BLE001
+            if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["settlement_observed"] = {
+                "settled_side": "UNDETERMINED",
+                "reason": "OBSERVER_FAILED:%s" % type(_exc).__name__}
+
         # A final progress read BEFORE the deadman, so an order that filled
         # between the last poll and window close is recorded as a fill rather
         # than disappearing into a cancel.
@@ -3584,6 +3808,12 @@ class Runner:
             # the reopening decision 1230z did not make; see
             # `probe_reopen_decision`. Carries its own break-even.
             "two_sided_reopen": rec.get("TWO_SIDED_REOPEN"),
+            # the frozen plan this tick re-priced, and the drift that
+            # justified it. Absent when nothing drifted, which is the
+            # common case; see `TS.replan_drift_ticks` for why a plan left
+            # behind the touch was invisible to both existing guards.
+            "two_sided_replan": rec.get("TWO_SIDED_REPLAN"),
+            "two_sided_round_repriced": rec.get("TWO_SIDED_ROUND_REPRICED"),
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
@@ -4150,7 +4380,8 @@ class Runner:
         Read-only throughout. No order path, no credential handling here.
         """
         if (self.available_cash_t is not None
-                and now - self.available_cash_t < CASH_REFRESH_S):
+                and now - self.available_cash_t < CASH_REFRESH_S
+                and not self.recycle_wants_fresh_cash(now)):
             return                     # the reading in hand is still fresh
         value = None
         err = None
@@ -4167,6 +4398,7 @@ class Runner:
         if self.executor is not None:
             # None means "no authoritative reading", never "unlimited"
             self.executor.available_cash_usd = value
+        self.confirm_recycled_cash(value, now)
         emit("L5_LIVE_CASH", {
             "available_cash_usd": (None if value is None else str(value)),
             "source": "/v1/account/balances via transport.account()",
@@ -4176,6 +4408,176 @@ class Runner:
             "labels": ("authoritative buying power. None is NOT unlimited: "
                        "the cash gate then binds on its configured ceiling "
                        "alone and require_cash_evidence() refuses to arm.")})
+
+    # ============== RECYCLED CASH MUST AGREE WITH THE VENUE'S BUYING POWER
+    #
+    # OWNER, 2026-11-11: "prove that recycled capital agrees with
+    # venue-confirmed buying power and that partial fills, stale order
+    # states, restarts, and reconciliation uncertainty cannot release
+    # unearned cash."
+    #
+    # THE RULE. A completed pair's cost leaves the cash figure only for the
+    # matched quantity that a balance read TAKEN AFTERWARDS has confirmed.
+    # The read is compared with an ANCHOR -- buying power the last time the
+    # account held nothing and had nothing at the venue -- moved by what
+    # each settlement since has paid:
+    #
+    #     buying power  >=  anchor - cost of UNMATCHED inventory - a cent
+    #
+    # If the venue had kept a pair's cash, buying power would sit below that
+    # line by the pair's whole cost, and nothing is confirmed.
+    #
+    # WHEN NOTHING IS CONFIRMED, by construction:
+    #   * no anchor: a restart, or a process that has not yet seen the
+    #     account flat. Memory only, never persisted, so a restart starts
+    #     from "nothing confirmed";
+    #   * an order is at the venue, or parked, or quarantined: it may hold
+    #     buying power, so the reading is not comparable and adds nothing;
+    #   * the ledger is uncertain: every confirmation is dropped;
+    #   * the balance is unreadable: nothing new is confirmed;
+    #   * buying power is below the line -- a fill the ledger has not booked
+    #     yet, a stale order state, a venue that did not net: every
+    #     confirmation is dropped.
+    # A partial fill changes the matched quantity; only the quantity that
+    # was confirmed keeps its credit until a later read confirms the rest.
+
+    RECYCLE_CONFIRM_MIN_S = 3.0
+    RECYCLE_TOLERANCE_USD = D("0.01")
+
+    def _recycle_book(self) -> Dict[str, Any]:
+        """Unmatched cost and matched quantity per unsettled market."""
+        ex, st = self.executor, self.store
+        retired = st.state.get("retired_markets") or {}
+        out = {"unmatched_cost": D(0), "locked_loss": D(0), "matched": {},
+               "any_position": False}
+        for m, c in st.committed().items():
+            if m in retired:
+                continue
+            up = D(str(st.position(m, "UP")))
+            dn = D(str(st.position(m, "DOWN")))
+            if up != 0 or dn != 0:
+                out["any_position"] = True
+            mc = ex.matched_pair_cost(m)
+            if mc is None:                # unvouched: all of it is at risk
+                out["unmatched_cost"] += c
+                continue
+            mq = min(up, dn)
+            out["unmatched_cost"] += max(D(0), c - mc)
+            out["locked_loss"] += max(D(0), mc - mq)
+            if mq > 0:
+                out["matched"][m] = mq
+        return out
+
+    def recycle_wants_fresh_cash(self, now: float) -> bool:
+        """Has quantity matched that no balance read has confirmed yet?
+        Then the next read should not wait out the minute. Rate-limited."""
+        try:
+            ex = self.executor
+            if ex is None or not ex.cash_recycles_completed_pairs():
+                return False
+            last = getattr(self, "_recycle_forced_t", None)
+            if last is not None and now - last < self.RECYCLE_CONFIRM_MIN_S:
+                return False
+            conf = ex.__dict__.get("recycle_confirmed") or {}
+            for m, mq in self._recycle_book()["matched"].items():
+                have = D(str((conf.get(m) or {}).get("matched", 0)))
+                if mq > have:
+                    self._recycle_forced_t = now
+                    return True
+            return False
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return False
+
+    def confirm_recycled_cash(self, value: Any, now: float
+                              ) -> Optional[Dict[str, Any]]:
+        """Record which matched quantity this balance read confirms.
+
+        Read-only towards the venue and the ledger; it writes one in-memory
+        dict on the executor. Never raises: any failure confirms nothing.
+        """
+        ex = self.executor
+        if ex is None:
+            return None
+        try:
+            if not ex.cash_recycles_completed_pairs():
+                return None
+            conf = ex.__dict__.setdefault("recycle_confirmed", {})
+            st = self.store
+            rec: Dict[str, Any] = {
+                "buying_power_usd": None if value is None else str(value)}
+
+            def done(verdict: str) -> Dict[str, Any]:
+                rec.update(verdict=verdict, confirmed={
+                    m: str(v.get("matched")) for m, v in conf.items()})
+                key = (verdict, tuple(sorted(rec["confirmed"].items())))
+                if key != getattr(self, "_recycle_last", None):
+                    self._recycle_last = key
+                    emit("L5_RECYCLE_CHECK", rec)
+                self.stats["recycle_check:%s" % verdict] += 1
+                return rec
+
+            if st.orders_uncertain():
+                conf.clear()
+                return done("LEDGER_UNCERTAIN_NOTHING_CONFIRMED")
+            # a settlement moves buying power by exactly what it paid
+            retired = st.state.get("retired_markets") or {}
+            seen = getattr(self, "_recycle_retired_seen", None)
+            if seen is None:
+                seen = self._recycle_retired_seen = set(retired)
+            for m in [k for k in retired if k not in seen]:
+                conf.pop(m, None)
+                anchor = getattr(self, "_bp_anchor", None)
+                try:
+                    pnl = D(str(retired[m].get("settlement_pnl")))
+                    self._bp_anchor = (None if anchor is None
+                                       or not pnl.is_finite()
+                                       else anchor + pnl)
+                except (ArithmeticError, ValueError, TypeError,
+                        AttributeError):
+                    self._bp_anchor = None
+                seen.add(m)
+            if value is None:
+                return done("BUYING_POWER_UNREADABLE_NOTHING_NEW")
+            bp = D(str(value))
+            book = self._recycle_book()
+            quiet = st.still_fillable_order_count() == 0
+            if quiet and not book["any_position"]:
+                self._bp_anchor = bp          # flat and empty: the anchor
+            anchor = getattr(self, "_bp_anchor", None)
+            rec.update(anchor_usd=None if anchor is None else str(anchor),
+                       unmatched_cost_usd=str(book["unmatched_cost"]),
+                       matched={m: str(q) for m, q in
+                                book["matched"].items()})
+            if not book["matched"]:
+                return done("NOTHING_MATCHED")
+            if anchor is None:
+                return done("NO_ANCHOR_NOTHING_CONFIRMED")
+            if not quiet:
+                return done("ORDERS_AT_THE_VENUE_NOTHING_NEW")
+            floor = (anchor - book["unmatched_cost"] - book["locked_loss"]
+                     - self.RECYCLE_TOLERANCE_USD)
+            rec["expected_at_least_usd"] = str(floor)
+            if bp < floor:
+                conf.clear()
+                return done("BUYING_POWER_BELOW_EXPECTED_NOTHING_CONFIRMED")
+            for m, mq in book["matched"].items():
+                conf[m] = {"matched": str(mq), "buying_power_usd": str(bp),
+                           "t": now}
+            return done("CONFIRMED")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # the failure path confirms nothing and cannot itself fail
+            try:
+                ex.__dict__.setdefault("recycle_confirmed", {}).clear()
+                self.stats["recycle_check_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException as exc2:                      # noqa: BLE001
+                if isinstance(exc2, (KeyboardInterrupt, SystemExit)):
+                    raise
+            return None
 
     def orders_stalled_for_s(self, now: float) -> float:
         """How long our live orders have gone without any venue progress.
@@ -5947,6 +6349,91 @@ class Runner:
             out["reason"] = "CAMPAIGN_TELEMETRY_FAILED:%s" % type(exc).__name__
         return out
 
+    def attest_other_strategy_cost(self, market: str, t: Any
+                                   ) -> Optional[Dict[str, Any]]:
+        """Restate a BTC5m position this ledger holds at the $1 bound, from
+        the BTC5m ledger's published fills, each confirmed by OUR OWN read
+        of the venue's order row. See `InventoryStore.attest_other_strategy_
+        cost` for the checks. Never raises into the settlement sweep."""
+        url = str(os.getenv(BTC5M_FILLS_URL_ENV, "")).strip()
+        if not url or LX.ORIGIN.strategy_of_market(market) != \
+                LX.ORIGIN.BTC5M:
+            return None
+        if not any(str(k).rsplit("|", 1)[0] == market for k in
+                   (self.store.state.get("leg_cost_basis_unknown") or [])):
+            return None
+        try:
+            import urllib.request as _ur
+            with _ur.urlopen(url, timeout=3.0) as r:           # noqa: S310
+                doc = json.loads(r.read().decode("utf-8"))
+            if not isinstance(doc, Mapping) or not doc.get("readable"):
+                raise ValueError("feed not readable")
+            fills = [o for o in (doc.get("orders") or ())
+                     if isinstance(o, Mapping) and o.get("market") == market]
+            rows = {}
+            for f in fills:
+                vid = str(f.get("venue_order_id") or "").strip()
+                if vid and D(str(f.get("filled_qty") or 0)) > 0:
+                    rows[vid] = t.order(vid)
+            out = self.store.attest_other_strategy_cost(
+                market, fills, rows,
+                source="BTC5M_LEDGER_FILLS_CONFIRMED_BY_VENUE_ORDER_READS")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out = {"attested": False, "market": market,
+                   "reason": "ATTEST_FAILED:%s" % type(exc).__name__}
+        emit("L5_OTHER_STRATEGY_COST", dict(out, labels=(
+            "attested=False leaves the position at the $1 bound; the "
+            "settlement below is unchanged by a refusal")))
+        return out
+
+    def account_risk_line(self) -> Dict[str, Any]:
+        """The account-wide loss state, for ANOTHER strategy on this account.
+
+        Published read-only on the order registry so the BTC5m runner reads
+        THE limits this service enforces rather than a second copy: the UTC
+        day realized against the daily halt, the all-time realized against
+        the cumulative ceiling, the operator halt, and which markets this
+        ledger has already retired (so a reader can tell which of its own
+        results are already inside these figures). `readable` is False
+        whenever any of it cannot be established, and the reader refuses.
+        """
+        day = self.day_realized_line()
+        try:
+            lifetime = D(str(self.store.realized_today()))
+            vg = getattr(self.executor, "validation_gates", None)
+            cum = getattr(vg, "max_cumulative_loss_usd", None)
+            cum = None if cum is None else D(str(cum))
+            retired = sorted((self.store.state.get("retired_markets")
+                              or {}).keys())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"readable": False,
+                    "reason": "RISK_READ_FAILED:%s" % type(exc).__name__}
+        dr = day.get("utc_day_realized_usd")
+        ok = dr is not None and cum is not None
+        return {
+            "readable": bool(ok),
+            "reason": None if ok else (
+                day.get("reason") or "CUMULATIVE_CEILING_UNREADABLE"),
+            "utc_day": day.get("utc_day"),
+            "utc_day_realized_usd": dr,
+            "daily_halt_usd": day.get("halt_usd"),
+            "daily_would_halt": day.get("would_halt"),
+            "lifetime_realized_usd": str(lifetime),
+            "cumulative_loss_ceiling_usd": (None if cum is None
+                                            else str(cum)),
+            "cumulative_would_halt": (None if cum is None
+                                      else bool(-lifetime >= cum)),
+            "operator_halt": bool(operator_halted()),
+            "retired_markets": retired[-400:],
+            "labels": ("the account-wide figures the 15-minute service's own "
+                       "gates read, published so a second strategy cannot "
+                       "hold a looser copy. Read-only."),
+        }
+
     def day_realized_line(self) -> Dict[str, Any]:
         """The figure the DAILY loss halt actually reads, published.
 
@@ -6205,6 +6692,9 @@ class Runner:
             # an operator cannot see is one nobody notices binding.
             "campaign": self.campaign_telemetry(),
             "day_realized": self.day_realized_line(),
+            # WHOSE RESULT IS WHOSE. A report beside the account-wide lines
+            # above, never instead of them: no gate reads it.
+            "origin": self.origin_line(),
             "auth_book": self.book.status(),
             "fill_calibration": (None if self.fill_calibration is None
                                  else self.fill_calibration.report()),
@@ -6302,6 +6792,10 @@ class Runner:
             # OBJECT THAT ENFORCES IT, never from the environment, so a
             # heartbeat cannot claim a bound the decision path is not using.
             "effective_cash_gate": self.effective_cash_gate(),
+            # ROUNDS SPENT AGAINST ORDERS SUBMITTED, this market, and whether
+            # THIS PROCESS charges a round only when an order goes out.
+            "round_lifecycle": self.cycle_report(
+                getattr(self.transport, "market_slug", None), brief=True),
             "lambda": str(self.lam),
             # WHICH POLICY RAN. k is echoed from the executor that is
             # actually wired, not from the environment, so a heartbeat can
@@ -6331,6 +6825,57 @@ class Runner:
             "frozen_rule": "030d8bf"}))
         self.emit_arm_switch_readiness()
         self.emit_two_sided_comparison()
+        self.emit_completion_latency()
+
+    def emit_completion_latency(self) -> None:
+        """The latency report on its OWN line, because the heartbeat drops it.
+
+        THE DEFECT, MEASURED ON THE RUNNING SERVICE. `bounded_hb` reduces
+        the largest field not in `HB_NEVER_REDUCE` until the line fits
+        LOG_BUDGET_BYTES, and deployment `c300a6c4` reports exactly that:
+
+            hb_reduced.fields = {"shadow_controller": 64618,
+                                 "l5_baseline": 19249,
+                                 "completion_latency": 15234}
+
+        So the one instrument built to answer "where does the time go"
+        reaches the tape as `{"_reduced": true, "bytes": 15234}` and the
+        funnel it was written to measure cannot be measured in production.
+
+        WHY NOT `HB_NEVER_REDUCE`. That list exists so the SAFETY state
+        survives, and the budget is finite: protecting 15 KB of telemetry
+        would push a safety field out instead -- the precise failure
+        `bounded_hb` was written to prevent. Telemetry does not outrank the
+        submission gate. It gets a second home instead, which is the same
+        answer the full authorization rows got on
+        `L5_AUTHORIZATION_PREFLIGHT`.
+
+        Reporting only, on the heartbeat cadence, and it cannot raise: a
+        latency line that throws would cost the heartbeat that carries the
+        safety state.
+        """
+        try:
+            rep = self._latency_report()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_line_failed:%s" % type(exc).__name__] += 1
+            return
+        if not rep:
+            return
+        try:
+            emit("L5_COMPLETION_LATENCY", {
+                "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
+                "report": rep,
+                "labels": ("the same report the heartbeat carries, on its "
+                           "own line because bounded_hb reduces it out of "
+                           "the heartbeat to protect the safety fields. "
+                           "Reporting only: no gate, limit or decision "
+                           "reads this.")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["latency_line_failed:%s" % type(exc).__name__] += 1
 
     #: the windows the FINISHED arm worked, comma-separated, so the switch
     #: readiness can require THEIR confirmed settlement by name rather than
@@ -7757,6 +8302,381 @@ class Runner:
                 raise
             self.stats["open_skip_emit_failed:%s" % type(exc).__name__] += 1
 
+    def pair_complement_slot_refusal(self, slug: Any, resting: Any
+                                     ) -> Optional[str]:
+        """None if the timer may place the COMPLEMENT of a half-placed pair.
+
+        Otherwise the named reason, and the caller keeps its lockout. Read
+        only: it places nothing and grants no allowance of its own -- it
+        decides whether one tick may reach `executor.handle`, where the
+        executor repeats this test (`PAIR_SECOND_SLOT`) and runs every gate.
+
+        EVERY CONDITION MUST HOLD:
+
+          * exactly ONE order is still fillable, account-wide. Zero is an
+            ordinary opening and never reaches here; two is the pair already
+            resting; a parked or quarantined order counts and refuses;
+          * a second slot is AUTHORIZED: `max_live_orders()` is above one;
+          * the owner set `L5_TS_TWO_ORDER_PAIR`;
+          * this market's current round has exactly one leg claimed;
+          * and `TS.second_leg_slot_refusal` -- the executor's own test --
+            agrees the resting order is that claimed leg, in this market, on
+            the opposite side.
+
+        FAIL CLOSED. An unreadable ledger, claim file or executor refuses by
+        name; nothing here is ever read as permission.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            # WITH A LADDER RESTING, "exactly one" is the wrong question: the
+            # newest pair's first leg sits beside the older pairs' orders.
+            # Found by driving three levels through this runner -- the third
+            # pair's complement was refused here and the leg stood alone.
+            # Off unless L5_TS_CONCURRENT_ROUNDS is above one.
+            ladder = TSP.concurrent_rounds() > 1 and int(resting) > 1
+            if int(resting) != 1 and not ladder:
+                return "NOT_EXACTLY_ONE_ORDER_RESTING"
+            if int(max_live_orders()) < 2:
+                return "NO_AUTHORIZED_SECOND_SLOT"
+            if not TSP.two_order_pair_enabled():
+                return "TWO_ORDER_PAIR_DISABLED"
+            ex = self.executor
+            rnd = ex.probe_round(str(slug))
+            if rnd is None:
+                return "NO_OPEN_ROUND"
+            claimed = dict(ex.probe_legs_claimed(str(slug), rnd) or {})
+            unplaced = sorted(str(k).strip().upper()
+                              for k, v in claimed.items() if not bool(v))
+            if len(claimed) != 2 or len(unplaced) != 1:
+                return "ROUND_IS_NOT_HALF_PLACED"
+            if ladder:
+                if self.store.pending_terminal() or \
+                        (self.store.state.get("quarantine") or {}):
+                    return "ORDER_STATE_UNRESOLVED"
+                return TSP.ladder_complement_refusal(
+                    market=str(slug), live_orders=self.store.live_orders(),
+                    max_live_orders=max_live_orders())
+            return TSP.second_leg_slot_refusal(
+                market=str(slug), side=unplaced[0],
+                live_orders=self.store.live_orders(),
+                legs_claimed=claimed)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "PAIR_SLOT_UNREADABLE:%s" % type(exc).__name__
+
+    def concurrent_round_slot_refusal(self, slug: Any) -> Optional[str]:
+        """None if the timer may open ANOTHER pair beside the resting ones.
+
+        The probe module's own test, on this runner's ledger and the owner's
+        order limit. Read-only and fail-closed: a parked or quarantined
+        order, an unreadable ledger or an unreadable limit all refuse.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            if self.store.pending_terminal() or \
+                    (self.store.state.get("quarantine") or {}):
+                return "ORDER_STATE_UNRESOLVED"
+            return TSP.concurrent_round_slot_refusal(
+                market=str(slug), live_orders=self.store.live_orders(),
+                max_live_orders=max_live_orders())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "CONCURRENT_SLOT_UNREADABLE:%s" % type(exc).__name__
+
+    #: seconds between portfolio decision records for one market.
+    PORTFOLIO_DECISION_EVERY_S = 5.0
+
+    def _portfolio_view(self, slug: Any, ws: float, book: Mapping[str, Any],
+                        tick: Any, now: float) -> Dict[str, Any]:
+        """The portfolio controller's decision on THIS ledger, book and
+        reference. Reads only; raises on anything unreadable.
+
+        THE BELIEF. With L5_BTC_REFERENCE=VENUE_INDEX the probability comes
+        from the venue's own settlement index and this market's own strike
+        (`l5_btc_reference`), started lazily on its own thread so a slow
+        gateway can never hold a tick. A stale index, a misaligned strike
+        or a clock that disagrees returns NO probability, and the controller
+        falls back to the book's mid -- labelled BOOK -- under which it can
+        pair and hedge and cannot favor a side.
+        """
+        from src import l5_portfolio_controller as PC
+        from src import l5_btc_reference as BR
+        port = PC.from_store(self.store, str(slug))
+        ref: Dict[str, Any] = {"ok": False, "p_up": None,
+                               "reason": "REFERENCE_DISABLED",
+                               "decision_t": float(now)}
+        if BR.enabled():
+            feed = getattr(self, "_btc_reference", None)
+            if feed is None:
+                feed = self._btc_reference = BR.Reference()
+                feed.start()
+            # THE WALL CLOCK, NOT THE TICK'S `now`. `now` is taken when the
+            # tick starts and this stage runs seconds later; the feed's
+            # thread has moved on meanwhile, so stamping the estimate with
+            # `now` makes the newest index second look like it is in the
+            # future. On 2026-11-10 19:22Z that was 5.1 s, every estimate
+            # was refused CLOCK_MISALIGNED and the belief fell back to the
+            # book. The estimate is taken at the instant it is actually
+            # used, and the gap to the tick's clock is recorded beside it.
+            wall = time.time()
+            ref = feed.estimate(str(slug), float(ws), now=wall)
+            ref["tick_now"] = float(now)
+            ref["tick_lag_s"] = wall - float(now)
+        ex = getattr(self, "executor", None)
+        cash = exposure = None
+        if ex is not None:
+            _c = ex.probe_cash_envelope()
+            cash = float(_c) if _c is not None else None
+            _e = getattr(ex.limits, "max_total_exposure_usd", None)
+            exposure = float(_e) if _e is not None else None
+        knobs = PC.production_params(tick)
+        # THE CONTROLLER DOES NOT SIZE ORDERS HERE; the engine does, under
+        # its own cash, exposure and residual gates. So the size it reasons
+        # with is the venue's smallest step: with a notional one-contract
+        # clip the two opening quotes together overran the $0.90 cash
+        # envelope and it wanted only one side of a pair the engine can
+        # perfectly well afford at its real 0.6.
+        _step = getattr(self.transport, "quantity_increment", None)
+        try:
+            _step = float(_step) if _step else 0.01
+        except (TypeError, ValueError):
+            _step = 0.01
+        # the engine's own clip, once it has filled one: the largest
+        # single fill in this market. Unknown (0) before the first fill.
+        try:
+            _clip = float(self.store.max_clip(str(slug)) or 0)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            _clip = 0.0
+        knobs = PC.with_overrides(knobs, base_qty=_step,
+                                  max_qty=max(_step, 1e6),
+                                  clip=max(0.0, _clip))
+        # THE BALANCE PROFILE DOES NOT USE THE MODEL. It quotes both sides on
+        # the book's own mid; the reference is still recorded beside it.
+        use_model = PC.profile_uses_model()
+        dec = PC.decide(
+            port, bid=book.get("bid"), ask=book.get("ask"),
+            p_up=(ref.get("p_up") if (use_model and ref.get("ok"))
+                  else None),
+            t_off=float(now) - float(ws), params=knobs,
+            limits=PC.Limits(cash_usd=cash, exposure_usd=exposure,
+                             max_orders=int(max_live_orders())),
+            # the MODEL's probability, for favorite accumulation only: it
+            # is used whatever belief the profile quotes pairs on
+            p_model=(ref.get("p_up") if ref.get("ok") else None))
+        # the belief a withdrawal may act on: the model's when this profile
+        # uses one and it is usable, else the same book belief `decide` used
+        if use_model:
+            p_act = ref.get("p_up") if ref.get("ok") else None
+        else:
+            p_act = (dec.get("belief") or {}).get("p_up")
+        return {"port": port, "dec": dec, "ref": ref, "knobs": knobs,
+                "p_act": p_act, "profile": PC.profile(),
+                "p_model": (ref.get("p_up") if ref.get("ok") else None),
+                "t_off": float(now) - float(ws)}
+
+    def portfolio_steer_for_open(self, slug: Any, ws: float,
+                                 book: Mapping[str, Any], tick: Any,
+                                 now: float) -> Optional[Dict[str, Any]]:
+        """The steer for ONE timer-path opening, or None when not steering.
+
+        None means L5_PORTFOLIO_CONTROLLER is not STEER and the opening
+        proceeds exactly as it always has. In STEER a steer is ALWAYS
+        returned: if the ledger, the book or the controller cannot be read
+        it is a steer that wants nothing, with the reason, so an unreadable
+        portfolio stops the opening instead of waving it through.
+        """
+        try:
+            from src import l5_portfolio_controller as PC
+            from src import l5_two_sided_probe as TSP
+            if PC.mode() != PC.STEER:
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_steer_error:%s" % type(exc).__name__] += 1
+            return None
+        try:
+            view = self._portfolio_view(slug, ws, book, tick, now)
+            st = PC.steer(view["dec"],
+                          approved_depth_ticks=TSP.depth_ticks())
+            st["flat_and_empty"] = (
+                abs(view["port"]["unmatched"]) < 1e-9
+                and not view["port"]["orders"])
+            st["reference"] = {k: view["ref"].get(k) for k in (
+                "ok", "reason", "p_up", "index_age_s", "seconds_left",
+                "distance", "decision_t", "bucket_t")}
+            self.stats["portfolio_steer:%s" % (
+                "WANTED" if st["any_wanted"] else "NOTHING_WANTED")] += 1
+            return st
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_steer_error:%s" % type(exc).__name__] += 1
+            return {"sides": {}, "extra_depth_ticks": 0, "any_wanted": False,
+                    "unavailable": type(exc).__name__}
+
+    def maybe_portfolio_withdraw(self, now: float) -> Optional[Dict[str, Any]]:
+        """Withdraw a resting OPENING order the controller would no longer
+        pay for. STEER only; a cancellation, never a submission.
+
+        WHY. A maker bid is filled when the market moves through it. The
+        steer on the opening path decides whether a quote goes up; this is
+        what takes it down again when the reference moves against it --
+        without it the quote simply waits out its time-to-live and is
+        filled by exactly the move it should have avoided.
+
+        HOW, and it is all existing machinery. The order is cancelled by
+        its exact id through `LX.deadman(only=[...])`: by venue id, proved
+        by re-read, any fill found while cancelling booked with its cost
+        basis, and an ambiguous outcome marks the ledger uncertain so
+        nothing new is submitted until reconciliation agrees.
+
+        WHAT IT WILL NOT DO. It never names an order that reduces a held
+        residual, it never runs outside STEER, and a failure anywhere is a
+        counter and no cancellation.
+        """
+        try:
+            from src import l5_portfolio_controller as PC
+            if PC.mode() != PC.STEER:
+                return None
+            t = self.transport
+            slug = getattr(t, "market_slug", None) if t is not None else None
+            if not slug:
+                return None
+            mine = [c for c, o in (self.store.live_orders() or {}).items()
+                    if str((o or {}).get("market")) == str(slug)]
+            if not mine:
+                return None
+            ws = AB.slug_start(slug)
+            if ws is None:
+                return None
+            book = self.book.snapshot(slug) if self.book is not None else None
+            if not isinstance(book, Mapping) or not book:
+                self.stats["portfolio_withdraw:NO_AUTHENTICATED_BOOK"] += 1
+                return None
+            view = self._portfolio_view(
+                slug, float(ws), book, getattr(t, "tick_size", None), now)
+            ref = view["ref"]
+            # only a MODEL belief can say a quote is rich; with none, every
+            # opening order is withdrawn (`withdrawals` names them all).
+            named = PC.withdrawals(view["port"], p_up=view["p_act"],
+                                   params=view["knobs"],
+                                   t_off=view["t_off"],
+                                   p_model=view["p_model"])
+            ids = [str(w["id"]) for w in named if str(w["id"]) in mine]
+            if not ids:
+                return None
+            res = LX.deadman(self.store, t, reason="portfolio_steer_withdraw",
+                             only=ids)
+            out = {"market": str(slug), "t_off": float(now) - float(ws),
+                   "withdrawn": named, "result": res,
+                   "reference": {k: ref.get(k) for k in (
+                       "ok", "reason", "p_up", "index_age_s", "seconds_left",
+                       "distance", "decision_t", "bucket_t")},
+                   "labels": ("a CANCELLATION of an opening order by exact "
+                              "id, with the venue's own re-read as proof. "
+                              "Not a submission; a hedge is never named.")}
+            emit("L5_PORTFOLIO_WITHDRAW", out)
+            self.stats["portfolio_withdraw:CANCELLED"] += len(ids)
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_withdraw_error:%s"
+                       % type(exc).__name__] += 1
+            return None
+
+    def maybe_portfolio_decision(self, now: float) -> Optional[Dict[str, Any]]:
+        """What the portfolio controller would quote now. RECORDED, NOT ACTED ON.
+
+        One controller looks at the whole window -- every contract held on
+        each side at its exact cost, the pairs that makes, what is
+        unmatched, every maker order still resting -- and says what should
+        be quoted on each side, at what price and size, and what each quote
+        would do to the portfolio's settlement. This stage reads the SAME
+        ledger and the SAME authenticated book the executor uses, so the
+        record is about the real inventory, not a model of it.
+
+        IT PLACES AND CANCELS NOTHING. It calls no executor method that can
+        submit, it writes nothing to the ledger, and its output is a log
+        line. It records in SHADOW and in STEER; the steering itself
+        happens on the opening path, not here.
+
+        IT CANNOT DISTURB THE TICK. Every failure is swallowed into a
+        counter: an unreadable ledger or book yields no record.
+
+        THE RECORD CARRIES ITS OWN CLOCKS: when the decision was taken,
+        which index second it used, how old that second was and how long
+        the fetch took -- or the reason there was no usable reference.
+        """
+        try:
+            # INSIDE the guard: a module missing from the image must cost a
+            # counter, never a tick.
+            from src import l5_portfolio_controller as PC
+            if PC.mode() == PC.OFF:
+                return None
+            t = self.transport
+            slug = getattr(t, "market_slug", None) if t is not None else None
+            if not slug:
+                return None
+            ws = AB.slug_start(slug)
+            if ws is None:
+                return None
+            last = getattr(self, "_portfolio_decision_t", None)
+            if last is not None and \
+                    float(now) - float(last) < self.PORTFOLIO_DECISION_EVERY_S:
+                return None
+            self._portfolio_decision_t = float(now)
+            book = self.book.snapshot(slug) if self.book is not None else None
+            if not isinstance(book, Mapping) or not book:
+                self.stats["portfolio_decision:NO_AUTHENTICATED_BOOK"] += 1
+                return None
+            view = self._portfolio_view(
+                slug, float(ws), book, getattr(t, "tick_size", None), now)
+            port, dec, ref = view["port"], view["dec"], view["ref"]
+            self._note_cycle_peaks(str(slug), port)
+            doc = {
+                "market": str(slug), "window_start": float(ws),
+                "t_off": float(now) - float(ws),
+                "mode": PC.mode(), "profile": view["profile"],
+                "book": {"bid": str(book.get("bid")),
+                         "ask": str(book.get("ask")),
+                         "stream_age_s": str(book.get("stream_age_s"))},
+                "belief": dec.get("belief"),
+                "reference": ref,
+                "portfolio": {k: port[k] for k in (
+                    "up_qty", "dn_qty", "up_cost", "dn_cost", "matched_pairs",
+                    "pair_cost", "locked_pair_pnl", "unmatched",
+                    "unmatched_cost", "settles_if_up", "settles_if_down",
+                    "worst_case", "worst_case_with_resting",
+                    "committed_usd")},
+                "resting": port["orders"],
+                "expected_settlement": dec.get("expected_settlement"),
+                "value": dec.get("value"),
+                "quotes": dec["quotes"], "skipped": dec["skipped"],
+                "favorite": {"enabled": bool(view["knobs"].fav_enabled),
+                             "declined": dec.get("favorite_declined")},
+                "actions": PC.order_actions(dec["quotes"], port["orders"],
+                                            params=view["knobs"]),
+                "labels": ("DECISION RECORD ONLY -- this stage placed and "
+                           "cancelled nothing; not a fill, not realized. "
+                           "belief.source says whether the probability is "
+                           "the venue index MODEL or the BOOK's own mid."),
+            }
+            emit("L5_PORTFOLIO_DECISION", doc)
+            self.stats["portfolio_decision:RECORDED"] += 1
+            return doc
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["portfolio_decision_error:%s"
+                       % type(exc).__name__] += 1
+            return None
+
     def maybe_controller_open(self, now: float) -> Optional[Dict[str, Any]]:
         """OUR OWN maker opening, on the timer, with no L5 action at all.
 
@@ -7829,11 +8749,54 @@ class Runner:
         # (OPEN 3/4) and why it produced three fills. With the fidelity mode
         # off the ceiling is 1 and `resting >= 1` IS `if resting:`.
         # Aliased FID, not FM: `FM` is already l5_maker_fill_model here.
+        _pair_complement = False
         if resting >= int(FID.ceiling("concurrent_opening_orders")):
-            self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
-            self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
-                                 {"still_fillable_orders": int(resting)})
-            return None
+            # THE COMPLEMENT OF A HALF-PLACED PAIR IS NOT A NEW OPENING.
+            #
+            # 2026-11-10 0200z, venue-confirmed. An L5 action placed the DOWN
+            # leg of a priced pair at 02:00:06 through `handle(row)`, which
+            # places ONE leg per call. The complement was this method's to
+            # place, and on the next three ticks (02:00:06.8, 09.4, 12.9) it
+            # returned here with ORDER_ALREADY_RESTING -- refusing the second
+            # leg BECAUSE the first leg was resting. DOWN filled alone at
+            # 02:00:13 and UP was not posted until 02:00:18. The two legs of
+            # the pair never rested together, and the pass loop below, which
+            # exists to place both, was never reached.
+            #
+            # THE EXECUTOR ALREADY DECIDES THIS, with evidence:
+            # `TS.second_leg_slot_refusal` grants the second maker slot only
+            # to the OPPOSITE side of the SAME round in the SAME market as
+            # the one order live. This gate asks the same function the same
+            # question instead of answering a coarser one. It can let the
+            # tick REACH the executor; it places nothing, and every gate in
+            # `handle` -- the pair precheck, the claim, MAX_LIVE_ORDERS, the
+            # cash and exposure overlays, the residual cap -- still runs.
+            #
+            # OFF UNLESS THE OWNER SET THE SECOND SLOT. With
+            # L5_TS_TWO_ORDER_PAIR unset the refusal is
+            # TWO_ORDER_PAIR_DISABLED and this is the lockout it always was.
+            _pair_why = self.pair_complement_slot_refusal(slug, resting)
+            # ...AND NEITHER IS THE NEXT LEVEL OF A LADDER. With
+            # L5_TS_CONCURRENT_ROUNDS above one, a new pair may be opened
+            # beside the resting ones when a price level is free and the
+            # owner's order limit has room for both legs. Asked only when
+            # the tick is not a complement, and -- like the complement slot
+            # -- it lets the tick reach the executor and decides nothing
+            # else: `probe_reopen_decision` repeats the test and prices the
+            # round. Off by default, which is the lockout as it was.
+            _lane_why = (None if _pair_why is None
+                         else self.concurrent_round_slot_refusal(slug))
+            if _pair_why is not None and _lane_why is not None:
+                self.stats["controller_open:ORDER_ALREADY_RESTING"] += 1
+                self._note_open_skip("ORDER_ALREADY_RESTING", slug, ws,
+                                     {"still_fillable_orders": int(resting),
+                                      "pair_complement_slot": str(_pair_why),
+                                      "concurrent_round_slot": str(_lane_why)})
+                return None
+            _pair_complement = _pair_why is None
+            self.stats["controller_open:%s" % (
+                "PAIR_COMPLEMENT_SLOT" if _pair_complement
+                else "CONCURRENT_ROUND_SLOT")] += 1
         # ============ AND, WHEN REPLENISHMENT IS ON, A RE-OPEN NEEDS AN
         # EVENT BEHIND IT.
         #
@@ -7862,7 +8825,10 @@ class Runner:
         # `L5_DUAL_REPLENISH` at their exact tokens; production holds
         # `L5_DUAL_REPLENISH=OFF`, so the ledger is not consulted at all and
         # this method behaves exactly as it does today.
-        if DQ.replenish_enabled(ws):
+        # A PAIR'S COMPLEMENT IS NOT A RE-OPEN, so it is not charged a
+        # replenishment credit to be ALLOWED -- exactly as pass two of the
+        # loop below is not. The attempt is still spent afterwards.
+        if DQ.replenish_enabled(ws) and not _pair_complement:
             _led = self.replenish()
             if not _led.may_open(ws):
                 # ONE LITERAL REASON, with the specific cause in the detail.
@@ -7977,6 +8943,22 @@ class Runner:
                        "that is actually placed, and every existing gate, "
                        "claim and limit applies unchanged."),
         })
+        # THE PORTFOLIO CONTROLLER MAY STEER THIS OPENING. None unless the
+        # owner set L5_PORTFOLIO_CONTROLLER=STEER, and then nothing below
+        # changes. A steer that wants no side opened ends the tick here,
+        # by name, before the executor is asked for anything.
+        _steer = self.portfolio_steer_for_open(slug, float(ws), book, tick,
+                                               now)
+        # ...but ONLY while flat with nothing resting. With inventory or a
+        # resting leg the call goes through, because the next leg may be a
+        # hedge and a hedge is never the steer's to stop; the executor
+        # refuses any non-reducing leg the steer does not want.
+        if _steer is not None and not _steer.get("any_wanted") \
+                and _steer.get("flat_and_empty") is not False:
+            self.stats["controller_open:PORTFOLIO_NOTHING_WANTED"] += 1
+            self._note_open_skip("PORTFOLIO_NOTHING_WANTED", slug, ws,
+                                 {"portfolio_steer": _steer})
+            return None
         self.stats["controller_open:ENTERED"] += 1
 
         # ============ BOTH LEGS IN ONE PASS, AND NOTHING ELSE CHANGES.
@@ -8036,17 +9018,27 @@ class Runner:
                     self.stats["controller_open:PASS2_LEDGER_UNREADABLE:%s"
                                % type(exc).__name__] += 1
                     break
-            rec = self.executor.handle(
-                None, book, market=str(slug), window=str(ws),
-                controller={"provenance": LX.CONTROLLER_GENERATED,
-                            "decision": dec,
-                            # NO REPLAY CLASSIFICATION EXISTS FOR AN ORDER
-                            # THAT HAS NOT BEEN PLACED. The L5 path is handed
-                            # `{}` here too and lands on the same
-                            # T_UNEVALUABLE, which MAKER_TREATMENT answers;
-                            # passing a class we do not have would be
-                            # inventing evidence.
-                            "maker_class": None})
+            # the steer exists for THIS call and no other: set here,
+            # cleared in the `finally`, so no completion, requote or L5
+            # action can ever see it.
+            if _steer is not None:
+                self.executor.portfolio_steer = _steer
+            try:
+                rec = self.executor.handle(
+                    None, book, market=str(slug), window=str(ws),
+                    controller={"provenance": LX.CONTROLLER_GENERATED,
+                                "decision": dec,
+                                # NO REPLAY CLASSIFICATION EXISTS FOR AN
+                                # ORDER THAT HAS NOT BEEN PLACED. The L5
+                                # path is handed `{}` here too and lands on
+                                # the same T_UNEVALUABLE, which
+                                # MAKER_TREATMENT answers; passing a class
+                                # we do not have would be inventing
+                                # evidence.
+                                "maker_class": None})
+            finally:
+                if _steer is not None:
+                    self.executor.portfolio_steer = None
             self.stats["controller_open:%s%s" % (
                 ("pass2:" if _p else ""),
                 str((rec or {}).get("refused_reason") or "NOT_REFUSED"))] += 1
@@ -9202,6 +10194,39 @@ class Runner:
         return controller_preserves(self, slug, now)
 
 
+    def _requote_ladder_pick(self, slug: Any,
+                             live: Mapping[str, Any]) -> Optional[str]:
+        """Which resting order a requote may move when several rest.
+
+        The client order id of the REDUCING-side order with the highest own
+        price -- the one nearest its touch -- or None, which declines. None
+        when the ladder is off, when nothing is held unmatched, when no
+        reducing-side order rests, or when anything needed to tell cannot be
+        read. An order the venue cannot name is never picked.
+        """
+        from src import l5_two_sided_probe as TSP
+        try:
+            if TSP.concurrent_rounds() <= 1:
+                return None
+            realised = D(str(self.store.residual(str(slug))))
+            if realised == 0:
+                return None
+            reducing = "DOWN" if realised > 0 else "UP"
+            best = None
+            for coid, row in live.items():
+                if str((row or {}).get("side") or "") != reducing:
+                    continue
+                if not str(row.get("venue_order_id") or "").strip():
+                    continue
+                px = D(str(row.get("price")))
+                if best is None or px > best[0]:
+                    best = (px, str(coid))
+            return None if best is None else best[1]
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
     def maybe_completion_requote(self, now: float
                                  ) -> Optional[Dict[str, Any]]:
         """Cancel a completion that has drifted off the touch, so the
@@ -9255,10 +10280,22 @@ class Runner:
                 # the same blindness as `ingest:FEED_FAILED` carrying no
                 # status. The two flags are safe together and mutually
                 # exclusive per market; this is what makes that visible.
-                self.stats["requote_refused:%s" % (
-                    "NO_RESTING_ORDER" if not live
-                    else "MULTIPLE_RESTING_ORDERS_IN_MARKET")] += 1
-                return None
+                #
+                # WITH A LADDER RESTING THERE IS NO GUESS TO MAKE. The order
+                # to move is the one that reduces what is held and sits
+                # nearest its touch: it is the next to fill, so it is the
+                # one whose price decides the pair. Everything else stays
+                # where it is. Off unless L5_TS_CONCURRENT_ROUNDS is above
+                # one, so the two-order case declines exactly as before.
+                _pick = (self._requote_ladder_pick(slug, live)
+                         if live else None)
+                if _pick is None:
+                    self.stats["requote_refused:%s" % (
+                        "NO_RESTING_ORDER" if not live
+                        else "MULTIPLE_RESTING_ORDERS_IN_MARKET")] += 1
+                    return None
+                live = {_pick: live[_pick]}
+                self.stats["requote_ladder_pick"] += 1
             coid, row = next(iter(live.items()))
             if not str(row.get("venue_order_id") or "").strip():
                 # cannot cancel what the venue cannot name, so do not start
@@ -9342,6 +10379,26 @@ class Runner:
                 _rest_s = None
             if _rest_s is None:
                 self.stats["requote_without_resting_age"] += 1
+            # A QUOTE PLACED AS AN OPENING LEG IS NOT A COMPLETION QUOTE
+            # THAT HAS HAD ITS CHANCE. The minimum rest exists so a
+            # completion placed near the touch is given time to fill before
+            # it is moved again. A quote sent BEFORE this market went
+            # unmatched was priced as the other half of an opening, two or
+            # more ticks behind; on 0400z three of them sat 6 to 25 ticks
+            # behind for 120 s while a 0.977 pair came and went. With the
+            # recovery switch such a quote is re-priced at once. Its
+            # replacement is sent after the fill, so it serves the minimum
+            # rest like any other completion quote.
+            try:
+                if _rest_s is not None and TSP.reprice_missing_leg_on_fill():
+                    _since = self.store.stranded_since(str(slug))
+                    if _since is not None and \
+                            (float(now) - _rest_s) < float(_since):
+                        _rest_s = None
+                        self.stats["requote_opening_leg_repriced_on_fill"] += 1
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
             res = TSP.completion_requote(
                 resting_rest_s=_rest_s,
                 side=side, resting_own_px=row.get("price"),
@@ -9748,6 +10805,19 @@ class Runner:
         # remains. Inert unless L5_COMPLETION_REQUOTE is set.
         self.maybe_completion_requote(now)
         _sc.mark("maybe_completion_requote")
+        # THE PORTFOLIO CONTROLLER, AHEAD OF THE DIAGNOSTICS BELOW. The
+        # deferred diagnostic has a five-second budget and uses it: on
+        # 2026-11-10 19:2xZ these two stages sat behind it and every
+        # decision was taken 5.4 s after the tick's own clock. A withdrawal
+        # that waits five seconds behind a read-only job has not withdrawn
+        # anything. First the record (SHADOW and STEER; places and cancels
+        # nothing), then, in STEER only, taking down an opening quote the
+        # controller would no longer pay for -- a cancellation by exact id
+        # through the existing deadman.
+        self.maybe_portfolio_decision(now)
+        _sc.mark("maybe_portfolio_decision")
+        self.maybe_portfolio_withdraw(now)
+        _sc.mark("maybe_portfolio_withdraw")
         # THE DEFERRED READ-ONLY DIAGNOSTICS, and their position in this list
         # is the fix. They used to run inside `roll`, which is the FIRST call
         # in the tick, so their cost came out of the window's opening -- 93
@@ -10611,6 +11681,78 @@ COST_BASIS_RESTATEMENTS = [
 ]
 
 
+#: RESTATEMENTS THAT WAIT FOR THE OWNER. Deploying this file applies none of
+#: them. One is applied only when `L5_COST_RESTATEMENT_APPROVED` names its
+#: id exactly (comma-separated for more than one), and then through the same
+#: verb and the same guards as the list above: the stored row must match
+#: `expect` field for field, the cost is re-derived from the named venue
+#: fill, the original row is preserved verbatim in `cost_superseded`, and it
+#: is applied once.
+COST_RESTATEMENT_APPROVAL_ENV = "L5_COST_RESTATEMENT_APPROVED"
+COST_BASIS_RESTATEMENTS_AWAITING_OWNER = [
+    {
+        "id": "0415z-position-before-fill-2026-11-11",
+        "market": "cpc-btc-updown-15m-2026-11-11-0415z",
+        "side": "UP",
+        # the stored row as L5_LIVE_SETTLED logged it at 04:30:32.690
+        "expect": {
+            "yes_value": "0.0000",
+            "up_qty": "0.4400",
+            "dn_qty": "0",
+            "cost_total": "0.4400",
+            "redemption_total": "0E-8",
+            "settlement_pnl": "-0.44000000",
+            "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND",
+        },
+        "measured_cost": D("0.1408"),
+        "measured_fees": D("0.0000"),
+        "evidence": {
+            "source": "/v1/order via the live transport and "
+                      "/v1/account/balances, both recorded in this service's "
+                      "own deploy log (deployment ddfa5c0d)",
+            # the venue ORDER id: one order, one execution of its whole
+            # quantity (cumQuantity 0.44 of 0.44), so it identifies the fill
+            "per_fill": [{"trade_id": "DN6KVVR0144P", "qty": "0.44",
+                          "price": "0.3200", "fee": "0.0000"}],
+            "activity_walk": {"complete": True, "pages": 0,
+                              "ended": "SINGLE_ORDER_READ",
+                              "basis": "one full execution of one order"},
+            "detail": ("DN6KVVR0144P ORDER_STATE_FILLED avg_px 0.3200 "
+                       "cum_qty 0.44 commission 0.0000, side UP. 0.44 "
+                       "shares at 0.32 cost 0.1408; the settlement line "
+                       "itself reports committed_released 0.140800"),
+            "cash": ("available_cash_usd 339.89295 at 04:14:01, 340.93215 "
+                     "at 04:16:05 after window 0400z paid 1.18 and this "
+                     "fill took 0.1408 (339.89295 + 1.18 - 0.1408), and "
+                     "340.93215 unchanged at 04:32:11 after settlement"),
+            "what_went_wrong": (
+                "the venue's position showed the 0.44 at 04:15:20.831, "
+                "before the order read that prices it. It was adopted at "
+                "the $1/share bound; PENDING_TERMINAL_RESOLVED at "
+                "04:15:22.507 then added the fill on top (0.88 against the "
+                "venue's 0.44), the reconciliation at 04:15:33.527 adopted "
+                "again, and settlement priced the bound"),
+            "before": ("retired_markets cost_total 0.4400, settlement_pnl "
+                       "-0.44000000; all-time realized -15.82160000"),
+            "after": ("cost_total 0.1408, settlement_pnl -0.14080000; "
+                      "all-time realized -15.52240000. The original row is "
+                      "preserved verbatim in cost_superseded; every limit "
+                      "is untouched"),
+            "fix": ("fills_in_flight and absorb_into_adopted, shipped with "
+                    "this entry: a position our own unbooked order explains "
+                    "is not adopted, and a fill the adopted quantity "
+                    "already contains replaces the bound"),
+        },
+    },
+]
+
+
+def approved_cost_restatements() -> List[str]:
+    """Ids the owner has approved, exactly as written. Unset is none."""
+    raw = os.getenv(COST_RESTATEMENT_APPROVAL_ENV) or ""
+    return [x for x in (p.strip() for p in raw.split(",")) if x]
+
+
 def apply_cost_basis_restatements(store) -> Optional[Dict[str, Any]]:
     """Replace a retired market's $1/share placeholder with a measured cost.
 
@@ -10620,7 +11762,19 @@ def apply_cost_basis_restatements(store) -> Optional[Dict[str, Any]]:
     guard, so a restart cannot apply one twice.
     """
     applied: List[Dict[str, Any]] = []
-    for c in COST_BASIS_RESTATEMENTS:
+    approved = approved_cost_restatements()
+    todo = list(COST_BASIS_RESTATEMENTS)
+    for c in COST_BASIS_RESTATEMENTS_AWAITING_OWNER:
+        if c["id"] in approved:
+            todo.append(c)
+        else:
+            emit("L5_LIVE_COST_RESTATE_AWAITING_OWNER", {
+                "id": c["id"], "market": c["market"], "side": c["side"],
+                "measured_cost": str(c["measured_cost"]),
+                "approve_with": "%s=%s" % (COST_RESTATEMENT_APPROVAL_ENV,
+                                           c["id"]),
+                "labels": "nothing was written"})
+    for c in todo:
         before = store.realized_lines()
         out = store.correct_cost_basis(
             c["market"], c["side"],
@@ -10949,6 +12103,41 @@ def shadow_only() -> bool:
     return str(os.getenv(SHADOW_ONLY_ENV, "1")).strip() != "0"
 
 
+#: the LOCAL operator halt. Any non-empty value halts: it is a deadman, so
+#: the permissive reading is the empty one and there is no "false" spelling.
+LIVE_HALT_ENV = "L5_LIVE_HALT"
+
+
+def operator_halted() -> bool:
+    """True while the local operator halt is engaged. ONE EXPRESSION.
+
+    WHY THIS IS A MODULE FUNCTION AND NOT JUST A METHOD, and it cost an
+    owner-approved live window. `Runner.try_arm` opens with
+
+        if t is None or t.armed or self.halted(): return
+
+    so the operator halt is the FIRST thing that stops arming, before any
+    numbered step of `authorize_arming` is reached. But
+    `l5_live_authorization.authorization_preflight` -- the artifact an
+    operator reads to decide whether a window is ready -- did not evaluate
+    it at all. On 2026-11-09 the 08:30Z window therefore reported
+    `authorization_preflight.ok true` with `fail []`, an approved campaign,
+    the shadow lock cleared and the owner token valid, while every tick
+    refused `SAFETY_OVERLAY:OPERATOR_HALT`. 162 refusals, zero orders, and
+    an approved window spent on a prerequisite nothing displayed.
+
+    Nothing was lost but the window -- `windows_spent` stayed 0, exposure
+    stayed $0 and the engine failed CLOSED, which is the correct direction.
+    The defect is observability: a readiness verdict that cannot see a
+    blocker is worse than no verdict, because it is believed.
+
+    So both callers now read THIS function. A preflight that duplicated the
+    `os.getenv` would be a second opinion, and a second opinion is what the
+    incident was.
+    """
+    return bool(os.getenv(LIVE_HALT_ENV, "").strip())
+
+
 #: completion repricing. DEFAULT OFF, so the code can be deployed and
 #: reviewed in place before it is ever allowed to cancel an order. It adds a
 #: cancellation, never a capability: the replacement goes through the same
@@ -10963,6 +12152,9 @@ def completion_requote_enabled() -> bool:
 
 #: names the guard service's READ-ONLY halt endpoint. Unset = inert.
 HALT_URL_ENV = "L5_HALT_URL"
+#: the BTC5m service's read-only fills feed. Unset: 5-minute positions this
+#: ledger adopts stay at the $1 bound through settlement, as before.
+BTC5M_FILLS_URL_ENV = "L5_BTC5M_FILLS_URL"
 #: "0" disables the validation gates; anything else (including unset) is ON
 GATES_ENV = "L5_VALIDATION_GATES"
 
@@ -11150,7 +12342,13 @@ def validation_gates():
             # does: it cannot raise, and its error case is already fail-closed.
             campaign_baseline=CBL.CampaignBaseline(),
             max_campaign_additional_loss_usd=CBL.limit_from_env(),
-            cash_policy=VG.NO_RECYCLING)
+            # NO_RECYCLING unless the owner's variable says, exactly,
+            # RECYCLE_ON_COMPLETE (2026-11-11): the venue's own balance
+            # returns a completed pair's cash at completion, not at
+            # settlement -- see FaithfulExecutor.matched_pair_cost.
+            cash_policy=(VG.RECYCLE_ON_COMPLETE
+                         if (os.getenv("L5_CASH_POLICY") or "").strip()
+                         == VG.RECYCLE_ON_COMPLETE else VG.NO_RECYCLING))
     except Exception as exc:                                   # noqa: BLE001
         # ============ A GATE WE CANNOT BUILD REFUSES. IT DOES NOT VANISH.
         #

@@ -191,3 +191,46 @@ against residual **−$1.4333** over 4 confirmed windows. This replay, the reshu
 L5's own 72.0% residual lose-rate all say the same thing: a directional
 BTC15m residual is adversely selected for everyone who holds one. The indicated
 direction is **fewer unmatched contracts**, not more directional ones.
+
+## Addendum 2026-11-10 — late-window 10-point bands (60c/70c/80c/90c)
+
+Separate offline experiment, owner-requested. Reproduce with
+`PYTHONPATH=. python3 analysis/l5/favorite_band_experiment.py`; tests in
+`tests/test_l5_favorite_band_experiment.py` (14 cases, no network, no corpus).
+Nothing under `src/` or the executor image references it.
+
+**Test applied.** Window-clustered edge on L5's actual BUY fills, using the
+**lower 95% bound** (not the mean), net of fee (maker 0.0000, taker 0.01), and
+required positive in **both** chronological halves (315 IS / 211 OOS windows).
+
+| band | timing | windows | mean | lower | IS lower | OOS lower | maker |
+|---|---|---|---|---|---|---|---|
+| 60c | all | 447 | +0.0617 | +0.0294 | +0.0061 | +0.0267 | SUPPORTED |
+| 60c | ≥600s | 177 | +0.0445 | −0.0139 | −0.0794 | +0.0206 | NOT SUPPORTED |
+| 60c | ≥720s | 120 | +0.0221 | −0.0530 | −0.1183 | −0.0491 | NOT SUPPORTED |
+| 70c | all | 430 | +0.0545 | +0.0227 | −0.0112 | +0.0310 | NOT SUPPORTED |
+| 70c | ≥600s | 210 | +0.0524 | +0.0027 | −0.0615 | +0.0290 | NOT SUPPORTED |
+| 70c | ≥720s | 127 | +0.0094 | −0.0613 | −0.1231 | −0.0622 | NOT SUPPORTED |
+| 80c | all | 410 | +0.0279 | −0.0016 | −0.0333 | +0.0054 | NOT SUPPORTED |
+| 80c | ≥600s | 258 | +0.0215 | −0.0174 | −0.0863 | +0.0088 | NOT SUPPORTED |
+| 80c | ≥720s | 155 | −0.0025 | −0.0571 | −0.1162 | −0.0419 | NOT SUPPORTED |
+| 90c | all | 403 | +0.0202 | +0.0043 | −0.0089 | +0.0044 | NOT SUPPORTED |
+| 90c | ≥600s | 351 | +0.0180 | +0.0018 | −0.0134 | +0.0021 | NOT SUPPORTED |
+| 90c | ≥720s | 266 | +0.0239 | +0.0073 | −0.0016 | +0.0022 | NOT SUPPORTED |
+
+Taker is NOT SUPPORTED in all twelve cells.
+
+**Reading.** No **late-window** cell passes in any band. The edge that exists
+is in the 60c band over the *whole* window and it decays the later the fill:
+at ≥720s the mean is ≤ +0.024 in every band and the lower bound is negative
+in three of four. "Late-window favorite accumulation" is the part of the
+favorite edge the data supports least.
+
+**Our own money disagrees with even the supported cell.** Venue-settled
+stranded legs: 0.60–0.80 lost −0.6170/unit on 4 legs; ≥0.80 lost −0.7125/unit
+on 2 legs. Underpowered (376 legs needed for 2σ, 2 held), so it is a veto on
+promotion, not a measurement of the edge.
+
+**Verdict: NO PROMOTION.** Not enabled, no exposure change. It would need
+PMUS fill-conditioned outcomes at these prices, an authorized directional
+action class, and separate owner approval.

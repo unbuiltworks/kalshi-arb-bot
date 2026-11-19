@@ -165,7 +165,11 @@ def test_the_allowed_series_is_a_code_constant_not_a_document_field(clock,
     out = decide(doc_for(start, clock, series="anything-i-like-"), slug,
                  clock, monkeypatch)
     assert out["ok"] is False, out
-    assert CA.ALLOWED_SERIES == (SERIES,)
+    # still a code constant. The 5-minute series joined it by owner decision
+    # on 2026-11-11; a document still cannot name a series the code lacks.
+    assert CA.ALLOWED_SERIES == (
+        SERIES, "cpc-btc-updown-5m-", "cpceth-eth-updown-5m-",
+        "cpcsol-sol-updown-5m-", "cpcxrp-xrp-updown-5m-")
 
 
 # ======================================================= fail closed, always
