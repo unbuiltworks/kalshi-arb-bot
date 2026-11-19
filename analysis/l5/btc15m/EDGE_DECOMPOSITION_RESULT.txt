@@ -1,0 +1,57 @@
+EDGE DECOMPOSITION -- competitor vs our own venue-confirmed executions
+Competitor: data/l5/competitor_0x8dxd_full/activity.jsonl, wallet 0x8dxd only
+  (trades.jsonl is single-wallet: 150,500/150,500 rows are 0x8dxd).
+Ours: analysis/l5/btc15m_live_ledger.json, VENUE_CONFIRMED_LIVE, 106 windows.
+Regenerate: grep the btc-updown-{5m,15m}- slugs out of activity.jsonl, then
+  python3 analysis/l5/btc15m/edge_decomposition.py <rows.jsonl>
+
+==============================================================================
+0x8dxd BTC15m -- 1009 settled windows
+==============================================================================
+  total spent      $    2623886.00
+  realized net     $     +25931.69
+  rebates credited $         +0.00
+
+  ACQUISITION  gain per matched pair   +0.0674  [+0.0592, +0.0757]
+               implied pair cost       0.9326  (median 0.9189)
+  INVENTORY    P&L per residual unit   -0.1371  [-0.1740, -0.0986]
+  PAIRING      matched:residual units  2.2687  [2.0775, 2.4765]
+               matched units    2383093.3 | residual units    1050411.7
+               ratio REQUIRED to break even 2.0336 -> CLEARS IT
+  windows net positive: 495 of 1009 (49.1%)
+
+==============================================================================
+0x8dxd BTC5m -- 3543 settled windows
+==============================================================================
+  total spent      $    3966920.55
+  realized net     $    +185754.41
+  rebates credited $         +0.00
+
+  ACQUISITION  gain per matched pair   +0.0527  [+0.0472, +0.0583]
+               implied pair cost       0.9473  (median 0.9508)
+  INVENTORY    P&L per residual unit   +0.0045  [-0.0129, +0.0222]
+  PAIRING      matched:residual units  1.2179  [1.1618, 1.2779]
+               matched units    2718940.0 | residual units    2232573.2
+  windows net positive: 2479 of 3543 (70.0%)
+
+==============================================================================
+OURS BTC15m -- 106 settled windows, VENUE_CONFIRMED_LIVE
+==============================================================================
+  ACQUISITION  gain per matched pair   +0.0884
+  INVENTORY    P&L per residual unit   -0.4567
+  PAIRING      matched:residual units  1.0098
+               matched units        146.4 | residual units        145.0
+               ratio REQUIRED to break even 5.1637 -> SHORT OF IT
+  realized net     $        -53.27  (placeholder-bounded true range {'worst': '-26.56740000', 'best': '-0.32740000'})
+
+==============================================================================
+SIDE BY SIDE -- where the difference actually is
+==============================================================================
+                            gain/pair   P&L/residual  matched:resid
+0x8dxd BTC15m                 +0.0674        -0.1371         2.2687
+0x8dxd BTC5m                  +0.0527        +0.0045         1.2179
+OURS BTC15m                   +0.0884        -0.4567         1.0098
+
+Competitor figures are OBSERVED fills + REDEEM cashflow. Ours are
+VENUE_CONFIRMED settled rows. Neither is a model. Rebates are
+reported separately and are never netted into a per-unit price.

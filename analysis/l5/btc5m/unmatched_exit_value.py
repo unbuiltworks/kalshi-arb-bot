@@ -30,6 +30,12 @@ one side fills alone:
               not an exit.
   CUT_STOP(x) carry it until its mark is x below what we paid, then sell at
               the prevailing bid, same taker charge. Settles if never hit.
+  CUT_AFTER(T) carry the unmatched leg until T seconds into the window, THEN
+              sell it at the prevailing bid as a taker. This is the policy
+              the per-unit decomposition points at: CUT_NOW destroyed every
+              pair because it fired the instant a leg was unmatched, but
+              pairing happens EARLY and settlement loss is taken LATE, so a
+              time-gated exit keeps the pairs and drops the settlement loss.
   COMPLETE(c) do not sell at all -- rest a MAKER BUY on the other side at
               `c - paid`, so the pair costs c if it fills. This is what the
               controller actually does (`straddle_completion_pair_cost`,
@@ -157,6 +163,8 @@ def simulate(path_, d, policy, stop=None):
         one = "UP" if held["UP"] else ("DOWN" if held["DOWN"] else None)
         if one is None:
             continue
+        if policy == "CUT_AFTER" and r["t"] < stop:
+            continue
         if policy == "COMPLETE":
             #: REPRICE the other side's resting order to whatever completes
             #: the pair at `stop` total, and keep waiting. No sale, so the
@@ -196,13 +204,14 @@ def run(path):
     print("quotes: recorded BTC5M_QUOTE tape; fill rule TRADED_THRU;"
           " exits are TAKER sales at the visible bid")
     print("=" * 76)
-    policies = [("HOLD", None), ("CUT_NOW", None),
-                ("COMPLETE", 0.96)]
+    policies = [("HOLD", None), ("CUT_NOW", None), ("COMPLETE", 0.96),
+                ("CUT_AFTER", 120.0), ("CUT_AFTER", 180.0),
+                ("CUT_AFTER", 240.0), ("CUT_AFTER", 270.0)]
     print("%6s %-13s %6s %5s %5s %5s %10s %10s %10s"
           % ("dist", "policy", "wins", "pair", "cut", "lone",
              "mean P&L", "pair P&L", "resid P&L"))
     best = None
-    for d in (0.00, 0.05, 0.12, 0.20, 0.25, 0.30, 0.35, 0.40):
+    for d in (0.00, 0.08, 0.20, 0.30, 0.40):
         for pol, stop in policies:
             n = pair = cut = lone = 0
             tot = pair_tot = resid_tot = 0.0
