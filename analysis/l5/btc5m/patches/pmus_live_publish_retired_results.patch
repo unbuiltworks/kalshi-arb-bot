@@ -1,0 +1,206 @@
+From 5c2fcea1c9af9e637307094a078a8f1f54834c70 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 17:54:49 +0000
+Subject: [PATCH] l5-pmus-live: publish what each of today's retired markets
+ was booked at
+
+An added key on the account-risk record, summing exactly to the UTC-day
+figure the daily halt reads. Read-only; no gate reads it.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_live_execution.py                     | 41 +++++++++
+ src/l5_pmus_live_runner.py                   | 18 ++++
+ tests/test_l5_retired_results_publication.py | 91 ++++++++++++++++++++
+ 3 files changed, 150 insertions(+)
+ create mode 100644 tests/test_l5_retired_results_publication.py
+
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index 9581dd013..2b4fb869e 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -2620,6 +2620,47 @@ class InventoryStore:
+                 return None
+         return total
+ 
++    def retired_results_current_utc_day(self, *, now: Optional[float] = None
++                                        ) -> Optional[Dict[str, str]]:
++        """What `realized_current_utc_day` is the SUM of, market by market.
++
++        Same rows, same day test, same refusals -- so the values here add up
++        to that figure exactly and are read in the same pass over the same
++        state. None wherever that method returns None.
++
++        WHY IT IS PUBLISHED. A second strategy on this account adds its own
++        settled losses to this ledger's day figure. Being told only WHICH
++        markets were retired is not enough to avoid counting one twice: a
++        row can be retired at a result that is not the market's loss (zero
++        when the account was closed flat; a $1-a-share bound on the NET
++        position, which is zero when the residual side wins). With the
++        amount, the reader can add exactly the shortfall and never less.
++        READ-ONLY.
++        """
++        ts = (dt.datetime.now(dt.timezone.utc) if now is None
++              else dt.datetime.fromtimestamp(float(now), dt.timezone.utc))
++        day = ts.strftime("%Y-%m-%d")
++        try:
++            resid = D(str(self.state.get("realized_unattributed") or 0))
++        except (InvalidOperation, TypeError, ValueError):
++            return None
++        if resid != 0:
++            return None
++        out: Dict[str, str] = {}
++        for mkt, row in (self.state.get("retired_markets") or {}).items():
++            if not isinstance(row, Mapping):
++                return None
++            stamp = str(row.get("t") or "")
++            if not stamp:
++                return None
++            if not stamp.startswith(day):
++                continue
++            try:
++                out[str(mkt)] = str(D(str(row.get("settlement_pnl") or 0)))
++            except (InvalidOperation, TypeError, ValueError):
++                return None
++        return out
++
+     def verified_l5_net_for_gates(self) -> Optional[D]:
+         """Return verified after-fee L5 net, never legacy estimated gross.
+ 
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 5e335d46d..4ccc1daa0 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -6694,6 +6694,11 @@ class Runner:
+                                       else bool(-lifetime >= cum)),
+             "operator_halt": bool(operator_halted()),
+             "retired_markets": retired[-400:],
++            # WHAT EACH OF TODAY'S RETIRED MARKETS CONTRIBUTED to
++            # `utc_day_realized_usd`. Added key only. None when the day
++            # itself is unknown; a reader without it adds everything.
++            "retired_results_utc_day": self._retired_results_line(
++                day.get("utc_day")),
+             # the venue-equity controls a second strategy must also honour.
+             # Added keys only: every figure above is computed as before.
+             **self.equity_risk_lines(),
+@@ -6702,6 +6707,19 @@ class Runner:
+                        "hold a looser copy. Read-only."),
+         }
+ 
++    def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
++        """Today's retired markets with the result each was booked at.
++        Never raises: unreadable is None, which a reader treats as absent."""
++        try:
++            got = self.store.retired_results_current_utc_day()
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            return None
++        if got is None or not utc_day:
++            return None
++        return {"utc_day": str(utc_day), "results": got}
++
+     def day_realized_line(self) -> Dict[str, Any]:
+         """The figure the DAILY loss halt actually reads, published.
+ 
+diff --git a/tests/test_l5_retired_results_publication.py b/tests/test_l5_retired_results_publication.py
+new file mode 100644
+index 000000000..0a5eff34a
+--- /dev/null
++++ b/tests/test_l5_retired_results_publication.py
+@@ -0,0 +1,91 @@
++"""Today's retired markets are published WITH the result each was booked
++at, so another strategy can add exactly what this ledger is missing."""
++import datetime as dt
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++
++NOW = dt.datetime(2026, 11, 20, 17, 8, tzinfo=dt.timezone.utc).timestamp()
++M1 = "cpc-btc-updown-5m-2026-11-20-1420z"
++M2 = "cpc-btc-updown-5m-2026-11-20-1705z"
++OLD = "cpc-btc-updown-15m-2026-11-19-1200z"
++
++
++@pytest.fixture
++def store(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["retired_markets"] = {
++        M1: {"t": "2026-11-20T14:25:49+00:00", "settlement_pnl": "-0.0114"},
++        M2: {"t": "2026-11-20T17:10:47+00:00", "settlement_pnl": "-0.44"},
++        OLD: {"t": "2026-11-19T12:16:00+00:00", "settlement_pnl": "-3"}}
++    return s
++
++
++def test_it_lists_exactly_todays_rows_with_their_amounts(store):
++    got = store.retired_results_current_utc_day(now=NOW)
++    assert got == {M1: "-0.0114", M2: "-0.44"}
++
++
++def test_it_sums_to_the_figure_the_daily_halt_reads(store):
++    got = store.retired_results_current_utc_day(now=NOW)
++    assert sum(D(v) for v in got.values()) \
++        == store.realized_current_utc_day(now=NOW)
++
++
++@pytest.mark.parametrize("break_it", [
++    lambda s: s.state["retired_markets"].__setitem__("x", "not a row"),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "", "settlement_pnl": "1"}),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "2026-11-20T01:00:00+00:00", "settlement_pnl": "?"}),
++    lambda s: s.state.__setitem__("realized_unattributed", "-1"),
++])
++def test_it_is_unknown_exactly_when_the_day_figure_is(store, break_it):
++    break_it(store)
++    assert store.realized_current_utc_day(now=NOW) is None
++    assert store.retired_results_current_utc_day(now=NOW) is None
++
++
++def test_a_restated_row_is_published_at_its_restated_amount(store):
++    store.state["retired_markets"][M2]["settlement_pnl"] = "-0.0151"
++    assert store.retired_results_current_utc_day(now=NOW)[M2] == "-0.0151"
++
++
++def test_reading_changes_nothing(store):
++    before = repr(store.state)
++    store.retired_results_current_utc_day(now=NOW)
++    assert repr(store.state) == before
++
++
++def test_the_risk_record_carries_it_as_an_added_key():
++    src = open(R.__file__, encoding="utf-8").read()
++    i = src.index("def account_risk_line(")
++    body = src[i:src.index("\n    def ", i + 10)]
++    assert '"retired_results_utc_day"' in body
++    #: every earlier key is still there
++    for k in ("utc_day_realized_usd", "daily_halt_usd",
++              "lifetime_realized_usd", "cumulative_loss_ceiling_usd",
++              "operator_halt", '"retired_markets"'):
++        assert k in body, k
++
++
++def test_the_line_never_raises_and_says_none_when_unknown():
++    class S:
++        def retired_results_current_utc_day(self):
++            raise RuntimeError("disk")
++
++    class Rn:
++        _retired_results_line = R.Runner._retired_results_line
++        store = S()
++    assert Rn()._retired_results_line("2026-11-20") is None
++
++    class S2:
++        def retired_results_current_utc_day(self):
++            return {M1: "-0.0114"}
++    Rn.store = S2()
++    assert Rn()._retired_results_line(None) is None
++    assert Rn()._retired_results_line("2026-11-20") == {
++        "utc_day": "2026-11-20", "results": {M1: "-0.0114"}}
+-- 
+2.43.0
+

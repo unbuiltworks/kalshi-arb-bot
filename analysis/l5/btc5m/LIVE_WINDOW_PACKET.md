@@ -731,3 +731,65 @@ Tests: `tests/test_l5_btc5m_one_sided_control.py` (109), five mutations each fai
   can trip early for those seconds.
 
 Suite across BTC5m, straddle, envelope and image files: the same 29 baseline failures, none new.
+
+## Accounting release candidate and one-sided control evaluation (2026-11-20 18:00Z)
+
+State verified: `l5-btc5m-live` deployment `d558ce6d` on `27cbdb32b`, `MONITOR`,
+`can_submit false`; `l5-pmus-live` `270f602d` on `cfac6707c`; watchdog 0 open orders.
+Nothing deployed, armed or traded in this step.
+
+### Accounting release candidate
+
+`release/l5-btc5m-accounting-20261120` at `ab7a2ae8c90875109ba68851889583e8db09d26c`,
+one commit on the deployed `27cbdb32b`. Contains FIFO settlement attribution and the
+duplicate-loss correction only; the controller, reservation and persistent-mode files are
+byte-identical to the deployed commit. 2,473 passed / 31 failed, the 31 identical to the
+deployed baseline.
+
+The first version of the duplicate-loss correction was unsafe and is replaced. It skipped any
+market the account service listed as retired, but a listed market is not a booked loss: that
+service adopts only the net position, first books it at a $1 bound (zero when the residual
+side wins), and retires some rows at zero. The rule is now per market: add
+`min(0, own − booked)` when the booked amount is published, all of it otherwise. The market
+then counts for `min(booked, own)`. A 4,000-case search over true, harsher, zero, partial,
+gain, absent and unreadable bookings, with the publication present, absent, for another day
+or names-only, finds no case where a loss is reduced below the lane's own result.
+
+It has no effect until the account service publishes amounts. That is a separate additive
+change to `l5-pmus-live` (`patches/pmus_live_publish_retired_results.patch`, local commit
+`5c2fcea1c`), kept apart from the cash-floor patch. Until then the lane behaves exactly as
+deployed, double count included.
+
+### One-sided control: NO PROMOTION
+
+Data: `btc5m_accumulation/btc5m_aligned_20261112.jsonl.gz`, 187 resolved windows over 16.5 h
+on 2026-11-11/12, causal model probability, both sides' quotes, outcomes. No sizes, no fills.
+Results: `ONE_SIDED_VALUE_RESULT.txt`, `ONE_SIDED_POLICY_REPLAY_RESULT.txt`.
+
+- Calibration: the model is worse than the market mid at the decision (Brier 0.1689 vs
+  0.1620, difference +0.0069, 95% [+0.0009, +0.0129]) and overstates the unfavoured side
+  (model 0.35 → won 0.28; 0.45 → 0.37).
+- Lone bids that fill (ask reaches the bid within 10 s): worth −3.7 cents against the bid at
+  the fill and −3.6 cents ten seconds later, tight intervals. Held to settlement: the legs the
+  rule allows −1.9 cents [−5.6, +1.8]; the legs it refuses −4.3 cents [−6.2, −2.5]. On the
+  unfavoured side (bid ≤ 0.40): allowed −1.1 [−5.3, +3.2], refused −2.4 [−6.6, +2.1]; the
+  ordering reverses in the second half at bid ≤ 0.25.
+- The existing controller replayed over all 187 windows, live configuration, EV gate waived:
+  without the rule matched −$0.0085, residual −$0.0161, net −$0.0246 per window
+  [−0.038, −0.011]; with it matched −$0.0108, residual −$0.0134, net −$0.0242. Paired
+  difference +$0.0004 per window [−0.0057, +0.0062]; negative in the first half, positive in
+  the second. Fees 0, credited incentives 0.
+
+No positive fee-adjusted signal, and the rule's effect is indistinguishable from zero. The
+base two-sided strategy is negative in this replay on both lines. Missing measurement: real
+fills. Every figure above assumes a fill rule on public quotes; the 26 live fills from two
+windows are the only conditional-on-fill data, too few to estimate anything.
+
+### Incentives (venue pages read 2026-11-20)
+
+Maker fee 0. Maker rebate: none below $10M of 30-day maker volume. Liquidity Incentive
+Program: no program covers BTC 5m or 15m markets today; the only crypto program found is BTC
+1h ($25 a day shared, target size 5,000, max spread 0.03, payouts under $1.00 not paid).
+Promotions pay non-withdrawable credit. Account record: $0 commission on all 57 orders of the
+two windows and cash reconciling to the cent, so nothing was credited. Nothing collectible
+changes BTC5m net.

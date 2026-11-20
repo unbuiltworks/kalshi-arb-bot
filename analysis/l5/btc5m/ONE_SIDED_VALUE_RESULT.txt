@@ -1,0 +1,52 @@
+windows resolved: 187   candidates: 8316   filled (THROUGH): 4709
+
+== 1. CALIBRATION at the decision (model p vs market mid) ==
+ALL all candidates                 w=187  Brier model 0.1689  market 0.1620  diff +0.0069 [+0.0009,+0.0129]
+ALL side bid<=0.40                 w=187  Brier model 0.1573  market 0.1507  diff +0.0067 [-0.0007,+0.0139]
+FIRST HALF all candidates          w= 93  Brier model 0.1734  market 0.1696  diff +0.0038 [-0.0049,+0.0116]
+FIRST HALF side bid<=0.40          w= 93  Brier model 0.1617  market 0.1583  diff +0.0033 [-0.0071,+0.0124]
+SECOND HALF all candidates         w= 94  Brier model 0.1644  market 0.1544  diff +0.0100 [+0.0009,+0.0184]
+SECOND HALF side bid<=0.40         w= 94  Brier model 0.1531  market 0.1431  diff +0.0100 [-0.0016,+0.0205]
+
+   reliability on the unfavoured side (bid<=0.40), all windows:
+   model p 0.0-0.1  n=  460  mean p 0.052  mean mid 0.040  won 0.011
+   model p 0.1-0.2  n=  611  mean p 0.154  mean mid 0.089  won 0.121
+   model p 0.2-0.3  n=  703  mean p 0.250  mean mid 0.163  won 0.213
+   model p 0.3-0.4  n=  911  mean p 0.351  mean mid 0.262  won 0.277
+   model p 0.4-0.6  n=  728  mean p 0.449  mean mid 0.341  won 0.367
+
+== 2. FILLED LONE BIDS: per-share return, mean of window means, 95% bootstrap over windows ==
+-- ALL (187 windows)
+  all sides | every fill           n= 4709  settle -0.0337 [-0.042,-0.025] w=187  mark_fill -0.0366 [-0.039,-0.035] w=187  mark_10s -0.0362 [-0.039,-0.034] w=187
+  all sides | rule ALLOWS          n= 1440  settle -0.0191 [-0.056,+0.018] w=184  mark_fill -0.0320 [-0.034,-0.030] w=184  mark_10s -0.0366 [-0.042,-0.031] w=184
+  all sides | rule REFUSES         n= 3269  settle -0.0432 [-0.062,-0.025] w=187  mark_fill -0.0396 [-0.042,-0.037] w=187  mark_10s -0.0366 [-0.041,-0.032] w=187
+  unfavoured side bid<=0.40 | every fill n= 2225  settle -0.0060 [-0.044,+0.034] w=187  mark_fill -0.0297 [-0.031,-0.028] w=187  mark_10s -0.0293 [-0.034,-0.025] w=187
+  unfavoured side bid<=0.40 | rule ALLOWS n= 1291  settle -0.0114 [-0.053,+0.032] w=184  mark_fill -0.0296 [-0.031,-0.028] w=184  mark_10s -0.0318 [-0.037,-0.026] w=184
+  unfavoured side bid<=0.40 | rule REFUSES n=  934  settle -0.0242 [-0.066,+0.021] w=173  mark_fill -0.0319 [-0.035,-0.029] w=170  mark_10s -0.0290 [-0.038,-0.020] w=170
+  unfavoured side bid<=0.25 | every fill n= 1439  settle +0.0156 [-0.023,+0.056] w=185  mark_fill -0.0247 [-0.026,-0.023] w=185  mark_10s -0.0224 [-0.029,-0.015] w=184
+  unfavoured side bid<=0.25 | rule ALLOWS n=  892  settle +0.0034 [-0.037,+0.047] w=179  mark_fill -0.0252 [-0.027,-0.024] w=179  mark_10s -0.0229 [-0.030,-0.015] w=177
+  unfavoured side bid<=0.25 | rule REFUSES n=  547  settle -0.0007 [-0.042,+0.044] w=145  mark_fill -0.0249 [-0.028,-0.022] w=128  mark_10s -0.0225 [-0.034,-0.010] w=122
+-- FIRST HALF (93 windows)
+  all sides | every fill           n= 2350  settle -0.0313 [-0.044,-0.018] w=93  mark_fill -0.0372 [-0.039,-0.035] w=93  mark_10s -0.0366 [-0.040,-0.033] w=93
+  all sides | rule ALLOWS          n=  681  settle -0.0101 [-0.061,+0.048] w=93  mark_fill -0.0324 [-0.035,-0.030] w=93  mark_10s -0.0406 [-0.050,-0.032] w=93
+  all sides | rule REFUSES         n= 1669  settle -0.0506 [-0.079,-0.025] w=93  mark_fill -0.0406 [-0.045,-0.037] w=93  mark_10s -0.0367 [-0.043,-0.031] w=93
+  unfavoured side bid<=0.40 | every fill n= 1107  settle +0.0036 [-0.050,+0.063] w=93  mark_fill -0.0302 [-0.032,-0.028] w=93  mark_10s -0.0317 [-0.037,-0.026] w=93
+  unfavoured side bid<=0.40 | rule ALLOWS n=  603  settle -0.0043 [-0.062,+0.062] w=93  mark_fill -0.0300 [-0.032,-0.028] w=93  mark_10s -0.0373 [-0.044,-0.030] w=93
+  unfavoured side bid<=0.40 | rule REFUSES n=  504  settle -0.0171 [-0.075,+0.043] w=87  mark_fill -0.0322 [-0.036,-0.029] w=86  mark_10s -0.0308 [-0.044,-0.018] w=86
+  unfavoured side bid<=0.25 | every fill n=  713  settle +0.0226 [-0.032,+0.083] w=93  mark_fill -0.0256 [-0.027,-0.024] w=93  mark_10s -0.0241 [-0.033,-0.012] w=93
+  unfavoured side bid<=0.25 | rule ALLOWS n=  415  settle +0.0186 [-0.041,+0.084] w=92  mark_fill -0.0248 [-0.027,-0.023] w=92  mark_10s -0.0255 [-0.036,-0.013] w=92
+  unfavoured side bid<=0.25 | rule REFUSES n=  298  settle -0.0137 [-0.065,+0.046] w=79  mark_fill -0.0284 [-0.034,-0.024] w=69  mark_10s -0.0290 [-0.047,-0.010] w=66
+-- SECOND HALF (94 windows)
+  all sides | every fill           n= 2359  settle -0.0361 [-0.047,-0.025] w=94  mark_fill -0.0360 [-0.040,-0.033] w=94  mark_10s -0.0358 [-0.040,-0.032] w=94
+  all sides | rule ALLOWS          n=  759  settle -0.0284 [-0.077,+0.025] w=91  mark_fill -0.0316 [-0.035,-0.028] w=91  mark_10s -0.0325 [-0.040,-0.025] w=91
+  all sides | rule REFUSES         n= 1600  settle -0.0359 [-0.061,-0.013] w=94  mark_fill -0.0386 [-0.043,-0.035] w=94  mark_10s -0.0365 [-0.043,-0.031] w=94
+  unfavoured side bid<=0.40 | every fill n= 1118  settle -0.0155 [-0.067,+0.042] w=94  mark_fill -0.0291 [-0.032,-0.027] w=94  mark_10s -0.0270 [-0.033,-0.020] w=94
+  unfavoured side bid<=0.40 | rule ALLOWS n=  688  settle -0.0188 [-0.073,+0.042] w=91  mark_fill -0.0292 [-0.032,-0.027] w=91  mark_10s -0.0262 [-0.035,-0.017] w=91
+  unfavoured side bid<=0.40 | rule REFUSES n=  430  settle -0.0313 [-0.093,+0.036] w=86  mark_fill -0.0316 [-0.035,-0.028] w=84  mark_10s -0.0271 [-0.038,-0.015] w=84
+  unfavoured side bid<=0.25 | every fill n=  726  settle +0.0085 [-0.043,+0.067] w=92  mark_fill -0.0238 [-0.026,-0.022] w=92  mark_10s -0.0207 [-0.030,-0.011] w=91
+  unfavoured side bid<=0.25 | rule ALLOWS n=  477  settle -0.0128 [-0.064,+0.044] w=87  mark_fill -0.0256 [-0.029,-0.023] w=87  mark_10s -0.0200 [-0.031,-0.008] w=85
+  unfavoured side bid<=0.25 | rule REFUSES n=  249  settle +0.0149 [-0.046,+0.084] w=66  mark_fill -0.0209 [-0.024,-0.018] w=59  mark_10s -0.0149 [-0.030,+0.002] w=56
+
+== 3. UNCONDITIONAL (not filled-only): what the same bids are worth if they always filled ==
+rule ALLOWS, bid<=0.40       w=186  won-x +0.0184 [-0.022,+0.061]
+rule REFUSES, bid<=0.40      w=176  won-x +0.0217 [-0.023,+0.069]

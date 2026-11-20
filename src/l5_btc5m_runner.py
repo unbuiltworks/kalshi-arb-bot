@@ -466,27 +466,57 @@ class OwnSettled(Decimal):
 
 
 def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
-                               ) -> Tuple[Decimal, List[str], List[str]]:
-    """(loss to add, markets added, markets left out as already booked).
+                               ) -> Tuple[Decimal, List[str], Dict[str, str]]:
+    """(loss to add, markets added in full, {market: shortfall added}).
 
-    A market is left out ONLY when the account service itself lists it
-    among the markets it has retired -- its settled result is then inside
-    that service's own day and lifetime figures, at venue cost or at the
-    harsher $1-a-share bound. Anything else is added, as before: no
-    breakdown, no published list, an unreadable list, or a market the list
-    does not name. So this can only remove a loss that is provably counted
-    already; it never removes one on a guess.
+    THE RULE, per market this lane settled today, with `o` its own result
+    from its own authenticated fills and `b` what the account service says
+    it booked that market at:
 
-    Only LOSSES are ever added: the sum is floored at zero from above.
+        b not published for that market   add  min(0, o)       -- all of it
+        b published and readable          add  min(0, o - b)   -- the gap
+
+    WHY THE GAP AND NOT "SKIP IF LISTED". A market being retired there does
+    not mean its loss is in that service's figure. It adopts only this
+    lane's NET position and first books it at a $1-a-share bound: when the
+    residual side wins that books ZERO, while matched pairs bought above
+    1.00 lost money here. It also retires rows at zero when an account is
+    closed flat. Skipping on the name alone would have hidden those losses.
+
+    WHAT THIS GUARANTEES. The account figure contains b. After the
+    addition the market counts for  b + min(0, o - b) = min(b, o),  which
+    is never better than this lane's own result -- whatever b is, and
+    however stale, because b and the day figure it is part of come from the
+    same record. So the correction can remove only what is provably counted
+    twice. It cannot make a loss disappear.
+
+    NOTHING PUBLISHED IS THE OLD BEHAVIOUR, EXACTLY: no breakdown of this
+    lane's own result, no `retired_results_utc_day`, one for another UTC
+    day, or an unreadable one all return `min(0, total)` as before.
+    An amount that cannot be read for ONE market adds that market in full.
+    A gain is never added and never offsets another market's loss.
     """
+    total = min(D(0), Decimal(own))
     by = getattr(own, "by_market", None)
-    listed = risk.get("retired_markets")
-    if not isinstance(by, Mapping) or not isinstance(listed, (list, tuple)):
-        return min(D(0), Decimal(own)), [], []
-    booked = {str(m) for m in listed}
-    added = sorted(m for m in by if m not in booked)
-    left = sorted(m for m in by if m in booked)
-    return (min(D(0), sum((by[m] for m in added), D(0))), added, left)
+    pub = risk.get("retired_results_utc_day")
+    if not isinstance(by, Mapping) or not isinstance(pub, Mapping):
+        return total, [], {}
+    booked = pub.get("results")
+    if not isinstance(booked, Mapping) \
+            or str(pub.get("utc_day")) != str(risk.get("utc_day")):
+        return total, [], {}
+    add, full, gaps = D(0), [], {}
+    for m in sorted(by):
+        o = by[m]
+        b = _dec(booked.get(m)) if m in booked else None
+        if b is None:
+            add += min(D(0), o)
+            full.append(m)
+        else:
+            gap = min(D(0), o - b)
+            add += gap
+            gaps[m] = str(gap)
+    return add, full, gaps
 
 
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
@@ -545,16 +575,15 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_FIGURES_UNREADABLE")
     if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
-    add, _added, _left_out = _own_not_in_account_ledger(own_unaccounted,
-                                                         risk)
+    add, _added, _gaps = _own_not_in_account_ledger(own_unaccounted, risk)
     day_all, life_all = day + add, life + add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
-           "btc5m_markets_added": _added,
-           "btc5m_markets_already_in_account_ledger": _left_out,
+           "btc5m_markets_added_in_full": _added,
+           "btc5m_shortfall_added_by_market": _gaps,
            # what may still be LOST before either account-wide limit binds
            "loss_room_usd": str(room),
            "btc15m_operator_halt": other_halt,
