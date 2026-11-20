@@ -1,0 +1,60 @@
+== 1. where the loss is (no withholding rule) ==
+   11-17/18                 windows  576  matched pairs $ -10.95 [-12.02,-9.94]  (avg pair cost 1.0424)   unmatched $  -7.47 [-9.18,-5.89]   net $-18.43
+   11-19/20                 windows  515  matched pairs $ -10.48 [-11.56,-9.40]  (avg pair cost 1.0459)   unmatched $  -7.49 [-9.12,-5.86]   net $-17.98
+   11-11..16 (10 s quotes)  windows 1468  matched pairs $ -39.64 [-41.49,-37.76]  (avg pair cost 1.1117)   unmatched $ -24.46 [-26.28,-22.51]   net $-64.10
+
+== 2. fills by how the side's own bid had moved when the bid was placed (no rule): net per share [95%], shares ==
+  over the prior 6 s
+   11-17/18
+      fell 3c or more  -0.0279 [-0.0514,-0.0057]  shares   103.9
+      fell 1-2c        -0.0068 [-0.0387,+0.0230]  shares    59.3
+      unchanged        -0.0538 [-0.0955,-0.0127]  shares    26.6
+      rose 1-2c        -0.0245 [-0.0488,+0.0009]  shares    79.3
+      rose 3c or more  -0.0427 [-0.0582,-0.0273]  shares   209.4
+   11-19/20
+      fell 3c or more  -0.0304 [-0.0534,-0.0066]  shares    92.9
+      fell 1-2c        -0.0629 [-0.0955,-0.0305]  shares    50.8
+      unchanged        -0.0074 [-0.0541,+0.0366]  shares    24.7
+      rose 1-2c        -0.0365 [-0.0674,-0.0065]  shares    66.2
+      rose 3c or more  -0.0380 [-0.0557,-0.0209]  shares   188.8
+  over the prior 10 s
+   11-17/18
+      fell 3c or more  -0.0369 [-0.0611,-0.0127]  shares   101.8
+      fell 1-2c        -0.0063 [-0.0425,+0.0315]  shares    44.3
+      unchanged        +0.0044 [-0.0361,+0.0463]  shares    26.3
+      rose 1-2c        -0.0257 [-0.0550,+0.0043]  shares    55.3
+      rose 3c or more  -0.0454 [-0.0609,-0.0299]  shares   221.6
+   11-19/20
+      fell 3c or more  -0.0526 [-0.0800,-0.0262]  shares    93.1
+      fell 1-2c        -0.0515 [-0.0860,-0.0145]  shares    38.1
+      unchanged        +0.0148 [-0.0362,+0.0647]  shares    19.5
+      rose 1-2c        -0.0354 [-0.0704,-0.0016]  shares    43.4
+      rose 3c or more  -0.0336 [-0.0500,-0.0172]  shares   202.5
+  over the prior 30 s
+   11-17/18
+      fell 3c or more  -0.0468 [-0.0779,-0.0170]  shares    92.9
+      fell 1-2c        -0.0593 [-0.1211,+0.0015]  shares    15.4
+      unchanged        -0.0442 [-0.1179,+0.0342]  shares     9.2
+      rose 1-2c        -0.0601 [-0.1156,-0.0034]  shares    18.1
+      rose 3c or more  -0.0298 [-0.0521,-0.0075]  shares   172.8
+   11-19/20
+      fell 3c or more  -0.0312 [-0.0633,+0.0004]  shares    82.2
+      fell 1-2c        +0.0313 [-0.0343,+0.0959]  shares    13.2
+      unchanged        +0.0068 [-0.0811,+0.0973]  shares     6.5
+      rose 1-2c        -0.0433 [-0.0999,+0.0145]  shares    15.4
+      rose 3c or more  -0.0541 [-0.0780,-0.0295]  shares   153.4
+
+== 3. withholding rule: no bid on a side whose bid fell by X over the last N s ==
+   FIT 11-17/18  no rule: net $-18.43, shares 549, per share -0.0336
+   FIT  X 0.01 N  6: net $-17.13, shares 524, per share -0.0327
+   FIT  X 0.02 N  6: net $-17.71, shares 534, per share -0.0332
+   FIT  X 0.03 N  6: net $-17.16, shares 538, per share -0.0319
+   FIT  X 0.01 N 10: net $-16.91, shares 525, per share -0.0322
+   FIT  X 0.02 N 10: net $-17.52, shares 532, per share -0.0330
+   FIT  X 0.03 N 10: net $-17.55, shares 536, per share -0.0328
+   FIT  X 0.01 N 30: net $-15.69, shares 510, per share -0.0308
+   FIT  X 0.02 N 30: net $-16.44, shares 518, per share -0.0317
+   FIT  X 0.03 N 30: net $-16.77, shares 524, per share -0.0320
+   chosen on FIT: X 0.01, N 30
+   HELD OUT 11-19/20                 no rule: net $-17.98 (per share -0.0369, shares 487) | with rule: net $-16.23 (per share -0.0361 [-0.0411,-0.0311], shares 450) | PAIRED $+1.74 [+0.24,+3.11]
+   HELD OUT 11-11..16 (10 s quotes)  no rule: net $-64.10 (per share -0.0822, shares 780) | with rule: net $-47.50 (per share -0.0804 [-0.0853,-0.0755], shares 590) | PAIRED $+16.60 [+13.92,+19.28]
