@@ -141,3 +141,28 @@ Candidate, fixed beforehand: ask at or above 0.97 with at most 30 s left. Taker 
 
 The candidate fails on its own terms: no defensible positive net expected value after fees
 and delay. It is rejected; no taker release is proposed.
+
+## Selection test on our venue, 2026-11-17..20 (1,015 shared windows)
+
+Script `analysis/l5/btc5m/bonereaper_selection_test.py`, result
+`analysis/l5/btc5m/BONEREAPER_SELECTION_TEST_RESULT.txt`. His Polymarket
+buys (side, 10-second bucket, dollars) replayed at OUR recorded asks and
+settled on OUR outcome. Discovery 11-17/18 (573 windows), validation
+11-19/20 (420 usable).
+
+- 84% of his dollars go to the side that is the favourite here; 71% to a
+  favourite whose bid has just risen.
+- His side vs the plain favourite at the same moments (paired per window,
+  ~10 s delay): -0.017 on discovery, +0.004 on validation, interval spans
+  zero on validation. No transferable side-selection signal.
+- His moments vs buying the favourite at every point: -0.004 and -0.009.
+  His timing does not help here either.
+- After our taker fee, with ~10 s delay, validation days: his side -0.011,
+  favourite at his times -0.015, favourite every point -0.006 per share;
+  every interval includes zero or is negative. The small positives on the
+  discovery days did not repeat.
+- His underdog buys lose 3 to 7 cents a share here before fees on both
+  halves.
+- This is a transfer test of his observable entries, not a reconstruction
+  of his signal: his decisions were made on Polymarket's book, and our
+  quotes are sampled every ~10 s with no sizes.

@@ -27,7 +27,9 @@ WHAT IS AND IS NOT BEING REPLAYED.
 Returns are USD per share: 1 if the side won here else 0, minus the ask
 (pre-fee), and minus 0.095 x p x (1 - p) (our taker fee; C pays none).
 Delay 0 prices at the first quote at or after the bucket; delay 1 at the
-next quote (~10 s later). Mean of per-window means, 95% bootstrap over
+next quote (~10 s later). His replays are weighted by his dollars. Outcome is the venue's own rule
+(next window's price-to-beat at or above this one's = UP), which needs no
+closing quote and so drops no close-run window. Mean of per-window means, 95% bootstrap over
 windows. DISCOVERY = 2026-11-17 and 11-18; VALIDATION = 11-19 and 11-20.
 """
 import collections
@@ -84,12 +86,15 @@ def num(x):
 def load_quotes(path):
     by = collections.defaultdict(list)
     seen = set()
+    TB.clear()
     for line in open(path):
         r = json.loads(line)
         k = (r["slug"], r["utc"])
         if k in seen or r.get("closed"):
             continue
         seen.add(k)
+        if num(r.get("to_beat")) is not None:
+            TB.setdefault(r["slug"], num(r["to_beat"]))
         by[r["slug"]].append((float(r["t"]), num(r.get("bid")),
                               num(r.get("ask"))))
     for s in by:
@@ -109,6 +114,25 @@ def bid(q, side):
     if side == "UP":
         return b
     return None if a is None else round(1 - a, 4)
+
+
+TB = {}
+
+
+def next_slug(s):
+    d = dt.datetime.strptime(s[-16:], "%Y-%m-%d-%H%Mz").replace(
+        tzinfo=dt.timezone.utc) + dt.timedelta(minutes=5)
+    return "cpc-btc-updown-5m-" + d.strftime("%Y-%m-%d-%H%Mz")
+
+
+def outcome_tb(s):
+    """The venue's own rule: UP iff the next window's price-to-beat is at
+    or above this window's. Uses no quote, so no window is dropped for
+    being close at the end."""
+    a, b = TB.get(s), TB.get(next_slug(s))
+    if a is None or b is None:
+        return None
+    return "UP" if b >= a else "DOWN"
 
 
 def outcome(rows):
@@ -155,7 +179,13 @@ def main():
     quotes = load_quotes(sys.argv[1])
     ev, br_won = load_br()
     P = print
-    res = {s: outcome(rows) for s, rows in quotes.items()}
+    res_q = {s: outcome(rows) for s, rows in quotes.items()}
+    res = {s: outcome_tb(s) for s in quotes}
+    chk = [s for s in quotes if res[s] and res_q[s]]
+    P("outcome = next window's price-to-beat vs this one's: known for %d of "
+      "%d windows; agrees with the final quote on %d of %d" % (
+          sum(1 for s in quotes if res[s]), len(quotes),
+          sum(1 for s in chk if res[s] == res_q[s]), len(chk)))
     wins = [s for s in quotes if res[s] and s in ev
             and len(quotes[s]) >= 20]
     both = [s for s in wins if s in br_won]
@@ -213,21 +243,26 @@ def main():
         P("   %-10s %-8s %5.1f%%" % (k[0], k[1], 100 * v / tot))
 
     # ---------------- 2. the replays
-    def replay(ws, delay, mode):
+    def replay(ws, delay, mode, only=None):
         out = collections.defaultdict(list)
         for s in ws:
             for (t, side), (sh, usd) in ev[s].items():
                 q, _p = at(s, t, delay)
                 if q is None:
                     continue
-                pick = side if mode == "B" else fav_here(q)
-                if pick is None:
+                f = fav_here(q)
+                pick = side if mode == "B" else f
+                if pick is None or f is None:
+                    continue
+                if only == "fav" and side != f:
+                    continue
+                if only == "dog" and side == f:
                     continue
                 a = ask(q, pick)
                 if a is None or not (0 < a < 1):
                     continue
                 w = 1.0 if res[s] == pick else 0.0
-                out[s].append((1.0, a, w))
+                out[s].append((usd, a, w))
         return out
 
     def lines(label, data):
@@ -235,10 +270,23 @@ def main():
         net = {s: [(wt, w - a - fee(a)) for wt, a, w in r]
                for s, r in data.items()}
         n = sum(len(r) for r in data.values())
-        px = (sum(a for r in data.values() for _w, a, _x in r) / n) if n \
-            else 0
+        tw = sum(w for r in data.values() for w, _a, _x in r)
+        px = (sum(w * a for r in data.values() for w, a, _x in r) / tw) \
+            if tw else 0
         return "   %-34s n=%6d px %.3f  pre-fee %s   after our fee %s" % (
             label, n, px, fmt(pre), fmt(net))
+
+    def wmean(rows):
+        w = sum(x for x, _a, _b in rows)
+        return sum(x * (b - a) for x, a, b in rows) / w if w > 0 else None
+
+    def paired(x, y):
+        v = [wmean(x[s]) - wmean(y[s]) for s in x
+             if s in y and wmean(x[s]) is not None
+             and wmean(y[s]) is not None]
+        c = boot(v)
+        return "%+.4f %s w=%d" % (sum(v) / len(v),
+                                  "[%+.3f,%+.3f]" % c if c else "", len(v))
 
     def grid(ws, rule):
         out = collections.defaultdict(list)
@@ -314,8 +362,17 @@ def main():
         P("\n== 2. %s: %d windows ==" % (name, len(ws)))
         for d in (0, 1):
             P("  delay %d quote(s):" % d)
-            P(lines("B  his side at his times", replay(ws, d, "B")))
-            P(lines("A  favourite here at his times", replay(ws, d, "A")))
+            b_, a_ = replay(ws, d, "B"), replay(ws, d, "A")
+            P(lines("B  his side at his times", b_))
+            P(lines("   of which his favourite buys", replay(ws, d, "B", "fav")))
+            P(lines("   of which his underdog buys", replay(ws, d, "B", "dog")))
+            P(lines("A  favourite here at his times", a_))
+            P("   paired, per window:  B - A (his choice of side)   %s" %
+              paired(b_, a_))
+            if d == 1:
+                P("   paired, per window:  A - favourite every point "
+                  "(his choice of moment)   %s" %
+                  paired(a_, grid(ws, rule_fav_all)))
         P("  every 10 s point, one quote of delay:")
         P(lines("A* favourite, his price/time habits", grid(ws, rule_habit)))
         P(lines("   favourite, every point", grid(ws, rule_fav_all)))
@@ -366,6 +423,9 @@ def main():
 
     P("\n== 3. our controller (maker, both sides) on the same windows: "
       "per share bought, no fee ==")
+    P("   CRUDE FILL MODEL: a bid counts as filled only if the ask is at or "
+      "below it 10 s later, which\n   keeps only fills the price ran "
+      "through. Sign is informative; the size overstates the loss.")
     for name, ws in (("DISCOVERY", disc), ("VALIDATION", val)):
         data = controller(ws)
         pre = {s: [(wt, w - a) for wt, a, w in r] for s, r in data.items()}
