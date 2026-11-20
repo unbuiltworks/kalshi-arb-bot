@@ -619,3 +619,59 @@ Sensitivity: 3-cent adverse → 0.75; pair cost 0.97 → 0.667. Assumption 3 alr
 live: the two pairs in the 14:20Z window formed across requote rounds at 0.99 and 1.01. The
 figure is the gate's arithmetic under its defaults, not a measured threshold, and should not
 be used to decide trading.
+
+## Live window result — `cpc-btc-updown-5m-2026-11-20-1705z` (17:05–17:10Z)
+
+Owner-authorized reliability validation on `27cbdb32bb86d74e406dee1fd0a3829a1f4776ac`
+(deployment `f82b32fe`), one window, entry-EV gate waived for this market only.
+Lifecycle label: **settled, realized**. Evidence: `evidence/window_1705z_orders.json`,
+`evidence/window_1705z_steps.jsonl`, `evidence/window_1705z_venue_market_record.json`.
+
+| | UP | DOWN | Total |
+|---|---|---|---|
+| Orders submitted | 13 | 26 | 39 |
+| Filled orders | 7 | 14 | 21 |
+| Shares | 0.41 | 0.85 | |
+| Cost | $0.2677 | $0.1574 | $0.4251 |
+
+Cancelled 18, uncertain 0, close clean 17:09:30Z, 0 still open. Venue commission $0.0000 on
+each of the 39 orders (lane's per-order read); no rebate credited. Lane inventory vs venue net
+position agrees (−0.44).
+
+Resolved UP (`outcomePrices ["1","0"]`). Redemption $0.41. **Realized net −$0.0151.** Venue cash
+$321.4668 → $321.4517. Matched 0.41 pairs; unmatched 0.44 DOWN (cost within the $0.10 cap).
+`l5-pmus-live` booked the unmatched leg at the $1 bound (−$0.44) at 17:10:47Z and restated it
+to −$0.0151 at 17:12:51Z.
+
+### What the test established
+
+1. Sustained requoting: PASS. Orders placed in every minute to t=205 s; $0.9768 submitted in
+   total against the $0.60 envelope with zero envelope or reservation refusals (previous
+   window: 36). Peak own exposure $0.4246. Reservation at window end $0.4251 = filled cost.
+2. Book-read timeout guard: NOT EXERCISED. No read failed in this window (`book_reason` null
+   on all 41 steps). The process did not crash and closed normally.
+3. Hold release on confirmed cancels: PASS on the evidence available (18 cancels, end
+   reservation equal to filled cost to the cent).
+4. Inventory limits: held. UP reached its $0.30 side cap at t≈119 s; from then only DOWN was
+   quoted (16 steps `SIDE_CAP_REACHED`).
+5. Reconciliation: orders, fills, fees, position and settlement cash all agree.
+
+### Observed, not fixed
+
+- After the UP side cap bound, the lane kept buying DOWN alone while UP rose from 0.84 to 0.99:
+  8 lone DOWN fills from t=136 s costing about $0.042, all worthless at settlement. Without
+  them the window would have been positive. This is strategy behaviour, not a defect in the
+  release.
+- `ACCOUNT_DRAWDOWN:PORTFOLIO_VALUE_UNAVAILABLE` blocked the lane 17:08:40–17:08:56Z, as in
+  the first window, while `l5-pmus-live` treated the lane's net position as a mismatch.
+- The lane's risk read showed UTC-day realized −$0.0228 during the window: the first window's
+  −$0.0114 counted both in the account ledger and as "not yet in account ledger". It errs
+  toward refusing.
+- `BOOK_UNUSABLE` from t=210 s (market one-sided at 0.99).
+
+### Disarm
+
+Arm token empty, `L5_SHADOW_ONLY=1`, probe and campaign documents empty, envelope expired.
+Boot 17:12:22Z (deployment `d558ce6d`): settlement recovered −0.0151, exposure 0.4251 → 0,
+stored state `MONITOR` (`CAMPAIGN_EXPIRED`), arming refused, no traceback. Resident,
+`can_submit false`. Watchdog 17:14:03Z: 0 open orders, no halt, registries OK.
