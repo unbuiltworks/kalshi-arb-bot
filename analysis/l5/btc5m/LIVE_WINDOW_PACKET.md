@@ -535,3 +535,14 @@ grow, touch other lanes) each fail tests.
 
 Suite: 2,184 passed, 11 failed across the BTC5m, persistent-mode, reservation, envelope,
 straddle and late-favourite files; the 11 are the baseline in `BASELINE_TEST_FAILURES.md`.
+
+### Reliability release deployed disarmed (2026-11-20 16:14Z)
+
+Owner-authorized. `l5-btc5m-live` deployment `1dad5d3a-d8de-4153-8fa5-65db1086c6aa`, commit
+`27cbdb32bb86d74e406dee1fd0a3829a1f4776ac`, branch `release/l5-btc5m-reliability-20261120`,
+status SUCCESS. No variable was changed.
+
+Boot at 16:14:04Z: stored state `MONITOR` (not latched), `L5_BTC5M_ARM` refused
+`ENVELOPE:ENVELOPE_EXPIRED`, resident with `can_submit false`, settlement recovery found
+nothing pending and exposure 0, no traceback. Watchdog 16:14:29Z: 0 open orders, no halt,
+all three registries OK (the lane's registry was unreachable for one sweep during the restart).
