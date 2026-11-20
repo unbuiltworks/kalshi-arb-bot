@@ -158,3 +158,90 @@ each a separate approval.
 **The $1.00 allowance is a new capital-risk decision**, as the owner noted:
 it authorizes loss after the earlier $15 limit was reached. It is not an
 accounting change and nothing in these releases sets it.
+
+## 6. The narrow ledger correction — built, not deployed, not applied (2026-11-20)
+
+Local commit `cfac6707cb82caaf9b4d0cdbe7aa46f6fb20ac1f`, one commit on the
+pinned service release `30c639da6`; kept here as
+`patches/pmus-live-superset-correction.on-30c639da6.patch`. No release
+branch has been pushed for it.
+
+**The list.** `config/venue_superset_manifest_20261120.json`: the 40
+markets, each with nine figures taken from the diagnostic evidence. SHA-256
+`2d7a87d9968931e87ff353887f8b8bd3fe2e3b4aaf8ce20107ef7f28aa61c368`. Booked
+-107.20, corrected -9.8835, total change +97.3165, which would take the
+gate's figure from -136.7845 to **-39.4680**. The two unreadable markets are
+named in the file as excluded and stay at the bound.
+
+**How it is switched.**
+
+| `L5_VENUE_SUPERSET_CORRECTION` | effect |
+|---|---|
+| unset | nothing is read or written |
+| `INSPECT` | reads the feed, runs the real correction on a copy of the ledger that cannot be saved, reports what would change. The ledger is untouched |
+| `APPLY` | writes, only if `L5_VENUE_SUPERSET_CORRECTION_APPROVED` equals the manifest's SHA-256 above |
+
+**What makes a market refuse** (each tested; the bound then stays):
+
+* any of the nine listed figures differs from what is found now, in any
+  digit: a fill added, removed or repriced since the list was written;
+* the venue holds less than the ledger on either side;
+* the ledger already had a cost for a side it holds;
+* any fee on any leg is non-zero or unreadable (fees are not in the booked
+  result; all 40 are zero);
+* the feed was not read to its end;
+* the row settled before the last re-anchor (its loss is no longer in the
+  total, so its improvement would be a credit against nothing);
+* a trade already used by an earlier correction (no fill counted twice);
+* the market is not in the list.
+
+A second pass, or a restart, corrects nothing more. Without a listing the
+existing correction behaves exactly as before, and the existing automatic
+attestation never supplies one.
+
+**Tests:** 45 new; 13 deliberate breakages each fail at least one.
+Regression subset on the service lineage: 12 failed / 2518 passed, the same
+twelve as the base. One existing allowlist changed: the image data-file
+guard now names the manifest, as it already names the earlier cost-basis
+manifests.
+
+**What a corrected figure is and is not.** -39.47 would be the ledger's
+total since the re-anchor with those 40 rows costed from venue fills. It is
+not a statement that the account recovered anything: cash over the period
+is -16.87, about $22 is still unexplained, and the portfolio drawdown limit
+is separate and still reached.
+
+**Suggested order when the time comes:** deploy with `INSPECT`, read the
+report against the manifest, then a separate approval for `APPLY`.
+
+## 7. Baseline document, to be filled from a fresh venue read
+
+Not set anywhere. `L5_EQUITY_BASELINE` on `l5-pmus-live`, one line of JSON:
+
+```json
+{
+  "id": "baseline-YYYYMMDD-HHMMz",
+  "at_utc": "<time of the venue read>",
+  "buying_power_usd": "<venue buying power at that time>",
+  "matched_redemption_usd": "0",
+  "equity_usd": "<buying power + matched redemption>",
+  "positions": {},
+  "open_orders": 0,
+  "max_drawdown_usd": "<the owner's allowance>",
+  "historical": {
+    "ledger_realized_usd": "<the ledger total at that time>",
+    "prior_anchor_usd": "336.68",
+    "prior_drawdown_usd": "<the drawdown at that time>"
+  },
+  "acknowledgement": "THIS SETS A STARTING POINT FOR MEASUREMENT. HISTORICAL LOSSES ARE PRESERVED IN historical AND ARE NOT ERASED. IT DOES NOT RESET, RAISE OR REPLACE THE CUMULATIVE LOSS CEILING OR ANY OTHER LIMIT."
+}
+```
+
+`positions` must list any market where the ledger holds both sides, and
+`matched_redemption_usd` must equal the pairs in it. The two October legs
+the ledger still shows are one-sided and count 0. The document is refused
+if read with orders resting or if the equity does not add up.
+
+The existing drawdown limit is two other variables on the same service,
+`L5_PORTFOLIO_ANCHOR_USD` and `L5_PORTFOLIO_MAX_DRAWDOWN_USD`. Changing them
+is the capital decision and is the owner's alone.
