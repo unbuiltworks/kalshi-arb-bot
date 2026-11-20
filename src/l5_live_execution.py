@@ -3647,9 +3647,18 @@ class InventoryStore:
     def attest_retired_market_cost(self, market: str, *,
                                    legs: Mapping[str, Any],
                                    walk: Mapping[str, Any],
-                                   correction_id: str) -> Dict[str, Any]:
+                                   correction_id: str,
+                                   expect_superset: Optional[
+                                       Mapping[str, Any]] = None
+                                   ) -> Dict[str, Any]:
         """Replace a RETIRED market's $1/share upper bound with the cost the
         VENUE's own fills state -- only when they reconcile exactly.
+
+        `expect_superset` (default None: behaviour exactly as before) admits
+        ONE more form, for a market the owner has listed by its exact
+        figures: the venue's fills CONTAIN the ledger's quantity and exceed
+        it, because this ledger recorded one leg of a position and never the
+        other. See `_superset_refusal` for everything that form requires.
 
         THE DEFECT. A position this ledger did not open (another strategy's
         legs, adopted from the venue) is booked at $1 a share. A BTC5m leg
@@ -3797,9 +3806,18 @@ class InventoryStore:
               and held[UP] - held[DOWN] == venue[UP] - venue[DOWN]):
             form = "VENUE_NET"
         else:
-            return no("VENUE_QTY_NE_LEDGER_QTY",
-                      venue_up=str(venue[UP]), venue_down=str(venue[DOWN]),
-                      ledger_up=str(held[UP]), ledger_down=str(held[DOWN]))
+            why = self._superset_refusal(
+                expect_superset, row=row, held=held, venue=venue,
+                derived=derived, v=v, old_pnl=old_pnl, walk=walk,
+                unknown_keys=unknown_keys, market=market)
+            if why is not None:
+                return no("VENUE_QTY_NE_LEDGER_QTY",
+                          venue_up=str(venue[UP]),
+                          venue_down=str(venue[DOWN]),
+                          ledger_up=str(held[UP]),
+                          ledger_down=str(held[DOWN]),
+                          superset=why)
+            form = self.VENUE_SUPERSET_FORM
         for side in (UP, DOWN):
             key = "%s|%s" % (market, side)
             if held[side] > 0 and key not in unknown_keys:
@@ -3913,6 +3931,98 @@ class InventoryStore:
                 "venue_order_ids": order_ids,
                 "realized_before": before,
                 "realized_after": self.realized_lines()}
+
+    VENUE_SUPERSET_FORM = "VENUE_SUPERSET_OWNER_LISTED"
+    SUPERSET_FIELDS = frozenset((
+        "venue_up", "venue_down", "cost_up", "cost_down", "ledger_up",
+        "ledger_down", "yes_value", "booked_pnl", "corrected_pnl"))
+
+    def _superset_refusal(self, expect: Any, *, row: Mapping[str, Any],
+                          held: Mapping[str, D], venue: Mapping[str, D],
+                          derived: Mapping[str, Mapping[str, Any]], v: D,
+                          old_pnl: D, walk: Mapping[str, Any],
+                          unknown_keys: List[str], market: str
+                          ) -> Optional[str]:
+        """None when the owner-listed superset form holds, else why not.
+
+        THE CASE (diagnostic of 2026-11-20, 94 of 97 rows). The venue's fills
+        hold MORE than this ledger does: it adopted one leg of a position
+        and never saw the other, so a bought pair is booked as a one-sided
+        loss at $1 a share. The exact rule refuses, correctly, because the
+        quantities differ. This admits that case and nothing wider.
+
+        READS ONLY. Every condition is a refusal; nothing is clamped,
+        defaulted or approximated:
+
+          * the caller must hand in the owner's listed figures for THIS
+            market, and every one must equal what is found here now: both
+            venue quantities, both venue costs, both ledger quantities, the
+            settlement value, the booked result and the corrected result.
+            A fill added, removed or repriced since the list was written
+            changes one of them and refuses;
+          * the ledger's quantity must be contained in the venue's on both
+            sides, and exceeded on at least one;
+          * every side the ledger holds must be one it never had a cost
+            for -- a side it KNEW is never re-priced by this form;
+          * every venue leg's fee must be readable and ZERO, because fees
+            are not in the booked result and a non-zero one would make the
+            corrected figure wrong by that amount;
+          * the feed must have been read to its END, not to a time floor:
+            a missing fill is exactly what this form cannot tolerate;
+          * the row must have settled AFTER the last accounting re-anchor.
+            A row settled before it is no longer in the account-wide total,
+            so adding its improvement would credit a loss the total does
+            not hold.
+        """
+        if expect is None:
+            return "NOT_OWNER_LISTED"
+        if not isinstance(expect, Mapping) \
+                or set(expect) != self.SUPERSET_FIELDS:
+            return "LISTING_FIELDS"
+        want = {k: finite_decimal(expect.get(k)) for k in self.SUPERSET_FIELDS}
+        if any(x is None for x in want.values()):
+            return "LISTING_UNREADABLE"
+        if not (held[UP] <= venue[UP] and held[DOWN] <= venue[DOWN]):
+            return "LEDGER_NOT_CONTAINED_IN_VENUE"
+        if held[UP] == venue[UP] and held[DOWN] == venue[DOWN]:
+            return "NOT_A_SUPERSET"
+        for side in (UP, DOWN):
+            if held[side] > 0 and "%s|%s" % (market, side) \
+                    not in unknown_keys:
+                return "KNOWN_SIDE:%s" % side
+        cost = {}
+        for side in (UP, DOWN):
+            leg = derived.get(side)
+            if leg is None:
+                cost[side] = D(0)
+                continue
+            fee = finite_decimal(leg.get("fees"))
+            if fee is None:
+                return "FEE_UNREADABLE:%s" % side
+            if fee != 0:
+                return "FEE_NOT_ZERO:%s" % side
+            cost[side] = D(str(leg["cost"]))
+        if not isinstance(walk, Mapping) or walk.get("by") != "END_OF_FEED":
+            return "FEED_NOT_READ_TO_ITS_END"
+        rebases = [str(r.get("t")) for r in
+                   (self.state.get("accounting_rebase_log") or [])
+                   if isinstance(r, Mapping) and r.get("t")]
+        settled = str(row.get("t") or "")
+        if not settled:
+            return "SETTLEMENT_TIME_UNREADABLE"
+        if rebases and settled < max(rebases):
+            return "SETTLED_BEFORE_THE_LAST_REBASE"
+        found = {"venue_up": venue[UP], "venue_down": venue[DOWN],
+                 "cost_up": cost[UP], "cost_down": cost[DOWN],
+                 "ledger_up": held[UP], "ledger_down": held[DOWN],
+                 "yes_value": v, "booked_pnl": old_pnl,
+                 "corrected_pnl": (venue[UP] * v + venue[DOWN] * (D(1) - v)
+                                   - cost[UP] - cost[DOWN])}
+        for k in sorted(found):
+            if found[k] != want[k]:
+                return "LISTED_%s_NE_FOUND:%s!=%s" % (k.upper(), want[k],
+                                                      found[k])
+        return None
 
     def correct_settled_market(self, market: str, *, correction_id: str,
                                expect: Mapping[str, Any],

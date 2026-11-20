@@ -3003,6 +3003,36 @@ class Runner:
                                         "refusal": bad},
                     "equity_value": {"usd": None, "unavailable_why": bad}}
 
+    def maybe_correct_venue_supersets(self, now: float) -> None:
+        """The owner-listed venue-superset cost corrections.
+
+        OFF unless `L5_VENUE_SUPERSET_CORRECTION` is set. `INSPECT` runs the
+        real correction against a copy of the ledger that cannot be saved
+        and reports what it would do. `APPLY` writes, and only when
+        `L5_VENUE_SUPERSET_CORRECTION_APPROVED` equals the shipped
+        manifest's SHA-256. It changes no limit. ANY failure is swallowed:
+        this can never stop a tick. See `l5_venue_superset_correction`.
+        """
+        try:
+            from src import l5_venue_superset_correction as VSC
+            if not (os.environ.get(VSC.MODE_ENV) or "").strip():
+                return
+            job = getattr(self, "_venue_superset_correction", None)
+            if job is None:
+                job = VSC.Correction()
+                self._venue_superset_correction = job
+            out = job.step(self.store, self.transport, float(now))
+            if not out.get("idle") and not out.get("walking"):
+                emit("L5_VENUE_SUPERSET_CORRECTION", out)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["venue_superset_correction_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
     def maybe_diagnose_venue_costs(self, now: float) -> None:
         """READ-ONLY: print the venue's fills beside this ledger's figures
         for the rows the attestation gave up on.
@@ -11605,6 +11635,7 @@ class Runner:
         self.maybe_attest_venue_costs(now)
         self.maybe_diagnose_venue_costs(now)
         self.maybe_watch_equity_transfers(now)
+        self.maybe_correct_venue_supersets(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)

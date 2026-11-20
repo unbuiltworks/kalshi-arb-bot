@@ -282,6 +282,9 @@ ALLOWED_DATA = {
     # the owner-approved one-leg restatement of the manual 19:15Z trade
     # (2026-11-12): read only when L5_COST_BASIS_BATCH_MANIFEST names it
     "config/cost_basis_batch_manifest_20261112_manual1915z.json",
+    # the 40 owner-listed venue-superset corrections (2026-11-20): read only
+    # when L5_VENUE_SUPERSET_CORRECTION is set
+    "config/venue_superset_manifest_20261120.json",
     # the frozen v2 action model the shadow controller loads at construction
     "analysis/l5/l5_action_model_v2.json",
 }

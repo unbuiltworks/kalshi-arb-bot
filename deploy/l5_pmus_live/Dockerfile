@@ -193,6 +193,8 @@ COPY src/l5_venue_cost_attestation.py src/l5_venue_cost_attestation.py
 COPY src/l5_venue_cost_diagnostic.py src/l5_venue_cost_diagnostic.py
 COPY src/l5_equity_baseline.py src/l5_equity_baseline.py
 COPY src/l5_equity_feed.py src/l5_equity_feed.py
+COPY src/l5_venue_superset_correction.py src/l5_venue_superset_correction.py
+COPY config/venue_superset_manifest_20261120.json config/venue_superset_manifest_20261120.json
 # The blocked-arm switch gate, called from the HEARTBEAT when
 # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
 # would NOT fail the boot -- it would report PROBE_FAILED:
