@@ -1,0 +1,59 @@
+windows: today 24; four days 1101 (fit 573, test 516)
+
+== A. TODAY, 24 windows: where his dollars go, by what he held and what the market was doing ==
+   state just before the fill                   dollars   to HEAVY  return on the dollars sent to heavy | light
+   heavy = favourite  heavy side rising         $   37970     85.6%   +0.024 [-0.081,+0.118]   | -0.076 [-0.496,+0.354]
+   heavy = favourite  flat                      $    8996     89.8%   +0.041 [+0.021,+0.103]   | -0.142 [-0.769,+0.589]
+   heavy = favourite  heavy side falling        $    5511     68.0%   +0.323 [+0.014,+0.529]   | -0.377 [-0.847,+0.288]
+   heavy = UNDERDOG   heavy side rising         $    5101     28.6%   +0.273 [-0.423,+0.844]   | +0.194 [-0.237,+0.555]
+   heavy = UNDERDOG   flat                      $    4261     21.4%   -0.161 [-0.800,+0.620]   | +0.072 [-0.068,+0.310]
+   heavy = UNDERDOG   heavy side falling        $   19846     31.7%   +0.038 [-0.523,+0.551]   | -0.046 [-0.226,+0.098]
+
+== A. FIT days 11-17/18: where his dollars go, by what he held and what the market was doing ==
+   state just before the fill                   dollars   to HEAVY  return on the dollars sent to heavy | light
+   heavy = favourite  heavy side rising         $  611355     89.5%   +0.005 [-0.015,+0.024]   | -0.035 [-0.143,+0.073]
+   heavy = favourite  flat                      $   83227     89.6%   +0.008 [-0.014,+0.030]   | -0.046 [-0.199,+0.106]
+   heavy = favourite  heavy side falling        $   55079     66.5%   +0.003 [-0.091,+0.095]   | -0.018 [-0.207,+0.179]
+   heavy = UNDERDOG   heavy side rising         $   60944     43.1%   -0.020 [-0.174,+0.128]   | -0.017 [-0.105,+0.075]
+   heavy = UNDERDOG   flat                      $   34774     47.9%   -0.024 [-0.181,+0.123]   | -0.049 [-0.140,+0.037]
+   heavy = UNDERDOG   heavy side falling        $  251888     24.4%   -0.025 [-0.161,+0.115]   | +0.011 [-0.019,+0.041]
+
+== A. TEST days 11-19/20: where his dollars go, by what he held and what the market was doing ==
+   state just before the fill                   dollars   to HEAVY  return on the dollars sent to heavy | light
+   heavy = favourite  heavy side rising         $  864932     90.9%   -0.000 [-0.027,+0.025]   | -0.059 [-0.188,+0.072]
+   heavy = favourite  flat                      $  126325     90.2%   -0.002 [-0.031,+0.027]   | +0.038 [-0.155,+0.245]
+   heavy = favourite  heavy side falling        $   91604     63.0%   +0.096 [+0.003,+0.182]   | -0.093 [-0.259,+0.075]
+   heavy = UNDERDOG   heavy side rising         $   64264     41.7%   +0.034 [-0.158,+0.213]   | +0.029 [-0.079,+0.136]
+   heavy = UNDERDOG   flat                      $   36860     41.8%   +0.004 [-0.163,+0.166]   | +0.039 [-0.038,+0.118]
+   heavy = UNDERDOG   heavy side falling        $  362161     25.2%   -0.114 [-0.244,+0.020]   | -0.011 [-0.047,+0.024]
+
+== B. same dollars at the same moments: his choice of side against a choice made from price and minute alone ==
+   (price-only rule fitted on 11-17/18; both scored at the same proxy prices, return per dollar)
+   fit 11-17/18           windows  573  $   861185 | his sides +0.0431 [+0.0294,+0.0565] | price-only sides +0.0002 [-0.0034,+0.0035] | HIS MINUS PRICE-ONLY +0.0429 [+0.0294,+0.0558]
+                          at the prices he ACTUALLY paid: -0.0036 per dollar; he paid +0.0121 a share more than the 2-s-old price
+   TEST 11-19/20          windows  516  $  1194753 | his sides +0.0290 [+0.0148,+0.0428] | price-only sides -0.0089 [-0.0146,-0.0041] | HIS MINUS PRICE-ONLY +0.0379 [+0.0242,+0.0513]
+                          at the prices he ACTUALLY paid: -0.0104 per dollar; he paid +0.0091 a share more than the 2-s-old price
+   TODAY 24 windows       windows   24  $    59826 | his sides +0.0794 [+0.0304,+0.1247] | price-only sides -0.0136 [-0.0250,-0.0030] | HIS MINUS PRICE-ONLY +0.0929 [+0.0434,+0.1366]
+                          at the prices he ACTUALLY paid: +0.0284 per dollar; he paid +0.0107 a share more than the 2-s-old price
+
+== C. TODAY, 24 windows: his position at fixed moments, profitable vs losing windows (only what was observable then) ==
+   at        windows        n  share of final spend in net shares on the favourite avg price paid so far   
+    60 s    profit        16                  30%                    +0.23                   0.563
+    60 s    loss           8                  24%                    -0.09                   0.520
+   120 s    profit        16                  56%                    +0.17                   0.580
+   120 s    loss           8                  40%                    -0.20                   0.511
+   180 s    profit        16                  73%                    +0.24                   0.594
+   180 s    loss           8                  56%                    -0.08                   0.534
+   240 s    profit        16                  91%                    +0.27                   0.609
+   240 s    loss           8                  80%                    +0.06                   0.584
+
+== C. TEST days 11-19/20: his position at fixed moments, profitable vs losing windows (only what was observable then) ==
+   at        windows        n  share of final spend in net shares on the favourite avg price paid so far   
+    60 s    profit       285                  30%                    +0.27                   0.582
+    60 s    loss         231                  27%                    -0.02                   0.517
+   120 s    profit       285                  55%                    +0.33                   0.610
+   120 s    loss         231                  50%                    -0.01                   0.542
+   180 s    profit       285                  75%                    +0.39                   0.640
+   180 s    loss         231                  71%                    +0.01                   0.573
+   240 s    profit       285                  95%                    +0.44                   0.672
+   240 s    loss         231                  92%                    +0.07                   0.611

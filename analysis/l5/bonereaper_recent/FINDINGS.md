@@ -233,3 +233,28 @@ favourite lines on our venue, carry this bias and should not be relied on.
 ## Weighting audit
 
 See `analysis/l5/btc5m/WEIGHTING_AUDIT_20261120.md`: several levels above are corrected there; that file supersedes them.
+
+## Inventory trajectory (2026-11-20): what drives his concentration
+
+`inventory_trajectory.py` -> `INVENTORY_TRAJECTORY_RESULT.txt`,
+10-second path of the 24 windows in `trajectory_20261120_1900_2100.csv`,
+`post_fill_drift.py` -> `POST_FILL_DRIFT_RESULT.txt`. All numbers are
+dollars summed over fills (no per-window averaging).
+
+- He does not defend a position. When the side he holds more of is still
+  the favourite, ~90% of new dollars go to it. When it has become the
+  underdog, only 25-43% do: he moves to the new favourite.
+- His choice of side beats a price-and-minute-only rule by +3.8 c per
+  dollar [+2.4,+5.1] on 11-19/20 when both are scored at the price 2 s
+  before his fill (+10.6 c at the price 10 s before). He buys the side
+  that is in the act of moving up.
+- At the prices he actually paid, the same fills return -1.0 c per dollar
+  on 11-19/20 (-0.4 c on 11-17/18). He pays 0.9 c a share above the
+  2-s-old price and 3.8 c above the 10-s-old price.
+- After his fills the price does not come back: it sits +0.5 c a share
+  above what he paid at 5, 15 and 30 s (both halves, intervals exclude
+  zero). So his buying carries a small real short-horizon lead, about
+  half a cent, smaller than the venue fee he pays.
+- Profitable vs losing windows at 60 s: profitable ones are already net
+  long the favourite (+0.27 of shares held, 11-19/20); losing ones are
+  balanced (-0.02).

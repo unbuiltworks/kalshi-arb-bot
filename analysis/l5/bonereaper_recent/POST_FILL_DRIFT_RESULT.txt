@@ -1,0 +1,8 @@
+11-17/18   5 s after: +0.0061 a share [+0.0052,+0.0070]  windows 573
+11-17/18  15 s after: +0.0044 a share [+0.0028,+0.0062]  windows 573
+11-17/18  30 s after: +0.0047 a share [+0.0021,+0.0073]  windows 573
+11-17/18  60 s after: +0.0050 a share [+0.0012,+0.0089]  windows 573
+11-19/20   5 s after: +0.0047 a share [+0.0037,+0.0056]  windows 514
+11-19/20  15 s after: +0.0045 a share [+0.0028,+0.0064]  windows 514
+11-19/20  30 s after: +0.0046 a share [+0.0017,+0.0074]  windows 514
+11-19/20  60 s after: +0.0037 a share [-0.0007,+0.0080]  windows 514
