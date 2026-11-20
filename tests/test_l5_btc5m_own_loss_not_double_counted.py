@@ -106,6 +106,7 @@ def test_an_absent_stale_or_malformed_publication_adds_everything(published):
     r = read(own(**{M1: "-0.0114"}), **over)
     assert D(r["utc_day_realized_usd"]) == D("-0.0228")
     assert r["btc5m_shortfall_added_by_market"] == {}
+    assert r["btc5m_markets_added_in_full"] == [M1]
 
 
 @pytest.mark.parametrize("amount", ["?", "", None, "nan", "inf", [1]])
@@ -171,9 +172,9 @@ def test_the_combined_figure_is_never_better_than_this_lanes_own_result():
       2. a market with a readable published amount counts for at most the
          lane's own result -- min(booked, own) -- so nothing it lost there
          can vanish;
-      3. everything else is handled EXACTLY as before this change: with a
-         usable publication, a market without a readable amount is added
-         in full; without one, the whole total is added as it always was.
+      3. everything else adds every loss in full, market by market, and
+         no gain: a market without a readable amount, and every market
+         when there is no usable publication at all.
     """
     rng = random.Random(20261120)
     cents = lambda lo, hi: D(rng.randint(lo, hi)) / D(1000)   # noqa: E731
@@ -211,8 +212,8 @@ def test_the_combined_figure_is_never_better_than_this_lanes_own_result():
         seen.add(mode)
         assert combined <= account_day                           # 1
         if mode != "ok":
-            assert combined == account_day + min(                # 3
-                D(0), sum(o.values(), D(0))), mode
+            assert combined == account_day + sum(                # 3
+                (min(D(0), v) for v in o.values()), D(0)), mode
             continue
         expect = other
         for m in markets:
@@ -263,3 +264,18 @@ def test_the_executor_breaks_the_day_down_by_market(tmp_path):
         == ex.day_settled_pnl(at)
     ex._ledger["settled"]["bad"] = {"settled_at": "?", "settlement_pnl": "1"}
     assert ex.day_settled_by_market(at) is None
+
+
+def test_without_a_publication_a_gain_no_longer_cancels_a_loss():
+    """The hole in the deployed fallback. A fully matched window bought
+    above 1.00 lost 0.03 here and is invisible to the account service; a
+    second window's winning residual was booked there as +0.05. The old
+    fallback added min(0, -0.03 + 0.05) = 0 and the loss vanished."""
+    lane = own(**{M1: "-0.03", M2: "0.05"})
+    old = read(D("0.02"), account_day="0.05")          # total, no breakdown
+    assert D(old["utc_day_realized_usd"]) == D("0.05")           # as it was
+    new = read(lane, account_day="0.05")
+    assert D(new["utc_day_realized_usd"]) == D("0.02")           # the truth
+    both = read(lane, account_day="0.05",
+                retired_results_utc_day=pub({M2: "0.05"}))
+    assert D(both["utc_day_realized_usd"]) == D("0.02")
