@@ -490,21 +490,32 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
     same record. So the correction can remove only what is provably counted
     twice. It cannot make a loss disappear.
 
-    NOTHING PUBLISHED IS THE OLD BEHAVIOUR, EXACTLY: no breakdown of this
-    lane's own result, no `retired_results_utc_day`, one for another UTC
-    day, or an unreadable one all return `min(0, total)` as before.
-    An amount that cannot be read for ONE market adds that market in full.
-    A gain is never added and never offsets another market's loss.
+    NOTHING PUBLISHED ADDS EVERY LOSS, MARKET BY MARKET: no
+    `retired_results_utc_day`, one for another UTC day, or an unreadable
+    one adds  sum of min(0, o)  over this lane's markets. An amount that
+    cannot be read for ONE market adds that market in full.
+
+    A GAIN IS NEVER ADDED AND NEVER OFFSETS ANOTHER MARKET'S LOSS. Before
+    this the fallback was min(0, total), which let a gain here cancel a
+    loss here -- while the account service could ALSO have booked that
+    gain. A fully matched window bought above 1.00 (a loss that service
+    never sees) beside a window whose winning residual it booked as a gain
+    then read as no loss at all. Flooring each market closes that with or
+    without the publication; it can only add loss.
+
+    Only when this lane's result arrives with no breakdown at all is the
+    total used, as `min(0, total)`.
     """
     total = min(D(0), Decimal(own))
     by = getattr(own, "by_market", None)
-    pub = risk.get("retired_results_utc_day")
-    if not isinstance(by, Mapping) or not isinstance(pub, Mapping):
+    if not isinstance(by, Mapping):
         return total, [], {}
-    booked = pub.get("results")
+    floor = sum((min(D(0), v) for v in by.values()), D(0))
+    pub = risk.get("retired_results_utc_day")
+    booked = pub.get("results") if isinstance(pub, Mapping) else None
     if not isinstance(booked, Mapping) \
             or str(pub.get("utc_day")) != str(risk.get("utc_day")):
-        return total, [], {}
+        return floor, sorted(by), {}
     add, full, gaps = D(0), [], {}
     for m in sorted(by):
         o = by[m]

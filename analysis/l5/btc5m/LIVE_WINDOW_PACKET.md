@@ -793,3 +793,30 @@ Program: no program covers BTC 5m or 15m markets today; the only crypto program 
 Promotions pay non-withdrawable credit. Account record: $0 commission on all 57 orders of the
 two windows and cash reconciling to the cent, so nothing was credited. Nothing collectible
 changes BTC5m net.
+
+## Combined failure behaviour of the two accounting fixes (2026-11-20 18:40Z)
+
+`CROSS_SERVICE_LOSS_ACCOUNTING_RESULT.txt`: both services' real code, the deployed and the
+candidate version of each (four combinations), ten ledger states plus a stale and an
+unreachable record. Scripts in `cross_service/`.
+
+- Candidate lane with either account-service version: every case is exact, conservative, or a
+  refusal. No case understates a loss.
+- Stale (31 s), unreachable, and day-unknown records (undated row, unreadable row,
+  unattributed residual): refused in all four combinations.
+- The DEPLOYED lane understates a loss in one state (S5), with either account-service
+  version: a fully matched window bought above 1.00 (invisible to the account service) beside
+  a window whose winning residual that service booked as a gain. The deployed fallback nets
+  the lane's gain against its loss. The candidate floors each market at zero and closes this
+  on its own, so the candidate lane is at least as conservative as the deployed one in every
+  state, with or without the account-service patch.
+- Deploying the account-service patch first changes nothing for the deployed lane (it ignores
+  the added key). Deploying the lane first leaves the double count in place.
+
+Release candidate updated for that: `release/l5-btc5m-accounting-20261120` at
+`2553b8d6991f455bb2ceb8df74ac16aa20e68347` (2,474 passed, the same 31 baseline failures).
+
+Not covered by either fix: the lane adds only TODAY's own losses to the lifetime figure. A
+loss from an earlier UTC day that the account service never booked (a fully matched window)
+is in neither service's cumulative figure. The cash-based equity baseline and portfolio
+drawdown limits do see it; the $75 cumulative ceiling does not.

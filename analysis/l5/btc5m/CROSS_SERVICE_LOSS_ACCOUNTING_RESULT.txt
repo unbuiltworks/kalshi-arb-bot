@@ -1,0 +1,64 @@
+Combined UTC-day figure the BTC5m lane judges its daily halt on, by deployment combination.
+Both services' real code. 'truth' = the account's other result (-1.00) plus the lane's own results.
+lane: deployed 27cbdb32 / candidate.   account service: deployed cfac6707 / with the publication patch.
+
+S1 not yet retired here | fresh   truth -1.05
+    lane deployed  account deployed  -> -1.05    EXACT
+    lane candidate account deployed  -> -1.05    EXACT
+    lane deployed  account patched   -> -1.05    EXACT
+    lane candidate account patched   -> -1.05    EXACT
+S2 booked at the $1 bound (harsher) | fresh   truth -1.0151
+    lane deployed  account deployed  -> -1.4551  CONSERVATIVE by 0.4400
+    lane candidate account deployed  -> -1.4551  CONSERVATIVE by 0.4400
+    lane deployed  account patched   -> -1.4551  CONSERVATIVE by 0.4400
+    lane candidate account patched   -> -1.44    CONSERVATIVE by 0.4249
+S2 booked at the $1 bound (harsher) | stale 31 s   truth -1.0151
+    lane deployed  account deployed  -> None     REFUSES (ACCOUNT_RISK_STALE)
+    lane candidate account deployed  -> None     REFUSES (ACCOUNT_RISK_STALE)
+    lane deployed  account patched   -> None     REFUSES (ACCOUNT_RISK_STALE)
+    lane candidate account patched   -> None     REFUSES (ACCOUNT_RISK_STALE)
+S2 booked at the $1 bound (harsher) | unreachable   truth -1.0151
+    lane deployed  account deployed  -> None     REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)
+    lane candidate account deployed  -> None     REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)
+    lane deployed  account patched   -> None     REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)
+    lane candidate account patched   -> None     REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)
+S3 booked ZERO, lane lost | fresh   truth -1.05
+    lane deployed  account deployed  -> -1.05    EXACT
+    lane candidate account deployed  -> -1.05    EXACT
+    lane deployed  account patched   -> -1.05    EXACT
+    lane candidate account patched   -> -1.05    EXACT
+S4 restated to the true result | fresh   truth -1.0114
+    lane deployed  account deployed  -> -1.0228  CONSERVATIVE by 0.0114
+    lane candidate account deployed  -> -1.0228  CONSERVATIVE by 0.0114
+    lane deployed  account patched   -> -1.0228  CONSERVATIVE by 0.0114
+    lane candidate account patched   -> -1.0114  EXACT
+S5 gain booked here, matched loss unseen | fresh   truth -0.98
+    lane deployed  account deployed  -> -0.95    UNDERSTATES LOSS by 0.03
+    lane candidate account deployed  -> -0.98    EXACT
+    lane deployed  account patched   -> -0.95    UNDERSTATES LOSS by 0.03
+    lane candidate account patched   -> -0.98    EXACT
+S6 one loss booked, one not yet | fresh   truth -1.0265
+    lane deployed  account deployed  -> -1.0379  CONSERVATIVE by 0.0114
+    lane candidate account deployed  -> -1.0379  CONSERVATIVE by 0.0114
+    lane deployed  account patched   -> -1.0379  CONSERVATIVE by 0.0114
+    lane candidate account patched   -> -1.0265  EXACT
+S7 booked on the PREVIOUS UTC day | fresh   truth -1.05
+    lane deployed  account deployed  -> -1.05    EXACT
+    lane candidate account deployed  -> -1.05    EXACT
+    lane deployed  account patched   -> -1.05    EXACT
+    lane candidate account patched   -> -1.05    EXACT
+S8 an undated row (day unknown) | fresh   truth -1.05
+    lane deployed  account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane deployed  account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+S9 unattributed residual (day unknown) | fresh   truth -1.05
+    lane deployed  account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane deployed  account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+S10 an unreadable row (day unknown) | fresh   truth -1.05
+    lane deployed  account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account deployed  -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane deployed  account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
+    lane candidate account patched   -> None     REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)
