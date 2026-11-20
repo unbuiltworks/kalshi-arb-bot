@@ -219,3 +219,15 @@ market or time.
 
 The four decisions stay separate: this build, the configuration, the waiver
 with the exact window authorization, and arming.
+
+### Step 1 done — deployed disarmed (owner-approved, 2026-11-20 12:00Z)
+
+`l5-btc5m-live` runs `16216c6b9019e111096fadee890f85e0427dd1fb`, deployment
+`ea0b79fc`, built on the first attempt. No variable changed. Boot 12:01:49Z:
+no error lines; settlement recovery clean (exposure $0 before and after);
+`L5_BTC5M_ARM` `armed: false`, `ENVELOPE_EXPIRED`; `can_submit: false` on
+every loop since. Effective configuration identical to the previous build:
+clip 0.05, side 0.30, unmatched 0.10, pair ceiling 0.99, book-relative and
+repeat on, live-order bound 2, taker off; requote 0, loss ceiling 0, leg age
+0, ranking on (the step 2 changes are not applied). Watchdog 12:02Z: not
+halted, 0 open orders, three registries OK. Rollback: deployment `cd13ec23`.
