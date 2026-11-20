@@ -107,3 +107,37 @@ Fee change check: Polymarket's own market records at 20:00Z show BTC 5-minute ma
 NO PROMOTION. The only candidate is a taker buy of a 0.97+ favourite in the last 30 s. What it
 needs: roughly 250 more PMUS windows with the ask AND its size in the last 30 s, to bound the
 loss rate under 1.2% and show the offer is there to be lifted.
+
+## Late-favourite taker candidate on 2,572 PMUS windows: REJECTED (2026-11-20)
+
+`analysis/l5/btc5m/LATE_FAVOURITE_RECORDER_RESULT.txt`; data
+`analysis/l5/btc5m/evidence/recorder_late_quotes_20261111_20261120.jsonl.gz` (37,957 quotes
+from the existing public recorder's logs, final 30 s of 2,574 windows, 2026-11-11 21:00Z to
+2026-11-20 20:00Z; six windows on 11-13 06:00-06:30Z are absent from the logs). 2,572 usable,
+2,571 with a known outcome; the two outcome readings agree on all 2,543 windows that have
+both. Out of sample = the 2,385 windows after the 187 the candidate was found on.
+
+Candidate, fixed beforehand: ask at or above 0.97 with at most 30 s left. Taker fee
+0.095 × p × (1 − p), no rebate. No sizes exist for these markets' final 30 s.
+
+| Out of sample | Opportunities | Filled | Lost | Loss rate (95% upper) | Net per share | At the upper bound |
+|---|---|---|---|---|---|---|
+| At the trigger quote | 359 (15.1% of windows) | 359 | 5 | 1.39% (3.22%) | +$0.0042 | −$0.0140 |
+| One quote later (~2 s) | 359 | 247 | 5 | 2.02% (4.65%) | +$0.0044 | −$0.0221 |
+| Two quotes later (~4 s) | 359 | 153 | 5 | 3.27% (7.42%) | −$0.0032 | −$0.0451 |
+
+- On the discovery windows it was 36 of 36 wins, +2.0 cents a share. Out of sample it is
+  +0.4 cents, a fifth of that.
+- 31% of opportunities have no ask left after ~2 s and 57% after ~4 s. The ones that remain
+  include all five losses.
+- Break-even loss rate at these prices is about 2.4%; observed 2.0% at a 2 s delay.
+- By date at a 2 s delay: six of nine days positive, three negative; the last two days lost
+  (2 of 20 on 11-19, 1 of 21 on 11-20). 08-16 UTC is negative.
+- Dollars: at a 2 s delay, 247 fills in 2,385 windows at +$0.0044 a share is +$0.00046 per
+  share per window, about $0.13 a day per share of clip. One loss costs $0.98 a share: about
+  40 average wins.
+- Tighter thresholds looked at afterwards (0.98: 1 loss in 197 at a 2 s delay, +1.4 cents)
+  are not validated: chosen after seeing this data, and still negative at their bound.
+
+The candidate fails on its own terms: no defensible positive net expected value after fees
+and delay. It is rejected; no taker release is proposed.
