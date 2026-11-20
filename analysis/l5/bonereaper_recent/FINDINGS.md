@@ -201,3 +201,31 @@ used to find it (1,387 windows): +0.034 [+0.021,+0.047] before fee,
 +0.013 [-0.000,+0.026] after our 0.095 fee. Positive before fees on 9 of
 10 days. Not established after fees. Unknown: size available at the ask
 (the recorder logs none) and fills faster than 10 s.
+
+## CORRECTION (2026-11-20): the mid-priced favourite candidate is withdrawn
+
+The hold-out table above averaged each window's MEAN return, counting a
+window with one signal the same as a window with twenty-five. Windows
+where the signalled side loses stay in the 0.50-0.70 band longer (11.4
+signals against 8.4), so that average favours winners. It is not what
+any buying rule earns.
+
+`favourite_band_weighting_check.py`, same signals, prices and fee:
+- every signal bought, per share after fee: -0.020 [-0.037,-0.004] on
+  11-17..20, -0.037 [-0.050,-0.023] on 11-11..16, -0.030 over ten days.
+- one buy per window at the first signal (`favourite_band_one_entry.py`):
+  -0.031 per window [-0.050,-0.011] over 2,378 windows.
+- no price x time cell inside the band is positive on the hold-out days
+  (`favourite_band_where.py`).
+
+Maker against taker for the same signal (`favourite_band_execution.py`,
+same per-window averaging, so only the ordering is usable): the resting
+bid is worse than the taker under every hold time and both fill
+assumptions.
+
+The same per-window averaging was used in the selection test and the
+spot-discrepancy tables. Their PAIRED results (his side minus the
+favourite, his buys minus other takers in the same window and band) are
+differences inside a window and stand. Their LEVELS, including "every
+taker earns +4 to +9 c at 0.50-0.85 on Polymarket" and the positive
+favourite lines on our venue, carry this bias and should not be relied on.

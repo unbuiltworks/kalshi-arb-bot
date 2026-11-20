@@ -1,0 +1,6 @@
+all ten days         180-280 s   windows   16  mean price 0.629  net per window -0.1476 [-0.373,+0.095]  sd 0.48
+all ten days         60-180 s    windows  107  mean price 0.628  net per window -0.0223 [-0.109,+0.063]  sd 0.47
+all ten days         any time    windows 2378  mean price 0.595  net per window -0.0305 [-0.050,-0.011]  sd 0.48
+all ten days         first 60 s  windows 2255  mean price 0.593  net per window -0.0301 [-0.049,-0.011]  sd 0.48
+found on 11-17..20   any time    windows  991  mean price 0.597  net per window -0.0085 [-0.037,+0.020]  sd 0.46
+hold-out 11-11..16   any time    windows 1387  mean price 0.593  net per window -0.0462 [-0.071,-0.020]  sd 0.48

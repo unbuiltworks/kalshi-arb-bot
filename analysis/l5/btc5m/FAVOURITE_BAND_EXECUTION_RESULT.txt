@@ -1,0 +1,84 @@
+
+== FOUND ON 11-17..20 ==
+   method                             fill rate  USD per signal [95%]             USD per maker fill
+   TAKER                                100.0%  +0.0374 [+0.021,+0.053] w= 991   
+   MAKER JOIN    hold 10s STRICT         43.9%  -0.0292 [-0.037,-0.021] w= 991   -0.0897
+   MAKER+T JOIN  hold 10s STRICT         99.3%  +0.0056 [-0.010,+0.020] w= 991   
+   MAKER JOIN    hold 10s TOUCH          44.8%  -0.0289 [-0.037,-0.021] w= 991   -0.0881
+   MAKER+T JOIN  hold 10s TOUCH          99.3%  +0.0058 [-0.010,+0.021] w= 991   
+   MAKER IMPROVE hold 10s STRICT         44.5%  -0.0296 [-0.037,-0.022] w= 991   -0.0899
+   MAKER+T IMPROVE hold 10s STRICT       99.2%  +0.0051 [-0.010,+0.020] w= 991   
+   MAKER IMPROVE hold 10s TOUCH          45.4%  -0.0294 [-0.037,-0.021] w= 991   -0.0885
+   MAKER+T IMPROVE hold 10s TOUCH        99.2%  +0.0054 [-0.010,+0.020] w= 991   
+   MAKER JOIN    hold 30s STRICT         62.3%  -0.0396 [-0.050,-0.030] w= 991   -0.0876
+   MAKER+T JOIN  hold 30s STRICT         99.3%  -0.0136 [-0.028,+0.000] w= 991   
+   MAKER JOIN    hold 30s TOUCH          63.0%  -0.0388 [-0.049,-0.029] w= 991   -0.0864
+   MAKER+T JOIN  hold 30s TOUCH          99.3%  -0.0127 [-0.027,+0.001] w= 991   
+   MAKER IMPROVE hold 30s STRICT         62.7%  -0.0400 [-0.050,-0.030] w= 991   -0.0884
+   MAKER+T IMPROVE hold 30s STRICT       99.2%  -0.0139 [-0.029,+0.000] w= 991   
+   MAKER IMPROVE hold 30s TOUCH          63.4%  -0.0391 [-0.050,-0.029] w= 991   -0.0870
+   MAKER+T IMPROVE hold 30s TOUCH        99.2%  -0.0131 [-0.028,+0.001] w= 991   
+   MAKER JOIN    hold 60s STRICT         70.8%  -0.0439 [-0.055,-0.033] w= 991   -0.0868
+   MAKER+T JOIN  hold 60s STRICT         99.3%  -0.0270 [-0.041,-0.013] w= 991   
+   MAKER JOIN    hold 60s TOUCH          71.4%  -0.0427 [-0.054,-0.032] w= 991   -0.0850
+   MAKER+T JOIN  hold 60s TOUCH          99.3%  -0.0258 [-0.040,-0.012] w= 991   
+   MAKER IMPROVE hold 60s STRICT         71.1%  -0.0442 [-0.056,-0.033] w= 991   -0.0872
+   MAKER+T IMPROVE hold 60s STRICT       99.2%  -0.0273 [-0.041,-0.014] w= 991   
+   MAKER IMPROVE hold 60s TOUCH          71.7%  -0.0429 [-0.054,-0.032] w= 991   -0.0853
+   MAKER+T IMPROVE hold 60s TOUCH        99.2%  -0.0261 [-0.040,-0.012] w= 991   
+
+== HOLD-OUT 11-11..16 ==
+   method                             fill rate  USD per signal [95%]             USD per maker fill
+   TAKER                                100.0%  +0.0131 [+0.000,+0.026] w=1387   
+   MAKER JOIN    hold 10s STRICT         43.5%  -0.0361 [-0.042,-0.030] w=1387   -0.1049
+   MAKER+T JOIN  hold 10s STRICT         99.5%  -0.0169 [-0.030,-0.004] w=1387   
+   MAKER JOIN    hold 10s TOUCH          44.7%  -0.0355 [-0.042,-0.029] w=1387   -0.1020
+   MAKER+T JOIN  hold 10s TOUCH          99.5%  -0.0166 [-0.029,-0.004] w=1387   
+   MAKER IMPROVE hold 10s STRICT         44.4%  -0.0367 [-0.043,-0.030] w=1387   -0.1050
+   MAKER+T IMPROVE hold 10s STRICT       99.5%  -0.0176 [-0.030,-0.005] w=1387   
+   MAKER IMPROVE hold 10s TOUCH          45.7%  -0.0368 [-0.043,-0.030] w=1387   -0.1036
+   MAKER+T IMPROVE hold 10s TOUCH        99.5%  -0.0172 [-0.030,-0.005] w=1387   
+   MAKER JOIN    hold 30s STRICT         61.6%  -0.0486 [-0.057,-0.040] w=1387   -0.1025
+   MAKER+T JOIN  hold 30s STRICT         99.5%  -0.0353 [-0.048,-0.023] w=1387   
+   MAKER JOIN    hold 30s TOUCH          62.5%  -0.0473 [-0.056,-0.039] w=1387   -0.0995
+   MAKER+T JOIN  hold 30s TOUCH          99.5%  -0.0344 [-0.047,-0.022] w=1387   
+   MAKER IMPROVE hold 30s STRICT         62.3%  -0.0491 [-0.058,-0.041] w=1387   -0.1030
+   MAKER+T IMPROVE hold 30s STRICT       99.5%  -0.0357 [-0.048,-0.023] w=1387   
+   MAKER IMPROVE hold 30s TOUCH          63.3%  -0.0479 [-0.056,-0.040] w=1387   -0.1002
+   MAKER+T IMPROVE hold 30s TOUCH        99.5%  -0.0347 [-0.047,-0.022] w=1387   
+   MAKER JOIN    hold 60s STRICT         70.0%  -0.0533 [-0.063,-0.044] w=1387   -0.1029
+   MAKER+T JOIN  hold 60s STRICT         99.5%  -0.0453 [-0.057,-0.034] w=1387   
+   MAKER JOIN    hold 60s TOUCH          70.7%  -0.0518 [-0.061,-0.042] w=1387   -0.1003
+   MAKER+T JOIN  hold 60s TOUCH          99.5%  -0.0437 [-0.056,-0.032] w=1387   
+   MAKER IMPROVE hold 60s STRICT         70.5%  -0.0535 [-0.063,-0.044] w=1387   -0.1031
+   MAKER+T IMPROVE hold 60s STRICT       99.5%  -0.0457 [-0.057,-0.034] w=1387   
+   MAKER IMPROVE hold 60s TOUCH          71.2%  -0.0524 [-0.062,-0.043] w=1387   -0.1009
+   MAKER+T IMPROVE hold 60s TOUCH        99.5%  -0.0440 [-0.056,-0.032] w=1387   
+
+== ALL TEN DAYS ==
+   method                             fill rate  USD per signal [95%]             USD per maker fill
+   TAKER                                100.0%  +0.0232 [+0.013,+0.033] w=2378   
+   MAKER JOIN    hold 10s STRICT         43.7%  -0.0332 [-0.038,-0.028] w=2378   -0.0985
+   MAKER+T JOIN  hold 10s STRICT         99.4%  -0.0076 [-0.017,+0.002] w=2378   
+   MAKER JOIN    hold 10s TOUCH          44.7%  -0.0328 [-0.038,-0.028] w=2378   -0.0962
+   MAKER+T JOIN  hold 10s TOUCH          99.4%  -0.0072 [-0.017,+0.003] w=2378   
+   MAKER IMPROVE hold 10s STRICT         44.5%  -0.0338 [-0.039,-0.029] w=2378   -0.0987
+   MAKER+T IMPROVE hold 10s STRICT       99.4%  -0.0081 [-0.018,+0.002] w=2378   
+   MAKER IMPROVE hold 10s TOUCH          45.6%  -0.0337 [-0.039,-0.029] w=2378   -0.0973
+   MAKER+T IMPROVE hold 10s TOUCH        99.4%  -0.0078 [-0.018,+0.002] w=2378   
+   MAKER JOIN    hold 30s STRICT         61.9%  -0.0449 [-0.051,-0.039] w=2378   -0.0963
+   MAKER+T JOIN  hold 30s STRICT         99.4%  -0.0263 [-0.036,-0.017] w=2378   
+   MAKER JOIN    hold 30s TOUCH          62.7%  -0.0438 [-0.050,-0.037] w=2378   -0.0940
+   MAKER+T JOIN  hold 30s TOUCH          99.4%  -0.0254 [-0.035,-0.016] w=2378   
+   MAKER IMPROVE hold 30s STRICT         62.5%  -0.0453 [-0.052,-0.039] w=2378   -0.0969
+   MAKER+T IMPROVE hold 30s STRICT       99.4%  -0.0266 [-0.036,-0.017] w=2378   
+   MAKER IMPROVE hold 30s TOUCH          63.3%  -0.0442 [-0.051,-0.038] w=2378   -0.0947
+   MAKER+T IMPROVE hold 30s TOUCH        99.4%  -0.0257 [-0.035,-0.016] w=2378   
+   MAKER JOIN    hold 60s STRICT         70.3%  -0.0494 [-0.057,-0.042] w=2378   -0.0961
+   MAKER+T JOIN  hold 60s STRICT         99.4%  -0.0377 [-0.047,-0.029] w=2378   
+   MAKER JOIN    hold 60s TOUCH          71.0%  -0.0480 [-0.055,-0.041] w=2378   -0.0939
+   MAKER+T JOIN  hold 60s TOUCH          99.4%  -0.0363 [-0.045,-0.027] w=2378   
+   MAKER IMPROVE hold 60s STRICT         70.7%  -0.0496 [-0.057,-0.042] w=2378   -0.0964
+   MAKER+T IMPROVE hold 60s STRICT       99.4%  -0.0380 [-0.047,-0.029] w=2378   
+   MAKER IMPROVE hold 60s TOUCH          71.4%  -0.0484 [-0.056,-0.041] w=2378   -0.0944
+   MAKER+T IMPROVE hold 60s TOUCH        99.4%  -0.0366 [-0.046,-0.028] w=2378   
