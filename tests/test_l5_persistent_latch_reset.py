@@ -455,3 +455,140 @@ def test_a_reset_and_an_arming_cannot_share_a_boot(lane, monkeypatch):
     monkeypatch.setenv(RUN.X.LIVE_ENV, RUN.X.ARM_TOKEN)
     assert RUN.clear_latch_if_owner_asked(Ex(), T)["cleared"] is False
     assert P.read_state(lane)["state"] == P.STOPPED
+
+
+# ============================ A STORED ARMED IS NOT A FRESH AUTHORIZATION
+#
+# The loop's gate asks only whether the envelope is valid and the stored
+# state is ARMED. So an ARMED left by an earlier campaign plus any valid
+# envelope used to pass it whenever the arming ceremony refused or did not
+# run. `demote_stale_armed` removes a stored ARMED this boot did not earn.
+
+from src import l5_live_authorization as AUTH   # noqa: E402
+
+GATE_NOW = dt.datetime(2026, 11, 16, 18, 21, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def old_armed(tmp_path, monkeypatch):
+    """ARMED on disk for an EARLIER campaign, its documents long replaced."""
+    p = str(tmp_path / "state.json")
+    out = do(tmp_path)                              # campaign A armed
+    assert out["ok"] and P.read_state(p)["state"] == P.ARMED
+    monkeypatch.setenv(P.STATE_PATH_ENV, p)
+    monkeypatch.setenv(P.DEPLOYMENT_ENV, SHA)
+    return p
+
+
+def set_docs(monkeypatch, env=None, camp=None):
+    monkeypatch.setenv(P.ENVELOPE_ENV, envelope() if env is None else env)
+    monkeypatch.setenv(AUTH.CAMPAIGN_APPROVAL_ENV,
+                       campaign() if camp is None else camp)
+
+
+def test_the_weakness_a_new_valid_envelope_passes_the_gate_on_an_old_armed(
+        old_armed, monkeypatch):
+    """Stated as it was: without the demotion, the gate says yes."""
+    set_docs(monkeypatch, env=envelope(nonce="a-different-envelope-2"),
+             camp=campaign(nonce="b5m-a-different-campaign-0002"))
+    assert RUN.persistent_gate(now=GATE_NOW)["ok"] is True
+
+
+@pytest.mark.parametrize("refusal", [
+    "ARMED_FOR_ANOTHER_CAMPAIGN", "CAMPAIGN_ALREADY_STARTED",
+    "CAMPAIGN_NOT_APPROVED", "ENVELOPE:ENVELOPE_EXPIRED",
+])
+def test_a_refused_ceremony_removes_an_armed_it_did_not_earn(
+        old_armed, monkeypatch, refusal):
+    set_docs(monkeypatch, env=envelope(nonce="a-different-envelope-2"),
+             camp=campaign(nonce="b5m-a-different-campaign-0002"))
+    out = RUN.demote_stale_armed({"ok": False, "reason": refusal}, GATE_NOW)
+    assert out["demoted"] is True and out["ceremony"] == refusal
+    assert P.read_state(old_armed)["state"] == P.MONITOR
+    gate = RUN.persistent_gate(now=GATE_NOW)
+    assert gate["ok"] is False and gate["reason"] == "STATE_NOT_ARMED"
+
+
+def test_no_ceremony_at_all_also_removes_it(old_armed, monkeypatch):
+    """No planned market, so the ceremony never ran: the old ARMED goes."""
+    set_docs(monkeypatch, env=envelope(nonce="a-different-envelope-2"))
+    out = RUN.demote_stale_armed(None, GATE_NOW)
+    assert out["demoted"] is True
+    assert out["ceremony"] == "NO_CEREMONY_THIS_BOOT"
+    assert P.read_state(old_armed)["state"] == P.MONITOR
+
+
+@pytest.mark.parametrize("env, camp", [
+    ("", None), (None, ""), ("", ""),
+])
+def test_missing_documents_never_keep_an_armed(old_armed, monkeypatch,
+                                               env, camp):
+    set_docs(monkeypatch, env=env, camp=camp)
+    out = RUN.demote_stale_armed({"ok": False, "reason": "x"}, GATE_NOW)
+    assert out["demoted"] is True
+    assert P.read_state(old_armed)["state"] == P.MONITOR
+
+
+def test_the_same_documents_after_a_restart_keep_it(old_armed, monkeypatch):
+    """The identical authorization, re-read mid-campaign: the ceremony
+    refuses because the first window has passed, and ARMED rightly stays."""
+    set_docs(monkeypatch)
+    before = disk(old_armed)
+    out = RUN.demote_stale_armed(
+        {"ok": False, "reason": "CAMPAIGN_ALREADY_STARTED"}, GATE_NOW)
+    assert out == {"kept": True, "state": P.ARMED, "why": out["why"]}
+    assert disk(old_armed) == before
+
+
+def test_the_same_documents_do_not_keep_it_once_the_envelope_expires(
+        old_armed, monkeypatch):
+    set_docs(monkeypatch)
+    late = dt.datetime(2026, 11, 16, 18, 41, 0, tzinfo=UTC)
+    out = RUN.demote_stale_armed(
+        {"ok": False, "reason": "ENVELOPE:ENVELOPE_EXPIRED"}, late)
+    assert out["demoted"] is True
+    assert P.read_state(old_armed)["state"] == P.MONITOR
+
+
+def test_a_ceremony_that_succeeded_is_left_alone(old_armed, monkeypatch):
+    set_docs(monkeypatch)
+    before = disk(old_armed)
+    assert RUN.demote_stale_armed({"ok": True, "armed": True}, GATE_NOW) \
+        is None
+    assert disk(old_armed) == before
+
+
+@pytest.mark.parametrize("state", [P.STOPPED, P.HALTED, P.MONITOR])
+def test_it_never_touches_a_latch_or_a_resting_state(tmp_path, monkeypatch,
+                                                     state):
+    p = str(tmp_path / "s.json")
+    P.write_state(state, why="x", now=LATCHED_AT, path=p)
+    monkeypatch.setenv(P.STATE_PATH_ENV, p)
+    set_docs(monkeypatch)
+    before = disk(p)
+    assert RUN.demote_stale_armed({"ok": False, "reason": "x"}, GATE_NOW) \
+        is None
+    assert disk(p) == before
+
+
+def test_if_it_cannot_be_removed_the_process_must_not_continue(
+        old_armed, monkeypatch):
+    set_docs(monkeypatch, env=envelope(nonce="a-different-envelope-2"))
+    monkeypatch.setattr(P, "write_state", lambda *a, **k: {
+        "ok": False, "reason": "STATE_NOT_WRITTEN"})
+    out = RUN.demote_stale_armed({"ok": False, "reason": "x"}, GATE_NOW)
+    assert out["demoted"] is False
+    src = inspect.getsource(RUN)
+    i = src.index("_stale = demote_stale_armed(_armed,")
+    block = src[i:i + 700]
+    assert 'if _stale.get("demoted") is False:' in block
+    assert "return 0" in block
+
+
+def test_the_demotion_runs_after_the_ceremony_and_before_the_loop():
+    src = inspect.getsource(RUN)
+    a = src.index("_armed = PMODE.enter_armed(")
+    b = src.index("_stale = demote_stale_armed(_armed,")
+    c = src.index("PERSISTENT MODE TAKES OVER THE LOOP")
+    assert a < b < c
+    assert src.count("_stale = demote_stale_armed(") == 1

@@ -155,6 +155,53 @@ def resident_when_disarmed() -> bool:
         == "YES"
 
 
+def demote_stale_armed(armed: Any, now: dt.datetime
+                       ) -> Optional[Dict[str, Any]]:
+    """A stored ARMED must never stand in for a fresh authorization.
+
+    THE WEAKNESS THIS CLOSES. The loop's gate asks only "is the envelope
+    valid and is the stored state ARMED?". The arming ceremony is what
+    proves the stored ARMED belongs to the documents now in force -- but
+    when it REFUSED (another campaign's digest, a campaign already started)
+    or did not run at all (no envelope, no planned market), the runner
+    logged that and carried on. A valid envelope plus an ARMED left on the
+    volume by an EARLIER campaign would then pass the gate.
+
+    So after the ceremony, a stored ARMED survives only if either
+      * this boot's ceremony succeeded, or
+      * its digest is exactly the digest of the envelope and campaign
+        documents set NOW, and that envelope is valid now (the same
+        authorization, re-read after a restart).
+    Anything else is written down to MONITOR. A latch is never touched:
+    this reads ARMED and nothing else. Returns None when there was nothing
+    to decide, else what it did; `demoted: False` means the write failed
+    and the caller must not continue.
+    """
+    st = PMODE.read_state()
+    if not st.get("ok") or st.get("state") != PMODE.ARMED:
+        return None
+    if isinstance(armed, Mapping) and armed.get("ok") is True:
+        return None
+    raw_env = os.getenv(PMODE.ENVELOPE_ENV) or ""
+    raw_camp = os.getenv(AUTH.CAMPAIGN_APPROVAL_ENV) or ""
+    stored = (st.get("detail") or {}).get("latch_digest")
+    if raw_env.strip() and raw_camp.strip() and stored:
+        env = PMODE.envelope(now=now)
+        if env.get("ok") and stored == PMODE.arm_digest(raw_env, raw_camp):
+            return {"kept": True, "state": PMODE.ARMED,
+                    "why": "the stored ARMED carries the digest of the "
+                           "documents in force"}
+    why = (str(armed.get("reason")) if isinstance(armed, Mapping)
+           else "NO_CEREMONY_THIS_BOOT")
+    out = PMODE.write_state(PMODE.MONITOR, why="STALE_ARMED:%s" % why,
+                            now=now)
+    return {"demoted": bool(out.get("ok")), "from": PMODE.ARMED,
+            "to": PMODE.MONITOR, "ceremony": why,
+            "write": out.get("reason"),
+            "note": ("a stored ARMED from an earlier authorization was "
+                     "removed; trading needs a ceremony that succeeds")}
+
+
 def resident_state_fields() -> Dict[str, Any]:
     """The stored state, for the resident line. Never raises.
 
@@ -2278,6 +2325,7 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             raise
         emit("L5_BTC5M_STORED_STATE", {"readable": False,
                                        "reason": type(_exc).__name__})
+    _armed: Any = None
     if (os.getenv(PMODE.ENVELOPE_ENV) or "").strip() and plan["markets"]:
         _first = window_start(plan["markets"][0])
         _armed = PMODE.enter_armed(
@@ -2295,6 +2343,20 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             #: an unarmed lane is not an error to march past: it observes
             #: and submits nothing, exactly as MONITOR is meant to.
             emit("L5_BTC5M_NOT_ARMED", {"reason": _armed.get("reason")})
+    #: A STORED ARMED THAT THIS BOOT DID NOT EARN IS REMOVED, whether the
+    #: ceremony refused or never ran. See `demote_stale_armed`.
+    try:
+        _stale = demote_stale_armed(_armed, dt.datetime.now(UTC))
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        _stale = {"demoted": False, "error": type(_exc).__name__}
+    if _stale is not None:
+        emit("L5_BTC5M_STALE_ARMED", _stale)
+        if _stale.get("demoted") is False:
+            #: it could not be removed, so this process must not go on to
+            #: a loop that would honour it
+            return 0
 
     #: ============== PERSISTENT MODE TAKES OVER THE LOOP ===============
     #:

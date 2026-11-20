@@ -371,3 +371,27 @@ one. Wider BTC5m and persistent-mode run: the same 11 pre-existing failures.
 
 Not shown: any of it on Railway. The reset has never run against the real
 state file.
+
+### A stored ARMED is not a fresh authorization — fixed in the same release
+
+The weakness: the loop's gate asks only "is the envelope valid and is the
+stored state ARMED?". The arming ceremony is what ties a stored ARMED to the
+documents in force, but when it refused (another campaign's digest, a
+campaign already started) or did not run (no envelope, no planned market),
+the runner logged it and went on. An ARMED left on the volume by an earlier
+campaign plus any valid envelope then passed the gate. A test states the
+weakness as it was.
+
+The fix (`demote_stale_armed`, in the runner, after the ceremony and before
+the loop): a stored ARMED survives only if this boot's ceremony succeeded,
+or its digest is exactly that of the envelope and campaign set now and that
+envelope is valid now (the same authorization re-read after a restart).
+Otherwise it is written down to MONITOR and logged as
+`L5_BTC5M_STALE_ARMED`. If that write fails the process exits. It reads
+ARMED only: a latch and a resting state are never touched.
+
+17 more tests (88 in the file); 5 mutations each fail at least one. BTC5m
+and persistent-mode regression: the same 11 pre-existing failures.
+
+**Release (supersedes `c8857fcd1`):** see the commit this section is in, on
+`release/l5-btc5m-latch-reset-20261120`.
