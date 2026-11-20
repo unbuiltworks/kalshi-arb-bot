@@ -293,3 +293,29 @@ Not exercised: BTC5m's equity gate. The disarmed loop stops at the expired
 envelope before reading the account record; it first runs at arming.
 
 Not applied. No limit, baseline or arming change.
+
+## 10. Correction applied (owner-approved, 2026-11-20 03:05Z)
+
+`l5-pmus-live` on `cfac6707cb82`, deployment `734c134d`. APPLY with the
+approved manifest hash `2d7a87d9…61c368`: 40 listed, 40 applied, 0 refused,
+feed read to `eof` (`evidence/venue_superset_apply_20261120.json`).
+
+| | before | after |
+|---|---|---|
+| cumulative total the gate reads | -136.7845 | **-39.4680** |
+| corrections applied | 116 | 156 |
+| rows at the assumed cost | 97 | 57 |
+| sum of rows | -215.4881 | -118.1716 |
+| rows | 468 | 468 |
+
+Identical across four heartbeats (03:05-03:08Z). Unchanged: $50 daily halt,
+$3.00 exposure, $2.70 cash, drawdown limit $15 from $336.68 (still reached,
+15.2018), equity baseline OFF. Disarmed, halted, 0 orders; watchdog clean.
+
+Both correction variables were then set to empty (off), restarting the
+service once more. Post-restart check pending at the time of writing.
+
+-39.47 is the ledger with those rows costed from venue fills. It is not
+evidence of profitability: cash over the period is -16.87 and about $22 is
+unexplained. 57 rows remain at the bound (2 unreadable inside the figure,
+55 settled before the re-anchor and outside it).
