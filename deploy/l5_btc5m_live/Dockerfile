@@ -40,6 +40,7 @@ COPY src/l5_straddle_ev.py src/l5_straddle_ev.py
 COPY src/l5_venue_constraints.py src/l5_venue_constraints.py
 COPY src/l5_measured_entry_rates.py src/l5_measured_entry_rates.py
 COPY src/l5_shared_reservation.py src/l5_shared_reservation.py
+COPY src/l5_btc5m_attribution.py src/l5_btc5m_attribution.py
 COPY src/l5_live_safety.py src/l5_live_safety.py
 COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY src/l5_persistent_mode.py src/l5_persistent_mode.py

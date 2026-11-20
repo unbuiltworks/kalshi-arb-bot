@@ -74,6 +74,7 @@ from src import l5_live_authorization as AUTH
 from src import l5_origin as ORIGIN
 from src import l5_persistent_mode as PMODE
 from src import l5_shared_reservation as RESV
+from src import l5_btc5m_attribution as ATTR
 
 D = Decimal
 ZERO = D("0")
@@ -774,6 +775,23 @@ def straddle_max_unmatched_usd(default: Decimal = D("0")) -> Decimal:
     if raw is None or raw <= ZERO:
         return default
     return min(raw, STRADDLE_MAX_UNMATCHED_USD_CEILING)
+
+
+#: ONE-SIDED ACCUMULATION CONTROL. An explicit token, not a boolean: a
+#: stray "1" or "true" must not switch a decision rule on.
+STRADDLE_ONE_SIDED_ENV = "L5_BTC5M_STRADDLE_ONE_SIDED"
+ONE_SIDED_TOKEN = "REQUIRE_EDGE_WHEN_PARTNER_CLOSED"
+
+
+def straddle_one_sided_control(default: bool = False) -> bool:
+    """Whether a leg that extends the imbalance must be justified when its
+    partner can no longer be bought. See
+    `Params.straddle_one_sided_control`. Only the exact token enables it;
+    anything else, including an unreadable value, keeps the default."""
+    raw = os.environ.get(STRADDLE_ONE_SIDED_ENV)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip() == ONE_SIDED_TOKEN
 
 
 def straddle_reprice_ticks(default: int = 0) -> int:
@@ -1556,6 +1574,25 @@ class Btc5mExecutor:
             if when.date() == at.date():
                 total += pnl
         return total
+
+    def day_settled_by_market(self, now: Any = None
+                              ) -> Optional[Dict[str, Decimal]]:
+        """`day_settled_pnl`, one market at a time. None under exactly the
+        conditions that method returns None."""
+        at = _utc(now) if now is not None else self._now()
+        if at is None or not self._ledger_ok:
+            return None
+        out: Dict[str, Decimal] = {}
+        for market, rec in self._ledger["settled"].items():
+            when = _parse_utc(rec.get("settled_at")) \
+                if isinstance(rec, Mapping) else None
+            pnl = _dec(rec.get("settlement_pnl")) \
+                if isinstance(rec, Mapping) else None
+            if when is None or pnl is None:
+                return None
+            if when.date() == at.date():
+                out[str(market)] = pnl
+        return out
 
     def _order_class(self, market: str, side: str, qty: Decimal) -> tuple:
         """(class, reducing) for the shared submission budgets.
@@ -2588,6 +2625,9 @@ class Btc5mExecutor:
                         straddle_reprice_ticks_per_clip=(
                             straddle_reprice_ticks(
                                 self.params.straddle_reprice_ticks_per_clip)),
+                        straddle_one_sided_control=(
+                            straddle_one_sided_control(
+                                self.params.straddle_one_sided_control)),
                         straddle_requote_ticks=straddle_requote_ticks(
                             self.params.straddle_requote_ticks),
                         straddle_max_window_loss_usd=(
@@ -2965,7 +3005,28 @@ class Btc5mExecutor:
         redemption = up["qty"] if up_won else down["qty"]
         unresolved = sorted(c for c, r in self._ledger["orders"].items()
                             if r["market"] == market and r["state"] in OPEN)
+        #: WHERE THE RESULT CAME FROM. Reporting only: nothing below reads
+        #: it, and a failure to build it never fails a settlement.
+        try:
+            attribution = ATTR.attribute(
+                [{"side": r["side"], "qty": r["filled_qty"],
+                  "cost": r["filled_cost"], "fee": r.get("venue_fees")}
+                 for _c, r in sorted(
+                     self._ledger["orders"].items(),
+                     key=lambda kv: (str(kv[1].get("created_at") or ""),
+                                     kv[0]))
+                 if r["market"] == market], up_won)
+            #: strings throughout: this record is written to the ledger
+            #: and logged, and a Decimal is not JSON
+            attribution = {
+                k: ({kk: (_s(vv) if isinstance(vv, Decimal) else vv)
+                     for kk, vv in v.items()} if isinstance(v, dict)
+                    else _s(v) if isinstance(v, Decimal) else v)
+                for k, v in attribution.items()}
+        except Exception as exc:                               # noqa: BLE001
+            attribution = {"ok": False, "reason": type(exc).__name__}
         return {"market": market, "up_won": up_won, "matched_qty": matched,
+                "attribution": attribution,
                 "pair_cost": pair, "residual_side": residual_side,
                 "residual_qty": residual, "cost_total": cost,
                 "redemption_total": redemption,

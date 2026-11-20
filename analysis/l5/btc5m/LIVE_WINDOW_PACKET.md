@@ -535,3 +535,199 @@ grow, touch other lanes) each fail tests.
 
 Suite: 2,184 passed, 11 failed across the BTC5m, persistent-mode, reservation, envelope,
 straddle and late-favourite files; the 11 are the baseline in `BASELINE_TEST_FAILURES.md`.
+
+### Reliability release deployed disarmed (2026-11-20 16:14Z)
+
+Owner-authorized. `l5-btc5m-live` deployment `1dad5d3a-d8de-4153-8fa5-65db1086c6aa`, commit
+`27cbdb32bb86d74e406dee1fd0a3829a1f4776ac`, branch `release/l5-btc5m-reliability-20261120`,
+status SUCCESS. No variable was changed.
+
+Boot at 16:14:04Z: stored state `MONITOR` (not latched), `L5_BTC5M_ARM` refused
+`ENVELOPE:ENVELOPE_EXPIRED`, resident with `can_submit false`, settlement recovery found
+nothing pending and exposure 0, no traceback. Watchdog 16:14:29Z: 0 open orders, no halt,
+all three registries OK (the lane's registry was unreachable for one sweep during the restart).
+
+### Readiness check for a second window (2026-11-20 16:43Z) — economic gate is the blocker
+
+Account risk (`l5-pmus-live` heartbeat 16:43:22Z), all clear, nothing reset:
+cumulative realized −$39.4794 vs $75 ceiling; UTC-day −$0.0114 vs $50 halt; portfolio drawdown
+$0.0114 of $1.00 (anchor $321.4782); equity baseline drawdown $0.0114 of $1.00; cash $321.4668.
+Tightest loss room $0.9886, above a $0.60 window exposure.
+
+Execution: `l5-btc5m-live` on `27cbdb32b` (deployment `1dad5d3a`), `MONITOR`,
+`can_submit false`, no latch; watchdog 0 open orders, no halt, registries OK.
+Effective config at boot: STRADDLE, book-relative, clip $0.05, requote 2 ticks, pair ceiling
+0.99, max side $0.30, max unmatched $0.10, window loss $0.20, live order bound 2, taker off.
+
+Economic eligibility: NOT met by the normal gate. `p_pair_natural_set`, `p_complete_set`,
+`p_lone_win_set` are all false and no conditional-on-fill estimate exists to attest, so the
+gate answers `ENTRY_EV_P_PAIR_NATURAL_NOT_SET`. With the gate's own arithmetic (maker fee 0,
+6 cents adverse selection on a lone leg, lone leg otherwise fair), a 0.99 pair needs
+p_pair_natural >= ~0.86 to be positive. The 14:20Z window, by quote round: 5 filled legs, 2 of
+them in a round where the partner also filled (0.40, n=5). Too few to attest; it does not
+support the threshold. The 14:20Z window ran only under the owner's one-window EV waiver.
+
+## Second-window approval packet (prepared 2026-11-20 16:48Z; NOT armed)
+
+Purpose: validate the two reliability fixes against the venue. An execution test under an
+experimental entry-EV waiver; not evidence of a profitable strategy.
+
+| Parameter | Setting |
+|---|---|
+| Service / SHA | `l5-btc5m-live` / `27cbdb32bb86d74e406dee1fd0a3829a1f4776ac` |
+| Market | one `cpc-btc-updown-5m-<date>-<HHMM>z`, named by the owner; start at least 10 minutes after approval so the lane boots before the window |
+| Envelope | $0.60 aggregate, $0.60 per market, $0.60 daily loss, strategy STRADDLE, maker-only |
+| Window-loss ceiling | $0.20 |
+| Clip / per side / unmatched | $0.05 / $0.30 / $0.10 |
+| Live orders | 2 |
+| Entry-EV gate | waived for this one market by a behaviour-probe document expiring at window end |
+| Account limits | unchanged: $1.00 drawdown from $321.4782, $50 daily, $75 cumulative |
+| After | disarm, reconcile, report |
+
+Venue check 16:47Z: upcoming 5m markets are listed with min quantity 0.01, tick 0.01, taker fee
+coefficient 0.095.
+
+### What can actually be lost
+
+- $0.20 is a pre-placement bound, not a stop. Before each order the controller computes
+  total cost − min(UP shares, DOWN shares) over every subset of resting, queued and proposed
+  orders, added to held inventory, and refuses the order if any subset exceeds $0.20. The
+  position is held to settlement, so a price move after a fill cannot add loss beyond what
+  that bound already assumed.
+- It holds only while the ledger matches the venue. If the ledger missed a fill, the next
+  bounds are per side $0.30 and unmatched $0.10.
+- The outer limit is the $0.60 envelope: the lane cannot have more than $0.60 reserved, and a
+  position's loss cannot exceed its cost. Plan on $0.60 as the maximum, $0.20 as the design.
+- The account-level $1.00 drawdown allowance refuses new orders; it does not unwind positions.
+- New in this release and untested live: per-step hold release. If it released too much the
+  envelope would under-count; the $0.20, $0.30 and $0.10 controller bounds are computed from
+  the ledger, not from the reservation, and are unaffected.
+
+### The 86% figure, checked
+
+EV per share = p × (1 − pair cost) + (1 − p) × (lone-leg value), lone-leg value =
+p_win × (1 − price) − (1 − p_win) × price − adverse. With p_win = price the lone leg is worth
+−adverse, so break-even p = adverse / (adverse + 1 − pair cost) = 0.06 / 0.07 = 0.857.
+
+It rests on four assumptions, none measured for this quoting mode:
+1. adverse selection of 6 cents a share (a proxy measurement from a different entry path);
+2. a lone leg that is otherwise fairly priced;
+3. pairs complete at the quoted pair cost of 0.99;
+4. no completion orders, zero fees.
+
+Sensitivity: 3-cent adverse → 0.75; pair cost 0.97 → 0.667. Assumption 3 already failed once
+live: the two pairs in the 14:20Z window formed across requote rounds at 0.99 and 1.01. The
+figure is the gate's arithmetic under its defaults, not a measured threshold, and should not
+be used to decide trading.
+
+## Live window result — `cpc-btc-updown-5m-2026-11-20-1705z` (17:05–17:10Z)
+
+Owner-authorized reliability validation on `27cbdb32bb86d74e406dee1fd0a3829a1f4776ac`
+(deployment `f82b32fe`), one window, entry-EV gate waived for this market only.
+Lifecycle label: **settled, realized**. Evidence: `evidence/window_1705z_orders.json`,
+`evidence/window_1705z_steps.jsonl`, `evidence/window_1705z_venue_market_record.json`.
+
+| | UP | DOWN | Total |
+|---|---|---|---|
+| Orders submitted | 13 | 26 | 39 |
+| Filled orders | 7 | 14 | 21 |
+| Shares | 0.41 | 0.85 | |
+| Cost | $0.2677 | $0.1574 | $0.4251 |
+
+Cancelled 18, uncertain 0, close clean 17:09:30Z, 0 still open. Venue commission $0.0000 on
+each of the 39 orders (lane's per-order read); no rebate credited. Lane inventory vs venue net
+position agrees (−0.44).
+
+Resolved UP (`outcomePrices ["1","0"]`). Redemption $0.41. **Realized net −$0.0151.** Venue cash
+$321.4668 → $321.4517. Matched 0.41 pairs; unmatched 0.44 DOWN (cost within the $0.10 cap).
+`l5-pmus-live` booked the unmatched leg at the $1 bound (−$0.44) at 17:10:47Z and restated it
+to −$0.0151 at 17:12:51Z.
+
+### What the test established
+
+1. Sustained requoting: PASS. Orders placed in every minute to t=205 s; $0.9768 submitted in
+   total against the $0.60 envelope with zero envelope or reservation refusals (previous
+   window: 36). Peak own exposure $0.4246. Reservation at window end $0.4251 = filled cost.
+2. Book-read timeout guard: NOT EXERCISED. No read failed in this window (`book_reason` null
+   on all 41 steps). The process did not crash and closed normally.
+3. Hold release on confirmed cancels: PASS on the evidence available (18 cancels, end
+   reservation equal to filled cost to the cent).
+4. Inventory limits: held. UP reached its $0.30 side cap at t≈119 s; from then only DOWN was
+   quoted (16 steps `SIDE_CAP_REACHED`).
+5. Reconciliation: orders, fills, fees, position and settlement cash all agree.
+
+### Observed, not fixed
+
+- After the UP side cap bound, the lane kept buying DOWN alone while UP rose from 0.84 to 0.99:
+  8 lone DOWN fills from t=136 s costing about $0.042, all worthless at settlement. Without
+  them the window would have been positive. This is strategy behaviour, not a defect in the
+  release.
+- `ACCOUNT_DRAWDOWN:PORTFOLIO_VALUE_UNAVAILABLE` blocked the lane 17:08:40–17:08:56Z, as in
+  the first window, while `l5-pmus-live` treated the lane's net position as a mismatch.
+- The lane's risk read showed UTC-day realized −$0.0228 during the window: the first window's
+  −$0.0114 counted both in the account ledger and as "not yet in account ledger". It errs
+  toward refusing.
+- `BOOK_UNUSABLE` from t=210 s (market one-sided at 0.99).
+
+### Disarm
+
+Arm token empty, `L5_SHADOW_ONLY=1`, probe and campaign documents empty, envelope expired.
+Boot 17:12:22Z (deployment `d558ce6d`): settlement recovered −0.0151, exposure 0.4251 → 0,
+stored state `MONITOR` (`CAMPAIGN_EXPIRED`), arming refused, no traceback. Resident,
+`can_submit false`. Watchdog 17:14:03Z: 0 open orders, no halt, registries OK.
+
+## Inventory-aware decision work after the 17:05Z window (prepared, not deployed)
+
+### Attribution of both live windows (FIFO pairing, the venue's own convention)
+
+| Window | Matched pairs | Matched P&L | Unmatched | Unmatched P&L | Fees | Rebates | Net |
+|---|---|---|---|---|---|---|---|
+| 14:20Z | 0.16 @ 1.00 | $0.0000 | 0.06 DOWN, cost $0.0114 | −$0.0114 | $0 | none credited | −$0.0114 |
+| 17:05Z | 0.41 @ 0.9278 | +$0.0296 | 0.44 DOWN, cost $0.0447 | −$0.0447 | $0 | none credited | −$0.0151 |
+
+17:05Z agrees with the venue's position row (`realized 0.0296`, `cost 0.0447`). In both
+windows the pairs did not lose money; the whole loss is unmatched inventory.
+`src/l5_btc5m_attribution.py` now attaches this split to every settlement record.
+
+### One-sided accumulation control (`L5_BTC5M_STRADDLE_ONE_SIDED`, off by default)
+
+A leg's shares that only bring its side up to what the other side holds complete pairs and
+are not judged. Shares beyond that need either a partner side that is still quotable, or a
+fresh independent probability with `p_side − price − 0.06 ≥ 0.01` (the single-sided path's
+existing test). Otherwise the leg is refused (`ONE_SIDED_NO_EDGE` / `ONE_SIDED_P_UNKNOWN`).
+It can only add a refusal; every cap and gate is unchanged.
+
+The 13 lone DOWN orders of the 17:05Z window, judged on the probability logged at the time
+(`evidence/window_1705z_one_sided_replay.json`): 10 refused, 3 kept (t=119, 182, 189 s, where
+the model put DOWN above its price by more than 7 cents). 7 of the 8 lone fills are among the
+refused, cost $0.0362. Arithmetically the window would have settled about +$0.021 instead of
+−$0.0151. That is one window and one outcome, not evidence of edge: the three kept legs rest
+on a model the market disagreed with (model 0.19–0.20 against prices 0.06–0.11), and the
+market was right.
+
+Tests: `tests/test_l5_btc5m_one_sided_control.py` (109), five mutations each fail.
+
+### Not built
+
+- Inventory-sensitive quote shading exists already (`L5_BTC5M_STRADDLE_REPRICE_TICKS`, 0 in
+  production). Its effect on fills cannot be judged offline and it was not changed.
+- Pair completion: the verdict now reports the pair cost and the model value against holding
+  for every completing leg. No taker or sell path was added; reducing exposure by selling is
+  not available to a maker-only, buy-only lane.
+
+### Operational fixes
+
+- Duplicate daily loss (BTC5m lane): the lane added its own settled losses to an account
+  ledger that had already retired the same market. It now leaves out a market the account
+  service lists in `retired_markets` and adds everything else as before.
+  `tests/test_l5_btc5m_own_loss_not_double_counted.py` (13).
+- Portfolio value unavailable (`l5-pmus-live`, separate code line): adopting this lane's venue
+  position marks that ledger uncertain for the 15 s between two reconciles, and the published
+  value went to None. It now publishes buying power alone as a floor, which can refuse early
+  and cannot permit late; that service's own gates are unchanged. This replaces the earlier
+  rule "uncertain order state blocks both". Local commit `209ca5542`, saved as
+  `patches/pmus_live_uncertain_cash_floor.patch`; 135 equity tests pass. Known cost: while
+  uncertain, matched pairs held by that service count as zero, so its older drawdown limit
+  can trip early for those seconds.
+
+Suite across BTC5m, straddle, envelope and image files: the same 29 baseline failures, none new.

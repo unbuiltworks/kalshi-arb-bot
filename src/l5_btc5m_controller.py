@@ -258,6 +258,35 @@ class Params:
     #: heavy. This is the real directional exposure and it is bounded in
     #: dollars rather than clips so a repriced rung cannot widen it.
     straddle_max_unmatched_usd: Decimal = D("0")
+    #: =====================================================================
+    #: ONE-SIDED ACCUMULATION NEEDS ITS OWN REASON.
+    #:
+    #: OBSERVED LIVE, window 2026-11-20 17:05Z. UP reached its side cap at
+    #: t=119 s. From then on only DOWN could be quoted, and it was: eight
+    #: more DOWN fills at 0.20 falling to 0.01 while UP ran from 0.84 to
+    #: 0.99. Each was a leg whose partner could no longer be bought, so it
+    #: was not half of a pair -- it was a directional position on the side
+    #: the market was leaving, opened under a pair strategy's permission.
+    #: The dollar unmatched ceiling did not see it: cheap contracts are
+    #: cheap, so 0.44 unmatched shares cost four cents.
+    #:
+    #: WHAT IS ASKED OF A LEG. Shares that only bring this side up to what
+    #: the other side already HOLDS complete pairs and are not judged here.
+    #: Shares beyond that EXTEND the imbalance, and those need one of:
+    #:
+    #:   - the partner side is still quotable, so this is ordinary
+    #:     two-sided quoting and the imbalance is temporary; or
+    #:   - the leg stands on its own: an INDEPENDENT, fresh probability
+    #:     says  p_side - price - adverse_selection_per_share  clears
+    #:     min_edge_per_share, the same test the single-sided path uses.
+    #:
+    #: Otherwise the leg is refused. It is NOT a ban on imbalance and not a
+    #: ban on one-sided buying: it asks that buying alone be justified
+    #: alone. It can only add a refusal, and False -- the default -- leaves
+    #: every decision byte for byte as it was.
+    straddle_one_sided_control: bool = False
+    #: how old the probability may be and still justify a lone leg
+    straddle_one_sided_max_p_age_s: float = 5.0
     #: INVENTORY-AWARE REPRICING. Per clip of net imbalance, the HEAVY
     #: side's rung moves this many ticks DOWN (bidding less aggressively
     #: for more of what we already hold) and the light side's moves UP.
@@ -796,6 +825,72 @@ def _prospective_unmatched_usd(side: str, price: Decimal, qty: Decimal,
 
 #: the one value of `Params.straddle_ev_waiver` that means anything. Spelled
 #: here and in `l5_behaviour_probe.CLASS`; a test holds them equal.
+def one_sided_verdict(*, side: str, price: Decimal, qty: Decimal,
+                      inv: Dict[str, tuple],
+                      rest: Optional[List[Dict[str, Any]]],
+                      partner_open: bool, p_up: Any, p_source: Any,
+                      p_age_s: Any, params: "Params") -> Dict[str, Any]:
+    """May this leg be placed, given what it does to the imbalance?
+
+    See `Params.straddle_one_sided_control`. Pure: it reads inventory, the
+    resting book and the probability it is handed, and decides nothing but
+    this one leg.
+
+    `extends` is how many of the leg's shares would sit beyond what the
+    OTHER side already holds, counting everything already working on this
+    side as if it fills -- the case a bound exists for. `completes` is the
+    rest. A leg that only completes is always allowed here; every other
+    limit still applies to it afterwards.
+
+    The comparison a completion rests on is reported, not enforced: buying
+    the missing side at x turns a position worth p_held into a certain 1,
+    so it is worth p_side - x against holding, and `pair_cost` says what
+    the pair then cost.
+    """
+    other = _other(side)
+    working = sum((o["qty"] for o in (rest or ()) if o["side"] == side),
+                  ZERO)
+    after = inv[side][0] + working + qty
+    extends = min(qty, max(ZERO, after - inv[other][0]))
+    completes = qty - extends
+    out: Dict[str, Any] = {"side": side, "price": str(price),
+                           "qty": str(qty), "extends": str(extends),
+                           "completes": str(completes),
+                           "partner_open": bool(partner_open),
+                           "p_side": None, "lone_edge": None,
+                           "pair_cost": None, "value_vs_holding": None,
+                           "allowed": True, "why": None}
+    p = _dec(p_up)
+    independent = (p is not None and ZERO <= p <= ONE
+                   and p_source is not None
+                   and str(p_source).upper() != "BOOK")
+    age = _num(p_age_s)
+    fresh = (independent and age is not None and 0 <= age
+             <= float(params.straddle_one_sided_max_p_age_s))
+    if independent:
+        p_side = p if side == UP else ONE - p
+        out["p_side"] = str(p_side)
+        out["value_vs_holding"] = str(p_side - price)
+    if completes > 0 and inv[other][0] > 0:
+        out["pair_cost"] = str(inv[other][1] / inv[other][0] + price)
+    if extends <= 0:
+        out["why"] = "COMPLETES_PAIR"
+        return out
+    if partner_open:
+        out["why"] = "PARTNER_QUOTABLE"
+        return out
+    if not fresh:
+        out.update(allowed=False, why="ONE_SIDED_P_UNKNOWN")
+        return out
+    edge = p_side - price - params.adverse_selection_per_share
+    out["lone_edge"] = str(edge)
+    if edge >= params.min_edge_per_share:
+        out["why"] = "LONE_EDGE_OK"
+        return out
+    out.update(allowed=False, why="ONE_SIDED_NO_EDGE")
+    return out
+
+
 EV_WAIVER_TOKEN = "BEHAVIOUR_PROBE_EV_UNPROVEN"
 
 
@@ -1373,6 +1468,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: one of those paths -- the identical mistake I made with `_bk`
         #: a few lines below, in this same function.
         _side_why: Dict[str, Any] = {s_: None for s_ in SIDES}
+        _one_sided: Dict[str, Any] = {s_: None for s_ in SIDES}
         _bk, _bk_why = {}, None
         if _bookrel:
             if not params.straddle_fill_model_measured:
@@ -1559,6 +1655,38 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                                 side, r_side, qty, inv, rest) > _unm_cap:
                             why_s = "UNMATCHED_CEILING"
                             _side_why[side] = "UNMATCHED_CEILING"
+                            continue
+                    if params.straddle_one_sided_control:
+                        #: IS THE PARTNER STILL BUYABLE? A partner quote
+                        #: already working counts. Otherwise the partner
+                        #: must be priceable now and inside the same side
+                        #: and unmatched bounds its own leg would face.
+                        _o = _other(side)
+                        _p_open = any(x["side"] == _o for x in rest)
+                        if not _p_open and _bk_why is None:
+                            _r_o = (_repriced_rung(_bk[_o], _o, inv, qty,
+                                                   params, hi=ONE)
+                                    if _bookrel else
+                                    _repriced_rung(r, _o, inv, qty, params))
+                            if _r_o is None:
+                                _p_open = False
+                            elif not _repeat:
+                                _p_open = inv[_o][0] <= 0
+                            else:
+                                _p_open = (
+                                    _committed[_o] + _r_o * qty <= _side_cap
+                                    and _prospective_unmatched_usd(
+                                        _o, _r_o, qty, inv, rest)
+                                    <= _unm_cap)
+                        _osv = one_sided_verdict(
+                            side=side, price=r_side, qty=qty, inv=inv,
+                            rest=rest, partner_open=_p_open, p_up=p_up,
+                            p_source=p_source, p_age_s=p_age_s,
+                            params=params)
+                        _one_sided[side] = _osv
+                        if not _osv["allowed"]:
+                            why_s = _osv["why"]
+                            _side_why[side] = _osv["why"]
                             continue
                     if r_side in live[side]:
                         continue                  # that rung already rests
@@ -2064,6 +2192,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 why_s = _side_why[_light]
         ev_s = {"completion": comp,
                 "side_refusals": dict(_side_why),
+                "one_sided": dict(_one_sided),
                 "completion_reserve": _reserve,
                 "book_relative": {
                     "on": _bookrel,
