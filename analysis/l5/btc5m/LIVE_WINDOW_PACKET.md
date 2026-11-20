@@ -231,3 +231,27 @@ clip 0.05, side 0.30, unmatched 0.10, pair ceiling 0.99, book-relative and
 repeat on, live-order bound 2, taker off; requote 0, loss ceiling 0, leg age
 0, ranking on (the step 2 changes are not applied). Watchdog 12:02Z: not
 halted, 0 open orders, three registries OK. Rollback: deployment `cd13ec23`.
+
+### Step 2 done — configuration applied, still disarmed (owner-approved, 2026-11-20 12:10Z)
+
+`l5-btc5m-live`, commit `16216c6b9019`, deployment `501caa62`. One change
+set: requote 2, window loss ceiling 0.20, leg age 240, ranking / three rates
+/ late favourite / taker completion cleared, total submissions 60,
+`L5_BTC5M_VENUE_CONSTRAINTS=REQUIRE`, `L5_DEPLOYMENT_ID=btc5m-probe-20261120`.
+
+**Not set:** `L5_BTC5M_MARKET` and `L5_BTC5M_NOT_AFTER`. The owner will name
+the window; they go in with the arming change set. The stored market is
+still `…-2026-11-17-2225z`, which cannot trade.
+
+Boot 12:11:25Z, `L5_BTC5M_EFFECTIVE_CONFIG`: requote 2, loss ceiling 0.20,
+leg age 240.0, ranking false, three rates unset, taker false, clip 0.05,
+side 0.30, unmatched 0.10, pair ceiling 0.99, book-relative and repeat on,
+live-order bound 2, completion pair cost 0, probe document not set.
+`L5_BTC5M_ARM` `armed: false` (`ENVELOPE_EXPIRED`); `can_submit: false` on
+every loop. No error lines. Watchdog 12:12Z: not halted, 0 open orders,
+three registries OK.
+
+Every precondition the probe checks on the configuration now holds. What
+the boot log does not show, because they have no line in it: the total
+submission cap and the venue-size switch. Both were accepted by Railway;
+their first observable effect is in an armed window.
