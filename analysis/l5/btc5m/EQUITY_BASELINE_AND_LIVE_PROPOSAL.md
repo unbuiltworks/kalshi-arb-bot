@@ -266,3 +266,30 @@ Railway deployment `4efa8e28-8f76-475a-a406-b0fdfcc8574b` (`3390246e0`); for
 BTC5m, `c6f44539-c668-4418-80c3-28cf8f2935fc` (`35224ec`).
 
 Not deployed. No ledger write, limit change or arming.
+
+## 9. Deployed disarmed, and INSPECT (owner-approved, 2026-11-20 02:00-02:31Z)
+
+| service | commit | deployment | state |
+|---|---|---|---|
+| `l5-pmus-live` | `cfac6707cb82` | `e4336027` | disarmed, halted, 0 live orders |
+| `l5-btc5m-live` | `a178c20f4348` | `cd13ec23` | `can_submit: false` (`ENVELOPE_EXPIRED`) |
+
+Railway skipped the first BTC5m deployment: that service builds only when
+`deploy/l5_btc5m_live/DEPLOY_TRIGGER` changes. The skipped deployment was
+rebuilt as itself; same commit. A future BTC5m release should touch that file.
+
+**INSPECT, 02:29:29Z** (`evidence/venue_superset_inspect_20261120.json`):
+40 listed, 40 would apply, 0 refused, change +97.3165, total -136.7845 to
+-39.4680, `ledger_written: false`, manifest SHA-256 `2d7a87d9…61c368`, feed
+read to `eof` in 234 pages. Seven markets move down (-0.0064 to -0.55), one
+is unchanged, 32 move up.
+
+**Ledger after the run (heartbeat 02:30:46Z):** -136.7845, legacy -215.4681,
+116 corrections (+315.16535), 97 rows at the bound, 468 rows, row sum
+-215.4881. Every figure identical to before the deployments. Watchdog
+02:30:52Z: not halted, 0 open orders, three registries OK.
+
+Not exercised: BTC5m's equity gate. The disarmed loop stops at the expired
+envelope before reading the account record; it first runs at arming.
+
+Not applied. No limit, baseline or arming change.
