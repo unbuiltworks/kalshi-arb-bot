@@ -809,6 +809,27 @@ def straddle_max_completed_pair_cost(default: Decimal = ZERO) -> Decimal:
     return raw
 
 
+STRADDLE_ENTRY_BID_BAND_ENV = "L5_BTC5M_STRADDLE_ENTRY_BID_BAND"
+#: what an unreadable band becomes: one no price can satisfy
+ENTRY_BAND_REFUSE_ALL = (D("1"), D("0"))
+
+
+def straddle_entry_bid_band(default: tuple = (ZERO, ZERO)) -> tuple:
+    """(min, max) of the quote price a side may be bid at, from "0.55:0.85".
+    See `Params.straddle_entry_bid_min`. Unset or empty keeps the default
+    (no band). SET BUT UNREADABLE REFUSES EVERY LEG: a restriction that
+    silently disappears on a typo is worse than no restriction."""
+    raw = os.environ.get(STRADDLE_ENTRY_BID_BAND_ENV)
+    if raw is None or not raw.strip():
+        return default
+    parts = raw.strip().split(":")
+    lo = _dec(parts[0]) if len(parts) == 2 else None
+    hi = _dec(parts[1]) if len(parts) == 2 else None
+    if lo is None or hi is None or not (ZERO < lo <= hi < D("1")):
+        return ENTRY_BAND_REFUSE_ALL
+    return (lo, hi)
+
+
 def straddle_reprice_ticks(default: int = 0) -> int:
     """Ticks per clip of imbalance. Unreadable keeps 0 (disabled)."""
     raw = os.environ.get(STRADDLE_REPRICE_TICKS_ENV)
@@ -2664,6 +2685,12 @@ class Btc5mExecutor:
                         straddle_max_completed_pair_cost=(
                             straddle_max_completed_pair_cost(
                                 self.params.straddle_max_completed_pair_cost)),
+                        straddle_entry_bid_min=straddle_entry_bid_band(
+                            (self.params.straddle_entry_bid_min,
+                             self.params.straddle_entry_bid_max))[0],
+                        straddle_entry_bid_max=straddle_entry_bid_band(
+                            (self.params.straddle_entry_bid_min,
+                             self.params.straddle_entry_bid_max))[1],
                         straddle_requote_ticks=straddle_requote_ticks(
                             self.params.straddle_requote_ticks),
                         straddle_max_window_loss_usd=(

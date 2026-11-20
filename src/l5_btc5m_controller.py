@@ -305,6 +305,34 @@ class Params:
     #: then govern. It prices; it adds no order and widens no limit. Zero
     #: -- the default -- changes nothing.
     straddle_max_completed_pair_cost: Decimal = D("0")
+    #: =====================================================================
+    #: WHICH SIDE MAY BE BID, BY ITS PRICE. A MECHANISM, NOT A FINDING.
+    #:
+    #: Portfolio settled net is the sum over fills of
+    #: shares x (1 if that side won else 0 - price), so the return of a
+    #: fill by the price paid IS the economics; pairs do not enter it.
+    #:
+    #: WHAT THE EVIDENCE SUPPORTS (analysis/l5/btc5m/ENTRY_RESEARCH_RESULT
+    #: .txt, ENTRY_BAND_EVIDENCE_RESULT.txt). ROBUST: a bid on a side
+    #: priced 0.15-0.45 loses -- in Bonereaper's real fills on both dates
+    #: and under every weighting, and on our venue's quotes. NOT
+    #: ESTABLISHED: that any band is positive. The favourite band
+    #: 0.55-0.85 is positive in Bonereaper's fills only when windows are
+    #: weighted equally; per fill and per dollar it is negative on the
+    #: larger date. Replayed through this controller on 187 windows, a
+    #: 0.55-0.85 band loses MORE per fill than quoting both sides, because
+    #: a favourite that changes sides is bought on both at above 0.55.
+    #:
+    #: SO THIS STAYS OFF. It exists so a band can be tested without a code
+    #: change, not because one has been found.
+    #:
+    #: With both set, a side is quoted only while its own quote price lies
+    #: inside [min, max]. It applies to every two-sided leg, completing or
+    #: not: it can only add a refusal (ENTRY_BAND). Both zero -- the
+    #: default -- changes nothing. An inverted or out-of-range band refuses
+    #: every leg rather than being read as no band.
+    straddle_entry_bid_min: Decimal = D("0")
+    straddle_entry_bid_max: Decimal = D("0")
     #: how old the probability may be and still justify a lone leg
     straddle_one_sided_max_p_age_s: float = 5.0
     #: INVENTORY-AWARE REPRICING. Per clip of net imbalance, the HEAVY
@@ -1681,6 +1709,17 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         why_s = "REPRICE_OUT_OF_BAND"
                         _side_why[side] = "REPRICE_OUT_OF_BAND"
                         continue
+                    _eb_lo = _dec(params.straddle_entry_bid_min) or ZERO
+                    _eb_hi = _dec(params.straddle_entry_bid_max) or ZERO
+                    if _eb_lo != ZERO or _eb_hi != ZERO:
+                        if not (ZERO < _eb_lo <= _eb_hi < ONE):
+                            why_s = "ENTRY_BAND_UNREADABLE"
+                            _side_why[side] = "ENTRY_BAND_UNREADABLE"
+                            continue
+                        if not (_eb_lo <= r_side <= _eb_hi):
+                            why_s = "ENTRY_BAND"
+                            _side_why[side] = "ENTRY_BAND"
+                            continue
                     if not _repeat:
                         if inv[side][0] > 0:
                             continue              # this side is done

@@ -923,3 +923,58 @@ Replay (`INTEGRATED_INVENTORY_REPLAY_RESULT.txt`, 187 windows): with completed p
   settlement, for the 14:20Z and 17:05Z windows.
 The assumed fill rule (ask reaches the bid) itself requires the price to move at least the
 spread, so part of the figure is the rule. The live fills are the only check on that.
+
+## Entry research (2026-11-20 ~19:20Z) — no positive entry found; NO PROMOTION
+
+Development branch only; nothing deployed. Results: `ENTRY_RESEARCH_RESULT.txt`,
+`ENTRY_CELL_VALIDATION_RESULT.txt`, `ENTRY_BAND_EVIDENCE_RESULT.txt`,
+`ADVERSE_SELECTION_ANATOMY_RESULT.txt`.
+
+Sources: (1) Bonereaper's real BTC 5-minute buys on Polymarket, 18,687 fills in 303 windows
+on 2026-03-25 and 2026-08-30/31, with prices, seconds in window and winners; (2) the 187 PMUS
+windows of 2026-11-11/12, public quotes and outcomes, fills assumed when the ask reaches the
+quote; (3) our 26 real fills. There is no PMUS trade tape or depth in the repository.
+
+Portfolio settled net is the sum over fills of shares × (1 if the side won, else 0 − price),
+so return per fill by entry state is the whole of it.
+
+- Bonereaper's own BTC5m buying lost money at settlement: −$6,733 on $332,625 bought (−2.0%),
+  139 of 303 windows positive. Across all his in-scope markets: −$6,962 on $730,960 (−0.95%).
+  The same record shows $7,698 of incentives credited (taker rebate $6,467, maker rebate
+  $1,088, reward $144). His result is the incentives less the trading loss. The period those
+  credits cover is not stated, so the two are not netted here.
+- Adverse selection on real fills: his fills return −1.7 cents a fill and −3.3% of dollars on
+  the larger date; our 26 fills −1.2 and −3.0 cents; the PMUS replay −3.2 to −3.6 cents. The
+  3.7-cent figure is the replay's mark at the fill and is consistent with, not proven by, the
+  real fills.
+- Quote depth: every depth from 0 to 30 cents behind the bid has negative expected value per
+  quote in both halves. Deeper quotes fill less (57% → 1%) and lose more when they do
+  (−3 → −10 cents): they are filled by larger moves, which continue.
+- Timing: quoting after 240 s is worst on both sources (PMUS −3 cents a quote; Bonereaper −2.0
+  cents a share). The first 60 s is the least bad and is not positive.
+- Price of the side: a side priced 0.15–0.45 loses on both sources, both Bonereaper dates and
+  every weighting. No band is reliably positive: 0.55–0.85 is positive in Bonereaper's fills
+  only when windows are weighted equally, and negative per fill and per dollar on the larger
+  date.
+- Out-of-sample check: of the entry cells positive on one half of the PMUS windows, 38–39%
+  stay positive on the other half, and together they return −$0.29 and −$0.04 a window
+  [intervals span zero].
+- Both sides, one side or neither, through the existing controller: both −$0.020 / −$0.029 a
+  window; favourite band 0.55–0.85 −$0.018 / −$0.014 and worse per fill; underdog only
+  −$0.007 / −$0.009; nothing positive. Neither is the only setting that does not lose.
+
+Controller change: an entry price band (`L5_BTC5M_STRADDLE_ENTRY_BID_BAND`), built for the
+favourite-band hypothesis, which did not survive. It stays off and is documented as a
+mechanism, not a finding. `tests/test_l5_btc5m_entry_band.py` (47). Suite 2,676 passed, the
+same 31 baseline failures.
+
+Missing measurement: a PMUS trade tape with sizes (to replace the assumed fill rule), and the
+period and volume behind Bonereaper's rebate credits (to state his net per dollar traded).
+
+### Accounting release candidates (separate)
+
+- `l5-pmus-live`: `release/l5-pmus-live-loss-publication-20261120` at
+  `1e75294f3db6a7ba8bb67d07649dc89e80cc567b`; full L5 suite has the same 19 failures as the
+  deployed `cfac6707c`.
+- BTC5m: `release/l5-btc5m-accounting-20261120` at `a87493baf0a3239358c9cb767fac0534e4eb9f9b`.
+- Order: `l5-pmus-live` first.
