@@ -22,3 +22,21 @@ These tests place nothing, so they currently verify nothing; the behaviours they
 `tests/test_l5_btc5m_hold_release.py`, `tests/test_l5_btc5m_continuous_participation.py` and
 `tests/test_l5_btc5m_execution.py`. Repairing the fixture is separate work and is not in the
 release candidate.
+
+## Full L5 suite (all `tests/test_l5_*.py`)
+
+Run on the release candidate `27cbdb32b`: 17,098 passed, 31 failed, 28 skipped. The same seven
+files run on the deployed commit `63475044f` fail the identical 31 tests (lists diffed), so the
+candidate adds none and fixes none.
+
+| File | Failing |
+|---|---|
+| `tests/test_l5_btc5m_live_loop.py` | 11 (above) |
+| `tests/test_l5_book_relative_inventory.py` | 8 |
+| `tests/test_l5_hybrid_decision.py` | 6 |
+| `tests/test_l5_balancing_budget.py` | 3 |
+| `tests/test_l5_chain_validation.py` | 1 |
+| `tests/test_l5_pmus_live_image_closure.py` | 1 |
+| `tests/test_l5_shadow_controller_wiring.py` | 1 |
+
+The causes of the 20 outside `test_l5_btc5m_live_loop.py` were not investigated.
