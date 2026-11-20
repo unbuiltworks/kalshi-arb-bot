@@ -1032,3 +1032,39 @@ still needs the owner's explicit approval.
 The recorder did not stop. For those thirty minutes every poll of the venue's public market
 endpoint returned an HTTP error (logged with `error: HTTPError` for slugs 0600z-0625z); quotes
 resume at 06:30:42Z. Six windows are missing from every study for that reason. No change made.
+
+## Accounting release: final preflight read, 2026-11-20 20:54Z (read-only; nothing deployed)
+
+| Check | Reading |
+|---|---|
+| `l5-pmus-live` running | deployment `270f602d`, commit `cfac6707c` (unchanged since 03:41Z) |
+| `l5-pmus-live` orders / exposure | 0 live orders, 0 pending, 0 quarantined, no market with exposure, halt latch CLEAR |
+| `l5-btc5m-live` running | deployment `d558ce6d`, commit `27cbdb32b` (unchanged since 17:11Z) |
+| `l5-btc5m-live` state | `can_submit false`, stored MONITOR, not latched, reason ENVELOPE_EXPIRED |
+| Watchdog | sweeping every 20 s, 0 open orders, all three registries OK, no read error |
+| Release branches on the remote | `release/l5-pmus-live-loss-publication-20261120` = `1e75294f3`; `release/l5-btc5m-accounting-20261120` = `a87493baf` |
+
+### Scope requested for approval (two steps, in this order)
+
+1. `l5-pmus-live` -> `1e75294f3` (2 commits on the running `cfac6707c`).
+   Files: `src/l5_live_execution.py` (+123), `src/l5_pmus_live_runner.py`
+   (+30), one new test file. Adds two read-only keys to the account-risk
+   record: `retired_results_utc_day` and `lifetime_basis`. No order path,
+   limit, or variable is touched. Action: point the service source at the
+   release branch; no variable is set.
+   Check before step 2: service healthy, 0 orders, `lifetime_basis`
+   present with `reconciled: true`. If it is absent or not reconciled,
+   stop; step 2 is not taken.
+2. `l5-btc5m-live` -> `a87493baf` (3 commits on the running `27cbdb32b`).
+   Files: new `src/l5_btc5m_attribution.py`, `src/l5_btc5m_execution.py`
+   (+59), `src/l5_btc5m_runner.py` (+211), Dockerfile (+1 COPY line),
+   `DEPLOY_TRIGGER`, tests. Controller, reservation and envelope files are
+   byte-identical to what is running. Action: point the service source at
+   the release branch; no variable is set, so it comes up disarmed
+   (`can_submit false`), as now.
+
+Not in scope: arming, any variable change, the cash-floor patch, the three
+strategy switches (not in either release), capital limits.
+Rollback for either step: point the service back at its current branch
+(`release/l5-pmus-live-equity-and-correction-20261120`,
+`release/l5-btc5m-reliability-20261120`).
