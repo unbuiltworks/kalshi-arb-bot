@@ -1,0 +1,185 @@
+
+====================================================================================================
+DISCOVERY 11-17/18 (2 s quotes): 576 windows
+
+-- matched 2 s after the signal --
+   windows that reached 0.90: 576 of 576; missed 4; bought 572
+   result
+      windows run 576, traded 572; fills 572; shares 572.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $521.00  fees $4.37  settlement proceeds $531.00
+      NET $+5.63 (before fees $+10.00)
+      per share +0.0098 [-0.0125,+0.0300]   per window run +0.0098 [-0.0124,+0.0298]
+   win rate 92.8% (531 of 572); average price paid 0.9108 (break-even win rate incl. fee 91.8%); price moved +0.0002 between signal and fill; worst window -0.945
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         44      0     88.6%    0.9007      -1.00     -0.0228 [-0.1316,+0.0662]
+     180-240 s        173      0     95.4%    0.9055      +6.95     +0.0402 [+0.0057,+0.0690]
+     120-180 s        163      0     92.0%    0.9056      +1.08     +0.0066 [-0.0350,+0.0449]
+      60-120 s        140      0     90.0%    0.9194      -3.69     -0.0264 [-0.0766,+0.0190]
+      30- 60 s         43      1     97.7%    0.9286      +1.81     +0.0420 [-0.0073,+0.0715]
+      10- 30 s          9      2    100.0%    0.9400      +0.49     +0.0549 [few]
+       0- 10 s          0      1
+
+-- matched 4 s after the signal --
+   windows that reached 0.90: 576 of 576; missed 8; bought 568
+   result
+      windows run 576, traded 568; fills 568; shares 568.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $517.63  fees $4.28  settlement proceeds $527.00
+      NET $+5.09 (before fees $+9.37)
+      per share +0.0090 [-0.0133,+0.0294]   per window run +0.0088 [-0.0131,+0.0289]
+   win rate 92.8% (527 of 568); average price paid 0.9113 (break-even win rate incl. fee 91.9%); price moved +0.0008 between signal and fill; worst window -0.964
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         44      0     88.6%    0.9027      -1.08     -0.0247 [-0.1307,+0.0635]
+     180-240 s        173      0     95.4%    0.9053      +6.99     +0.0404 [+0.0057,+0.0687]
+     120-180 s        163      0     92.0%    0.9050      +1.18     +0.0073 [-0.0346,+0.0464]
+      60-120 s        139      1     89.9%    0.9209      -3.95     -0.0284 [-0.0789,+0.0165]
+      30- 60 s         41      3     97.6%    0.9329      +1.52     +0.0371 [-0.0177,+0.0744]
+      10- 30 s          8      3    100.0%    0.9413      +0.43     +0.0539 [few]
+       0- 10 s          0      1
+
+-- matched 10 s after the signal --
+   windows that reached 0.90: 576 of 576; missed 34; bought 542
+   result
+      windows run 576, traded 542; fills 542; shares 542.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $494.73  fees $3.94  settlement proceeds $501.00
+      NET $+2.33 (before fees $+6.27)
+      per share +0.0043 [-0.0191,+0.0254]   per window run +0.0040 [-0.0180,+0.0240]
+   win rate 92.4% (501 of 542); average price paid 0.9128 (break-even win rate incl. fee 92.0%); price moved +0.0034 between signal and fill; worst window -0.982
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         44      0     88.6%    0.8932      -0.69     -0.0157 [-0.1180,+0.0712]
+     180-240 s        173      0     95.4%    0.9056      +6.95     +0.0402 [+0.0063,+0.0679]
+     120-180 s        163      0     92.0%    0.9101      +0.43     +0.0026 [-0.0387,+0.0409]
+      60-120 s        135      5     89.6%    0.9269      -4.94     -0.0366 [-0.0898,+0.0106]
+      30- 60 s         26     18     96.2%    0.9346      +0.56     +0.0217 [-0.0582,+0.0756]
+      10- 30 s          1     10    100.0%    0.9800      +0.02     +0.0181 [few]
+       0- 10 s          0      1
+
+-- matched 0 s after the signal  (NOT executable: a ceiling) --
+   windows that reached 0.90: 576 of 576; missed 0; bought 576
+   result
+      windows run 576, traded 576; fills 576; shares 576.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $524.73  fees $4.42  settlement proceeds $535.00
+      NET $+5.85 (before fees $+10.27)
+      per share +0.0101 [-0.0120,+0.0305]   per window run +0.0101 [-0.0120,+0.0305]
+   win rate 92.9% (535 of 576); average price paid 0.9110 (break-even win rate incl. fee 91.9%); price moved +0.0000 between signal and fill; worst window -0.955
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         44      0     88.6%    0.9066      -1.24     -0.0283 [-0.1406,+0.0622]
+     180-240 s        173      0     95.4%    0.9056      +6.93     +0.0400 [+0.0056,+0.0687]
+     120-180 s        163      0     92.0%    0.9072      +0.83     +0.0051 [-0.0372,+0.0424]
+      60-120 s        140      0     90.0%    0.9156      -3.21     -0.0230 [-0.0735,+0.0217]
+      30- 60 s         44      0     97.7%    0.9277      +1.90     +0.0432 [-0.0066,+0.0707]
+      10- 30 s         11      0    100.0%    0.9409      +0.59     +0.0539 [few]
+       0- 10 s          1      0    100.0%    0.9400      +0.05     +0.0546 [few]
+
+====================================================================================================
+HELD OUT 11-19/20 (2 s quotes): 515 windows
+
+-- matched 2 s after the signal --
+   windows that reached 0.90: 513 of 515; missed 1; bought 512
+   result
+      windows run 515, traded 512; fills 512; shares 512.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $465.15  fees $3.98  settlement proceeds $463.00
+      NET $-6.13 (before fees $-2.15)
+      per share -0.0120 [-0.0374,+0.0129]   per window run -0.0119 [-0.0371,+0.0128]
+   win rate 90.4% (463 of 512); average price paid 0.9085 (break-even win rate incl. fee 91.6%); price moved -0.0008 between signal and fill; worst window -0.964
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         60      0     90.0%    0.9045      -0.76     -0.0127 [-0.0952,+0.0549]
+     180-240 s        160      0     91.2%    0.9065      -0.32     -0.0020 [-0.0470,+0.0409]
+     120-180 s        141      0     92.2%    0.9077      +0.90     +0.0063 [-0.0386,+0.0478]
+      60-120 s        106      0     89.6%    0.9138      -2.64     -0.0249 [-0.0853,+0.0295]
+      30- 60 s         39      1     82.1%    0.9100      -3.77     -0.0966 [-0.2196,+0.0106]
+      10- 30 s          6      0    100.0%    0.9167      +0.46     +0.0770 [few]
+
+-- matched 4 s after the signal --
+   windows that reached 0.90: 513 of 515; missed 4; bought 509
+   result
+      windows run 515, traded 509; fills 509; shares 509.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $463.00  fees $3.85  settlement proceeds $460.00
+      NET $-6.85 (before fees $-3.00)
+      per share -0.0135 [-0.0381,+0.0114]   per window run -0.0133 [-0.0377,+0.0113]
+   win rate 90.4% (460 of 509); average price paid 0.9096 (break-even win rate incl. fee 91.7%); price moved +0.0007 between signal and fill; worst window -0.973
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         60      0     90.0%    0.9057      -0.82     -0.0137 [-0.0955,+0.0534]
+     180-240 s        160      0     91.2%    0.9084      -0.60     -0.0038 [-0.0489,+0.0386]
+     120-180 s        141      0     92.2%    0.9111      +0.47     +0.0033 [-0.0418,+0.0446]
+      60-120 s        106      0     89.6%    0.9113      -2.37     -0.0224 [-0.0808,+0.0296]
+      30- 60 s         38      2     81.6%    0.9245      -4.36     -0.1148 [-0.2434,-0.0043]
+      10- 30 s          4      2    100.0%    0.7800      +0.84     +0.2095 [few]
+
+-- matched 10 s after the signal --
+   windows that reached 0.90: 513 of 515; missed 19; bought 494
+   result
+      windows run 515, traded 494; fills 494; shares 494.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $448.07  fees $3.64  settlement proceeds $446.00
+      NET $-5.71 (before fees $-2.07)
+      per share -0.0116 [-0.0372,+0.0133]   per window run -0.0111 [-0.0354,+0.0127]
+   win rate 90.3% (446 of 494); average price paid 0.9070 (break-even win rate incl. fee 91.4%); price moved -0.0017 between signal and fill; worst window -0.982
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         60      0     90.0%    0.9055      -0.81     -0.0135 [-0.0951,+0.0558]
+     180-240 s        160      0     91.2%    0.9088      -0.64     -0.0040 [-0.0491,+0.0382]
+     120-180 s        141      0     92.2%    0.9126      +0.30     +0.0022 [-0.0435,+0.0420]
+      60-120 s        103      3     89.3%    0.9049      -1.91     -0.0185 [-0.0787,+0.0351]
+      30- 60 s         29     11     79.3%    0.8786      -2.68     -0.0923 [-0.2288,+0.0259]
+      10- 30 s          1      5    100.0%    0.9800      +0.02     +0.0181 [few]
+
+-- matched 0 s after the signal  (NOT executable: a ceiling) --
+   windows that reached 0.90: 513 of 515; missed 0; bought 513
+   result
+      windows run 515, traded 513; fills 513; shares 513.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $466.51  fees $4.01  settlement proceeds $464.00
+      NET $-6.52 (before fees $-2.51)
+      per share -0.0127 [-0.0379,+0.0125]   per window run -0.0127 [-0.0378,+0.0125]
+   win rate 90.4% (464 of 513); average price paid 0.9094 (break-even win rate incl. fee 91.7%); price moved +0.0000 between signal and fill; worst window -0.945
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         60      0     90.0%    0.9065      -0.87     -0.0145 [-0.0979,+0.0526]
+     180-240 s        160      0     91.2%    0.9056      -0.20     -0.0012 [-0.0457,+0.0425]
+     120-180 s        141      0     92.2%    0.9071      +0.97     +0.0069 [-0.0377,+0.0489]
+      60-120 s        106      0     89.6%    0.9134      -2.61     -0.0247 [-0.0834,+0.0307]
+      30- 60 s         40      0     82.5%    0.9240      -4.22     -0.1056 [-0.2288,-0.0029]
+      10- 30 s          6      0    100.0%    0.9233      +0.42     +0.0700 [few]
+
+====================================================================================================
+OLDER DAYS 11-11..16 (10 s quotes, not refitted): 1468 windows
+
+-- matched 10 s after the signal --
+   windows that reached 0.90: 1449 of 1468; missed 213; bought 1236
+   result
+      windows run 1468, traded 1236; fills 1236; shares 1236.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $1133.89  fees $8.26  settlement proceeds $1115.00
+      NET $-27.15 (before fees $-18.89)
+      per share -0.0220 [-0.0378,-0.0061]   per window run -0.0185 [-0.0319,-0.0051]
+   win rate 90.2% (1115 of 1236); average price paid 0.9174 (break-even win rate incl. fee 92.4%); price moved -0.0045 between signal and fill; worst window -0.982
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         58      4     89.7%    0.8888      -0.06     -0.0011 [-0.0906,+0.0714]
+     180-240 s        304     32     88.2%    0.9150     -12.37     -0.0407 [-0.0760,-0.0060]
+     120-180 s        408     29     91.4%    0.9186      -4.58     -0.0112 [-0.0390,+0.0139]
+      60-120 s        352     53     91.2%    0.9263      -7.13     -0.0202 [-0.0506,+0.0067]
+      30- 60 s        101     55     88.1%    0.9075      -3.23     -0.0319 [-0.0821,+0.0147]
+      10- 30 s         13     35     92.3%    0.9000      +0.21     +0.0164 [few]
+       0- 10 s          0      5
+
+-- matched 0 s after the signal  (NOT executable: a ceiling) --
+   windows that reached 0.90: 1449 of 1468; missed 0; bought 1449
+   result
+      windows run 1468, traded 1449; fills 1449; shares 1449.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $1340.40  fees $9.47  settlement proceeds $1323.00
+      NET $-26.87 (before fees $-17.40)
+      per share -0.0185 [-0.0331,-0.0043]   per window run -0.0183 [-0.0326,-0.0042]
+   win rate 91.3% (1323 of 1449); average price paid 0.9251 (break-even win rate incl. fee 93.2%); price moved +0.0000 between signal and fill; worst window -0.973
+   by time remaining at the signal:
+     left          bought missed  win rate avg price    net USD   per share [95%]
+     240-300 s         62      0     88.7%    0.9144      -2.15     -0.0347 [-0.1167,+0.0321]
+     180-240 s        336      0     88.7%    0.9151     -11.94     -0.0355 [-0.0696,-0.0028]
+     120-180 s        437      0     92.0%    0.9189      -2.62     -0.0060 [-0.0324,+0.0178]
+      60-120 s        405      0     91.9%    0.9298      -7.05     -0.0174 [-0.0456,+0.0076]
+      30- 60 s        156      0     92.3%    0.9456      -4.26     -0.0273 [-0.0708,+0.0113]
+      10- 30 s         48      0     97.9%    0.9544      +0.99     +0.0207 [-0.0227,+0.0459]
+       0- 10 s          5      0    100.0%    0.9640      +0.16     +0.0328 [few]
