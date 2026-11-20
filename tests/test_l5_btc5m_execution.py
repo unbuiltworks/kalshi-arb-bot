@@ -1068,7 +1068,11 @@ class TestIsolationOfTheModule:
         assert re.findall(r"^from src import (.+)$", src, re.M) == [
             "l5_btc5m_controller as C", "l5_live_authorization as AUTH",
             "l5_origin as ORIGIN", "l5_persistent_mode as PMODE",
-            "l5_shared_reservation as RESV"]
+            "l5_shared_reservation as RESV",
+            # `l5_btc5m_attribution` is arithmetic on fills already booked:
+            # it imports only `decimal` and `typing`, reads nothing and
+            # decides nothing (pinned in test_l5_btc5m_attribution.py).
+            "l5_btc5m_attribution as ATTR"]
 
     def test_it_calls_only_the_six_transport_methods(self):
         """Five since this module was written, plus `account` -- the cash

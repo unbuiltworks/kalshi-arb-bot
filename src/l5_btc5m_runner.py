@@ -40,7 +40,7 @@ import threading
 import time
 import urllib.request
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from src import l5_venue_constraints as VC
 from src import l5_btc5m_controller as C
@@ -442,6 +442,83 @@ EQUITY_BLOCKS = (("portfolio_drawdown", "ACCOUNT_DRAWDOWN"),
                  ("equity_baseline", "ACCOUNT_EQUITY_BASELINE"))
 
 
+class OwnSettled(Decimal):
+    """This strategy's settled result today, WITH the markets it came from.
+
+    A Decimal, so every existing reader of the total is unchanged; the
+    per-market breakdown rides along as `by_market` for the one reader
+    that needs it.
+
+    THE DEFECT THIS CARRIES THE FIX FOR. `account_risk` added this lane's
+    settled losses to the account ledger's figures on the assumption that
+    the other service never books them. It does: it adopts this lane's
+    venue position, retires it at settlement and restates it from venue
+    cost. Live 2026-11-20 17:08Z the first window's -0.0114 was therefore
+    counted twice -- the day read -0.0228 against a true -0.0114.
+    """
+    by_market: Optional[Dict[str, Decimal]] = None
+
+    @classmethod
+    def of(cls, by_market: Mapping[str, Decimal]) -> "OwnSettled":
+        out = cls(sum(by_market.values(), D(0)))
+        out.by_market = dict(by_market)
+        return out
+
+
+def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
+                               ) -> Tuple[Decimal, List[str], Dict[str, str]]:
+    """(loss to add, markets added in full, {market: shortfall added}).
+
+    THE RULE, per market this lane settled today, with `o` its own result
+    from its own authenticated fills and `b` what the account service says
+    it booked that market at:
+
+        b not published for that market   add  min(0, o)       -- all of it
+        b published and readable          add  min(0, o - b)   -- the gap
+
+    WHY THE GAP AND NOT "SKIP IF LISTED". A market being retired there does
+    not mean its loss is in that service's figure. It adopts only this
+    lane's NET position and first books it at a $1-a-share bound: when the
+    residual side wins that books ZERO, while matched pairs bought above
+    1.00 lost money here. It also retires rows at zero when an account is
+    closed flat. Skipping on the name alone would have hidden those losses.
+
+    WHAT THIS GUARANTEES. The account figure contains b. After the
+    addition the market counts for  b + min(0, o - b) = min(b, o),  which
+    is never better than this lane's own result -- whatever b is, and
+    however stale, because b and the day figure it is part of come from the
+    same record. So the correction can remove only what is provably counted
+    twice. It cannot make a loss disappear.
+
+    NOTHING PUBLISHED IS THE OLD BEHAVIOUR, EXACTLY: no breakdown of this
+    lane's own result, no `retired_results_utc_day`, one for another UTC
+    day, or an unreadable one all return `min(0, total)` as before.
+    An amount that cannot be read for ONE market adds that market in full.
+    A gain is never added and never offsets another market's loss.
+    """
+    total = min(D(0), Decimal(own))
+    by = getattr(own, "by_market", None)
+    pub = risk.get("retired_results_utc_day")
+    if not isinstance(by, Mapping) or not isinstance(pub, Mapping):
+        return total, [], {}
+    booked = pub.get("results")
+    if not isinstance(booked, Mapping) \
+            or str(pub.get("utc_day")) != str(risk.get("utc_day")):
+        return total, [], {}
+    add, full, gaps = D(0), [], {}
+    for m in sorted(by):
+        o = by[m]
+        b = _dec(booked.get(m)) if m in booked else None
+        if b is None:
+            add += min(D(0), o)
+            full.append(m)
+        else:
+            gap = min(D(0), o - b)
+            add += gap
+            gaps[m] = str(gap)
+    return add, full, gaps
+
+
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
                  fetch: Optional[Callable[[str], Any]] = None
                  ) -> Dict[str, Any]:
@@ -498,13 +575,15 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_FIGURES_UNREADABLE")
     if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
-    add = min(D(0), own_unaccounted)
+    add, _added, _gaps = _own_not_in_account_ledger(own_unaccounted, risk)
     day_all, life_all = day + add, life + add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
+           "btc5m_markets_added_in_full": _added,
+           "btc5m_shortfall_added_by_market": _gaps,
            # what may still be LOST before either account-wide limit binds
            "loss_room_usd": str(room),
            "btc15m_operator_halt": other_halt,
@@ -1521,6 +1600,13 @@ class Session:
         got = self.ex.day_settled_pnl(self._now())
         if got is None:
             raise ValueError("own settled result unreadable")
+        #: the same rows, by market, so `account_risk` can leave out a
+        #: market the account service has already booked. If the breakdown
+        #: cannot be read the total alone is passed and all of it is added.
+        by = getattr(self.ex, "day_settled_by_market", None)
+        by = by(self._now()) if callable(by) else None
+        if isinstance(by, Mapping) and sum(by.values(), D(0)) == got:
+            return OwnSettled.of(by)
         return min(D(0), got)
 
     def gates(self) -> Dict[str, Any]:
