@@ -111,6 +111,7 @@ def test_a_feed_too_long_to_finish_is_incomplete_and_refuses(monkeypatch):
     w, now = run(feed)
     assert w.view(SINCE, now)["by"] == "INCOMPLETE"
     assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
+    assert len(feed.reads) == 3            # stopped AT the page limit
 
 
 def test_a_transport_error_keeps_refusing_and_backs_off():
