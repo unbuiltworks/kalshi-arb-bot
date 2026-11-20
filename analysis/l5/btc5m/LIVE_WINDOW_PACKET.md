@@ -416,3 +416,34 @@ not halted, 0 open orders, three registries OK. Rollback: `6b6423d9`.
 
 The stored time and reason match the lane's own log line of 2026-11-17
 22:09:41.843Z exactly.
+
+### Latch cleared (owner-approved, 2026-11-20 13:53Z)
+
+Owner authorized a one-time reset of latch
+`0679515302aba2c311967b23e7aa8a8842fac85dcca6f75ff8803d65c4394e71` only.
+Pre-checks 13:51Z: watchdog clear, 0 open orders, lane `can_submit: false`.
+Reset document set 13:52Z (nonce `reset-20261120-f7b7f113382e`, expiry
+14:22Z, the owner's reason verbatim). Lane log, deployment `7d938e04`:
+
+    13:53:29Z L5_BTC5M_LATCH_RESET {"ok": true, "cleared": true,
+      "was": "STOPPED", "state": "MONITOR", "armed": false,
+      "latch_sha256": "0679515302…4394e71",
+      "conditions": {"watchdog_halt_clear": "True", "own_live_orders": "0",
+                     "own_exposure_usd": "0", "lane_can_submit": "False"},
+      "audit": "/state/btc5m/persistent_state.json.latch_resets.jsonl"}
+
+Reset document then set to empty. Final state, deployment `fa469862`, commit
+`63475044f95566ec207bf60cbc98057a1dfe1808`, boot 13:55:29Z:
+
+    L5_BTC5M_STORED_STATE {"state": "MONITOR", "latched": false,
+      "at_utc": "2026-11-20T13:53:28.919262+00:00",
+      "why": "LATCH_CLEARED_BY_OWNER nonce=reset-20261120-f7b7f113382e
+              was=STOPPED latch=0679515302aba2c3",
+      "would_refuse_arming": false}
+
+No `L5_BTC5M_LATCH_RESET` line on that boot (no document set). `armed:
+false` (`ENVELOPE_EXPIRED`), `can_submit: false`, exposure $0. Watchdog
+13:56:03Z: not halted, 0 open orders, three registries OK.
+
+The audit file is on the service volume and was not read from here; the code
+writes it before the state and clears nothing if that write fails.
