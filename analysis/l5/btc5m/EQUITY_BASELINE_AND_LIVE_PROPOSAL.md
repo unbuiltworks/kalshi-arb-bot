@@ -319,3 +319,50 @@ service once more. Post-restart check pending at the time of writing.
 evidence of profitability: cash over the period is -16.87 and about $22 is
 unexplained. 57 rows remain at the bound (2 unreadable inside the figure,
 55 settled before the re-anchor and outside it).
+
+## 11. New venue-equity baseline set (owner-approved, 2026-11-20 03:41Z)
+
+Preflight 03:23-03:38Z: buying power $321.4782 (venue, 03:38:22Z); venue
+positions none (two reconciles); ledger holds two one-sided October legs the
+venue does not, valued 0; open and pending orders 0; no transfers since the
+re-anchor on a feed read to `eof`; both lanes disarmed; watchdog healthy.
+
+Set on `l5-pmus-live` (commit `cfac6707cb82`, deployment `270f602d`), and
+nothing else:
+
+| variable | value | was |
+|---|---|---|
+| `L5_EQUITY_BASELINE` | `evidence/equity_baseline_document_20261120.json` | unset |
+| `L5_PORTFOLIO_ANCHOR_USD` | 321.4782 | 336.68 |
+| `L5_PORTFOLIO_MAX_DRAWDOWN_USD` | 1.00 | 15 |
+
+Baseline `baseline-20261120T0338Z-prior-limit-15usd`, at 2026-11-20
+03:38:22Z, equity $321.4782, allowance $1.00. It carries prior anchor
+$336.68, prior drawdown $15.2018 and ledger total -$39.4680. The record has
+no field for the prior $15 limit; it is in the id and recorded here.
+
+Published 03:56-03:58Z (`evidence/equity_baseline_published_20261120.json`):
+baseline ON, equity now $321.4782, change $0, room $1.00, no refusal;
+transfers none since baseline, read `END_OF_FEED`, 234 pages, first complete
+03:54Z, about 12 minutes after the container started; drawdown limit ON,
+anchor $321.4782, limit $1.00, room $1.00. Unchanged: $50 daily halt, $3.00
+exposure, $2.70 cash, ledger -39.4680, 156 corrections, 57 rows at the bound.
+Disarmed, halted, 0 orders, no alarms. Watchdog 03:59Z clean. BTC5m on
+`a178c20f4348`, `can_submit: false`.
+
+BTC5m gate (`evidence/btc5m_gate_check.py`, the deployed file, run on the
+published record): allowed as published with room $1.00; blocked when the
+record is 31s old, either block is missing, the balance is stale, transfers
+are not established, either limit is breached, room is zero or unreadable,
+the baseline is malformed, or the daily or cumulative limit is reached. Run
+here, not in the service: the disarmed lane stops at the expired envelope
+before reading the record, so its first in-service read is at arming.
+
+Open: the count of pre-baseline non-trading rows differs by reader and run
+(13, then 5 from the report-only diagnostic; 17 from the gating read). Not
+explained. All agree nothing follows the re-anchor or the baseline.
+
+Operational notes for a window: after any `l5-pmus-live` restart the
+baseline refuses for about 12 minutes until the transfer read completes; the
+read repeats every 15 minutes and expires after 35. `l5-pmus-live`'s own
+drawdown gate no longer refuses; it remains disarmed, halted and shadow-locked.
