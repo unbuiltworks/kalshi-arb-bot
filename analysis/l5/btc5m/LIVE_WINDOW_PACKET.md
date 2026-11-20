@@ -255,3 +255,46 @@ Every precondition the probe checks on the configuration now holds. What
 the boot log does not show, because they have no line in it: the total
 submission cap and the venue-size switch. Both were accepted by Railway;
 their first observable effect is in an armed window.
+
+## Window attempt 2026-11-20 13:00Z — armed by the owner, REFUSED by the lane, nothing traded
+
+Owner authorized one window at about 12:51:54Z. By the approved rule the
+window was `cpc-btc-updown-5m-2026-11-20-1300z`, 13:00:00-13:05:00Z.
+Arming change set applied 12:53Z (deployment `224a3c03`, commit
+`16216c6b9019`).
+
+Boot 12:54:13Z: plan named the market; effective configuration correct;
+probe document read as set; envelope accepted. Then:
+
+    L5_BTC5M_ARM {"armed": false, "reason": "STATE_STOPPED",
+                  "state_was": "STOPPED",
+                  "note": "latched; arming cannot clear a halt or a stop"}
+
+The lane exited (the fleet stops when its child does; the service does not
+restart itself). **Orders submitted: 0. Fills: 0. Settled P&L: none.**
+Watchdog: 0 open orders throughout, never halted; it reported this lane's
+registry unreachable from 12:54Z to 13:08Z while the process was down.
+
+**Where the latch came from** (lane log, still retained):
+
+    2026-11-17T22:09:41Z L5_BTC5M_PERSISTENT_HALTED
+      {"reason": "HALT:halt_asserted", "source": "WATCHDOG",
+       "stop": {"cancelled": [], "fills_during_stop": [], "still_open": [],
+                "latched": true, "ok": true}}
+
+The watchdog asserted its account-wide halt during the 2026-11-17 campaign;
+the lane stopped cleanly with nothing open and latched. Nothing has cleared
+it since. While the envelope was expired the lane never read that state, so
+it was invisible until a valid envelope was presented.
+
+**Disarm.** Sent about 12:56Z; this session was interrupted mid-call and
+Railway applied it at 13:07Z (deployment `6b6423d9`). In between, the arm
+token and shadow-lock release were set on a process that was not running
+and whose state refuses every order. Now: arm token empty, shadow lock on,
+probe document and campaign approval empty, envelope an expired copy. Boot
+13:08:21Z: `armed: false` (`ENVELOPE_EXPIRED`), `can_submit: false`,
+resident and serving its registry. Watchdog 13:08:43Z: not halted, 0 open
+orders, three registries OK. The market and end-time variables still name
+the passed window; it cannot trade.
+
+**To trade, the latch must be cleared.** No code path does. Not done.
