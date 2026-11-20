@@ -1,0 +1,46 @@
+
+== 11-17/18: 18122 bursts, 193148 control side-seconds ==
+   in the seconds before                his bursts      control    ratio
+   others_prints_prev_1s                    4.4656       3.4487     1.29
+   others_prints_prev_5s                   27.2118      18.0585     1.51
+   others_usd_same_side_prev_1s            27.9518      28.5481     0.98
+   others_usd_other_side_prev_1s           29.7436      28.5481     1.04
+   others_usd_same_side_prev_5s           176.1771     148.2018     1.19
+   others_usd_other_side_prev_5s          167.3455     148.2018     1.13
+   big_print_500usd_prev_2s                 0.0146       0.0214     0.68
+   side_price_move_prev_5s                 -0.0053       0.0000        -
+   side_price_move_prev_10s                -0.0046       0.0000        -
+   side_rose_1c_prev_5s                     0.4053       0.2572     1.58
+   side_fell_1c_prev_5s                     0.4245       0.2572     1.65
+   side_price_level                         0.5153       0.5000     1.03
+
+== 11-19/20: 19247 bursts, 161930 control side-seconds ==
+   in the seconds before                his bursts      control    ratio
+   others_prints_prev_1s                    4.8130       3.6029     1.34
+   others_prints_prev_5s                   30.4119      18.5629     1.64
+   others_usd_same_side_prev_1s            29.6445      28.9230     1.02
+   others_usd_other_side_prev_1s           28.9508      28.9230     1.00
+   others_usd_same_side_prev_5s           185.1055     148.6847     1.24
+   others_usd_other_side_prev_5s          173.2067     148.6847     1.16
+   big_print_500usd_prev_2s                 0.0137       0.0208     0.66
+   side_price_move_prev_5s                 -0.0052       0.0000        -
+   side_price_move_prev_10s                -0.0042       0.0000        -
+   side_rose_1c_prev_5s                     0.4101       0.2441     1.68
+   side_fell_1c_prev_5s                     0.4346       0.2441     1.78
+   side_price_level                         0.5213       0.5000     1.04
+
+bursts per window: median 36
+seconds between the starts of consecutive bursts (share): 0s 3%  1s 6%  2s 6%  3s 23%  4s 9%  5s 9%  6s 12%  7s 4%  8s 4%  9s 6%
+first burst relative to the window start (share): -60s 1%  -50s 15%  -40s 22%  -30s 14%  -20s 9%  -10s 5%  +0s 29%  +10s 4%  +20s 0%  +30s 0%  +50s 0%  +60s 0%
+
+== bursts and dollars by the side's move over the prior 5 s and the price paid (11-17..20) ==
+   prior 5 s  price         bursts   dollars $ per burst
+   rose 1c+   0.90+           5.2%     26.5%         336
+   rose 1c+   0.50-0.90      20.9%     19.2%          61
+   flat       0.90+           3.3%     17.5%         349
+   fell 1c+   0.50-0.90      15.7%     11.1%          47
+   fell 1c+   under 0.50     25.1%      9.0%          24
+   flat       0.50-0.90       7.1%      5.5%          52
+   rose 1c+   under 0.50     13.7%      4.9%          24
+   fell 1c+   0.90+           1.0%      3.8%         241
+   flat       under 0.50      7.9%      2.6%          22
