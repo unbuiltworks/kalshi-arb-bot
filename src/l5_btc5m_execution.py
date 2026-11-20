@@ -2705,32 +2705,48 @@ class Btc5mExecutor:
         return sorted(out)
 
     def sync_reservation(self) -> Dict[str, Any]:
-        """Release this lane's holds whose orders are no longer live.
+        """Bring this lane's holds down to what its ledger shows at risk.
 
-        A HOLD OUTLIVES ITS ORDER. An order that FILLED has left OPEN,
-        but its cost is now inventory we still own, and a losing contract
-        pays nothing -- so releasing on terminal order state would drop
-        exactly the risk that just became real. A hold is kept while the
-        order is open OR it filled into a market that has not settled.
+        WHAT EACH ORDER STILL HOLDS, read from the durable ledger:
+
+          NEW / LIVE / UNCERTAIN   the whole hold. It may still fill, and
+                                   an order whose fate cannot be read IS
+                                   exposure. A cancel that was only
+                                   requested, or timed out, leaves the row
+                                   here: only the venue's own re-read moves
+                                   an order to a terminal state.
+          terminal, filled > 0,    what the fill cost. The unfilled
+            market not settled     remainder can no longer trade; the
+                                   filled part is inventory, and a losing
+                                   contract pays nothing.
+          terminal, nothing filled nothing. The venue confirmed it ended
+            or market settled      with no fill, or settlement has paid.
+
+        A HOLD OUTLIVES ITS ORDER. Releasing on terminal order state alone
+        would drop exactly the risk that just became real.
 
         ONE RULE FOR EVERY AWKWARD ENDING. A partial fill, a cancel that
         raced a fill, a submission that timed out, a process that
-        restarted -- all are just "does this order still carry risk,
-        according to the durable ledger", so none needs its own release
-        call and none can be forgotten on a path nobody thought about. It
-        touches only this lane's holds, so a sibling's room is never
-        freed here.
+        restarted -- all are "what does this order still carry, according
+        to the ledger". It is a statement of state, so repeating it frees
+        nothing twice, and it touches only this lane's holds.
+
+        CALLED EVERY STEP as well as between windows. Until 2026-11-20 it
+        ran only between windows, so a cancelled quote kept its hold for
+        the rest of the window and requoting alone exhausted the envelope.
         """
         settled = self._ledger["settled"]
-        live = []
+        keep: Dict[str, Any] = {}
         for c, r in self._ledger["orders"].items():
             if r.get("state") in OPEN:
-                live.append(c)                       # may still fill
+                keep[c] = None                       # may still fill
                 continue
             filled = _dec(r.get("filled_qty")) or ZERO
             if filled > 0 and r.get("market") not in settled:
-                live.append(c)                       # inventory at risk
-        return RESV.reconcile(lane=STRATEGY, live_keys=live)
+                cost = _dec(r.get("filled_cost"))
+                #: an unreadable cost keeps the WHOLE hold, never a guess
+                keep[c] = cost if cost is not None and cost > ZERO else None
+        return RESV.settle_to(lane=STRATEGY, keep=keep)
 
     def step(self, *, market: str, book: Any, t_in_window_s: Any,
              p_up: Any = None, p_source: Any = None,
@@ -2782,6 +2798,17 @@ class Btc5mExecutor:
             self._save_or_halt()                  # the disk may be back
         # 1. the venue's word on our orders, before anything is decided
         report["fills"].extend(self.poll()["fills"])
+        #: GIVE BACK WHAT THE POLL JUST PROVED FINISHED, before this step
+        #: asks for room. Only when the ledger that proves it is on disk: a
+        #: release justified by state a restart would not find is not one.
+        #: A sync that fails releases nothing, which refuses and never
+        #: permits.
+        if self._ledger_ok and self._ledger.get("halt_kind") != HALT_WRITE:
+            try:
+                _sync = self.sync_reservation()
+            except Exception as exc:                           # noqa: BLE001
+                _sync = {"ok": False, "reason": type(exc).__name__}
+            report["exposure"]["reservation_sync"] = _sync
         # 2. the pure decision, on the ledger's inventory and resting orders
         try:
             _params = self.effective_params(exposure_ceiling_usd)

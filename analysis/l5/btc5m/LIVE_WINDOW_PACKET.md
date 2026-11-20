@@ -513,3 +513,25 @@ The request is read-only, so no order outcome is uncertain; order submit and can
 were already handled as `SUBMIT_UNCERTAIN` in the executor and are unchanged.
 Tests: `tests/test_l5_btc5m_book_read_failure.py` (18; 9 fail with the guard removed).
 `tests/test_l5_btc5m_live_loop.py` has 11 failures that predate this change.
+
+### Hold-release fix (prepared, not deployed)
+
+`Btc5mExecutor.sync_reservation` now runs on every step, after the order poll and before the
+decision, and states what each order still carries: open or uncertain orders keep the whole
+hold; a terminal order with a fill in an unsettled market keeps its filled cost; a terminal
+order with no fill, or a settled market, keeps nothing. `l5_shared_reservation.settle_to`
+applies that under one lock, shrink-only, own lane only. Caps and the reserve path are
+unchanged.
+
+Also observed while testing: `AUTHORIZATION_ALREADY_USED` follows an envelope refusal because
+the single-use claim is taken before the envelope check and the same order id is retried. It
+is a consequence of the refusals this fix removes and is not changed here.
+
+Tests: `tests/test_l5_btc5m_hold_release.py` (34). Under the live window's configuration and a
+$0.60 envelope, 280 s of requoting submits more than three times the cap with no refusal and
+the reserved total never above $0.60; with the per-step release removed the same run stalls.
+Five mutations (release fills, release unconfirmed orders, never shrink a partial, let holds
+grow, touch other lanes) each fail tests.
+
+Suite: 2,184 passed, 11 failed across the BTC5m, persistent-mode, reservation, envelope,
+straddle and late-favourite files; the 11 are the baseline in `BASELINE_TEST_FAILURES.md`.

@@ -41,7 +41,7 @@ import json
 import os
 import tempfile
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional
 
 try:                                                # pragma: no cover
     import fcntl
@@ -290,6 +290,72 @@ def reconcile(*, lane: Any, live_keys: Iterable[Any],
         if gone and not lk.write(doc):
             return {"ok": False, "reason": "RESERVATION_NOT_WRITTEN"}
         return {"ok": True, "reason": None, "released": sorted(gone)}
+
+
+def settle_to(*, lane: Any, keep: Mapping[Any, Any],
+              file_path: Optional[str] = None) -> Dict[str, Any]:
+    """Bring this lane's holds down to what its ledger says is still at risk.
+
+    `keep` maps each of this lane's keys that still carries risk to either
+    None -- leave the hold exactly as it is -- or the dollars still at risk.
+    A hold of this lane that `keep` does not name is released.
+
+    WHY THIS EXISTS. Live window 2026-11-20 14:20Z: holds were released only
+    between windows, so every cancelled quote went on counting. Seven
+    requote rounds reserved $0.5742 against a $0.60 envelope while $0.17 was
+    actually at risk, and two-sided quoting stopped 68 s into a 300 s
+    window.
+
+    IT IS A STATEMENT OF STATE, NOT AN EVENT. The caller says what is at
+    risk now; nothing here adds room per cancel seen. Saying the same thing
+    twice changes nothing the second time, so a repeated reconciliation, a
+    cancel reported twice or a restart cannot free the same money twice.
+
+    A HOLD ONLY EVER SHRINKS HERE. An amount above the current hold leaves
+    the hold where it is: growing one would take room without the cap check
+    `reserve` makes. An amount that is unreadable or not positive also
+    leaves the hold untouched -- "I cannot say what is at risk" is not
+    "nothing is".
+
+    One lock hold, own lane only, like `reconcile`.
+    """
+    lane_s = str(lane or "").strip()
+    if not isinstance(keep, Mapping):
+        return {"ok": False, "reason": "RESERVATION_KEEP_UNREADABLE"}
+    want = {str(k).strip(): v for k, v in keep.items()}
+    p = file_path or path()
+    if not p:
+        return {"ok": False, "reason": "RESERVATION_PATH_UNSET"}
+    with _Locked(p) as lk:
+        if lk.error or lk.fh is None:
+            return {"ok": False, "reason": "RESERVATION_LOCK_FAILED",
+                    "error": lk.error}
+        doc = lk.read()
+        if doc is None:
+            return {"ok": False, "reason": "RESERVATION_FILE_UNREADABLE"}
+        gone, reduced, freed = [], [], ZERO
+        for k, h in list(doc["holds"].items()):
+            if str((h or {}).get("lane")) != lane_s:
+                continue
+            cur = _dec((h or {}).get("usd"))
+            if k not in want:
+                gone.append(k)
+                freed += cur if cur is not None and cur > ZERO else ZERO
+                del doc["holds"][k]
+                continue
+            amt = want[k]
+            if amt is None:
+                continue
+            new = _dec(amt)
+            if new is None or new <= ZERO or cur is None or new >= cur:
+                continue
+            h["usd"] = str(new)
+            reduced.append(k)
+            freed += cur - new
+        if (gone or reduced) and not lk.write(doc):
+            return {"ok": False, "reason": "RESERVATION_NOT_WRITTEN"}
+        return {"ok": True, "reason": None, "released": sorted(gone),
+                "reduced": sorted(reduced), "freed_usd": str(freed)}
 
 
 def aggregate(file_path: Optional[str] = None) -> Dict[str, Any]:
