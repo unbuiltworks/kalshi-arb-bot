@@ -245,3 +245,24 @@ if read with orders resting or if the equity does not add up.
 The existing drawdown limit is two other variables on the same service,
 `L5_PORTFOLIO_ANCHOR_USD` and `L5_PORTFOLIO_MAX_DRAWDOWN_USD`. Changing them
 is the capital decision and is the owner's alone.
+
+## 8. Combined service release, pinned 2026-11-20 (preparation only)
+
+| | |
+|---|---|
+| branch | `release/l5-pmus-live-equity-and-correction-20261120` |
+| commit | `cfac6707cb82caaf9b4d0cdbe7aa46f6fb20ac1f` (tree `a1ad8ce6d640…`) |
+| contains | the accounting release `30c639da6` plus the correction, one commit |
+| base | `3390246e0`, running on `l5-pmus-live` now |
+| manifest SHA-256 in that commit | `2d7a87d9968931e87ff353887f8b8bd3fe2e3b4aaf8ce20107ef7f28aa61c368` |
+| regression, fresh checkout of the pushed commit | 12 failed / 2518 passed, the same twelve as the base; 253 adjacent tests pass |
+
+It supersedes `30c639da6` as the service release. The BTC5m release is
+unchanged: `a178c20f4348376cac6ddf3d9b2310eaf1a0f49a`.
+
+Deploy order: `l5-pmus-live` first with `L5_VENUE_SUPERSET_CORRECTION`
+unset, then `l5-btc5m-live`, then `INSPECT`. Rollback for the service is
+Railway deployment `4efa8e28-8f76-475a-a406-b0fdfcc8574b` (`3390246e0`); for
+BTC5m, `c6f44539-c668-4418-80c3-28cf8f2935fc` (`35224ec`).
+
+Not deployed. No ledger write, limit change or arming.
