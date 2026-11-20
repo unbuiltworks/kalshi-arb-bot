@@ -40,7 +40,7 @@ import threading
 import time
 import urllib.request
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from src import l5_venue_constraints as VC
 from src import l5_btc5m_controller as C
@@ -442,6 +442,53 @@ EQUITY_BLOCKS = (("portfolio_drawdown", "ACCOUNT_DRAWDOWN"),
                  ("equity_baseline", "ACCOUNT_EQUITY_BASELINE"))
 
 
+class OwnSettled(Decimal):
+    """This strategy's settled result today, WITH the markets it came from.
+
+    A Decimal, so every existing reader of the total is unchanged; the
+    per-market breakdown rides along as `by_market` for the one reader
+    that needs it.
+
+    THE DEFECT THIS CARRIES THE FIX FOR. `account_risk` added this lane's
+    settled losses to the account ledger's figures on the assumption that
+    the other service never books them. It does: it adopts this lane's
+    venue position, retires it at settlement and restates it from venue
+    cost. Live 2026-11-20 17:08Z the first window's -0.0114 was therefore
+    counted twice -- the day read -0.0228 against a true -0.0114.
+    """
+    by_market: Optional[Dict[str, Decimal]] = None
+
+    @classmethod
+    def of(cls, by_market: Mapping[str, Decimal]) -> "OwnSettled":
+        out = cls(sum(by_market.values(), D(0)))
+        out.by_market = dict(by_market)
+        return out
+
+
+def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
+                               ) -> Tuple[Decimal, List[str], List[str]]:
+    """(loss to add, markets added, markets left out as already booked).
+
+    A market is left out ONLY when the account service itself lists it
+    among the markets it has retired -- its settled result is then inside
+    that service's own day and lifetime figures, at venue cost or at the
+    harsher $1-a-share bound. Anything else is added, as before: no
+    breakdown, no published list, an unreadable list, or a market the list
+    does not name. So this can only remove a loss that is provably counted
+    already; it never removes one on a guess.
+
+    Only LOSSES are ever added: the sum is floored at zero from above.
+    """
+    by = getattr(own, "by_market", None)
+    listed = risk.get("retired_markets")
+    if not isinstance(by, Mapping) or not isinstance(listed, (list, tuple)):
+        return min(D(0), Decimal(own)), [], []
+    booked = {str(m) for m in listed}
+    added = sorted(m for m in by if m not in booked)
+    left = sorted(m for m in by if m in booked)
+    return (min(D(0), sum((by[m] for m in added), D(0))), added, left)
+
+
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
                  fetch: Optional[Callable[[str], Any]] = None
                  ) -> Dict[str, Any]:
@@ -498,13 +545,16 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_FIGURES_UNREADABLE")
     if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
-    add = min(D(0), own_unaccounted)
+    add, _added, _left_out = _own_not_in_account_ledger(own_unaccounted,
+                                                         risk)
     day_all, life_all = day + add, life + add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
+           "btc5m_markets_added": _added,
+           "btc5m_markets_already_in_account_ledger": _left_out,
            # what may still be LOST before either account-wide limit binds
            "loss_room_usd": str(room),
            "btc15m_operator_halt": other_halt,
@@ -1521,6 +1571,13 @@ class Session:
         got = self.ex.day_settled_pnl(self._now())
         if got is None:
             raise ValueError("own settled result unreadable")
+        #: the same rows, by market, so `account_risk` can leave out a
+        #: market the account service has already booked. If the breakdown
+        #: cannot be read the total alone is passed and all of it is added.
+        by = getattr(self.ex, "day_settled_by_market", None)
+        by = by(self._now()) if callable(by) else None
+        if isinstance(by, Mapping) and sum(by.values(), D(0)) == got:
+            return OwnSettled.of(by)
         return min(D(0), got)
 
     def gates(self) -> Dict[str, Any]:
@@ -2279,6 +2336,8 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             "straddle_reprice_ticks_per_clip":
                 int(_ep.straddle_reprice_ticks_per_clip or 0),
             "straddle_requote_ticks": int(_ep.straddle_requote_ticks or 0),
+            "straddle_one_sided_control":
+                bool(_ep.straddle_one_sided_control),
             "straddle_leg_max_age_s": float(_ep.straddle_leg_max_age_s or 0),
             #: whether a behaviour-probe document is SET, never what it
             #: says. Whether it is valid is judged per step, against the

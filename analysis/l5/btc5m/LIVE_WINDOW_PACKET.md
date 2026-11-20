@@ -675,3 +675,59 @@ Arm token empty, `L5_SHADOW_ONLY=1`, probe and campaign documents empty, envelop
 Boot 17:12:22Z (deployment `d558ce6d`): settlement recovered −0.0151, exposure 0.4251 → 0,
 stored state `MONITOR` (`CAMPAIGN_EXPIRED`), arming refused, no traceback. Resident,
 `can_submit false`. Watchdog 17:14:03Z: 0 open orders, no halt, registries OK.
+
+## Inventory-aware decision work after the 17:05Z window (prepared, not deployed)
+
+### Attribution of both live windows (FIFO pairing, the venue's own convention)
+
+| Window | Matched pairs | Matched P&L | Unmatched | Unmatched P&L | Fees | Rebates | Net |
+|---|---|---|---|---|---|---|---|
+| 14:20Z | 0.16 @ 1.00 | $0.0000 | 0.06 DOWN, cost $0.0114 | −$0.0114 | $0 | none credited | −$0.0114 |
+| 17:05Z | 0.41 @ 0.9278 | +$0.0296 | 0.44 DOWN, cost $0.0447 | −$0.0447 | $0 | none credited | −$0.0151 |
+
+17:05Z agrees with the venue's position row (`realized 0.0296`, `cost 0.0447`). In both
+windows the pairs did not lose money; the whole loss is unmatched inventory.
+`src/l5_btc5m_attribution.py` now attaches this split to every settlement record.
+
+### One-sided accumulation control (`L5_BTC5M_STRADDLE_ONE_SIDED`, off by default)
+
+A leg's shares that only bring its side up to what the other side holds complete pairs and
+are not judged. Shares beyond that need either a partner side that is still quotable, or a
+fresh independent probability with `p_side − price − 0.06 ≥ 0.01` (the single-sided path's
+existing test). Otherwise the leg is refused (`ONE_SIDED_NO_EDGE` / `ONE_SIDED_P_UNKNOWN`).
+It can only add a refusal; every cap and gate is unchanged.
+
+The 13 lone DOWN orders of the 17:05Z window, judged on the probability logged at the time
+(`evidence/window_1705z_one_sided_replay.json`): 10 refused, 3 kept (t=119, 182, 189 s, where
+the model put DOWN above its price by more than 7 cents). 7 of the 8 lone fills are among the
+refused, cost $0.0362. Arithmetically the window would have settled about +$0.021 instead of
+−$0.0151. That is one window and one outcome, not evidence of edge: the three kept legs rest
+on a model the market disagreed with (model 0.19–0.20 against prices 0.06–0.11), and the
+market was right.
+
+Tests: `tests/test_l5_btc5m_one_sided_control.py` (109), five mutations each fail.
+
+### Not built
+
+- Inventory-sensitive quote shading exists already (`L5_BTC5M_STRADDLE_REPRICE_TICKS`, 0 in
+  production). Its effect on fills cannot be judged offline and it was not changed.
+- Pair completion: the verdict now reports the pair cost and the model value against holding
+  for every completing leg. No taker or sell path was added; reducing exposure by selling is
+  not available to a maker-only, buy-only lane.
+
+### Operational fixes
+
+- Duplicate daily loss (BTC5m lane): the lane added its own settled losses to an account
+  ledger that had already retired the same market. It now leaves out a market the account
+  service lists in `retired_markets` and adds everything else as before.
+  `tests/test_l5_btc5m_own_loss_not_double_counted.py` (13).
+- Portfolio value unavailable (`l5-pmus-live`, separate code line): adopting this lane's venue
+  position marks that ledger uncertain for the 15 s between two reconciles, and the published
+  value went to None. It now publishes buying power alone as a floor, which can refuse early
+  and cannot permit late; that service's own gates are unchanged. This replaces the earlier
+  rule "uncertain order state blocks both". Local commit `209ca5542`, saved as
+  `patches/pmus_live_uncertain_cash_floor.patch`; 135 equity tests pass. Known cost: while
+  uncertain, matched pairs held by that service count as zero, so its older drawdown limit
+  can trip early for those seconds.
+
+Suite across BTC5m, straddle, envelope and image files: the same 29 baseline failures, none new.
