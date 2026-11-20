@@ -2488,6 +2488,10 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 bool(_ep.straddle_one_sided_control),
             "straddle_max_completed_pair_cost":
                 str(_ep.straddle_max_completed_pair_cost),
+            "straddle_ev_basis": str(_ep.straddle_ev_basis or ""),
+            "straddle_fill_edge_per_share": (
+                None if _ep.straddle_fill_edge_per_share is None
+                else str(_ep.straddle_fill_edge_per_share)),
             "straddle_stop_adding_heavy_underdog":
                 bool(_ep.straddle_stop_adding_heavy_underdog),
             "straddle_heavy_underdog_margin":

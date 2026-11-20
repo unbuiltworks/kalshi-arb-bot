@@ -354,6 +354,36 @@ class Params:
     #: only removes orders (HEAVY_SIDE_IS_UNDERDOG): it places nothing,
     #: widens no limit and sells nothing. False -- the default -- leaves
     #: every decision byte for byte as it was.
+    #: =====================================================================
+    #: JUDGE EVERY ORDER ON THE WHOLE POSITION, NOT ON THE PAIR.
+    #:
+    #: The entry gate below prices a leg by the chance it becomes half of a
+    #: pair, and charges adverse selection "on the lone branch only: a
+    #: filled pair is locked and cannot be adversely selected". The replays
+    #: contradict that: with every completing leg quoted inside a 0.99 pair
+    #: ceiling, the pairs actually built cost 1.04 on average and are 58%
+    #: of the loss (analysis/l5/btc5m/REMAINING_FILLS_ANATOMY_RESULT.txt).
+    #: A completing bid is filled when ITS side is falling, exactly like any
+    #: other bid.
+    #:
+    #: Settled P&L is linear in shares: a position holding U and D pays
+    #: U - cost if UP wins and D - cost if DOWN wins, so one more share of a
+    #: side bought at x adds (value of that share when the bid is filled)
+    #: - x, whatever else is held. Pairing changes the SPREAD between the
+    #: two outcomes, never the expectation. So with basis "POSITION":
+    #:   * a leg's expected worth is `straddle_fill_edge_per_share` (the
+    #:     MEASURED value of a filled share minus its price) minus the fee,
+    #:     times its quantity -- the same for an opening, extending or
+    #:     completing leg; no pair probability enters;
+    #:   * that figure must be explicitly set from measurement. Unset, the
+    #:     leg is refused (FILL_EDGE_NOT_SET): nothing is assumed;
+    #:   * the step report carries, per proposed order, the position's
+    #:     settled P&L if UP wins and if DOWN wins, before and after, and
+    #:     the worst of the two. Risk stays with the existing side,
+    #:     unmatched and window-loss ceilings, which are untouched.
+    #: "" -- the default -- leaves the pair-based gate exactly as it was.
+    straddle_ev_basis: str = ""
+    straddle_fill_edge_per_share: Optional[Decimal] = None
     straddle_stop_adding_heavy_underdog: bool = False
     #: how far below the other side's bid counts as the underdog
     straddle_heavy_underdog_margin: Decimal = D("0")
@@ -966,6 +996,50 @@ def one_sided_verdict(*, side: str, price: Decimal, qty: Decimal,
 EV_WAIVER_TOKEN = "BEHAVIOUR_PROBE_EV_UNPROVEN"
 
 
+EV_BASIS_POSITION = "POSITION"
+
+
+def position_order_economics(*, side: str, price: Decimal, qty: Decimal,
+                             inv: Dict[str, tuple], fill_edge: Any,
+                             fee_per_share: Any) -> Dict[str, Any]:
+    """What one more filled order does to the WHOLE position.
+
+    See `Params.straddle_ev_basis`. Pure arithmetic on what is held and
+    what is proposed. `fill_edge` is the measured value of a filled share
+    minus its price; None means unmeasured and is refused, never read as
+    zero. The verdict has the shape `SEV.admits` returns.
+    """
+    cost = inv[UP][1] + inv[DOWN][1]
+    before = {UP: inv[UP][0] - cost, DOWN: inv[DOWN][0] - cost}
+    fee = _dec(fee_per_share)
+    fee = ZERO if fee is None else fee
+    spend = qty * price + qty * fee
+    after = {s_: before[s_] - spend + (qty if s_ == side else ZERO)
+             for s_ in SIDES}
+    out = {"basis": EV_BASIS_POSITION, "side": side,
+           "pnl_if_up_before": str(before[UP]),
+           "pnl_if_down_before": str(before[DOWN]),
+           "pnl_if_up_after": str(after[UP]),
+           "pnl_if_down_after": str(after[DOWN]),
+           "worst_before": str(min(before.values())),
+           "worst_after": str(min(after.values())),
+           "completes_shares": str(max(ZERO, min(
+               qty, inv[_other(side)][0] - inv[side][0]))),
+           "fill_edge_per_share": None, "expected_change_usd": None}
+    edge = _dec(fill_edge) if fill_edge is not None else None
+    if edge is None:
+        out.update(ok=False, reason="FILL_EDGE_NOT_SET")
+        return out
+    ev = edge - fee
+    out.update(fill_edge_per_share=str(edge), ev_per_share=str(ev),
+               expected_change_usd=str(ev * qty))
+    if ev <= ZERO:
+        out.update(ok=False, reason="EV_NOT_POSITIVE")
+    else:
+        out.update(ok=True, reason=None)
+    return out
+
+
 def with_ev_waiver(params: "Params") -> "Params":
     """A copy of `params` carrying the behaviour-probe token. The ONLY way
     the token is ever attached, and it is called from exactly one place:
@@ -1541,6 +1615,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: a few lines below, in this same function.
         _side_why: Dict[str, Any] = {s_: None for s_ in SIDES}
         _one_sided: Dict[str, Any] = {s_: None for s_ in SIDES}
+        _position: Dict[str, Any] = {s_: None for s_ in SIDES}
         _pair_block: Dict[str, bool] = {s_: False for s_ in SIDES}
         _pair_plan: Dict[str, Any] = {"action": None}
         _bk, _bk_why = {}, None
@@ -1862,6 +1937,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     #: on a pair that did not exist. Exactly the
                     #: "confident wrong number" this gate is supposed to
                     #: prevent, arriving through the gate itself.
+                    _pos_basis = (params.straddle_ev_basis
+                                  == EV_BASIS_POSITION)
                     if _bookrel:
                         _r_other = _repriced_rung(_bk[_other(side)],
                                                   _other(side), inv, qty,
@@ -1938,6 +2015,18 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                     _ok = SEV.admits(
                         _ev,
                         min_ev_per_share=params.straddle_min_ev_per_share)
+                    if _pos_basis:
+                        #: the pair-based figure above is computed and
+                        #: DISCARDED: under this basis no pair probability
+                        #: may admit a leg.
+                        _poe = position_order_economics(
+                            side=side, price=r_side, qty=qty, inv=inv,
+                            fill_edge=params.straddle_fill_edge_per_share,
+                            fee_per_share=params.straddle_fee_per_share)
+                        _position[side] = _poe
+                        _ev = {"ok": _poe["ok"],
+                               "ev_per_share": _poe.get("ev_per_share")}
+                        _ok = {"ok": _poe["ok"], "reason": _poe["reason"]}
                     ev_rungs.append({"price": str(r_side),
                                      "ev_per_share": (
                                          None if _ev.get("ev_per_share") is None
@@ -2325,6 +2414,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 "side_refusals": dict(_side_why),
                 "one_sided": dict(_one_sided),
                 "heavy_underdog": dict(_hu),
+                "position_economics": dict(_position),
                 "pair_completion": dict(_pair_plan),
                 "completion_reserve": _reserve,
                 "book_relative": {

@@ -1,0 +1,11 @@
+POSITION-BASIS REPLAY (STRICT inferred fills; not venue fills). Real controller, live configuration.
+fit days 11-17/18, deployed configuration (gate waived as live): net $-26.16 on 666 shares -> measured value of a filled share minus its price = -0.0393 (replay-inferred; the 26 venue-confirmed fills gave -0.012 and -0.030)
+
+HELD-OUT 11-19/20, 515 windows:
+  A deployed (gate waived, as live)                    orders placed 15524 cancels  6921 fills  8474  spent $ 271.03  NET $ -20.25  per window -0.0393  worst window -0.145
+  B deployed + heavy-underdog stop                     orders placed 12845 cancels  6064 fills  6724  spent $ 252.67  NET $ -17.98  per window -0.0349  worst window -0.156
+  C position basis, edge unset, no waiver              orders placed     0 cancels     0 fills     0  spent $   0.00  NET $  +0.00  per window +0.0000  worst window +0.000
+  D position basis, edge = fit-day measurement -0.0393 orders placed     0 cancels     0 fills     0  spent $   0.00  NET $  +0.00  per window +0.0000  worst window +0.000
+  E position basis, edge = best venue-confirmed -0.012 orders placed     0 cancels     0 fills     0  spent $   0.00  NET $  +0.00  per window +0.0000  worst window +0.000
+
+C, D and E place nothing: with what has been measured, no bid has a non-negative expected value, so the whole-position gate refuses. $0.00 is the absence of trading, not a profit, and is not a promotion case.

@@ -819,6 +819,31 @@ def straddle_heavy_underdog_margin(default: Decimal = ZERO) -> Decimal:
     return raw
 
 
+#: WHICH EXPECTED-VALUE BASIS THE ENTRY GATE USES. Only the exact token
+#: selects the whole-position basis; anything else keeps the pair basis.
+STRADDLE_EV_BASIS_ENV = "L5_BTC5M_STRADDLE_EV_BASIS"
+STRADDLE_FILL_EDGE_ENV = "L5_BTC5M_STRADDLE_FILL_EDGE"
+
+
+def straddle_ev_basis(default: str = "") -> str:
+    """See `Params.straddle_ev_basis`."""
+    raw = os.environ.get(STRADDLE_EV_BASIS_ENV)
+    if raw is None or not raw.strip():
+        return default
+    return "POSITION" if raw.strip() == "POSITION" else default
+
+
+def straddle_fill_edge_per_share(default: Optional[Decimal] = None
+                                 ) -> Optional[Decimal]:
+    """The measured value of a filled share minus its price. Unset or
+    unreadable is None -- unmeasured -- and the position basis then refuses
+    every leg. Accepted only inside (-0.50, 0.50)."""
+    raw = _dec(os.environ.get(STRADDLE_FILL_EDGE_ENV))
+    if raw is None or not (D("-0.50") < raw < D("0.50")):
+        return default
+    return raw
+
+
 STRADDLE_MAX_COMPLETED_PAIR_COST_ENV = \
     "L5_BTC5M_STRADDLE_MAX_COMPLETED_PAIR_COST"
 
@@ -2710,6 +2735,11 @@ class Btc5mExecutor:
                         straddle_max_completed_pair_cost=(
                             straddle_max_completed_pair_cost(
                                 self.params.straddle_max_completed_pair_cost)),
+                        straddle_ev_basis=straddle_ev_basis(
+                            self.params.straddle_ev_basis),
+                        straddle_fill_edge_per_share=(
+                            straddle_fill_edge_per_share(
+                                self.params.straddle_fill_edge_per_share)),
                         straddle_stop_adding_heavy_underdog=(
                             straddle_stop_adding_heavy_underdog(
                                 self.params
