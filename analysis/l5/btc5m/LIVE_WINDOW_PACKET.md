@@ -153,3 +153,69 @@ the report: actual fills and settled net P&L from venue cashflows, not
 simulated figures.
 
 Rollback of the build: Railway deployment `cd13ec23` (`a178c20f4348`).
+
+## Addendum 2026-11-20 04:30Z — the owner's two points, and the release
+
+### Venue minimum order size: confirmed, and $0.05 clips fit
+
+Read from the venue's public record for
+`cpc-btc-updown-5m-2026-11-20-0425z`
+(`evidence/venue_market_record_btc5m_20261120-0425z.json`):
+
+| venue field | value | the lane assumes |
+|---|---|---|
+| `minimumTradeQty` | **0.01** share | 0.01 |
+| `orderPriceMinTickSize` | **0.01** | 0.01 |
+| `feeCoefficient` (taker) | 0.095 | not used: every order is post-only |
+
+A $0.05 clip is 1.00 share at a price of 0.05, 0.10 share at 0.50 and 0.05
+share at 0.99: five to a hundred times the venue's minimum quantity at every
+price. No limit needs to change and none is proposed. The fixed reader, run
+on that same record, returns a verified size and tick equal to the lane's.
+
+Not established: whether the venue also enforces a minimum order *value*.
+Its record publishes none. If it does and $0.05 is below it, the venue
+rejects the order and nothing fills; the limits would not be raised to fit.
+
+With the fix deployed and `REQUIRE` set, the lane re-reads these two figures
+from the venue on every step and holds if either differs from its own.
+
+### What the $0.20 ceiling is and is not
+
+Three different bounds apply to the window. They should be approved as three
+numbers.
+
+| bound | value | what it means |
+|---|---|---|
+| window loss ceiling | $0.20 | before each order the lane computes the worst settlement outcome over every combination of fills still possible, and refuses the order if that exceeds $0.20. It holds **if** the lane's record of its fills is complete, the market settles at $1 / $0, and maker fees stay zero |
+| per-side caps | $0.30 + $0.30 | the most that can be spent on the window in total |
+| approved exposure | $0.60 | the same $0.60, stated in the approval |
+
+So the designed loss is at most $0.20, and the most that can be **lost if
+those assumptions fail** — a fill the lane did not record, a voided or
+irregularly settled market — is what was spent: up to **$0.60**. The $1.00
+account allowance covers that. Simulated adversaries stayed inside $0.20;
+nothing on the real venue has tested it.
+
+### The entry-EV waiver
+
+Stated plainly for the authorization: the normal economic gate refuses every
+order in this mode, because no measured pairing rate supports one. Document
+C waives that refusal for this one named window only. It does not assert any
+rate. The orders placed are orders the strategy would otherwise reject, and
+the window is expected to lose money. It applies only while the loss
+ceiling, requote and order-age settings are in force, and to no other
+market or time.
+
+### Release for step 1 (prepared, not deployed)
+
+| | |
+|---|---|
+| branch | `release/l5-btc5m-venue-size-20261120` |
+| commit | `16216c6b9019e111096fadee890f85e0427dd1fb` |
+| base | `a178c20f4348`, running now |
+| code diff | `src/l5_btc5m_runner.py` (+34, -5: `step_book`), `deploy/l5_btc5m_live/DEPLOY_TRIGGER` (timestamp), one test file (+52) |
+| tests, fresh checkout | 325 pass in the five BTC5m files; wider BTC5m run has the same 11 pre-existing failures as the base |
+
+The four decisions stay separate: this build, the configuration, the waiver
+with the exact window authorization, and arming.
