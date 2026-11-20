@@ -1011,3 +1011,24 @@ before any order. Roll back to `27cbdb32b` on any failure.
 
 Step 1 restarts `l5-pmus-live`; the BTC5m lane is disarmed, so the brief loss of the risk
 record blocks nothing. Each step needs the owner's explicit approval.
+
+## Accounting releases: final preflight, read at 2026-11-20 20:33Z (nothing deployed)
+
+| Check | Result |
+|---|---|
+| `l5-pmus-live` | deployment `270f602d`, commit `cfac6707c`, SUCCESS |
+| `l5-pmus-live` state | 0 live orders, 0 pending, no uncertain order state, no markets with exposure; venue cash $321.4517 |
+| `l5-btc5m-live` | deployment `d558ce6d`, commit `27cbdb32b`, SUCCESS |
+| `l5-btc5m-live` state | stored MONITOR, `can_submit false`, no latch, envelope expired |
+| Watchdog | 0 open orders, no halt, all three registries OK |
+| Candidates on the remote | `release/l5-pmus-live-loss-publication-20261120` = `1e75294f3`; `release/l5-btc5m-accounting-20261120` = `a87493baf` |
+
+`l5-pmus-live`'s own readiness line lists `HALT_NOT_ASSERTED`, as it has all day; its arm and
+shadow switches were not re-read for this preflight. Preflight passes for step 1. Each step
+still needs the owner's explicit approval.
+
+## Recorder gap on 2026-11-13 06:00-06:30Z
+
+The recorder did not stop. For those thirty minutes every poll of the venue's public market
+endpoint returned an HTTP error (logged with `error: HTTPError` for slugs 0600z-0625z); quotes
+resume at 06:30:42Z. Six windows are missing from every study for that reason. No change made.
