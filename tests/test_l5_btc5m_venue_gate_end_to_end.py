@@ -369,3 +369,55 @@ def test_the_venue_minimum_is_not_the_economic_minimum():
     s = VC.from_market(market_doc()["market"])
     assert VC.check_order("0.50", "0.01", s) is None       # venue: fine
     assert D("0.0884") * D("0.01") < D("0.001")            # economics: no
+
+
+# =========================================== THE BOOK THE SESSION STEPS WITH
+#
+# Production does not step the executor with `public_book`'s output. The
+# session rebuilds the book, and that rebuild dropped the constraints, so
+# REQUIRE held every decision. These step with what the session builds.
+
+def session_book(**bookkw):
+    return R.step_book(book_via_runner(**bookkw),
+                       {"bid_shares": D("50"), "ask_shares": D("50")})
+
+
+def test_the_session_book_keeps_the_venue_constraints():
+    b = session_book()
+    assert b[VC.BOOK_MIN_QTY] == D("0.01") and b[VC.BOOK_TICK] == D("0.01")
+    assert b["bid"] == D("0.60") and b["bid_shares"] == D("50")
+    assert VC.from_book(b)["ok"] is True
+
+
+def test_required_and_stepped_as_the_session_does_the_order_is_sent(
+        rig2, armed, require):
+    rep = rig2.ex.step(market=MARKET, book=session_book(),
+                       t_in_window_s=30.0, p_up="0.75", p_source="TEST")
+    assert rep["why"] != "VENUE_CONSTRAINTS_UNVERIFIED", rep
+    assert rep["placed"] and rig2.venue.sent, rep
+
+
+def test_a_public_record_without_them_is_still_unverified(rig2, armed,
+                                                          require):
+    """Nothing is invented: keys the venue did not send are not added."""
+    b = R.step_book({"bid": D("0.60"), "ask": D("0.62"), "age_s": 0.1},
+                    {"bid_shares": D("50"), "ask_shares": D("50")})
+    assert VC.BOOK_MIN_QTY not in b and VC.BOOK_TICK not in b
+    rep = rig2.ex.step(market=MARKET, book=b, t_in_window_s=30.0,
+                       p_up="0.75", p_source="TEST")
+    assert rep["placed"] == [] and rig2.venue.sent == []
+    assert rep["why"] == "VENUE_CONSTRAINTS_UNVERIFIED"
+
+
+def test_a_disagreeing_grid_stops_the_session_path_too(rig2, armed, require):
+    rep = rig2.ex.step(market=MARKET, book=session_book(min_qty=0.05),
+                       t_in_window_s=30.0, p_up="0.75", p_source="TEST")
+    assert rep["placed"] == [] and rig2.venue.sent == []
+    assert str(rep["why"]).startswith("VENUE_CONSTRAINTS_DISAGREE")
+
+
+def test_the_session_steps_with_that_function_and_nothing_else():
+    import inspect
+    src = inspect.getsource(R.Session.trade)
+    assert "book=step_book(book, sized)," in src
+    assert src.count("self.ex.step(") == 1

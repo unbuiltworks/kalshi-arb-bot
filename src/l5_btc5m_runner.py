@@ -261,6 +261,35 @@ def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
     return out
 
 
+def step_book(book: Mapping[str, Any],
+              sized: Mapping[str, Any]) -> Dict[str, Any]:
+    """The book the executor is stepped with: prices from the public record,
+    depth from the freshness-checked sizing, and the venue's own order
+    constraints carried through UNCHANGED.
+
+    THE DEFECT THIS FIXES. `public_book` has carried the venue's minimum
+    quantity and tick since the venue-constraints gate was added, and the
+    gate reads them from the book it is stepped with. This dict was built
+    by hand from five keys and dropped them, so with
+    `L5_BTC5M_VENUE_CONSTRAINTS=REQUIRE` every production decision held on
+    VENUE_CONSTRAINTS_UNVERIFIED: the gate could be switched on only by
+    switching trading off. The end-to-end test stepped the executor with
+    `public_book`'s output directly and so never saw it.
+
+    Only keys the public record actually carried are passed, so "the venue
+    did not say" stays distinguishable from "nobody looked", and with the
+    gate off nothing reads them.
+    """
+    out: Dict[str, Any] = {"bid": book.get("bid"), "ask": book.get("ask"),
+                           "age_s": book.get("age_s"),
+                           "bid_shares": sized.get("bid_shares"),
+                           "ask_shares": sized.get("ask_shares")}
+    for k in (VC.BOOK_MIN_QTY, VC.BOOK_TICK, VC.BOOK_FEE):
+        if k in book:
+            out[k] = book[k]
+    return out
+
+
 #: the venue-equity blocks the account-risk record must carry, and the
 #: prefix each one's refusal is reported under.
 EQUITY_BLOCKS = (("portfolio_drawdown", "ACCOUNT_DRAWDOWN"),
@@ -1556,10 +1585,7 @@ class Session:
                                                auth=depth)
                 rep = self.ex.step(
                     market=self.market,
-                    book={"bid": book.get("bid"), "ask": book.get("ask"),
-                          "age_s": book.get("age_s"),
-                          "bid_shares": sized.get("bid_shares"),
-                          "ask_shares": sized.get("ask_shares")},
+                    book=step_book(book, sized),
                     t_in_window_s=now - ws, p_up=p_up,
                     p_source=("VENUE_INDEX" if p_up is not None else None),
                     #: the index age the estimator already measured, and
