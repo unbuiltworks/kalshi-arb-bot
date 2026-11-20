@@ -2620,6 +2620,47 @@ class InventoryStore:
                 return None
         return total
 
+    def retired_results_current_utc_day(self, *, now: Optional[float] = None
+                                        ) -> Optional[Dict[str, str]]:
+        """What `realized_current_utc_day` is the SUM of, market by market.
+
+        Same rows, same day test, same refusals -- so the values here add up
+        to that figure exactly and are read in the same pass over the same
+        state. None wherever that method returns None.
+
+        WHY IT IS PUBLISHED. A second strategy on this account adds its own
+        settled losses to this ledger's day figure. Being told only WHICH
+        markets were retired is not enough to avoid counting one twice: a
+        row can be retired at a result that is not the market's loss (zero
+        when the account was closed flat; a $1-a-share bound on the NET
+        position, which is zero when the residual side wins). With the
+        amount, the reader can add exactly the shortfall and never less.
+        READ-ONLY.
+        """
+        ts = (dt.datetime.now(dt.timezone.utc) if now is None
+              else dt.datetime.fromtimestamp(float(now), dt.timezone.utc))
+        day = ts.strftime("%Y-%m-%d")
+        try:
+            resid = D(str(self.state.get("realized_unattributed") or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+        if resid != 0:
+            return None
+        out: Dict[str, str] = {}
+        for mkt, row in (self.state.get("retired_markets") or {}).items():
+            if not isinstance(row, Mapping):
+                return None
+            stamp = str(row.get("t") or "")
+            if not stamp:
+                return None
+            if not stamp.startswith(day):
+                continue
+            try:
+                out[str(mkt)] = str(D(str(row.get("settlement_pnl") or 0)))
+            except (InvalidOperation, TypeError, ValueError):
+                return None
+        return out
+
     def verified_l5_net_for_gates(self) -> Optional[D]:
         """Return verified after-fee L5 net, never legacy estimated gross.
 

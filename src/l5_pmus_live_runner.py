@@ -6694,6 +6694,11 @@ class Runner:
                                       else bool(-lifetime >= cum)),
             "operator_halt": bool(operator_halted()),
             "retired_markets": retired[-400:],
+            # WHAT EACH OF TODAY'S RETIRED MARKETS CONTRIBUTED to
+            # `utc_day_realized_usd`. Added key only. None when the day
+            # itself is unknown; a reader without it adds everything.
+            "retired_results_utc_day": self._retired_results_line(
+                day.get("utc_day")),
             # the venue-equity controls a second strategy must also honour.
             # Added keys only: every figure above is computed as before.
             **self.equity_risk_lines(),
@@ -6701,6 +6706,19 @@ class Runner:
                        "gates read, published so a second strategy cannot "
                        "hold a looser copy. Read-only."),
         }
+
+    def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
+        """Today's retired markets with the result each was booked at.
+        Never raises: unreadable is None, which a reader treats as absent."""
+        try:
+            got = self.store.retired_results_current_utc_day()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if got is None or not utc_day:
+            return None
+        return {"utc_day": str(utc_day), "results": got}
 
     def day_realized_line(self) -> Dict[str, Any]:
         """The figure the DAILY loss halt actually reads, published.
