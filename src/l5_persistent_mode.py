@@ -304,6 +304,226 @@ def write_state(state: str, *, why: Any, now: Any,
     return {"ok": True, "reason": None, "state": state, "written": doc}
 
 
+# ==================================================== the owner's latch reset
+#
+# WHY THIS EXISTS. HALTED and STOPPED are latched and NOTHING cleared them:
+# every writer in the system writes a latch, none removes one. So a lane
+# halted once could never trade again without someone editing the state
+# file by hand, which leaves no record of who did it, when, or what the
+# latch said. On 2026-11-20 an owner-approved window armed into a STOPPED
+# written on 2026-11-17 and traded nothing.
+#
+# WHAT IT IS. ONE document from the owner that names ONE latch by the hash
+# of its stored record. It moves that latch to MONITOR -- never to ARMED --
+# and only after the original record has been appended, verbatim, to an
+# audit file beside the state. Trading afterwards still needs the envelope,
+# the campaign approval and the arming ceremony, exactly as before.
+#
+# WHAT CANNOT CLEAR A LATCH, and tests hold each: a restart; a new or
+# expired envelope; a new or expired campaign approval; `enter_armed`; the
+# resident loop; a reset document that is malformed, expired, for another
+# latch, already used, or presented while the lane could trade or while the
+# watchdog's halt is not readable-and-clear. The watchdog is not involved
+# and is not weakened: it asserts halts, this does not touch its record.
+
+LATCH_RESET_ENV = "L5_PERSISTENT_LATCH_RESET"
+RESET_ACTION = "CLEAR_LATCH_TO_MONITOR"
+RESET_ACKNOWLEDGEMENT = (
+    "I HAVE READ WHY THIS LATCH WAS SET. THE CONDITION IS RESOLVED. THIS "
+    "CLEARS THAT ONE LATCH TO MONITOR. IT DOES NOT ARM THE LANE AND "
+    "AUTHORIZES NO ORDER.")
+RESET_FIELDS = frozenset((
+    "approved", "action", "latch_sha256", "latch_state", "reason",
+    "issued_utc", "expires_utc", "nonce", "acknowledgement"))
+#: a reset document is good for one hour at most
+MAX_RESET_LIFETIME_S = 3600.0
+RESET_LOG_SUFFIX = ".latch_resets.jsonl"
+#: what the caller must establish, each exactly, before a latch may clear
+RESET_SAFE_KEYS = ("watchdog_halt_clear", "own_live_orders",
+                   "own_exposure_usd", "lane_can_submit")
+
+
+def latch_identity(st: Mapping[str, Any]) -> Optional[str]:
+    """The SHA-256 of a stored state record, or None if it is unreadable.
+
+    Covers the state, when it was written, why, and its digest, so two
+    latches are never the same identity: a document written for one cannot
+    clear a later one.
+    """
+    if not isinstance(st, Mapping) or not st.get("ok"):
+        return None
+    d = st.get("detail") or {}
+    doc = {"state": st.get("state"), "why": d.get("why"),
+           "at_utc": d.get("at_utc"), "latch_digest": d.get("latch_digest")}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True,
+                                     default=str).encode("utf-8")).hexdigest()
+
+
+def stored_state_report(path: Optional[str] = None) -> Dict[str, Any]:
+    """What is on the volume, for the log. READ-ONLY.
+
+    Emitted whatever the envelope says, because a latch that is only
+    looked at once a valid envelope is presented is a latch that stays
+    invisible until the moment a campaign is armed into it.
+    """
+    st = read_state(path)
+    if not st.get("ok"):
+        return {"readable": False, "reason": st.get("reason"),
+                "state": None, "latched": None, "would_refuse_arming": True}
+    d = st.get("detail") or {}
+    latched = st["state"] in LATCHED
+    return {"readable": True, "state": st["state"], "latched": latched,
+            "born": bool(st.get("born")),
+            "at_utc": d.get("at_utc"), "why": d.get("why"),
+            "latch_sha256": latch_identity(st) if latched else None,
+            "would_refuse_arming": latched,
+            "note": ("LATCHED: no envelope, approval or restart clears "
+                     "this; arming will be refused until the owner clears "
+                     "it by its latch_sha256" if latched else None)}
+
+
+def _reset_log_path(p: str) -> str:
+    return p + RESET_LOG_SUFFIX
+
+
+def _reset_nonces(p: str) -> Optional[set]:
+    """Nonces already spent, or None when the audit file cannot be read."""
+    try:
+        text = pathlib.Path(_reset_log_path(p)).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return set()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    out = set()
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            out.add(str(json.loads(line).get("reset", {}).get("nonce")))
+        except (ValueError, TypeError, AttributeError):
+            return None                 # a corrupt audit trail refuses
+    return out
+
+
+def clear_latch(*, raw: Any, now: Any, safe: Any,
+                path: Optional[str] = None) -> Dict[str, Any]:
+    """HALTED/STOPPED -> MONITOR for the ONE latch the owner named.
+
+    Every refusal leaves the state file exactly as it was. The order is
+    deliberate: nothing is written until every check has passed, and the
+    audit record is durable BEFORE the state changes, so a crash between
+    the two leaves a latch with a record, never a cleared latch without one.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, ok=False, cleared=False, reason=reason)
+
+    if raw is None or not str(raw).strip():
+        return no("RESET_ABSENT")
+    at = _utc(now)
+    if at is None:
+        return no("NOW_UNREADABLE")
+    p = path or state_path()
+    if not p:
+        return no("STATE_PATH_UNSET")
+    st = read_state(p)
+    if not st.get("ok"):
+        return no("STATE:%s" % st.get("reason"))
+    if st["state"] not in LATCHED:
+        return no("NOT_LATCHED", state=st["state"])
+    ident = latch_identity(st)
+    try:
+        doc = json.loads(str(raw))
+    except (ValueError, TypeError):
+        return no("RESET_UNPARSEABLE")
+    if not isinstance(doc, dict):
+        return no("RESET_NOT_AN_OBJECT")
+    if set(doc) != RESET_FIELDS:
+        return no("RESET_FIELDS", missing=sorted(RESET_FIELDS - set(doc)),
+                  unknown=sorted(set(doc) - RESET_FIELDS))
+    if doc["approved"] is not True:
+        return no("RESET_NOT_APPROVED")
+    if doc["action"] != RESET_ACTION:
+        return no("RESET_ACTION")
+    if doc["acknowledgement"] != RESET_ACKNOWLEDGEMENT:
+        return no("RESET_ACKNOWLEDGEMENT")
+    nonce = str(doc["nonce"] or "").strip() \
+        if isinstance(doc["nonce"], str) else ""
+    if len(nonce) < 8:
+        return no("RESET_NONCE_TOO_SHORT")
+    why = doc["reason"]
+    if not isinstance(why, str) or len(why.strip()) < 20:
+        return no("RESET_REASON_TOO_SHORT")
+    issued, expires = _utc(doc["issued_utc"]), _utc(doc["expires_utc"])
+    if issued is None or expires is None:
+        return no("RESET_TIMES_UNREADABLE")
+    if issued > at:
+        return no("RESET_ISSUED_IN_THE_FUTURE")
+    if expires <= issued \
+            or (expires - issued).total_seconds() > MAX_RESET_LIFETIME_S:
+        return no("RESET_LIFETIME")
+    if at >= expires:
+        return no("RESET_EXPIRED")
+    if doc["latch_state"] != st["state"]:
+        return no("RESET_IS_FOR_ANOTHER_STATE", stored=st["state"])
+    if not isinstance(doc["latch_sha256"], str) \
+            or doc["latch_sha256"] != ident:
+        return no("RESET_IS_FOR_ANOTHER_LATCH", stored_latch_sha256=ident)
+    # THE CONDITIONS, each established by the caller and each REQUIRED. A
+    # missing one is a refusal, never a pass.
+    if not isinstance(safe, Mapping) \
+            or any(k not in safe for k in RESET_SAFE_KEYS):
+        return no("RESET_CONDITIONS_NOT_ESTABLISHED")
+    if safe["watchdog_halt_clear"] is not True:
+        return no("RESET_WHILE_WATCHDOG_HALT_NOT_CLEAR")
+    if isinstance(safe["own_live_orders"], bool) \
+            or safe["own_live_orders"] != 0:
+        return no("RESET_WHILE_ORDERS_LIVE")
+    exp = _dec(safe["own_exposure_usd"])
+    if exp is None or exp != ZERO:
+        return no("RESET_WHILE_EXPOSED")
+    if safe["lane_can_submit"] is not False:
+        #: clearing a latch and trading are two decisions on two restarts
+        return no("RESET_WHILE_THE_LANE_COULD_SUBMIT")
+    spent = _reset_nonces(p)
+    if spent is None:
+        return no("RESET_AUDIT_UNREADABLE")
+    if nonce in spent:
+        return no("RESET_ALREADY_USED")
+
+    record = {"t_utc": at.isoformat(), "latch_sha256": ident,
+              "original": {"state": st["state"],
+                           **dict(st.get("detail") or {})},
+              "reset": {k: doc[k] for k in sorted(doc)},
+              "conditions": {k: str(safe[k]) for k in RESET_SAFE_KEYS},
+              "to": MONITOR}
+    try:
+        folder = os.path.dirname(os.path.abspath(p))
+        os.makedirs(folder, exist_ok=True)
+        with open(_reset_log_path(p), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return no("RESET_AUDIT_NOT_WRITTEN", error=type(exc).__name__)
+    out = write_state(
+        MONITOR, now=at, path=p, latch_digest=None,
+        why="LATCH_CLEARED_BY_OWNER nonce=%s was=%s latch=%s" % (
+            nonce[:32], st["state"], ident[:16]))
+    if not out.get("ok"):
+        return no("STATE_NOT_WRITTEN:%s" % out.get("reason"),
+                  audit_written=True)
+    return {"ok": True, "cleared": True, "reason": None,
+            "was": st["state"], "state": MONITOR, "latch_sha256": ident,
+            "armed": False, "audit": _reset_log_path(p),
+            "note": ("the lane is in MONITOR. It is NOT armed: trading "
+                     "still needs the envelope, the campaign approval and "
+                     "the arming ceremony.")}
+
+
 # ============================================================== the gate
 
 def may_submit(*, market: Any, strategy: Any, post_only: Any,

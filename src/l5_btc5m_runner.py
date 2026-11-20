@@ -155,6 +155,25 @@ def resident_when_disarmed() -> bool:
         == "YES"
 
 
+def resident_state_fields() -> Dict[str, Any]:
+    """The stored state, for the resident line. Never raises.
+
+    `would_refuse_arming` is the point: while the envelope is expired this
+    lane never reaches the state check, so without this a latch is silent.
+    """
+    try:
+        rep = PMODE.stored_state_report()
+        return {"stored_state": rep.get("state"),
+                "latched": rep.get("latched"),
+                "latch_sha256": rep.get("latch_sha256"),
+                "would_refuse_arming": rep.get("would_refuse_arming")}
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"stored_state": None, "latched": None,
+                "would_refuse_arming": True}
+
+
 def stay_resident(gate: Mapping[str, Any]) -> bool:
     """Should this refusal keep the lane resident instead of ending it?
 
@@ -259,6 +278,49 @@ def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
            "closed": bool(m.get("closed"))}
     out.update(VC.carry(m))
     return out
+
+
+def clear_latch_if_owner_asked(ex: Any, now: dt.datetime
+                                ) -> Optional[Dict[str, Any]]:
+    """Run the owner's latch reset, if a reset document is set. Else None.
+
+    The conditions `PMODE.clear_latch` requires are established HERE, from
+    this lane's own ledger, switches and the watchdog's record, and any one
+    that cannot be read is simply left out -- which is a refusal there, not
+    a pass. It never arms: the lane must be unable to submit (no arm token
+    AND the shadow lock engaged) for a reset to be accepted at all.
+    """
+    raw = os.getenv(PMODE.LATCH_RESET_ENV)
+    if not (raw or "").strip():
+        return None
+    safe: Dict[str, Any] = {}
+    wd = shared_halt((os.getenv(HALT_URL_ENV) or "").strip())
+    safe["watchdog_halt_clear"] = wd.get("ok") is True
+    try:
+        safe["own_live_orders"] = len(ex.live_orders())
+        exp = account_exposure_of(ex)
+        if exp is not None:
+            safe["own_exposure_usd"] = exp
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+    safe["lane_can_submit"] = bool(
+        os.environ.get(X.LIVE_ENV) == X.ARM_TOKEN
+        or not AUTH.shadow_lock_engaged())
+    out = PMODE.clear_latch(raw=raw, now=now, safe=safe)
+    return dict(out, watchdog=wd.get("reason"),
+                conditions={k: str(v) for k, v in safe.items()})
+
+
+def account_exposure_of(ex: Any) -> Optional[Decimal]:
+    """This lane's own resting plus filled, unsettled notional, or None."""
+    try:
+        got = _dec((ex.account_exposure() or {}).get("own_usd"))
+        return got
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
 
 
 def step_book(book: Mapping[str, Any],
@@ -2192,6 +2254,30 @@ def main() -> int:            # pragma: no cover - the service entrypoint
     #:
     #: With no envelope configured this is skipped entirely and the
     #: bounded campaign below is byte-for-byte what it always was.
+    #: THE OWNER'S LATCH RESET, IF ONE IS SET -- before the ceremony, never
+    #: instead of it. It can only move a latch to MONITOR, and only while
+    #: this lane cannot submit, so a reset and an arming never share a boot.
+    try:
+        _reset = clear_latch_if_owner_asked(ex, dt.datetime.now(UTC))
+        if _reset is not None:
+            emit("L5_BTC5M_LATCH_RESET", _reset)
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BTC5M_LATCH_RESET", {"ok": False, "cleared": False,
+                                      "reason": "RESET_FAILED:%s"
+                                      % type(_exc).__name__})
+    #: WHAT IS STORED, SAID AT EVERY BOOT WHATEVER THE ENVELOPE SAYS. A
+    #: latch used to be read only once a valid envelope was presented, so
+    #: a lane could rest "disarmed" for days carrying a STOPPED that would
+    #: refuse the next campaign -- and did, on 2026-11-20.
+    try:
+        emit("L5_BTC5M_STORED_STATE", PMODE.stored_state_report())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BTC5M_STORED_STATE", {"readable": False,
+                                       "reason": type(_exc).__name__})
     if (os.getenv(PMODE.ENVELOPE_ENV) or "").strip() and plan["markets"]:
         _first = window_start(plan["markets"][0])
         _armed = PMODE.enter_armed(
@@ -2298,6 +2384,7 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                     #: be sent; and this same gate refuses again in 15 s.
                     emit("L5_BTC5M_RESIDENT_DISARMED",
                          {"reason": gate.get("reason"),
+                          **resident_state_fields(),
                           "serving_registry": bool(
                               (os.getenv(FILLS_PORT_ENV) or "").strip()),
                           "can_submit": False,

@@ -298,3 +298,76 @@ orders, three registries OK. The market and end-time variables still name
 the passed window; it cannot trade.
 
 **To trade, the latch must be cleared.** No code path does. Not done.
+
+## The STOPPED latch: cause, and the owner's reset (built, not deployed) — 2026-11-20
+
+### Why the latch was set (watchdog and lane logs, read-only)
+
+| time (2026-11-17) | what happened |
+|---|---|
+| 21:57:04Z | the watchdog latched its account-wide halt, `UNMANAGED_RESTING_ORDER`: order `DSHAHBP0144P` in `aec-utr-gaskan-hanbra-2026-11-17` had rested 315s against the 300s limit. It was a **sports-lane** order. Its managed-lane exemption was refused because that lane's report read as `STALE:-6.1` — a negative age, i.e. clock skew between the two services |
+| 21:57:24Z | account book empty (0 open orders); it stayed empty |
+| 22:09:41Z | `l5-btc5m-live` booted for its 22:25Z campaign, armed, read the watchdog's halt as asserted, stopped with nothing to cancel, and **latched STOPPED** |
+| 23:09:03Z | the watchdog's halt was cleared by an owner-approved boot reset (`reset-20261117-lane-clock-skew-02`) on a build carrying the clock-skew fix (`2eb3a541f`) |
+
+BTC5m had no order at any point that evening: every step was
+`TRANSPORT_NOT_ARMED`, both session reports show 0 submitted, the stop found
+nothing open. The halt was the watchdog's, about another lane, and correct
+for BTC5m to honour. The watchdog's own latch was cleared the same night;
+**the lane's copy never was**, because nothing can clear it.
+
+The watchdog latched three more times afterwards, each on another lane's or
+the owner's order, the last cleared 2026-11-18 19:06Z. No latch since.
+
+Not established: which two ids the watchdog's `claimed_ids: 2` referred to
+at 21:57Z, and what removed the two open orders in the next 20 seconds.
+
+### Current conditions (2026-11-20 13:08Z)
+
+Watchdog not halted, 0 open orders, three registries OK. BTC5m: 0 orders,
+exposure $0, disarmed. Account limits all with room; ledger -39.4680.
+
+### The reset mechanism (code only)
+
+`l5_persistent_mode.clear_latch`, driven at boot by one owner document in
+`L5_PERSISTENT_LATCH_RESET`. It moves ONE latch to MONITOR. It never arms.
+
+The document names the latch by the SHA-256 of its stored record (state,
+time, reason), so it cannot clear any other. It carries a reason, a verbatim
+acknowledgement, a nonce, and expires within an hour. Unknown fields refuse.
+
+It is refused, and the state file left byte-identical, unless ALL hold:
+
+* the watchdog's halt record is readable and clear;
+* this lane has 0 live orders and $0 exposure, both readable;
+* the lane cannot submit: no arm token AND the shadow lock on. So a reset
+  and an arming can never happen on the same restart;
+* the nonce has not been used before.
+
+Before the state changes, the original latch record is appended verbatim to
+`<state file>.latch_resets.jsonl` with the document and the conditions. If
+that write fails, nothing is cleared.
+
+What cannot clear a latch (each tested): a restart; a new or expired
+envelope; a new or expired campaign approval; the arming ceremony; the
+resident loop; a document that is malformed, expired, for another latch or
+state, reused, or presented while armable, exposed or halted.
+
+The watchdog is not touched: no change to its code, record or limits.
+
+### The visibility defect, fixed
+
+The lane now logs `L5_BTC5M_STORED_STATE` at every boot **whatever the
+envelope says**, and every `L5_BTC5M_RESIDENT_DISARMED` line carries
+`stored_state`, `latched`, `latch_sha256` and `would_refuse_arming`. A lane
+resting on an expired envelope while carrying a latch now says so every 15
+seconds, and prints the hash the owner needs.
+
+### Tests
+
+71 new (`tests/test_l5_persistent_latch_reset.py`); 281 pass across the
+persistent-mode and runner files; 15 deliberate breakages each fail at least
+one. Wider BTC5m and persistent-mode run: the same 11 pre-existing failures.
+
+Not shown: any of it on Railway. The reset has never run against the real
+state file.
