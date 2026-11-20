@@ -78,3 +78,32 @@ not reachable from this environment): the taker rebate program started 2026-05-2
 Not established: whether equivalent asks exist on Polymarket US at the same prices and sizes;
 how his fills split between maker and taker (inferred from fees only); the deposits and
 withdrawals behind the account (the platform returns none).
+
+## Fee-adjusted taker economics on Polymarket US (2026-11-20 ~20:00Z)
+
+`analysis/l5/btc5m/TAKER_FEE_ADJUSTED_RESULT.txt` (187 PMUS windows, asks as quoted, taker fee
+0.095 × p × (1 − p), no rebate) and `LATE_FAVOURITE_TAIL_CHECK_RESULT.txt` (Bonereaper's 1,334
+real markets). No size data exists locally for PMUS asks.
+
+- Lifting the offer is negative or indistinguishable from zero in every price band over the
+  whole window; favourites priced 0.90–0.95 are the worst (−4 to −5 cents a share).
+- Cells positive on one half of the windows do not hold on the other (−0.6 and −8.0 cents).
+- One state is positive in both halves: an ask at or above 0.97 with at most 60 s left won
+  82 of 82 windows (+2.0 and +2.3 cents a share); any ask at or above 0.80 with at most 30 s
+  left won 34 of 34.
+- That is too few to bound the tail. At 0.975 the gain is about 2.3 cents and a loss about
+  97.7, so break-even is a loss rate near 2.3%. Bonereaper's real buys at or above 0.97 with
+  at most 60 s left lost 3 of 246 markets (1.2%, at most 3.5%): about +0.05 cents a share at
+  the PMUS fee, −2.3 cents at the bound. At or above 0.99 with at most 60 s left, 3 of 183
+  lost, which is negative.
+- With at most 30 s left and 0.97 or more, he lost 0 of 111 and PMUS showed 0 of 34. Together
+  that bounds the loss rate below about 2.5%; break-even there is about 1.2%. Not established.
+- Attainable rebates at our volume: none.
+
+Fee change check: Polymarket's own market records at 20:00Z show BTC 5-minute markets for
+2026-11-21 still at rate 0.07 with a 0.2 maker-rebate share, under a fee type now named
+`crypto_btc_5m_15m_fees`. The reported change is not confirmed by the records.
+
+NO PROMOTION. The only candidate is a taker buy of a 0.97+ favourite in the last 30 s. What it
+needs: roughly 250 more PMUS windows with the ask AND its size in the last 30 s, to bound the
+loss rate under 1.2% and show the offer is there to be lifted.
