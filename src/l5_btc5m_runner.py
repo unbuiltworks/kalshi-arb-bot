@@ -261,6 +261,12 @@ def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
     return out
 
 
+#: the venue-equity blocks the account-risk record must carry, and the
+#: prefix each one's refusal is reported under.
+EQUITY_BLOCKS = (("portfolio_drawdown", "ACCOUNT_DRAWDOWN"),
+                 ("equity_baseline", "ACCOUNT_EQUITY_BASELINE"))
+
+
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
                  fetch: Optional[Callable[[str], Any]] = None
                  ) -> Dict[str, Any]:
@@ -332,6 +338,36 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
     if -life_all >= cum:
         return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
+    # THE VENUE-EQUITY CONTROLS, IN ADDITION TO THE TWO ABOVE (owner
+    # direction 2026-11-20). The 15-minute service enforces a portfolio
+    # drawdown limit measured on the venue's own balance; this lane never
+    # read it, so one strategy could go on losing after the account-wide
+    # limit had stopped the other. Both blocks are REQUIRED in the record:
+    # a publisher that does not carry them is refused, never assumed clean.
+    # `OFF` is the publisher saying the owner has configured no such limit
+    # -- the same meaning it has there. Anything else must be `ON` with no
+    # refusal and positive room. These can only ADD a refusal: the daily and
+    # cumulative checks above have already run and are unchanged.
+    for key, tag in EQUITY_BLOCKS:
+        blk = risk.get(key)
+        if not isinstance(blk, Mapping):
+            return no("%s_NOT_PUBLISHED" % tag, **out)
+        state, why = blk.get("state"), blk.get("refusal")
+        out["%s_state" % key] = state
+        if why:
+            return no("%s:%s" % (tag, str(why)[:80]), **out)
+        if state == "OFF":
+            continue
+        if state != "ON":
+            return no("%s_STATE_%s" % (tag, str(state)[:24]), **out)
+        left = _dec(blk.get("room_usd"))
+        if left is None:
+            return no("%s_ROOM_UNREADABLE" % tag, **out)
+        if left <= 0:
+            return no("%s_NO_ROOM" % tag, **out)
+        out["%s_room_usd" % key] = str(left)
+        room = min(room, left)
+    out["loss_room_usd"] = str(room)
     return dict(out, ok=True, reason=None)
 
 

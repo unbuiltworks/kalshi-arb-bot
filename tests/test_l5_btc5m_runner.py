@@ -299,10 +299,86 @@ def risk_doc(**over):
     r = {"readable": True, "reason": None, "utc_day": "2026-11-12",
          "utc_day_realized_usd": "-1.00", "daily_halt_usd": "5",
          "lifetime_realized_usd": "-10.00",
-         "cumulative_loss_ceiling_usd": "20", "operator_halt": False}
+         "cumulative_loss_ceiling_usd": "20", "operator_halt": False,
+         # the venue-equity blocks are REQUIRED in the record since
+         # 2026-11-20; OFF is "the owner configured no such limit"
+         "portfolio_drawdown": {"state": "OFF", "refusal": None},
+         "equity_baseline": {"state": "OFF", "refusal": None}}
     r.update(over)
     return {"as_of_utc": (NOW - dt.timedelta(seconds=3)).isoformat(),
             "account_risk": r}
+
+
+def _on(room="3.00", **over):
+    b = {"state": "ON", "refusal": None, "room_usd": room}
+    b.update(over)
+    return b
+
+
+def test_the_record_must_carry_both_venue_equity_blocks():
+    d = risk_doc()
+    d["account_risk"].pop("portfolio_drawdown")
+    assert risk(doc=d)["reason"] == "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+    d = risk_doc()
+    d["account_risk"].pop("equity_baseline")
+    assert risk(doc=d)["reason"] == "ACCOUNT_EQUITY_BASELINE_NOT_PUBLISHED"
+    assert risk(portfolio_drawdown="OFF")["reason"] == \
+        "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+
+
+@pytest.mark.parametrize("block,reason", [
+    (_on(refusal="PORTFOLIO_DRAWDOWN_LIMIT:15.2018>=15", room="-0.2018"),
+     "ACCOUNT_DRAWDOWN:PORTFOLIO_DRAWDOWN_LIMIT:15.2018>=15"),
+    (_on(refusal="PORTFOLIO_VALUE_UNAVAILABLE"),
+     "ACCOUNT_DRAWDOWN:PORTFOLIO_VALUE_UNAVAILABLE"),
+    ({"state": "OFF", "refusal": "PORTFOLIO_DRAWDOWN_CONFIG_UNREADABLE"},
+     "ACCOUNT_DRAWDOWN:PORTFOLIO_DRAWDOWN_CONFIG_UNREADABLE"),
+    ({"state": "INVALID", "refusal": None}, "ACCOUNT_DRAWDOWN_STATE_INVALID"),
+    ({"state": "UNREADABLE", "refusal": "EQUITY_LINES_FAILED:KeyError"},
+     "ACCOUNT_DRAWDOWN:EQUITY_LINES_FAILED:KeyError"),
+    ({"state": None, "refusal": None}, "ACCOUNT_DRAWDOWN_STATE_None"),
+    ({"state": "ON", "refusal": None}, "ACCOUNT_DRAWDOWN_ROOM_UNREADABLE"),
+    (_on(room="x"), "ACCOUNT_DRAWDOWN_ROOM_UNREADABLE"),
+    (_on(room="0"), "ACCOUNT_DRAWDOWN_NO_ROOM"),
+    (_on(room="-1"), "ACCOUNT_DRAWDOWN_NO_ROOM"),
+])
+def test_the_published_drawdown_limit_binds_this_lane(block, reason):
+    assert risk(portfolio_drawdown=block)["reason"] == reason
+
+
+@pytest.mark.parametrize("block,reason", [
+    (_on(refusal="EQUITY_DRAWDOWN_LIMIT:5.0000>=5", room="0"),
+     "ACCOUNT_EQUITY_BASELINE:EQUITY_DRAWDOWN_LIMIT:5.0000>=5"),
+    (_on(refusal="EQUITY_TRANSFERS_NOT_ESTABLISHED"),
+     "ACCOUNT_EQUITY_BASELINE:EQUITY_TRANSFERS_NOT_ESTABLISHED"),
+    (_on(refusal="EQUITY_UNAVAILABLE"),
+     "ACCOUNT_EQUITY_BASELINE:EQUITY_UNAVAILABLE"),
+    ({"state": "INVALID", "refusal": "EQUITY_BASELINE_FIELDS"},
+     "ACCOUNT_EQUITY_BASELINE:EQUITY_BASELINE_FIELDS"),
+    (_on(room=None), "ACCOUNT_EQUITY_BASELINE_ROOM_UNREADABLE"),
+])
+def test_the_published_equity_baseline_binds_this_lane(block, reason):
+    assert risk(equity_baseline=block)["reason"] == reason
+
+
+def test_the_older_limits_are_judged_first_and_are_not_replaced():
+    """A clean equity record buys nothing against the cumulative ceiling."""
+    got = risk(lifetime_realized_usd="-136.7845",
+               cumulative_loss_ceiling_usd="75",
+               portfolio_drawdown=_on(), equity_baseline=_on())
+    assert got["reason"] == "ACCOUNT_CUMULATIVE_LOSS_CEILING"
+    assert risk(utc_day_realized_usd="-5.00", portfolio_drawdown=_on(),
+                equity_baseline=_on())["reason"] == "ACCOUNT_DAILY_LOSS_HALT"
+
+
+def test_loss_room_is_the_tightest_of_all_four():
+    # daily room 4.00, cumulative room 10.00
+    assert risk()["loss_room_usd"] == "4.00"
+    got = risk(portfolio_drawdown=_on("2.50"), equity_baseline=_on("0.75"))
+    assert got["ok"] is True and got["loss_room_usd"] == "0.75"
+    assert got["portfolio_drawdown_room_usd"] == "2.50"
+    assert risk(portfolio_drawdown=_on("9"),
+                equity_baseline=_on("9"))["loss_room_usd"] == "4.00"
 
 
 def risk(doc=None, own="0", **over):
