@@ -2661,6 +2661,88 @@ class InventoryStore:
                 return None
         return out
 
+    #: above this many rows the published map is cut to the newest and
+    #: marked incomplete; a reader then treats a market it cannot find as
+    #: not booked
+    LIFETIME_BASIS_MAX_ROWS = 3000
+
+    def lifetime_basis(self) -> Optional[Dict[str, Any]]:
+        """What the lifetime realized figure is MADE OF, for a second
+        strategy that must not count its own results twice or not at all.
+
+        The lifetime figure is the last cash re-anchor plus every row
+        retired since. So a result is inside it in exactly two ways:
+
+          - it settled before the re-anchor's flat-account cash read
+            (`cash_read_utc`): the cash already contained it; or
+          - this ledger retired it after the re-anchor was applied
+            (`rebased_at_utc`), at the amount in `results_since_rebase`.
+
+        `reconciled` is True only when the re-anchor total plus those rows
+        EQUALS the lifetime figure now. Anything else -- a row restated
+        from before the re-anchor, an entry this method does not
+        understand -- is False, and a reader must then assume nothing of
+        its own is booked. With no re-anchor on record every row counts and
+        both times are None.
+
+        None when a row's time or amount, or the re-anchor record, cannot
+        be read. READ-ONLY.
+        """
+        try:
+            rows = self.state.get("retired_markets") or {}
+            log = [r for r in (self.state.get("accounting_rebase_log") or [])
+                   if isinstance(r, Mapping)]
+            rebased_at, base = None, D(0)
+            if log:
+                last = log[-1]
+                rebased_at = dt.datetime.fromisoformat(
+                    str(last["t"]).replace("Z", "+00:00"))
+                base = D(str(last["attributed"])) + D(str(last["unattributed"]))
+            cash_read = None
+            anchor = self.state.get("cash_anchor")
+            if log:
+                cash_read = dt.datetime.fromisoformat(
+                    str((anchor or {})["at_read_utc"]).replace("Z", "+00:00"))
+                if cash_read > rebased_at:
+                    return None
+            since: Dict[str, str] = {}
+            stamps: Dict[str, dt.datetime] = {}
+            total = base
+            for mkt, row in rows.items():
+                if not isinstance(row, Mapping):
+                    return None
+                at = dt.datetime.fromisoformat(
+                    str(row["t"]).replace("Z", "+00:00"))
+                pnl = D(str(row.get("settlement_pnl") or 0))
+                if not pnl.is_finite():
+                    return None
+                if rebased_at is not None and at <= rebased_at:
+                    continue
+                since[str(mkt)] = str(pnl)
+                stamps[str(mkt)] = at
+                total += pnl
+            reconciled = bool(total == self.realized_today())
+            complete = len(since) <= self.LIFETIME_BASIS_MAX_ROWS
+            if not complete:
+                keep = sorted(since, key=lambda m: stamps[m])[
+                    -self.LIFETIME_BASIS_MAX_ROWS:]
+                since = {m: since[m] for m in keep}
+            return {
+                "cash_read_utc": (None if cash_read is None
+                                  else cash_read.isoformat()),
+                "rebased_at_utc": (None if rebased_at is None
+                                   else rebased_at.isoformat()),
+                "results_since_rebase": since,
+                "rows": len(since), "complete": complete,
+                "reconciled": reconciled,
+                "lifetime_realized_usd": str(self.realized_today()),
+                "labels": ("reconciled=False or complete=False: assume "
+                           "nothing of yours is booked unless it is named "
+                           "here. A result settled before cash_read_utc is "
+                           "inside the cash re-anchor.")}
+        except (KeyError, TypeError, ValueError, InvalidOperation):
+            return None
+
     def verified_l5_net_for_gates(self) -> Optional[D]:
         """Return verified after-fee L5 net, never legacy estimated gross.
 

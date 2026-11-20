@@ -6699,6 +6699,9 @@ class Runner:
             # itself is unknown; a reader without it adds everything.
             "retired_results_utc_day": self._retired_results_line(
                 day.get("utc_day")),
+            # WHAT THE LIFETIME FIGURE IS MADE OF: the cash re-anchor and
+            # every row retired since. Added key only; None when unknown.
+            "lifetime_basis": self._lifetime_basis_line(),
             # the venue-equity controls a second strategy must also honour.
             # Added keys only: every figure above is computed as before.
             **self.equity_risk_lines(),
@@ -6719,6 +6722,15 @@ class Runner:
         if got is None or not utc_day:
             return None
         return {"utc_day": str(utc_day), "results": got}
+
+    def _lifetime_basis_line(self) -> Optional[Dict[str, Any]]:
+        """`store.lifetime_basis()` behind a total wrap. Never raises."""
+        try:
+            return self.store.lifetime_basis()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
 
     def day_realized_line(self) -> Dict[str, Any]:
         """The figure the DAILY loss halt actually reads, published.
