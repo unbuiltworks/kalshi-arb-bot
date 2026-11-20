@@ -285,6 +285,26 @@ class Params:
     #: alone. It can only add a refusal, and False -- the default -- leaves
     #: every decision byte for byte as it was.
     straddle_one_sided_control: bool = False
+    #: =====================================================================
+    #: A COMPLETING LEG IS PRICED AGAINST WHAT IS ALREADY HELD.
+    #:
+    #: The pair ceiling bounds the two prices quoted TOGETHER in one round.
+    #: It says nothing about a leg bought now against a leg bought earlier:
+    #: UP filled at 0.60 as it fell, then DOWN quoted at its bid of 0.49
+    #: after UP reached 0.50, is a matched pair costing 1.09. Replayed over
+    #: 187 recorded windows the live configuration's matched pairs averaged
+    #: 1.017-1.023, and the matched line LOST money: every such pair was a
+    #: completion bought after the market had moved against the first leg.
+    #:
+    #: With this set, the side that would COMPLETE held inventory is never
+    #: quoted above  (this figure - the held side's average cost). Where
+    #: the book's bid is higher the quote rests lower instead, at the price
+    #: that completes the pair within the figure; where no legal price
+    #: does, that side is not quoted (PAIR_COST_ABOVE_CAP) and the held leg
+    #: stays unmatched, which the one-sided rule and the unmatched ceiling
+    #: then govern. It prices; it adds no order and widens no limit. Zero
+    #: -- the default -- changes nothing.
+    straddle_max_completed_pair_cost: Decimal = D("0")
     #: how old the probability may be and still justify a lone leg
     straddle_one_sided_max_p_age_s: float = 5.0
     #: INVENTORY-AWARE REPRICING. Per clip of net imbalance, the HEAVY
@@ -1469,6 +1489,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         #: a few lines below, in this same function.
         _side_why: Dict[str, Any] = {s_: None for s_ in SIDES}
         _one_sided: Dict[str, Any] = {s_: None for s_ in SIDES}
+        _pair_block: Dict[str, bool] = {s_: False for s_ in SIDES}
+        _pair_plan: Dict[str, Any] = {"action": None}
         _bk, _bk_why = {}, None
         if _bookrel:
             if not params.straddle_fill_model_measured:
@@ -1482,6 +1504,25 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             else:
                 for s_ in SIDES:
                     _bk[s_] = _book_rung(s_, bid, ask, params, tick)
+                _pc_cap = _dec(params.straddle_max_completed_pair_cost) \
+                    or ZERO
+                if _pc_cap > ZERO and inv[UP][0] != inv[DOWN][0] \
+                        and all(v is not None for v in _bk.values()):
+                    _hv = UP if inv[UP][0] > inv[DOWN][0] else DOWN
+                    _lt = _other(_hv)
+                    _havg = inv[_hv][1] / inv[_hv][0]
+                    _cpx = _floor_to(_pc_cap - _havg, tick)
+                    _pair_plan.update(
+                        held_side=_hv, completing_side=_lt,
+                        held_avg=str(_havg), book_bid=str(_bk[_lt]),
+                        cap=str(_pc_cap), cap_price=str(_cpx),
+                        action="AT_BOOK")
+                    if _cpx < PRICE_MIN:
+                        _pair_block[_lt] = True
+                        _pair_plan["action"] = "NOT_QUOTED"
+                    elif _cpx < _bk[_lt]:
+                        _bk[_lt] = _cpx
+                        _pair_plan["action"] = "RESTS_AT_CAP"
                 if any(v is None for v in _bk.values()):
                     _bk_why = "QUOTE_NOT_MAKEABLE"
                 elif sum(_bk.values()) > _pceil:
@@ -1656,6 +1697,10 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                             why_s = "UNMATCHED_CEILING"
                             _side_why[side] = "UNMATCHED_CEILING"
                             continue
+                    if _pair_block[side]:
+                        why_s = "PAIR_COST_ABOVE_CAP"
+                        _side_why[side] = "PAIR_COST_ABOVE_CAP"
+                        continue
                     if params.straddle_one_sided_control:
                         #: IS THE PARTNER STILL BUYABLE? A partner quote
                         #: already working counts. Otherwise the partner
@@ -1663,7 +1708,8 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         #: and unmatched bounds its own leg would face.
                         _o = _other(side)
                         _p_open = any(x["side"] == _o for x in rest)
-                        if not _p_open and _bk_why is None:
+                        if not _p_open and _bk_why is None \
+                                and not _pair_block[_o]:
                             _r_o = (_repriced_rung(_bk[_o], _o, inv, qty,
                                                    params, hi=ONE)
                                     if _bookrel else
@@ -2193,6 +2239,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         ev_s = {"completion": comp,
                 "side_refusals": dict(_side_why),
                 "one_sided": dict(_one_sided),
+                "pair_completion": dict(_pair_plan),
                 "completion_reserve": _reserve,
                 "book_relative": {
                     "on": _bookrel,

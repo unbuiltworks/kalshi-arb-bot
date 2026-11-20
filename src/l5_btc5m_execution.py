@@ -794,6 +794,21 @@ def straddle_one_sided_control(default: bool = False) -> bool:
     return raw.strip() == ONE_SIDED_TOKEN
 
 
+STRADDLE_MAX_COMPLETED_PAIR_COST_ENV = \
+    "L5_BTC5M_STRADDLE_MAX_COMPLETED_PAIR_COST"
+
+
+def straddle_max_completed_pair_cost(default: Decimal = ZERO) -> Decimal:
+    """The most a pair may cost when a leg completes held inventory. See
+    `Params.straddle_max_completed_pair_cost`. Accepted only inside
+    (0.50, 1.00]: above 1.00 would be permission to lock a loss, which this
+    switch does not grant. Anything else keeps the default."""
+    raw = _dec(os.environ.get(STRADDLE_MAX_COMPLETED_PAIR_COST_ENV))
+    if raw is None or not (D("0.50") < raw <= D("1.00")):
+        return default
+    return raw
+
+
 def straddle_reprice_ticks(default: int = 0) -> int:
     """Ticks per clip of imbalance. Unreadable keeps 0 (disabled)."""
     raw = os.environ.get(STRADDLE_REPRICE_TICKS_ENV)
@@ -2646,6 +2661,9 @@ class Btc5mExecutor:
                         straddle_one_sided_control=(
                             straddle_one_sided_control(
                                 self.params.straddle_one_sided_control)),
+                        straddle_max_completed_pair_cost=(
+                            straddle_max_completed_pair_cost(
+                                self.params.straddle_max_completed_pair_cost)),
                         straddle_requote_ticks=straddle_requote_ticks(
                             self.params.straddle_requote_ticks),
                         straddle_max_window_loss_usd=(

@@ -2486,6 +2486,8 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             "straddle_requote_ticks": int(_ep.straddle_requote_ticks or 0),
             "straddle_one_sided_control":
                 bool(_ep.straddle_one_sided_control),
+            "straddle_max_completed_pair_cost":
+                str(_ep.straddle_max_completed_pair_cost),
             "straddle_leg_max_age_s": float(_ep.straddle_leg_max_age_s or 0),
             #: whether a behaviour-probe document is SET, never what it
             #: says. Whether it is valid is judged per step, against the

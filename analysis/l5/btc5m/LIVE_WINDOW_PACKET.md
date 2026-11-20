@@ -794,7 +794,7 @@ Promotions pay non-withdrawable credit. Account record: $0 commission on all 57 
 two windows and cash reconciling to the cent, so nothing was credited. Nothing collectible
 changes BTC5m net.
 
-## Combined failure behaviour of the two accounting fixes (2026-11-20 18:40Z)
+## Combined failure behaviour of the two accounting fixes (2026-11-20 ~18:10Z)
 
 `CROSS_SERVICE_LOSS_ACCOUNTING_RESULT.txt`: both services' real code, the deployed and the
 candidate version of each (four combinations), ten ledger states plus a stale and an
@@ -821,7 +821,7 @@ loss from an earlier UTC day that the account service never booked (a fully matc
 is in neither service's cumulative figure. The cash-based equity baseline and portfolio
 drawdown limits do see it; the $75 cumulative ceiling does not.
 
-## Complete accounting release and entry-filter study (2026-11-20 20:00Z)
+## Complete accounting release and entry-filter study (2026-11-20 ~18:20Z)
 
 Nothing deployed, armed or traded.
 
@@ -883,3 +883,43 @@ ask reaches the bid within 10 s.
   −$0.004 / −$0.006. Losses fall in proportion to how little is traded.
 
 Arithmetic on public quotes with an assumed fill rule; one 16.5-hour stretch.
+
+## Integrated inventory decisions on the development branch (2026-11-20 ~18:50Z)
+
+Development branch only (`claude/runner-executor-verification-utzgrh`). Not in either release
+candidate, not deployed, both switches off by default.
+
+What already existed and was reused: `l5_inventory_decision.rank` (HOLD / MAKER_COMPLETE /
+TAKER_COMPLETE / TAKER_PARTIAL), the completion path, inventory price shading, the unmatched
+and window-loss ceilings. That module also records that on this venue selling the held leg and
+buying its complement are the same order, so "reduce exposure" is "complete", not a fifth
+action.
+
+What was missing and is now integrated into the two-sided quoting path:
+- stop accumulating: the one-sided rule (`L5_BTC5M_STRADDLE_ONE_SIDED`);
+- pair-aware completion pricing (`L5_BTC5M_STRADDLE_MAX_COMPLETED_PAIR_COST`): the side that
+  would complete held inventory is never quoted above cap minus the held side's average cost;
+  it rests lower instead, or is not quoted when no legal price fits. The two rules know about
+  each other: a completing side that cannot be quoted counts as a closed partner.
+Every decision reports both under `evaluation.one_sided` and `evaluation.pair_completion`.
+
+Tests: `test_l5_btc5m_pair_completion_price.py` (19), `test_l5_btc5m_one_sided_control.py`
+(109). Suite: 2,628 passed, the same 31 baseline failures.
+
+Replay (`INTEGRATED_INVENTORY_REPLAY_RESULT.txt`, 187 windows): with completed pairs capped at
+1.00 the matched line turns from −$0.008 to +$0.021 a window and average pair cost falls from
+1.02 to 0.93, and the residual line goes from −$0.016 to −$0.047. Net is unchanged at about
+−$0.023 / −$0.029. The cap moves the loss from one line to the other; it does not remove it.
+
+### Why a filled bid loses (`ADVERSE_SELECTION_ANATOMY_RESULT.txt`)
+
+- The loss is there at the fill: −3.7 cents against the side's bid, −3.6 at +10 s and +30 s,
+  −2.1 at +60 s, −3.4 at settlement. It does not build afterwards.
+- The model barely sees it: its probability for the side moved −0.6 cents in the 10 s before
+  the quote and −0.6 cents between quote and fill. No split on what the model was doing is
+  positive in both halves.
+- Fast fills (within 4 s) are not clearly worse than slow ones.
+- The 26 real fills agree in size: −3.4 and −1.7 cents at the report, −3.0 and −1.2 at
+  settlement, for the 14:20Z and 17:05Z windows.
+The assumed fill rule (ask reaches the bid) itself requires the price to move at least the
+spread, so part of the figure is the rule. The live fills are the only check on that.
