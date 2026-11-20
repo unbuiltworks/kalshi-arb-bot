@@ -447,3 +447,59 @@ false` (`ENVELOPE_EXPIRED`), `can_submit: false`, exposure $0. Watchdog
 
 The audit file is on the service volume and was not read from here; the code
 writes it before the state and clears nothing if that write fails.
+
+## Live window result — `cpc-btc-updown-5m-2026-11-20-1420z` (14:20–14:25Z)
+
+Deployed SHA `63475044f95566ec207bf60cbc98057a1dfe1808`. One window, owner-authorized. Lifecycle label: **settled, realized**.
+
+Evidence: `evidence/window_1420z_orders.json`, `evidence/window_1420z_steps.jsonl`,
+`evidence/window_1420z_venue_market_record.json`.
+
+### Result
+
+| | UP | DOWN | Total |
+|---|---|---|---|
+| Orders placed | 7 | 11 | 18 |
+| Fills | 0.08@0.58, 0.08@0.60 | 0.08@0.41, 0.08@0.41, 0.06@0.19 | 5 |
+| Shares | 0.16 | 0.22 | |
+| Cost | $0.0944 | $0.0770 | $0.1714 |
+
+- Matched: 0.16 pairs, cost $0.1600 (avg pair cost $1.00), redeemed $0.16 → $0.0000.
+- Unmatched: 0.06 DOWN @ 0.19, cost $0.0114, redeemed $0 → −$0.0114.
+- Venue resolved UP (`outcomePrices ["1","0"]`, settlement px 1.0000).
+- **Realized net: −$0.0114.** Venue cash $321.4782 → $321.4668 (`/v1/account/balances`), exactly the
+  fill arithmetic, so execution fees and rebates were $0 (maker-only; no rebate credited).
+- `l5-pmus-live` first booked the unmatched leg at the $1/share bound (−$0.06), then venue cost
+  attestation restated it to −$0.0114 (14:27:56Z). Equity baseline: period change −$0.0114,
+  room $0.9886 of $1.00.
+- Open orders at venue: 0 on every watchdog sweep from 14:21:41Z onward.
+
+### Timing
+
+First quotes went out 2.9 s into the window (UP 0.57 / DOWN 0.42), not 48 s — an earlier interim
+statement was wrong. Requote rounds ran roughly every 12 s until t≈68 s.
+
+### Defects observed
+
+1. **Shared-reservation holds are not released inside a window.** `sync_reservation` runs only
+   between windows (`src/l5_btc5m_runner.py:2551`) and on stop. Every cancelled quote kept its
+   hold, so the envelope judged cumulative *submitted* notional ($0.5742 after seven rounds)
+   against the $0.60 aggregate cap, while actual exposure was $0.17. From t≈80 s every UP quote
+   (~$0.05) was refused `ENVELOPE:AGGREGATE_EXPOSURE`; only sub-cent DOWN orders fit. Two-sided
+   quoting therefore lasted 68 s of 300 s, and the one fill after that point was the unmatched
+   DOWN 0.06@0.19 that produced the whole loss.
+2. **Uncaught network timeout.** `public_book` (`src/l5_btc5m_runner.py:311`, 3 s urllib read)
+   raised `TimeoutError` at 14:24:27Z from `trade()`; the process exited. No orders were open;
+   the restart recovered settlement and demoted the stale ARMED state.
+3. `ACCOUNT_DRAWDOWN:PORTFOLIO_VALUE_UNAVAILABLE` blocked the lane 14:22:27–14:22:37Z while
+   `l5-pmus-live` saw the lane's unmatched leg as a gross/net divergence.
+4. `AUTHORIZATION_ALREADY_USED` on six refused attempts (t=173–222 s) — a retry reusing a
+   single-use claim after an envelope refusal.
+5. Step log records one cancel per requote round although two quotes were placed; six order ids
+   have no terminal event in the lane's log (venue reads show none open, and position and cash
+   reconcile).
+
+### Disarm
+
+Arm token empty, `L5_SHADOW_ONLY=1`, probe and campaign documents empty, envelope expired.
+Lane resident, `stored_state MONITOR`, `can_submit false`. Watchdog healthy, 0 open orders.
