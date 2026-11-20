@@ -820,3 +820,66 @@ Not covered by either fix: the lane adds only TODAY's own losses to the lifetime
 loss from an earlier UTC day that the account service never booked (a fully matched window)
 is in neither service's cumulative figure. The cash-based equity baseline and portfolio
 drawdown limits do see it; the $75 cumulative ceiling does not.
+
+## Complete accounting release and entry-filter study (2026-11-20 20:00Z)
+
+Nothing deployed, armed or traded.
+
+### Prior-day losses and the cumulative ceiling
+
+Gap: the lane added only today's own losses to the lifetime figure, so a loss from an earlier
+UTC day that the account service never booked reached neither service's cumulative total.
+
+The account service's lifetime figure is its last cash re-anchor plus every row retired since.
+It now publishes that as `lifetime_basis` (cash-read time, re-anchor time, results since, and
+`reconciled`, true only when anchor plus rows equals the lifetime figure). The lane judges its
+whole durable settled history against it: settled before the anchor's cash read → inside the
+anchor; retired there since at a published amount b → `min(0, own − b)`; anything else → all
+of it. A basis that is absent, unreconciled, for a different lifetime figure or malformed
+books nothing, and every loss the lane has ever settled is added. An unreadable own history
+refuses. One assumption remains and is stated in the code: a booking the lane is not shown is
+no better than the larger of zero and the lane's own result.
+
+### Cross-service matrix (`CROSS_SERVICE_LOSS_ACCOUNTING_RESULT.txt`)
+
+Real code of both services, deployed and candidate, 17 ledger states plus stale and
+unreachable records, day and lifetime figures.
+
+- Candidate lane, either account-service version: 0 cases understate a loss.
+- Deployed lane understates in three states: a prior-day loss never booked (L1), a prior-day
+  loss booked at zero (L8), and a matched loss netted against a gain (S5).
+- UTC rollover (lane and account service on opposite sides of midnight): lifetime exact in
+  both directions with both patches; the day figure is exact or conservative.
+- Missing re-anchor history or a lifetime that does not reconcile: every own loss added.
+- Stale, unreachable, day-unknown: refused in all combinations.
+- Candidate lane before the account-service patch: conservative, but the lane's whole history
+  is added to the lifetime figure, including results already inside the cash anchor. Deploy
+  the account-service patch first to avoid a spurious cumulative breach.
+
+Release candidates:
+- BTC5m `release/l5-btc5m-accounting-20261120` at `a87493baf0a3239358c9cb767fac0534e4eb9f9b`
+  (three commits on `27cbdb32b`): 2,500 passed, the same 31 baseline failures; controller,
+  reservation and persistent-mode files byte-identical to deployed.
+- `l5-pmus-live` publication patch: two commits on `cfac6707c`
+  (`patches/pmus_live_publish_retired_results.patch`); added keys only.
+- Cash-floor patch: separate, undeployed.
+
+### Entry-filter study: no filter found (`ENTRY_FILTER_STUDY_RESULT.txt`)
+
+187 windows, first half for discovery and second half as the check; fills assumed when the
+ask reaches the bid within 10 s.
+
+- One two-sided quote round: both legs fill about 20% of the time and one leg 74%. The pair
+  earns +$0.0025 a share; the lone leg loses $0.037–0.040 a share at settlement and $0.024
+  against its own bid when filled. Net −$0.035 / −$0.037 a share in the two halves.
+- No bucket is positive in either half: time in window, spread, favourite price, recent
+  movement, model-versus-market gap, or a calm-market combination.
+- Matched pairs above $1.00 are pairs completed across requote rounds: the second leg is
+  bought after the market moved against the first. Average matched pair cost 1.017–1.023
+  under the live configuration.
+- Existing controller settings: every one is negative in both halves or indistinguishable from
+  zero. Pair ceiling 0.97 brings matched pair cost under 1.00 and matched P&L to about zero,
+  with 93% fewer fills and net −$0.002 / −$0.004 a window. Stopping entries after 60 s gives
+  −$0.004 / −$0.006. Losses fall in proportion to how little is traded.
+
+Arithmetic on public quotes with an assumed fill rule; one 16.5-hour stretch.
