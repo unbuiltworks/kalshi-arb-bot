@@ -566,3 +566,56 @@ gate answers `ENTRY_EV_P_PAIR_NATURAL_NOT_SET`. With the gate's own arithmetic (
 p_pair_natural >= ~0.86 to be positive. The 14:20Z window, by quote round: 5 filled legs, 2 of
 them in a round where the partner also filled (0.40, n=5). Too few to attest; it does not
 support the threshold. The 14:20Z window ran only under the owner's one-window EV waiver.
+
+## Second-window approval packet (prepared 2026-11-20 16:48Z; NOT armed)
+
+Purpose: validate the two reliability fixes against the venue. An execution test under an
+experimental entry-EV waiver; not evidence of a profitable strategy.
+
+| Parameter | Setting |
+|---|---|
+| Service / SHA | `l5-btc5m-live` / `27cbdb32bb86d74e406dee1fd0a3829a1f4776ac` |
+| Market | one `cpc-btc-updown-5m-<date>-<HHMM>z`, named by the owner; start at least 10 minutes after approval so the lane boots before the window |
+| Envelope | $0.60 aggregate, $0.60 per market, $0.60 daily loss, strategy STRADDLE, maker-only |
+| Window-loss ceiling | $0.20 |
+| Clip / per side / unmatched | $0.05 / $0.30 / $0.10 |
+| Live orders | 2 |
+| Entry-EV gate | waived for this one market by a behaviour-probe document expiring at window end |
+| Account limits | unchanged: $1.00 drawdown from $321.4782, $50 daily, $75 cumulative |
+| After | disarm, reconcile, report |
+
+Venue check 16:47Z: upcoming 5m markets are listed with min quantity 0.01, tick 0.01, taker fee
+coefficient 0.095.
+
+### What can actually be lost
+
+- $0.20 is a pre-placement bound, not a stop. Before each order the controller computes
+  total cost − min(UP shares, DOWN shares) over every subset of resting, queued and proposed
+  orders, added to held inventory, and refuses the order if any subset exceeds $0.20. The
+  position is held to settlement, so a price move after a fill cannot add loss beyond what
+  that bound already assumed.
+- It holds only while the ledger matches the venue. If the ledger missed a fill, the next
+  bounds are per side $0.30 and unmatched $0.10.
+- The outer limit is the $0.60 envelope: the lane cannot have more than $0.60 reserved, and a
+  position's loss cannot exceed its cost. Plan on $0.60 as the maximum, $0.20 as the design.
+- The account-level $1.00 drawdown allowance refuses new orders; it does not unwind positions.
+- New in this release and untested live: per-step hold release. If it released too much the
+  envelope would under-count; the $0.20, $0.30 and $0.10 controller bounds are computed from
+  the ledger, not from the reservation, and are unaffected.
+
+### The 86% figure, checked
+
+EV per share = p × (1 − pair cost) + (1 − p) × (lone-leg value), lone-leg value =
+p_win × (1 − price) − (1 − p_win) × price − adverse. With p_win = price the lone leg is worth
+−adverse, so break-even p = adverse / (adverse + 1 − pair cost) = 0.06 / 0.07 = 0.857.
+
+It rests on four assumptions, none measured for this quoting mode:
+1. adverse selection of 6 cents a share (a proxy measurement from a different entry path);
+2. a lone leg that is otherwise fairly priced;
+3. pairs complete at the quoted pair cost of 0.99;
+4. no completion orders, zero fees.
+
+Sensitivity: 3-cent adverse → 0.75; pair cost 0.97 → 0.667. Assumption 3 already failed once
+live: the two pairs in the 14:20Z window formed across requote rounds at 0.99 and 1.01. The
+figure is the gate's arithmetic under its defaults, not a measured threshold, and should not
+be used to decide trading.
