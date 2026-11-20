@@ -1,0 +1,73 @@
+windows: fit 576, test 515; test quote spacing median 2.0 s, p90 2.0 s
+   180-400 s left: b0 -0.033  gap +1.797  tilt +1.885  (n 33638)
+   120-180 s left: b0 +0.065  gap +2.073  tilt +1.470  (n 15921)
+    60-120 s left: b0 +0.119  gap +2.097  tilt +1.426  (n 11296)
+    30- 60 s left: b0 +0.144  gap +2.501  tilt +2.229  (n 2497)
+     0- 30 s left: b0 -0.014  gap +5.946  tilt +3.274  (n 553)
+
+== model against the quote ==
+   FIT: Brier model 0.1649, quote mid 0.1527 (63905 quotes)
+      model above quote by 3c+   quote mid moves -0.0001 in  2 s  -0.0006 in  6 s  -0.0011 in 10 s   (n 24113)
+      within 3c                  quote mid moves -0.0001 in  2 s  -0.0005 in  6 s  -0.0011 in 10 s   (n 17964)
+      model below quote by 3c+   quote mid moves -0.0003 in  2 s  -0.0005 in  6 s  -0.0008 in 10 s   (n 21157)
+   TEST: Brier model 0.1725, quote mid 0.1625 (56030 quotes)
+      model above quote by 3c+   quote mid moves -0.0001 in  2 s  +0.0001 in  6 s  +0.0002 in 10 s   (n 20974)
+      within 3c                  quote mid moves -0.0004 in  2 s  -0.0004 in  6 s  -0.0006 in 10 s   (n 15679)
+      model below quote by 3c+   quote mid moves -0.0003 in  2 s  -0.0021 in  6 s  -0.0035 in 10 s   (n 18761)
+
+== THE RULE, order matched 2 s after the signal ==
+   FIT  theta 0.00: traded  576 of 576 windows, missed  360 of   936 orders, NET $-18.34, per window run -0.0318
+   FIT  theta 0.02: traded  576 of 576 windows, missed  352 of   928 orders, NET $-19.13, per window run -0.0332
+   FIT  theta 0.04: traded  576 of 576 windows, missed  318 of   894 orders, NET $-16.93, per window run -0.0294
+   FIT  theta 0.06: traded  565 of 576 windows, missed  337 of   902 orders, NET $-9.22, per window run -0.0160
+   FIT  theta 0.10: traded  513 of 576 windows, missed  292 of   805 orders, NET $-2.67, per window run -0.0046
+   FIT  theta 0.15: traded  417 of 576 windows, missed  264 of   681 orders, NET $-0.15, per window run -0.0003
+   chosen on FIT: theta 0.15.  HELD-OUT 11-19/20, orders sent 643, missed 261:
+   held-out result
+      windows run 515, traded 382; fills 382; shares 382.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $150.51  fees $7.52  settlement proceeds $152.00
+      NET $-6.03 (before fees $+1.49)
+      per share -0.0158 [-0.0606,+0.0287]   per window run -0.0117 [-0.0454,+0.0215]
+   (other theta 0.00 on held-out: traded 515, NET $-19.01)
+   (other theta 0.02 on held-out: traded 515, NET $-22.92)
+   (other theta 0.04 on held-out: traded 511, NET $-16.24)
+   (other theta 0.06 on held-out: traded 506, NET $-18.27)
+   (other theta 0.10 on held-out: traded 470, NET $+0.97)
+
+== THE RULE, order matched 4 s after the signal ==
+   FIT  theta 0.00: traded  576 of 576 windows, missed  467 of  1043 orders, NET $-10.96, per window run -0.0190
+   FIT  theta 0.02: traded  575 of 576 windows, missed  452 of  1027 orders, NET $-22.95, per window run -0.0398
+   FIT  theta 0.04: traded  573 of 576 windows, missed  460 of  1033 orders, NET $-18.47, per window run -0.0321
+   FIT  theta 0.06: traded  563 of 576 windows, missed  458 of  1021 orders, NET $-2.45, per window run -0.0043
+   FIT  theta 0.10: traded  506 of 576 windows, missed  402 of   908 orders, NET $-1.97, per window run -0.0034
+   FIT  theta 0.15: traded  405 of 576 windows, missed  294 of   699 orders, NET $+1.26, per window run +0.0022
+   chosen on FIT: theta 0.15.  HELD-OUT 11-19/20, orders sent 679, missed 317:
+   held-out result
+      windows run 515, traded 362; fills 362; shares 362.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $131.26  fees $6.89  settlement proceeds $135.00
+      NET $-3.15 (before fees $+3.74)
+      per share -0.0087 [-0.0544,+0.0382]   per window run -0.0061 [-0.0376,+0.0270]
+   (other theta 0.00 on held-out: traded 515, NET $-17.63)
+   (other theta 0.02 on held-out: traded 514, NET $-19.25)
+   (other theta 0.04 on held-out: traded 511, NET $-13.97)
+   (other theta 0.06 on held-out: traded 503, NET $-10.00)
+   (other theta 0.10 on held-out: traded 464, NET $+3.88)
+
+== THE RULE, order matched 0 s after the signal  (NOT executable: same instant, shown as a ceiling) ==
+   FIT  theta 0.00: traded  576 of 576 windows, missed    0 of   576 orders, NET $-19.88, per window run -0.0345
+   FIT  theta 0.02: traded  576 of 576 windows, missed    0 of   576 orders, NET $-24.30, per window run -0.0422
+   FIT  theta 0.04: traded  576 of 576 windows, missed    0 of   576 orders, NET $-14.43, per window run -0.0251
+   FIT  theta 0.06: traded  572 of 576 windows, missed    0 of   572 orders, NET $-8.70, per window run -0.0151
+   FIT  theta 0.10: traded  529 of 576 windows, missed    0 of   529 orders, NET $-3.85, per window run -0.0067
+   FIT  theta 0.15: traded  450 of 576 windows, missed    0 of   450 orders, NET $+4.63, per window run +0.0080
+   chosen on FIT: theta 0.15.  HELD-OUT 11-19/20, orders sent 421, missed 0:
+   held-out result
+      windows run 515, traded 421; fills 421; shares 421.00  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+      cost $179.98  fees $8.54  settlement proceeds $188.00
+      NET $-0.52 (before fees $+8.02)
+      per share -0.0012 [-0.0437,+0.0421]   per window run -0.0010 [-0.0356,+0.0342]
+   (other theta 0.00 on held-out: traded 515, NET $-9.14)
+   (other theta 0.02 on held-out: traded 515, NET $-7.16)
+   (other theta 0.04 on held-out: traded 513, NET $-11.09)
+   (other theta 0.06 on held-out: traded 510, NET $-19.30)
+   (other theta 0.10 on held-out: traded 488, NET $-13.07)

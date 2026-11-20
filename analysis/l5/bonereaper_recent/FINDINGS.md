@@ -258,3 +258,25 @@ dollars summed over fills (no per-window averaging).
 - Profitable vs losing windows at 60 s: profitable ones are already net
   long the favourite (+0.27 of shares held, 11-19/20); losing ones are
   balanced (-0.02).
+
+## Settlement index against our quotes: causal rule test (2026-11-20)
+
+`analysis/l5/btc5m/index_lead_rule.py` -> `INDEX_LEAD_RULE_RESULT.txt`.
+One-second settlement index (public gateway) and the recorder's full
+2-second quotes, 2026-11-17..20; model and threshold fitted on 11-17/18
+(576 windows), scored on 11-19/20 (515 windows) with the shared ledger.
+Index used only when at least 2 s older than the quote.
+
+- The quote is the better forecast: Brier 0.1625 for the quote mid
+  against 0.1725 for the index model on the held-out days.
+- Quotes do not move toward the model afterwards: where the model is 3 c
+  or more above the quote, the mid moves +0.0001 in 6 s and +0.0002 in
+  10 s (held-out).
+- The rule (one share per window, buy when model - ask - fee >= 0.15,
+  order matched 2 s later, missed if the ask has risen): 382 windows
+  traded of 515, 261 orders missed, NET -$6.03, per window run -0.012
+  [-0.045,+0.022]; before fees +$1.49. At 4 s: -$3.15. Even matched at
+  the same instant (not executable): -$0.52.
+- Conclusion: the 60-second-average index does not lead our quotes. Our
+  quotes already price something faster than it. No event-driven index
+  controller is justified by this data.
