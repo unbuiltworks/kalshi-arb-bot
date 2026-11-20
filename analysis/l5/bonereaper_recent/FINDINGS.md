@@ -229,3 +229,7 @@ favourite, his buys minus other takers in the same window and band) are
 differences inside a window and stand. Their LEVELS, including "every
 taker earns +4 to +9 c at 0.50-0.85 on Polymarket" and the positive
 favourite lines on our venue, carry this bias and should not be relied on.
+
+## Weighting audit
+
+See `analysis/l5/btc5m/WEIGHTING_AUDIT_20261120.md`: several levels above are corrected there; that file supersedes them.

@@ -1068,3 +1068,7 @@ strategy switches (not in either release), capital limits.
 Rollback for either step: point the service back at its current branch
 (`release/l5-pmus-live-equity-and-correction-20261120`,
 `release/l5-btc5m-reliability-20261120`).
+
+## Weighting audit
+
+See `analysis/l5/btc5m/WEIGHTING_AUDIT_20261120.md`: several levels above are corrected there; that file supersedes them.
