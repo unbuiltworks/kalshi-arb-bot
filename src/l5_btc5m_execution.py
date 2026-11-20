@@ -1594,6 +1594,24 @@ class Btc5mExecutor:
                 out[str(market)] = pnl
         return out
 
+    def settled_history(self) -> Optional[Dict[str, Dict[str, Any]]]:
+        """EVERY market this strategy has ever settled: when, and at what
+        result. From the durable ledger, which only ever adds to `settled`.
+        None when the ledger or any row's time or amount cannot be read --
+        a history with a hole in it is not a history."""
+        if not self._ledger_ok:
+            return None
+        out: Dict[str, Dict[str, Any]] = {}
+        for market, rec in self._ledger["settled"].items():
+            when = _parse_utc(rec.get("settled_at")) \
+                if isinstance(rec, Mapping) else None
+            pnl = _dec(rec.get("settlement_pnl")) \
+                if isinstance(rec, Mapping) else None
+            if when is None or pnl is None:
+                return None
+            out[str(market)] = {"at": when, "pnl": pnl}
+        return out
+
     def _order_class(self, market: str, side: str, qty: Decimal) -> tuple:
         """(class, reducing) for the shared submission budgets.
 

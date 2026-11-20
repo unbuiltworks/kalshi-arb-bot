@@ -457,11 +457,17 @@ class OwnSettled(Decimal):
     counted twice -- the day read -0.0228 against a true -0.0114.
     """
     by_market: Optional[Dict[str, Decimal]] = None
+    #: every market ever settled: {market: {"at": datetime, "pnl": Decimal}}
+    history: Optional[Dict[str, Dict[str, Any]]] = None
 
     @classmethod
-    def of(cls, by_market: Mapping[str, Decimal]) -> "OwnSettled":
+    def of(cls, by_market: Mapping[str, Decimal],
+           history: Optional[Mapping[str, Mapping[str, Any]]] = None
+           ) -> "OwnSettled":
         out = cls(sum(by_market.values(), D(0)))
         out.by_market = dict(by_market)
+        out.history = None if history is None else {
+            str(m): dict(r) for m, r in history.items()}
         return out
 
 
@@ -530,6 +536,93 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
     return add, full, gaps
 
 
+def _own_not_in_lifetime(own: Any, risk: Mapping[str, Any],
+                          life: Decimal) -> Optional[Dict[str, Any]]:
+    """What to add to the account's LIFETIME figure for this lane's whole
+    settled history. None when the lane's history was not supplied.
+
+    THE GAP THIS CLOSES. Only TODAY's own losses were added to the lifetime
+    figure. A loss from an earlier UTC day that the account service never
+    booked -- a fully matched window bought above 1.00 is invisible to it
+    -- was then in neither service's cumulative total, and the cumulative
+    ceiling was judged without it.
+
+    The account service's lifetime figure is its last cash re-anchor plus
+    every row it has retired since, and it publishes exactly that as
+    `lifetime_basis`. For each market this lane ever settled, with `o` its
+    own result:
+
+      settled at or before the re-anchor's cash read   0. The cash that
+                                                       anchor was taken
+                                                       from contained it.
+      retired there since, at a published amount b     min(0, o - b)
+      anything else                                    min(0, o), all of it
+
+    THE BASIS IS USED ONLY WHEN IT RECONCILES: present, marked
+    `reconciled` (re-anchor plus rows equals its lifetime figure), and
+    stating the SAME lifetime figure this record carries. Absent,
+    unreconciled, for another figure, or malformed, NOTHING is treated as
+    booked and every loss this lane has ever settled is added. An
+    incomplete map is used for the markets it names and no others.
+
+    So a market whose booking is published counts for at most
+    min(booked, own); the only results left out are ones the anchor's cash
+    provably held; and every failure of reconciliation errs toward a larger
+    loss. A gain is never added.
+
+    WHAT IS ASSUMED OF A BOOKING THIS LANE IS NOT SHOWN: that it is no
+    better than the larger of zero and this lane's own result. Both ways
+    the account service books a market satisfy it -- the $1-a-share bound
+    is never above zero, and a restatement from venue cost is the result
+    itself. Nothing published here can test that from this side.
+    """
+    hist = getattr(own, "history", None)
+    if not isinstance(hist, Mapping):
+        return None
+    basis = risk.get("lifetime_basis")
+    why = None
+    booked: Mapping[str, Any] = {}
+    cash_read = None
+    if not isinstance(basis, Mapping):
+        why = "BASIS_NOT_PUBLISHED"
+    elif basis.get("reconciled") is not True:
+        why = "BASIS_NOT_RECONCILED"
+    elif _dec(basis.get("lifetime_realized_usd")) != life:
+        why = "BASIS_FOR_ANOTHER_FIGURE"
+    elif not isinstance(basis.get("results_since_rebase"), Mapping):
+        why = "BASIS_UNREADABLE"
+    else:
+        raw = basis.get("cash_read_utc")
+        if raw is not None:
+            try:
+                cash_read = dt.datetime.fromisoformat(
+                    str(raw).replace("Z", "+00:00"))
+                if cash_read.tzinfo is None:
+                    raise ValueError("naive")
+            except (TypeError, ValueError):
+                why, cash_read = "BASIS_UNREADABLE", None
+        if why is None:
+            booked = basis["results_since_rebase"]
+    add = D(0)
+    n = {"inside_cash_anchor": 0, "gap_to_booked": 0, "in_full": 0}
+    for m in sorted(hist):
+        o, at = hist[m]["pnl"], hist[m]["at"]
+        if why is None and cash_read is not None and at <= cash_read:
+            n["inside_cash_anchor"] += 1
+            continue
+        b = _dec(booked.get(m)) if (why is None and m in booked) else None
+        if b is None:
+            add += min(D(0), o)
+            n["in_full"] += 1
+        else:
+            add += min(D(0), o - b)
+            n["gap_to_booked"] += 1
+    return {"add": add, "basis_used": why is None, "basis_refusal": why,
+            "basis_complete": (None if why is not None
+                               else basis.get("complete") is True),
+            "markets": n}
+
+
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
                  fetch: Optional[Callable[[str], Any]] = None
                  ) -> Dict[str, Any]:
@@ -587,12 +680,20 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
     if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
     add, _added, _gaps = _own_not_in_account_ledger(own_unaccounted, risk)
-    day_all, life_all = day + add, life + add
+    _lt = _own_not_in_lifetime(own_unaccounted, risk, life)
+    #: with no history supplied the lifetime figure gets today's addition,
+    #: as it always did
+    life_add = add if _lt is None else _lt["add"]
+    day_all, life_all = day + add, life + life_add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
+           "btc5m_lifetime_losses_added_usd": str(life_add),
+           "btc5m_lifetime_basis": (None if _lt is None else
+                                    {k: v for k, v in _lt.items()
+                                     if k != "add"}),
            "btc5m_markets_added_in_full": _added,
            "btc5m_shortfall_added_by_market": _gaps,
            # what may still be LOST before either account-wide limit binds
@@ -1617,7 +1718,14 @@ class Session:
         by = getattr(self.ex, "day_settled_by_market", None)
         by = by(self._now()) if callable(by) else None
         if isinstance(by, Mapping) and sum(by.values(), D(0)) == got:
-            return OwnSettled.of(by)
+            #: the WHOLE settled history too, for the lifetime figure. A
+            #: history that cannot be read refuses: it is the only record
+            #: of what this lane lost on earlier days.
+            hist = getattr(self.ex, "settled_history", None)
+            hist = hist() if callable(hist) else None
+            if hist is None:
+                raise ValueError("own settled history unreadable")
+            return OwnSettled.of(by, hist)
         return min(D(0), got)
 
     def gates(self) -> Dict[str, Any]:
