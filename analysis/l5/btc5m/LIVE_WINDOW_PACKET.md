@@ -395,3 +395,24 @@ and persistent-mode regression: the same 11 pre-existing failures.
 
 **Release (supersedes `c8857fcd1`):** see the commit this section is in, on
 `release/l5-btc5m-latch-reset-20261120`.
+
+### Deployed disarmed (owner-approved, 2026-11-20 13:46Z) — the latch, as stored
+
+`l5-btc5m-live` runs `63475044f95566ec207bf60cbc98057a1dfe1808`, deployment
+`3d01dd70`. No variable changed; no reset document set. Boot 13:47:29Z:
+
+    L5_BTC5M_STORED_STATE {"state": "STOPPED", "latched": true,
+      "at_utc": "2026-11-17T22:09:41.843005+00:00",
+      "why": "WATCHDOG:HALT:halt_asserted",
+      "latch_sha256":
+        "0679515302aba2c311967b23e7aa8a8842fac85dcca6f75ff8803d65c4394e71",
+      "would_refuse_arming": true}
+
+Every resident line since carries the same hash with `can_submit: false`.
+`L5_BTC5M_ARM` `armed: false` (`ENVELOPE_EXPIRED`). No `L5_BTC5M_LATCH_RESET`
+line (none was asked for) and no `L5_BTC5M_STALE_ARMED` line (the stored
+state is not ARMED). Settlement recovery: exposure $0. Watchdog 13:48:00Z:
+not halted, 0 open orders, three registries OK. Rollback: `6b6423d9`.
+
+The stored time and reason match the lane's own log line of 2026-11-17
+22:09:41.843Z exactly.
