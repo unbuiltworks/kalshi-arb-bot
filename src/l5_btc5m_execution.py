@@ -794,6 +794,31 @@ def straddle_one_sided_control(default: bool = False) -> bool:
     return raw.strip() == ONE_SIDED_TOKEN
 
 
+#: STOP REPLENISHING THE HEAVIER SIDE ONCE IT IS THE UNDERDOG. An explicit
+#: token, not a boolean, for the same reason as the one-sided control.
+STRADDLE_HEAVY_UNDERDOG_ENV = "L5_BTC5M_STRADDLE_HEAVY_UNDERDOG"
+HEAVY_UNDERDOG_TOKEN = "STOP_ADDING"
+STRADDLE_HEAVY_UNDERDOG_MARGIN_ENV = "L5_BTC5M_STRADDLE_HEAVY_UNDERDOG_MARGIN"
+
+
+def straddle_stop_adding_heavy_underdog(default: bool = False) -> bool:
+    """See `Params.straddle_stop_adding_heavy_underdog`. Only the exact
+    token enables it; anything else keeps the default."""
+    raw = os.environ.get(STRADDLE_HEAVY_UNDERDOG_ENV)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip() == HEAVY_UNDERDOG_TOKEN
+
+
+def straddle_heavy_underdog_margin(default: Decimal = ZERO) -> Decimal:
+    """How far below the other side's bid counts as the underdog. Accepted
+    only inside [0, 0.50); anything else keeps the default."""
+    raw = _dec(os.environ.get(STRADDLE_HEAVY_UNDERDOG_MARGIN_ENV))
+    if raw is None or not (ZERO <= raw < D("0.50")):
+        return default
+    return raw
+
+
 STRADDLE_MAX_COMPLETED_PAIR_COST_ENV = \
     "L5_BTC5M_STRADDLE_MAX_COMPLETED_PAIR_COST"
 
@@ -2685,6 +2710,13 @@ class Btc5mExecutor:
                         straddle_max_completed_pair_cost=(
                             straddle_max_completed_pair_cost(
                                 self.params.straddle_max_completed_pair_cost)),
+                        straddle_stop_adding_heavy_underdog=(
+                            straddle_stop_adding_heavy_underdog(
+                                self.params
+                                .straddle_stop_adding_heavy_underdog)),
+                        straddle_heavy_underdog_margin=(
+                            straddle_heavy_underdog_margin(
+                                self.params.straddle_heavy_underdog_margin)),
                         straddle_entry_bid_min=straddle_entry_bid_band(
                             (self.params.straddle_entry_bid_min,
                              self.params.straddle_entry_bid_max))[0],

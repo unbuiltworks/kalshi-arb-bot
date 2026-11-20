@@ -333,6 +333,30 @@ class Params:
     #: every leg rather than being read as no band.
     straddle_entry_bid_min: Decimal = D("0")
     straddle_entry_bid_max: Decimal = D("0")
+    #: =====================================================================
+    #: DO NOT REPLENISH THE SIDE THAT IS BOTH HEAVIER AND LOSING.
+    #:
+    #: Two-sided bidding is filled on whichever side is falling, so the
+    #: book ends up long the side the market has turned against, and the
+    #: next round bids for more of it. In 1,101 recorded windows of the
+    #: trader this strategy is modelled on, 63-91% of new spending went to
+    #: his heavier side while it was still the favourite and 25-42% once it
+    #: had become the underdog (analysis/l5/bonereaper_recent/
+    #: INVENTORY_TRAJECTORY_RESULT.txt). That is behaviour, not a proven
+    #: edge; this switch lets the existing controller be replayed with it.
+    #:
+    #: With this set, in book-relative mode, a side is NOT quoted, and its
+    #: resting two-sided legs are cancelled by id, while BOTH hold:
+    #:   it holds more shares than the other side, and
+    #:   its bid is below the other side's bid by more than the margin.
+    #: The other side is untouched, so the pair can still be completed and
+    #: simultaneous quoting resumes the moment either condition ends. It
+    #: only removes orders (HEAVY_SIDE_IS_UNDERDOG): it places nothing,
+    #: widens no limit and sells nothing. False -- the default -- leaves
+    #: every decision byte for byte as it was.
+    straddle_stop_adding_heavy_underdog: bool = False
+    #: how far below the other side's bid counts as the underdog
+    straddle_heavy_underdog_margin: Decimal = D("0")
     #: how old the probability may be and still justify a lone leg
     straddle_one_sided_max_p_age_s: float = 5.0
     #: INVENTORY-AWARE REPRICING. Per clip of net imbalance, the HEAVY
@@ -1599,6 +1623,16 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _reserve["qty_after"] = str(qty)
             if qty < min_qty:
                 _reserve["why"] = "COMPLETION_UNFUNDABLE"
+        #: ---------------- HEAVY AND LOSING: which side, if any.
+        _hu = {s_: False for s_ in SIDES}
+        if params.straddle_stop_adding_heavy_underdog and _bookrel \
+                and bid is not None and ask is not None:
+            _sb = {UP: bid, DOWN: ONE - ask}
+            _hm = _dec(params.straddle_heavy_underdog_margin) or ZERO
+            for s_ in SIDES:
+                _o_ = _other(s_)
+                _hu[s_] = bool(inv[s_][0] > inv[_o_][0]
+                               and _sb[s_] < _sb[_o_] - _hm)
         want = []
         ev_rungs = []
         #: ---------------- REQUOTE, decided before anything is placed.
@@ -1632,6 +1666,14 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         _rq_cancel[s_].append(o)
                     elif _rq_live:
                         _rq_kept[s_] = True
+        for s_ in SIDES:
+            if not _hu[s_]:
+                continue
+            _have = {o["id"] for o in _rq_cancel[s_]}
+            for o in rest:
+                if o["side"] == s_ and o.get("reason") == "STRADDLE_LEG" \
+                        and o["id"] not in _have:
+                    _rq_cancel[s_].append(o)
         for s_ in SIDES:
             for o in _rq_cancel[s_]:
                 want.append({"op": "CANCEL", "id": o["id"]})
@@ -1689,6 +1731,10 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
             _order = tuple(sorted(SIDES, key=lambda s: inv[s][0]))
             for i, r in enumerate(_rungs):
                 for side in _order:
+                    if _hu[side]:
+                        why_s = "HEAVY_SIDE_IS_UNDERDOG"
+                        _side_why[side] = "HEAVY_SIDE_IS_UNDERDOG"
+                        continue
                     if _rq_cancel[side] or _rq_kept[side]:
                         #: a cancel is in flight, or a quote within
                         #: tolerance already works this side
@@ -2278,6 +2324,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         ev_s = {"completion": comp,
                 "side_refusals": dict(_side_why),
                 "one_sided": dict(_one_sided),
+                "heavy_underdog": dict(_hu),
                 "pair_completion": dict(_pair_plan),
                 "completion_reserve": _reserve,
                 "book_relative": {

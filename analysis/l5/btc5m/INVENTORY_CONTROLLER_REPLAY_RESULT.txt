@@ -1,0 +1,44 @@
+config BASE/STRICT: {'placed': 67299, 'steps_stopped': 0, 'cancels': 30832}
+config BASE/TOUCH: {'placed': 66191, 'steps_stopped': 0, 'cancels': 29086}
+config NEW/STRICT: {'placed': 51455, 'steps_stopped': 107489, 'cancels': 25157}
+config NEW/TOUCH: {'placed': 50647, 'steps_stopped': 107740, 'cancels': 23765}
+
+==== 11-17, 11-18 (2 s quotes): 576 windows ====
+  fill model STRICT
+   BASE fills  9339  cost $  305.37  proceeds $  279.21  NET $ -26.161  per window -0.04542 | worst window -0.169  5% worst -0.126  windows losing >5c: 372 | unmatched shares/window 0.240
+   NEW  fills  7461  cost $  283.50  proceeds $  265.07  NET $ -18.426  per window -0.03199 | worst window -0.162  5% worst -0.116  windows losing >5c: 160 | unmatched shares/window 0.056
+   PAIRED NEW - BASE: total $+7.735 [+4.540,+10.912]; windows better 373, worse 200, same 3
+  fill model TOUCH
+   BASE fills  9405  cost $  307.30  proceeds $  282.35  NET $ -24.954  per window -0.04332 | worst window -0.169  5% worst -0.124  windows losing >5c: 367 | unmatched shares/window 0.239
+   NEW  fills  7521  cost $  285.42  proceeds $  267.88  NET $ -17.544  per window -0.03046 | worst window -0.163  5% worst -0.114  windows losing >5c: 156 | unmatched shares/window 0.057
+   PAIRED NEW - BASE: total $+7.410 [+4.258,+10.582]; windows better 361, worse 214, same 1
+
+==== 11-19, 11-20 (2 s quotes): 515 windows ====
+  fill model STRICT
+   BASE fills  8474  cost $  271.03  proceeds $  250.78  NET $ -20.253  per window -0.03933 | worst window -0.145  5% worst -0.125  windows losing >5c: 333 | unmatched shares/window 0.248
+   NEW  fills  6724  cost $  252.67  proceeds $  234.69  NET $ -17.975  per window -0.03490 | worst window -0.156  5% worst -0.126  windows losing >5c: 154 | unmatched shares/window 0.059
+   PAIRED NEW - BASE: total $+2.278 [-1.595,+6.052]; windows better 306, worse 206, same 3
+  fill model TOUCH
+   BASE fills  8492  cost $  271.88  proceeds $  251.90  NET $ -19.976  per window -0.03879 | worst window -0.145  5% worst -0.125  windows losing >5c: 332 | unmatched shares/window 0.248
+   NEW  fills  6770  cost $  254.41  proceeds $  236.65  NET $ -17.755  per window -0.03448 | worst window -0.174  5% worst -0.129  windows losing >5c: 154 | unmatched shares/window 0.060
+   PAIRED NEW - BASE: total $+2.220 [-1.713,+5.993]; windows better 307, worse 204, same 4
+
+==== 11-11 .. 11-16 (10 s quotes: coarser fills): 1468 windows ====
+  fill model STRICT
+   BASE fills 16889  cost $  503.11  proceeds $  424.03  NET $ -79.080  per window -0.05387 | worst window -0.154  5% worst -0.116  windows losing >5c: 906 | unmatched shares/window 0.211
+   NEW  fills 11191  cost $  427.30  proceeds $  363.20  NET $ -64.098  per window -0.04366 | worst window -0.154  5% worst -0.103  windows losing >5c: 544 | unmatched shares/window 0.048
+   PAIRED NEW - BASE: total $+14.983 [+10.264,+19.623]; windows better 1029, worse 416, same 23
+  fill model TOUCH
+   BASE fills 17489  cost $  519.03  proceeds $  440.57  NET $ -78.461  per window -0.05345 | worst window -0.154  5% worst -0.116  windows losing >5c: 898 | unmatched shares/window 0.214
+   NEW  fills 11681  cost $  443.92  proceeds $  380.52  NET $ -63.404  per window -0.04319 | worst window -0.154  5% worst -0.104  windows losing >5c: 539 | unmatched shares/window 0.047
+   PAIRED NEW - BASE: total $+15.057 [+10.359,+19.744]; windows better 1031, worse 416, same 21
+
+==== ALL: 2559 windows ====
+  fill model STRICT
+   BASE fills 34702  cost $ 1079.51  proceeds $  954.02  NET $-125.495  per window -0.04904 | worst window -0.169  5% worst -0.121  windows losing >5c: 1611 | unmatched shares/window 0.225
+   NEW  fills 25376  cost $  963.46  proceeds $  862.96  NET $-100.499  per window -0.03927 | worst window -0.162  5% worst -0.111  windows losing >5c: 858 | unmatched shares/window 0.052
+   PAIRED NEW - BASE: total $+24.996 [+18.155,+31.671]; windows better 1708, worse 822, same 29
+  fill model TOUCH
+   BASE fills 35386  cost $ 1098.21  proceeds $  974.82  NET $-123.390  per window -0.04822 | worst window -0.169  5% worst -0.121  windows losing >5c: 1597 | unmatched shares/window 0.226
+   NEW  fills 25972  cost $  983.75  proceeds $  885.05  NET $ -98.703  per window -0.03857 | worst window -0.174  5% worst -0.113  windows losing >5c: 849 | unmatched shares/window 0.052
+   PAIRED NEW - BASE: total $+24.687 [+17.716,+31.398]; windows better 1699, worse 834, same 26
