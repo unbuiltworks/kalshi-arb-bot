@@ -3,7 +3,7 @@
 Wallet `0xeebde7a0e019a63e6b476eb425505b7b3e6eba30` on Polymarket (international). All figures
 are the platform's own, pulled read-only from its public data API on 2026-11-20 ~19:40Z:
 `platform_user_pnl_all_20261120.json` (cumulative daily series), `incentive_credits_20261120.json`
-(all 440 rebate and reward credits), `activity_20261117_20261120.jsonl.gz` (61,983 activity
+(all 440 rebate and reward credits), `activity_20261117_20261120.jsonl.gz` (62,920 activity
 rows). Scripts: `reconcile_platform_pnl.py`, `recent_fills_by_price.py`, `fetch_activity.py`.
 
 ## Lifetime, 2026-03-25 to 2026-11-20 (`PLATFORM_PNL_RECONCILIATION.txt`)
