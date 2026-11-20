@@ -503,3 +503,13 @@ statement was wrong. Requote rounds ran roughly every 12 s until t≈68 s.
 
 Arm token empty, `L5_SHADOW_ONLY=1`, probe and campaign documents empty, envelope expired.
 Lane resident, `stored_state MONITOR`, `can_submit false`. Watchdog healthy, 0 open orders.
+
+### Timeout fix (prepared, not deployed)
+
+`read_book` in `src/l5_btc5m_runner.py` wraps the trade loop's public book GET. A failed read
+becomes a book with no quote (`BOOK_READ_FAILED:<type>`), which the controller already holds on
+as `BOOK_UNUSABLE` with cancel, so resting quotes are pulled and the next step reads again.
+The request is read-only, so no order outcome is uncertain; order submit and cancel timeouts
+were already handled as `SUBMIT_UNCERTAIN` in the executor and are unchanged.
+Tests: `tests/test_l5_btc5m_book_read_failure.py` (18; 9 fail with the guard removed).
+`tests/test_l5_btc5m_live_loop.py` has 11 failures that predate this change.

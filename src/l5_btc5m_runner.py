@@ -327,6 +327,43 @@ def public_book(market: str, *, fetch: Optional[Callable[[str], Any]] = None
     return out
 
 
+BOOK_READ_FAILED = "BOOK_READ_FAILED"
+
+
+def read_book(book_fn: Callable[[str], Any], market: str) -> Dict[str, Any]:
+    """One book read that cannot end the trading process.
+
+    THE DEFECT THIS FIXES. Live window 2026-11-20 14:20Z: the public market
+    record GET in `public_book` hit its 3 s read timeout at 14:24:27Z and
+    the `TimeoutError` rose through `trade()` and out of `main`. The process
+    exited 33 s before the window closed, skipping `close()`, with ARMED
+    still on disk.
+
+    WHAT A FAILED READ MEANS. This request is a GET of public data: it
+    places, cancels and changes nothing, so its failure says nothing about
+    any order. It means only that this step has NO BOOK. A step with no
+    book is one the controller already handles, and handles closed:
+    `decide` returns HOLD `BOOK_UNUSABLE` with cancel=True, so resting
+    quotes are pulled rather than left priced off a book nobody can see.
+    Nothing is retried here; the next step, STEP_S later, reads again, and
+    the bound on each attempt stays the request's own timeout.
+
+    The answer is never a guessed or remembered quote: bid, ask and age are
+    None, which no pricing path accepts.
+    """
+    try:
+        book = book_fn(market)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"bid": None, "ask": None, "age_s": None,
+                "reason": "%s:%s" % (BOOK_READ_FAILED, type(exc).__name__)}
+    if not isinstance(book, Mapping):
+        return {"bid": None, "ask": None, "age_s": None,
+                "reason": "%s:NOT_A_BOOK" % BOOK_READ_FAILED}
+    return dict(book)
+
+
 def clear_latch_if_owner_asked(ex: Any, now: dt.datetime
                                 ) -> Optional[Dict[str, Any]]:
     """Run the owner's latch reset, if a reset document is set. Else None.
@@ -1659,7 +1696,9 @@ class Session:
                     "cancelled": [c["venue_order_id"]
                                   for c in rep.get("cancelled") or ()]})
             else:
-                book = self.book_fn(self.market)
+                #: A FAILED READ IS A STEP WITH NO BOOK, never the end of
+                #: the process. See `read_book`.
+                book = read_book(self.book_fn, self.market)
                 est = self.p_fn(self.market, ws, now) or {}
                 p_up = est.get("p_up") if est.get("ok") else None
                 #: TOP-OF-BOOK SIZE, PROMOTED FROM THE LOG TO THE
@@ -1779,6 +1818,7 @@ class Session:
                     "t_in_window_s": round(now - ws, 2),
                     "late": _late,
                     "bid": book.get("bid"), "ask": book.get("ask"),
+                    "book_reason": book.get("reason"),
                     "p_up": p_up, "p_reason": est.get("reason"),
                     "action": rep.get("action"), "why": rep.get("why"),
                     "placed": [(p["side"], p["price"], p["qty"],
