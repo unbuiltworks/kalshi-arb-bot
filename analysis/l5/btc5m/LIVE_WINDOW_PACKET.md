@@ -546,3 +546,23 @@ Boot at 16:14:04Z: stored state `MONITOR` (not latched), `L5_BTC5M_ARM` refused
 `ENVELOPE:ENVELOPE_EXPIRED`, resident with `can_submit false`, settlement recovery found
 nothing pending and exposure 0, no traceback. Watchdog 16:14:29Z: 0 open orders, no halt,
 all three registries OK (the lane's registry was unreachable for one sweep during the restart).
+
+### Readiness check for a second window (2026-11-20 16:43Z) — economic gate is the blocker
+
+Account risk (`l5-pmus-live` heartbeat 16:43:22Z), all clear, nothing reset:
+cumulative realized −$39.4794 vs $75 ceiling; UTC-day −$0.0114 vs $50 halt; portfolio drawdown
+$0.0114 of $1.00 (anchor $321.4782); equity baseline drawdown $0.0114 of $1.00; cash $321.4668.
+Tightest loss room $0.9886, above a $0.60 window exposure.
+
+Execution: `l5-btc5m-live` on `27cbdb32b` (deployment `1dad5d3a`), `MONITOR`,
+`can_submit false`, no latch; watchdog 0 open orders, no halt, registries OK.
+Effective config at boot: STRADDLE, book-relative, clip $0.05, requote 2 ticks, pair ceiling
+0.99, max side $0.30, max unmatched $0.10, window loss $0.20, live order bound 2, taker off.
+
+Economic eligibility: NOT met by the normal gate. `p_pair_natural_set`, `p_complete_set`,
+`p_lone_win_set` are all false and no conditional-on-fill estimate exists to attest, so the
+gate answers `ENTRY_EV_P_PAIR_NATURAL_NOT_SET`. With the gate's own arithmetic (maker fee 0,
+6 cents adverse selection on a lone leg, lone leg otherwise fair), a 0.99 pair needs
+p_pair_natural >= ~0.86 to be positive. The 14:20Z window, by quote round: 5 filled legs, 2 of
+them in a round where the partner also filled (0.40, n=5). Too few to attest; it does not
+support the threshold. The 14:20Z window ran only under the owner's one-window EV waiver.
