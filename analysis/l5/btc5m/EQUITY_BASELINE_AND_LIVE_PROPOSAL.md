@@ -26,8 +26,8 @@ About $22 between the corrected figure and cash is still unexplained.
 
 ## 2. What is built (code only, not deployed)
 
-**`l5-pmus-live`** — commit `b06342976e698a2155ae771b5f5ecf13534f38e1`
-(tree `e3dd6a2e…`), one commit on the deployed `3390246e0`; kept here as
+**`l5-pmus-live`** — see section 5 for the pinned release (it supersedes
+the `b06342976e` first named here); kept here as
 `patches/pmus-live-equity-baseline.on-3390246e0.patch`.
 
 * Baseline record `L5_EQUITY_BASELINE`: id, timestamp, buying power,
@@ -69,9 +69,8 @@ after). 26 deliberate breakages, each fails at least one test.
 One existing test fixture was changed: the BTC5m account-risk fixture now
 includes the two blocks, because the reader requires them.
 
-Not shown: any of this against the real venue. The transfer check stops
-after two consecutive feed pages older than the baseline by a day; the feed
-is not strictly ordered, so that margin is an assumption.
+Not shown: any of this against the real venue. The transfer check's date
+margin was removed on review; see section 5.
 
 ## 3. What still blocks a window, and the decision each needs
 
@@ -93,8 +92,8 @@ policy. It costs one more build and one approved ledger write.
 | maximum additional loss | **$1.00**, proposed. Set as both the baseline's `max_drawdown_usd` and the drawdown limit (anchor moved to the starting equity, allowance $1.00). The dollar loss allowed from here falls from "none" to $1.00; the old anchor's $15.20 stays on the record |
 | why $1.00 | the window's own ceiling is $0.20; the campaign's approved exposure ($0.60) must fit inside the remaining room or the lane refuses to start |
 | window | `cpc-btc-updown-5m-2026-11-20-1500z`, 15:00-15:05Z, or any later single window |
-| BTC5m build | this branch at the commit that adds the equity gate (stated in the report); supersedes `35224ec` |
-| service build | `b06342976e` |
+| BTC5m build | the commit `release/l5-btc5m-equity-gate-20261120` points to (section 5); supersedes `35224ec` |
+| service build | `30c639da67e0` (section 5) |
 | orders | maker only, UP and DOWN together, requote at 2 ticks, 240s order age, clip $0.05, per side $0.30, unmatched $0.10, two live orders, window loss ceiling $0.20, 60 submissions |
 | watchdog | independent, 300s order age, exact-id cancel, healthy at 00:11Z with 0 open orders |
 | unchanged | $50 daily halt; $75 cumulative ceiling (subject to section 3) |
@@ -104,3 +103,58 @@ policy. It costs one more build and one approved ledger write.
 gate decision; the baseline document and drawdown setting; the BTC5m
 configuration; arming for the one window. After the window: actual fills and
 settled net P&L from venue cashflows.
+
+## 5. Release preparation, 2026-11-20 (owner-approved: preparation and testing only)
+
+Nothing deployed. No ledger write, limit change or arming.
+
+| service | branch | commit | base (deployed now) | code files changed |
+|---|---|---|---|---|
+| `l5-pmus-live` | `release/l5-pmus-live-equity-baseline-20261120` | `30c639da67e036b5712382f3175fbb75381fff0e` | `3390246e0` | new `l5_equity_baseline.py`, `l5_equity_feed.py`; `l5_pmus_live_runner.py` (+122); Dockerfile (+2); three test files |
+| `l5-btc5m-live` | `release/l5-btc5m-equity-gate-20261120` | the commit that branch points to (the one containing this section) | `35224ec` | `l5_btc5m_runner.py` (+36); its test file |
+
+**A mistake in the first push of the service release, caught by the
+regression run on the pushed commit.** `ccc479e50` carried the earlier
+transfer check: a stray file revert during my mutation testing had dropped
+the rewrite, and I had not read the local result that showed it. Three tests
+failed on the pushed commit. `56dfa0b71` restores the rewrite; `30c639da6`
+adds one assertion. The branch was not force-pushed; all three commits are
+on it. Regression on a fresh checkout of `56dfa0b71`: 12 failed / 2446
+passed, the same twelve as the base. `30c639da6` changes one test line; the
+186 adjacent tests pass on it.
+
+**Transfer completeness (the owner's condition).** The date-margin stop is
+gone. A read counts only when the venue ends the feed with an explicit
+`eof`; a page with no cursor and no `eof`, or the page limit, is incomplete
+and blocks. The cost: a full read is a few hundred pages, so it repeats
+every 15 minutes and goes stale after 35. Between reads a new deposit is
+unseen and looks like a gain, so a gain now never adds room beyond the
+allowance; an unseen deposit can mask losses only up to its own size until
+the next read. A new withdrawal looks like a loss, the safe direction.
+
+**The correction, checked against the evidence, not built.** For the 40
+readable rows inside the gate's figure:
+
+| check | result |
+|---|---|
+| ledger quantity is contained in the venue's fills, both sides | 40 of 40 |
+| venue shows less than the ledger on any side | 0 |
+| every side the ledger holds is one it never had a cost for | 40 of 40 |
+| venue quantity equal on both sides (a full pair) | 39; one unbalanced |
+| fees on the venue's fills | $0.00 on every leg, none unreadable |
+| settlement value readable (0 or 1) | 40 of 40 |
+| concentration | largest single row +$5.60; top 8 are +$40.40 of the +$97.32 |
+
+The existing correction refuses these because it requires the ledger's
+quantity to equal the venue's (gross, or net). Here the venue holds more:
+the ledger recorded one leg and never the other. A rule for this case would
+take quantity and cost from the venue's fills, value redemption on those
+fills (a pair pays $1 either way), consume each trade id once so no fill is
+used twice, and be limited to an owner-approved list naming each market
+with the exact venue quantity and cost in the evidence file. The two
+unreadable rows stay at the bound. Building that rule and applying it are
+each a separate approval.
+
+**The $1.00 allowance is a new capital-risk decision**, as the owner noted:
+it authorizes loss after the earlier $15 limit was reached. It is not an
+accounting change and nothing in these releases sets it.

@@ -1,8 +1,8 @@
-From b06342976e698a2155ae771b5f5ecf13534f38e1 Mon Sep 17 00:00:00 2001
+From ccc479e50501be0c433c16d03fb48a6268b58072 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Fri, 20 Nov 2026 00:54:44 +0000
-Subject: [PATCH] l5-pmus-live: a venue equity baseline, transfer detection,
- and the equity controls published for a second strategy
+Subject: [PATCH 1/3] l5-pmus-live: a venue equity baseline, transfer
+ detection, and the equity controls published for a second strategy
 
 l5_equity_baseline (pure): an owner-written baseline record (venue buying
 power, positions, zero open orders, timestamp, and the historical figures it
@@ -12,8 +12,8 @@ beside it, added to nothing. Malformed is INVALID and refuses.
 
 l5_equity_feed: a paced GET-only read of the activity feed for deposits,
 transfers and bonuses since the baseline. Amounts are not interpreted: any
-such row, an undated one, or a read that does not reach the baseline is a
-refusal until the owner writes a new baseline.
+such row, an undated one, or a read the venue did not itself end (explicit
+eof) is a refusal until the owner writes a new baseline. A gain adds no room.
 
 Runner: the account risk record now also carries portfolio_drawdown and
 equity_baseline, each with its own refusal, computed on a value withheld
@@ -22,19 +22,19 @@ positions are unreadable. Added keys only. This service's own gates, the
 ledger and every limit are unchanged; nothing is read unless a baseline
 document is set.
 
-94 new tests. Not deployed.
+98 new tests. Not deployed.
 
 Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
 ---
  deploy/l5_pmus_live/Dockerfile      |   2 +
- src/l5_equity_baseline.py           | 309 ++++++++++++++++++++++++++++
+ src/l5_equity_baseline.py           | 314 ++++++++++++++++++++++++++++
  src/l5_equity_feed.py               | 140 +++++++++++++
  src/l5_pmus_live_runner.py          | 122 +++++++++++
- tests/test_l5_equity_baseline.py    | 280 +++++++++++++++++++++++++
- tests/test_l5_equity_feed.py        | 181 ++++++++++++++++
+ tests/test_l5_equity_baseline.py    | 291 ++++++++++++++++++++++++++
+ tests/test_l5_equity_feed.py        | 182 ++++++++++++++++
  tests/test_l5_equity_publication.py | 291 ++++++++++++++++++++++++++
- 7 files changed, 1325 insertions(+)
+ 7 files changed, 1342 insertions(+)
  create mode 100644 src/l5_equity_baseline.py
  create mode 100644 src/l5_equity_feed.py
  create mode 100644 tests/test_l5_equity_baseline.py
@@ -56,10 +56,10 @@ index 64d5163b7..cc6c0d09d 100644
  # would NOT fail the boot -- it would report PROBE_FAILED:
 diff --git a/src/l5_equity_baseline.py b/src/l5_equity_baseline.py
 new file mode 100644
-index 000000000..fde48d136
+index 000000000..3f76dd643
 --- /dev/null
 +++ b/src/l5_equity_baseline.py
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,314 @@
 +"""A venue-confirmed EQUITY BASELINE and the period measured from it.
 +
 +WHY (owner direction 2026-11-20). The account-wide loss figure is a ledger
@@ -311,8 +311,13 @@ index 000000000..fde48d136
 +            transfers=transfers_detail)
 +        if equity_now is not None and net_transfers is not None:
 +            ch = equity_now - doc["equity_usd"] - net_transfers
++            #: A GAIN ADDS NO ROOM. Room is what may still be lost from the
++            #: baseline, never more than the allowance: a rise in equity --
++            #: which is also what a not-yet-seen deposit looks like -- must
++            #: not become permission to lose more.
 +            out.update(period_change_usd=str(ch), drawdown_usd=str(-ch),
-+                       room_usd=str(doc["max_drawdown_usd"] + ch))
++                       room_usd=str(doc["max_drawdown_usd"]
++                                    + min(D(0), ch)))
 +    out["refusal"] = refusal(doc, equity_now, net_transfers)
 +    out["labels"] = (
 +        "equity = buying power + min(UP,DOWN) per market; an unmatched "
@@ -371,7 +376,7 @@ index 000000000..fde48d136
 +                       "neither a confirmed loss nor a confirmed profit.")}
 diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
 new file mode 100644
-index 000000000..0d8b1ac41
+index 000000000..03fd27474
 --- /dev/null
 +++ b/src/l5_equity_feed.py
 @@ -0,0 +1,140 @@
@@ -480,7 +485,7 @@ index 000000000..0d8b1ac41
 +                if rec is not None:
 +                    w["rows"].append(rec)
 +            w["old"] = w["old"] + 1 if (times and max(times) < floor) else 0
-+            if ended in ("eof", "no_cursor"):
++            if ended == "eof":
 +                return self._finish(now, floor, "END_OF_FEED")
 +            if w["old"] >= OLD_PAGES:
 +                return self._finish(now, floor, "TIME_FLOOR_WITH_MARGIN")
@@ -678,10 +683,10 @@ index 48503df3b..5b4386bbc 100644
          self.reconcile_if_needed(now)
 diff --git a/tests/test_l5_equity_baseline.py b/tests/test_l5_equity_baseline.py
 new file mode 100644
-index 000000000..815aa5dc6
+index 000000000..b7c02710a
 --- /dev/null
 +++ b/tests/test_l5_equity_baseline.py
-@@ -0,0 +1,280 @@
+@@ -0,0 +1,291 @@
 +"""The equity baseline: a venue-confirmed starting point that erases nothing.
 +
 +Pure functions. What matters: a baseline cannot be malformed into force, a
@@ -962,12 +967,23 @@ index 000000000..815aa5dc6
 +    assert EB.refusal(d, D("323.4782"), D("10")) \
 +        == "EQUITY_DRAWDOWN_LIMIT:10.0000>=5"
 +    assert EB.refusal(d, D("313.4782"), D("-10")) is None
++
++
++def test_a_gain_never_adds_room():
++    """Equity above the baseline -- which is also what an unseen deposit
++    looks like -- leaves room at the allowance, not above it."""
++    d = read(doc())
++    up = EB.line(d, D("373.4782"), D(0))
++    assert up["period_change_usd"] == "50.0000"
++    assert up["room_usd"] == "5" and up["refusal"] is None
++    down = EB.line(d, D("321.4782"), D(0))
++    assert down["room_usd"] == "3.0000"
 diff --git a/tests/test_l5_equity_feed.py b/tests/test_l5_equity_feed.py
 new file mode 100644
-index 000000000..af75dbdeb
+index 000000000..652b317fd
 --- /dev/null
 +++ b/tests/test_l5_equity_feed.py
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,182 @@
 +"""The transfer watch: proof that no money moved, or a refusal."""
 +from __future__ import annotations
 +
@@ -1031,31 +1047,32 @@ index 000000000..af75dbdeb
 +    assert verdict(w, now)["net_usd"] == D(0)
 +
 +
-+def test_it_stops_after_two_consecutive_pages_older_than_the_margin():
++def test_old_pages_are_never_proof_only_the_end_of_the_feed_is():
++    """The feed is not ordered. A deposit served after any number of pages
++    of old rows must still be seen, so nothing but the venue ending the
++    feed stops the read."""
 +    feed = Feed([[trade("2026-11-20T00:40:00Z")], old_page(1), old_page(3),
-+                 [dep("2026-10-01T00:00:00Z")], old_page(5)], eof=False)
++                 old_page(5), old_page(7),
++                 [dep("2026-11-20T00:45:00Z")]])
 +    w, now = run(feed)
-+    v = w.view(SINCE, now)
-+    assert v["by"] == "TIME_FLOOR_WITH_MARGIN" and v["pages"] == 3
-+    assert verdict(w, now)["net_usd"] == D(0)
-+
-+
-+def test_one_old_page_is_not_enough_because_the_feed_is_not_ordered():
-+    """A deposit served AFTER a page of old rows must still be seen."""
-+    feed = Feed([old_page(1),
-+                 [dep("2026-11-20T00:45:00Z"), trade(OLD % 9)],
-+                 old_page(3), old_page(5)], eof=False)
-+    w, now = run(feed)
-+    out = verdict(w, now)
-+    assert out["net_usd"] is None
-+    assert out["why"] == "MONEY_MOVED_SINCE_BASELINE"
-+
-+
-+def test_rows_inside_the_margin_do_not_count_as_old():
-+    recent = [trade("2026-11-19T12:00:00Z")]        # older than since, < 24h
-+    feed = Feed([recent, recent, recent, [dep("2026-11-20T00:50:00Z")]])
-+    w, now = run(feed)
++    assert len(feed.reads) == 6
++    assert w.view(SINCE, now)["by"] == "END_OF_FEED"
 +    assert verdict(w, now)["why"] == "MONEY_MOVED_SINCE_BASELINE"
++
++
++def test_a_feed_that_never_ends_is_never_trusted():
++    feed = Feed([old_page(1), old_page(3), old_page(5), old_page(7)],
++                eof=False)
++    w, now = run(feed)
++    assert w.view(SINCE, now)["by"] == "INCOMPLETE"
++    assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
++
++
++def test_there_is_no_date_based_stop_in_the_code():
++    src = (ROOT / "src" / "l5_equity_feed.py").read_text()
++    code = src[src.index("class TransferWatch"):]
++    for word in ("floor", "MARGIN", "max(times)", "row_time(r)"):
++        assert word not in code, word
 +
 +
 +@pytest.mark.parametrize("kind", ["activity_type_account_deposit",
@@ -1446,6 +1463,174 @@ index 000000000..bbe625263
 +    d = (ROOT / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
 +    for m in ("l5_equity_baseline.py", "l5_equity_feed.py"):
 +        assert "COPY src/%s src/%s" % (m, m) in d
+-- 
+2.43.0
+
+
+From 56dfa0b7178ccf1ea6a43cd7a17d2b8cff5f2ed8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 01:12:22 +0000
+Subject: [PATCH 2/3] l5-pmus-live: the transfer read is complete only when the
+ venue ends the feed
+
+The release commit before this one carried the earlier transfer check, which
+stopped after two pages a day older than the baseline. The feed is not
+strictly ordered, so that was an unmeasured assumption. It is removed: a
+read counts only on the venue's explicit eof; a page with no cursor and no
+eof, or MAX_PAGES, is INCOMPLETE and refuses. Full reads repeat every 15
+minutes and go stale after 35.
+
+The three tests for this were already in the previous commit and failed
+there; they pass here.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_equity_feed.py | 65 +++++++++++++++++++++----------------------
+ 1 file changed, 31 insertions(+), 34 deletions(-)
+
+diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
+index 03fd27474..378fd862c 100644
+--- a/src/l5_equity_feed.py
++++ b/src/l5_equity_feed.py
+@@ -5,14 +5,22 @@ keeps the NON-trading rows (deposits, transfers, bonuses) and how far back
+ the read is good for. `l5_equity_baseline.net_transfers` turns that into
+ either "nothing moved" or a refusal. This module decides nothing.
+ 
+-HOW FAR BACK IS FAR ENOUGH. The feed is newest-first but NOT strictly
+-ordered (the full walk of 2026-11-20 reported `monotonic: false`), so the
+-first row older than the baseline proves nothing. The read stops only at the
+-end of the feed, or after `OLD_PAGES` consecutive pages whose every dated
+-row is more than `MARGIN_S` older than the baseline. That margin is an
+-ASSUMPTION about how far out of order the venue serves rows; it is stated in
+-the result (`by`) and not hidden. A read that hits `MAX_PAGES` first is
+-incomplete, and incomplete refuses.
++HOW FAR BACK IS FAR ENOUGH: THE END OF THE FEED, AND NOTHING LESS. The feed
++is newest-first but NOT strictly ordered (the full walk of 2026-11-20
++reported `monotonic: false`), so no row's date proves that everything after
++the baseline has been served. An earlier version stopped after two pages
++older than the baseline by a day; that rested on an unmeasured assumption
++about how far out of order the venue serves rows, and it was removed. The
++only read that counts is one the venue itself ended with an explicit `eof`.
++A read that hits `MAX_PAGES`, or gets a page with no cursor and no `eof`, is
++INCOMPLETE, and incomplete refuses.
++
++THE COST OF THAT, STATED. A full read is a few hundred pages, so it is
++repeated every `REFRESH_S`, not every tick. Between reads a NEW deposit is
++unseen for up to that long and would read as a gain; a new withdrawal reads
++as a loss, which is the safe direction. `l5_equity_baseline` therefore never
++lets a gain add room beyond the baseline's allowance, so an unseen deposit
++can mask losses only up to its own size and only until the next read.
+ 
+ It writes no state anywhere, calls no ledger method and makes no request but
+ the feed's GET. Its result lives in memory and goes stale after `STALE_S`,
+@@ -21,17 +29,17 @@ after which it again refuses.
+ from __future__ import annotations
+ 
+ import datetime as dt
+-from typing import Any, Dict, List, Mapping, Optional
++from typing import Any, Dict, Mapping, Optional
+ 
+ from src import l5_cost_basis_audit as CBA
+ from src import l5_venue_cost_attestation as VCA
+ 
+-REFRESH_S = 300.0
+-STALE_S = 900.0
++REFRESH_S = 900.0
++STALE_S = 2100.0
+ PAGES_PER_STEP = 2
+-MAX_PAGES = 80
+-OLD_PAGES = 2
+-MARGIN_S = 86400.0
++MAX_PAGES = 800
++#: what a read the venue ended is complete back to
++BEGINNING = "1970-01-01T00:00:00+00:00"
+ ERROR_BACKOFF_S = 60.0
+ 
+ TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
+@@ -77,10 +85,8 @@ class TransferWatch:
+         if self._walk is None:
+             if self._seen_t is not None and now - self._seen_t < REFRESH_S:
+                 return
+-            self._walk = {"cursor": None, "pages": 0, "rows": [],
+-                          "old": 0}
++            self._walk = {"cursor": None, "pages": 0, "rows": []}
+         w = self._walk
+-        floor = since - dt.timedelta(seconds=MARGIN_S)
+         for _ in range(PAGES_PER_STEP):
+             got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
+                                       cursor=w["cursor"], rows=[],
+@@ -92,34 +98,25 @@ class TransferWatch:
+                 self.next_allowed = now + ERROR_BACKOFF_S
+                 return
+             w["pages"] = int(got.get("pages") or w["pages"] + 1)
+-            times: List[dt.datetime] = []
+             for r in got.get("rows") or ():
+-                if not isinstance(r, Mapping):
+-                    continue
+-                t = VCA.row_time(r)
+-                if t is not None:
+-                    times.append(t)
+                 rec = non_trading(r)
+                 if rec is not None:
+                     w["rows"].append(rec)
+-            w["old"] = w["old"] + 1 if (times and max(times) < floor) else 0
++            #: ONLY the venue's explicit `eof`. A page that merely carries no
++            #: cursor is what a truncated answer looks like too; the full
++            #: walk of 2026-11-20 ended on `eof`, so that is what is required.
+             if ended == "eof":
+-                return self._finish(now, floor, "END_OF_FEED")
+-            if w["old"] >= OLD_PAGES:
+-                return self._finish(now, floor, "TIME_FLOOR_WITH_MARGIN")
++                return self._finish(now, BEGINNING, "END_OF_FEED")
+             nxt = got.get("next_cursor")
+-            if not nxt or w["pages"] >= MAX_PAGES:
++            if ended == "no_cursor" or not nxt or w["pages"] >= MAX_PAGES:
+                 return self._finish(now, None, "INCOMPLETE")
+             w["cursor"] = str(nxt)
+ 
+-    def _finish(self, now: float, back: Optional[dt.datetime],
+-                by: str) -> None:
++    def _finish(self, now: float, back: Optional[str], by: str) -> None:
+         w = self._walk or {}
+-        self._seen = {"complete_back_to": (None if back is None
+-                                           else back.isoformat()),
++        self._seen = {"complete_back_to": back,
+                       "rows": list(w.get("rows") or ()),
+-                      "by": by, "pages": w.get("pages"),
+-                      "margin_s": MARGIN_S}
++                      "by": by, "pages": w.get("pages")}
+         self._seen_t = now
+         self._walk = None
+         self.last_error = None
+-- 
+2.43.0
+
+
+From 30c639da67e036b5712382f3175fbb75381fff0e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 01:15:41 +0000
+Subject: [PATCH 3/3] tests: the transfer read stops at the page limit, not
+ after it
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ tests/test_l5_equity_feed.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tests/test_l5_equity_feed.py b/tests/test_l5_equity_feed.py
+index 652b317fd..af25739a1 100644
+--- a/tests/test_l5_equity_feed.py
++++ b/tests/test_l5_equity_feed.py
+@@ -111,6 +111,7 @@ def test_a_feed_too_long_to_finish_is_incomplete_and_refuses(monkeypatch):
+     w, now = run(feed)
+     assert w.view(SINCE, now)["by"] == "INCOMPLETE"
+     assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
++    assert len(feed.reads) == 3            # stopped AT the page limit
+ 
+ 
+ def test_a_transport_error_keeps_refusing_and_backs_off():
 -- 
 2.43.0
 
