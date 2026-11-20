@@ -5,14 +5,22 @@ keeps the NON-trading rows (deposits, transfers, bonuses) and how far back
 the read is good for. `l5_equity_baseline.net_transfers` turns that into
 either "nothing moved" or a refusal. This module decides nothing.
 
-HOW FAR BACK IS FAR ENOUGH. The feed is newest-first but NOT strictly
-ordered (the full walk of 2026-11-20 reported `monotonic: false`), so the
-first row older than the baseline proves nothing. The read stops only at the
-end of the feed, or after `OLD_PAGES` consecutive pages whose every dated
-row is more than `MARGIN_S` older than the baseline. That margin is an
-ASSUMPTION about how far out of order the venue serves rows; it is stated in
-the result (`by`) and not hidden. A read that hits `MAX_PAGES` first is
-incomplete, and incomplete refuses.
+HOW FAR BACK IS FAR ENOUGH: THE END OF THE FEED, AND NOTHING LESS. The feed
+is newest-first but NOT strictly ordered (the full walk of 2026-11-20
+reported `monotonic: false`), so no row's date proves that everything after
+the baseline has been served. An earlier version stopped after two pages
+older than the baseline by a day; that rested on an unmeasured assumption
+about how far out of order the venue serves rows, and it was removed. The
+only read that counts is one the venue itself ended with an explicit `eof`.
+A read that hits `MAX_PAGES`, or gets a page with no cursor and no `eof`, is
+INCOMPLETE, and incomplete refuses.
+
+THE COST OF THAT, STATED. A full read is a few hundred pages, so it is
+repeated every `REFRESH_S`, not every tick. Between reads a NEW deposit is
+unseen for up to that long and would read as a gain; a new withdrawal reads
+as a loss, which is the safe direction. `l5_equity_baseline` therefore never
+lets a gain add room beyond the baseline's allowance, so an unseen deposit
+can mask losses only up to its own size and only until the next read.
 
 It writes no state anywhere, calls no ledger method and makes no request but
 the feed's GET. Its result lives in memory and goes stale after `STALE_S`,
@@ -21,17 +29,17 @@ after which it again refuses.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 from src import l5_cost_basis_audit as CBA
 from src import l5_venue_cost_attestation as VCA
 
-REFRESH_S = 300.0
-STALE_S = 900.0
+REFRESH_S = 900.0
+STALE_S = 2100.0
 PAGES_PER_STEP = 2
-MAX_PAGES = 80
-OLD_PAGES = 2
-MARGIN_S = 86400.0
+MAX_PAGES = 800
+#: what a read the venue ended is complete back to
+BEGINNING = "1970-01-01T00:00:00+00:00"
 ERROR_BACKOFF_S = 60.0
 
 TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
@@ -77,10 +85,8 @@ class TransferWatch:
         if self._walk is None:
             if self._seen_t is not None and now - self._seen_t < REFRESH_S:
                 return
-            self._walk = {"cursor": None, "pages": 0, "rows": [],
-                          "old": 0}
+            self._walk = {"cursor": None, "pages": 0, "rows": []}
         w = self._walk
-        floor = since - dt.timedelta(seconds=MARGIN_S)
         for _ in range(PAGES_PER_STEP):
             got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
                                       cursor=w["cursor"], rows=[],
@@ -92,34 +98,25 @@ class TransferWatch:
                 self.next_allowed = now + ERROR_BACKOFF_S
                 return
             w["pages"] = int(got.get("pages") or w["pages"] + 1)
-            times: List[dt.datetime] = []
             for r in got.get("rows") or ():
-                if not isinstance(r, Mapping):
-                    continue
-                t = VCA.row_time(r)
-                if t is not None:
-                    times.append(t)
                 rec = non_trading(r)
                 if rec is not None:
                     w["rows"].append(rec)
-            w["old"] = w["old"] + 1 if (times and max(times) < floor) else 0
+            #: ONLY the venue's explicit `eof`. A page that merely carries no
+            #: cursor is what a truncated answer looks like too; the full
+            #: walk of 2026-11-20 ended on `eof`, so that is what is required.
             if ended == "eof":
-                return self._finish(now, floor, "END_OF_FEED")
-            if w["old"] >= OLD_PAGES:
-                return self._finish(now, floor, "TIME_FLOOR_WITH_MARGIN")
+                return self._finish(now, BEGINNING, "END_OF_FEED")
             nxt = got.get("next_cursor")
-            if not nxt or w["pages"] >= MAX_PAGES:
+            if ended == "no_cursor" or not nxt or w["pages"] >= MAX_PAGES:
                 return self._finish(now, None, "INCOMPLETE")
             w["cursor"] = str(nxt)
 
-    def _finish(self, now: float, back: Optional[dt.datetime],
-                by: str) -> None:
+    def _finish(self, now: float, back: Optional[str], by: str) -> None:
         w = self._walk or {}
-        self._seen = {"complete_back_to": (None if back is None
-                                           else back.isoformat()),
+        self._seen = {"complete_back_to": back,
                       "rows": list(w.get("rows") or ()),
-                      "by": by, "pages": w.get("pages"),
-                      "margin_s": MARGIN_S}
+                      "by": by, "pages": w.get("pages")}
         self._seen_t = now
         self._walk = None
         self.last_error = None
