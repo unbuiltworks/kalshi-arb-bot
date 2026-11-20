@@ -978,3 +978,36 @@ period and volume behind Bonereaper's rebate credits (to state his net per dolla
   deployed `cfac6707c`.
 - BTC5m: `release/l5-btc5m-accounting-20261120` at `a87493baf0a3239358c9cb767fac0534e4eb9f9b`.
 - Order: `l5-pmus-live` first.
+
+## Accounting releases: deployment preflight plan (prepared 2026-11-20 ~20:20Z; NOT executed)
+
+Both disarmed. Neither changes a trading decision. Order matters.
+
+| Step | Service | Branch | Commit | Deployed now |
+|---|---|---|---|---|
+| 1 | `l5-pmus-live` | `release/l5-pmus-live-loss-publication-20261120` | `1e75294f3db6a7ba8bb67d07649dc89e80cc567b` | `cfac6707c` |
+| 2 | `l5-btc5m-live` | `release/l5-btc5m-accounting-20261120` | `a87493baf0a3239358c9cb767fac0534e4eb9f9b` | `27cbdb32b` |
+
+`l5-pmus-live` has no watch pattern and builds from `deploy/l5_pmus_live/Dockerfile`; the patch
+adds no module, so the image file list is unchanged. `l5-btc5m-live` builds only when
+`deploy/l5_btc5m_live/DEPLOY_TRIGGER` changes; the candidate changes it and adds
+`l5_btc5m_attribution.py` to its Dockerfile.
+
+Before step 1 (read-only): both services on the commits above; `l5-btc5m-live` stored state
+MONITOR, `can_submit false`; watchdog 0 open orders, no halt; `l5-pmus-live` halted, shadow-only,
+equity baseline and drawdown blocks without refusal.
+
+After step 1: same commit hash on the deployment; heartbeat and registry healthy; the
+account-risk record carries `retired_results_utc_day` and `lifetime_basis`; note
+`lifetime_basis.reconciled` (if false, the lane will add every loss in its history and may
+refuse on the cumulative ceiling: stop and report before step 2); every earlier key unchanged;
+watchdog still reads the registry. No variable is changed. Roll back to `cfac6707c` on any
+failure.
+
+After step 2: commit hash; boot shows MONITOR, arming refused, `can_submit false`, no
+traceback; watchdog 0 open orders. The lane's risk reader runs only when armed, so the new
+lifetime figure is first visible at the next authorized window's preflight: read it there
+before any order. Roll back to `27cbdb32b` on any failure.
+
+Step 1 restarts `l5-pmus-live`; the BTC5m lane is disarmed, so the brief loss of the risk
+record blocks nothing. Each step needs the owner's explicit approval.
