@@ -237,6 +237,9 @@ HB_EVERY_S = 60.0
 #: the rest of the run and be reported as though it were current. One GET
 #: a minute against a 1.5 rps budget is negligible.
 CASH_REFRESH_S = 60.0
+#: the PUBLISHED equity value is withheld when buying power is older than
+#: this. Three refresh intervals: one missed read is tolerated, two are not.
+EQUITY_CASH_MAX_AGE_S = 180.0
 #: how often ONE order may be re-read. The tick is 3s and the old code
 #: polled every live order on every tick: with a full envelope that is 2.7
 #: GETs a second from this path alone, which is most of how we rate-limited
@@ -2886,6 +2889,119 @@ class Runner:
                            % type(exc).__name__] += 1
             except BaseException:                              # noqa: BLE001
                 pass
+
+    def maybe_watch_equity_transfers(self, now: float) -> None:
+        """READ-ONLY: while an equity baseline is set, keep reading the
+        venue's feed for money moving in or out since it.
+
+        Nothing is read unless `L5_EQUITY_BASELINE` is a valid document. It
+        calls no store method and writes nothing; its only request is the
+        activity feed's GET, two pages a tick, then idle for five minutes.
+        ANY failure is swallowed -- the published line then refuses, which
+        is the safe direction, and the tick goes on.
+        """
+        try:
+            from src import l5_equity_baseline as EB
+            from src import l5_equity_feed as EF
+            doc = EB.read_document()
+            if doc.get("state") != "ON":
+                return
+            watch = getattr(self, "_equity_watch", None)
+            if watch is None:
+                watch = EF.TransferWatch()
+                self._equity_watch = watch
+            watch.step(self.transport, doc["at_utc"], float(now))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["equity_watch_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
+    def equity_risk_lines(self, now: Optional[float] = None
+                          ) -> Dict[str, Any]:
+        """The venue-equity controls, PUBLISHED for another strategy.
+
+        Two blocks, each carrying its own `refusal`:
+
+          `portfolio_drawdown` -- the existing owner limit, evaluated on a
+          value that is None unless buying power was read within
+          EQUITY_CASH_MAX_AGE_S and no order state is uncertain. This
+          service's OWN gate is untouched and still reads its own value;
+          this is the copy a second strategy must honour, and it is the
+          stricter of the two.
+
+          `equity_baseline` -- the same value against the owner's baseline
+          document, with money moved in or out since it, and the period's
+          measured result beside the uncertain rows.
+
+        READ-ONLY, computed from what the tick already holds: no venue
+        request is made here, because this is served from the registry's
+        thread. Never raises; a failure is published as a refusal.
+        """
+        try:
+            from src import l5_portfolio_drawdown as PDD
+            from src import l5_equity_baseline as EB
+            t = time.time() if now is None else float(now)
+            why = None
+            age = (None if self.available_cash_t is None
+                   else t - self.available_cash_t)
+            val = None
+            if self.available_cash_usd is None or age is None:
+                why = "BUYING_POWER_NOT_READ"
+            elif age > EQUITY_CASH_MAX_AGE_S or age < -5:
+                why = "BUYING_POWER_STALE"
+            else:
+                unc = self.store.orders_uncertain()
+                if unc:
+                    why = "ORDER_STATE_UNCERTAIN"
+                else:
+                    val = PDD.worst_case_value(
+                        self.available_cash_usd,
+                        self.store.positions_by_market())
+                    if val is None:
+                        why = "POSITIONS_UNREADABLE"
+            doc = EB.read_document()
+            moved: Dict[str, Any] = {"net_usd": None, "why": "NOT_APPLICABLE"}
+            period = None
+            if doc.get("state") == "ON":
+                watch = getattr(self, "_equity_watch", None)
+                seen = (None if watch is None
+                        else watch.view(doc["at_utc"], t))
+                moved = EB.net_transfers(seen, doc["at_utc"])
+                moved["read"] = (None if seen is None else
+                                 {k: seen.get(k) for k in
+                                  ("by", "pages", "age_s", "last_error",
+                                   "complete_back_to")})
+                period = EB.period_realized(
+                    self.store.state.get("retired_markets") or {},
+                    doc["at_utc"])
+            net = moved.get("net_usd")
+            detail = {k: (str(v) if k == "net_usd" and v is not None else v)
+                      for k, v in moved.items()}
+            return {
+                "portfolio_drawdown": PDD.report(val),
+                "equity_baseline": dict(
+                    EB.line(doc, val, net, transfers_detail=detail),
+                    period=period),
+                "equity_value": {
+                    "usd": None if val is None else str(val),
+                    "unavailable_why": why,
+                    "buying_power_age_s": (None if age is None
+                                           else round(age, 1)),
+                    "max_age_s": EQUITY_CASH_MAX_AGE_S},
+            }
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            bad = "EQUITY_LINES_FAILED:%s" % type(exc).__name__
+            return {"portfolio_drawdown": {"state": "UNREADABLE",
+                                           "refusal": bad},
+                    "equity_baseline": {"state": "UNREADABLE",
+                                        "refusal": bad},
+                    "equity_value": {"usd": None, "unavailable_why": bad}}
 
     def maybe_diagnose_venue_costs(self, now: float) -> None:
         """READ-ONLY: print the venue's fills beside this ledger's figures
@@ -6548,6 +6664,9 @@ class Runner:
                                       else bool(-lifetime >= cum)),
             "operator_halt": bool(operator_halted()),
             "retired_markets": retired[-400:],
+            # the venue-equity controls a second strategy must also honour.
+            # Added keys only: every figure above is computed as before.
+            **self.equity_risk_lines(),
             "labels": ("the account-wide figures the 15-minute service's own "
                        "gates read, published so a second strategy cannot "
                        "hold a looser copy. Read-only."),
@@ -6872,6 +6991,8 @@ class Runner:
                 "labels": ("None is no reading, never unlimited. A number "
                            "only ADDS a refusal to the cash gate.")},
             "portfolio_drawdown": self.portfolio_drawdown_report(),
+            "equity_baseline": self.equity_risk_lines(self.now_t).get(
+                "equity_baseline"),
             "risk_gate": {
                 "measures": "worst-case loss over both settlements",
                 "max_usd_per_market": str(self.limits.max_usd_per_market),
@@ -11483,6 +11604,7 @@ class Runner:
         self.sweep_settlements()
         self.maybe_attest_venue_costs(now)
         self.maybe_diagnose_venue_costs(now)
+        self.maybe_watch_equity_transfers(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)
