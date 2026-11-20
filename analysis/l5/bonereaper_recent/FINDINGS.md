@@ -166,3 +166,38 @@ settled on OUR outcome. Discovery 11-17/18 (573 windows), validation
 - This is a transfer test of his observable entries, not a reconstruction
   of his signal: his decisions were made on Polymarket's book, and our
   quotes are sampled every ~10 s with no sizes.
+
+## Spot / price-to-beat / book discrepancy test, 2026-11-17..20
+
+Script `analysis/l5/btc5m/bonereaper_spot_discrepancy.py`, result
+`BONEREAPER_SPOT_DISCREPANCY_RESULT.txt`; pulls reproduced by
+`harvest_spot_and_tape.py` (the 27 MB all-trader tape is not committed).
+957 windows with spot; 42,025 of his taker buys ($1.85M), 4,570 maker
+buys ($0.27M), 1.08M buys by other takers ($16.2M).
+
+- 87% of his dollars are TAKER buys. Same window, same price band, his
+  taker buys earn 0.5 c/share LESS than other takers' (-0.0050 and
+  -0.0057 on the two halves; intervals reach zero). He has no selection
+  advantage over the crowd he trades beside.
+- Every taker, him included, earns +4 to +9 c/share before fees buying
+  at 0.50-0.85 and loses 3 to 9 c buying below 0.50, on both halves.
+- A fair value built from Gemini spot does not explain his entries and
+  is a worse forecast than the market price (buys where spot said
+  "cheap" lose 3-6 c). Gemini trades every ~3 s; 73% of buys have no
+  tick in the prior 3 s. The test of a sub-second spot lead is therefore
+  NOT answered. Missing source: a tick-level history of the settlement
+  feeds (Chainlink BTC/USD stream there, CF Benchmarks BRTI here) or of
+  Binance/Coinbase trades; none is reachable from this environment, and
+  no order-book history exists publicly for either venue.
+- Polymarket's last print does not lead our quotes in a usable way:
+  buying here when it is above our ask loses on both halves.
+
+## Candidate that held on other days: mid-priced favourite on our venue
+
+`favourite_band_holdout.py`, `FAVOURITE_BAND_HOLDOUT_RESULT.txt`. Rule:
+a side's ask is 0.50-0.70 at a ~10 s sample; buy at the next sample's ask.
+Found on 11-17..20 (+0.058 before fee, +0.037 after). On 11-11..16, not
+used to find it (1,387 windows): +0.034 [+0.021,+0.047] before fee,
++0.013 [-0.000,+0.026] after our 0.095 fee. Positive before fees on 9 of
+10 days. Not established after fees. Unknown: size available at the ask
+(the recorder logs none) and fills faster than 10 s.
