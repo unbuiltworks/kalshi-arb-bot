@@ -56,11 +56,12 @@ No profitability claim is made from Phase 1.
 
 PHASE 2, PROVE ECONOMICS (still current limits; needs a separate
 authorization for more windows).
-- Sample: per-window settled result has had a standard deviation of
-  about $0.05-0.06 at this size in replay. To distinguish a mean of
-  +$0.01 a window from zero at two standard errors takes about 120-150
-  settled windows; +$0.005 takes about 500. The number is recomputed
-  from the venue-confirmed spread after Phase 1.
+- Sample: the per-window settled result has a standard deviation of
+  $0.096 at this size in replay (1,091 windows). To distinguish a mean
+  of +$0.01 a window from zero at two standard errors takes about 370
+  settled windows (about 31 hours of consecutive windows); +$0.005 takes
+  about 1,500. The number is recomputed from the venue-confirmed spread
+  after Phase 1.
 - Pass when, on venue-confirmed fills and settlements only:
   settled net P&L per window is positive with a 95% interval above zero;
   the measured fill edge (price 30 s after a fill minus price paid) is
@@ -68,8 +69,8 @@ authorization for more windows).
   (matched and unmatched lines reported separately); drawdown never
   reaches the $1.00 allowance; every window reconciles.
 - Fail (stop and return to design) when cumulative settled loss reaches
-  the drawdown allowance, or the interval is entirely below zero after
-  100 windows.
+  the drawdown allowance, or the interval is entirely below zero at any
+  checkpoint of 100 windows.
 
 PHASE 3, INCREASE CAPACITY (owner decision, proposed only after Phase 2
 passes). One step at a time: double the clip and the caps together
