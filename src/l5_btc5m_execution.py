@@ -459,6 +459,48 @@ def _first(row: Mapping[str, Any], keys) -> Any:
     return None
 
 
+#: WHAT THE VENUE SAYS ABOUT ONE OF OUR ORDERS, kept as it was said.
+#:
+#: Observed 2026-11-21 (cpc-btc-updown-5m-2026-11-21-0620z): 13 of 20
+#: cancelled orders had no cancel of ours in the logs, and nothing recorded
+#: showed whether the venue treated the orders as post-only or when it
+#: matched them. The single-order read already returns that row; this keeps
+#: the descriptive part of it. It decides NOTHING -- no state, quantity or
+#: fee is read from here -- and it keeps only short scalar values whose key
+#: names a time, a reason, an order type, a liquidity flag or the manual
+#: indicator. Identifiers (account, user, position, client ids) are
+#: excluded by name.
+EVIDENCE_KEY_WORDS = ("time", "reason", "manual", "tif", "inforce", "post",
+                      "participate", "type", "liquidity", "maker", "taker",
+                      "state", "status", "avgpx", "text")
+EVIDENCE_KEY_EXCLUDE = ("account", "user", "position", "client", "owner",
+                        "key", "token", "secret", "sign")
+EVIDENCE_MAX_KEYS = 24
+EVIDENCE_MAX_CHARS = 64
+
+
+def venue_order_evidence(got: Any) -> Dict[str, Any]:
+    """Short descriptive scalars from a venue order row. Never raises."""
+    out: Dict[str, Any] = {}
+    if not isinstance(got, Mapping):
+        return out
+    for k in sorted(str(x) for x in got.keys()):
+        low = k.lower()
+        if any(w in low for w in EVIDENCE_KEY_EXCLUDE):
+            continue
+        if not any(w in low for w in EVIDENCE_KEY_WORDS):
+            continue
+        v = got.get(k)
+        if isinstance(v, Mapping):
+            v = v.get("value")
+        if v is None or isinstance(v, (list, tuple, dict, set)):
+            continue
+        out[k] = v if isinstance(v, bool) else str(v)[:EVIDENCE_MAX_CHARS]
+        if len(out) >= EVIDENCE_MAX_KEYS:
+            break
+    return out
+
+
 def live_halt_engaged() -> bool:
     return bool((os.environ.get(HALT_ENV) or "").strip())
 
@@ -2224,7 +2266,18 @@ class Btc5mExecutor:
             market = _first(row, ("marketSlug", "market_slug", "market", "slug"))
             if market is None or not str(market).strip():
                 return unknown("POSITION_MARKET_UNREADABLE")
-            bought, sold = _dec(row.get("qtyBought")), _dec(row.get("qtySold"))
+            #: THE DECIMAL FIELDS FIRST. The venue row carries both
+            #: `qtyBought` and `qtyBoughtDecimal`; contracts here are
+            #: fractional (0.05 clips) and the plain field is a WHOLE
+            #: number. Observed 2026-11-21 06:23:17Z: with 0.39 bought and
+            #: 0.56 sold in this lane's own market the plain fields read as
+            #: 0 and 1, so 1 - 0.95 = 0.05 contracts were charged as a
+            #: FOREIGN position for two steps. The same rounding reads a
+            #: genuinely foreign 0.40 as 0 -- under-counting, which is the
+            #: direction that matters. The account service has always read
+            #: the decimal field first (`VENUE_POSITION_BOUGHT_KEYS`).
+            bought = _dec(_first(row, ("qtyBoughtDecimal", "qtyBought")))
+            sold = _dec(_first(row, ("qtySoldDecimal", "qtySold")))
             net = _dec(_first(row, ("netPositionDecimal", "netPosition",
                                     "net_position")))
             if bought is not None and sold is not None:
@@ -2324,6 +2377,7 @@ class Btc5mExecutor:
                           "market": row["market"], "side": row["side"],
                           "qty": delta, "price": price, "cost": cost})
         row["venue_state"] = word or None
+        row["venue_evidence"] = venue_order_evidence(got)
         row["state"] = ((FILLED if cum == qty else CANCELLED) if terminal else LIVE)
         row.pop("uncertain_reason", None)
         return {"ok": True, "terminal": terminal, "filled": delta, "error": None}
@@ -2717,7 +2771,11 @@ class Btc5mExecutor:
             #: ORDER rather than the inventory aggregate, so a partial
             #: fill attributes exactly what filled and a fill that races a
             #: cancel attributes to whoever placed it.
-            "strategy": _strategy_of(order)}
+            "strategy": _strategy_of(order),
+            #: what this lane SENT, for the per-order record. The intent
+            #: is the only thing handed to the transport.
+            "post_only": intent.get("post_only"),
+            "mode": intent.get("mode")}
         if not self._save_or_halt():
             del self._ledger["orders"][coid]
             return refuse("LEDGER_WRITE_FAILED")

@@ -272,6 +272,59 @@ CAMPAIGN_ENV = "L5_BTC5M_CAMPAIGN"
 CA_MAX_ROLLING_WINDOWS = 8
 
 
+def order_table(mine: Mapping[str, Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """One row per order of this window, from the ledger. Never raises.
+
+    `sent_post_only` is what this lane SENT (the intent it recorded);
+    `venue` is what the venue's own order row said at the last read.
+    """
+    rows: List[Dict[str, Any]] = []
+    for coid in sorted(mine):
+        r = mine[coid]
+        try:
+            intent = r.get("intent") if isinstance(r.get("intent"),
+                                                   Mapping) else {}
+            rows.append({
+                "venue_order_id": r.get("venue_order_id"),
+                "side": r.get("side"), "price": r.get("price"),
+                "qty": r.get("qty"), "filled_qty": r.get("filled_qty"),
+                "state": r.get("state"),
+                "venue_state": r.get("venue_state"),
+                "cancel_requested": bool(r.get("cancel_requested")),
+                "cancel_sent_at": r.get("cancel_sent_at"),
+                "cancel_error": r.get("cancel_error"),
+                "sent_post_only": (r.get("post_only")
+                                   if r.get("post_only") is not None
+                                   else intent.get("post_only")),
+                "venue_fees": r.get("venue_fees"),
+                "venue": r.get("venue_evidence") or {}})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            rows.append({"client_order_id_unreadable": True,
+                         "error": type(exc).__name__})
+    return rows
+
+
+def last_traded_orders(ex: Any) -> Dict[str, Any]:
+    """The per-order table of the latest market this lane sent orders in."""
+    orders = ex.orders()
+    sent = {c: r for c, r in orders.items() if r.get("venue_order_id")}
+    if not sent:
+        return {"market": None, "orders": []}
+    market = max(str(r.get("market")) for r in sent.values())
+    mine = {c: r for c, r in sent.items() if str(r.get("market")) == market}
+    rows = order_table(mine)
+    return {"market": market, "count": len(rows),
+            "cancel_requested": sum(1 for r in rows
+                                    if r.get("cancel_requested")),
+            "ended_without_our_cancel": [
+                r.get("venue_order_id") for r in rows
+                if r.get("state") == X.CANCELLED
+                and not r.get("cancel_requested")],
+            "orders": rows}
+
+
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
     print("%s %s" % (kind, json.dumps(dict(doc), sort_keys=True,
                                       default=str)), flush=True)
@@ -1619,6 +1672,126 @@ def reconcile_pending(ex: Any, transport: Any, *,
     return out
 
 
+#: how often the resident-after-campaign loop looks again
+RESIDENT_POLL_S = 15.0
+#: how often it repeats its line when nothing changed
+RESIDENT_REPORT_S = 300.0
+
+
+def resident_after_campaign(ex: Any, emit: Callable[[str, Any], None], *,
+                            sleep: Callable[[float], None] = time.sleep,
+                            clock: Callable[[], float] = time.time,
+                            now: Callable[[], dt.datetime] = (
+                                lambda: dt.datetime.now(UTC)),
+                            halt: Optional[Callable[[], Mapping[str, Any]]]
+                            = None,
+                            max_passes: Optional[int] = None) -> int:
+    """After a campaign's NOT_AFTER: stay up, DISARMED, and keep reading.
+
+    WHY. Observed 2026-11-21: the 06:20Z window closed, NOT_AFTER passed,
+    the loop returned 0 and the fleet stopped. For six hours the watchdog
+    read this lane's registry as REGISTRY_UNREACHABLE, and the window's
+    settlement (the venue settled it at 06:26:56Z) was not recorded in
+    this lane's ledger until the next boot. A lane that has just traded
+    is the one the watchdog most needs to see.
+
+    WHAT THIS DOES. Nothing that can send an order: it never calls a
+    window, and the transport it reads through was disarmed by the
+    session close. Each pass it
+      * exits on a latched or unreadable state (a latch is never idled
+        over), and turns a watchdog halt into the durable latch and an
+        unwind, exactly as the trading loop does;
+      * makes ONE settlement attempt per pending market and releases only
+        what the venue settled.
+    The stored state is already MONITOR (written before this is entered)
+    and this function never writes ARMED, so nothing here can resume
+    trading: re-arming needs a new process and its startup ceremony.
+    Returns the process exit code. `max_passes` exists for tests.
+    """
+    last_report = None
+    last_key = None
+    passes = 0
+    #: GIVE UP THE ARM AGAIN, and refuse to stay if it does not go. The
+    #: session close already did this; a transport that still reads armed
+    #: here is one this loop must not sit next to.
+    t0 = getattr(ex, "transport", None)
+    if t0 is not None:
+        try:
+            t0.disarm("BTC5M_RESIDENT_AFTER_CAMPAIGN")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+        if bool(getattr(t0, "armed", False)):
+            emit("L5_BTC5M_RESIDENT_EXIT",
+                 {"reason": "TRANSPORT_STILL_ARMED",
+                  "utc": now().isoformat()})
+            return 0
+    while True:
+        passes += 1
+        now_ = now()
+        st = PMODE.read_state()
+        if not st.get("ok") or st.get("state") in PMODE.LATCHED:
+            emit("L5_BTC5M_RESIDENT_EXIT",
+                 {"reason": ("STATE_%s" % st.get("state") if st.get("ok")
+                             else str(st.get("reason"))),
+                  "utc": now_.isoformat()})
+            return 0
+        if st.get("state") != PMODE.MONITOR:
+            #: this loop is only ever entered after MONITOR was written.
+            #: Anything else means something outside wrote the state; it
+            #: is not this function's to interpret, and never to trade on.
+            emit("L5_BTC5M_RESIDENT_EXIT",
+                 {"reason": "STATE_NOT_MONITOR:%s" % st.get("state"),
+                  "utc": now_.isoformat()})
+            return 0
+        wd = (halt() if halt is not None
+              else shared_halt((os.getenv(HALT_URL_ENV) or "").strip()))
+        if not wd.get("ok"):
+            PMODE.write_state(PMODE.HALTED,
+                              why="WATCHDOG:%s" % wd.get("reason"), now=now_)
+            unwound = ex.stop(reason="WATCHDOG:%s" % wd.get("reason"),
+                              now=now_)
+            emit("L5_BTC5M_PERSISTENT_HALTED",
+                 {"reason": wd.get("reason"), "source": "WATCHDOG",
+                  "stop": unwound, "utc": now_.isoformat()})
+            return 0
+        t = getattr(ex, "transport", None)
+        recon = ({"pending": [], "settled": [], "unreadable": [],
+                  "deferred": [], "error": "NO_TRANSPORT"}
+                 if t is None else reconcile_pending(ex, t))
+        try:
+            freed = ex.sync_reservation()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            freed = {"ok": False, "reason": type(exc).__name__}
+        key = json.dumps([recon.get("pending"), recon.get("unreadable"),
+                          recon.get("deferred"), recon.get("error")],
+                         sort_keys=True, default=str)
+        due = (last_report is None or recon.get("settled")
+               or key != last_key
+               or (clock() - last_report) >= RESIDENT_REPORT_S)
+        if due:
+            emit("L5_BTC5M_RESIDENT_AFTER_CAMPAIGN",
+                 {"can_submit": False, "stored_state": st.get("state"),
+                  "transport_armed": bool(getattr(t, "armed", False)),
+                  "serving_registry": bool(
+                      (os.getenv(FILLS_PORT_ENV) or "").strip()),
+                  "settlement": recon,
+                  "pending_count": len(recon.get("pending") or []),
+                  "reservation": freed,
+                  "why": ("the campaign is over; staying up so the shared "
+                          "watchdog can read this lane's registry and so "
+                          "its settlements are recorded. Nothing here can "
+                          "place an order"),
+                  "utc": now_.isoformat()})
+            last_report = clock()
+            last_key = key
+        if max_passes is not None and passes >= max_passes:
+            return 0
+        sleep(RESIDENT_POLL_S)
+
+
 #: the refusal `_submit` emits when the shared hold cannot be taken
 BUDGET_REFUSAL = "SHARED_RESERVATION:RESERVATION_WOULD_EXCEED_CAP"
 
@@ -2356,6 +2529,12 @@ class Session:
             #: `pair_cost` stay market-level facts above.
             "by_strategy": _attribution_block(self.ex, self.market,
                                               settled, fees),
+            #: EVERY ORDER, ONE ROW. Observed 2026-11-21: the report
+            #: said 20 cancelled while the step lines named seven, and
+            #: nothing showed how each order ended or that it went out
+            #: post-only. `cancel_requested` separates the cancels this
+            #: lane sent from the ones the venue ended by itself.
+            "orders": order_table(mine),
             #: OPPORTUNITIES LOST TO AN EXHAUSTED SHARED BUDGET.
             #:
             #: The four lanes are separate processes competing for one
@@ -2434,6 +2613,18 @@ def main() -> int:            # pragma: no cover - the service entrypoint
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
         emit("L5_BTC5M_SETTLEMENT_RECOVERY", {"error": type(exc).__name__})
+
+    # THE LAST WINDOW THAT SENT ORDERS, one row per order, from the durable
+    # ledger. Read-only and local: no venue call. It is what lets an
+    # earlier window's cancels be told apart (ours vs the venue's) after
+    # the process that traded it has gone.
+    try:
+        emit("L5_BTC5M_LAST_TRADED_WINDOW_ORDERS", last_traded_orders(ex))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BTC5M_LAST_TRADED_WINDOW_ORDERS",
+             {"error": type(exc).__name__})
 
     # THE AUTHENTICATED BOOK FEED, subscribed to the 5-minute series. It is
     # what lets `book_readable` survive the venue's early-window 404s, via
@@ -2861,8 +3052,13 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                          {"not_after": _na, "state": PMODE.MONITOR,
                           "armed": False,
                           "note": ("the campaign window has passed; the lane "
-                                   "is DISARMED and stops rolling windows")})
-                    return 0
+                                   "is DISARMED and stops rolling windows"),
+                          "resident": resident_when_disarmed()})
+                    if not resident_when_disarmed():
+                        return 0
+                    #: STAY READABLE. See `resident_after_campaign`: no
+                    #: window is ever called from there.
+                    return resident_after_campaign(ex, emit)
             nxt = persistent_next(now=now_, prefix=row.prefix,
                                   horizon_s=row.horizon_s)
             if not nxt["ok"]:
