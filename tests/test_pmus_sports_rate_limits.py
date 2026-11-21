@@ -125,3 +125,63 @@ def test_loop_still_manages_markets_when_the_account_read_fails(eng,
     e.run()
     assert stepped == ["aec-x"]
     assert e.require_fresh_account is True and not e.account_fresh()
+
+
+# ------------------------------------------- pair cap: simultaneous fills
+def test_simultaneous_fill_of_both_openings_stays_within_the_pair_cap(tmp_path,
+                                                                     monkeypatch):
+    """Both RN1 opening bids rest together; if BOTH fill in one pass the
+    locked pair must still cost <= PAIR_CAP (LSU/Tenn 0.985 case)."""
+    from src import pmus_rn1_replica as R
+    monkeypatch.setattr(R, "ON", True)
+    monkeypatch.setattr(R, "RESIDUAL_CAP_USD", D("10"))
+    monkeypatch.setattr(R, "PER_MARKET_USD", D("20"))
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    v = FakeVenue()
+    v.spec = lambda slug: {"tick": D("0.005"), "min_qty": D("1")}
+    v.bid, v.ask = D("0.395"), D("0.400")
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e.b.m("aec-x")
+    e.step_market("aec-x")
+    open_ = [o for o in v.orders.values() if o["open"]]
+    assert {o["side"] for o in open_} == {"YES", "NO"}
+    assert sum(o["px"] for o in open_) <= D("0.97")
+    for o in open_:
+        o.update(filled=o["qty"], open=False)          # both fill at once
+    e.step_market("aec-x")
+    assert D(e.b.d["pairs"][-1]["pair_cost"]) <= D("0.97")
+
+
+# ----------------- no unknown or uncancellable orders after cancel failures
+def test_failed_cancels_leave_no_unknown_orders(tmp_path, monkeypatch):
+    """A rate-limited cancel during a reprice must leave the order OPEN in
+    the book (so the registry and watchdog still name it) until the venue
+    confirms it closed; once cancels work again nothing is left resting."""
+    from src import pmus_rn1_replica as R
+    monkeypatch.setattr(R, "ON", True)
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    v = FakeVenue()
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e.b.m("aec-x")
+    e.step_market("aec-x")
+    ids = {k for k, o in v.orders.items() if o["open"]}
+    assert len(ids) == 2
+
+    def limited(oid):
+        raise E429("HTTP Error 429")
+    real = v.cancel
+    v.cancel = limited
+    v.bid, v.ask = D("0.55"), D("0.57")               # forces a reprice
+    with pytest.raises(E429):
+        e.step_market("aec-x")                        # engine logs market_error
+    book = e.b.m("aec-x")["orders"]
+    assert all(book[i]["open"] for i in ids)          # never assumed closed
+    listed = {r["venue_order_id"] for r in M.registry_doc(e.b)["orders"]}
+    assert ids <= listed                              # watchdog still sees them
+    v.cancel = real                                   # venue recovers
+    e.step_market("aec-x")
+    assert not any(v.orders[i]["open"] for i in ids)
+    venue_open = {k for k, o in v.orders.items() if o["open"]}
+    book_open = {k for k, o in e.b.m("aec-x")["orders"].items() if o["open"]}
+    assert venue_open == book_open                    # nothing unknown

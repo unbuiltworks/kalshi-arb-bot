@@ -960,7 +960,10 @@ class Venue:
         from src import pmus_spring_gateway_candidates as gw
         os.environ.setdefault("PMUS_Q1_STATE_DIR", str(STATE_DIR / "q1"))
         self.q1, self.micro, self.gw = q1, micro, gw
-        self.t = q1.Transport()
+        # every SIGNED call goes through one shared budget: cancels and
+        # order-status first, research only from spare (2026-11-21 429s)
+        from src import pmus_request_budget as RB
+        self.t = RB.GovernedTransport(q1.Transport(), RB.from_env())
         self._spec: Dict[str, Any] = {}
 
     def gget(self, path: str) -> Any:
@@ -3399,6 +3402,9 @@ class Engine:
             "jump_pauses": self.jump_pauses}
         if self.guard is not None:
             extra["intl_guard"] = self.guard.status()
+        _bud = getattr(getattr(self.v, "t", None), "budget", None)
+        if _bud is not None:
+            extra = dict(extra, venue_requests=_bud.report())
         log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
             recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
