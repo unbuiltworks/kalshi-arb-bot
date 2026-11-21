@@ -2453,6 +2453,18 @@ class Engine:
             tg = q.get(side)
             if tg and tg["role"] != "complete" and new_block:
                 tg = None
+            if tg and tg["role"] != "complete" and self.guard is not None:
+                # 2026-11-21 two-venue recording: international leads PMUS by
+                # 3-30 s and 91% of PMUS mid drops >= 1c were preceded by a
+                # lower international mid. An opening/extension bid the
+                # international fair says is not cheap is withheld (the same
+                # guard the two-sided openings use). A profitable completion
+                # locks its pair whatever fair says, so it is exempt.
+                gv = self.guard.verdict(slug, {side: tg["px"]}, tick)
+                if not gv["ok"]:
+                    self.guard.stats["blocked"] += 1
+                    q["why_" + side] = "intl_guard:" + str(gv.get("why"))
+                    tg = None
             want[side] = tg
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])

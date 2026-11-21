@@ -207,3 +207,25 @@ def test_pending_cancel_state_stays_open_so_a_racing_fill_is_recorded():
         "authoritative_fill": staticmethod(lambda o, q, accept_partial: None)
     })()})(), {"state": "ORDER_STATE_CANCELED", "quantity": "5"})
     assert st["open"] is False
+
+
+class _Guard:
+    def __init__(self, unsafe):
+        self.unsafe, self.stats = set(unsafe), {"blocked": 0}
+
+    def verdict(self, slug, prices, tick):
+        bad = [s for s in prices if s in self.unsafe]
+        return {"ok": not bad, "why": "intl_says_not_cheap" if bad else "ok"}
+
+
+def test_intl_guard_withholds_openings_but_never_a_profitable_completion(rn1):
+    e, v = rn1
+    e.guard = _Guard({"YES", "NO"})
+    e.step_market("aec-x")
+    assert live(v) == {}                                    # both openings held
+    mk = e.b.m("aec-x")
+    mk["pos"], mk["cost"] = {"YES": "5", "NO": "0"}, {"YES": "2.35", "NO": "0"}
+    mk["last_fill_t"] = {"YES": 9e12}                      # YES in cool-down
+    e.step_market("aec-x")
+    assert live(v) == {"NO": (D("0.49"), D("5"))}           # completion goes
+    assert e.guard.stats["blocked"] >= 2
