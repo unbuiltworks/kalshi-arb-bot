@@ -414,3 +414,37 @@ is a fixed list and was not extended); an unbooked one-sided market gets
 no figure (no settlement value for a market the ledger never saw); the
 17 November market stays outside the exclusion until its order row is
 read.
+
+## Accounting release deployed and verified (2026-11-21 02:41Z; read 03:03Z)
+
+`l5-pmus-live` at `77e5631cd5983529ebf23352aead511a6c2923ef`, SUCCESS;
+previous deployment removed. 0 live orders, no exposure, halt latch clear,
+submission blocked by the shadow lock; no Traceback, error or alarm line;
+0 rate-limit responses with both feed reads running at once.
+
+- Equity baseline: refused from boot, cleared between 02:53Z and 02:54Z
+  (12-13 min), progress visible throughout (pages 2 -> 208). Drawdown
+  $0.0265, room $0.9735, cash $321.4517: unchanged.
+- LIFETIME BASIS: `reconciled true`, `complete true`, 95 rows, lifetime
+  -39.4945 = all-time realized -39.4945. (The check that could not be read
+  at Step 1.)
+- VENUE-BASIS REPORT (one pass, feed read to `eof`, 236 pages, scope since
+  the 2026-11-16 00:58Z rebase), settled arithmetic on confirmed fills,
+  nothing applied:
+  182 markets: 88 agree, 49 unbooked, 4 booked too optimistically, 41 with
+  no venue figure. 403 venue-confirmed fills; cost $536.98, fees $0.52,
+  payout $503.14; venue result -$34.36 against booked -$33.04 on the
+  markets with a figure. Upward differences pending the owner: +$6.75.
+  LOSSES THE LEDGER LACKS: -$8.0656. Settlement cash: not checked for any
+  market (the feed has no cash row). 39 ledger positions the venue's fills
+  do not support.
+- OWNERSHIP, FROM THE VENUE'S ORDER ROWS: every order in the six markets
+  carries `MANUAL_ORDER_INDICATOR_MANUAL`, including 2026-11-17-0150z
+  (order DS04XZ5014F0, GTC, DOWN 2 at 0.09, placed 01:51:05Z, filled
+  passively 01:51:13Z). The two orders of 2026-11-16-0335z carry
+  `..._AUTOMATIC` (DRD1B96014F1 UP 2 @ 0.08; DRD2MJK033ZD DOWN 2 @ 0.75,
+  YES-quoted 0.25), fees 0.0000: the executor's +0.34 arithmetic stands.
+- 2026-11-18-1605z resolved: the venue shows UP 1.22 @ 0.80 and DOWN 6.26
+  @ 0.30 with fees 0.14; UP won; result -1.774. The account service had
+  netted it to DOWN 5.04.
+- Watchdog clean; `l5-btc5m-live` unchanged at `be85a3b07`, disarmed.
