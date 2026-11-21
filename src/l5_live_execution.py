@@ -3746,7 +3746,8 @@ class InventoryStore:
     VENUE_ATTEST_STATE_KEY = "venue_cost_attestation"
 
     def note_venue_cost_attempt(self, market: str, *, reason: str,
-                                final: bool, count_attempt: bool = True
+                                final: bool, count_attempt: bool = True,
+                                sibling_attempts: Optional[int] = None
                                 ) -> Dict[str, Any]:
         """Record ONE refused attestation attempt. Writes no money field.
 
@@ -3760,6 +3761,8 @@ class InventoryStore:
         rec = dict(rows.get(market) or {})
         if count_attempt:
             rec["attempts"] = int(rec.get("attempts") or 0) + 1
+        if sibling_attempts is not None:
+            rec["sibling_attempts"] = int(sibling_attempts)
         rec["status"] = "UPPER_BOUND_KEPT" if final else "PENDING"
         rec["last_reason"] = str(reason)[:200]
         rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
@@ -3772,10 +3775,17 @@ class InventoryStore:
                                    walk: Mapping[str, Any],
                                    correction_id: str,
                                    expect_superset: Optional[
+                                       Mapping[str, Any]] = None,
+                                   sibling: Optional[
                                        Mapping[str, Any]] = None
                                    ) -> Dict[str, Any]:
         """Replace a RETIRED market's $1/share upper bound with the cost the
         VENUE's own fills state -- only when they reconcile exactly.
+
+        `sibling` (default None: behaviour exactly as before) admits ONE
+        more form, for a market in ANOTHER registered strategy's series
+        whose own order ledger states, order by order, exactly the fills
+        the venue's feed states. See `_sibling_refusal`.
 
         `expect_superset` (default None: behaviour exactly as before) admits
         ONE more form, for a market the owner has listed by its exact
@@ -3933,14 +3943,22 @@ class InventoryStore:
                 expect_superset, row=row, held=held, venue=venue,
                 derived=derived, v=v, old_pnl=old_pnl, walk=walk,
                 unknown_keys=unknown_keys, market=market)
+            sib_why = None
             if why is not None:
-                return no("VENUE_QTY_NE_LEDGER_QTY",
-                          venue_up=str(venue[UP]),
-                          venue_down=str(venue[DOWN]),
-                          ledger_up=str(held[UP]),
-                          ledger_down=str(held[DOWN]),
-                          superset=why)
-            form = self.VENUE_SUPERSET_FORM
+                sib_why = self._sibling_refusal(
+                    sibling, row=row, held=held, venue=venue,
+                    derived=derived, unknown_keys=unknown_keys,
+                    market=market)
+                if sib_why is not None:
+                    return no("VENUE_QTY_NE_LEDGER_QTY",
+                              venue_up=str(venue[UP]),
+                              venue_down=str(venue[DOWN]),
+                              ledger_up=str(held[UP]),
+                              ledger_down=str(held[DOWN]),
+                              superset=why, sibling=sib_why)
+                form = self.SIBLING_LEDGER_FORM
+            else:
+                form = self.VENUE_SUPERSET_FORM
         for side in (UP, DOWN):
             key = "%s|%s" % (market, side)
             if held[side] > 0 and key not in unknown_keys:
@@ -4035,6 +4053,11 @@ class InventoryStore:
                               ("pages", "ended", "sufficient", "by",
                                "started_at", "floor")},
             "ownership_unchanged": True,
+            "sibling_ledger": (None if form != self.SIBLING_LEDGER_FORM
+                               else {"strategy": sibling.get("strategy"),
+                                     "source": sibling.get("source"),
+                                     "as_of_utc": sibling.get("as_of_utc"),
+                                     "orders_matched": len(order_ids)}),
             "labels": ("account-wide realized with a venue-attested cost "
                        "basis. NOT verified L5: no owner field was written. "
                        "Fees are recorded per leg and are NOT in the pnl."),
@@ -4054,6 +4077,131 @@ class InventoryStore:
                 "venue_order_ids": order_ids,
                 "realized_before": before,
                 "realized_after": self.realized_lines()}
+
+    SIBLING_LEDGER_FORM = "VENUE_FILLS_EQUAL_SIBLING_LEDGER"
+
+    def _sibling_refusal(self, sibling: Any, *, row: Mapping[str, Any],
+                         held: Mapping[str, D], venue: Mapping[str, D],
+                         derived: Mapping[str, Mapping[str, Any]],
+                         unknown_keys: List[str], market: str
+                         ) -> Optional[str]:
+        """None when another strategy's own ledger states exactly the fills
+        the venue's feed states for this market, else why not.
+
+        THE CASE (2026-11-21, cpc-btc-updown-5m-2026-11-21-0620z). The
+        5-minute lane bought UP 0.49 and DOWN 0.61 in seventeen maker fills.
+        This ledger never sees those fills: it adopted the venue's NET
+        position once (DOWN 0.10, at the $1 bound, when the true net was
+        already moving) and retired the market at $0.00 while the account's
+        cash moved +$0.0195. The exact forms refuse, correctly -- neither
+        the gross nor the net quantity equals what this ledger held -- and
+        the row stays wrong for good.
+
+        TWO INDEPENDENT RECORDS MUST AGREE, ORDER BY ORDER:
+          the venue's activity feed, read by this service with its own
+          credentials (`derived`: every fill with its trade id, order id,
+          quantity, price and fee); and
+          the other strategy's durable order ledger (`sibling`), built
+          from its own `/v1/order` reads.
+        A fill missing from either, an extra one, a different quantity or
+        a different cost refuses. Because the two must be equal, a feed
+        walk that stopped at a time floor is enough here: a fill it missed
+        makes the venue's side short of the sibling's and refuses.
+
+        Also required, each a refusal:
+          * the market is in ANOTHER registered strategy's series, and
+            the sibling record says it is that strategy's;
+          * the ledger's quantity is contained in the venue's and differs
+            from it (equal is the GROSS form, which needs no sibling);
+          * every side this ledger holds is one it never had a cost for;
+          * every venue fill names its order, and every venue leg's fee is
+            readable and ZERO (fees are not in the booked result);
+          * the row settled after the last accounting re-anchor.
+        READS ONLY.
+        """
+        if sibling is None:
+            return "NO_SIBLING_EVIDENCE"
+        if not isinstance(sibling, Mapping):
+            return "SIBLING_UNREADABLE"
+        owner = ORIGIN.strategy_of_market(market)
+        if owner is None or owner == OWN_STRATEGY:
+            return "NOT_ANOTHER_STRATEGYS_MARKET"
+        if str(sibling.get("strategy") or "") != str(owner):
+            return "SIBLING_IS_NOT_THE_MARKETS_STRATEGY"
+        orders = sibling.get("orders")
+        if not isinstance(orders, Mapping) or not orders:
+            return "SIBLING_ORDERS_UNREADABLE"
+        if not (held[UP] <= venue[UP] and held[DOWN] <= venue[DOWN]):
+            return "LEDGER_NOT_CONTAINED_IN_VENUE"
+        if held[UP] == venue[UP] and held[DOWN] == venue[DOWN]:
+            return "NOT_A_SUPERSET"
+        for side in (UP, DOWN):
+            if held[side] > 0 and "%s|%s" % (market, side) \
+                    not in unknown_keys:
+                return "KNOWN_SIDE:%s" % side
+        by_order: Dict[str, Dict[str, Any]] = {}
+        for side in (UP, DOWN):
+            leg = derived.get(side)
+            if leg is None:
+                continue
+            fee = finite_decimal(leg.get("fees"))
+            if fee is None:
+                return "FEE_UNREADABLE:%s" % side
+            if fee != 0:
+                return "FEE_NOT_ZERO:%s" % side
+            for f in leg.get("fills") or ():
+                vid = str(f.get("venue_order_id") or "").strip()
+                if not vid:
+                    return "VENUE_FILL_NAMES_NO_ORDER:%s" % side
+                rec = by_order.setdefault(
+                    vid, {"side": side, "qty": D(0), "cost": D(0)})
+                if rec["side"] != side:
+                    return "VENUE_ORDER_ON_BOTH_SIDES:%s" % vid
+                q = finite_decimal(f.get("qty"))
+                own = finite_decimal(f.get("own_price"))
+                if q is None or own is None:
+                    return "VENUE_FILL_UNREADABLE:%s" % vid
+                rec["qty"] += q
+                rec["cost"] += q * own
+        theirs: Dict[str, Dict[str, Any]] = {}
+        for vid, o in orders.items():
+            if not isinstance(o, Mapping):
+                return "SIBLING_ORDER_UNREADABLE"
+            q = finite_decimal(o.get("filled_qty"))
+            c = finite_decimal(o.get("filled_cost"))
+            if q is None or c is None or q < 0 or c < 0:
+                return "SIBLING_ORDER_UNREADABLE:%s" % vid
+            if q == 0:
+                continue
+            try:
+                side = canonical_side(o.get("side"),
+                                      doing="reading a sibling fill")
+            except UnknownSide:
+                return "SIBLING_SIDE_UNREADABLE:%s" % vid
+            theirs[str(vid)] = {"side": side, "qty": q, "cost": c}
+        if set(theirs) != set(by_order):
+            return "ORDER_SETS_DIFFER:venue_only=%d,sibling_only=%d" % (
+                len(set(by_order) - set(theirs)),
+                len(set(theirs) - set(by_order)))
+        for vid in sorted(theirs):
+            a, b = by_order[vid], theirs[vid]
+            if a["side"] != b["side"]:
+                return "ORDER_SIDE_DIFFERS:%s" % vid
+            if a["qty"] != b["qty"]:
+                return "ORDER_QTY_DIFFERS:%s:%s!=%s" % (vid, a["qty"],
+                                                         b["qty"])
+            if a["cost"] != b["cost"]:
+                return "ORDER_COST_DIFFERS:%s:%s!=%s" % (vid, a["cost"],
+                                                          b["cost"])
+        rebases = [str(r.get("t")) for r in
+                   (self.state.get("accounting_rebase_log") or [])
+                   if isinstance(r, Mapping) and r.get("t")]
+        settled = str(row.get("t") or "")
+        if not settled:
+            return "SETTLEMENT_TIME_UNREADABLE"
+        if rebases and settled < max(rebases):
+            return "SETTLED_BEFORE_THE_LAST_REBASE"
+        return None
 
     VENUE_SUPERSET_FORM = "VENUE_SUPERSET_OWNER_LISTED"
     SUPERSET_FIELDS = frozenset((

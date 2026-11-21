@@ -79,6 +79,100 @@ MAX_ATTEMPTS = 3
 SETTLE_AGE_S = 120.0
 RETRY_S = 600.0
 
+#: THE SIBLING-LEDGER FORM. OFF unless this is exactly the token below.
+#:
+#: A market in another registered strategy's series (the 5-minute lane)
+#: is traded two-sided and fast; this ledger adopts one net snapshot of it
+#: and retires it at the $1 bound, so the exact forms can never match. With
+#: the switch on, a refusal `VENUE_QTY_NE_LEDGER_QTY` on such a market is
+#: retried ONCE per pass with that strategy's own order ledger as second
+#: evidence -- see `InventoryStore._sibling_refusal` for everything that
+#: must then agree. Off, nothing here changes.
+SIBLING_ENV = "L5_SIBLING_LEDGER_ATTESTATION"
+SIBLING_TOKEN = "VENUE_FILLS_AND_SIBLING_LEDGER"
+#: where each other strategy publishes its order ledger (read-only GET)
+SIBLING_FEED_ENVS = {"BTC5M": "L5_BTC5M_FILLS_URL"}
+SIBLING_TIMEOUT_S = 3.0
+#: a market already exhausted under the exact forms gets this many tries
+#: under the sibling form, recorded durably, then is left alone again
+MAX_SIBLING_ATTEMPTS = 3
+QTY_REASON = "VENUE_QTY_NE_LEDGER_QTY"
+
+
+def sibling_enabled() -> bool:
+    return (os.environ.get(SIBLING_ENV) or "").strip() == SIBLING_TOKEN
+
+
+def _strategy_of(market: str) -> Optional[str]:
+    try:
+        from src import l5_live_execution as LX
+        owner = LX.ORIGIN.strategy_of_market(market)
+        return None if owner in (None, LX.OWN_STRATEGY) else str(owner)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
+def sibling_evidence(market: str, *, fetch: Any = None) -> Dict[str, Any]:
+    """The other strategy's own orders for `market`, or why not. GET only.
+
+    {"ok": True, "evidence": {...}} | {"ok": False, "reason": ...}. Never
+    raises. An order with no venue id, or the same venue id twice, refuses:
+    the store matches by venue order id and must not be handed a guess.
+    """
+    if not sibling_enabled():
+        return {"ok": False, "reason": "SIBLING_FORM_OFF"}
+    owner = _strategy_of(market)
+    if owner is None:
+        return {"ok": False, "reason": "NOT_ANOTHER_STRATEGYS_MARKET"}
+    env = SIBLING_FEED_ENVS.get(owner)
+    url = (os.environ.get(env) or "").strip() if env else ""
+    if not url:
+        return {"ok": False, "reason": "SIBLING_FEED_NOT_CONFIGURED"}
+    try:
+        if fetch is None:
+            import json as _json
+            import urllib.request as _ur
+            with _ur.urlopen(url, timeout=SIBLING_TIMEOUT_S) as r:  # noqa: S310
+                doc = _json.loads(r.read().decode("utf-8"))
+        else:
+            doc = fetch(url)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"ok": False,
+                "reason": "SIBLING_FEED_UNREACHABLE:%s" % type(exc).__name__}
+    if not isinstance(doc, Mapping) or doc.get("readable") is not True:
+        return {"ok": False, "reason": "SIBLING_FEED_NOT_READABLE"}
+    if str(doc.get("strategy") or "") != owner:
+        return {"ok": False, "reason": "SIBLING_FEED_IS_ANOTHER_STRATEGYS"}
+    orders: Dict[str, Dict[str, Any]] = {}
+    for o in doc.get("orders") or ():
+        if not isinstance(o, Mapping):
+            return {"ok": False, "reason": "SIBLING_ORDER_UNREADABLE"}
+        if str(o.get("market") or "") != market:
+            continue
+        q = CBA._d(o.get("filled_qty"))
+        if q is None:
+            return {"ok": False, "reason": "SIBLING_ORDER_UNREADABLE"}
+        if q == 0:
+            continue
+        vid = str(o.get("venue_order_id") or "").strip()
+        if not vid or vid in orders:
+            return {"ok": False,
+                    "reason": "SIBLING_ORDER_ID_MISSING_OR_REPEATED"}
+        orders[vid] = {"side": o.get("side"),
+                       "filled_qty": o.get("filled_qty"),
+                       "filled_cost": o.get("filled_cost")}
+    if not orders:
+        return {"ok": False, "reason": "SIBLING_HAS_NO_FILLS_IN_MARKET"}
+    return {"ok": True, "evidence": {
+        "strategy": owner, "orders": orders,
+        "as_of_utc": doc.get("as_of_utc"),
+        "source": "%s_ORDER_LEDGER_FEED" % owner}}
+
+
 _SLUG_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})z$")
 _ROW_TIME_KEYS = ("time", "createTime", "transactTime", "tradeTime",
                   "executionTime", "createdAt", "created_at", "timestamp",
@@ -165,7 +259,10 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
         if not t or t[:10] < floor:
             continue
         rec = book.get(m) or {}
-        if rec.get("status") in ("CORRECTED", "UPPER_BOUND_KEPT"):
+        if rec.get("status") == "CORRECTED":
+            continue
+        if rec.get("status") == "UPPER_BOUND_KEPT" and not sibling_retry(
+                m, rec):
             continue
         rt = parse_time(t)
         if rt is not None and (now - rt).total_seconds() < SETTLE_AGE_S:
@@ -176,6 +273,21 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
         out.append((t, str(m)))
     out.sort()
     return out
+
+
+def sibling_retry(market: str, rec: Mapping[str, Any]) -> bool:
+    """May an EXHAUSTED market be read again under the sibling form?
+
+    Only with the switch on, only for another strategy's market, only when
+    what exhausted it was the quantity rule (the one thing the sibling form
+    addresses), and only `MAX_SIBLING_ATTEMPTS` times, counted durably.
+    """
+    if not sibling_enabled() or _strategy_of(market) is None:
+        return False
+    if not str(rec.get("last_reason") or "").startswith(QTY_REASON) \
+            and not int(rec.get("sibling_attempts") or 0):
+        return False
+    return int(rec.get("sibling_attempts") or 0) < MAX_SIBLING_ATTEMPTS
 
 
 class Walk:
@@ -407,6 +519,9 @@ class Attestor:
                         "old_pnl": out.get("old_pnl"),
                         "new_pnl": out.get("new_pnl"),
                         "delta": out.get("delta")}
+            if str(out.get("reason")) == QTY_REASON and sibling_enabled() \
+                    and _strategy_of(market) is not None:
+                return self._evaluate_sibling(store, w, market, got)
             return self._refuse(store, market, str(out.get("reason")))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -417,6 +532,37 @@ class Attestor:
             except BaseException:                              # noqa: BLE001
                 return {"market": market, "attested": False,
                         "reason": "EXCEPTION:%s" % type(exc).__name__}
+
+    def _evaluate_sibling(self, store: Any, w: Walk, market: str,
+                          got: Mapping[str, Any]) -> Dict[str, Any]:
+        """The same venue fills, with the other strategy's ledger beside
+        them. Every outcome but a correction spends one SIBLING attempt and
+        leaves the bound exactly where it was."""
+        ev = sibling_evidence(market)
+        if ev.get("ok"):
+            out = store.attest_retired_market_cost(
+                market, legs=got["legs"], walk=w.proof(),
+                correction_id="venue-attest|%s" % market,
+                sibling=ev["evidence"])
+            if out.get("attested"):
+                return {"market": market, "attested": True,
+                        "form": "VENUE_FILLS_EQUAL_SIBLING_LEDGER",
+                        "old_pnl": out.get("old_pnl"),
+                        "new_pnl": out.get("new_pnl"),
+                        "delta": out.get("delta")}
+            reason = "%s:SIBLING:%s" % (QTY_REASON, out.get("sibling")
+                                        or out.get("reason"))
+        else:
+            reason = "%s:SIBLING:%s" % (QTY_REASON, ev.get("reason"))
+        rec = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
+               .get("markets") or {}).get(market) or {}
+        n = int(rec.get("sibling_attempts") or 0) + 1
+        final = n >= MAX_SIBLING_ATTEMPTS
+        store.note_venue_cost_attempt(market, reason=reason, final=final,
+                                      count_attempt=False,
+                                      sibling_attempts=n)
+        return {"market": market, "attested": False, "reason": reason,
+                "sibling_attempts": n, "final": final}
 
     def heartbeat(self, store: Any) -> Dict[str, Any]:
         st = getattr(store, "state", {}) or {}
