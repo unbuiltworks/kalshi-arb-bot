@@ -359,3 +359,58 @@ lost). Ownership is not established. Until it is named, arming refuses
 with `OWN_LEDGER_MISSING_SETTLED_MARKETS`. The accounting release's
 per-market detail line (venue order ids and the manual indicator) is the
 planned way to establish it.
+
+## The two prepared releases (2026-11-21; NOT deployed, NO variable set)
+
+| Service | Running | Prepared | Branch |
+|---|---|---|---|
+| `l5-pmus-live` | `1e75294f3` | `77e5631cdb...` (see ls-remote in the session report) | `release/l5-pmus-live-venue-basis-20261121` |
+| `l5-btc5m-live` | `be85a3b07` | `ac3c7f9e758e2bd9a518507c82dcd7caa475821c` | `release/l5-btc5m-inventory-20261121c` |
+
+ACCOUNTING RELEASE (insertions only against `1e75294f3`; full L5 suite
+15,205 passed, the same 19 failures as the running commit's baseline):
+- heartbeat shows the published lifetime basis's verdict (reconciled,
+  complete, rows, anchor times) and the transfers read's progress;
+- `L5_VENUE_BASIS=REPORT` (off unless set): per market, the result from
+  the venue's execution rows beside the booked result, classed and
+  totalled, upward and downward separately; writes nothing, changes no
+  gate; one feed read an hour. Settlement cash is NOT in the venue's feed:
+  every figure is settled arithmetic on confirmed fills;
+- `L5_VENUE_BASIS_DETAIL_MARKETS` (exact slugs, max 12): the venue's
+  execution rows and, through the existing single-order read, the order
+  rows for those markets, allowlisted fields only (order id, trade id,
+  client order id, manual indicator, type, side, price, quantity, state,
+  time); account, user, wallet, key, token and similar fields never.
+
+BTC5m RELEASE (one source file against `be85a3b07`; safety suites 2,397
+passed, 0 failed):
+- `L5_BTC5M_NOT_THIS_LANE_MARKETS`: exact slugs the owner attests this
+  lane never traded; reported, not refused; nothing else exempted;
+- reads the accounting release's `venue_basis` report and adds a NEGATIVE
+  downward total to the lifetime figure the cumulative ceiling reads.
+  Upward differences and unreadable reports add nothing.
+
+VARIABLES EACH WOULD NEED (owner approval; none is set):
+- `l5-pmus-live`: `L5_VENUE_BASIS=REPORT`;
+  `L5_VENUE_BASIS_DETAIL_MARKETS=cpc-btc-updown-5m-2026-11-17-0150z,cpc-btc-updown-5m-2026-11-18-1535z,cpc-btc-updown-5m-2026-11-18-1540z,cpc-btc-updown-5m-2026-11-18-1545z,cpc-btc-updown-5m-2026-11-18-1600z,cpc-btc-updown-5m-2026-11-18-1605z,cpc-btc-updown-5m-2026-11-16-0335z`
+- `l5-btc5m-live`: `L5_BTC5M_NOT_THIS_LANE_MARKETS=` the five 11-18 slugs.
+
+ACCEPTANCE, ALL READABLE FROM LOGS:
+Accounting: exact SHA; 0 orders; equity baseline clears after the
+restart read (progress now visible: `walking`, `pages_this_walk`);
+heartbeat `account_risk_publication.lifetime_basis.reconciled` true and
+its lifetime figure equal to the all-time realized figure; one
+`L5_VENUE_BASIS` line with `feed_complete` true; `L5_VENUE_BASIS_DETAIL`
+and `L5_VENUE_BASIS_ORDERS` lines for the seven named markets; drawdown
+unchanged; watchdog clean.
+BTC5m: exact SHA; disarmed; switches off; limits unchanged; watchdog
+clean. Its ledger-completeness verdict is still only produced at arming
+(a disarmed lane does not read the account record), where it refuses
+before any order if it fails.
+
+KNOWN LIMITS: a missing loss the venue report shows is enforced on the
+BTC5m side only (the account service's own "unresolved accounting" block
+is a fixed list and was not extended); an unbooked one-sided market gets
+no figure (no settlement value for a market the ledger never saw); the
+17 November market stays outside the exclusion until its order row is
+read.
