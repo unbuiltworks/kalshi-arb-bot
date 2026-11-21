@@ -589,6 +589,75 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
     return add, full, gaps
 
 
+#: A CAMPAIGN STOPS WHEN THE ACCOUNT LEDGER HAS NOT RECONCILED A WINDOW.
+#:
+#: With one window per arming, the owner compared the lane's settled result
+#: with the account ledger's before the next window was armed. A campaign
+#: document covers many windows in one arming, so that comparison has to be
+#: made by the code or it is not made.
+#:
+#: While a campaign document is SET (valid or not), every market this lane
+#: settled today more than CAMPAIGN_RECON_GRACE_S ago must be published by
+#: the account service with a result within CAMPAIGN_RECON_TOLERANCE_USD of
+#: this lane's own. One that is missing, unreadable or further away refuses
+#: every further submission. The grace is how long the account service is
+#: given to restate a window from the venue's fills. Measured 2026-11-21:
+#: 10 and 17 minutes, because each pass reads the venue's whole activity
+#: feed (236 pages, about 10 minutes) and a window that settles during a
+#: pass waits for the next one -- so two passes, plus margin. The tolerance
+#: is the owner's.
+#:
+#: It can only ADD a refusal, and only under a campaign document: with none
+#: set this returns None and nothing reads it.
+CAMPAIGN_RECON_GRACE_S = 2400.0
+CAMPAIGN_RECON_TOLERANCE_USD = D("0.005")
+
+
+def campaign_reconciliation(own: Any, risk: Mapping[str, Any],
+                            now: dt.datetime,
+                            env: Optional[Mapping[str, str]] = None
+                            ) -> Optional[Dict[str, Any]]:
+    """None when no campaign document is set; else the verdict."""
+    if not PROBE.campaign_configured(env):
+        return None
+    by = getattr(own, "by_market", None)
+    hist = getattr(own, "history", None)
+    if not isinstance(by, Mapping) or not isinstance(hist, Mapping):
+        #: without the per-market breakdown nothing can be compared, and a
+        #: comparison that cannot be made is not a pass
+        return {"ok": False, "why": "OWN_RESULTS_HAVE_NO_BREAKDOWN"}
+    pub = risk.get("retired_results_utc_day")
+    booked = pub.get("results") if isinstance(pub, Mapping) else None
+    readable = isinstance(booked, Mapping) and str(pub.get("utc_day")) \
+        == str(risk.get("utc_day"))
+    due, waiting, bad = [], [], {}
+    for m in sorted(by):
+        at = (hist.get(m) or {}).get("at") if isinstance(
+            hist.get(m), Mapping) else None
+        try:
+            age = (now - at).total_seconds()
+        except (TypeError, ValueError):
+            bad[m] = "SETTLED_TIME_UNREADABLE"
+            continue
+        if age < CAMPAIGN_RECON_GRACE_S:
+            waiting.append(m)
+            continue
+        due.append(m)
+        if not readable:
+            bad[m] = "ACCOUNT_RESULTS_NOT_PUBLISHED"
+            continue
+        b = _dec(booked.get(m)) if m in booked else None
+        if b is None:
+            bad[m] = "NOT_IN_THE_ACCOUNT_LEDGER"
+        elif abs(b - by[m]) > CAMPAIGN_RECON_TOLERANCE_USD:
+            bad[m] = "DIFFERS:own=%s,account=%s" % (by[m], b)
+    return {"ok": not bad, "why": None if not bad else
+            "CAMPAIGN_LEDGER_NOT_RECONCILED",
+            "checked": due, "within_grace": waiting, "failed": bad,
+            "grace_s": CAMPAIGN_RECON_GRACE_S,
+            "tolerance_usd": str(CAMPAIGN_RECON_TOLERANCE_USD)}
+
+
 NOT_THIS_LANE_ENV = "L5_BTC5M_NOT_THIS_LANE_MARKETS"
 _SLUG_OK = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -782,6 +851,10 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         return no("ACCOUNT_RISK_FIGURES_UNREADABLE")
     if str(risk.get("utc_day")) != now.strftime("%Y-%m-%d"):
         return no("ACCOUNT_RISK_FOR_ANOTHER_DAY", utc_day=risk.get("utc_day"))
+    _recon = campaign_reconciliation(own_unaccounted, risk, now)
+    if _recon is not None and not _recon.get("ok"):
+        return no("CAMPAIGN_LEDGER_NOT_RECONCILED",
+                  campaign_reconciliation=_recon)
     add, _added, _gaps = _own_not_in_account_ledger(own_unaccounted, risk)
     _lt = _own_not_in_lifetime(own_unaccounted, risk, life)
     #: with no history supplied the lifetime figure gets today's addition,
@@ -864,6 +937,8 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         out["%s_room_usd" % key] = str(left)
         room = min(room, left)
     out["loss_room_usd"] = str(room)
+    if _recon is not None:
+        out["campaign_reconciliation"] = _recon
     return dict(out, ok=True, reason=None)
 
 
@@ -2779,6 +2854,8 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             #: market being stepped, and reported in that step's report.
             "behaviour_probe_document_set": bool(
                 (os.environ.get(PROBE.DOC_ENV) or "").strip()),
+            "behaviour_probe_campaign_document_set":
+                PROBE.campaign_configured(),
             "straddle_max_window_loss_usd":
                 str(_ep.straddle_max_window_loss_usd),
             "straddle_completion_pair_cost":

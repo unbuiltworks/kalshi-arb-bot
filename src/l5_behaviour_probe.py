@@ -200,6 +200,160 @@ def read_document(market: Any, now: dt.datetime,
             "expires_utc": exp.isoformat()}
 
 
+# ------------------------------------------------- the campaign document
+#
+# WHY IT EXISTS (owner decision 2026-11-21). The one-window document needs
+# a redeploy before every window, so consecutive windows cannot be measured
+# at all: the fastest it allows is every other market. The owner asked for a
+# bounded two-hour measurement of the SAME behaviour.
+#
+# WHAT IT IS. A SECOND document, in its own variable, that names EVERY
+# window it covers by its exact slug. It is not a duration and not a series:
+# a window that is not in the list is not covered, exactly as before.
+#
+# WHAT STAYS TRUE.
+#   * It grants nothing. Arming, the campaign approval (which must itself
+#     enumerate the same windows), the envelope, both halts, the account
+#     loss state, the caps, post-only and reconciliation are the existing
+#     ones and are not read or changed here.
+#   * Every rule of the one-window document that is not about there being
+#     one window still applies: the class, a verbatim acknowledgement, EV
+#     stated UNPROVEN, no rate set, the per-window loss ceiling under the
+#     code maximum, a document no older than six hours.
+#   * Bounded in code: at most MAX_CAMPAIGN_WINDOWS windows, all inside
+#     MAX_CAMPAIGN_SPAN_S from the first one's start, expiring at the last
+#     one's end -- a longer expiry is refused, not shortened.
+#   * It REQUIRES the code-enforced cumulative loss halt
+#     (L5_BTC5M_CAMPAIGN_LOSS_HALT) to be set, readable, and no looser than
+#     this document's own `max_campaign_loss_usd`, which is itself capped.
+#   * With both documents set, NEITHER is honoured.
+CAMPAIGN_CLASS = "BEHAVIOUR_PROBE_CAMPAIGN_EV_UNPROVEN"
+CAMPAIGN_DOC_ENV = "L5_BTC5M_BEHAVIOUR_PROBE_CAMPAIGN"
+CAMPAIGN_ACKNOWLEDGEMENT = (
+    "ENTRY EV IS UNPROVEN. NO PAIRING RATE HAS BEEN MEASURED OR IS "
+    "ASSERTED. EVERY LISTED WINDOW IS EXPECTED TO LOSE MONEY, UP TO "
+    "max_window_loss_usd EACH AND max_campaign_loss_usd IN TOTAL.")
+MAX_CAMPAIGN_WINDOWS = 24
+MAX_CAMPAIGN_SPAN_S = 2 * 3600
+MAX_CAMPAIGN_LOSS_USD = D("0.60")
+#: named here because this module may not import the executor; a test holds
+#: it equal to `l5_btc5m_execution.CAMPAIGN_LOSS_HALT_ENV`.
+LOSS_HALT_ENV = "L5_BTC5M_CAMPAIGN_LOSS_HALT"
+CAMPAIGN_FIELDS = ("class", "acknowledgement", "entry_ev", "markets",
+                   "issued_utc", "expires_utc", "max_window_loss_usd",
+                   "max_campaign_loss_usd", "nonce")
+
+
+def campaign_configured(env: Optional[Mapping[str, str]] = None) -> bool:
+    """Is a campaign document SET (valid or not)? Callers that tighten a
+    check for a campaign key on this, so an invalid document still gets the
+    tighter check rather than none."""
+    env = os.environ if env is None else env
+    return bool((env.get(CAMPAIGN_DOC_ENV) or "").strip())
+
+
+def read_campaign_document(market: Any, now: dt.datetime,
+                           env: Optional[Mapping[str, str]] = None
+                           ) -> Dict[str, Any]:
+    """Is there a valid CAMPAIGN document covering THIS market NOW?"""
+    env = os.environ if env is None else env
+    raw = (env.get(CAMPAIGN_DOC_ENV) or "").strip()
+    if not raw:
+        return {"ok": False, "present": False, "reason": None}
+    try:
+        doc = json.loads(raw)
+    except (ValueError, TypeError):
+        return _no("PROBE_DOCUMENT_UNREADABLE")
+    if not isinstance(doc, dict):
+        return _no("PROBE_DOCUMENT_UNREADABLE")
+    missing = [k for k in CAMPAIGN_FIELDS if k not in doc]
+    if missing:
+        return _no("PROBE_FIELD_MISSING", fields=missing)
+    extra = sorted(k for k in doc if k not in CAMPAIGN_FIELDS)
+    if extra:
+        return _no("PROBE_FIELD_UNKNOWN", fields=extra)
+    if doc["class"] != CAMPAIGN_CLASS:
+        return _no("PROBE_CLASS_MISMATCH")
+    if doc["acknowledgement"] != CAMPAIGN_ACKNOWLEDGEMENT:
+        return _no("PROBE_NOT_ACKNOWLEDGED")
+    if doc["entry_ev"] != "UNPROVEN":
+        return _no("PROBE_EV_NOT_STATED_UNPROVEN")
+    if not isinstance(doc["nonce"], str) or len(doc["nonce"].strip()) < 8:
+        return _no("PROBE_NONCE_UNREADABLE")
+    slugs = doc["markets"]
+    if not isinstance(slugs, list) or not slugs \
+            or not all(isinstance(x, str) for x in slugs):
+        return _no("PROBE_MARKETS_UNREADABLE")
+    if len(slugs) > MAX_CAMPAIGN_WINDOWS:
+        return _no("PROBE_TOO_MANY_WINDOWS", count=len(slugs),
+                   maximum=MAX_CAMPAIGN_WINDOWS)
+    starts = [slug_window_start(x) for x in slugs]
+    if any(x is None for x in starts):
+        return _no("PROBE_MARKET_NOT_A_BTC5M_WINDOW")
+    if any(b <= a for a, b in zip(starts, starts[1:])):
+        #: strictly ascending: no repeat, and the list reads as a schedule
+        return _no("PROBE_MARKETS_NOT_ASCENDING")
+    first, last_end = starts[0], starts[-1] + dt.timedelta(seconds=WINDOW_S)
+    if (last_end - first).total_seconds() > MAX_CAMPAIGN_SPAN_S:
+        return _no("PROBE_CAMPAIGN_TOO_LONG",
+                   span_s=(last_end - first).total_seconds(),
+                   maximum=MAX_CAMPAIGN_SPAN_S)
+    exp, iss = _when(doc["expires_utc"]), _when(doc["issued_utc"])
+    if exp is None or iss is None:
+        return _no("PROBE_TIME_UNREADABLE")
+    if exp != last_end:
+        return _no("PROBE_EXPIRY_NOT_THE_LAST_WINDOW_END")
+    if now.tzinfo is None:
+        return _no("PROBE_CLOCK_UNREADABLE")
+    now = now.astimezone(UTC)
+    if iss > now:
+        return _no("PROBE_ISSUED_IN_THE_FUTURE")
+    if (now - iss).total_seconds() > MAX_DOC_AGE_S:
+        return _no("PROBE_DOCUMENT_STALE")
+    if iss >= first + dt.timedelta(seconds=WINDOW_S):
+        #: issued before the campaign's first window has ended: a document
+        #: cannot be written to cover windows after the fact
+        return _no("PROBE_ISSUED_AFTER_ITS_FIRST_WINDOW")
+    cap = _dec(doc["max_window_loss_usd"])
+    if cap is None or cap <= 0:
+        return _no("PROBE_LOSS_CEILING_UNREADABLE")
+    if cap > MAX_WINDOW_LOSS_USD:
+        return _no("PROBE_LOSS_CEILING_ABOVE_CODE_MAXIMUM",
+                   asked=str(cap), maximum=str(MAX_WINDOW_LOSS_USD))
+    total = _dec(doc["max_campaign_loss_usd"])
+    if total is None or total <= 0:
+        return _no("PROBE_CAMPAIGN_LOSS_CEILING_UNREADABLE")
+    if total > MAX_CAMPAIGN_LOSS_USD:
+        return _no("PROBE_CAMPAIGN_LOSS_CEILING_ABOVE_CODE_MAXIMUM",
+                   asked=str(total), maximum=str(MAX_CAMPAIGN_LOSS_USD))
+    #: THE CUMULATIVE STOP MUST EXIST IN CODE, not only in this document.
+    try:
+        halt = json.loads((env.get(LOSS_HALT_ENV) or "").strip() or "null")
+    except (ValueError, TypeError):
+        halt = None
+    hmax = _dec(halt.get("max_loss_usd")) if isinstance(halt, dict) else None
+    if hmax is None or hmax <= 0:
+        return _no("PROBE_CAMPAIGN_NEEDS_THE_LOSS_HALT", env=LOSS_HALT_ENV)
+    if hmax > total:
+        return _no("PROBE_CAMPAIGN_LOSS_HALT_LOOSER_THAN_APPROVED",
+                   halt=str(hmax), approved=str(total))
+    if str(market or "") not in slugs:
+        return _no("PROBE_OTHER_MARKET", covers="%d listed windows"
+                   % len(slugs))
+    start = slug_window_start(market)
+    end = start + dt.timedelta(seconds=WINDOW_S)
+    if now < start:
+        return _no("PROBE_WINDOW_NOT_OPEN")
+    if now >= end:
+        return _no("PROBE_EXPIRED")
+    return {"ok": True, "present": True, "reason": None,
+            "class": CAMPAIGN_CLASS, "market": str(market),
+            "max_window_loss_usd": cap, "expires_utc": end.isoformat(),
+            "campaign_windows": len(slugs),
+            "campaign_expires_utc": last_end.isoformat(),
+            "max_campaign_loss_usd": str(total)}
+
+
 def preconditions(params: Any, grant: Mapping[str, Any]) -> Optional[str]:
     """Why the effective configuration cannot run a probe, or None.
 
@@ -260,6 +414,12 @@ def evaluate(*, market: Any, now: dt.datetime, params: Any,
     precondition. Never raises: an error here is a refusal."""
     try:
         doc = read_document(market, now, env)
+        camp = read_campaign_document(market, now, env)
+        if doc.get("present") and camp.get("present"):
+            #: two approvals for one step is not an approval
+            return _no("PROBE_TWO_DOCUMENTS_SET")
+        if camp.get("present"):
+            doc = camp
         if not doc.get("present"):
             return doc
         if not doc.get("ok"):
@@ -279,10 +439,14 @@ def evaluate(*, market: Any, now: dt.datetime, params: Any,
         why = preconditions(params, doc)
         if why is not None:
             return _no(why, market=doc["market"])
-        return {"ok": True, "present": True, "reason": None, "class": CLASS,
+        return {"ok": True, "present": True, "reason": None,
+                "class": doc.get("class", CLASS),
                 "market": doc["market"],
                 "max_window_loss_usd": str(doc["max_window_loss_usd"]),
                 "expires_utc": doc["expires_utc"],
+                **{k: doc[k] for k in ("campaign_windows",
+                                       "campaign_expires_utc",
+                                       "max_campaign_loss_usd") if k in doc},
                 "label": ("entry EV unproven; legs are admitted on the "
                           "window loss ceiling, not on expected value. Not "
                           "an authorization: arming is unchanged.")}
@@ -294,4 +458,7 @@ def summary(state: Mapping[str, Any]) -> Dict[str, Any]:
     """Safe to log: never the nonce, never the document."""
     return {k: state.get(k) for k in ("present", "ok", "reason", "class",
                                       "market", "max_window_loss_usd",
-                                      "expires_utc") if k in state}
+                                      "expires_utc", "campaign_windows",
+                                      "campaign_expires_utc",
+                                      "max_campaign_loss_usd")
+            if k in state}
