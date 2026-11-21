@@ -13,7 +13,7 @@
   3. watchdog reads the lane registry OK, 0 open orders.
 
 ## 2. l5-pmus-live
-- Branch `release/l5-pmus-live-sibling-ledger-20261121`, commit `7c044c6da337fcefca35814b682915ee6ef4cd7b`
+- Branch `release/l5-pmus-live-sibling-ledger-20261121`, commit `62b54e14a4a2db0f85d8133020a5ce5c47bb8194` (source identical to 7c044c6da; adds 13 interaction tests)
 - Currently deployed: `03b77157115ae80e088aa01c0dba06f3a71fffb4`
 - Diff: `src/l5_live_execution.py` (+164), `src/l5_venue_cost_attestation.py` (+148), one new test file (24 tests).
 - Variables to ADD (two):
@@ -33,6 +33,20 @@
   3. the market leaves the uncertain / unknown-basis lists;
   4. account ledger vs lane vs cash for the window all read +0.0195 (difference 0 <= 0.005).
   If the attestation refuses, the row stays at 0.00 exactly as now and the reason is logged; no live window follows.
+
+## Interaction check: what `L5_BTC5M_FILLS_URL` switches on before settlement
+`Runner.attest_other_strategy_cost` runs once, just before a terminal 5-minute market is retired, only if the ledger
+holds that market at the $1 bound. It GETs the lane's feed, GETs `/v1/order/{id}` for each filled order (17 for
+window 1), and accepts only if every order agrees with the venue row AND the fills equal the ledger's held quantity
+on each side exactly. Verified in `tests/test_l5_fills_url_interaction.py` (13 tests):
+- window-1 shape with the ledger holding DOWN 0.10, 0.12, 0.17, 0.61 or UP 0.49: refused
+  `FILLS_DO_NOT_ACCOUNT_FOR_THE_POSITION`; ledger state and file byte-identical before and after;
+- lane unreachable, venue read failing (e.g. 429), feed not readable, an order with no venue id: refused, nothing written;
+- it calls only `transport.order`, and only for filled orders;
+- end to end with both settings: refused before settlement, retired at the bound (0.00), corrected to +0.0195 after;
+- the one shape it accepts (ledger holds exactly the lane's fills per side) writes the fills' real cost.
+Not covered by a test: its cost in time. It makes up to one 3 s feed read plus one venue read per filled order inside
+the settlement sweep, once per market.
 
 ## Order
 Lane first (the account service reads the lane's feed), then the account service with its two variables.
