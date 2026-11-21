@@ -67,7 +67,7 @@ import hashlib
 import json
 import os
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from src import l5_btc5m_controller as C
 from src import l5_live_authorization as AUTH
@@ -499,6 +499,36 @@ def venue_order_evidence(got: Any) -> Dict[str, Any]:
         if len(out) >= EVIDENCE_MAX_KEYS:
             break
     return out
+
+
+#: A CEILING ON ORDERS PER WINDOW, separate from the campaign's totals.
+#:
+#: The campaign budgets count orders across every window of an approval, so
+#: one busy window can spend what the later ones needed (2026-11-21: 47 of
+#: 60 in the first window, and the campaign could no longer open anything
+#: twelve minutes in). This bounds each window on its own. Unset: no
+#: per-window ceiling, exactly as before. Set but not a positive whole
+#: number: every risk-adding order is refused, because a limit someone
+#: tried to set must not silently vanish.
+#:
+#: LIKE THE FLAT TOTAL, IT NEVER REFUSES AN ORDER THAT REDUCES UNMATCHED
+#: INVENTORY: a count that can refuse the completing leg can only strand
+#: what the other orders created.
+WINDOW_ORDER_CAP_ENV = "L5_BTC5M_MAX_ORDERS_PER_WINDOW"
+
+
+def window_order_cap() -> Tuple[Optional[int], Optional[str]]:
+    """(cap, refusal). (None, None) when unset."""
+    raw = (os.environ.get(WINDOW_ORDER_CAP_ENV) or "").strip()
+    if not raw:
+        return None, None
+    try:
+        v = int(raw)
+    except ValueError:
+        return None, "WINDOW_ORDER_CAP_UNREADABLE"
+    if v <= 0:
+        return None, "WINDOW_ORDER_CAP_UNREADABLE"
+    return v, None
 
 
 def live_halt_engaged() -> bool:
@@ -2579,6 +2609,17 @@ class Btc5mExecutor:
                 if self.params.entry_mode == C.STRADDLE else CLIP_MAX_USD)
             if _cur:
                 return refuse(_cur)
+        _wcap, _wbad = window_order_cap()
+        if (_wcap is not None or _wbad) and not self._reduces_exposure(
+                market, side, qty):
+            if _wbad:
+                return refuse(_wbad, env=WINDOW_ORDER_CAP_ENV)
+            _sent = sum(1 for r in self._ledger["orders"].values()
+                        if r.get("market") == market)
+            if _sent >= _wcap:
+                return refuse("WINDOW_ORDER_CAP", sent=_sent, cap=_wcap,
+                              note="orders that reduce unmatched inventory "
+                                   "are not refused by this ceiling")
         if exp["total_exposure_usd"] + notional > self.params.max_exposure_usd:
             return refuse("BTC5M_EXPOSURE_CAP",
                           exposure_usd=exp["total_exposure_usd"],
@@ -2749,6 +2790,21 @@ class Btc5mExecutor:
                               detail={k: v for k, v in _cl.items()
                                       if k not in ("ok", "markets")})
             _cap = min(_cap, D(_cl["room_usd"]))
+            #: WINDOWS STILL AWAITING SETTLEMENT COUNT AT THEIR WORST CASE.
+            #: The campaign halt above is judged on SETTLED results, so
+            #: with an earlier window unsettled it would lend the same
+            #: room twice. Each unsettled market's worst case -- its whole
+            #: cost less the pairs that redeem whichever side wins -- comes
+            #: off the room first. It can only lower the cap.
+            _pw = self.pending_worst_case_usd(exclude=market)
+            report["exposure"]["pending_worst_case_usd"] = _s(_pw)
+            _cap = min(_cap, D(_cl["room_usd"]) - _pw)
+            if _cap <= ZERO:
+                return refuse(
+                    "CAMPAIGN_LOSS_HALT:UNSETTLED_WORST_CASE_EXHAUSTS_ROOM",
+                    client_order_id=coid,
+                    detail={"room_usd": _cl["room_usd"],
+                            "pending_worst_case_usd": _s(_pw)})
         resv = RESV.reserve(lane=STRATEGY, key=coid, usd=notional,
                             now=now, cap_usd=_cap)
         report["exposure"]["reservation"] = {
@@ -3050,6 +3106,21 @@ class Btc5mExecutor:
         out["ok"] = bool(latched.get("ok")) and saved \
             and not out["still_open"] and not out["refused"]
         return out
+
+    def pending_worst_case_usd(self, exclude: Any = None) -> Decimal:
+        """The most the unsettled markets (other than `exclude`) can still
+        lose: for each, its filled cost less min(UP, DOWN) -- a matched pair
+        redeems 1.00 whichever side wins, an unmatched share may redeem 0.
+        Never negative per market."""
+        total = ZERO
+        for m in self.pending_settlement():
+            if exclude is not None and str(m) == str(exclude):
+                continue
+            legs = self.inventory(m)
+            cost = legs[C.UP]["cost"] + legs[C.DOWN]["cost"]
+            sure = min(legs[C.UP]["qty"], legs[C.DOWN]["qty"])
+            total += max(ZERO, cost - sure)
+        return total
 
     def pending_settlement(self) -> List[str]:
         """Markets we hold fills in that the venue has not settled for us.

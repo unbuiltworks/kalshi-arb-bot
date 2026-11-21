@@ -613,6 +613,42 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
 #: It can only ADD a refusal, and only under a campaign document: with none
 #: set this returns None and nothing reads it.
 CAMPAIGN_RECON_GRACE_S = 0.0
+
+#: =================== CONSECUTIVE WINDOWS, ON VERIFIED EXPOSURE ==========
+#:
+#: Owner decision 2026-11-21 (after a campaign in which every second window
+#: was sat out): each listed window should be ELIGIBLE to trade, provided
+#: what is still open from the window before it is independently verified
+#: and bounded. OFF unless the switch is exactly the token; off, everything
+#: above applies unchanged (wait for settlement AND reconciliation).
+#:
+#: ON, a window may trade while the window before it is unsettled, when
+#: ALL of these hold -- and any one failing sits the window out as before:
+#:   * AT MOST ONE earlier market is unsettled;
+#:   * this lane has no order still open in it;
+#:   * the VENUE'S own position row for it agrees with this lane's ledger
+#:     on both legs (or the venue already reports it settled), read fresh
+#:     once per window;
+#:   * its worst case comes off the campaign's loss room before anything
+#:     is reserved (`Btc5mExecutor.pending_worst_case_usd`, always on);
+#:   * every market settled more than CAMPAIGN_RECON_DEADLINE_S ago is in
+#:     the account ledger within the tolerance. A younger settlement is
+#:     still being restated and does not refuse; an older one that is
+#:     missing or different does.
+#: The earlier window is settled DURING the next one (a read every
+#: MIDWINDOW_SETTLE_S), so its cost stops occupying the exposure limit as
+#: soon as the venue settles it.
+CAMPAIGN_OVERLAP_ENV = "L5_BTC5M_CAMPAIGN_OVERLAP"
+CAMPAIGN_OVERLAP_TOKEN = "ONE_VERIFIED_UNSETTLED_WINDOW"
+#: how long the account service is given to restate a settled window.
+#: Measured 2026-11-21: 2 minutes in both campaign windows.
+CAMPAIGN_RECON_DEADLINE_S = 600.0
+MIDWINDOW_SETTLE_S = 15.0
+
+
+def campaign_overlap() -> bool:
+    return (os.environ.get(CAMPAIGN_OVERLAP_ENV) or "").strip() \
+        == CAMPAIGN_OVERLAP_TOKEN
 CAMPAIGN_RECON_TOLERANCE_USD = D("0.005")
 
 
@@ -623,6 +659,8 @@ def campaign_reconciliation(own: Any, risk: Mapping[str, Any],
     """None when no campaign document is set; else the verdict."""
     if not PROBE.campaign_configured(env):
         return None
+    grace = (CAMPAIGN_RECON_DEADLINE_S if campaign_overlap()
+             else CAMPAIGN_RECON_GRACE_S)
     by = getattr(own, "by_market", None)
     hist = getattr(own, "history", None)
     if not isinstance(by, Mapping) or not isinstance(hist, Mapping):
@@ -642,7 +680,7 @@ def campaign_reconciliation(own: Any, risk: Mapping[str, Any],
         except (TypeError, ValueError):
             bad[m] = "SETTLED_TIME_UNREADABLE"
             continue
-        if age < CAMPAIGN_RECON_GRACE_S:
+        if age < grace:
             waiting.append(m)
             continue
         due.append(m)
@@ -657,7 +695,7 @@ def campaign_reconciliation(own: Any, risk: Mapping[str, Any],
     return {"ok": not bad, "why": None if not bad else
             "CAMPAIGN_LEDGER_NOT_RECONCILED",
             "checked": due, "within_grace": waiting, "failed": bad,
-            "grace_s": CAMPAIGN_RECON_GRACE_S,
+            "grace_s": grace,
             "tolerance_usd": str(CAMPAIGN_RECON_TOLERANCE_USD)}
 
 
@@ -2056,6 +2094,80 @@ class Session:
             return OwnSettled.of(by, hist)
         return min(D(0), got)
 
+    def _overlap_refusal(self, pending: List[str]) -> Optional[Dict[str, Any]]:
+        """Why an unsettled earlier window forbids trading this one, or None.
+        See CAMPAIGN_OVERLAP_ENV. A market verified once in this window is
+        not read again; anything unreadable is a refusal."""
+        if len(pending) > 1:
+            return {"reason": "CAMPAIGN_TOO_MANY_UNSETTLED_WINDOWS"}
+        m = pending[0]
+        seen = getattr(self, "_overlap_verified", None)
+        if seen is None:
+            seen = self._overlap_verified = set()
+        if m in seen:
+            return None
+        try:
+            if any(str(r.get("market")) == m
+                   for r in self.ex.live_orders().values()):
+                return {"reason": "CAMPAIGN_PREVIOUS_WINDOW_HAS_OPEN_ORDERS"}
+            legs = self.ex.inventory(m)
+            rows = [r for r in (self.t.positions() or ())
+                    if isinstance(r, Mapping) and str(
+                        r.get("marketSlug") or r.get("market")) == m]
+            if len(rows) == 1:
+                up = _dec(rows[0].get("qtyBoughtDecimal"))
+                dn = _dec(rows[0].get("qtySoldDecimal"))
+                if up is None or dn is None:
+                    return {"reason":
+                            "CAMPAIGN_PREVIOUS_WINDOW_VENUE_ROW_UNREADABLE"}
+                if up != legs[C.UP]["qty"] or dn != legs[C.DOWN]["qty"]:
+                    return {"reason":
+                            "CAMPAIGN_PREVIOUS_WINDOW_DISAGREES_WITH_VENUE",
+                            "venue": {"up": str(up), "down": str(dn)},
+                            "ours": {"up": str(legs[C.UP]["qty"]),
+                                     "down": str(legs[C.DOWN]["qty"])}}
+            else:
+                #: no row (or more than one): only acceptable when the
+                #: venue itself says the market has settled, in which case
+                #: the mid-window read below records it
+                v = self.t.settlement(m)
+                if not (isinstance(v, Mapping) and v.get("terminal")):
+                    return {"reason":
+                            "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE",
+                            "venue_rows": len(rows)}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"reason": "CAMPAIGN_PREVIOUS_WINDOW_READ_FAILED",
+                    "error": type(exc).__name__}
+        seen.add(m)
+        return None
+
+    def settle_earlier_windows(self, now: float) -> Optional[Dict[str, Any]]:
+        """Under a campaign with overlap on: one settlement attempt for each
+        earlier window, at most every MIDWINDOW_SETTLE_S. Reads only, and
+        releases only what the venue settled. Never raises."""
+        if not (PROBE.campaign_configured() and campaign_overlap()):
+            return None
+        last = getattr(self, "_midwindow_settle_at", None)
+        if last is not None and now - last < MIDWINDOW_SETTLE_S:
+            return None
+        self._midwindow_settle_at = now
+        try:
+            if not [m for m in self.ex.pending_settlement()
+                    if m != self.market]:
+                return None
+            recon = reconcile_pending(self.ex, self.t)
+            freed = self.ex.sync_reservation()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__}
+        if recon.get("settled") or recon.get("unreadable"):
+            self._log("L5_BTC5M_MIDWINDOW_SETTLEMENT",
+                      {"settlement": recon, "reservation": freed})
+        return recon
+
     def gates(self) -> Dict[str, Any]:
         h = self.halt_fn()
         if not h.get("ok"):
@@ -2094,7 +2206,12 @@ class Session:
                     "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"
                 return {"ok": False,
                         "reason": "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"}
-            if _pend:
+            if _pend and campaign_overlap():
+                _why = self._overlap_refusal(_pend)
+                if _why:
+                    self._campaign_sat_out = _why["reason"]
+                    return dict(_why, ok=False, pending=_pend)
+            elif _pend:
                 self._campaign_sat_out = \
                     "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED"
                 return {"ok": False,
@@ -2245,6 +2362,7 @@ class Session:
             self.sleep(min(STEP_S, ws - self.clock()))
         while self.clock() < stop_at:
             now = self.clock()
+            self.settle_earlier_windows(now)
             g = self.gates()
             if not g["ok"]:
                 rep = self.ex.end_of_window(self.market)
