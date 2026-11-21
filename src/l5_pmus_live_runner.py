@@ -2949,13 +2949,32 @@ class Runner:
             age = (None if self.available_cash_t is None
                    else t - self.available_cash_t)
             val = None
+            unc_seen, sibling_seen = None, None
             if self.available_cash_usd is None or age is None:
                 why = "BUYING_POWER_NOT_READ"
             elif age > EQUITY_CASH_MAX_AGE_S or age < -5:
                 why = "BUYING_POWER_STALE"
             else:
                 unc = self.store.orders_uncertain()
-                if unc:
+                #: THE VALUE IS STILL PUBLISHED when the whole uncertainty
+                #: is another strategy's position this ledger had not
+                #: booked yet -- see `uncertainty_confined_to_other_
+                #: strategy`. The figure is the venue's own buying power
+                #: plus guaranteed pair redemption, and an adopted net
+                #: position adds nothing to it, so it can only read LOWER
+                #: than the truth. This service's own submission gate is
+                #: untouched. OFF unless the switch is exactly the token.
+                sibling_only = None
+                if unc and publish_value_during_sibling_adoption():
+                    try:
+                        sibling_only = self.store \
+                            .uncertainty_confined_to_other_strategy()
+                    except BaseException as exc:               # noqa: BLE001
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        sibling_only = None
+                unc_seen, sibling_seen = unc, sibling_only
+                if unc and not sibling_only:
                     why = "ORDER_STATE_UNCERTAIN"
                 else:
                     val = PDD.worst_case_value(
@@ -2999,7 +3018,14 @@ class Runner:
                     "unavailable_why": why,
                     "buying_power_age_s": (None if age is None
                                            else round(age, 1)),
-                    "max_age_s": EQUITY_CASH_MAX_AGE_S},
+                    "max_age_s": EQUITY_CASH_MAX_AGE_S,
+                    #: present ONLY when the value was published DURING an
+                    #: uncertainty, with the markets it was confined to;
+                    #: otherwise the block is exactly what it always was
+                    **({} if not (unc_seen and sibling_seen) else {
+                        "published_while_uncertain": {
+                            "scope": SIBLING_VALUE_TOKEN,
+                            "markets": list(sibling_seen)}})},
             }
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
@@ -13113,6 +13139,17 @@ COMPLETION_REQUOTE_ENV = "L5_COMPLETION_REQUOTE"
 def completion_requote_enabled() -> bool:
     return (str(os.getenv(COMPLETION_REQUOTE_ENV, "")).strip().upper()
             in ("1", "YES", "TRUE", "ON"))
+
+
+#: keep publishing the conservative portfolio value while the ONLY
+#: uncertainty is another strategy's just-adopted position. Exactly the
+#: token, or off.
+SIBLING_VALUE_ENV = "L5_PUBLISH_VALUE_DURING_SIBLING_ADOPTION"
+SIBLING_VALUE_TOKEN = "OTHER_STRATEGY_POSITION_ONLY"
+
+
+def publish_value_during_sibling_adoption() -> bool:
+    return (os.getenv(SIBLING_VALUE_ENV) or "").strip() == SIBLING_VALUE_TOKEN
 
 
 #: names the guard service's READ-ONLY halt endpoint. Unset = inert.

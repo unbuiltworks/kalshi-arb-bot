@@ -1191,6 +1191,8 @@ VENUE_ORDER_LINK = "venue_order_ids"
 #: which ORDER an `orders_uncertain` mark is about, when it is about one.
 #: Evidence for `resolve_cancel_uncertainty`; never read as permission.
 UNCERTAIN_CAUSE = "orders_uncertain_cause"
+#: what the last reconciliation's uncertainty consisted of (evidence only)
+UNCERTAIN_SCOPE = "orders_uncertain_scope"
 #: the only causes the venue's terminal read of that order can end: both
 #: say "we cancelled it and could not see it finish".
 CANCEL_UNCERTAINTY_KINDS = ("CANCEL_STILL_OPEN", "CANCEL_UNVERIFIED")
@@ -2196,6 +2198,52 @@ class InventoryStore:
         the assumption that loses money.
         """
         return self.state.get("orders_uncertain") or None
+
+    def uncertainty_confined_to_other_strategy(self) -> Optional[List[str]]:
+        """The markets, when the WHOLE of the current uncertainty is another
+        registered strategy's position that this ledger had not booked.
+        None in every other case, including "not uncertain at all".
+
+        WHY IT EXISTS. This ledger is the account-wide one. When the
+        5-minute strategy's first fill of a window appears at the venue,
+        the next reconciliation adopts it ("venue holds a market we never
+        booked"), and marks the order state uncertain until the following
+        reconciliation, about 15-20 s later. That is right for THIS
+        service's own submissions and is not changed. But the published
+        portfolio value was withheld for the same seconds, and the other
+        strategy -- whose fill it was -- then refused on a missing value,
+        cancelled its resting bid and held its first leg unquoted while
+        the market moved (2026-11-21 16:40Z: 22 s, UP 0.41 -> 0.61).
+
+        READS ONLY, and every condition is required:
+          * the uncertainty's reason is exactly the one the last
+            reconciliation wrote (a later mark of any kind does not match);
+          * that reconciliation found NO incoherent book, NO order of ours
+            awaiting a terminal read and NO quarantined order;
+          * every disputed market is in ANOTHER registered strategy's
+            series; and
+          * this ledger has no live order in any of them.
+        """
+        unc = self.state.get("orders_uncertain")
+        scope = self.state.get(UNCERTAIN_SCOPE)
+        if not unc or not isinstance(scope, Mapping):
+            return None
+        if scope.get("why") != unc:
+            return None
+        if scope.get("incoherent") or scope.get("pending") \
+                or scope.get("quarantine"):
+            return None
+        markets = scope.get("disputed")
+        if not isinstance(markets, list) or not markets:
+            return None
+        live = {str((o or {}).get("market")) for o in
+                (self.state.get("live_orders") or {}).values()
+                if isinstance(o, Mapping)}
+        for m in markets:
+            owner = ORIGIN.strategy_of_market(str(m))
+            if owner is None or owner == OWN_STRATEGY or str(m) in live:
+                return None
+        return [str(m) for m in markets]
 
     def mark_uncertain(self, why: str, *,
                        cause: Optional[Mapping[str, Any]] = None) -> None:
@@ -6687,6 +6735,7 @@ class InventoryStore:
         # An authoritative answer is the ONLY thing that clears uncertainty
         # -- and only when what it leaves behind is a book that could exist.
         self.state["orders_uncertain"] = None
+        self.state[UNCERTAIN_SCOPE] = None
         incoherent: Dict[str, Any] = {}
         for m in sorted({k.rsplit("|", 1)[0]
                          for k in (self.state.get("positions") or {})}):
@@ -6733,6 +6782,14 @@ class InventoryStore:
                 % (sorted(set(disputed)), sorted(incoherent), pending,
                    quarantine))
             self.state["orders_uncertain"] = _why
+            # WHAT THE UNCERTAINTY IS MADE OF, kept beside the reason it
+            # belongs to. Evidence only: see
+            # `uncertainty_confined_to_other_strategy`. Any later mark
+            # writes a different reason and this no longer matches it.
+            self.state[UNCERTAIN_SCOPE] = {
+                "why": _why, "disputed": sorted(set(disputed)),
+                "incoherent": sorted(incoherent), "pending": list(pending),
+                "quarantine": list(quarantine)}
             # WHICH ORDERS, when they are the whole of it. Evidence for
             # `resolve_pending_uncertainty`; a divergence, an incoherent
             # book or a quarantine records NO cause and is cleared only by
