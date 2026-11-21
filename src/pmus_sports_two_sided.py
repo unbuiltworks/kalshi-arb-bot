@@ -3577,7 +3577,11 @@ def main() -> int:
         try:
             from src.pmus_sports_tape import Tape
             TAPE = Tape(STATE_DIR / "tape", max_bytes_per_day=int(os.getenv(
-                "PMUS_TWO_SIDED_TAPE_MAX_BYTES", "40000000")))
+                "PMUS_TWO_SIDED_TAPE_MAX_BYTES", "40000000")),
+                # owner 2026-11-21: keep the 14-18 Nov book tapes for the RN1
+                # replica replay; 0 = never prune. Default unchanged (7).
+                keep_days=int(os.getenv("PMUS_TWO_SIDED_TAPE_KEEP_DAYS",
+                                        "7")))
             log("tape_enabled", dir=str(STATE_DIR / "tape"))
         except Exception as exc:                         # noqa: BLE001
             log("tape_error", err=f"{type(exc).__name__}:{str(exc)[:120]}")
