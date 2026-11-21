@@ -122,6 +122,22 @@ class TransferWatch:
         self.last_error = None
         self.reads += 1
 
+    def progress(self, now: float) -> Dict[str, Any]:
+        """WHERE THE READ IS, for an operator. Reporting only: nothing
+        reads this to decide anything, and `view` is unchanged.
+
+        Until a read finishes `view` says NOT_READ_YET with no page count,
+        which from outside is indistinguishable from a read that never
+        started or has stalled -- seen on 2026-11-21, when a restart's
+        eleven-minute read looked for all of it exactly like a hung one.
+        """
+        w = self._walk
+        return {"walking": w is not None,
+                "pages_this_walk": None if w is None else int(w["pages"]),
+                "reads_completed": int(self.reads),
+                "backing_off_s": round(max(0.0, self.next_allowed - now), 1),
+                "last_error": self.last_error}
+
     def view(self, since: dt.datetime, now: float) -> Dict[str, Any]:
         """What `net_transfers` reads. Never raises; stale or absent is a
         result with `complete_back_to` None, which refuses."""

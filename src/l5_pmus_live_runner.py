@@ -2975,6 +2975,14 @@ class Runner:
                                  {k: seen.get(k) for k in
                                   ("by", "pages", "age_s", "last_error",
                                    "complete_back_to")})
+                #: reporting only; `net_usd` and `why` above decide
+                try:
+                    moved["progress"] = (None if watch is None
+                                         else watch.progress(t))
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    moved["progress"] = None
                 period = EB.period_realized(
                     self.store.state.get("retired_markets") or {},
                     doc["at_utc"])
@@ -6710,6 +6718,45 @@ class Runner:
                        "hold a looser copy. Read-only."),
         }
 
+    def _publication_summary(self) -> Dict[str, Any]:
+        """WHAT THE REGISTRY IS PUBLISHING for a second strategy, in a few
+        fields an operator can read on the heartbeat.
+
+        The account-risk record is served only on the internal registry
+        endpoint, so whether its lifetime basis reconciles could not be
+        seen from outside without deploying the service that reads it.
+        This calls the SAME two methods that record is built from and
+        reports their verdicts, never their rows. Reporting only; never
+        raises; a field it cannot establish is None.
+        """
+        out: Dict[str, Any] = {"lifetime_basis": None,
+                               "retired_results_utc_day": None}
+        try:
+            b = self._lifetime_basis_line()
+            if isinstance(b, Mapping):
+                out["lifetime_basis"] = {
+                    k: b.get(k) for k in (
+                        "reconciled", "complete", "rows", "rebased_at_utc",
+                        "cash_read_utc", "lifetime_realized_usd")}
+            day = None
+            try:
+                day = (self.day_realized_line() or {}).get("utc_day")
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+            r = self._retired_results_line(day)
+            if isinstance(r, Mapping):
+                res = r.get("results")
+                out["retired_results_utc_day"] = {
+                    "utc_day": r.get("utc_day"),
+                    "markets": (len(res) if isinstance(res, Mapping)
+                                else None)}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = type(exc).__name__
+        return out
+
     def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
         """Today's retired markets with the result each was booked at.
         Never raises: unreadable is None, which a reader treats as absent."""
@@ -7053,6 +7100,7 @@ class Runner:
             "portfolio_drawdown": self.portfolio_drawdown_report(),
             "equity_baseline": self.equity_risk_lines(self.now_t).get(
                 "equity_baseline"),
+            "account_risk_publication": self._publication_summary(),
             "risk_gate": {
                 "measures": "worst-case loss over both settlements",
                 "max_usd_per_market": str(self.limits.max_usd_per_market),
