@@ -334,3 +334,28 @@ attestation refused (venue quantity 4 against ledger 2) and went final.
 Nine other matched pairs that day filled between two reads and were never
 booked at all (+3.06 by the executor's arithmetic). Whether the venue
 credited the redemption cash is not in any log.
+
+## Prepared BTC5m follow-up release and exclusions (2026-11-21; NOT deployed, NO variable set)
+
+RELEASE. `release/l5-btc5m-inventory-20261121b`, the commit that adds this
+section. Against the running `be85a3b07` the image differs in ONE source
+file, `src/l5_btc5m_runner.py`: the owner attestation
+`L5_BTC5M_NOT_THIS_LANE_MARKETS` (exact slugs only; a named market is
+reported and not refused; anything unnamed still refuses). Unset, every
+decision is that of `be85a3b07`. Safety suites: 2,381 passed, 0 failed.
+
+EXCLUSION, PREPARED FOR THE OWNER TO SET (five markets the owner has
+confirmed as manual trades of 2026-11-18):
+
+    L5_BTC5M_NOT_THIS_LANE_MARKETS=cpc-btc-updown-5m-2026-11-18-1535z,cpc-btc-updown-5m-2026-11-18-1540z,cpc-btc-updown-5m-2026-11-18-1545z,cpc-btc-updown-5m-2026-11-18-1600z,cpc-btc-updown-5m-2026-11-18-1605z
+
+It removes nothing from account-wide accounting: the account service has
+booked all five (-1.8585, -1.8398, -0.92, -0.32, -1.634) and the daily,
+cumulative and equity limits read its figures. The variable only stops
+this lane mistaking them for entries lost from its own ledger.
+
+NOT IN THE LIST: `cpc-btc-updown-5m-2026-11-17-0150z` (DOWN 2, cost $0.18,
+lost). Ownership is not established. Until it is named, arming refuses
+with `OWN_LEDGER_MISSING_SETTLED_MARKETS`. The accounting release's
+per-market detail line (venue order ids and the manual indicator) is the
+planned way to establish it.
