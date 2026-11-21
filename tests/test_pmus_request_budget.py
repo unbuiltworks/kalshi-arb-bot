@@ -104,3 +104,31 @@ def test_report_shape():
     r = b.report()
     assert {"rps_budget", "sent_rps", "cooling", "sent", "deferred",
             "http_429"} <= set(r)
+
+
+def test_critical_burst_cannot_starve_reconciliation_for_long():
+    """The deficit is floored at -burst, so after ANY cancel storm an
+    account read gets a token within (burst + 1) / rps seconds."""
+    b, c = budget(rps=1, burst=4, normal_wait_s=3)
+    for _ in range(100):
+        b.acquire("critical")
+    assert b._tokens >= -4
+    c.t += (4 + 1) / 1
+    b.acquire("normal")                          # account read goes
+    assert b.stats["sent"]["normal"] == 1
+
+
+def test_no_queue_waits_are_bounded():
+    """Nothing is queued: research is refused at once, normal waits at most
+    normal_wait_s on the caller's own thread, then is refused."""
+    b, c = budget(rps=1, burst=1, normal_wait_s=3)
+    b.acquire("normal")
+    b.note_429()
+    t0 = c.t
+    with pytest.raises(RB.BudgetDeferred):
+        b.acquire("normal")
+    assert c.t - t0 <= 3.5
+    t0 = c.t
+    with pytest.raises(RB.BudgetDeferred):
+        b.acquire("research")
+    assert c.t == t0

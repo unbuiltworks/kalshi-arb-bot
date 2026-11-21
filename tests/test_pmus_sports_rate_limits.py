@@ -42,16 +42,102 @@ def test_good_read_refreshes_the_snapshot_and_logs_recovery(eng, capsys):
     assert "account_read_recovered" in capsys.readouterr().out
 
 
-def test_stale_account_refuses_new_exposure_but_not_completions(eng, monkeypatch,
-                                                               capsys):
+def _held_yes(e, v, qty="5"):
+    """Book and venue agree: we hold `qty` YES, nothing open."""
+    mk = e.b.m("aec-x")
+    mk["pos"]["YES"], mk["cost"]["YES"] = D(qty), D(qty) * D("0.40")
+    v.acct = {"positions": {"aec-x": D(qty)}, "open_orders": []}
+    return mk
+
+
+def test_stale_account_refuses_new_exposure(eng, capsys):
     e, v = eng
     e.require_fresh_account = True
     e._acct_ok_at = None                                 # never read
+    _held_yes(e, v)
+    v.account = lambda: (_ for _ in ()).throw(E429("HTTP Error 429"))
     e.place("aec-x", "YES", D("0.40"), D("1"), "rn1_open")
     assert v.orders == {}
     assert "place_refused_account_stale" in capsys.readouterr().out
-    e.place("aec-x", "NO", D("0.55"), D("1"), "two_sided_complete")
-    assert len(v.orders) == 1                            # completion goes
+
+
+def test_stale_completion_goes_only_on_venue_confirmed_inventory(eng):
+    e, v = eng
+    e.require_fresh_account = True
+    e._acct_ok_at = None
+    _held_yes(e, v)
+    e.place("aec-x", "NO", D("0.55"), D("5"), "two_sided_complete")
+    assert len(v.orders) == 1                            # confirmed -> goes
+    assert e.account_fresh()                             # it used a fresh read
+
+
+@pytest.mark.parametrize("case,reason", [
+    ("unreadable", "account_unreadable"),
+    ("venue_differs", "venue_inventory_mismatch"),
+    ("no_venue_row", "venue_inventory_mismatch"),
+    ("wrong_side", "would_not_reduce_venue_imbalance"),
+    ("too_big", "exceeds_venue_imbalance"),
+    ("unknown_order", "venue_order_state_mismatch"),
+    ("book_order_gone", "venue_order_state_mismatch"),
+    ("resting_already", "exceeds_venue_imbalance"),
+])
+def test_stale_completion_refused_without_confirmation(eng, capsys, case,
+                                                       reason):
+    e, v = eng
+    e.require_fresh_account = True
+    e._acct_ok_at = None
+    mk = _held_yes(e, v)
+    side, qty = "NO", D("5")
+    if case == "unreadable":
+        v.account = lambda: (_ for _ in ()).throw(E429("HTTP Error 429"))
+    elif case == "venue_differs":
+        v.acct["positions"]["aec-x"] = D("3")
+    elif case == "no_venue_row":
+        v.acct["positions"] = {}
+    elif case == "wrong_side":
+        side = "YES"                                     # would extend
+    elif case == "too_big":
+        qty = D("6")                                     # would flip
+    elif case == "unknown_order":
+        v.acct["open_orders"] = [{"id": "manual1", "marketSlug": "aec-x"}]
+    elif case == "book_order_gone":
+        mk["orders"]["o9"] = {"side": "NO", "px": "0.5", "qty": "1",
+                              "filled": "0", "open": True}
+    elif case == "resting_already":
+        mk["orders"]["o9"] = {"side": "NO", "px": "0.5", "qty": "1",
+                              "filled": "0", "open": True}
+        v.acct["open_orders"] = [{"id": "o9", "marketSlug": "aec-x"}]
+    e.place("aec-x", side, D("0.55"), qty, "two_sided_complete")
+    assert v.orders == {}
+    out = capsys.readouterr().out
+    assert "place_refused_stale_completion" in out and reason in out
+
+
+def test_stale_completion_still_obeys_lock_and_halt(eng, monkeypatch):
+    e, v = eng
+    e.require_fresh_account = True
+    e._acct_ok_at = None
+    _held_yes(e, v)
+    monkeypatch.setattr(M, "submission_locked", lambda: True)
+    e.place("aec-x", "NO", D("0.55"), D("5"), "two_sided_complete")
+    assert v.orders == {}
+
+
+def test_stale_completion_reads_at_most_every_retry_interval(eng, capsys):
+    e, v = eng
+    e.require_fresh_account = True
+    e._acct_ok_at = None
+    _held_yes(e, v)
+    calls = {"n": 0}
+
+    def boom():
+        calls["n"] += 1
+        raise E429("HTTP Error 429")
+    v.account = boom
+    for _ in range(5):
+        e.place("aec-x", "NO", D("0.55"), D("5"), "two_sided_complete")
+    assert calls["n"] == 1 and v.orders == {}
+    assert "account_stale_retry_wait" in capsys.readouterr().out
 
 
 def test_account_freshness_expires(eng, monkeypatch):

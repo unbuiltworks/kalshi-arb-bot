@@ -1183,6 +1183,7 @@ class Engine:
         self._acct_ok_at: Optional[float] = None
         self._acct_cache: Optional[Dict[str, Any]] = None
         self._acct_fail = 0
+        self._stale_try_at = -1e9
         self._last_reward = time.monotonic() - REWARD_CHECK_S + 120  # first ~2min after boot
         self.stop = False
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
@@ -2438,15 +2439,69 @@ class Engine:
                 return "ACCOUNT_EXPOSURE_UNREADABLE"
         return None
 
+    def stale_completion_block(self, slug: str, side: str,
+                               qty: D) -> Optional[str]:
+        """Owner 2026-11-21: a completion spends cash, so on a STALE account
+        it is allowed only against fresh, venue-confirmed inventory and
+        order state. One fresh account read (at most every ACCOUNT_RETRY_S),
+        then ALL of:
+          * the venue's net position in this market equals the book's
+            YES - NO (unproven or disagreeing inventory -> refuse);
+          * this side REDUCES the venue-confirmed imbalance, and this qty
+            plus our open same-side orders does not exceed it (a completion
+            can never flip or extend the position);
+          * the venue's open orders in this market are exactly the book's
+            open orders (no unknown, foreign or manual orders).
+        Returns a refusal reason, or None. The submission lock and shared
+        halt are still checked by place() afterwards."""
+        now = time.monotonic()
+        if now - self._stale_try_at < ACCOUNT_RETRY_S:
+            return "account_stale_retry_wait"
+        self._stale_try_at = now
+        acc = self.read_account()
+        if acc is None:
+            return "account_unreadable"
+        mk = self.b.m(slug)
+        y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        try:
+            venue_net = D(str((acc.get("positions") or {}).get(slug) or 0))
+        except Exception:                                 # noqa: BLE001
+            return "venue_position_unreadable"
+        if venue_net != y - n:
+            return "venue_inventory_mismatch"
+        excess = venue_net if side == "NO" else -venue_net
+        if excess <= 0:
+            return "would_not_reduce_venue_imbalance"
+        venue_open = {str(o.get("id")) for o in acc.get("open_orders") or []
+                      if str(o.get("marketSlug") or "") == slug}
+        book_open = {oid for oid, o in mk["orders"].items() if o.get("open")}
+        if venue_open != book_open:
+            return "venue_order_state_mismatch"
+        resting = sum((D(o["qty"]) - D(o.get("filled") or "0")
+                       for o in mk["orders"].values()
+                       if o.get("open") and o.get("side") == side), D(0))
+        if resting + qty > excess:
+            return "exceeds_venue_imbalance"
+        return None
+
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if is_completion_stage(stage) and not self.account_fresh():
+            why = self.stale_completion_block(slug, side, qty)
+            if why:
+                log("place_refused_stale_completion", slug=slug, side=side,
+                    px=px, qty=qty, stage=stage, reason=why,
+                    label="stale account: completion needs fresh "
+                          "venue-confirmed inventory and order state")
+                return
         if not is_completion_stage(stage) and not self.account_fresh():
             log("place_refused_account_stale", slug=slug, side=side, px=px,
                 qty=qty, stage=stage,
                 age_s=None if self._acct_ok_at is None else
                 round(time.monotonic() - self._acct_ok_at, 1),
                 label="new exposure needs a fresh account read; "
-                      "management and completions continue")
+                      "management continues; completions need venue "
+                      "confirmation")
             return
         if not is_completion_stage(stage):
             why = self.account_risk_blocks(px, qty)
