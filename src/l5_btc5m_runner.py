@@ -589,27 +589,30 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
     return add, full, gaps
 
 
-#: A CAMPAIGN STOPS WHEN THE ACCOUNT LEDGER HAS NOT RECONCILED A WINDOW.
+#: A CAMPAIGN DOES NOT TRADE PAST A WINDOW THE ACCOUNT LEDGER HAS NOT
+#: RECONCILED.
 #:
 #: With one window per arming, the owner compared the lane's settled result
 #: with the account ledger's before the next window was armed. A campaign
 #: document covers many windows in one arming, so that comparison has to be
 #: made by the code or it is not made.
 #:
-#: While a campaign document is SET (valid or not), every market this lane
-#: settled today more than CAMPAIGN_RECON_GRACE_S ago must be published by
-#: the account service with a result within CAMPAIGN_RECON_TOLERANCE_USD of
-#: this lane's own. One that is missing, unreadable or further away refuses
-#: every further submission. The grace is how long the account service is
-#: given to restate a window from the venue's fills. Measured 2026-11-21:
-#: 10 and 17 minutes, because each pass reads the venue's whole activity
-#: feed (236 pages, about 10 minutes) and a window that settles during a
-#: pass waits for the next one -- so two passes, plus margin. The tolerance
-#: is the owner's.
+#: While a campaign document is SET (valid or not), nothing may be submitted
+#: unless EVERY market this lane has traded today is
+#:   (a) settled in this lane's own ledger -- `Session.gates` refuses while
+#:       an earlier window is still awaiting the venue's settlement; and
+#:   (b) published by the account service with a result within
+#:       CAMPAIGN_RECON_TOLERANCE_USD of this lane's own.
+#: One that is missing, unreadable or further away refuses. THERE IS NO
+#: GRACE (owner decision 2026-11-21, replacing a 40-minute allowance): a
+#: reconciliation that is merely pending is a refusal too, so the lane
+#: WAITS -- it does not trade through the uncertainty. The account service
+#: takes 10-17 minutes to restate a window from the venue's fills, so a
+#: campaign trades roughly one window in four or five. That is accepted.
 #:
 #: It can only ADD a refusal, and only under a campaign document: with none
 #: set this returns None and nothing reads it.
-CAMPAIGN_RECON_GRACE_S = 2400.0
+CAMPAIGN_RECON_GRACE_S = 0.0
 CAMPAIGN_RECON_TOLERANCE_USD = D("0.005")
 
 
@@ -2063,6 +2066,22 @@ class Session:
             own = self._own_unaccounted()
         except ValueError:
             return {"ok": False, "reason": "OWN_SETTLED_RESULT_UNREADABLE"}
+        #: UNDER A CAMPAIGN DOCUMENT, AN EARLIER WINDOW STILL AWAITING THE
+        #: VENUE'S SETTLEMENT STOPS NEW EXPOSURE. Its result is not known,
+        #: so it cannot have been reconciled. See CAMPAIGN_RECON_GRACE_S.
+        if PROBE.campaign_configured():
+            try:
+                _pend = sorted(m for m in self.ex.pending_settlement()
+                               if m != self.market)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return {"ok": False,
+                        "reason": "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"}
+            if _pend:
+                return {"ok": False,
+                        "reason": "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED",
+                        "pending": _pend}
         r = self.risk_fn(self._now(), own)
         if not r.get("ok"):
             return {"ok": False, "reason": "ACCOUNT_RISK:%s" % r.get("reason"),

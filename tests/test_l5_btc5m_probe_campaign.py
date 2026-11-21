@@ -270,9 +270,17 @@ def test_within_tolerance_passes_and_beyond_it_stops():
     assert r["failed"][M1].startswith("DIFFERS:")
 
 
-def test_a_window_still_inside_the_grace_is_not_judged():
-    r = recon(own({M3: "-0.0408"}, {M3: 600}), risk({M3: "-0.02"}))
-    assert r["ok"] is True and r["within_grace"] == [M3]
+def test_there_is_no_grace_a_pending_reconciliation_waits():
+    """The owner's rule: do not trade through a window that has not
+    reconciled yet, however recently it settled."""
+    assert RUN.CAMPAIGN_RECON_GRACE_S == 0
+    for age in (0, 30, 600, 2400):
+        r = recon(own({M3: "-0.0408"}, {M3: age}), risk({M3: "-0.02"}))
+        assert r["ok"] is False and r["within_grace"] == []
+        r = recon(own({M3: "-0.0408"}, {M3: age}), risk({}))
+        assert r["failed"] == {M3: "NOT_IN_THE_ACCOUNT_LEDGER"}
+    assert recon(own({M3: "-0.0408"}, {M3: 5}),
+                 risk({M3: "-0.0408"}))["ok"] is True
 
 
 def test_a_window_the_account_ledger_never_booked_stops():
@@ -282,9 +290,10 @@ def test_a_window_the_account_ledger_never_booked_stops():
 
 @pytest.mark.parametrize("r_", [risk(None), risk({}, day="2026-11-20")])
 def test_nothing_published_stops_once_a_window_is_due(r_):
-    r = recon(own({M1: "0.01"}, {M1: 2500}), r_)
-    assert r["ok"] is False
-    assert recon(own({M1: "0.01"}, {M1: 100}), r_)["ok"] is True
+    assert recon(own({M1: "0.01"}, {M1: 2500}), r_)["ok"] is False
+    assert recon(own({M1: "0.01"}, {M1: 1}), r_)["ok"] is False
+    #: with nothing settled today there is nothing to reconcile
+    assert recon(RUN.OwnSettled.of({}, {}), r_)["ok"] is True
 
 
 def test_no_breakdown_is_not_a_pass():
@@ -323,3 +332,52 @@ def test_account_risk_is_untouched_without_a_campaign(monkeypatch):
                          fetch=lambda u: _doc({M1: "-0.0200"}))
     assert r.get("reason") != "CAMPAIGN_LEDGER_NOT_RECONCILED"
     assert "campaign_reconciliation" not in r
+
+
+# ------------------------------ an earlier window not yet settled: waits
+
+class _Ex:
+    def __init__(self, pending=(), raises=False):
+        self._pending, self._raises = list(pending), raises
+
+    def pending_settlement(self):
+        if self._raises:
+            raise RuntimeError("ledger")
+        return list(self._pending)
+
+
+def _gates(ex, market=M2, risk_ok=True):
+    s = RUN.Session.__new__(RUN.Session)
+    s.ex, s.market = ex, market
+    s.halt_fn = lambda: {"ok": True}
+    s._own_unaccounted = lambda: RUN.OwnSettled.of({}, {})
+    s._now = lambda: NOW
+    s.risk_fn = lambda now, own: {"ok": risk_ok, "reason": None,
+                                  "loss_room_usd": "0.95"}
+    s.exposure_ceiling = lambda: D("0.60")
+    return s.gates()
+
+
+def test_under_a_campaign_an_unsettled_earlier_window_refuses(monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    g = _gates(_Ex([M1]))
+    assert g == {"ok": False, "pending": [M1],
+                 "reason": "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED"}
+
+
+def test_the_window_being_traded_is_not_its_own_predecessor(monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    assert _gates(_Ex([M2]))["ok"] is True
+    assert _gates(_Ex([]))["ok"] is True
+
+
+def test_an_unreadable_pending_set_refuses(monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    assert _gates(_Ex(raises=True))["reason"] \
+        == "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"
+
+
+def test_without_a_campaign_document_the_gate_is_as_before(monkeypatch):
+    monkeypatch.delenv(P.CAMPAIGN_DOC_ENV, raising=False)
+    assert _gates(_Ex([M1]))["ok"] is True
+    assert _gates(_Ex(raises=True))["ok"] is True
