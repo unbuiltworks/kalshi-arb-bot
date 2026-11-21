@@ -3072,6 +3072,19 @@ class Runner:
             except BaseException:                              # noqa: BLE001
                 pass
 
+    def venue_cost_attestation_lines(self) -> Dict[str, Any]:
+        """The heartbeat block for `maybe_attest_venue_costs`. Never raises."""
+        try:
+            from src import l5_venue_cost_attestation as VCA
+            att = getattr(self, "_venue_cost_attestor", None) or VCA.Attestor()
+            return att.heartbeat(self.store)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__,
+                    "labels": "attestation telemetry unavailable; the $1 "
+                              "bound stays wherever it was"}
+
     def maybe_report_venue_basis(self, now: float) -> None:
         """REPORT-ONLY: the venue's executions beside this ledger's booked
         results, including markets the ledger never saw.
@@ -3106,19 +3119,6 @@ class Runner:
                            % type(exc).__name__] += 1
             except BaseException:                              # noqa: BLE001
                 pass
-
-    def venue_cost_attestation_lines(self) -> Dict[str, Any]:
-        """The heartbeat block for `maybe_attest_venue_costs`. Never raises."""
-        try:
-            from src import l5_venue_cost_attestation as VCA
-            att = getattr(self, "_venue_cost_attestor", None) or VCA.Attestor()
-            return att.heartbeat(self.store)
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            return {"error": type(exc).__name__,
-                    "labels": "attestation telemetry unavailable; the $1 "
-                              "bound stays wherever it was"}
 
     def resolve_pending_terminal(self, now: float) -> List[Dict[str, Any]]:
         """Book the final fill of every order that left the venue's open list.
