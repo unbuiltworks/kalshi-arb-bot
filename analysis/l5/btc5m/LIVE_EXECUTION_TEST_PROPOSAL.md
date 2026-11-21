@@ -448,3 +448,26 @@ submission blocked by the shadow lock; no Traceback, error or alarm line;
   @ 0.30 with fees 0.14; UP won; result -1.774. The account service had
   netted it to DOWN 5.04.
 - Watchdog clean; `l5-btc5m-live` unchanged at `be85a3b07`, disarmed.
+
+## Reporting correction, frozen (2026-11-21; NOT deployed)
+
+`l5-pmus-live` release `03b77157115ae80e088aa01c0dba06f3a71fffb4`, branch
+`release/l5-pmus-live-venue-basis-20261121b`. Against the running
+`77e5631cd` the image differs in ONE file, `src/l5_venue_basis_report.py`
+(+42 -1): the report counts markets with no venue figure BY REASON with
+example markets, and each market named for detail carries the report's
+verdict (class, booked and venue figures, reasons, ledger quantities,
+correction path). Reporting only; no variable changes needed (the two set
+for `77e5631cd` stay as they are).
+
+Full L5 suite: 15,206 passed, 19 failed; the failing set is IDENTICAL,
+test for test, to the suite run on the running commit `77e5631cd`
+(15,205 passed, 19 failed).
+
+Acceptance after deployment: exact SHA; 0 orders; equity baseline clears
+(~12 min); one `L5_VENUE_BASIS` line with `feed_complete true` carrying
+`incomplete_by_reason` whose counts sum to the number of
+VENUE_INCOMPLETE markets; seven detail lines each with a `verdict`;
+drawdown unchanged; watchdog clean; `l5-btc5m-live` untouched.
+Rollback: point the service back at
+`release/l5-pmus-live-venue-basis-20261121` (`77e5631cd`).
