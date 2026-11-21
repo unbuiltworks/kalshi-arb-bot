@@ -2,8 +2,8 @@
 and what did markets that settled inside the file pay. READ-ONLY arithmetic on a saved file.
 P&L here covers only conditions with a REDEEM in the file, and counts only buys seen in the file,
 so it is a SAMPLE of settled markets, biased toward short-lived ones - not the wallet's total."""
-import collections, json, sys
-rows = [json.loads(l) for l in open(sys.argv[1])]
+import gzip, collections, json, sys
+rows = [json.loads(l) for l in (gzip.open(sys.argv[1],'rt') if sys.argv[1].endswith('.gz') else open(sys.argv[1]))]
 tr = [r for r in rows if r["type"] == "TRADE"]
 span_d = (max(r["timestamp"] for r in rows) - min(r["timestamp"] for r in rows)) / 86400
 usd = sum(r["usdc_size"] for r in tr)

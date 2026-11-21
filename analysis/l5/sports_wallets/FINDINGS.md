@@ -10,7 +10,9 @@ Label: HISTORICAL, another trader's results on another venue. Nothing here is ou
 | maker + taker rebates | +1.90M | +0.21M | +0.56M | +0.17M |
 | rewards | +0.37M | +0.05M | +0.12M | +0.06M |
 | volume | 1.54B | 130M | 450M | 135M |
-RN1 keeps about 0.4% of volume from trading. Bonereaper, by the same series, is negative on trading.
+RN1 keeps about 0.4% of the platform's share-count `volume`, which is about 0.7–0.8% of dollars actually spent
+(30-day reconciliation: +$431,949 on $61.2M bought, +0.71%; see `RN1_30D_FINDINGS.md`). Bonereaper, by the same
+series, is negative on trading.
 
 ## 2. RN1, 19–21 Nov (2.85 days, 25,243 trades, $4.34M) — `RN1_RESULT.txt`
 - Buys only; never sells; ~8,900 buys a day, median $20, across ~4,000 markets (NBA, CFB, soccer, tennis, esports).
@@ -41,3 +43,12 @@ buy still positive after the PMUS taker fee (promo: 0.0695·p(1−p) with 70% re
 ## Limits
 Three days of one wallet; 1-minute prices, so sub-minute timing is not resolved; maker/taker is not flagged in the
 public feed; the settled-market sample in the profile omits losing positions (no REDEEM row) and is not used above.
+
+## Addendum — 30-day reconciliation (`RN1_30D_FINDINGS.md`, `RN1_30D_RESULT.txt`)
+Settled P&L rebuilt from 274,695 fills, losers settled from final prices: +$431,949 on $61.2M (+0.71%), within 2.6–4.5%
+of the platform's own figure (daily correlation 0.996). About 1.2 standard errors from zero treating each game as a draw.
+- 88% of dollars are maker fills (+0.80%); taker fills are flat after fees (+0.04%).
+- Matched pairs +$869k (pair cost 0.9766); residual −$388k; one-sided markets −$49k.
+- ALL of the profit is in fills over $500 (+1.04%). Fills under $500 are flat to negative, and markets where he spent
+  under $100 in total lost 10.8%. We would trade small: this is the most important caution for transfer.
+- 93.5% of dollars are bought after the game starts.

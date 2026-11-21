@@ -67,10 +67,19 @@ league | conditions | matched | locked gross | avg pair cost
   top: lal-sev-bet-2026-11-21-bet matched 13103 pc 0.6793 trades 36 switches 4 span 10842s
 
 tokens 400 cover 69% of usdc
-Traceback (most recent call last):
-  File "/home/user/kalshi-arb-bot/analysis/l5/sports_wallets/rn1_drift.py", line 38, in <module>
-    p0 = at(h, ts - 30)
-  File "/home/user/kalshi-arb-bot/analysis/l5/sports_wallets/rn1_drift.py", line 28, in at
-    k = bisect.bisect_right(h, (ts, 9)) - 1
-        ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
-TypeError: '<' not supported between instances of 'tuple' and 'list'
+price paid minus last public price ~30s earlier: -0.0133 a share
+all
+  before  2min +0.0142 (n 7810)   5min +0.0141 (n 7807)  15min +0.0165 (n 7816)  30min +0.0147 (n 7828)
+  after   2min +0.0076 (n 7701)   5min +0.0091 (n 7578)  15min +0.0215 (n 7076)  30min +0.0267 (n 5915)
+px<0.2
+  before  2min +0.0614 (n 774)   5min +0.1030 (n 772)  15min +0.1740 (n 769)  30min +0.2233 (n 771)
+  after   2min +0.0124 (n 733)   5min +0.0080 (n 717)  15min +0.0263 (n 629)  30min +0.0368 (n 497)
+0.2-0.8
+  before  2min +0.0155 (n 5847)   5min +0.0162 (n 5849)  15min +0.0188 (n 5860)  30min +0.0150 (n 5874)
+  after   2min +0.0074 (n 5817)   5min +0.0086 (n 5741)  15min +0.0225 (n 5454)  30min +0.0268 (n 4607)
+0.8-0.95
+  before  2min -0.0186 (n 732)   5min -0.0511 (n 731)  15min -0.0891 (n 731)  30min -0.1100 (n 725)
+  after   2min +0.0076 (n 712)   5min +0.0131 (n 696)  15min +0.0155 (n 604)  30min +0.0280 (n 472)
+>=0.95
+  before  2min -0.0179 (n 457)   5min -0.0348 (n 455)  15min -0.0704 (n 456)  30min -0.0988 (n 458)
+  after   2min +0.0013 (n 439)   5min +0.0096 (n 424)  15min +0.0091 (n 389)  30min +0.0077 (n 339)

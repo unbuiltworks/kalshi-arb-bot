@@ -1,7 +1,7 @@
 """How does RN1 get both sides below $1? For every condition where both outcomes were bought inside the
 file: time between the two sides' buys, pair cost, and how interleaved the buying is. READ-ONLY."""
-import collections, json, sys
-rows = [json.loads(l) for l in open(sys.argv[1]) if '"TRADE"' in l]
+import gzip, collections, json, sys
+rows = [json.loads(l) for l in (gzip.open(sys.argv[1],'rt') if sys.argv[1].endswith('.gz') else open(sys.argv[1])) if '"TRADE"' in l]
 c = collections.defaultdict(list)
 for r in rows: c[r["condition_id"]].append(r)
 out = []

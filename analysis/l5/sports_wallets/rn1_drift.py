@@ -4,9 +4,9 @@ For the tokens holding most of his dollars: public 1-minute price history around
   after  = price N min AFTER  the buy minus price paid   (positive: it went his way)
 Dollar-weighted by shares. Buys within 20 min of the last price point (settlement run) are excluded
 from 'after'. READ-ONLY public data. usage: rn1_drift.py <activity.jsonl> <cache.json> <n_tokens>"""
-import bisect, collections, json, os, sys, time, urllib.request
+import gzip, bisect, collections, json, os, sys, time, urllib.request
 act, cache_p, ntok = sys.argv[1], sys.argv[2], int(sys.argv[3])
-rows = [json.loads(l) for l in open(act) if '"TRADE"' in l]
+rows = [json.loads(l) for l in (gzip.open(act,'rt') if act.endswith('.gz') else open(act)) if '"TRADE"' in l]
 usd = collections.Counter()
 for r in rows: usd[r["token_id"]] += r["usdc_size"]
 toks = [t for t, _ in usd.most_common(ntok)]
@@ -24,6 +24,7 @@ for i, t in enumerate(toks):
     time.sleep(0.25)
     if i % 50 == 0: json.dump(cache, open(cache_p, "w"))
 json.dump(cache, open(cache_p, "w"))
+cache = {k: [tuple(x) for x in v] for k, v in cache.items()}
 def at(h, ts, maxgap=180):
     k = bisect.bisect_right(h, (ts, 9)) - 1
     if k < 0 or ts - h[k][0] > maxgap: return None

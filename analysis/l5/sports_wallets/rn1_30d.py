@@ -306,3 +306,15 @@ def cb(u): return "cond <$100" if u < 100 else "cond $100-1k" if u < 1000 else "
 table("total dollars in the condition", ((cb(c.cost), c, c.cost, c.pnl) for c in INC), order=["cond <$100", "cond $100-1k", "cond $1k-10k", "cond >$10k"])
 print("  equal-weight view (each condition counts once): mean P&L/$ of conditions <$100: %+.4f ; $100-1k: %+.4f ; $1k-10k: %+.4f ; >$10k: %+.4f" % tuple(
     (lambda xs: sum(xs) / len(xs))([c.pnl / c.cost for c in INC if lo <= c.cost < hi]) for lo, hi in ((0, 100), (100, 1000), (1000, 10000), (10000, 1e12))))
+table("conditions under $100 in total, by entry price band (per buy)", ((band(r["price"]), c, r["usdc_size"], r["pnl"]) for c, r in buys if c.cost < 100), order=PB)
+table("fills under $20, by entry price band", ((band(r["price"]), c, r["usdc_size"], r["pnl"]) for c, r in buys if r["usdc_size"] < 20), order=PB)
+table("fills under $20 at price 0.20-0.95, maker/taker", ((("TAKER" if r["taker"] else "MAKER"), c, r["usdc_size"], r["pnl"]) for c, r in buys if r["usdc_size"] < 20 and .2 <= r["price"] < .95), order=["MAKER", "TAKER"])
+
+print("\n=== 8. WINDOW ECONOMICS SUMMARY ===")
+mk_usd = usd_all - tk_usd
+print("INCLUDED settled trading P&L (net of taker fees): $%.0f on $%.0f bought = %.3f%% ; game-clustered se $%.0f (ESTIMATE) -> P&L/se = %.2f" % (
+    inc_pnl, inc_cost, 100 * inc_pnl / inc_cost, math.sqrt(len(ev) / (len(ev) - 1) * sum((v - sum(ev.values()) / len(ev)) ** 2 for v in ev.values())),
+    inc_pnl / math.sqrt(len(ev) / (len(ev) - 1) * sum((v - sum(ev.values()) / len(ev)) ** 2 for v in ev.values()))))
+print("credited in the same file (whole window, not per condition): maker rebate $%.0f (%.3f%% of maker usdc), taker rebate $%.0f (%.1f%% of taker fees paid), rewards $%.0f ; together %.3f%% of all usdc bought" % (
+    other["MAKER_REBATE"], 100 * other["MAKER_REBATE"] / mk_usd, other["TAKER_REBATE"], 100 * other["TAKER_REBATE"] / tf, other["REWARD"],
+    100 * (other["MAKER_REBATE"] + other["TAKER_REBATE"] + other["REWARD"]) / usd_all))
