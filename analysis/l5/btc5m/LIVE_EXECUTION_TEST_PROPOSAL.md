@@ -123,3 +123,84 @@ assert the entry-gate arithmetic from before the adverse-selection
 charge), 1 each `test_l5_chain_validation`,
 `test_l5_pmus_live_image_closure`, `test_l5_shadow_controller_wiring`
 (other services; not investigated). BTC5m image-closure tests: 218 passed.
+
+## Pre-authorization checks (2026-11-21 00:30Z)
+
+FROZEN RELEASES
+- `l5-pmus-live`: `1e75294f3db6a7ba8bb67d07649dc89e80cc567b`
+  (`release/l5-pmus-live-loss-publication-20261120`). Image files changed
+  against the running `cfac6707c`: `src/l5_live_execution.py` (+123),
+  `src/l5_pmus_live_runner.py` (+30). No new import.
+- `l5-btc5m-live`: `a27420990504f615f13de685056fe9eeba28b6da`
+  (`release/l5-btc5m-inventory-20261121`). Image files changed against the
+  running `27cbdb32b`: `src/l5_btc5m_attribution.py` (new),
+  `l5_btc5m_controller.py`, `l5_btc5m_execution.py`, `l5_btc5m_runner.py`,
+  the Dockerfile's one COPY line for the new module, `DEPLOY_TRIGGER`.
+  Nothing else the image copies differs.
+
+TESTS. The 11 entry-gate failures are resolved (replacement assertions pin
+the pair term and the charged figure separately; two fixtures repaired).
+Safety suites: 2,320 passed, 0 failed. Three failures remain in the wider
+L5 suite; each fails identically on the running pmus commit and on the
+proposed one: `test_l5_chain_validation` (chain observer, in neither
+image), `test_l5_pmus_live_image_closure::test_removing_any_closure_module`
+(a path error inside this sandbox's Python install; the closure check
+itself passes and the release adds no import), and
+`test_l5_shadow_controller_wiring` (asserts the heartbeat carries the full
+shadow report; the heartbeat has since reduced that field by design).
+
+THE $0.60 STOP: WHAT THE CODE DOES AND DOES NOT DO (matters for step 3,
+not for the disarmed deployments)
+- Enforced at every submission (`WORST_CASE_DAILY_LOSS_EXHAUSTED`): the
+  envelope's `max_daily_loss_usd` minus THIS LANE'S OWN settled result for
+  the current UTC day, folded into the reservation cap so open exposure
+  counts. The figure comes from the lane's durable ledger; an unreadable
+  ledger or day result refuses.
+- It is NOT a cross-service reconciled figure, it is NET of same-day gains,
+  it RESETS at 00:00 UTC, and a ledger file that is MISSING (as opposed to
+  unreadable) starts empty.
+- Cross-service reconciled losses feed the account-level daily halt, the
+  cumulative ceiling and the venue-equity drawdown ($1.00, measured on the
+  venue's balance). Those refuse when the published record is unreadable,
+  older than 30 s, for another day, or lacks the equity blocks; with a
+  missing or unreconciled lifetime basis every own loss is added in full.
+- Therefore, for the four-window test the cumulative stop will be applied
+  as follows, with no limit raised: each window's envelope and campaign
+  `max_daily_loss_usd` is set to 0.60 MINUS the test's cumulative loss as
+  reconciled against the venue's position rows (never above 0.60); all
+  four windows are run inside one UTC day; a window is not armed until
+  the previous one is reconciled; and the venue-equity drawdown remains
+  the independent backstop.
+
+PRODUCTION STATE READ 00:21Z: `l5-pmus-live` `cfac6707c`, 0 live orders,
+no exposure, halt latch clear; `l5-btc5m-live` `27cbdb32b`, `can_submit
+false`, not latched, envelope expired; watchdog sweeping, 0 open orders,
+three registries OK, no read error; equity $321.4517 against baseline
+$321.4782, drawdown $0.0265 of $1.00, room $0.9735.
+
+## Step 1, exactly
+
+OPERATION. One call: point service `l5-pmus-live`
+(`87f1834e-530e-4fc4-a310-91c8d3add196`, project
+`50fb7357-e2bc-4d04-a49e-71eb5d73b0d1`, environment
+`f3642d27-26dc-4e21-9170-bc76290c076f`) at repository
+`unbuiltworks/kalshi-arb-bot`, branch
+`release/l5-pmus-live-loss-publication-20261120` (Railway
+`connect-service-source`). No variable is read, set or removed.
+
+ACCEPTANCE, all required, read within 10 minutes of the deployment:
+1. the new deployment is SUCCESS at commit `1e75294f3...` and the previous
+   one is removed;
+2. readiness line: 0 live orders, 0 pending, 0 quarantined, no market with
+   exposure, halt latch clear;
+3. the heartbeat's account-risk record carries `retired_results_utc_day`
+   and `lifetime_basis`, with `lifetime_basis.reconciled` true and its
+   lifetime figure equal to the record's all-time realized figure;
+4. equity blocks unchanged: drawdown $0.0265, room $0.9735, no refusal;
+5. watchdog: three registries OK, 0 open orders, no read error;
+6. `l5-btc5m-live` untouched: same deployment, `can_submit false`.
+If any fails: roll back and stop; step 2 is not requested.
+
+ROLLBACK. One call: point the service back at branch
+`release/l5-pmus-live-equity-and-correction-20261120` (`cfac6707c`), then
+re-read items 2, 4 and 5.
