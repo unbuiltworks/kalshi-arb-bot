@@ -3111,6 +3111,8 @@ class Runner:
             elif out.get("walk_failed"):
                 emit("L5_VENUE_BASIS", {"walk_failed": out["walk_failed"],
                                         "applied": False})
+            for rec in out.get("orders") or ():
+                emit("L5_VENUE_BASIS_ORDERS", rec)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

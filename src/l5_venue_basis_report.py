@@ -97,6 +97,24 @@ FORBIDDEN_KEY_PARTS = ("account", "user", "owner", "wallet", "address",
                        "email", "key", "secret", "token", "signature",
                        "auth", "session", "ip")
 
+#: READ-ONLY ORDER DETAIL for the listed markets: each distinct order id of
+#: OURS is read once per process through the transport's existing
+#: `order(id)` (GET /v1/order/{id}), one read per step.
+ORDERS_MAX_PER_MARKET = 6
+ORDERS_MAX_PER_PASS = 40
+_ORDER_ID = re.compile(r"[A-Za-z0-9_-]{1,80}")
+#: the ONLY order-row keys printed (whole key, case-insensitive, top level)
+ORDER_KEYS = frozenset((
+    "manualorderindicator", "manual_order_indicator",
+    "clientorderid", "client_order_id",
+    "type", "ordertype", "order_type",
+    "tif", "timeinforce", "time_in_force",
+    "side", "outcomeside", "outcome_side", "intent",
+    "price", "limitprice", "limit_price",
+    "quantity", "cumquantity", "cum_quantity", "state",
+    "createtime", "create_time", "inserttime", "insert_time",
+    "createdat", "created_at"))
+
 RESOLUTION_KINDS = frozenset(("activity_type_position_resolution",
                               "position_resolution"))
 
@@ -226,6 +244,41 @@ def detail(market: str, rows: List[Mapping[str, Any]], *,
                    "order ids, manual-order indicator) from the row and OUR "
                    "execution only, verbatim and uninterpreted: this line "
                    "attributes no order to anyone and nothing was written.")}
+
+
+def order_fields(row: Any) -> Dict[str, Any]:
+    """The allowlisted scalars of one venue order row, verbatim, clipped.
+    Top level only; a {value, currency} money mapping is read for its
+    value. A key with a FORBIDDEN_KEY_PARTS fragment is never printed."""
+    out: Dict[str, Any] = {}
+    if not isinstance(row, Mapping):
+        return out
+    for k, v in row.items():
+        low = str(k).lower()
+        if low not in ORDER_KEYS \
+                or any(part in low for part in FORBIDDEN_KEY_PARTS):
+            continue
+        if isinstance(v, Mapping):
+            v = v.get(CBA.MONEY_VALUE_KEY)
+        if v is None or isinstance(v, (Mapping, list, tuple)):
+            continue
+        out[str(k)[:40]] = _clip(v)
+    return out
+
+
+def our_order_ids(rows: List[Mapping[str, Any]]) -> List[str]:
+    """Distinct venue order ids of OUR executions on a market's trade rows,
+    in feed order. An id that is not a plain token is dropped."""
+    out: List[str] = []
+    for r in rows:
+        if _kind(r) not in CBA.FILL_KINDS:
+            continue
+        body = CBA._payload(r)
+        ours, _all, _src = CBA._row_venue_order_candidates(
+            body if isinstance(body, Mapping) else {})
+        if ours and _ORDER_ID.fullmatch(ours) and ours not in out:
+            out.append(ours)
+    return out
 
 
 def _kind(row: Mapping[str, Any]) -> str:
@@ -444,6 +497,9 @@ class Pass:
         self.next_allowed = 0.0
         self.last_error: Optional[str] = None
         self.passes = 0
+        #: order rows already read in this process: id -> allowlisted fields
+        self._order_cache: Dict[str, Dict[str, Any]] = {}
+        self._orders: Optional[Dict[str, Any]] = None
         #: wall clock, compared with the ledger's own retirement stamps
         self.wall = lambda: dt.datetime.now(dt.timezone.utc)
 
@@ -455,6 +511,9 @@ class Pass:
         if now < self.next_allowed \
                 or now - self.last_step < VCA.STEP_INTERVAL_S:
             return {"idle": "PACED"}
+        if self._orders is not None:
+            self.last_step = now
+            return self._read_one_order(transport)
         if self._walk is None:
             if self.last_t is not None and now - self.last_t < REFRESH_S:
                 return {"idle": "FRESH"}
@@ -541,7 +600,80 @@ class Pass:
                           feed_complete=complete,
                           as_of=w["started_at"].isoformat())
                    for m in sorted(w.get("detail") or ())]
-        return {"report": self.last, "details": details}
+        out = {"report": self.last, "details": details}
+        done = self._plan_orders(w)
+        if done is not None:
+            out["orders"] = done
+        return out
+
+    def _plan_orders(self, w: Mapping[str, Any]
+                     ) -> Optional[List[Dict[str, Any]]]:
+        """Queue the order reads for the listed markets. Returns the
+        finished records at once when there is nothing to read."""
+        listed = sorted(w.get("detail") or ())
+        if not listed:
+            return None
+        plan: Dict[str, Any] = {"as_of": w["started_at"].isoformat(),
+                                "markets": {}, "queue": [], "why": {}}
+        budget = ORDERS_MAX_PER_PASS
+        for m in listed:
+            ids = our_order_ids(list((w.get("rows") or {}).get(m) or ()))
+            take = ids[:min(ORDERS_MAX_PER_MARKET, budget)]
+            budget -= len(take)
+            plan["markets"][m] = {"ids": take,
+                                  "omitted": len(ids) - len(take)}
+            plan["queue"].extend(i for i in take
+                                 if i not in self._order_cache
+                                 and i not in plan["queue"])
+        self._orders = plan
+        if not plan["queue"]:
+            return self._orders_done(None)
+        return None
+
+    def _read_one_order(self, transport: Any) -> Dict[str, Any]:
+        plan = self._orders or {}
+        read = getattr(transport, "order", None)
+        if not callable(read):
+            return {"orders": self._orders_done(
+                "NO_ORDER_READ_ON_TRANSPORT")}
+        oid = plan["queue"].pop(0)
+        try:
+            self._order_cache[oid] = order_fields(read(oid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            #: recorded, not cached and not retried in this pass
+            plan["why"][oid] = "ORDER_READ_FAILED:%s" % type(exc).__name__
+        if plan["queue"]:
+            return {"reading_orders": len(plan["queue"])}
+        return {"orders": self._orders_done(None)}
+
+    def _orders_done(self, note: Optional[str]) -> List[Dict[str, Any]]:
+        plan = self._orders or {"markets": {}}
+        self._orders = None
+        out = []
+        for m in sorted(plan["markets"]):
+            rec = plan["markets"][m]
+            orders = []
+            for oid in rec["ids"]:
+                if oid in self._order_cache:
+                    orders.append({"venue_order_id": oid,
+                                   "fields": dict(self._order_cache[oid])})
+                else:
+                    orders.append({"venue_order_id": oid, "fields": None,
+                                   "error": (plan.get("why") or {}).get(
+                                       oid, note or "NOT_READ")})
+            out.append({
+                "market": m, "as_of": plan.get("as_of"),
+                "orders": orders, "orders_omitted": rec["omitted"],
+                "note": note if note else (
+                    None if orders else
+                    "NO ORDER ID OF OURS ON THIS MARKET'S VENUE ROWS"),
+                "labels": ("READ-ONLY. The venue's own order rows for the "
+                           "order ids on OUR executions, an allowlist of "
+                           "fields, verbatim. Nothing is attributed and "
+                           "nothing was written.")})
+        return out
 
     def lines(self) -> Dict[str, Any]:
         """The small block for the heartbeat and the account-risk record."""

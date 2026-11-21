@@ -815,3 +815,167 @@ class TestDetail:
         assert r["identity_fields"] == {}
         assert r["venue_order_id_ours"] is None and r["trade_id"] == "TA1"
         assert "VA1" not in repr(r) and "CPTY" not in repr(r)
+
+
+# ------------------------------------------------------------ order reads
+
+class OrderFeed(Feed):
+    """The feed double plus the transport's existing `order(id)` read."""
+
+    def __init__(self, pages, *, rows=None, fail=(), **kw):
+        super().__init__(pages, **kw)
+        self.order_rows = rows or {}
+        self.order_fail = set(fail)
+        self.order_reads = []
+
+    def order(self, oid):
+        self.order_reads.append(oid)
+        if oid in self.order_fail:
+            raise TimeoutError("venue")
+        return dict(self.order_rows.get(oid) or {"state": "ORDER_STATE_X"})
+
+
+def many_orders(market, n, tag="V"):
+    return [fill(market, "UP", "1", "0.10", "T%s%02d" % (tag, i),
+                 "%s%02d" % (tag, i)) for i in range(n)]
+
+
+def order_lines(tape):
+    return [d for k, d in tape if k == "L5_VENUE_BASIS_ORDERS"]
+
+
+SECRET = "S3CR3T-DO-NOT-LOG"
+ORDER_ROW = {
+    "id": "VA1", "marketSlug": OPEN, "side": "ORDER_SIDE_BUY",
+    "outcomeSide": "OUTCOME_SIDE_YES", "intent": "ORDER_INTENT_BUY_LONG",
+    "type": "ORDER_TYPE_LIMIT", "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+    "price": {"value": "0.4600", "currency": "USD"}, "quantity": "5",
+    "cumQuantity": "5", "leavesQuantity": "0",
+    "state": "ORDER_STATE_FILLED",
+    "createTime": "2026-11-17T19:59:58.1Z",
+    "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL",
+    "clientOrderId": "c" * 200,
+    "account": SECRET, "accountId": SECRET, "userId": SECRET,
+    "ownerSide": SECRET, "walletAddress": SECRET, "email": SECRET,
+    "apiKey": SECRET, "secret": SECRET, "authToken": SECRET,
+    "signature": SECRET, "sessionId": SECRET, "ip": SECRET,
+    "participant": {"clientOrderId": SECRET, "state": SECRET},
+    "avgPx": {"value": "0.4600"}, "commission": "0"}
+
+
+class TestOrderReads:
+
+    def test_fields_are_an_allowlist(self, store, tape, on, monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, "%s,%s" % (OPEN, QUIET))
+        rows = [fill(OPEN, "UP", "5", "0.46", "TA1", "VA1"),
+                fill(OPEN, "UP", "1", "0.46", "TA2", "VA1")]
+        feed = OrderFeed([rows], rows={"VA1": ORDER_ROW})
+        before = repr(store.state)
+        drive(Rn(store, feed))
+        assert feed.order_reads == ["VA1"]           # distinct, once
+        got = {d["market"]: d for d in order_lines(tape)}
+        assert sorted(got) == sorted([OPEN, QUIET])
+        assert got[OPEN]["orders"] == [{"venue_order_id": "VA1", "fields": {
+            "side": "ORDER_SIDE_BUY", "outcomeSide": "OUTCOME_SIDE_YES",
+            "intent": "ORDER_INTENT_BUY_LONG", "type": "ORDER_TYPE_LIMIT",
+            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL", "price": "0.4600",
+            "quantity": "5", "cumQuantity": "5",
+            "state": "ORDER_STATE_FILLED",
+            "createTime": "2026-11-17T19:59:58.1Z",
+            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL",
+            "clientOrderId": "c" * 80}}]
+        assert SECRET not in repr(tape) and "CPTY-" not in repr(
+            order_lines(tape))
+        assert got[QUIET]["orders"] == [] and got[QUIET]["note"]
+        assert repr(store.state) == before
+
+    def test_bounded_per_market_and_per_pass(self, store, tape, on,
+                                             monkeypatch):
+        ms = ["listed-market-number-%02d" % i for i in range(9)]
+        monkeypatch.setenv(VBR.DETAIL_ENV, ",".join(ms))
+        rows = []
+        for i, m in enumerate(ms):
+            rows += many_orders(m, 8, tag="M%d-" % i)
+        feed = OrderFeed([rows])
+        drive(Rn(store, feed), n=80)
+        got = order_lines(tape)
+        assert len(got) == 9
+        assert all(len(d["orders"]) <= VBR.ORDERS_MAX_PER_MARKET
+                   for d in got)
+        assert got[0]["orders_omitted"] == 2
+        assert sum(len(d["orders"]) for d in got) == 40
+        assert len(feed.order_reads) == VBR.ORDERS_MAX_PER_PASS == 40
+        assert len(set(feed.order_reads)) == 40
+
+    def test_one_read_per_step(self, store, on, monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
+        feed = OrderFeed([many_orders(OPEN, 3)])
+        job = VBR.Pass()
+        job.wall = lambda: WALL
+        assert "report" in job.step(store, feed, 1000.0)
+        assert feed.order_reads == []
+        assert job.step(store, feed, 1001.0) == {"idle": "PACED"}
+        t = 1000.0
+        for want in (1, 2):
+            t += VCA.STEP_INTERVAL_S
+            assert job.step(store, feed, t) == {"reading_orders": 3 - want}
+            assert len(feed.order_reads) == want
+        t += VCA.STEP_INTERVAL_S
+        assert len(job.step(store, feed, t)["orders"][0]["orders"]) == 3
+
+    def test_each_id_is_read_once_per_process(self, store, tape, on,
+                                              monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
+        monkeypatch.setattr(VBR, "REFRESH_S", 0.0)
+        feed = OrderFeed([many_orders(OPEN, 2)])
+        drive(Rn(store, feed), n=30)
+        assert len(order_lines(tape)) >= 2           # several passes
+        assert sorted(feed.order_reads) == ["V00", "V01"]
+        assert order_lines(tape)[-1]["orders"][0]["fields"] == {
+            "state": "ORDER_STATE_X"}
+
+    def test_a_failing_read_does_not_stop_the_pass(self, store, tape, on,
+                                                   monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
+        feed = OrderFeed([many_orders(OPEN, 3)], fail={"V01"})
+        r = Rn(store, feed)
+        drive(r)
+        assert feed.order_reads == ["V00", "V01", "V02"]   # no retry
+        o = order_lines(tape)[0]["orders"]
+        assert o[1] == {"venue_order_id": "V01", "fields": None,
+                        "error": "ORDER_READ_FAILED:TimeoutError"}
+        assert o[0]["fields"] and o[2]["fields"]
+        assert not r.stats
+
+    def test_a_transport_without_the_read_gets_no_new_call(self, store, tape,
+                                                           on, monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
+        feed = Feed([many_orders(OPEN, 2)])
+        drive(Rn(store, feed))
+        d = order_lines(tape)[0]
+        assert d["note"] == "NO_ORDER_READ_ON_TRANSPORT"
+        assert all(o["fields"] is None for o in d["orders"])
+        assert all("/v1/order/" not in p for p in feed.reads)
+
+    def test_an_odd_order_id_is_never_put_in_a_path(self):
+        row = fill(OPEN, "UP", "1", "0.10", "T1", "V1/../cancel")
+        assert VBR.our_order_ids([row]) == []
+
+    def test_no_detail_list_reads_no_order(self, store, tape, on):
+        feed = OrderFeed([many_orders(OPEN, 2)])
+        drive(Rn(store, feed))
+        assert feed.order_reads == [] and order_lines(tape) == []
+
+    def test_switch_off_reads_no_order(self, store, tape, monkeypatch):
+        monkeypatch.delenv(VBR.MODE_ENV, raising=False)
+        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
+        feed = OrderFeed([many_orders(OPEN, 2)])
+        drive(Rn(store, feed))
+        assert feed.order_reads == [] and feed.reads == [] and tape == []
+
+    def test_unlisted_markets_are_never_read(self, store, tape, on,
+                                             monkeypatch):
+        monkeypatch.setenv(VBR.DETAIL_ENV, QUIET)
+        feed = OrderFeed([many_orders(OPEN, 2) + pair_rows()])
+        drive(Rn(store, feed))
+        assert feed.order_reads == []
