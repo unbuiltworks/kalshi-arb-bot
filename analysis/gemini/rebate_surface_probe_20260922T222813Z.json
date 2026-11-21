@@ -1,0 +1,904 @@
+{
+  "label": "GEMINI_REBATE_SURFACE_PROBE_V1",
+  "utc": "2026-09-22T22:28:13.999030+00:00",
+  "credentials": true,
+  "labels": "READ-ONLY SURVEY. It locates a surface; it does not read a rebate, compute a rate or decide anything. A 404 means the endpoint is absent, which is NOT the same fact as 'there were no rebates'.",
+  "probes": [
+    {
+      "path": "/v1/portfolio/activities",
+      "method": "POST",
+      "why": "the Activity feed the UI screenshot shows",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 116,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/portfolio/activities",
+      "method": "GET",
+      "why": "the Activity feed the UI screenshot shows",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 116,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/account/activities",
+      "method": "POST",
+      "why": "same feed under an account-scoped path",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 114,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/account/activities",
+      "method": "GET",
+      "why": "same feed under an account-scoped path",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 114,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/activities",
+      "method": "POST",
+      "why": "same feed, unscoped",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 106,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/activities",
+      "method": "GET",
+      "why": "same feed, unscoped",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 106,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/transfers",
+      "method": "POST",
+      "why": "credits often post as transfer rows",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": [
+        {
+          "type": "str",
+          "status": "str",
+          "timestampms": "int",
+          "eid": "int",
+          "currency": "str",
+          "amount": "str",
+          "purpose": "str"
+        },
+        "...x10"
+      ],
+      "n_rows": 10,
+      "bytes": 1718,
+      "rebate_hints": [
+        "rebate"
+      ],
+      "first_row_keys": [
+        "amount",
+        "currency",
+        "eid",
+        "purpose",
+        "status",
+        "timestampms",
+        "type"
+      ]
+    },
+    {
+      "path": "/v1/transfers",
+      "method": "GET",
+      "why": "credits often post as transfer rows",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 105,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/balances",
+      "method": "POST",
+      "why": "cash anchor before/after a credit",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": [
+        {
+          "type": "str",
+          "currency": "str",
+          "amount": "str",
+          "available": "str",
+          "availableForWithdrawal": "str",
+          "_timestamp": "str"
+        },
+        "...x1"
+      ],
+      "n_rows": 1,
+      "bytes": 165,
+      "rebate_hints": [],
+      "first_row_keys": [
+        "_timestamp",
+        "amount",
+        "available",
+        "availableForWithdrawal",
+        "currency",
+        "type"
+      ]
+    },
+    {
+      "path": "/v1/balances",
+      "method": "GET",
+      "why": "cash anchor before/after a credit",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 104,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/notionalbalances/usd",
+      "method": "POST",
+      "why": "cash anchor in notional terms",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": [
+        {
+          "currency": "str",
+          "amount": "str",
+          "amountNotional": "str",
+          "available": "str",
+          "availableNotional": "str",
+          "availableForWithdrawal": "str",
+          "availableForWithdrawalNotional": "str"
+        },
+        "...x1"
+      ],
+      "n_rows": 1,
+      "bytes": 197,
+      "rebate_hints": [],
+      "first_row_keys": [
+        "amount",
+        "amountNotional",
+        "available",
+        "availableForWithdrawal",
+        "availableForWithdrawalNotional",
+        "availableNotional",
+        "currency"
+      ]
+    },
+    {
+      "path": "/v1/notionalbalances/usd",
+      "method": "GET",
+      "why": "cash anchor in notional terms",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 116,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/incentives",
+      "method": "POST",
+      "why": "named incentive surface",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 106,
+      "rebate_hints": [
+        "incentive"
+      ]
+    },
+    {
+      "path": "/v1/incentives",
+      "method": "GET",
+      "why": "named incentive surface",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 106,
+      "rebate_hints": [
+        "incentive"
+      ]
+    },
+    {
+      "path": "/v1/incentives/earnings",
+      "method": "POST",
+      "why": "credited earnings under incentives",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 115,
+      "rebate_hints": [
+        "incentive"
+      ]
+    },
+    {
+      "path": "/v1/incentives/earnings",
+      "method": "GET",
+      "why": "credited earnings under incentives",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 115,
+      "rebate_hints": [
+        "incentive"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/rewards",
+      "method": "POST",
+      "why": "prediction-market rewards",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 122,
+      "rebate_hints": [
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/rewards",
+      "method": "GET",
+      "why": "prediction-market rewards",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 122,
+      "rebate_hints": [
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/rebates",
+      "method": "POST",
+      "why": "prediction-market rebates",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 122,
+      "rebate_hints": [
+        "rebate"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/rebates",
+      "method": "GET",
+      "why": "prediction-market rebates",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 122,
+      "rebate_hints": [
+        "rebate"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/rates",
+      "method": "POST",
+      "why": "PUBLISHED: rate schedule",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 133,
+      "rebate_hints": [
+        "rebate"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/rates",
+      "method": "GET",
+      "why": "PUBLISHED: rate schedule",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "rate_rules": [
+          {
+            "id": "int",
+            "rebate_multiplier_bps": "int",
+            "effective_from": "str",
+            "category": "str",
+            "effective_to": "str"
+          },
+          "...x12"
+        ]
+      },
+      "n_rows": null,
+      "bytes": 1662,
+      "rebate_hints": [
+        "rebate"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/payouts",
+      "method": "POST",
+      "why": "PUBLISHED: payout rows",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "payouts": [
+          {
+            "id": "int",
+            "total_volume_usd": "str",
+            "total_rebate_usd": "str",
+            "total_fill_count": "int",
+            "status": "str",
+            "paid_at": "str",
+            "created_at": "str"
+          },
+          "...x9"
+        ]
+      },
+      "n_rows": null,
+      "bytes": 1899,
+      "rebate_hints": [
+        "rebate"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/payouts",
+      "method": "GET",
+      "why": "PUBLISHED: payout rows",
+      "params": null,
+      "status": 405,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": true,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 81,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/summary/total",
+      "method": "POST",
+      "why": "PUBLISHED: lifetime rebate summary",
+      "params": null,
+      "status": 405,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": true,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 82,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/maker-rebate/summary/total",
+      "method": "GET",
+      "why": "PUBLISHED: lifetime rebate summary",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "total_earned_usd": "str",
+        "total_fill_count": "int",
+        "total_volume_usd": "str",
+        "payout_count": "int",
+        "first_payout_date": "str",
+        "last_payout_date": "str"
+      },
+      "n_rows": null,
+      "bytes": 169,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/config",
+      "method": "POST",
+      "why": "PUBLISHED: liquidity rewards config",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 139,
+      "rebate_hints": [
+        "liquidity",
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/config",
+      "method": "GET",
+      "why": "PUBLISHED: liquidity rewards config",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "max_spread_cents": "int",
+        "min_payout_threshold_usd": "str",
+        "enabled": "bool"
+      },
+      "n_rows": null,
+      "bytes": 77,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/events",
+      "method": "POST",
+      "why": "PUBLISHED: liquidity rewards events",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 139,
+      "rebate_hints": [
+        "liquidity",
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/events",
+      "method": "GET",
+      "why": "PUBLISHED: liquidity rewards events",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "events": [
+          {
+            "event_ticker": "str",
+            "title": "str",
+            "category": "str",
+            "daily_pool_usd": "str",
+            "pool_source": "str",
+            "ends_at": "str",
+            "qualifying_maker_count": "int",
+            "icon_url": "str",
+            "pool_id": "int",
+            "pool_event_count": "int",
+            "pool_category_name": "str"
+          },
+          "...x50"
+        ],
+        "pagination": {
+          "limit": "int",
+          "offset": "int",
+          "total": "int"
+        },
+        "last_score_date": "str"
+      },
+      "n_rows": null,
+      "bytes": 22802,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/summary/daily",
+      "method": "POST",
+      "why": "PUBLISHED: liquidity rewards daily summary",
+      "params": null,
+      "status": 405,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": true,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 82,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/summary/daily",
+      "method": "GET",
+      "why": "PUBLISHED: liquidity rewards daily summary",
+      "params": null,
+      "status": 400,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 86,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/summary/total",
+      "method": "POST",
+      "why": "PUBLISHED: liquidity rewards lifetime summary",
+      "params": null,
+      "status": 405,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": true,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 82,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards/summary/total",
+      "method": "GET",
+      "why": "PUBLISHED: liquidity rewards lifetime summary",
+      "params": null,
+      "status": 200,
+      "reachable": true,
+      "exists": true,
+      "verb_wrong": false,
+      "shape": {
+        "total_earned_usd": "str",
+        "payout_count": "int",
+        "first_payout_date": "NoneType",
+        "last_payout_date": "NoneType"
+      },
+      "n_rows": null,
+      "bytes": 100,
+      "rebate_hints": []
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards",
+      "method": "POST",
+      "why": "liquidity rewards",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 132,
+      "rebate_hints": [
+        "liquidity",
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/liquidity-rewards",
+      "method": "GET",
+      "why": "liquidity rewards",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 132,
+      "rebate_hints": [
+        "liquidity",
+        "reward"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/incentives",
+      "method": "POST",
+      "why": "incentives under prediction markets",
+      "params": null,
+      "status": 404,
+      "reachable": true,
+      "exists": false,
+      "verb_wrong": false,
+      "shape": {
+        "result": "str",
+        "reason": "str",
+        "message": "str"
+      },
+      "n_rows": null,
+      "bytes": 125,
+      "rebate_hints": [
+        "incentive"
+      ]
+    },
+    {
+      "path": "/v1/prediction-markets/incentives",
+      "method": "GET",
+      "why": "incentives under prediction markets",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/activities",
+      "method": "POST",
+      "why": "activity under prediction markets",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/activities",
+      "method": "GET",
+      "why": "activity under prediction markets",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/settlements",
+      "method": "POST",
+      "why": "settlement cashflow, for contrast",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/settlements",
+      "method": "GET",
+      "why": "settlement cashflow, for contrast",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/notionalvolume",
+      "method": "POST",
+      "why": "venue's own notional volume / fee tier",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/notionalvolume",
+      "method": "GET",
+      "why": "venue's own notional volume / fee tier",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/tradevolume",
+      "method": "POST",
+      "why": "venue's own trade volume",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/tradevolume",
+      "method": "GET",
+      "why": "venue's own trade volume",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/metrics/volume",
+      "method": "POST",
+      "why": "prediction-market volume",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    },
+    {
+      "path": "/v1/prediction-markets/metrics/volume",
+      "method": "GET",
+      "why": "prediction-market volume",
+      "params": null,
+      "reachable": false,
+      "error": "RuntimeError: Gemini time-based nonce rate exceeded"
+    }
+  ],
+  "endpoints_that_exist": [
+    "/v1/balances",
+    "/v1/notionalbalances/usd",
+    "/v1/prediction-markets/liquidity-rewards/config",
+    "/v1/prediction-markets/liquidity-rewards/events",
+    "/v1/prediction-markets/liquidity-rewards/summary/daily",
+    "/v1/prediction-markets/liquidity-rewards/summary/total",
+    "/v1/prediction-markets/maker-rebate/payouts",
+    "/v1/prediction-markets/maker-rebate/rates",
+    "/v1/prediction-markets/maker-rebate/summary/total",
+    "/v1/transfers"
+  ],
+  "endpoints_mentioning_a_credit": [
+    "GET /v1/prediction-markets/maker-rebate/rates",
+    "POST /v1/prediction-markets/maker-rebate/payouts",
+    "POST /v1/transfers"
+  ],
+  "verdict": "SURFACE_FOUND",
+  "next": "build the reader against the named surface"
+}

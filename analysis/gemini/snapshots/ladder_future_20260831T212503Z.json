@@ -1,0 +1,106 @@
+{
+ "generated_utc": "2026-08-31T21:25:05.442720+00:00",
+ "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
+ "sample": "FUTURE_EVIDENCE",
+ "ladder_cutoff_utc": "2026-08-31T21:45",
+ "constants": {
+  "rung_size": 1.0,
+  "offsets_multi": [
+   0.0,
+   0.02,
+   0.05
+  ],
+  "max_spend_per_window": 10.0,
+  "limited": [
+   [
+    "BTC",
+    "ETH"
+   ],
+   [
+    "05M"
+   ]
+  ]
+ },
+ "arms": {
+  "L0": {
+   "engaged": 0,
+   "missing_labels": 0,
+   "status": "COMPLETE",
+   "n_fills": 0,
+   "turnover_usdc": 0,
+   "matched_pct_qty": 0.0,
+   "pair_locked": 0,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 0,
+   "rebates_separate": 0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 0,
+   "max_single_window_loss": null,
+   "capital_minutes": 0,
+   "rung_fill_counts": {}
+  },
+  "L1": {
+   "engaged": 0,
+   "missing_labels": 0,
+   "status": "COMPLETE",
+   "n_fills": 0,
+   "turnover_usdc": 0,
+   "matched_pct_qty": 0.0,
+   "pair_locked": 0,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 0,
+   "rebates_separate": 0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 0,
+   "max_single_window_loss": null,
+   "capital_minutes": 0,
+   "rung_fill_counts": {}
+  },
+  "L2": {
+   "engaged": 0,
+   "missing_labels": 0,
+   "status": "COMPLETE",
+   "n_fills": 0,
+   "turnover_usdc": 0,
+   "matched_pct_qty": 0.0,
+   "pair_locked": 0,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 0,
+   "rebates_separate": 0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 0,
+   "max_single_window_loss": null,
+   "capital_minutes": 0,
+   "rung_fill_counts": {}
+  },
+  "L3": {
+   "engaged": 0,
+   "missing_labels": 0,
+   "status": "COMPLETE",
+   "n_fills": 0,
+   "turnover_usdc": 0,
+   "matched_pct_qty": 0.0,
+   "pair_locked": 0,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 0,
+   "rebates_separate": 0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 0,
+   "max_single_window_loss": null,
+   "capital_minutes": 0,
+   "rung_fill_counts": {}
+  }
+ }
+}

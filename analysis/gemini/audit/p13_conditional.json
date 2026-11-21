@@ -1,0 +1,196 @@
+{
+  "label": "P13_CONDITIONAL_V1",
+  "horizons_s": [
+    30,
+    60,
+    90,
+    180
+  ],
+  "by_family": {
+    "btc-updown-5m": {
+      "depth_1": {
+        "n_states": 8089,
+        "p_next_action_is_same_side_EXTEND": 0.6638,
+        "p_opposite_ever": 0.6801,
+        "p_opposite_within_s": {
+          "30": 0.1671,
+          "60": 0.3134,
+          "90": 0.4263,
+          "180": 0.6164
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 5501,
+          "p25": 0.83,
+          "p50": 0.98,
+          "p75": 1.14,
+          "frac_gt_1.00": 0.4454
+        }
+      },
+      "depth_2": {
+        "n_states": 4693,
+        "p_next_action_is_same_side_EXTEND": 0.6373,
+        "p_opposite_ever": 0.6657,
+        "p_opposite_within_s": {
+          "30": 0.2135,
+          "60": 0.3757,
+          "90": 0.4846,
+          "180": 0.6284
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 3124,
+          "p25": 0.822,
+          "p50": 0.97,
+          "p75": 1.1378,
+          "frac_gt_1.00": 0.4405
+        }
+      },
+      "depth_3": {
+        "n_states": 2592,
+        "p_next_action_is_same_side_EXTEND": 0.6964,
+        "p_opposite_ever": 0.6362,
+        "p_opposite_within_s": {
+          "30": 0.2508,
+          "60": 0.4105,
+          "90": 0.505,
+          "180": 0.6103
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 1649,
+          "p25": 0.82,
+          "p50": 0.9569,
+          "p75": 1.1302,
+          "frac_gt_1.00": 0.4233
+        }
+      },
+      "depth_4": {
+        "n_states": 1548,
+        "p_next_action_is_same_side_EXTEND": 0.6913,
+        "p_opposite_ever": 0.6292,
+        "p_opposite_within_s": {
+          "30": 0.2681,
+          "60": 0.416,
+          "90": 0.5084,
+          "180": 0.6021
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 974,
+          "p25": 0.8214,
+          "p50": 0.9536,
+          "p75": 1.1263,
+          "frac_gt_1.00": 0.422
+        }
+      },
+      "depth_5": {
+        "n_states": 918,
+        "p_next_action_is_same_side_EXTEND": 0.6843,
+        "p_opposite_ever": 0.6144,
+        "p_opposite_within_s": {
+          "30": 0.2876,
+          "60": 0.4227,
+          "90": 0.512,
+          "180": 0.6002
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 564,
+          "p25": 0.8197,
+          "p50": 0.9493,
+          "p75": 1.122,
+          "frac_gt_1.00": 0.4113
+        }
+      }
+    },
+    "btc-updown-15m": {
+      "depth_1": {
+        "n_states": 5503,
+        "p_next_action_is_same_side_EXTEND": 0.7696,
+        "p_opposite_ever": 0.9924,
+        "p_opposite_within_s": {
+          "30": 0.5466,
+          "60": 0.7516,
+          "90": 0.8559,
+          "180": 0.962
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 5461,
+          "p25": 0.93,
+          "p50": 0.99,
+          "p75": 1.03,
+          "frac_gt_1.00": 0.3759
+        }
+      },
+      "depth_2": {
+        "n_states": 4226,
+        "p_next_action_is_same_side_EXTEND": 0.7703,
+        "p_opposite_ever": 0.9929,
+        "p_opposite_within_s": {
+          "30": 0.5405,
+          "60": 0.7487,
+          "90": 0.8519,
+          "180": 0.9626
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 4196,
+          "p25": 0.93,
+          "p50": 0.9839,
+          "p75": 1.03,
+          "frac_gt_1.00": 0.3885
+        }
+      },
+      "depth_3": {
+        "n_states": 3249,
+        "p_next_action_is_same_side_EXTEND": 0.7895,
+        "p_opposite_ever": 0.9932,
+        "p_opposite_within_s": {
+          "30": 0.5331,
+          "60": 0.7439,
+          "90": 0.8569,
+          "180": 0.9649
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 3227,
+          "p25": 0.9287,
+          "p50": 0.9824,
+          "p75": 1.0314,
+          "frac_gt_1.00": 0.3932
+        }
+      },
+      "depth_4": {
+        "n_states": 2558,
+        "p_next_action_is_same_side_EXTEND": 0.7732,
+        "p_opposite_ever": 0.9949,
+        "p_opposite_within_s": {
+          "30": 0.5297,
+          "60": 0.742,
+          "90": 0.8565,
+          "180": 0.9676
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 2545,
+          "p25": 0.9268,
+          "p50": 0.9844,
+          "p75": 1.0381,
+          "frac_gt_1.00": 0.4102
+        }
+      },
+      "depth_5": {
+        "n_states": 1977,
+        "p_next_action_is_same_side_EXTEND": 0.7917,
+        "p_opposite_ever": 0.9939,
+        "p_opposite_within_s": {
+          "30": 0.5473,
+          "60": 0.7542,
+          "90": 0.8629,
+          "180": 0.9666
+        },
+        "pair_cost_at_that_opposite": {
+          "n": 1965,
+          "p25": 0.925,
+          "p50": 0.985,
+          "p75": 1.0389,
+          "frac_gt_1.00": 0.4127
+        }
+      }
+    }
+  },
+  "labels": "p_opposite_within_s is measured from the k-th same-side fill. pair_cost_at_that_opposite is the size-weighted average cost a matched pair WOULD have carried had the opposite leg filled at the price it actually next traded at for this account -- it is not a P&L, and it says nothing about whether an order was resting."
+}

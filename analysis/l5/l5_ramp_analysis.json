@@ -1,0 +1,498 @@
+{
+ "generated_utc": "2026-09-03T04:32:03.006722+00:00",
+ "labels": "research-only sequential re-analysis; provenance-backed canonical history; nothing armed; timing not causality",
+ "epochs": {
+  "developing": {
+   "windows": 86,
+   "fills": 2029,
+   "trades_per_window": 23.6,
+   "trades_per_min_median": 2.387,
+   "qty_mean": 8.735,
+   "qty_median": 10.0,
+   "run_len_mean": 2.14,
+   "run_len_p90": 4,
+   "nearby_price_frac": 0.148,
+   "p_extend_given_extend": 0.572,
+   "p_complete_given_extend": 0.428,
+   "flip_gap_median_s": 16.0,
+   "flip_gap_p75_s": 30.0,
+   "peak_residual_mean": 52.4,
+   "final_residual_mean": 36.0,
+   "repair_halflife_median_s": 94.0,
+   "pair_cost_final_mean": 0.9851,
+   "pair_cost_drift_mean": -0.0016,
+   "complete_price_mean": 0.5155,
+   "entry_price_bands": {
+    "p45-55c": 31,
+    "p25-45c": 26,
+    "p55-75c": 21,
+    "p75-90c": 4
+   },
+   "favored_up_share": 0.442,
+   "residual_on_winner_rate": 0.5,
+   "concurrency_mean": 1,
+   "concurrency_max": 1,
+   "qty_mean_by_concurrency": {
+    "1": 8.735
+   },
+   "maker_share_by_tte": "NOT_MEASURABLE_maker_taker_unknown",
+   "splits": {
+    "BTC-15m": {
+     "windows": 86,
+     "fills": 2029,
+     "qty_mean": 8.735
+    }
+   }
+  },
+  "early": {
+   "windows": 7,
+   "fills": 9,
+   "trades_per_window": 1.3,
+   "trades_per_min_median": 60.0,
+   "qty_mean": 2.155,
+   "qty_median": 1.37,
+   "run_len_mean": 1,
+   "run_len_p90": 1,
+   "nearby_price_frac": null,
+   "p_extend_given_extend": null,
+   "p_complete_given_extend": null,
+   "flip_gap_median_s": null,
+   "flip_gap_p75_s": null,
+   "peak_residual_mean": 2.2,
+   "final_residual_mean": 1.8,
+   "repair_halflife_median_s": 70.0,
+   "pair_cost_final_mean": null,
+   "pair_cost_drift_mean": null,
+   "complete_price_mean": null,
+   "entry_price_bands": {
+    "p55-75c": 2,
+    "p>90c": 2,
+    "p75-90c": 1,
+    "p<10c": 1
+   },
+   "favored_up_share": 0.714,
+   "residual_on_winner_rate": 0.714,
+   "concurrency_mean": 1,
+   "concurrency_max": 1,
+   "qty_mean_by_concurrency": {
+    "1": 2.155
+   },
+   "maker_share_by_tte": "NOT_MEASURABLE_maker_taker_unknown",
+   "splits": {
+    "BTC-15m": {
+     "windows": 5,
+     "fills": 5,
+     "qty_mean": 2.458
+    },
+    "BTC-5m": {
+     "windows": 2,
+     "fills": 4,
+     "qty_mean": 1.399
+    }
+   }
+  },
+  "mature_apr": {
+   "windows": 85,
+   "fills": 2657,
+   "trades_per_window": 31.3,
+   "trades_per_min_median": 2.5,
+   "qty_mean": 15.164,
+   "qty_median": 20.0,
+   "run_len_mean": 2.09,
+   "run_len_p90": 4,
+   "nearby_price_frac": 0.231,
+   "p_extend_given_extend": 0.484,
+   "p_complete_given_extend": 0.516,
+   "flip_gap_median_s": 12.0,
+   "flip_gap_p75_s": 26.0,
+   "peak_residual_mean": 78.6,
+   "final_residual_mean": 46.4,
+   "repair_halflife_median_s": 86.0,
+   "pair_cost_final_mean": 0.9602,
+   "pair_cost_drift_mean": -0.0104,
+   "complete_price_mean": 0.4751,
+   "entry_price_bands": {
+    "p45-55c": 37,
+    "p25-45c": 22,
+    "p55-75c": 21,
+    "p10-25c": 3
+   },
+   "favored_up_share": 0.565,
+   "residual_on_winner_rate": 0.306,
+   "concurrency_mean": 1,
+   "concurrency_max": 1,
+   "qty_mean_by_concurrency": {
+    "1": 15.164
+   },
+   "maker_share_by_tte": "NOT_MEASURABLE_maker_taker_unknown",
+   "splits": {
+    "BTC-15m": {
+     "windows": 85,
+     "fills": 2657,
+     "qty_mean": 15.164
+    }
+   }
+  },
+  "mature_aug": {
+   "windows": 2000,
+   "fills": 66715,
+   "trades_per_window": 33.4,
+   "trades_per_min_median": 3.704,
+   "qty_mean": 21.855,
+   "qty_median": 13.29,
+   "run_len_mean": 3.11,
+   "run_len_p90": 7,
+   "nearby_price_frac": 0.247,
+   "p_extend_given_extend": 0.695,
+   "p_complete_given_extend": 0.305,
+   "flip_gap_median_s": 3.0,
+   "flip_gap_p75_s": 10.0,
+   "peak_residual_mean": 143.6,
+   "final_residual_mean": 108.4,
+   "repair_halflife_median_s": 41.0,
+   "pair_cost_final_mean": 0.9947,
+   "pair_cost_drift_mean": -0.0323,
+   "complete_price_mean": 0.4425,
+   "entry_price_bands": {
+    "p55-75c": 721,
+    "p45-55c": 389,
+    "p75-90c": 306,
+    "p25-45c": 236
+   },
+   "favored_up_share": 0.481,
+   "residual_on_winner_rate": 0.506,
+   "concurrency_mean": 3.1,
+   "concurrency_max": 8,
+   "qty_mean_by_concurrency": {
+    "1": 34.793,
+    "2-3": 35.173,
+    "4+": 19.852
+   },
+   "maker_share_by_tte": {
+    "tte<30s": 0.411,
+    "tte2-5m": 0.714,
+    "tte30-120s": 0.586,
+    "tte>10m": 0.97,
+    "tte5-10m": 0.963
+   },
+   "splits": {
+    "BTC-15m": {
+     "windows": 313,
+     "fills": 58304,
+     "qty_mean": 19.783
+    },
+    "BTC-5m": {
+     "windows": 955,
+     "fills": 6225,
+     "qty_mean": 41.396
+    },
+    "ETH-15m": {
+     "windows": 29,
+     "fills": 117,
+     "qty_mean": 13.372
+    },
+    "ETH-5m": {
+     "windows": 703,
+     "fills": 2069,
+     "qty_mean": 21.932
+    }
+   }
+  },
+  "ramp": {
+   "windows": 30,
+   "fills": 446,
+   "trades_per_window": 14.9,
+   "trades_per_min_median": 1.609,
+   "qty_mean": 9.441,
+   "qty_median": 10.0,
+   "run_len_mean": 2.25,
+   "run_len_p90": 5,
+   "nearby_price_frac": 0.09,
+   "p_extend_given_extend": 0.621,
+   "p_complete_given_extend": 0.379,
+   "flip_gap_median_s": 24.0,
+   "flip_gap_p75_s": 46.0,
+   "peak_residual_mean": 42.4,
+   "final_residual_mean": 25.1,
+   "repair_halflife_median_s": 214.0,
+   "pair_cost_final_mean": 0.9496,
+   "pair_cost_drift_mean": -0.0176,
+   "complete_price_mean": 0.447,
+   "entry_price_bands": {
+    "p45-55c": 14,
+    "p55-75c": 8,
+    "p25-45c": 6,
+    "p10-25c": 1
+   },
+   "favored_up_share": 0.567,
+   "residual_on_winner_rate": 0.533,
+   "concurrency_mean": 1,
+   "concurrency_max": 1,
+   "qty_mean_by_concurrency": {
+    "1": 9.441
+   },
+   "maker_share_by_tte": "NOT_MEASURABLE_maker_taker_unknown",
+   "splits": {
+    "BTC-15m": {
+     "windows": 30,
+     "fills": 446,
+     "qty_mean": 9.441
+    }
+   }
+  },
+  "transition": {
+   "windows": 8,
+   "fills": 128,
+   "trades_per_window": 16,
+   "trades_per_min_median": 3.576,
+   "qty_mean": 4.935,
+   "qty_median": 5.0,
+   "run_len_mean": 2.67,
+   "run_len_p90": 5,
+   "nearby_price_frac": 0.305,
+   "p_extend_given_extend": 0.701,
+   "p_complete_given_extend": 0.299,
+   "flip_gap_median_s": 14.0,
+   "flip_gap_p75_s": 20.0,
+   "peak_residual_mean": 27.6,
+   "final_residual_mean": 24.9,
+   "repair_halflife_median_s": 106.0,
+   "pair_cost_final_mean": 0.9427,
+   "pair_cost_drift_mean": -0.055,
+   "complete_price_mean": 0.4534,
+   "entry_price_bands": {
+    "p45-55c": 4,
+    "p25-45c": 2,
+    "p75-90c": 1,
+    "p10-25c": 1
+   },
+   "favored_up_share": 0.875,
+   "residual_on_winner_rate": 0.5,
+   "concurrency_mean": 1,
+   "concurrency_max": 1,
+   "qty_mean_by_concurrency": {
+    "1": 4.935
+   },
+   "maker_share_by_tte": "NOT_MEASURABLE_maker_taker_unknown",
+   "splits": {
+    "BTC-15m": {
+     "windows": 8,
+     "fills": 128,
+     "qty_mean": 4.935
+    }
+   }
+  }
+ },
+ "daily": {
+  "2026-03-19": {
+   "fills": 5,
+   "windows": 3,
+   "qty_mean": 2.599,
+   "p_ee": null
+  },
+  "2026-03-25": {
+   "fills": 4,
+   "windows": 4,
+   "qty_mean": 1.822,
+   "p_ee": null
+  },
+  "2026-03-26": {
+   "fills": 128,
+   "windows": 8,
+   "qty_mean": 4.935,
+   "p_ee": 0.701
+  },
+  "2026-03-27": {
+   "fills": 864,
+   "windows": 28,
+   "qty_mean": 7.497,
+   "p_ee": 0.627
+  },
+  "2026-03-28": {
+   "fills": 285,
+   "windows": 15,
+   "qty_mean": 9.746,
+   "p_ee": 0.662
+  },
+  "2026-03-30": {
+   "fills": 448,
+   "windows": 20,
+   "qty_mean": 9.568,
+   "p_ee": 0.515
+  },
+  "2026-03-31": {
+   "fills": 197,
+   "windows": 10,
+   "qty_mean": 9.675,
+   "p_ee": 0.387
+  },
+  "2026-04-01": {
+   "fills": 85,
+   "windows": 4,
+   "qty_mean": 9.62,
+   "p_ee": 0.308
+  },
+  "2026-04-02": {
+   "fills": 150,
+   "windows": 9,
+   "qty_mean": 9.717,
+   "p_ee": 0.5
+  },
+  "2026-04-06": {
+   "fills": 41,
+   "windows": 5,
+   "qty_mean": 9.722,
+   "p_ee": 0.526
+  },
+  "2026-04-09": {
+   "fills": 299,
+   "windows": 16,
+   "qty_mean": 9.518,
+   "p_ee": 0.632
+  },
+  "2026-04-10": {
+   "fills": 106,
+   "windows": 9,
+   "qty_mean": 9.114,
+   "p_ee": 0.632
+  },
+  "2026-04-13": {
+   "fills": 337,
+   "windows": 19,
+   "qty_mean": 12.267,
+   "p_ee": 0.448
+  },
+  "2026-04-14": {
+   "fills": 433,
+   "windows": 21,
+   "qty_mean": 17.791,
+   "p_ee": 0.5
+  },
+  "2026-04-15": {
+   "fills": 112,
+   "windows": 6,
+   "qty_mean": 17.171,
+   "p_ee": 0.432
+  },
+  "2026-04-17": {
+   "fills": 118,
+   "windows": 9,
+   "qty_mean": 13.96,
+   "p_ee": 0.592
+  },
+  "2026-04-20": {
+   "fills": 1416,
+   "windows": 25,
+   "qty_mean": 14.637,
+   "p_ee": 0.485
+  },
+  "2026-04-21": {
+   "fills": 241,
+   "windows": 5,
+   "qty_mean": 17.253,
+   "p_ee": 0.469
+  },
+  "2026-08-28": {
+   "fills": 12325,
+   "windows": 401,
+   "qty_mean": 22.964,
+   "p_ee": 0.709
+  },
+  "2026-08-29": {
+   "fills": 20026,
+   "windows": 567,
+   "qty_mean": 21.667,
+   "p_ee": 0.689
+  },
+  "2026-08-30": {
+   "fills": 19460,
+   "windows": 558,
+   "qty_mean": 21.74,
+   "p_ee": 0.695
+  },
+  "2026-08-31": {
+   "fills": 14904,
+   "windows": 474,
+   "qty_mean": 21.342,
+   "p_ee": 0.691
+  }
+ },
+ "changepoints_measured": {
+  "fills": {
+   "boundary_after": "2026-08-28",
+   "first_new_day": "2026-08-29",
+   "t_stat": 11.77,
+   "mean_before": 926,
+   "mean_after": 18130
+  },
+  "windows": {
+   "boundary_after": "2026-08-28",
+   "first_new_day": "2026-08-29",
+   "t_stat": 15.95,
+   "mean_before": 32.474,
+   "mean_after": 533
+  },
+  "qty_mean": {
+   "boundary_after": "2026-04-21",
+   "first_new_day": "2026-08-28",
+   "t_stat": 10.53,
+   "mean_before": 10.367,
+   "mean_after": 21.928
+  },
+  "p_ee": {
+   "boundary_after": "2026-04-21",
+   "first_new_day": "2026-08-28",
+   "t_stat": 6.44,
+   "mean_before": 0.526,
+   "mean_after": 0.696
+  }
+ },
+ "changepoints_spring_only": {
+  "fills": {
+   "boundary_after": "2026-03-25",
+   "first_new_day": "2026-03-26",
+   "t_stat": 3.79,
+   "mean_before": 4.5,
+   "mean_after": 328.75
+  },
+  "windows": {
+   "boundary_after": "2026-03-25",
+   "first_new_day": "2026-03-26",
+   "t_stat": 5.09,
+   "mean_before": 3.5,
+   "mean_after": 13.062
+  },
+  "qty_mean": {
+   "boundary_after": "2026-03-25",
+   "first_new_day": "2026-03-26",
+   "t_stat": 9.7,
+   "mean_before": 2.211,
+   "mean_after": 11.387
+  },
+  "p_ee": {
+   "boundary_after": "2026-03-28",
+   "first_new_day": "2026-03-30",
+   "t_stat": 5.61,
+   "mean_before": 0.663,
+   "mean_after": 0.494
+  }
+ },
+ "maker_taker_coverage_note": "maker/taker labels exist ONLY for Aug 28-31 rows; spring epochs are 'unknown' and reported as such",
+ "incentive_timing": {
+  "MAKER_REBATE": {
+   "first": "2026-04-21",
+   "last": "2026-08-30",
+   "n": 109
+  },
+  "TAKER_REBATE": {
+   "first": "2026-06-20",
+   "last": "2026-08-30",
+   "n": 72
+  },
+  "REWARD": {
+   "first": "2026-08-08",
+   "last": "2026-08-30",
+   "n": 19
+  }
+ }
+}

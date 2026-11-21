@@ -1,0 +1,118 @@
+{
+ "generated_utc": "2026-08-31T21:19:18.791107+00:00",
+ "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
+ "sample": "IN_SAMPLE_DIAGNOSTIC",
+ "ladder_cutoff_utc": "2026-08-31T21:45",
+ "constants": {
+  "rung_size": 1.0,
+  "offsets_multi": [
+   0.0,
+   0.02,
+   0.05
+  ],
+  "max_spend_per_window": 10.0,
+  "limited": [
+   [
+    "BTC",
+    "ETH"
+   ],
+   [
+    "05M"
+   ]
+  ]
+ },
+ "arms": {
+  "L0": {
+   "engaged": 25,
+   "missing_labels": 1,
+   "status": "INCOMPLETE",
+   "n_fills": 108,
+   "turnover_usdc": 41.84,
+   "matched_pct_qty": 0.5741,
+   "pair_locked": 7.9139,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 1.08,
+   "rebates_separate": 0.0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 20.33,
+   "max_single_window_loss": -1.54,
+   "capital_minutes": 53.8,
+   "rung_fill_counts": {
+    "0": 108
+   }
+  },
+  "L1": {
+   "engaged": 59,
+   "missing_labels": 2,
+   "status": "INCOMPLETE",
+   "n_fills": 170,
+   "turnover_usdc": 63.15,
+   "matched_pct_qty": 0.4235,
+   "pair_locked": 7.7706,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 1.7,
+   "rebates_separate": 0.0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 36.5,
+   "max_single_window_loss": -1.54,
+   "capital_minutes": 112.0,
+   "rung_fill_counts": {
+    "0": 170
+   }
+  },
+  "L2": {
+   "engaged": 25,
+   "missing_labels": 1,
+   "status": "INCOMPLETE",
+   "n_fills": 110,
+   "turnover_usdc": 42.88,
+   "matched_pct_qty": 0.5636,
+   "pair_locked": 7.9233,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 1.1,
+   "rebates_separate": 0.0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 21.46,
+   "max_single_window_loss": -2.18,
+   "capital_minutes": 53.9,
+   "rung_fill_counts": {
+    "0": 108,
+    "1": 2,
+    "2": 0
+   }
+  },
+  "L3": {
+   "engaged": 59,
+   "missing_labels": 2,
+   "status": "INCOMPLETE",
+   "n_fills": 176,
+   "turnover_usdc": 65.7,
+   "matched_pct_qty": 0.4091,
+   "pair_locked": 7.7767,
+   "realized_settlement_pnl_all": null,
+   "net_sep2": null,
+   "net_aug31": null,
+   "maker_fees": 1.76,
+   "rebates_separate": 0.0,
+   "residual_pnl": null,
+   "mech_net_per_turnover": null,
+   "worst_residual_loss_sum": 39.13,
+   "max_single_window_loss": -2.18,
+   "capital_minutes": 114.7,
+   "rung_fill_counts": {
+    "0": 170,
+    "1": 6,
+    "2": 0
+   }
+  }
+ }
+}

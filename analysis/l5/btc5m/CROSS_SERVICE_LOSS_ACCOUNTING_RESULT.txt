@@ -1,0 +1,113 @@
+Combined UTC-day and LIFETIME figures the BTC5m lane judges its loss limits on, by deployment combination.
+Both services' real code. Truth: day = account's other result (-1.00) + the lane's own results today;
+lifetime = cash re-anchor (-39.468) + other (-1.00) + every lane result settled after the anchor's cash read.
+lane: deployed 27cbdb32 / candidate.   account service: deployed cfac6707 / patched.
+
+S1 not yet retired here | fresh
+    lane deployed  account deployed  day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane candidate account deployed  day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane deployed  account patched   day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane candidate account patched   day -1.05 EXACT                         lifetime -40.518 EXACT
+S2 booked at the $1 bound (harsher) | fresh
+    lane deployed  account deployed  day -1.4551 CONSERVATIVE by 0.4400      lifetime -40.9231 CONSERVATIVE by 0.4400
+    lane candidate account deployed  day -1.4551 CONSERVATIVE by 0.4400      lifetime -40.9231 CONSERVATIVE by 0.4400
+    lane deployed  account patched   day -1.4551 CONSERVATIVE by 0.4400      lifetime -40.9231 CONSERVATIVE by 0.4400
+    lane candidate account patched   day -1.44 CONSERVATIVE by 0.4249        lifetime -40.908 CONSERVATIVE by 0.4249
+S2 booked at the $1 bound (harsher) | stale 31 s
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+S2 booked at the $1 bound (harsher) | unreachable
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+S3 booked ZERO, lane lost | fresh
+    lane deployed  account deployed  day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane candidate account deployed  day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane deployed  account patched   day -1.05 EXACT                         lifetime -40.518 EXACT
+    lane candidate account patched   day -1.05 EXACT                         lifetime -40.518 EXACT
+S4 restated to the true result | fresh
+    lane deployed  account deployed  day -1.0228 CONSERVATIVE by 0.0114      lifetime -40.4908 CONSERVATIVE by 0.0114
+    lane candidate account deployed  day -1.0228 CONSERVATIVE by 0.0114      lifetime -40.4908 CONSERVATIVE by 0.0114
+    lane deployed  account patched   day -1.0228 CONSERVATIVE by 0.0114      lifetime -40.4908 CONSERVATIVE by 0.0114
+    lane candidate account patched   day -1.0114 EXACT                       lifetime -40.4794 EXACT
+S5 gain booked here, matched loss unseen | fresh
+    lane deployed  account deployed  day -0.95 UNDERSTATES LOSS by 0.03      lifetime -40.418 UNDERSTATES LOSS by 0.030
+    lane candidate account deployed  day -0.98 EXACT                         lifetime -40.448 EXACT
+    lane deployed  account patched   day -0.95 UNDERSTATES LOSS by 0.03      lifetime -40.418 UNDERSTATES LOSS by 0.030
+    lane candidate account patched   day -0.98 EXACT                         lifetime -40.448 EXACT
+S6 one loss booked, one not yet | fresh
+    lane deployed  account deployed  day -1.0379 CONSERVATIVE by 0.0114      lifetime -40.5059 CONSERVATIVE by 0.0114
+    lane candidate account deployed  day -1.0379 CONSERVATIVE by 0.0114      lifetime -40.5059 CONSERVATIVE by 0.0114
+    lane deployed  account patched   day -1.0379 CONSERVATIVE by 0.0114      lifetime -40.5059 CONSERVATIVE by 0.0114
+    lane candidate account patched   day -1.0265 EXACT                       lifetime -40.4945 EXACT
+S8 an undated row (day unknown) | fresh
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+S9 unattributed residual off the anchor | fresh
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+S10 an unreadable row | fresh
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_SAYS_UNREADABLE)  lifetime REFUSES
+L1 PRIOR-DAY loss never booked here | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -40.468 UNDERSTATES LOSS by 0.300
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -40.468 UNDERSTATES LOSS by 0.300
+    lane candidate account patched   day -1.00 EXACT                         lifetime -40.768 EXACT
+L1 PRIOR-DAY loss never booked here | stale 31 s
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_STALE)        lifetime REFUSES
+L1 PRIOR-DAY loss never booked here | unreachable
+    lane deployed  account deployed  day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane candidate account deployed  day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane deployed  account patched   day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+    lane candidate account patched   day REFUSES (ACCOUNT_RISK_UNREADABLE:TimeoutError)  lifetime REFUSES
+L2 prior-day loss booked at its result | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -41.068 CONSERVATIVE by 0.300
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane candidate account patched   day -1.00 EXACT                         lifetime -40.768 EXACT
+L3 lane loss from BEFORE the cash anchor | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -40.468 EXACT
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -45.468 CONSERVATIVE by 5.000
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -40.468 EXACT
+    lane candidate account patched   day -1.00 EXACT                         lifetime -40.468 EXACT
+L4 rollover: lane 23:59, retired here 00:00 | fresh
+    lane deployed  account deployed  day -1.20 CONSERVATIVE by 0.20          lifetime -40.668 EXACT
+    lane candidate account deployed  day -1.20 CONSERVATIVE by 0.20          lifetime -40.868 CONSERVATIVE by 0.200
+    lane deployed  account patched   day -1.20 CONSERVATIVE by 0.20          lifetime -40.668 EXACT
+    lane candidate account patched   day -1.20 CONSERVATIVE by 0.20          lifetime -40.668 EXACT
+L5 rollover: retired here 23:59, lane 00:00 | fresh
+    lane deployed  account deployed  day -1.20 EXACT                         lifetime -40.868 CONSERVATIVE by 0.200
+    lane candidate account deployed  day -1.20 EXACT                         lifetime -40.868 CONSERVATIVE by 0.200
+    lane deployed  account patched   day -1.20 EXACT                         lifetime -40.868 CONSERVATIVE by 0.200
+    lane candidate account patched   day -1.20 EXACT                         lifetime -40.668 EXACT
+L6 lifetime does not reconcile | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -41.538 CONSERVATIVE by 0.770
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -41.838 CONSERVATIVE by 1.070
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -41.538 CONSERVATIVE by 0.770
+    lane candidate account patched   day -1.00 EXACT                         lifetime -41.838 CONSERVATIVE by 1.070
+L7 re-anchor history missing | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -41.068 CONSERVATIVE by 0.300
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane candidate account patched   day -1.00 EXACT                         lifetime -41.068 CONSERVATIVE by 0.300
+L8 prior-day loss booked at ZERO | fresh
+    lane deployed  account deployed  day -1.00 EXACT                         lifetime -40.468 UNDERSTATES LOSS by 0.300
+    lane candidate account deployed  day -1.00 EXACT                         lifetime -40.768 EXACT
+    lane deployed  account patched   day -1.00 EXACT                         lifetime -40.468 UNDERSTATES LOSS by 0.300
+    lane candidate account patched   day -1.00 EXACT                         lifetime -40.768 EXACT
+
+cases where the CANDIDATE lane understates a loss: 0
+states where the DEPLOYED lane understates a loss: ['L1 PRIOR-DAY loss never booked here | fresh', 'L8 prior-day loss booked at ZERO | fresh', 'S5 gain booked here, matched loss unseen | fresh']

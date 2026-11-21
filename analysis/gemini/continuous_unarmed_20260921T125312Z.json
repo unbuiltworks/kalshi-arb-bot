@@ -1,0 +1,187 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-21T12:53:12.885451+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "17a10e561c1e4e66aa7ed8b1a47fda4d1622e43d7edf906c4a1b3af10ede0f34",
+  "envelope_name": "GEMINI_L5_SHADOW_ENVELOPE_Q001",
+  "envelope_sha": "c5e88347601e24885e8cdb3cfb5b7a803b0b872948cce896c80a60023da51887",
+  "envelope": {
+    "name": "GEMINI_L5_SHADOW_ENVELOPE_Q001",
+    "action_size": "0.01",
+    "max_actions": "12",
+    "max_same_side_run": "4",
+    "max_residual_contracts": "0.04",
+    "max_imbalance_contracts": "0.04",
+    "max_yes_contracts": "0.10",
+    "max_no_contracts": "0.10",
+    "max_total_spend_usd": "0.15",
+    "max_committed_usd": "0.15",
+    "max_residual_usd": "0.04",
+    "max_working_orders": "2",
+    "max_concurrent_markets": "1",
+    "cohort_prefix": "GEMI-BTC05M",
+    "worst_case_loss_usd": "0.15"
+  },
+  "driver_envelope_sha": "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22",
+  "bundle_sha": "02f7a55800b952bfc2c76117dcfcc472825df19ff5952ba561c9f8fcc73b6bbb",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "family": {
+    "name": "BTC5m",
+    "prefix": "BTC05M",
+    "minutes": 5,
+    "resolved_symbol_prefix": "GEMI-BTC05M",
+    "explicit": true
+  },
+  "envelope_family": "GEMI-BTC05M",
+  "entry_schedule": {
+    "in_band": false,
+    "band": [
+      840.0,
+      880.0
+    ],
+    "waited_s": 422.44,
+    "polls": 59,
+    "selection": {
+      "eligible": false,
+      "considered": [
+        {
+          "symbol": "GEMI-BTC05M2609211305-UP",
+          "tte_s": 288.85297083854675,
+          "contract_status": "active",
+          "market_state": "open",
+          "why": "tte 288.85297083854675 outside [840.0, 300.0]"
+        },
+        {
+          "symbol": "GEMI-BTC05M2609211300-UP",
+          "tte_s": -11.147029161453247,
+          "contract_status": "settled",
+          "market_state": "closed",
+          "why": "tte -11.147029161453247 outside [840.0, 300.0]"
+        },
+        {
+          "symbol": "GEMI-BTC05M2609211255-UP",
+          "tte_s": -311.14702916145325,
+          "contract_status": "settled",
+          "market_state": "closed",
+          "why": "tte -311.14702916145325 outside [840.0, 300.0]"
+        },
+        {
+          "symbol": "GEMI-BTC05M2609211250-UP",
+          "tte_s": -611.1470291614532,
+          "contract_status": "settled",
+          "market_state": "closed",
+          "why": "tte -611.1470291614532 outside [840.0, 300.0]"
+        }
+      ],
+      "band": [
+        840.0,
+        300.0
+      ],
+      "cohort": "BTC5m",
+      "why": "no BTC5m contract is inside the entry band [840.0, 300.0] right now"
+    },
+    "observed": [
+      {
+        "waited_s": 384.58,
+        "tte_s": [
+          24.535073280334473,
+          -275.4649267196655,
+          -575.4649267196655,
+          -875.4649267196655
+        ]
+      },
+      {
+        "waited_s": 391.49,
+        "tte_s": [
+          17.52618384361267,
+          -282.47381615638733,
+          -582.4738161563873,
+          -882.4738161563873
+        ]
+      },
+      {
+        "waited_s": 398.13,
+        "tte_s": [
+          10.613940238952637,
+          -289.38605976104736,
+          -589.3860597610474,
+          -889.3860597610474
+        ]
+      },
+      {
+        "waited_s": 404.71,
+        "tte_s": [
+          3.974804401397705,
+          -296.0251955986023,
+          -596.0251955986023,
+          -896.0251955986023
+        ]
+      },
+      {
+        "waited_s": 413.25,
+        "tte_s": [
+          297.39853858947754,
+          -2.601461410522461,
+          -302.60146141052246,
+          -602.6014614105225
+        ]
+      },
+      {
+        "waited_s": 422.44,
+        "tte_s": [
+          288.85297083854675,
+          -11.147029161453247,
+          -311.14702916145325,
+          -611.1470291614532
+        ]
+      }
+    ],
+    "why": "no contract reached the entry band [840.0, 880.0] within 420.0s; refusing BEFORE the latch rather than entering a window the experiment did not ask for"
+  },
+  "state": "DO_NOT_TRADE",
+  "why": "no contract reached the entry band [840.0, 880.0] within 420.0s; refusing BEFORE the latch rather than entering a window the experiment did not ask for",
+  "latch": {
+    "consumed": false,
+    "why": "the entry band was never reached; refused BEFORE the latch"
+  },
+  "symbol_selection": {
+    "eligible": false,
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609211305-UP",
+        "tte_s": 288.85297083854675,
+        "contract_status": "active",
+        "market_state": "open",
+        "why": "tte 288.85297083854675 outside [840.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211300-UP",
+        "tte_s": -11.147029161453247,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -11.147029161453247 outside [840.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211255-UP",
+        "tte_s": -311.14702916145325,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -311.14702916145325 outside [840.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609211250-UP",
+        "tte_s": -611.1470291614532,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -611.1470291614532 outside [840.0, 300.0]"
+      }
+    ],
+    "band": [
+      840.0,
+      300.0
+    ],
+    "cohort": "BTC5m",
+    "why": "no BTC5m contract is inside the entry band [840.0, 300.0] right now"
+  },
+  "finished_utc": "2026-09-21T13:00:15.324352+00:00"
+}

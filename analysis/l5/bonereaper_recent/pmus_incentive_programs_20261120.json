@@ -1,0 +1,63 @@
+{
+"fetched_utc": "2026-11-20",
+"source": "https://gateway.polymarket.us/v1/incentives",
+"complete": false,
+"programs": {
+"cfb_t2_ml_live_20261118": {
+"n": 60000,
+"cat": "SPR",
+"sub": "FOOTBALL",
+"product": "aec",
+"pool": 15,
+"target": 78000,
+"disc": 0.15,
+"maxSpread": null,
+"period": "live",
+"status": "active",
+"type": "liquidityProgram",
+"example": "aec-cfb-airf-nmx-2026-11-27"
+},
+"cfb_t3_ml_live_20261118": {
+"n": 57000,
+"cat": "SPR",
+"sub": "FOOTBALL",
+"product": "aec",
+"pool": 12,
+"target": 5000,
+"disc": 0.2,
+"maxSpread": null,
+"period": "live",
+"status": "active",
+"type": "liquidityProgram",
+"example": "aec-cfb-alaam-msvlst-2026-11-21"
+},
+"cfb_t1_ml_live_20261118": {
+"n": 33000,
+"cat": "SPR",
+"sub": "FOOTBALL",
+"product": "aec",
+"pool": 30,
+"target": 94000,
+"disc": 0.1,
+"maxSpread": null,
+"period": "live",
+"status": "active",
+"type": "liquidityProgram",
+"example": "aec-cfb-ark-tx-2026-11-21"
+}
+},
+"note": "the unfiltered listing returned the same three football programs for 1,500 pages and never ended; it is NOT a census. Crypto markets were checked by slug instead.",
+"crypto_check": {
+"asked": [
+"cpc-btc-updown-5m-2026-11-20-2030z",
+"cpc-btc-updown-15m-2026-11-20-2030z",
+"cpc-btc-updown-1h-2026-11-20-2000z",
+"cpceth-eth-updown-5m-2026-11-20-2030z",
+"cpceth-eth-updown-15m-2026-11-20-2030z",
+"cpceth-eth-updown-1h-2026-11-20-2000z",
+"cpcsol-sol-updown-5m-2026-11-20-2030z",
+"cpcxrp-xrp-updown-5m-2026-11-20-2030z"
+],
+"found": {}
+}
+}

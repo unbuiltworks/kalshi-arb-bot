@@ -1,0 +1,150 @@
+{
+ "labels": "READ-ONLY historical decomposition of the frozen v2 cadence unit; no model or gate change",
+ "source": "l5_drift_out/l5_canonical_sequence.csv.gz (151,037 trades)",
+ "windows": 3982,
+ "trade_to_trade_gap_s": {
+  "n": 146362,
+  "median": 2.0,
+  "p25": 0,
+  "p75": 7,
+  "p90": 18,
+  "mean": 7.56,
+  "buckets": {
+   "gap<2s": 0.4546,
+   "gap2-10": 0.3474,
+   "gap10-30": 0.1406,
+   "gap>30": 0.0574
+  }
+ },
+ "same_resting_order_gap_s (same outcome/side/price as previous fill)": {
+  "n": 41803,
+  "median": 0,
+  "p25": 0,
+  "p75": 2,
+  "p90": 5,
+  "mean": 1.81,
+  "buckets": {
+   "gap<2s": 0.6867,
+   "gap2-10": 0.2768,
+   "gap10-30": 0.0314,
+   "gap>30": 0.0051
+  }
+ },
+ "changed_order_gap_s (fresh decision)": {
+  "n": 104559,
+  "median": 3,
+  "p25": 0,
+  "p75": 10,
+  "p90": 24,
+  "mean": 9.86,
+  "buckets": {
+   "gap<2s": 0.3618,
+   "gap2-10": 0.3756,
+   "gap10-30": 0.1843,
+   "gap>30": 0.0783
+  }
+ },
+ "share_of_gap<2s_transitions_that_are_same_resting_order": 0.4314,
+ "share_of_all_transitions_same_resting_order": 0.2856,
+ "order_episode_start_to_start_gap_s": {
+  "n": 104559,
+  "median": 3,
+  "p25": 0,
+  "p75": 12,
+  "p90": 26,
+  "mean": 10.55,
+  "buckets": {
+   "gap<2s": 0.3389,
+   "gap2-10": 0.3731,
+   "gap10-30": 0.203,
+   "gap>30": 0.085
+  }
+ },
+ "order_episode_idle_gap_s (prev episode last fill -> next episode first fill)": {
+  "n": 104559,
+  "median": 3,
+  "p25": 0,
+  "p75": 10,
+  "p90": 24,
+  "mean": 9.86,
+  "buckets": {
+   "gap<2s": 0.3618,
+   "gap2-10": 0.3756,
+   "gap10-30": 0.1843,
+   "gap>30": 0.0783
+  }
+ },
+ "order_episode_gap_by_relation_s": {
+  "sell": {
+   "n": 2,
+   "median": 70.0,
+   "p25": 24,
+   "p75": 116,
+   "p90": 116,
+   "mean": 70.0,
+   "buckets": {
+    "gap<2s": 0.0,
+    "gap2-10": 0.0,
+    "gap10-30": 0.5,
+    "gap>30": 0.5
+   }
+  },
+  "complete": {
+   "n": 52015,
+   "median": 4,
+   "p25": 1,
+   "p75": 12,
+   "p90": 26,
+   "mean": 10.73,
+   "buckets": {
+    "gap<2s": 0.3229,
+    "gap2-10": 0.3819,
+    "gap10-30": 0.2087,
+    "gap>30": 0.0865
+   }
+  },
+  "extend": {
+   "n": 52542,
+   "median": 3.0,
+   "p25": 0,
+   "p75": 11,
+   "p90": 25,
+   "mean": 10.37,
+   "buckets": {
+    "gap<2s": 0.3546,
+    "gap2-10": 0.3644,
+    "gap10-30": 0.1974,
+    "gap>30": 0.0836
+   }
+  }
+ },
+ "fills_per_order_episode": {
+  "n": 108541,
+  "median": 1,
+  "p25": 1,
+  "p75": 1,
+  "p90": 2,
+  "mean": 1.39,
+  "buckets": {
+   "gap<2s": 0.7792,
+   "gap2-10": 0.2196,
+   "gap10-30": 0.0012,
+   "gap>30": 0.0
+  }
+ },
+ "order_episode_duration_s": {
+  "n": 108541,
+  "median": 0,
+  "p25": 0,
+  "p75": 0,
+  "p90": 1,
+  "mean": 0.7,
+  "buckets": {
+   "gap<2s": 0.9075,
+   "gap2-10": 0.0731,
+   "gap10-30": 0.0167,
+   "gap>30": 0.0027
+  }
+ },
+ "assumption": "consecutive fills at identical outcome/side/price are partial fills of ONE resting order (no order ids in public activity)"
+}

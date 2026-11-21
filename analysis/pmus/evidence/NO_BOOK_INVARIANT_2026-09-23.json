@@ -1,0 +1,127 @@
+{
+ "label": "NO_BOOK_INVARIANT_V1",
+ "no_book_rows": 169,
+ "contradicted": 12,
+ "unverifiable_no_tape": 134,
+ "contradicted_rate_of_verifiable": 34.3,
+ "by_window": {
+  "16:15": 6,
+  "16:30": 6
+ },
+ "detail": [
+  {
+   "action_key": "0x9268c7de5c2b5a2d4fcec73a4fd8e55c0f9183831985703a7c703a33114ae89e|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.06|12.3085|1790180877",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xab7845581961ff0b4ab9d8d613eaeea55d70638046c87b58cb50c2ef62352d79|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.04|5|1790180881",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xd7e74de67b08b5b91fe6eed13ef0349a694ce98f0a52e7a63d330a07d3c11372|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.04|60|1790180881",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0x947b304c9fc64dde32ae95810cb4f3a4e3c33201a028fd8869bd43e58ba7e55d|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.03|68|1790180884",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0x3646ce9103aa05b8b33891a5cb8b36de397be60acb593bdc52c800613fc92bcb|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.03|7.12|1790180884",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xb38eda4bcc61e2010b4ad32c574d0333c17cf78eb3cd7094b10fee2d5e06bd3e|102916093553609953013801795751601674360138156052074220045537106119266601768766|BUY|0.03|24|1790180886",
+   "window": "16:15",
+   "market": "cpc-btc-updown-15m-2026-09-23-1615z",
+   "receipt_utc": "2026-09-23T16:28:26.441763+00:00",
+   "authenticated_prints_within_30s": 10,
+   "tte_s_at_receipt": 93.6,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xd93136d01e3078639cc974a4175fb659350e851230b1bf82431d6b2e6177875d|5663261769123978287377429352526443975243473154847515039431037654418516637361|BUY|0.65|10|1790181024",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:30:32.737671+00:00",
+   "authenticated_prints_within_30s": 99,
+   "tte_s_at_receipt": 867.3,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0x5d457b444fe9ec4587eb0c4be297c58ca89aa3aa107770831e9888206b496030|5663261769123978287377429352526443975243473154847515039431037654418516637361|BUY|0.62|15|1790181025",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:30:32.737671+00:00",
+   "authenticated_prints_within_30s": 99,
+   "tte_s_at_receipt": 867.3,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0x247111950c0317b194caf8c2a1d0b8a970dec840f25a4a87fc1ad57098e1a2da|5663261769123978287377429352526443975243473154847515039431037654418516637361|BUY|0.6200000111|5.394737|1790181027",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:30:32.737671+00:00",
+   "authenticated_prints_within_30s": 99,
+   "tte_s_at_receipt": 867.3,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xf2ee2ac8425c8353a832fa080b83ca6e73c51fc03c5d1503b21f7732ead99675|5663261769123978287377429352526443975243473154847515039431037654418516637361|BUY|0.68|93.75|1790181039",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:31:04.890882+00:00",
+   "authenticated_prints_within_30s": 85,
+   "tte_s_at_receipt": 835.1,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0x62444a211c1b42353d87914c2ef81c7fb8c2ffcb2fffaf0170193b8a25e08fc9|3480863677287360571727023607243796112629375622548402714451975851100472629779|BUY|0.27|76.22|1790181060",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:31:04.890882+00:00",
+   "authenticated_prints_within_30s": 85,
+   "tte_s_at_receipt": 835.1,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  },
+  {
+   "action_key": "0xfd49d4dcf58f687a7a32215bb3766a84c7f77f4994ac519f9c8eb5d631c516ed|5663261769123978287377429352526443975243473154847515039431037654418516637361|BUY|0.68|100|1790181079",
+   "window": "16:30",
+   "market": "cpc-btc-updown-15m-2026-09-23-1630z",
+   "receipt_utc": "2026-09-23T16:31:36.477875+00:00",
+   "authenticated_prints_within_30s": 57,
+   "tte_s_at_receipt": 803.5,
+   "verdict": "NO_BOOK_CONTRADICTED_BY_TRADES"
+  }
+ ],
+ "verdict": "OBSERVATION_DEFECT",
+ "meaning": "a contradicted row means the venue was trading while we saw no book: our observation failed. It does NOT supply a price, and no BBO is ever fabricated from a trade.",
+ "provenance": {
+  "original_evidence_preserved": "analysis/pmus/evidence/observer_rows_all_windows.jsonl",
+  "note": "original NO_BOOK classifications are NOT rewritten. This report sits beside them and marks which are contradicted."
+ }
+}

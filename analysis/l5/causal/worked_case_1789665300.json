@@ -1,0 +1,2699 @@
+{
+  "fills": [
+    {
+      "t": 1789665336,
+      "outcome": "Down",
+      "px": 0.48,
+      "qty": 9.61,
+      "usd": 4.6128,
+      "tx": "0xb07036b0276c8bb4e3430858e5150583461b4ede25e3d950e61660050c5e18fe"
+    },
+    {
+      "t": 1789665337,
+      "outcome": "Down",
+      "px": 0.48,
+      "qty": 5.77,
+      "usd": 2.7696,
+      "tx": "0xc1fdb6d2b9b94cac0dc83a02d1381ac2b29d8083b760f45bea54be40c465d225"
+    },
+    {
+      "t": 1789665361,
+      "outcome": "Down",
+      "px": 0.49,
+      "qty": 100.0,
+      "usd": 49.0,
+      "tx": "0x6bf6189d9c9fb0dd42bb1f7ef8744e6968448e792a400fb2b3a27b2d2a947bbd"
+    },
+    {
+      "t": 1789665415,
+      "outcome": "Down",
+      "px": 0.62,
+      "qty": 25.0,
+      "usd": 15.5,
+      "tx": "0x59b3d73c22022fce4c28a3db66f7593d7ea7cfd45ba99e04d30fe9f5536b008d"
+    },
+    {
+      "t": 1789665417,
+      "outcome": "Down",
+      "px": 0.6200001242,
+      "qty": 2.736843,
+      "usd": 1.696843,
+      "tx": "0x798bb7c20689201ea59551c8c90ddd8a42270c5287853b46647109756ff8d1d0"
+    },
+    {
+      "t": 1789665427,
+      "outcome": "Up",
+      "px": 0.3500000014,
+      "qty": 71.846154,
+      "usd": 25.146154,
+      "tx": "0x0e761f03c63dd8b40df8fd3cdcedde9334730949e764cef8c205fdf2f77ef1d4"
+    },
+    {
+      "t": 1789665469,
+      "outcome": "Up",
+      "px": 0.51,
+      "qty": 18.57,
+      "usd": 9.4707,
+      "tx": "0xbea46f3385e1834401393ab574a49eabd8a7824ff49a65d45b75e62d0f2ba43c"
+    },
+    {
+      "t": 1789665484,
+      "outcome": "Up",
+      "px": 0.5600001408,
+      "qty": 2.272728,
+      "usd": 1.272728,
+      "tx": "0xe99cfd824eea2ca4d11fcc438d0c0e7e19e6f4c69c1c3e821d2c9dfa2ed41cd0"
+    },
+    {
+      "t": 1789665486,
+      "outcome": "Up",
+      "px": 0.56,
+      "qty": 1.96,
+      "usd": 1.0976,
+      "tx": "0x47964763afc41e2a5578643fbb2bacce5226de19210e599ac8da4bb6b170b356"
+    },
+    {
+      "t": 1789665517,
+      "outcome": "Up",
+      "px": 0.58,
+      "qty": 86.59,
+      "usd": 51.69873,
+      "tx": "0x87534966560955f676cb8dc74c63ea3f5dccdd42190ce114e566f08be67269d2"
+    },
+    {
+      "t": 1789665558,
+      "outcome": "Down",
+      "px": 0.32,
+      "qty": 17.5,
+      "usd": 5.6,
+      "tx": "0x398d485a38c2a03279096ab7b175b72272e2d2da5cc2773189b3500137892a86"
+    },
+    {
+      "t": 1789665699,
+      "outcome": "Down",
+      "px": 0.2800000473,
+      "qty": 5.069442,
+      "usd": 1.419444,
+      "tx": "0x07c11b28f93b75170d05f990803f08305d20eae184900e3aa3ee472ec20fa0c4"
+    },
+    {
+      "t": 1789665700,
+      "outcome": "Down",
+      "px": 0.21,
+      "qty": 60.0,
+      "usd": 12.6,
+      "tx": "0x2bd2dbf61f2c006cbd58e9ccd8755664d7a7c841c0c58996e180277399518886"
+    },
+    {
+      "t": 1789665700,
+      "outcome": "Down",
+      "px": 0.21,
+      "qty": 40.0,
+      "usd": 8.4,
+      "tx": "0x385c2ba23a2b89753dd95e95cb1b1b6c74cc4880d01c641cc8896e5fc033b27d"
+    },
+    {
+      "t": 1789665730,
+      "outcome": "Down",
+      "px": 0.1100000102,
+      "qty": 9.84719,
+      "usd": 1.083191,
+      "tx": "0x4475fa305486719e6650cef348da4b4b45dc5a2d1893e9188fd57183d7e835a0"
+    },
+    {
+      "t": 1789665730,
+      "outcome": "Down",
+      "px": 0.110000001,
+      "qty": 60.674154,
+      "usd": 6.674157,
+      "tx": "0xdc7d5ae04abe4f18e57961199f5b0c6a972e7cad033000604a759311db9dbd6f"
+    },
+    {
+      "t": 1789665745,
+      "outcome": "Up",
+      "px": 0.8800000013,
+      "qty": 63.333334,
+      "usd": 55.733334,
+      "tx": "0x1e76b86e8743e99bdf532b8dc07cc7ee8da6d1feaa5e03ecf656ba561de8f723"
+    },
+    {
+      "t": 1789665756,
+      "outcome": "Down",
+      "px": 0.1100000026,
+      "qty": 15.168536,
+      "usd": 1.668539,
+      "tx": "0xa6209c11e41722aca0f5cde67f6d06e2518080006e20e9e66cb4a78bb541f6b7"
+    },
+    {
+      "t": 1789665756,
+      "outcome": "Down",
+      "px": 0.11,
+      "qty": 6.0,
+      "usd": 0.66,
+      "tx": "0xb990e412ab949a41cacf4a6708b5ce8fcf1779572ca654e144b584aafc2ce1af"
+    },
+    {
+      "t": 1789665771,
+      "outcome": "Down",
+      "px": 0.09,
+      "qty": 1.0989,
+      "usd": 0.098901,
+      "tx": "0xe8e94927f66882f530e4bb1b451d07383299848a1760c31e9464ccb66dd7e08e"
+    },
+    {
+      "t": 1789665783,
+      "outcome": "Down",
+      "px": 0.09,
+      "qty": 5.0,
+      "usd": 0.45,
+      "tx": "0x412d3c26b37af1db078fd9f7eba2140530de71b6a06856c5e102c5cc028b58bc"
+    },
+    {
+      "t": 1789665786,
+      "outcome": "Down",
+      "px": 0.07,
+      "qty": 30.0,
+      "usd": 2.1,
+      "tx": "0x9a1a1ae5322cd5ec52d09651316f1bae28c6b7cc4574d4c618711b5746c9bbd7"
+    },
+    {
+      "t": 1789665786,
+      "outcome": "Down",
+      "px": 0.07,
+      "qty": 10.0,
+      "usd": 0.7,
+      "tx": "0xdf85567a32db6c4f6447c0616ef72daa40cec303f831eaadd9c43968f40c8e16"
+    },
+    {
+      "t": 1789665786,
+      "outcome": "Down",
+      "px": 0.07,
+      "qty": 40.0,
+      "usd": 2.8,
+      "tx": "0xf4fc6cc12992a5ef33f2628cb31350240dd4acd1c4dac14777f80a326c7f6aa0"
+    },
+    {
+      "t": 1789665796,
+      "outcome": "Up",
+      "px": 0.9,
+      "qty": 46.42,
+      "usd": 41.778,
+      "tx": "0x390893d3b48af9a0a1825254a8e35811bdaa34ce65002cc7936067b14bafe2a7"
+    },
+    {
+      "t": 1789665796,
+      "outcome": "Up",
+      "px": 0.890000003,
+      "qty": 33.38091,
+      "usd": 29.70901,
+      "tx": "0x620d11ddc3de3c5e135a5b4dd8dea99e7444a374a73747b5745abdd169a1bba7"
+    },
+    {
+      "t": 1789665798,
+      "outcome": "Up",
+      "px": 0.9,
+      "qty": 53.58,
+      "usd": 48.222,
+      "tx": "0xd0ce6589202d8fed172a2414a5df895d506774f5cdda81dbb36e013f782584af"
+    },
+    {
+      "t": 1789665811,
+      "outcome": "Up",
+      "px": 0.87,
+      "qty": 5.0,
+      "usd": 4.35,
+      "tx": "0x3b749caff78a2e18967fae55ae49906208f07010c5a3bf2b92e7cdcc1e0b4e26"
+    },
+    {
+      "t": 1789665837,
+      "outcome": "Down",
+      "px": 0.07,
+      "qty": 5.0,
+      "usd": 0.35,
+      "tx": "0x209fe028fac41891681b05666711a764fa5762124c35d9482cb2c9fa236bab4f"
+    },
+    {
+      "t": 1789665849,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 5.26314,
+      "usd": 0.263157,
+      "tx": "0xcf8c153b4908edd2fc7728ea5b1ae6e1ff53ff4665407f62125cdbc422a43386"
+    },
+    {
+      "t": 1789665861,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 5.26314,
+      "usd": 0.263157,
+      "tx": "0x54857e95ead013d9e75295ff66b8c22999b38e147c6f54ca56e8622b00a4904d"
+    },
+    {
+      "t": 1789665861,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 10.21052,
+      "usd": 0.510526,
+      "tx": "0x7ae74a54a8fcda438e63340d52890657c27e673b475dddd4a1f9bc577151738d"
+    },
+    {
+      "t": 1789665861,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 1.05262,
+      "usd": 0.052631,
+      "tx": "0x9ac2a7684cfdacd228cb94e13b2a34d4fc5ac23bd66d0720ccc0d3d2d9079edf"
+    },
+    {
+      "t": 1789665862,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 78.18,
+      "usd": 3.909,
+      "tx": "0xe2330d9300e808748bb8d50f10e37a744ad5403a1eca13dc51421bd08ca84428"
+    },
+    {
+      "t": 1789665883,
+      "outcome": "Up",
+      "px": 0.88,
+      "qty": 30.0,
+      "usd": 26.4,
+      "tx": "0x9460d903520182672799d14436d10c7f1178d3f44fea9b857fb41be7bf98dc14"
+    },
+    {
+      "t": 1789665886,
+      "outcome": "Up",
+      "px": 0.88,
+      "qty": 48.0,
+      "usd": 42.24,
+      "tx": "0x56dcecb4c4317cd8492f91fe31c3fd24edc89f871f32ecafafc4dc5babd937a7"
+    },
+    {
+      "t": 1789665904,
+      "outcome": "Up",
+      "px": 0.89,
+      "qty": 3.37,
+      "usd": 2.9993,
+      "tx": "0x5a4d6f3091d141e75313767ef811ad02c04d90fca25cf67d7f949890648623b8"
+    },
+    {
+      "t": 1789665916,
+      "outcome": "Up",
+      "px": 0.92,
+      "qty": 20.0,
+      "usd": 18.4,
+      "tx": "0x03a030fe681227fd2d4be4b998b564390f5ae12da8ef752e9bb42f1efcdc0530"
+    },
+    {
+      "t": 1789665916,
+      "outcome": "Up",
+      "px": 0.92,
+      "qty": 3.62,
+      "usd": 3.3304,
+      "tx": "0x07446bfa0cda61a5d628fc8a24a5cae316df6c5daf0ae94152ec5624bf3e2ef2"
+    },
+    {
+      "t": 1789665924,
+      "outcome": "Down",
+      "px": 0.06,
+      "qty": 24.2234,
+      "usd": 1.453404,
+      "tx": "0x047f8ba9acd3bbfe3207377e5dc8b019a4cec2f516cfee5cf94836ce408ceaf8"
+    },
+    {
+      "t": 1789665925,
+      "outcome": "Down",
+      "px": 0.06,
+      "qty": 5.0,
+      "usd": 0.3,
+      "tx": "0x8865797ffa6b75b20e06b0110ba127561333674c327f29f4e6484b97b861e0bc"
+    },
+    {
+      "t": 1789665925,
+      "outcome": "Down",
+      "px": 0.06,
+      "qty": 5.99,
+      "usd": 0.3594,
+      "tx": "0xa0f5b176dff5e2cbe92951d344b0745d4f47093726c37e6836711a8e4c5c68e4"
+    },
+    {
+      "t": 1789665931,
+      "outcome": "Up",
+      "px": 0.91,
+      "qty": 49.99,
+      "usd": 45.4909,
+      "tx": "0x8957c6445e994e21e7f2de7ed3ae2ea6a9d2d2218cf57559812a886094935671"
+    },
+    {
+      "t": 1789665934,
+      "outcome": "Up",
+      "px": 0.92,
+      "qty": 53.905,
+      "usd": 49.5926,
+      "tx": "0x01835afe6eb63a4c074784c4a64dc488bfaa70d829716cb0a969a3cbe58c8bce"
+    },
+    {
+      "t": 1789665943,
+      "outcome": "Down",
+      "px": 0.0600000003,
+      "qty": 60.638283,
+      "usd": 3.638297,
+      "tx": "0x1bbf28f70e2b49a3227ddb313aff0025eed1bc4788dc03f1807563844c171527"
+    },
+    {
+      "t": 1789665943,
+      "outcome": "Down",
+      "px": 0.06,
+      "qty": 39.36,
+      "usd": 2.3616,
+      "tx": "0xc2bedfce6a0bb82836c55a84640ec79a814b7e8a92c5d39ae424d1877d6d4586"
+    },
+    {
+      "t": 1789665963,
+      "outcome": "Up",
+      "px": 0.97,
+      "qty": 68.0,
+      "usd": 65.96,
+      "tx": "0x1773af6e6c3bec2b32fba8de87d990187c90c9f3dd59e497414ba0cd716d0c31"
+    },
+    {
+      "t": 1789665973,
+      "outcome": "Up",
+      "px": 0.91,
+      "qty": 30.0,
+      "usd": 27.3,
+      "tx": "0x30595150db300f76fe58bc35243d1a2f60a205664cc9d8d93e83ecac2eb12ad4"
+    },
+    {
+      "t": 1789665973,
+      "outcome": "Up",
+      "px": 0.91,
+      "qty": 14.1,
+      "usd": 12.831,
+      "tx": "0x59f9153cb4b6f0415152d2590626351144044bea9b1694280eb7189983e87d6a"
+    },
+    {
+      "t": 1789665973,
+      "outcome": "Up",
+      "px": 0.91,
+      "qty": 55.9,
+      "usd": 50.869,
+      "tx": "0xbff493069c56406392e4bd3880c98f7b79fd6966eca1acc500b5f058d3b85077"
+    },
+    {
+      "t": 1789666000,
+      "outcome": "Down",
+      "px": 0.08,
+      "qty": 100.0,
+      "usd": 8.0,
+      "tx": "0x2a0890379a16de99720d68de2a1d3f7f45cd81ca16d3f48bf18511f40defdea7"
+    },
+    {
+      "t": 1789666000,
+      "outcome": "Down",
+      "px": 0.09,
+      "qty": 2.0,
+      "usd": 0.18,
+      "tx": "0x782ea9b5b3ac73350e9ff667f42579f36f97d87d7f48e0d85a600ec781bdb648"
+    },
+    {
+      "t": 1789666006,
+      "outcome": "Down",
+      "px": 0.0600000056,
+      "qty": 3.556583,
+      "usd": 0.213395,
+      "tx": "0x405a907cc9800b6061a7f5fa8ad5d055078791ab4091c2079b64388131edac71"
+    },
+    {
+      "t": 1789666009,
+      "outcome": "Down",
+      "px": 0.07,
+      "qty": 92.51,
+      "usd": 6.4757,
+      "tx": "0x913ffb634c398ef27af99cd2c523bb0e88f7ee742b0daee5c0570da9cafa6577"
+    },
+    {
+      "t": 1789666021,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 0.17262,
+      "usd": 0.008631,
+      "tx": "0xdb7845138bcfab5e81689c00802b49e03abdde51442334219f3da59f3b12b61b"
+    },
+    {
+      "t": 1789666023,
+      "outcome": "Down",
+      "px": 0.05,
+      "qty": 21.05262,
+      "usd": 1.052631,
+      "tx": "0xa3769ffc47061a65404f8a5e3bcb8499511a008cfe6551e616e8dba9a80a0632"
+    },
+    {
+      "t": 1789666048,
+      "outcome": "Down",
+      "px": 0.02,
+      "qty": 0.972,
+      "usd": 0.01944,
+      "tx": "0x0a485e816de3af6c0ce04c0d5292b398325c5b8af727ed897b36820ccea0c8bf"
+    },
+    {
+      "t": 1789666048,
+      "outcome": "Down",
+      "px": 0.02,
+      "qty": 1.0204,
+      "usd": 0.020408,
+      "tx": "0x5b8694aae4015c790cf528bd85e47c334694a6d5e66d5e1d260ff0f6106d9444"
+    }
+  ],
+  "parents": [
+    {
+      "order_hash": "0xb5daf406aff0737f58bd5aaca6ade93f9cc38ad76809303a5450d1d62fe8cea2",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665336,
+      "last_execution": 1789665337,
+      "execution_lifetime_lower_bound_s": 1,
+      "executed_qty_LOWER_BOUND": 15.38,
+      "avg_px": 0.48,
+      "public_px": 0.48,
+      "fragments": 2,
+      "fragment_qtys": [
+        9.61,
+        5.77
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 0.0,
+        "Down": 0.0
+      },
+      "inventory_after": {
+        "Up": 0.0,
+        "Down": 15.379999999999999
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x124abbe0f730462ffcc7656ad981512ddd08230dad9e31e9a166264a4649c83c",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665361,
+      "last_execution": 1789665361,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 100.0,
+      "avg_px": 0.49,
+      "public_px": 0.49,
+      "fragments": 1,
+      "fragment_qtys": [
+        100.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 0.0,
+        "Down": 15.379999999999999
+      },
+      "inventory_after": {
+        "Up": 0.0,
+        "Down": 115.38
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xff02aba5fca576a26bb1a38beac4ac1688c719460472574d49cfc27170511f57",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665415,
+      "last_execution": 1789665417,
+      "execution_lifetime_lower_bound_s": 2,
+      "executed_qty_LOWER_BOUND": 27.7368,
+      "avg_px": 0.62,
+      "public_px": 0.62,
+      "fragments": 2,
+      "fragment_qtys": [
+        25.0,
+        2.7368
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 0.0,
+        "Down": 115.38
+      },
+      "inventory_after": {
+        "Up": 0.0,
+        "Down": 143.116843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xe7e076cd8a9ab0026164f3c7876f0519647c9bb65051e9f26b55f043e625fd4b",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665427,
+      "last_execution": 1789665427,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 71.8462,
+      "avg_px": 0.35,
+      "public_px": 0.3500000014,
+      "fragments": 1,
+      "fragment_qtys": [
+        71.8462
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 0.0,
+        "Down": 143.116843
+      },
+      "inventory_after": {
+        "Up": 71.846154,
+        "Down": 143.116843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x6d856489fb9a2e2a82716ed89123a60118b2c94530ca66e28b3d0a5274ce35f2",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665469,
+      "last_execution": 1789665469,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 18.57,
+      "avg_px": 0.51,
+      "public_px": 0.51,
+      "fragments": 1,
+      "fragment_qtys": [
+        18.57
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 71.846154,
+        "Down": 143.116843
+      },
+      "inventory_after": {
+        "Up": 90.416154,
+        "Down": 143.116843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xfdbd44f73139abfd93c5691e30b1c403c1a06ee4c66eeb78aa3d87959bc0c811",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665484,
+      "last_execution": 1789665486,
+      "execution_lifetime_lower_bound_s": 2,
+      "executed_qty_LOWER_BOUND": 4.2327,
+      "avg_px": 0.56,
+      "public_px": 0.5600001408,
+      "fragments": 2,
+      "fragment_qtys": [
+        2.2727,
+        1.96
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 90.416154,
+        "Down": 143.116843
+      },
+      "inventory_after": {
+        "Up": 94.648882,
+        "Down": 143.116843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xe3d8cadadff1c079e544a499b30dbb08248a3e88dfb1f166364afb985c8501dd",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665517,
+      "last_execution": 1789665517,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 86.59,
+      "avg_px": 0.58,
+      "public_px": 0.58,
+      "fragments": 1,
+      "fragment_qtys": [
+        86.59
+      ],
+      "fee_usd": 1.47653,
+      "inventory_before": {
+        "Up": 94.648882,
+        "Down": 143.116843
+      },
+      "inventory_after": {
+        "Up": 181.238882,
+        "Down": 143.116843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x2a0e1b1781054eaa0056657ba4c603afa680c6749c8ef2d9b8cc2209efc88c43",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665558,
+      "last_execution": 1789665558,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 17.5,
+      "avg_px": 0.32,
+      "public_px": 0.32,
+      "fragments": 1,
+      "fragment_qtys": [
+        17.5
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 181.238882,
+        "Down": 143.116843
+      },
+      "inventory_after": {
+        "Up": 181.238882,
+        "Down": 160.616843
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x44cef6a45d9e616538d79d540979d740c11b1843618722bc82082745b3165404",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665699,
+      "last_execution": 1789665699,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 5.0694,
+      "avg_px": 0.28,
+      "public_px": 0.2800000473,
+      "fragments": 1,
+      "fragment_qtys": [
+        5.0694
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 181.238882,
+        "Down": 160.616843
+      },
+      "inventory_after": {
+        "Up": 181.238882,
+        "Down": 165.686285
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x2bca9d936a868243016cedd049ee9f2e0b2fe9781a152097161d9292a97e551a",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665700,
+      "last_execution": 1789665700,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 100.0,
+      "avg_px": 0.21,
+      "public_px": 0.21,
+      "fragments": 2,
+      "fragment_qtys": [
+        60.0,
+        40.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 181.238882,
+        "Down": 165.686285
+      },
+      "inventory_after": {
+        "Up": 181.238882,
+        "Down": 265.686285
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xbe489dfe3fa2d6ef4de324a23309ebff928487754190d7b96dfd26711269ab5b",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665730,
+      "last_execution": 1789665730,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 70.5213,
+      "avg_px": 0.11,
+      "public_px": 0.1100000102,
+      "fragments": 2,
+      "fragment_qtys": [
+        9.8472,
+        60.6742
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 181.238882,
+        "Down": 265.686285
+      },
+      "inventory_after": {
+        "Up": 181.238882,
+        "Down": 336.207629
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x66898848fa6729c9c9a2a00f8543b91b36f846afb8456bba0ea17a2e35c6d625",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665745,
+      "last_execution": 1789665745,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 63.3333,
+      "avg_px": 0.88,
+      "public_px": 0.8800000013,
+      "fragments": 1,
+      "fragment_qtys": [
+        63.3333
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 181.238882,
+        "Down": 336.207629
+      },
+      "inventory_after": {
+        "Up": 244.572216,
+        "Down": 336.207629
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x3a1445ba804efda2c64572769204c44e1c722b315a8ba46561f70a43e6341096",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665756,
+      "last_execution": 1789665756,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 21.1685,
+      "avg_px": 0.11,
+      "public_px": 0.1100000026,
+      "fragments": 2,
+      "fragment_qtys": [
+        15.1685,
+        6.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 244.572216,
+        "Down": 336.207629
+      },
+      "inventory_after": {
+        "Up": 244.572216,
+        "Down": 357.376165
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xa755874db915c93b5d2240c2cebf60f06115e0176e16f4a03933b1a0ab005928",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665771,
+      "last_execution": 1789665771,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 1.0989,
+      "avg_px": 0.09,
+      "public_px": 0.09,
+      "fragments": 1,
+      "fragment_qtys": [
+        1.0989
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 244.572216,
+        "Down": 357.376165
+      },
+      "inventory_after": {
+        "Up": 244.572216,
+        "Down": 358.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xc0a5303ab3b92daf96d01075606f989039e224fa492a3b5b8cc50a44f7626dae",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665783,
+      "last_execution": 1789665783,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 5.0,
+      "avg_px": 0.09,
+      "public_px": 0.09,
+      "fragments": 1,
+      "fragment_qtys": [
+        5.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 244.572216,
+        "Down": 358.47506500000003
+      },
+      "inventory_after": {
+        "Up": 244.572216,
+        "Down": 363.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x03bb5ae0c1f1b2da330a1826b689aa2e910e8b0c2b74533ce99d59e5fbff2761",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665786,
+      "last_execution": 1789665786,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 80.0,
+      "avg_px": 0.07,
+      "public_px": 0.07,
+      "fragments": 3,
+      "fragment_qtys": [
+        30.0,
+        10.0,
+        40.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 244.572216,
+        "Down": 363.47506500000003
+      },
+      "inventory_after": {
+        "Up": 244.572216,
+        "Down": 443.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x01a1f8e588f2945d4627ea8f0f61e9f66b27e7deb891a0c9e3519705088f4604",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665796,
+      "last_execution": 1789665796,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 33.3809,
+      "avg_px": 0.89,
+      "public_px": 0.890000003,
+      "fragments": 1,
+      "fragment_qtys": [
+        33.3809
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 244.572216,
+        "Down": 443.47506500000003
+      },
+      "inventory_after": {
+        "Up": 277.953126,
+        "Down": 443.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x1fcdb16d5444704bd9900860ad205838f6a08aca86d613278c8ff3f18ab5e70f",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665796,
+      "last_execution": 1789665798,
+      "execution_lifetime_lower_bound_s": 2,
+      "executed_qty_LOWER_BOUND": 100.0,
+      "avg_px": 0.9,
+      "public_px": 0.9,
+      "fragments": 2,
+      "fragment_qtys": [
+        46.42,
+        53.58
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 277.953126,
+        "Down": 443.47506500000003
+      },
+      "inventory_after": {
+        "Up": 377.953126,
+        "Down": 443.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x9520ec5c9ce761098bd3df03140c26058e38f6c54b75bd588ca8774f5c9d160b",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665811,
+      "last_execution": 1789665811,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 5.0,
+      "avg_px": 0.87,
+      "public_px": 0.87,
+      "fragments": 1,
+      "fragment_qtys": [
+        5.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 377.953126,
+        "Down": 443.47506500000003
+      },
+      "inventory_after": {
+        "Up": 382.953126,
+        "Down": 443.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x5bc6d14d0c55eb24bb9103c46a2a1eb937ab4c26697da47ed75bd2139ad9854c",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665837,
+      "last_execution": 1789665837,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 5.0,
+      "avg_px": 0.07,
+      "public_px": 0.07,
+      "fragments": 1,
+      "fragment_qtys": [
+        5.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 382.953126,
+        "Down": 443.47506500000003
+      },
+      "inventory_after": {
+        "Up": 382.953126,
+        "Down": 448.47506500000003
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665849,
+      "last_execution": 1789665862,
+      "execution_lifetime_lower_bound_s": 13,
+      "executed_qty_LOWER_BOUND": 99.9694,
+      "avg_px": 0.05,
+      "public_px": 0.05,
+      "fragments": 5,
+      "fragment_qtys": [
+        5.2631,
+        5.2631,
+        10.2105,
+        1.0526,
+        78.18
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 382.953126,
+        "Down": 448.47506500000003
+      },
+      "inventory_after": {
+        "Up": 382.953126,
+        "Down": 548.444485
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x5ecd64465dc74f639ed193dc24891ae53dd860814114ad5bbf19e2545ef5416a",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665883,
+      "last_execution": 1789665883,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 30.0,
+      "avg_px": 0.88,
+      "public_px": 0.88,
+      "fragments": 1,
+      "fragment_qtys": [
+        30.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 382.953126,
+        "Down": 548.444485
+      },
+      "inventory_after": {
+        "Up": 412.953126,
+        "Down": 548.444485
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x8820f758cdbc2aa00d9083bb2104d897ac776496d51904f8e1388bad9fb19424",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665886,
+      "last_execution": 1789665886,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 48.0,
+      "avg_px": 0.88,
+      "public_px": 0.88,
+      "fragments": 1,
+      "fragment_qtys": [
+        48.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 412.953126,
+        "Down": 548.444485
+      },
+      "inventory_after": {
+        "Up": 460.953126,
+        "Down": 548.444485
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xa1e0e59ebce1f080b2d0391dfb51025b7c9a5e78b1ab1d63b34a884565637de0",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665904,
+      "last_execution": 1789665904,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 3.37,
+      "avg_px": 0.89,
+      "public_px": 0.89,
+      "fragments": 1,
+      "fragment_qtys": [
+        3.37
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 460.953126,
+        "Down": 548.444485
+      },
+      "inventory_after": {
+        "Up": 464.323126,
+        "Down": 548.444485
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xdc326db63742eafc11b9c3296439e3d32ea11b98fd9535420eb1811b7b71a093",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665916,
+      "last_execution": 1789665916,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 23.62,
+      "avg_px": 0.92,
+      "public_px": 0.92,
+      "fragments": 2,
+      "fragment_qtys": [
+        20.0,
+        3.62
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 464.323126,
+        "Down": 548.444485
+      },
+      "inventory_after": {
+        "Up": 487.943126,
+        "Down": 548.444485
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x0bb51fdc1f815a35c1333243afe1cc547dba8cfac2f259760fabda9a0f9f923f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665924,
+      "last_execution": 1789665925,
+      "execution_lifetime_lower_bound_s": 1,
+      "executed_qty_LOWER_BOUND": 35.2134,
+      "avg_px": 0.06,
+      "public_px": 0.06,
+      "fragments": 3,
+      "fragment_qtys": [
+        24.2234,
+        5.0,
+        5.99
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 487.943126,
+        "Down": 548.444485
+      },
+      "inventory_after": {
+        "Up": 487.943126,
+        "Down": 583.657885
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x6a37a5e8f9f9e1df41159d814faceb32415a82a2bebea72b3866306449c39fce",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665931,
+      "last_execution": 1789665931,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 49.99,
+      "avg_px": 0.91,
+      "public_px": 0.91,
+      "fragments": 1,
+      "fragment_qtys": [
+        49.99
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 487.943126,
+        "Down": 583.657885
+      },
+      "inventory_after": {
+        "Up": 537.933126,
+        "Down": 583.657885
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x2a6b42b9a990f2fd0b77818200a37f6b5f0b817099d35178607a29af716b26a2",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665934,
+      "last_execution": 1789665934,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 53.905,
+      "avg_px": 0.92,
+      "public_px": 0.92,
+      "fragments": 1,
+      "fragment_qtys": [
+        53.905
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 537.933126,
+        "Down": 583.657885
+      },
+      "inventory_after": {
+        "Up": 591.838126,
+        "Down": 583.657885
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x717b9e3e21de9f312df08bb79e226a27f634045661cc3f3b00c204ac22a5a4d5",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789665943,
+      "last_execution": 1789665943,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 99.9983,
+      "avg_px": 0.06,
+      "public_px": 0.0600000003,
+      "fragments": 2,
+      "fragment_qtys": [
+        60.6383,
+        39.36
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 591.838126,
+        "Down": 583.657885
+      },
+      "inventory_after": {
+        "Up": 591.838126,
+        "Down": 683.656168
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x1db64821a41dd89c523d80f90f963fe49dc8b2d1c890584b72d85e34b779f68d",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665963,
+      "last_execution": 1789665963,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 68.0,
+      "avg_px": 0.97,
+      "public_px": 0.97,
+      "fragments": 1,
+      "fragment_qtys": [
+        68.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 591.838126,
+        "Down": 683.656168
+      },
+      "inventory_after": {
+        "Up": 659.838126,
+        "Down": 683.656168
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x74b92494e19498d27850f19479de2ff25b96c3389f88eee7243a458a16fd5ab6",
+      "outcome": "Up",
+      "direction": "BUY",
+      "first_execution": 1789665973,
+      "last_execution": 1789665973,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 100.0,
+      "avg_px": 0.91,
+      "public_px": 0.91,
+      "fragments": 3,
+      "fragment_qtys": [
+        30.0,
+        14.1,
+        55.9
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 659.838126,
+        "Down": 683.656168
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 683.656168
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x00fd203b1739826bc97c69df254574243d283c334f7985583b179c40150524db",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666000,
+      "last_execution": 1789666000,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 2.0,
+      "avg_px": 0.09,
+      "public_px": 0.09,
+      "fragments": 1,
+      "fragment_qtys": [
+        2.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 683.656168
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 685.656168
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x4cb7e8b641c7bef67b3fc5e13c0efd5c816c6792521c7f30c60185dfad2809a2",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666000,
+      "last_execution": 1789666000,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 100.0,
+      "avg_px": 0.08,
+      "public_px": 0.08,
+      "fragments": 1,
+      "fragment_qtys": [
+        100.0
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 685.656168
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 785.656168
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x8d84119ed6d03b2b1634aae2747e46a75db53f3fd3b0c4ad491cdf89db0fddbd",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666006,
+      "last_execution": 1789666006,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 3.5566,
+      "avg_px": 0.06,
+      "public_px": 0.0600000056,
+      "fragments": 1,
+      "fragment_qtys": [
+        3.5566
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 785.656168
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 789.212751
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x62db3625e818f13c385d26a5976e0976d7f08528afe7b5e864159d4d3c17a9f8",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666009,
+      "last_execution": 1789666009,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 92.51,
+      "avg_px": 0.07,
+      "public_px": 0.07,
+      "fragments": 1,
+      "fragment_qtys": [
+        92.51
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 789.212751
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 881.722751
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0x066799c8008cfd357bba211f8221afa25f481b75773f4caea8a093a7b8d79a89",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666021,
+      "last_execution": 1789666023,
+      "execution_lifetime_lower_bound_s": 2,
+      "executed_qty_LOWER_BOUND": 21.2252,
+      "avg_px": 0.05,
+      "public_px": 0.05,
+      "fragments": 2,
+      "fragment_qtys": [
+        0.1726,
+        21.0526
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 881.722751
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 902.9479910000001
+      },
+      "ownership": "L5_OWNED"
+    },
+    {
+      "order_hash": "0xf3c91cc5a3d8414e6d0ad63087c4826f58755d5c87a2a5a4bc7b65be38203441",
+      "outcome": "Down",
+      "direction": "BUY",
+      "first_execution": 1789666048,
+      "last_execution": 1789666048,
+      "execution_lifetime_lower_bound_s": 0,
+      "executed_qty_LOWER_BOUND": 1.9924,
+      "avg_px": 0.02,
+      "public_px": 0.02,
+      "fragments": 2,
+      "fragment_qtys": [
+        0.972,
+        1.0204
+      ],
+      "fee_usd": 0.0,
+      "inventory_before": {
+        "Up": 759.838126,
+        "Down": 902.9479910000001
+      },
+      "inventory_after": {
+        "Up": 759.838126,
+        "Down": 904.9403910000001
+      },
+      "ownership": "L5_OWNED"
+    }
+  ],
+  "executions": [
+    {
+      "t": 1789665336,
+      "tx": "0xb07036b0276c8bb4e3430858e5150583461b4ede25e3d950e61660050c5e18fe",
+      "shares": 9.61,
+      "usd": 4.6128,
+      "px": 0.48,
+      "fee": 0.0,
+      "public_px": 0.48,
+      "public_qty": 9.61,
+      "order_hash": "0xb5daf406aff0737f58bd5aaca6ade93f9cc38ad76809303a5450d1d62fe8cea2",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 0.0
+      },
+      "inv_after": {
+        "Up": 0.0,
+        "Down": 9.61
+      },
+      "residual_after": -9.61
+    },
+    {
+      "t": 1789665337,
+      "tx": "0xc1fdb6d2b9b94cac0dc83a02d1381ac2b29d8083b760f45bea54be40c465d225",
+      "shares": 5.77,
+      "usd": 2.7696,
+      "px": 0.48,
+      "fee": 0.0,
+      "public_px": 0.48,
+      "public_qty": 5.77,
+      "order_hash": "0xb5daf406aff0737f58bd5aaca6ade93f9cc38ad76809303a5450d1d62fe8cea2",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 9.61
+      },
+      "inv_after": {
+        "Up": 0.0,
+        "Down": 15.379999999999999
+      },
+      "residual_after": -15.38
+    },
+    {
+      "t": 1789665361,
+      "tx": "0x6bf6189d9c9fb0dd42bb1f7ef8744e6968448e792a400fb2b3a27b2d2a947bbd",
+      "shares": 100.0,
+      "usd": 49.0,
+      "px": 0.49,
+      "fee": 0.0,
+      "public_px": 0.49,
+      "public_qty": 100.0,
+      "order_hash": "0x124abbe0f730462ffcc7656ad981512ddd08230dad9e31e9a166264a4649c83c",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 15.379999999999999
+      },
+      "inv_after": {
+        "Up": 0.0,
+        "Down": 115.38
+      },
+      "residual_after": -115.38
+    },
+    {
+      "t": 1789665415,
+      "tx": "0x59b3d73c22022fce4c28a3db66f7593d7ea7cfd45ba99e04d30fe9f5536b008d",
+      "shares": 25.0,
+      "usd": 15.5,
+      "px": 0.62,
+      "fee": 0.0,
+      "public_px": 0.62,
+      "public_qty": 25.0,
+      "order_hash": "0xff02aba5fca576a26bb1a38beac4ac1688c719460472574d49cfc27170511f57",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 115.38
+      },
+      "inv_after": {
+        "Up": 0.0,
+        "Down": 140.38
+      },
+      "residual_after": -140.38
+    },
+    {
+      "t": 1789665417,
+      "tx": "0x798bb7c20689201ea59551c8c90ddd8a42270c5287853b46647109756ff8d1d0",
+      "shares": 2.736843,
+      "usd": 1.696843,
+      "px": 0.62,
+      "fee": 0.0,
+      "public_px": 0.6200001242,
+      "public_qty": 2.736843,
+      "order_hash": "0xff02aba5fca576a26bb1a38beac4ac1688c719460472574d49cfc27170511f57",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 140.38
+      },
+      "inv_after": {
+        "Up": 0.0,
+        "Down": 143.116843
+      },
+      "residual_after": -143.116843
+    },
+    {
+      "t": 1789665427,
+      "tx": "0x0e761f03c63dd8b40df8fd3cdcedde9334730949e764cef8c205fdf2f77ef1d4",
+      "shares": 71.846154,
+      "usd": 25.146154,
+      "px": 0.35,
+      "fee": 0.0,
+      "public_px": 0.3500000014,
+      "public_qty": 71.846154,
+      "order_hash": "0xe7e076cd8a9ab0026164f3c7876f0519647c9bb65051e9f26b55f043e625fd4b",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 0.0,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 71.846154,
+        "Down": 143.116843
+      },
+      "residual_after": -71.270689
+    },
+    {
+      "t": 1789665469,
+      "tx": "0xbea46f3385e1834401393ab574a49eabd8a7824ff49a65d45b75e62d0f2ba43c",
+      "shares": 18.57,
+      "usd": 9.4707,
+      "px": 0.51,
+      "fee": 0.0,
+      "public_px": 0.51,
+      "public_qty": 18.57,
+      "order_hash": "0x6d856489fb9a2e2a82716ed89123a60118b2c94530ca66e28b3d0a5274ce35f2",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 71.846154,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 90.416154,
+        "Down": 143.116843
+      },
+      "residual_after": -52.700689
+    },
+    {
+      "t": 1789665484,
+      "tx": "0xe99cfd824eea2ca4d11fcc438d0c0e7e19e6f4c69c1c3e821d2c9dfa2ed41cd0",
+      "shares": 2.272728,
+      "usd": 1.272728,
+      "px": 0.56,
+      "fee": 0.0,
+      "public_px": 0.5600001408,
+      "public_qty": 2.272728,
+      "order_hash": "0xfdbd44f73139abfd93c5691e30b1c403c1a06ee4c66eeb78aa3d87959bc0c811",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 90.416154,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 92.688882,
+        "Down": 143.116843
+      },
+      "residual_after": -50.427961
+    },
+    {
+      "t": 1789665486,
+      "tx": "0x47964763afc41e2a5578643fbb2bacce5226de19210e599ac8da4bb6b170b356",
+      "shares": 1.96,
+      "usd": 1.0976,
+      "px": 0.56,
+      "fee": 0.0,
+      "public_px": 0.56,
+      "public_qty": 1.96,
+      "order_hash": "0xfdbd44f73139abfd93c5691e30b1c403c1a06ee4c66eeb78aa3d87959bc0c811",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 92.688882,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 94.648882,
+        "Down": 143.116843
+      },
+      "residual_after": -48.467961
+    },
+    {
+      "t": 1789665517,
+      "tx": "0x87534966560955f676cb8dc74c63ea3f5dccdd42190ce114e566f08be67269d2",
+      "shares": 86.59,
+      "usd": 50.2222,
+      "px": 0.58,
+      "fee": 1.47653,
+      "public_px": 0.58,
+      "public_qty": 86.59,
+      "order_hash": "0xe3d8cadadff1c079e544a499b30dbb08248a3e88dfb1f166364afb985c8501dd",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 94.648882,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 143.116843
+      },
+      "residual_after": 38.122039
+    },
+    {
+      "t": 1789665558,
+      "tx": "0x398d485a38c2a03279096ab7b175b72272e2d2da5cc2773189b3500137892a86",
+      "shares": 17.5,
+      "usd": 5.6,
+      "px": 0.32,
+      "fee": 0.0,
+      "public_px": 0.32,
+      "public_qty": 17.5,
+      "order_hash": "0x2a0e1b1781054eaa0056657ba4c603afa680c6749c8ef2d9b8cc2209efc88c43",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 143.116843
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 160.616843
+      },
+      "residual_after": 20.622039
+    },
+    {
+      "t": 1789665699,
+      "tx": "0x07c11b28f93b75170d05f990803f08305d20eae184900e3aa3ee472ec20fa0c4",
+      "shares": 5.069442,
+      "usd": 1.419444,
+      "px": 0.28,
+      "fee": 0.0,
+      "public_px": 0.2800000473,
+      "public_qty": 5.069442,
+      "order_hash": "0x44cef6a45d9e616538d79d540979d740c11b1843618722bc82082745b3165404",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 160.616843
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 165.686285
+      },
+      "residual_after": 15.552597
+    },
+    {
+      "t": 1789665700,
+      "tx": "0x2bd2dbf61f2c006cbd58e9ccd8755664d7a7c841c0c58996e180277399518886",
+      "shares": 60.0,
+      "usd": 12.6,
+      "px": 0.21,
+      "fee": 0.0,
+      "public_px": 0.21,
+      "public_qty": 60.0,
+      "order_hash": "0x2bca9d936a868243016cedd049ee9f2e0b2fe9781a152097161d9292a97e551a",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 165.686285
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 225.686285
+      },
+      "residual_after": -44.447403
+    },
+    {
+      "t": 1789665700,
+      "tx": "0x385c2ba23a2b89753dd95e95cb1b1b6c74cc4880d01c641cc8896e5fc033b27d",
+      "shares": 40.0,
+      "usd": 8.4,
+      "px": 0.21,
+      "fee": 0.0,
+      "public_px": 0.21,
+      "public_qty": 40.0,
+      "order_hash": "0x2bca9d936a868243016cedd049ee9f2e0b2fe9781a152097161d9292a97e551a",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 225.686285
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 265.686285
+      },
+      "residual_after": -84.447403
+    },
+    {
+      "t": 1789665730,
+      "tx": "0x4475fa305486719e6650cef348da4b4b45dc5a2d1893e9188fd57183d7e835a0",
+      "shares": 9.84719,
+      "usd": 1.083191,
+      "px": 0.11,
+      "fee": 0.0,
+      "public_px": 0.1100000102,
+      "public_qty": 9.84719,
+      "order_hash": "0xbe489dfe3fa2d6ef4de324a23309ebff928487754190d7b96dfd26711269ab5b",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 265.686285
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 275.533475
+      },
+      "residual_after": -94.294593
+    },
+    {
+      "t": 1789665730,
+      "tx": "0xdc7d5ae04abe4f18e57961199f5b0c6a972e7cad033000604a759311db9dbd6f",
+      "shares": 60.674154,
+      "usd": 6.674157,
+      "px": 0.11,
+      "fee": 0.0,
+      "public_px": 0.110000001,
+      "public_qty": 60.674154,
+      "order_hash": "0xbe489dfe3fa2d6ef4de324a23309ebff928487754190d7b96dfd26711269ab5b",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 275.533475
+      },
+      "inv_after": {
+        "Up": 181.238882,
+        "Down": 336.207629
+      },
+      "residual_after": -154.968747
+    },
+    {
+      "t": 1789665745,
+      "tx": "0x1e76b86e8743e99bdf532b8dc07cc7ee8da6d1feaa5e03ecf656ba561de8f723",
+      "shares": 63.333334,
+      "usd": 55.733334,
+      "px": 0.88,
+      "fee": 0.0,
+      "public_px": 0.8800000013,
+      "public_qty": 63.333334,
+      "order_hash": "0x66898848fa6729c9c9a2a00f8543b91b36f846afb8456bba0ea17a2e35c6d625",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 181.238882,
+        "Down": 336.207629
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 336.207629
+      },
+      "residual_after": -91.635413
+    },
+    {
+      "t": 1789665756,
+      "tx": "0xa6209c11e41722aca0f5cde67f6d06e2518080006e20e9e66cb4a78bb541f6b7",
+      "shares": 15.168536,
+      "usd": 1.668539,
+      "px": 0.11,
+      "fee": 0.0,
+      "public_px": 0.1100000026,
+      "public_qty": 15.168536,
+      "order_hash": "0x3a1445ba804efda2c64572769204c44e1c722b315a8ba46561f70a43e6341096",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 336.207629
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 351.376165
+      },
+      "residual_after": -106.803949
+    },
+    {
+      "t": 1789665756,
+      "tx": "0xb990e412ab949a41cacf4a6708b5ce8fcf1779572ca654e144b584aafc2ce1af",
+      "shares": 6.0,
+      "usd": 0.66,
+      "px": 0.11,
+      "fee": 0.0,
+      "public_px": 0.11,
+      "public_qty": 6.0,
+      "order_hash": "0x3a1445ba804efda2c64572769204c44e1c722b315a8ba46561f70a43e6341096",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 351.376165
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 357.376165
+      },
+      "residual_after": -112.803949
+    },
+    {
+      "t": 1789665771,
+      "tx": "0xe8e94927f66882f530e4bb1b451d07383299848a1760c31e9464ccb66dd7e08e",
+      "shares": 1.0989,
+      "usd": 0.098901,
+      "px": 0.09,
+      "fee": 0.0,
+      "public_px": 0.09,
+      "public_qty": 1.0989,
+      "order_hash": "0xa755874db915c93b5d2240c2cebf60f06115e0176e16f4a03933b1a0ab005928",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 357.376165
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 358.47506500000003
+      },
+      "residual_after": -113.902849
+    },
+    {
+      "t": 1789665783,
+      "tx": "0x412d3c26b37af1db078fd9f7eba2140530de71b6a06856c5e102c5cc028b58bc",
+      "shares": 5.0,
+      "usd": 0.45,
+      "px": 0.09,
+      "fee": 0.0,
+      "public_px": 0.09,
+      "public_qty": 5.0,
+      "order_hash": "0xc0a5303ab3b92daf96d01075606f989039e224fa492a3b5b8cc50a44f7626dae",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 358.47506500000003
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 363.47506500000003
+      },
+      "residual_after": -118.902849
+    },
+    {
+      "t": 1789665786,
+      "tx": "0x9a1a1ae5322cd5ec52d09651316f1bae28c6b7cc4574d4c618711b5746c9bbd7",
+      "shares": 30.0,
+      "usd": 2.1,
+      "px": 0.07,
+      "fee": 0.0,
+      "public_px": 0.07,
+      "public_qty": 30.0,
+      "order_hash": "0x03bb5ae0c1f1b2da330a1826b689aa2e910e8b0c2b74533ce99d59e5fbff2761",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 363.47506500000003
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 393.47506500000003
+      },
+      "residual_after": -148.902849
+    },
+    {
+      "t": 1789665786,
+      "tx": "0xdf85567a32db6c4f6447c0616ef72daa40cec303f831eaadd9c43968f40c8e16",
+      "shares": 10.0,
+      "usd": 0.7,
+      "px": 0.07,
+      "fee": 0.0,
+      "public_px": 0.07,
+      "public_qty": 10.0,
+      "order_hash": "0x03bb5ae0c1f1b2da330a1826b689aa2e910e8b0c2b74533ce99d59e5fbff2761",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 393.47506500000003
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 403.47506500000003
+      },
+      "residual_after": -158.902849
+    },
+    {
+      "t": 1789665786,
+      "tx": "0xf4fc6cc12992a5ef33f2628cb31350240dd4acd1c4dac14777f80a326c7f6aa0",
+      "shares": 40.0,
+      "usd": 2.8,
+      "px": 0.07,
+      "fee": 0.0,
+      "public_px": 0.07,
+      "public_qty": 40.0,
+      "order_hash": "0x03bb5ae0c1f1b2da330a1826b689aa2e910e8b0c2b74533ce99d59e5fbff2761",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 403.47506500000003
+      },
+      "inv_after": {
+        "Up": 244.572216,
+        "Down": 443.47506500000003
+      },
+      "residual_after": -198.902849
+    },
+    {
+      "t": 1789665796,
+      "tx": "0x620d11ddc3de3c5e135a5b4dd8dea99e7444a374a73747b5745abdd169a1bba7",
+      "shares": 33.38091,
+      "usd": 29.70901,
+      "px": 0.89,
+      "fee": 0.0,
+      "public_px": 0.890000003,
+      "public_qty": 33.38091,
+      "order_hash": "0x01a1f8e588f2945d4627ea8f0f61e9f66b27e7deb891a0c9e3519705088f4604",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 244.572216,
+        "Down": 443.47506500000003
+      },
+      "inv_after": {
+        "Up": 277.953126,
+        "Down": 443.47506500000003
+      },
+      "residual_after": -165.521939
+    },
+    {
+      "t": 1789665796,
+      "tx": "0x390893d3b48af9a0a1825254a8e35811bdaa34ce65002cc7936067b14bafe2a7",
+      "shares": 46.42,
+      "usd": 41.778,
+      "px": 0.9,
+      "fee": 0.0,
+      "public_px": 0.9,
+      "public_qty": 46.42,
+      "order_hash": "0x1fcdb16d5444704bd9900860ad205838f6a08aca86d613278c8ff3f18ab5e70f",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 277.953126,
+        "Down": 443.47506500000003
+      },
+      "inv_after": {
+        "Up": 324.373126,
+        "Down": 443.47506500000003
+      },
+      "residual_after": -119.101939
+    },
+    {
+      "t": 1789665798,
+      "tx": "0xd0ce6589202d8fed172a2414a5df895d506774f5cdda81dbb36e013f782584af",
+      "shares": 53.58,
+      "usd": 48.222,
+      "px": 0.9,
+      "fee": 0.0,
+      "public_px": 0.9,
+      "public_qty": 53.58,
+      "order_hash": "0x1fcdb16d5444704bd9900860ad205838f6a08aca86d613278c8ff3f18ab5e70f",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 324.373126,
+        "Down": 443.47506500000003
+      },
+      "inv_after": {
+        "Up": 377.953126,
+        "Down": 443.47506500000003
+      },
+      "residual_after": -65.521939
+    },
+    {
+      "t": 1789665811,
+      "tx": "0x3b749caff78a2e18967fae55ae49906208f07010c5a3bf2b92e7cdcc1e0b4e26",
+      "shares": 5.0,
+      "usd": 4.35,
+      "px": 0.87,
+      "fee": 0.0,
+      "public_px": 0.87,
+      "public_qty": 5.0,
+      "order_hash": "0x9520ec5c9ce761098bd3df03140c26058e38f6c54b75bd588ca8774f5c9d160b",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 377.953126,
+        "Down": 443.47506500000003
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 443.47506500000003
+      },
+      "residual_after": -60.521939
+    },
+    {
+      "t": 1789665837,
+      "tx": "0x209fe028fac41891681b05666711a764fa5762124c35d9482cb2c9fa236bab4f",
+      "shares": 5.0,
+      "usd": 0.35,
+      "px": 0.07,
+      "fee": 0.0,
+      "public_px": 0.07,
+      "public_qty": 5.0,
+      "order_hash": "0x5bc6d14d0c55eb24bb9103c46a2a1eb937ab4c26697da47ed75bd2139ad9854c",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 443.47506500000003
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 448.47506500000003
+      },
+      "residual_after": -65.521939
+    },
+    {
+      "t": 1789665849,
+      "tx": "0xcf8c153b4908edd2fc7728ea5b1ae6e1ff53ff4665407f62125cdbc422a43386",
+      "shares": 5.26314,
+      "usd": 0.263157,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 5.26314,
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 448.47506500000003
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 453.73820500000005
+      },
+      "residual_after": -70.785079
+    },
+    {
+      "t": 1789665861,
+      "tx": "0x54857e95ead013d9e75295ff66b8c22999b38e147c6f54ca56e8622b00a4904d",
+      "shares": 5.26314,
+      "usd": 0.263157,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 5.26314,
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 453.73820500000005
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 459.0013450000001
+      },
+      "residual_after": -76.048219
+    },
+    {
+      "t": 1789665861,
+      "tx": "0x7ae74a54a8fcda438e63340d52890657c27e673b475dddd4a1f9bc577151738d",
+      "shares": 10.21052,
+      "usd": 0.510526,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 10.21052,
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 459.0013450000001
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 469.21186500000005
+      },
+      "residual_after": -86.258739
+    },
+    {
+      "t": 1789665861,
+      "tx": "0x9ac2a7684cfdacd228cb94e13b2a34d4fc5ac23bd66d0720ccc0d3d2d9079edf",
+      "shares": 1.05262,
+      "usd": 0.052631,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 1.05262,
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 469.21186500000005
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 470.26448500000004
+      },
+      "residual_after": -87.311359
+    },
+    {
+      "t": 1789665862,
+      "tx": "0xe2330d9300e808748bb8d50f10e37a744ad5403a1eca13dc51421bd08ca84428",
+      "shares": 78.18,
+      "usd": 3.909,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 78.18,
+      "order_hash": "0x70e941a737efa29249583ead8ec84d249d8f3c07b2ba9188edb3d14a1059652f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 470.26448500000004
+      },
+      "inv_after": {
+        "Up": 382.953126,
+        "Down": 548.444485
+      },
+      "residual_after": -165.491359
+    },
+    {
+      "t": 1789665883,
+      "tx": "0x9460d903520182672799d14436d10c7f1178d3f44fea9b857fb41be7bf98dc14",
+      "shares": 30.0,
+      "usd": 26.4,
+      "px": 0.88,
+      "fee": 0.0,
+      "public_px": 0.88,
+      "public_qty": 30.0,
+      "order_hash": "0x5ecd64465dc74f639ed193dc24891ae53dd860814114ad5bbf19e2545ef5416a",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 382.953126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 412.953126,
+        "Down": 548.444485
+      },
+      "residual_after": -135.491359
+    },
+    {
+      "t": 1789665886,
+      "tx": "0x56dcecb4c4317cd8492f91fe31c3fd24edc89f871f32ecafafc4dc5babd937a7",
+      "shares": 48.0,
+      "usd": 42.24,
+      "px": 0.88,
+      "fee": 0.0,
+      "public_px": 0.88,
+      "public_qty": 48.0,
+      "order_hash": "0x8820f758cdbc2aa00d9083bb2104d897ac776496d51904f8e1388bad9fb19424",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 412.953126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 460.953126,
+        "Down": 548.444485
+      },
+      "residual_after": -87.491359
+    },
+    {
+      "t": 1789665904,
+      "tx": "0x5a4d6f3091d141e75313767ef811ad02c04d90fca25cf67d7f949890648623b8",
+      "shares": 3.37,
+      "usd": 2.9993,
+      "px": 0.89,
+      "fee": 0.0,
+      "public_px": 0.89,
+      "public_qty": 3.37,
+      "order_hash": "0xa1e0e59ebce1f080b2d0391dfb51025b7c9a5e78b1ab1d63b34a884565637de0",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 460.953126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 464.323126,
+        "Down": 548.444485
+      },
+      "residual_after": -84.121359
+    },
+    {
+      "t": 1789665916,
+      "tx": "0x03a030fe681227fd2d4be4b998b564390f5ae12da8ef752e9bb42f1efcdc0530",
+      "shares": 20.0,
+      "usd": 18.4,
+      "px": 0.92,
+      "fee": 0.0,
+      "public_px": 0.92,
+      "public_qty": 20.0,
+      "order_hash": "0xdc326db63742eafc11b9c3296439e3d32ea11b98fd9535420eb1811b7b71a093",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 464.323126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 484.323126,
+        "Down": 548.444485
+      },
+      "residual_after": -64.121359
+    },
+    {
+      "t": 1789665916,
+      "tx": "0x07446bfa0cda61a5d628fc8a24a5cae316df6c5daf0ae94152ec5624bf3e2ef2",
+      "shares": 3.62,
+      "usd": 3.3304,
+      "px": 0.92,
+      "fee": 0.0,
+      "public_px": 0.92,
+      "public_qty": 3.62,
+      "order_hash": "0xdc326db63742eafc11b9c3296439e3d32ea11b98fd9535420eb1811b7b71a093",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 484.323126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 487.943126,
+        "Down": 548.444485
+      },
+      "residual_after": -60.501359
+    },
+    {
+      "t": 1789665924,
+      "tx": "0x047f8ba9acd3bbfe3207377e5dc8b019a4cec2f516cfee5cf94836ce408ceaf8",
+      "shares": 24.2234,
+      "usd": 1.453404,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.06,
+      "public_qty": 24.2234,
+      "order_hash": "0x0bb51fdc1f815a35c1333243afe1cc547dba8cfac2f259760fabda9a0f9f923f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 487.943126,
+        "Down": 548.444485
+      },
+      "inv_after": {
+        "Up": 487.943126,
+        "Down": 572.667885
+      },
+      "residual_after": -84.724759
+    },
+    {
+      "t": 1789665925,
+      "tx": "0x8865797ffa6b75b20e06b0110ba127561333674c327f29f4e6484b97b861e0bc",
+      "shares": 5.0,
+      "usd": 0.3,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.06,
+      "public_qty": 5.0,
+      "order_hash": "0x0bb51fdc1f815a35c1333243afe1cc547dba8cfac2f259760fabda9a0f9f923f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 487.943126,
+        "Down": 572.667885
+      },
+      "inv_after": {
+        "Up": 487.943126,
+        "Down": 577.667885
+      },
+      "residual_after": -89.724759
+    },
+    {
+      "t": 1789665925,
+      "tx": "0xa0f5b176dff5e2cbe92951d344b0745d4f47093726c37e6836711a8e4c5c68e4",
+      "shares": 5.99,
+      "usd": 0.3594,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.06,
+      "public_qty": 5.99,
+      "order_hash": "0x0bb51fdc1f815a35c1333243afe1cc547dba8cfac2f259760fabda9a0f9f923f",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 487.943126,
+        "Down": 577.667885
+      },
+      "inv_after": {
+        "Up": 487.943126,
+        "Down": 583.657885
+      },
+      "residual_after": -95.714759
+    },
+    {
+      "t": 1789665931,
+      "tx": "0x8957c6445e994e21e7f2de7ed3ae2ea6a9d2d2218cf57559812a886094935671",
+      "shares": 49.99,
+      "usd": 45.4909,
+      "px": 0.91,
+      "fee": 0.0,
+      "public_px": 0.91,
+      "public_qty": 49.99,
+      "order_hash": "0x6a37a5e8f9f9e1df41159d814faceb32415a82a2bebea72b3866306449c39fce",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 487.943126,
+        "Down": 583.657885
+      },
+      "inv_after": {
+        "Up": 537.933126,
+        "Down": 583.657885
+      },
+      "residual_after": -45.724759
+    },
+    {
+      "t": 1789665934,
+      "tx": "0x01835afe6eb63a4c074784c4a64dc488bfaa70d829716cb0a969a3cbe58c8bce",
+      "shares": 53.905,
+      "usd": 49.5926,
+      "px": 0.92,
+      "fee": 0.0,
+      "public_px": 0.92,
+      "public_qty": 53.905,
+      "order_hash": "0x2a6b42b9a990f2fd0b77818200a37f6b5f0b817099d35178607a29af716b26a2",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 537.933126,
+        "Down": 583.657885
+      },
+      "inv_after": {
+        "Up": 591.838126,
+        "Down": 583.657885
+      },
+      "residual_after": 8.180241
+    },
+    {
+      "t": 1789665943,
+      "tx": "0x1bbf28f70e2b49a3227ddb313aff0025eed1bc4788dc03f1807563844c171527",
+      "shares": 60.638283,
+      "usd": 3.638297,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.0600000003,
+      "public_qty": 60.638283,
+      "order_hash": "0x717b9e3e21de9f312df08bb79e226a27f634045661cc3f3b00c204ac22a5a4d5",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 591.838126,
+        "Down": 583.657885
+      },
+      "inv_after": {
+        "Up": 591.838126,
+        "Down": 644.296168
+      },
+      "residual_after": -52.458042
+    },
+    {
+      "t": 1789665943,
+      "tx": "0xc2bedfce6a0bb82836c55a84640ec79a814b7e8a92c5d39ae424d1877d6d4586",
+      "shares": 39.36,
+      "usd": 2.3616,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.06,
+      "public_qty": 39.36,
+      "order_hash": "0x717b9e3e21de9f312df08bb79e226a27f634045661cc3f3b00c204ac22a5a4d5",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 591.838126,
+        "Down": 644.296168
+      },
+      "inv_after": {
+        "Up": 591.838126,
+        "Down": 683.656168
+      },
+      "residual_after": -91.818042
+    },
+    {
+      "t": 1789665963,
+      "tx": "0x1773af6e6c3bec2b32fba8de87d990187c90c9f3dd59e497414ba0cd716d0c31",
+      "shares": 68.0,
+      "usd": 65.96,
+      "px": 0.97,
+      "fee": 0.0,
+      "public_px": 0.97,
+      "public_qty": 68.0,
+      "order_hash": "0x1db64821a41dd89c523d80f90f963fe49dc8b2d1c890584b72d85e34b779f68d",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 591.838126,
+        "Down": 683.656168
+      },
+      "inv_after": {
+        "Up": 659.838126,
+        "Down": 683.656168
+      },
+      "residual_after": -23.818042
+    },
+    {
+      "t": 1789665973,
+      "tx": "0x30595150db300f76fe58bc35243d1a2f60a205664cc9d8d93e83ecac2eb12ad4",
+      "shares": 30.0,
+      "usd": 27.3,
+      "px": 0.91,
+      "fee": 0.0,
+      "public_px": 0.91,
+      "public_qty": 30.0,
+      "order_hash": "0x74b92494e19498d27850f19479de2ff25b96c3389f88eee7243a458a16fd5ab6",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 659.838126,
+        "Down": 683.656168
+      },
+      "inv_after": {
+        "Up": 689.838126,
+        "Down": 683.656168
+      },
+      "residual_after": 6.181958
+    },
+    {
+      "t": 1789665973,
+      "tx": "0x59f9153cb4b6f0415152d2590626351144044bea9b1694280eb7189983e87d6a",
+      "shares": 14.1,
+      "usd": 12.831,
+      "px": 0.91,
+      "fee": 0.0,
+      "public_px": 0.91,
+      "public_qty": 14.1,
+      "order_hash": "0x74b92494e19498d27850f19479de2ff25b96c3389f88eee7243a458a16fd5ab6",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 689.838126,
+        "Down": 683.656168
+      },
+      "inv_after": {
+        "Up": 703.938126,
+        "Down": 683.656168
+      },
+      "residual_after": 20.281958
+    },
+    {
+      "t": 1789665973,
+      "tx": "0xbff493069c56406392e4bd3880c98f7b79fd6966eca1acc500b5f058d3b85077",
+      "shares": 55.9,
+      "usd": 50.869,
+      "px": 0.91,
+      "fee": 0.0,
+      "public_px": 0.91,
+      "public_qty": 55.9,
+      "order_hash": "0x74b92494e19498d27850f19479de2ff25b96c3389f88eee7243a458a16fd5ab6",
+      "outcome": "Up",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 703.938126,
+        "Down": 683.656168
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 683.656168
+      },
+      "residual_after": 76.181958
+    },
+    {
+      "t": 1789666000,
+      "tx": "0x782ea9b5b3ac73350e9ff667f42579f36f97d87d7f48e0d85a600ec781bdb648",
+      "shares": 2.0,
+      "usd": 0.18,
+      "px": 0.09,
+      "fee": 0.0,
+      "public_px": 0.09,
+      "public_qty": 2.0,
+      "order_hash": "0x00fd203b1739826bc97c69df254574243d283c334f7985583b179c40150524db",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 683.656168
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 685.656168
+      },
+      "residual_after": 74.181958
+    },
+    {
+      "t": 1789666000,
+      "tx": "0x2a0890379a16de99720d68de2a1d3f7f45cd81ca16d3f48bf18511f40defdea7",
+      "shares": 100.0,
+      "usd": 8.0,
+      "px": 0.08,
+      "fee": 0.0,
+      "public_px": 0.08,
+      "public_qty": 100.0,
+      "order_hash": "0x4cb7e8b641c7bef67b3fc5e13c0efd5c816c6792521c7f30c60185dfad2809a2",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 685.656168
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 785.656168
+      },
+      "residual_after": -25.818042
+    },
+    {
+      "t": 1789666006,
+      "tx": "0x405a907cc9800b6061a7f5fa8ad5d055078791ab4091c2079b64388131edac71",
+      "shares": 3.556583,
+      "usd": 0.213395,
+      "px": 0.06,
+      "fee": 0.0,
+      "public_px": 0.0600000056,
+      "public_qty": 3.556583,
+      "order_hash": "0x8d84119ed6d03b2b1634aae2747e46a75db53f3fd3b0c4ad491cdf89db0fddbd",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 785.656168
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 789.212751
+      },
+      "residual_after": -29.374625
+    },
+    {
+      "t": 1789666009,
+      "tx": "0x913ffb634c398ef27af99cd2c523bb0e88f7ee742b0daee5c0570da9cafa6577",
+      "shares": 92.51,
+      "usd": 6.4757,
+      "px": 0.07,
+      "fee": 0.0,
+      "public_px": 0.07,
+      "public_qty": 92.51,
+      "order_hash": "0x62db3625e818f13c385d26a5976e0976d7f08528afe7b5e864159d4d3c17a9f8",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 789.212751
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 881.722751
+      },
+      "residual_after": -121.884625
+    },
+    {
+      "t": 1789666021,
+      "tx": "0xdb7845138bcfab5e81689c00802b49e03abdde51442334219f3da59f3b12b61b",
+      "shares": 0.17262,
+      "usd": 0.008631,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 0.17262,
+      "order_hash": "0x066799c8008cfd357bba211f8221afa25f481b75773f4caea8a093a7b8d79a89",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 881.722751
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 881.8953710000001
+      },
+      "residual_after": -122.057245
+    },
+    {
+      "t": 1789666023,
+      "tx": "0xa3769ffc47061a65404f8a5e3bcb8499511a008cfe6551e616e8dba9a80a0632",
+      "shares": 21.05262,
+      "usd": 1.052631,
+      "px": 0.05,
+      "fee": 0.0,
+      "public_px": 0.05,
+      "public_qty": 21.05262,
+      "order_hash": "0x066799c8008cfd357bba211f8221afa25f481b75773f4caea8a093a7b8d79a89",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 881.8953710000001
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 902.9479910000001
+      },
+      "residual_after": -143.109865
+    },
+    {
+      "t": 1789666048,
+      "tx": "0x0a485e816de3af6c0ce04c0d5292b398325c5b8af727ed897b36820ccea0c8bf",
+      "shares": 0.972,
+      "usd": 0.01944,
+      "px": 0.02,
+      "fee": 0.0,
+      "public_px": 0.02,
+      "public_qty": 0.972,
+      "order_hash": "0xf3c91cc5a3d8414e6d0ad63087c4826f58755d5c87a2a5a4bc7b65be38203441",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 902.9479910000001
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 903.9199910000001
+      },
+      "residual_after": -144.081865
+    },
+    {
+      "t": 1789666048,
+      "tx": "0x5b8694aae4015c790cf528bd85e47c334694a6d5e66d5e1d260ff0f6106d9444",
+      "shares": 1.0204,
+      "usd": 0.020408,
+      "px": 0.02,
+      "fee": 0.0,
+      "public_px": 0.02,
+      "public_qty": 1.0204,
+      "order_hash": "0xf3c91cc5a3d8414e6d0ad63087c4826f58755d5c87a2a5a4bc7b65be38203441",
+      "outcome": "Down",
+      "direction": "BUY",
+      "inv_before": {
+        "Up": 759.838126,
+        "Down": 903.9199910000001
+      },
+      "inv_after": {
+        "Up": 759.838126,
+        "Down": 904.9403910000001
+      },
+      "residual_after": -145.102265
+    }
+  ],
+  "unresolved": [],
+  "final_inventory": {
+    "Up": 759.838126,
+    "Down": 904.9403910000001
+  }
+}

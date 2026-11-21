@@ -1,0 +1,38 @@
+{
+ "_sha256_16": "51f47848d2a3e929",
+ "economics_definition": "pair P&L after the venue's known maker fees (ceil-cent 0.0175*q*p*(1-p) both legs) plus one-sided hold P&L on UNAMBIGUOUS mid-proxy outcomes; rebates/rewards never count; ambiguous outcomes excluded and reported",
+ "exploratory_arms": [
+  "touch_cancel_30s:modal",
+  "rest_60s:modal",
+  "rest_120s:modal",
+  "rest_180s:modal",
+  "reprice_180s:stochastic"
+ ],
+ "exploratory_rule": "an exploratory arm that passes needs its OWN fresh sample of min_windows/min_days collected AFTER it is promoted to primary by a new pre-registration; nothing passes on the sample that selected it",
+ "fill_definition": "STRICT only: a public print THROUGH our price after the hypothetical join; at-price prints are labeled optimistic/unknown and never count",
+ "frozen_before_any_live_shadow_result": true,
+ "frozen_utc": "2026-09-05T21:08:32+00:00",
+ "no_tuning_rule": "these thresholds are frozen at commit; a change requires a new file with a new frozen_utc and restarts the sample count; the verdict function reads only this file",
+ "primary_arm": "reprice_180s:modal",
+ "primary_arm_rationale": "chosen on the RETAINED tape before the live service produced a record: lowest adverse-selection share among shells that fill; modal = what the live PMUS engine executes",
+ "reject": {
+  "after_windows": 300,
+  "meaning": "TRANSFER-REJECTED for that arm; a new arm needs a new pre-registration",
+  "net_after_fees_usd_at_or_below": -1.0,
+  "two_sided_completions_below": 5
+ },
+ "requirements": {
+  "max_adverse_selection_30s_pct": 50.0,
+  "max_one_sided_hold_rate_pct": 25.0,
+  "min_completion_days": 4,
+  "min_days": 5,
+  "min_matched_le_099_share_pct": 80.0,
+  "min_net_after_known_fees_usd": 0.0,
+  "min_non_negative_days": 3,
+  "min_p_complement_given_first_fill_pct": 35.0,
+  "min_two_sided_completions": 15,
+  "min_windows": 300
+ },
+ "rollback": "any live Gemini probe (none authorized) rolls back to DISARMED on: a venue-confirmed realized loss beyond -$1.00/day, any ambiguous settlement, any open-order reconcile mismatch, or the arm's rolling 24h strict net turning negative for 2 consecutive days",
+ "workstream": "OWNER 5554553793 B item 5 -- Gemini L5 transfer gate, pre-registered"
+}

@@ -1,0 +1,97 @@
+{
+  "windows": 2216,
+  "peak_directional_imbalance_per_window_units": {
+    "n": 2216,
+    "p10": 1.0,
+    "p25": 1.7334,
+    "p50": 2.7612,
+    "p75": 5.2113,
+    "p90": 25.5291,
+    "p95": 37.8858,
+    "max": 155.4275,
+    "mean": 7.9258
+  },
+  "coverage_of_a_cap": {
+    "1": 0.1616,
+    "2": 0.3822,
+    "3": 0.542,
+    "4": 0.6692,
+    "5": 0.7351,
+    "6": 0.7861,
+    "8": 0.8276,
+    "10": 0.8421
+  },
+  "same_side_run_length_actions": {
+    "n": 23955,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 3.0,
+    "p90": 6.0,
+    "p95": 9.0,
+    "max": 45.0,
+    "mean": 3.0049
+  },
+  "run_length_hist": {
+    "1": 9653,
+    "2": 5486,
+    "3": 2912,
+    "4": 1782,
+    "5": 1094,
+    "6": 736,
+    "7": 533,
+    "8": 375,
+    "9": 286,
+    "10": 204,
+    "11": 169,
+    "12": 129
+  },
+  "max_same_side_units_before_an_opposite_action": {
+    "n": 33982,
+    "p10": 1.0558,
+    "p25": 3.1574,
+    "p50": 9.1552,
+    "p75": 18.5598,
+    "p90": 27.9938,
+    "p95": 35.1355,
+    "max": 155.4275,
+    "mean": 12.6371
+  },
+  "P_opposite_next_given_held_units": {
+    "1": 0.4794,
+    "2": 0.481,
+    "3": 0.5029,
+    "4": 0.4874,
+    "5": 0.4903
+  },
+  "n_at_each_held_level": {
+    "1": 6180,
+    "2": 4686,
+    "3": 3802,
+    "4": 3295,
+    "5": 45535
+  },
+  "extends_while_already_at_or_beyond_units": {
+    "1": {
+      "n": 32438,
+      "share_of_all_same_side_actions": 0.9118
+    },
+    "2": {
+      "n": 29221,
+      "share_of_all_same_side_actions": 0.8214
+    },
+    "3": {
+      "n": 26789,
+      "share_of_all_same_side_actions": 0.753
+    },
+    "4": {
+      "n": 24899,
+      "share_of_all_same_side_actions": 0.6999
+    },
+    "5": {
+      "n": 23210,
+      "share_of_all_same_side_actions": 0.6524
+    }
+  },
+  "same_side_actions_total": 35576
+}

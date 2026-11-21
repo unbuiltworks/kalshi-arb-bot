@@ -1,0 +1,145 @@
+{
+ "title": "Venue-separated chain results, and why PMUS has not completed once",
+ "as_of_utc": "2026-09-20T11:40:02Z",
+ "labels": "SHADOW/HYPOTHETICAL. No orders, no arming, no live capital. Nothing submitted, filled, settled or realized. No Model A change, no habitat threshold change, no parameter optimization.",
+ "VENUES_NEVER_POOLED": {
+  "assertion": "slug overlap between venue chain sets = 0; each venue's chains carry only its own venue tag. Verified in code, printed with the results.",
+  "PMUS": "gateway.polymarket.us -- PRIMARY TRANSFER TARGET, the venue we can actually execute on.",
+  "INTL": "gamma/clob/data-api -- L5's OWN venue. REFERENCE/FIDELITY ONLY. Not executable for us, never a trading target."
+ },
+ "CENSUS": {
+  "PMUS": {
+   "live_events_monitored": 32,
+   "live_markets_monitored": 52,
+   "live_book_observations": 6989,
+   "flow_markets_covered": 45,
+   "bbo_snapshots": 2595,
+   "INFERRED_trade_events": 95,
+   "inferred_contracts": 66065.9,
+   "REAL_PRINTS": 0,
+   "note": "PMUS exposes no per-trade tape to us. Flow is CAUSAL volume-delta inference between consecutive snapshots, no hindsight. BBO snapshots are NOT prints."
+  },
+  "INTL": {
+   "live_events_monitored": 83,
+   "live_markets_monitored": 302,
+   "live_book_observations": 28521,
+   "REAL_PRINTS": 529,
+   "markets_that_printed": 105,
+   "printed_contracts": 131952.1,
+   "INFERRED_trade_events": 0,
+   "note": "real prints with KNOWN direction from the global tape; nothing inferred"
+  }
+ },
+ "CLARIFICATION_OF_THE_111": "The 111 figure I reported was INTERNATIONAL REAL PRINTS in the flow tap's first minute. It was never PMUS and never combined. The 264 that appeared beside it in the same tool output was PMUS BBO SNAPSHOTS -- book reads, NOT prints. PMUS real prints are and remain ZERO because the venue exposes no per-trade tape to us.",
+ "CHAIN_PMUS": {
+  "FIRST_FILLS": 13,
+  "matched_conversion_per_100_first_fills": 0.0,
+  "RESOLVED_first_fills": 12,
+  "matched_conversion_per_100_RESOLVED": 0.0,
+  "failure_modes": {
+   "1a_POLICY_NEVER_RECOMMENDED_COMPLETE": 12,
+   "7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION": 1
+  },
+  "failure_modes_per_100_first_fills": {
+   "1a_POLICY_NEVER_RECOMMENDED_COMPLETE": 92.3,
+   "7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION": 7.7
+  },
+  "extends_median": 2,
+  "extends_max": 2,
+  "completion_latency_s_median": null,
+  "queue_aware_first_fills": 5,
+  "optimistic_first_fills": 13,
+  "markets": 13,
+  "by_league": {
+   "cs2": 5,
+   "atpcq": 4,
+   "valorant": 2,
+   "sea": 1,
+   "flc": 1
+  }
+ },
+ "CHAIN_INTL": {
+  "FIRST_FILLS": 33,
+  "matched_conversion_per_100_first_fills": 33.3,
+  "RESOLVED_first_fills": 32,
+  "matched_conversion_per_100_RESOLVED": 34.4,
+  "failure_modes": {
+   "1a_POLICY_NEVER_RECOMMENDED_COMPLETE": 19,
+   "5_OPPOSITE_FILL_QTY_MISMATCH": 2,
+   "6_MATCHED": 11,
+   "7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION": 1
+  },
+  "failure_modes_per_100_first_fills": {
+   "1a_POLICY_NEVER_RECOMMENDED_COMPLETE": 57.6,
+   "5_OPPOSITE_FILL_QTY_MISMATCH": 6.1,
+   "6_MATCHED": 33.3,
+   "7_CENSORED_TOO_LITTLE_POST_FILL_OBSERVATION": 3.0
+  },
+  "extends_median": 2,
+  "extends_max": 2,
+  "completion_latency_s_median": 484.1,
+  "queue_aware_first_fills": 5,
+  "optimistic_first_fills": 33,
+  "markets": 23,
+  "by_league": {
+   "cs2": 10,
+   "atp": 9,
+   "elc": 3,
+   "dota2": 3,
+   "scop": 2,
+   "lol": 2,
+   "kor": 1,
+   "sea": 1,
+   "wta": 1,
+   "val": 1
+  }
+ },
+ "THE_MECHANISM": {
+  "finding": "The frozen v2 model recommends `complete` in EXACTLY ONE price bucket: p10-25c. In p25-45c, p45-55c, p55-75c and p75-90c at imbalance it recommends `extend`; p<10c and p>90c are off-distribution. So a chain can only complete if the price ENTERS 10-25c after the first fill.",
+  "test": "post-first-fill states per chain, did it ever enter p10-25c",
+  "INTL": {
+   "chains": 33,
+   "ever_entered_p10_25c": 20,
+   "pct": 60.6,
+   "matched": 11
+  },
+  "PMUS": {
+   "chains": 13,
+   "ever_entered_p10_25c": 3,
+   "pct": 23.1,
+   "matched": 0
+  },
+  "live_bid_bucket_distribution": {
+   "PMUS": {
+    "p55-75c": 24.2,
+    "p25-45c": 17.6,
+    "p75-90c": 14.6,
+    "p45-55c": 13.7,
+    "p10-25c": 13.1,
+    "p>90c": 11.9,
+    "p<10c": 4.9
+   },
+   "INTL": {
+    "p<10c": 38.3,
+    "p25-45c": 19.2,
+    "p10-25c": 17.0,
+    "p55-75c": 8.8,
+    "p>90c": 6.3,
+    "p45-55c": 5.6,
+    "p75-90c": 4.8
+   }
+  },
+  "reading": "PMUS live sports sit where a competitive game's moneyline sits -- 45-75c -- which is precisely where the frozen policy always says EXTEND and never asks for the complement. This is a POLICY-HABITAT MISMATCH IN THE PRICE DIMENSION, not a demonstration that PMUS cannot recycle inventory.",
+  "what_it_does_NOT_show": "PMUS's 0 matched is NOT evidence PMUS liquidity cannot complete a pair. In 92.3% of PMUS chains the policy never asked. Conditional on entering the completing bucket PMUS is 0/3 and INTL is 11/20 -- the PMUS conditional sample is THREE. No verdict either way.",
+  "explicitly_not_done": "No model, bucket, threshold or parameter was changed. This is a diagnosis, not a fix, and proposing one is the owner's call."
+ },
+ "interim_checkpoints_now_PER_VENUE": {
+  "INTL": "33 first fills -- past the 25 checkpoint",
+  "PMUS": "13 first fills -- NOT yet at 25. No transfer verdict."
+ },
+ "caveats": [
+  "PMUS 13 first fills and INTL 33 are both small. EARLY.",
+  "Optimistic vs queue-aware first fills differ sharply (PMUS 13 vs 5, INTL 33 vs 5); queue position is unobservable and the bracket is never collapsed.",
+  "Gemini A+B untouched as the negative control. NFL PRE baseline preserved."
+ ]
+}

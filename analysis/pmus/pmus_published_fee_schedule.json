@@ -1,0 +1,507 @@
+{
+ "label": "PMUS_PUBLISHED_FEE_SCHEDULE_V1",
+ "source": "https://docs.polymarket.us/fees",
+ "effective": "12 AM ET, Thursday September 17, 2026",
+ "formula": "Fee = theta * C * p * (1 - p)",
+ "taker_theta": "0.0695",
+ "maker_theta": "-0.0125",
+ "rounding": "banker's rounding to the cent",
+ "lot": 100,
+ "rows": [
+  {
+   "price": "0.01",
+   "taker_pays": "0.07",
+   "maker_receives": "0.01"
+  },
+  {
+   "price": "0.02",
+   "taker_pays": "0.14",
+   "maker_receives": "0.02"
+  },
+  {
+   "price": "0.03",
+   "taker_pays": "0.20",
+   "maker_receives": "0.04"
+  },
+  {
+   "price": "0.04",
+   "taker_pays": "0.27",
+   "maker_receives": "0.05"
+  },
+  {
+   "price": "0.05",
+   "taker_pays": "0.33",
+   "maker_receives": "0.06"
+  },
+  {
+   "price": "0.06",
+   "taker_pays": "0.39",
+   "maker_receives": "0.07"
+  },
+  {
+   "price": "0.07",
+   "taker_pays": "0.45",
+   "maker_receives": "0.08"
+  },
+  {
+   "price": "0.08",
+   "taker_pays": "0.51",
+   "maker_receives": "0.09"
+  },
+  {
+   "price": "0.09",
+   "taker_pays": "0.57",
+   "maker_receives": "0.10"
+  },
+  {
+   "price": "0.10",
+   "taker_pays": "0.63",
+   "maker_receives": "0.11"
+  },
+  {
+   "price": "0.11",
+   "taker_pays": "0.68",
+   "maker_receives": "0.12"
+  },
+  {
+   "price": "0.12",
+   "taker_pays": "0.73",
+   "maker_receives": "0.13"
+  },
+  {
+   "price": "0.13",
+   "taker_pays": "0.79",
+   "maker_receives": "0.14"
+  },
+  {
+   "price": "0.14",
+   "taker_pays": "0.84",
+   "maker_receives": "0.15"
+  },
+  {
+   "price": "0.15",
+   "taker_pays": "0.89",
+   "maker_receives": "0.16"
+  },
+  {
+   "price": "0.16",
+   "taker_pays": "0.93",
+   "maker_receives": "0.17"
+  },
+  {
+   "price": "0.17",
+   "taker_pays": "0.98",
+   "maker_receives": "0.18"
+  },
+  {
+   "price": "0.18",
+   "taker_pays": "1.03",
+   "maker_receives": "0.18"
+  },
+  {
+   "price": "0.19",
+   "taker_pays": "1.07",
+   "maker_receives": "0.19"
+  },
+  {
+   "price": "0.20",
+   "taker_pays": "1.11",
+   "maker_receives": "0.20"
+  },
+  {
+   "price": "0.21",
+   "taker_pays": "1.15",
+   "maker_receives": "0.21"
+  },
+  {
+   "price": "0.22",
+   "taker_pays": "1.19",
+   "maker_receives": "0.21"
+  },
+  {
+   "price": "0.23",
+   "taker_pays": "1.23",
+   "maker_receives": "0.22"
+  },
+  {
+   "price": "0.24",
+   "taker_pays": "1.27",
+   "maker_receives": "0.23"
+  },
+  {
+   "price": "0.25",
+   "taker_pays": "1.30",
+   "maker_receives": "0.23"
+  },
+  {
+   "price": "0.26",
+   "taker_pays": "1.34",
+   "maker_receives": "0.24"
+  },
+  {
+   "price": "0.27",
+   "taker_pays": "1.37",
+   "maker_receives": "0.25"
+  },
+  {
+   "price": "0.28",
+   "taker_pays": "1.40",
+   "maker_receives": "0.25"
+  },
+  {
+   "price": "0.29",
+   "taker_pays": "1.43",
+   "maker_receives": "0.26"
+  },
+  {
+   "price": "0.30",
+   "taker_pays": "1.46",
+   "maker_receives": "0.26"
+  },
+  {
+   "price": "0.31",
+   "taker_pays": "1.49",
+   "maker_receives": "0.27"
+  },
+  {
+   "price": "0.32",
+   "taker_pays": "1.51",
+   "maker_receives": "0.27"
+  },
+  {
+   "price": "0.33",
+   "taker_pays": "1.54",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.34",
+   "taker_pays": "1.56",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.35",
+   "taker_pays": "1.58",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.36",
+   "taker_pays": "1.60",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.37",
+   "taker_pays": "1.62",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.38",
+   "taker_pays": "1.64",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.39",
+   "taker_pays": "1.65",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.40",
+   "taker_pays": "1.67",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.41",
+   "taker_pays": "1.68",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.42",
+   "taker_pays": "1.69",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.43",
+   "taker_pays": "1.70",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.44",
+   "taker_pays": "1.71",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.45",
+   "taker_pays": "1.72",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.46",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.47",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.48",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.49",
+   "taker_pays": "1.74",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.50",
+   "taker_pays": "1.74",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.51",
+   "taker_pays": "1.74",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.52",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.53",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.54",
+   "taker_pays": "1.73",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.55",
+   "taker_pays": "1.72",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.56",
+   "taker_pays": "1.71",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.57",
+   "taker_pays": "1.70",
+   "maker_receives": "0.31"
+  },
+  {
+   "price": "0.58",
+   "taker_pays": "1.69",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.59",
+   "taker_pays": "1.68",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.60",
+   "taker_pays": "1.67",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.61",
+   "taker_pays": "1.65",
+   "maker_receives": "0.30"
+  },
+  {
+   "price": "0.62",
+   "taker_pays": "1.64",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.63",
+   "taker_pays": "1.62",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.64",
+   "taker_pays": "1.60",
+   "maker_receives": "0.29"
+  },
+  {
+   "price": "0.65",
+   "taker_pays": "1.58",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.66",
+   "taker_pays": "1.56",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.67",
+   "taker_pays": "1.54",
+   "maker_receives": "0.28"
+  },
+  {
+   "price": "0.68",
+   "taker_pays": "1.51",
+   "maker_receives": "0.27"
+  },
+  {
+   "price": "0.69",
+   "taker_pays": "1.49",
+   "maker_receives": "0.27"
+  },
+  {
+   "price": "0.70",
+   "taker_pays": "1.46",
+   "maker_receives": "0.26"
+  },
+  {
+   "price": "0.71",
+   "taker_pays": "1.43",
+   "maker_receives": "0.26"
+  },
+  {
+   "price": "0.72",
+   "taker_pays": "1.40",
+   "maker_receives": "0.25"
+  },
+  {
+   "price": "0.73",
+   "taker_pays": "1.37",
+   "maker_receives": "0.25"
+  },
+  {
+   "price": "0.74",
+   "taker_pays": "1.34",
+   "maker_receives": "0.24"
+  },
+  {
+   "price": "0.75",
+   "taker_pays": "1.30",
+   "maker_receives": "0.23"
+  },
+  {
+   "price": "0.76",
+   "taker_pays": "1.27",
+   "maker_receives": "0.23"
+  },
+  {
+   "price": "0.77",
+   "taker_pays": "1.23",
+   "maker_receives": "0.22"
+  },
+  {
+   "price": "0.78",
+   "taker_pays": "1.19",
+   "maker_receives": "0.21"
+  },
+  {
+   "price": "0.79",
+   "taker_pays": "1.15",
+   "maker_receives": "0.21"
+  },
+  {
+   "price": "0.80",
+   "taker_pays": "1.11",
+   "maker_receives": "0.20"
+  },
+  {
+   "price": "0.81",
+   "taker_pays": "1.07",
+   "maker_receives": "0.19"
+  },
+  {
+   "price": "0.82",
+   "taker_pays": "1.03",
+   "maker_receives": "0.18"
+  },
+  {
+   "price": "0.83",
+   "taker_pays": "0.98",
+   "maker_receives": "0.18"
+  },
+  {
+   "price": "0.84",
+   "taker_pays": "0.93",
+   "maker_receives": "0.17"
+  },
+  {
+   "price": "0.85",
+   "taker_pays": "0.89",
+   "maker_receives": "0.16"
+  },
+  {
+   "price": "0.86",
+   "taker_pays": "0.84",
+   "maker_receives": "0.15"
+  },
+  {
+   "price": "0.87",
+   "taker_pays": "0.79",
+   "maker_receives": "0.14"
+  },
+  {
+   "price": "0.88",
+   "taker_pays": "0.73",
+   "maker_receives": "0.13"
+  },
+  {
+   "price": "0.89",
+   "taker_pays": "0.68",
+   "maker_receives": "0.12"
+  },
+  {
+   "price": "0.90",
+   "taker_pays": "0.63",
+   "maker_receives": "0.11"
+  },
+  {
+   "price": "0.91",
+   "taker_pays": "0.57",
+   "maker_receives": "0.10"
+  },
+  {
+   "price": "0.92",
+   "taker_pays": "0.51",
+   "maker_receives": "0.09"
+  },
+  {
+   "price": "0.93",
+   "taker_pays": "0.45",
+   "maker_receives": "0.08"
+  },
+  {
+   "price": "0.94",
+   "taker_pays": "0.39",
+   "maker_receives": "0.07"
+  },
+  {
+   "price": "0.95",
+   "taker_pays": "0.33",
+   "maker_receives": "0.06"
+  },
+  {
+   "price": "0.96",
+   "taker_pays": "0.27",
+   "maker_receives": "0.05"
+  },
+  {
+   "price": "0.97",
+   "taker_pays": "0.20",
+   "maker_receives": "0.04"
+  },
+  {
+   "price": "0.98",
+   "taker_pays": "0.14",
+   "maker_receives": "0.02"
+  },
+  {
+   "price": "0.99",
+   "taker_pays": "0.07",
+   "maker_receives": "0.01"
+  }
+ ]
+}

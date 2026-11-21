@@ -1,0 +1,83 @@
+name: Kalshi Account Preflight (READ-ONLY)
+
+# Runs the read-only account preflight where the repository secrets live.
+# GET requests only; there is no order path in the module it runs.
+#
+# Trigger is a push that touches THIS FILE on the research branch. For events
+# other than push, GitHub resolves workflows from the default branch, and
+# nothing here is allowed on the default branch -- so push-on-path is the one
+# trigger that works from a feature branch without touching main.
+on:
+  push:
+    branches: [feature/l5-transfer-backtest]
+    paths:
+      - .github/workflows/kalshi-account-preflight.yml
+      - src/kalshi_account_preflight_fetch.py
+      - src/kalshi_account_preflight_readonly.py
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # python-dotenv is required: config/settings.py imports it at module
+      # load, so omitting it made the first run die with ModuleNotFoundError
+      # before it ever reached the network.
+      - name: Install dependencies
+        run: pip install --quiet httpx cryptography python-dotenv
+
+      # Import check runs with NO credentials in scope, so its traceback is
+      # safe to surface in full. The preflight step below keeps its message
+      # suppression, which is what made the first failure hard to read.
+      - name: Import check (no credentials in scope)
+        run: python -c "import src.kalshi_account_preflight_fetch as m; print('IMPORT_OK', m.PROD)"
+
+      # Secret NAMES cannot be listed through the API by design. A wider set
+      # of plausible names is probed here; absent ones resolve to empty and
+      # the booleans below say which arrived. No value is ever echoed.
+      - name: Report which credential names are populated
+        env:
+          N1: ${{ secrets.KALSHI_API_KEY_ID }}
+          N2: ${{ secrets.KALSHI_KEY_ID }}
+          N3: ${{ secrets.KALSHI_ACCESS_KEY }}
+          N4: ${{ secrets.KALSHI_PRIVATE_KEY_PEM }}
+          N5: ${{ secrets.KALSHI_PRIVATE_KEY }}
+          N6: ${{ secrets.KALSHI_API_KEY }}
+          N7: ${{ secrets.KALSHI_SECRET }}
+          N8: ${{ secrets.KALSHI_API_SECRET }}
+          N9: ${{ secrets.KALSHI_PROD_KEY_ID }}
+          N10: ${{ secrets.KALSHI_PROD_PRIVATE_KEY }}
+          N11: ${{ secrets.KALSHI_PEM }}
+          N12: ${{ secrets.KALSHI_KEY }}
+        run: |
+          b() { [ -n "$1" ] && echo true || echo false; }
+          printf 'KALSHI_SECRET_PRESENCE {'
+          printf '"KALSHI_API_KEY_ID":%s,' "$(b "$N1")"
+          printf '"KALSHI_KEY_ID":%s,' "$(b "$N2")"
+          printf '"KALSHI_ACCESS_KEY":%s,' "$(b "$N3")"
+          printf '"KALSHI_PRIVATE_KEY_PEM":%s,' "$(b "$N4")"
+          printf '"KALSHI_PRIVATE_KEY":%s,' "$(b "$N5")"
+          printf '"KALSHI_API_KEY":%s,' "$(b "$N6")"
+          printf '"KALSHI_SECRET":%s,' "$(b "$N7")"
+          printf '"KALSHI_API_SECRET":%s,' "$(b "$N8")"
+          printf '"KALSHI_PROD_KEY_ID":%s,' "$(b "$N9")"
+          printf '"KALSHI_PROD_PRIVATE_KEY":%s,' "$(b "$N10")"
+          printf '"KALSHI_PEM":%s,' "$(b "$N11")"
+          printf '"KALSHI_KEY":%s}\n' "$(b "$N12")"
+
+      - name: Read-only preflight
+        env:
+          KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID || secrets.KALSHI_KEY_ID || secrets.KALSHI_ACCESS_KEY || secrets.KALSHI_API_KEY || secrets.KALSHI_PROD_KEY_ID }}
+          KALSHI_PRIVATE_KEY_PEM: ${{ secrets.KALSHI_PRIVATE_KEY_PEM || secrets.KALSHI_PRIVATE_KEY || secrets.KALSHI_PROD_PRIVATE_KEY || secrets.KALSHI_PEM || secrets.KALSHI_KEY }}
+          KALSHI_ENV: prod
+          KALSHI_EXPECTED_CASH_USD: '3419'
+        run: python -m src.kalshi_account_preflight_fetch

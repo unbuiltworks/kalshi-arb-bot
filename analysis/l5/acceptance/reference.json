@@ -1,0 +1,166 @@
+{
+ "rows": 59605,
+ "train": 33432,
+ "oos": 26173,
+ "train_windows": 358,
+ "oos_windows": 154,
+ "TRAIN": {
+  "same_side_vwap": {
+   "n": 32725,
+   "favourable_share": 0.6145,
+   "accuracy": 0.6025,
+   "P_continue_when_favourable": 0.7245,
+   "P_continue_when_unfavourable": 0.592,
+   "separation": 0.1325,
+   "always_continue_baseline": 0.6734
+  },
+  "opposite_cost_basis": {
+   "n": 32190,
+   "favourable_share": 0.6042,
+   "accuracy": 0.5997,
+   "P_continue_when_favourable": 0.7238,
+   "P_continue_when_unfavourable": 0.5899,
+   "separation": 0.1339,
+   "always_continue_baseline": 0.6708
+  },
+  "probability_mid": {
+   "n": 33432,
+   "favourable_share": 1.0,
+   "accuracy": 0.6725,
+   "P_continue_when_favourable": 0.6725,
+   "P_continue_when_unfavourable": null,
+   "separation": null,
+   "always_continue_baseline": 0.6725
+  },
+  "recent_fill_vwap": {
+   "n": 32725,
+   "favourable_share": 0.584,
+   "accuracy": 0.5859,
+   "P_continue_when_favourable": 0.722,
+   "P_continue_when_unfavourable": 0.6052,
+   "separation": 0.1168,
+   "always_continue_baseline": 0.6734
+  },
+  "run_start_price": {
+   "n": 33432,
+   "favourable_share": 0.8093,
+   "accuracy": 0.6075,
+   "P_continue_when_favourable": 0.673,
+   "P_continue_when_unfavourable": 0.6705,
+   "separation": 0.0025,
+   "always_continue_baseline": 0.6725
+  },
+  "rolling_min": {
+   "n": 32725,
+   "favourable_share": 0.3024,
+   "accuracy": 0.4671,
+   "P_continue_when_favourable": 0.7324,
+   "P_continue_when_unfavourable": 0.6478,
+   "separation": 0.0846,
+   "always_continue_baseline": 0.6734
+  },
+  "rolling_max": {
+   "n": 32725,
+   "favourable_share": 0.8497,
+   "accuracy": 0.6563,
+   "P_continue_when_favourable": 0.694,
+   "P_continue_when_unfavourable": 0.5568,
+   "separation": 0.1372,
+   "always_continue_baseline": 0.6734
+  },
+  "pair_budget": {
+   "n": 32190,
+   "favourable_share": 0.6389,
+   "accuracy": 0.6112,
+   "P_continue_when_favourable": 0.7207,
+   "P_continue_when_unfavourable": 0.5825,
+   "separation": 0.1382,
+   "always_continue_baseline": 0.6708
+  }
+ },
+ "chosen_on_train": "pair_budget",
+ "selection_rule": "largest |separation| in P(continue) on TRAIN windows only; ties broken by accuracy",
+ "OOS_all_references": {
+  "same_side_vwap": {
+   "n": 25865,
+   "favourable_share": 0.6135,
+   "accuracy": 0.6015,
+   "P_continue_when_favourable": 0.7429,
+   "P_continue_when_unfavourable": 0.623,
+   "separation": 0.1199,
+   "always_continue_baseline": 0.6966
+  },
+  "opposite_cost_basis": {
+   "n": 25579,
+   "favourable_share": 0.606,
+   "accuracy": 0.6032,
+   "P_continue_when_favourable": 0.7451,
+   "P_continue_when_unfavourable": 0.6152,
+   "separation": 0.13,
+   "always_continue_baseline": 0.6939
+  },
+  "probability_mid": {
+   "n": 26173,
+   "favourable_share": 1.0,
+   "accuracy": 0.695,
+   "P_continue_when_favourable": 0.695,
+   "P_continue_when_unfavourable": null,
+   "separation": null,
+   "always_continue_baseline": 0.695
+  },
+  "recent_fill_vwap": {
+   "n": 25865,
+   "favourable_share": 0.5783,
+   "accuracy": 0.5826,
+   "P_continue_when_favourable": 0.7414,
+   "P_continue_when_unfavourable": 0.6351,
+   "separation": 0.1063,
+   "always_continue_baseline": 0.6966
+  },
+  "run_start_price": {
+   "n": 26173,
+   "favourable_share": 0.7879,
+   "accuracy": 0.6052,
+   "P_continue_when_favourable": 0.6905,
+   "P_continue_when_unfavourable": 0.7116,
+   "separation": -0.0211,
+   "always_continue_baseline": 0.695
+  },
+  "rolling_min": {
+   "n": 25865,
+   "favourable_share": 0.2919,
+   "accuracy": 0.4522,
+   "P_continue_when_favourable": 0.7548,
+   "P_continue_when_unfavourable": 0.6726,
+   "separation": 0.0822,
+   "always_continue_baseline": 0.6966
+  },
+  "rolling_max": {
+   "n": 25865,
+   "favourable_share": 0.8573,
+   "accuracy": 0.6733,
+   "P_continue_when_favourable": 0.7157,
+   "P_continue_when_unfavourable": 0.5815,
+   "separation": 0.1342,
+   "always_continue_baseline": 0.6966
+  },
+  "pair_budget": {
+   "n": 25579,
+   "favourable_share": 0.6143,
+   "accuracy": 0.6023,
+   "P_continue_when_favourable": 0.7411,
+   "P_continue_when_unfavourable": 0.6188,
+   "separation": 0.1223,
+   "always_continue_baseline": 0.6939
+  }
+ },
+ "OOS_chosen": {
+  "n": 25579,
+  "favourable_share": 0.6143,
+  "accuracy": 0.6023,
+  "P_continue_when_favourable": 0.7411,
+  "P_continue_when_unfavourable": 0.6188,
+  "separation": 0.1223,
+  "always_continue_baseline": 0.6939
+ }
+}

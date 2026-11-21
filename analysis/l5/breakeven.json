@@ -1,0 +1,57 @@
+{
+  "basis": "per opened leg, measured WITHIN markets, reconciling only",
+  "markets_used": 15,
+  "markets_excluded": [
+    {
+      "slug": "aec-setkameua-vervas-kohboh-2026-09-08",
+      "why": "qty_reconciliation.reconciles is false",
+      "qty_delta": "4.3400"
+    }
+  ],
+  "excluded_because": "a market whose venue and ledger quantities disagree is refused every per-unit rate: its residual units may be a missed fill rather than a flat book, which would put loss in the numerator against no units in the denominator",
+  "matched_pairs": "149.93",
+  "residual_units": "29.80",
+  "opened_legs": "179.73",
+  "matched_contribution_usd": "8.5805",
+  "residual_contribution_usd": "-9.877190770703921039063075451",
+  "pair_profit_per_matched_pair_usd": "0.057230",
+  "residual_loss_per_residual_unit_usd": "-0.331449",
+  "observed_leg_completion_rate": 0.834196,
+  "confirmed_credits": {
+    "rebate_per_fill_usd": "0.007270",
+    "cohort_fills": 73,
+    "cohort_attributable_rebate_usd": "0.5307",
+    "rebate_per_opened_leg_usd": "0.002953",
+    "liquidity_rewards_usd": "0.0000",
+    "fees_usd": "0.0000",
+    "mapping_is_approximate": "rebates accrue on maker NOTIONAL; we hold a per-fill figure and scale it by this cohort's fills-per-leg. The break-even is therefore a RANGE, not a point.",
+    "rewards_are_zero_because": "every liquidity-reward row is SKIPPED or PENDING; accrued face value is never revenue"
+  },
+  "per_market_crosscheck": {
+    "settled_markets": 16,
+    "paired_to_zero_derived": 11,
+    "stranded_residual_venue_confirmed": 5,
+    "observed_pairing_rate_market_level": 0.6875,
+    "pair_profit_per_paired_market_usd": "0.7219727272727272727272727273",
+    "residual_loss_per_stranded_market_usd": "-2.16324",
+    "warning": "CONTAMINATED AND KEPT ANYWAY. Every venue-confirmed market is negative and every derived market positive partly BY CONSTRUCTION: a market that pairs to zero leaves no residual to settle, so the venue never publishes a realizedPnl for it and it can only appear on the derived side. Read the per-leg basis above; this is here so the weaker cut can be argued with rather than hidden.",
+    "breakeven_excluding_credits": 0.749768,
+    "breakeven_including_credits": 0.736345,
+    "credit_per_market_usd": "0.03872727272727272727272727273"
+  },
+  "breakeven": {
+    "excluding_credits": 0.852758,
+    "including_confirmed_credits": 0.84516,
+    "observed": 0.834196,
+    "range_reading": "the two figures BRACKET the answer: the credit mapping is approximate, so the truth sits between them",
+    "gap_percentage_points_vs_including_credits": -1.096,
+    "gap_percentage_points_vs_excluding_credits": -1.856,
+    "verdict": "BELOW BREAK-EVEN on both ends of the range"
+  },
+  "marginal_value": {
+    "usd_per_opened_leg_per_completion_point": "0.003887",
+    "usd_over_this_cohort_per_completion_point": "0.6986",
+    "completion_points_needed_to_reach_breakeven": 1.096,
+    "reading": "a residual unit costs 5.8x what a matched pair earns, which is why completion rate dominates every other lever measured so far"
+  }
+}

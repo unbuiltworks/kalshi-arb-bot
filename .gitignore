@@ -8,3 +8,99 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# L5: normalized JSONL is derived from data/l5/raw by 'cli build'; keep the source of truth only
+data/l5/normalized/
+
+# L5 backfill: ~300MB slim raw cache, regenerable via 'python -m src.polymarket_l5.backfill'
+data/l5/raw/activity_gap.jsonl
+
+# policy_d_port raw tapes: the JSONL for a multi-hour run is 80-90MB, past
+# GitHub's 50MB warning, and a growing file costs a full new blob on every
+# snapshot commit. Track the gzipped tape instead (~9.5x smaller); the raw
+# file stays on disk for the running collector. Same rule already in force
+# on claude/polymarket-l5-historical-analysis-2ih9ui (6524704b), where the
+# 2026-09-04 and 2026-09-05 tapes are committed in their .gz form.
+data/policy_d_port/tape_*.jsonl
+
+# Same rule, same reason, for the 2026-09-17 measurement runs: the Gemini
+# hot-window tape and the PMUS book tape are both written continuously by a
+# live collector, so the raw JSONL is a growing file that would cost a fresh
+# multi-MB blob on every commit while the run is in flight. The RAW TAPE IS
+# PRESERVED ON DISK for the collector and for provenance, and the GZIPPED
+# tape is committed once the run completes -- which is also the only point at
+# which the file is a complete, citable artifact rather than a partial one.
+data/policy_d_port_hot/tape_*.jsonl
+data/policy_d_port_hot/canonical_*.jsonl
+data/pmus_book_tape/pmus_book_*.jsonl
+data/policy_d_port_hot/*.jsonl.gz
+data/pmus_book_tape/*.jsonl.gz
+
+# prospective FIDELITY rows are runtime research state, not source code.
+# The v0 snapshots already committed stay committed; nothing is rewritten.
+analysis/l5/fidelity/prospective/*.jsonl
+
+# Chain receipt fetch cache. Derived and regenerable: immutable public receipts,
+# re-fetchable from any archive node, and it churns while a study is running.
+# The tx-level PROVENANCE is not here -- every row of the committed
+# roles_*.json carries its own tx, block, logIndex and contract, which is the
+# auditable artifact.
+analysis/l5/pair_formation/receipts.jsonl
+
+# Historical-L2 chain backfill + block-time fetch caches. Derived and
+# regenerable from immutable public chain data; the findings and the tables
+# they produce are committed instead.
+analysis/l5/historical_l2/l5_backfill.json
+analysis/l5/historical_l2/block_times.json
+data/l5_book_context/*.jsonl
+data/gemini_surface_shadow/*.jsonl
+data/l5_window_forensics/*.jsonl
+
+# P10 captures in flight: renamed into place only when complete
+analysis/gemini/p10_capture/*.partial
+data/pmus_btc15m/
+data/l5_pmus_realtime/
+data/pmus_auth_trades/
+
+# Local working copies of collected tapes. The evidence that matters is
+# committed under analysis/pmus/evidence/ -- these are the scratch paths the
+# harvest scripts write to and are byte-identical duplicates of it, so
+# committing them would double ~16MB for nothing. The container is ephemeral;
+# anything worth keeping goes to analysis/pmus/evidence/ and is committed.
+data/l5_pmus_realtime/
+data/pmus_auth_trades/
+data/pmus_btc15m/
+
+# P10 decoder capture. That workstream is closed and GATE FAILED; its capture
+# is not revived, merged or modified.
+analysis/gemini/p10_capture/
+
+# L5: data/l5_master is a 375MB derivation of data/l5/raw (the source of
+# truth), rebuilt on demand by scripts/l5_settlement_decomposition_audit.py.
+data/l5_master/
+
+# derived, 28MB, rebuilt by analysis/l5/taker_entry/extract.py
+analysis/l5/taker_entry/windows.json
+
+# window-consumption ledgers are ACCOUNTING STATE, never source. consumed_root()
+# defaults to ./campaign_windows when L5_LIVE_ROOT is unset, so any local call that
+# reserves a window writes here. Committing one could seed a deployed ledger with
+# windows marked spent.
+campaign_windows/
+
+# 0x8dxd competitor capture: the verified wallet's venue-reported history.
+# trades.jsonl alone is 117MB -- past GitHub's 50MB warning and its 100MB
+# hard limit -- and a growing file costs a full new blob per commit, the
+# same reason data/policy_d_port tapes are excluded above. The capture is
+# regenerable from a public read-only API:
+#   python3 -I analysis/l5/competitor_0x8dxd_fetch.py
+# Identity is verified inside that script's docstring, not assumed: v2
+# returns name "0x8dxd" / pseudonym "Blushing-Fine" for proxy_wallet
+# 0x63ce342161250d705dc0b16df89036c8e5f9ba9a on three separate routes.
+data/l5/competitor_0x8dxd/*.jsonl
+#: the untruncated re-capture (PAGE_CAP=1500); same provenance, ~600MB
+data/l5/competitor_0x8dxd_full/*.jsonl
+#: Phase A read-only book tape (owner-authorized 2026-11-17); large,
+#: regenerable from analysis/l5/btc5m_maker_phase_a.py
+data/l5/phase_a/*.jsonl
+data/l5/phase_a/*.log

@@ -1,0 +1,33 @@
+BRTI SETTLEMENT MODEL vs MARKET PRICE -- independent of the frozen hypothesis
+Forward windows only (0440z..1110z 2026-11-19). BRTI: 25,201 contiguous
+1-second buckets 04:30Z..11:30Z from the public gateway, zero gaps.
+
+============================================================================
+BRTI SETTLEMENT MODEL vs MARKET PRICE -- forward windows only
+============================================================================
+  skipped before_cutoff                      230
+scored windows: 79
+
+quote-proxy settlement vs TRUE settlement: 76/76 agree (100.0%)
+
+Brier score (lower is better)
+  model : 0.1109
+  market: 0.1087
+  -> MARKET better
+
+Taking the model's disagreement, at the offer, net of taker fee
+min edge       n   mean/sh        se 95% CI              
+    0.05      40   +0.0159    0.0612 [-0.1031, +0.1365] 
+    0.10      19   +0.0418    0.0976 [-0.1428, +0.2438] 
+    0.20       1         -         -  too few
+    0.30       0         -         -  too few
+
+Hypothetical executions. NOT fills, NOT realized P&L.
+
+EXECUTION REALITY, verified in the same pass:
+  taker theta 0.095 (Tier 1, from the live market object's feeCoefficient);
+    taker_fee(0.1213) = 0.0101/share; maker_rebate = 0.0000 at Tier 1
+  quote cadence median 2.03s, p99 2.08s, max 60.87s; gaps >6s are 0.35% of
+    gaps but disqualify 8 of 79 windows (10%) at the t=180 decision instant
+  spread at t=180: 0.01 in 71 of 79 windows, 0.02 in 6, 0.04 in 2
+  ask liquidity: BTC5M_QUOTE has no size field. NOT verifiable.

@@ -1,0 +1,127 @@
+{
+ "label": "PMUS_BTC15M_BAND_COUNTERFACTUAL_V1",
+ "executor_untouched": true,
+ "fill_basis": "TRACK B ASSUMPTION, not evidence -- the economics columns inherit it and are not realized",
+ "candidates": [
+  {
+   "quotes": 12,
+   "holds": 48,
+   "band_holds": 25,
+   "relations": {
+    "open": 4,
+    "complete": 3,
+    "extend": 5
+   },
+   "assumed_pairs": 3,
+   "avg_pair_cost": "0.9805",
+   "pair_pnl_usd": "0.0586",
+   "pairs_clear_under_1": true,
+   "pairs_clear_under_spring_096": false,
+   "residual_units": 6,
+   "desired_price_p10": "0.21",
+   "desired_price_p50": "0.28",
+   "desired_price_p90": "0.75",
+   "band": "inherited_sports",
+   "lo": "0.20",
+   "hi": "0.80",
+   "quotes_vs_inherited": 0,
+   "suppression_of_this_band": 0.417
+  },
+  {
+   "quotes": 15,
+   "holds": 35,
+   "band_holds": 12,
+   "relations": {
+    "open": 5,
+    "complete": 4,
+    "extend": 6
+   },
+   "assumed_pairs": 4,
+   "avg_pair_cost": "1.0175",
+   "pair_pnl_usd": "-0.0700",
+   "pairs_clear_under_1": false,
+   "pairs_clear_under_spring_096": false,
+   "residual_units": 7,
+   "desired_price_p10": "0.18",
+   "desired_price_p50": "0.24",
+   "desired_price_p90": "0.82",
+   "band": "0.15-0.85",
+   "lo": "0.15",
+   "hi": "0.85",
+   "quotes_vs_inherited": 3,
+   "suppression_of_this_band": 0.24
+  },
+  {
+   "quotes": 17,
+   "holds": 29,
+   "band_holds": 16,
+   "relations": {
+    "open": 6,
+    "complete": 4,
+    "extend": 7
+   },
+   "assumed_pairs": 4,
+   "avg_pair_cost": "1.0012",
+   "pair_pnl_usd": "-0.0050",
+   "pairs_clear_under_1": false,
+   "pairs_clear_under_spring_096": false,
+   "residual_units": 9,
+   "desired_price_p10": "0.11",
+   "desired_price_p50": "0.24",
+   "desired_price_p90": "0.82",
+   "band": "0.10-0.90",
+   "lo": "0.10",
+   "hi": "0.90",
+   "quotes_vs_inherited": 5,
+   "suppression_of_this_band": 0.348
+  },
+  {
+   "quotes": 20,
+   "holds": 26,
+   "band_holds": 13,
+   "relations": {
+    "open": 6,
+    "complete": 4,
+    "extend": 10
+   },
+   "assumed_pairs": 4,
+   "avg_pair_cost": "1.0012",
+   "pair_pnl_usd": "-0.0050",
+   "pairs_clear_under_1": false,
+   "pairs_clear_under_spring_096": false,
+   "residual_units": 12,
+   "desired_price_p10": "0.09",
+   "desired_price_p50": "0.24",
+   "desired_price_p90": "0.82",
+   "band": "0.05-0.95",
+   "lo": "0.05",
+   "hi": "0.95",
+   "quotes_vs_inherited": 8,
+   "suppression_of_this_band": 0.283
+  },
+  {
+   "quotes": 33,
+   "holds": 9,
+   "band_holds": 0,
+   "relations": {
+    "open": 6,
+    "complete": 4,
+    "extend": 23
+   },
+   "assumed_pairs": 4,
+   "avg_pair_cost": "1.0012",
+   "pair_pnl_usd": "-0.0050",
+   "pairs_clear_under_1": false,
+   "pairs_clear_under_spring_096": false,
+   "residual_units": 25,
+   "desired_price_p10": "0.01",
+   "desired_price_p50": "0.10",
+   "desired_price_p90": "0.75",
+   "band": "venue_full",
+   "lo": "0.01",
+   "hi": "0.99",
+   "quotes_vs_inherited": 21,
+   "suppression_of_this_band": 0.0
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-09-21-Q1LIVE-1",
+  "created_utc": "2026-09-21T01:53:37.461109+00:00",
+  "budget": 12,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-21-Q1LIVE-1/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C8B/ledger.jsonl",
+  "predecessor_sha256": "6943febfafb09088654ad8c6611a5047bad0c84cd7a3197d023f75b8f89d4da6",
+  "predecessor_consumed": 11,
+  "envelope_max_actions": 12,
+  "note": "OWNER-2026-09-21-GEMINI-Q1-LIVE-1: ONE BTC5m window at q=1 under the reviewed LIVE_Q1 envelope. BUDGET 12 = CP.MAX_ACTIONS = LIVE_Q1.max_actions, so this is LIFECYCLE CAPACITY and NOT an override: the owner authorized twelve action attempts and this is exactly twelve. It exists ONLY to supply a fresh durable ledger, because the HISTORICAL ledger is permanently spent (12/12 by CONTINUOUS-2/-3/-4) and a window that bound it would refuse on budget at the moment it matters. It is NOT authorization to increase, reset during the run, or replenish the limit: a cohort budget is fixed, unused slots never roll over, and nothing in the package creates a cohort automatically. FINANCIAL RISK IS BOUNDED ELSEWHERE AND IS UNCHANGED: committed cash and worst-case loss $2.50, directional residual $2.00, two working orders, one concurrent BTC5m market, maker-or-cancel only, FROZEN_L5_NATIVE. LINEAGE: chained to C8B's ledger, the last cohort that actually consumed slots (11 of 12).",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

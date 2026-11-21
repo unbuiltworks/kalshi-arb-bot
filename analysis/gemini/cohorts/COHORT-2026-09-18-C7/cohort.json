@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-09-18-C7",
+  "created_utc": "2026-09-18T22:34:02.050913+00:00",
+  "budget": 6,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-18-C7/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C6/ledger.jsonl",
+  "predecessor_sha256": "3996eb94bcdabf1e0b272d8dcf3282915f2570330453894985e3202bb1a265d3",
+  "predecessor_consumed": 6,
+  "envelope_max_actions": 12,
+  "note": "CONTINUOUS-7: REAL FILL -> COHERENT AUTHORITATIVE REFRESH -> INVENTORY CHANGE -> CHANGED L5 ACTION. Chained to C6's ledger, so C6's 6 spent slots and C5's frozen 3 behind it cannot be rewritten or recycled without this cohort refusing before the latch.",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

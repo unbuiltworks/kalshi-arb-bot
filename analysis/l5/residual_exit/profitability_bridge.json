@@ -1,0 +1,163 @@
+{
+ "breakeven_completion": 0.84516,
+ "campaign_bridge": {
+  "attribution_of_shortfall": {
+   "complement_price_slippage": 0.1905,
+   "fees": 0.0,
+   "missed_complement_to_settlement": 0.8095,
+   "queue_adverse_selection": "n/a -- no complement ever filled, so no fill was adversely selected"
+  },
+  "complement_slippage": "-0.1053",
+  "fees_charged_by_venue": "0.0000",
+  "planned_edge_if_both_paired": "0.1480",
+  "realized": "-0.4048",
+  "reconciles": true,
+  "residual_settlement": "-0.4475",
+  "rows": [
+   {
+    "complement_slippage": "-0.1053",
+    "planned_edge": "0.0585",
+    "realized": "-0.0468",
+    "residual_settlement": "0",
+    "window": "0230z"
+   },
+   {
+    "complement_slippage": "0",
+    "planned_edge": "0.0895",
+    "realized": "-0.3580",
+    "residual_settlement": "-0.4475",
+    "window": "0300z"
+   },
+   {
+    "actual_complement": null,
+    "cost": null,
+    "outcome": "no_fill",
+    "planned_complement": null,
+    "planned_edge": "0",
+    "qty": "0",
+    "realized": "0",
+    "window": "0245z"
+   }
+  ],
+  "venue_reported": "-0.4048"
+ },
+ "ceiling_curve": [
+  {
+   "breakeven_completion": 0.84516,
+   "ceiling": "0.96",
+   "gross_edge": "0.05",
+   "min_depth_ticks": 2,
+   "need_per_attempt_at_12": 0.143968,
+   "need_per_attempt_at_8": 0.207981,
+   "pair_cost": "0.95",
+   "pair_profit": "0.057230"
+  },
+  {
+   "breakeven_completion": 0.891008,
+   "ceiling": "0.97",
+   "gross_edge": "0.03",
+   "min_depth_ticks": 1,
+   "need_per_attempt_at_12": 0.168652,
+   "need_per_attempt_at_8": 0.241991,
+   "pair_cost": "0.97",
+   "pair_profit": "0.037230"
+  },
+  {
+   "breakeven_completion": 0.891008,
+   "ceiling": "0.98",
+   "gross_edge": "0.03",
+   "min_depth_ticks": 1,
+   "need_per_attempt_at_12": 0.168652,
+   "need_per_attempt_at_8": 0.241991,
+   "pair_cost": "0.97",
+   "pair_profit": "0.037230"
+  },
+  {
+   "breakeven_completion": 0.942116,
+   "ceiling": "0.99",
+   "gross_edge": "0.01",
+   "min_depth_ticks": 0,
+   "need_per_attempt_at_12": 0.211358,
+   "need_per_attempt_at_8": 0.299642,
+   "pair_cost": "0.99",
+   "pair_profit": "0.017230"
+  }
+ ],
+ "ev_at_observed_completion": "-0.004261532916",
+ "fill_assumptions": {
+  "breakeven_completion": 0.84516,
+  "scenarios": {
+   "independent_at_depth2_fill": {
+    "attempts_to_breakeven": 12,
+    "completion_by_attempt": {
+     "1": 0.144,
+     "2": 0.2673,
+     "4": 0.4631,
+     "8": 0.7117,
+     "12": 0.8452,
+     "16": 0.9169
+    },
+    "ev_by_attempt": {
+     "1": "-0.272526",
+     "2": "-0.224616",
+     "4": "-0.148500",
+     "8": "-0.051859",
+     "12": "0.000027",
+     "16": "0.027885"
+    }
+   },
+   "measured_decay_at_l5_levels": {
+    "attempts_to_breakeven": 16,
+    "completion_by_attempt": {
+     "1": 0.22,
+     "2": 0.4173,
+     "4": 0.5511,
+     "8": 0.6853,
+     "12": 0.7794,
+     "16": 0.8454
+    },
+    "ev_by_attempt": {
+     "1": "-0.242987",
+     "2": "-0.166285",
+     "4": "-0.114295",
+     "8": "-0.062116",
+     "12": "-0.025542",
+     "16": "0.000094"
+    }
+   },
+   "measured_decay_scaled_to_our_attempt1": {
+    "attempts_to_breakeven": null,
+    "completion_by_attempt": {
+     "1": 0.144,
+     "2": 0.2858,
+     "4": 0.3952,
+     "8": 0.519,
+     "12": 0.6174,
+     "16": 0.6957
+    },
+    "ev_by_attempt": {
+     "1": "-0.272526",
+     "2": "-0.217430",
+     "4": "-0.174871",
+     "8": "-0.126767",
+     "12": "-0.088507",
+     "16": "-0.058077"
+    }
+   }
+  }
+ },
+ "inputs": {
+  "attempt_decay": [
+   0.22,
+   0.253,
+   0.158,
+   0.085
+  ],
+  "depth2_per_order_fill": 0.144,
+  "observed_leg_completion": "0.834196",
+  "pair_profit": "0.057230",
+  "rebate_per_leg": "0.002953",
+  "residual_loss": "-0.331449"
+ },
+ "verdict": "negative expectancy under every defensible fill assumption; no ceiling/depth point clears breakeven"
+}

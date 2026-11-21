@@ -1,0 +1,37 @@
+his spend inside 10-280 s on the fitting days: $1466 a window; rule scaled by 0.00341 to spend $5.00 a window
+spend per state, dollars at this scale (rows: our ask; columns: minute 0-4):
+   0.00-0.10   0.021   0.008   0.006   0.013   0.045
+   0.10-0.20   0.038   0.029   0.024   0.029   0.054
+   0.20-0.30   0.062   0.042   0.038   0.049   0.065
+   0.30-0.40   0.063   0.055   0.054   0.059   0.071
+   0.40-0.50   0.069   0.062   0.074   0.078   0.060
+   0.50-0.60   0.082   0.077   0.082   0.089   0.086
+   0.60-0.70   0.113   0.092   0.094   0.092   0.078
+   0.70-0.80   0.153   0.114   0.093   0.116   0.076
+   0.80-0.90   0.291   0.165   0.126   0.109   0.118
+   0.90-0.95   0.603   0.229   0.182   0.166   0.154
+   0.95-0.98   0.000   0.926   0.401   0.263   0.368
+   0.98-1.00   0.000   1.737   1.361   1.133   0.000
+
+FITTING DAYS 11-17, 11-18 (not evidence)
+   windows run 576, traded 576; fills 23780; shares 5735.81  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+   cost $2880.00  fees $66.76  settlement proceeds $2850.95
+   NET $-95.81 (before fees $-29.05)
+   per share -0.0167 [-0.0188,-0.0145]   per window run -0.1663 [-0.1867,-0.1449]
+   spend per window run $5.00; on favourites 81%; return on money spent -3.33%
+
+HELD OUT: 11-19, 11-20
+   windows run 515, traded 515; fills 20825; shares 5090.28  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+   cost $2587.37  fees $59.04  settlement proceeds $2569.31
+   NET $-77.10 (before fees $-18.06)
+   per share -0.0151 [-0.0206,-0.0103]   per window run -0.1497 [-0.2040,-0.1019]
+   spend per window run $5.02; on favourites 82%; return on money spent -2.98%
+
+HELD OUT: 11-11 .. 11-16
+   windows run 1468, traded 1468; fills 62637; shares 14773.03  (SIZE AT THE PRICE NOT OBSERVED: assumed fillable)
+   cost $7174.50  fees $176.32  settlement proceeds $7077.06
+   NET $-273.76 (before fees $-97.44)
+   per share -0.0185 [-0.0202,-0.0168]   per window run -0.1865 [-0.2036,-0.1694]
+   spend per window run $4.89; on favourites 80%; return on money spent -3.82%
+
+per-window spread: fitting sd 0.26 (11% of windows positive); 11-19/20 sd 0.57, worst window -7.23, best +4.99 (15% positive); 11-11..16 sd 0.33, worst -5.82 (13% positive)

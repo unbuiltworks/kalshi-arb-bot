@@ -1,0 +1,32 @@
+{
+  "label": "L5_CAUSAL_MECHANISM_V1_FROZEN",
+  "frozen_utc": "2026-09-17T15:47:02.916648+00:00",
+  "authority": "OWNER 2026-09-17: 'Freeze L5_CAUSAL_MECHANISM_V1; do not tune it.'",
+  "scope": "BTC15m ONLY. Not promoted to any other cohort.",
+  "working_hypothesis": "PASSIVE_QUOTE_SURFACE + weaker state-dependent overlay",
+  "epistemic_status": {
+    "claim": "The observed CONSEQUENCES of the tape are best explained by a multi-level passive quote surface whose side and run sequence are largely set by incoming flow, with a modest state-dependent overlay.",
+    "NOT_a_claim": "That any specific latent quote surface was observed. L5's actual unfilled, resting or cancelled orders are UNOBSERVABLE_OR_UNRESOLVED in every dataset held here, and an inferred surface is NEVER to be labelled an observed L5 order.",
+    "evidence_is_indirect": "P1 clustering, P3 falling-side, P4 rising hazard are consequences of a surface, not sightings of one."
+  },
+  "annotated_not_edited": {
+    "P2_price_walk_within_a_run": "tests a SINGLE-level resting quote; H3 permits a multi-level ladder which predicts the observed 69.5% walk. Declared verdict left as declared.",
+    "P8_timing_depends_on_inventory_or_flow": "UNINFORMATIVE: whole-second stamps, 1s median inter-fill gap. The only test whose verdict failed to replicate across halves. Undecided, not support."
+  },
+  "commit": "45d54b998147ad4d7ef5a8c0f974a79c23269b71",
+  "files": {
+    "analysis/l5/causal/mechanism.py": {
+      "sha256": "e0fb55a59656283fea3a096dde637e0b9dc0291b97a03b94b4055db17811cec0",
+      "bytes": 23870
+    },
+    "analysis/l5/causal/btc15m_mechanism_v1.json": {
+      "sha256": "422db4954c5cc07b6b064635bbb6e2e75fec15945bbb3b141a955ca66dcf9566",
+      "bytes": 12020
+    },
+    "analysis/l5/causal/L5_CAUSAL_MECHANISM_V1.md": {
+      "sha256": "21172ce03177206fb26f1181894c09849d75595e9096aee388e58477451b5733",
+      "bytes": 6639
+    }
+  },
+  "rule": "Evidence. Changing a frozen file is a NEW study, never an edit to this one."
+}

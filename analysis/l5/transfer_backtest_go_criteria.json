@@ -1,0 +1,39 @@
+{
+  "frozen_utc": "2026-09-02T17:40:00Z",
+  "frozen_before_any_aggregate_pnl_was_computed": true,
+  "workstream": "issue #167 comment 5513476177 — historical transfer backtest (Gemini BTC-5m vs Polymarket sports)",
+  "note": "Committed BEFORE the backtest engine was run on any historical sample, so positive hindsight results cannot move these goalposts. All decisions read the CONSERVATIVE (strict-through) fill tier; the optimistic (at-price print-through) tier is an upper bound only and never gates anything. No queue-ignored maker fill is ever labeled realized.",
+  "benchmark_anchor": {
+    "source": "live Railway shadow checkpoint 2026-09-02 ~14:45-15:49 UTC (owner-relayed) + public-tape census this session",
+    "gemini_btc5m_observed": {
+      "qualifying_campaigns": 12,
+      "first_leg_fill_rate": 0.5,
+      "complement_completion_given_first_fill": 0.5,
+      "one_sided_hold_rate_per_campaign": 0.25,
+      "two_sided_in_span_flow_ceiling": 0.57
+    }
+  },
+  "venue_family_go_criteria": {
+    "description": "A venue/category family is a GO candidate for a continuous read-only shadow adapter only if ALL hold under the conservative fill tier, computed on its backtest sample:",
+    "criteria": [
+      "clean_matched_completions_per_day >= 2x the Gemini BTC-5m baseline under the SAME fill assumption and same q=1 one-attempt-per-event mechanics",
+      "one_sided_hold_rate_per_qualifying_campaign <= 1.25x the Gemini BTC-5m baseline",
+      "median completed pair cost including both maker fees <= 0.99 (>= 1c locked edge)",
+      "sample >= 30 qualifying campaigns spanning >= 2 distinct days or independent sessions",
+      "residual tail bounded: no single-event worst-case loss above the first-leg cost at q=1 under the venue's settlement rules"
+    ]
+  },
+  "flow_gate_adoption_criteria": {
+    "description": "A pre-entry trailing two-sided-flow gate (30s/60s/120s variants) is recommended for forward shadow evaluation only if BOTH hold in the backtest:",
+    "criteria": [
+      "one_sided_holds reduced by >= 50% versus no-gate on the same sample",
+      "matched completions lost <= 25% versus no-gate on the same sample"
+    ],
+    "note": "Backtest support alone never changes code; a passing gate goes to forward shadow comparison first."
+  },
+  "labeling_rules": [
+    "All backtest P&L is THEORETICAL; nothing here is realized",
+    "Settlement outcomes inferred from final pre-expiry quotes are labeled outcome_proxy and excluded from P&L when the final mid is inside (0.20, 0.80)",
+    "Data tiers are reported separately: tier1 exact quote+print replay, tier2 print-only flow ceiling, tier3 unavailable"
+  ]
+}

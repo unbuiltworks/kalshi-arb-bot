@@ -1,0 +1,102 @@
+windows with late quotes: 2573   usable: 2572   excluded: {'gap over 8 s': 1}
+outcome known: 2571 (both readings agree on 2543)   readings disagree: 0   no reading: 1
+usable windows by date: {'2026-11-11': 36, '2026-11-12': 288, '2026-11-13': 282, '2026-11-14': 288, '2026-11-15': 288, '2026-11-16': 288, '2026-11-17': 288, '2026-11-18': 288, '2026-11-19': 287, '2026-11-20': 239}
+
+== ask >= 0.97 with <= 30 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   36 known   36 lost   0 (0.00%, <=9.64%; unknown-as-loss <=9.64%)  avg px 0.9781  net +0.0199  at bound -0.0765  worst 0.9909
+    OUT OF SAMPLE              signals  359 fills  359 known  359 lost   5 (1.39%, <=3.22%; unknown-as-loss <=3.22%)  avg px 0.9800  net +0.0042  at bound -0.0140  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   31 known   31 lost   0 (0.00%, <=11.03%; unknown-as-loss <=11.03%)  avg px 0.9716  net +0.0259  at bound -0.0845  worst 0.9909
+    OUT OF SAMPLE              signals  359 fills  247 known  247 lost   5 (2.02%, <=4.65%; unknown-as-loss <=4.65%)  avg px 0.9731  net +0.0044  at bound -0.0221  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   25 known   25 lost   0 (0.00%, <=13.32%; unknown-as-loss <=13.32%)  avg px 0.9744  net +0.0233  at bound -0.1100  worst 0.9909
+    OUT OF SAMPLE              signals  359 fills  153 known  153 lost   5 (3.27%, <=7.42%; unknown-as-loss <=7.42%)  avg px 0.9679  net -0.0032  at bound -0.0451  worst 0.9909
+
+== ask >= 0.97 with <= 20 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   20 fills   20 known   20 lost   0 (0.00%, <=16.11%; unknown-as-loss <=16.11%)  avg px 0.9800  net +0.0181  at bound -0.1430  worst 0.9909
+    OUT OF SAMPLE              signals  181 fills  181 known  181 lost   2 (1.10%, <=3.94%; unknown-as-loss <=3.94%)  avg px 0.9818  net +0.0054  at bound -0.0229  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   20 fills   18 known   18 lost   0 (0.00%, <=17.59%; unknown-as-loss <=17.59%)  avg px 0.9767  net +0.0213  at bound -0.1547  worst 0.9909
+    OUT OF SAMPLE              signals  181 fills   99 known   99 lost   2 (2.02%, <=7.07%; unknown-as-loss <=7.07%)  avg px 0.9587  net +0.0184  at bound -0.0331  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   20 fills   13 known   13 lost   0 (0.00%, <=22.81%; unknown-as-loss <=22.81%)  avg px 0.9738  net +0.0239  at bound -0.2044  worst 0.9909
+    OUT OF SAMPLE              signals  181 fills   47 known   47 lost   2 (4.26%, <=14.25%; unknown-as-loss <=14.25%)  avg px 0.9330  net +0.0213  at bound -0.0814  worst 0.9909
+
+== ask >= 0.97 with <= 10 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals    5 fills    5 known    5 lost   0 (0.00%, <=43.45%; unknown-as-loss <=43.45%)  avg px 0.9860  net +0.0127  at bound -0.4218  worst 0.9909
+    OUT OF SAMPLE              signals   46 fills   46 known   46 lost   0 (0.00%, <=7.71%; unknown-as-loss <=7.71%)  avg px 0.9835  net +0.0150  at bound -0.0621  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals    5 fills    3 known    3 lost   0 (0.00%, <=56.15%; unknown-as-loss <=56.15%)  avg px 0.9733  net +0.0243  at bound -0.5373  worst 0.9909
+    OUT OF SAMPLE              signals   46 fills   14 known   14 lost   0 (0.00%, <=21.53%; unknown-as-loss <=21.53%)  avg px 0.9529  net +0.0434  at bound -0.1724  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals    5 fills    2 known    2 lost   0 (0.00%, <=65.76%; unknown-as-loss <=65.76%)  avg px 0.9050  net +0.0875  at bound -0.5708  worst 0.9909
+    OUT OF SAMPLE              signals   46 fills    5 known    5 lost   0 (0.00%, <=43.45%; unknown-as-loss <=43.45%)  avg px 0.9840  net +0.0145  at bound -0.4200  worst 0.9909
+
+== ask >= 0.95 with <= 30 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   36 known   36 lost   0 (0.00%, <=9.64%; unknown-as-loss <=9.64%)  avg px 0.9708  net +0.0265  at bound -0.0699  worst 0.9909
+    OUT OF SAMPLE              signals  383 fills  383 known  382 lost   7 (1.83%, <=3.73%; unknown-as-loss <=4.07%)  avg px 0.9715  net +0.0075  at bound -0.0115  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   31 known   31 lost   0 (0.00%, <=11.03%; unknown-as-loss <=11.03%)  avg px 0.9710  net +0.0264  at bound -0.0839  worst 0.9909
+    OUT OF SAMPLE              signals  383 fills  283 known  282 lost   7 (2.48%, <=5.03%; unknown-as-loss <=5.48%)  avg px 0.9668  net +0.0055  at bound -0.0202  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   26 known   26 lost   0 (0.00%, <=12.87%; unknown-as-loss <=12.87%)  avg px 0.9727  net +0.0249  at bound -0.1039  worst 0.9909
+    OUT OF SAMPLE              signals  383 fills  208 known  207 lost   7 (3.38%, <=6.81%; unknown-as-loss <=7.40%)  avg px 0.9612  net +0.0019  at bound -0.0329  worst 0.9909
+
+== ask >= 0.98 with <= 30 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   33 fills   33 known   33 lost   0 (0.00%, <=10.43%; unknown-as-loss <=10.43%)  avg px 0.9852  net +0.0135  at bound -0.0908  worst 0.9909
+    OUT OF SAMPLE              signals  326 fills  326 known  326 lost   1 (0.31%, <=1.72%; unknown-as-loss <=1.72%)  avg px 0.9848  net +0.0107  at bound -0.0034  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   33 fills   27 known   27 lost   0 (0.00%, <=12.46%; unknown-as-loss <=12.46%)  avg px 0.9841  net +0.0144  at bound -0.1101  worst 0.9909
+    OUT OF SAMPLE              signals  326 fills  197 known  197 lost   1 (0.51%, <=2.82%; unknown-as-loss <=2.82%)  avg px 0.9789  net +0.0141  at bound -0.0091  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   33 fills   18 known   18 lost   0 (0.00%, <=17.59%; unknown-as-loss <=17.59%)  avg px 0.9833  net +0.0151  at bound -0.1608  worst 0.9909
+    OUT OF SAMPLE              signals  326 fills  113 known  113 lost   1 (0.88%, <=4.84%; unknown-as-loss <=4.84%)  avg px 0.9773  net +0.0118  at bound -0.0278  worst 0.9909
+
+== ask >= 0.99 with <= 30 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   29 fills   29 known   29 lost   0 (0.00%, <=11.70%; unknown-as-loss <=11.70%)  avg px 0.9900  net +0.0091  at bound -0.1079  worst 0.9909
+    OUT OF SAMPLE              signals  237 fills  237 known  237 lost   1 (0.42%, <=2.35%; unknown-as-loss <=2.35%)  avg px 0.9900  net +0.0048  at bound -0.0145  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   29 fills   22 known   22 lost   0 (0.00%, <=14.87%; unknown-as-loss <=14.87%)  avg px 0.9877  net +0.0111  at bound -0.1375  worst 0.9909
+    OUT OF SAMPLE              signals  237 fills  122 known  122 lost   1 (0.82%, <=4.50%; unknown-as-loss <=4.50%)  avg px 0.9811  net +0.0090  at bound -0.0279  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   29 fills   14 known   14 lost   0 (0.00%, <=21.53%; unknown-as-loss <=21.53%)  avg px 0.9850  net +0.0136  at bound -0.2017  worst 0.9909
+    OUT OF SAMPLE              signals  237 fills   53 known   53 lost   1 (1.89%, <=9.94%; unknown-as-loss <=9.94%)  avg px 0.9794  net -0.0002  at bound -0.0808  worst 0.9909
+
+== ask >= 0.90 with <= 30 s left ==
+  delay 0 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   36 known   36 lost   0 (0.00%, <=9.64%; unknown-as-loss <=9.64%)  avg px 0.9561  net +0.0400  at bound -0.0565  worst 0.9909
+    OUT OF SAMPLE              signals  397 fills  397 known  396 lost  17 (4.29%, <=6.77%; unknown-as-loss <=7.05%)  avg px 0.9517  net +0.0011  at bound -0.0238  worst 0.9909
+  delay 1 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   31 known   31 lost   0 (0.00%, <=11.03%; unknown-as-loss <=11.03%)  avg px 0.9587  net +0.0376  at bound -0.0727  worst 0.9909
+    OUT OF SAMPLE              signals  397 fills  331 known  330 lost  17 (5.15%, <=8.09%; unknown-as-loss <=8.43%)  avg px 0.9418  net +0.0020  at bound -0.0280  worst 0.9909
+  delay 2 quote(s):
+    discovery (to 11-12 13:30Z) signals   36 fills   29 known   29 lost   0 (0.00%, <=11.70%; unknown-as-loss <=11.70%)  avg px 0.9641  net +0.0326  at bound -0.0844  worst 0.9909
+    OUT OF SAMPLE              signals  397 fills  270 known  269 lost  17 (6.32%, <=9.89%; unknown-as-loss <=10.29%)  avg px 0.9305  net +0.0014  at bound -0.0355  worst 0.9909
+
+== OUT OF SAMPLE by date: ask >= 0.97, <= 30 s, one quote of delay ==
+    2026-11-11                 signals    0  fills    0  (no known outcomes)
+    2026-11-12                 signals   23 fills   16 known   16 lost   0 (0.00%, <=19.36%; unknown-as-loss <=19.36%)  avg px 0.9794  net +0.0187  at bound -0.1749  worst 0.9909
+    2026-11-13                 signals   45 fills   34 known   34 lost   0 (0.00%, <=10.15%; unknown-as-loss <=10.15%)  avg px 0.9776  net +0.0203  at bound -0.0812  worst 0.9909
+    2026-11-14                 signals   49 fills   35 known   35 lost   1 (2.86%, <=14.53%; unknown-as-loss <=14.53%)  avg px 0.9811  net -0.0115  at bound -0.1282  worst 0.9909
+    2026-11-15                 signals   51 fills   37 known   37 lost   0 (0.00%, <=9.41%; unknown-as-loss <=9.41%)  avg px 0.9708  net +0.0268  at bound -0.0676  worst 0.9909
+    2026-11-16                 signals   49 fills   35 known   35 lost   1 (2.86%, <=14.53%; unknown-as-loss <=14.53%)  avg px 0.9680  net +0.0010  at bound -0.1163  worst 0.9909
+    2026-11-17                 signals   38 fills   26 known   26 lost   0 (0.00%, <=12.87%; unknown-as-loss <=12.87%)  avg px 0.9838  net +0.0147  at bound -0.1141  worst 0.9909
+    2026-11-18                 signals   41 fills   23 known   23 lost   0 (0.00%, <=14.31%; unknown-as-loss <=14.31%)  avg px 0.9674  net +0.0297  at bound -0.1135  worst 0.9909
+    2026-11-19                 signals   36 fills   20 known   20 lost   2 (10.00%, <=30.10%; unknown-as-loss <=30.10%)  avg px 0.9640  net -0.0671  at bound -0.2683  worst 0.9909
+    2026-11-20                 signals   27 fills   21 known   21 lost   1 (4.76%, <=22.67%; unknown-as-loss <=22.67%)  avg px 0.9614  net -0.0122  at bound -0.1916  worst 0.9909
+
+== OUT OF SAMPLE by UTC session: ask >= 0.97, <= 30 s, one quote of delay ==
+    00-08 UTC                  signals  104 fills   71 known   71 lost   1 (1.41%, <=7.56%; unknown-as-loss <=7.56%)  avg px 0.9741  net +0.0097  at bound -0.0520  worst 0.9909
+    08-16 UTC                  signals  122 fills   84 known   84 lost   3 (3.57%, <=9.98%; unknown-as-loss <=9.98%)  avg px 0.9692  net -0.0075  at bound -0.0718  worst 0.9909
+    16-24 UTC                  signals  133 fills   92 known   92 lost   1 (1.09%, <=5.90%; unknown-as-loss <=5.90%)  avg px 0.9759  net +0.0111  at bound -0.0371  worst 0.9909
+
+== OUT OF SAMPLE by how contested the window was at 30 s left ==
+    favourite < 0.90 at 30 s   signals  137 fills   89 known   89 lost   1 (1.12%, <=6.09%; unknown-as-loss <=6.09%)  avg px 0.9688  net +0.0174  at bound -0.0326  worst 0.9909
+    favourite 0.90-0.97        signals  100 fills   78 known   78 lost   0 (0.00%, <=4.69%; unknown-as-loss <=4.69%)  avg px 0.9731  net +0.0246  at bound -0.0225  worst 0.9909
+    favourite >= 0.97          signals  122 fills   80 known   80 lost   4 (5.00%, <=12.16%; unknown-as-loss <=12.16%)  avg px 0.9779  net -0.0299  at bound -0.1016  worst 0.9909

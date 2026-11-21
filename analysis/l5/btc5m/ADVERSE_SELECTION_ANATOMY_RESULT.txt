@@ -1,0 +1,54 @@
+windows 187   fills 4709
+
+1. WHERE THE LOSS APPEARS (side's bid minus the price paid)
+   at the fill  -0.0366 [-0.0386,-0.0347] n=4610 w=187
+   +10 s        -0.0362 [-0.0389,-0.0334] n=4517 w=187
+   +30 s        -0.0356 [-0.0401,-0.0310] n=4262 w=187
+   +60 s        -0.0211 [-0.0289,-0.0134] n=3822 w=187
+   settlement   -0.0337 [-0.0425,-0.0254] n=4709 w=187
+
+2. BEFORE THE QUOTE: last 10 s, this side
+   model p change      -0.0060 [-0.0075,-0.0046] n=4612 w=187
+   book bid change     -0.0045 [-0.0069,-0.0021] n=4506 w=187
+   model minus mid     +0.0122 [+0.0098,+0.0147] n=4709 w=187
+
+3. BETWEEN QUOTE AND FILL
+   model p change      -0.0063 [-0.0071,-0.0055] n=4709 w=187
+   seconds to fill     +3.6556 [+3.5980,+3.7136] n=4709 w=187
+
+4. SPLITS (settlement return | mark +30 s)
+   model already falling >=2c before quote
+      first half  settle -0.0212 [-0.0549,+0.0173] n=848 w=93 | +30s -0.0340 [-0.0501,-0.0182] n=706 w=91
+      second half settle -0.0504 [-0.0756,-0.0243] n=825 w=93 | +30s -0.0402 [-0.0553,-0.0249] n=699 w=93
+   model flat (within 2c) before quote
+      first half  settle -0.0492 [-0.0743,-0.0224] n=766 w=93 | +30s -0.0450 [-0.0614,-0.0299] n=702 w=92
+      second half settle -0.0268 [-0.0528,+0.0011] n=838 w=94 | +30s -0.0430 [-0.0540,-0.0325] n=773 w=94
+   model rising >=2c before quote
+      first half  settle -0.0353 [-0.0671,-0.0045] n=698 w=93 | +30s -0.0304 [-0.0447,-0.0161] n=672 w=93
+      second half settle -0.0052 [-0.0304,+0.0201] n=637 w=93 | +30s -0.0191 [-0.0349,-0.0040] n=614 w=93
+   model BELOW mid by >=3c at quote
+      first half  settle -0.0372 [-0.0862,+0.0122] n=794 w=93 | +30s -0.0231 [-0.0374,-0.0076] n=780 w=93
+      second half settle +0.0050 [-0.0481,+0.0553] n=790 w=92 | +30s -0.0326 [-0.0529,-0.0150] n=780 w=92
+   model within 3c of mid at quote
+      first half  settle -0.0692 [-0.1075,-0.0328] n=545 w=88 | +30s -0.0364 [-0.0555,-0.0189] n=482 w=87
+      second half settle -0.0762 [-0.1166,-0.0369] n=498 w=87 | +30s -0.0388 [-0.0570,-0.0211] n=450 w=85
+   model ABOVE mid by >=3c at quote
+      first half  settle -0.0011 [-0.0478,+0.0503] n=1011 w=93 | +30s -0.0451 [-0.0589,-0.0305] n=855 w=92
+      second half settle -0.0348 [-0.0811,+0.0144] n=1071 w=93 | +30s -0.0350 [-0.0500,-0.0179] n=915 w=93
+   filled within 4 s
+      first half  settle -0.0409 [-0.0626,-0.0177] n=1226 w=93 | +30s -0.0341 [-0.0446,-0.0230] n=1121 w=93
+      second half settle -0.0418 [-0.0669,-0.0176] n=1244 w=94 | +30s -0.0353 [-0.0462,-0.0241] n=1154 w=94
+   filled after 4-10 s
+      first half  settle -0.0250 [-0.0453,-0.0031] n=1124 w=93 | +30s -0.0314 [-0.0412,-0.0219] n=996 w=92
+      second half settle -0.0322 [-0.0525,-0.0117] n=1115 w=94 | +30s -0.0404 [-0.0520,-0.0297] n=991 w=94
+   model fell >=2c between quote and fill
+      first half  settle -0.0371 [-0.0682,-0.0059] n=631 w=92 | +30s -0.0665 [-0.0810,-0.0529] n=537 w=92
+      second half settle -0.0647 [-0.1016,-0.0286] n=488 w=93 | +30s -0.0520 [-0.0713,-0.0323] n=419 w=93
+   model did not fall between quote and fill
+      first half  settle -0.0294 [-0.0458,-0.0119] n=1719 w=93 | +30s -0.0232 [-0.0307,-0.0151] n=1580 w=93
+      second half settle -0.0356 [-0.0495,-0.0228] n=1871 w=94 | +30s -0.0385 [-0.0463,-0.0315] n=1726 w=94
+
+5. THE 26 REAL FILLS (two live windows, 2026-11-20): side's bid at the step that reported the fill, and later, minus the fill price
+   1420z  fills 5  mark at report -0.0342 (n=5)  mark +30 s -0.0679 (n=5)  settlement -0.0300   [share-weighted, per share]
+   1705z  fills 21  mark at report -0.0172 (n=20)  mark +30 s -0.0020 (n=17)  settlement -0.0120   [share-weighted, per share]
+   The lane polls about every 6 s, so 'at report' is up to 6 s after the fill. 26 fills in 2 windows: an observation, not an estimate.

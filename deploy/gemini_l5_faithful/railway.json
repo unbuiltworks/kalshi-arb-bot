@@ -1,0 +1,33 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_l5_faithful/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_l5_faithful/**",
+      "src/gemini_execution/continuous_probe.py",
+      "src/gemini_execution/continuous_runner.py",
+      "src/gemini_execution/contract_cohort.py",
+      "src/gemini_execution/hypothetical.py",
+      "src/gemini_execution/tape_replay.py",
+      "src/gemini_execution/metadata.py",
+      "src/gemini_execution/shadow_soak.py",
+      "src/l5_surface/*.py",
+      "artifacts/l5_surface/*.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.gemini_execution.shadow_soak --cohorts btc5m,btc15m --policy FROZEN_L5_NATIVE --windows 0 --cycles 110 --interval 8.0 --state-root /state/gemini-l5-faithful",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "SHADOW / DISARMED. L5_CONTINUOUS_FAITHFUL: the frozen L5 process run UNMODIFIED on Gemini BTC5m and BTC15m. No order path, no authorization id, no arming env, no session; mutations_sent is 0 on every window by construction.",
+  "_what_changed_from_gemini_econ_shadow": "TWO SETTINGS AND NOTHING ELSE. --policy FROZEN_L5_NATIVE instead of GEMINI_RECYCLE, and GEMINI_ECON_ARM=0. No strategy code is added, removed or tuned; every module is the one already in the tree.",
+  "_why_this_service_exists": "An independent review found we had never tested the L5 continuous inventory process on Gemini, only adaptations of it. That is correct, and the repository localises it to one argument: tape_replay POLICY_B (GEMINI_RECYCLE) vetoes the EXTEND the frozen policy asks for as soon as any residual exists. L5's own evidence puts P(next action = EXTEND) at 0.66 with 84.3% of imbalance episodes overshooting THROUGH zero, so that veto suppresses the dominant action of the process being replicated. shadow_soak --policy already DEFAULTS to FROZEN_L5_NATIVE; every Gemini service we run had explicitly overridden it.",
+  "_behaviour_restored": "OPEN, same-side EXTEND, repeated EXTEND, COMPLETE by acquiring the opposite side, overshoot through balance, and continued trading after balance. Nothing stops the process after one matched pair. extends_vetoed, which POLICY_B increments, is 0 here by construction and is the A/B against gemini-econ-shadow.",
+  "_risk_not_relaxed": "continuous_probe.risk_gates is UNTOUCHED: imbalance <= 0.04, YES <= 0.10, NO <= 0.10, total spend <= 0.15, and would_breach still refuses to rest an order that could not be afforded if filled. Behavioural fidelity is not unlimited risk. The end-of-window floors (NO_NEW_OPEN_EXTEND below TTE 60, WITHDRAW_ALL below TTE 30) are kept and are declared an ASSUMPTION, not an L5 finding -- continuous_probe.py states the lane set's own TTE_policy is [0, 300] with tte_floor_s 0.",
+  "_fill_model": "hypothetical.HypotheticalBook with QUEUE_SYMMETRIC, rows stamped CORRECTED_QUEUE_V1. Side symmetry is a property test, not an assertion: 83 inversion assertions over a self-mirrored book in tests/test_gemini_fill_model_side_swap.py, plus a test that reconstructs the pre-1e3159e defect and shows it would be caught.",
+  "_state_isolation": "Its own state root, /state/gemini-l5-faithful. gemini-maker-shadow (the control, a44de245) and gemini-econ-shadow are both left exactly as they are and keep running.",
+  "_prospective": "The policy is frozen in the tree and is not tuned here. Windows recorded from this service's first deploy onward are the PROSPECTIVE set; anything replayed over earlier tape is retrospective and must be reported separately.",
+  "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade."
+}

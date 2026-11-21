@@ -1,0 +1,124 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-18T17:37:05.335926+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "bundle_sha": "7e31d5c305f3b0c1695e3b2dbe38162ca63acf60efa6bfbc7dfb979c0ff6e0b4",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609181740-UP",
+      "tte_s": 174.66242814064026,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609181740-UP",
+        "tte_s": 174.66242814064026,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 12,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 12,
+    "budget_note": "max(ledger 12, venue 0): a disagreement is always read upward",
+    "budget_left": 0
+  },
+  "authorization": {
+    "authorized": false,
+    "required_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+    "authorized_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+    "executable_sha": "842685116fb95c7917b5ec286c12ee3d3da61ccc76d8560069b89e6c9b506ad4",
+    "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "arming": {
+      "armed": false,
+      "live_flag": false,
+      "auth_id_present": false,
+      "auth_id_matches": false,
+      "expiry_supplied": false,
+      "expired": null,
+      "expected_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "why_not": "GEMINI_CANARY_LIVE is not YES"
+    },
+    "why_not": [
+      "transport arm: GEMINI_CANARY_LIVE is not YES"
+    ],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "state": "READY_TO_MUTATE_BUT_UNAUTHORIZED",
+  "why": "not authorized: transport arm: GEMINI_CANARY_LIVE is not YES",
+  "latch": {
+    "consumed": false,
+    "why": "authorization was refused BEFORE the latch was spent; the authorization is untouched"
+  },
+  "finished_utc": "2026-09-18T17:37:07.740303+00:00"
+}

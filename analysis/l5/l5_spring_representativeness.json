@@ -1,0 +1,458 @@
+{
+ "labels": "READ-ONLY research on the canonical L5 sequence; no gate, admission, execution, or risk change; REPLICATION-fidelity metrics, not executable-economics guarantees",
+ "denominators": {
+  "windows_with_any_buy": 2216,
+  "buy_actions": 71982,
+  "post_open_buy_actions": 69766,
+  "total_buy_notional_usd": 728502.07
+ },
+ "entry_price_bands": {
+  "45-55": {
+   "window_opens_in_band": 524,
+   "window_opens_frac": 0.2365,
+   "buy_actions_in_band": 7564,
+   "buy_actions_frac": 0.1051
+  },
+  "40-60": {
+   "window_opens_in_band": 856,
+   "window_opens_frac": 0.3863,
+   "buy_actions_in_band": 14334,
+   "buy_actions_frac": 0.1991
+  },
+  "35-65": {
+   "window_opens_in_band": 1143,
+   "window_opens_frac": 0.5158,
+   "buy_actions_in_band": 20941,
+   "buy_actions_frac": 0.2909
+  },
+  "30-70": {
+   "window_opens_in_band": 1391,
+   "window_opens_frac": 0.6277,
+   "buy_actions_in_band": 27897,
+   "buy_actions_frac": 0.3876
+  },
+  "25-75": {
+   "window_opens_in_band": 1563,
+   "window_opens_frac": 0.7053,
+   "buy_actions_in_band": 35317,
+   "buy_actions_frac": 0.4906
+  }
+ },
+ "pair_cost_and_latency_by_stream": {
+  "ALL": {
+   "windows": 2216,
+   "matched_windows": 1610,
+   "matched_frac": 0.7265,
+   "pair_cost_cdf": {
+    "le_0.94": 0.3584,
+    "le_0.96": 0.4516,
+    "le_0.98": 0.5391,
+    "le_1.00": 0.6118,
+    "le_1.02": 0.6646
+   },
+   "pair_cost_p50": 0.9705,
+   "completion_latency": {
+    "n": 1610,
+    "p50_s": 53.5,
+    "p90_s": 166.0,
+    "gt_30s": 0.6584,
+    "gt_60s": 0.4491,
+    "gt_120s": 0.2056
+   }
+  },
+  "BTC-15m": {
+   "windows": 527,
+   "matched_windows": 506,
+   "matched_frac": 0.9602,
+   "pair_cost_cdf": {
+    "le_0.94": 0.2826,
+    "le_0.96": 0.4723,
+    "le_0.98": 0.6482,
+    "le_1.00": 0.7767,
+    "le_1.02": 0.8656
+   },
+   "pair_cost_p50": 0.9634,
+   "completion_latency": {
+    "n": 506,
+    "p50_s": 26.0,
+    "p90_s": 120.0,
+    "gt_30s": 0.4308,
+    "gt_60s": 0.2332,
+    "gt_120s": 0.0968
+   }
+  },
+  "BTC-5m": {
+   "windows": 957,
+   "matched_windows": 795,
+   "matched_frac": 0.8307,
+   "pair_cost_cdf": {
+    "le_0.94": 0.395,
+    "le_0.96": 0.4541,
+    "le_0.98": 0.5069,
+    "le_1.00": 0.5635,
+    "le_1.02": 0.6063
+   },
+   "pair_cost_p50": 0.9763,
+   "completion_latency": {
+    "n": 795,
+    "p50_s": 66.0,
+    "p90_s": 165.0,
+    "gt_30s": 0.7761,
+    "gt_60s": 0.5384,
+    "gt_120s": 0.2377
+   }
+  },
+  "ETH-15m": {
+   "windows": 29,
+   "matched_windows": 13,
+   "matched_frac": 0.4483,
+   "pair_cost_cdf": {
+    "le_0.94": 0.0769,
+    "le_0.96": 0.2308,
+    "le_0.98": 0.2308,
+    "le_1.00": 0.3077,
+    "le_1.02": 0.3077
+   },
+   "pair_cost_p50": 1.2334,
+   "completion_latency": {
+    "n": 13,
+    "p50_s": 318.0,
+    "p90_s": 571.0,
+    "gt_30s": 1.0,
+    "gt_60s": 0.8462,
+    "gt_120s": 0.7692
+   }
+  },
+  "ETH-5m": {
+   "windows": 703,
+   "matched_windows": 296,
+   "matched_frac": 0.4211,
+   "pair_cost_cdf": {
+    "le_0.94": 0.402,
+    "le_0.96": 0.4189,
+    "le_0.98": 0.4527,
+    "le_1.00": 0.473,
+    "le_1.02": 0.4932
+   },
+   "pair_cost_p50": 1.0263,
+   "completion_latency": {
+    "n": 296,
+    "p50_s": 70.0,
+    "p90_s": 189.0,
+    "gt_30s": 0.7162,
+    "gt_60s": 0.5608,
+    "gt_120s": 0.2804
+   }
+  }
+ },
+ "post_first_side_behavior": {
+  "by_price_band": {
+   "45-55": {
+    "n_actions": 7040,
+    "extend_frac": 0.4866,
+    "complete_frac": 0.5091
+   },
+   "40-60": {
+    "n_actions": 13478,
+    "extend_frac": 0.4886,
+    "complete_frac": 0.5073
+   },
+   "35-65": {
+    "n_actions": 19798,
+    "extend_frac": 0.4917,
+    "complete_frac": 0.5041
+   },
+   "30-70": {
+    "n_actions": 26506,
+    "extend_frac": 0.4955,
+    "complete_frac": 0.5006
+   },
+   "25-75": {
+    "n_actions": 33754,
+    "extend_frac": 0.4956,
+    "complete_frac": 0.5008
+   }
+  },
+  "by_tte": {
+   "tte_gt_120s": {
+    "n_actions": 58304,
+    "extend_frac": 0.5048,
+    "complete_frac": 0.4924
+   },
+   "tte_30_120s": {
+    "n_actions": 10615,
+    "extend_frac": 0.5355,
+    "complete_frac": 0.4604
+   },
+   "tte_lt_30s": {
+    "n_actions": 847,
+    "extend_frac": 0.5455,
+    "complete_frac": 0.4534
+   }
+  },
+  "by_imbalance": {
+   "imb_le_1u": {
+    "n_actions": 13634,
+    "extend_frac": 0.5038,
+    "complete_frac": 0.4809
+   },
+   "imb_gt_1u": {
+    "n_actions": 56132,
+    "extend_frac": 0.5114,
+    "complete_frac": 0.4886
+   }
+  }
+ },
+ "current_strict_gate_replay_45_55_le096": {
+  "eligible_windows": 524,
+  "eligible_frac_of_windows": 0.2365,
+  "completed_windows": 220,
+  "completion_rate_of_eligible": 0.4198,
+  "completions_per_day": 1.33,
+  "share_of_buy_notional": 0.1988,
+  "share_of_buy_actions": 0.2344,
+  "complete_relation_frac_in_eligible": 0.4887,
+  "repeated_ge2_within_hour_streams": 3,
+  "repeated_ge3_within_hour_streams": 2,
+  "per_stream_repetition": {
+   "BTC-15m": {
+    "completions": 136,
+    "max_completions_in_any_60min": 4
+   },
+   "BTC-5m": {
+    "completions": 67,
+    "max_completions_in_any_60min": 4
+   },
+   "ETH-15m": {
+    "completions": 1,
+    "max_completions_in_any_60min": 1
+   },
+   "ETH-5m": {
+    "completions": 16,
+    "max_completions_in_any_60min": 2
+   }
+  }
+ },
+ "evidence_grid": {
+  "45-55|le_0.94": {
+   "eligible_windows": 524,
+   "completed_windows": 164,
+   "completion_rate_of_eligible": 0.313,
+   "completions_per_day": 0.99,
+   "share_of_buy_notional": 0.096,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 2,
+   "mean_pair_cost": 0.8326,
+   "mean_end_residual_abs": 151.3967
+  },
+  "45-55|le_0.96": {
+   "eligible_windows": 524,
+   "completed_windows": 220,
+   "completion_rate_of_eligible": 0.4198,
+   "completions_per_day": 1.33,
+   "share_of_buy_notional": 0.1988,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 2,
+   "mean_pair_cost": 0.8625,
+   "mean_end_residual_abs": 151.3967
+  },
+  "45-55|le_0.98": {
+   "eligible_windows": 524,
+   "completed_windows": 262,
+   "completion_rate_of_eligible": 0.5,
+   "completions_per_day": 1.58,
+   "share_of_buy_notional": 0.2821,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 2,
+   "mean_pair_cost": 0.8796,
+   "mean_end_residual_abs": 151.3967
+  },
+  "45-55|le_1.00": {
+   "eligible_windows": 524,
+   "completed_windows": 303,
+   "completion_rate_of_eligible": 0.5782,
+   "completions_per_day": 1.83,
+   "share_of_buy_notional": 0.3636,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 2,
+   "mean_pair_cost": 0.8945,
+   "mean_end_residual_abs": 151.3967
+  },
+  "40-60|le_0.94": {
+   "eligible_windows": 856,
+   "completed_windows": 257,
+   "completion_rate_of_eligible": 0.3002,
+   "completions_per_day": 1.55,
+   "share_of_buy_notional": 0.1447,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8277,
+   "mean_end_residual_abs": 145.9309
+  },
+  "40-60|le_0.96": {
+   "eligible_windows": 856,
+   "completed_windows": 345,
+   "completion_rate_of_eligible": 0.403,
+   "completions_per_day": 2.08,
+   "share_of_buy_notional": 0.3046,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8589,
+   "mean_end_residual_abs": 145.9309
+  },
+  "40-60|le_0.98": {
+   "eligible_windows": 856,
+   "completed_windows": 419,
+   "completion_rate_of_eligible": 0.4895,
+   "completions_per_day": 2.53,
+   "share_of_buy_notional": 0.4463,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8784,
+   "mean_end_residual_abs": 145.9309
+  },
+  "40-60|le_1.00": {
+   "eligible_windows": 856,
+   "completed_windows": 479,
+   "completion_rate_of_eligible": 0.5596,
+   "completions_per_day": 2.89,
+   "share_of_buy_notional": 0.5677,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8923,
+   "mean_end_residual_abs": 145.9309
+  },
+  "35-65|le_0.94": {
+   "eligible_windows": 1143,
+   "completed_windows": 341,
+   "completion_rate_of_eligible": 0.2983,
+   "completions_per_day": 2.06,
+   "share_of_buy_notional": 0.1771,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8222,
+   "mean_end_residual_abs": 131.4868
+  },
+  "35-65|le_0.96": {
+   "eligible_windows": 1143,
+   "completed_windows": 445,
+   "completion_rate_of_eligible": 0.3893,
+   "completions_per_day": 2.69,
+   "share_of_buy_notional": 0.3563,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8522,
+   "mean_end_residual_abs": 131.4868
+  },
+  "35-65|le_0.98": {
+   "eligible_windows": 1143,
+   "completed_windows": 537,
+   "completion_rate_of_eligible": 0.4698,
+   "completions_per_day": 3.24,
+   "share_of_buy_notional": 0.5262,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8724,
+   "mean_end_residual_abs": 131.4868
+  },
+  "35-65|le_1.00": {
+   "eligible_windows": 1143,
+   "completed_windows": 611,
+   "completion_rate_of_eligible": 0.5346,
+   "completions_per_day": 3.69,
+   "share_of_buy_notional": 0.6648,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8866,
+   "mean_end_residual_abs": 131.4868
+  },
+  "30-70|le_0.94": {
+   "eligible_windows": 1391,
+   "completed_windows": 410,
+   "completion_rate_of_eligible": 0.2948,
+   "completions_per_day": 2.48,
+   "share_of_buy_notional": 0.186,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8213,
+   "mean_end_residual_abs": 123.6381
+  },
+  "30-70|le_0.96": {
+   "eligible_windows": 1391,
+   "completed_windows": 529,
+   "completion_rate_of_eligible": 0.3803,
+   "completions_per_day": 3.2,
+   "share_of_buy_notional": 0.3724,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8503,
+   "mean_end_residual_abs": 123.6381
+  },
+  "30-70|le_0.98": {
+   "eligible_windows": 1391,
+   "completed_windows": 633,
+   "completion_rate_of_eligible": 0.4551,
+   "completions_per_day": 3.82,
+   "share_of_buy_notional": 0.5551,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.87,
+   "mean_end_residual_abs": 123.6381
+  },
+  "30-70|le_1.00": {
+   "eligible_windows": 1391,
+   "completed_windows": 715,
+   "completion_rate_of_eligible": 0.514,
+   "completions_per_day": 4.32,
+   "share_of_buy_notional": 0.7013,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8837,
+   "mean_end_residual_abs": 123.6381
+  },
+  "25-75|le_0.94": {
+   "eligible_windows": 1563,
+   "completed_windows": 462,
+   "completion_rate_of_eligible": 0.2956,
+   "completions_per_day": 2.79,
+   "share_of_buy_notional": 0.1946,
+   "repeated_ge2_within_hour_streams": 3,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8174,
+   "mean_end_residual_abs": 117.8865
+  },
+  "25-75|le_0.96": {
+   "eligible_windows": 1563,
+   "completed_windows": 589,
+   "completion_rate_of_eligible": 0.3768,
+   "completions_per_day": 3.56,
+   "share_of_buy_notional": 0.3827,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.846,
+   "mean_end_residual_abs": 117.8865
+  },
+  "25-75|le_0.98": {
+   "eligible_windows": 1563,
+   "completed_windows": 703,
+   "completion_rate_of_eligible": 0.4498,
+   "completions_per_day": 4.25,
+   "share_of_buy_notional": 0.5706,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8661,
+   "mean_end_residual_abs": 117.8865
+  },
+  "25-75|le_1.00": {
+   "eligible_windows": 1563,
+   "completed_windows": 790,
+   "completion_rate_of_eligible": 0.5054,
+   "completions_per_day": 4.77,
+   "share_of_buy_notional": 0.7179,
+   "repeated_ge2_within_hour_streams": 4,
+   "repeated_ge3_within_hour_streams": 3,
+   "mean_pair_cost": 0.8798,
+   "mean_end_residual_abs": 117.8865
+  }
+ }
+}

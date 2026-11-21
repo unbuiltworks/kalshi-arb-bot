@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_volume": "MUST share the campaign's durable mount so the activation record it writes is the one the probe reads. Mount the SAME volume the probe uses for its state dir; a record written anywhere else activates nothing.",
+  "_credentials": "This service performs AUTHENTICATED READS ONLY (venue positions, open orders, settlements) and holds NO order path. Provide the venue credentials by Railway variable REFERENCE to the probe service, never by copying a secret value.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_boundary_transition/Dockerfile",
+    "watchPatterns": [
+      "deploy/pmus_boundary_transition/**",
+      "src/pmus_boundary_transition.py",
+      "src/pmus_boundary_preflight.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.pmus_boundary_transition",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

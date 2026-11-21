@@ -1,0 +1,44 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_service": "l5-shadow-loop",
+  "_role": "READ-ONLY 24/7 L5 shadow research (issue #167 comment 5574408755 item 5). Separate process and image from the WS evidence recorder, the sports collector, the spring probe, the Gemini shadow and the l5-ops research service. It NEVER writes the frozen model/lookup/spec; it writes proposals that REQUIRE an owner decision.",
+  "_credentials": "NONE. This service holds no trading credentials, no exchange key, no wallet key and no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret. Its only network use is the public, keyless L5 activity endpoint the existing collector (src/polymarket_l5/ops.py SOURCES) already reads. If that collector ever requires a key, the ONLY thing to add here is the env var NAME it documents (none today) -- never a value in this file.",
+  "_volume": "Mount a dedicated volume at /data/l5_shadow (L5_SHADOW_STATE_DIR). Do NOT reuse /state/pmus-ws (recorder), /state/pmus-sports (collector) or /state/pmus-spring (probe). Everything the loop writes (collector cursor + day files under ops/, heartbeat.json, alarms/, proposals/, tally_latest.json, notes.jsonl, failures/) lives on this volume only.",
+  "_pin": "Set the service variable RAILWAY_DOCKERFILE_PATH=/deploy/l5_shadow/Dockerfile on this service (deploy/RAILWAY_ISOLATION.md pattern) so a branch push can never cross-build it with another service.",
+  "_watch_note": "watchPatterns name src/pmus_progress_tape.py and src/pmus_event_progress.py EXPLICITLY -- the two files this service now reads for the sports event-progress tape -- but still exclude src/polymarket_l5/** and every OTHER src/pmus_*.py: a change there redeploys the live probe/recorder, and this research service must never be a reason to touch them. It rebuilds only when its own loop, the drift/scoring helpers or this deploy dir change.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_shadow/Dockerfile",
+    "watchPatterns": [
+      "src/l5_shadow_loop.py",
+      "src/l5_shadow_state.py",
+      "deploy/l5_shadow/**",
+      "src/l5_model_drift_check.py",
+      "src/l5_shadow_scoring.py",
+      "src/pmus_progress_tape.py",
+      "src/pmus_event_progress.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_shadow_loop",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "_env": {
+    "L5_SHADOW_STATE_DIR": "/data/l5_shadow",
+    "L5_SHADOW_INTERVAL_S": "300",
+    "L5_SHADOW_WINDOW_DAYS": "14",
+    "L5_SHADOW_MAX_ROWS": "200000",
+    "L5_SHADOW_MIN_DECISIONS": "200",
+    "L5_SHADOW_MIN_AGREEMENT": "0.55",
+    "L5_SHADOW_STATE_SHIFT_L1": "0.40",
+    "L5_SHADOW_DRIFT_WEIGHTED_L1": "0.10",
+    "L5_SHADOW_OFF_DIST_MAX_PCT": "5.0",
+    "L5_SHADOW_STALE_S": "21600",
+    "L5_SHADOW_MAX_RSS_MB": "1500",
+    "L5_SHADOW_HOLDOUT_DAYS": "3",
+    "L5_SHADOW_PROPOSAL_MIN_GAP_S": "86400",
+    "L5_SHADOW_EXPECTED_MODEL_SHA": "bbb55bf90638d2bd",
+    "_note": "defaults are baked in src/l5_shadow_loop.py DEFAULTS; set here only to override. See analysis/l5/L5_SHADOW_ARCHITECTURE.md for the meaning of each threshold."
+  }
+}

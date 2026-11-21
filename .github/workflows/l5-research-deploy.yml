@@ -1,0 +1,65 @@
+name: L5 Research Deploy
+
+on:
+  push:
+    branches:
+      - feature/l5-canonical
+    paths:
+      - 'src/polymarket_l5/**'
+      - 'research/**'
+      - 'scripts/l5_ops_runner.sh'
+      - 'analysis/l5/l5_behavior.json'
+      - 'analysis/l5/l5_action_model.json'
+      - 'analysis/l5/l5_canonical_sequence.csv.gz'
+      - 'analysis/l5/l5_canonical_sequence.meta.json'
+      - 'railway.json'
+      - '.github/workflows/l5-research-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l5-research-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-read-only-research:
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      PROJECT_ID: 50fb7357-e2bc-4d04-a49e-71eb5d73b0d1
+      ENVIRONMENT_ID: f3642d27-26dc-4e21-9170-bc76290c076f
+      SERVICE_ID: b215191e-5aea-4e37-8249-8dd9a184419b
+      OPS_MOUNT: /app/data/l5/ops
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify isolated research build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "feature/l5-canonical"
+          test -f research/Dockerfile
+          grep -q 'research/Dockerfile' railway.json
+          grep -q 'scripts/l5_ops_runner.sh' research/Dockerfile
+          if grep -Eq 'GEMINI_API|KALSHI_API|POLYMARKET.*(KEY|SECRET)|BOT_MODE.*live' research/Dockerfile; then
+            echo 'STOP: trading credential/arming reference found in research image'
+            exit 1
+          fi
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Ensure durable research volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLS="$(railway volume list --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" --service "$SERVICE_ID" --json 2>/dev/null || printf '[]')"
+          if printf '%s' "$VOLS" | grep -Fq "$OPS_MOUNT"; then
+            echo "Research volume already mounted at $OPS_MOUNT"
+          else
+            railway volume add --mount-path "$OPS_MOUNT" --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" --service "$SERVICE_ID" --json
+          fi
+
+      - name: Deploy read-only L5 collector/shadow
+        run: railway up --service "$SERVICE_ID" --detach

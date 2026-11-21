@@ -1,0 +1,88 @@
+{
+ "hb_log_ts": "2026-11-20T03:56:35.611327180Z",
+ "hb_utc": "2026-11-20T03:56:31.105775+00:00",
+ "equity_baseline": {
+  "state": "ON",
+  "baseline_id": "baseline-20261120T0338Z-prior-limit-15usd",
+  "baseline_at_utc": "2026-11-20T03:38:22+00:00",
+  "baseline_equity_usd": "321.4782",
+  "max_drawdown_usd": "1.00",
+  "historical": {
+   "ledger_realized_usd": "-39.4680",
+   "prior_drawdown_usd": "15.2018",
+   "prior_anchor_usd": "336.68"
+  },
+  "equity_now_usd": "321.4782",
+  "net_transfers_usd": "0",
+  "transfers": {
+   "net_usd": "0",
+   "why": null,
+   "rows_before_baseline": 17,
+   "read": {
+    "by": "END_OF_FEED",
+    "pages": 234,
+    "age_s": 160.2,
+    "last_error": null,
+    "complete_back_to": "1970-01-01T00:00:00+00:00"
+   }
+  },
+  "period_change_usd": "0.0000",
+  "drawdown_usd": "0.0000",
+  "room_usd": "1.00",
+  "refusal": null,
+  "labels": "equity = buying power + min(UP,DOWN) per market; an unmatched contract counts 0. period_change is equity now, less the baseline, less deposits net of withdrawals since it. `historical` is the record the baseline starts after; it is preserved, not erased, and the cumulative loss ceiling is a separate limit this does not touch.",
+  "period": {
+   "since_utc": "2026-11-20T03:38:22+00:00",
+   "measured_realized_usd": "0",
+   "measured_rows": 0,
+   "uncertain_rows": 0,
+   "uncertain_booked_bound_usd": "0",
+   "uncertain_markets": [],
+   "unreadable_rows": 0,
+   "complete": true,
+   "labels": "measured_realized counts only rows whose cost came from fills. uncertain_booked_bound is what the ledger booked for rows it could not cost; it is a bound, it is NOT in measured_realized, and it is neither a confirmed loss nor a confirmed profit."
+  }
+ },
+ "portfolio_drawdown": {
+  "state": "ON",
+  "worst_case_value_usd": "321.4782",
+  "anchor_usd": "321.4782",
+  "max_drawdown_usd": "1.00",
+  "drawdown_usd": "0.0000",
+  "room_usd": "1.0000",
+  "refusal": null,
+  "labels": "value = buying power + min(UP,DOWN) per market; unmatched contracts and resting-order holds count 0. Anchor moves only when the owner updates L5_PORTFOLIO_ANCHOR_USD for a deposit or withdrawal."
+ },
+ "day_realized": {
+  "utc_day": "2026-11-20",
+  "utc_day_realized_usd": "0",
+  "halt_usd": "50",
+  "would_halt": false,
+  "room_usd": "50",
+  "all_time_realized_usd": "-39.46800000",
+  "unattributed_usd": "0",
+  "undated_settlements": [],
+  "labels": "the DAILY ceiling reads utc_day_realized_usd; the separate cumulative ceilings read all_time_realized_usd. None is UNKNOWN and refuses at the gate -- it is never read as zero."
+ },
+ "realized": {
+  "realized_attributed": "-39.46800000",
+  "realized_unattributed": "0",
+  "realized_total": "-39.46800000",
+  "legacy_realized_today": "-118.15160000"
+ },
+ "limits": {
+  "max_usd_per_market": "20",
+  "max_abs_residual": "10",
+  "max_total_exposure_usd": "3.00",
+  "max_concurrent_markets": 1,
+  "max_live_orders": 6,
+  "daily_realized_loss_halt_usd": "50",
+  "band": null
+ },
+ "available_cash": {
+  "usd": "321.4782",
+  "age_s": 0.0,
+  "source": "/v1/account/balances",
+  "labels": "None is no reading, never unlimited. A number only ADDS a refusal to the cash gate."
+ }
+}

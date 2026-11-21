@@ -1,0 +1,2512 @@
+diff --git a/deploy/l5_pmus_live/Dockerfile b/deploy/l5_pmus_live/Dockerfile
+index 459e4969d..a9cee341f 100644
+--- a/deploy/l5_pmus_live/Dockerfile
++++ b/deploy/l5_pmus_live/Dockerfile
+@@ -194,6 +194,10 @@ COPY src/l5_venue_cost_diagnostic.py src/l5_venue_cost_diagnostic.py
+ COPY src/l5_equity_baseline.py src/l5_equity_baseline.py
+ COPY src/l5_equity_feed.py src/l5_equity_feed.py
+ COPY src/l5_venue_superset_correction.py src/l5_venue_superset_correction.py
++# Lazily imported by Runner.maybe_report_venue_basis / venue_basis_lines
++# (guarded). Report only; OFF unless L5_VENUE_BASIS=REPORT.
++COPY src/l5_venue_basis.py src/l5_venue_basis.py
++COPY src/l5_venue_basis_report.py src/l5_venue_basis_report.py
+ COPY config/venue_superset_manifest_20261120.json config/venue_superset_manifest_20261120.json
+ # The blocked-arm switch gate, called from the HEARTBEAT when
+ # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
+diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
+index 378fd862c..1e612a56f 100644
+--- a/src/l5_equity_feed.py
++++ b/src/l5_equity_feed.py
+@@ -122,6 +122,22 @@ class TransferWatch:
+         self.last_error = None
+         self.reads += 1
+ 
++    def progress(self, now: float) -> Dict[str, Any]:
++        """WHERE THE READ IS, for an operator. Reporting only: nothing
++        reads this to decide anything, and `view` is unchanged.
++
++        Until a read finishes `view` says NOT_READ_YET with no page count,
++        which from outside is indistinguishable from a read that never
++        started or has stalled -- seen on 2026-11-21, when a restart's
++        eleven-minute read looked for all of it exactly like a hung one.
++        """
++        w = self._walk
++        return {"walking": w is not None,
++                "pages_this_walk": None if w is None else int(w["pages"]),
++                "reads_completed": int(self.reads),
++                "backing_off_s": round(max(0.0, self.next_allowed - now), 1),
++                "last_error": self.last_error}
++
+     def view(self, since: dt.datetime, now: float) -> Dict[str, Any]:
+         """What `net_transfers` reads. Never raises; stale or absent is a
+         result with `complete_back_to` None, which refuses."""
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index fc3a936ec..f2dc7c491 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -2975,6 +2975,14 @@ class Runner:
+                                  {k: seen.get(k) for k in
+                                   ("by", "pages", "age_s", "last_error",
+                                    "complete_back_to")})
++                #: reporting only; `net_usd` and `why` above decide
++                try:
++                    moved["progress"] = (None if watch is None
++                                         else watch.progress(t))
++                except BaseException as exc:                   # noqa: BLE001
++                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                        raise
++                    moved["progress"] = None
+                 period = EB.period_realized(
+                     self.store.state.get("retired_markets") or {},
+                     doc["at_utc"])
+@@ -3077,6 +3085,43 @@ class Runner:
+                     "labels": "attestation telemetry unavailable; the $1 "
+                               "bound stays wherever it was"}
+ 
++    def maybe_report_venue_basis(self, now: float) -> None:
++        """REPORT-ONLY: the venue's executions beside this ledger's booked
++        results, including markets the ledger never saw.
++
++        OFF unless `L5_VENUE_BASIS` is exactly `REPORT`. It calls no store
++        method, writes nothing and changes no gate; its only transport call
++        is the activity feed's GET at the attestation's pace. ANY failure
++        is swallowed -- this can never stop a tick. See
++        `l5_venue_basis_report`.
++        """
++        try:
++            from src import l5_venue_basis_report as VBR
++            if VBR.mode() != VBR.MODE_REPORT:
++                return
++            job = getattr(self, "_venue_basis_pass", None)
++            if job is None:
++                job = VBR.Pass()
++                self._venue_basis_pass = job
++            out = job.step(self.store, self.transport, float(now))
++            if out.get("report") is not None:
++                emit("L5_VENUE_BASIS", out["report"])
++                for rec in out.get("details") or ():
++                    emit("L5_VENUE_BASIS_DETAIL", rec)
++            elif out.get("walk_failed"):
++                emit("L5_VENUE_BASIS", {"walk_failed": out["walk_failed"],
++                                        "applied": False})
++            for rec in out.get("orders") or ():
++                emit("L5_VENUE_BASIS_ORDERS", rec)
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            try:
++                self.stats["venue_basis_error:%s"
++                           % type(exc).__name__] += 1
++            except BaseException:                              # noqa: BLE001
++                pass
++
+     def resolve_pending_terminal(self, now: float) -> List[Dict[str, Any]]:
+         """Book the final fill of every order that left the venue's open list.
+ 
+@@ -6705,11 +6750,53 @@ class Runner:
+             # the venue-equity controls a second strategy must also honour.
+             # Added keys only: every figure above is computed as before.
+             **self.equity_risk_lines(),
++            # the venue's executions beside the booked results. Added key
++            # only, report only: no figure above reads it.
++            "venue_basis": venue_basis_lines(self),
+             "labels": ("the account-wide figures the 15-minute service's own "
+                        "gates read, published so a second strategy cannot "
+                        "hold a looser copy. Read-only."),
+         }
+ 
++    def _publication_summary(self) -> Dict[str, Any]:
++        """WHAT THE REGISTRY IS PUBLISHING for a second strategy, in a few
++        fields an operator can read on the heartbeat.
++
++        The account-risk record is served only on the internal registry
++        endpoint, so whether its lifetime basis reconciles could not be
++        seen from outside without deploying the service that reads it.
++        This calls the SAME two methods that record is built from and
++        reports their verdicts, never their rows. Reporting only; never
++        raises; a field it cannot establish is None.
++        """
++        out: Dict[str, Any] = {"lifetime_basis": None,
++                               "retired_results_utc_day": None}
++        try:
++            b = self._lifetime_basis_line()
++            if isinstance(b, Mapping):
++                out["lifetime_basis"] = {
++                    k: b.get(k) for k in (
++                        "reconciled", "complete", "rows", "rebased_at_utc",
++                        "cash_read_utc", "lifetime_realized_usd")}
++            day = None
++            try:
++                day = (self.day_realized_line() or {}).get("utc_day")
++            except BaseException as exc:                       # noqa: BLE001
++                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                    raise
++            r = self._retired_results_line(day)
++            if isinstance(r, Mapping):
++                res = r.get("results")
++                out["retired_results_utc_day"] = {
++                    "utc_day": r.get("utc_day"),
++                    "markets": (len(res) if isinstance(res, Mapping)
++                                else None)}
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            out["error"] = type(exc).__name__
++        return out
++
+     def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
+         """Today's retired markets with the result each was booked at.
+         Never raises: unreadable is None, which a reader treats as absent."""
+@@ -7053,6 +7140,7 @@ class Runner:
+             "portfolio_drawdown": self.portfolio_drawdown_report(),
+             "equity_baseline": self.equity_risk_lines(self.now_t).get(
+                 "equity_baseline"),
++            "account_risk_publication": self._publication_summary(),
+             "risk_gate": {
+                 "measures": "worst-case loss over both settlements",
+                 "max_usd_per_market": str(self.limits.max_usd_per_market),
+@@ -7081,6 +7169,10 @@ class Runner:
+             # not open: attested, still at the $1 bound (with reasons), and
+             # the corrections applied with their delta. Reporting only.
+             "venue_cost_attestation": self.venue_cost_attestation_lines(),
++            # VENUE EXECUTIONS BESIDE THE BOOKED RESULTS. Report only: state,
++            # counts and totals, never the rows. OFF unless L5_VENUE_BASIS
++            # is exactly REPORT. No gate reads it.
++            "venue_basis": venue_basis_lines(self),
+             "l5_baseline": self.store.l5_baseline_lines(),
+             # ACCOUNT-WIDE EXPOSURE, reported independently of the decision
+             # path. The aggregation itself runs inside the gate, which the
+@@ -11666,6 +11758,7 @@ class Runner:
+         self.maybe_diagnose_venue_costs(now)
+         self.maybe_watch_equity_transfers(now)
+         self.maybe_correct_venue_supersets(now)
++        self.maybe_report_venue_basis(now)
+         # a book that has gone uncertain gets another authoritative read,
+         # rather than latching the session shut until a redeploy
+         self.reconcile_if_needed(now)
+@@ -12856,6 +12949,26 @@ class TimedCounter(collections.Counter):
+         return {k: round(t - v, 1) for k, v in self.last_t.items()}
+ 
+ 
++def venue_basis_lines(runner: Any) -> Dict[str, Any]:
++    """The small `venue_basis` block: state, counts and totals. Never the
++    rows, never raises, and nothing reads it to decide anything.
++
++    A module function, NOT a Runner method: `account_risk_line` and
++    `heartbeat` are grafted onto stubs in several suites, and a new
++    instance attribute there is a duck-typing hazard (see
++    `unresolved_discrepancies`).
++    """
++    try:
++        from src import l5_venue_basis_report as VBR
++        job = getattr(runner, "_venue_basis_pass", None) or VBR.Pass()
++        return job.lines()
++    except BaseException as exc:                               # noqa: BLE001
++        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++            raise
++        return {"state": "UNAVAILABLE", "error": type(exc).__name__,
++                "applied": False}
++
++
+ def unresolved_accounting() -> List[Dict[str, Any]]:
+     """Every STANDING unresolved-accounting record.
+ 
+diff --git a/src/l5_venue_basis.py b/src/l5_venue_basis.py
+new file mode 100644
+index 000000000..ec7fe0500
+--- /dev/null
++++ b/src/l5_venue_basis.py
+@@ -0,0 +1,450 @@
++"""A market's result from the VENUE's confirmed executions. PURE ARITHMETIC.
++
++THE DEFECT (measured 2026-11-16, cpc-btc-updown-5m-2026-11-16-0335z). Another
++executor on this account bought UP 2 @ 0.08 and, fifteen seconds later,
++DOWN 2 @ 0.75: a pair costing 1.66 that pays 2.00. The account ledger learns
++of positions it did not open from the venue's NET position (UP minus DOWN).
++It read the net in the gap between the two fills, adopted "UP 2" at the $1
++bound, read net 0 fifteen seconds later, kept UP 2 / DOWN 0 on its book and
++booked -2.00 at settlement. Nine other pairs that day filled entirely
++between two reads, showed net 0 both times and were never booked at all.
++
++A net-position snapshot is evidence of EXPOSURE at one instant. It is not a
++trading history, and a result cannot be derived from it. This module derives
++the result from the executions themselves.
++
++WHAT IS HERE. Functions over already-normalized rows. No I/O, no clock, no
++store, no environment: stdlib and Decimal only.
++
++WHAT IT REFUSES TO DO.
++  * It never guesses. An unreadable row, an unknown action, a settlement
++    value that is not 0 or 1, or a feed that was not read to its explicit
++    end gives `complete` False and `pnl` None.
++  * It never APPLIES anything. `compare` reports a difference; an UPWARD
++    difference (the ledger is more pessimistic than the venue) is pending
++    the owner's existing correction paths and is never netted against a
++    downward one. `downward_adjustment` is what the ledger is MISSING in
++    losses, and is the only figure a conservative reader should act on.
++  * A result whose settlement cash is not CONFIRMED is labelled as settled
++    ARITHMETIC on confirmed fills. It is not realized cash.
++
++ROW FORMAT (one market's fills). Each row is a mapping:
++    side    "UP" or "DOWN"            the outcome held
++    action  "BUY" or "SELL"           absent means BUY; anything else is
++                                      unreadable
++    qty     > 0
++    price   the OWN-OUTCOME price per share, 0 < price < 1 (a DOWN share
++            bought while YES trades at 0.25 has price 0.75)
++    fee     charged on the fill; negative is a credited rebate. ABSENT IS
++            NOT ZERO: a row without a fee is unreadable
++    id      the venue's execution id; required, and never repeated
++    t       optional, carried through untouched
++"""
++from __future__ import annotations
++
++from decimal import Decimal as D, InvalidOperation
++from typing import Any, Dict, Iterable, List, Mapping, Optional
++
++UP = "UP"
++DOWN = "DOWN"
++
++#: |venue - booked| at or below this is agreement (half the ledger's 4dp).
++AGREE_TOLERANCE = D("0.00005")
++#: a confirmed settlement credit may differ from the arithmetic payout by
++#: at most a cent of the venue's own rounding.
++CREDIT_TOLERANCE = D("0.005")
++
++CASH_CONFIRMED = "CONFIRMED"
++CASH_NOT_CONFIRMED = "NOT_CONFIRMED"
++CASH_NOT_CHECKED = "NOT_CHECKED"
++
++AGREES = "AGREES"
++VENUE_INCOMPLETE = "VENUE_INCOMPLETE"
++VENUE_HAS_NO_FILLS = "VENUE_HAS_NO_FILLS"
++UNBOOKED = "UNBOOKED"
++BOOKED_MORE_PESSIMISTIC = "BOOKED_MORE_PESSIMISTIC"
++BOOKED_TOO_OPTIMISTIC = "BOOKED_TOO_OPTIMISTIC"
++SETTLEMENT_CREDIT_DISAGREES = "SETTLEMENT_CREDIT_DISAGREES"
++LEDGER_UNREADABLE = "LEDGER_UNREADABLE"
++CLASSES = (AGREES, VENUE_INCOMPLETE, VENUE_HAS_NO_FILLS, UNBOOKED,
++           BOOKED_MORE_PESSIMISTIC, BOOKED_TOO_OPTIMISTIC,
++           SETTLEMENT_CREDIT_DISAGREES, LEDGER_UNREADABLE)
++
++PATH_ATTESTATION = "ATTESTATION (l5_venue_cost_attestation, exact quantities)"
++PATH_SUPERSET = ("SUPERSET CORRECTION (l5_venue_superset_correction, "
++                 "owner-listed manifest)")
++PATH_UNBOOKED = "NO PATH: UNBOOKED MARKET"
++PATH_NOT_AT_BOUND = "NO PATH: ROW NOT AT THE $1 BOUND"
++PATH_NOT_CONTAINED = "NO PATH: LEDGER QUANTITY NOT CONTAINED IN VENUE FILLS"
++PATH_SELLS = "NO PATH: VENUE FILLS INCLUDE SELLS"
++PATH_CREDIT = "NO PATH: SETTLEMENT CREDIT DISAGREES WITH FILLS"
++
++MAX_LISTED = 40
++
++LABEL_ARITHMETIC = ("SETTLED ARITHMETIC ON CONFIRMED FILLS: payout computed "
++                    "from the settlement value, NOT a confirmed cash credit. "
++                    "Not realized cash.")
++LABEL_CONFIRMED = ("venue-confirmed fills, fees and settlement credit agree")
++LABEL_CREDIT_DISAGREES = ("the confirmed settlement credit DISAGREES with "
++                          "the payout the fills imply; neither is trusted")
++LABEL_INCOMPLETE = "INCOMPLETE: no result is stated"
++
++
++def dec(value: Any) -> Optional[D]:
++    """A finite Decimal, or None. None is UNKNOWN, never zero."""
++    if value is None or isinstance(value, bool) or value == "":
++        return None
++    try:
++        out = value if isinstance(value, D) else D(str(value))
++    except (InvalidOperation, TypeError, ValueError):
++        return None
++    return out if out.is_finite() else None
++
++
++class Position(dict):
++    """`position_from_fills`'s answer: a plain dict, plus one question."""
++
++    def consistent_with_net(self, venue_net: Any) -> bool:
++        """Is the venue's NET position (UP minus DOWN) what these fills
++        add up to? False when either side is unreadable -- never a guess."""
++        want = dec(venue_net)
++        if want is None or not self.get("readable"):
++            return False
++        return self["net_up_minus_down"] == want
++
++
++def position_from_fills(fills: Iterable[Any]) -> Position:
++    """Per-side quantity and cost from executions, and their net.
++
++    A BUY adds quantity and cost. A SELL removes quantity and credits its
++    proceeds against that side's cost (so the cost can go negative: a
++    position sold for more than it cost). Selling more than was bought is
++    unreadable here -- the missing buy is somewhere this caller did not
++    look.
++    """
++    qty = {UP: D(0), DOWN: D(0)}
++    cost = {UP: D(0), DOWN: D(0)}
++    fees = D(0)
++    ids: List[str] = []
++    problems: List[str] = []
++    sells = 0
++    n = 0
++    for f in (fills or ()):
++        n += 1
++        if not isinstance(f, Mapping):
++            problems.append("ROW_NOT_A_MAPPING")
++            continue
++        side = str(f.get("side") or "").strip().upper()
++        action = str(f.get("action") or "BUY").strip().upper()
++        q, px, fee = dec(f.get("qty")), dec(f.get("price")), dec(f.get("fee"))
++        rid = str(f.get("id") or "").strip()
++        if side not in (UP, DOWN):
++            problems.append("SIDE_UNREADABLE")
++            continue
++        if action not in ("BUY", "SELL"):
++            problems.append("ACTION_UNREADABLE")
++            continue
++        if q is None or q <= 0:
++            problems.append("QTY_UNREADABLE")
++            continue
++        if px is None or not (D(0) < px < D(1)):
++            problems.append("PRICE_UNREADABLE")
++            continue
++        if fee is None:
++            problems.append("FEE_ABSENT")
++            continue
++        if not rid:
++            problems.append("ID_ABSENT")
++            continue
++        if rid in ids:
++            problems.append("ID_REPEATED")
++            continue
++        ids.append(rid)
++        fees += fee
++        if action == "BUY":
++            qty[side] += q
++            cost[side] += q * px
++        else:
++            sells += 1
++            qty[side] -= q
++            cost[side] -= q * px
++    for side in (UP, DOWN):
++        if qty[side] < 0:
++            problems.append("SOLD_MORE_THAN_BOUGHT:%s" % side)
++    return Position({
++        "up_qty": qty[UP], "dn_qty": qty[DOWN],
++        "up_cost": cost[UP], "dn_cost": cost[DOWN],
++        "cost": cost[UP] + cost[DOWN], "fees": fees,
++        "net_up_minus_down": qty[UP] - qty[DOWN],
++        "fills": n, "sells": sells, "fill_ids": ids,
++        "readable": not problems,
++        "problems": sorted(set(problems))})
++
++
++def market_result(fills: Iterable[Any], yes_value: Any, *,
++                  feed_complete: bool,
++                  settlement_credit: Any = None) -> Dict[str, Any]:
++    """One market's result from its venue executions.
++
++    `yes_value` is the settlement value of the UP/YES outcome: exactly 0 or
++    1. None is accepted ONLY when the fills hold the same quantity on both
++    sides, because a matched pair pays the same either way -- that is
++    arithmetic, not a guess, and the result says so (`outcome_independent`).
++
++    `settlement_credit`: None = the caller did not look (NOT_CHECKED);
++    the string "NOT_CONFIRMED" = it looked and the venue has not credited
++    it; a number = the venue's confirmed credit, in the same convention as
++    `payout` (gross: UP x yes + DOWN x (1 - yes)).
++
++    `pnl` is None unless `complete`. A confirmed credit that differs from
++    the arithmetic payout by more than a cent is FLAGGED
++    (`settlement_credit_agrees` False) and `pnl_on_credit` states the result
++    the credit implies; `compare` then trusts neither.
++    """
++    pos = position_from_fills(fills)
++    reasons: List[str] = list(pos["problems"])
++    if feed_complete is not True:
++        reasons.append("FEED_NOT_READ_TO_ITS_END")
++    v = dec(yes_value)
++    independent = False
++    payout: Optional[D] = None
++    if yes_value is None:
++        if pos["readable"] and pos["up_qty"] == pos["dn_qty"]:
++            independent = True
++            payout = pos["up_qty"]
++        else:
++            reasons.append("SETTLEMENT_VALUE_UNKNOWN")
++    elif v is None or v not in (D(0), D(1)):
++        reasons.append("SETTLEMENT_VALUE_NOT_0_OR_1")
++    elif pos["readable"]:
++        payout = pos["up_qty"] * v + pos["dn_qty"] * (D(1) - v)
++
++    credit: Optional[D] = None
++    if settlement_credit is None:
++        cash = CASH_NOT_CHECKED
++    elif isinstance(settlement_credit, str) \
++            and settlement_credit.strip() == CASH_NOT_CONFIRMED:
++        cash = CASH_NOT_CONFIRMED
++    else:
++        credit = dec(settlement_credit)
++        if credit is None:
++            cash = CASH_NOT_CONFIRMED
++            reasons.append("SETTLEMENT_CREDIT_UNREADABLE")
++        else:
++            cash = CASH_CONFIRMED
++
++    complete = not reasons
++    pnl = (payout - pos["cost"] - pos["fees"]) if complete else None
++    agrees: Optional[bool] = None
++    pnl_on_credit: Optional[D] = None
++    if complete and credit is not None:
++        agrees = abs(credit - payout) <= CREDIT_TOLERANCE
++        pnl_on_credit = credit - pos["cost"] - pos["fees"]
++    realized_cash = bool(complete and cash == CASH_CONFIRMED and agrees)
++    if not complete:
++        label = LABEL_INCOMPLETE
++    elif realized_cash:
++        label = LABEL_CONFIRMED
++    elif agrees is False:
++        label = LABEL_CREDIT_DISAGREES
++    else:
++        label = LABEL_ARITHMETIC
++    return {
++        "up_qty": pos["up_qty"], "dn_qty": pos["dn_qty"],
++        "up_cost": pos["up_cost"], "dn_cost": pos["dn_cost"],
++        "cost": pos["cost"], "fees": pos["fees"],
++        "net_up_minus_down": pos["net_up_minus_down"],
++        "fills": pos["fills"], "sells": pos["sells"],
++        "fill_ids": list(pos["fill_ids"]),
++        "yes_value": v if not independent else None,
++        "outcome_independent": independent,
++        "payout": payout if complete else None,
++        "pnl": pnl,
++        "complete": complete,
++        "incomplete_reasons": sorted(set(reasons)),
++        "feed_complete": feed_complete is True,
++        "settlement_cash": cash,
++        "settlement_credit": credit,
++        "settlement_credit_agrees": agrees,
++        "pnl_on_credit": pnl_on_credit,
++        "realized_cash": realized_cash,
++        "label": label,
++    }
++
++
++def compare(booked_pnl: Any, result: Mapping[str, Any]) -> Dict[str, Any]:
++    """The ledger's booked figure beside the venue's. APPLIES NOTHING.
++
++    `booked_pnl` None means the ledger has no row for the market. A value
++    that is given but cannot be read is LEDGER_UNREADABLE, with no figures.
++
++    `difference` = venue - booked (booked taken as 0 when unbooked).
++    `downward_adjustment` = min(0, difference): the loss the ledger lacks.
++    `upward_pending` = max(0, difference): reported, never applied here.
++    All three are None unless the venue result is complete.
++    """
++    booked = dec(booked_pnl)
++    out: Dict[str, Any] = {
++        "booked_pnl": booked, "venue_pnl": None, "difference": None,
++        "downward_adjustment": None, "upward_pending": None,
++        "applied": False}
++    if not result.get("complete") or result.get("pnl") is None:
++        out["class"] = VENUE_INCOMPLETE
++        return out
++    if booked_pnl is not None and booked is None:
++        out["class"] = LEDGER_UNREADABLE
++        return out
++    if not result.get("fills"):
++        #: a ledger row with no venue execution behind it. Not a zero
++        #: result: the position came from somewhere this feed does not show.
++        out["class"] = VENUE_HAS_NO_FILLS
++        return out
++    venue = result["pnl"]
++    if result.get("settlement_credit_agrees") is False:
++        #: two venue readings disagree. The LOWER is used, so a loss the
++        #: ledger lacks is still surfaced; nothing upward is claimed.
++        venue = min(venue, result["pnl_on_credit"])
++        diff = venue - (booked or D(0))
++        out.update({"class": SETTLEMENT_CREDIT_DISAGREES, "venue_pnl": venue,
++                    "difference": diff, "downward_adjustment": min(D(0), diff),
++                    "upward_pending": D(0)})
++        return out
++    diff = venue - (booked or D(0))
++    out.update({"venue_pnl": venue, "difference": diff,
++                "downward_adjustment": min(D(0), diff),
++                "upward_pending": max(D(0), diff)})
++    if booked is None:
++        out["class"] = UNBOOKED
++    elif abs(diff) <= AGREE_TOLERANCE:
++        out["class"] = AGREES
++    elif booked < venue:
++        out["class"] = BOOKED_MORE_PESSIMISTIC
++    else:
++        out["class"] = BOOKED_TOO_OPTIMISTIC
++    return out
++
++
++def phantom(ledger_up: Any, ledger_dn: Any, result: Mapping[str, Any]
++            ) -> Optional[Dict[str, Any]]:
++    """Name a position the ledger holds that the venue's fills do not net
++    to: a snapshot adopted mid-sequence and never corrected. None when the
++    nets agree or either cannot be read. Names it; changes nothing."""
++    lu, ld = dec(ledger_up), dec(ledger_dn)
++    vu, vd = dec(result.get("up_qty")), dec(result.get("dn_qty"))
++    if None in (lu, ld, vu, vd) or result.get("incomplete_reasons"):
++        return None
++    excess = (lu - ld) - (vu - vd)
++    if excess == 0:
++        return None
++    return {"side": UP if excess > 0 else DOWN, "qty": abs(excess),
++            "ledger": {UP: lu, DOWN: ld}, "venue": {UP: vu, DOWN: vd},
++            "ledger_net": lu - ld, "venue_net": vu - vd,
++            "labels": ("the ledger's net position is not the net of the "
++                       "venue's fills: a net-position snapshot was taken as "
++                       "the position")}
++
++
++def correction_path(cls: str, result: Mapping[str, Any], *,
++                    ledger_up: Any = None, ledger_dn: Any = None,
++                    at_bound: bool = False) -> Optional[str]:
++    """Which EXISTING owner-gated path could apply this difference, by the
++    quantity forms those paths accept. A statement of eligibility by
++    quantity only -- each path has further conditions of its own and
++    decides for itself. None where there is nothing to apply."""
++    if cls in (AGREES, VENUE_INCOMPLETE, VENUE_HAS_NO_FILLS,
++               LEDGER_UNREADABLE):
++        return None
++    if cls == UNBOOKED:
++        return PATH_UNBOOKED
++    if cls == SETTLEMENT_CREDIT_DISAGREES:
++        return PATH_CREDIT
++    if not at_bound:
++        return PATH_NOT_AT_BOUND
++    if result.get("sells"):
++        return PATH_SELLS
++    lu, ld = dec(ledger_up), dec(ledger_dn)
++    vu, vd = dec(result.get("up_qty")), dec(result.get("dn_qty"))
++    if None in (lu, ld, vu, vd):
++        return PATH_NOT_CONTAINED
++    if (lu == vu and ld == vd) or (min(lu, ld) == 0
++                                   and lu - ld == vu - vd):
++        return PATH_ATTESTATION
++    if lu <= vu and ld <= vd:
++        return PATH_SUPERSET
++    return PATH_NOT_CONTAINED
++
++
++def _s(x: Any) -> Optional[str]:
++    return None if x is None else str(x)
++
++
++def summarise(per_market: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
++    """Totals for a report. Each entry: {"market", "result", "comparison",
++    optional "path", "phantom"}. Strings out, so it can go on a log line.
++
++    Money totals cover COMPLETE venue results only; an incomplete market
++    contributes to the counts and to nothing else. Upward and downward
++    differences are totalled SEPARATELY and never netted.
++    """
++    by: Dict[str, int] = {}
++    cash = {CASH_CONFIRMED: 0, CASH_NOT_CONFIRMED: 0, CASH_NOT_CHECKED: 0}
++    n = fills = phantoms = 0
++    cost = fees = payout = venue = booked = up = down = D(0)
++    diffs: List[Dict[str, Any]] = []
++    for e in (per_market or ()):
++        if not isinstance(e, Mapping):
++            continue
++        res = e.get("result") if isinstance(e.get("result"), Mapping) else {}
++        cmp_ = e.get("comparison") \
++            if isinstance(e.get("comparison"), Mapping) else {}
++        n += 1
++        cls = str(cmp_.get("class") or VENUE_INCOMPLETE)
++        by[cls] = by.get(cls, 0) + 1
++        if e.get("phantom"):
++            phantoms += 1
++        if not res.get("complete"):
++            continue
++        fills += int(res.get("fills") or 0)
++        cost += res["cost"]
++        fees += res["fees"]
++        payout += res["payout"]
++        key = str(res.get("settlement_cash") or CASH_NOT_CHECKED)
++        cash[key] = cash.get(key, 0) + 1
++        if cmp_.get("difference") is None:
++            continue
++        venue += cmp_["venue_pnl"]
++        booked += cmp_.get("booked_pnl") or D(0)
++        up += cmp_.get("upward_pending") or D(0)
++        down += cmp_.get("downward_adjustment") or D(0)
++        if cls != AGREES:
++            diffs.append({"market": _s(e.get("market")), "class": cls,
++                          "booked_pnl": _s(cmp_.get("booked_pnl")),
++                          "venue_pnl": _s(cmp_.get("venue_pnl")),
++                          "difference": _s(cmp_.get("difference")),
++                          "path": e.get("path"),
++                          "phantom": (None if not e.get("phantom") else {
++                              "side": e["phantom"].get("side"),
++                              "qty": _s(e["phantom"].get("qty"))}),
++                          "applied": False})
++    diffs.sort(key=lambda r: (-abs(D(r["difference"])), str(r["market"])))
++    return {
++        "markets": n, "by_class": by,
++        "venue_confirmed_fills": fills,
++        "total_cost_usd": str(cost), "total_fees_usd": str(fees),
++        "total_payout_usd": str(payout),
++        "venue_pnl_usd": str(venue), "booked_pnl_usd": str(booked),
++        "upward_difference_pending_usd": str(up),
++        "downward_adjustment_usd": str(down),
++        "settlement_cash": cash,
++        "phantom_positions": phantoms,
++        "differences_total": len(diffs),
++        "largest_differences": diffs[:MAX_LISTED],
++        "applied": False,
++        "labels": ("REPORT ONLY: nothing here was applied to any booked "
++                   "figure, position or limit. Money totals cover markets "
++                   "whose venue result is COMPLETE. venue_pnl_usd is settled "
++                   "arithmetic on confirmed fills unless settlement_cash says "
++                   "CONFIRMED. upward_difference_pending_usd is pending the "
++                   "owner's existing correction paths and adds no capacity; "
++                   "downward_adjustment_usd is losses the ledger lacks."),
++    }
+diff --git a/src/l5_venue_basis_report.py b/src/l5_venue_basis_report.py
+new file mode 100644
+index 000000000..4e4254006
+--- /dev/null
++++ b/src/l5_venue_basis_report.py
+@@ -0,0 +1,735 @@
++"""REPORT-ONLY: the ledger's booked results beside the venue's executions.
++
++WHY. The account ledger learns of positions it did not open from the
++venue's NET position, read every few seconds. A pair whose legs fill between
++two reads is never booked; a pair read in the gap between its legs is booked
++as a one-sided loss at $1 a share. See `l5_venue_basis` for the measured
++case. This pass reads the venue's activity feed -- the executions themselves
++-- and states, market by market, what the fills say next to what the ledger
++booked, INCLUDING markets the ledger never saw.
++
++WHAT IT CANNOT DO, which is the design:
++
++  * It calls NO method of the store and never assigns into `store.state`.
++    No booked result, position, cost, attempt counter, correction record or
++    limit is written. Nothing here is read by any gate.
++  * Its only transport call is the activity feed's GET, through
++    `l5_cost_basis_audit.walk_activities`, at the attestation's own pace
++    (`VCA.PAGES_PER_STEP` pages no more often than `VCA.STEP_INTERVAL_S`),
++    and a whole pass is repeated no more often than `REFRESH_S`.
++  * It applies no difference. An upward one is reported as pending the
++    owner's existing correction path, which it names; a downward one is
++    reported as `downward_adjustment_usd`.
++  * OFF unless `L5_VENUE_BASIS` is exactly `REPORT`. There is no other
++    mode. Its state lives in memory; a restart repeats the pass.
++
++COMPLETENESS IS THE VENUE'S EXPLICIT END OF FEED AND NOTHING LESS, as in
++`l5_equity_feed`: the feed is newest-first but not strictly ordered, so no
++row's date proves that every fill of a market has been served. A pass that
++does not end on `eof` reports every market VENUE_INCOMPLETE with no figure.
++
++WHAT THE FEED DOES AND DOES NOT CARRY (see `l5_cost_basis_audit`):
++  * trade rows (`activity_type_trade`): our execution's outcome side,
++    shares, YES-quoted price, commission and the trade id. The venue has no
++    separate "sell to close": buying DOWN IS selling YES, and it nets the
++    position. Every readable fill is therefore an acquisition of its own
++    outcome at its own price; a row whose direction and outcome contradict
++    each other, or that states a SELL intent, is left UNREADABLE.
++  * resolution rows (`activity_type_position_resolution`): the venue's own
++    `afterPosition.realized` for the netted position. That is a REALIZED
++    figure, not a cash credit, and its exact convention against a gross
++    payout is not established -- so it is reported BESIDE the result as a
++    cross-check and never substituted for it.
++  * NO settlement-cash credit row. So `settlement_cash` is NOT_CHECKED for
++    every market this pass reports, and every figure is labelled settled
++    arithmetic on confirmed fills, not realized cash.
++"""
++from __future__ import annotations
++
++import datetime as dt
++import os
++import re
++from decimal import Decimal as D
++from typing import Any, Dict, List, Mapping, Optional, Tuple
++
++from src import l5_cost_basis_audit as CBA
++from src import l5_venue_basis as VB
++from src import l5_venue_cost_attestation as VCA
++
++MODE_ENV = "L5_VENUE_BASIS"
++MODE_REPORT = "REPORT"
++MODE_OFF = "OFF"
++
++#: a finished pass is not repeated sooner than this (seconds)
++REFRESH_S = 3600.0
++MAX_PAGES = 800
++#: feed rows kept in memory for one pass; more makes the pass INCOMPLETE
++MAX_ROWS = 20000
++#: a market the ledger has no row for is reported only once its slug time is
++#: this far behind the pass's start, so a window still trading is not
++#: reported as a finished result
++UNBOOKED_AGE_S = 3600.0
++UNBOOKED_AGE_NO_SLUG_S = 86400.0
++#: |venue realized - result| at or below this is agreement
++RESOLUTION_TOLERANCE = D("0.005")
++
++#: READ-ONLY DETAIL: exact market slugs whose venue execution rows are
++#: printed (one `L5_VENUE_BASIS_DETAIL` line each) when a pass completes.
++DETAIL_ENV = "L5_VENUE_BASIS_DETAIL_MARKETS"
++DETAIL_MAX_MARKETS = 12
++DETAIL_MAX_ROWS = 60
++DETAIL_CLIP = 80
++DETAIL_MAX_IDENTITY_FIELDS = 40
++_SLUG = re.compile(r"[a-z0-9-]{12,120}")
++#: THE ONLY identity keys ever printed, matched on the whole key name
++#: (case-insensitive): venue order id, trade/fill/execution id, client order
++#: id and the manual-order indicator. `id` is NOT here: a bare id is printed
++#: only through the named readers in `detail_row`.
++IDENTITY_KEYS = frozenset((
++    "orderid", "order_id", "venueorderid", "venue_order_id",
++    "tradeid", "trade_id", "fillid", "fill_id",
++    "executionid", "execution_id", "execid", "exec_id",
++    "clientorderid", "client_order_id",
++    "manualorderindicator", "manual_order_indicator"))
++#: a key containing any of these is never printed and never descended into,
++#: at any depth -- no credential and no account identifier reaches the log.
++FORBIDDEN_KEY_PARTS = ("account", "user", "owner", "wallet", "address",
++                       "email", "key", "secret", "token", "signature",
++                       "auth", "session", "ip")
++
++#: READ-ONLY ORDER DETAIL for the listed markets: each distinct order id of
++#: OURS is read once per process through the transport's existing
++#: `order(id)` (GET /v1/order/{id}), one read per step.
++ORDERS_MAX_PER_MARKET = 6
++ORDERS_MAX_PER_PASS = 40
++_ORDER_ID = re.compile(r"[A-Za-z0-9_-]{1,80}")
++#: the ONLY order-row keys printed (whole key, case-insensitive, top level)
++ORDER_KEYS = frozenset((
++    "manualorderindicator", "manual_order_indicator",
++    "clientorderid", "client_order_id",
++    "type", "ordertype", "order_type",
++    "tif", "timeinforce", "time_in_force",
++    "side", "outcomeside", "outcome_side", "intent",
++    "price", "limitprice", "limit_price",
++    "quantity", "cumquantity", "cum_quantity", "state",
++    "createtime", "create_time", "inserttime", "insert_time",
++    "createdat", "created_at"))
++
++RESOLUTION_KINDS = frozenset(("activity_type_position_resolution",
++                              "position_resolution"))
++
++
++def mode(env: Optional[Mapping[str, str]] = None) -> str:
++    """REPORT for the exact token, OFF for everything else."""
++    e = os.environ if env is None else env
++    return MODE_REPORT if str(e.get(MODE_ENV) or "").strip() == MODE_REPORT \
++        else MODE_OFF
++
++
++def detail_markets(env: Optional[Mapping[str, str]] = None) -> List[str]:
++    """The EXACT slugs listed, in order, at most DETAIL_MAX_MARKETS. A token
++    that is not a plain lowercase slug is dropped: no wildcard, no prefix."""
++    e = os.environ if env is None else env
++    out: List[str] = []
++    for tok in str(e.get(DETAIL_ENV) or "").split(","):
++        tok = tok.strip()
++        if _SLUG.fullmatch(tok) and tok not in out:
++            out.append(tok)
++        if len(out) >= DETAIL_MAX_MARKETS:
++            break
++    return out
++
++
++def _clip(x: Any) -> Any:
++    if x is None or isinstance(x, (bool, int)):
++        return x
++    return str(x)[:DETAIL_CLIP]
++
++
++def identity_fields(row: Mapping[str, Any]) -> Dict[str, Any]:
++    """The ALLOWLISTED identity scalars on the row and on OUR execution, by
++    dotted path, verbatim, clipped. Bounded.
++
++    Never printed: any key that is not in IDENTITY_KEYS; anything under a
++    key containing a FORBIDDEN_KEY_PARTS fragment; and anything under the
++    COUNTERPARTY's execution -- where `isAggressor` does not say which
++    execution is ours, neither is read.
++    """
++    out: Dict[str, Any] = {}
++    body = CBA._payload(row)
++    ours = CBA._exec_objects(body) if isinstance(body, Mapping) else []
++
++    def visit(obj: Any, path: str, depth: int) -> None:
++        if depth > 5 or not isinstance(obj, Mapping):
++            return
++        for k, v in obj.items():
++            if len(out) >= DETAIL_MAX_IDENTITY_FIELDS:
++                return
++            low = str(k).lower()
++            if any(part in low for part in FORBIDDEN_KEY_PARTS):
++                continue
++            here = "%s.%s" % (path, k) if path else str(k)
++            if isinstance(v, Mapping):
++                if k in CBA.EXEC_KEYS and not any(v is o for o in ours):
++                    continue            # not ours, or not known to be
++                visit(v, here, depth + 1)
++            elif low in IDENTITY_KEYS and not isinstance(v, (list, tuple)):
++                out[here[:160]] = _clip(v)
++
++    visit(row, "", 0)
++    return out
++
++
++def detail_row(row: Mapping[str, Any]) -> Dict[str, Any]:
++    """One venue row as served: time, side, direction words, our
++    execution's shares/price/fee, and every identity field. Verbatim
++    strings; nothing is derived or attributed."""
++    body = CBA._payload(row)
++    body = body if isinstance(body, Mapping) else {}
++    ours = CBA._exec_objects(body)
++    ex = ours[0] if ours else {}
++    order = ex.get("order") if isinstance(ex.get("order"), Mapping) else {}
++    t = VCA.row_time(row)
++    qty = CBA._d(CBA._first_present(ours, CBA.EXEC_QTY_KEYS))
++    if qty is None:
++        qty = CBA._d(body.get("qty"))
++    px = CBA._d(CBA._first_present(ours, CBA.EXEC_PX_KEYS))
++    if px is None:
++        px = CBA._d(body.get("price"))
++    fee = CBA._d(CBA._first_present([body], CBA.FEE_KEYS))
++    if fee is None:
++        fee = CBA._d(CBA._first_present(ours, CBA.FEE_KEYS, deep=True))
++    vid_ours, _vid_all, vid_src = CBA._row_venue_order_candidates(body)
++    return {
++        "kind": _kind(row)[:DETAIL_CLIP],
++        "time": None if t is None else t.isoformat(),
++        "side": CBA._row_side(row),
++        "action": {"order_side": _clip(order.get("side") or ex.get("side")),
++                   "outcome_side": _clip(order.get("outcomeSide")
++                                         or ex.get("outcomeSide")),
++                   "intent": _clip(order.get("intent") or ex.get("intent")),
++                   "read_as": row_action(row)},
++        "qty": None if qty is None else str(qty),
++        "price_yes_quoted": None if px is None else str(px),
++        "fee": None if fee is None else str(fee),
++        "trade_id": _clip(VCA._row_id(row)),
++        "is_aggressor": (body.get("isAggressor")
++                         if isinstance(body.get("isAggressor"), bool)
++                         else _clip(body.get("isAggressor"))),
++        "venue_order_id_ours": _clip(vid_ours),
++        "venue_order_id_ours_source": vid_src,
++        "identity_fields": identity_fields(row)}
++
++
++def detail(market: str, rows: List[Mapping[str, Any]], *,
++           feed_complete: bool, as_of: str) -> Dict[str, Any]:
++    """The `L5_VENUE_BASIS_DETAIL` record for one listed market."""
++    trades = [r for r in rows if _kind(r) in CBA.FILL_KINDS]
++    listed = [detail_row(r) for r in trades[:DETAIL_MAX_ROWS]]
++    return {
++        "market": market, "as_of": as_of, "feed_complete": bool(feed_complete),
++        "venue_rows": len(trades), "rows_listed": len(listed),
++        "rows_omitted": len(trades) - len(listed),
++        "resolution_rows": sum(1 for r in rows
++                               if _kind(r) in RESOLUTION_KINDS),
++        "note": (None if trades else
++                 "NO VENUE EXECUTION ROWS FOUND FOR THIS MARKET"
++                 + ("" if feed_complete else
++                    " (the feed was NOT read to its end, so this is not "
++                    "evidence of absence)")),
++        "rows": listed,
++        "labels": ("READ-ONLY. The venue's rows as served, newest first; "
++                   "price is the YES-quoted wire price. Identity fields are "
++                   "an allowlist (order, trade/fill/execution and client "
++                   "order ids, manual-order indicator) from the row and OUR "
++                   "execution only, verbatim and uninterpreted: this line "
++                   "attributes no order to anyone and nothing was written.")}
++
++
++def order_fields(row: Any) -> Dict[str, Any]:
++    """The allowlisted scalars of one venue order row, verbatim, clipped.
++    Top level only; a {value, currency} money mapping is read for its
++    value. A key with a FORBIDDEN_KEY_PARTS fragment is never printed."""
++    out: Dict[str, Any] = {}
++    if not isinstance(row, Mapping):
++        return out
++    for k, v in row.items():
++        low = str(k).lower()
++        if low not in ORDER_KEYS \
++                or any(part in low for part in FORBIDDEN_KEY_PARTS):
++            continue
++        if isinstance(v, Mapping):
++            v = v.get(CBA.MONEY_VALUE_KEY)
++        if v is None or isinstance(v, (Mapping, list, tuple)):
++            continue
++        out[str(k)[:40]] = _clip(v)
++    return out
++
++
++def our_order_ids(rows: List[Mapping[str, Any]]) -> List[str]:
++    """Distinct venue order ids of OUR executions on a market's trade rows,
++    in feed order. An id that is not a plain token is dropped."""
++    out: List[str] = []
++    for r in rows:
++        if _kind(r) not in CBA.FILL_KINDS:
++            continue
++        body = CBA._payload(r)
++        ours, _all, _src = CBA._row_venue_order_candidates(
++            body if isinstance(body, Mapping) else {})
++        if ours and _ORDER_ID.fullmatch(ours) and ours not in out:
++            out.append(ours)
++    return out
++
++
++def _kind(row: Mapping[str, Any]) -> str:
++    return str(row.get("kind") or row.get("type") or "").strip().lower()
++
++
++def row_action(row: Mapping[str, Any]) -> str:
++    """BUY, or UNKNOWN when the row's own words contradict an acquisition.
++
++    The venue pairs ORDER_SIDE_BUY with OUTCOME_SIDE_YES and ORDER_SIDE_SELL
++    with OUTCOME_SIDE_NO (its `side` is about the YES token). Any other
++    pairing, or an intent that says SELL, is something this reader has never
++    seen and does not interpret.
++    """
++    body = CBA._payload(row)
++    ours = CBA._exec_objects(body) if isinstance(body, Mapping) else []
++    if not ours:
++        return "BUY"
++    ex = ours[0]
++    order = ex.get("order") if isinstance(ex.get("order"), Mapping) else {}
++
++    def word(key: str) -> str:
++        return str(order.get(key) or ex.get(key) or "").strip().upper()
++
++    intent = word("intent")
++    if "SELL" in intent:
++        return "UNKNOWN"
++    d, o = word("side"), word("outcomeSide")
++    dn = "UP" if d.endswith("BUY") else "DOWN" if d.endswith("SELL") else None
++    on = "UP" if o.endswith("YES") else "DOWN" if o.endswith("NO") else None
++    if dn is not None and on is not None and dn != on:
++        return "UNKNOWN"
++    return "BUY"
++
++
++def normalise(rows: List[Mapping[str, Any]], market: str
++              ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
++    """One market's feed rows as `l5_venue_basis` fills, through the
++    attestation's own reader (`VCA.legs_from_rows`: side, our execution's
++    shares and price, fee, trade id, and the venue's per-fill cost
++    cross-check). An unreadable market yields ONE unreadable row and the
++    reason, so the result is incomplete rather than partial."""
++    trades = [r for r in rows if _kind(r) in CBA.FILL_KINDS]
++    if any(row_action(r) != "BUY" for r in trades):
++        return [{"side": None}], "FILL_ACTION_UNREADABLE"
++    got = VCA.legs_from_rows(trades, market)
++    if not got.get("ok"):
++        why = str(got.get("reason"))
++        if why == "NO_VENUE_FILLS_FOUND":
++            return [], None
++        return [{"side": None}], why
++    fills: List[Dict[str, Any]] = []
++    for side in ("UP", "DOWN"):
++        for f in ((got["legs"].get(side) or {}).get("fills") or ()):
++            px = CBA._d(f.get("price"))
++            fills.append({
++                "side": side, "action": "BUY", "qty": f.get("qty"),
++                "price": None if px is None else CBA.own_price(px, side),
++                "fee": f.get("fee"), "id": f.get("trade_id")})
++    return fills, None
++
++
++def resolution_check(rows: List[Mapping[str, Any]], result: Mapping[str, Any]
++                     ) -> Dict[str, Any]:
++    """The venue's own realized figure for the market, beside the result.
++    Reported, never used: see the module docstring."""
++    res = [r for r in rows if _kind(r) in RESOLUTION_KINDS]
++    if not res:
++        return {"state": "ABSENT"}
++    if len(res) > 1:
++        return {"state": "MULTIPLE_ROWS", "rows": len(res)}
++    body = CBA._payload(res[0])
++    after = body.get("afterPosition") if isinstance(body, Mapping) else None
++    realized = CBA._d(after.get("realized")) \
++        if isinstance(after, Mapping) else None
++    if realized is None:
++        return {"state": "UNREADABLE"}
++    out = {"venue_realized": str(realized)}
++    if result.get("pnl") is None:
++        return dict(out, state="RESULT_INCOMPLETE")
++    ok = abs(realized - result["pnl"]) <= RESOLUTION_TOLERANCE
++    return dict(out, state="AGREES" if ok else "DISAGREES")
++
++
++def scope(state: Mapping[str, Any]) -> Dict[str, Any]:
++    """What a pass covers, read from the ledger. Writes nothing.
++
++    `since` is the last accounting re-anchor, or the attestation's approved
++    floor day when there is none: rows settled before it are not in the
++    account-wide figure, so neither they nor unbooked markets older than it
++    are compared.
++    """
++    ts = [str(r.get("t")) for r in (state.get("accounting_rebase_log") or [])
++          if isinstance(r, Mapping) and r.get("t")]
++    since = VCA.parse_time(max(ts)) if ts else None
++    if since is None:
++        since = VCA.parse_time(VCA.retro_floor_day() + "T00:00:00+00:00")
++    retired: Dict[str, Mapping[str, Any]] = {}
++    known = set()
++    for m, row in (state.get("retired_markets") or {}).items():
++        known.add(str(m))
++        if not isinstance(row, Mapping):
++            continue
++        t = VCA.parse_time(row.get("t"))
++        if t is not None and since is not None and t >= since:
++            retired[str(m)] = row
++    for name in ("positions", "leg_cost", "committed"):
++        for k in (state.get(name) or {}):
++            known.add(str(k).rsplit("|", 1)[0])
++    return {"since": since, "retired": retired, "known": known}
++
++
++def _str(x: Any) -> Any:
++    if isinstance(x, D):
++        return str(x)
++    if isinstance(x, Mapping):
++        return {k: _str(v) for k, v in x.items()}
++    if isinstance(x, (list, tuple)):
++        return [_str(v) for v in x]
++    return x
++
++
++def build(state: Mapping[str, Any], rows_by_market: Mapping[str, List[Any]],
++          *, feed_complete: bool, started_at: dt.datetime
++          ) -> Dict[str, Any]:
++    """Every in-scope market's comparison, and the totals. PURE: reads its
++    arguments and returns new objects."""
++    sc = scope(state)
++    since, retired, known = sc["since"], sc["retired"], sc["known"]
++    entries: List[Dict[str, Any]] = []
++    skipped = {"RETIRED_AFTER_PASS_STARTED": 0, "UNBOOKED_TOO_RECENT": 0,
++               "UNBOOKED_BEFORE_SCOPE": 0}
++    for m in sorted(retired):
++        row = retired[m]
++        rt = VCA.parse_time(row.get("t"))
++        if rt is None or rt > started_at:
++            #: its fills may be newer than the pass's first page
++            skipped["RETIRED_AFTER_PASS_STARTED"] += 1
++            continue
++        rows = list(rows_by_market.get(m) or ())
++        fills, why = normalise(rows, m)
++        res = VB.market_result(fills, CBA._d(row.get("yes_value")),
++                               feed_complete=feed_complete)
++        booked = row.get("settlement_pnl")
++        cmp_ = VB.compare("unreadable" if booked is None else booked, res)
++        at_bound = (row.get("pnl_provenance") == VCA.UPPER_BOUND
++                    and not row.get("cost_superseded")
++                    and not row.get("venue_cost_attested"))
++        entries.append({
++            "market": m, "result": res, "comparison": cmp_,
++            "ledger": {"up_qty": row.get("up_qty"),
++                       "dn_qty": row.get("dn_qty"),
++                       "pnl_provenance": row.get("pnl_provenance")},
++            "venue_unreadable_reason": why,
++            "phantom": VB.phantom(row.get("up_qty"), row.get("dn_qty"), res),
++            "path": VB.correction_path(
++                cmp_["class"], res, ledger_up=row.get("up_qty"),
++                ledger_dn=row.get("dn_qty"), at_bound=at_bound),
++            "venue_resolution": resolution_check(rows, res)})
++    for m in sorted(rows_by_market):
++        if m in known:
++            continue
++        rows = list(rows_by_market.get(m) or ())
++        if not any(_kind(r) in CBA.FILL_KINDS for r in rows):
++            continue
++        st = VCA.slug_time(m)
++        times = [t for t in (VCA.row_time(r) for r in rows) if t is not None]
++        ref = st if st is not None else (max(times) if times else None)
++        age = UNBOOKED_AGE_S if st is not None else UNBOOKED_AGE_NO_SLUG_S
++        if ref is None or (started_at - ref).total_seconds() < age:
++            skipped["UNBOOKED_TOO_RECENT"] += 1
++            continue
++        if since is not None and ref < since:
++            skipped["UNBOOKED_BEFORE_SCOPE"] += 1
++            continue
++        fills, why = normalise(rows, m)
++        #: the ledger never saw this market, so it holds no settlement value
++        #: for it. A matched pair needs none; anything else is incomplete.
++        res = VB.market_result(fills, None, feed_complete=feed_complete)
++        cmp_ = VB.compare(None, res)
++        entries.append({
++            "market": m, "result": res, "comparison": cmp_, "ledger": None,
++            "venue_unreadable_reason": why, "phantom": None,
++            "path": VB.correction_path(cmp_["class"], res),
++            "venue_resolution": resolution_check(rows, res)})
++    summary = VB.summarise(entries)
++    resolution: Dict[str, int] = {}
++    for e in entries:
++        k = e["venue_resolution"]["state"]
++        resolution[k] = resolution.get(k, 0) + 1
++    summary["venue_resolution_cross_check"] = resolution
++    #: WHY a market has no venue figure. Without this a report can say
++    #: "41 markets incomplete" and nothing more (the first production pass
++    #: did). Counts by reason, and the first few markets of each.
++    why_count: Dict[str, int] = {}
++    why_first: Dict[str, List[str]] = {}
++    for e in entries:
++        if (e.get("comparison") or {}).get("class") != "VENUE_INCOMPLETE":
++            continue
++        rs = list((e.get("result") or {}).get("incomplete_reasons") or ())
++        if e.get("venue_unreadable_reason"):
++            rs.append(str(e["venue_unreadable_reason"]))
++        for r in (sorted(set(str(x)[:60] for x in rs)) or ["NO_REASON_GIVEN"]):
++            why_count[r] = why_count.get(r, 0) + 1
++            if len(why_first.setdefault(r, [])) < 5:
++                why_first[r].append(str(e.get("market")))
++    summary["incomplete_by_reason"] = dict(sorted(why_count.items()))
++    summary["incomplete_examples"] = {k: why_first[k]
++                                      for k in sorted(why_first)[:12]}
++    summary["skipped"] = skipped
++    summary["scope_since"] = None if since is None else since.isoformat()
++    return {"summary": summary, "entries": entries}
++
++
++def small(summary: Mapping[str, Any]) -> Dict[str, Any]:
++    """Counts and totals only, for the heartbeat. Never the rows."""
++    keys = ("markets", "by_class", "incomplete_by_reason",
++            "venue_confirmed_fills",
++            "total_cost_usd", "total_fees_usd", "total_payout_usd",
++            "venue_pnl_usd", "booked_pnl_usd",
++            "upward_difference_pending_usd", "downward_adjustment_usd",
++            "settlement_cash", "phantom_positions", "differences_total",
++            "as_of", "feed_complete", "pages")
++    return {k: summary.get(k) for k in keys if k in summary}
++
++
++class Pass:
++    """The paced pass. Everything it knows is in memory."""
++
++    def __init__(self) -> None:
++        self._walk: Optional[Dict[str, Any]] = None
++        self.last: Optional[Dict[str, Any]] = None
++        self.last_t: Optional[float] = None
++        self.last_step = 0.0
++        self.next_allowed = 0.0
++        self.last_error: Optional[str] = None
++        self.passes = 0
++        #: order rows already read in this process: id -> allowlisted fields
++        self._order_cache: Dict[str, Dict[str, Any]] = {}
++        self._orders: Optional[Dict[str, Any]] = None
++        #: wall clock, compared with the ledger's own retirement stamps
++        self.wall = lambda: dt.datetime.now(dt.timezone.utc)
++
++    def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
++        if mode() != MODE_REPORT:
++            return {"idle": MODE_OFF}
++        if transport is None:
++            return {"idle": "NO_TRANSPORT"}
++        if now < self.next_allowed \
++                or now - self.last_step < VCA.STEP_INTERVAL_S:
++            return {"idle": "PACED"}
++        if self._orders is not None:
++            self.last_step = now
++            return self._read_one_order(transport)
++        if self._walk is None:
++            if self.last_t is not None and now - self.last_t < REFRESH_S:
++                return {"idle": "FRESH"}
++            st = getattr(store, "state", None)
++            sc = scope(st if isinstance(st, Mapping) else {})
++            self._walk = {
++                "cursor": None, "pages": 0, "rows": {}, "kept": 0,
++                "seen": set(), "overflow": False,
++                "started_at": self.wall(),
++                "retired": set(sc["retired"]), "known": set(sc["known"]),
++                "detail": set(detail_markets())}
++        self.last_step = now
++        w = self._walk
++        for _ in range(VCA.PAGES_PER_STEP):
++            got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
++                                      cursor=w["cursor"], rows=[],
++                                      pages_done=w["pages"])
++            ended = str(got.get("ended") or "")
++            if ended.startswith("error"):
++                #: a transport fault says nothing about any market
++                self.last_error = ended
++                self._walk = None
++                self.next_allowed = now + VCA.ERROR_BACKOFF_S
++                return {"walk_failed": ended}
++            w["pages"] = int(got.get("pages") or w["pages"] + 1)
++            for r in got.get("rows") or ():
++                self._keep(w, r)
++            if ended == "eof":
++                return self._finish(store, now, True, ended)
++            nxt = got.get("next_cursor")
++            if ended == "no_cursor" or not nxt or w["pages"] >= MAX_PAGES:
++                return self._finish(store, now, False,
++                                    ended if ended != "max_pages"
++                                    or w["pages"] < MAX_PAGES
++                                    else "max_pages_of_pass")
++            w["cursor"] = str(nxt)
++        return {"walking": {"pages": w["pages"], "rows_kept": w["kept"]}}
++
++    @staticmethod
++    def _keep(w: Dict[str, Any], r: Any) -> None:
++        if not isinstance(r, Mapping):
++            return
++        kind = _kind(r)
++        if kind not in CBA.FILL_KINDS and kind not in RESOLUTION_KINDS:
++            return
++        m = CBA._row_market(r)
++        if not m:
++            return
++        if m in w["known"] and m not in w["retired"] \
++                and m not in w["detail"]:
++            return                      # open, or settled before the scope
++        rid = VCA._row_id(r)
++        if rid is not None:
++            key = (kind, rid)
++            if key in w["seen"]:
++                return                  # a re-served row is not a new fill
++            w["seen"].add(key)
++        if w["kept"] >= MAX_ROWS:
++            w["overflow"] = True
++            return
++        w["rows"].setdefault(m, []).append(dict(r))
++        w["kept"] += 1
++
++    def _finish(self, store: Any, now: float, eof: bool, ended: str
++                ) -> Dict[str, Any]:
++        w = self._walk or {}
++        self._walk = None
++        complete = bool(eof and not w.get("overflow"))
++        st = getattr(store, "state", None)
++        out = build(st if isinstance(st, Mapping) else {},
++                    w.get("rows") or {}, feed_complete=complete,
++                    started_at=w["started_at"])
++        summary = dict(out["summary"])
++        summary.update({"as_of": w["started_at"].isoformat(),
++                        "feed_complete": complete,
++                        "feed_ended": ended,
++                        "rows_overflowed": bool(w.get("overflow")),
++                        "pages": w.get("pages"), "mode": MODE_REPORT})
++        self.last = _str(summary)
++        self.last_t = now
++        self.last_error = None
++        self.passes += 1
++        details = [detail(m, list((w.get("rows") or {}).get(m) or ()),
++                          feed_complete=complete,
++                          as_of=w["started_at"].isoformat())
++                   for m in sorted(w.get("detail") or ())]
++        #: the report's own verdict for each listed market, beside its
++        #: rows: class, both figures, the reason when there is no figure.
++        by_market = {str(e.get("market")): e for e in out["entries"]}
++        for d in details:
++            e = by_market.get(str(d.get("market")))
++            if e is None:
++                d["verdict"] = None
++                d["verdict_note"] = ("NOT IN THIS PASS'S COMPARISON (held "
++                                     "open by the ledger, outside the "
++                                     "scope, or too recent)")
++                continue
++            c, r = e.get("comparison") or {}, e.get("result") or {}
++            d["verdict"] = _str({
++                "class": c.get("class"), "booked_pnl": c.get("booked_pnl"),
++                "venue_pnl": r.get("pnl"), "difference": c.get("difference"),
++                "downward_adjustment": c.get("downward_adjustment"),
++                "incomplete_reasons": list(r.get("incomplete_reasons") or ()),
++                "venue_unreadable_reason": e.get("venue_unreadable_reason"),
++                "ledger": e.get("ledger"), "phantom": e.get("phantom"),
++                "path": e.get("path"),
++                "venue_resolution": (e.get("venue_resolution") or {}
++                                     ).get("state")})
++        out = {"report": self.last, "details": details}
++        done = self._plan_orders(w)
++        if done is not None:
++            out["orders"] = done
++        return out
++
++    def _plan_orders(self, w: Mapping[str, Any]
++                     ) -> Optional[List[Dict[str, Any]]]:
++        """Queue the order reads for the listed markets. Returns the
++        finished records at once when there is nothing to read."""
++        listed = sorted(w.get("detail") or ())
++        if not listed:
++            return None
++        plan: Dict[str, Any] = {"as_of": w["started_at"].isoformat(),
++                                "markets": {}, "queue": [], "why": {}}
++        budget = ORDERS_MAX_PER_PASS
++        for m in listed:
++            ids = our_order_ids(list((w.get("rows") or {}).get(m) or ()))
++            take = ids[:min(ORDERS_MAX_PER_MARKET, budget)]
++            budget -= len(take)
++            plan["markets"][m] = {"ids": take,
++                                  "omitted": len(ids) - len(take)}
++            plan["queue"].extend(i for i in take
++                                 if i not in self._order_cache
++                                 and i not in plan["queue"])
++        self._orders = plan
++        if not plan["queue"]:
++            return self._orders_done(None)
++        return None
++
++    def _read_one_order(self, transport: Any) -> Dict[str, Any]:
++        plan = self._orders or {}
++        read = getattr(transport, "order", None)
++        if not callable(read):
++            return {"orders": self._orders_done(
++                "NO_ORDER_READ_ON_TRANSPORT")}
++        oid = plan["queue"].pop(0)
++        try:
++            self._order_cache[oid] = order_fields(read(oid))
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            #: recorded, not cached and not retried in this pass
++            plan["why"][oid] = "ORDER_READ_FAILED:%s" % type(exc).__name__
++        if plan["queue"]:
++            return {"reading_orders": len(plan["queue"])}
++        return {"orders": self._orders_done(None)}
++
++    def _orders_done(self, note: Optional[str]) -> List[Dict[str, Any]]:
++        plan = self._orders or {"markets": {}}
++        self._orders = None
++        out = []
++        for m in sorted(plan["markets"]):
++            rec = plan["markets"][m]
++            orders = []
++            for oid in rec["ids"]:
++                if oid in self._order_cache:
++                    orders.append({"venue_order_id": oid,
++                                   "fields": dict(self._order_cache[oid])})
++                else:
++                    orders.append({"venue_order_id": oid, "fields": None,
++                                   "error": (plan.get("why") or {}).get(
++                                       oid, note or "NOT_READ")})
++            out.append({
++                "market": m, "as_of": plan.get("as_of"),
++                "orders": orders, "orders_omitted": rec["omitted"],
++                "note": note if note else (
++                    None if orders else
++                    "NO ORDER ID OF OURS ON THIS MARKET'S VENUE ROWS"),
++                "labels": ("READ-ONLY. The venue's own order rows for the "
++                           "order ids on OUR executions, an allowlist of "
++                           "fields, verbatim. Nothing is attributed and "
++                           "nothing was written.")})
++        return out
++
++    def lines(self) -> Dict[str, Any]:
++        """The small block for the heartbeat and the account-risk record."""
++        md = mode()
++        if md != MODE_REPORT:
++            return {"state": MODE_OFF, "applied": False}
++        w = self._walk
++        out: Dict[str, Any] = {
++            "state": MODE_REPORT, "applied": False,
++            "passes_completed": self.passes,
++            "walking_pages": None if w is None else int(w["pages"]),
++            "last_error": self.last_error,
++            "summary": None if self.last is None else small(self.last),
++            "labels": ("REPORT ONLY. The venue's executions beside the "
++                       "ledger's booked results; nothing is applied and no "
++                       "gate reads this. Settled arithmetic on confirmed "
++                       "fills, not realized cash.")}
++        return out
+diff --git a/tests/test_l5_publication_visible.py b/tests/test_l5_publication_visible.py
+new file mode 100644
+index 000000000..957da3eba
+--- /dev/null
++++ b/tests/test_l5_publication_visible.py
+@@ -0,0 +1,91 @@
++"""What the registry publishes for a second strategy, and where the
++transfers read is, must be readable on the heartbeat. Reporting only."""
++import datetime as dt
++
++from src import l5_equity_baseline as EB
++from src import l5_equity_feed as EF
++from src import l5_pmus_live_runner as R
++from tests.test_l5_equity_feed import SINCE, old_page, run, verdict
++from tests.test_l5_venue_cost_attestation import Feed
++
++
++def runner(basis, results, day="2026-11-20"):
++    class Rn:
++        _publication_summary = R.Runner._publication_summary
++
++        def _lifetime_basis_line(self):
++            if isinstance(basis, BaseException):
++                raise basis
++            return basis
++
++        def _retired_results_line(self, d):
++            return None if results is None else {"utc_day": d,
++                                                 "results": results}
++
++        def day_realized_line(self):
++            return {"utc_day": day}
++    return Rn()
++
++
++BASIS = {"cash_read_utc": "2026-11-16T00:11:52+00:00",
++         "rebased_at_utc": "2026-11-16T00:20:00+00:00",
++         "results_since_rebase": {"m1": "-0.0114", "m2": "-0.0151"},
++         "rows": 2, "complete": True, "reconciled": True,
++         "lifetime_realized_usd": "-39.4945", "labels": "x"}
++
++
++def test_it_reports_the_verdicts_and_never_the_rows():
++    got = runner(BASIS, {"m1": "-0.0114"})._publication_summary()
++    assert got["lifetime_basis"] == {
++        "reconciled": True, "complete": True, "rows": 2,
++        "rebased_at_utc": "2026-11-16T00:20:00+00:00",
++        "cash_read_utc": "2026-11-16T00:11:52+00:00",
++        "lifetime_realized_usd": "-39.4945"}
++    assert got["retired_results_utc_day"] == {"utc_day": "2026-11-20",
++                                              "markets": 1}
++    assert "results_since_rebase" not in str(got)
++
++
++def test_an_unreconciled_basis_is_shown_as_unreconciled():
++    got = runner(dict(BASIS, reconciled=False), {})._publication_summary()
++    assert got["lifetime_basis"]["reconciled"] is False
++
++
++def test_an_unknown_basis_is_none_not_a_pass():
++    got = runner(None, None)._publication_summary()
++    assert got == {"lifetime_basis": None, "retired_results_utc_day": None}
++
++
++def test_it_never_raises():
++    got = runner(RuntimeError("x"), {})._publication_summary()
++    assert got["lifetime_basis"] is None and got["error"] == "RuntimeError"
++
++
++def test_the_real_runner_carries_it_on_the_heartbeat_source():
++    src = open(R.__file__).read()
++    assert '"account_risk_publication": self._publication_summary()' in src
++
++
++# ------------------------------------------------- the transfers read
++
++def test_progress_before_during_and_after_a_read():
++    w = EF.TransferWatch()
++    assert w.progress(0.0) == {"walking": False, "pages_this_walk": None,
++                               "reads_completed": 0, "backing_off_s": 0.0,
++                               "last_error": None}
++    feed = Feed([old_page(h) for h in range(1, 9)])
++    w, now = run(feed, steps=1, w=w)                # two pages a step
++    p = w.progress(now)
++    assert p["walking"] is True and p["pages_this_walk"] == 2
++    assert verdict(w, now)["net_usd"] is None        # still refuses
++    w, now = run(feed, steps=20, w=w)
++    p = w.progress(now)
++    assert p["walking"] is False and p["reads_completed"] == 1
++
++
++def test_progress_does_not_change_the_verdict():
++    feed = Feed([old_page(h) for h in range(1, 5)])
++    a, now = run(feed, steps=20)
++    before = verdict(a, now)
++    a.progress(now)
++    assert verdict(a, now) == before
+diff --git a/tests/test_l5_venue_basis.py b/tests/test_l5_venue_basis.py
+new file mode 100644
+index 000000000..3f70e518b
+--- /dev/null
++++ b/tests/test_l5_venue_basis.py
+@@ -0,0 +1,999 @@
++"""Venue executions as the accounting basis -- REPORT ONLY.
++
++THE DEFECT (production, 2026-11-16, cpc-btc-updown-5m-2026-11-16-0335z).
++Another executor bought UP 2 @ 0.08 then DOWN 2 @ 0.75 fifteen seconds later:
++a pair costing 1.66 that pays 2.00. The ledger read the venue's NET position
++in the gap, adopted UP 2 at the $1 bound, and booked -2.00. Nine other pairs
++that day filled between two reads and were never booked.
++
++Everything here is offline: the attestation suite's fake feed and row
++builder, a real InventoryStore in a temp dir, and the real settlement path.
++"""
++from __future__ import annotations
++
++import collections
++import copy
++import datetime as dt
++import inspect
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++from src import l5_venue_basis as VB
++from src import l5_venue_basis_report as VBR
++from src import l5_venue_cost_attestation as VCA
++
++from tests.test_l5_venue_cost_attestation import Feed, deposit, fill, retire
++
++M = "cpc-btc-updown-5m-2026-11-16-0335z"
++M2 = "cpc-btc-updown-5m-2026-11-16-0340z"
++M3 = "cpc-btc-updown-5m-2026-11-16-0345z"
++WALL = dt.datetime(2026, 11, 16, 12, 0, tzinfo=dt.timezone.utc)
++T_RET = "2026-11-16T03:41:00+00:00"
++
++
++def F(side, qty, px, rid, *, fee="0", action=None):
++    row = {"side": side, "qty": qty, "price": px, "fee": fee, "id": rid}
++    if action is not None:
++        row["action"] = action
++    return row
++
++
++PAIR = [F("UP", "2", "0.08", "a"), F("DOWN", "2", "0.75", "b")]
++
++
++def pair_rows(market=M, up="0.08", dn="0.75", n=""):
++    return [fill(market, "DOWN", "2", dn, "T-D" + n + market[-5:],
++                 "V-D" + n, t="2026-11-16T03:36:15Z"),
++            fill(market, "UP", "2", up, "T-U" + n + market[-5:],
++                 "V-U" + n, t="2026-11-16T03:36:00Z")]
++
++
++@pytest.fixture()
++def store(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["realized_attributed"] = "0"
++    s.state["realized_unattributed"] = "0"
++    s.state["realized_today"] = "0"
++    return s
++
++
++@pytest.fixture()
++def on(monkeypatch):
++    monkeypatch.setenv(VBR.MODE_ENV, "REPORT")
++    monkeypatch.delenv(VBR.DETAIL_ENV, raising=False)
++
++
++def run_pass(store, feed, *, steps=50):
++    job = VBR.Pass()
++    job.wall = lambda: WALL
++    now, out = 1_000.0, {}
++    for _ in range(steps):
++        now += VCA.STEP_INTERVAL_S + 1
++        out = job.step(store, feed, now)
++        if "report" in out or "walk_failed" in out or out.get("idle") in (
++                "OFF", "FRESH"):
++            break
++    return job, out
++
++
++def built(store, rows, *, complete=True):
++    by = {}
++    for r in rows:
++        by.setdefault(r["trade"]["marketSlug"] if "trade" in r
++                      else r["positionResolution"]["marketSlug"],
++                      []).append(r)
++    return VBR.build(store.state, by, feed_complete=complete,
++                     started_at=WALL)
++
++
++def entry(out, market):
++    return [e for e in out["entries"] if e["market"] == market][0]
++
++
++# ---------------------------------------------------------- 1. never booked
++
++class TestBothLegsFillBetweenSnapshots:
++
++    def test_pure_unbooked_pair_that_won(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        assert (res["up_qty"], res["dn_qty"]) == (D("2"), D("2"))
++        assert res["cost"] == D("1.66") and res["fees"] == D("0")
++        assert res["payout"] == D("2") and res["pnl"] == D("0.34")
++        cmp_ = VB.compare(None, res)
++        assert cmp_["class"] == VB.UNBOOKED
++        assert cmp_["difference"] == D("0.34")
++        assert cmp_["downward_adjustment"] == D("0")
++        assert cmp_["applied"] is False
++        assert VB.correction_path(cmp_["class"], res) \
++            == "NO PATH: UNBOOKED MARKET"
++
++    def test_pure_unbooked_market_that_lost(self):
++        res = VB.market_result([F("UP", "2", "0.08", "a")], D(0),
++                               feed_complete=True)
++        assert res["pnl"] == D("-0.16")
++        cmp_ = VB.compare(None, res)
++        assert cmp_["class"] == VB.UNBOOKED
++        assert cmp_["downward_adjustment"] == D("-0.16")
++        assert cmp_["upward_pending"] == D("0")
++
++    def test_the_pass_finds_a_market_the_ledger_never_saw(self, store, on):
++        before = repr(store.state)
++        job, out = run_pass(store, Feed([pair_rows()]))
++        rep = out["report"]
++        assert rep["feed_complete"] is True and rep["applied"] is False
++        assert rep["by_class"] == {"UNBOOKED": 1}
++        assert rep["venue_pnl_usd"] == "0.34"
++        assert rep["booked_pnl_usd"] == "0"
++        assert rep["upward_difference_pending_usd"] == "0.34"
++        assert rep["downward_adjustment_usd"] == "0"
++        d = rep["largest_differences"][0]
++        assert d["market"] == M and d["path"] == "NO PATH: UNBOOKED MARKET"
++        assert d["applied"] is False
++        assert repr(store.state) == before
++
++    def test_the_pass_reports_an_unbooked_pair_that_lost(self, store, on):
++        _job, out = run_pass(store, Feed([pair_rows(up="0.60", dn="0.55")]))
++        rep = out["report"]
++        assert rep["venue_pnl_usd"] == "-0.30"
++        assert rep["downward_adjustment_usd"] == "-0.30"
++        assert rep["upward_difference_pending_usd"] == "0"
++
++    def test_an_unbooked_lone_leg_has_no_settlement_value_so_no_figure(
++            self, store):
++        out = built(store, pair_rows()[1:])
++        e = entry(out, M)
++        assert e["comparison"]["class"] == VB.VENUE_INCOMPLETE
++        assert e["result"]["pnl"] is None
++        assert "SETTLEMENT_VALUE_UNKNOWN" in e["result"]["incomplete_reasons"]
++
++    def test_a_window_still_trading_is_not_reported(self, store):
++        recent = "cpc-btc-updown-5m-2026-11-16-1155z"
++        out = built(store, pair_rows(recent))
++        assert out["entries"] == []
++        assert out["summary"]["skipped"]["UNBOOKED_TOO_RECENT"] == 1
++
++    def test_upward_and_downward_are_never_netted(self, store):
++        out = built(store, pair_rows() + pair_rows(M2, "0.60", "0.55"))
++        s = out["summary"]
++        assert s["upward_difference_pending_usd"] == "0.34"
++        assert s["downward_adjustment_usd"] == "-0.30"
++        assert s["venue_pnl_usd"] == "0.04"
++
++
++# ------------------------------------------- 2. one leg seen, then completed
++
++class TestOneLegObservedBeforeTheCompletingLeg:
++
++    def test_pure(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        cmp_ = VB.compare(D("-2.00"), res)
++        assert cmp_["class"] == VB.BOOKED_MORE_PESSIMISTIC
++        assert cmp_["difference"] == D("2.34")
++        assert cmp_["downward_adjustment"] == D("0")
++        assert cmp_["upward_pending"] == D("2.34")
++        assert cmp_["applied"] is False
++
++    def test_the_pass_changes_nothing(self, store, on):
++        row = retire(store, M, up="2", yes="0", t=T_RET)
++        assert D(row["settlement_pnl"]) == D("-2")
++        before = repr(store.state)
++        lines_before = store.realized_lines()
++        _job, out = run_pass(store, Feed([pair_rows()]))
++        rep = out["report"]
++        assert rep["by_class"] == {"BOOKED_MORE_PESSIMISTIC": 1}
++        d = rep["largest_differences"][0]
++        assert D(d["difference"]) == D("2.34")
++        assert D(d["booked_pnl"]) == D("-2")
++        assert d["path"] == VB.PATH_SUPERSET
++        assert D(rep["upward_difference_pending_usd"]) == D("2.34")
++        assert D(rep["downward_adjustment_usd"]) == D("0")
++        assert repr(store.state) == before
++        assert store.realized_lines() == lines_before
++        assert D(store.state["retired_markets"][M]["settlement_pnl"]) \
++            == D("-2")
++
++
++# ----------------------------------------------- 3. net returning to zero
++
++class TestNetReturningToZero:
++
++    def test_position_from_fills(self):
++        pos = VB.position_from_fills(PAIR)
++        assert (pos["up_qty"], pos["dn_qty"]) == (D("2"), D("2"))
++        assert pos["net_up_minus_down"] == D("0")
++        assert pos.consistent_with_net(0) is True
++        assert pos.consistent_with_net(2) is False
++        one = VB.position_from_fills(PAIR[:1])
++        assert one.consistent_with_net(2) is True
++
++    def test_an_unreadable_position_is_consistent_with_nothing(self):
++        pos = VB.position_from_fills([{"side": "UP"}])
++        assert pos["readable"] is False
++        assert pos.consistent_with_net(0) is False
++
++    def test_the_phantom_is_named_and_the_store_is_not_touched(self, store):
++        retire(store, M, up="2", yes="0", t=T_RET)
++        before = repr(store.state)
++        e = entry(built(store, pair_rows()), M)
++        ph = e["phantom"]
++        assert ph["side"] == "UP" and ph["qty"] == D("2")
++        assert ph["ledger"] == {"UP": D("2"), "DOWN": D("0")}
++        assert ph["venue"] == {"UP": D("2"), "DOWN": D("2")}
++        assert ph["ledger_net"] == D("2") and ph["venue_net"] == D("0")
++        assert repr(store.state) == before
++        pos = store.state.get("positions") or {}
++        assert not any(k.startswith(M) and D(str(v)) != 0
++                       for k, v in pos.items())
++
++    def test_no_phantom_when_the_nets_agree(self):
++        res = VB.market_result(PAIR[:1], D(0), feed_complete=True)
++        assert VB.phantom("2", "0", res) is None
++
++
++# ------------------------------- 4. fills differ from the adopted snapshot
++
++class TestFillQuantitiesDifferFromTheSnapshot:
++
++    def test_pure(self):
++        res = VB.market_result([F("UP", "5", "0.60", "a")], D(0),
++                               feed_complete=True)
++        assert res["pnl"] == D("-3.00")
++        cmp_ = VB.compare(D("-2.00"), res)
++        assert cmp_["class"] == VB.BOOKED_TOO_OPTIMISTIC
++        assert cmp_["difference"] == D("-1.00")
++        assert cmp_["downward_adjustment"] == D("-1.00")
++        assert cmp_["upward_pending"] == D("0")
++
++    def test_the_pass(self, store, on):
++        retire(store, M, up="2", yes="0", t=T_RET)
++        before = repr(store.state)
++        rows = [fill(M, "UP", "5", "0.60", "T5", "V5",
++                     t="2026-11-16T03:36:00Z")]
++        _job, out = run_pass(store, Feed([rows]))
++        rep = out["report"]
++        assert rep["by_class"] == {"BOOKED_TOO_OPTIMISTIC": 1}
++        assert D(rep["downward_adjustment_usd"]) == D("-1")
++        assert D(rep["upward_difference_pending_usd"]) == D("0")
++        assert rep["largest_differences"][0]["path"] == VB.PATH_SUPERSET
++        assert repr(store.state) == before
++
++    def test_venue_fills_less_than_the_ledger_have_no_path(self):
++        res = VB.market_result([F("UP", "1", "0.60", "a")], D(0),
++                               feed_complete=True)
++        cmp_ = VB.compare(D("-2"), res)
++        assert VB.correction_path(cmp_["class"], res, ledger_up="2",
++                                  ledger_dn="0", at_bound=True) \
++            == VB.PATH_NOT_CONTAINED
++
++    def test_exact_quantities_name_the_attestation(self):
++        res = VB.market_result([F("UP", "2", "0.08", "a")], D(0),
++                               feed_complete=True)
++        cmp_ = VB.compare(D("-2"), res)
++        assert cmp_["class"] == VB.BOOKED_MORE_PESSIMISTIC
++        assert VB.correction_path(cmp_["class"], res, ledger_up="2",
++                                  ledger_dn="0", at_bound=True) \
++            == VB.PATH_ATTESTATION
++        assert VB.correction_path(cmp_["class"], res, ledger_up="2",
++                                  ledger_dn="0", at_bound=False) \
++            == VB.PATH_NOT_AT_BOUND
++
++
++# ------------------------------------- 5. settlement cash not yet confirmed
++
++class TestSettlementCash:
++
++    def test_not_confirmed_is_labelled_not_realized(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True,
++                               settlement_credit="NOT_CONFIRMED")
++        assert res["complete"] is True and res["pnl"] == D("0.34")
++        assert res["settlement_cash"] == "NOT_CONFIRMED"
++        assert res["realized_cash"] is False
++        assert res["label"] == VB.LABEL_ARITHMETIC
++        assert "Not realized cash" in res["label"]
++
++    def test_not_checked(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        assert res["settlement_cash"] == "NOT_CHECKED"
++        assert res["realized_cash"] is False
++
++    def test_confirmed_and_agreeing(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True,
++                               settlement_credit="2.00")
++        assert res["settlement_cash"] == "CONFIRMED"
++        assert res["settlement_credit"] == D("2.00")
++        assert res["settlement_credit_agrees"] is True
++        assert res["realized_cash"] is True
++        assert VB.compare(D("0.34"), res)["class"] == VB.AGREES
++
++    def test_a_confirmed_credit_that_disagrees_is_flagged(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True,
++                               settlement_credit="1.00")
++        assert res["settlement_cash"] == "CONFIRMED"
++        assert res["settlement_credit_agrees"] is False
++        assert res["realized_cash"] is False
++        assert res["pnl_on_credit"] == D("-0.66")
++        cmp_ = VB.compare(D("0.34"), res)
++        assert cmp_["class"] == VB.SETTLEMENT_CREDIT_DISAGREES
++        # the LOWER reading: a loss the ledger lacks is still surfaced
++        assert cmp_["downward_adjustment"] == D("-1.00")
++        assert cmp_["upward_pending"] == D("0")
++        assert VB.correction_path(cmp_["class"], res) == VB.PATH_CREDIT
++
++    def test_an_unreadable_credit_is_incomplete(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True,
++                               settlement_credit="lots")
++        assert res["complete"] is False and res["pnl"] is None
++
++    def test_the_pass_checks_no_cash_and_says_so(self, store, on):
++        _job, out = run_pass(store, Feed([pair_rows()]))
++        assert out["report"]["settlement_cash"] == {
++            "CONFIRMED": 0, "NOT_CONFIRMED": 0, "NOT_CHECKED": 1}
++        assert "not realized cash" in out["report"]["labels"].lower() \
++            or "settled arithmetic" in out["report"]["labels"]
++
++    def test_the_venue_resolution_row_is_a_cross_check_only(self, store):
++        res_row = {"type": "activity_type_position_resolution",
++                   "positionResolution": {
++                       "marketSlug": M, "time": "2026-11-16T03:40:10Z",
++                       "afterPosition": {"realized": {"value": "0.3400",
++                                                      "currency": "USD"}}}}
++        e = entry(built(store, pair_rows() + [res_row]), M)
++        assert e["venue_resolution"] == {"venue_realized": "0.3400",
++                                         "state": "AGREES"}
++        bad = copy.deepcopy(res_row)
++        bad["positionResolution"]["afterPosition"]["realized"]["value"] = "-2"
++        e = entry(built(store, pair_rows() + [bad]), M)
++        assert e["venue_resolution"]["state"] == "DISAGREES"
++        assert e["result"]["pnl"] == D("0.34")       # not substituted
++
++
++# ------------------------------------------------------------ fail closed
++
++class TestIncompleteNeverGuesses:
++
++    def test_incomplete_feed(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=False)
++        assert res["complete"] is False and res["pnl"] is None
++        assert res["payout"] is None
++        cmp_ = VB.compare(D("-2"), res)
++        assert cmp_["class"] == VB.VENUE_INCOMPLETE
++        assert cmp_["difference"] is None
++        assert cmp_["downward_adjustment"] is None
++
++    @pytest.mark.parametrize("bad", [
++        {"side": "UP", "qty": "2", "price": "0.08", "id": "x"},   # no fee
++        {"side": "UP", "qty": "2", "price": "0.08", "fee": "0"},  # no id
++        {"side": "??", "qty": "2", "price": "0.08", "fee": "0", "id": "x"},
++        {"side": "UP", "qty": "0", "price": "0.08", "fee": "0", "id": "x"},
++        {"side": "UP", "qty": "2", "price": "1.2", "fee": "0", "id": "x"},
++        {"side": "UP", "qty": "2", "price": "0.08", "fee": "0", "id": "a"},
++        {"side": "UP", "qty": "2", "price": "0.08", "fee": "0", "id": "x",
++         "action": "TRANSFER"},
++        "not a row",
++    ])
++    def test_unreadable_row(self, bad):
++        res = VB.market_result(PAIR + [bad], D(0), feed_complete=True)
++        assert res["complete"] is False and res["pnl"] is None
++        cmp_ = VB.compare(None, res)
++        assert cmp_["class"] == VB.VENUE_INCOMPLETE
++        assert cmp_["downward_adjustment"] is None
++
++    @pytest.mark.parametrize("yes", ["0.5", "2", "-1", "x"])
++    def test_settlement_value_must_be_0_or_1(self, yes):
++        res = VB.market_result(PAIR, yes, feed_complete=True)
++        assert res["complete"] is False and res["pnl"] is None
++
++    def test_fees_are_subtracted(self):
++        fills = [F("UP", "2", "0.08", "a", fee="0.02"),
++                 F("DOWN", "2", "0.75", "b", fee="0.03")]
++        res = VB.market_result(fills, D(1), feed_complete=True)
++        assert res["fees"] == D("0.05") and res["pnl"] == D("0.29")
++
++    def test_a_rebate_is_a_negative_fee(self):
++        res = VB.market_result([F("UP", "2", "0.08", "a", fee="-0.01")],
++                               D(1), feed_complete=True)
++        assert res["pnl"] == D("1.85")
++
++    def test_a_sell_reduces_quantity_and_credits_its_proceeds(self):
++        fills = [F("UP", "2", "0.08", "a"),
++                 F("UP", "2", "0.25", "b", action="SELL")]
++        res = VB.market_result(fills, D(1), feed_complete=True)
++        assert res["up_qty"] == D("0") and res["sells"] == 1
++        assert res["cost"] == D("-0.34") and res["pnl"] == D("0.34")
++        part = VB.market_result(
++            [F("UP", "5", "0.60", "a"),
++             F("UP", "2", "0.70", "b", action="SELL")], D(0),
++            feed_complete=True)
++        assert part["up_qty"] == D("3") and part["pnl"] == D("-1.60")
++
++    def test_selling_more_than_was_bought_is_incomplete(self):
++        res = VB.market_result([F("UP", "2", "0.25", "b", action="SELL")],
++                               D(1), feed_complete=True)
++        assert res["complete"] is False and res["pnl"] is None
++
++    def test_a_ledger_row_with_no_venue_fill_gets_no_figure(self):
++        res = VB.market_result([], D(0), feed_complete=True)
++        cmp_ = VB.compare(D("-2"), res)
++        assert cmp_["class"] == VB.VENUE_HAS_NO_FILLS
++        assert cmp_["difference"] is None
++
++    def test_an_unreadable_booked_figure(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        assert VB.compare("n/a", res)["class"] == VB.LEDGER_UNREADABLE
++
++    def test_agreement_tolerance(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        assert VB.compare(D("0.34004"), res)["class"] == VB.AGREES
++        assert VB.compare(D("0.3401"), res)["class"] \
++            == VB.BOOKED_TOO_OPTIMISTIC
++
++    def test_feed_row_whose_direction_contradicts_its_outcome(self, store):
++        rows = pair_rows()
++        rows[1]["trade"]["passiveExecution"]["order"]["side"] = \
++            "ORDER_SIDE_SELL"                    # with OUTCOME_SIDE_YES
++        e = entry(built(store, rows), M)
++        assert e["venue_unreadable_reason"] == "FILL_ACTION_UNREADABLE"
++        assert e["comparison"]["class"] == VB.VENUE_INCOMPLETE
++        assert e["result"]["pnl"] is None
++
++    def test_feed_row_with_a_sell_intent(self):
++        r = pair_rows()[1]
++        r["trade"]["passiveExecution"]["order"]["intent"] = \
++            "ORDER_INTENT_SELL_LONG"
++        assert VBR.row_action(r) == "UNKNOWN"
++        ok = pair_rows()[0]
++        ok["trade"]["passiveExecution"]["order"].update(
++            side="ORDER_SIDE_SELL", intent="ORDER_INTENT_BUY_SHORT")
++        assert VBR.row_action(ok) == "BUY"
++
++    def test_feed_fees_reach_the_result(self, store):
++        rows = [fill(M, "DOWN", "2", "0.75", "TD", "VD", fee="0.03",
++                     t="2026-11-16T03:36:15Z"),
++                fill(M, "UP", "2", "0.08", "TU", "VU", fee="0.02",
++                     t="2026-11-16T03:36:00Z")]
++        e = entry(built(store, rows), M)
++        assert e["result"]["fees"] == D("0.05")
++        assert e["result"]["pnl"] == D("0.29")
++
++    def test_a_feed_that_does_not_end_on_eof(self, store, on):
++        retire(store, M, up="2", yes="0", t=T_RET)
++        before = repr(store.state)
++        _job, out = run_pass(store, Feed([pair_rows()], eof=False))
++        rep = out["report"]
++        assert rep["feed_complete"] is False
++        assert rep["by_class"] == {"VENUE_INCOMPLETE": 1}
++        #: and the report says WHY, with the market named
++        assert sum(rep["incomplete_by_reason"].values()) >= 1
++        assert all(isinstance(v, list) and v
++                   for v in rep["incomplete_examples"].values())
++        assert rep["venue_pnl_usd"] == "0"
++        assert rep["downward_adjustment_usd"] == "0"
++        assert rep["largest_differences"] == []
++        assert repr(store.state) == before
++
++    def test_a_re_served_row_is_not_a_second_fill(self, store, on):
++        rows = pair_rows()
++        _job, out = run_pass(store, Feed([rows, [copy.deepcopy(rows[0]),
++                                                 deposit("2026-11-01T00:00:00Z")]]))
++        assert out["report"]["venue_pnl_usd"] == "0.34"
++        assert out["report"]["pages"] == 2
++
++    def test_a_market_retired_after_the_pass_started_is_skipped(self, store):
++        retire(store, M, up="2", yes="0", t="2026-11-16T12:00:01+00:00")
++        out = built(store, pair_rows())
++        assert out["entries"] == []
++        assert out["summary"]["skipped"]["RETIRED_AFTER_PASS_STARTED"] == 1
++
++    def test_rows_settled_before_the_rebase_are_out_of_scope(self, store):
++        retire(store, M, up="2", yes="0", t=T_RET)
++        store.state["accounting_rebase_log"] = [
++            {"t": "2026-11-16T05:00:00+00:00", "attributed": "0",
++             "unattributed": "0"}]
++        out = built(store, pair_rows())
++        assert out["entries"] == []          # booked, and before the scope
++
++
++class TestSummarise:
++
++    def test_bounded_and_sorted(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        per = [{"market": "m%03d" % i, "result": res,
++                "comparison": VB.compare(D(i), res), "path": "p"}
++               for i in range(1, 60)]
++        s = VB.summarise(per)
++        assert s["markets"] == 59 and s["differences_total"] == 59
++        assert len(s["largest_differences"]) == VB.MAX_LISTED == 40
++        assert s["largest_differences"][0]["market"] == "m059"
++        assert s["venue_confirmed_fills"] == 118
++        assert s["total_cost_usd"] == str(D("1.66") * 59)
++        assert s["applied"] is False
++
++    def test_small_has_no_rows(self):
++        res = VB.market_result(PAIR, D(0), feed_complete=True)
++        s = VB.summarise([{"market": "m", "result": res,
++                           "comparison": VB.compare(None, res)}])
++        sm = VBR.small(s)
++        assert "largest_differences" not in sm
++        assert sm["venue_pnl_usd"] == "0.34"
++
++
++# ----------------------------------------------------------------- switch
++
++class TestTheSwitch:
++
++    @pytest.mark.parametrize("val", [None, "", "report", "Report", "ON",
++                                     "1", "true", "REPORT_ONLY", "APPLY",
++                                     "REPORT,APPLY", "YES"])
++    def test_only_the_exact_token_enables(self, val):
++        env = {} if val is None else {VBR.MODE_ENV: val}
++        assert VBR.mode(env) == "OFF"
++
++    def test_the_token(self):
++        assert VBR.mode({VBR.MODE_ENV: "REPORT"}) == "REPORT"
++
++    def test_there_is_no_mode_that_writes(self):
++        src = inspect.getsource(VBR) + inspect.getsource(VB)
++        for verb in ("attest_retired_market_cost", "note_venue_cost_attempt",
++                     ".save(", "retire_settled_market", "setdefault(\"",
++                     "state["):
++            assert verb not in src, verb
++
++    def test_off_reads_nothing(self, store, monkeypatch):
++        monkeypatch.delenv(VBR.MODE_ENV, raising=False)
++        feed = Feed([pair_rows()])
++        job, out = run_pass(store, feed)
++        assert out == {"idle": "OFF"} and feed.reads == []
++        assert job.lines() == {"state": "OFF", "applied": False}
++
++    def test_paced_like_the_attestation(self, store, on):
++        feed = Feed([[deposit("2026-11-16T00:00:00Z")]] * 9)
++        job = VBR.Pass()
++        job.wall = lambda: WALL
++        job.step(store, feed, 1000.0)
++        assert len(feed.reads) == VCA.PAGES_PER_STEP
++        assert job.step(store, feed, 1001.0) == {"idle": "PACED"}
++        assert len(feed.reads) == VCA.PAGES_PER_STEP
++        job.step(store, feed, 1000.0 + VCA.STEP_INTERVAL_S)
++        assert len(feed.reads) == 2 * VCA.PAGES_PER_STEP
++
++    def test_a_finished_pass_is_not_repeated_at_once(self, store, on):
++        feed = Feed([pair_rows()])
++        job, _out = run_pass(store, feed)
++        n = len(feed.reads)
++        assert job.step(store, feed, 2000.0) == {"idle": "FRESH"}
++        assert len(feed.reads) == n
++
++    def test_a_transport_fault_backs_off(self, store, on):
++        job, out = run_pass(store, Feed([[]], fail=RuntimeError("429")))
++        assert out == {"walk_failed": "error:RuntimeError"}
++        assert job.lines()["last_error"] == "error:RuntimeError"
++        assert job.lines()["summary"] is None
++
++
++# ----------------------------------------------------------------- runner
++
++class Rn:
++    maybe_report_venue_basis = R.Runner.maybe_report_venue_basis
++
++    def __init__(self, store, feed):
++        self.store = store
++        self.transport = feed
++        self.stats = collections.Counter()
++
++
++@pytest.fixture()
++def tape(monkeypatch):
++    got = []
++    monkeypatch.setattr(R, "emit", lambda kind, doc: got.append((kind, doc)))
++    return got
++
++
++def drive(r, n=12):
++    now = 1_000.0
++    for _ in range(n):
++        now += VCA.STEP_INTERVAL_S + 1
++        r.maybe_report_venue_basis(now)
++
++
++class TestRunner:
++
++    def test_off_emits_and_reads_nothing(self, store, tape, monkeypatch):
++        monkeypatch.delenv(VBR.MODE_ENV, raising=False)
++        monkeypatch.setenv(VBR.DETAIL_ENV, M)
++        feed = Feed([pair_rows()])
++        r = Rn(store, feed)
++        drive(r)
++        assert tape == [] and feed.reads == []
++        assert not hasattr(r, "_venue_basis_pass")
++        assert R.venue_basis_lines(r) == {"state": "OFF", "applied": False}
++
++    def test_report_emits_one_line_and_writes_nothing(self, store, tape, on):
++        retire(store, M, up="2", yes="0", t=T_RET)
++        before = repr(store.state)
++        mtime = (store.path, open(store.path, "rb").read())
++        r = Rn(store, Feed([pair_rows() + pair_rows(M2)]))
++        drive(r)
++        assert [k for k, _ in tape] == ["L5_VENUE_BASIS"]
++        doc = tape[0][1]
++        assert doc["mode"] == "REPORT" and doc["feed_complete"] is True
++        assert doc["pages"] == 1 and doc["as_of"]
++        assert doc["by_class"] == {"BOOKED_MORE_PESSIMISTIC": 1,
++                                   "UNBOOKED": 1}
++        assert repr(store.state) == before
++        assert open(mtime[0], "rb").read() == mtime[1]
++        hb = R.venue_basis_lines(r)
++        assert hb["state"] == "REPORT" and hb["applied"] is False
++        assert "largest_differences" not in hb["summary"]
++        assert D(hb["summary"]["upward_difference_pending_usd"]) \
++            == D("2.68")
++        assert D(hb["summary"]["downward_adjustment_usd"]) == D("0")
++
++    def test_it_never_raises_into_the_tick(self, store, tape, on):
++        r = Rn(None, object())               # no state, no transport verb
++        drive(r)                             # must not raise
++        r2 = Rn(store, Feed([[{"type": "activity_type_trade",
++                               "trade": {"marketSlug": M, "junk": object()}},
++                              "garbage", None]]))
++        drive(r2)
++        assert all(k == "L5_VENUE_BASIS" for k, _ in tape)
++
++    def test_a_broken_store_is_swallowed(self, tape, on):
++        class Bad:
++            @property
++            def state(self):
++                raise RuntimeError("volume gone")
++        r = Rn(Bad(), Feed([pair_rows()]))
++        drive(r)
++        assert tape == []
++        assert r.stats["venue_basis_error:RuntimeError"] >= 1
++
++    def test_the_lines_helper_never_raises(self, monkeypatch):
++        monkeypatch.setenv(VBR.MODE_ENV, "REPORT")
++
++        class Odd:
++            _venue_basis_pass = "not a pass"
++        out = R.venue_basis_lines(Odd())
++        assert out["state"] == "UNAVAILABLE" and out["applied"] is False
++
++    def test_it_is_on_the_heartbeat_the_risk_record_and_the_tick(self):
++        assert '"venue_basis": venue_basis_lines(self)' in inspect.getsource(
++            R.Runner.heartbeat)
++        assert '"venue_basis": venue_basis_lines(self)' in inspect.getsource(
++            R.Runner.account_risk_line)
++        src = inspect.getsource(R)
++        assert src.count("self.maybe_report_venue_basis(now)") == 1
++
++    def test_no_gate_reads_it(self):
++        src = inspect.getsource(R)
++        assert src.count("venue_basis_lines(") == 3       # def + 2 reports
++        assert src.count("_venue_basis_pass") == 3
++        assert "l5_venue_basis" not in inspect.getsource(LX)
++
++
++# ----------------------------------------------------------------- detail
++
++OPEN = "aec-nba-det-sa-2026-11-17"
++QUIET = "aec-nba-hou-mia-2026-11-16"
++
++
++class TestDetail:
++
++    def test_only_exact_slugs_are_honoured(self):
++        env = {VBR.DETAIL_ENV: " %s ,cpc-btc-*,CPC-BTC-UPDOWN-5M-X,short,"
++               "a/b-c-d-e-f-g-h-i,%s,%s, ,cpc-btc-updown-5m-" % (M, M2, M)}
++        assert VBR.detail_markets(env) == [M, M2, "cpc-btc-updown-5m-"]
++        assert VBR.detail_markets({}) == []
++        assert VBR.detail_markets({VBR.DETAIL_ENV: "x" * 121}) == []
++
++    def test_at_most_twelve(self):
++        many = ",".join("market-number-%04d" % i for i in range(30))
++        assert len(VBR.detail_markets({VBR.DETAIL_ENV: many})) == 12
++
++    def test_a_prefix_matches_nothing(self, store, tape, on, monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, "cpc-btc-updown-5m-")
++        drive(Rn(store, Feed([pair_rows()])))
++        det = [d for k, d in tape if k == "L5_VENUE_BASIS_DETAIL"]
++        assert len(det) == 1 and det[0]["venue_rows"] == 0
++
++    def test_unset_emits_nothing(self, store, tape, on):
++        drive(Rn(store, Feed([pair_rows()])))
++        assert [k for k, _ in tape] == ["L5_VENUE_BASIS"]
++
++    def test_rows_and_identity_fields(self, store, tape, on, monkeypatch):
++        # OPEN is held by the ledger (an open position): out of the
++        # comparison's scope, but its rows are still printed when listed.
++        store.state.setdefault("positions", {})["%s|UP" % OPEN] = "5"
++        store.save()
++        rows = [fill(OPEN, "UP", "5", "0.46", "TA1", "VA1", fee="0.01",
++                     t="2026-11-17T20:00:00Z")]
++        tr = rows[0]["trade"]
++        tr["clientOrderId"] = "c" * 200
++        tr["passiveExecution"]["order"].update(
++            side="ORDER_SIDE_BUY", intent="ORDER_INTENT_BUY_LONG",
++            manualOrderIndicator="MANUAL_ORDER_INDICATOR_MANUAL",
++            clientOrderId="coid-7")
++        tr["passiveExecution"]["tradeId"] = "exec-trade-9"
++        monkeypatch.setenv(VBR.DETAIL_ENV, "%s,%s" % (OPEN, QUIET))
++        before = repr(store.state)
++        drive(Rn(store, Feed([rows + pair_rows()])))
++        det = {d["market"]: d for k, d in tape
++               if k == "L5_VENUE_BASIS_DETAIL"}
++        assert sorted(det) == sorted([OPEN, QUIET])
++        assert repr(store.state) == before
++        d = det[OPEN]
++        assert d["venue_rows"] == 1 and d["feed_complete"] is True
++        row = d["rows"][0]
++        assert row["time"] == "2026-11-17T20:00:00+00:00"
++        assert row["side"] == "UP" and row["qty"] == "5"
++        assert row["price_yes_quoted"] == "0.46" and row["fee"] == "0.01"
++        assert row["action"] == {"order_side": "ORDER_SIDE_BUY",
++                                 "outcome_side": "OUTCOME_SIDE_YES",
++                                 "intent": "ORDER_INTENT_BUY_LONG",
++                                 "read_as": "BUY"}
++        assert row["trade_id"] == "TA1" and row["is_aggressor"] is False
++        assert row["venue_order_id_ours"] == "VA1"
++        assert row["venue_order_id_ours_source"] == "flag"
++        assert "CPTY-TA1" not in repr(d)             # not the counterparty
++        ids = row["identity_fields"]
++        assert ids["trade.clientOrderId"] == "c" * 80          # clipped
++        assert ids["trade.passiveExecution.order.manualOrderIndicator"] \
++            == "MANUAL_ORDER_INDICATOR_MANUAL"
++        assert ids["trade.passiveExecution.order.clientOrderId"] == "coid-7"
++        assert ids["trade.passiveExecution.tradeId"] == "exec-trade-9"
++        # the open market is not compared as an unbooked one
++        rep = [d for k, d in tape if k == "L5_VENUE_BASIS"][0]
++        assert rep["by_class"] == {"UNBOOKED": 1}
++        q = det[QUIET]
++        assert q["venue_rows"] == 0 and q["rows"] == []
++        assert q["note"] == "NO VENUE EXECUTION ROWS FOUND FOR THIS MARKET"
++
++    def test_no_rows_on_an_incomplete_feed_is_not_absence(self, store, tape,
++                                                          on, monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, QUIET)
++        drive(Rn(store, Feed([pair_rows()], eof=False)))
++        d = [d for k, d in tape if k == "L5_VENUE_BASIS_DETAIL"][0]
++        assert d["feed_complete"] is False
++        assert "not evidence of absence" in d["note"]
++
++    def test_rows_are_bounded(self):
++        rows = [fill(M, "UP", "1", "0.10", "T%03d" % i, "V%03d" % i)
++                for i in range(75)]
++        d = VBR.detail(M, rows, feed_complete=True, as_of="x")
++        assert d["venue_rows"] == 75 and d["rows_listed"] == 60
++        assert d["rows_omitted"] == 15 and len(d["rows"]) == 60
++
++    def test_identity_fields_are_bounded(self):
++        row = {"type": "activity_type_trade",
++               "trade": {"n%d" % i: {"orderId": "v"} for i in range(100)}}
++        assert len(VBR.identity_fields(row)) \
++            == VBR.DETAIL_MAX_IDENTITY_FIELDS
++
++    def test_allowlist_only_and_no_credentials_or_account_ids(self):
++        row = fill(OPEN, "UP", "5", "0.46", "TA1", "VA1")
++        tr = row["trade"]
++        secret = "S3CR3T-DO-NOT-LOG"
++        tr.update({
++            "accountId": secret, "userId": secret, "ownerOrderId": secret,
++            "walletAddress": secret, "email": secret, "apiKey": secret,
++            "apiSecret": secret, "authToken": secret, "signature": secret,
++            "sessionId": secret, "clientIp": secret, "ip": secret,
++            "account": {"orderId": secret, "tradeId": secret},
++            "auth": {"deep": {"clientOrderId": secret}},
++            "orderIdNote": secret, "someOtherId": secret, "memo": secret,
++            "orderId": "ORD-1", "tradeId": "TRD-1",
++            "clientOrderId": "COID-1"})
++        mine = tr["passiveExecution"]
++        mine.update({"accountId": secret, "executionId": "EXE-1",
++                     "user": {"orderId": secret}})
++        mine["order"].update({
++            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATED",
++            "clientOrderId": "COID-2", "userKey": secret,
++            "ownerAccount": secret, "tokenId": secret})
++        tr["aggressorExecution"].update({"tradeId": "THEIRS",
++                                         "clientOrderId": "THEIRS"})
++        tr["aggressorExecution"]["order"]["manualOrderIndicator"] = "THEIRS"
++        d = VBR.detail(OPEN, [row], feed_complete=True, as_of="x")
++        text = repr(d)
++        assert secret not in text and "THEIRS" not in text
++        assert "CPTY-" not in text
++        assert d["rows"][0]["identity_fields"] == {
++            "trade.orderId": "ORD-1", "trade.tradeId": "TRD-1",
++            "trade.clientOrderId": "COID-1",
++            "trade.passiveExecution.executionId": "EXE-1",
++            "trade.passiveExecution.order.manualOrderIndicator":
++                "MANUAL_ORDER_INDICATOR_AUTOMATED",
++            "trade.passiveExecution.order.clientOrderId": "COID-2"}
++        for path in d["rows"][0]["identity_fields"]:
++            assert not any(part in seg.lower()
++                           for seg in path.split(".")
++                           for part in VBR.FORBIDDEN_KEY_PARTS), path
++
++    def test_neither_execution_is_read_when_ours_is_unknown(self):
++        row = fill(OPEN, "UP", "5", "0.46", "TA1", "VA1")
++        del row["trade"]["isAggressor"]
++        row["trade"]["passiveExecution"]["tradeId"] = "X1"
++        r = VBR.detail_row(row)
++        assert r["identity_fields"] == {}
++        assert r["venue_order_id_ours"] is None and r["trade_id"] == "TA1"
++        assert "VA1" not in repr(r) and "CPTY" not in repr(r)
++
++
++# ------------------------------------------------------------ order reads
++
++class OrderFeed(Feed):
++    """The feed double plus the transport's existing `order(id)` read."""
++
++    def __init__(self, pages, *, rows=None, fail=(), **kw):
++        super().__init__(pages, **kw)
++        self.order_rows = rows or {}
++        self.order_fail = set(fail)
++        self.order_reads = []
++
++    def order(self, oid):
++        self.order_reads.append(oid)
++        if oid in self.order_fail:
++            raise TimeoutError("venue")
++        return dict(self.order_rows.get(oid) or {"state": "ORDER_STATE_X"})
++
++
++def many_orders(market, n, tag="V"):
++    return [fill(market, "UP", "1", "0.10", "T%s%02d" % (tag, i),
++                 "%s%02d" % (tag, i)) for i in range(n)]
++
++
++def order_lines(tape):
++    return [d for k, d in tape if k == "L5_VENUE_BASIS_ORDERS"]
++
++
++SECRET = "S3CR3T-DO-NOT-LOG"
++ORDER_ROW = {
++    "id": "VA1", "marketSlug": OPEN, "side": "ORDER_SIDE_BUY",
++    "outcomeSide": "OUTCOME_SIDE_YES", "intent": "ORDER_INTENT_BUY_LONG",
++    "type": "ORDER_TYPE_LIMIT", "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
++    "price": {"value": "0.4600", "currency": "USD"}, "quantity": "5",
++    "cumQuantity": "5", "leavesQuantity": "0",
++    "state": "ORDER_STATE_FILLED",
++    "createTime": "2026-11-17T19:59:58.1Z",
++    "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL",
++    "clientOrderId": "c" * 200,
++    "account": SECRET, "accountId": SECRET, "userId": SECRET,
++    "ownerSide": SECRET, "walletAddress": SECRET, "email": SECRET,
++    "apiKey": SECRET, "secret": SECRET, "authToken": SECRET,
++    "signature": SECRET, "sessionId": SECRET, "ip": SECRET,
++    "participant": {"clientOrderId": SECRET, "state": SECRET},
++    "avgPx": {"value": "0.4600"}, "commission": "0"}
++
++
++class TestOrderReads:
++
++    def test_fields_are_an_allowlist(self, store, tape, on, monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, "%s,%s" % (OPEN, QUIET))
++        rows = [fill(OPEN, "UP", "5", "0.46", "TA1", "VA1"),
++                fill(OPEN, "UP", "1", "0.46", "TA2", "VA1")]
++        feed = OrderFeed([rows], rows={"VA1": ORDER_ROW})
++        before = repr(store.state)
++        drive(Rn(store, feed))
++        assert feed.order_reads == ["VA1"]           # distinct, once
++        got = {d["market"]: d for d in order_lines(tape)}
++        assert sorted(got) == sorted([OPEN, QUIET])
++        assert got[OPEN]["orders"] == [{"venue_order_id": "VA1", "fields": {
++            "side": "ORDER_SIDE_BUY", "outcomeSide": "OUTCOME_SIDE_YES",
++            "intent": "ORDER_INTENT_BUY_LONG", "type": "ORDER_TYPE_LIMIT",
++            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL", "price": "0.4600",
++            "quantity": "5", "cumQuantity": "5",
++            "state": "ORDER_STATE_FILLED",
++            "createTime": "2026-11-17T19:59:58.1Z",
++            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL",
++            "clientOrderId": "c" * 80}}]
++        assert SECRET not in repr(tape) and "CPTY-" not in repr(
++            order_lines(tape))
++        assert got[QUIET]["orders"] == [] and got[QUIET]["note"]
++        assert repr(store.state) == before
++
++    def test_bounded_per_market_and_per_pass(self, store, tape, on,
++                                             monkeypatch):
++        ms = ["listed-market-number-%02d" % i for i in range(9)]
++        monkeypatch.setenv(VBR.DETAIL_ENV, ",".join(ms))
++        rows = []
++        for i, m in enumerate(ms):
++            rows += many_orders(m, 8, tag="M%d-" % i)
++        feed = OrderFeed([rows])
++        drive(Rn(store, feed), n=80)
++        got = order_lines(tape)
++        assert len(got) == 9
++        assert all(len(d["orders"]) <= VBR.ORDERS_MAX_PER_MARKET
++                   for d in got)
++        assert got[0]["orders_omitted"] == 2
++        assert sum(len(d["orders"]) for d in got) == 40
++        assert len(feed.order_reads) == VBR.ORDERS_MAX_PER_PASS == 40
++        assert len(set(feed.order_reads)) == 40
++
++    def test_one_read_per_step(self, store, on, monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
++        feed = OrderFeed([many_orders(OPEN, 3)])
++        job = VBR.Pass()
++        job.wall = lambda: WALL
++        assert "report" in job.step(store, feed, 1000.0)
++        assert feed.order_reads == []
++        assert job.step(store, feed, 1001.0) == {"idle": "PACED"}
++        t = 1000.0
++        for want in (1, 2):
++            t += VCA.STEP_INTERVAL_S
++            assert job.step(store, feed, t) == {"reading_orders": 3 - want}
++            assert len(feed.order_reads) == want
++        t += VCA.STEP_INTERVAL_S
++        assert len(job.step(store, feed, t)["orders"][0]["orders"]) == 3
++
++    def test_each_id_is_read_once_per_process(self, store, tape, on,
++                                              monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
++        monkeypatch.setattr(VBR, "REFRESH_S", 0.0)
++        feed = OrderFeed([many_orders(OPEN, 2)])
++        drive(Rn(store, feed), n=30)
++        assert len(order_lines(tape)) >= 2           # several passes
++        assert sorted(feed.order_reads) == ["V00", "V01"]
++        assert order_lines(tape)[-1]["orders"][0]["fields"] == {
++            "state": "ORDER_STATE_X"}
++
++    def test_a_failing_read_does_not_stop_the_pass(self, store, tape, on,
++                                                   monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
++        feed = OrderFeed([many_orders(OPEN, 3)], fail={"V01"})
++        r = Rn(store, feed)
++        drive(r)
++        assert feed.order_reads == ["V00", "V01", "V02"]   # no retry
++        o = order_lines(tape)[0]["orders"]
++        assert o[1] == {"venue_order_id": "V01", "fields": None,
++                        "error": "ORDER_READ_FAILED:TimeoutError"}
++        assert o[0]["fields"] and o[2]["fields"]
++        assert not r.stats
++
++    def test_a_transport_without_the_read_gets_no_new_call(self, store, tape,
++                                                           on, monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
++        feed = Feed([many_orders(OPEN, 2)])
++        drive(Rn(store, feed))
++        d = order_lines(tape)[0]
++        assert d["note"] == "NO_ORDER_READ_ON_TRANSPORT"
++        assert all(o["fields"] is None for o in d["orders"])
++        assert all("/v1/order/" not in p for p in feed.reads)
++
++    def test_an_odd_order_id_is_never_put_in_a_path(self):
++        row = fill(OPEN, "UP", "1", "0.10", "T1", "V1/../cancel")
++        assert VBR.our_order_ids([row]) == []
++
++    def test_no_detail_list_reads_no_order(self, store, tape, on):
++        feed = OrderFeed([many_orders(OPEN, 2)])
++        drive(Rn(store, feed))
++        assert feed.order_reads == [] and order_lines(tape) == []
++
++    def test_switch_off_reads_no_order(self, store, tape, monkeypatch):
++        monkeypatch.delenv(VBR.MODE_ENV, raising=False)
++        monkeypatch.setenv(VBR.DETAIL_ENV, OPEN)
++        feed = OrderFeed([many_orders(OPEN, 2)])
++        drive(Rn(store, feed))
++        assert feed.order_reads == [] and feed.reads == [] and tape == []
++
++    def test_unlisted_markets_are_never_read(self, store, tape, on,
++                                             monkeypatch):
++        monkeypatch.setenv(VBR.DETAIL_ENV, QUIET)
++        feed = OrderFeed([many_orders(OPEN, 2) + pair_rows()])
++        drive(Rn(store, feed))
++        assert feed.order_reads == []
++
++
++# ------------------------------------------------ why a market has no figure
++
++def test_the_report_counts_incomplete_markets_by_reason():
++    e_ok = {"market": "m-ok", "comparison": {"class": "AGREES"},
++            "result": {"incomplete_reasons": []},
++            "venue_unreadable_reason": None,
++            "venue_resolution": {"state": "ABSENT"}}
++    src = open(VBR.__file__).read()
++    assert '"incomplete_by_reason"' in src and '"incomplete_examples"' in src
++    assert "incomplete_by_reason" in VBR.small(
++        {"incomplete_by_reason": {"X": 1}, "markets": 1})
++    assert e_ok["comparison"]["class"] == "AGREES"

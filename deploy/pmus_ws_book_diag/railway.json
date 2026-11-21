@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "OBSOLETE one-off diagnostic (Sep 4): superseded by pmus-ws-evidence-recorder (authenticated WS, 128-market census, status document). Kept only so the Railway service can never fall through to the generic src.__main__ Kalshi entrypoint (OWNER 5556354536). Auto-redeploy is disabled by a watch pattern that matches nothing; redeploy is an owner action.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_ws_book_diag/Dockerfile",
+    "watchPatterns": [
+      "deploy/pmus_ws_book_diag/ENABLE_REDEPLOY_BY_OWNER_ONLY/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 scripts/pmus_ws_book_diag.py",
+    "restartPolicyType": "NEVER"
+  }
+}

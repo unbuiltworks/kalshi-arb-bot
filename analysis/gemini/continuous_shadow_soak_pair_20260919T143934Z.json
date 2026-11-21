@@ -1,0 +1,176 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_V1",
+  "mode": "SHADOW",
+  "budget": {
+    "max_spend_per_window_usd": "0.15",
+    "action_size": "0.01",
+    "max_residual_units": "0.04",
+    "max_imbalance_units": "0.04",
+    "max_concurrent_markets": 1,
+    "max_windows": 1,
+    "max_total_spend_usd": "1.00",
+    "daily_realized_loss_stop_usd": "-0.25",
+    "max_run_seconds": 7200.0
+  },
+  "budget_labels": "bounds TIGHTEN or STOP; nothing here can self-increase. Continuous operation multiplies WINDOWS, never size: the per-window envelope is the CONTINUOUS-8 one, unchanged.",
+  "entry_band": [
+    240.0,
+    280.0
+  ],
+  "windows_started": 1,
+  "windows_completed": 1,
+  "total_spend_usd": "0",
+  "realized_usd": "0",
+  "stopped": "RISK_BUDGET_EXHAUSTED",
+  "why": "max_windows 1 reached",
+  "elapsed_s": 296.6,
+  "windows": [
+    {
+      "kind": "window",
+      "started_utc": "2026-09-19T14:39:34.337313+00:00",
+      "pre_entry": {
+        "symbol": "GEMI-BTC05M2609191445-UP",
+        "tte_s": 277.4592089653015,
+        "readable": true,
+        "crossed": false,
+        "book_why": null,
+        "spread": "0.27",
+        "spread_source": "derived from the observed bid and ask",
+        "yes_bid": "0.49",
+        "yes_ask": "0.76",
+        "touch_depth": "340.0",
+        "touch_is_ours": false,
+        "depth_within_1": "340.0",
+        "depth_within_2": "340.0",
+        "depth_within_3": "340.0",
+        "n_levels": 4,
+        "flow_own": {
+          "recent_s": 120.0,
+          "readable": true,
+          "measured_over": "a trailing 120s window",
+          "span_s": 120.0,
+          "n_total_on_tape": 1,
+          "n_recent": 1,
+          "prints_per_min": "0.500",
+          "since_last_print_s": 32.7,
+          "recent_volume": "2",
+          "buy_prints": 1,
+          "sell_prints": 0,
+          "two_sided": false,
+          "side_balance": 0.0,
+          "age_s": 22.5,
+          "prints_per_min_over_age": "2.662",
+          "age_is_a_floor": true,
+          "why_age": "a 20-second-old contract with two prints is NEW, not quiet; its rate is stated over its own age or not at all. The age is measured against the 300s EFFECTIVE window and is a FLOOR -- prints can precede it, and in 19 of 26 captured windows they did, from TTE ~377."
+        },
+        "flow_prior_window": {
+          "recent_s": 120.0,
+          "readable": true,
+          "measured_over": "the tape's own span",
+          "span_s": 134.924,
+          "n_total_on_tape": 4,
+          "n_recent": 4,
+          "prints_per_min": "1.779",
+          "since_last_print_s": 119.0,
+          "recent_volume": "66.08",
+          "buy_prints": 2,
+          "sell_prints": 2,
+          "two_sided": true,
+          "side_balance": 1.0
+        },
+        "spot": {
+          "symbol": "btcusd",
+          "readable": true,
+          "n_prints": 40,
+          "last": "81486.9",
+          "low": "81460.36",
+          "high": "81528.37",
+          "range_abs": "68.01",
+          "range_bps": "8.3",
+          "span_s": 1121.6,
+          "prints_per_min": "2.140",
+          "labels": "underlying movement, measured. NOT a forecast and not an input to any price, size or bound."
+        },
+        "touch_turnover": {
+          "observable": true,
+          "bid_before": "0.44",
+          "bid_after": "0.44",
+          "bid_moved": false,
+          "bid_delta": "0.00",
+          "qty_before": "340.0",
+          "qty_after": "350.0",
+          "qty_changed": true,
+          "qty_delta": "10.0",
+          "changed": true
+        },
+        "labels": "PRE-ENTRY EVIDENCE, model B. Measured before any order exists. Nothing here is wired into admission, and no threshold is defined in this module.",
+        "prior_symbol": "GEMI-BTC05M2609191440-UP",
+        "sources": "PUBLIC: contract prices, /v1/book/{symbol} x2, /v1/trades/{symbol}, /v1/trades/{predecessor}, /v1/trades/btcusd. No credential, no order path.",
+        "turnover_gap_s": 3.0
+      },
+      "realised_flow": {
+        "measurable": true,
+        "intervals": 23,
+        "zero_intervals": 23,
+        "zero_share": 1.0,
+        "mean_prints_per_min": 0.0,
+        "max_prints_per_min": 0.0,
+        "prints_first_cycle": 1,
+        "prints_last_cycle": 1,
+        "prints_added": 0,
+        "labels": "what the window delivered, measured between its own cycles. Not a forecast and not a target."
+      },
+      "pre_entry_labels": "MEASURED BEFORE ENTRY AND NOT ACTED ON. The window ran identically to one taken without it; admission is unchanged and no threshold exists.",
+      "finished_utc": "2026-09-19T14:44:30.905369+00:00",
+      "symbol": "GEMI-BTC05M2609191445-UP",
+      "entry_tte_s": 277.4592089653015,
+      "cohort": "BTC5m",
+      "execution_policy": "FROZEN_L5_NATIVE",
+      "adapter_vetoes": 0,
+      "waited_s": 48.88,
+      "polls": 6,
+      "cycles": 24,
+      "account_readable": false,
+      "rollover": {
+        "safe": false,
+        "state": "STATE_UNREADABLE",
+        "why": "the open-order list is UNREADABLE, which is not an empty one; the previous window cannot be shown finished"
+      },
+      "rolled_over_despite_gate_in_shadow": true,
+      "rollover_note": "the rollover gate refused and this is SHADOW: no session exists and no order could be outstanding, so the refusal is recorded and the loop continues. In LIVE this stops the run.",
+      "habitat": {
+        "cycles": 24,
+        "book_readable_cycles": 15,
+        "book_refused_cycles": 9,
+        "book_refused_share": 0.375,
+        "refusal_reasons": [
+          "CROSSED book: a bid at or above its own ask"
+        ],
+        "spread_yes": {
+          "n": 15,
+          "min": "0.17",
+          "median": "0.25",
+          "max": "0.30"
+        },
+        "flow": {
+          "samples": 24,
+          "max_prints_seen": 1
+        },
+        "surface_moves": 11,
+        "reprice_rate_per_cycle": 0.458,
+        "rungs_placed": 0,
+        "fills": 0,
+        "fill_conversion": {
+          "fills_per_rung": null,
+          "window_s": 192.0,
+          "why": "resting seconds per fill is the honest denominator; rungs placed is reported beside it because a rung that rested four minutes and one that rested four seconds are not one sample each"
+        },
+        "labels": "HABITAT EVIDENCE for model B. Not a verdict, not a tuning input, and never realized economics."
+      },
+      "state": "COMPLETED",
+      "mutations_sent": 0,
+      "labels": "SHADOW: zero orders were sent and no session exists. SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a recorded plan is none of them."
+    }
+  ],
+  "accounting_labels": "SUBMITTED -> FILLED -> SETTLED -> REALIZED are distinct and never collapsed. realized_usd moves only on a venue-confirmed cash movement; a shadow plan, a fill, a settled contract and a mark are none of them."
+}

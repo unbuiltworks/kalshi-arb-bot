@@ -1,0 +1,1636 @@
+From ccc479e50501be0c433c16d03fb48a6268b58072 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 00:54:44 +0000
+Subject: [PATCH 1/3] l5-pmus-live: a venue equity baseline, transfer
+ detection, and the equity controls published for a second strategy
+
+l5_equity_baseline (pure): an owner-written baseline record (venue buying
+power, positions, zero open orders, timestamp, and the historical figures it
+starts after, which are preserved); drawdown measured from it; a period
+result that counts only rows with a measured cost and lists uncertain rows
+beside it, added to nothing. Malformed is INVALID and refuses.
+
+l5_equity_feed: a paced GET-only read of the activity feed for deposits,
+transfers and bonuses since the baseline. Amounts are not interpreted: any
+such row, an undated one, or a read the venue did not itself end (explicit
+eof) is a refusal until the owner writes a new baseline. A gain adds no room.
+
+Runner: the account risk record now also carries portfolio_drawdown and
+equity_baseline, each with its own refusal, computed on a value withheld
+when buying power is unread or older than 180s, order state is uncertain or
+positions are unreadable. Added keys only. This service's own gates, the
+ledger and every limit are unchanged; nothing is read unless a baseline
+document is set.
+
+98 new tests. Not deployed.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ deploy/l5_pmus_live/Dockerfile      |   2 +
+ src/l5_equity_baseline.py           | 314 ++++++++++++++++++++++++++++
+ src/l5_equity_feed.py               | 140 +++++++++++++
+ src/l5_pmus_live_runner.py          | 122 +++++++++++
+ tests/test_l5_equity_baseline.py    | 291 ++++++++++++++++++++++++++
+ tests/test_l5_equity_feed.py        | 182 ++++++++++++++++
+ tests/test_l5_equity_publication.py | 291 ++++++++++++++++++++++++++
+ 7 files changed, 1342 insertions(+)
+ create mode 100644 src/l5_equity_baseline.py
+ create mode 100644 src/l5_equity_feed.py
+ create mode 100644 tests/test_l5_equity_baseline.py
+ create mode 100644 tests/test_l5_equity_feed.py
+ create mode 100644 tests/test_l5_equity_publication.py
+
+diff --git a/deploy/l5_pmus_live/Dockerfile b/deploy/l5_pmus_live/Dockerfile
+index 64d5163b7..cc6c0d09d 100644
+--- a/deploy/l5_pmus_live/Dockerfile
++++ b/deploy/l5_pmus_live/Dockerfile
+@@ -191,6 +191,8 @@ COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
+ # here so the image carries it.
+ COPY src/l5_venue_cost_attestation.py src/l5_venue_cost_attestation.py
+ COPY src/l5_venue_cost_diagnostic.py src/l5_venue_cost_diagnostic.py
++COPY src/l5_equity_baseline.py src/l5_equity_baseline.py
++COPY src/l5_equity_feed.py src/l5_equity_feed.py
+ # The blocked-arm switch gate, called from the HEARTBEAT when
+ # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
+ # would NOT fail the boot -- it would report PROBE_FAILED:
+diff --git a/src/l5_equity_baseline.py b/src/l5_equity_baseline.py
+new file mode 100644
+index 000000000..3f76dd643
+--- /dev/null
++++ b/src/l5_equity_baseline.py
+@@ -0,0 +1,314 @@
++"""A venue-confirmed EQUITY BASELINE and the period measured from it.
++
++WHY (owner direction 2026-11-20). The account-wide loss figure is a ledger
++total in which many rows are costed at an assumed $1.00 a contract, and it
++was re-anchored once already. It is not reliable enough to be the primary
++financial control. The venue's own balance is. So: fix a baseline from a
++venue read, measure the account from there, and adjust for money moved in
++or out -- while keeping the historical loss record and every existing halt.
++
++WHAT THIS MODULE IS. Pure functions. It reads an owner-written document and
++figures handed to it, and returns reports. It writes no state, moves no
++figure in the ledger, and is read by no gate in this service. Publishing its
++line is the only wiring. The existing portfolio drawdown limit
++(`l5_portfolio_drawdown`, owner decision 2026-11-13) and the cumulative loss
++ceiling are untouched and still run.
++
++THE THREE THINGS IT ADDS to the existing drawdown limit:
++
++  1. A baseline that is a RECORD, not a bare number: when it was read, the
++     buying power, the positions, the open orders, and the historical
++     figures it supersedes as a starting point -- which stay on the record.
++  2. Deposits and withdrawals DETECTED from the venue's feed instead of
++     depending on someone remembering to move an anchor. Their amounts are
++     deliberately NOT interpreted: no deposit, transfer or bonus row has
++     been observed since this was written, so the sign and meaning of the
++     venue's amount field are unverified. Any such row dated after the
++     baseline, or a feed that could not be read back to it, is a REFUSAL
++     until the owner writes a new baseline. That can stop trading early and
++     can never hide a withdrawal or count a deposit as profit.
++  3. A period result that counts only rows with a measured cost. Rows still
++     at the assumed bound are listed beside it and added to nothing: not a
++     confirmed loss, not a confirmed profit.
++
++EQUITY is the conservative one the drawdown limit already uses:
++    buying power + min(UP, DOWN) per market
++An unmatched contract counts 0, so buying a leg shows as a drawdown until it
++pairs or settles. That can only trip early.
++
++    change   = equity_now - baseline_equity - net_transfers_since_baseline
++    drawdown = -change           refuse when drawdown >= max_drawdown_usd
++"""
++from __future__ import annotations
++
++import datetime as dt
++import json
++import os
++from decimal import Decimal as D, InvalidOperation
++from typing import Any, Dict, Mapping, Optional
++
++DOC_ENV = "L5_EQUITY_BASELINE"
++OFF = "OFF"
++
++ACKNOWLEDGEMENT = (
++    "THIS SETS A STARTING POINT FOR MEASUREMENT. HISTORICAL LOSSES ARE "
++    "PRESERVED IN historical AND ARE NOT ERASED. IT DOES NOT RESET, RAISE OR "
++    "REPLACE THE CUMULATIVE LOSS CEILING OR ANY OTHER LIMIT.")
++
++FIELDS = frozenset((
++    "id", "at_utc", "buying_power_usd", "matched_redemption_usd",
++    "equity_usd", "positions", "open_orders", "max_drawdown_usd",
++    "historical", "acknowledgement"))
++HISTORICAL_FIELDS = frozenset((
++    "ledger_realized_usd", "prior_anchor_usd", "prior_drawdown_usd"))
++
++#: cost bases that are a MEASURED cost. Anything else is uncertain.
++MEASURED = frozenset(("AUTHENTICATED_FILLS",))
++MEASURED_PROVENANCE = frozenset((
++    "VENUE_ATTESTED_COST", "MEASURED_FROM_VENUE_FILLS"))
++
++
++def _dec(v: Any) -> Optional[D]:
++    if v is None or isinstance(v, bool):
++        return None
++    try:
++        d = D(str(v).strip())
++    except (InvalidOperation, ValueError, TypeError):
++        return None
++    return d if d.is_finite() else None
++
++
++def _when(v: Any) -> Optional[dt.datetime]:
++    try:
++        t = dt.datetime.fromisoformat(str(v).strip().replace("Z", "+00:00"))
++    except (ValueError, TypeError):
++        return None
++    return t if t.tzinfo is not None else None
++
++
++def _bad(why: str, **more: Any) -> Dict[str, Any]:
++    return dict({"state": "INVALID", "why": why}, **more)
++
++
++def matched_redemption(positions: Any) -> Optional[D]:
++    """Sum of min(UP, DOWN) over markets. None when any figure is unusable."""
++    if not isinstance(positions, Mapping):
++        return None
++    total = D(0)
++    for sides in positions.values():
++        if not isinstance(sides, Mapping):
++            return None
++        up, dn = _dec(sides.get("UP", 0)), _dec(sides.get("DOWN", 0))
++        if up is None or dn is None or up < 0 or dn < 0:
++            return None
++        total += min(up, dn)
++    return total
++
++
++def read_document(env: Optional[Mapping[str, str]] = None, *,
++                  now: Optional[dt.datetime] = None) -> Dict[str, Any]:
++    """{"state": OFF} | {"state": "ON", ...} | {"state": "INVALID", "why"}.
++
++    Unset is OFF and changes nothing. Anything set but not exactly right is
++    INVALID, which a reader treats as a refusal: a baseline someone tried to
++    set must not silently vanish. Nothing is clamped or defaulted.
++    """
++    e = os.environ if env is None else env
++    raw = str(e.get(DOC_ENV) or "").strip()
++    if not raw:
++        return {"state": OFF}
++    try:
++        doc = json.loads(raw)
++    except ValueError:
++        return _bad("NOT_JSON")
++    if not isinstance(doc, dict):
++        return _bad("NOT_AN_OBJECT")
++    if set(doc) != FIELDS:
++        return _bad("FIELDS", missing=sorted(FIELDS - set(doc)),
++                    unknown=sorted(set(doc) - FIELDS))
++    if doc["acknowledgement"] != ACKNOWLEDGEMENT:
++        return _bad("ACKNOWLEDGEMENT")
++    if not isinstance(doc["id"], str) or len(doc["id"].strip()) < 8:
++        return _bad("ID")
++    at = _when(doc["at_utc"])
++    if at is None:
++        return _bad("AT_UTC")
++    n = now or dt.datetime.now(dt.timezone.utc)
++    if at > n + dt.timedelta(seconds=5):
++        return _bad("AT_UTC_IN_THE_FUTURE")
++    bp, mr, eq, mx = (_dec(doc["buying_power_usd"]),
++                      _dec(doc["matched_redemption_usd"]),
++                      _dec(doc["equity_usd"]), _dec(doc["max_drawdown_usd"]))
++    if None in (bp, mr, eq, mx):
++        return _bad("FIGURES_UNREADABLE")
++    if bp < 0 or mr < 0 or eq <= 0 or mx <= 0:
++        return _bad("FIGURES_OUT_OF_RANGE")
++    got = matched_redemption(doc["positions"])
++    if got is None:
++        return _bad("POSITIONS_UNREADABLE")
++    if got != mr:
++        return _bad("MATCHED_REDEMPTION_NE_POSITIONS",
++                    stated=str(mr), from_positions=str(got))
++    if bp + mr != eq:
++        return _bad("EQUITY_NE_BUYING_POWER_PLUS_MATCHED",
++                    stated=str(eq), computed=str(bp + mr))
++    oo = doc["open_orders"]
++    if isinstance(oo, bool) or not isinstance(oo, int) or oo < 0:
++        return _bad("OPEN_ORDERS")
++    if oo != 0:
++        #: funds held against a resting order are not in buying power and
++        #: not in equity, so a baseline read with orders resting understates
++        #: the account and hands back headroom when they cancel.
++        return _bad("BASELINE_READ_WITH_ORDERS_RESTING", open_orders=oo)
++    h = doc["historical"]
++    if not isinstance(h, dict) or set(h) != HISTORICAL_FIELDS:
++        return _bad("HISTORICAL_FIELDS")
++    hv = {k: _dec(h[k]) for k in HISTORICAL_FIELDS}
++    if None in hv.values():
++        return _bad("HISTORICAL_UNREADABLE")
++    return {"state": "ON", "id": doc["id"].strip(), "at_utc": at,
++            "buying_power_usd": bp, "matched_redemption_usd": mr,
++            "equity_usd": eq, "max_drawdown_usd": mx,
++            "positions": {str(m): {"UP": str(_dec(s.get("UP", 0))),
++                                   "DOWN": str(_dec(s.get("DOWN", 0)))}
++                          for m, s in doc["positions"].items()},
++            "historical": {k: str(v) for k, v in hv.items()}}
++
++
++def net_transfers(seen: Any, since: dt.datetime) -> Dict[str, Any]:
++    """Whether any money moved in or out since the baseline.
++
++    `seen` is {"complete_back_to": <iso or None>, "rows": [{"type", "time"}]}
++    -- the non-trading rows a feed read passed over and how far back that
++    read is complete. Returns {"net_usd": D(0)} only when the read reaches
++    the baseline and holds no such row after it; otherwise net_usd is None
++    with the reason, which `refusal` turns into a refusal.
++    """
++    if not isinstance(seen, Mapping):
++        return {"net_usd": None, "why": "FEED_NOT_READ"}
++    back = _when(seen.get("complete_back_to"))
++    if back is None or back > since:
++        return {"net_usd": None, "why": "FEED_NOT_READ_BACK_TO_BASELINE",
++                "complete_back_to": seen.get("complete_back_to")}
++    rows = seen.get("rows")
++    if not isinstance(rows, (list, tuple)):
++        return {"net_usd": None, "why": "FEED_ROWS_UNREADABLE"}
++    after, undated = [], 0
++    for r in rows:
++        if not isinstance(r, Mapping):
++            return {"net_usd": None, "why": "FEED_ROWS_UNREADABLE"}
++        t = _when(r.get("time"))
++        if t is None:
++            undated += 1
++        elif t >= since:
++            after.append({"type": str(r.get("type")),
++                          "time": t.isoformat()})
++    if undated:
++        return {"net_usd": None, "why": "UNDATED_TRANSFER_ROW",
++                "undated": undated}
++    if after:
++        return {"net_usd": None, "why": "MONEY_MOVED_SINCE_BASELINE",
++                "rows": after[:20], "count": len(after)}
++    return {"net_usd": D(0), "why": None, "rows_before_baseline": len(rows)}
++
++
++def refusal(doc: Mapping[str, Any], equity_now: Optional[D],
++            net_transfers: Optional[D]) -> Optional[str]:
++    """None to allow, else the reason. OFF allows: it is not configured."""
++    st = doc.get("state")
++    if st == OFF:
++        return None
++    if st != "ON":
++        return "EQUITY_BASELINE_%s" % doc.get("why", "INVALID")
++    if equity_now is None:
++        return "EQUITY_UNAVAILABLE"
++    if net_transfers is None:
++        return "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++    dd = doc["equity_usd"] + net_transfers - equity_now
++    if dd >= doc["max_drawdown_usd"]:
++        return "EQUITY_DRAWDOWN_LIMIT:%s>=%s" % (dd, doc["max_drawdown_usd"])
++    return None
++
++
++def line(doc: Mapping[str, Any], equity_now: Optional[D],
++         net_transfers: Optional[D], *,
++         transfers_detail: Any = None) -> Dict[str, Any]:
++    """The published block. Reporting; `refusal` is the verdict in it."""
++    out: Dict[str, Any] = {"state": doc.get("state")}
++    if doc.get("state") == "INVALID":
++        out["why"] = doc.get("why")
++    if doc.get("state") == "ON":
++        out.update(
++            baseline_id=doc["id"], baseline_at_utc=doc["at_utc"].isoformat(),
++            baseline_equity_usd=str(doc["equity_usd"]),
++            max_drawdown_usd=str(doc["max_drawdown_usd"]),
++            historical=dict(doc["historical"]),
++            equity_now_usd=None if equity_now is None else str(equity_now),
++            net_transfers_usd=(None if net_transfers is None
++                               else str(net_transfers)),
++            transfers=transfers_detail)
++        if equity_now is not None and net_transfers is not None:
++            ch = equity_now - doc["equity_usd"] - net_transfers
++            #: A GAIN ADDS NO ROOM. Room is what may still be lost from the
++            #: baseline, never more than the allowance: a rise in equity --
++            #: which is also what a not-yet-seen deposit looks like -- must
++            #: not become permission to lose more.
++            out.update(period_change_usd=str(ch), drawdown_usd=str(-ch),
++                       room_usd=str(doc["max_drawdown_usd"]
++                                    + min(D(0), ch)))
++    out["refusal"] = refusal(doc, equity_now, net_transfers)
++    out["labels"] = (
++        "equity = buying power + min(UP,DOWN) per market; an unmatched "
++        "contract counts 0. period_change is equity now, less the baseline, "
++        "less deposits net of withdrawals since it. `historical` is the "
++        "record the baseline starts after; it is preserved, not erased, and "
++        "the cumulative loss ceiling is a separate limit this does not "
++        "touch.")
++    return out
++
++
++def period_realized(retired: Any, since: dt.datetime) -> Dict[str, Any]:
++    """Settled results since the baseline, MEASURED and UNCERTAIN apart.
++
++    A row counts as measured only when its cost came from fills. A row still
++    at the assumed $1.00 a contract is counted, its booked figure is shown as
++    a bound, and it is added to NOTHING: an uncertain row is neither a
++    confirmed loss nor a confirmed profit. Reads; writes nothing.
++    """
++    conf, bound = D(0), D(0)
++    n_conf = n_unc = n_bad = 0
++    uncertain = []
++    for m, row in (retired.items() if isinstance(retired, Mapping) else ()):
++        if not isinstance(row, Mapping):
++            continue
++        t = _when(row.get("t"))
++        if t is None:
++            n_bad += 1
++            continue
++        if t < since:
++            continue
++        pnl = _dec(row.get("settlement_pnl"))
++        if pnl is None:
++            n_bad += 1
++            continue
++        if (row.get("origin_cost_basis") in MEASURED
++                or row.get("pnl_provenance") in MEASURED_PROVENANCE):
++            conf += pnl
++            n_conf += 1
++        else:
++            bound += pnl
++            n_unc += 1
++            if len(uncertain) < 50:
++                uncertain.append(str(m))
++    return {"since_utc": since.isoformat(),
++            "measured_realized_usd": str(conf), "measured_rows": n_conf,
++            "uncertain_rows": n_unc,
++            "uncertain_booked_bound_usd": str(bound),
++            "uncertain_markets": uncertain,
++            "unreadable_rows": n_bad,
++            "complete": n_bad == 0,
++            "labels": ("measured_realized counts only rows whose cost came "
++                       "from fills. uncertain_booked_bound is what the "
++                       "ledger booked for rows it could not cost; it is a "
++                       "bound, it is NOT in measured_realized, and it is "
++                       "neither a confirmed loss nor a confirmed profit.")}
+diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
+new file mode 100644
+index 000000000..03fd27474
+--- /dev/null
++++ b/src/l5_equity_feed.py
+@@ -0,0 +1,140 @@
++"""Has money moved in or out of the account since the equity baseline?
++
++A paced, GET-only read of the venue's activity feed, newest first, that
++keeps the NON-trading rows (deposits, transfers, bonuses) and how far back
++the read is good for. `l5_equity_baseline.net_transfers` turns that into
++either "nothing moved" or a refusal. This module decides nothing.
++
++HOW FAR BACK IS FAR ENOUGH. The feed is newest-first but NOT strictly
++ordered (the full walk of 2026-11-20 reported `monotonic: false`), so the
++first row older than the baseline proves nothing. The read stops only at the
++end of the feed, or after `OLD_PAGES` consecutive pages whose every dated
++row is more than `MARGIN_S` older than the baseline. That margin is an
++ASSUMPTION about how far out of order the venue serves rows; it is stated in
++the result (`by`) and not hidden. A read that hits `MAX_PAGES` first is
++incomplete, and incomplete refuses.
++
++It writes no state anywhere, calls no ledger method and makes no request but
++the feed's GET. Its result lives in memory and goes stale after `STALE_S`,
++after which it again refuses.
++"""
++from __future__ import annotations
++
++import datetime as dt
++from typing import Any, Dict, List, Mapping, Optional
++
++from src import l5_cost_basis_audit as CBA
++from src import l5_venue_cost_attestation as VCA
++
++REFRESH_S = 300.0
++STALE_S = 900.0
++PAGES_PER_STEP = 2
++MAX_PAGES = 80
++OLD_PAGES = 2
++MARGIN_S = 86400.0
++ERROR_BACKOFF_S = 60.0
++
++TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
++    ("activity_type_position_resolution", "position_resolution"))
++
++
++def non_trading(row: Any) -> Optional[Dict[str, Any]]:
++    """{"type", "time"} for a row that is not a fill or a settlement."""
++    if not isinstance(row, Mapping):
++        return None
++    kind = str(row.get("type") or row.get("kind") or "").lower()
++    if not kind or kind in TRADING_KINDS:
++        return None
++    t = VCA.row_time(row)
++    if t is None:
++        for v in row.values():
++            if isinstance(v, Mapping):
++                t = VCA.row_time(v)
++                if t is not None:
++                    break
++    return {"type": kind, "time": None if t is None else t.isoformat()}
++
++
++class TransferWatch:
++    """Memory only. `step` on the service's tick; `view` from any thread."""
++
++    def __init__(self) -> None:
++        self._walk: Optional[Dict[str, Any]] = None
++        self._seen: Optional[Dict[str, Any]] = None
++        self._seen_t: Optional[float] = None
++        self._since: Optional[dt.datetime] = None
++        self.next_allowed = 0.0
++        self.last_error: Optional[str] = None
++        self.reads = 0
++
++    def step(self, transport: Any, since: dt.datetime, now: float) -> None:
++        if transport is None or now < self.next_allowed:
++            return
++        if self._since != since:
++            #: a new baseline: nothing read for the old one applies
++            self._walk, self._seen, self._seen_t = None, None, None
++            self._since = since
++        if self._walk is None:
++            if self._seen_t is not None and now - self._seen_t < REFRESH_S:
++                return
++            self._walk = {"cursor": None, "pages": 0, "rows": [],
++                          "old": 0}
++        w = self._walk
++        floor = since - dt.timedelta(seconds=MARGIN_S)
++        for _ in range(PAGES_PER_STEP):
++            got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
++                                      cursor=w["cursor"], rows=[],
++                                      pages_done=w["pages"])
++            ended = str(got.get("ended") or "")
++            if ended.startswith("error"):
++                self.last_error = ended
++                self._walk = None
++                self.next_allowed = now + ERROR_BACKOFF_S
++                return
++            w["pages"] = int(got.get("pages") or w["pages"] + 1)
++            times: List[dt.datetime] = []
++            for r in got.get("rows") or ():
++                if not isinstance(r, Mapping):
++                    continue
++                t = VCA.row_time(r)
++                if t is not None:
++                    times.append(t)
++                rec = non_trading(r)
++                if rec is not None:
++                    w["rows"].append(rec)
++            w["old"] = w["old"] + 1 if (times and max(times) < floor) else 0
++            if ended == "eof":
++                return self._finish(now, floor, "END_OF_FEED")
++            if w["old"] >= OLD_PAGES:
++                return self._finish(now, floor, "TIME_FLOOR_WITH_MARGIN")
++            nxt = got.get("next_cursor")
++            if not nxt or w["pages"] >= MAX_PAGES:
++                return self._finish(now, None, "INCOMPLETE")
++            w["cursor"] = str(nxt)
++
++    def _finish(self, now: float, back: Optional[dt.datetime],
++                by: str) -> None:
++        w = self._walk or {}
++        self._seen = {"complete_back_to": (None if back is None
++                                           else back.isoformat()),
++                      "rows": list(w.get("rows") or ()),
++                      "by": by, "pages": w.get("pages"),
++                      "margin_s": MARGIN_S}
++        self._seen_t = now
++        self._walk = None
++        self.last_error = None
++        self.reads += 1
++
++    def view(self, since: dt.datetime, now: float) -> Dict[str, Any]:
++        """What `net_transfers` reads. Never raises; stale or absent is a
++        result with `complete_back_to` None, which refuses."""
++        if (self._seen is None or self._seen_t is None
++                or self._since != since):
++            return {"complete_back_to": None, "rows": [],
++                    "by": "NOT_READ_YET", "last_error": self.last_error}
++        age = now - self._seen_t
++        if age > STALE_S or age < 0:
++            return {"complete_back_to": None, "rows": [], "by": "STALE",
++                    "age_s": round(age, 1), "last_error": self.last_error}
++        return dict(self._seen, age_s=round(age, 1),
++                    last_error=self.last_error)
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 48503df3b..5b4386bbc 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -237,6 +237,9 @@ HB_EVERY_S = 60.0
+ #: the rest of the run and be reported as though it were current. One GET
+ #: a minute against a 1.5 rps budget is negligible.
+ CASH_REFRESH_S = 60.0
++#: the PUBLISHED equity value is withheld when buying power is older than
++#: this. Three refresh intervals: one missed read is tolerated, two are not.
++EQUITY_CASH_MAX_AGE_S = 180.0
+ #: how often ONE order may be re-read. The tick is 3s and the old code
+ #: polled every live order on every tick: with a full envelope that is 2.7
+ #: GETs a second from this path alone, which is most of how we rate-limited
+@@ -2887,6 +2890,119 @@ class Runner:
+             except BaseException:                              # noqa: BLE001
+                 pass
+ 
++    def maybe_watch_equity_transfers(self, now: float) -> None:
++        """READ-ONLY: while an equity baseline is set, keep reading the
++        venue's feed for money moving in or out since it.
++
++        Nothing is read unless `L5_EQUITY_BASELINE` is a valid document. It
++        calls no store method and writes nothing; its only request is the
++        activity feed's GET, two pages a tick, then idle for five minutes.
++        ANY failure is swallowed -- the published line then refuses, which
++        is the safe direction, and the tick goes on.
++        """
++        try:
++            from src import l5_equity_baseline as EB
++            from src import l5_equity_feed as EF
++            doc = EB.read_document()
++            if doc.get("state") != "ON":
++                return
++            watch = getattr(self, "_equity_watch", None)
++            if watch is None:
++                watch = EF.TransferWatch()
++                self._equity_watch = watch
++            watch.step(self.transport, doc["at_utc"], float(now))
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            try:
++                self.stats["equity_watch_error:%s"
++                           % type(exc).__name__] += 1
++            except BaseException:                              # noqa: BLE001
++                pass
++
++    def equity_risk_lines(self, now: Optional[float] = None
++                          ) -> Dict[str, Any]:
++        """The venue-equity controls, PUBLISHED for another strategy.
++
++        Two blocks, each carrying its own `refusal`:
++
++          `portfolio_drawdown` -- the existing owner limit, evaluated on a
++          value that is None unless buying power was read within
++          EQUITY_CASH_MAX_AGE_S and no order state is uncertain. This
++          service's OWN gate is untouched and still reads its own value;
++          this is the copy a second strategy must honour, and it is the
++          stricter of the two.
++
++          `equity_baseline` -- the same value against the owner's baseline
++          document, with money moved in or out since it, and the period's
++          measured result beside the uncertain rows.
++
++        READ-ONLY, computed from what the tick already holds: no venue
++        request is made here, because this is served from the registry's
++        thread. Never raises; a failure is published as a refusal.
++        """
++        try:
++            from src import l5_portfolio_drawdown as PDD
++            from src import l5_equity_baseline as EB
++            t = time.time() if now is None else float(now)
++            why = None
++            age = (None if self.available_cash_t is None
++                   else t - self.available_cash_t)
++            val = None
++            if self.available_cash_usd is None or age is None:
++                why = "BUYING_POWER_NOT_READ"
++            elif age > EQUITY_CASH_MAX_AGE_S or age < -5:
++                why = "BUYING_POWER_STALE"
++            else:
++                unc = self.store.orders_uncertain()
++                if unc:
++                    why = "ORDER_STATE_UNCERTAIN"
++                else:
++                    val = PDD.worst_case_value(
++                        self.available_cash_usd,
++                        self.store.positions_by_market())
++                    if val is None:
++                        why = "POSITIONS_UNREADABLE"
++            doc = EB.read_document()
++            moved: Dict[str, Any] = {"net_usd": None, "why": "NOT_APPLICABLE"}
++            period = None
++            if doc.get("state") == "ON":
++                watch = getattr(self, "_equity_watch", None)
++                seen = (None if watch is None
++                        else watch.view(doc["at_utc"], t))
++                moved = EB.net_transfers(seen, doc["at_utc"])
++                moved["read"] = (None if seen is None else
++                                 {k: seen.get(k) for k in
++                                  ("by", "pages", "age_s", "last_error",
++                                   "complete_back_to")})
++                period = EB.period_realized(
++                    self.store.state.get("retired_markets") or {},
++                    doc["at_utc"])
++            net = moved.get("net_usd")
++            detail = {k: (str(v) if k == "net_usd" and v is not None else v)
++                      for k, v in moved.items()}
++            return {
++                "portfolio_drawdown": PDD.report(val),
++                "equity_baseline": dict(
++                    EB.line(doc, val, net, transfers_detail=detail),
++                    period=period),
++                "equity_value": {
++                    "usd": None if val is None else str(val),
++                    "unavailable_why": why,
++                    "buying_power_age_s": (None if age is None
++                                           else round(age, 1)),
++                    "max_age_s": EQUITY_CASH_MAX_AGE_S},
++            }
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            bad = "EQUITY_LINES_FAILED:%s" % type(exc).__name__
++            return {"portfolio_drawdown": {"state": "UNREADABLE",
++                                           "refusal": bad},
++                    "equity_baseline": {"state": "UNREADABLE",
++                                        "refusal": bad},
++                    "equity_value": {"usd": None, "unavailable_why": bad}}
++
+     def maybe_diagnose_venue_costs(self, now: float) -> None:
+         """READ-ONLY: print the venue's fills beside this ledger's figures
+         for the rows the attestation gave up on.
+@@ -6548,6 +6664,9 @@ class Runner:
+                                       else bool(-lifetime >= cum)),
+             "operator_halt": bool(operator_halted()),
+             "retired_markets": retired[-400:],
++            # the venue-equity controls a second strategy must also honour.
++            # Added keys only: every figure above is computed as before.
++            **self.equity_risk_lines(),
+             "labels": ("the account-wide figures the 15-minute service's own "
+                        "gates read, published so a second strategy cannot "
+                        "hold a looser copy. Read-only."),
+@@ -6872,6 +6991,8 @@ class Runner:
+                 "labels": ("None is no reading, never unlimited. A number "
+                            "only ADDS a refusal to the cash gate.")},
+             "portfolio_drawdown": self.portfolio_drawdown_report(),
++            "equity_baseline": self.equity_risk_lines(self.now_t).get(
++                "equity_baseline"),
+             "risk_gate": {
+                 "measures": "worst-case loss over both settlements",
+                 "max_usd_per_market": str(self.limits.max_usd_per_market),
+@@ -11483,6 +11604,7 @@ class Runner:
+         self.sweep_settlements()
+         self.maybe_attest_venue_costs(now)
+         self.maybe_diagnose_venue_costs(now)
++        self.maybe_watch_equity_transfers(now)
+         # a book that has gone uncertain gets another authoritative read,
+         # rather than latching the session shut until a redeploy
+         self.reconcile_if_needed(now)
+diff --git a/tests/test_l5_equity_baseline.py b/tests/test_l5_equity_baseline.py
+new file mode 100644
+index 000000000..b7c02710a
+--- /dev/null
++++ b/tests/test_l5_equity_baseline.py
+@@ -0,0 +1,291 @@
++"""The equity baseline: a venue-confirmed starting point that erases nothing.
++
++Pure functions. What matters: a baseline cannot be malformed into force, a
++drawdown is measured from venue equity, money moving in or out can never be
++mistaken for profit or loss, uncertain rows are never counted as confirmed,
++and nothing here touches a ledger figure or an existing limit.
++"""
++from __future__ import annotations
++
++import ast
++import copy
++import datetime as dt
++import json
++from decimal import Decimal as D
++from pathlib import Path
++
++import pytest
++
++from src import l5_equity_baseline as EB
++
++ROOT = Path(__file__).resolve().parents[1]
++NOW = dt.datetime(2026, 11, 20, 1, 0, tzinfo=dt.timezone.utc)
++AT = "2026-11-20T00:30:00+00:00"
++SINCE = dt.datetime(2026, 11, 20, 0, 30, tzinfo=dt.timezone.utc)
++
++
++def doc(**over):
++    d = {"id": "baseline-20261120",
++         "at_utc": AT,
++         "buying_power_usd": "321.4782",
++         "matched_redemption_usd": "2",
++         "equity_usd": "323.4782",
++         "positions": {"m1": {"UP": "2", "DOWN": "2"},
++                       "m2": {"UP": "2.9", "DOWN": "0"}},
++         "open_orders": 0,
++         "max_drawdown_usd": "5",
++         "historical": {"ledger_realized_usd": "-136.7845",
++                        "prior_anchor_usd": "336.68",
++                        "prior_drawdown_usd": "15.2018"},
++         "acknowledgement": EB.ACKNOWLEDGEMENT}
++    d.update(over)
++    return d
++
++
++def read(d):
++    raw = d if isinstance(d, str) else json.dumps(d)
++    return EB.read_document({EB.DOC_ENV: raw}, now=NOW)
++
++
++def test_unset_is_off_and_refuses_nothing():
++    off = EB.read_document({}, now=NOW)
++    assert off == {"state": "OFF"}
++    assert EB.refusal(off, None, None) is None
++    assert EB.line(off, None, None)["refusal"] is None
++
++
++def test_a_good_document_is_on_and_keeps_the_history():
++    d = read(doc())
++    assert d["state"] == "ON"
++    assert d["equity_usd"] == D("323.4782")
++    assert d["historical"] == {"ledger_realized_usd": "-136.7845",
++                               "prior_anchor_usd": "336.68",
++                               "prior_drawdown_usd": "15.2018"}
++    out = EB.line(d, D("323.4782"), D(0))
++    assert out["historical"]["ledger_realized_usd"] == "-136.7845"
++    assert out["period_change_usd"] == "0.0000" and out["refusal"] is None
++
++
++def _drop(key):
++    d = doc()
++    d.pop(key)
++    return d
++
++
++def _hist(**over):
++    h = dict(doc()["historical"])
++    h.update(over)
++    return doc(historical=h)
++
++
++@pytest.mark.parametrize("bad, why", [
++    ("{not json", "NOT_JSON"),
++    ("[]", "NOT_AN_OBJECT"),
++    (_drop("historical"), "FIELDS"),
++    (_drop("acknowledgement"), "FIELDS"),
++    (doc(extra="x"), "FIELDS"),
++    (doc(acknowledgement="ok"), "ACKNOWLEDGEMENT"),
++    (doc(acknowledgement=EB.ACKNOWLEDGEMENT.lower()), "ACKNOWLEDGEMENT"),
++    (doc(id="short"), "ID"),
++    (doc(at_utc="yesterday"), "AT_UTC"),
++    (doc(at_utc="2026-11-20T00:30:00"), "AT_UTC"),
++    (doc(at_utc="2026-11-20T02:00:00+00:00"), "AT_UTC_IN_THE_FUTURE"),
++    (doc(buying_power_usd="lots"), "FIGURES_UNREADABLE"),
++    (doc(max_drawdown_usd="NaN"), "FIGURES_UNREADABLE"),
++    (doc(max_drawdown_usd=True), "FIGURES_UNREADABLE"),
++    (doc(max_drawdown_usd="0"), "FIGURES_OUT_OF_RANGE"),
++    (doc(max_drawdown_usd="-5"), "FIGURES_OUT_OF_RANGE"),
++    (doc(buying_power_usd="-1", equity_usd="1"), "FIGURES_OUT_OF_RANGE"),
++    (doc(positions="none"), "POSITIONS_UNREADABLE"),
++    (doc(positions={"m": {"UP": "-1", "DOWN": "0"}}), "POSITIONS_UNREADABLE"),
++    (doc(matched_redemption_usd="3", equity_usd="324.4782"),
++     "MATCHED_REDEMPTION_NE_POSITIONS"),
++    (doc(equity_usd="336.68"), "EQUITY_NE_BUYING_POWER_PLUS_MATCHED"),
++    (doc(open_orders=2), "BASELINE_READ_WITH_ORDERS_RESTING"),
++    (doc(open_orders="0"), "OPEN_ORDERS"),
++    (doc(open_orders=True), "OPEN_ORDERS"),
++    (doc(historical={"ledger_realized_usd": "0"}), "HISTORICAL_FIELDS"),
++    (_hist(ledger_realized_usd="unknown"), "HISTORICAL_UNREADABLE"),
++])
++def test_anything_not_exactly_right_is_invalid_and_refuses(bad, why):
++    d = read(bad)
++    assert d["state"] == "INVALID" and d["why"] == why
++    r = EB.refusal(d, D("1000"), D(0))
++    assert r == "EQUITY_BASELINE_%s" % why
++    assert EB.line(d, D("1000"), D(0))["refusal"] == r
++
++
++def test_the_equity_cannot_be_stated_above_what_the_venue_read_supports():
++    """The obvious way to buy headroom: claim a higher starting equity."""
++    assert read(doc(equity_usd="400"))["state"] == "INVALID"
++
++
++@pytest.mark.parametrize("now_eq, moved, verdict", [
++    ("323.4782", "0", None),
++    ("318.4783", "0", None),                       # 4.9999 down
++    ("318.4782", "0", "EQUITY_DRAWDOWN_LIMIT:5.0000>=5"),
++    ("300", "0", "EQUITY_DRAWDOWN_LIMIT:23.4782>=5"),
++    ("400", "0", None),
++])
++def test_the_drawdown_is_measured_from_the_baseline(now_eq, moved, verdict):
++    assert EB.refusal(read(doc()), D(now_eq), D(moved)) == verdict
++
++
++def test_missing_figures_refuse_and_are_never_read_as_zero():
++    d = read(doc())
++    assert EB.refusal(d, None, D(0)) == "EQUITY_UNAVAILABLE"
++    assert EB.refusal(d, D("323.4782"), None) \
++        == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++    out = EB.line(d, D("323.4782"), None)
++    assert "period_change_usd" not in out and "room_usd" not in out
++
++
++# --- money moving in or out --------------------------------------------------
++
++def seen(rows, back="2026-08-14T03:26:06+00:00"):
++    return {"complete_back_to": back, "rows": rows}
++
++
++def test_no_movement_since_a_baseline_the_feed_reaches_is_zero():
++    out = EB.net_transfers(seen([
++        {"type": "activity_type_account_deposit",
++         "time": "2026-10-01T00:00:00+00:00"}]), SINCE)
++    assert out["net_usd"] == D(0) and out["rows_before_baseline"] == 1
++
++
++@pytest.mark.parametrize("s, why", [
++    (None, "FEED_NOT_READ"),
++    ({"rows": []}, "FEED_NOT_READ_BACK_TO_BASELINE"),
++    (seen([], back="2026-11-20T00:45:00+00:00"),
++     "FEED_NOT_READ_BACK_TO_BASELINE"),
++    (seen("x"), "FEED_ROWS_UNREADABLE"),
++    (seen(["x"]), "FEED_ROWS_UNREADABLE"),
++    (seen([{"type": "activity_type_transfer", "time": None}]),
++     "UNDATED_TRANSFER_ROW"),
++    (seen([{"type": "activity_type_account_deposit",
++            "time": "2026-11-20T00:40:00+00:00"}]),
++     "MONEY_MOVED_SINCE_BASELINE"),
++    (seen([{"type": "activity_type_transfer",
++            "time": "2026-11-20T00:30:00+00:00"}]),
++     "MONEY_MOVED_SINCE_BASELINE"),
++])
++def test_anything_short_of_proof_of_no_movement_refuses(s, why):
++    out = EB.net_transfers(s, SINCE)
++    assert out["net_usd"] is None and out["why"] == why
++    assert EB.refusal(read(doc()), D("999"), out["net_usd"]) \
++        == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++
++
++def test_a_deposit_can_never_be_read_as_a_gain():
++    """Equity up by exactly a deposit: without the row that is a 'profit'
++    that hands back drawdown room. With the row it is a refusal."""
++    moved = EB.net_transfers(seen([
++        {"type": "activity_type_account_deposit",
++         "time": "2026-11-20T00:50:00+00:00"}]), SINCE)
++    assert EB.refusal(read(doc()), D("423.4782"), moved["net_usd"]) \
++        is not None
++
++
++# --- the period result -------------------------------------------------------
++
++RETIRED = {
++    "old": {"t": "2026-11-19T10:00:00+00:00", "settlement_pnl": "-50",
++            "origin_cost_basis": "AUTHENTICATED_FILLS"},
++    "a": {"t": "2026-11-20T00:40:00+00:00", "settlement_pnl": "0.12",
++          "origin_cost_basis": "AUTHENTICATED_FILLS"},
++    "b": {"t": "2026-11-20T00:45:00+00:00", "settlement_pnl": "-0.30",
++          "origin_cost_basis": "UPPER_BOUND_1USD_PER_CONTRACT",
++          "pnl_provenance": "VENUE_ATTESTED_COST"},
++    "c": {"t": "2026-11-20T00:50:00+00:00", "settlement_pnl": "-5",
++          "origin_cost_basis": "UPPER_BOUND_1USD_PER_CONTRACT",
++          "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND"},
++    "d": {"t": "2026-11-20T00:55:00+00:00", "settlement_pnl": "0",
++          "origin_cost_basis": "OWN_FILLS_ATTRIBUTION_UNVERIFIED"},
++}
++
++
++def test_only_measured_rows_count_and_the_period_starts_at_the_baseline():
++    out = EB.period_realized(RETIRED, SINCE)
++    assert D(out["measured_realized_usd"]) == D("-0.18")
++    assert out["measured_rows"] == 2
++    assert out["uncertain_rows"] == 2
++    assert D(out["uncertain_booked_bound_usd"]) == D("-5")
++    assert out["uncertain_markets"] == ["c", "d"]
++    assert out["complete"] is True
++
++
++def test_an_empty_period_reads_zero():
++    out = EB.period_realized({"old": RETIRED["old"]}, SINCE)
++    assert D(out["measured_realized_usd"]) == 0
++    assert out["measured_rows"] == 0 and out["uncertain_rows"] == 0
++
++
++def test_an_unreadable_row_makes_the_period_incomplete_not_zero():
++    rows = dict(RETIRED, bad={"t": "2026-11-20T00:58:00+00:00",
++                              "settlement_pnl": "?"},
++                undated={"settlement_pnl": "-9"})
++    out = EB.period_realized(rows, SINCE)
++    assert out["unreadable_rows"] == 2 and out["complete"] is False
++
++
++# --- it reads; it changes nothing --------------------------------------------
++
++def test_nothing_is_altered_by_any_function():
++    rows = copy.deepcopy(RETIRED)
++    d = doc()
++    env = {EB.DOC_ENV: json.dumps(d)}
++    before = (copy.deepcopy(rows), dict(env))
++    got = EB.read_document(env, now=NOW)
++    EB.line(got, D("320"), D(0))
++    EB.period_realized(rows, SINCE)
++    EB.net_transfers(seen([]), SINCE)
++    assert (rows, env) == before
++
++
++def test_the_module_touches_no_ledger_limit_or_transport():
++    src = (ROOT / "src" / "l5_equity_baseline.py").read_text()
++    tree = ast.parse(src)
++    for node in ast.walk(tree):
++        if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Module)) \
++                and node.body and isinstance(node.body[0], ast.Expr) \
++                and isinstance(getattr(node.body[0], "value", None),
++                               ast.Constant):
++            node.body = node.body[1:] or [ast.Pass()]
++    code = ast.unparse(tree)
++    imports = sorted({n.names[0].name for n in ast.walk(tree)
++                      if isinstance(n, ast.Import)}
++                     | {n.module for n in ast.walk(tree)
++                        if isinstance(n, ast.ImportFrom)})
++    assert imports == ["__future__", "datetime", "decimal", "json", "os",
++                       "typing"]
++    for word in ("realized_attributed", "L5_MAX_CUMULATIVE", "save(",
++                 "state[", "open(", "os.environ[", "_get", "_post",
++                 "submit", "cancel"):
++        assert word not in code, word
++
++
++def test_the_acknowledgement_says_what_it_does_not_do():
++    a = EB.ACKNOWLEDGEMENT
++    assert "NOT ERASED" in a and "DOES NOT RESET, RAISE OR REPLACE" in a
++
++
++def test_the_sign_of_a_transfer_figure_is_pinned():
++    """`net_transfers` only ever yields 0 today, but the arithmetic takes a
++    figure: money IN raises the bar equity must clear, money OUT lowers it."""
++    d = read(doc())
++    assert EB.refusal(d, D("333.4782"), D("10")) is None
++    assert EB.line(d, D("333.4782"), D("10"))["period_change_usd"] == "0.0000"
++    assert EB.refusal(d, D("323.4782"), D("10")) \
++        == "EQUITY_DRAWDOWN_LIMIT:10.0000>=5"
++    assert EB.refusal(d, D("313.4782"), D("-10")) is None
++
++
++def test_a_gain_never_adds_room():
++    """Equity above the baseline -- which is also what an unseen deposit
++    looks like -- leaves room at the allowance, not above it."""
++    d = read(doc())
++    up = EB.line(d, D("373.4782"), D(0))
++    assert up["period_change_usd"] == "50.0000"
++    assert up["room_usd"] == "5" and up["refusal"] is None
++    down = EB.line(d, D("321.4782"), D(0))
++    assert down["room_usd"] == "3.0000"
+diff --git a/tests/test_l5_equity_feed.py b/tests/test_l5_equity_feed.py
+new file mode 100644
+index 000000000..652b317fd
+--- /dev/null
++++ b/tests/test_l5_equity_feed.py
+@@ -0,0 +1,182 @@
++"""The transfer watch: proof that no money moved, or a refusal."""
++from __future__ import annotations
++
++import ast
++import datetime as dt
++from decimal import Decimal as D
++from pathlib import Path
++
++import pytest
++
++from src import l5_equity_baseline as EB
++from src import l5_equity_feed as EF
++
++from tests.test_l5_venue_cost_attestation import Feed, fill
++
++ROOT = Path(__file__).resolve().parents[1]
++SINCE = dt.datetime(2026, 11, 20, 0, 30, tzinfo=dt.timezone.utc)
++M = "cpc-btc-updown-5m-2026-11-20-0100z"
++
++
++def trade(t):
++    return fill(M, "UP", "1", "0.5", "T" + t, "V" + t, t=t)
++
++
++def dep(t, kind="activity_type_account_deposit"):
++    return {"type": kind, "accountBalanceChange": {"time": t, "amount": "1"}}
++
++
++def run(feed, *, steps=100, since=SINCE, w=None):
++    w = w or EF.TransferWatch()
++    now = 1000.0
++    for _ in range(steps):
++        now += 1
++        w.step(feed, since, now)
++    return w, now
++
++
++def verdict(w, now, since=SINCE):
++    return EB.net_transfers(w.view(since, now), since)
++
++
++OLD = "2026-11-18T%02d:00:00Z"
++
++
++def old_page(h):
++    return [trade(OLD % h), trade(OLD % (h + 1))]
++
++
++def test_before_any_read_it_refuses():
++    w = EF.TransferWatch()
++    v = w.view(SINCE, 1.0)
++    assert v["by"] == "NOT_READ_YET"
++    assert EB.net_transfers(v, SINCE)["net_usd"] is None
++
++
++def test_a_quiet_feed_read_to_its_end_proves_nothing_moved():
++    w, now = run(Feed([[trade("2026-11-20T00:40:00Z")],
++                       [dep("2026-10-01T00:00:00Z")]]))
++    v = w.view(SINCE, now)
++    assert v["by"] == "END_OF_FEED"
++    assert verdict(w, now)["net_usd"] == D(0)
++
++
++def test_old_pages_are_never_proof_only_the_end_of_the_feed_is():
++    """The feed is not ordered. A deposit served after any number of pages
++    of old rows must still be seen, so nothing but the venue ending the
++    feed stops the read."""
++    feed = Feed([[trade("2026-11-20T00:40:00Z")], old_page(1), old_page(3),
++                 old_page(5), old_page(7),
++                 [dep("2026-11-20T00:45:00Z")]])
++    w, now = run(feed)
++    assert len(feed.reads) == 6
++    assert w.view(SINCE, now)["by"] == "END_OF_FEED"
++    assert verdict(w, now)["why"] == "MONEY_MOVED_SINCE_BASELINE"
++
++
++def test_a_feed_that_never_ends_is_never_trusted():
++    feed = Feed([old_page(1), old_page(3), old_page(5), old_page(7)],
++                eof=False)
++    w, now = run(feed)
++    assert w.view(SINCE, now)["by"] == "INCOMPLETE"
++    assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
++
++
++def test_there_is_no_date_based_stop_in_the_code():
++    src = (ROOT / "src" / "l5_equity_feed.py").read_text()
++    code = src[src.index("class TransferWatch"):]
++    for word in ("floor", "MARGIN", "max(times)", "row_time(r)"):
++        assert word not in code, word
++
++
++@pytest.mark.parametrize("kind", ["activity_type_account_deposit",
++                                  "activity_type_transfer",
++                                  "activity_type_referral_bonus",
++                                  "activity_type_something_new"])
++def test_any_non_trading_row_after_the_baseline_refuses(kind):
++    w, now = run(Feed([[dep("2026-11-20T00:31:00Z", kind)]]))
++    assert verdict(w, now)["why"] == "MONEY_MOVED_SINCE_BASELINE"
++
++
++def test_an_undated_non_trading_row_refuses():
++    w, now = run(Feed([[{"type": "activity_type_transfer",
++                         "transfer": {"amount": "5"}}]]))
++    assert verdict(w, now)["why"] == "UNDATED_TRANSFER_ROW"
++
++
++def test_a_feed_too_long_to_finish_is_incomplete_and_refuses(monkeypatch):
++    monkeypatch.setattr(EF, "MAX_PAGES", 3)
++    feed = Feed([[trade("2026-11-20T00:4%d:00Z" % i)] for i in range(6)],
++                eof=False)
++    w, now = run(feed)
++    assert w.view(SINCE, now)["by"] == "INCOMPLETE"
++    assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
++
++
++def test_a_transport_error_keeps_refusing_and_backs_off():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")]], fail=RuntimeError("x"))
++    w, now = run(feed, steps=30)
++    assert w.last_error and w.view(SINCE, now)["by"] == "NOT_READ_YET"
++    assert verdict(w, now)["net_usd"] is None
++    assert len(feed.reads) == 1                      # backed off, no storm
++
++
++def test_an_error_after_a_good_read_does_not_outlive_the_staleness_limit():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")]])
++    w, now = run(feed, steps=5)
++    assert verdict(w, now)["net_usd"] == D(0)
++    feed.fail = RuntimeError("venue down")
++    later = now + EF.STALE_S + 1
++    w.step(feed, SINCE, later)
++    assert w.view(SINCE, later)["by"] == "STALE"
++    assert verdict(w, later)["net_usd"] is None
++
++
++def test_it_rereads_on_the_refresh_interval_and_not_before():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")]])
++    w, now = run(feed, steps=50)
++    assert len(feed.reads) == 1
++    w.step(feed, SINCE, now + EF.REFRESH_S + 1)
++    assert len(feed.reads) == 2
++
++
++def test_a_deposit_that_arrives_later_is_caught_on_the_next_read():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")]])
++    w, now = run(feed, steps=5)
++    assert verdict(w, now)["net_usd"] == D(0)
++    feed.pages = [[dep("2026-11-20T00:55:00Z"),
++                   trade("2026-11-20T00:40:00Z")]]
++    now += EF.REFRESH_S + 1
++    w.step(feed, SINCE, now)
++    assert verdict(w, now)["why"] == "MONEY_MOVED_SINCE_BASELINE"
++
++
++def test_a_new_baseline_discards_what_was_read_for_the_old_one():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")]])
++    w, now = run(feed, steps=5)
++    newer = SINCE + dt.timedelta(hours=1)
++    assert w.view(newer, now)["by"] == "NOT_READ_YET"
++    w.step(feed, newer, now + 1)
++    assert w.view(newer, now + 1)["by"] == "END_OF_FEED"
++
++
++def test_it_only_ever_gets_the_activity_feed():
++    feed = Feed([[trade("2026-11-20T00:40:00Z")], old_page(1)])
++    run(feed)
++    assert feed.reads and all(p.startswith("/v1/portfolio/activities")
++                              for p in feed.reads)
++
++
++def test_the_module_writes_nothing_and_knows_no_ledger():
++    src = (ROOT / "src" / "l5_equity_feed.py").read_text()
++    tree = ast.parse(src)
++    for node in ast.walk(tree):
++        if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Module)) \
++                and node.body and isinstance(node.body[0], ast.Expr) \
++                and isinstance(getattr(node.body[0], "value", None),
++                               ast.Constant):
++            node.body = node.body[1:] or [ast.Pass()]
++    code = ast.unparse(tree)
++    for word in ("store", "state[", "save(", "open(", "_post", "_put",
++                 "_delete", "submit", "cancel", "realized", "os."):
++        assert word not in code, word
+diff --git a/tests/test_l5_equity_publication.py b/tests/test_l5_equity_publication.py
+new file mode 100644
+index 000000000..bbe625263
+--- /dev/null
++++ b/tests/test_l5_equity_publication.py
+@@ -0,0 +1,291 @@
++"""What l5-pmus-live PUBLISHES about venue equity, for a second strategy.
++
++The published copy must refuse whenever the value behind it is not known to
++be current: buying power never read, buying power stale, order state
++uncertain, positions unreadable, transfers not established, baseline
++malformed, or a limit breached. And publishing it must change no ledger
++figure and none of this service's own gates.
++"""
++from __future__ import annotations
++
++import collections
++import copy
++import datetime as dt
++import json
++from decimal import Decimal as D
++from pathlib import Path
++
++import pytest
++
++from src import l5_equity_baseline as EB
++from src import l5_equity_feed as EF
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++from src import l5_portfolio_drawdown as PDD
++
++from tests.test_l5_venue_cost_attestation import Feed, fill
++
++ROOT = Path(__file__).resolve().parents[1]
++T0 = dt.datetime(2026, 11, 20, 0, 30, tzinfo=dt.timezone.utc)
++NOW = T0.timestamp() + 600
++M = "cpc-btc-updown-5m-2026-11-20-0100z"
++
++
++class Rn:
++    equity_risk_lines = R.Runner.equity_risk_lines
++    maybe_watch_equity_transfers = R.Runner.maybe_watch_equity_transfers
++
++    def __init__(self, store, feed=None):
++        self.store = store
++        self.transport = feed
++        self.available_cash_usd = D("321.4782")
++        self.available_cash_t = NOW - 30
++        self.stats = collections.Counter()
++
++
++def baseline(**over):
++    d = {"id": "baseline-20261120", "at_utc": T0.isoformat(),
++         "buying_power_usd": "321.4782", "matched_redemption_usd": "0",
++         "equity_usd": "321.4782", "positions": {}, "open_orders": 0,
++         "max_drawdown_usd": "5",
++         "historical": {"ledger_realized_usd": "-136.7845",
++                        "prior_anchor_usd": "336.68",
++                        "prior_drawdown_usd": "15.2018"},
++         "acknowledgement": EB.ACKNOWLEDGEMENT}
++    d.update(over)
++    return json.dumps(d)
++
++
++@pytest.fixture
++def store(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.save()
++    return s
++
++
++@pytest.fixture
++def env(monkeypatch):
++    monkeypatch.setenv(PDD.ANCHOR_ENV, "336.68")
++    monkeypatch.setenv(PDD.MAX_DRAWDOWN_ENV, "15")
++    monkeypatch.setenv(EB.DOC_ENV, baseline())
++
++
++def quiet_feed():
++    return Feed([[fill(M, "UP", "1", "0.5", "T1", "V1",
++                       t="2026-11-20T00:35:00Z")]])
++
++
++def watched(store, feed=None):
++    r = Rn(store, feed or quiet_feed())
++    for i in range(5):
++        r.maybe_watch_equity_transfers(NOW - 20 + i)
++    return r
++
++
++def refusals(out):
++    return (out["portfolio_drawdown"]["refusal"],
++            out["equity_baseline"]["refusal"])
++
++
++def test_with_nothing_configured_both_blocks_are_off(store, monkeypatch):
++    for k in (PDD.ANCHOR_ENV, PDD.MAX_DRAWDOWN_ENV, EB.DOC_ENV):
++        monkeypatch.delenv(k, raising=False)
++    feed = quiet_feed()
++    r = Rn(store, feed)
++    r.maybe_watch_equity_transfers(NOW)
++    out = r.equity_risk_lines(NOW)
++    assert out["portfolio_drawdown"]["state"] == "OFF"
++    assert out["equity_baseline"]["state"] == "OFF"
++    assert refusals(out) == (None, None)
++    assert feed.reads == []            # no baseline, no feed read
++
++
++def test_the_existing_limit_is_published_as_breached(store, env):
++    out = watched(store).equity_risk_lines(NOW)
++    assert out["portfolio_drawdown"]["refusal"] \
++        == "PORTFOLIO_DRAWDOWN_LIMIT:15.2018>=15"
++    eq = out["equity_baseline"]
++    assert eq["refusal"] is None and eq["period_change_usd"] == "0.0000"
++    assert eq["historical"]["ledger_realized_usd"] == "-136.7845"
++    assert out["equity_value"]["usd"] == "321.4782"
++
++
++def test_a_loss_past_the_baseline_allowance_is_published(store, env):
++    r = watched(store)
++    r.available_cash_usd = D("316.4782")
++    assert r.equity_risk_lines(NOW)["equity_baseline"]["refusal"] \
++        == "EQUITY_DRAWDOWN_LIMIT:5.0000>=5"
++
++
++@pytest.mark.parametrize("cash, age, why", [
++    (None, None, "BUYING_POWER_NOT_READ"),
++    (D("321.4782"), 181.0, "BUYING_POWER_STALE"),
++    (D("321.4782"), 3600.0, "BUYING_POWER_STALE"),
++    (D("321.4782"), -60.0, "BUYING_POWER_STALE"),
++])
++def test_a_missing_or_stale_balance_blocks_both(store, env, cash, age, why):
++    r = watched(store)
++    r.available_cash_usd = cash
++    r.available_cash_t = None if age is None else NOW - age
++    out = r.equity_risk_lines(NOW)
++    assert out["equity_value"] == {
++        "usd": None, "unavailable_why": why,
++        "buying_power_age_s": age, "max_age_s": R.EQUITY_CASH_MAX_AGE_S}
++    assert refusals(out) == ("PORTFOLIO_VALUE_UNAVAILABLE",
++                             "EQUITY_UNAVAILABLE")
++
++
++def test_a_balance_just_inside_the_age_limit_is_used(store, env):
++    r = watched(store)
++    r.available_cash_t = NOW - 180.0
++    assert r.equity_risk_lines(NOW)["equity_value"]["usd"] == "321.4782"
++
++
++def test_uncertain_order_state_blocks_both(store, env):
++    store.mark_uncertain("cancel outcome unknown")
++    out = watched(store).equity_risk_lines(NOW)
++    assert out["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
++    assert refusals(out) == ("PORTFOLIO_VALUE_UNAVAILABLE",
++                             "EQUITY_UNAVAILABLE")
++
++
++def test_unreadable_positions_block_both(store, env):
++    store.state["positions"] = {M + "|UP": "not a number"}
++    out = watched(store).equity_risk_lines(NOW)
++    assert refusals(out)[0] is not None and refusals(out)[1] is not None
++    assert out["equity_value"].get("usd") is None
++
++
++def test_an_unmatched_position_is_worth_nothing(store, env):
++    store.state["positions"] = {M + "|UP": "50"}
++    assert watched(store).equity_risk_lines(NOW)["equity_value"]["usd"] \
++        == "321.4782"
++
++
++def test_a_matched_pair_is_worth_its_redemption(store, env):
++    store.state["positions"] = {M + "|UP": "3", M + "|DOWN": "2"}
++    assert watched(store).equity_risk_lines(NOW)["equity_value"]["usd"] \
++        == "323.4782"
++
++
++def test_transfers_never_read_block_the_baseline_not_the_old_limit(
++        store, env):
++    out = Rn(store, quiet_feed()).equity_risk_lines(NOW)      # never stepped
++    assert out["equity_baseline"]["refusal"] \
++        == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++    assert out["equity_baseline"]["transfers"]["why"] == "FEED_NOT_READ"
++    assert out["portfolio_drawdown"]["refusal"].startswith(
++        "PORTFOLIO_DRAWDOWN_LIMIT")
++
++
++def test_a_deposit_since_the_baseline_blocks(store, env):
++    feed = Feed([[{"type": "activity_type_account_deposit",
++                   "accountBalanceChange": {"time": "2026-11-20T00:36:00Z",
++                                            "amount": "100"}}]])
++    r = watched(store, feed)
++    r.available_cash_usd = D("421.4782")          # "up $100"
++    eq = r.equity_risk_lines(NOW)["equity_baseline"]
++    assert eq["refusal"] == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++    assert eq["transfers"]["why"] == "MONEY_MOVED_SINCE_BASELINE"
++    assert "period_change_usd" not in eq
++
++
++def test_a_transfer_read_that_went_stale_blocks(store, env):
++    r = watched(store)
++    later = NOW + EF.STALE_S + 60
++    r.available_cash_t = later - 10
++    eq = r.equity_risk_lines(later)["equity_baseline"]
++    assert eq["refusal"] == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++
++
++def test_a_feed_error_blocks_and_never_raises(store, env):
++    feed = quiet_feed()
++    feed.fail = RuntimeError("venue down")
++    eq = watched(store, feed).equity_risk_lines(NOW)["equity_baseline"]
++    assert eq["refusal"] == "EQUITY_TRANSFERS_NOT_ESTABLISHED"
++
++
++def test_a_malformed_baseline_blocks(store, monkeypatch, env):
++    monkeypatch.setenv(EB.DOC_ENV, baseline(equity_usd="400"))
++    eq = watched(store).equity_risk_lines(NOW)["equity_baseline"]
++    assert eq["refusal"] \
++        == "EQUITY_BASELINE_EQUITY_NE_BUYING_POWER_PLUS_MATCHED"
++
++
++def test_the_period_separates_measured_from_uncertain(store, env):
++    store.state["retired_markets"] = {
++        "before": {"t": "2026-11-19T00:00:00+00:00", "settlement_pnl": "-90",
++                   "origin_cost_basis": "AUTHENTICATED_FILLS"},
++        "m": {"t": "2026-11-20T00:40:00+00:00", "settlement_pnl": "-0.07",
++              "origin_cost_basis": "AUTHENTICATED_FILLS"},
++        "u": {"t": "2026-11-20T00:41:00+00:00", "settlement_pnl": "-5",
++              "origin_cost_basis": "UPPER_BOUND_1USD_PER_CONTRACT"}}
++    p = watched(store).equity_risk_lines(NOW)["equity_baseline"]["period"]
++    assert D(p["measured_realized_usd"]) == D("-0.07")
++    assert p["uncertain_rows"] == 1
++    assert D(p["uncertain_booked_bound_usd"]) == D("-5")
++
++
++def test_a_failure_inside_is_published_as_a_refusal(store, env):
++    r = watched(store)
++    r.store = None
++    out = r.equity_risk_lines(NOW)
++    assert all(x and x.startswith("EQUITY_LINES_FAILED") for x in
++               refusals(out))
++
++
++def test_publishing_changes_nothing_in_the_ledger(store, env, tmp_path):
++    store.state["retired_markets"] = {
++        "m": {"t": "2026-11-20T00:40:00+00:00", "settlement_pnl": "-0.07",
++              "origin_cost_basis": "AUTHENTICATED_FILLS"}}
++    store.state["realized_attributed"] = "-136.7845"
++    store.save()
++    disk = (tmp_path / "inv.json").read_bytes()
++    before = copy.deepcopy(store.state)
++    r = watched(store)
++    for _ in range(3):
++        r.equity_risk_lines(NOW)
++    assert store.state == before
++    assert (tmp_path / "inv.json").read_bytes() == disk
++    assert store.realized_today() == D("-136.7845")
++
++
++def _src():
++    return (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
++
++
++def test_the_risk_record_carries_the_blocks_and_keeps_every_old_figure():
++    src = _src()
++    i = src.index("    def account_risk_line(self)")
++    body = src[i:src.index("    def day_realized_line(self)")]
++    assert "**self.equity_risk_lines()," in body
++    for old in ('"utc_day_realized_usd": dr', '"daily_halt_usd"',
++                '"lifetime_realized_usd": str(lifetime)',
++                '"cumulative_loss_ceiling_usd"', '"cumulative_would_halt"'):
++        assert old in body, old
++
++
++def test_this_services_own_gates_do_not_read_the_new_module():
++    for name in ("l5_live_validation_gates.py", "l5_live_execution.py",
++                 "l5_portfolio_drawdown.py"):
++        text = (ROOT / "src" / name).read_text()
++        assert "l5_equity_baseline" not in text, name
++        assert "l5_equity_feed" not in text, name
++    # and the gate's own value is still computed where it was
++    lx = (ROOT / "src" / "l5_live_execution.py").read_text()
++    assert "return PDD.worst_case_value(self.available_cash_usd, pos)" in lx
++
++
++def test_the_watch_runs_on_the_tick_and_is_swallowed():
++    src = _src()
++    assert src.count("self.maybe_watch_equity_transfers(now)") == 1
++    i = src.index("    def maybe_watch_equity_transfers")
++    body = src[i:src.index("    def equity_risk_lines")]
++    assert 'if doc.get("state") != "ON":' in body
++    assert "except BaseException" in body
++
++
++def test_the_live_image_ships_both_modules():
++    d = (ROOT / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
++    for m in ("l5_equity_baseline.py", "l5_equity_feed.py"):
++        assert "COPY src/%s src/%s" % (m, m) in d
+-- 
+2.43.0
+
+
+From 56dfa0b7178ccf1ea6a43cd7a17d2b8cff5f2ed8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 01:12:22 +0000
+Subject: [PATCH 2/3] l5-pmus-live: the transfer read is complete only when the
+ venue ends the feed
+
+The release commit before this one carried the earlier transfer check, which
+stopped after two pages a day older than the baseline. The feed is not
+strictly ordered, so that was an unmeasured assumption. It is removed: a
+read counts only on the venue's explicit eof; a page with no cursor and no
+eof, or MAX_PAGES, is INCOMPLETE and refuses. Full reads repeat every 15
+minutes and go stale after 35.
+
+The three tests for this were already in the previous commit and failed
+there; they pass here.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_equity_feed.py | 65 +++++++++++++++++++++----------------------
+ 1 file changed, 31 insertions(+), 34 deletions(-)
+
+diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
+index 03fd27474..378fd862c 100644
+--- a/src/l5_equity_feed.py
++++ b/src/l5_equity_feed.py
+@@ -5,14 +5,22 @@ keeps the NON-trading rows (deposits, transfers, bonuses) and how far back
+ the read is good for. `l5_equity_baseline.net_transfers` turns that into
+ either "nothing moved" or a refusal. This module decides nothing.
+ 
+-HOW FAR BACK IS FAR ENOUGH. The feed is newest-first but NOT strictly
+-ordered (the full walk of 2026-11-20 reported `monotonic: false`), so the
+-first row older than the baseline proves nothing. The read stops only at the
+-end of the feed, or after `OLD_PAGES` consecutive pages whose every dated
+-row is more than `MARGIN_S` older than the baseline. That margin is an
+-ASSUMPTION about how far out of order the venue serves rows; it is stated in
+-the result (`by`) and not hidden. A read that hits `MAX_PAGES` first is
+-incomplete, and incomplete refuses.
++HOW FAR BACK IS FAR ENOUGH: THE END OF THE FEED, AND NOTHING LESS. The feed
++is newest-first but NOT strictly ordered (the full walk of 2026-11-20
++reported `monotonic: false`), so no row's date proves that everything after
++the baseline has been served. An earlier version stopped after two pages
++older than the baseline by a day; that rested on an unmeasured assumption
++about how far out of order the venue serves rows, and it was removed. The
++only read that counts is one the venue itself ended with an explicit `eof`.
++A read that hits `MAX_PAGES`, or gets a page with no cursor and no `eof`, is
++INCOMPLETE, and incomplete refuses.
++
++THE COST OF THAT, STATED. A full read is a few hundred pages, so it is
++repeated every `REFRESH_S`, not every tick. Between reads a NEW deposit is
++unseen for up to that long and would read as a gain; a new withdrawal reads
++as a loss, which is the safe direction. `l5_equity_baseline` therefore never
++lets a gain add room beyond the baseline's allowance, so an unseen deposit
++can mask losses only up to its own size and only until the next read.
+ 
+ It writes no state anywhere, calls no ledger method and makes no request but
+ the feed's GET. Its result lives in memory and goes stale after `STALE_S`,
+@@ -21,17 +29,17 @@ after which it again refuses.
+ from __future__ import annotations
+ 
+ import datetime as dt
+-from typing import Any, Dict, List, Mapping, Optional
++from typing import Any, Dict, Mapping, Optional
+ 
+ from src import l5_cost_basis_audit as CBA
+ from src import l5_venue_cost_attestation as VCA
+ 
+-REFRESH_S = 300.0
+-STALE_S = 900.0
++REFRESH_S = 900.0
++STALE_S = 2100.0
+ PAGES_PER_STEP = 2
+-MAX_PAGES = 80
+-OLD_PAGES = 2
+-MARGIN_S = 86400.0
++MAX_PAGES = 800
++#: what a read the venue ended is complete back to
++BEGINNING = "1970-01-01T00:00:00+00:00"
+ ERROR_BACKOFF_S = 60.0
+ 
+ TRADING_KINDS = frozenset(CBA.FILL_KINDS) | frozenset(
+@@ -77,10 +85,8 @@ class TransferWatch:
+         if self._walk is None:
+             if self._seen_t is not None and now - self._seen_t < REFRESH_S:
+                 return
+-            self._walk = {"cursor": None, "pages": 0, "rows": [],
+-                          "old": 0}
++            self._walk = {"cursor": None, "pages": 0, "rows": []}
+         w = self._walk
+-        floor = since - dt.timedelta(seconds=MARGIN_S)
+         for _ in range(PAGES_PER_STEP):
+             got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
+                                       cursor=w["cursor"], rows=[],
+@@ -92,34 +98,25 @@ class TransferWatch:
+                 self.next_allowed = now + ERROR_BACKOFF_S
+                 return
+             w["pages"] = int(got.get("pages") or w["pages"] + 1)
+-            times: List[dt.datetime] = []
+             for r in got.get("rows") or ():
+-                if not isinstance(r, Mapping):
+-                    continue
+-                t = VCA.row_time(r)
+-                if t is not None:
+-                    times.append(t)
+                 rec = non_trading(r)
+                 if rec is not None:
+                     w["rows"].append(rec)
+-            w["old"] = w["old"] + 1 if (times and max(times) < floor) else 0
++            #: ONLY the venue's explicit `eof`. A page that merely carries no
++            #: cursor is what a truncated answer looks like too; the full
++            #: walk of 2026-11-20 ended on `eof`, so that is what is required.
+             if ended == "eof":
+-                return self._finish(now, floor, "END_OF_FEED")
+-            if w["old"] >= OLD_PAGES:
+-                return self._finish(now, floor, "TIME_FLOOR_WITH_MARGIN")
++                return self._finish(now, BEGINNING, "END_OF_FEED")
+             nxt = got.get("next_cursor")
+-            if not nxt or w["pages"] >= MAX_PAGES:
++            if ended == "no_cursor" or not nxt or w["pages"] >= MAX_PAGES:
+                 return self._finish(now, None, "INCOMPLETE")
+             w["cursor"] = str(nxt)
+ 
+-    def _finish(self, now: float, back: Optional[dt.datetime],
+-                by: str) -> None:
++    def _finish(self, now: float, back: Optional[str], by: str) -> None:
+         w = self._walk or {}
+-        self._seen = {"complete_back_to": (None if back is None
+-                                           else back.isoformat()),
++        self._seen = {"complete_back_to": back,
+                       "rows": list(w.get("rows") or ()),
+-                      "by": by, "pages": w.get("pages"),
+-                      "margin_s": MARGIN_S}
++                      "by": by, "pages": w.get("pages")}
+         self._seen_t = now
+         self._walk = None
+         self.last_error = None
+-- 
+2.43.0
+
+
+From 30c639da67e036b5712382f3175fbb75381fff0e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 01:15:41 +0000
+Subject: [PATCH 3/3] tests: the transfer read stops at the page limit, not
+ after it
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ tests/test_l5_equity_feed.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tests/test_l5_equity_feed.py b/tests/test_l5_equity_feed.py
+index 652b317fd..af25739a1 100644
+--- a/tests/test_l5_equity_feed.py
++++ b/tests/test_l5_equity_feed.py
+@@ -111,6 +111,7 @@ def test_a_feed_too_long_to_finish_is_incomplete_and_refuses(monkeypatch):
+     w, now = run(feed)
+     assert w.view(SINCE, now)["by"] == "INCOMPLETE"
+     assert verdict(w, now)["why"] == "FEED_NOT_READ_BACK_TO_BASELINE"
++    assert len(feed.reads) == 3            # stopped AT the page limit
+ 
+ 
+ def test_a_transport_error_keeps_refusing_and_backs_off():
+-- 
+2.43.0
+

@@ -1,0 +1,135 @@
+{
+  "experiment": "PMUS NFL Sunday PRE->LIVE habitat test, 2026-09-20",
+  "status": "PREREGISTERED. Written and committed BEFORE any reach, movement or recycling figure was computed for this slate.",
+  "posture": "READ-ONLY / SHADOW. GET requests to the public PMUS gateway only. No credentials, no order path, no venue writes, no arming, no change to Model A or any execution system. The Gemini corrected A+B prospective shadow keeps running untouched as the control.",
+  "why_this_slate": "the previous Phase-2 reach test ran 02:40-03:10 UTC when essentially no US sport was live and 176 of 229 sampled markets were NFL PREGAME for games days away. Those reach figures are valid only as a lower bound for that hour and cannot answer whether LIVE sport supplies L5-like habitat. Today's slate is the natural experiment.",
+  "slate_as_the_venue_serves_it": {
+    "nfl_events": 10,
+    "nfl_markets_total": 3394,
+    "kickoffs_utc": {
+      "2026-09-20T17:00Z (13:00 ET)": 8,
+      "2026-09-20T20:05Z (16:05 ET)": 2
+    },
+    "SNF_note": "no 20:20 ET / 00:20 UTC Sunday Night Football event is present in the league feed at selection time. The SNF cohort stays DEFINED and will be reported EMPTY if no such game appears, rather than dropped."
+  },
+  "selection_rule_fixed_in_advance": {
+    "rule": "per event, the markets whose mid sits nearest 0.50 within [0.30, 0.70] -- the price region L5 actually operates in -- capped at 2 per sportsMarketType family and 13 per NFL event / 9 per other event, so no family or game dominates",
+    "never_uses": "reach, movement, depth or any outcome variable",
+    "selected": 306,
+    "events": 43,
+    "by_league": {
+      "nfl": 130,
+      "mlb": 67,
+      "sea": 30,
+      "lal": 29,
+      "epl": 24,
+      "wnba": 21,
+      "mls": 5
+    },
+    "rediscovery_s": 900,
+    "note": "re-discovery every 15 min refreshes each event's live flag, period and score, which is what makes the same-market PRE->LIVE pairing possible",
+    "nfl_by_family": {
+      "football_team_full_game_spread": 20,
+      "football_team_first_half_spread": 20,
+      "football_game_first_half_total": 20,
+      "football_team_full_game_total": 20,
+      "football_team_points_full_game_total": 20,
+      "football_team_first_half_total": 20,
+      "football_team_full_game_winner (moneyline)": 6,
+      "football_team_second_half_spread": 4
+    }
+  },
+  "cadence": {
+    "before_2026-09-20T15:00Z": "60s (cheap overnight PRE baseline)",
+    "from_15:00Z_to_2026-09-21T03:30Z": "8s",
+    "why": "the 8s PRE window from 15:00-17:00Z is a like-for-like control for the 8s LIVE measurement. Reach at 30/60/120s is computed ONLY on 8s rows."
+  },
+  "cohorts_reported_separately_never_pooled": [
+    "PRE (8s, pre-kickoff)",
+    "NFL 1PM ET LIVE",
+    "NFL 4:05/4:25 ET LIVE",
+    "NFL SNF LIVE (may be empty)",
+    "late-game / high-TTE-pressure states where sample permits",
+    "and, crosscutting, moneyline vs spread vs total vs other"
+  ],
+  "preregistered_qualification_thresholds": {
+    "median_spread": "<= 0.02",
+    "share_of_states_at_or_below_2c": ">= 95%",
+    "resting_price_reach_within_120s": ">= 70%",
+    "median_reach_s": "<= 30",
+    "near_qualifiers": "ranked and reported with the exact failing dimension named; never silently discarded"
+  },
+  "frozen_reference": {
+    "international_btc15m_8s": {
+      "median_spread": 0.01,
+      "share_at_or_below_1c": 96.1,
+      "reach120": 80.6,
+      "median_reach_s": 16
+    },
+    "note": "reach120 for both reference venues was corrected to EXCLUDE right-censored states rather than score them as misses (International 76.0 -> 80.6, Gemini 16.8 -> 24.4). The corrected figures are canonical and the same exclusion applies to every figure in this experiment."
+  },
+  "primary_discriminator": "REACH and recycling, not spread. A resting BUY at p can only fill if the market later offers at or below p; the mirror test applies to the complement. Spread alone already failed to separate Gemini (wide, 24.4% reach), PMUS pregame (tight but frozen) and International (tight and churning, 80.6%).",
+  "recycling_resource_being_tested": {
+    "not": "literal PositionSplit behaviour -- the mechanism autopsy established that L5 never mints; the venue operator does, as matching plumbing",
+    "but": "the economically equivalent resource: how often complementary or opposing demand arrives at a price that would let resting inventory recycle, measured as FIRST MAKER FILL -> OPPOSITE EXECUTABLE INTEREST -> MATCHED at 30s / 60s / 120s / remainder-of-market"
+  },
+  "if_a_cohort_qualifies": "run the EXISTING frozen continuous-inventory L5 model in corrected shadow on it, preserving unequal sizing, same-side EXTEND runs, inventory imbalance, patient opposite acquisition, price-dependent sizing and TTE behaviour. It is NOT to be converted into equal-size YES/NO pair trading. Shadow only; no trading.",
+  "anti_fitting_commitments": [
+    "thresholds above are fixed and will not be moved after seeing results",
+    "cohorts will not be pooled to manufacture a pass",
+    "near-misses are reported with the failing dimension named",
+    "the Gemini control keeps every prospective result exactly as recorded, including the economically bad shadow COMPLETE at pair basis 1.23"
+  ],
+  "labels": "Every fill, pair and conversion produced by this experiment is SHADOW/HYPOTHETICAL. No order exists; nothing is submitted, filled, settled or realized.",
+  "amendments_made_before_any_result_was_computed": [
+    {
+      "n": 1,
+      "found": "the selection iterated sportsMarketType families ALPHABETICALLY before applying the per-event cap, so football_game_first_quarter_total sorted ahead of the canonical game-level markets and filled the cap first.",
+      "evidence": "the v1 NFL sample was 120 quarter/half TOTALS and 10 first-half spreads, with ZERO moneylines, ZERO full-game spreads and ZERO full-game totals -- while 6 moneylines, 111 full-game spreads and 136 full-game totals were in band and eligible.",
+      "fix": "family priority is now explicit and follows what the experiment must report separately: winner/moneyline, then full-game spread, full-game total, then halves, then quarters.",
+      "superseded_data": "scratchpad/nfl_sunday_v1_superseded_selection.jsonl"
+    },
+    {
+      "n": 2,
+      "found": "the corrected priority list matched soccer's 'full_time_winner' but not football's 'full_game_winner'. The family key is sportsMarketType, and NFL's game winner is football_team_full_game_winner -- it matches neither that nor 'moneyline', which is the marketType. Moneylines still ranked last.",
+      "fix": "'full_game_winner' added to the priority patterns.",
+      "superseded_data": "scratchpad/nfl_sunday_v2_superseded_selection.jsonl"
+    }
+  ],
+  "amendment_integrity": "Both bugs were found by inspecting the SELECTED SAMPLE, not by looking at any outcome. No reach, movement, recycling or conversion figure had been computed for this slate when either fix was made. The superseded collections are retained rather than deleted. The qualification thresholds are unchanged.",
+  "scope_widened_2026-09-20T04:55Z": {
+    "instruction": "measure the complete accessible LIVE slate now rather than waiting for NFL kickoff",
+    "what_changed": [
+      "8s cadence starts immediately instead of 15:00Z",
+      "league coverage is every league /v2/leagues returns (50), not a hand-picked list of 8",
+      "selection is LIVE-FIRST: every two-sided market of a live event is taken uncapped before any pregame market, then the NFL pregame control, then other pregame, under a 300-market cap",
+      "rediscovery every 5 minutes instead of 15, so a newly-live event enters the sample fast",
+      "live markets are sampled EVERY sweep and pregame every 4th: 18 threads did not beat a 13.0s sweep on 300 markets, so the gateway sets the floor, and the cadence budget goes to the markets the experiment is about",
+      "every row now carries sweep_s, the ACTUAL measured sweep duration, so no reach figure is ever computed on an assumed grid"
+    ],
+    "measured_after_change": {
+      "live_sampling_interval_median_s": 8.0,
+      "live_sweep_duration_s": 0.5,
+      "markets": 300,
+      "events": 50
+    }
+  },
+  "live_slate_at_04:47Z": {
+    "finding": "the gateway serves 118 events and exactly ONE is live",
+    "event": "mlb-min-laa-2026-09-19, period 'Mid Extra', +3.2h since start, 5 two-sided markets",
+    "three_independent_signals": {
+      "live_flag": {
+        "true": 1,
+        "false": 117
+      },
+      "period": {
+        "NS (not started)": 81,
+        "empty": 36,
+        "Mid Extra": 1
+      },
+      "started_and_not_ended": 1
+    },
+    "consistency_check": "the 02:00Z census of this same venue found 344 live markets (mls 203, mlb 120, wnba 18, cs2 2, ufc 1). Those games have since ended. At 00:47 ET a near-empty live slate is expected.",
+    "note": "this does not match a reported count of ~22 live events. The discrepancy is recorded rather than resolved; the collector now scales automatically with whatever the gateway marks live."
+  }
+}

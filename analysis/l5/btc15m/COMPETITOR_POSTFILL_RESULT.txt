@@ -1,0 +1,51 @@
+0x8dxd BTC15m POST-FILL RECONSTRUCTION -- source-anchored result
+Evidence: data/l5/competitor_0x8dxd_full/activity.jsonl filtered to
+btc-updown-15m-*: 228,561 TRADE rows and 2,041 REDEEM rows, 1,033 windows,
+2026-03-12..2026-04-06. Regenerate:
+  grep '"btc-updown-15m-' <activity.jsonl> > a15.jsonl
+  python3 analysis/l5/btc15m/competitor_postfill.py a15.jsonl
+
+==============================================================================
+0x8dxd BTC15m POST-FILL RECONSTRUCTION
+==============================================================================
+windows 1033 | observed fills 228561 | unparseable rows 0
+fills collapsed into DECISIONS (same side/outcome within 1s): 64093
+  -> 3.6 fills per decision; a transition statistic on raw fills
+     would mostly be measuring partial fills of one order.
+rebates credited in this slice: maker $0.00, taker $0.00
+
+--- WHAT HAPPENS AFTER A FILL (next observed fill, n=64093) ---
+  SAME_SIDE_BUY          33691   52.6%
+  OPPOSITE_SIDE_BUY      19930   31.1%
+  SAME_SIDE_SELL          7231   11.3%
+  OPPOSITE_SIDE_SELL      2209    3.4%
+  TERMINAL                1032    1.6%
+
+--- TIMING AND PRICE ---
+  gap to next fill (s): median 2  p25 0  p75 6  p95 50
+  same-side price change: mean +0.0004  median +0.0000
+  |imbalance| at a fill: median 669.4  mean 1029.3  p95 3214.9 shares
+  filled on the HEAVY side, then added to it again: 18410/36330 (50.7%)
+
+--- PAIR ECONOMICS AND SETTLEMENT (per window) ---
+  windows with both sides held: 1003 of 1032
+  pair acquisition cost: median 0.9189  p10 0.7421  p90 1.0739
+  pair cost < 1.00 in 751 of 1003 (74.9%)
+  residual carried into settlement: median 639.5  mean 1038.8 shares
+  windows carrying ZERO residual: 0 (0.0%)
+
+--- REALIZED, from REDEEM cashflow (1008 windows) ---
+  total spent $2623886.00 | total redeemed $2645916.01 | net $+22030.01
+  mean per window $+21.8552 | median $-5.4389
+  windows net positive: 494 of 1008 (49.0%)
+  matched-pair P&L  $+160699.45 over 1003 windows (mean $+160.2188)
+  residual P&L      $-144048.20 over 1003 windows (mean $-143.6173)
+
+--- RETURN ON TURNOVER, and what it demands of capital ---
+  net $+22030.01 on $2623886.00 spent = 0.8396% of turnover
+  mean spend per window: $2603.06
+  to net $480/day at that rate: $57170 of turnover a day,
+     i.e. $596 per window across 96 BTC15m windows
+
+Fills and REDEEM cashflows are OBSERVED. Order submissions, cancellations and
+intentions are NOT in this feed and are not claimed here.

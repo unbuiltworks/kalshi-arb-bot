@@ -1,0 +1,30 @@
+{
+ "_sha256_16": "d34c35879c46d885",
+ "applies_to_windows_with_entry_t_at_or_after_utc": "2026-09-05T23:17:44+00:00",
+ "arm": "rest_120s:modal",
+ "failure": {
+  "after_windows_admitted": 100,
+  "net_after_fees_usd_at_or_below": -0.5
+ },
+ "frozen_utc": "2026-09-05T23:17:44+00:00",
+ "hypothesis": "strict first fills taken when the trailing 120s of the same symbol's public prints contain BOTH buys and sells are less adverse (retained-tape descriptive segment: 43% vs 82% adverse on rest_120s) and the arm's strict net is non-negative",
+ "no_tuning_rule": "threshold and feature definition frozen here; a change is a new file and a fresh window count; never evaluated on windows before applies_to_windows_with_entry_t_at_or_after_utc",
+ "rule": {
+  "all": [
+   {
+    "feature": "trailing_two_sided_120s",
+    "op": "==",
+    "value": true
+   }
+  ],
+  "name": "two_sided_flow_120s"
+ },
+ "success": {
+  "max_adverse_selection_30s_pct": 50.0,
+  "min_days": 4,
+  "min_first_fills": 15,
+  "min_net_after_known_fees_usd": 0.0,
+  "min_windows_admitted": 100
+ },
+ "workstream": "OWNER 5555437740 -- two-sided-flow hypothesis, pre-registered on UNTOUCHED future windows; sample kept separate from the primary transfer gate; not a promotion path"
+}

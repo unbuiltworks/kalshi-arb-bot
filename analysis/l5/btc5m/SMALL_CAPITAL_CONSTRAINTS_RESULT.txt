@@ -1,0 +1,20 @@
+== 1. Bonereaper per window, 1104 windows, and the same at a $0.60 window ==
+   median                                           his size     x 0.000275 our limit
+   dollars spent per window                          2181.76         0.6000   0.60 envelope
+   dollars on his heavier side                       1670.64         0.4594   0.30 side cap
+   unmatched dollars at the close                     717.00         0.1972   0.10 unmatched cap
+   single fill, dollars                                22.00         0.0061   0.05 clip
+   largest single fill in a window, dollars           249.85         0.0687   0.05 clip
+   fills per window                                       52
+   share imbalance |UP-DOWN| / (UP+DOWN)                 32%
+   dollars paid at 0.90 or above                         49%   (all windows pooled)
+   heavier side as a share of his spend: 80% (ours is capped at 0.30/0.60 = 50% of the envelope)
+   unmatched as a share of his spend: 37% (ours is capped at 0.10/0.60 = 17%)
+
+== 2. our controller, live configuration, 1091 windows (inferred fills) ==
+   median dollars filled per window $0.555 of the $0.60 envelope; median fills 16; median share of the window with NO order working: 68%
+   limit that refused a side    windows it bound in  median first bind (s) share of all decisions
+   SIDE_CAP_REACHED                            95%                     55                  70.5%
+   UNMATCHED_CEILING                           97%                     16                  39.0%
+   REQUOTE_CANCEL_PENDING                     100%                      4                  12.5%
+   ENTRY_WINDOW_CLOSED                         16%                    271                   0.9%
