@@ -646,6 +646,65 @@ CAMPAIGN_RECON_DEADLINE_S = 600.0
 MIDWINDOW_SETTLE_S = 15.0
 
 
+#: WHAT THIS LANE VERIFIED AGAINST THE VENUE WHEN A WINDOW CLOSED.
+#:
+#: Observed 2026-11-21 18:40:30Z: the 18:35 window had closed, the venue had
+#: already dropped its position row, and the venue had not yet reported the
+#: market settled (it did 13 s later). The overlap check found neither a row
+#: to compare nor a settlement, refused, and the 18:40 window was sat out.
+#:
+#: But five seconds earlier this same process had read that row for the
+#: closing window's own reconciliation, and it agreed. That read is kept
+#: here -- in memory only, so a restart forgets it and the strict check
+#: applies again -- and the overlap check accepts it, for
+#: CLOSE_VERIFIED_MAX_AGE_S, when the venue has no row to show any more.
+#: It is recorded ONLY when the venue's row was read and both legs equal
+#: this lane's ledger.
+CLOSE_VERIFIED: Dict[str, Dict[str, Any]] = {}
+CLOSE_VERIFIED_MAX_AGE_S = 300.0
+
+
+def note_close_verification(market: str, recon: Any, legs: Any,
+                            at: float) -> Optional[Dict[str, Any]]:
+    """Record a close-time agreement on BOTH legs, or nothing. Never raises."""
+    try:
+        if not (isinstance(recon, Mapping) and recon.get("read")
+                and recon.get("agrees") is True):
+            return None
+        rows = recon.get("venue_rows") or []
+        up_q, dn_q = legs[C.UP]["qty"], legs[C.DOWN]["qty"]
+        if len(rows) == 1:
+            up = _dec(rows[0].get("qtyBoughtDecimal"))
+            dn = _dec(rows[0].get("qtySoldDecimal"))
+            if up is None or dn is None or up != up_q or dn != dn_q:
+                return None
+        elif rows or up_q != 0 or dn_q != 0:
+            #: several rows, or none while we hold something: not verified
+            return None
+        rec = {"at": float(at), "up": str(up_q), "down": str(dn_q)}
+        CLOSE_VERIFIED[str(market)] = rec
+        return rec
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
+def close_verified(market: str, legs: Any, now: float) -> bool:
+    """Was `market` verified at its close, recently, at the SAME legs the
+    ledger holds now?"""
+    rec = CLOSE_VERIFIED.get(str(market))
+    if not rec:
+        return False
+    try:
+        age = float(now) - float(rec["at"])
+        return (0 <= age <= CLOSE_VERIFIED_MAX_AGE_S
+                and rec["up"] == str(legs[C.UP]["qty"])
+                and rec["down"] == str(legs[C.DOWN]["qty"]))
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
 def campaign_overlap() -> bool:
     return (os.environ.get(CAMPAIGN_OVERLAP_ENV) or "").strip() \
         == CAMPAIGN_OVERLAP_TOKEN
@@ -2132,9 +2191,12 @@ class Session:
                 #: the mid-window read below records it
                 v = self.t.settlement(m)
                 if not (isinstance(v, Mapping) and v.get("terminal")):
-                    return {"reason":
-                            "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE",
-                            "venue_rows": len(rows)}
+                    #: ...or when this process verified both legs against
+                    #: the venue as that window closed, moments ago
+                    if rows or not close_verified(m, legs, self.clock()):
+                        return {"reason":
+                                "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE",
+                                "venue_rows": len(rows)}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -2720,6 +2782,8 @@ class Session:
         # reported agrees FALSE with venue_rows empty. The check could not
         # pass in exactly the case it exists for.
         recon = self.reconcile()
+        note_close_verification(self.market, recon, self.ex.inventory(
+            self.market), self.clock())
         settled = self.settle()
         #: the same read AFTER settlement, kept for the record. An empty
         #: venue here is expected -- the position has been redeemed -- so

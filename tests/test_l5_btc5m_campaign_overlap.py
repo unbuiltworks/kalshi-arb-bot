@@ -216,6 +216,7 @@ def session(ex, t, market=M2):
                                 "loss_room_usd": "0.95"}
     s.exposure_ceiling = lambda: D("0.60")
     s._log = lambda k, d: None
+    s.clock = lambda: 1000.0
     return s
 
 
@@ -308,3 +309,79 @@ def test_a_failing_settlement_read_never_raises(overlap):
     ex.pending_settlement = lambda: (_ for _ in ()).throw(RuntimeError("x"))
     assert session(ex, _T()).settle_earlier_windows(1.0) == {
         "error": "RuntimeError"}
+
+
+# -------------- the venue dropped its row before reporting the settlement
+
+@pytest.fixture(autouse=True)
+def _clean_close_record():
+    RUN.CLOSE_VERIFIED.clear()
+    yield
+    RUN.CLOSE_VERIFIED.clear()
+
+
+def legs(up="0.31", dn="0.31"):
+    return {C.UP: {"qty": D(up), "cost": D("0.19")},
+            C.DOWN: {"qty": D(dn), "cost": D("0.14")}}
+
+
+def close_recon(up="0.3100", dn="0.3100", agrees=True, read=True, rows=None):
+    return {"read": read, "agrees": agrees,
+            "venue_rows": [row(M1, up, dn)] if rows is None else rows}
+
+
+def test_18_40z_the_row_is_gone_but_this_process_verified_it_at_close(
+        overlap):
+    assert RUN.note_close_verification(M1, close_recon(), legs(), 990.0)
+    s = session(_Ex([M1]), _T([], terminal=False))
+    assert s.gates()["ok"] is True
+
+
+def test_without_a_close_record_the_same_state_still_sits_out(overlap):
+    g = session(_Ex([M1]), _T([], terminal=False)).gates()
+    assert g["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE"
+
+
+@pytest.mark.parametrize("recon_,lg", [
+    (close_recon(agrees=False), legs()),
+    (close_recon(read=False), legs()),
+    (close_recon(up="0.3000"), legs()),            # a leg differed at close
+    (close_recon(dn="0.3900"), legs()),
+    (close_recon(rows=[]), legs()),                 # no row while holding
+    (close_recon(rows=[row(M1), row(M1)]), legs()),
+    (close_recon(rows=[{"marketSlug": M1}]), legs()),
+    (None, legs()),
+])
+def test_only_an_agreement_on_both_legs_is_recorded(overlap, recon_, lg):
+    assert RUN.note_close_verification(M1, recon_, lg, 990.0) is None
+    assert M1 not in RUN.CLOSE_VERIFIED
+    g = session(_Ex([M1]), _T([], terminal=False)).gates()
+    assert g["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE"
+
+
+def test_a_close_record_older_than_its_limit_is_not_accepted(overlap):
+    RUN.note_close_verification(
+        M1, close_recon(), legs(),
+        1000.0 - RUN.CLOSE_VERIFIED_MAX_AGE_S - 1)
+    g = session(_Ex([M1]), _T([], terminal=False)).gates()
+    assert g["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE"
+
+
+def test_a_ledger_that_changed_since_the_close_is_not_accepted(overlap):
+    RUN.note_close_verification(M1, close_recon(), legs(), 990.0)
+    ex = _Ex([M1], legs=("0.36", "0.31"))           # a late fill arrived
+    g = session(ex, _T([], terminal=False)).gates()
+    assert g["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_NOT_VERIFIABLE"
+
+
+def test_a_row_that_is_still_there_is_always_compared(overlap):
+    """The close record never overrides a venue row that can be read."""
+    RUN.note_close_verification(M1, close_recon(), legs(), 990.0)
+    g = session(_Ex([M1]), _T([row(M1, up="0.3000")])).gates()
+    assert g["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_DISAGREES_WITH_VENUE"
+
+
+def test_a_flat_window_verified_flat_is_recorded():
+    assert RUN.note_close_verification(
+        M1, {"read": True, "agrees": True, "venue_rows": []},
+        legs("0", "0"), 1.0)
