@@ -282,26 +282,66 @@ class TestThePairIsPricedAsTheRealPair:
                     straddle_p_lone_win=D("0.0981"),
                     straddle_min_ev_per_share=D("0"))
 
-    def test_the_gate_now_admits_and_prices_the_real_pair(self):
-        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+    #: THE ARITHMETIC, SINCE 9c9a2a47b ("charge the unmatched leg for
+    #: adverse selection"):
+    #:
+    #:   ev = p_pair x (1 - pair cost)  -  (1 - p_pair) x A
+    #:
+    #: A = `adverse_selection_per_share` (default 0.06), charged on the
+    #: branch where the leg stays alone. The pair term is unchanged from
+    #: what this class always asserted; with A = 0 the two are identical.
+    #: Each fact is therefore pinned twice: the pair term alone (A = 0),
+    #: and the figure the gate actually returns (default A), which is
+    #: NEGATIVE at these rates, so the gate refuses.
+    NO_CHARGE = dict(adverse_selection_per_share=D("0"))
+    A = C.Params().adverse_selection_per_share
+
+    def test_the_gate_prices_the_real_pair(self):
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED,
+                   **self.NO_CHARGE)
         assert legs(r), r["evaluation"]["entry"]
         assert rec(r)["pair_quote_cost"] == "0.99"
 
-    def test_ev_is_p_pair_natural_times_the_spread(self):
-        #: the whole economics in one line: a matched pair costing
-        #: 1 - spread pays 1.00, so the edge is the spread, weighted by
-        #: how often the pair actually completes.
+    def test_with_the_charge_the_same_quote_is_refused(self):
         r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        assert legs(r) == []
+        assert r["why"] == "ENTRY_EV_EV_NOT_POSITIVE"
+        assert rec(r)["pair_quote_cost"] == "0.99"
+
+    def test_the_pair_term_is_p_pair_natural_times_the_spread(self):
+        #: a matched pair costing 1 - spread pays 1.00, so the edge is the
+        #: spread, weighted by how often the pair actually completes.
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED,
+                   **self.NO_CHARGE)
         for g in r["evaluation"]["entry_ev"]["rungs"]:
             assert D(g["ev_per_share"]) == D("0.070") * D("0.01"), g
+
+    def test_ev_is_the_pair_term_less_the_lone_leg_charge(self):
+        assert self.A == D("0.06")
+        r = decide(straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        want = D("0.070") * D("0.01") - (1 - D("0.070")) * self.A
+        assert want == D("-0.0551")
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == want, g
+            assert g["admitted"] is False
 
     def test_a_wider_spread_earns_proportionally_more(self):
         wide = {"bid": "0.28", "ask": "0.31", "age_s": 0.1}
         r = decide(book=wide, straddle_pair_ceiling=D("0.99"),
-                   straddle_completion_pair_cost=D("0"), **self.MEASURED)
+                   straddle_completion_pair_cost=D("0"), **self.MEASURED,
+                   **self.NO_CHARGE)
         assert rec(r)["pair_quote_cost"] == "0.97"
         for g in r["evaluation"]["entry_ev"]["rungs"]:
             assert D(g["ev_per_share"]) == D("0.070") * D("0.03"), g
+
+    def test_a_wider_spread_does_not_outweigh_the_charge(self):
+        wide = {"bid": "0.28", "ask": "0.31", "age_s": 0.1}
+        r = decide(book=wide, straddle_pair_ceiling=D("0.99"),
+                   straddle_completion_pair_cost=D("0"), **self.MEASURED)
+        want = D("0.070") * D("0.03") - (1 - D("0.070")) * self.A
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == want == D("-0.0537"), g
+        assert legs(r) == []
 
     def test_both_legs_are_priced_symmetrically(self):
         #: a pair is one trade. If the two legs disagreed on what the
@@ -316,14 +356,25 @@ class TestThePairIsPricedAsTheRealPair:
         #: credit ourselves the half-spread we buy at the bid nor charge
         #: a loss the market does not imply. The pair carries the
         #: decision.
+        lone = dict(straddle_completion_pair_cost=D("0"),
+                    straddle_p_pair_natural=D("0"),
+                    straddle_p_complete=D("0"),
+                    straddle_p_lone_win=D("0.0981"),
+                    straddle_min_ev_per_share=D("0"))
+        r = decide(**lone, **self.NO_CHARGE)
+        for g in r["evaluation"]["entry_ev"]["rungs"]:
+            assert D(g["ev_per_share"]) == D("0"), g
+        assert legs(r) == [], "zero EV must not be admitted"
+
+    def test_a_leg_certain_to_stay_alone_is_worth_minus_the_charge(self):
         r = decide(straddle_completion_pair_cost=D("0"),
                    straddle_p_pair_natural=D("0"),
                    straddle_p_complete=D("0"),
                    straddle_p_lone_win=D("0.0981"),
                    straddle_min_ev_per_share=D("0"))
         for g in r["evaluation"]["entry_ev"]["rungs"]:
-            assert D(g["ev_per_share"]) == D("0"), g
-        assert legs(r) == [], "zero EV must not be admitted"
+            assert D(g["ev_per_share"]) == -self.A, g
+        assert legs(r) == []
 
     def test_an_unset_pair_rate_still_refuses(self):
         #: the remaining unmeasured input is still mandatory.
@@ -489,7 +540,11 @@ class TestThroughTheRealExecutorPath:
         from src import l5_btc5m_execution as X
         monkeypatch.setenv(X.ENTRY_MODE_ENV, C.STRADDLE)
         monkeypatch.setenv(X.STRADDLE_PRICE_ENV, "0.08")
-        monkeypatch.setenv(X.CLIP_USD_ENV, "2.00")
+        #: 0.40, not the 2.00 this fixture was written with: the executor has
+        #: since refused any clip above its mode ceiling
+        #: (CLIP_USD_ABOVE_MODE_CEILING, 0.45), so at 2.00 both legs were
+        #: refused before reaching the venue.
+        monkeypatch.setenv(X.CLIP_USD_ENV, "0.40")
         monkeypatch.setenv(X.STRADDLE_BOOK_RELATIVE_ENV, "YES")
         monkeypatch.setenv(X.STRADDLE_PAIR_CEILING_ENV, "0.99")
         monkeypatch.setenv(X.STRADDLE_JOIN_TICKS_ENV, "0")
@@ -501,6 +556,10 @@ class TestThroughTheRealExecutorPath:
         monkeypatch.setenv(X.STRADDLE_P_PAIR_NATURAL_ENV, "0.95")
         monkeypatch.setenv(X.STRADDLE_P_COMPLETE_ENV, "0.0001")
         monkeypatch.setenv(X.STRADDLE_P_LONE_WIN_ENV, "0.50")
+        #: attested as measured conditional on a fill (required since
+        #: eed10118c); without it every decision held and nothing reached
+        #: the venue, so these four tests exercised no order path at all
+        monkeypatch.setenv(X.STRADDLE_P_BASIS_ENV, X.P_BASIS_CONDITIONAL)
 
     def test_the_token_is_required_not_merely_YES(self, rig, armed):
         from src import l5_btc5m_execution as X

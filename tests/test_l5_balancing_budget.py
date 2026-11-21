@@ -69,7 +69,18 @@ def params(**kw):
                 straddle_p_pair_natural=D("0.070"),
                 straddle_p_complete=D("0.131"),
                 straddle_p_lone_win=D("0.0981"),
-                straddle_min_ev_per_share=D("0"))
+                straddle_min_ev_per_share=D("0"),
+                #: THE GATE'S LONE-LEG CHARGE IS SET TO ZERO HERE, ON PURPOSE.
+                #: This file pins the unmatched CEILING and the ticket
+                #: budget: which side may be quoted and how often, given
+                #: that the entry gate admits. Since 9c9a2a47b the gate
+                #: charges a lone leg 6 cents and, at the rates above,
+                #: refuses every leg (ev = 0.070 x 0.01 - 0.930 x 0.06 =
+                #: -0.0551), so nothing reached the ceiling logic and three
+                #: tests failed for a reason unrelated to what they test.
+                #: `TestTheGateStillRefusesAtTheDefaultCharge` below pins
+                #: that refusal so this override cannot hide it.
+                adverse_selection_per_share=D("0"))
     base.update(kw)
     return C.Params(**base)
 
@@ -116,6 +127,29 @@ class TestTheCeilingOnlyBlocksAddedExposure:
 
 
 # ============ 2. the binding constraint is now visible
+
+class TestTheGateStillRefusesAtTheDefaultCharge:
+    """The ceiling admitting a balancing leg is not the gate admitting it."""
+
+    DEFAULT = dict(adverse_selection_per_share=C.Params()
+                   .adverse_selection_per_share)
+
+    def test_the_default_charge_is_six_cents(self):
+        assert self.DEFAULT["adverse_selection_per_share"] == D("0.06")
+
+    def test_the_balancing_leg_is_refused_by_the_gate_not_the_ceiling(self):
+        r = decide(**self.DEFAULT)
+        assert legs(r) == []
+        assert r["evaluation"]["side_refusals"][C.UP] is None
+        g = r["evaluation"]["entry_ev"]["rungs"][0]
+        assert g["reason"] == "EV_NOT_POSITIVE"
+        assert D(g["ev_per_share"]) == \
+            D("0.070") * D("0.01") - (1 - D("0.070")) * D("0.06")
+
+    def test_the_heavy_side_is_still_refused_by_the_ceiling(self):
+        r = decide(**self.DEFAULT)
+        assert r["evaluation"]["side_refusals"][C.DOWN] == "UNMATCHED_CEILING"
+
 
 class TestTheBindingConstraintIsReported:
     """A step that places nothing must name the constraint on the order
