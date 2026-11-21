@@ -125,6 +125,7 @@ COPY src/pmus_sports_sharp.py src/pmus_sports_sharp.py
 COPY src/pmus_combo_maker.py src/pmus_combo_maker.py
 COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
+COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py
 COPY src/pmus_sports_completion_replay.py src/pmus_sports_completion_replay.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py

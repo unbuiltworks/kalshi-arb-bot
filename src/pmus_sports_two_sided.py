@@ -92,6 +92,25 @@ LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
 # runs, but NEW exposure requires an account read no older than this.
 ACCOUNT_FRESH_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_FRESH_S", "60"))
 ACCOUNT_RETRY_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RETRY_S", "10"))
+
+
+def _pilot_since(raw: str) -> Optional[float]:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        from datetime import datetime
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+
+
+#: RN1 live pilot (owner 2026-11-21): the meter counts markets the pilot
+#: opened at/after PMUS_RN1_PILOT_SINCE (epoch s or ISO-8601; unset = all
+#: RN1 markets); PMUS_RN1_PILOT_LOSS_USD > 0 latches a campaign stop at that
+#: venue-settled net loss. Default 0 = no stop (the lock is the control).
+PILOT_SINCE = _pilot_since(os.getenv("PMUS_RN1_PILOT_SINCE", ""))
+PILOT_LOSS_USD = _env_d("PMUS_RN1_PILOT_LOSS_USD", "0")
 # SIGTERM / disable: per-order cancel attempts and the total time budget
 # (Railway drains for 30 s).
 CANCEL_ATTEMPTS = int(os.getenv("PMUS_TWO_SIDED_CANCEL_ATTEMPTS", "4"))
@@ -2562,6 +2581,8 @@ class Engine:
             new_block = "shared_halt"
         elif self.account_risk_blocks() is not None:
             new_block = "account_risk"
+        elif self.pilot_loss_stopped():
+            new_block = "pilot_loss_stop"
         # account-wide blocks hold the slot (they lift); a block about THIS
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
@@ -3234,6 +3255,43 @@ class Engine:
     AUDIT_SINCE = os.getenv("PMUS_TWO_SIDED_AUDIT_SINCE",
                             "2026-11-14T15:30:00Z")
 
+    def pilot_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
+        """RN1 pilot settled net P&L (src/pmus_pilot_pnl.py) from this
+        audit's venue rows; feeds the campaign loss stop."""
+        try:
+            from src import pmus_pilot_pnl as PP
+            r = PP.meter(markets, rows, since=PILOT_SINCE)
+        except Exception as exc:                          # noqa: BLE001
+            self._pilot = None
+            log("PILOT_PNL", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return
+        self._pilot = r
+        log("PILOT_PNL", ok=True, since=PILOT_SINCE,
+            loss_stop_usd=str(PILOT_LOSS_USD),
+            loss_stopped=self.pilot_loss_stopped(), **r)
+
+    def pilot_loss_stopped(self) -> bool:
+        """Campaign stop: venue-settled pilot net <= -PILOT_LOSS_USD blocks
+        NEW RN1 openings/extensions (completions continue). Latched in the
+        book: a restart or a later recovery does not lift it -- the owner
+        clears `pilot_loss_stop` explicitly."""
+        if PILOT_LOSS_USD <= 0:
+            return False
+        if self.b.d.get("pilot_loss_stop"):
+            return True
+        r = getattr(self, "_pilot", None)
+        if r and D(r["settled_net_usd"]) <= -PILOT_LOSS_USD:
+            self.b.d["pilot_loss_stop"] = {"t": now_iso(),
+                                           "net": r["settled_net_usd"]}
+            self.b.save()
+            log("PILOT_LOSS_STOP", net=r["settled_net_usd"],
+                limit=str(PILOT_LOSS_USD),
+                effect="no new RN1 openings/extensions until the owner "
+                       "clears pilot_loss_stop")
+            return True
+        return False
+
     def account_audit(self) -> None:
         """VENUE TRUTH for this bot's markets, from /v1/portfolio/activities:
         realizedPnl summed per market and per sport (trades + resolutions),
@@ -3303,6 +3361,7 @@ class Engine:
         if looked:
             self.b.save()
         bs = PNL.book_settled(mk_all)
+        self.pilot_meter(mine, mk_all)
         since = self.b.d.get("recovery_since")
         bs_new = PNL.book_settled(mk_all, since=since) if since else None
         settled_margin = D(PNL.book_economics(

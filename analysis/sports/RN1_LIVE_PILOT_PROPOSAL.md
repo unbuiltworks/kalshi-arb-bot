@@ -10,10 +10,10 @@ Prepared 2026-11-21 by the sports production coordinator. Step A (disarmed) runs
    is the lock lifted. Two separate approvals.
 2. **24 h of Step A with no `http_429` growth on account reads** (heartbeat `venue_requests`,
    `account_read_error`), no `cancel_error`, watchdog clean.
-3. **Settled-P&L meter built (read-only)**: per pilot market, venue cash out (fills x price +
-   fees, from venue trade rows) vs venue cash in (settlement / redemption rows), on the exact
-   pilot market set. The venue's `realizedPnl` field is blank on most rows (reconciliation
-   finding), so it is not used.
+3. **Settled-P&L meter** (`src/pmus_pilot_pnl.py`, logged hourly as `PILOT_PNL`): a pilot market
+   counts only when the venue's trade-row quantity equals the book's fills, the venue shows a
+   position resolution, and the final price is known. The venue's `realizedPnl` is blank on
+   most rows, so it is not used.
 
 ## Markets
 
@@ -40,12 +40,16 @@ Prepared 2026-11-21 by the sports production coordinator. Step A (disarmed) runs
 ## Loss limits
 
 - **Daily:** openings stop at −$5 (`PMUS_TWO_SIDED_DAILY_LOSS_USD=5`, unchanged); completions continue.
-- **Campaign:** cumulative venue-settled net P&L ≤ −$10 → coordinator re-locks, no restart.
+- **Campaign (in code):** `PMUS_RN1_PILOT_LOSS_USD=4` — when the meter's venue-settled pilot net
+  reaches −$4, new RN1 openings/extensions stop and the stop is **latched in the book** (a restart
+  does not lift it; only you clear it). Completions continue. The coordinator also re-locks.
 - Account-wide: existing shared halt and account ledger (daily halt $50, loss room ~$35) unchanged.
 
-## Duration
+## Duration (owner 2026-11-21: 24 hours first)
 
-7 days or 30 settled pilot markets, whichever is first, then stop and report for your decision.
+**24 hours** from the unlock (`PMUS_RN1_PILOT_SINCE` = unlock time), then the coordinator
+re-locks. Positions opened in the window are held to settlement and measured. After the first
+settled markets we review execution quality and venue-settled P&L together before any extension.
 No automatic extension; a crash or restart does not re-arm anything beyond the lock state you set.
 
 ## Guard behaviour
@@ -71,13 +75,14 @@ No automatic extension; a crash or restart does not re-arm anything beyond the l
 1. Campaign settled net ≤ −$10.
 2. Any book/venue inventory mismatch, or any `cancel_error` with `still_open`.
 3. Any order or production change not explained by the approved config.
-4. 7 days / 30 settled markets.
+4. 24 hours elapsed.
 
 ## How settled net P&L is measured
 
-Per pilot market, only after the venue shows the market resolved:
-`settled net = settlement cash received − (Σ fill qty × price) − fees`, from venue rows, on
-the pilot market set only. Reported separately: matched-pair edge, residual (unpaired) P&L,
+Per pilot market, only when fills reconcile and the venue shows it resolved:
+`gross = YES qty × px + NO qty × (1 − px) − cost`; `net = gross − fees charged on our side`.
+`gross` splits into matched-pair edge and the unpaired (residual) leg's outcome. A market whose
+venue trades do not match the book is reported as `fills_unconfirmed` and left out. Reported separately: matched-pair edge, residual (unpaired) P&L,
 fees, and credited rewards (never mixed into trading P&L). Labels: submitted → filled →
 settled → realized. Nothing unsettled is called profit.
 
@@ -90,5 +95,8 @@ plausible and would be an answer, not a failure of the test.
 
 ## Approvals needed, in order
 
-1. Deploy pilot release `<sha>` disarmed (lock on), settings above. 
-2. After verification and 24 h of Step A: set `PMUS_TWO_SIDED_SUBMISSION_LOCK=0` for the pilot.
+1. Deploy the meter release disarmed (lock on). Done for 3f65fc99b (stale-completion fix);
+   the meter needs one more disarmed release.
+2. After verification and 24 h of stable Step A: one change set —
+   `PMUS_TWO_SIDED_SUBMISSION_LOCK=0`, `PMUS_TWO_SIDED_MAX_MARKETS=2`,
+   `PMUS_RN1_PILOT_SINCE=<unlock time>`, `PMUS_RN1_PILOT_LOSS_USD=4` — for 24 hours.
