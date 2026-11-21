@@ -42,3 +42,32 @@ watchdog reads the registry; zero open orders.
 
 ## Rollback
 Reconnect to 5424a3244; restore the four budget variables.
+
+## 2026-11-21 15:52Z — 6b665d25a deployed DISARMED (owner-approved) — acceptance PASS
+Deployment 838a1854: `armed:false`, `can_submit:false`, state MONITOR, not latched, serving its registry;
+`behaviour_probe_campaign_document_set:false`, `campaign_loss_halt:NOT_SET`; clip 0.05, side 0.30, unmatched 0.10,
+window loss 0.20, taker completion off; no orders, no errors. Watchdog: lane registry OK on every sweep through the
+build, 0 open orders. The campaign parser and the reconciliation rule can only be exercised in production by arming;
+they are covered by tests and by `arm_campaign.py`'s local validation with the service's own parsers.
+
+## Owner decisions 2026-11-21 (after review)
+- Order-count budgets: NOT raised. The campaign runs on the existing 90 / 90 / 90.
+- 40-minute reconciliation grace: REJECTED. Replaced in the follow-up release below.
+- Arming: not authorized; needs explicit approval of the exact UTC period.
+
+## Follow-up release for review — NOT deployed
+- Branch `release/l5-btc5m-campaign-20261121f`, commit `d81792cece059d8e4de1ec5df3f9cdec0817858e`
+  (6b665d25a + one change to `src/l5_btc5m_runner.py`, +31/-12; 51 tests in the campaign file; 4,228 lane/probe/safety
+  tests pass, the same two lineage tests fail with and without it).
+- Under a campaign document the lane places nothing while
+  (a) an earlier window it traded still awaits the venue's settlement, or
+  (b) any market it settled today is missing from the account ledger's results or differs by more than $0.005 —
+  with NO grace. Pending reconciliation = wait.
+- Consequence: after a window with fills the lane sits out until that window is settled (~90 s after close, recorded
+  at the end of the following window) and restated by the account service (10-17 minutes measured). Expect roughly one
+  traded window in four or five: about 5-6 traded windows in a two-hour list. Trading can resume part-way through a
+  window. If a window never reconciles, nothing further trades.
+- Existing budgets: REPLACE 90 covers about 4-6 traded windows at 14-26 per window; if it runs out, requotes are
+  refused and the lane stops adding (fails closed).
+- Unchanged: $0.20 window loss, $0.60 campaign loss, account drawdown limit (binds at about $0.35 further down),
+  maker-only, clip/side/unmatched limits, watchdog.
