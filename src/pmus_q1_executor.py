@@ -392,8 +392,12 @@ def cancel_exact(t: Transport, order_id: str, slug: str,
               {"marketSlug": slug})
     order = _order_status(t, order_id, sleep=sleep)
     status = order_state_str(order)
-    return "CANCEL" in status or "REJECT" in status or \
-        "FILLED" not in status
+    # True only on a CONFIRMED terminal non-fill: an order still OPEN /
+    # NEW / PENDING_CANCEL is not cancelled (2026-11-21 audit: the old
+    # `"FILLED" not in status` reported a cancel that had not taken).
+    if "PENDING" in status:
+        return False
+    return "CANCEL" in status or "REJECT" in status or "EXPIRED" in status
 
 
 def cancel_all_deadman(t: Transport, slug: str) -> None:

@@ -272,8 +272,16 @@ class ComboMaker:
             self.s["seen"][rid] = self.clock()
             legs = r.get("comboLegs") or []
             syms = [str(l.get("symbol")) for l in legs]
-            books = self.books(syms) if syms else {}
-            q = price_quote(r, legs, books, r.get("tickSize"))
+            # 2026-11-21 rate-limit audit: every leg was priced (~19 req/s)
+            # BEFORE checks that need no price rejected ~65% of RFQs. The
+            # price-free checks run first; price_quote repeats them.
+            if not legs or not (2 <= len(legs) <= MAX_LEGS) or \
+                    same_game(legs):
+                q = {"ok": False, "why": "legs_out_of_range"
+                     if not (2 <= len(legs) <= MAX_LEGS) else "same_game"}
+            else:
+                books = self.books(syms) if syms else {}
+                q = price_quote(r, legs, books, r.get("tickSize"))
             if not q["ok"]:
                 st["skipped"] += 1
                 self.log("COMBO_MAKER_SKIP", rfq_id=rid, why=q["why"],

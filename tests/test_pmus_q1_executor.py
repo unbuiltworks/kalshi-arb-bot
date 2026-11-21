@@ -243,7 +243,7 @@ def test_no_fill_cancels_exact_and_verifies(env):
     arm(env)
     script = _happy_script()
     script["GET /v1/order/ord-1"] = {"order": {
-        "status": "ORDER_STATUS_OPEN", "filledQuantity": "0"}}
+        "status": "ORDER_STATUS_CANCELED", "filledQuantity": "0"}}
     script["POST /v1/order/ord-1/cancel"] = {}
     t = FakeTransport(script)
     clock, slp = _fast()
@@ -251,6 +251,21 @@ def test_no_fill_cancels_exact_and_verifies(env):
     rep = ex.run_campaign(t, clock=clock, sleep=slp)
     assert rep["status"] == "NO_FILL" and rep["cancel_verified"] is True
     assert any(p == "/v1/order/ord-1/cancel" for _, p, _ in t.calls)
+
+
+def test_a_cancel_that_did_not_take_is_not_verified(env):
+    """2026-11-21 audit: an order still OPEN after the cancel POST used to
+    report cancel_verified=True (`"FILLED" not in status`)."""
+    arm(env)
+    script = _happy_script()
+    script["GET /v1/order/ord-1"] = {"order": {
+        "status": "ORDER_STATUS_OPEN", "filledQuantity": "0"}}
+    script["POST /v1/order/ord-1/cancel"] = {}
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    env.setenv(ex.FIRST_WAIT_ENV, "20")
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep.get("cancel_verified") is not True
 
 
 def test_one_sided_hold_respects_residual_cap_and_action(env):

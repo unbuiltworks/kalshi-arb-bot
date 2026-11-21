@@ -86,6 +86,16 @@ BAND_LO = _env_d("PMUS_TWO_SIDED_BAND_LO", "0.25")
 BAND_HI = _env_d("PMUS_TWO_SIDED_BAND_HI", "0.75")
 MAX_SPREAD_TICKS = int(os.getenv("PMUS_TWO_SIDED_MAX_SPREAD_TICKS", "6"))
 LOOP_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_S", "5"))
+# 2026-11-21 rate-limit audit: a 429 on the account read threw out of the
+# loop and skipped EVERY market's management (fills, completions, cancels)
+# that pass, ~3 times a minute. The read is now isolated: management always
+# runs, but NEW exposure requires an account read no older than this.
+ACCOUNT_FRESH_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_FRESH_S", "60"))
+ACCOUNT_RETRY_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RETRY_S", "10"))
+# SIGTERM / disable: per-order cancel attempts and the total time budget
+# (Railway drains for 30 s).
+CANCEL_ATTEMPTS = int(os.getenv("PMUS_TWO_SIDED_CANCEL_ATTEMPTS", "4"))
+CANCEL_BUDGET_S = float(os.getenv("PMUS_TWO_SIDED_CANCEL_BUDGET_S", "20"))
 # OWNER 2026-11-14 "If a pair is just sitting there for a while, cancel and
 # resubmit closer": every STALE_S unfilled, one tick closer to the touch.
 STALE_S = float(os.getenv("PMUS_TWO_SIDED_STALE_S", "60"))
@@ -1165,6 +1175,11 @@ class Venue:
 class Engine:
     def __init__(self, venue: Venue, book: Book):
         self.v, self.b = venue, book
+        # account freshness (new exposure needs a fresh read; set by run())
+        self.require_fresh_account = False
+        self._acct_ok_at: Optional[float] = None
+        self._acct_cache: Optional[Dict[str, Any]] = None
+        self._acct_fail = 0
         self._last_reward = time.monotonic() - REWARD_CHECK_S + 120  # first ~2min after boot
         self.stop = False
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
@@ -2129,20 +2144,68 @@ class Engine:
                 order_id=oid, pos=mk["pos"],
                 label="venue-reported fill; not realized until settlement")
 
+    def account_fresh(self) -> bool:
+        """True unless run() requires freshness and the last good account
+        read is missing or older than ACCOUNT_FRESH_S."""
+        if not self.require_fresh_account:
+            return True
+        return self._acct_ok_at is not None and \
+            time.monotonic() - self._acct_ok_at <= ACCOUNT_FRESH_S
+
+    def read_account(self) -> Optional[Dict[str, Any]]:
+        """One account read. Success refreshes the snapshot; failure (429,
+        5xx, network) is logged and returns None -- never raises into the
+        loop, so market management still runs."""
+        try:
+            acc = self.v.account()
+        except Exception as exc:                          # noqa: BLE001
+            self._acct_fail += 1
+            if self._acct_fail == 1 or self._acct_fail % 10 == 0:
+                log("account_read_error", consecutive=self._acct_fail,
+                    err=f"{type(exc).__name__}:{str(exc)[:160]}",
+                    effect="no new markets or openings until a fresh read; "
+                           "existing orders are still managed")
+            return None
+        if self._acct_fail:
+            log("account_read_recovered", after_failures=self._acct_fail)
+        self._acct_fail = 0
+        self._acct_ok_at = time.monotonic()
+        self._acct_cache = acc
+        return acc
+
     def cancel_all_own(self, why: str) -> None:
+        """Cancel every own open order by exact id. Each order gets up to
+        CANCEL_ATTEMPTS tries with backoff (429s at shutdown left orders
+        resting until the watchdog's age limit), inside CANCEL_BUDGET_S.
+        No bulk per-market cancel: it would also cancel the owner's manual
+        orders in that market."""
+        t0 = time.monotonic()
+        left = []
         for slug, mk in self.b.d["markets"].items():
             for oid, o in list(mk["orders"].items()):
-                if o.get("open"):
+                if not o.get("open"):
+                    continue
+                err = None
+                for attempt in range(max(1, CANCEL_ATTEMPTS)):
                     try:
                         self.v.cancel(oid)
                         st = self.v.status(oid)
                         self._record_fill(slug, o["side"], oid, st)
                         o["open"] = st["open"]
+                        err = None
+                        if not st["open"]:
+                            break
                     except Exception as exc:          # noqa: BLE001
-                        log("cancel_error", slug=slug, order_id=oid,
-                            err=str(exc)[:160])
+                        err = str(exc)[:160]
+                    if time.monotonic() - t0 > CANCEL_BUDGET_S:
+                        break
+                    self._sleep(min(4.0, 0.5 * (2 ** attempt)))
+                if err is not None or o.get("open"):
+                    left.append(oid)
+                    log("cancel_error", slug=slug, order_id=oid, err=err,
+                        still_open=bool(o.get("open")))
         self.b.save()
-        log("cancelled_all_own", why=why)
+        log("cancelled_all_own", why=why, still_open=left)
 
     def shared_halt(self) -> Optional[str]:
         """None = permitted; "HALT" = the watchdog asserted the shared halt;
@@ -2374,6 +2437,14 @@ class Engine:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if not is_completion_stage(stage) and not self.account_fresh():
+            log("place_refused_account_stale", slug=slug, side=side, px=px,
+                qty=qty, stage=stage,
+                age_s=None if self._acct_ok_at is None else
+                round(time.monotonic() - self._acct_ok_at, 1),
+                label="new exposure needs a fresh account read; "
+                      "management and completions continue")
+            return
         if not is_completion_stage(stage):
             why = self.account_risk_blocks(px, qty)
             if why:
@@ -3355,6 +3426,7 @@ class Engine:
 
     def run(self) -> int:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
+        self.require_fresh_account = True     # no new exposure on stale state
         self.mark_recovery_start()
         seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))
         if seed["seeded"] or seed["error"] or seed["kept_live"]:
@@ -3410,12 +3482,16 @@ class Engine:
                             self.v.live_sports()
                         except Exception:          # noqa: BLE001
                             pass
-                    self.select(self.v.account())
+                    acc = self.read_account()
+                    if acc is not None:
+                        self.select(acc)
+                        last_sel = time.monotonic()
+                    else:                          # retry sooner, not every pass
+                        last_sel = time.monotonic() - 20 + ACCOUNT_RETRY_S
                     if self.guard is not None:
                         self.guard.track(self.active())
-                    if rewards_on():
+                    if rewards_on() and acc is not None:
                         self.refresh_active_rewards()
-                    last_sel = time.monotonic()
                 for slug in self.active():
                     if self.stop:
                         break
@@ -3440,7 +3516,13 @@ class Engine:
                             err=type(exc).__name__)
                 if time.monotonic() - getattr(self, "_last_orphan", 0) > 30:
                     self._last_orphan = time.monotonic()
-                    self.orphan_sweep()
+                    # reuse the account read's open orders when it is fresh
+                    # (one signed GET instead of two)
+                    fresh = self._acct_cache is not None and \
+                        self._acct_ok_at is not None and \
+                        time.monotonic() - self._acct_ok_at <= 30
+                    self.orphan_sweep(self._acct_cache["open_orders"]
+                                      if fresh else None)
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()

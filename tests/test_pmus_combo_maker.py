@@ -296,3 +296,19 @@ def test_errors_never_raise():
     st = m.pass_once()
     assert st["quoted"] == 0
     assert any(k == "COMBO_MAKER_ERROR" for k, _ in api.logs)
+
+
+def test_price_free_rejections_fetch_no_books():
+    """2026-11-21 audit: ~19 gateway req/s were spent pricing legs of RFQs
+    rejected on leg count or same-game, which need no price."""
+    seen = []
+    many = [{"symbol": f"aec-nba-t{i}-u{i}-2026-11-18", "side": "SIDE_BUY"}
+            for i in range(CM.MAX_LEGS + 1)]
+    same = [LEGS[0], dict(LEGS[0], symbol="asc-nba-mil-mia-2026-11-18-pts")]
+    api = Api(rfqs=[dict(RFQ, id="r-many", comboLegs=many),
+                    dict(RFQ, id="r-same", comboLegs=same)])
+    real = api.books
+    api.books = lambda syms: seen.append(syms) or real(syms)
+    m, _ = maker(api)
+    st = m.pass_once()
+    assert st["skipped"] == 2 and seen == []
