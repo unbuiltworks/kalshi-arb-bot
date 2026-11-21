@@ -1,0 +1,45 @@
+Read-only depth recording, public books. MODELLED share of pool for X contracts resting at the best price on both sides; not earnings.
+
+== cfb_t1_ml_live_20261118  pool $30 (live)  DF 0.1  target 94000  maxSpread None  markets sampled 26
+  mean fraction of seconds paying 73%; total traded $5003658
+  100 contracts a side on every sampled market: mean share 2.5%  -> if the pool is split evenly over the programme's markets, $1 of $30 for the whole programme
+  500 contracts a side on every sampled market: mean share 4.3%  -> if the pool is split evenly over the programme's markets, $1 of $30 for the whole programme
+  1000 contracts a side on every sampled market: mean share 5.6%  -> if the pool is split evenly over the programme's markets, $2 of $30 for the whole programme
+  2500 contracts a side on every sampled market: mean share 8.0%  -> if the pool is split evenly over the programme's markets, $2 of $30 for the whole programme
+  median market's median bid score 37267
+
+== ufc_main_moneyline_live_20260924  pool $5000 (live)  DF 0.3  target 20000  maxSpread None  markets sampled 9
+  mean fraction of seconds paying 7%; total traded $270916
+  100 contracts a side on every sampled market: mean share 1.5%  -> if the pool is split evenly over the programme's markets, $73 of $5000 for the whole programme
+  500 contracts a side on every sampled market: mean share 2.4%  -> if the pool is split evenly over the programme's markets, $118 of $5000 for the whole programme
+  1000 contracts a side on every sampled market: mean share 2.8%  -> if the pool is split evenly over the programme's markets, $138 of $5000 for the whole programme
+  2500 contracts a side on every sampled market: mean share 3.2%  -> if the pool is split evenly over the programme's markets, $161 of $5000 for the whole programme
+  median market's median bid score 25
+
+== crypto_btc_above_day_20261110  pool $500 (daily_event)  DF 0.4  target 1500  maxSpread 0.05  markets sampled 69
+  mean fraction of seconds paying 0%; total traded $7529
+  100 contracts a side on every sampled market: mean share 0.0%  -> if the pool is split evenly over the programme's markets, $0 of $500 for the whole programme
+  500 contracts a side on every sampled market: mean share 0.0%  -> if the pool is split evenly over the programme's markets, $0 of $500 for the whole programme
+  1000 contracts a side on every sampled market: mean share 0.0%  -> if the pool is split evenly over the programme's markets, $0 of $500 for the whole programme
+  2500 contracts a side on every sampled market: mean share 0.0%  -> if the pool is split evenly over the programme's markets, $0 of $500 for the whole programme
+  median market's median bid score 200
+
+== crypto_btc_updown_1d_20261110  pool $400 (daily_event)  DF 0.3  target 10000  maxSpread 0.03  markets sampled 1
+  cpc-btc-updown-1d-2026-11-20-2200z  20:09-22:06 n 678  pays bid 0% ask 0%  median score bid 1803 ask 2004  traded $22749
+     share of pool at best: 100:0.0%  500:0.0%  1000:0.0%  2500:0.0%
+
+== crypto_alt_updown_1d_20261110  pool $150 (daily_event)  DF 0.3  target 2000  maxSpread 0.05  markets sampled 3
+  cpceth-eth-updown-1d-2026-11-20-2200z  20:09-22:06 n 230  pays bid 0% ask 0%  median score bid 440 ask 0  traded $1423
+     share of pool at best: 100:0.0%  500:0.0%  1000:0.0%  2500:0.0%
+  cpcsol-sol-updown-1d-2026-11-20-2200z  20:09-22:06 n 230  pays bid 0% ask 0%  median score bid 415 ask 0  traded $36
+     share of pool at best: 100:0.0%  500:0.0%  1000:0.0%  2500:0.0%
+  cpcxrp-xrp-updown-1d-2026-11-20-2200z  20:09-22:06 n 230  pays bid 0% ask 0%  median score bid 156 ask 36  traded $124
+     share of pool at best: 100:0.0%  500:0.0%  1000:0.0%  2500:0.0%
+
+== cfb_t1_totals_live_20261118  pool $1400 (live)  DF 0.15  target 8500  maxSpread None  markets sampled 55
+  mean fraction of seconds paying 70%; total traded $27480
+  100 contracts a side on every sampled market: mean share 21.4%  -> if the pool is split evenly over the programme's markets, $300 of $1400 for the whole programme
+  500 contracts a side on every sampled market: mean share 33.2%  -> if the pool is split evenly over the programme's markets, $465 of $1400 for the whole programme
+  1000 contracts a side on every sampled market: mean share 39.2%  -> if the pool is split evenly over the programme's markets, $549 of $1400 for the whole programme
+  2500 contracts a side on every sampled market: mean share 47.2%  -> if the pool is split evenly over the programme's markets, $660 of $1400 for the whole programme
+  median market's median bid score 191
