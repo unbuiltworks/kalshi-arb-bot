@@ -54,3 +54,26 @@ Lane first (the account service reads the lane's feed), then the account service
 ## Rollback
 Reconnect each service to its current commit above; remove the two variables. A correction already applied is a
 recorded ledger restatement (`cost_basis_corrections`) and is not undone by rollback.
+
+## Deployed 2026-11-21 (owner-authorized; both services disarmed) — acceptance results
+
+### l5-btc5m-live — deployment 82d7edb0, commit 5424a3244, 13:22Z — PASS
+- Boot: `armed:false`, `can_submit:false`, stored state MONITOR, no submissions, no errors.
+- Watchdog: lane registry OK in every sweep across the redeploy; 0 open orders; no cancels.
+- `L5_BTC5M_LAST_TRADED_WINDOW_ORDERS` for cpc-btc-updown-5m-2026-11-21-0620z: 37 orders =
+  17 FILLED, 6 CANCELED after the lane's cancel, 14 REJECTED by the venue (13 with no cancel of ours; 1 — DOWN 0.06 at
+  0.75 — rejected, the lane's cancel at 06:22:40 found it already ended). No partial fills. Fees 0.0000 on all 37.
+  UP 0.49 / 0.2948, DOWN 0.61 / 0.2957. Reject reason not stored (old code); post-only-would-cross is an inference.
+
+### l5-pmus-live — deployment 7ee2e8bc, commit 62b54e14a, 13:27Z, two variables added — PASS
+- Started disarmed (shadow lock, submit pause), 0 live orders, no tracebacks.
+- 13:44:32Z `L5_VENUE_COST_ATTESTATION`: cpc-btc-updown-5m-2026-11-21-0620z attested, form
+  `VENUE_FILLS_EQUAL_SIBLING_LEDGER`, 0.00 -> 0.0195, delta +0.0195.
+- Lifetime realized -39.4945 -> -39.4750 (heartbeat, lifetime basis and all-time figure all agree); UTC day +0.0195.
+- 0620z gone from `unknown_basis_keys` and from `uncertain_markets` (now empty).
+- Lane +0.0195, account ledger +0.0195, cash +0.0195: difference 0.
+- Also re-read by the new form and REFUSED, nothing changed: 5m markets 11-13-1605z, 11-13-2215z, 11-13-2255z,
+  11-15-1925z (`SETTLED_BEFORE_THE_LAST_REBASE`; 1 of 3 attempts used each).
+- `L5_OTHER_STRATEGY_COST`: 0 lines (no 5-minute market reached settlement since the deploy), so the pre-settlement
+  check has still not run in production.
+- Feed walk completed without hitting the page cap.
