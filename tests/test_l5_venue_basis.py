@@ -465,6 +465,10 @@ class TestIncompleteNeverGuesses:
         rep = out["report"]
         assert rep["feed_complete"] is False
         assert rep["by_class"] == {"VENUE_INCOMPLETE": 1}
+        #: and the report says WHY, with the market named
+        assert sum(rep["incomplete_by_reason"].values()) >= 1
+        assert all(isinstance(v, list) and v
+                   for v in rep["incomplete_examples"].values())
         assert rep["venue_pnl_usd"] == "0"
         assert rep["downward_adjustment_usd"] == "0"
         assert rep["largest_differences"] == []
@@ -979,3 +983,17 @@ class TestOrderReads:
         feed = OrderFeed([many_orders(OPEN, 2) + pair_rows()])
         drive(Rn(store, feed))
         assert feed.order_reads == []
+
+
+# ------------------------------------------------ why a market has no figure
+
+def test_the_report_counts_incomplete_markets_by_reason():
+    e_ok = {"market": "m-ok", "comparison": {"class": "AGREES"},
+            "result": {"incomplete_reasons": []},
+            "venue_unreadable_reason": None,
+            "venue_resolution": {"state": "ABSENT"}}
+    src = open(VBR.__file__).read()
+    assert '"incomplete_by_reason"' in src and '"incomplete_examples"' in src
+    assert "incomplete_by_reason" in VBR.small(
+        {"incomplete_by_reason": {"X": 1}, "markets": 1})
+    assert e_ok["comparison"]["class"] == "AGREES"

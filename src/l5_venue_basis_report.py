@@ -470,6 +470,24 @@ def build(state: Mapping[str, Any], rows_by_market: Mapping[str, List[Any]],
         k = e["venue_resolution"]["state"]
         resolution[k] = resolution.get(k, 0) + 1
     summary["venue_resolution_cross_check"] = resolution
+    #: WHY a market has no venue figure. Without this a report can say
+    #: "41 markets incomplete" and nothing more (the first production pass
+    #: did). Counts by reason, and the first few markets of each.
+    why_count: Dict[str, int] = {}
+    why_first: Dict[str, List[str]] = {}
+    for e in entries:
+        if (e.get("comparison") or {}).get("class") != "VENUE_INCOMPLETE":
+            continue
+        rs = list((e.get("result") or {}).get("incomplete_reasons") or ())
+        if e.get("venue_unreadable_reason"):
+            rs.append(str(e["venue_unreadable_reason"]))
+        for r in (sorted(set(str(x)[:60] for x in rs)) or ["NO_REASON_GIVEN"]):
+            why_count[r] = why_count.get(r, 0) + 1
+            if len(why_first.setdefault(r, [])) < 5:
+                why_first[r].append(str(e.get("market")))
+    summary["incomplete_by_reason"] = dict(sorted(why_count.items()))
+    summary["incomplete_examples"] = {k: why_first[k]
+                                      for k in sorted(why_first)[:12]}
     summary["skipped"] = skipped
     summary["scope_since"] = None if since is None else since.isoformat()
     return {"summary": summary, "entries": entries}
@@ -477,7 +495,8 @@ def build(state: Mapping[str, Any], rows_by_market: Mapping[str, List[Any]],
 
 def small(summary: Mapping[str, Any]) -> Dict[str, Any]:
     """Counts and totals only, for the heartbeat. Never the rows."""
-    keys = ("markets", "by_class", "venue_confirmed_fills",
+    keys = ("markets", "by_class", "incomplete_by_reason",
+            "venue_confirmed_fills",
             "total_cost_usd", "total_fees_usd", "total_payout_usd",
             "venue_pnl_usd", "booked_pnl_usd",
             "upward_difference_pending_usd", "downward_adjustment_usd",
@@ -600,6 +619,28 @@ class Pass:
                           feed_complete=complete,
                           as_of=w["started_at"].isoformat())
                    for m in sorted(w.get("detail") or ())]
+        #: the report's own verdict for each listed market, beside its
+        #: rows: class, both figures, the reason when there is no figure.
+        by_market = {str(e.get("market")): e for e in out["entries"]}
+        for d in details:
+            e = by_market.get(str(d.get("market")))
+            if e is None:
+                d["verdict"] = None
+                d["verdict_note"] = ("NOT IN THIS PASS'S COMPARISON (held "
+                                     "open by the ledger, outside the "
+                                     "scope, or too recent)")
+                continue
+            c, r = e.get("comparison") or {}, e.get("result") or {}
+            d["verdict"] = _str({
+                "class": c.get("class"), "booked_pnl": c.get("booked_pnl"),
+                "venue_pnl": r.get("pnl"), "difference": c.get("difference"),
+                "downward_adjustment": c.get("downward_adjustment"),
+                "incomplete_reasons": list(r.get("incomplete_reasons") or ()),
+                "venue_unreadable_reason": e.get("venue_unreadable_reason"),
+                "ledger": e.get("ledger"), "phantom": e.get("phantom"),
+                "path": e.get("path"),
+                "venue_resolution": (e.get("venue_resolution") or {}
+                                     ).get("state")})
         out = {"report": self.last, "details": details}
         done = self._plan_orders(w)
         if done is not None:
