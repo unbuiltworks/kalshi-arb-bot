@@ -1,0 +1,264 @@
+{
+ "label": "HISTORICAL RN1 (Polymarket international), public fills; not our P&L. OBSERVABLE = fills; resting quotes UNKNOWN.",
+ "merge_s": 10,
+ "counts": {
+  "conditions": 36753,
+  "events": 186772,
+  "open_events": 36753,
+  "extend_events": 82891,
+  "both_sided": 16142,
+  "one_sided": 20611,
+  "taker_events": 24430
+ },
+ "taker_event_share": 0.1308,
+ "first_px": {
+  "p10": 0.05,
+  "p25": 0.2,
+  "p50": 0.47,
+  "p75": 0.6614,
+  "p90": 0.88,
+  "n": 36753
+ },
+ "event_px": {
+  "p5": 0.035,
+  "p10": 0.08,
+  "p25": 0.26,
+  "p50": 0.48,
+  "p75": 0.666,
+  "p90": 0.866,
+  "p95": 0.94,
+  "n": 186772
+ },
+ "event_shares": {
+  "p10": 5.61,
+  "p25": 23.0,
+  "p50": 155.4559,
+  "p75": 693.0,
+  "p90": 1911.1291,
+  "n": 186772
+ },
+ "event_usd": {
+  "p10": 1.7027,
+  "p25": 7.3762,
+  "p50": 50.9063,
+  "p75": 240.681,
+  "p90": 874.1352,
+  "n": 186772
+ },
+ "same_side_gap_s": {
+  "p10": 20,
+  "p25": 54,
+  "p50": 228,
+  "p75": 819,
+  "p90": 2139,
+  "n": 133877
+ },
+ "run_before_switch": {
+  "p10": 1,
+  "p25": 1,
+  "p50": 1,
+  "p75": 1,
+  "p90": 3,
+  "n": 83564
+ },
+ "extend_px_minus_avg": {
+  "p10": -0.1875,
+  "p25": -0.0599,
+  "p50": 0.0,
+  "p75": 0.07,
+  "p90": 0.1868,
+  "n": 82891
+ },
+ "extend_below_avg_share": 0.4722,
+ "completion_pair_cost": {
+  "p10": 0.7334,
+  "p25": 0.883,
+  "p50": 0.9947,
+  "p75": 1.0935,
+  "p90": 1.2252,
+  "n": 67128
+ },
+ "completion_share_at_or_below": {
+  "0.9": 0.2742,
+  "0.94": 0.3405,
+  "0.96": 0.3825,
+  "0.97": 0.4057,
+  "0.98": 0.4322,
+  "1.0": 0.522
+ },
+ "completion_fraction_of_gap": {
+  "p10": 0.0036,
+  "p25": 0.0198,
+  "p50": 0.1317,
+  "p75": 0.6959,
+  "p90": 1.0,
+  "n": 67128
+ },
+ "final_unmatched_share_frac": {
+  "p10": 0.1515,
+  "p25": 0.3831,
+  "p50": 0.6951,
+  "p75": 0.925,
+  "p90": 0.9847,
+  "n": 16142
+ },
+ "max_unmatched_share_frac": {
+  "p10": 1.0,
+  "p25": 1.0,
+  "p50": 1.0,
+  "p75": 1.0,
+  "p90": 1.0,
+  "n": 16142
+ },
+ "final_unmatched_usd": {
+  "p10": 14.41,
+  "p25": 77.19,
+  "p50": 340.2456,
+  "p75": 1182.341,
+  "p90": 3132.3327,
+  "n": 16142
+ },
+ "final_pair_cost_both_sided": {
+  "p10": 0.7424,
+  "p25": 0.8828,
+  "p50": 0.9862,
+  "p75": 1.0635,
+  "p90": 1.18,
+  "n": 16142
+ },
+ "one_sided_usd": {
+  "p10": 1.008,
+  "p25": 5.5878,
+  "p50": 39.68,
+  "p75": 226.6376,
+  "p90": 803.3937,
+  "n": 20611
+ },
+ "market_mix_top": [
+  {
+   "sport": "atp",
+   "type": "moneyline",
+   "usd_share": 0.1594
+  },
+  {
+   "sport": "wta",
+   "type": "moneyline",
+   "usd_share": 0.1141
+  },
+  {
+   "sport": "cs2",
+   "type": "moneyline",
+   "usd_share": 0.079
+  },
+  {
+   "sport": "cfb",
+   "type": "moneyline",
+   "usd_share": 0.0471
+  },
+  {
+   "sport": "nfl",
+   "type": "spread",
+   "usd_share": 0.0365
+  },
+  {
+   "sport": "cfb",
+   "type": "spread",
+   "usd_share": 0.0275
+  },
+  {
+   "sport": "sea",
+   "type": "moneyline",
+   "usd_share": 0.0237
+  },
+  {
+   "sport": "epl",
+   "type": "moneyline",
+   "usd_share": 0.0216
+  },
+  {
+   "sport": "nba",
+   "type": "moneyline",
+   "usd_share": 0.0214
+  },
+  {
+   "sport": "nba",
+   "type": "spread",
+   "usd_share": 0.0207
+  },
+  {
+   "sport": "nfl",
+   "type": "moneyline",
+   "usd_share": 0.0196
+  },
+  {
+   "sport": "nfl",
+   "type": "total",
+   "usd_share": 0.0174
+  },
+  {
+   "sport": "epl",
+   "type": "total",
+   "usd_share": 0.0163
+  },
+  {
+   "sport": "nba",
+   "type": "total",
+   "usd_share": 0.016
+  },
+  {
+   "sport": "lal",
+   "type": "moneyline",
+   "usd_share": 0.0159
+  },
+  {
+   "sport": "unl",
+   "type": "moneyline",
+   "usd_share": 0.0154
+  },
+  {
+   "sport": "sea",
+   "type": "total",
+   "usd_share": 0.0141
+  },
+  {
+   "sport": "uel",
+   "type": "moneyline",
+   "usd_share": 0.0136
+  },
+  {
+   "sport": "cfb",
+   "type": "total",
+   "usd_share": 0.0118
+  },
+  {
+   "sport": "lal",
+   "type": "total",
+   "usd_share": 0.0113
+  },
+  {
+   "sport": "unl",
+   "type": "total",
+   "usd_share": 0.0099
+  },
+  {
+   "sport": "ucl",
+   "type": "moneyline",
+   "usd_share": 0.0093
+  },
+  {
+   "sport": "fl1",
+   "type": "moneyline",
+   "usd_share": 0.0087
+  },
+  {
+   "sport": "bun",
+   "type": "moneyline",
+   "usd_share": 0.0084
+  },
+  {
+   "sport": "bun",
+   "type": "total",
+   "usd_share": 0.0072
+  }
+ ]
+}

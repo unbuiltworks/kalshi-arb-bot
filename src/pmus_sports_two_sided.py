@@ -40,6 +40,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 ONE = D("1")
 
+from src import pmus_rn1_replica as RN1  # noqa: E402  (default OFF)
+
 
 def _env_d(name: str, default: str) -> D:
     try:
@@ -1118,9 +1120,15 @@ class Venue:
         f = self.micro.authoritative_fill(o, D(str(o.get("quantity") or
                                                   o.get("qty") or "1e9")),
                                           accept_partial=True)
+        # A cancel the venue has ACCEPTED but not applied (PENDING_CANCEL /
+        # *_PENDING) can still fill. LIVE 2026-11-17 aec-utr-gaskan-hanbra:
+        # a YES 5 @0.31 fill most likely raced the cancel, the order was
+        # booked closed with 0 filled and never re-read, and the book missed
+        # $3.45 the venue paid. Pending states stay OPEN, so the order is
+        # polled again until it is truly terminal and every fill is recorded.
         is_open = not any(x in state for x in
                           ("CANCEL", "EXPIRED", "REJECT", "FILLED")) or \
-            "PARTIALLY" in state
+            "PARTIALLY" in state or "PENDING" in state
         return {"qty": f["qty"] if f else D(0), "px": f["price"] if f else None,
                 "open": is_open, "state": state}
 
@@ -2116,6 +2124,7 @@ class Engine:
             mk["pos"][side] = str(D(mk["pos"][side]) + new)
             mk["cost"][side] = str(D(mk["cost"][side]) + new * st["px"])
             o["filled"] = str(st["qty"])
+            mk.setdefault("last_fill_t", {})[side] = time.time()
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
                 order_id=oid, pos=mk["pos"],
                 label="venue-reported fill; not realized until settlement")
@@ -2390,6 +2399,118 @@ class Engine:
         log("ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage,
             order_id=oid)
 
+    # ------------------------------------------------ RN1 replica (default off)
+    def _rn1_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
+                  bbo: Mapping, tick: D) -> None:
+        """One RN1-replica pass for one market: compute RN1's resting maker
+        bids (src/pmus_rn1_replica.quotes) and reconcile our open orders to
+        them. Openings/extensions obey every new-exposure gate; completions
+        (profitable pairs only) continue under them, as elsewhere. Post-only
+        BUYs only: nothing here sells or takes."""
+        now = time.time()
+        y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        if TAPE is not None:
+            (TAPE.priority.discard if y == n else TAPE.priority.add)(slug)
+        if y == n and y > 0 and mk.get("pair_logged_at") != str(y):
+            cpair = (D(mk["cost"]["YES"]) + D(mk["cost"]["NO"])) / y
+            self.b.d["pairs"].append({"slug": slug, "qty": str(y),
+                                      "pair_cost": str(cpair),
+                                      "t": now_iso()})
+            mk["pair_logged_at"] = str(y)
+            log("PAIR_LOCKED", slug=slug, pairs=y, avg_pair_cost=cpair,
+                locked_edge_per_pair=ONE - cpair, mode="rn1",
+                label="locked pair economics; realized at settlement")
+        new_block = None
+        if os.getenv(ENABLED_ENV, "").upper() != "YES":
+            new_block = "not_enabled"
+        elif self.b.total_unmatched() >= TOTAL_CAP:
+            new_block = "total_cap"
+        elif self.daily_stopped():
+            new_block = "daily_loss_stop"
+        elif self.halt_new_exposure():
+            new_block = "halt_new_exposure"
+        elif self.shared_halt() is not None:
+            new_block = "shared_halt"
+        elif self.account_risk_blocks() is not None:
+            new_block = "account_risk"
+        late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
+            if LATE_CUTOFF else None
+        if excluded(slug):
+            late = "excluded"
+        if not new_block and late:
+            new_block = "late:" + str(late)
+        if not new_block and OPEN_EV_GATE and not self.open_gate(slug)["allow"]:
+            new_block = "open_ev_gate"
+        if not new_block and self.ws is not None and \
+                now < float(mk.get("jump_pause_until") or 0):
+            new_block = "jump_pause"
+        q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
+                       pos=mk["pos"], cost=mk["cost"],
+                       last_fill_t=mk.get("last_fill_t"), now=now,
+                       min_qty=spec["min_qty"])
+        want: Dict[str, Any] = {}
+        for side in ("YES", "NO"):
+            tg = q.get(side)
+            if tg and tg["role"] != "complete" and new_block:
+                tg = None
+            want[side] = tg
+        key = json.dumps({s: (None if t is None else
+                              [str(t["px"]), str(t["qty"]), t["role"]])
+                          for s, t in want.items()} |
+                         {"block": new_block,
+                          "why": {s: q.get("why_" + s) for s in ("YES", "NO")}},
+                         sort_keys=True)
+        if mk.get("rn1_logged") != key:
+            mk["rn1_logged"] = key
+            log("RN1_QUOTE", slug=slug, pos=mk["pos"], cost=mk["cost"],
+                bid=bbo["bid"], ask=bbo["ask"], block=new_block,
+                want={s: (None if t is None else
+                          {"px": str(t["px"]), "qty": str(t["qty"]),
+                           "role": t["role"]}) for s, t in want.items()},
+                why={s: q.get("why_" + s) for s in ("YES", "NO")},
+                label="RN1 replica decision; orders only if every gate "
+                      "and the submission lock allow")
+        # reconcile: keep a resting bid within REPRICE_TICKS of target with
+        # no more than the target size left; cancel everything else first
+        stale = []
+        keep = {}
+        for oid, o in mk["orders"].items():
+            if not o.get("open"):
+                continue
+            tg = want.get(o["side"])
+            left = D(o["qty"]) - D(o.get("filled") or "0")
+            if tg is not None and o["side"] not in keep and \
+                    abs(D(o["px"]) - tg["px"]) < RN1.REPRICE_TICKS * tick and \
+                    left <= tg["qty"]:
+                keep[o["side"]] = oid
+            else:
+                stale.append((oid, o))
+        if stale:
+            before = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"]))
+            self._cancel_legs(slug, stale)
+            self.b.save()
+            if (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before or \
+                    any(o.get("open") for _oid, o in stale):
+                return       # a fill raced the cancel, or still pending
+        flat = y == 0 and n == 0
+        if flat and not any(want.values()) and not new_block:
+            idle = mk.setdefault("idle_since", now)
+            if now - float(idle) > 120 and \
+                    not any(o.get("open") for o in mk["orders"].values()):
+                mk["done"] = True
+                self.b.save()
+                log("released_flat_market", slug=slug, pos=mk["pos"],
+                    bid=bbo["bid"], ask=bbo["ask"], mode="rn1")
+            return
+        mk.pop("idle_since", None)
+        for side in ("YES", "NO"):
+            tg = want.get(side)
+            if tg is None or side in keep:
+                continue
+            stage = {"complete": "two_sided_complete",
+                     "extend": "rn1_extend"}.get(tg["role"], "rn1_open")
+            self.place(slug, side, tg["px"], tg["qty"], stage)
+
     def step_market(self, slug: str) -> None:
         mk = self.b.m(slug)
         # 1. refresh own orders
@@ -2466,6 +2587,12 @@ class Engine:
                 self._reward_estimate(slug, mk, tick)
             except Exception as exc:                  # noqa: BLE001
                 log("reward_estimate_error", slug=slug, err=str(exc)[:120])
+        if RN1.ON:
+            # OWNER 2026-11-21: scaled-down RN1 behavioural replica. Replaces
+            # the two-sided open/complete/recovery decisions for this market;
+            # every gate, lock, cap and the bookkeeping stay the engine's.
+            self._rn1_step(slug, mk, spec, bbo, tick)
+            return
         y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
         if TAPE is not None:
             # a market holding an unpaired leg records its book even when the
@@ -3218,7 +3345,8 @@ class Engine:
             self.b.save()
             log("drift_seed", **seed, label="measured completion drift "
                 "preloaded for sports with no live history")
-        log("boot", recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
+        log("boot", rn1=({"on": True, **RN1.cfg()} if RN1.ON else {"on": False}),
+            recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
                               "shared_policy": completion_policy_live(),
                               "sports_cap": COMPLETION_SPORTS_CAP,
                               "max_stranded": MAX_STRANDED,
