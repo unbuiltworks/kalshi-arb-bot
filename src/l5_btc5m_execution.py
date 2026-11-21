@@ -801,6 +801,19 @@ HEAVY_UNDERDOG_TOKEN = "STOP_ADDING"
 STRADDLE_HEAVY_UNDERDOG_MARGIN_ENV = "L5_BTC5M_STRADDLE_HEAVY_UNDERDOG_MARGIN"
 
 
+STRADDLE_PACE_SIDE_CAP_ENV = "L5_BTC5M_STRADDLE_SIDE_CAP_PACING"
+PACE_SIDE_CAP_TOKEN = "LINEAR_TO_ENTRY_CUTOFF"
+
+
+def straddle_pace_side_cap(default: bool = False) -> bool:
+    """See `Params.straddle_pace_side_cap`. Only the exact token enables
+    it; anything else keeps the default."""
+    raw = os.environ.get(STRADDLE_PACE_SIDE_CAP_ENV)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip() == PACE_SIDE_CAP_TOKEN
+
+
 def straddle_stop_adding_heavy_underdog(default: bool = False) -> bool:
     """See `Params.straddle_stop_adding_heavy_underdog`. Only the exact
     token enables it; anything else keeps the default."""
@@ -2740,6 +2753,8 @@ class Btc5mExecutor:
                         straddle_fill_edge_per_share=(
                             straddle_fill_edge_per_share(
                                 self.params.straddle_fill_edge_per_share)),
+                        straddle_pace_side_cap=straddle_pace_side_cap(
+                            self.params.straddle_pace_side_cap),
                         straddle_stop_adding_heavy_underdog=(
                             straddle_stop_adding_heavy_underdog(
                                 self.params

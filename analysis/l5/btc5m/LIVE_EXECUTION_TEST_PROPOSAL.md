@@ -204,3 +204,20 @@ If any fails: roll back and stop; step 2 is not requested.
 ROLLBACK. One call: point the service back at branch
 `release/l5-pmus-live-equity-and-correction-20261120` (`cfac6707c`), then
 re-read items 2, 4 and 5.
+
+## Update 2026-11-21 (supersedes the BTC5m SHA above)
+
+Two additions since `a27420990`, both in the BTC5m image only:
+- own-ledger completeness check (always on): the account-risk read
+  refuses with `OWN_LEDGER_MISSING_SETTLED_MARKETS` when the account
+  service's reconciled basis lists a market of this lane's series that
+  the lane's own ledger does not contain. Step 2's acceptance now
+  includes: `own_series_markets_not_in_own_history` is empty (this also
+  confirms the ledger survived the redeploy).
+- side-cap pacing switch, off unless
+  `L5_BTC5M_STRADDLE_SIDE_CAP_PACING=LINEAR_TO_ENTRY_CUTOFF`. NOT part of
+  the four-window test, which is unchanged.
+The frozen BTC5m SHA is the commit that adds this section (reported with
+it); `release/l5-btc5m-inventory-20261121` is moved forward to it.
+Safety suites at that commit: 2,344 passed, 0 failed.
+Step 1 (`l5-pmus-live` -> `1e75294f3`) is unchanged.

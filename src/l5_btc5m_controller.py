@@ -385,6 +385,22 @@ class Params:
     straddle_ev_basis: str = ""
     straddle_fill_edge_per_share: Optional[Decimal] = None
     straddle_stop_adding_heavy_underdog: bool = False
+    #: =====================================================================
+    #: SPEND THE SIDE CAP ACROSS THE WINDOW, NOT IN ITS FIRST MINUTE.
+    #:
+    #: At a $0.60 window the caps are a dozen clips. Replayed on 1,091
+    #: recorded windows the side cap first refused a quote 55 seconds in
+    #: (median) and no order was working for 68% of the window
+    #: (analysis/l5/btc5m/SMALL_CAPITAL_CONSTRAINTS_RESULT.txt), so the
+    #: controller cannot respond to anything that happens after the first
+    #: minute -- which is where the trader it is modelled on does most of
+    #: his buying. With this set, the side cap in force at time t is
+    #:     max(one clip, side cap x t / no_new_entry_after_s)
+    #: reaching the full cap only at the entry cutoff. It can only LOWER
+    #: the cap in force (SIDE_CAP_PACED); the configured cap, the unmatched
+    #: ceiling and the window-loss ceiling are untouched. False -- the
+    #: default -- leaves every decision as it was.
+    straddle_pace_side_cap: bool = False
     #: how far below the other side's bid counts as the underdog
     straddle_heavy_underdog_margin: Decimal = D("0")
     #: how old the probability may be and still justify a lone leg
@@ -1616,6 +1632,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
         _side_why: Dict[str, Any] = {s_: None for s_ in SIDES}
         _one_sided: Dict[str, Any] = {s_: None for s_ in SIDES}
         _position: Dict[str, Any] = {s_: None for s_ in SIDES}
+        _pacing: Dict[str, Any] = {"on": False}
         _pair_block: Dict[str, bool] = {s_: False for s_ in SIDES}
         _pair_plan: Dict[str, Any] = {"action": None}
         _bk, _bk_why = {}, None
@@ -1784,6 +1801,20 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 why_s = _bk_why
                 _rungs = ()
             _side_cap = _dec(params.straddle_max_side_usd) or ZERO
+            _side_cap_full = _side_cap
+            if params.straddle_pace_side_cap and _side_cap > ZERO:
+                try:
+                    _hz = float(params.no_new_entry_after_s)
+                    _fr = min(1.0, max(float(t), 0.0) / _hz) if _hz > 0 \
+                        else 1.0
+                except (TypeError, ValueError):
+                    _fr = 0.0        # unreadable clock: the smallest cap
+                _paced = _side_cap * D(str(round(_fr, 6)))
+                _floor = _dec(params.clip_usd) or ZERO
+                _side_cap = min(_side_cap, max(_paced, _floor))
+            _pacing.update(on=bool(params.straddle_pace_side_cap),
+                           side_cap_now=str(_side_cap),
+                           side_cap_full=str(_side_cap_full))
             _wl_cap = _dec(params.straddle_max_window_loss_usd) or ZERO
             _unm_cap = _dec(params.straddle_max_unmatched_usd) or ZERO
             _committed = {s: _side_committed_usd(s, inv, rest)
@@ -1849,8 +1880,11 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                         #: the lockout's two jobs: how much one side may
                         #: hold, and how lopsided the book may get.
                         if _committed[side] + r_side * qty > _side_cap:
-                            why_s = "SIDE_CAP_REACHED"
-                            _side_why[side] = "SIDE_CAP_REACHED"
+                            _sc = ("SIDE_CAP_PACED"
+                                   if _committed[side] + r_side * qty
+                                   <= _side_cap_full else "SIDE_CAP_REACHED")
+                            why_s = _sc
+                            _side_why[side] = _sc
                             continue
                         if _prospective_unmatched_usd(
                                 side, r_side, qty, inv, rest) > _unm_cap:
@@ -2415,6 +2449,7 @@ def decide(*, book, t_in_window_s, inventory, resting, params=Params(),
                 "one_sided": dict(_one_sided),
                 "heavy_underdog": dict(_hu),
                 "position_economics": dict(_position),
+                "pacing": dict(_pacing),
                 "pair_completion": dict(_pair_plan),
                 "completion_reserve": _reserve,
                 "book_relative": {

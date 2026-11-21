@@ -617,10 +617,27 @@ def _own_not_in_lifetime(own: Any, risk: Mapping[str, Any],
         else:
             add += min(D(0), o - b)
             n["gap_to_booked"] += 1
+    #: IS THIS LANE'S OWN LEDGER WHOLE? The daily and cumulative figures
+    #: above, and the executor's own daily-loss room, all start from the
+    #: lane's durable ledger. A ledger that is unreadable refuses; one that
+    #: is simply ABSENT -- a lost or replaced volume -- loads as empty and
+    #: reads as "nothing ever lost". The account service's reconciled basis
+    #: is an independent record of what settled on this account: a market
+    #: of THIS lane's series that it lists and this lane's history does not
+    #: contain means the history has a hole. Named here; refused by the
+    #: caller. Only a reconciled basis can say so; without one this check
+    #: is silent and every own loss is already being added in full.
+    missing: List[str] = []
+    if why is None:
+        #: the executor refuses at import unless its strategy is in this
+        #: table, so the lookup cannot miss
+        prefix = str(X.ORIGIN.STRATEGY_SERIES[X.STRATEGY])
+        missing = sorted(str(m) for m in booked
+                         if str(m).startswith(prefix) and m not in hist)
     return {"add": add, "basis_used": why is None, "basis_refusal": why,
             "basis_complete": (None if why is not None
                                else basis.get("complete") is True),
-            "markets": n}
+            "markets": n, "own_series_markets_not_in_own_history": missing}
 
 
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
@@ -700,6 +717,8 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
            "loss_room_usd": str(room),
            "btc15m_operator_halt": other_halt,
            "age_s": round(age, 1)}
+    if _lt is not None and _lt.get("own_series_markets_not_in_own_history"):
+        return no("OWN_LEDGER_MISSING_SETTLED_MARKETS", **out)
     if day_all <= -halt:
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
     if -life_all >= cum:
@@ -2492,6 +2511,7 @@ def main() -> int:            # pragma: no cover - the service entrypoint
             "straddle_fill_edge_per_share": (
                 None if _ep.straddle_fill_edge_per_share is None
                 else str(_ep.straddle_fill_edge_per_share)),
+            "straddle_pace_side_cap": bool(_ep.straddle_pace_side_cap),
             "straddle_stop_adding_heavy_underdog":
                 bool(_ep.straddle_stop_adding_heavy_underdog),
             "straddle_heavy_underdog_margin":
