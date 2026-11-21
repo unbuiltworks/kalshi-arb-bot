@@ -1,0 +1,152 @@
+{
+  "ok": true,
+  "intent": {
+    "symbol": "GEMI-BTC05M2609190135-UP",
+    "side": "buy",
+    "outcome": "yes",
+    "price": "0.41",
+    "quantity": "0.01",
+    "authorized_envelope_quantity": "0.01",
+    "quantity_source": "contract quantityMinimum/quantityIncrement",
+    "bbo_age_s": 1.144,
+    "intent_id": "canary-d67a642639744150",
+    "client_order_id": "l5c-canary-d67a642639744150"
+  },
+  "transport": "WEBSOCKET",
+  "instrument_metadata": {
+    "readable": true,
+    "ticker": "BTC05M2609190135",
+    "instrumentSymbol": "GEMI-BTC05M2609190135-UP",
+    "quantityMinimum": "0.01",
+    "quantityIncrement": "0.01",
+    "priceMinimum": "0.01",
+    "priceIncrement": "0.01",
+    "priceMaximum": null,
+    "quantityMaximum": null,
+    "contract_status": "active",
+    "market_state": "open",
+    "event_status": "active",
+    "expiry": "2026-09-19T01:35:00.000Z",
+    "missing_fields": [],
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "why": null
+  },
+  "resolution_evidence": {
+    "readable": true,
+    "verdict": "PENDING",
+    "instrumentSymbol": "GEMI-BTC05M2609190135-UP",
+    "ticker": "BTC05M2609190135",
+    "status": "active",
+    "resolutionSide": null,
+    "resolvedAt": null,
+    "settlementValue": null,
+    "marketState": "open",
+    "expiryDate": "2026-09-19T01:35:00.000Z",
+    "event_status": "active",
+    "is_terminal": false,
+    "expired": false,
+    "reads": 3,
+    "reads_readable": 3,
+    "reads_settled": 0,
+    "distinct_readings": [
+      "active/None"
+    ],
+    "flapped": false,
+    "observations": [
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:35:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:35:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:35:00.000Z",
+        "event_status": "active"
+      }
+    ],
+    "missing_fields": [
+      "resolutionSide",
+      "resolvedAt",
+      "settlementValue"
+    ],
+    "strike_check": {
+      "available": false,
+      "why": "not settled yet, or no strike published"
+    },
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+  },
+  "bbo": {
+    "bid": "0.41",
+    "bid_qty": "10.0",
+    "ask": "0.66",
+    "ask_qty": "441.0",
+    "levels": "3 bid / 3 ask",
+    "source_ts": 1789781432.0
+  },
+  "queue_ahead": "10.0",
+  "max_cash_exposure_usd": "0.00410000",
+  "armed": false,
+  "sent": false,
+  "frame": {
+    "id": "<uuid4 hex, per request>",
+    "method": "order.place",
+    "params": {
+      "symbol": "GEMI-BTC05M2609190135-UP",
+      "side": "BUY",
+      "type": "LIMIT",
+      "timeInForce": "MOC",
+      "price": "0.41",
+      "quantity": "0.01",
+      "eventOutcome": "YES",
+      "clientOrderId": "l5c-canary-d67a642639744150"
+    }
+  },
+  "frame_json": "{\"id\":\"<uuid4 hex, per request>\",\"method\":\"order.place\",\"params\":{\"symbol\":\"GEMI-BTC05M2609190135-UP\",\"side\":\"BUY\",\"type\":\"LIMIT\",\"timeInForce\":\"MOC\",\"price\":\"0.41\",\"quantity\":\"0.01\",\"eventOutcome\":\"YES\",\"clientOrderId\":\"l5c-canary-d67a642639744150\"}}",
+  "types": {
+    "symbol": "string",
+    "side": "string, exactly \"BUY\"",
+    "type": "string, exactly \"LIMIT\"",
+    "timeInForce": "string, exactly \"MOC\" -- maker-only, not GTC/IOC/FOK",
+    "price": "decimal string, aligned to contract metadata",
+    "quantity": "decimal string, from contract metadata",
+    "eventOutcome": "string, exactly \"YES\"",
+    "clientOrderId": "string, 1..36 chars"
+  },
+  "structure": {
+    "unknown": [],
+    "missing": [],
+    "allowed": [
+      "symbol",
+      "side",
+      "type",
+      "timeInForce",
+      "price",
+      "quantity",
+      "eventOutcome",
+      "clientOrderId"
+    ]
+  },
+  "auth_note": "no per-message nonce, payload or signature: the socket is authenticated once at the handshake by websocket_auth_headers, and the frame carries no credential material",
+  "ack_contract": "accepted iff the ack's `status` is 200"
+}

@@ -1,0 +1,26 @@
+{
+ "label": "L5_MAKER_TAKER_CROSSCHECK_V1",
+ "why": "a multi-price transaction only proves L5 had concurrent RESTING orders if L5 was the MAKER. If L5 were the taker it would be sweeping someone else's book and would prove nothing. The taker-only feed is the discriminator, and it is valid ONLY inside its own coverage window.",
+ "taker_feed_window_utc": [
+  1787875677,
+  1788217879
+ ],
+ "activity_rows_in_window": 66715,
+ "activity_transactions_in_window": 63278,
+ "activity_tx_also_present_in_taker_feed": 11068,
+ "multi_price_tx_in_window": 3434,
+ "multi_price_tx_where_L5_was_TAKER": 0,
+ "multi_price_tx_where_L5_was_MAKER": 3434,
+ "btc5m_negative": {
+  "btc15m_multi_level_rate": 0.05710769640125058,
+  "btc5m_transactions": 6229,
+  "expected_at_btc15m_rate": 356,
+  "observed": 0,
+  "p_zero_if_same_rate": 8.401631197886728e-160,
+  "why": "absence here is not merely absence of evidence: at the BTC15m rate, zero in 6229 transactions is not a sampling outcome"
+ },
+ "both_outcomes_one_tx": {
+  "observed": 0,
+  "why_this_is_WEAK_evidence": "a taker transaction buys ONE outcome, so it cannot consume the other outcome's liquidity. Zero is what this test must return whether or not L5 rested both sides. It does NOT argue against concurrent two-sided resting."
+ }
+}

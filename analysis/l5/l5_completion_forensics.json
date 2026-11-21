@@ -1,0 +1,1107 @@
+{
+ "cohort_summary": {
+  "FULL": {
+   "band_blocked_cycles_total": 9,
+   "complete_fill_rate": 0.2314,
+   "complete_filled": 59,
+   "complete_orders": 255,
+   "complete_orders_per_market": 12.14,
+   "complete_reject_rate": 0.1725,
+   "complete_rejected": 44,
+   "markets": 21,
+   "median_complete_rest_s": 6.292,
+   "median_entry_spread": 0.01
+  },
+  "PARTIAL": {
+   "band_blocked_cycles_total": 6,
+   "complete_fill_rate": 0.0567,
+   "complete_filled": 8,
+   "complete_orders": 141,
+   "complete_orders_per_market": 47.0,
+   "complete_reject_rate": 0.2766,
+   "complete_rejected": 39,
+   "markets": 3,
+   "median_complete_rest_s": 5.827,
+   "median_entry_spread": 0.01
+  },
+  "ZERO": {
+   "band_blocked_cycles_total": 21,
+   "complete_fill_rate": 0.0,
+   "complete_filled": 0,
+   "complete_orders": 15,
+   "complete_orders_per_market": 2.14,
+   "complete_reject_rate": 0.4,
+   "complete_rejected": 6,
+   "markets": 7,
+   "median_complete_rest_s": 30.763,
+   "median_entry_spread": 0.01
+  }
+ },
+ "cohorts": {
+  "FULL": [
+   "aec-atp-artgea-botzan-2026-09-06",
+   "aec-atp-fracer-aleblo-2026-09-06",
+   "aec-atp-fratia-alemic-2026-09-07",
+   "aec-atp-karkha-leatie-2026-09-07",
+   "aec-atp-nikizq-santav-2026-09-08",
+   "aec-cs2-bpl-pf-2026-09-08",
+   "aec-cs2-mouzn-bmb-2026-09-08",
+   "aec-itfwo-sofcos-hinino-2026-09-08",
+   "aec-mlb-az-kc-2026-09-07",
+   "aec-setkamemd-ghifio-butdum-2026-09-08",
+   "aec-setkamemd-salvea-dupale-2026-09-07",
+   "aec-setkameua-malden-pytiva-2026-09-07",
+   "aec-setkameua-naiole-khaser-2026-09-07",
+   "aec-setkameua-varvol-koryev-2026-09-08",
+   "aec-setkameua-vervas-kohboh-2026-09-08",
+   "aec-wta-anatik-darsem-2026-09-07",
+   "asc-cfb-smu-flst-2026-09-07-neg-10pt5",
+   "asc-cfb-smu-flst-2026-09-07-neg-13pt5",
+   "asc-cfb-smu-flst-2026-09-07-neg-3pt5",
+   "atc-ekst-psz-plo-2026-09-07-draw",
+   "atc-sea-udi-laz-2026-09-07-udi"
+  ],
+  "PARTIAL": [
+   "aec-atp-pedmar-frafor-2026-09-08",
+   "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+   "aec-setkameua-malden-stoole-2026-09-08"
+  ],
+  "ZERO": [
+   "aec-atp-grilom-filpel-2026-09-07",
+   "aec-atp-tiaper-martru-2026-09-08",
+   "aec-setkamemd-scovla-otgand-2026-09-07",
+   "aec-setkameua-zhyole-strole-2026-09-08",
+   "aec-wta-martre-jenrug-2026-09-08",
+   "asc-cfb-smu-flst-2026-09-07-neg-6pt5",
+   "tsc-mlb-laa-bos-2026-09-07-7pt5"
+  ]
+ },
+ "entry_band": {
+  "fired": 42,
+  "l5_recommended_on_holding_cycles": {
+   "complete": 12,
+   "extend": 24,
+   "open": 3
+  },
+  "per_market": {
+   "aec-atp-valabo-juamar-2026-09-08": {
+    "blocked_cycles": 3,
+    "l5_wanted": {
+     "open": 3
+    },
+    "max_unmatched_usd_carried": "0.4264",
+    "min_bid_seen": 0.89
+   },
+   "aec-setkamecz-tomvoj-ticjir-2026-09-07": {
+    "blocked_cycles": 6,
+    "l5_wanted": {
+     "complete": 6
+    },
+    "max_unmatched_usd_carried": "3.4228",
+    "min_bid_seen": 0.03
+   },
+   "aec-setkamemd-scovla-otgand-2026-09-07": {
+    "blocked_cycles": 12,
+    "l5_wanted": {
+     "extend": 12
+    },
+    "max_unmatched_usd_carried": "1.8252",
+    "min_bid_seen": 0.08
+   },
+   "aec-setkameua-naiole-khaser-2026-09-07": {
+    "blocked_cycles": 3,
+    "l5_wanted": {
+     "extend": 3
+    },
+    "max_unmatched_usd_carried": "1.8252",
+    "min_bid_seen": 0.14
+   },
+   "asc-cfb-smu-flst-2026-09-07-neg-13pt5": {
+    "blocked_cycles": 3,
+    "l5_wanted": {
+     "complete": 3
+    },
+    "max_unmatched_usd_carried": "1.2090",
+    "min_bid_seen": 0.19
+   },
+   "atc-ekst-psz-plo-2026-09-07-draw": {
+    "blocked_cycles": 3,
+    "l5_wanted": {
+     "complete": 3
+    },
+    "max_unmatched_usd_carried": "0.0663",
+    "min_bid_seen": 0.12
+   },
+   "tsc-mlb-laa-bos-2026-09-07-7pt5": {
+    "blocked_cycles": 9,
+    "l5_wanted": {
+     "extend": 9
+    },
+    "max_unmatched_usd_carried": "3.1213",
+    "min_bid_seen": 0.03
+   }
+  },
+  "shell_would_have_acted_on_holding_cycles": {
+   "extend": 36,
+   "open": 3
+  },
+  "while_flat_a_true_entry_refusal": 3,
+  "while_holding_residual": 39,
+  "why_removal_is_not_automatic": "on these same cycles the shell would mostly have EXTENDed -- bought more of the side already held, in markets whose bid was falling. COMPLETE and EXTEND must be decided separately, never netted.",
+  "why_this_matters": "entry_band_left is an ENTRY admission band. A firing while holding unmatched inventory refuses a residual action, not an entry."
+ },
+ "flow_hypothesis": "SUPPORTED IN THE PARTIAL COHORT, UNTESTABLE IN THE ZERO COHORT. Entry spread is 0.010 at the median in every cohort and four FULL-cover markets show bid drift as violent as the stranded ones, so the static book features we recorded do not separate FULL from ZERO -- there, our own abandonment dominates the variance and no market property could show through it. The PARTIAL cohort is the clean case FOR the hypothesis: 141 COMPLETE orders, 47 per market, worked for up to 43 minutes, and a 5.7% fill rate. That is a market that will not transact against a resting maker, measured after persistence is ruled out as the cause. The campaign did not record the feature that would name it -- contemporaneous trade prints and two-sided print rate are not in the order rows, only spread, touch extrema and poll counts. Naming it needs a forward collector that tapes prints per market; the baseline it must beat is in this file.",
+ "labels": {
+  "counterfactual": "did not happen; fill-assumed, queue position and depth not modelled",
+  "descriptive": "cohorts are not randomly assigned; no causal claim is made",
+  "measured": "counted from the campaign's own decision/order/session rows"
+ },
+ "markets_with_a_first_side_fill": 31,
+ "per_market": {
+  "aec-atp-artgea-botzan-2026-09-06": {
+   "abandonment": {
+    "completes_after_first_fill": 1,
+    "end_reasons_after_first_fill": {
+     "filled": 1
+    },
+    "median_complete_rest_s": 1.913,
+    "minutes_first_fill_to_last_action": 0.49,
+    "orders": 10
+   },
+   "attempts": {
+    "complete": 3,
+    "open": 7
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "13.61",
+   "cover": "1",
+   "first_side_filled": "13.61",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.57,
+    "entry_spread_median": 0.04,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.04
+   }
+  },
+  "aec-atp-fracer-aleblo-2026-09-06": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 2.49,
+    "orders": 12
+   },
+   "attempts": {
+    "complete": 1,
+    "open": 11
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "4.23",
+   "cover": "1",
+   "first_side_filled": "4.23",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.61,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": null
+   }
+  },
+  "aec-atp-fratia-alemic-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 4,
+    "end_reasons_after_first_fill": {
+     "deadline": 1,
+     "filled": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCCP09": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCCQ3P": 1
+    },
+    "median_complete_rest_s": 4.4385,
+    "minutes_first_fill_to_last_action": 1.71,
+    "orders": 10
+   },
+   "attempts": {
+    "complete": 9,
+    "open": 1
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "4.5",
+   "cover": "1",
+   "first_side_filled": "4.5",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.555,
+    "entry_spread_median": 0.005,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.005
+   }
+  },
+  "aec-atp-grilom-filpel-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 2,
+    "end_reasons_after_first_fill": {
+     "deadline": 2
+    },
+    "median_complete_rest_s": 31.4735,
+    "minutes_first_fill_to_last_action": 1.71,
+    "orders": 12
+   },
+   "attempts": {
+    "complete": 2,
+    "extend": 6,
+    "open": 4
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+1",
+   "first_side_filled": "5.6",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.42,
+    "entry_spread_median": 0.04,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.02
+   }
+  },
+  "aec-atp-karkha-leatie-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 4,
+    "end_reasons_after_first_fill": {
+     "filled": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXH3V": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXHWQ": 1
+    },
+    "median_complete_rest_s": 3.569,
+    "minutes_first_fill_to_last_action": 17.9,
+    "orders": 25
+   },
+   "attempts": {
+    "complete": 6,
+    "extend": 3,
+    "open": 16
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "11.16",
+   "cover": "1",
+   "first_side_filled": "11.16",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.455,
+    "entry_spread_median": 0.015,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.02
+   }
+  },
+  "aec-atp-nikizq-santav-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 6,
+    "end_reasons_after_first_fill": {
+     "deadline": 1,
+     "filled": 3,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC8RXG": 1,
+     "resting:ORDER_STATE_NEW": 1
+    },
+    "median_complete_rest_s": 5.2885,
+    "minutes_first_fill_to_last_action": 1.89,
+    "orders": 15
+   },
+   "attempts": {
+    "complete": 8,
+    "extend": 5,
+    "open": 2
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "13.21",
+   "cover": "1",
+   "first_side_filled": "13.21",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.35,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-atp-pedmar-frafor-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 109,
+    "end_reasons_after_first_fill": {
+     "deadline": 81,
+     "filled": 2,
+     "filled_on_cancel": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC701T": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC70DX": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC70MM": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC70TT": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC77X2": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC77Z1": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC780M": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7817": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7818": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC781F": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC786J": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7884": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7893": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC78E3": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC78E8": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC78HA": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7A16": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7A3A": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7AD0": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7ADH": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7AJN": 1,
+     "resting:ORDER_STATE_NEW": 1
+    },
+    "median_complete_rest_s": 5.934,
+    "minutes_first_fill_to_last_action": 43.22,
+    "orders": 120
+   },
+   "attempts": {
+    "complete": 110,
+    "extend": 8,
+    "open": 2
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "PARTIAL",
+   "complement_filled": "6.51",
+   "cover": "0.6823899371069182389937106918",
+   "first_side_filled": "9.54",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.59,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-atp-tiaper-martru-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 2,
+    "end_reasons_after_first_fill": {
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7DHB": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CC7DMK": 1
+    },
+    "median_complete_rest_s": 0.904,
+    "minutes_first_fill_to_last_action": 1.46,
+    "orders": 12
+   },
+   "attempts": {
+    "complete": 2,
+    "extend": 5,
+    "open": 5
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+1",
+   "first_side_filled": "10.7",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.45,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": null
+   }
+  },
+  "aec-cs2-bpl-pf-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 11
+   },
+   "attempts": {
+    "complete": 1,
+    "open": 10
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "5.55",
+   "cover": "1",
+   "first_side_filled": "5.55",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.57,
+    "entry_spread_median": 0.04,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-cs2-mouzn-bmb-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 54,
+    "end_reasons_after_first_fill": {
+     "deadline": 40,
+     "filled": 4,
+     "filled_on_cancel": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCBXKM": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCBXRC": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCBXVE": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCC06Z": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCC0PM": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCC13S": 1,
+     "resting:ORDER_STATE_NEW": 2
+    },
+    "median_complete_rest_s": 6.528,
+    "minutes_first_fill_to_last_action": 13.81,
+    "orders": 65
+   },
+   "attempts": {
+    "complete": 54,
+    "extend": 7,
+    "open": 4
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "19.83",
+   "cover": "1",
+   "first_side_filled": "19.83",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.43,
+    "entry_spread_median": 0.13,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.06
+   }
+  },
+  "aec-itfwo-sofcos-hinino-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 6
+   },
+   "attempts": {
+    "complete": 4,
+    "open": 2
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "8.61",
+   "cover": "1.896475770925110132158590308",
+   "first_side_filled": "4.54",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.59,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-mlb-az-kc-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 1,
+    "end_reasons_after_first_fill": {
+     "filled": 1
+    },
+    "median_complete_rest_s": 24.582,
+    "minutes_first_fill_to_last_action": 1.92,
+    "orders": 11
+   },
+   "attempts": {
+    "complete": 3,
+    "extend": 1,
+    "open": 7
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "15.84",
+   "cover": "1",
+   "first_side_filled": "15.84",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.365,
+    "entry_spread_median": 0.005,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.005
+   }
+  },
+  "aec-setkamecz-tomvoj-ticjir-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 2,
+    "end_reasons_after_first_fill": {
+     "deadline": 1,
+     "filled": 1
+    },
+    "median_complete_rest_s": 28.3875,
+    "minutes_first_fill_to_last_action": 2.2,
+    "orders": 23
+   },
+   "attempts": {
+    "complete": 2,
+    "extend": 9,
+    "open": 12
+   },
+   "band_blocked_cycles": 6,
+   "cohort": "PARTIAL",
+   "complement_filled": "4.11",
+   "cover": "0.2842323651452282157676348548",
+   "first_side_filled": "14.46",
+   "flow": {
+    "bid_drift": -0.41,
+    "entry_bid": 0.44,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": 0.03,
+    "touch_to_oppask_span_median": 0.005
+   }
+  },
+  "aec-setkamemd-ghifio-butdum-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 19,
+    "end_reasons_after_first_fill": {
+     "deadline": 7,
+     "filled": 2,
+     "filled_on_cancel": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY86S": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY8TW": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY912": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY9J2": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY9M8": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBYA0R": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBYA1R": 1,
+     "resting:ORDER_STATE_NEW": 1
+    },
+    "median_complete_rest_s": 4.548,
+    "minutes_first_fill_to_last_action": 6.18,
+    "orders": 33
+   },
+   "attempts": {
+    "complete": 20,
+    "extend": 9,
+    "open": 4
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "14.32",
+   "cover": "1",
+   "first_side_filled": "14.32",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.38,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkamemd-salvea-dupale-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 4
+   },
+   "attempts": {
+    "complete": 2,
+    "open": 2
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "10.82",
+   "cover": "1",
+   "first_side_filled": "10.82",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.4,
+    "entry_spread_median": 0.02,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkamemd-scovla-otgand-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 1,
+    "end_reasons_after_first_fill": {
+     "deadline": 1
+    },
+    "median_complete_rest_s": 30.774,
+    "minutes_first_fill_to_last_action": 3.16,
+    "orders": 12
+   },
+   "attempts": {
+    "complete": 3,
+    "extend": 8,
+    "open": 1
+   },
+   "band_blocked_cycles": 12,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+2",
+   "first_side_filled": "5.07",
+   "flow": {
+    "bid_drift": -0.28,
+    "entry_bid": 0.36,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": 0.08,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkameua-malden-pytiva-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 3,
+    "end_reasons_after_first_fill": {
+     "filled": 3
+    },
+    "median_complete_rest_s": 13.372,
+    "minutes_first_fill_to_last_action": 3.21,
+    "orders": 20
+   },
+   "attempts": {
+    "complete": 3,
+    "extend": 6,
+    "open": 11
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "16.7",
+   "cover": "1",
+   "first_side_filled": "16.7",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.41,
+    "entry_spread_median": 0.02,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkameua-malden-stoole-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 29,
+    "end_reasons_after_first_fill": {
+     "deadline": 6,
+     "filled": 3,
+     "filled_on_cancel": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXANH": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXB3G": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXB3S": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXB61": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXBEM": 3,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXBGF": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXBRM": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXBTP": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXC66": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXC7D": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXCCT": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXCE5": 1,
+     "repriced:bbo_unreadable:Halt": 1,
+     "resting:ORDER_STATE_NEW": 3
+    },
+    "median_complete_rest_s": 1.887,
+    "minutes_first_fill_to_last_action": 5.51,
+    "orders": 46
+   },
+   "attempts": {
+    "complete": 29,
+    "extend": 6,
+    "open": 11
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "PARTIAL",
+   "complement_filled": "18.90",
+   "cover": "0.7988165680473372781065088757",
+   "first_side_filled": "23.66",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.46,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.03
+   }
+  },
+  "aec-setkameua-naiole-khaser-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 8,
+    "end_reasons_after_first_fill": {
+     "filled": 3,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBSFAB": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBSFF5": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBSFKR": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBSFQW": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBSFRM": 1
+    },
+    "median_complete_rest_s": 0.8674999999999999,
+    "minutes_first_fill_to_last_action": 5.97,
+    "orders": 21
+   },
+   "attempts": {
+    "complete": 9,
+    "extend": 2,
+    "open": 10
+   },
+   "band_blocked_cycles": 3,
+   "cohort": "FULL",
+   "complement_filled": "9.58",
+   "cover": "1",
+   "first_side_filled": "9.58",
+   "flow": {
+    "bid_drift": -0.38,
+    "entry_bid": 0.52,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": 0.14,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkameua-varvol-koryev-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 5,
+    "end_reasons_after_first_fill": {
+     "filled": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCCJMY": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCCJZG": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CCCKMF": 1
+    },
+    "median_complete_rest_s": 2.03,
+    "minutes_first_fill_to_last_action": 1.25,
+    "orders": 12
+   },
+   "attempts": {
+    "complete": 10,
+    "extend": 1,
+    "open": 1
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "10.63",
+   "cover": "1",
+   "first_side_filled": "10.63",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.48,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "aec-setkameua-vervas-kohboh-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 6
+   },
+   "attempts": {
+    "complete": 2,
+    "extend": 1,
+    "open": 3
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "4.74",
+   "cover": "1",
+   "first_side_filled": "4.74",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.54,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.02
+   }
+  },
+  "aec-setkameua-zhyole-strole-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 6
+   },
+   "attempts": {
+    "complete": 1,
+    "extend": 4,
+    "open": 1
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+2",
+   "first_side_filled": "4.23",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.59,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": null
+   }
+  },
+  "aec-wta-anatik-darsem-2026-09-07": {
+   "abandonment": {
+    "completes_after_first_fill": 4,
+    "end_reasons_after_first_fill": {
+     "deadline": 1,
+     "filled": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRHRN": 1
+    },
+    "median_complete_rest_s": 9.83,
+    "minutes_first_fill_to_last_action": 4.25,
+    "orders": 13
+   },
+   "attempts": {
+    "complete": 5,
+    "extend": 1,
+    "open": 7
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "8.7",
+   "cover": "1",
+   "first_side_filled": "8.7",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.63,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": 0.005
+   }
+  },
+  "aec-wta-martre-jenrug-2026-09-08": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.0,
+    "orders": 6
+   },
+   "attempts": {
+    "complete": 1,
+    "extend": 3,
+    "open": 2
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+2",
+   "first_side_filled": "7.63",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.6,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": null
+   }
+  },
+  "asc-cfb-smu-flst-2026-09-07-neg-10pt5": {
+   "abandonment": {
+    "completes_after_first_fill": 0,
+    "end_reasons_after_first_fill": {},
+    "median_complete_rest_s": null,
+    "minutes_first_fill_to_last_action": 0.4,
+    "orders": 8
+   },
+   "attempts": {
+    "complete": 1,
+    "open": 7
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "5.31",
+   "cover": "1",
+   "first_side_filled": "5.31",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.47,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "asc-cfb-smu-flst-2026-09-07-neg-13pt5": {
+   "abandonment": {
+    "completes_after_first_fill": 62,
+    "end_reasons_after_first_fill": {
+     "deadline": 54,
+     "filled": 4,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXVGP": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY1HJ": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY1KD": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBY1X1": 1
+    },
+    "median_complete_rest_s": 5.877000000000001,
+    "minutes_first_fill_to_last_action": 26.19,
+    "orders": 70
+   },
+   "attempts": {
+    "complete": 65,
+    "extend": 4,
+    "open": 1
+   },
+   "band_blocked_cycles": 3,
+   "cohort": "FULL",
+   "complement_filled": "16.47",
+   "cover": "1",
+   "first_side_filled": "16.47",
+   "flow": {
+    "bid_drift": -0.24,
+    "entry_bid": 0.43,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": 0.19,
+    "touch_to_oppask_span_median": -0.02
+   }
+  },
+  "asc-cfb-smu-flst-2026-09-07-neg-3pt5": {
+   "abandonment": {
+    "completes_after_first_fill": 15,
+    "end_reasons_after_first_fill": {
+     "deadline": 10,
+     "filled": 4,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBXP8B": 1
+    },
+    "median_complete_rest_s": 30.796,
+    "minutes_first_fill_to_last_action": 8.34,
+    "orders": 27
+   },
+   "attempts": {
+    "complete": 17,
+    "extend": 2,
+    "open": 8
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "15.00",
+   "cover": "1.00",
+   "first_side_filled": "15",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.44,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "asc-cfb-smu-flst-2026-09-07-neg-6pt5": {
+   "abandonment": {
+    "completes_after_first_fill": 4,
+    "end_reasons_after_first_fill": {
+     "deadline": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBYDFP": 2
+    },
+    "median_complete_rest_s": 16.1985,
+    "minutes_first_fill_to_last_action": 4.66,
+    "orders": 18
+   },
+   "attempts": {
+    "complete": 4,
+    "extend": 2,
+    "open": 12
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+2",
+   "first_side_filled": "9.77",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.4,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": 0.015
+   }
+  },
+  "atc-ekst-psz-plo-2026-09-07-draw": {
+   "abandonment": {
+    "completes_after_first_fill": 22,
+    "end_reasons_after_first_fill": {
+     "deadline": 12,
+     "filled": 2,
+     "filled_on_cancel": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRRZ0": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRSZ9": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRT13": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRT2V": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBRTAQ": 2,
+     "resting:ORDER_STATE_NEW": 1
+    },
+    "median_complete_rest_s": 5.6325,
+    "minutes_first_fill_to_last_action": 18.05,
+    "orders": 65
+   },
+   "attempts": {
+    "complete": 22,
+    "extend": 17,
+    "open": 26
+   },
+   "band_blocked_cycles": 3,
+   "cohort": "FULL",
+   "complement_filled": "13.64",
+   "cover": "1",
+   "first_side_filled": "13.64",
+   "flow": {
+    "bid_drift": -0.27,
+    "entry_bid": 0.39,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": 0.12,
+    "touch_to_oppask_span_median": -0.03
+   }
+  },
+  "atc-sea-udi-laz-2026-09-07-udi": {
+   "abandonment": {
+    "completes_after_first_fill": 8,
+    "end_reasons_after_first_fill": {
+     "deadline": 4,
+     "filled": 2,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBS15D": 1,
+     "rejected:ORDER_REJECTED_ZERO_FILL:CBS2X8": 1
+    },
+    "median_complete_rest_s": 25.1415,
+    "minutes_first_fill_to_last_action": 5.81,
+    "orders": 17
+   },
+   "attempts": {
+    "complete": 10,
+    "extend": 4,
+    "open": 3
+   },
+   "band_blocked_cycles": 0,
+   "cohort": "FULL",
+   "complement_filled": "8.32",
+   "cover": "1",
+   "first_side_filled": "8.32",
+   "flow": {
+    "bid_drift": null,
+    "entry_bid": 0.6,
+    "entry_spread_median": 0.01,
+    "min_bid_after_entry": null,
+    "touch_to_oppask_span_median": -0.01
+   }
+  },
+  "tsc-mlb-laa-bos-2026-09-07-7pt5": {
+   "abandonment": {
+    "completes_after_first_fill": 2,
+    "end_reasons_after_first_fill": {
+     "deadline": 2
+    },
+    "median_complete_rest_s": 31.1425,
+    "minutes_first_fill_to_last_action": 6.2,
+    "orders": 18
+   },
+   "attempts": {
+    "complete": 2,
+    "extend": 13,
+    "open": 3
+   },
+   "band_blocked_cycles": 9,
+   "cohort": "ZERO",
+   "complement_filled": "0",
+   "cover": "0E+2",
+   "first_side_filled": "9.62",
+   "flow": {
+    "bid_drift": -0.345,
+    "entry_bid": 0.375,
+    "entry_spread_median": 0.17,
+    "min_bid_after_entry": 0.03,
+    "touch_to_oppask_span_median": 0.0375
+   }
+  }
+ },
+ "shell_prefix": "R5F/",
+ "verdict": "There are TWO distinct completion failures in this campaign and they have opposite fixes. (1) ABANDONMENT, the ZERO cohort: 7 markets, 2.14 COMPLETE attempts each, median rest 30.8s -- one deadline and done. In five of them our last action came within 6.2 minutes of the first fill; in two we never attempted a completion after the fill at all. Nothing about the venue caused that. (2) GENUINE COMPLETION DIFFICULTY, the PARTIAL cohort: 3 markets, 47 COMPLETE attempts each over as long as 43 minutes, and a 5.7% fill rate against the FULL cohort's 23.1%. There we did persist, and the complement still would not trade. Failure (1) is ours and is fixed by removing our own stops. Failure (2) is the market's, and is the one that market selection can actually address."
+}

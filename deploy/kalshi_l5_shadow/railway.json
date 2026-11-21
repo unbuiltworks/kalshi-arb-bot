@@ -1,0 +1,32 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_service": "kalshi-l5-shadow",
+  "_role": "READ-ONLY 24/7 Kalshi 15M crypto L5 shadow (issue #167 comment 5584095017 workstream B). Collects the public KXBTC15M/KXETH15M tape and runs the EXISTING src/kalshi_l5_shadow.py analyser over it. Separate process and image from the PMUS probe, the WS recorder, the sports collector, the L5 shadow loop and the Gemini shadow.",
+  "_credentials": "NONE. Public keyless GETs to api.elections.kalshi.com only. This service holds no exchange key, no wallet key and no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret, and there is no order path in the image. If a key is ever required, add only the env var NAME here -- never a value.",
+  "_clock": "This lane keeps LITERAL time-to-settlement. Kalshi 15M windows serve open_time/close_time and settle on a 60-second CF Benchmarks RTI average, so seconds-to-settlement is a fact rather than a translation and the sports event-progress mapping is NOT applied.",
+  "_no_live_money": "Shadow only. order_entry=False travels on every emission. Live money on Kalshi requires a separate, explicit owner approval that does not exist.",
+  "_volume": "Mount a dedicated volume at /data/kalshi_l5 (KALSHI_L5_STATE_DIR). Do NOT reuse /state/pmus-ws (recorder), /state/pmus-sports (collector), /state/pmus-spring (probe) or /data/l5_shadow (L5 shadow loop). The tape is bounded by KALSHI_L5_TAPE_MAX_BYTES and swept oldest-first; an unbounded tape is what filled the recorder's 50 GB volume at 00:40Z on 2026-09-08.",
+  "_pin": "Set RAILWAY_DOCKERFILE_PATH=/deploy/kalshi_l5_shadow/Dockerfile on this service so a branch push can never cross-build it with another service.",
+  "_watch_note": "watchPatterns deliberately EXCLUDE every src/pmus_*.py except the frozen lookup loader this image imports: a change to the live probe or recorder must never redeploy through this research service, and vice versa.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/kalshi_l5_shadow/Dockerfile",
+    "watchPatterns": [
+      "src/kalshi_l5_collector.py",
+      "src/kalshi_l5_shadow.py",
+      "deploy/kalshi_l5_shadow/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.kalshi_l5_collector",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 10
+  },
+  "_env": {
+    "KALSHI_L5_STATE_DIR": "/data/kalshi_l5",
+    "KALSHI_L5_INTERVAL_S": "20",
+    "KALSHI_L5_SHADOW_EVERY": "15",
+    "KALSHI_L5_TAPE_MAX_BYTES": "536870912",
+    "_note": "defaults are baked into src/kalshi_l5_collector.py; set here only to override."
+  }
+}

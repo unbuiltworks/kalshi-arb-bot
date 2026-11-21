@@ -1,0 +1,518 @@
+{
+ "arms": {
+  "reprice_180s:modal": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "30": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "5": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "60": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     }
+    },
+    "campaign_first_fill_rate": 3.4,
+    "complement_fills": 0,
+    "complement_orders": 0,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 2,
+    "hold_pnl_theoretical_total": "0",
+    "holds_ambiguous_excluded": 1,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 0,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0",
+    "one_sided_holds": 1,
+    "orders_submitted": 15,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0,
+     "extend": 0.1333,
+     "open": 0.8667
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.1443,
+     "extend": 0.156,
+     "open": 0.6996
+    },
+    "hold_refusals": {
+     "entry_band_left": 25
+    },
+    "hold_share_of_decisions": 0.625,
+    "l1_acted_vs_l5": 0.3341,
+    "l1_sampled_vs_l5": 0.2113,
+    "off_distribution_rate_pct": 17.5,
+    "post_fill": {
+     "acted": {
+      "complete": 0.0,
+      "extend": 1.0,
+      "open": 0.0
+     },
+     "complete_freq_gap_pp_acted": -43.9,
+     "complete_freq_gap_pp_sampled": -43.9,
+     "decisions": 2,
+     "expected_l5": {
+      "complete": 0.4394,
+      "extend": 0.5603,
+      "open": 0.0003
+     },
+     "sampled": {
+      "complete": 0.0,
+      "extend": 1.0,
+      "open": 0.0
+     }
+    },
+    "sampled_relation_freq": {
+     "complete": 0.25,
+     "extend": 0.125,
+     "open": 0.625
+    },
+    "scored_decisions": 40
+   },
+   "windows": 29
+  },
+  "reprice_180s:stochastic": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "30": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "5": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     },
+     "60": {
+      "mean_mid_move": 0.055,
+      "n": 2,
+      "pct_adverse": 0.0
+     }
+    },
+    "campaign_first_fill_rate": 3.4,
+    "complement_fills": 0,
+    "complement_orders": 0,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 2,
+    "hold_pnl_theoretical_total": "0",
+    "holds_ambiguous_excluded": 1,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 0,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0",
+    "one_sided_holds": 1,
+    "orders_submitted": 15,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0,
+     "extend": 0.1333,
+     "open": 0.8667
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.1443,
+     "extend": 0.156,
+     "open": 0.6996
+    },
+    "hold_refusals": {
+     "entry_band_left": 25
+    },
+    "hold_share_of_decisions": 0.625,
+    "l1_acted_vs_l5": 0.3341,
+    "l1_sampled_vs_l5": 0.2113,
+    "off_distribution_rate_pct": 17.5,
+    "post_fill": {
+     "acted": {
+      "complete": 0.0,
+      "extend": 1.0,
+      "open": 0.0
+     },
+     "complete_freq_gap_pp_acted": -43.9,
+     "complete_freq_gap_pp_sampled": -43.9,
+     "decisions": 2,
+     "expected_l5": {
+      "complete": 0.4394,
+      "extend": 0.5603,
+      "open": 0.0003
+     },
+     "sampled": {
+      "complete": 0.0,
+      "extend": 1.0,
+      "open": 0.0
+     }
+    },
+    "sampled_relation_freq": {
+     "complete": 0.25,
+     "extend": 0.125,
+     "open": 0.625
+    },
+    "scored_decisions": 40
+   },
+   "windows": 29
+  },
+  "rest_120s:modal": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": -0.285,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "30": {
+      "mean_mid_move": -0.27,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "5": {
+      "mean_mid_move": -0.35,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "60": {
+      "mean_mid_move": -0.305,
+      "n": 1,
+      "pct_adverse": 100.0
+     }
+    },
+    "campaign_first_fill_rate": 3.4,
+    "complement_fills": 0,
+    "complement_orders": 0,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 1,
+    "hold_pnl_theoretical_total": "0.57",
+    "holds_ambiguous_excluded": 0,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 1,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0.57",
+    "one_sided_holds": 1,
+    "orders_submitted": 19,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0,
+     "extend": 0.0,
+     "open": 1.0
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.14,
+     "extend": 0.1919,
+     "open": 0.668
+    },
+    "hold_refusals": {
+     "entry_band_left": 30
+    },
+    "hold_share_of_decisions": 0.6122,
+    "l1_acted_vs_l5": 0.6639,
+    "l1_sampled_vs_l5": 0.1689,
+    "off_distribution_rate_pct": 14.29,
+    "post_fill": {
+     "acted": {
+      "complete": 0.0,
+      "extend": 0.0,
+      "open": 0.0
+     },
+     "complete_freq_gap_pp_acted": -27.1,
+     "complete_freq_gap_pp_sampled": -7.1,
+     "decisions": 5,
+     "expected_l5": {
+      "complete": 0.2712,
+      "extend": 0.7286,
+      "open": 0.0002
+     },
+     "sampled": {
+      "complete": 0.2,
+      "extend": 0.8,
+      "open": 0.0
+     }
+    },
+    "sampled_relation_freq": {
+     "complete": 0.2245,
+     "extend": 0.1224,
+     "open": 0.6531
+    },
+    "scored_decisions": 49
+   },
+   "windows": 29
+  },
+  "rest_120s:stochastic": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": -0.285,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "30": {
+      "mean_mid_move": -0.27,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "5": {
+      "mean_mid_move": -0.35,
+      "n": 1,
+      "pct_adverse": 100.0
+     },
+     "60": {
+      "mean_mid_move": -0.305,
+      "n": 1,
+      "pct_adverse": 100.0
+     }
+    },
+    "campaign_first_fill_rate": 3.4,
+    "complement_fills": 0,
+    "complement_orders": 1,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 1,
+    "hold_pnl_theoretical_total": "0.57",
+    "holds_ambiguous_excluded": 0,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 1,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0.57",
+    "one_sided_holds": 1,
+    "orders_submitted": 22,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0455,
+     "extend": 0.0909,
+     "open": 0.8636
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.1372,
+     "extend": 0.1663,
+     "open": 0.6964
+    },
+    "hold_refusals": {
+     "entry_band_left": 25
+    },
+    "hold_share_of_decisions": 0.5319,
+    "l1_acted_vs_l5": 0.3343,
+    "l1_sampled_vs_l5": 0.1935,
+    "off_distribution_rate_pct": 14.89,
+    "post_fill": {
+     "acted": {
+      "complete": 0.3333,
+      "extend": 0.6667,
+      "open": 0.0
+     },
+     "complete_freq_gap_pp_acted": 1.9,
+     "complete_freq_gap_pp_sampled": 1.9,
+     "decisions": 3,
+     "expected_l5": {
+      "complete": 0.3142,
+      "extend": 0.6856,
+      "open": 0.0003
+     },
+     "sampled": {
+      "complete": 0.3333,
+      "extend": 0.6667,
+      "open": 0.0
+     }
+    },
+    "sampled_relation_freq": {
+     "complete": 0.234,
+     "extend": 0.0851,
+     "open": 0.6809
+    },
+    "scored_decisions": 47
+   },
+   "windows": 29
+  },
+  "touch_cancel_30s:modal": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "30": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "5": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "60": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     }
+    },
+    "campaign_first_fill_rate": 0.0,
+    "complement_fills": 0,
+    "complement_orders": 0,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 0,
+    "hold_pnl_theoretical_total": "0",
+    "holds_ambiguous_excluded": 0,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 0,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0",
+    "one_sided_holds": 0,
+    "orders_submitted": 54,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0,
+     "extend": 0.0,
+     "open": 1.0
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.113,
+     "extend": 0.1182,
+     "open": 0.7688
+    },
+    "hold_refusals": {
+     "entry_band_left": 24
+    },
+    "hold_share_of_decisions": 0.3077,
+    "l1_acted_vs_l5": 0.4624,
+    "l1_sampled_vs_l5": 0.1082,
+    "off_distribution_rate_pct": 7.69,
+    "post_fill": {
+     "acted": {},
+     "complete_freq_gap_pp_acted": null,
+     "complete_freq_gap_pp_sampled": null,
+     "decisions": 0,
+     "expected_l5": null,
+     "sampled": {}
+    },
+    "sampled_relation_freq": {
+     "complete": 0.1667,
+     "extend": 0.0641,
+     "open": 0.7692
+    },
+    "scored_decisions": 78
+   },
+   "windows": 29
+  },
+  "touch_cancel_30s:stochastic": {
+   "economics": {
+    "adverse_selection_by_horizon": {
+     "15": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "30": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "5": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     },
+     "60": {
+      "mean_mid_move": null,
+      "n": 0,
+      "pct_adverse": null
+     }
+    },
+    "campaign_first_fill_rate": 0.0,
+    "complement_fills": 0,
+    "complement_orders": 0,
+    "fees_theoretical_total": "0",
+    "first_leg_fills": 0,
+    "hold_pnl_theoretical_total": "0",
+    "holds_ambiguous_excluded": 0,
+    "holds_residual_lost": 0,
+    "holds_residual_won": 0,
+    "matched_pairs_le_099": 0,
+    "median_pair_cost_after_fees": null,
+    "net_theoretical_total": "0",
+    "one_sided_holds": 0,
+    "orders_submitted": 54,
+    "pair_pnl_theoretical_total": "0",
+    "two_sided_fill_campaigns": 0
+   },
+   "fidelity": {
+    "acted_relation_freq": {
+     "complete": 0.0,
+     "extend": 0.0,
+     "open": 1.0
+    },
+    "expected_relation_freq_l5": {
+     "complete": 0.113,
+     "extend": 0.1182,
+     "open": 0.7688
+    },
+    "hold_refusals": {
+     "entry_band_left": 24
+    },
+    "hold_share_of_decisions": 0.3077,
+    "l1_acted_vs_l5": 0.4624,
+    "l1_sampled_vs_l5": 0.1082,
+    "off_distribution_rate_pct": 7.69,
+    "post_fill": {
+     "acted": {},
+     "complete_freq_gap_pp_acted": null,
+     "complete_freq_gap_pp_sampled": null,
+     "decisions": 0,
+     "expected_l5": null,
+     "sampled": {}
+    },
+    "sampled_relation_freq": {
+     "complete": 0.1667,
+     "extend": 0.0641,
+     "open": 0.7692
+    },
+    "scored_decisions": 78
+   },
+   "windows": 29
+  }
+ },
+ "generated_utc": "2026-09-06T00:29:42.403606+00:00",
+ "labels": "THEORETICAL strict counterfactual on the untouched 15m partition; tiny print-tail sample; provenance per row in the .jsonl",
+ "provenance": {
+  "bbo": "gemini_bbo_btc15m.jsonl.gz",
+  "model": "bbb55bf90638d2bd",
+  "prints": "gemini_prints_15m_tail.jsonl.gz",
+  "stochastic_spec": "40e28081226917a9",
+  "symbols": 29,
+  "untouched_by": "every v2 shell/arm/threshold/hypothesis choice was made on the 5m tape or live windows"
+ }
+}

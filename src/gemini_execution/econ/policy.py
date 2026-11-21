@@ -1,0 +1,314 @@
+"""BTC5m AND BTC15m ARE DIFFERENT POLICIES, NOT ONE POLICY WITH TWO CLOCKS.
+
+The lineage already learned this once and paid for it.
+`L5_ADAPTED_GEMINI_CRYPTO` carried `TTE_policy = [0, 300]`, where 300 is the
+LENGTH OF A BTC5m CONTRACT -- an OURS_ADAPTED number chosen for the 5-minute
+cohort and then inherited unchanged when the same lane was bound to BTC15m
+(`TTE_PROVENANCE_1.md`). Under it the clone was present only for the last third
+of a 900s window, which is the 3.2% tail in which L5 has already stopped
+opening. `L5_ADAPTED_GEMINI_BTC15M_V2` corrected exactly that one field to
+[0, 900] and nothing else, on evidence: 89.5% of L5's BTC15m OPEN fills land at
+tte 600-900, and a fee-positive complement is price-observable in 28 of 96
+contracts under [300, 900] against 12 under [0, 300] (sign test p=0.0037).
+
+THAT CORRECTION IS PRESERVED AND COMPARED AGAINST, NOT REINVENTED. This module
+takes [0, 900] as given for BTC15m and adds the thing the timing correction
+does not address: WHAT THE LANE SHOULD BE DOING at each point inside those 900
+seconds. A band says when we may quote. A mode says what we are quoting FOR.
+
+THE MODES, AND THE ONE THE BRIEF EXPLICITLY RULES OUT.
+
+    ENTRY        seek a first fill; inventory work if any arises
+    MIXED        both, with entry progressively discouraged
+    INVENTORY    no new first fills; work what is held
+    WITHDRAW     nothing rests
+
+The brief says: "do not mechanically wait until the last five minutes to
+participate." So BTC15m ENTRY opens at the TOP of the window (900s) rather than
+at 300s, and the 900->300 region is where the challenger is designed to do most
+of its entering -- it is the region the V2 correction opened and the region the
+old [0,300] band could not see at all.
+
+WHY BTC5m IS STRICTER RATHER THAN FASTER. A 300s window leaves almost no time
+to recover a complement after a first fill, so the cost of a bad entry is
+carried to settlement rather than worked out of. BTC5m therefore tightens the
+ENTRY gates (more alternation required, a nearer complement) and tolerates less
+residual, instead of merely running the same policy on a shorter clock.
+"""
+from __future__ import annotations
+
+from decimal import Decimal as D
+from typing import Any, Dict, Mapping, Optional, Tuple
+
+from src.gemini_execution.econ import entry as EN
+
+SCHEMA = "gemini_econ_cohort_policy/v1"
+
+ENTRY, MIXED, INVENTORY, WITHDRAW = "ENTRY", "MIXED", "INVENTORY", "WITHDRAW"
+MODES = (ENTRY, MIXED, INVENTORY, WITHDRAW)
+
+
+class CohortPolicy:
+    """Everything that differs between the two cohorts, in one place.
+
+    Declared per cohort rather than derived from window length, so a value
+    that is genuinely instrument-specific cannot be inherited by arithmetic
+    the way `[0, 300]` was.
+    """
+
+    __slots__ = ("cohort", "window_s", "quote_band_s", "entry_until_tte_s",
+                 "mixed_until_tte_s", "withdraw_below_tte_s",
+                 "max_residual", "toxicity_horizon_s", "rescue_below_tte_s",
+                 "thresholds", "notes", "flow_window_s")
+
+    def __init__(self, *, cohort, window_s, quote_band_s, entry_until_tte_s,
+                 mixed_until_tte_s, withdraw_below_tte_s, max_residual,
+                 toxicity_horizon_s, rescue_below_tte_s, thresholds, notes,
+                 flow_window_s=120.0):
+        self.cohort = cohort
+        self.window_s = window_s
+        self.quote_band_s = quote_band_s
+        self.entry_until_tte_s = entry_until_tte_s
+        self.mixed_until_tte_s = mixed_until_tte_s
+        self.withdraw_below_tte_s = withdraw_below_tte_s
+        self.max_residual = D(str(max_residual))
+        self.toxicity_horizon_s = toxicity_horizon_s
+        # A NEW PARAMETER THE WS RE-SOURCING REQUIRES, not a retune of an
+        # existing threshold. The polled tape returned a ~200-print tail with
+        # no bounded window at all, so "the window" had no defined length;
+        # reading a maintained socket needs one. 120s is NOT a fresh choice --
+        # it is the value `hazard.features` has defaulted to since it was
+        # written, reused rather than invented so no new number enters the
+        # preregistration through the back door.
+        self.flow_window_s = float(flow_window_s)
+        self.rescue_below_tte_s = rescue_below_tte_s
+        self.thresholds = thresholds
+        self.notes = notes
+
+    def mode(self, tte_s: Any) -> Dict[str, Any]:
+        """Which mode this instant is in, and why.
+
+        Read as "time remaining", so the bounds count DOWN: entry stops first,
+        then mixed, then everything withdraws.
+        """
+        if tte_s is None:
+            return {"mode": WITHDRAW, "why": "TTE unreadable; UNREADABLE is "
+                    "never treated as time remaining"}
+        t = float(tte_s)
+        lo, hi = self.quote_band_s
+        if not (lo <= t <= hi):
+            return {"mode": WITHDRAW, "tte_s": t,
+                    "why": "outside the quote band %s" % (self.quote_band_s,)}
+        if t < self.withdraw_below_tte_s:
+            return {"mode": WITHDRAW, "tte_s": t,
+                    "why": "below the withdrawal floor %ss"
+                           % self.withdraw_below_tte_s}
+        if t >= self.entry_until_tte_s:
+            return {"mode": ENTRY, "tte_s": t,
+                    "why": "full entry region"}
+        if t >= self.mixed_until_tte_s:
+            return {"mode": MIXED, "tte_s": t,
+                    "why": "entry progressively discouraged; inventory work "
+                           "takes precedence"}
+        return {"mode": INVENTORY, "tte_s": t,
+                "why": "no new first fills; only what is already held"}
+
+    def may_open(self, tte_s: Any) -> bool:
+        return self.mode(tte_s)["mode"] in (ENTRY, MIXED)
+
+    def may_rescue(self, tte_s: Any) -> bool:
+        """Bounded aggressive exit is permitted only near the end, where
+        carrying an unknown is worse than taking a known loss."""
+        if tte_s is None:
+            return False
+        return float(tte_s) <= self.rescue_below_tte_s
+
+    def report(self) -> Dict[str, Any]:
+        return {
+            "schema": SCHEMA, "cohort": self.cohort,
+            "window_s": self.window_s, "quote_band_s": list(self.quote_band_s),
+            "entry_until_tte_s": self.entry_until_tte_s,
+            "mixed_until_tte_s": self.mixed_until_tte_s,
+            "withdraw_below_tte_s": self.withdraw_below_tte_s,
+            "max_residual": str(self.max_residual),
+            "toxicity_horizon_s": self.toxicity_horizon_s,
+            "flow_window_s": self.flow_window_s,
+            "rescue_below_tte_s": self.rescue_below_tte_s,
+            "thresholds": self.thresholds.report(),
+            "notes": self.notes,
+        }
+
+
+#: BTC5m -- 300s. Stricter, not merely faster.
+BTC5M = CohortPolicy(
+    cohort="BTC5m", window_s=300, quote_band_s=(0.0, 300.0),
+    entry_until_tte_s=120.0,      # stop seeking first fills with 2 min left
+    mixed_until_tte_s=60.0,
+    withdraw_below_tte_s=30.0,    # matches continuous_probe.WITHDRAW_ALL_TTE_S
+    max_residual="0.02",          # half the frozen 0.04: less time to work it
+    toxicity_horizon_s=20.0,      # post-fill assessment must be fast here
+    rescue_below_tte_s=60.0,
+    thresholds=EN.Thresholds(
+        cohort="BTC5m",
+        min_alternation=0.35,            # stricter: reversibility matters more
+        max_largest_print_share=0.45,
+        max_required_gap_ticks=2,        # the market must already be near
+        max_reference_disagreement="0.04",
+        min_prints=5,
+        hazard_threshold=0.40,
+        min_edge="0.005",
+        max_spread="0.08"),
+    notes=("300s leaves almost no room to recover a complement, so a bad "
+           "entry is carried to settlement rather than worked out. The "
+           "response is tighter ADMISSION and less residual, not a faster "
+           "loop over the same rules."))
+
+#: BTC15m -- 900s. The full lifecycle, entering early rather than late.
+BTC15M = CohortPolicy(
+    cohort="BTC15m", window_s=900, quote_band_s=(0.0, 900.0),
+    entry_until_tte_s=300.0,      # ENTRY across the whole 900->300 region
+    mixed_until_tte_s=120.0,
+    withdraw_below_tte_s=30.0,
+    max_residual="0.04",          # the frozen envelope; there is time to work it
+    toxicity_horizon_s=60.0,
+    rescue_below_tte_s=180.0,
+    thresholds=EN.Thresholds(
+        cohort="BTC15m",
+        min_alternation=0.30,
+        max_largest_print_share=0.50,
+        max_required_gap_ticks=4,        # a longer horizon can wait a little
+        max_reference_disagreement="0.05",
+        min_prints=4,
+        hazard_threshold=0.35,
+        min_edge="0.005",
+        max_spread="0.10"),
+    notes=("quote_band_s [0,900] is L5_ADAPTED_GEMINI_BTC15M_V2's correction, "
+           "preserved and not re-derived. ENTRY runs 900->300 because the "
+           "brief rules out mechanically waiting for the last five minutes, "
+           "and because 89.5% of L5's BTC15m OPEN fills land at tte 600-900."))
+
+COHORTS: Dict[str, CohortPolicy] = {"BTC5m": BTC5M, "BTC15m": BTC15M}
+
+
+def _passive_pair_variant(pol: CohortPolicy) -> CohortPolicy:
+    """The same policy with NO fixed maximum spread.
+
+    Everything else is copied field for field -- bands, modes, residual,
+    toxicity horizon, and every other threshold -- so the two arms differ in
+    the spread treatment AND NOTHING ELSE. That is what makes their comparison
+    attributable; a second arm that also moved min_alternation would answer a
+    different question.
+
+    `max_spread` is carried across unchanged and simply not consulted in
+    PASSIVE_PAIR mode, rather than deleted, so the two threshold sets stay
+    diffable.
+    """
+    t = pol.thresholds
+    return CohortPolicy(
+        cohort=pol.cohort, window_s=pol.window_s,
+        quote_band_s=pol.quote_band_s,
+        entry_until_tte_s=pol.entry_until_tte_s,
+        mixed_until_tte_s=pol.mixed_until_tte_s,
+        withdraw_below_tte_s=pol.withdraw_below_tte_s,
+        max_residual=pol.max_residual,
+        toxicity_horizon_s=pol.toxicity_horizon_s,
+        rescue_below_tte_s=pol.rescue_below_tte_s,
+        flow_window_s=pol.flow_window_s,
+        thresholds=EN.Thresholds(
+            cohort=t.cohort, min_alternation=t.min_alternation,
+            max_largest_print_share=t.max_largest_print_share,
+            max_required_gap_ticks=t.max_required_gap_ticks,
+            max_reference_disagreement=t.max_reference_disagreement,
+            min_prints=t.min_prints, hazard_threshold=t.hazard_threshold,
+            min_edge=t.min_edge, max_spread=t.max_spread,
+            spread_mode=EN.SPREAD_PASSIVE_PAIR,
+            phase=t.phase, advisory_gates=t.advisory_gates),
+        notes=("%s with NO fixed maximum spread. Admission uses the passive "
+               "pair instead: yes_bid + no_bid + maker fees <= 1.00 - "
+               "min_edge, rebates excluded. Every other field is the boolean "
+               "arm's, byte for byte." % pol.cohort))
+
+
+#: the passive-pair variants, derived rather than written out, so they cannot
+#: drift from the arm they are being compared against
+PASSIVE_PAIR_COHORTS: Dict[str, CohortPolicy] = {
+    k: _passive_pair_variant(v) for k, v in COHORTS.items()}
+
+BOOLEAN_VARIANT, PASSIVE_PAIR_VARIANT = "BOOLEAN", "PASSIVE_PAIR"
+
+#: THE FLOW-EVIDENCE LADDER. Four arms with the IDENTICAL passive-pair
+#: economic rule, identical price/TTE policy, identical inventory limits and
+#: identical cadence, differing in ONE number: how many WS prints the tape must
+#: carry before an entry may be admitted.
+#:
+#: The purpose is NOT to find the loosest threshold that trades. It is to
+#: measure whether additional flow evidence actually BUYS anything -- better
+#: first-fill markout, higher maker-to-maker completion, smaller residual
+#: losses, better whole-cycle economics. If F5 does not beat F0/F1/F2 on those,
+#: then >=5 prints is spending capacity and buying nothing.
+#:
+#: F5 is the production hypothesis and is NOT modified. At min_prints >= 2 both
+#: downstream flow statistics are always identifiable, so the ladder machinery
+#: reproduces F5's existing verdicts exactly; a test asserts it.
+FLOW_LADDER: Dict[str, int] = {"F0": 0, "F1": 1, "F2": 2, "F5": 5}
+
+#: On the LOOSE rungs a flow statistic that cannot be computed is UNKNOWN and
+#: is waived rather than refusing -- otherwise F0 would admit nothing and the
+#: ladder would measure its own gate instead of the market. A statistic that
+#: IS computable and FAILS still refuses on every rung; only unidentifiability
+#: is waived.
+_LADDER_ADVISORY = ("HAZARD", "REFERENCE_AGREEMENT",
+                    "FLOW_REVERSIBLE", "NOT_CONCENTRATED")
+
+
+def _flow_variant(pol: CohortPolicy, rung: str) -> CohortPolicy:
+    """The passive-pair policy at one rung of the flow-evidence ladder."""
+    base = _passive_pair_variant(pol)
+    t = base.thresholds
+    n = FLOW_LADDER[rung]
+    return CohortPolicy(
+        cohort=base.cohort, window_s=base.window_s,
+        quote_band_s=base.quote_band_s,
+        entry_until_tte_s=base.entry_until_tte_s,
+        mixed_until_tte_s=base.mixed_until_tte_s,
+        withdraw_below_tte_s=base.withdraw_below_tte_s,
+        max_residual=base.max_residual,
+        toxicity_horizon_s=base.toxicity_horizon_s,
+        rescue_below_tte_s=base.rescue_below_tte_s,
+        flow_window_s=base.flow_window_s,
+        thresholds=EN.Thresholds(
+            cohort=t.cohort, min_alternation=t.min_alternation,
+            max_largest_print_share=t.max_largest_print_share,
+            max_required_gap_ticks=t.max_required_gap_ticks,
+            max_reference_disagreement=t.max_reference_disagreement,
+            min_prints=n, hazard_threshold=t.hazard_threshold,
+            min_edge=t.min_edge, max_spread=t.max_spread,
+            spread_mode=EN.SPREAD_PASSIVE_PAIR, phase=t.phase,
+            advisory_gates=(t.advisory_gates if rung == "F5"
+                            else _LADDER_ADVISORY)),
+        notes=("%s at flow rung %s (min_prints=%d). Identical to the other "
+               "rungs in every other respect. OBSERVATION ONLY."
+               % (base.cohort, rung, n)))
+
+
+#: (cohort, rung) -> policy
+FLOW_LADDER_COHORTS: Dict[str, Dict[str, CohortPolicy]] = {
+    rung: {c: _flow_variant(p, rung) for c, p in COHORTS.items()}
+    for rung in FLOW_LADDER
+}
+
+
+def policy_for(cohort: Any, *, variant: str = BOOLEAN_VARIANT
+               ) -> Optional[CohortPolicy]:
+    """The policy for a cohort, or None. NEVER a default.
+
+    A cohort we have not written a policy for must not silently inherit
+    another one's -- that inheritance is the exact defect `TTE_PROVENANCE_1.md`
+    records.
+    """
+    name = getattr(cohort, "name", None) or str(cohort or "")
+    if variant in FLOW_LADDER:
+        return FLOW_LADDER_COHORTS[variant].get(name)
+    if variant == PASSIVE_PAIR_VARIANT:
+        return PASSIVE_PAIR_COHORTS.get(name)
+    return COHORTS.get(name)

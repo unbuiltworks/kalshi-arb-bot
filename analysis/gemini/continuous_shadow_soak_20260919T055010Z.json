@@ -1,0 +1,220 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_V1",
+  "mode": "SHADOW",
+  "budget": {
+    "max_spend_per_window_usd": "0.15",
+    "action_size": "0.01",
+    "max_residual_units": "0.04",
+    "max_imbalance_units": "0.04",
+    "max_concurrent_markets": 1,
+    "max_windows": 4,
+    "max_total_spend_usd": "1.00",
+    "daily_realized_loss_stop_usd": "-0.25",
+    "max_run_seconds": 7200.0
+  },
+  "budget_labels": "bounds TIGHTEN or STOP; nothing here can self-increase. Continuous operation multiplies WINDOWS, never size: the per-window envelope is the CONTINUOUS-8 one, unchanged.",
+  "entry_band": [
+    240.0,
+    280.0
+  ],
+  "windows_started": 4,
+  "windows_completed": 4,
+  "total_spend_usd": "0",
+  "realized_usd": "0",
+  "stopped": "RISK_BUDGET_EXHAUSTED",
+  "why": "max_windows 4 reached",
+  "elapsed_s": 1128.8,
+  "windows": [
+    {
+      "kind": "window",
+      "started_utc": "2026-09-19T05:50:11.037280+00:00",
+      "finished_utc": "2026-09-19T05:53:50.568543+00:00",
+      "symbol": "GEMI-BTC05M2609190555-UP",
+      "entry_tte_s": 275.87878942489624,
+      "waited_s": 13.38,
+      "polls": 3,
+      "cycles": 22,
+      "account_readable": true,
+      "rollover": {
+        "safe": true,
+        "state": null,
+        "why": null,
+        "labels": "positive evidence: a READABLE open-order list with none of ours in it, and a readable execution view"
+      },
+      "habitat": {
+        "cycles": 22,
+        "book_readable_cycles": 22,
+        "book_refused_cycles": 0,
+        "book_refused_share": 0.0,
+        "refusal_reasons": [],
+        "spread_yes": {
+          "n": 22,
+          "min": "0.11",
+          "median": "0.18",
+          "max": "0.34"
+        },
+        "flow": {
+          "samples": 22,
+          "max_prints_seen": 7
+        },
+        "surface_moves": 21,
+        "reprice_rate_per_cycle": 0.955,
+        "rungs_placed": 0,
+        "fills": 0,
+        "fill_conversion": {
+          "fills_per_rung": null,
+          "window_s": 176.0,
+          "why": "resting seconds per fill is the honest denominator; rungs placed is reported beside it because a rung that rested four minutes and one that rested four seconds are not one sample each"
+        },
+        "labels": "HABITAT EVIDENCE for model B. Not a verdict, not a tuning input, and never realized economics."
+      },
+      "state": "COMPLETED",
+      "mutations_sent": 0,
+      "labels": "SHADOW: zero orders were sent and no session exists. SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a recorded plan is none of them."
+    },
+    {
+      "kind": "window",
+      "started_utc": "2026-09-19T05:53:50.569569+00:00",
+      "finished_utc": "2026-09-19T05:58:40.785936+00:00",
+      "symbol": "GEMI-BTC05M2609190600-UP",
+      "entry_tte_s": 279.4146885871887,
+      "waited_s": 90.34,
+      "polls": 13,
+      "cycles": 22,
+      "account_readable": true,
+      "rollover": {
+        "safe": true,
+        "state": null,
+        "why": null,
+        "labels": "positive evidence: a READABLE open-order list with none of ours in it, and a readable execution view"
+      },
+      "habitat": {
+        "cycles": 22,
+        "book_readable_cycles": 19,
+        "book_refused_cycles": 3,
+        "book_refused_share": 0.136,
+        "refusal_reasons": [
+          "CROSSED book: a bid at or above its own ask"
+        ],
+        "spread_yes": {
+          "n": 19,
+          "min": "0.12",
+          "median": "0.29",
+          "max": "0.34"
+        },
+        "flow": {
+          "samples": 22,
+          "max_prints_seen": 3
+        },
+        "surface_moves": 18,
+        "reprice_rate_per_cycle": 0.818,
+        "rungs_placed": 0,
+        "fills": 0,
+        "fill_conversion": {
+          "fills_per_rung": null,
+          "window_s": 176.0,
+          "why": "resting seconds per fill is the honest denominator; rungs placed is reported beside it because a rung that rested four minutes and one that rested four seconds are not one sample each"
+        },
+        "labels": "HABITAT EVIDENCE for model B. Not a verdict, not a tuning input, and never realized economics."
+      },
+      "state": "COMPLETED",
+      "mutations_sent": 0,
+      "labels": "SHADOW: zero orders were sent and no session exists. SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a recorded plan is none of them."
+    },
+    {
+      "kind": "window",
+      "started_utc": "2026-09-19T05:58:40.787050+00:00",
+      "finished_utc": "2026-09-19T06:03:41.644968+00:00",
+      "symbol": "GEMI-BTC05M2609190605-UP",
+      "entry_tte_s": 278.1820921897888,
+      "waited_s": 101.32,
+      "polls": 15,
+      "cycles": 22,
+      "account_readable": true,
+      "rollover": {
+        "safe": true,
+        "state": null,
+        "why": null,
+        "labels": "positive evidence: a READABLE open-order list with none of ours in it, and a readable execution view"
+      },
+      "habitat": {
+        "cycles": 22,
+        "book_readable_cycles": 22,
+        "book_refused_cycles": 0,
+        "book_refused_share": 0.0,
+        "refusal_reasons": [],
+        "spread_yes": {
+          "n": 22,
+          "min": "0.06",
+          "median": "0.30",
+          "max": "0.35"
+        },
+        "flow": {
+          "samples": 22,
+          "max_prints_seen": 7
+        },
+        "surface_moves": 17,
+        "reprice_rate_per_cycle": 0.773,
+        "rungs_placed": 0,
+        "fills": 0,
+        "fill_conversion": {
+          "fills_per_rung": null,
+          "window_s": 176.0,
+          "why": "resting seconds per fill is the honest denominator; rungs placed is reported beside it because a rung that rested four minutes and one that rested four seconds are not one sample each"
+        },
+        "labels": "HABITAT EVIDENCE for model B. Not a verdict, not a tuning input, and never realized economics."
+      },
+      "state": "COMPLETED",
+      "mutations_sent": 0,
+      "labels": "SHADOW: zero orders were sent and no session exists. SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a recorded plan is none of them."
+    },
+    {
+      "kind": "window",
+      "started_utc": "2026-09-19T06:03:41.646072+00:00",
+      "finished_utc": "2026-09-19T06:08:59.883636+00:00",
+      "symbol": "GEMI-BTC05M2609190610-UP",
+      "entry_tte_s": 265.31287813186646,
+      "waited_s": 113.35,
+      "polls": 14,
+      "cycles": 22,
+      "account_readable": true,
+      "rollover": {
+        "safe": true,
+        "state": null,
+        "why": null,
+        "labels": "positive evidence: a READABLE open-order list with none of ours in it, and a readable execution view"
+      },
+      "habitat": {
+        "cycles": 22,
+        "book_readable_cycles": 22,
+        "book_refused_cycles": 0,
+        "book_refused_share": 0.0,
+        "refusal_reasons": [],
+        "spread_yes": {
+          "n": 22,
+          "min": "0.06",
+          "median": "0.23",
+          "max": "0.34"
+        },
+        "flow": {
+          "samples": 22,
+          "max_prints_seen": 3
+        },
+        "surface_moves": 19,
+        "reprice_rate_per_cycle": 0.864,
+        "rungs_placed": 0,
+        "fills": 0,
+        "fill_conversion": {
+          "fills_per_rung": null,
+          "window_s": 176.0,
+          "why": "resting seconds per fill is the honest denominator; rungs placed is reported beside it because a rung that rested four minutes and one that rested four seconds are not one sample each"
+        },
+        "labels": "HABITAT EVIDENCE for model B. Not a verdict, not a tuning input, and never realized economics."
+      },
+      "state": "COMPLETED",
+      "mutations_sent": 0,
+      "labels": "SHADOW: zero orders were sent and no session exists. SUBMITTED/FILLED/SETTLED/REALIZED are all zero and a recorded plan is none of them."
+    }
+  ],
+  "accounting_labels": "SUBMITTED -> FILLED -> SETTLED -> REALIZED are distinct and never collapsed. realized_usd moves only on a venue-confirmed cash movement; a shadow plan, a fill, a settled contract and a mark are none of them."
+}

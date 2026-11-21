@@ -1,0 +1,89 @@
+{
+ "captured_at": "2026-09-13T17:56:21.910429+00:00",
+ "VENUE": "polymarket_us",
+ "SOURCE": "https://gateway.polymarket.us/v1/events?live=true&active=true&closed=false",
+ "SETTLEMENT_RULESET": "pmus_sports_position_resolution",
+ "gates_mirrored_from_production": {
+  "SPRING_BAND_LO": "0.25",
+  "SPRING_BAND_HI": "0.75",
+  "SPRING_MIN_TRADES_1H": 10,
+  "MIN_TOUCH_DEPTH": "1",
+  "SPRING_PAIR_TARGET": "0.98",
+  "note": "REPORTED, never relaxed by this audit."
+ },
+ "categories_filter_effect": {
+  "live_events_unfiltered": 61,
+  "live_events_categories_sports": 61,
+  "verdict": "the hardcoded &categories=sports narrows NOTHING right now: the whole PMUS live universe is category 'sports'"
+ },
+ "funnel": {
+  "live_events": 61,
+  "markets": 11631,
+  "open": 10633,
+  "two_sided": 6336,
+  "in_price_band": 2961,
+  "with_recorder_seat": 61,
+  "ELIGIBLE_NOW": 61,
+  "buckets": {
+   "ONE_SIDED": 4297,
+   "PRICE_BAND": 3375,
+   "NO_RECORDER_SEAT": 2900,
+   "SETTLEMENT": 998,
+   "ELIGIBLE_NOW": 61
+  },
+  "rejection_reasons": {
+   "missing_quote": 4297,
+   "bid_outside_band_0.25_0.75": 3375,
+   "no_authenticated_ws_evidence": 2900,
+   "market_status_resolved": 867,
+   "market_status_closed": 131
+  }
+ },
+ "recorder_seats": 80,
+ "by_sport": {
+  "football": {
+   "PRICE_BAND": 2722,
+   "NO_RECORDER_SEAT": 2448,
+   "ONE_SIDED": 1977,
+   "ELIGIBLE_NOW": 54,
+   "SETTLEMENT": 733
+  },
+  "soccer": {
+   "ONE_SIDED": 188,
+   "PRICE_BAND": 64,
+   "SETTLEMENT": 61,
+   "NO_RECORDER_SEAT": 27,
+   "ELIGIBLE_NOW": 1
+  },
+  "baseball": {
+   "NO_RECORDER_SEAT": 389,
+   "PRICE_BAND": 569,
+   "SETTLEMENT": 161,
+   "ONE_SIDED": 1988,
+   "ELIGIBLE_NOW": 4
+  },
+  "esports": {
+   "NO_RECORDER_SEAT": 10,
+   "ONE_SIDED": 74,
+   "SETTLEMENT": 39,
+   "PRICE_BAND": 9
+  },
+  "tennis": {
+   "PRICE_BAND": 9,
+   "NO_RECORDER_SEAT": 19,
+   "ONE_SIDED": 62,
+   "ELIGIBLE_NOW": 2
+  },
+  "table-tennis": {
+   "NO_RECORDER_SEAT": 7,
+   "ONE_SIDED": 7,
+   "PRICE_BAND": 2,
+   "SETTLEMENT": 4
+  },
+  "darts": {
+   "ONE_SIDED": 1
+  }
+ },
+ "rows_note": "full per-market rows in live_funnel_rows.jsonl.gz -- one JSON object per market, every one carrying VENUE / EXECUTABLE_BY_CURRENT_ENGINE / SOURCE / SETTLEMENT_RULESET and exactly one bucket + FINAL_REJECTION_REASON",
+ "rows_count": 11631
+}

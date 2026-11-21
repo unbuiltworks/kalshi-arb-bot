@@ -1,0 +1,61 @@
+{
+ "source": "analysis/l5/l5_canonical_sequence.csv.gz",
+ "windows": 2216,
+ "two_sided_windows": 1610,
+ "two_sided_rate": 0.7265,
+ "t_to_two_sided_s": {
+  "n": 1610,
+  "p10": 7.0,
+  "median": 54.0,
+  "p90": 166.0,
+  "max": 735.0
+ },
+ "fills_before_two_sided": {
+  "n": 1610,
+  "p10": 1,
+  "median": 2,
+  "p90": 5,
+  "max": 45
+ },
+ "pair_cost": {
+  "n": 1610,
+  "p10": "0.766741",
+  "median": "0.964639",
+  "p90": "1.222255",
+  "max": "1.765146"
+ },
+ "within_our_0_96_target": 786,
+ "within_our_target_rate": 0.4882,
+ "our_pair_target": "0.96",
+ "by_cohort": {
+  "BTC15m": {
+   "windows": 527,
+   "two_sided": 506,
+   "two_sided_rate": 0.9602,
+   "median_pair_cost": "0.962403",
+   "within_our_0_96_target": 245
+  },
+  "BTC5m": {
+   "windows": 957,
+   "two_sided": 795,
+   "two_sided_rate": 0.8307,
+   "median_pair_cost": "0.958368",
+   "within_our_0_96_target": 402
+  },
+  "ETH15m": {
+   "windows": 29,
+   "two_sided": 13,
+   "two_sided_rate": 0.4483,
+   "median_pair_cost": "1.200000",
+   "within_our_0_96_target": 3
+  },
+  "ETH5m": {
+   "windows": 703,
+   "two_sided": 296,
+   "two_sided_rate": 0.4211,
+   "median_pair_cost": "1.007000",
+   "within_our_0_96_target": 136
+  }
+ },
+ "labels": "L5's OWN trajectory from public history. Not a fill of ours, not a shadow result, not realized P&L. `within_our_0_96_target` compares his achieved pair cost against OUR spring discipline -- a low rate means the discipline refuses the trade he actually makes, which is a fact about our policy, not about him."
+}

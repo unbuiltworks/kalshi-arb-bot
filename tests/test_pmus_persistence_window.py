@@ -1,0 +1,472 @@
+"""Tests for the 30-60s persistence-window observation.
+
+The same three silent-failure shapes are guarded here: a truncated window
+must not read as a result, the inputs must actually reach the computation,
+and the output must not be a degenerate function of one input.
+"""
+
+from decimal import Decimal as D
+
+import pytest
+
+from src.pmus_persistence_window import (BUCKETS,
+                                         MIN_OBSERVATIONS_PER_BUCKET,
+                                         MIN_OPPORTUNITIES_FOR_COMPARISON,
+                                         WINDOW_S, bucket_of, cohort,
+                                         complement_price_now, observe,
+                                         open_window, power_check, rate_analysis,
+                                         summarise,
+                                         touch_reached)
+
+
+def book(bid="0.40", ask="0.42"):
+    return {"bid": D(bid), "ask": D(ask)}
+
+
+def win(px="0.58", side="NO"):
+    return open_window(0.0, D(px), side, "m")
+
+
+# ------------------------------ buckets ------------------------------
+
+def test_buckets_partition_the_window_without_overlap():
+    assert bucket_of(0.0) == "a_0_30s"
+    assert bucket_of(29.9) == "a_0_30s"
+    assert bucket_of(30.0) == "b_30_60s"      # boundary belongs to the NEXT
+    assert bucket_of(59.9) == "b_30_60s"
+    assert bucket_of(60.0) == "c_60_120s"
+    assert bucket_of(119.9) == "c_60_120s"
+    assert bucket_of(120.0) is None
+
+
+def test_the_window_closes_and_stops_recording():
+    w = observe(win(), book(), WINDOW_S + 1, True, D(5))
+    assert w["closed"] is True
+    assert sum(b["observations"] for b in w["buckets"].values()) == 0
+
+
+# --- an opportunity needs BOTH the touch and a print ---
+
+def test_touch_alone_is_not_an_opportunity():
+    """No assumed fills: a price nobody traded at is not an opportunity."""
+    w = observe(win("0.58", "NO"), book("0.42", "0.60"), 10.0,
+                printed=False, shares=D(0))
+    assert w["buckets"]["a_0_30s"]["opportunities"] == 0
+
+
+def test_print_alone_is_not_an_opportunity():
+    """A print that never came to our price would not have hit us."""
+    w = observe(win("0.58", "NO"), book("0.30", "0.35"), 10.0,
+                printed=True, shares=D(5))
+    assert w["buckets"]["a_0_30s"]["prints"] == 1
+    assert w["buckets"]["a_0_30s"]["opportunities"] == 0
+
+
+def test_touch_and_print_together_make_one_opportunity():
+    w = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0,
+                printed=True, shares=D(5))
+    assert w["buckets"]["a_0_30s"]["opportunities"] == 1
+
+
+def test_touch_reached_uses_the_complement_side_not_always_one_minus_ask():
+    """The bug already shipped once in the shadow: assuming the complement is
+    always NO. A NO complement is reachable at 1-bid; a YES complement at the
+    ask."""
+    b = book("0.45", "0.60")
+    assert touch_reached(b, "NO", D("0.58")) is True     # 1-0.45 = 0.55 <= 0.58
+    assert touch_reached(b, "YES", D("0.58")) is False   # ask 0.60 > 0.58
+    assert touch_reached(b, "YES", D("0.61")) is True
+
+
+def test_complement_price_follows_the_side():
+    assert complement_price_now(book("0.40", "0.42"), "NO") == D("0.58")
+    assert complement_price_now(book("0.40", "0.42"), "YES") == D("0.40")
+
+
+# --- GUARD: the answer must depend on WHEN things happened ---
+
+def test_opportunities_land_in_the_bucket_they_occurred_in():
+    """Goes red if elapsed time stops reaching the bucketing -- the failure
+    that made a 4-interval window look like a complete result."""
+    w = win("0.58", "NO")
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
+    for t, b in ((5.0, hit), (12.0, miss), (20.0, miss)):        # 1 of 3 in a
+        w = observe(w, b, t, True, D(1))
+    for t, b in ((35.0, hit), (42.0, hit), (52.0, miss)):        # 2 of 3 in b
+        w = observe(w, b, t, True, D(1))
+    for t, b in ((70.0, hit), (85.0, miss), (100.0, miss)):      # 1 of 3 in c
+        w = observe(w, b, t, True, D(1))
+    s = summarise(w)
+    assert s["unresolvable_buckets"] == []
+    assert s["buckets"]["a_0_30s"]["opportunities"] == 1
+    assert s["buckets"]["b_30_60s"]["opportunities"] == 2
+    assert s["buckets"]["c_60_120s"]["opportunities"] == 1
+    assert s["opportunities_inside_our_old_deadline"] == 1
+    assert s["opportunities_we_never_waited_for"] == 3
+    assert s["share_beyond_30s"] == 0.75
+
+
+def test_a_window_with_no_opportunity_reports_none_not_zero_share():
+    s = summarise(win())
+    assert s["share_beyond_30s"] is None
+
+
+# --- deterioration is signed and measured from entry ---
+
+def test_a_cheaper_complement_reads_as_negative_deterioration():
+    w = observe(win("0.58", "NO"), book("0.50", "0.55"), 10.0, True, D(1))
+    b = summarise(w)["buckets"]["a_0_30s"]
+    assert b["best_complement_px"] == "0.45"          # 1 - 0.55
+    assert b["deterioration_vs_entry"] == "-0.13"
+
+
+def test_best_complement_price_keeps_the_best_seen_not_the_last():
+    w = win("0.58", "NO")
+    w = observe(w, book("0.50", "0.55"), 5.0, True, D(1))    # 0.45
+    w = observe(w, book("0.30", "0.70"), 9.0, True, D(1))    # 0.30, better
+    w = observe(w, book("0.50", "0.60"), 12.0, True, D(1))   # 0.40, worse
+    assert summarise(w)["buckets"]["a_0_30s"]["best_complement_px"] == "0.30"
+
+
+# --- GUARD: observation must not be degenerate with a single input ---
+
+def test_two_windows_with_identical_books_but_different_timing_differ():
+    """If the output collapsed to a function of the book alone, these would
+    be identical -- the shape that made pair cost exactly 1 - spread."""
+    early, late = win("0.58", "NO"), win("0.58", "NO")
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
+    # identical books, identical sample COUNTS per bucket; only the timing of
+    # the reachable ones differs
+    for t, bk in ((5.0, hit), (12.0, hit), (20.0, miss),
+                  (35.0, miss), (42.0, miss), (52.0, miss),
+                  (70.0, miss), (85.0, miss), (100.0, miss)):
+        early = observe(early, bk, t, True, D(1))
+    for t, bk in ((5.0, miss), (12.0, miss), (20.0, miss),
+                  (35.0, hit), (42.0, miss), (52.0, miss),
+                  (70.0, hit), (85.0, miss), (100.0, miss)):
+        late = observe(late, bk, t, True, D(1))
+    a, b = summarise(early), summarise(late)
+    assert a["opportunities_we_never_waited_for"] == 0
+    assert b["opportunities_we_never_waited_for"] == 2
+    assert a["share_beyond_30s"] != b["share_beyond_30s"]
+
+
+def test_flow_is_accumulated_per_bucket():
+    w = win()
+    w = observe(w, book(), 5.0, True, D("3"))
+    w = observe(w, book(), 45.0, True, D("7"))
+    s = summarise(w)
+    assert s["buckets"]["a_0_30s"]["shares"] == "3"
+    assert s["buckets"]["b_30_60s"]["shares"] == "7"
+
+
+# ------------------------------ cohort ------------------------------
+
+def test_cohort_totals_the_comparison_the_owner_asked_for():
+    ws = []
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
+    for _ in range(3):
+        w = win("0.58", "NO")
+        for t, bk in ((5.0, hit), (12.0, miss), (20.0, miss),
+                      (35.0, hit), (42.0, miss), (52.0, miss),
+                      (70.0, miss), (85.0, miss), (100.0, miss)):
+            w = observe(w, bk, t, True, D(1))
+        ws.append(summarise(w))
+    c = cohort(ws)
+    assert c["windows"] == 3
+    assert c["opportunities_inside_our_old_deadline"] == 3
+    assert c["opportunities_we_never_waited_for"] == 3
+    assert c["share_beyond_30s"] == 0.5
+    assert c["our_historical_max_rest_s"] == 32.2
+    assert c["l5_median_complement_gap_s"] == 47.0
+
+
+def test_an_empty_cohort_does_not_invent_a_share():
+    assert cohort([])["share_beyond_30s"] is None
+
+
+# ---- OWNER-REQUIRED FAIL-CLOSED GUARD: cadence that cannot resolve a bucket
+# ---- must say UNRESOLVABLE, never quietly report zero.
+
+from src.pmus_persistence_window import (MIN_SAMPLES_PER_BUCKET, cadence_plan,
+                                         resolvable)
+
+
+def test_a_30s_poll_cannot_resolve_a_30s_bucket():
+    """The exact geometry that produced share_beyond_30s = 1.0 from a single
+    opening sample per window."""
+    assert resolvable(30.0, 0.0, 30.0) is False
+    plan = cadence_plan(30.0)
+    assert plan["all_resolvable"] is False
+    assert "a_0_30s" in plan["unresolvable"]
+
+
+def test_a_5s_poll_resolves_every_bucket():
+    plan = cadence_plan(5.0)
+    assert plan["all_resolvable"] is True and plan["unresolvable"] == []
+    assert plan["by_bucket"]["a_0_30s"]["expected_samples"] == 6.0
+
+
+def test_a_zero_or_negative_poll_is_never_resolvable():
+    assert resolvable(0.0, 0.0, 30.0) is False
+    assert resolvable(-5.0, 0.0, 30.0) is False
+
+
+def test_a_thin_bucket_reports_unresolvable_not_zero_opportunities():
+    """The heart of the guard: absence of samples must not read as absence of
+    opportunity."""
+    w = win("0.58", "NO")
+    w = observe(w, book("0.45", "0.60"), 10.0, True, D(1))   # ONE sample in a
+    for t in (35.0, 40.0, 45.0, 70.0, 80.0, 90.0):
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    s = summarise(w)
+    a = s["buckets"]["a_0_30s"]
+    assert a["resolvable"] is False
+    assert a["opportunities"] is None, "a thin bucket reported a count"
+    assert "cannot be read as zero" in a["unresolvable_reason"]
+    # and the comparison itself refuses
+    assert s["share_beyond_30s"] is None
+    assert s["comparison"].startswith("UNRESOLVABLE")
+    assert s["opportunities_inside_our_old_deadline"] is None
+
+
+def test_a_fully_sampled_window_still_reports_the_comparison():
+    w = win("0.58", "NO")
+    for t in (2.0, 8.0, 14.0, 20.0, 26.0):          # 5 in bucket a
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    for t in (32.0, 40.0, 50.0):                     # 3 in bucket b
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    for t in (65.0, 80.0, 100.0):                    # 3 in bucket c
+        w = observe(w, book("0.30", "0.70"), t, False, D(0))
+    s = summarise(w)
+    assert s["unresolvable_buckets"] == []
+    assert s["comparison"] == "resolvable"
+    assert s["opportunities_inside_our_old_deadline"] == 5
+    assert s["opportunities_we_never_waited_for"] == 3
+    assert s["share_beyond_30s"] == 0.375
+
+
+def test_cohort_drops_unresolvable_windows_and_says_how_many():
+    good = win("0.58", "NO")
+    for t in (2.0, 8.0, 14.0, 32.0, 40.0, 50.0, 65.0, 80.0, 100.0):
+        good = observe(good, book("0.45", "0.60"), t, True, D(1))
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(good), summarise(bad)])
+    assert c["windows"] == 1
+    assert c["windows_dropped_unresolvable"] == 1
+
+
+def test_a_cohort_of_only_unresolvable_windows_refuses_to_answer():
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(bad)])
+    assert c["share_beyond_30s"] is None
+    assert c["comparison"].startswith("UNRESOLVABLE")
+
+
+# --------------------------------------------------------------------------
+# The pre-registered power bar. OWNER: "If we still don't get enough, the
+# result is UNDERPOWERED, with the exact sample deficit -- not another forced
+# conclusion." A resolvable cohort can still be far too small to compare.
+# --------------------------------------------------------------------------
+
+def _bucket_totals(opps=(0, 0, 0), obs=(0, 0, 0)):
+    names = [n for _, _, n in BUCKETS]
+    return {n: {"observations": o, "opportunities": p, "prints": 0}
+            for n, p, o in zip(names, opps, obs)}
+
+
+def _resolvable_window(opps, obs):
+    """A closed window whose buckets all resolved, carrying given counts."""
+    names = [n for _, _, n in BUCKETS]
+    return {"slug": "s", "complement_side": "NO",
+            "complement_px_at_entry": "0.40", "unresolvable_buckets": [],
+            "buckets": {n: {"observations": o, "opportunities": p, "prints": p,
+                            "shares": "0", "best_complement_px": "0.40",
+                            "resolvable": True}
+                        for n, p, o in zip(names, opps, obs)}}
+
+
+def test_the_flow_blind_run_is_reported_underpowered():
+    """The real 2026-09-09 numbers: 4 opportunities in 2,136 observations.
+
+    Those buckets were arithmetically sound and every window resolved. The
+    sample was still far too small to say anything about persistence, and
+    without this bar it read as a comparison.
+    """
+    r = power_check(_bucket_totals(opps=(0, 2, 2), obs=(576, 552, 1008)))
+    assert r["powered"] is False
+    assert r["verdict"] == "UNDERPOWERED"
+    assert r["opportunities_observed"] == 4
+    assert r["opportunity_deficit"] == MIN_OPPORTUNITIES_FOR_COMPARISON - 4
+
+
+def test_the_deficit_is_exact_not_a_flag():
+    r = power_check(_bucket_totals(opps=(3, 4, 5), obs=(600, 600, 600)))
+    assert r["opportunity_deficit"] == MIN_OPPORTUNITIES_FOR_COMPARISON - 12
+    assert r["observation_deficit_by_bucket"] == {}
+
+
+def test_thin_observations_block_power_even_with_enough_opportunities():
+    r = power_check(_bucket_totals(opps=(40, 40, 40), obs=(600, 10, 600)))
+    assert r["powered"] is False
+    assert r["observation_deficit_by_bucket"] == {
+        "b_30_60s": MIN_OBSERVATIONS_PER_BUCKET - 10}
+
+
+def test_a_genuinely_powered_cohort_passes():
+    r = power_check(_bucket_totals(opps=(20, 10, 5), obs=(600, 600, 900)))
+    assert r["powered"] is True
+    assert r["verdict"] == "POWERED"
+    assert r["opportunity_deficit"] == 0
+
+
+def test_cohort_refuses_to_call_an_underpowered_result_a_comparison():
+    c = cohort([_resolvable_window(opps=(0, 1, 1), obs=(6, 6, 12))])
+    assert c["comparison"].startswith("UNDERPOWERED")
+    assert c["power"]["powered"] is False
+    assert c["power"]["opportunity_deficit"] > 0
+    # the share is still computable and still reported; it is simply not a
+    # finding until the power bar is met
+    assert c["windows"] == 1
+
+
+def test_a_powered_cohort_is_labelled_a_comparison():
+    wins = [_resolvable_window(opps=(20, 10, 5), obs=(600, 600, 900))]
+    c = cohort(wins)
+    assert c["comparison"] == "powered"
+    assert c["power"]["verdict"] == "POWERED"
+    assert c["share_beyond_30s"] == round(15 / 35, 4)
+
+
+def test_the_bars_are_pre_registered_constants():
+    """Frozen before the run. A bar tuned after seeing data is not a bar."""
+    assert MIN_OPPORTUNITIES_FOR_COMPARISON == 30
+    assert MIN_OBSERVATIONS_PER_BUCKET == 500
+
+
+# --------------------------------------------------------------------------
+# share_beyond_30s is WIDTH-BIASED. Buckets b+c span 90 s against a's 30 s,
+# so a uniform arrival rate already produces ~0.75 with no persistence effect
+# at all. The first flow-ranked cohort measured 0.80 -- lift 1.067x, nothing.
+# --------------------------------------------------------------------------
+
+def test_a_uniform_arrival_rate_produces_a_high_share_and_no_lift():
+    """The null, constructed: identical per-observation rates everywhere."""
+    r = rate_analysis(_bucket_totals(opps=(10, 10, 20), obs=(300, 300, 600)))
+    assert r["share_beyond_30s"] == 0.75
+    assert r["share_beyond_30s_uniform_null"] == 0.75
+    assert r["lift_vs_uniform"] == 1.0, \
+        "a uniform process must show no persistence lift, whatever the share"
+
+
+def test_the_first_flow_ranked_cohort_is_barely_above_its_null():
+    """The real numbers, 2026-09-09T15:24Z. 0.80 looks like a finding."""
+    r = rate_analysis(_bucket_totals(opps=(3, 3, 9), obs=(270, 270, 540)))
+    assert r["share_beyond_30s"] == 0.8
+    assert r["share_beyond_30s_uniform_null"] == 0.75
+    assert r["lift_vs_uniform"] == pytest.approx(1.0667, abs=1e-4)
+    per = r["by_bucket"]
+    assert per["a_0_30s"]["opportunity_rate_per_observation"] == \
+        per["b_30_60s"]["opportunity_rate_per_observation"], \
+        "0-30s and 30-60s were equally productive per observation"
+
+
+def test_a_real_persistence_effect_shows_a_lift_above_one():
+    r = rate_analysis(_bucket_totals(opps=(1, 10, 20), obs=(300, 300, 600)))
+    assert r["lift_vs_uniform"] > 1.2
+    assert r["by_bucket"]["b_30_60s"]["opportunity_rate_per_observation"] > \
+        r["by_bucket"]["a_0_30s"]["opportunity_rate_per_observation"]
+
+
+def test_an_effect_concentrated_inside_30s_shows_a_lift_below_one():
+    r = rate_analysis(_bucket_totals(opps=(30, 2, 4), obs=(300, 300, 600)))
+    assert r["lift_vs_uniform"] < 1.0
+
+
+def test_the_share_never_travels_without_its_null():
+    """Anywhere cohort reports the share, the null must be alongside it."""
+    c = cohort([_resolvable_window(opps=(3, 3, 9), obs=(270, 270, 540))])
+    assert c["share_beyond_30s"] is not None
+    assert c["rates"]["share_beyond_30s_uniform_null"] is not None
+    assert c["rates"]["lift_vs_uniform"] is not None
+
+
+def test_rates_survive_a_cohort_with_no_usable_window():
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(bad)])
+    assert c["rates"]["share_beyond_30s"] is None
+    assert c["rates"]["lift_vs_uniform"] is None
+
+
+def test_the_bucket_rate_is_normalised_by_observations_not_a_raw_count():
+    """Raw counts and rates can ORDER DIFFERENTLY, and the rate is the truth.
+
+    Bucket c is twice as wide as a, so it collects twice the observations and
+    its raw count flatters it for free. Here a sees 3 opportunities in 100
+    observations (3%) and c sees 4 in 400 (1%): the raw count says c is the
+    busier bucket, the rate says a is three times busier. Comparing raw
+    counts across unequal buckets is the same width bias that makes
+    share_beyond_30s read 0.75 on a uniform process.
+    """
+    r = rate_analysis(_bucket_totals(opps=(3, 1, 4), obs=(100, 100, 400)))
+    per = r["by_bucket"]
+    assert per["a_0_30s"]["opportunity_rate_per_observation"] == 0.03
+    assert per["c_60_120s"]["opportunity_rate_per_observation"] == 0.01
+    assert (per["a_0_30s"]["opportunity_rate_per_observation"]
+            > per["c_60_120s"]["opportunity_rate_per_observation"]), \
+        "the wider bucket's larger raw count must not read as a higher rate"
+
+
+# --- the projection must carry everything the window measures ------------
+from src import pmus_persistence_window as pw  # noqa: E402
+
+
+def _warm(first_leg="0.60", bid="0.585", ask="0.62", n=11):
+    w = pw.open_window(0.0, pw.complement_price_now({"bid": D(bid), "ask": D(ask)}, "NO"),
+                       "NO", "slug", first_leg_px=D(first_leg))
+    for i in range(1, n + 1):
+        w = pw.observe(w, {"bid": D(bid), "ask": D(ask)}, float(i), True, D("5"))
+    return pw.summarise(w)
+
+
+def test_summarise_emits_first_leg_px():
+    """summarise() PROJECTS a fixed field set. The rescue instrumentation
+    shipped, incremented correctly in memory, and was dropped here -- every
+    live row came out without it and the invariant check reported "0
+    violations" across 0 measured buckets. A vacuous pass."""
+    assert _warm()["first_leg_px"] == "0.60"
+
+
+def test_summarise_emits_all_three_rescue_counters():
+    b = _warm()["buckets"]["a_0_30s"]
+    for k in ("capped_opportunities", "rescue_opportunities",
+              "rescue_only_opportunities"):
+        assert k in b, f"{k} missing from the emitted row"
+        assert b[k] is not None
+
+
+def test_rescue_counters_are_suppressed_in_a_thin_bucket_like_opportunities():
+    """A bucket too thin to read as zero opportunity is equally too thin to
+    read as zero RESCUE opportunity; both must suppress on the same rule."""
+    b = _warm(n=1)["buckets"]["a_0_30s"]
+    assert b["resolvable"] is False
+    assert b["opportunities"] is None
+    assert b["capped_opportunities"] is None
+    assert b["rescue_opportunities"] is None
+
+
+def test_emitted_capped_matches_emitted_opportunities_on_a_live_shaped_window():
+    """The wiring invariant, asserted on the row we actually analyse.
+
+    In the live path complement_px_at_entry and 1.00 - first_leg_px are the
+    same number (side_ask and complement_price_now are complements on one
+    book), so these two counters must agree. If they ever diverge the paired
+    measurement is reading two different prices."""
+    book = {"bid": D("0.58"), "ask": D("0.62")}
+    first_leg = pw.side_ask(book, "YES")                 # 0.62
+    w = pw.open_window(0.0, pw.complement_price_now(book, "NO"), "NO", "s",
+                       first_leg_px=first_leg)
+    for i in range(1, 12):
+        w = pw.observe(w, book, float(i), True, D("5"))
+    b = pw.summarise(w)["buckets"]["a_0_30s"]
+    assert b["capped_opportunities"] == b["opportunities"]

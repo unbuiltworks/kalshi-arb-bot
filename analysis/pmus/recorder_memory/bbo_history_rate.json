@@ -1,0 +1,228 @@
+{
+ "SAMPLING_BIAS": "XCHECK samples SUBSCRIBED markets only. This measures the ~160 seated markets and establishes NOTHING about the ~1,340 unseated COLD entries that hold most of mstate.",
+ "age_bound_would_free_memory": {
+  "markets": 1,
+  "of": 17,
+  "share": 0.0588
+ },
+ "book_updates_per_second": {
+  "max": 5.3427,
+  "p10": 0.9479,
+  "p25": 2.3084,
+  "p50": 2.8613,
+  "p75": 3.6288,
+  "p90": 4.5516
+ },
+ "bounds": {
+  "bbo_history_count_bound": 2000,
+  "rate_below_which_an_age_bound_helps": 0.5128,
+  "widest_consumer_window_s": 3900.0
+ },
+ "cold_market_rate": "UNKNOWN -- no read-only path to their counters",
+ "per_market": [
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 2057,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 21786,
+   "market": "aec-atpcq-andfen-ryaseg-2026-09-13",
+   "observations": 22,
+   "seconds_2000_entries_span": 427.9,
+   "separation_s": 440.1,
+   "updates_per_s": 4.6737
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 5811,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 31500,
+   "market": "aec-nfl-dal-nyg-2026-09-13",
+   "observations": 93,
+   "seconds_2000_entries_span": 374.3,
+   "separation_s": 1087.6,
+   "updates_per_s": 5.3427
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 8535,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 16157,
+   "market": "asc-nfl-dal-nyg-2026-09-13-pos-3pt5",
+   "observations": 137,
+   "seconds_2000_entries_span": 858.4,
+   "separation_s": 3663.4,
+   "updates_per_s": 2.3298
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 2418,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 13573,
+   "market": "asc-nfl-dal-nyg-2026-09-13-neg-2pt5",
+   "observations": 86,
+   "seconds_2000_entries_span": 866.4,
+   "separation_s": 1047.5,
+   "updates_per_s": 2.3084
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 10200,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 23877,
+   "market": "aec-cs2-spo-war-2026-09-13",
+   "observations": 238,
+   "seconds_2000_entries_span": 727.7,
+   "separation_s": 3711.3,
+   "updates_per_s": 2.7484
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 339,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 12659,
+   "market": "asc-nfl-dal-nyg-2026-09-13-neg-3pt5",
+   "observations": 11,
+   "seconds_2000_entries_span": 827.4,
+   "separation_s": 140.2,
+   "updates_per_s": 2.4173
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 9501,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 17013,
+   "market": "atc-lmx-san-ju-2026-09-13-san",
+   "observations": 157,
+   "seconds_2000_entries_span": 634.3,
+   "separation_s": 3013.0,
+   "updates_per_s": 3.1533
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 877,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 3806,
+   "market": "aec-setkameua-lazrus-binole-2026-09-14",
+   "observations": 9,
+   "seconds_2000_entries_span": 547.4,
+   "separation_s": 240.0,
+   "updates_per_s": 3.6537
+  },
+  {
+   "age_bound_would_free_memory": true,
+   "book_updates_delta": 71,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 11983,
+   "market": "asc-nfl-dal-nyg-2026-09-13-pos-2pt5",
+   "observations": 12,
+   "seconds_2000_entries_span": 4807.7,
+   "separation_s": 170.7,
+   "updates_per_s": 0.416
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 918,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 2734,
+   "market": "aec-setkameua-kryyev-dukole-2026-09-14",
+   "observations": 22,
+   "seconds_2000_entries_span": 628.9,
+   "separation_s": 288.7,
+   "updates_per_s": 3.18
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 976,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 5041,
+   "market": "aec-itfwo-chezhu-yuhwan-2026-09-14",
+   "observations": 10,
+   "seconds_2000_entries_span": 979.2,
+   "separation_s": 477.9,
+   "updates_per_s": 2.0424
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 5142,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 12969,
+   "market": "atc-lmx-san-ju-2026-09-13-draw",
+   "observations": 55,
+   "seconds_2000_entries_span": 551.1,
+   "separation_s": 1417.0,
+   "updates_per_s": 3.6288
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 3457,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 14680,
+   "market": "atc-lmx-san-ju-2026-09-13-ju",
+   "observations": 60,
+   "seconds_2000_entries_span": 439.4,
+   "separation_s": 759.5,
+   "updates_per_s": 4.5516
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 2642,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 4319,
+   "market": "aec-setkamemd-salnic-meraur-2026-09-14",
+   "observations": 30,
+   "seconds_2000_entries_span": 591.7,
+   "separation_s": 781.6,
+   "updates_per_s": 3.3801
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 3229,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 19734,
+   "market": "asc-nfl-dal-nyg-2026-09-13-pos-6pt5",
+   "observations": 43,
+   "seconds_2000_entries_span": 699.0,
+   "separation_s": 1128.5,
+   "updates_per_s": 2.8613
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 152,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 7330,
+   "market": "tsc-nfl-dal-nyg-2026-09-13-total-42pt5",
+   "observations": 3,
+   "seconds_2000_entries_span": 2109.9,
+   "separation_s": 160.3,
+   "updates_per_s": 0.9479
+  },
+  {
+   "age_bound_would_free_memory": false,
+   "book_updates_delta": 86,
+   "history_saturated_at_2000": true,
+   "lifetime_book_updates": 3201,
+   "market": "aec-setkameua-pitser-kulhry-2026-09-14",
+   "observations": 5,
+   "seconds_2000_entries_span": 1417.0,
+   "separation_s": 60.9,
+   "updates_per_s": 1.4115
+  }
+ ],
+ "read_only": true,
+ "seconds_2000_entries_span": {
+  "max": 4807.7,
+  "p10": 427.9,
+  "p25": 551.1,
+  "p50": 699.0,
+  "p75": 866.4,
+  "p90": 1417.0
+ },
+ "source": {
+  "distinct_markets_seen": 20,
+  "log_dumps": [
+   "/tmp/claude-0/-home-user-kalshi-arb-bot/cfee5a9a-5927-5460-9489-c565191b2d65/scratchpad/xcheck.json"
+  ],
+  "markets_with_usable_separation": 17,
+  "xcheck_rows_parsed": 333
+ }
+}

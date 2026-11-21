@@ -1,0 +1,17 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/btc5m_recorder/Dockerfile",
+    "watchPatterns": [
+      "deploy/btc5m_recorder/**",
+      "analysis/l5/btc5m_public_recorder.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "sh -c \"python3 -u btc5m_public_recorder.py - 0 | tee -a /data/btc5m_quotes.jsonl\"",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "READ-ONLY recorder of PUBLIC PMUS BTC 5-minute quotes (best bid/ask, price to beat, settlement). One file in the image; no credentials, nothing from src/, no order path, no account access. Separate service from l5-pmus-live: shares no state, volume or variable with it. Quotes go to the service log and are appended to /data."
+}

@@ -1,0 +1,118 @@
+{
+ "schema": "requote_gate_isolation/1",
+ "generated_utc": "2026-11-03T13:30:00Z",
+ "headline": "The requoter was ENABLED and RUNNING during the campaign. Its dominant refusal was NOTHING_TO_COMPLETE (163) -- there was no resting complement to reprice. Repricing cannot be the lever, because the order it would reprice was never placed.",
+ "deployment_verified": {
+  "deployment": "b8faa380 SUCCESS 2026-11-03T13:07:17Z",
+  "commit": "51542dad (carrying e1758566)",
+  "preflight": "PASSED 15/15",
+  "open_orders": 0,
+  "armed": false,
+  "cancel_margin_s": 300.0,
+  "maker_pair_ceiling": "0.96",
+  "max_live_orders": 1,
+  "defensive_terminal_guard_last": [
+   600.0,
+   540.0,
+   585.0
+  ],
+  "verifier": "PASS false on 8 rows, all NO_APPROVAL_IN_FORCE -- correct for a disarmed service with no campaign approval"
+ },
+ "correction_1": {
+  "what_I_claimed": "L5_COMPLETION_REQUOTE is disabled by an unset variable, and that is 'the actual blocker'",
+  "what_is_true": "completion_requote_enabled reads TRUE in the running process, via the money path's own accessor",
+  "how_I_got_it_wrong": "I inferred it from the accessor default plus maybe_completion_requote showing 0.000s in L5_LIVE_TICK_STAGES. 0.000s meant FAST, not inert: halted and disarmed with zero open orders, there is no resting completion to requote, so it returns immediately.",
+  "note": "second time this session I inferred a switch state from absent telemetry and got it backwards; the first was L5_BOOK_COMPLETION. The row shipped in d29a4bf7 is what caught it."
+ },
+ "correction_2": {
+  "what_I_implied": "the cancel-verification defect (7 verify_error + 3 still_open) was the key unlock for completions",
+  "what_is_true": "requote_refused:ORDERS_UNCERTAIN fired exactly ONCE in the campaign, and requote_cancelled succeeded once. e1758566 fixes a real defect, verified by 19 tests -- but it was not the dominant blocker of this campaign.",
+  "status": "e1758566 is deployed disarmed and remains worth having; its impact is smaller than I framed it"
+ },
+ "gate_isolation": {
+  "source": "L5_LIVE_HB counters, campaign deployment 134fba3a (SHA b8d2743c), read at 23:27:18 and 23:32:27 -- identical, so these are the settled campaign totals",
+  "counters": {
+   "requote_refused:NOTHING_TO_COMPLETE": 163,
+   "requote_refused:NO_IMPROVEMENT": 13,
+   "requote_refused:ALREADY_NEAR_TOUCH": 7,
+   "requote_refused:ORDERS_UNCERTAIN": 1,
+   "requote_cancelled": 1
+  },
+  "reading": "NOTHING_TO_COMPLETE dominates at 163 of 184 refusals (88.6%). The requoter had no outstanding complement order to reprice.",
+  "corroboration": "independent and consistent with the earlier campaign audit: a complement was SUBMITTED in only 1 of the 4 windows (2245z). In the other three none was ever placed, so there was nothing to requote.",
+  "attribution_caveat": "the 163 is campaign-wide; I am attributing it to the three complement-less windows from the separate submission audit, not from a per-window counter. Two consistent sources, not one inference."
+ },
+ "the_market_evidence": {
+  "window": "2230z",
+  "held": "2.04 UP at basis 0.4700",
+  "fill_at": "t+130s",
+  "path": [
+   {
+    "t": 130,
+    "dn_own": "0.4700",
+    "depth": 100000,
+    "net_pair": "0.9351",
+    "state": "UNDER 0.96 -- AT THE FILL"
+   },
+   {
+    "t": 132,
+    "dn_own": "0.4700",
+    "depth": 100000,
+    "net_pair": "0.9351",
+    "state": "UNDER 0.96"
+   },
+   {
+    "t": 148,
+    "dn_own": "0.6200",
+    "depth": 87000,
+    "net_pair": "1.0851",
+    "state": "impossible"
+   },
+   {
+    "t": 179,
+    "dn_own": "0.7000",
+    "depth": 85000,
+    "net_pair": "1.1651",
+    "state": "impossible"
+   },
+   {
+    "t": 780,
+    "dn_own": "0.9500",
+    "depth": 15000,
+    "net_pair": "1.4200",
+    "state": "impossible"
+   }
+  ],
+  "crossed_096_between": [
+   132,
+   148
+  ],
+  "window_of_opportunity_s": "<=16, at the fill tick, with 100,000 shares of depth",
+  "other_windows": {
+   "2215z": "only sub-0.96 moment is t+831s, past the 600s terminal, on a flash dislocation",
+   "2245z": "never under 0.96 or 0.99 -- economically impossible",
+   "2300z": "best 0.9800 at t+220s: under 0.99, never under 0.96"
+  }
+ },
+ "the_single_highest_impact_change": {
+  "change": "submit the INITIAL complement on the fill event, inside the fill tick, rather than waiting for the ingest-driven complement path.",
+  "why_this_and_not_repricing": "163 of 184 requote refusals are NOTHING_TO_COMPLETE. You cannot reprice an order that was never placed. The 0.99 cap, the requoter and the cancel-verify retry all operate downstream of a complement that does not exist.",
+  "the_timing_arithmetic": {
+   "fill_to_opportunity_close_s": "<=16",
+   "tick_cadence_s": "~5 (L5_LIVE_TICK_STAGES total_s 5.09-5.25) -- would have caught it",
+   "ingest_driven_complement_median_s": 18.11,
+   "conclusion": "the tick could reach it; the 18.11s ingest median lands at t+148, exactly at the crossing"
+  },
+  "what_is_NOT_yet_established": "WHY the initial complement was not submitted in those three windows. The submission audit says it was not; the requote counters say there was nothing to reprice. Neither says which gate refused the initial submission at t+130. That is the next question, and it is a different gate from everything examined so far.",
+  "explicitly_not_proposed": "no code change is proposed in this artifact. Three times in this session I have inferred a mechanism from indirect evidence and been wrong twice; the initial-submission gate will be named from telemetry before anything is written."
+ },
+ "safety": {
+  "halt": "active",
+  "armed": false,
+  "open_orders": 0,
+  "cancel_margin_s": 300,
+  "pair_cap": "0.96",
+  "099_cap": "not deployed",
+  "live_orders": 0
+ }
+}

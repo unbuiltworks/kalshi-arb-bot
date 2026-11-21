@@ -1,0 +1,15 @@
+{"t":1788145948.411762,"kind":"canary_start","live":false,"env":"prod","max_windows":2,"quote_size":1,"max_spend":3.0,"max_worst_loss":1.0,"series":["KXBTC15M","KXETH15M"]}
+{"t":1788145948.75514,"kind":"window_tracked","market":"KXBTC15M-26AUG302315-15","close_time":"2026-08-31T03:15:00Z"}
+{"t":1788145948.8022218,"kind":"window_tracked","market":"KXETH15M-26AUG302315-15","close_time":"2026-08-31T03:15:00Z"}
+{"t":1788145951.2181232,"kind":"window_engaged","market":"KXBTC15M-26AUG302315-15","windows_quoted":1,"max_windows":2}
+{"t":1788145951.2182164,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.994,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145953.6241705,"kind":"window_engaged","market":"KXETH15M-26AUG302315-15","windows_quoted":2,"max_windows":2}
+{"t":1788145953.6242893,"kind":"dry_run_order","market":"KXETH15M-26AUG302315-15","side":"Up","price":0.996,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145958.0657446,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.995,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145958.19505,"kind":"dry_run_order","market":"KXETH15M-26AUG302315-15","side":"Up","price":0.99,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145962.7421198,"kind":"dry_run_order","market":"KXETH15M-26AUG302315-15","side":"Up","price":0.99,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145967.138772,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.997,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145967.2777596,"kind":"dry_run_order","market":"KXETH15M-26AUG302315-15","side":"Up","price":0.993,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145971.6775463,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.999,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145976.1890385,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.998,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}
+{"t":1788145980.8218482,"kind":"dry_run_order","market":"KXBTC15M-26AUG302315-15","side":"Up","price":0.998,"count":1,"post_only":true,"reason":"TAPE_CONTRA_JOIN"}

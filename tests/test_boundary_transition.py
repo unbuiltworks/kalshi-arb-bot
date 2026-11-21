@@ -1,0 +1,489 @@
+"""The automatic clean-boundary transition must fail closed everywhere.
+
+OWNER: "when the existing a88dff63 campaign becomes flat, it automatically
+runs the already-approved seven-check preflight and activates ranked selector
++ residual quarantine iff all checks pass. Fail closed. No manual owner
+action."
+
+Every test below asks the same question from a different angle: can anything
+other than "flat, settled, unambiguous, and seven green checks" produce an
+activation? The answer must be no.
+"""
+from __future__ import annotations
+
+import json
+import os
+
+import pytest
+
+from src import pmus_boundary_activation as BA
+from src import pmus_boundary_transition as BT
+
+
+class FakeContinuous:
+    def __init__(self, held=(), unsettled=(), ours=0, foreign=0, boom=None):
+        self._held, self._unsettled = list(held), list(unsettled)
+        self._sweep = {"ours": ours, "foreign": foreign}
+        self._boom = boom
+
+    def held_markets(self, t):
+        if self._boom == "held":
+            raise RuntimeError("venue unreachable")
+        return list(self._held)
+
+    def unsettled_slugs(self):
+        return list(self._unsettled)
+
+    def _fresh_open_orders(self, t):
+        if self._boom == "sweep":
+            raise RuntimeError("sweep failed")
+        return dict(self._sweep)
+
+
+def _ok_preflight(monkeypatch, ok=True, failed=()):
+    def fake(**kw):
+        return {"kind": "boundary_preflight", "ok": ok,
+                "checks": [], "failed": list(failed)}
+    monkeypatch.setattr(BT.pf, "preflight", fake)
+
+
+# ---- the boundary itself --------------------------------------------------
+
+def test_a_held_position_is_not_a_clean_boundary():
+    b = BT.clean_boundary(FakeContinuous(held=["aec-county-not-ham-2026-09-08"]))
+    assert b["clean"] is False
+    assert "flat_no_held_inventory" in b["blockers"]
+
+
+def test_an_unsettled_market_is_not_a_clean_boundary():
+    b = BT.clean_boundary(FakeContinuous(unsettled=["x"]))
+    assert b["clean"] is False
+    assert "settlements_current" in b["blockers"]
+
+
+def test_a_resting_order_is_not_a_clean_boundary():
+    assert BT.clean_boundary(FakeContinuous(ours=1))["clean"] is False
+    assert BT.clean_boundary(FakeContinuous(foreign=1))["clean"] is False
+
+
+def test_flat_settled_and_unambiguous_is_a_clean_boundary():
+    assert BT.clean_boundary(FakeContinuous())["clean"] is True
+
+
+def test_an_unreachable_venue_is_not_a_clean_boundary():
+    """'We could not establish that the campaign is flat' is never 'the
+    campaign is flat'."""
+    b = BT.clean_boundary(FakeContinuous(boom="held"))
+    assert b["clean"] is False
+    assert "flat_no_held_inventory" in b["blockers"]
+    assert "venue unreachable" in b["conditions"]["flat_no_held_inventory_error"]
+
+
+def test_a_sweep_that_cannot_attribute_orders_blocks(monkeypatch):
+    b = BT.clean_boundary(FakeContinuous(boom="sweep"))
+    assert b["clean"] is False
+    assert "no_resting_orders" in b["blockers"]
+
+
+# ---- the transition -------------------------------------------------------
+
+def test_not_flat_waits_and_never_activates(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(held=["x"]), path=p)
+    assert row["transition"] == BT.WAITING
+    assert BT.is_active(p) is False
+
+
+def test_failed_preflight_refuses_and_writes_no_record(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch, ok=False, failed=["settlements_current"])
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    assert row["transition"] == BT.REFUSED
+    assert row["failed"] == ["settlements_current"]
+    assert BT.is_active(p) is False
+
+
+def test_clean_boundary_and_green_preflight_activates(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                now=lambda: 1000.0)
+    assert row["transition"] == BT.ACTIVATED
+    assert BT.is_active(p) is True
+    doc = json.loads(open(p).read())
+    assert doc["active"] is True
+    assert set(doc["activates"]) == set(BT.ACTIVATES)
+
+
+def test_activation_is_durable_and_one_shot(tmp_path, monkeypatch):
+    """A promotion, not a per-market gate: it survives a restart and the
+    preflight is not re-run afterwards."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p)
+
+    calls = []
+
+    def boom(**kw):
+        calls.append(1)
+        raise AssertionError("preflight must not re-run once active")
+
+    monkeypatch.setattr(BT.pf, "preflight", boom)
+    row = BT.attempt_transition(continuous=FakeContinuous(held=["x"]), path=p)
+    assert row["transition"] == BT.ALREADY
+    assert calls == []
+
+
+def test_a_preflight_that_raises_refuses_rather_than_skipping_the_gate(
+        tmp_path, monkeypatch):
+    def boom(**kw):
+        raise RuntimeError("transport gone")
+    monkeypatch.setattr(BT.pf, "preflight", boom)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    assert row["transition"] == BT.REFUSED
+    assert BT.is_active(p) is False
+
+
+def test_an_unpersistable_activation_is_not_reported_as_activated(
+        tmp_path, monkeypatch):
+    """An activation that does not survive a restart is worse than none: the
+    engine would promote itself and silently demote on the next boot."""
+    _ok_preflight(monkeypatch)
+    monkeypatch.setattr(BT, "_write", lambda *a, **k: False)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    assert row["transition"] == BT.REFUSED
+    assert "persist" in row["note"]
+
+
+def test_a_corrupt_record_reads_as_not_active(tmp_path):
+    p = tmp_path / "act.json"
+    p.write_text("{not json")
+    assert BT.is_active(str(p)) is False
+    p.write_text(json.dumps({"active": "yes"}))     # truthy but not True
+    assert BT.is_active(str(p)) is False
+    p.write_text(json.dumps({"active": False}))
+    assert BT.is_active(str(p)) is False
+
+
+def test_activation_records_the_envelope_it_was_granted_under(
+        tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    doc = json.loads(open(p).read())
+    assert doc["envelope"] == {k: str(v)
+                               for k, v in BT.pf.REQUIRED_ENVELOPE.items()}
+    assert doc["acquisition_slots"] == BT.rq.ACTIVE_ACQUISITION_SLOTS == 1
+
+
+def test_transition_never_raises_on_any_input():
+    for kw in ({"continuous": FakeContinuous(boom="held")},
+               {"continuous": FakeContinuous(boom="sweep")},
+               {"continuous": None, "path": "/proc/nope/act.json"}):
+        row = BT.attempt_transition(**kw, run_tests=False)
+        assert row["transition"] in (BT.WAITING, BT.UNDETERMINED, BT.REFUSED)
+
+
+# ---- mutation: each safety transition must be load-bearing ----------------
+
+@pytest.mark.parametrize("mutation,expect_active", [
+    ("skip_boundary_check", True),      # would activate while holding
+    ("ignore_preflight_ok", True),      # would activate on a red preflight
+])
+def test_mutations_that_would_permit_a_bad_activation(
+        tmp_path, monkeypatch, mutation, expect_active):
+    """Proof the guards are what stops activation, not an accident of
+    ordering. Each mutation is applied, shown to activate when it must not,
+    and left un-restored only within this test."""
+    p = str(tmp_path / "act.json")
+    if mutation == "skip_boundary_check":
+        _ok_preflight(monkeypatch)
+        monkeypatch.setattr(BT, "clean_boundary",
+                            lambda **kw: {"clean": True, "conditions": {},
+                                          "blockers": []})
+        cont = FakeContinuous(held=["still-holding"])
+    else:
+        _ok_preflight(monkeypatch, ok=False, failed=["settlements_current"])
+        monkeypatch.setattr(
+            BT.pf, "preflight",
+            lambda **kw: {"ok": True, "checks": [], "failed":
+                          ["settlements_current"]})
+        cont = FakeContinuous()
+    BT.attempt_transition(continuous=cont, path=p)
+    assert BT.is_active(p) is expect_active, (
+        "mutation did not change behaviour -- the guard under test is not "
+        "the thing preventing activation")
+
+
+# ---- the runner -----------------------------------------------------------
+
+def test_runner_keeps_waiting_and_never_activates_without_a_boundary(
+        tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(BT, "attempt_transition",
+                        lambda **kw: BT._row(BT.WAITING))
+    BT.run(cycles=3, sleep=lambda s: None)
+    out = capsys.readouterr().out
+    assert out.count(BT.PREFIX) == 3
+    assert BT.ACTIVATED not in out
+
+
+def test_runner_stops_deciding_once_activated(tmp_path, monkeypatch, capsys):
+    """One durable record, then no more decisions -- the process stays alive
+    so the service does not read as CRASHED."""
+    calls = []
+
+    def once(**kw):
+        calls.append(1)
+        return BT._row(BT.ACTIVATED)
+
+    monkeypatch.setattr(BT, "attempt_transition", once)
+    BT.run(cycles=5, sleep=lambda s: None)
+    assert len(calls) == 1
+    assert capsys.readouterr().out.count(BT.PREFIX) == 1
+
+
+def test_runner_survives_an_exception_and_keeps_watching(monkeypatch, capsys):
+    def boom(**kw):
+        raise RuntimeError("venue down")
+    monkeypatch.setattr(BT, "attempt_transition", boom)
+    BT.run(cycles=2, sleep=lambda s: None)
+    out = capsys.readouterr().out
+    assert out.count(BT.WAITING) == 2
+    assert "failed closed" in out
+
+
+def test_supervisor_holds_no_order_path():
+    import ast
+    tree = ast.parse(open("src/pmus_boundary_transition.py").read())
+    calls = {n.func.attr for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    for banned in ("submit", "place_order", "cancel_order", "cancel_all"):
+        assert banned not in calls
+
+
+def test_deploy_manifest_does_not_share_the_probe_watch_path():
+    import json as _json
+    mine = set(_json.load(open("deploy/pmus_boundary_transition/railway.json"))
+               ["build"]["watchPatterns"])
+    probe = set(_json.load(open("deploy/pmus_spring_l5/railway.json"))
+                ["build"]["watchPatterns"])
+    assert not (mine & probe)
+
+
+# ---- "not yet" is not "not asked" ----------------------------------------
+
+def test_an_unreachable_venue_is_undetermined_not_merely_waiting(tmp_path):
+    """Both refuse to activate, but they are different facts. Run from a
+    container without venue credentials every transport condition errors,
+    and a single WAITING state would print the identical row whether the
+    campaign held a residual or was flat and ready -- so an unattended
+    monitor would wait forever on a boundary already reached."""
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(boom="sweep"),
+                                path=p, run_tests=False)
+    assert row["transition"] == BT.UNDETERMINED
+    assert row["boundary"]["established"] is False
+    assert "no_resting_orders" in row["boundary"]["undetermined"]
+    assert "could not establish" in row["boundary"]["refused_because"]
+    assert BT.is_active(p) is False
+
+
+def test_a_genuinely_held_position_is_waiting_not_undetermined(tmp_path):
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(held=["x"]),
+                                path=p, run_tests=False)
+    assert row["transition"] == BT.WAITING
+    assert row["boundary"]["established"] is True
+    assert row["boundary"]["undetermined"] == []
+    assert "not clean" in row["boundary"]["refused_because"]
+
+
+def test_unknown_outranks_not_yet_when_both_are_present(tmp_path):
+    """A held position AND an unreadable sweep: we still cannot claim to have
+    read the campaign's state, so it reports UNDETERMINED."""
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(
+        continuous=FakeContinuous(held=["x"], boom="sweep"), path=p,
+        run_tests=False)
+    assert row["transition"] == BT.UNDETERMINED
+
+
+def test_neither_state_ever_activates(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    for cont in (FakeContinuous(boom="sweep"), FakeContinuous(held=["x"])):
+        p = str(tmp_path / f"act-{id(cont)}.json")
+        BT.attempt_transition(continuous=cont, path=p, run_tests=False)
+        assert BT.is_active(p) is False
+
+
+# ---- the consumption side -------------------------------------------------
+
+def test_no_record_means_the_campaign_runs_unchanged(tmp_path):
+    a = BT.activation_for_campaign(str(tmp_path / "absent.json"))
+    assert a["active"] is False
+    assert a["ranked_selector"] is False and a["residual_quarantine"] is False
+    assert a["acquisition_slots"] == BT.rq.ACTIVE_ACQUISITION_SLOTS
+
+
+def test_an_unreadable_record_is_not_an_activation(tmp_path):
+    p = tmp_path / "act.json"
+    p.write_text("{corrupt")
+    assert BT.activation_for_campaign(str(p))["active"] is False
+
+
+def test_a_written_activation_names_exactly_what_it_turns_on(
+        tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["ranked_selector"] is True
+    assert a["residual_quarantine"] is True
+    assert a["acquisition_slots"] == 1
+    assert a["envelope"] == {k: str(v)
+                             for k, v in BT.pf.REQUIRED_ENVELOPE.items()}
+
+
+# ---- the proof: a record is not a serving process -------------------------
+#
+# OWNER: "A deployment request, SUCCESS build, or pushed commit alone is not
+# activation proof." This record is written by the transition process and is
+# not proof either. Acquisition keys off may_acquire, never off active.
+
+def _proof(state=None):
+    state = state or BA.ACTIVATION_PROVEN
+    return lambda _preflight: {"state": state,
+                               "may_acquire": BA.may_acquire(state),
+                               "serving_sha": "abc1234"}
+
+
+def test_a_boundary_record_without_a_proof_never_permits_acquisition(
+        tmp_path, monkeypatch):
+    """The default path still activates the selector and quarantine -- and
+    acquisition stays shut, because nothing proved what the probe is running."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    assert row["transition"] == BT.ACTIVATED
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["may_acquire"] is False
+    assert a["proof_state"] is None
+
+
+def test_a_proven_chain_is_the_only_thing_that_opens_acquisition(
+        tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=_proof())
+    assert row["transition"] == BT.ACTIVATED
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["may_acquire"] is True
+    assert a["proof_state"] == BA.ACTIVATION_PROVEN
+    assert json.loads(open(p).read())["activation_proof"]["serving_sha"] \
+        == "abc1234"
+
+
+@pytest.mark.parametrize("state", [
+    s for k, s in sorted(vars(BA).items())
+    if k.isupper() and isinstance(s, str) and k != "REQUIRED_COMPONENTS"
+    and s != BA.ACTIVATION_PROVEN])
+def test_every_unproven_chain_state_refuses_and_writes_no_record(
+        tmp_path, monkeypatch, state):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=_proof(state))
+    assert row["transition"] == BT.REFUSED_PROOF, state
+    assert row["proof"]["state"] == state
+    assert not os.path.exists(p), "an unproven transition left a record"
+    assert BT.activation_for_campaign(p)["may_acquire"] is False
+
+
+def test_a_prover_that_raises_refuses_rather_than_activating(
+        tmp_path, monkeypatch):
+    """Fail closed in the direction that matters: 'could not prove' is not
+    'proved'."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+
+    def boom(_preflight):
+        raise RuntimeError("railway unreachable")
+
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=boom)
+    assert row["transition"] == BT.REFUSED_PROOF
+    assert "railway unreachable" in str(row["proof"]["error"])
+    assert not os.path.exists(p)
+
+
+@pytest.mark.parametrize("bad", [None, "PROVEN", {}, {"state": None},
+                                 {"may_acquire": True}, 0])
+def test_a_prover_returning_junk_is_never_read_as_proof(
+        tmp_path, monkeypatch, bad):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=lambda _pf: bad)
+    assert row["transition"] == BT.REFUSED_PROOF, bad
+    assert not os.path.exists(p)
+
+
+def test_a_record_whose_proof_is_tampered_with_stops_permitting_acquisition(
+        tmp_path, monkeypatch):
+    """The stored proof is re-read through may_acquire on every cycle, so a
+    record edited to claim activation does not gain it."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p, prove=_proof())
+    assert BT.activation_for_campaign(p)["may_acquire"] is True
+    doc = json.loads(open(p).read())
+    for tamper in ({"may_acquire": True}, {"state": "ok", "may_acquire": True},
+                   "ACTIVATION_PROVEN", True):
+        doc["activation_proof"] = tamper
+        open(p, "w").write(json.dumps(doc))
+        assert BT.activation_for_campaign(p)["may_acquire"] is False, tamper
+
+
+def test_the_prover_sees_the_preflight_that_actually_passed(
+        tmp_path, monkeypatch):
+    """Step 4 deploys AFTER the seven assertions, and is handed their result
+    rather than re-deriving it."""
+    _ok_preflight(monkeypatch)
+    seen = []
+    BT.attempt_transition(continuous=FakeContinuous(),
+                          path=str(tmp_path / "act.json"),
+                          prove=lambda pf_row: seen.append(pf_row) or {
+                              "state": BA.ACTIVATION_PROVEN})
+    assert seen and seen[0]["kind"] == "boundary_preflight"
+    assert seen[0]["ok"] is True
+
+
+def test_no_prover_runs_before_the_boundary_is_clean(tmp_path, monkeypatch):
+    """Nothing deploys while the campaign still holds a position."""
+    _ok_preflight(monkeypatch)
+    calls = []
+    for cont in (FakeContinuous(held=["nfl-x"]),
+                 FakeContinuous(unsettled=["nfl-x"])):
+        row = BT.attempt_transition(
+            continuous=cont, path=str(tmp_path / "act.json"),
+            prove=lambda _pf: calls.append(1) or {
+                "state": BA.ACTIVATION_PROVEN})
+        assert row["transition"] != BT.ACTIVATED
+    assert calls == []
+
+
+def test_no_prover_runs_when_the_preflight_fails(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch, ok=False, failed=["settlements_current"])
+    calls = []
+    row = BT.attempt_transition(
+        continuous=FakeContinuous(), path=str(tmp_path / "act.json"),
+        prove=lambda _pf: calls.append(1) or {"state": BA.ACTIVATION_PROVEN})
+    assert row["transition"] == BT.REFUSED
+    assert calls == []

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_fidelity/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_fidelity/**",
+      "src/l5_fidelity/**",
+      "artifacts/l5_fidelity/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_fidelity.service --hours 0 --out-dir /state/l5-fidelity",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "READ-ONLY L5_FIDELITY prospective runner. Public endpoints only: no credentials, no order path, no execution module, never touches the PMUS executor and never mutates OBSERVATION data. Freezes content-sealed predictions before the action exists and appends outcomes as separate first-writer-wins rows on a durable volume. ESTIMAND A (fill-anchored) only; arbitrary-state WAIT/ACT is NOT READY because the activity feed is a median 28.5s behind."
+}

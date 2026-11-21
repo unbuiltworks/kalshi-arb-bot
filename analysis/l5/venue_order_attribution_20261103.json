@@ -1,0 +1,147 @@
+{
+  "artifact": "venue_order_attribution_20261103",
+  "status": "MEASURED, in three production runs. The ids now resolve on every fill; the OWNERSHIP of 75 of 76 does not, and the audit no longer claims it does.",
+  "read_only": true,
+  "production_run": {
+    "deployment": "fdf01fd6-c4f6-4965-b723-30536519322f",
+    "emitted_at": "2026-11-03T16:22:24.404Z",
+    "marker": "L5_COST_BASIS_AUDIT",
+    "ok": true,
+    "writes": "NONE",
+    "activity_walk": {
+      "pages": 128,
+      "ended": "eof",
+      "complete": true
+    },
+    "activity_rows": 2543
+  },
+  "attribution_actual_matches": {
+    "our_client_order_ids_collected": 305,
+    "our_venue_order_ids_collected": 420,
+    "fills_examined": 76,
+    "legs_examined": 51,
+    "venue_order_id_resolved_on_fills": 76,
+    "positively_matched_L5_OWNED": 1,
+    "positively_matched_leg": "cpc-btc-updown-15m-2026-11-02-2300z|UP, first fill 2026-11-02T23:00:19.336Z, measured cost 0.35280000 against a 1.6800 placeholder",
+    "not_matched": 75,
+    "label_now_applied_to_the_75": "UNKNOWN_OWNER / venue_order_id_not_ours_but_flag_uncalibrated",
+    "verdict": "1 of 76 fills is POSITIVELY ours and needs no assumption. The other 75 carry a venue order id absent from our 420 tracked ids, read off the execution isAggressor claims is ours -- a claim this account's feed cannot corroborate. They are UNRESOLVED, not external activity.",
+    "why_not_OWNER_MANUAL": "a positive match cannot be the counterparty's, so positives resolve without the flag; a NON-match depends on it entirely. With NOT_CALIBRATED, calling the 75 OWNER_MANUAL would assert external trading on a SHARED account from an unverified reading of a field name -- the same error as the original UNKNOWN_OWNER sweep, pointing the other way.",
+    "two_readings_both_still_open": [
+      "genuinely not placed by this executor (manual activity on the shared account)",
+      "placed by this executor before the durable venue_order_ids link existed or across a store migration -- 42 of the 51 legs are PRE-baseline (2026-10-14 to 10-16) and the baseline is 2026-10-16T02:45:12Z"
+    ]
+  },
+  "root_cause": {
+    "defect": "_row_venue_order_id looked for the execution object under the keys `execution`, `exec` and `fill`. The PMUS feed uses NONE of those.",
+    "real_shape": "EXEC_KEYS = (aggressorExecution, passiveExecution) -- the module's own execution_field_inventory already named them, and reported 2255 fill rows carrying 4510 execution objects (TWO per row) whose key set includes `order`.",
+    "consequence": "venue_order_id read null on every production fill, so the second ownership route could never fire and every leg still reported UNKNOWN_OWNER.",
+    "how_found": "by comparing the extractor's path against execution_field_inventory's path in the same module, after the production run returned 0 matches on 420 ids."
+  },
+  "fix": {
+    "_exec_order_id": "pulls the id out of ONE execution object (order / orderId / nested {id}).",
+    "_row_venue_order_candidates": "returns (ours, every). Walks EXEC_KEYS, plus the unambiguous single-object and flat shapes.",
+    "two_party_problem": "A trade has two parties and the account is ONE of them. Both executions carry an order id. `isAggressor` on the payload says which is ours (True -> aggressorExecution, False -> passiveExecution).",
+    "deliberate_asymmetry": "A POSITIVE match against ids we track resolves ownership even without isAggressor, because an id of ours cannot belong to the counterparty. A NON-match on an id that may be the counterparty's proves nothing and leaves the fill UNKNOWN_OWNER -- it is never downgraded to OWNER_MANUAL. OWNER_MANUAL requires the row to identify WHICH execution is ours.",
+    "money_fields": "untouched. cost, qty and price are identical before and after; this change is attribution only.",
+    "read_only_guard_preserved": "built as pairs rather than by subscript assignment, because the module's test guard forbids every subscript assignment target as its proxy for 'writes no store key'.",
+    "calibration": "aggressor_flag_calibration measures the flag against rows already known ours by client order id and reports CALIBRATED / INVERTED / AMBIGUOUS / NOT_CALIBRATED. Only CALIBRATED lets a flag-sourced non-match be called OWNER_MANUAL; an unambiguous shape (one execution object, or a flat id) never needed the flag and is unaffected.",
+    "negative_verdicts_trusted": false
+  },
+  "cost_basis_result_from_the_same_run": {
+    "unknown_basis_legs": 51,
+    "establishable": 49,
+    "unestablished": 2,
+    "placeholder_cost_total_usd": "297.6800",
+    "established_placeholder_cost_usd": "294.6400",
+    "actual_cost_total_usd": "51.69340000",
+    "overstatement_usd": "242.94660000",
+    "overstatement_basis": "established legs ONLY. NOT the difference against placeholder_cost_total_usd, because the 2 unestablished legs have no measured cost to subtract -- their cost stays UNKNOWN and is never treated as zero.",
+    "applied": false,
+    "why_not_applied": "correct_settled_market refuses it as CORRECTION_WOULD_RELAX_LOSS_HALT. Applying it moves realized toward zero and needs its own owner decision."
+  },
+  "accounting_from_the_same_run": {
+    "account_wide_realized": "-10.62110000",
+    "verified_l5_realized": "0.179500",
+    "unknown_unattributed_realized": "-87.02580000",
+    "manual_realized": null,
+    "manual_unavailable_reason": "UNATTRIBUTED_RESIDUAL_NONZERO: manual is a residual and is only meaningful once nothing is unattributable",
+    "identity_holds": false,
+    "pre_baseline_total_l5_share_unknown": "-79.01000000",
+    "pre_baseline_unknown_basis_legs": 42,
+    "post_baseline_settlements_not_attested_count": 10,
+    "legs_priced_at_one_dollar_upper_bound": 51,
+    "label": "A $1/share upper bound is an estimate, not a verified realized loss. verified_l5_realized counts ONLY attested L5 settlements after the 2026-10-16T02:45:12Z baseline."
+  },
+  "tests": {
+    "file": "tests/test_l5_execution_order_attribution.py",
+    "count": 52,
+    "new": 8,
+    "covers": [
+      "the real nesting is read at all (returned None on every production fill before)",
+      "isAggressor picks our execution, not the counterparty's",
+      "the real shape resolves to L5_OWNED",
+      "a positive match resolves even without the aggressor flag",
+      "a counterparty id alone stays UNKNOWN and is never called manual",
+      "our identified execution that is not ours IS manual",
+      "the coid route is untouched",
+      "no money field changes"
+    ],
+    "files": [
+      "tests/test_l5_execution_order_attribution.py",
+      "tests/test_l5_aggressor_flag_calibration.py",
+      "tests/test_l5_residual_ceiling_applied_cap_row.py"
+    ]
+  },
+  "parity": {
+    "command": "PYTHONPATH=. python3 -m pytest tests/ -q -p no:randomly --continue-on-collection-errors -rfE",
+    "failing_ids": 80,
+    "digest": "eb672d14b4baf439",
+    "baseline_digest": "eb672d14b4baf439",
+    "verdict": "EXACT, on each of the three trees"
+  },
+  "production_runs": [
+    {
+      "deployment": "fdf01fd6-c4f6-4965-b723-30536519322f",
+      "emitted_at": "2026-11-03T16:22:24.404Z",
+      "extraction": "wrong path (execution/exec/fill)",
+      "result": "L5_OWNED 0, OWNER_MANUAL 0, UNKNOWN_OWNER 76, venue_order_id null on every fill"
+    },
+    {
+      "deployment": "f9f94790-97ba-488b-b92b-83753ffe463a",
+      "emitted_at": "2026-11-03T16:42:28.217Z",
+      "extraction": "corrected to aggressorExecution/passiveExecution",
+      "result": "L5_OWNED 1, OWNER_MANUAL 75, UNKNOWN_OWNER 0 -- but the 75 rested on an UNVERIFIED isAggressor"
+    },
+    {
+      "deployment": "821e1f7d-eaf6-4cf5-b67f-9dc67ea60252",
+      "emitted_at": "2026-11-03T17:06:15.792Z",
+      "extraction": "corrected, plus isAggressor calibration",
+      "calibration": {
+        "verdict": "NOT_CALIBRATED",
+        "counts": {},
+        "decided_rows": 0,
+        "why": "no fill row in the 2543-row walk carries a clientOrderId at all, so the one independent route that could check the flag had no rows to check it on"
+      },
+      "result": "L5_OWNED 1, OWNER_MANUAL 75 -- reported, then superseded by the downgrade below"
+    }
+  ],
+  "residual_cap_correction": {
+    "what_I_reported": "PMUS_RESIDUAL_CAP_K=1 gives an effective residual cap of 5 contracts, not 1",
+    "that_was_wrong": true,
+    "why": "I read the preflight's effective_cap_contracts 5 / which_binds ABSOLUTE. That row uses largest_recorded_clip, which is ACCOUNT-WIDE; the 37.73 belongs to one XRP market on 2026-10-16. The gate reads store.max_clip(market), 0 for a BTC15m window that has never filled, so use_clip falls back to the order's own size.",
+    "applied_cap_at_a_1_contract_clip": "min(1 * 1, 5) = 1 contract",
+    "exercised_against_the_gate": {
+      "OPEN 1": "cap 1, not capped (a first leg is exempt)",
+      "EXTEND +1 on 1 held": "cap 1, REFUSED",
+      "COMPLETE 1 vs held 1": "never refused (risk-reducing)"
+    },
+    "telemetry_fixed": "the row now reports applied_cap_at_opening_clip beside the historical worst case, POLICY_OFF when PMUS_RESIDUAL_CAP_K is unset"
+  },
+  "cash_ceiling_correction": {
+    "what_I_said_earlier": "max_cash_deployed_usd = $12 is run-scoped",
+    "corrected": "ledger-scoped. cash_legs_for_gates reads store.committed() -- a durable store key -- filtered by retired_markets, so a restart does NOT reset it and cash is released only by retire_settled_market after a confirmed settlement.",
+    "consequence": "the $12 bounds the WHOLE pilot across the blocked-arm restart, not $12 per arm",
+    "the_5_59_figure": "NOT enforced; it assumed one inventory cycle per window. To bind near it, set L5_MAX_CASH_DEPLOYED_USD=6"
+  }
+}

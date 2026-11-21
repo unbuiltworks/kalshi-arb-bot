@@ -1,0 +1,25 @@
+{
+  "label": "pmus_book_20260917",
+  "closed_utc": "2026-09-17T17:17:30.072833+00:00",
+  "files": [
+    {
+      "raw": "data/pmus_book_tape/pmus_book_20260917T141433Z.jsonl",
+      "raw_sha256": "d45dee47e9fc72778e7c00167514ae169209e9ee6abe4c2acb0c7e94998de5fe",
+      "raw_bytes": 2000491,
+      "raw_rows": 5221,
+      "gz": "data/pmus_book_tape/pmus_book_20260917T141433Z.jsonl.gz",
+      "gz_sha256": "c59f4675c6b3168153bb0634233a163f4003c60f486329566e884ae69b3af25b",
+      "gz_bytes": 56334
+    },
+    {
+      "raw": "data/pmus_book_tape/pmus_book_20260917T144533Z.jsonl",
+      "raw_sha256": "4766640c2fba8ebcf5a29b66a54c54e36039613014f9ed5f550d7ec655e55217",
+      "raw_bytes": 11154902,
+      "raw_rows": 28921,
+      "gz": "data/pmus_book_tape/pmus_book_20260917T144533Z.jsonl.gz",
+      "gz_sha256": "83fb026cddbadf32ad253545e2b8aaed371cd698223dd23b0ff56e081da2230c",
+      "gz_bytes": 321082
+    }
+  ],
+  "labels": "raw tape preserved in place; .gz is an additional artifact; both hashed so the analysed file is provably the collected file"
+}

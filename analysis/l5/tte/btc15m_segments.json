@@ -1,0 +1,103 @@
+{
+  "dropped": {
+    "duplicate": 3380,
+    "no_side": 562
+  },
+  "fills_by_tte": {
+    "fills": 63562,
+    "fills_after_expiry_excluded": 7,
+    "inside_clone_band": 22355,
+    "outside_clone_band": 41207,
+    "share_outside": 0.6483,
+    "median_fill_tte_s": 431.0,
+    "labels": "OBSERVED_RETROSPECTIVE: L5's own venue-reported fills. Not our clone, not a backtest of it, and never our cost basis or realized P&L."
+  },
+  "segments": {
+    "buckets": {
+      ">600": {
+        "windows": 495,
+        "fills": 63140,
+        "fills_per_window": 127.6,
+        "two_sided_windows": 487,
+        "complement_rate": 0.9838,
+        "par_constrained_windows": 377,
+        "par_constrained_rate": 0.7616,
+        "matched_contracts": "553114.702604",
+        "gross_contracts": "1209542.932405",
+        "matched_over_gross": "0.4573",
+        "median_pair_basis": 0.9637,
+        "median_abs_residual": 131.8568,
+        "median_first_fill_tte_s": 887.0,
+        "degenerate_basis_windows": 0
+      },
+      "300-600": {
+        "windows": 24,
+        "fills": 352,
+        "fills_per_window": 14.7,
+        "two_sided_windows": 14,
+        "complement_rate": 0.5833,
+        "par_constrained_windows": 12,
+        "par_constrained_rate": 0.5,
+        "matched_contracts": "2407.115717",
+        "gross_contracts": "5373.535695",
+        "matched_over_gross": "0.4480",
+        "median_pair_basis": 0.9251,
+        "median_abs_residual": 14.4655,
+        "median_first_fill_tte_s": 504.0,
+        "degenerate_basis_windows": 0
+      },
+      "120-300": {
+        "windows": 7,
+        "fills": 76,
+        "fills_per_window": 10.9,
+        "two_sided_windows": 5,
+        "complement_rate": 0.7143,
+        "par_constrained_windows": 4,
+        "par_constrained_rate": 0.5714,
+        "matched_contracts": "536.525099",
+        "gross_contracts": "1391.006879",
+        "matched_over_gross": "0.3857",
+        "median_pair_basis": 0.984,
+        "median_abs_residual": 30.7778,
+        "median_first_fill_tte_s": 217.0,
+        "degenerate_basis_windows": 0
+      },
+      "60-120": {
+        "windows": 1,
+        "fills": 1,
+        "fills_per_window": 1.0,
+        "two_sided_windows": 0,
+        "complement_rate": 0.0,
+        "par_constrained_windows": 0,
+        "par_constrained_rate": 0.0,
+        "matched_contracts": "0",
+        "gross_contracts": "5",
+        "matched_over_gross": "0.0000",
+        "median_pair_basis": null,
+        "median_abs_residual": 5.0,
+        "median_first_fill_tte_s": 81.0,
+        "degenerate_basis_windows": 0
+      },
+      "<60": {
+        "windows": 0,
+        "fills": 0,
+        "fills_per_window": null,
+        "two_sided_windows": 0,
+        "complement_rate": null,
+        "par_constrained_windows": 0,
+        "par_constrained_rate": null,
+        "matched_contracts": "0",
+        "gross_contracts": "0",
+        "matched_over_gross": null,
+        "median_pair_basis": null,
+        "median_abs_residual": null,
+        "median_first_fill_tte_s": null,
+        "degenerate_basis_windows": 0
+      }
+    },
+    "clone_max_tte_s": 300.0,
+    "windows_first_fill_after_expiry": 0,
+    "degenerate_basis_windows": 0,
+    "labels": "OBSERVED_RETROSPECTIVE: L5's own venue-reported fills. Not our clone, not a backtest of it, and never our cost basis or realized P&L."
+  }
+}

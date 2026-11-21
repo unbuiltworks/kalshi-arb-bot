@@ -1,0 +1,634 @@
+{
+ "generated_utc": "2026-09-01T15:39:09.052386+00:00",
+ "question": "Mar 27: trader activation vs venue-liquidity regime shift (BTC-15m)",
+ "selection_caveat": "pre-era sample = windows L5 chose to trade; if he picked livelier windows this biases pre-era volume UP, so a post-era increase is a lower bound",
+ "cohorts": {
+  "pre_mar19_26": {
+   "n_markets_sampled": 13,
+   "trades_total_median": 3780,
+   "volume_usd_median": 63880.28,
+   "unique_wallets_median": 800,
+   "l5_share_median": 0.0,
+   "rewards_min_size_values": [
+    50
+   ],
+   "rewards_max_spread_values": [
+    4.5
+   ],
+   "markets": [
+    {
+     "trades_total": 4632,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 82142.9,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 729,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1773917100",
+     "l5_buy_usdc": 0.05
+    },
+    {
+     "trades_total": 2302,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2302,
+     "volume_usd": 50958.73,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 841,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774440000",
+     "l5_buy_usdc": 1.0
+    },
+    {
+     "trades_total": 4386,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 75597.92,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 766,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774441800",
+     "l5_buy_usdc": 1.0
+    },
+    {
+     "trades_total": 3492,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 63880.28,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 800,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774442700",
+     "l5_buy_usdc": 1.0
+    },
+    {
+     "trades_total": 3800,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 80651.34,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 845,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774450800",
+     "l5_buy_usdc": 1.0
+    },
+    {
+     "trades_total": 2562,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2562,
+     "volume_usd": 43349.96,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 785,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774526400",
+     "l5_buy_usdc": 1.0
+    },
+    {
+     "trades_total": 3780,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 53560.17,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 650,
+     "l5_share_of_fetched_volume": 0.0,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774527300",
+     "l5_buy_usdc": 4.4
+    },
+    {
+     "trades_total": 2843,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2843,
+     "volume_usd": 51209.25,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 1001,
+     "l5_share_of_fetched_volume": 0.0001,
+     "rewards_config": {
+      "rates": [
+       {
+        "asset_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+        "rewards_daily_rate": 0.001
+       }
+      ],
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774528200",
+     "l5_buy_usdc": 4.65
+    },
+    {
+     "trades_total": 4255,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 66928.26,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 811,
+     "l5_share_of_fetched_volume": 0.0001,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774539000",
+     "l5_buy_usdc": 3.0
+    },
+    {
+     "trades_total": 2810,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2810,
+     "volume_usd": 91158.86,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 898,
+     "l5_share_of_fetched_volume": 0.0003,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774539900",
+     "l5_buy_usdc": 26.33
+    },
+    {
+     "trades_total": 2853,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2853,
+     "volume_usd": 39685.22,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 880,
+     "l5_share_of_fetched_volume": 0.0007,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774540800",
+     "l5_buy_usdc": 29.05
+    },
+    {
+     "trades_total": 4358,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 72152.27,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 742,
+     "l5_share_of_fetched_volume": 0.0015,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774541700",
+     "l5_buy_usdc": 94.29
+    },
+    {
+     "trades_total": 4779,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 60105.73,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 584,
+     "l5_share_of_fetched_volume": 0.0018,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774543500",
+     "l5_buy_usdc": 125.61
+    }
+   ]
+  },
+  "post_mar27_28": {
+   "n_markets_sampled": 24,
+   "trades_total_median": 3828,
+   "volume_usd_median": 52597.52,
+   "unique_wallets_median": 757,
+   "l5_share_median": 0.0,
+   "rewards_min_size_values": [
+    50
+   ],
+   "rewards_max_spread_values": [
+    4.5
+   ],
+   "markets": [
+    {
+     "trades_total": 3820,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 56858.37,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 702,
+     "l5_share_of_fetched_volume": 0.0021,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774605600",
+     "l5_buy_usdc": 98.4
+    },
+    {
+     "trades_total": 2099,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2099,
+     "volume_usd": 41105.75,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 643,
+     "l5_share_of_fetched_volume": 0.0013,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774607400",
+     "l5_buy_usdc": 52.25
+    },
+    {
+     "trades_total": 3905,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 55279.3,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 758,
+     "l5_share_of_fetched_volume": 0.0014,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774612800",
+     "l5_buy_usdc": 78.85
+    },
+    {
+     "trades_total": 3828,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 52597.52,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 800,
+     "l5_share_of_fetched_volume": 0.0014,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774614600",
+     "l5_buy_usdc": 66.34
+    },
+    {
+     "trades_total": 3502,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 44619.85,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 712,
+     "l5_share_of_fetched_volume": 0.0028,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774615500",
+     "l5_buy_usdc": 111.6
+    },
+    {
+     "trades_total": 4336,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 64118.94,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 817,
+     "l5_share_of_fetched_volume": 0.002,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774623600",
+     "l5_buy_usdc": 138.5
+    },
+    {
+     "trades_total": 5116,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 117399.92,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 788,
+     "l5_share_of_fetched_volume": 0.001,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774624500",
+     "l5_buy_usdc": 139.9
+    },
+    {
+     "trades_total": 4526,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 55125.23,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 757,
+     "l5_share_of_fetched_volume": 0.0017,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774628100",
+     "l5_buy_usdc": 65.57
+    },
+    {
+     "trades_total": 4593,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 80045.77,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 896,
+     "l5_share_of_fetched_volume": 0.0006,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774629000",
+     "l5_buy_usdc": 69.93
+    },
+    {
+     "trades_total": 4051,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 64440.86,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 941,
+     "l5_share_of_fetched_volume": 0.0009,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774629900",
+     "l5_buy_usdc": 63.55
+    },
+    {
+     "trades_total": 2695,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2695,
+     "volume_usd": 59908.46,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 799,
+     "l5_share_of_fetched_volume": 0.0012,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774630800",
+     "l5_buy_usdc": 75.9
+    },
+    {
+     "trades_total": 2429,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2429,
+     "volume_usd": 36725.11,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 770,
+     "l5_share_of_fetched_volume": 0.0002,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774638900",
+     "l5_buy_usdc": 6.01
+    },
+    {
+     "trades_total": 4768,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 68092.62,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 627,
+     "l5_share_of_fetched_volume": 0.0026,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774639800",
+     "l5_buy_usdc": 223.61
+    },
+    {
+     "trades_total": 4035,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 53382.22,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 687,
+     "l5_share_of_fetched_volume": 0.0039,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774640700",
+     "l5_buy_usdc": 160.1
+    },
+    {
+     "trades_total": 4117,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 60007.88,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 620,
+     "l5_share_of_fetched_volume": 0.004,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774641600",
+     "l5_buy_usdc": 180.89
+    },
+    {
+     "trades_total": 3241,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 46273.08,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 797,
+     "l5_share_of_fetched_volume": 0.0043,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774642500",
+     "l5_buy_usdc": 190.86
+    },
+    {
+     "trades_total": 3859,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 38934.28,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 674,
+     "l5_share_of_fetched_volume": 0.0037,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774643400",
+     "l5_buy_usdc": 183.9
+    },
+    {
+     "trades_total": 1775,
+     "count_at_probe_cap": false,
+     "trades_fetched": 1775,
+     "volume_usd": 39664.84,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 660,
+     "l5_share_of_fetched_volume": 0.0013,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774644300",
+     "l5_buy_usdc": 53.2
+    },
+    {
+     "trades_total": 1641,
+     "count_at_probe_cap": false,
+     "trades_fetched": 1641,
+     "volume_usd": 29196.28,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 662,
+     "l5_share_of_fetched_volume": 0.0014,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774645200",
+     "l5_buy_usdc": 41.2
+    },
+    {
+     "trades_total": 3394,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 39040.44,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 585,
+     "l5_share_of_fetched_volume": 0.0061,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774646100",
+     "l5_buy_usdc": 219.69
+    },
+    {
+     "trades_total": 2822,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2822,
+     "volume_usd": 43067.98,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 918,
+     "l5_share_of_fetched_volume": 0.0012,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774647000",
+     "l5_buy_usdc": 53.6
+    },
+    {
+     "trades_total": 2422,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2422,
+     "volume_usd": 33524.87,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 725,
+     "l5_share_of_fetched_volume": 0.0022,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774647900",
+     "l5_buy_usdc": 76.75
+    },
+    {
+     "trades_total": 2143,
+     "count_at_probe_cap": false,
+     "trades_fetched": 2143,
+     "volume_usd": 42242.54,
+     "volume_is_estimate": false,
+     "unique_wallets_in_fetched": 781,
+     "l5_share_of_fetched_volume": 0.0009,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774648800",
+     "l5_buy_usdc": 40.75
+    },
+    {
+     "trades_total": 4025,
+     "count_at_probe_cap": false,
+     "trades_fetched": 3000,
+     "volume_usd": 42755.01,
+     "volume_is_estimate": true,
+     "unique_wallets_in_fetched": 729,
+     "l5_share_of_fetched_volume": 0.0044,
+     "rewards_config": {
+      "rates": null,
+      "min_size": 50,
+      "max_spread": 4.5
+     },
+     "slug": "btc-updown-15m-1774649700",
+     "l5_buy_usdc": 178.0
+    }
+   ]
+  }
+ }
+}

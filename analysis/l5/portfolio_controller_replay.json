@@ -1,0 +1,2535 @@
+{
+ "evidence_class": "L5 POLYMARKET PATHS with PMUS ticks and fees, one-minute Coinbase reference -- not PMUS fills, not our own",
+ "panels": {
+  "spot": {
+   "belief": "MODEL",
+   "candidates": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.021841329886201303,
+       "entry": 0.006286692447666391,
+       "fill": -0.02811927244512987,
+       "settlement": 0.0011107954368506491,
+       "unmatched": 0.0052498027585024375
+      },
+      "fills": 4928,
+      "fills_per_window": 26.352941176470587,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.0373133116883117,
+      "net_per_contract_ci95": [
+       -0.04521329046087888,
+       -0.02919512682244859
+      ],
+      "net_per_window": -0.9833155080213907,
+      "net_per_window_ci95": [
+       -1.179923815240114,
+       -0.7867072008026674
+      ],
+      "net_total": -183.88000000000005,
+      "p05_window": -2.8400000000000007,
+      "pair_cost_p50": 1.04,
+      "pairs": 2280,
+      "roles": {
+       "ADD": 2694,
+       "HEDGE": 2234
+      },
+      "unmatched_contracts": 368,
+      "unmatched_lost_frac": 0.720108695652174,
+      "unmatched_mean": -0.1466304347826087,
+      "windows": 187,
+      "worst_unmatched_contract": -0.66,
+      "worst_window": -4.39
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.020934160707193703,
+       "entry": 0.00616282243886629,
+       "fill": -0.025992876073360448,
+       "settlement": -0.0010650742080579563,
+       "unmatched": 0.005004174162353838
+      },
+      "fills": 3934,
+      "fills_per_window": 31.472,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.03682511438739198,
+      "net_per_contract_ci95": [
+       -0.046418880723572656,
+       -0.02783247612049964
+      ],
+      "net_per_window": -1.1589600000000004,
+      "net_per_window_ci95": [
+       -1.4377411506720712,
+       -0.8801788493279296
+      ],
+      "net_total": -144.87000000000003,
+      "p05_window": -3.630000000000001,
+      "pair_cost_p50": 1.02,
+      "pairs": 1816,
+      "roles": {
+       "ADD": 2160,
+       "HEDGE": 1774
+      },
+      "unmatched_contracts": 302,
+      "unmatched_lost_frac": 0.7947019867549668,
+      "unmatched_mean": -0.2247019867549669,
+      "windows": 125,
+      "worst_unmatched_contract": -0.85,
+      "worst_window": -6.5
+     }
+    },
+    "AGGRESSIVE + hedge skew": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.023402735685757098,
+       "entry": 0.011604244778685572,
+       "fill": -0.03200293044618458,
+       "settlement": 0.0015729125244706352,
+       "unmatched": 0.0063335827400918905
+      },
+      "fills": 5006,
+      "fills_per_window": 26.77005347593583,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.03589492608869358,
+      "net_per_contract_ci95": [
+       -0.04145596868884539,
+       -0.03006434205064345
+      ],
+      "net_per_window": -0.9609090909090912,
+      "net_per_window_ci95": [
+       -1.115453030621671,
+       -0.8063651511965113
+      ],
+      "net_total": -179.69000000000005,
+      "p05_window": -2.5500000000000003,
+      "pair_cost_p50": 1.05,
+      "pairs": 2411,
+      "roles": {
+       "ADD": 2594,
+       "HEDGE": 2412
+      },
+      "unmatched_contracts": 184,
+      "unmatched_lost_frac": 0.7010869565217391,
+      "unmatched_mean": -0.10413043478260871,
+      "windows": 187,
+      "worst_unmatched_contract": -0.63,
+      "worst_window": -4.29
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.021290970903852898,
+       "entry": 0.011684898385213907,
+       "fill": -0.030611238513535154,
+       "settlement": -0.0014635980719789842,
+       "unmatched": 0.00044748403535151257
+      },
+      "fills": 3997,
+      "fills_per_window": 31.976,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.041233425068801614,
+      "net_per_contract_ci95": [
+       -0.04791451731761238,
+       -0.034428499496475334
+      ],
+      "net_per_window": -1.3184800000000003,
+      "net_per_window_ci95": [
+       -1.539204315708302,
+       -1.0977556842916987
+      ],
+      "net_total": -164.81000000000006,
+      "p05_window": -3.480000000000001,
+      "pair_cost_p50": 1.04,
+      "pairs": 1911,
+      "roles": {
+       "ADD": 2085,
+       "HEDGE": 1912
+      },
+      "unmatched_contracts": 175,
+      "unmatched_lost_frac": 0.8228571428571428,
+      "unmatched_mean": -0.23777142857142858,
+      "windows": 125,
+      "worst_unmatched_contract": -0.71,
+      "worst_window": -6.779999999999999
+     }
+    },
+    "BALANCED (haircut 4c)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.021805354857878972,
+       "entry": 0.011001702340143794,
+       "fill": -0.03160641867124026,
+       "settlement": 0.0003666864233073695,
+       "unmatched": 0.008484367389994009
+      },
+      "fills": 1669,
+      "fills_per_window": 8.925133689839573,
+      "max_unmatched_held": 3.0,
+      "net_per_contract": -0.033559017375674065,
+      "net_per_contract_ci95": [
+       -0.041889092017062764,
+       -0.024746487477092235
+      ],
+      "net_per_window": -0.2995187165775402,
+      "net_per_window_ci95": [
+       -0.3765647851330953,
+       -0.22247264802198508
+      ],
+      "net_total": -56.01000000000002,
+      "p05_window": -1.1400000000000001,
+      "pair_cost_p50": 1.04,
+      "pairs": 771,
+      "roles": {
+       "ADD": 898,
+       "HEDGE": 771
+      },
+      "unmatched_contracts": 127,
+      "unmatched_lost_frac": 0.7322834645669292,
+      "unmatched_mean": -0.14023622047244094,
+      "windows": 187,
+      "worst_unmatched_contract": -0.76,
+      "worst_window": -2.15
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.020562244119357434,
+       "entry": 0.011331870072128509,
+       "fill": -0.030269336039357424,
+       "settlement": -0.004361446382811244,
+       "unmatched": 0.0018129636983132533
+      },
+      "fills": 1245,
+      "fills_per_window": 9.96,
+      "max_unmatched_held": 3.0,
+      "net_per_contract": -0.04204819277108435,
+      "net_per_contract_ci95": [
+       -0.05318082788671023,
+       -0.031012658227848093
+      ],
+      "net_per_window": -0.4188000000000001,
+      "net_per_window_ci95": [
+       -0.5269480078864446,
+       -0.31065199211355565
+      ],
+      "net_total": -52.350000000000016,
+      "p05_window": -1.3000000000000003,
+      "pair_cost_p50": 1.03,
+      "pairs": 568,
+      "roles": {
+       "ADD": 677,
+       "HEDGE": 568
+      },
+      "unmatched_contracts": 109,
+      "unmatched_lost_frac": 0.8440366972477065,
+      "unmatched_mean": -0.24724770642201835,
+      "windows": 125,
+      "worst_unmatched_contract": -0.75,
+      "worst_window": -3.17
+     }
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.018938328908430915,
+       "entry": 0.01913029555339578,
+       "fill": -0.04424308141896956,
+       "settlement": 0.0016814996592505833,
+       "unmatched": 0.010636594037470729
+      },
+      "fills": 427,
+      "fills_per_window": 2.283422459893048,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.03173302107728338,
+      "net_per_contract_ci95": [
+       -0.05292565947242208,
+       -0.01161662817551964
+      ],
+      "net_per_window": -0.07245989304812836,
+      "net_per_window_ci95": [
+       -0.11670950901752511,
+       -0.02821027707873161
+      ],
+      "net_total": -13.550000000000004,
+      "p05_window": -0.49,
+      "pair_cost_p50": 0.97,
+      "pairs": 159,
+      "roles": {
+       "ADD": 268,
+       "HEDGE": 159
+      },
+      "unmatched_contracts": 109,
+      "unmatched_lost_frac": 0.8073394495412844,
+      "unmatched_mean": -0.20266055045871562,
+      "windows": 187,
+      "worst_unmatched_contract": -0.8200000000000001,
+      "worst_window": -0.8100000000000002
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.017311484208524595,
+       "entry": 0.018239926916721307,
+       "fill": -0.03912517708,
+       "settlement": -0.009704918308524591,
+       "unmatched": 0.0012459149754098352
+      },
+      "fills": 305,
+      "fills_per_window": 2.44,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.04665573770491804,
+      "net_per_contract_ci95": [
+       -0.0700354609929078,
+       -0.026242236024844736
+      ],
+      "net_per_window": -0.11384000000000002,
+      "net_per_window_ci95": [
+       -0.16181063733824497,
+       -0.0658693626617551
+      ],
+      "net_total": -14.230000000000002,
+      "p05_window": -0.55,
+      "pair_cost_p50": 0.98,
+      "pairs": 118,
+      "roles": {
+       "ADD": 187,
+       "HEDGE": 118
+      },
+      "unmatched_contracts": 69,
+      "unmatched_lost_frac": 0.8695652173913043,
+      "unmatched_mean": -0.27304347826086955,
+      "windows": 125,
+      "worst_unmatched_contract": -0.81,
+      "worst_window": -0.81
+     }
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.021946595782245792,
+       "entry": 0.010216810857313753,
+       "fill": -0.032248591226536165,
+       "settlement": 0.0016503532633224574,
+       "unmatched": 0.010867990261718327
+      },
+      "fills": 3678,
+      "fills_per_window": 19.668449197860962,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.031460032626427416,
+      "net_per_contract_ci95": [
+       -0.041476491613967575,
+       -0.02146341463414637
+      ],
+      "net_per_window": -0.618770053475936,
+      "net_per_window_ci95": [
+       -0.8077659787995559,
+       -0.42977412815231614
+      ],
+      "net_total": -115.71000000000004,
+      "p05_window": -2.5000000000000004,
+      "pair_cost_p50": 1.03,
+      "pairs": 1647,
+      "roles": {
+       "ADD": 2025,
+       "HEDGE": 1653
+      },
+      "unmatched_contracts": 384,
+      "unmatched_lost_frac": 0.7317708333333334,
+      "unmatched_mean": -0.13921875,
+      "windows": 187,
+      "worst_unmatched_contract": -0.65,
+      "worst_window": -3.9299999999999997
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.019566572043342587,
+       "entry": 0.009817798873959773,
+       "fill": -0.029628580062656035,
+       "settlement": -0.0020804444338072122,
+       "unmatched": 0.0027788794966366135
+      },
+      "fills": 2884,
+      "fills_per_window": 23.072,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.038678918169209445,
+      "net_per_contract_ci95": [
+       -0.050185185185185194,
+       -0.02729064039408868
+      ],
+      "net_per_window": -0.8924000000000003,
+      "net_per_window_ci95": [
+       -1.1464142437215274,
+       -0.6383857562784732
+      ],
+      "net_total": -111.55000000000004,
+      "p05_window": -3.0700000000000003,
+      "pair_cost_p50": 1.01,
+      "pairs": 1296,
+      "roles": {
+       "ADD": 1582,
+       "HEDGE": 1302
+      },
+      "unmatched_contracts": 292,
+      "unmatched_lost_frac": 0.8116438356164384,
+      "unmatched_mean": -0.22417808219178084,
+      "windows": 125,
+      "worst_unmatched_contract": -0.75,
+      "worst_window": -6.220000000000001
+     }
+    },
+    "PAIR (deployed)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.022276912217846157,
+       "entry": 0.017169227439999997,
+       "fill": -0.04215384688707693,
+       "settlement": -0.010338455943692308,
+       "unmatched": 0.006123064531692311
+      },
+      "fills": 325,
+      "fills_per_window": 1.7379679144385027,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.05147692307692309,
+      "net_per_contract_ci95": [
+       -0.07164556962025306,
+       -0.03355029585798826
+      ],
+      "net_per_window": -0.08946524064171124,
+      "net_per_window_ci95": [
+       -0.11978732756533031,
+       -0.059143153718092166
+      ],
+      "net_total": -16.730000000000004,
+      "p05_window": -0.51,
+      "pair_cost_p50": 0.99,
+      "pairs": 139,
+      "roles": {
+       "ADD": 325,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 47,
+      "unmatched_lost_frac": 0.9361702127659575,
+      "unmatched_mean": -0.38553191489361704,
+      "windows": 187,
+      "worst_unmatched_contract": -0.64,
+      "worst_window": -0.64
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.02236486451216217,
+       "entry": 0.016351351512612602,
+       "fill": -0.03815316208468468,
+       "settlement": -0.0015315312882882898,
+       "unmatched": 0.01682433249864865
+      },
+      "fills": 222,
+      "fills_per_window": 1.776,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.02887387387387388,
+      "net_per_contract_ci95": [
+       -0.050330188679245366,
+       -0.010000000000000007
+      ],
+      "net_per_window": -0.05128000000000002,
+      "net_per_window_ci95": [
+       -0.08490246510921896,
+       -0.017657534890781076
+      ],
+      "net_total": -6.410000000000002,
+      "p05_window": -0.51,
+      "pair_cost_p50": 0.99,
+      "pairs": 101,
+      "roles": {
+       "ADD": 222,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 20,
+      "unmatched_lost_frac": 0.9,
+      "unmatched_mean": -0.371,
+      "windows": 125,
+      "worst_unmatched_contract": -0.64,
+      "worst_window": -0.64
+     }
+    },
+    "TUNED on IS, by $/contract": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.0245926434011236,
+       "entry": 0.01179263772921348,
+       "fill": -0.03309538898801498,
+       "settlement": 0.011985018715730336,
+       "unmatched": 0.037243709277528084
+      },
+      "fills": 267,
+      "fills_per_window": 1.427807486631016,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": 0.003333333333333321,
+      "net_per_contract_ci95": [
+       -0.01720689655172415,
+       0.024792452830188667
+      ],
+      "net_per_window": 0.004759358288770036,
+      "net_per_window_ci95": [
+       -0.025629526909931533,
+       0.0351482434874716
+      ],
+      "net_total": 0.8899999999999967,
+      "p05_window": -0.1700000000000001,
+      "pair_cost_p50": 1.01,
+      "pairs": 129,
+      "roles": {
+       "ADD": 138,
+       "HEDGE": 129
+      },
+      "unmatched_contracts": 9,
+      "unmatched_lost_frac": 0.2222222222222222,
+      "unmatched_mean": 0.21999999999999997,
+      "windows": 187,
+      "worst_unmatched_contract": -0.4,
+      "worst_window": -1.0199999999999998
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.02642275672682928,
+       "entry": 0.01657055260731707,
+       "fill": -0.035107140052845535,
+       "settlement": 0.006422755701626017,
+       "unmatched": 0.026504068145528463
+      },
+      "fills": 123,
+      "fills_per_window": 0.984,
+      "max_unmatched_held": 5.0,
+      "net_per_contract": -0.012032520325203263,
+      "net_per_contract_ci95": [
+       -0.035204081632653074,
+       0.01577981651376146
+      ],
+      "net_per_window": -0.01184000000000001,
+      "net_per_window_ci95": [
+       -0.03684069923522787,
+       0.013160699235227846
+      ],
+      "net_total": -1.4800000000000013,
+      "p05_window": -0.2899999999999999,
+      "pair_cost_p50": 1.04,
+      "pairs": 56,
+      "roles": {
+       "ADD": 67,
+       "HEDGE": 56
+      },
+      "unmatched_contracts": 11,
+      "unmatched_lost_frac": 0.36363636363636365,
+      "unmatched_mean": 0.03636363636363636,
+      "windows": 125,
+      "worst_unmatched_contract": -0.5,
+      "worst_window": -0.5
+     }
+    },
+    "TUNED on IS, by $/window": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.0245926434011236,
+       "entry": 0.01179263772921348,
+       "fill": -0.03309538898801498,
+       "settlement": 0.011985018715730336,
+       "unmatched": 0.037243709277528084
+      },
+      "fills": 267,
+      "fills_per_window": 1.427807486631016,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": 0.003333333333333321,
+      "net_per_contract_ci95": [
+       -0.01720689655172415,
+       0.024792452830188667
+      ],
+      "net_per_window": 0.004759358288770036,
+      "net_per_window_ci95": [
+       -0.025629526909931533,
+       0.0351482434874716
+      ],
+      "net_total": 0.8899999999999967,
+      "p05_window": -0.1700000000000001,
+      "pair_cost_p50": 1.01,
+      "pairs": 129,
+      "roles": {
+       "ADD": 138,
+       "HEDGE": 129
+      },
+      "unmatched_contracts": 9,
+      "unmatched_lost_frac": 0.2222222222222222,
+      "unmatched_mean": 0.21999999999999997,
+      "windows": 187,
+      "worst_unmatched_contract": -0.4,
+      "worst_window": -1.0199999999999998
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.02642275672682928,
+       "entry": 0.01657055260731707,
+       "fill": -0.035107140052845535,
+       "settlement": 0.006422755701626017,
+       "unmatched": 0.026504068145528463
+      },
+      "fills": 123,
+      "fills_per_window": 0.984,
+      "max_unmatched_held": 5.0,
+      "net_per_contract": -0.012032520325203263,
+      "net_per_contract_ci95": [
+       -0.035204081632653074,
+       0.01577981651376146
+      ],
+      "net_per_window": -0.01184000000000001,
+      "net_per_window_ci95": [
+       -0.03684069923522787,
+       0.013160699235227846
+      ],
+      "net_total": -1.4800000000000013,
+      "p05_window": -0.2899999999999999,
+      "pair_cost_p50": 1.04,
+      "pairs": 56,
+      "roles": {
+       "ADD": 67,
+       "HEDGE": 56
+      },
+      "unmatched_contracts": 11,
+      "unmatched_lost_frac": 0.36363636363636365,
+      "unmatched_mean": 0.03636363636363636,
+      "windows": 125,
+      "worst_unmatched_contract": -0.5,
+      "worst_window": -0.5
+     }
+    }
+   },
+   "frontier": [
+    {
+     "IS": {
+      "fills_per_window": 0.6256684491978609,
+      "net_per_contract": -0.0017094017094017224,
+      "net_per_contract_ci95": [
+       -0.04079207920792081,
+       0.03510344827586202
+      ],
+      "net_per_window": -0.0010695187165775482,
+      "net_per_window_ci95": [
+       -0.024654650331850516,
+       0.022515612898695418
+      ],
+      "worst_window": -0.74
+     },
+     "OOS": {
+      "fills_per_window": 0.504,
+      "net_per_contract": -0.005714285714285725,
+      "net_per_contract_ci95": [
+       -0.05272727272727275,
+       0.042794117647058816
+      ],
+      "net_per_window": -0.0028800000000000054,
+      "net_per_window_ci95": [
+       -0.02590566499214133,
+       0.02014566499214132
+      ],
+      "worst_window": -0.55
+     },
+     "band": [
+      0.2,
+      1.0
+     ],
+     "params": {
+      "adverse": 0.05,
+      "margin": 0.05,
+      "max_qty": 1,
+      "max_unmatched": 1,
+      "pair_ceiling": 0.99,
+      "risk": 0.3,
+      "size_per_cent": 0.0
+     },
+     "settings_in_band": 4
+    },
+    {
+     "IS": {
+      "fills_per_window": 1.427807486631016,
+      "net_per_contract": 0.003333333333333321,
+      "net_per_contract_ci95": [
+       -0.01720689655172415,
+       0.024792452830188667
+      ],
+      "net_per_window": 0.004759358288770036,
+      "net_per_window_ci95": [
+       -0.025629526909931533,
+       0.0351482434874716
+      ],
+      "worst_window": -1.0199999999999998
+     },
+     "OOS": {
+      "fills_per_window": 0.984,
+      "net_per_contract": -0.012032520325203263,
+      "net_per_contract_ci95": [
+       -0.035204081632653074,
+       0.01577981651376146
+      ],
+      "net_per_window": -0.01184000000000001,
+      "net_per_window_ci95": [
+       -0.03684069923522787,
+       0.013160699235227846
+      ],
+      "worst_window": -0.5
+     },
+     "band": [
+      1.0,
+      3.0
+     ],
+     "params": {
+      "adverse": 0.05,
+      "margin": 0.05,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": null,
+      "risk": 0.3,
+      "size_per_cent": 0.0
+     },
+     "settings_in_band": 47
+    },
+    {
+     "IS": {
+      "fills_per_window": 3.0320855614973263,
+      "net_per_contract": -0.002010582010582022,
+      "net_per_contract_ci95": [
+       -0.025104166666666674,
+       0.023296089385474835
+      ],
+      "net_per_window": -0.006096256684492014,
+      "net_per_window_ci95": [
+       -0.07883591542540999,
+       0.06664340205642597
+      ],
+      "worst_window": -2.34
+     },
+     "OOS": {
+      "fills_per_window": 2.352,
+      "net_per_contract": -0.014523809523809534,
+      "net_per_contract_ci95": [
+       -0.03915789473684213,
+       0.015111111111111105
+      ],
+      "net_per_window": -0.034160000000000024,
+      "net_per_window_ci95": [
+       -0.09775790441408608,
+       0.02943790441408603
+      ],
+      "worst_window": -1.5
+     },
+     "band": [
+      3.0,
+      10.0
+     ],
+     "params": {
+      "adverse": 0.05,
+      "margin": 0.05,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": null,
+      "risk": 0.3,
+      "size_per_cent": 0.25
+     },
+     "settings_in_band": 123
+    },
+    {
+     "IS": {
+      "fills_per_window": 10.572192513368984,
+      "net_per_contract": -0.02010116337885686,
+      "net_per_contract_ci95": [
+       -0.03954168967421315,
+       -0.001543241843604361
+      ],
+      "net_per_window": -0.2125133689839573,
+      "net_per_window_ci95": [
+       -0.4036049685192609,
+       -0.021421769448653705
+      ],
+      "worst_window": -3.5
+     },
+     "OOS": {
+      "fills_per_window": 10.816,
+      "net_per_contract": -0.037551775147929005,
+      "net_per_contract_ci95": [
+       -0.06171404682274245,
+       -0.013272084805653726
+      ],
+      "net_per_window": -0.40616000000000013,
+      "net_per_window_ci95": [
+       -0.65853339273423,
+       -0.15378660726577031
+      ],
+      "worst_window": -3.9400000000000004
+     },
+     "band": [
+      10.0,
+      20.0
+     ],
+     "params": {
+      "adverse": 0.05,
+      "margin": 0.05,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": null,
+      "risk": 0.05,
+      "size_per_cent": 0.25
+     },
+     "settings_in_band": 59
+    },
+    {
+     "IS": {
+      "fills_per_window": 21.700534759358288,
+      "net_per_contract": -0.03291276490882209,
+      "net_per_contract_ci95": [
+       -0.04030190546894332,
+       -0.024916007905138354
+      ],
+      "net_per_window": -0.7142245989304815,
+      "net_per_window_ci95": [
+       -0.8787376162007956,
+       -0.5497115816601674
+      ],
+      "worst_window": -3.2399999999999998
+     },
+     "OOS": {
+      "fills_per_window": 25.232,
+      "net_per_contract": -0.04046607482561827,
+      "net_per_contract_ci95": [
+       -0.04901880877742948,
+       -0.031839517919441784
+      ],
+      "net_per_window": -1.0210400000000002,
+      "net_per_window_ci95": [
+       -1.233070358504303,
+       -0.8090096414956972
+      ],
+      "worst_window": -6.510000000000001
+     },
+     "band": [
+      20.0,
+      1000000000.0
+     ],
+     "params": {
+      "adverse": 0.01,
+      "margin": 0.01,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": null,
+      "risk": 0.15,
+      "size_per_cent": 0.25
+     },
+     "settings_in_band": 7
+    }
+   ],
+   "grid_IS_best_any": 0.004759358288770036,
+   "grid_IS_positive": 2,
+   "through0": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "buckets_per_contract": {
+      "completion": -0.015479905708227012,
+      "entry": 0.006032087859550557,
+      "fill": -0.0188527742980956,
+      "settlement": -0.0003256526155398974,
+      "unmatched": 0.004840299228127977
+     },
+     "fills": 5251,
+     "fills_per_window": 42.008,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.023785945534183974,
+     "net_per_contract_ci95": [
+      -0.03185171245765904,
+      -0.016528709917971677
+     ],
+     "net_per_window": -0.9992000000000004,
+     "net_per_window_ci95": [
+      -1.301487143289611,
+      -0.6969128567103899
+     ],
+     "net_total": -124.90000000000005,
+     "p05_window": -3.7000000000000006,
+     "pair_cost_p50": 1.0,
+     "pairs": 2488,
+     "roles": {
+      "ADD": 2840,
+      "HEDGE": 2411
+     },
+     "unmatched_contracts": 275,
+     "unmatched_lost_frac": 0.7381818181818182,
+     "unmatched_mean": -0.18887272727272728,
+     "windows": 125,
+     "worst_unmatched_contract": -0.85,
+     "worst_window": -6.539999999999999
+    },
+    "AGGRESSIVE + hedge skew": {
+     "buckets_per_contract": {
+      "completion": -0.014147419002839013,
+      "entry": 0.011788834006771288,
+      "fill": -0.023636582045847294,
+      "settlement": -0.00011638192011990843,
+      "unmatched": 0.0002730725028566397
+     },
+     "fills": 5671,
+     "fills_per_window": 45.368,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.025838476459178285,
+     "net_per_contract_ci95": [
+      -0.031050261214195646,
+      -0.02082260491556597
+     ],
+     "net_per_window": -1.1722400000000004,
+     "net_per_window_ci95": [
+      -1.4050089291964394,
+      -0.9394710708035615
+     ],
+     "net_total": -146.53000000000006,
+     "p05_window": -3.330000000000001,
+     "pair_cost_p50": 1.02,
+     "pairs": 2782,
+     "roles": {
+      "ADD": 2889,
+      "HEDGE": 2782
+     },
+     "unmatched_contracts": 107,
+     "unmatched_lost_frac": 0.7289719626168224,
+     "unmatched_mean": -0.16626168224299065,
+     "windows": 125,
+     "worst_unmatched_contract": -0.6900000000000001,
+     "worst_window": -6.750000000000001
+    },
+    "BALANCED (haircut 4c)": {
+     "buckets_per_contract": {
+      "completion": -0.014525805836914773,
+      "entry": 0.01192566282490996,
+      "fill": -0.024234874120768305,
+      "settlement": -0.0009783918816926769,
+      "unmatched": 0.0017509840444777907
+     },
+     "fills": 1666,
+     "fills_per_window": 13.328,
+     "max_unmatched_held": 3.0,
+     "net_per_contract": -0.026062424969988004,
+     "net_per_contract_ci95": [
+      -0.034968004653868526,
+      -0.017296416938110765
+     ],
+     "net_per_window": -0.3473600000000001,
+     "net_per_window_ci95": [
+      -0.4617557182816143,
+      -0.23296428171838587
+     ],
+     "net_total": -43.420000000000016,
+     "p05_window": -1.2400000000000004,
+     "pair_cost_p50": 1.01,
+     "pairs": 782,
+     "roles": {
+      "ADD": 884,
+      "HEDGE": 782
+     },
+     "unmatched_contracts": 102,
+     "unmatched_lost_frac": 0.803921568627451,
+     "unmatched_mean": -0.1846078431372549,
+     "windows": 125,
+     "worst_unmatched_contract": -0.75,
+     "worst_window": -3.1300000000000003
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "buckets_per_contract": {
+      "completion": -0.014429354316847831,
+      "entry": 0.020524938153804344,
+      "fill": -0.03392168067907608,
+      "settlement": -0.007717391629347827,
+      "unmatched": 0.006630444993206521
+     },
+     "fills": 368,
+     "fills_per_window": 2.944,
+     "max_unmatched_held": 1.0,
+     "net_per_contract": -0.02891304347826088,
+     "net_per_contract_ci95": [
+      -0.046564245810055874,
+      -0.011621621621621628
+     ],
+     "net_per_window": -0.08512000000000003,
+     "net_per_window_ci95": [
+      -0.13213239172616295,
+      -0.0381076082738371
+     ],
+     "net_total": -10.640000000000004,
+     "p05_window": -0.53,
+     "pair_cost_p50": 0.9700000000000001,
+     "pairs": 149,
+     "roles": {
+      "ADD": 219,
+      "HEDGE": 149
+     },
+     "unmatched_contracts": 70,
+     "unmatched_lost_frac": 0.8857142857142857,
+     "unmatched_mean": -0.24714285714285716,
+     "windows": 125,
+     "worst_unmatched_contract": -0.73,
+     "worst_window": -0.73
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "buckets_per_contract": {
+      "completion": -0.015379675770454551,
+      "entry": 0.010289967362112294,
+      "fill": -0.023015714154625666,
+      "settlement": -0.0007727277610160432,
+      "unmatched": 0.004332695778529411
+     },
+     "fills": 3740,
+     "fills_per_window": 29.92,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.024545454545454558,
+     "net_per_contract_ci95": [
+      -0.03493755203996671,
+      -0.015181567743551226
+     ],
+     "net_per_window": -0.7344000000000004,
+     "net_per_window_ci95": [
+      -1.0108147813012298,
+      -0.45798521869877107
+     ],
+     "net_total": -91.80000000000004,
+     "p05_window": -3.02,
+     "pair_cost_p50": 1.0,
+     "pairs": 1725,
+     "roles": {
+      "ADD": 2013,
+      "HEDGE": 1727
+     },
+     "unmatched_contracts": 290,
+     "unmatched_lost_frac": 0.7793103448275862,
+     "unmatched_mean": -0.19927586206896553,
+     "windows": 125,
+     "worst_unmatched_contract": -0.75,
+     "worst_window": -6.250000000000001
+    },
+    "PAIR (deployed)": {
+     "buckets_per_contract": {
+      "completion": -0.01861233585594714,
+      "entry": 0.015991188199118933,
+      "fill": -0.03458150425110132,
+      "settlement": 0.0011894273127753294,
+      "unmatched": 0.018259920630396474
+     },
+     "fills": 227,
+     "fills_per_window": 1.816,
+     "max_unmatched_held": 1.0,
+     "net_per_contract": -0.01775330396475772,
+     "net_per_contract_ci95": [
+      -0.035401785714285774,
+      -0.0022072072072072276
+     ],
+     "net_per_window": -0.03224000000000002,
+     "net_per_window_ci95": [
+      -0.06223451940097532,
+      -0.00224548059902472
+     ],
+     "net_total": -4.030000000000002,
+     "p05_window": -0.5,
+     "pair_cost_p50": 0.99,
+     "pairs": 106,
+     "roles": {
+      "ADD": 227,
+      "HEDGE": 0
+     },
+     "unmatched_contracts": 15,
+     "unmatched_lost_frac": 0.8666666666666667,
+     "unmatched_mean": -0.3393333333333333,
+     "windows": 125,
+     "worst_unmatched_contract": -0.62,
+     "worst_window": -0.62
+    },
+    "TUNED on IS, by $/contract": {
+     "buckets_per_contract": {
+      "completion": -0.018826808789944142,
+      "entry": 0.01585574175698324,
+      "fill": -0.02870490307486034,
+      "settlement": 0.004804457567597766,
+      "unmatched": 0.021675981813966485
+     },
+     "fills": 179,
+     "fills_per_window": 1.432,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.005195530726256993,
+     "net_per_contract_ci95": [
+      -0.030625000000000006,
+      0.024618834080717474
+     ],
+     "net_per_window": -0.007440000000000014,
+     "net_per_window_ci95": [
+      -0.04807421841119912,
+      0.033194218411199086
+     ],
+     "net_total": -0.9300000000000017,
+     "p05_window": -0.32,
+     "pair_cost_p50": 1.03,
+     "pairs": 79,
+     "roles": {
+      "ADD": 100,
+      "HEDGE": 79
+     },
+     "unmatched_contracts": 21,
+     "unmatched_lost_frac": 0.42857142857142855,
+     "unmatched_mean": 0.02666666666666666,
+     "windows": 125,
+     "worst_unmatched_contract": -0.5,
+     "worst_window": -0.63
+    },
+    "TUNED on IS, by $/window": {
+     "buckets_per_contract": {
+      "completion": -0.018826808789944142,
+      "entry": 0.01585574175698324,
+      "fill": -0.02870490307486034,
+      "settlement": 0.004804457567597766,
+      "unmatched": 0.021675981813966485
+     },
+     "fills": 179,
+     "fills_per_window": 1.432,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.005195530726256993,
+     "net_per_contract_ci95": [
+      -0.030625000000000006,
+      0.024618834080717474
+     ],
+     "net_per_window": -0.007440000000000014,
+     "net_per_window_ci95": [
+      -0.04807421841119912,
+      0.033194218411199086
+     ],
+     "net_total": -0.9300000000000017,
+     "p05_window": -0.32,
+     "pair_cost_p50": 1.03,
+     "pairs": 79,
+     "roles": {
+      "ADD": 100,
+      "HEDGE": 79
+     },
+     "unmatched_contracts": 21,
+     "unmatched_lost_frac": 0.42857142857142855,
+     "unmatched_mean": 0.02666666666666666,
+     "windows": 125,
+     "worst_unmatched_contract": -0.5,
+     "worst_window": -0.63
+    }
+   },
+   "tuned": {
+    "by_contract": {
+     "adverse": 0.05,
+     "margin": 0.05,
+     "max_qty": 3,
+     "max_unmatched": 6,
+     "pair_ceiling": null,
+     "risk": 0.3,
+     "size_per_cent": 0.0
+    },
+    "by_window": {
+     "adverse": 0.05,
+     "margin": 0.05,
+     "max_qty": 3,
+     "max_unmatched": 6,
+     "pair_ceiling": null,
+     "risk": 0.3,
+     "size_per_cent": 0.0
+    },
+    "eligible": 236,
+    "grid": 240
+   },
+   "vs_pair": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "IS": {
+      "ci95": [
+       -1.0794117647058827,
+       -0.698770053475936
+      ],
+      "mean": -0.8938502673796793,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -1.40552,
+       -0.8223200000000004
+      ],
+      "mean": -1.1076800000000002,
+      "windows": 125
+     }
+    },
+    "AGGRESSIVE + hedge skew": {
+     "IS": {
+      "ci95": [
+       -1.0255614973262033,
+       -0.7137967914438506
+      ],
+      "mean": -0.8714438502673799,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -1.5135200000000004,
+       -1.0439200000000004
+      ],
+      "mean": -1.2672000000000003,
+      "windows": 125
+     }
+    },
+    "BALANCED (haircut 4c)": {
+     "IS": {
+      "ci95": [
+       -0.2894652406417113,
+       -0.12524064171123
+      ],
+      "mean": -0.21005347593582896,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -0.4852000000000001,
+       -0.2556000000000001
+      ],
+      "mean": -0.36752000000000007,
+      "windows": 125
+     }
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "IS": {
+      "ci95": [
+       -0.03149732620320856,
+       0.06631016042780748
+      ],
+      "mean": 0.017005347593582885,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -0.11120000000000001,
+       -0.011040000000000006
+      ],
+      "mean": -0.06256,
+      "windows": 125
+     }
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "IS": {
+      "ci95": [
+       -0.70620320855615,
+       -0.3365240641711232
+      ],
+      "mean": -0.5293048128342248,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -1.1174400000000002,
+       -0.5846400000000002
+      ],
+      "mean": -0.8411200000000002,
+      "windows": 125
+     }
+    },
+    "TUNED on IS, by $/contract": {
+     "IS": {
+      "ci95": [
+       0.05165775401069519,
+       0.1409090909090909
+      ],
+      "mean": 0.09422459893048128,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -0.0038399999999999945,
+       0.08280000000000001
+      ],
+      "mean": 0.03944000000000001,
+      "windows": 125
+     }
+    },
+    "TUNED on IS, by $/window": {
+     "IS": {
+      "ci95": [
+       0.05165775401069519,
+       0.1409090909090909
+      ],
+      "mean": 0.09422459893048128,
+      "windows": 187
+     },
+     "OOS": {
+      "ci95": [
+       -0.0038399999999999945,
+       0.08280000000000001
+      ],
+      "mean": 0.03944000000000001,
+      "windows": 125
+     }
+    }
+   },
+   "windows": {
+    "IS": 187,
+    "OOS": 125
+   }
+  },
+  "wide": {
+   "belief": "BOOK",
+   "candidates": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.02534226073085201,
+       "entry": 0.005218467675057326,
+       "fill": -0.029373835223549125,
+       "settlement": -0.003374845570770859,
+       "unmatched": 0.0019940120402716526
+      },
+      "fills": 5669,
+      "fills_per_window": 17.996825396825397,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.05087846180984302,
+      "net_per_contract_ci95": [
+       -0.05522326064382135,
+       -0.046965988842900826
+      ],
+      "net_per_window": -0.9156507936507938,
+      "net_per_window_ci95": [
+       -0.9964806135771143,
+       -0.8348209737244734
+      ],
+      "net_total": -288.43000000000006,
+      "p05_window": -2.2700000000000005,
+      "pair_cost_p50": 1.06,
+      "pairs": 2710,
+      "roles": {
+       "ADD": 2959,
+       "HEDGE": 2710
+      },
+      "unmatched_contracts": 249,
+      "unmatched_lost_frac": 0.9357429718875502,
+      "unmatched_mean": -0.2191566265060241,
+      "windows": 315,
+      "worst_unmatched_contract": -0.78,
+      "worst_window": -3.2200000000000006
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.02123499025759451,
+       "entry": 0.005088564459835047,
+       "fill": -0.024427447258487972,
+       "settlement": -0.0008563573585017182,
+       "unmatched": 0.0024391651226529213
+      },
+      "fills": 7275,
+      "fills_per_window": 34.47867298578199,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.038991065292096234,
+      "net_per_contract_ci95": [
+       -0.04160451977401128,
+       -0.03634032634032635
+      ],
+      "net_per_window": -1.34436018957346,
+      "net_per_window_ci95": [
+       -1.4492097263610373,
+       -1.2395106527858828
+      ],
+      "net_total": -283.6600000000001,
+      "p05_window": -2.5300000000000007,
+      "pair_cost_p50": 1.05,
+      "pairs": 3572,
+      "roles": {
+       "ADD": 3703,
+       "HEDGE": 3572
+      },
+      "unmatched_contracts": 131,
+      "unmatched_lost_frac": 0.916030534351145,
+      "unmatched_mean": -0.16389312977099238,
+      "windows": 211,
+      "worst_unmatched_contract": -0.62,
+      "worst_window": -5.15
+     }
+    },
+    "AGGRESSIVE + hedge skew": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.025587111836281044,
+       "entry": 0.03556366080702604,
+       "fill": -0.06673176188243489,
+       "settlement": -0.005637051262023017,
+       "unmatched": 0.004736298092549969
+      },
+      "fills": 1651,
+      "fills_per_window": 5.241269841269841,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.05765596608116294,
+      "net_per_contract_ci95": [
+       -0.0674426934097421,
+       -0.04854976928147661
+      ],
+      "net_per_window": -0.30219047619047623,
+      "net_per_window_ci95": [
+       -0.3569941132862409,
+       -0.24738683909471154
+      ],
+      "net_total": -95.19000000000001,
+      "p05_window": -1.29,
+      "pair_cost_p50": 1.07,
+      "pairs": 776,
+      "roles": {
+       "ADD": 875,
+       "HEDGE": 776
+      },
+      "unmatched_contracts": 99,
+      "unmatched_lost_frac": 0.9292929292929293,
+      "unmatched_mean": -0.18888888888888888,
+      "windows": 315,
+      "worst_unmatched_contract": -0.72,
+      "worst_window": -4.05
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.018291583461079,
+       "entry": 0.033387283373795755,
+       "fill": -0.05794073266962106,
+       "settlement": -0.0003339755940912012,
+       "unmatched": -0.0030123853548490675
+      },
+      "fills": 1557,
+      "fills_per_window": 7.37914691943128,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.04619139370584458,
+      "net_per_contract_ci95": [
+       -0.05347886347886347,
+       -0.03922155688622755
+      ],
+      "net_per_window": -0.34085308056872043,
+      "net_per_window_ci95": [
+       -0.40499781921452244,
+       -0.27670834192291843
+      ],
+      "net_total": -71.92000000000002,
+      "p05_window": -1.17,
+      "pair_cost_p50": 1.05,
+      "pairs": 770,
+      "roles": {
+       "ADD": 787,
+       "HEDGE": 770
+      },
+      "unmatched_contracts": 17,
+      "unmatched_lost_frac": 1.0,
+      "unmatched_mean": -0.26529411764705885,
+      "windows": 211,
+      "worst_unmatched_contract": -0.65,
+      "worst_window": -2.9399999999999995
+     }
+    },
+    "BALANCED (haircut 4c)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.02666666876666666,
+       "entry": 0.03916666314166665,
+       "fill": -0.059999996474999984,
+       "settlement": -0.11750000000000001,
+       "unmatched": -0.05916666456666667
+      },
+      "fills": 12,
+      "fills_per_window": 0.0380952380952381,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.22416666666666665,
+      "net_per_contract_ci95": [
+       -0.51875,
+       -0.03799999999999999
+      ],
+      "net_per_window": -0.00853968253968254,
+      "net_per_window_ci95": [
+       -0.01720105077870568,
+       0.00012168569934059743
+      ],
+      "net_total": -2.69,
+      "p05_window": 0.0,
+      "pair_cost_p50": 1.09,
+      "pairs": 5,
+      "roles": {
+       "ADD": 7,
+       "HEDGE": 5
+      },
+      "unmatched_contracts": 2,
+      "unmatched_lost_frac": 1.0,
+      "unmatched_mean": -0.8500000000000001,
+      "windows": 315,
+      "worst_unmatched_contract": -0.87,
+      "worst_window": -0.87
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.020500003640000007,
+       "entry": 0.035,
+       "fill": -0.051570731680000016,
+       "settlement": 0.0,
+       "unmatched": -0.020429264679999986
+      },
+      "fills": 20,
+      "fills_per_window": 0.0947867298578199,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.05750000000000001,
+      "net_per_contract_ci95": [
+       -0.08500000000000002,
+       -0.032857142857142856
+      ],
+      "net_per_window": -0.005450236966824645,
+      "net_per_window_ci95": [
+       -0.009519900608415536,
+       -0.0013805733252337544
+      ],
+      "net_total": -1.1500000000000001,
+      "p05_window": 0.0,
+      "pair_cost_p50": 1.1,
+      "pairs": 10,
+      "roles": {
+       "ADD": 10,
+       "HEDGE": 10
+      },
+      "unmatched_contracts": 0,
+      "unmatched_lost_frac": null,
+      "unmatched_mean": null,
+      "windows": 211,
+      "worst_unmatched_contract": null,
+      "worst_window": -0.26
+     }
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": null,
+       "entry": null,
+       "fill": null,
+       "settlement": null,
+       "unmatched": null
+      },
+      "fills": 0,
+      "fills_per_window": 0.0,
+      "max_unmatched_held": 0.0,
+      "net_per_contract": null,
+      "net_per_contract_ci95": [
+       NaN,
+       NaN
+      ],
+      "net_per_window": 0.0,
+      "net_per_window_ci95": [
+       0.0,
+       0.0
+      ],
+      "net_total": 0.0,
+      "p05_window": 0.0,
+      "pair_cost_p50": null,
+      "pairs": 0,
+      "roles": {
+       "ADD": 0,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 0,
+      "unmatched_lost_frac": null,
+      "unmatched_mean": null,
+      "windows": 315,
+      "worst_unmatched_contract": null,
+      "worst_window": 0.0
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": null,
+       "entry": null,
+       "fill": null,
+       "settlement": null,
+       "unmatched": null
+      },
+      "fills": 0,
+      "fills_per_window": 0.0,
+      "max_unmatched_held": 0.0,
+      "net_per_contract": null,
+      "net_per_contract_ci95": [
+       NaN,
+       NaN
+      ],
+      "net_per_window": 0.0,
+      "net_per_window_ci95": [
+       0.0,
+       0.0
+      ],
+      "net_total": 0.0,
+      "p05_window": 0.0,
+      "pair_cost_p50": null,
+      "pairs": 0,
+      "roles": {
+       "ADD": 0,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 0,
+      "unmatched_lost_frac": null,
+      "unmatched_mean": null,
+      "windows": 211,
+      "worst_unmatched_contract": null,
+      "worst_window": 0.0
+     }
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.02891439921958348,
+       "entry": 0.03803220859774941,
+       "fill": -0.06625040839442392,
+       "settlement": -0.006546187394894189,
+       "unmatched": 0.006188023898555592
+      },
+      "fills": 2977,
+      "fills_per_window": 9.450793650793651,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.057490762512596584,
+      "net_per_contract_ci95": [
+       -0.06454482995534185,
+       -0.050720488903184306
+      ],
+      "net_per_window": -0.5433333333333334,
+      "net_per_window_ci95": [
+       -0.6130861799574869,
+       -0.47358048670917996
+      ],
+      "net_total": -171.15000000000003,
+      "p05_window": -1.7599999999999998,
+      "pair_cost_p50": 1.05,
+      "pairs": 1347,
+      "roles": {
+       "ADD": 1630,
+       "HEDGE": 1347
+      },
+      "unmatched_contracts": 283,
+      "unmatched_lost_frac": 0.9293286219081273,
+      "unmatched_mean": -0.23091872791519436,
+      "windows": 315,
+      "worst_unmatched_contract": -0.72,
+      "worst_window": -3.5
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.022186364969650357,
+       "entry": 0.03582518010398601,
+       "fill": -0.059976441289545455,
+       "settlement": 0.00155244774041958,
+       "unmatched": -0.0013476887180769233
+      },
+      "fills": 2860,
+      "fills_per_window": 13.554502369668246,
+      "max_unmatched_held": 6.0,
+      "net_per_contract": -0.04613286713286714,
+      "net_per_contract_ci95": [
+       -0.05239999999999999,
+       -0.03996693121693122
+      ],
+      "net_per_window": -0.625308056872038,
+      "net_per_window_ci95": [
+       -0.721689110062275,
+       -0.5289270036818011
+      ],
+      "net_total": -131.94000000000003,
+      "p05_window": -1.5600000000000003,
+      "pair_cost_p50": 1.06,
+      "pairs": 1384,
+      "roles": {
+       "ADD": 1476,
+       "HEDGE": 1384
+      },
+      "unmatched_contracts": 92,
+      "unmatched_lost_frac": 0.8260869565217391,
+      "unmatched_mean": -0.1666304347826087,
+      "windows": 211,
+      "worst_unmatched_contract": -0.65,
+      "worst_window": -3.7300000000000004
+     }
+    },
+    "PAIR (deployed)": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.024782064257676355,
+       "entry": 0.0174874250846473,
+       "fill": -0.0450442488340249,
+       "settlement": -0.003278006849170125,
+       "unmatched": 0.007774571204771784
+      },
+      "fills": 482,
+      "fills_per_window": 1.53015873015873,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.047842323651452294,
+      "net_per_contract_ci95": [
+       -0.06479830148619928,
+       -0.03076288659793816
+      ],
+      "net_per_window": -0.07320634920634922,
+      "net_per_window_ci95": [
+       -0.09804169813082302,
+       -0.04837100028187542
+      ],
+      "net_total": -23.060000000000006,
+      "p05_window": -0.52,
+      "pair_cost_p50": 0.99,
+      "pairs": 201,
+      "roles": {
+       "ADD": 482,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 80,
+      "unmatched_lost_frac": 0.85,
+      "unmatched_mean": -0.313375,
+      "windows": 315,
+      "worst_unmatched_contract": -0.64,
+      "worst_window": -0.64
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.023328874394652414,
+       "entry": 0.016604276131818176,
+       "fill": -0.039893053487967914,
+       "settlement": -0.00550801808475936,
+       "unmatched": 0.01568181956818182
+      },
+      "fills": 374,
+      "fills_per_window": 1.7725118483412323,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.03644385026737969,
+      "net_per_contract_ci95": [
+       -0.05350974930362106,
+       -0.021522309711286165
+      ],
+      "net_per_window": -0.06459715639810429,
+      "net_per_window_ci95": [
+       -0.09106459852232549,
+       -0.0381297142738831
+      ],
+      "net_total": -13.630000000000004,
+      "p05_window": -0.51,
+      "pair_cost_p50": 0.99,
+      "pairs": 167,
+      "roles": {
+       "ADD": 374,
+       "HEDGE": 0
+      },
+      "unmatched_contracts": 40,
+      "unmatched_lost_frac": 0.925,
+      "unmatched_mean": -0.3825,
+      "windows": 211,
+      "worst_unmatched_contract": -0.64,
+      "worst_window": -0.64
+     }
+    },
+    "TUNED on IS, by $/contract": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.022405539902577713,
+       "entry": 0.043493258776648974,
+       "fill": -0.07786227615868081,
+       "settlement": -0.000825331231463231,
+       "unmatched": 0.018729532185519333
+      },
+      "fills": 1319,
+      "fills_per_window": 4.1873015873015875,
+      "max_unmatched_held": 3.0,
+      "net_per_contract": -0.03887035633055346,
+      "net_per_contract_ci95": [
+       -0.05739903069466882,
+       -0.02017267267267268
+      ],
+      "net_per_window": -0.1627619047619048,
+      "net_per_window_ci95": [
+       -0.23863453190323736,
+       -0.08688927762057226
+      ],
+      "net_total": -51.27000000000002,
+      "p05_window": -1.2000000000000002,
+      "pair_cost_p50": 0.96,
+      "pairs": 465,
+      "roles": {
+       "ADD": 855,
+       "HEDGE": 464
+      },
+      "unmatched_contracts": 389,
+      "unmatched_lost_frac": 0.8097686375321337,
+      "unmatched_mean": -0.18799485861182522,
+      "windows": 315,
+      "worst_unmatched_contract": -0.74,
+      "worst_window": -1.75
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.018967058367319684,
+       "entry": 0.04090828472769367,
+       "fill": -0.069971378650935,
+       "settlement": -0.008423863031700802,
+       "unmatched": 0.009882332330276045
+      },
+      "fills": 1123,
+      "fills_per_window": 5.322274881516588,
+      "max_unmatched_held": 3.0,
+      "net_per_contract": -0.04657168299198576,
+      "net_per_contract_ci95": [
+       -0.06758003766478338,
+       -0.026989342806394326
+      ],
+      "net_per_window": -0.2478672985781991,
+      "net_per_window_ci95": [
+       -0.34882092973747336,
+       -0.14691366741892486
+      ],
+      "net_total": -52.30000000000001,
+      "p05_window": -1.4400000000000002,
+      "pair_cost_p50": 0.95,
+      "pairs": 418,
+      "roles": {
+       "ADD": 701,
+       "HEDGE": 422
+      },
+      "unmatched_contracts": 287,
+      "unmatched_lost_frac": 0.8501742160278746,
+      "unmatched_mean": -0.26477351916376307,
+      "windows": 211,
+      "worst_unmatched_contract": -0.78,
+      "worst_window": -1.85
+     }
+    },
+    "TUNED on IS, by $/window": {
+     "IS": {
+      "buckets_per_contract": {
+       "completion": -0.02144999875075,
+       "entry": 0.04257133588974999,
+       "fill": -0.08015873068874999,
+       "settlement": -0.0036834641145000006,
+       "unmatched": 0.011495857664249997
+      },
+      "fills": 400,
+      "fills_per_window": 1.2698412698412698,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.051225000000000014,
+      "net_per_contract_ci95": [
+       -0.07515492957746474,
+       -0.030668151447661513
+      ],
+      "net_per_window": -0.06504761904761906,
+      "net_per_window_ci95": [
+       -0.09204434602283554,
+       -0.038050892072402594
+      ],
+      "net_total": -20.490000000000006,
+      "p05_window": -0.65,
+      "pair_cost_p50": 0.99,
+      "pairs": 145,
+      "roles": {
+       "ADD": 255,
+       "HEDGE": 145
+      },
+      "unmatched_contracts": 110,
+      "unmatched_lost_frac": 0.7636363636363637,
+      "unmatched_mean": -0.197,
+      "windows": 315,
+      "worst_unmatched_contract": -0.79,
+      "worst_window": -0.79
+     },
+     "OOS": {
+      "buckets_per_contract": {
+       "completion": -0.014350128206631303,
+       "entry": 0.03779045900238726,
+       "fill": -0.065509294901061,
+       "settlement": 0.0018037149986737402,
+       "unmatched": 0.008779837966047742
+      },
+      "fills": 377,
+      "fills_per_window": 1.7867298578199051,
+      "max_unmatched_held": 1.0,
+      "net_per_contract": -0.031485411140583563,
+      "net_per_contract_ci95": [
+       -0.05064999999999998,
+       -0.014416666666666682
+      ],
+      "net_per_window": -0.05625592417061613,
+      "net_per_window_ci95": [
+       -0.09033735056895431,
+       -0.02217449777227795
+      ],
+      "net_total": -11.870000000000005,
+      "p05_window": -0.67,
+      "pair_cost_p50": 0.99,
+      "pairs": 159,
+      "roles": {
+       "ADD": 219,
+       "HEDGE": 158
+      },
+      "unmatched_contracts": 59,
+      "unmatched_lost_frac": 0.6949152542372882,
+      "unmatched_mean": -0.2452542372881356,
+      "windows": 211,
+      "worst_unmatched_contract": -0.85,
+      "worst_window": -0.8400000000000001
+     }
+    }
+   },
+   "frontier": [
+    {
+     "IS": {
+      "fills_per_window": 0.23174603174603176,
+      "net_per_contract": -0.10287671232876715,
+      "net_per_contract_ci95": [
+       -0.2230120481927711,
+       -0.012692307692307725
+      ],
+      "net_per_window": -0.023841269841269847,
+      "net_per_window_ci95": [
+       -0.04800089577580879,
+       0.00031835609326909264
+      ],
+      "worst_window": -1.86
+     },
+     "OOS": {
+      "fills_per_window": 0.2559241706161137,
+      "net_per_contract": -0.045740740740740755,
+      "net_per_contract_ci95": [
+       -0.15891304347826088,
+       0.024444444444444435
+      ],
+      "net_per_window": -0.011706161137440762,
+      "net_per_window_ci95": [
+       -0.033888663803084224,
+       0.010476341528202702
+      ],
+      "worst_window": -1.6600000000000001
+     },
+     "band": [
+      0.2,
+      1.0
+     ],
+     "params": {
+      "adverse": 0.01,
+      "margin": 0.01,
+      "max_qty": 3,
+      "max_unmatched": 3,
+      "pair_ceiling": 0.99,
+      "risk": 0.15,
+      "size_per_cent": 0.25
+     },
+     "settings_in_band": 4
+    },
+    {
+     "IS": {
+      "fills_per_window": 1.2698412698412698,
+      "net_per_contract": -0.051225000000000014,
+      "net_per_contract_ci95": [
+       -0.07515492957746474,
+       -0.030668151447661513
+      ],
+      "net_per_window": -0.06504761904761906,
+      "net_per_window_ci95": [
+       -0.09204434602283554,
+       -0.038050892072402594
+      ],
+      "worst_window": -0.79
+     },
+     "OOS": {
+      "fills_per_window": 1.7867298578199051,
+      "net_per_contract": -0.031485411140583563,
+      "net_per_contract_ci95": [
+       -0.05064999999999998,
+       -0.014416666666666682
+      ],
+      "net_per_window": -0.05625592417061613,
+      "net_per_window_ci95": [
+       -0.09033735056895431,
+       -0.02217449777227795
+      ],
+      "worst_window": -0.8400000000000001
+     },
+     "band": [
+      1.0,
+      3.0
+     ],
+     "params": {
+      "adverse": 0.0,
+      "margin": 0.0,
+      "max_qty": 1,
+      "max_unmatched": 1,
+      "pair_ceiling": 0.99,
+      "risk": 0.15,
+      "size_per_cent": 0.0
+     },
+     "settings_in_band": 16
+    },
+    {
+     "IS": {
+      "fills_per_window": 3.895238095238095,
+      "net_per_contract": -0.040391198044009785,
+      "net_per_contract_ci95": [
+       -0.05940838126540672,
+       -0.021511354737666417
+      ],
+      "net_per_window": -0.15733333333333338,
+      "net_per_window_ci95": [
+       -0.22963861980733719,
+       -0.08502804685932959
+      ],
+      "worst_window": -1.75
+     },
+     "OOS": {
+      "fills_per_window": 4.995260663507109,
+      "net_per_contract": -0.045550284629981036,
+      "net_per_contract_ci95": [
+       -0.06552907530981884,
+       -0.02522944550669217
+      ],
+      "net_per_window": -0.22753554502369672,
+      "net_per_window_ci95": [
+       -0.325987949723152,
+       -0.12908314032424145
+      ],
+      "worst_window": -1.85
+     },
+     "band": [
+      3.0,
+      10.0
+     ],
+     "params": {
+      "adverse": 0.03,
+      "margin": 0.03,
+      "max_qty": 3,
+      "max_unmatched": 3,
+      "pair_ceiling": 0.99,
+      "risk": 0.0,
+      "size_per_cent": 0.0
+     },
+     "settings_in_band": 63
+    },
+    {
+     "IS": {
+      "fills_per_window": 10.215873015873015,
+      "net_per_contract": -0.05888440024860163,
+      "net_per_contract_ci95": [
+       -0.07462358845671269,
+       -0.04305489964580874
+      ],
+      "net_per_window": -0.6015555555555556,
+      "net_per_window_ci95": [
+       -0.7536125896862498,
+       -0.44949852142486146
+      ],
+      "worst_window": -3.54
+     },
+     "OOS": {
+      "fills_per_window": 17.597156398104264,
+      "net_per_contract": -0.04548882305413413,
+      "net_per_contract_ci95": [
+       -0.0590152339499456,
+       -0.03245968773995394
+      ],
+      "net_per_window": -0.8004739336492893,
+      "net_per_window_ci95": [
+       -1.0238652697275659,
+       -0.5770825975710128
+      ],
+      "worst_window": -3.5600000000000005
+     },
+     "band": [
+      10.0,
+      20.0
+     ],
+     "params": {
+      "adverse": 0.0,
+      "margin": 0.0,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": 0.99,
+      "risk": 0.0,
+      "size_per_cent": 0.0
+     },
+     "settings_in_band": 16
+    },
+    {
+     "IS": {
+      "fills_per_window": 21.247619047619047,
+      "net_per_contract": -0.05297773793515615,
+      "net_per_contract_ci95": [
+       -0.05775167785234898,
+       -0.04834878083559108
+      ],
+      "net_per_window": -1.1256507936507938,
+      "net_per_window_ci95": [
+       -1.2306972674906098,
+       -1.0206043198109778
+      ],
+      "worst_window": -3.8400000000000007
+     },
+     "OOS": {
+      "fills_per_window": 37.056872037914694,
+      "net_per_contract": -0.038375751374856125,
+      "net_per_contract_ci95": [
+       -0.04120811518324611,
+       -0.03548588957055215
+      ],
+      "net_per_window": -1.4220853080568725,
+      "net_per_window_ci95": [
+       -1.5436996045114078,
+       -1.3004710116023372
+      ],
+      "worst_window": -4.910000000000002
+     },
+     "band": [
+      20.0,
+      1000000000.0
+     ],
+     "params": {
+      "adverse": 0.0,
+      "margin": 0.0,
+      "max_qty": 3,
+      "max_unmatched": 6,
+      "pair_ceiling": null,
+      "risk": 0.05,
+      "size_per_cent": 0.25
+     },
+     "settings_in_band": 1
+    }
+   ],
+   "grid_IS_best_any": 0.0,
+   "grid_IS_positive": 0,
+   "through0": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "buckets_per_contract": {
+      "completion": -0.01273150537072965,
+      "entry": 0.005015350864779072,
+      "fill": -0.01719820379349924,
+      "settlement": -0.00030049093873370583,
+      "unmatched": 0.0019238385728711698
+     },
+     "fills": 11814,
+     "fills_per_window": 55.99052132701422,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.023291010665312355,
+     "net_per_contract_ci95": [
+      -0.02502303375492086,
+      -0.02155715722427089
+     ],
+     "net_per_window": -1.3040758293838868,
+     "net_per_window_ci95": [
+      -1.4082556461176727,
+      -1.1998960126501008
+     ],
+     "net_total": -275.16000000000014,
+     "p05_window": -2.8100000000000005,
+     "pair_cost_p50": 1.03,
+     "pairs": 5888,
+     "roles": {
+      "ADD": 5926,
+      "HEDGE": 5888
+     },
+     "unmatched_contracts": 38,
+     "unmatched_lost_frac": 0.9210526315789473,
+     "unmatched_mean": -0.1636842105263158,
+     "windows": 211,
+     "worst_unmatched_contract": -0.56,
+     "worst_window": -4.6000000000000005
+    },
+    "AGGRESSIVE + hedge skew": {
+     "buckets_per_contract": {
+      "completion": -0.013542841136651789,
+      "entry": 0.032930360086294644,
+      "fill": -0.04989898593959822,
+      "settlement": -1.7857142857142872e-05,
+      "unmatched": 0.00017664556138392837
+     },
+     "fills": 2240,
+     "fills_per_window": 10.616113744075829,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.030352678571428583,
+     "net_per_contract_ci95": [
+      -0.03535004730368969,
+      -0.025681431005110736
+     ],
+     "net_per_window": -0.32222748815165886,
+     "net_per_window_ci95": [
+      -0.3791744204764398,
+      -0.26528055582687793
+     ],
+     "net_total": -67.99000000000002,
+     "p05_window": -1.1400000000000001,
+     "pair_cost_p50": 1.03,
+     "pairs": 1119,
+     "roles": {
+      "ADD": 1121,
+      "HEDGE": 1119
+     },
+     "unmatched_contracts": 2,
+     "unmatched_lost_frac": 1.0,
+     "unmatched_mean": -0.03,
+     "windows": 211,
+     "worst_unmatched_contract": -0.03,
+     "worst_window": -2.31
+    },
+    "BALANCED (haircut 4c)": {
+     "buckets_per_contract": {
+      "completion": -0.018076925876923087,
+      "entry": 0.03411574406923076,
+      "fill": -0.04724705391923078,
+      "settlement": 0.0,
+      "unmatched": -0.01725330273461537
+     },
+     "fills": 26,
+     "fills_per_window": 0.12322274881516587,
+     "max_unmatched_held": 1.0,
+     "net_per_contract": -0.04846153846153847,
+     "net_per_contract_ci95": [
+      -0.07500000000000001,
+      -0.02636363636363637
+     ],
+     "net_per_window": -0.005971563981042655,
+     "net_per_window_ci95": [
+      -0.010123935449225043,
+      -0.0018191925128602663
+     ],
+     "net_total": -1.2600000000000002,
+     "p05_window": -0.010000000000000009,
+     "pair_cost_p50": 1.1,
+     "pairs": 13,
+     "roles": {
+      "ADD": 13,
+      "HEDGE": 13
+     },
+     "unmatched_contracts": 0,
+     "unmatched_lost_frac": null,
+     "unmatched_mean": null,
+     "windows": 211,
+     "worst_unmatched_contract": null,
+     "worst_window": -0.26
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "buckets_per_contract": {
+      "completion": null,
+      "entry": null,
+      "fill": null,
+      "settlement": null,
+      "unmatched": null
+     },
+     "fills": 0,
+     "fills_per_window": 0.0,
+     "max_unmatched_held": 0.0,
+     "net_per_contract": null,
+     "net_per_contract_ci95": [
+      NaN,
+      NaN
+     ],
+     "net_per_window": 0.0,
+     "net_per_window_ci95": [
+      0.0,
+      0.0
+     ],
+     "net_total": 0.0,
+     "p05_window": 0.0,
+     "pair_cost_p50": null,
+     "pairs": 0,
+     "roles": {
+      "ADD": 0,
+      "HEDGE": 0
+     },
+     "unmatched_contracts": 0,
+     "unmatched_lost_frac": null,
+     "unmatched_mean": null,
+     "windows": 211,
+     "worst_unmatched_contract": null,
+     "worst_window": 0.0
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "buckets_per_contract": {
+      "completion": -0.01646576275018051,
+      "entry": 0.03516684072841671,
+      "fill": -0.053019497347885504,
+      "settlement": -0.000783909223156266,
+      "unmatched": 0.0016495178656266121
+     },
+     "fills": 3878,
+     "fills_per_window": 18.379146919431278,
+     "max_unmatched_held": 6.0,
+     "net_per_contract": -0.03345281072717897,
+     "net_per_contract_ci95": [
+      -0.037533552798176766,
+      -0.029621837549933413
+     ],
+     "net_per_window": -0.614834123222749,
+     "net_per_window_ci95": [
+      -0.6977040657246881,
+      -0.5319641807208099
+     ],
+     "net_total": -129.73000000000005,
+     "p05_window": -1.7000000000000002,
+     "pair_cost_p50": 1.04,
+     "pairs": 1907,
+     "roles": {
+      "ADD": 1971,
+      "HEDGE": 1907
+     },
+     "unmatched_contracts": 64,
+     "unmatched_lost_frac": 0.9375,
+     "unmatched_mean": -0.24265625000000002,
+     "windows": 211,
+     "worst_unmatched_contract": -0.65,
+     "worst_window": -4.04
+    },
+    "PAIR (deployed)": {
+     "buckets_per_contract": {
+      "completion": -0.01815245136408269,
+      "entry": 0.016046508937209294,
+      "fill": -0.03462532621395349,
+      "settlement": -0.00431524516640827,
+      "unmatched": 0.018669252825322998
+     },
+     "fills": 387,
+     "fills_per_window": 1.8341232227488151,
+     "max_unmatched_held": 1.0,
+     "net_per_contract": -0.022377260981912155,
+     "net_per_contract_ci95": [
+      -0.03700808625336934,
+      -0.010179028132992351
+     ],
+     "net_per_window": -0.041042654028436036,
+     "net_per_window_ci95": [
+      -0.06355296535403153,
+      -0.018532342702840543
+     ],
+     "net_total": -8.660000000000004,
+     "p05_window": -0.48,
+     "pair_cost_p50": 0.99,
+     "pairs": 180,
+     "roles": {
+      "ADD": 387,
+      "HEDGE": 0
+     },
+     "unmatched_contracts": 27,
+     "unmatched_lost_frac": 0.9259259259259259,
+     "unmatched_mean": -0.3874074074074074,
+     "windows": 211,
+     "worst_unmatched_contract": -0.62,
+     "worst_window": -0.62
+    },
+    "TUNED on IS, by $/contract": {
+     "buckets_per_contract": {
+      "completion": -0.01618598875324948,
+      "entry": 0.03949336287316561,
+      "fill": -0.06103473940265548,
+      "settlement": -0.010335429257651992,
+      "unmatched": 0.003953779865338923
+     },
+     "fills": 1431,
+     "fills_per_window": 6.781990521327014,
+     "max_unmatched_held": 3.0,
+     "net_per_contract": -0.04410901467505242,
+     "net_per_contract_ci95": [
+      -0.06322720694645441,
+      -0.026905235255135867
+     ],
+     "net_per_window": -0.2991469194312797,
+     "net_per_window_ci95": [
+      -0.4094140757298872,
+      -0.18887976313267218
+     ],
+     "net_total": -63.12000000000001,
+     "p05_window": -1.4400000000000002,
+     "pair_cost_p50": 0.95,
+     "pairs": 550,
+     "roles": {
+      "ADD": 874,
+      "HEDGE": 557
+     },
+     "unmatched_contracts": 331,
+     "unmatched_lost_frac": 0.8851963746223565,
+     "unmatched_mean": -0.28323262839879154,
+     "windows": 211,
+     "worst_unmatched_contract": -0.84,
+     "worst_window": -1.8900000000000001
+    },
+    "TUNED on IS, by $/window": {
+     "buckets_per_contract": {
+      "completion": -0.01142716602156134,
+      "entry": 0.03677882176765799,
+      "fill": -0.054306699233829,
+      "settlement": 0.0023234200611524174,
+      "unmatched": 0.005925303723977694
+     },
+     "fills": 538,
+     "fills_per_window": 2.5497630331753554,
+     "max_unmatched_held": 1.0,
+     "net_per_contract": -0.02070631970260224,
+     "net_per_contract_ci95": [
+      -0.034668008048289754,
+      -0.00783242258652096
+     ],
+     "net_per_window": -0.05279620853080571,
+     "net_per_window_ci95": [
+      -0.08839084408978015,
+      -0.017201572971831267
+     ],
+     "net_total": -11.140000000000006,
+     "p05_window": -0.65,
+     "pair_cost_p50": 0.99,
+     "pairs": 236,
+     "roles": {
+      "ADD": 303,
+      "HEDGE": 235
+     },
+     "unmatched_contracts": 66,
+     "unmatched_lost_frac": 0.7424242424242424,
+     "unmatched_mean": -0.24424242424242426,
+     "windows": 211,
+     "worst_unmatched_contract": -0.85,
+     "worst_window": -0.8300000000000001
+    }
+   },
+   "tuned": {
+    "by_contract": {
+     "adverse": 0.03,
+     "margin": 0.03,
+     "max_qty": 3,
+     "max_unmatched": 3,
+     "pair_ceiling": 0.99,
+     "risk": 0.0,
+     "size_per_cent": 0.25
+    },
+    "by_window": {
+     "adverse": 0.0,
+     "margin": 0.0,
+     "max_qty": 1,
+     "max_unmatched": 1,
+     "pair_ceiling": 0.99,
+     "risk": 0.15,
+     "size_per_cent": 0.0
+    },
+    "eligible": 96,
+    "grid": 240
+   },
+   "vs_pair": {
+    "AGGRESSIVE (haircut 0, touch, size on edge)": {
+     "IS": {
+      "ci95": [
+       -0.922857142857143,
+       -0.7684444444444446
+      ],
+      "mean": -0.8424444444444447,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       -1.3910426540284362,
+       -1.1742180094786734
+      ],
+      "mean": -1.2797630331753558,
+      "windows": 211
+     }
+    },
+    "AGGRESSIVE + hedge skew": {
+     "IS": {
+      "ci95": [
+       -0.2900317460317461,
+       -0.1687619047619048
+      ],
+      "mean": -0.228984126984127,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       -0.35142180094786735,
+       -0.20805687203791476
+      ],
+      "mean": -0.2762559241706161,
+      "windows": 211
+     }
+    },
+    "BALANCED (haircut 4c)": {
+     "IS": {
+      "ci95": [
+       0.03834920634920636,
+       0.0922857142857143
+      ],
+      "mean": 0.06466666666666668,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       0.031184834123222767,
+       0.08682464454976305
+      ],
+      "mean": 0.05914691943127964,
+      "windows": 211
+     }
+    },
+    "CAUTIOUS (haircut 6c, hedge first)": {
+     "IS": {
+      "ci95": [
+       0.049015873015873034,
+       0.09831746031746033
+      ],
+      "mean": 0.07320634920634922,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       0.03720379146919433,
+       0.09118483412322276
+      ],
+      "mean": 0.06459715639810429,
+      "windows": 211
+     }
+    },
+    "FAVORED (haircut 4c, size on edge)": {
+     "IS": {
+      "ci95": [
+       -0.5420317460317461,
+       -0.40187301587301594
+      ],
+      "mean": -0.4701269841269842,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       -0.6665876777251186,
+       -0.45620853080568735
+      ],
+      "mean": -0.5607109004739338,
+      "windows": 211
+     }
+    },
+    "TUNED on IS, by $/contract": {
+     "IS": {
+      "ci95": [
+       -0.1567619047619048,
+       -0.019301587301587337
+      ],
+      "mean": -0.0895555555555556,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       -0.28037914691943133,
+       -0.08663507109004744
+      ],
+      "mean": -0.18327014218009482,
+      "windows": 211
+     }
+    },
+    "TUNED on IS, by $/window": {
+     "IS": {
+      "ci95": [
+       -0.026539682539682544,
+       0.04447619047619047
+      ],
+      "mean": 0.00815873015873016,
+      "windows": 315
+     },
+     "OOS": {
+      "ci95": [
+       -0.035355450236966825,
+       0.051753554502369674
+      ],
+      "mean": 0.008341232227488154,
+      "windows": 211
+     }
+    }
+   },
+   "windows": {
+    "IS": 315,
+    "OOS": 211
+   }
+  }
+ }
+}

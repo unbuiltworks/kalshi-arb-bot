@@ -1,0 +1,180 @@
+{
+  "decisions": 2225,
+  "with_a_sampled_relation": 2213,
+  "transition_matrix": {
+    "open": {
+      "sampled_n": 629,
+      "acted": {
+        "open": 562,
+        "complete": 4,
+        "hold": 63
+      },
+      "executed_as_sampled": 562,
+      "fidelity": 0.8935
+    },
+    "extend": {
+      "sampled_n": 800,
+      "acted": {
+        "extend": 373,
+        "complete": 227,
+        "hold": 200
+      },
+      "executed_as_sampled": 373,
+      "fidelity": 0.4662
+    },
+    "complete": {
+      "sampled_n": 784,
+      "acted": {
+        "extend": 3,
+        "complete": 704,
+        "hold": 77
+      },
+      "executed_as_sampled": 704,
+      "fidelity": 0.898
+    }
+  },
+  "attribution": {
+    "extend->complete": {
+      "n": 227,
+      "divergence": {
+        "safety_adaptation:spend_cap->complete": 183,
+        "policy_flag:cap_fallback_complete": 40,
+        "behavioral:modal_argmax_vs_stochastic_draw": 4
+      },
+      "refusal_family": {
+        "none": 187,
+        "residual_cap": 40
+      },
+      "cap_binding": {
+        "spend_cap": 180,
+        "<not recorded>": 30,
+        "residual_cap": 17
+      },
+      "shell_attests_it_would_have_acted_as_sampled": 197,
+      "unattributed": 30,
+      "attestation_note": "would_act_without_safety_cap is the shell's own record of what it would have done absent a binding cap. Rows where it is null are counted UNATTRIBUTED rather than assumed."
+    },
+    "extend->hold": {
+      "n": 200,
+      "divergence": {
+        "safety_adaptation:entry_band_left": 89,
+        "safety_adaptation:unmatched_usd_cap": 62,
+        "null": 44,
+        "safety_adaptation:spend_cap->stop": 3,
+        "safety_adaptation:off_distribution_hold": 2
+      },
+      "refusal_family": {
+        "entry_band_left": 89,
+        "unmatched_usd_cap": 62,
+        "residual_cap": 44,
+        "spend_cap_reached": 3,
+        "off_distribution_hold": 2
+      },
+      "cap_binding": {
+        "<none bound>": 91,
+        "unmatched_usd_cap": 62,
+        "<not recorded>": 44,
+        "spend_cap": 3
+      },
+      "shell_attests_it_would_have_acted_as_sampled": 154,
+      "unattributed": 46,
+      "attestation_note": "would_act_without_safety_cap is the shell's own record of what it would have done absent a binding cap. Rows where it is null are counted UNATTRIBUTED rather than assumed."
+    },
+    "open->hold": {
+      "n": 63,
+      "divergence": {
+        "safety_adaptation:spend_cap->stop": 33,
+        "safety_adaptation:off_distribution_hold": 23,
+        "safety_adaptation:entry_band_left": 7
+      },
+      "refusal_family": {
+        "spend_cap_reached": 33,
+        "off_distribution_hold": 23,
+        "entry_band_left": 7
+      },
+      "cap_binding": {
+        "spend_cap": 33,
+        "<none bound>": 30
+      },
+      "shell_attests_it_would_have_acted_as_sampled": 40,
+      "unattributed": 23,
+      "attestation_note": "would_act_without_safety_cap is the shell's own record of what it would have done absent a binding cap. Rows where it is null are counted UNATTRIBUTED rather than assumed."
+    },
+    "open->complete": {
+      "n": 4,
+      "divergence": {
+        "safety_adaptation:spend_cap->complete": 4
+      },
+      "refusal_family": {
+        "none": 4
+      },
+      "cap_binding": {
+        "spend_cap": 4
+      },
+      "shell_attests_it_would_have_acted_as_sampled": 4,
+      "unattributed": 0,
+      "attestation_note": "would_act_without_safety_cap is the shell's own record of what it would have done absent a binding cap. Rows where it is null are counted UNATTRIBUTED rather than assumed."
+    },
+    "complete->hold": {
+      "n": 77,
+      "divergence": {
+        "safety_adaptation:fee_safe_complement_bound": 27,
+        "null": 22,
+        "venue_execution_adaptation:no_legal_maker_price": 20,
+        "venue_execution_adaptation:complete_below_unit_granularity": 8
+      },
+      "refusal_family": {
+        "complement_not_priceable": 47,
+        "residual_cap": 22,
+        "complete_without_residual": 8
+      },
+      "cap_binding": {
+        "<none bound>": 55,
+        "<not recorded>": 22
+      },
+      "shell_attests_it_would_have_acted_as_sampled": 55,
+      "unattributed": 22,
+      "attestation_note": "would_act_without_safety_cap is the shell's own record of what it would have done absent a binding cap. Rows where it is null are counted UNATTRIBUTED rather than assumed."
+    }
+  },
+  "counterfactual_mix": {
+    "decisions": 2225,
+    "rows_restored": 450,
+    "actual_incl_hold": {
+      "complete": 0.4202,
+      "hold": 0.1555,
+      "open": 0.2553,
+      "extend": 0.169
+    },
+    "counterfactual_incl_hold": {
+      "extend": 0.3267,
+      "complete": 0.3546,
+      "open": 0.2751,
+      "hold": 0.0436
+    },
+    "actual_acting_only": {
+      "open": 0.3023,
+      "extend": 0.2001,
+      "complete": 0.4976
+    },
+    "counterfactual_acting_only": {
+      "open": 0.2876,
+      "extend": 0.3416,
+      "complete": 0.3708
+    },
+    "l5_expected": {
+      "complete": 0.2858,
+      "extend": 0.3376,
+      "open": 0.3766
+    },
+    "l1_actual_vs_l5": 0.4236,
+    "l1_counterfactual_vs_l5": 0.178,
+    "complete_share_actual": 0.4976,
+    "complete_share_counterfactual": 0.3708,
+    "this_is_a_measurement_not_a_proposal": "restoring these rows would mean not honouring a cap. Nothing here proposes that. The figure says what the caps cost in fidelity, so the trade-off can be seen; the caps may be worth it."
+  },
+  "the_finding": "Sampling is faithful; execution is not, and the gap is one cell. Only 46.6% of sampled EXTENDs are executed as EXTEND: 227 become COMPLETE and 200 become HOLD. OPEN and COMPLETE are executed close to as sampled.",
+  "why_it_is_coherent": "EXTEND grows a position and COMPLETE shrinks it. When the spend or residual cap binds the shell cannot grow, so an EXTEND draw is executed as the shrinking action. The shell is doing what it was built to do; the fidelity cost is the by-product.",
+  "dominant_guard": "{'spend_cap': 180, '<not recorded>': 30, 'residual_cap': 17} over 227 EXTEND->COMPLETE conversions, with the shell attesting 197 of them would have been EXTEND but for a cap.",
+  "no_change_proposed": "No safety control is removed, no cap is changed and no live policy is altered by this module. It measures; it does not recommend."
+}

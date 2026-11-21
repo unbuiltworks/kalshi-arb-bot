@@ -1,0 +1,439 @@
+{
+ "THE_SPLIT": {
+  "priced_AT_our_touch": {
+   "attempts": 125,
+   "cancelled_to_requote": 9,
+   "fill_rate_of_rested": 0.1974,
+   "fills": 15,
+   "median_rest_s": 6.436,
+   "rejected": 49,
+   "rested": 76,
+   "single_poll_rows": 4
+  },
+  "priced_BELOW_our_touch": {
+   "attempts": 135,
+   "cancelled_to_requote": 134,
+   "fill_rate_of_rested": 0.0074,
+   "fills": 1,
+   "median_rest_s": 2.013,
+   "rejected": 0,
+   "rested": 135,
+   "single_poll_rows": 134
+  }
+ },
+ "co_occurring_signals": {
+  "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 3,
+  "M5_REPEAT_ATTEMPT_UNCHANGED_PRICE_AND_BOOK": 89,
+  "S_PRICED_BEHIND_OUR_OWN_TOUCH_AT_POST": 134
+ },
+ "corpus": {
+  "complete_attempts": 260,
+  "filled": 16,
+  "markets": 8,
+  "median_observed_fill_latency_s": 3.191,
+  "observed_fill_rate": "0.061538",
+  "sessions": 132,
+  "tick_by_market": {
+   "aec-atp-jayfri-maxbas-2026-09-13": [
+    "0.01",
+    "declared_by_venue"
+   ],
+   "aec-cs2-mzp-ezt-2026-09-13": [
+    "0.01",
+    "declared_by_venue"
+   ],
+   "aec-mlb-lad-mia-2026-09-13": [
+    "0.005",
+    "declared_by_venue"
+   ],
+   "aec-mlb-sea-ath-2026-09-13": [
+    "0.005",
+    "declared_by_venue"
+   ],
+   "aec-nfl-buf-hou-2026-09-13": [
+    "0.005",
+    "declared_by_venue"
+   ],
+   "aec-setkameua-sapole-salvas-2026-09-13": [
+    "0.01",
+    "assumed_coarse_no_half_cent_seen"
+   ],
+   "asc-lal-lev-fcb-2026-09-13-pos-2pt5": [
+    "0.01",
+    "declared_by_venue"
+   ],
+   "atc-epl-cov-bha-2026-09-13-bha": [
+    "0.01",
+    "declared_by_venue"
+   ]
+  },
+  "unfilled": 244
+ },
+ "economic_sensitivity": {
+  "account_bridge_for_context": {
+   "A_settlement_or_trading_pnl_usd": "-12.5082",
+   "B_confirmed_maker_rebates_usd": "2.1300",
+   "C_confirmed_liquidity_rewards_usd": "0",
+   "D_fees_usd": "0",
+   "actual_realized_net_usd": "-10.3782",
+   "double_count_test": {
+    "failures": [],
+    "markets_reproducing_exactly": 3,
+    "markets_tested": 3,
+    "meaning": "The venue's realizedPnl is pure settlement cashflow (payout - cost_basis), carrying no rebate and no fee, so credits are additive to it rather than already inside it. A failure here means the venue changed that and the bridge would double-count; it refuses instead.",
+    "safe_to_add_credits": true
+   },
+   "memo_not_performance": {
+    "non_trading_credits_usd": "10",
+    "rewards_accrued_not_credited_usd": "1.48"
+   },
+   "refused": null
+  },
+  "arms": [
+   {
+    "complete_fill_rate": "0.10",
+    "contracts_those_fills_would_want": "14.30",
+    "extra_fills_vs_observed": "10.0",
+    "extra_matched_contracts_capped_by_residual": "14.30",
+    "maker_rebate_usd_accrual_only": "0.0443",
+    "matched_margin_usd": "0.0682",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": false,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.2726",
+    "turns_positive": false
+   },
+   {
+    "complete_fill_rate": "0.20",
+    "contracts_those_fills_would_want": "51.47",
+    "extra_fills_vs_observed": "36.0",
+    "extra_matched_contracts_capped_by_residual": "32.77",
+    "maker_rebate_usd_accrual_only": "0.1016",
+    "matched_margin_usd": "0.1563",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": true,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.1845",
+    "turns_positive": false
+   },
+   {
+    "complete_fill_rate": "0.30",
+    "contracts_those_fills_would_want": "88.65",
+    "extra_fills_vs_observed": "62.0",
+    "extra_matched_contracts_capped_by_residual": "32.77",
+    "maker_rebate_usd_accrual_only": "0.1016",
+    "matched_margin_usd": "0.1563",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": true,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.1845",
+    "turns_positive": false
+   },
+   {
+    "complete_fill_rate": "0.50",
+    "contracts_those_fills_would_want": "163.00",
+    "extra_fills_vs_observed": "114.0",
+    "extra_matched_contracts_capped_by_residual": "32.77",
+    "maker_rebate_usd_accrual_only": "0.1016",
+    "matched_margin_usd": "0.1563",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": true,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.1845",
+    "turns_positive": false
+   },
+   {
+    "complete_fill_rate": "0.75",
+    "contracts_those_fills_would_want": "255.93",
+    "extra_fills_vs_observed": "179.0",
+    "extra_matched_contracts_capped_by_residual": "32.77",
+    "maker_rebate_usd_accrual_only": "0.1016",
+    "matched_margin_usd": "0.1563",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": true,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.1845",
+    "turns_positive": false
+   },
+   {
+    "complete_fill_rate": "1.00",
+    "contracts_those_fills_would_want": "348.87",
+    "extra_fills_vs_observed": "244.0",
+    "extra_matched_contracts_capped_by_residual": "32.77",
+    "maker_rebate_usd_accrual_only": "0.1016",
+    "matched_margin_usd": "0.1563",
+    "residual_available_to_match": "32.77",
+    "saturates_the_residual": true,
+    "settled_residual_pnl_usd_held_constant": "-1.3408",
+    "total_if_residual_unchanged_usd": "-1.1845",
+    "turns_positive": false
+   }
+  ],
+  "maker_rebate_per_contract_accrual": "0.0031",
+  "marginal_pair_cost": "0.9952291666666667",
+  "mean_unfilled_qty_contracts": "1.4298",
+  "method": "marginal, not average: the pair cost is taken from the attempts that did NOT fill, because those are the contracts a higher fill rate would add",
+  "residual_by_market": {
+   "aec-atp-jayfri-maxbas-2026-09-13": "8.58",
+   "aec-cs2-mzp-ezt-2026-09-13": "7.88",
+   "aec-mlb-lad-mia-2026-09-13": "4.05",
+   "aec-nfl-buf-hou-2026-09-13": "6.61",
+   "aec-setkamecz-snimic-kruluk-2026-09-13": "1.88",
+   "aec-setkameua-sapole-salvas-2026-09-13": "3.49",
+   "asc-lal-lev-fcb-2026-09-13-pos-2pt5": "0.28"
+  },
+  "residual_contracts_available": "32.77",
+  "settled_markets": {
+   "aec-mlb-lad-mia-2026-09-13": {
+    "identity_check_usd": "0.0000",
+    "matched_contracts": "6.08",
+    "matched_margin_usd": "3.5668",
+    "pair_cost": "0.4133613030602171767028627838",
+    "residual_contracts": "4.05",
+    "residual_pnl_usd": "2.4366",
+    "venue_realized_usd": "6.0034"
+   },
+   "aec-nfl-buf-hou-2026-09-13": {
+    "identity_check_usd": "-0.0000",
+    "matched_contracts": "0",
+    "matched_margin_usd": "0.0000",
+    "pair_cost": "0.3917776096822995461422087746",
+    "residual_contracts": "6.61",
+    "residual_pnl_usd": "-2.5896",
+    "venue_realized_usd": "-2.5896"
+   },
+   "aec-setkameua-sapole-salvas-2026-09-13": {
+    "identity_check_usd": "0.0000",
+    "matched_contracts": "2.79",
+    "matched_margin_usd": "0.1099",
+    "pair_cost": "0.9606012145286852498687304522",
+    "residual_contracts": "3.49",
+    "residual_pnl_usd": "-1.1878",
+    "venue_realized_usd": "-1.0779"
+   }
+  },
+  "settled_residual_pnl_usd": "-1.3408",
+  "the_other_axis_pair_cost": {
+   "pair_we_actually_quote_on_unfilled_attempts": "0.9952291666666667",
+   "to_cover_the_account_settlement_line": {
+    "loss_usd": "12.5082",
+    "required_pair_cost": "0.6183",
+    "residual_contracts": "32.77"
+   },
+   "to_cover_the_settled_residual_loss": {
+    "loss_usd": "1.3408",
+    "required_pair_cost": "0.9591",
+    "residual_contracts": "32.77"
+   }
+  }
+ },
+ "l5_public_fill_process": {
+  "NOT_OBSERVABLE": {
+   "cancels": "UNKNOWN",
+   "orders_that_never_filled": "UNKNOWN",
+   "queue_position": "UNKNOWN",
+   "reprices": "UNKNOWN",
+   "resting_quotes": "UNKNOWN"
+  },
+  "consecutive_fills_at_one_price": {
+   "label": "consecutive_fills_at_one_price",
+   "max": 24,
+   "n": 59195,
+   "p10": 1,
+   "p25": 1,
+   "p50": 1,
+   "p75": 1,
+   "p90": 2
+  },
+  "fills": 71984,
+  "maker_taker_mix": {
+   "maker": 55647,
+   "taker": 11068,
+   "unknown": 5269
+  },
+  "same_side_run_lengths": {
+   "label": "same_side_run_lengths",
+   "max": 45,
+   "n": 23955,
+   "p10": 1,
+   "p25": 1,
+   "p50": 2,
+   "p75": 3,
+   "p90": 6
+  },
+  "seconds_between_same_side_fills": {
+   "label": "seconds_between_same_side_fills",
+   "max": 736.0,
+   "n": 48029,
+   "p10": 0.0,
+   "p25": 0.0,
+   "p50": 1.0,
+   "p75": 5.0,
+   "p90": 15.0
+  },
+  "seconds_to_opposite_side_fill": {
+   "label": "seconds_to_opposite_side_fill",
+   "max": 571.0,
+   "n": 21739,
+   "p10": 0.0,
+   "p25": 1.0,
+   "p50": 4.0,
+   "p75": 12.0,
+   "p90": 29.0
+  },
+  "seconds_to_opposite_side_fill_MAKER_ONLY": {
+   "label": "maker opposite-side fill latency",
+   "max": 170.0,
+   "n": 15905,
+   "p10": 0.0,
+   "p25": 1.0,
+   "p50": 3.0,
+   "p75": 7.0,
+   "p90": 15.0
+  },
+  "switch_clips": {
+   "label": "switch_clips",
+   "max": 250.0,
+   "n": 21739,
+   "p10": 2.2,
+   "p25": 6.0,
+   "p50": 17.019089,
+   "p75": 48.035713,
+   "p90": 50.0
+  },
+  "switch_prices": {
+   "label": "switch_prices",
+   "max": 0.99,
+   "n": 21739,
+   "p10": 0.09,
+   "p25": 0.2300000053,
+   "p50": 0.49,
+   "p75": 0.75,
+   "p90": 0.89
+  },
+  "windows": 2216
+ },
+ "labels": {
+  "not_realized": "every sensitivity figure is arithmetic on observed inputs, never realized P&L and never an assumed fill",
+  "queue": "queue position is NOT observable on either side and is reported as UNKNOWN, never inferred"
+ },
+ "pair_economics_filled_vs_not": {
+  "session_FILLED": {
+   "capped_by_pair_ceiling": 0,
+   "fee_safe": 12,
+   "pair_at_chosen": {
+    "label": "pair_at_chosen",
+    "max": 0.995,
+    "n": 13,
+    "p10": 0.5272486772486773,
+    "p25": 0.7540515222482436,
+    "p50": 0.9489929328621908,
+    "p75": 0.96,
+    "p90": 0.97
+   },
+   "sessions": 13
+  },
+  "session_NO_FILL": {
+   "capped_by_pair_ceiling": 37,
+   "fee_safe": 23,
+   "pair_at_chosen": {
+    "label": "pair_at_chosen",
+    "max": 1.0,
+    "n": 65,
+    "p10": 0.8527138643067846,
+    "p25": 0.9627138643067846,
+    "p50": 0.9952291666666667,
+    "p75": 0.996740614334471,
+    "p90": 0.996740614334471
+   },
+   "sessions": 65
+  }
+ },
+ "per_market": {
+  "aec-atp-jayfri-maxbas-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 2,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 1,
+   "M6_MARKET_MOVED_PAST_US": 1,
+   "R0_REJECTED_BEFORE_RESTING": 6
+  },
+  "aec-cs2-mzp-ezt-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 13,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 10,
+   "R0_REJECTED_BEFORE_RESTING": 1
+  },
+  "aec-mlb-lad-mia-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 9,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 96,
+   "M5_REPEAT_ATTEMPT_UNCHANGED_PRICE_AND_BOOK": 8,
+   "M7_UNKNOWN_INSUFFICIENT_EVIDENCE": 2,
+   "R0_REJECTED_BEFORE_RESTING": 6
+  },
+  "aec-mlb-sea-ath-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 1,
+   "R0_REJECTED_BEFORE_RESTING": 6
+  },
+  "aec-nfl-buf-hou-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 9,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 1,
+   "M7_UNKNOWN_INSUFFICIENT_EVIDENCE": 1,
+   "R0_REJECTED_BEFORE_RESTING": 20
+  },
+  "aec-setkameua-sapole-salvas-2026-09-13": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 2,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 3,
+   "M6_MARKET_MOVED_PAST_US": 2
+  },
+  "asc-lal-lev-fcb-2026-09-13-pos-2pt5": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 2,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 7,
+   "M5_REPEAT_ATTEMPT_UNCHANGED_PRICE_AND_BOOK": 1,
+   "M6_MARKET_MOVED_PAST_US": 3,
+   "R0_REJECTED_BEFORE_RESTING": 3
+  },
+  "atc-epl-cov-bha-2026-09-13-bha": {
+   "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE": 14,
+   "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL": 4,
+   "M6_MARKET_MOVED_PAST_US": 3,
+   "R0_REJECTED_BEFORE_RESTING": 7
+  }
+ },
+ "ranked_failure_decomposition": [
+  {
+   "attempts": 122,
+   "mode": "M3_WE_CANCELLED_BEFORE_IT_COULD_FILL",
+   "share_of_attempts": 0.4692
+  },
+  {
+   "attempts": 52,
+   "mode": "M1_COMPLEMENT_NEVER_REACHED_OUR_PRICE",
+   "share_of_attempts": 0.2
+  },
+  {
+   "attempts": 49,
+   "mode": "R0_REJECTED_BEFORE_RESTING",
+   "share_of_attempts": 0.1885
+  },
+  {
+   "attempts": 9,
+   "mode": "M6_MARKET_MOVED_PAST_US",
+   "share_of_attempts": 0.0346
+  },
+  {
+   "attempts": 9,
+   "mode": "M5_REPEAT_ATTEMPT_UNCHANGED_PRICE_AND_BOOK",
+   "share_of_attempts": 0.0346
+  },
+  {
+   "attempts": 3,
+   "mode": "M7_UNKNOWN_INSUFFICIENT_EVIDENCE",
+   "share_of_attempts": 0.0115
+  }
+ ],
+ "repeat_attempt_structure": {
+  "consecutive_attempts": 252,
+  "same_book_as_previous": 147,
+  "same_price_as_previous": 189,
+  "same_price_share": 0.75
+ },
+ "scope": "READ-ONLY forensics. No production change, no taker, no band/cap/admission/sizing/concurrency change, 392b5c0e still deferred."
+}

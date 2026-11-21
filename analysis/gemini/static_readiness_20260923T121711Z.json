@@ -1,0 +1,216 @@
+{
+  "label": "GEMINI_COHORT_STATIC_READINESS_V1",
+  "utc": "2026-09-23T12:17:11.490592+00:00",
+  "tte_independent": true,
+  "mutations_sent": 0,
+  "checks": {
+    "spec": {
+      "spec_id": "btc5m_q1_improve",
+      "spec_sha": "bfe7ba23199c544d30f25cd1c730d92e62d0bea534274b1c00feff961242a650",
+      "family": "btc5m",
+      "envelope": "live_q1",
+      "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_V1",
+      "envelope_sha": "4e2818d53735999cda6c3de439f4a9e87a3cb2a98f9e7c10c2af125e145ed6b5",
+      "entry_tte_band": "240:280",
+      "action_size": "1",
+      "quote_band": null,
+      "bounds": {
+        "action_size": "1",
+        "max_working_orders": "2",
+        "max_committed_usd": "2.50",
+        "max_residual_usd": "2.00",
+        "max_same_side_run": "2",
+        "max_yes": "2",
+        "max_no": "2",
+        "max_actions": "12",
+        "max_concurrent_markets": "1",
+        "cohort_prefix": "GEMI-BTC05M"
+      },
+      "ok": true
+    },
+    "authorization": {
+      "authorized": false,
+      "required_auth_id": "OWNER-2026-09-23-GEMINI-Q1-AB-2",
+      "authorized_sha": "31ec46a6a2d03b6f7d26cbcdf34304f3c524382b15d7ceb43852e687fa914c62",
+      "executable_sha": "31ec46a6a2d03b6f7d26cbcdf34304f3c524382b15d7ceb43852e687fa914c62",
+      "authorized_envelope": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+      "envelope_sha": "be8b544b35929149c9ecea41e6a2461824426a59debb3a6e5d4e275f9250445d",
+      "arming": {
+        "armed": false,
+        "live_flag": false,
+        "auth_id_present": false,
+        "auth_id_matches": false,
+        "expiry_supplied": false,
+        "expired": null,
+        "expected_auth_id": "OWNER-2026-09-23-GEMINI-Q1-AB-2",
+        "why_not": "GEMINI_CANARY_LIVE is not YES"
+      },
+      "why_not": [
+        "transport arm: GEMINI_CANARY_LIVE is not YES"
+      ],
+      "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name.",
+      "tree_authorized": true,
+      "tree_why_not": [],
+      "transport_armed": false,
+      "transport_note": "the arm is a property of the STEP that trades, not of the tree. This check never sets it and never asserts it; the driver requires it on every mutation.",
+      "ok": true
+    },
+    "bundle": {
+      "authorized": true,
+      "bundle_sha": "48ec77ac64fc412a18a311f3c18bb4aeeb464452ec8573d70b4e4bdd8f3cb279",
+      "authorized_bundle": "48ec77ac64fc412a18a311f3c18bb4aeeb464452ec8573d70b4e4bdd8f3cb279",
+      "members": [
+        "ws_continuous.py",
+        "run_continuous.py",
+        "continuous_probe.py",
+        "cohort.py",
+        "continuous_preflight.py",
+        "metadata.py",
+        "executions.py",
+        "arming.py",
+        "live_envelope.py",
+        "outstanding_ledger.py",
+        "position_ledger.py",
+        "live_probe_spec.py",
+        "fill_quality.py",
+        "ab_arms.py",
+        "bundle.py"
+      ],
+      "member_shas": {
+        "ws_continuous.py": "8f8c7af1569b575c52a2edcb29e606dbb682cf48272fce6e61994c164a7f05c4",
+        "run_continuous.py": "5e7bde43294a42d7a5d8e156239dd400da633935a6d4e4715e69c6214c244084",
+        "continuous_probe.py": "dff31f8f20d0ea2f58deb2833e26d850be22b3bb91bbffd13678dc55559c494f",
+        "cohort.py": "e4a5845a5a9c22dc49cd192a1a73fd61f30ecac485ac73a9d42aacecb34be0e8",
+        "continuous_preflight.py": "48f108eb96135fb5df36f4b43c0a94f26cbce1515fece2e58c1bf5ecc61647d5",
+        "metadata.py": "8f1f17566095ad128cc9e4ea9306a76a9633c3db47343d2d933aef1d88c4c91d",
+        "executions.py": "76cff5081843ceffc61cf625b0905e29bd75c8b8486d0c7186cc9bf765937aa6",
+        "arming.py": "686fcfd0c05c341d1cd8b194e090d9637765b77251b545359b5025dca51e9946",
+        "live_envelope.py": "2f9ba082ff6dbeaded8b4b0661848b675e6b83cc00d55ddc9612b8c595fefbd3",
+        "outstanding_ledger.py": "cc54abec4e1968a42722c296c8d73b53659eb685528589dbc238a8e5a7e03106",
+        "position_ledger.py": "ee162936ca2309b89a86a678ff0a83528acdc36970e53171678e4235bb944fd2",
+        "live_probe_spec.py": "c602a17d64d8888ab33df6126e168191a94da1fd7be17b3ec2cc4f11fe75c35b",
+        "fill_quality.py": "5270903bc21ada16bf8cd66f4ccf72f18dcd9d321335c88ab8ad0e7824ff355f",
+        "ab_arms.py": "7bfffb99e30648787051540203042c7aa9dbf248f76b5da9670121957f47f1be",
+        "bundle.py": "12500b811440e213b23b689ad6a8532f6966531d45c6c2f3304f8b0100c7f172"
+      },
+      "why_not": [],
+      "labels": "executable_sha covers the driver's BOUNDS; bundle_sha covers the ORDERING too. Both are named by an authorization, because undoing either has cost a live authorization before.",
+      "ok": true
+    },
+    "family_agrees": {
+      "envelope_family": "GEMI-BTC05M",
+      "spec_family": "GEMI-BTC05M",
+      "ok": true
+    },
+    "cohort_chain": {
+      "ledgers": [
+        {
+          "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W01",
+          "budget": 12,
+          "consumed": 12,
+          "remaining": 0,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W02",
+          "budget": 12,
+          "consumed": 7,
+          "remaining": 5,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W03",
+          "budget": 12,
+          "consumed": 8,
+          "remaining": 4,
+          "predecessor_intact": true
+        },
+        {
+          "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W04",
+          "budget": 12,
+          "consumed": 0,
+          "remaining": 12,
+          "predecessor_intact": true
+        }
+      ],
+      "n": 4,
+      "actions_per_window": 12,
+      "total_budget": 48,
+      "total_remaining": 21,
+      "ok": true
+    },
+    "cohort": {
+      "label": "GEMINI_MUTATION_COHORT_V1",
+      "cohort_id": "COHORT-2026-09-23-BTC5M-AB-B-W01",
+      "created_utc": "2026-09-23T01:47:18.549541+00:00",
+      "budget": 12,
+      "consumed": 12,
+      "remaining": 0,
+      "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-23-BTC5M-AB-B-W01/ledger.jsonl",
+      "envelope_max_actions": 12,
+      "predecessor": {
+        "intact": true,
+        "predecessor_ledger": "analysis/gemini/continuous_ledger.jsonl",
+        "recorded_sha256": "89cf9de6d949cf8838afe1aca18ff7c6d1cacf3472e4562c25439c2064ea40a7",
+        "current_sha256": "89cf9de6d949cf8838afe1aca18ff7c6d1cacf3472e4562c25439c2064ea40a7",
+        "recorded_consumed": 12,
+        "current_consumed": 12,
+        "why": null
+      },
+      "note": "the head of a chain may be spent; the cohort's remaining capacity is the chain's, asserted by cohort_chain",
+      "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor.",
+      "ok": true,
+      "is_chain_head": true,
+      "room_asserted_here": false
+    },
+    "terms": {
+      "readable": true,
+      "verdict": "ACCEPTED",
+      "method": "GET",
+      "status": 200,
+      "hasAcceptedLatest": true,
+      "acceptedVersion": 1,
+      "latestVersion": 1,
+      "blocks_orders": false,
+      "attempts": [
+        {
+          "method": "GET",
+          "status": 200,
+          "body_keys": [
+            "acceptedVersion",
+            "hasAcceptedLatest",
+            "latestVersion"
+          ]
+        }
+      ],
+      "why": null,
+      "ok": true
+    },
+    "positions_readable": {
+      "ok": true,
+      "status": 200,
+      "why": null,
+      "n_rows_on_account": 0,
+      "note": "readability only. Which rows belong to which contract is a per-window question and is asked again, per window, by the position gate inside run_one_window."
+    },
+    "latch": {
+      "auth_id": "OWNER-2026-09-23-GEMINI-Q1-AB-2",
+      "state_dir": "analysis/gemini/canary_latch",
+      "latch_path_exists": true,
+      "consumes_nothing": true,
+      "labels": "the COUNTERFACTUAL of _consume_cohort_latch, evaluated read-only. `reaches_mutation_boundary` false means the armed run would stop at STOPPED_NO_LATCH having placed nothing.",
+      "windows_observed": 4,
+      "windows_remaining": 0,
+      "cohort_stopped": true,
+      "reaches_mutation_boundary": false,
+      "would": "REFUSE_STOPPED",
+      "why": "authorization OWNER-2026-09-23-GEMINI-Q1-AB-2 is spent and its cohort is STOPPED (WINDOWS_EXHAUSTED: the authorized 4 window(s) have been observed); a stopped cohort is not resumed automatically",
+      "ok": false
+    }
+  },
+  "why_not": [
+    "latch: authorization OWNER-2026-09-23-GEMINI-Q1-AB-2 is spent and its cohort is STOPPED (WINDOWS_EXHAUSTED: the authorized 4 window(s) have been observed); a stopped cohort is not resumed automatically"
+  ],
+  "verdict": "FAIL",
+  "ok": false
+}

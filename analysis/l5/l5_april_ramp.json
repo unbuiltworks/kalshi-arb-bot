@@ -1,0 +1,814 @@
+{
+ "kind": "L5_APRIL_RAMP",
+ "month": "2026-04",
+ "source": "data/l5/raw/activity.jsonl + activity_gap.jsonl.gz",
+ "active_days": 20,
+ "days": [
+  {
+   "day": "2026-04-01",
+   "trades": 85,
+   "redeems": 20,
+   "windows": 4,
+   "markets": 4,
+   "actions_per_window_median": 20,
+   "actions_per_window_p90": 32,
+   "contracts": 817.7,
+   "turnover_usdc": 425.66,
+   "buy_usdc": 425.66,
+   "redeem_usdc": 2106.36,
+   "net_trading_cash_usdc": 1680.69,
+   "cum_trading_cash_usdc": 1680.69,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 10.0,
+   "p90_size_contracts": 10.0,
+   "median_action_usdc": 4.6,
+   "p90_action_usdc": 9.3,
+   "median_price": 0.5,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 85
+   },
+   "relation_counts": {
+    "open": 4,
+    "complete": 4,
+    "extend": 77
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 90.0,
+   "median_residual_units": 15.01,
+   "p90_residual_units": 28.58,
+   "max_residual_units": 28.58,
+   "maker_taker": {
+    "unknown": 85
+   }
+  },
+  {
+   "day": "2026-04-02",
+   "trades": 195,
+   "redeems": 0,
+   "windows": 9,
+   "markets": 9,
+   "actions_per_window_median": 18,
+   "actions_per_window_p90": 49,
+   "contracts": 1884.5,
+   "turnover_usdc": 958.24,
+   "buy_usdc": 958.24,
+   "redeem_usdc": 0.0,
+   "net_trading_cash_usdc": -958.24,
+   "cum_trading_cash_usdc": 722.46,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 10.0,
+   "p90_size_contracts": 10.0,
+   "median_action_usdc": 4.9,
+   "p90_action_usdc": 8.4,
+   "median_price": 0.51,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 195
+   },
+   "relation_counts": {
+    "open": 9,
+    "extend": 178,
+    "complete": 8
+   },
+   "complete_rate": 0.8889,
+   "median_matched_units": 90.0,
+   "median_residual_units": 28.2564,
+   "p90_residual_units": 50.3774,
+   "max_residual_units": 50.38,
+   "maker_taker": {
+    "unknown": 195
+   }
+  },
+  {
+   "day": "2026-04-06",
+   "trades": 82,
+   "redeems": 0,
+   "windows": 5,
+   "markets": 5,
+   "actions_per_window_median": 12,
+   "actions_per_window_p90": 36,
+   "contracts": 797.2,
+   "turnover_usdc": 380.35,
+   "buy_usdc": 380.35,
+   "redeem_usdc": 0.0,
+   "net_trading_cash_usdc": -380.35,
+   "cum_trading_cash_usdc": 342.11,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 10.0,
+   "p90_size_contracts": 10.0,
+   "median_action_usdc": 4.7,
+   "p90_action_usdc": 8.3,
+   "median_price": 0.49,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 82
+   },
+   "relation_counts": {
+    "open": 5,
+    "extend": 72,
+    "complete": 5
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 30.0,
+   "median_residual_units": 47.78,
+   "p90_residual_units": 82.0618,
+   "max_residual_units": 82.06,
+   "maker_taker": {
+    "unknown": 82
+   }
+  },
+  {
+   "day": "2026-04-09",
+   "trades": 598,
+   "redeems": 58,
+   "windows": 16,
+   "markets": 16,
+   "actions_per_window_median": 42,
+   "actions_per_window_p90": 64,
+   "contracts": 5692.0,
+   "turnover_usdc": 2652.71,
+   "buy_usdc": 2652.71,
+   "redeem_usdc": 4558.56,
+   "net_trading_cash_usdc": 1905.85,
+   "cum_trading_cash_usdc": 2247.96,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 10.0,
+   "p90_size_contracts": 10.0,
+   "median_action_usdc": 4.5,
+   "p90_action_usdc": 7.6,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 598
+   },
+   "relation_counts": {
+    "open": 16,
+    "extend": 568,
+    "complete": 14
+   },
+   "complete_rate": 0.875,
+   "median_matched_units": 200.0,
+   "median_residual_units": 49.1906,
+   "p90_residual_units": 115.66,
+   "max_residual_units": 117.55,
+   "maker_taker": {
+    "unknown": 598
+   }
+  },
+  {
+   "day": "2026-04-10",
+   "trades": 212,
+   "redeems": 0,
+   "windows": 9,
+   "markets": 9,
+   "actions_per_window_median": 24,
+   "actions_per_window_p90": 42,
+   "contracts": 1932.3,
+   "turnover_usdc": 986.56,
+   "buy_usdc": 986.56,
+   "redeem_usdc": 0.0,
+   "net_trading_cash_usdc": -986.56,
+   "cum_trading_cash_usdc": 1261.39,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 10.0,
+   "p90_size_contracts": 10.0,
+   "median_action_usdc": 4.48,
+   "p90_action_usdc": 8.1,
+   "median_price": 0.5,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 212
+   },
+   "relation_counts": {
+    "open": 9,
+    "extend": 194,
+    "complete": 9
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 80.0,
+   "median_residual_units": 29.78,
+   "p90_residual_units": 100.25,
+   "max_residual_units": 100.25,
+   "maker_taker": {
+    "unknown": 212
+   }
+  },
+  {
+   "day": "2026-04-13",
+   "trades": 674,
+   "redeems": 38,
+   "windows": 19,
+   "markets": 19,
+   "actions_per_window_median": 34,
+   "actions_per_window_p90": 64,
+   "contracts": 8267.9,
+   "turnover_usdc": 4224.74,
+   "buy_usdc": 4224.74,
+   "redeem_usdc": 3581.31,
+   "net_trading_cash_usdc": -643.43,
+   "cum_trading_cash_usdc": 617.97,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 15.0,
+   "p90_size_contracts": 15.0,
+   "median_action_usdc": 6.3,
+   "p90_action_usdc": 11.25,
+   "median_price": 0.49,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 674
+   },
+   "relation_counts": {
+    "open": 19,
+    "extend": 637,
+    "complete": 18
+   },
+   "complete_rate": 0.9474,
+   "median_matched_units": 162.6982,
+   "median_residual_units": 40.0,
+   "p90_residual_units": 111.12,
+   "max_residual_units": 172.44,
+   "maker_taker": {
+    "unknown": 674
+   }
+  },
+  {
+   "day": "2026-04-14",
+   "trades": 866,
+   "redeems": 0,
+   "windows": 21,
+   "markets": 21,
+   "actions_per_window_median": 36,
+   "actions_per_window_p90": 82,
+   "contracts": 15406.6,
+   "turnover_usdc": 7232.22,
+   "buy_usdc": 7232.22,
+   "redeem_usdc": 0.0,
+   "net_trading_cash_usdc": -7232.22,
+   "cum_trading_cash_usdc": -6614.25,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 20.0,
+   "median_action_usdc": 8.2,
+   "p90_action_usdc": 15.0,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 866
+   },
+   "relation_counts": {
+    "open": 21,
+    "extend": 824,
+    "complete": 21
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 251.5094,
+   "median_residual_units": 62.9,
+   "p90_residual_units": 289.68,
+   "max_residual_units": 299.27,
+   "maker_taker": {
+    "unknown": 866
+   }
+  },
+  {
+   "day": "2026-04-15",
+   "trades": 224,
+   "redeems": 0,
+   "windows": 6,
+   "markets": 6,
+   "actions_per_window_median": 38,
+   "actions_per_window_p90": 64,
+   "contracts": 3846.4,
+   "turnover_usdc": 1725.74,
+   "buy_usdc": 1725.74,
+   "redeem_usdc": 0.0,
+   "net_trading_cash_usdc": -1725.74,
+   "cum_trading_cash_usdc": -8340.0,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 20.0,
+   "median_action_usdc": 7.2,
+   "p90_action_usdc": 16.0,
+   "median_price": 0.42,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 224
+   },
+   "relation_counts": {
+    "open": 6,
+    "extend": 212,
+    "complete": 6
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 297.94,
+   "median_residual_units": 112.46,
+   "p90_residual_units": 169.6132,
+   "max_residual_units": 169.61,
+   "maker_taker": {
+    "unknown": 224
+   }
+  },
+  {
+   "day": "2026-04-17",
+   "trades": 236,
+   "redeems": 78,
+   "windows": 9,
+   "markets": 9,
+   "actions_per_window_median": 36,
+   "actions_per_window_p90": 62,
+   "contracts": 3294.5,
+   "turnover_usdc": 1449.7,
+   "buy_usdc": 1449.7,
+   "redeem_usdc": 10596.85,
+   "net_trading_cash_usdc": 9147.15,
+   "cum_trading_cash_usdc": 807.15,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 20.0,
+   "median_action_usdc": 3.75,
+   "p90_action_usdc": 15.0,
+   "median_price": 0.48,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 236
+   },
+   "relation_counts": {
+    "open": 9,
+    "extend": 222,
+    "complete": 5
+   },
+   "complete_rate": 0.5556,
+   "median_matched_units": 301.1104,
+   "median_residual_units": 12.96,
+   "p90_residual_units": 219.78,
+   "max_residual_units": 219.78,
+   "maker_taker": {
+    "unknown": 236
+   }
+  },
+  {
+   "day": "2026-04-20",
+   "trades": 2832,
+   "redeems": 70,
+   "windows": 25,
+   "markets": 25,
+   "actions_per_window_median": 112,
+   "actions_per_window_p90": 210,
+   "contracts": 41450.8,
+   "turnover_usdc": 19716.65,
+   "buy_usdc": 19716.65,
+   "redeem_usdc": 21040.7,
+   "net_trading_cash_usdc": 1324.05,
+   "cum_trading_cash_usdc": 2131.2,
+   "incentives_usdc": 0.0,
+   "cum_incentives_usdc": 0.0,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 20.0,
+   "median_action_usdc": 5.6,
+   "p90_action_usdc": 16.6,
+   "median_price": 0.47,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 2832
+   },
+   "relation_counts": {
+    "open": 25,
+    "extend": 2782,
+    "complete": 25
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 806.7499,
+   "median_residual_units": 85.4812,
+   "p90_residual_units": 210.5949,
+   "max_residual_units": 335.12,
+   "maker_taker": {
+    "unknown": 2832
+   }
+  },
+  {
+   "day": "2026-04-21",
+   "trades": 3432,
+   "redeems": 54,
+   "windows": 52,
+   "markets": 52,
+   "actions_per_window_median": 58,
+   "actions_per_window_p90": 120,
+   "contracts": 56710.8,
+   "turnover_usdc": 26510.06,
+   "buy_usdc": 26510.06,
+   "redeem_usdc": 22351.07,
+   "net_trading_cash_usdc": -4159.0,
+   "cum_trading_cash_usdc": -2027.8,
+   "incentives_usdc": 59.88,
+   "cum_incentives_usdc": 59.88,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 30.0,
+   "median_action_usdc": 5.374,
+   "p90_action_usdc": 18.8,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 3432
+   },
+   "relation_counts": {
+    "open": 52,
+    "extend": 3328,
+    "complete": 52
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 446.8364,
+   "median_residual_units": 90.7704,
+   "p90_residual_units": 249.0402,
+   "max_residual_units": 331.09,
+   "maker_taker": {
+    "unknown": 3432
+   }
+  },
+  {
+   "day": "2026-04-22",
+   "trades": 2544,
+   "redeems": 59,
+   "windows": 40,
+   "markets": 40,
+   "actions_per_window_median": 58,
+   "actions_per_window_p90": 144,
+   "contracts": 53609.0,
+   "turnover_usdc": 25352.53,
+   "buy_usdc": 25352.53,
+   "redeem_usdc": 27553.09,
+   "net_trading_cash_usdc": 2200.56,
+   "cum_trading_cash_usdc": 172.76,
+   "incentives_usdc": 77.79,
+   "cum_incentives_usdc": 137.66,
+   "median_size_contracts": 20.0,
+   "p90_size_contracts": 40.0,
+   "median_action_usdc": 7.0,
+   "p90_action_usdc": 23.6,
+   "median_price": 0.48,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 2544
+   },
+   "relation_counts": {
+    "open": 40,
+    "extend": 2466,
+    "complete": 38
+   },
+   "complete_rate": 0.95,
+   "median_matched_units": 517.0094,
+   "median_residual_units": 73.6584,
+   "p90_residual_units": 247.0059,
+   "max_residual_units": 384.13,
+   "maker_taker": {
+    "unknown": 2544
+   }
+  },
+  {
+   "day": "2026-04-23",
+   "trades": 2451,
+   "redeems": 38,
+   "windows": 38,
+   "markets": 38,
+   "actions_per_window_median": 50,
+   "actions_per_window_p90": 150,
+   "contracts": 47041.1,
+   "turnover_usdc": 21820.26,
+   "buy_usdc": 21820.26,
+   "redeem_usdc": 22395.0,
+   "net_trading_cash_usdc": 574.73,
+   "cum_trading_cash_usdc": 747.5,
+   "incentives_usdc": 113.2,
+   "cum_incentives_usdc": 250.86,
+   "median_size_contracts": 17.7241,
+   "p90_size_contracts": 40.0,
+   "median_action_usdc": 5.75,
+   "p90_action_usdc": 22.0,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 2451
+   },
+   "relation_counts": {
+    "open": 38,
+    "extend": 2375,
+    "complete": 38
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 424.8633,
+   "median_residual_units": 73.1741,
+   "p90_residual_units": 276.875,
+   "max_residual_units": 432.18,
+   "maker_taker": {
+    "unknown": 2451
+   }
+  },
+  {
+   "day": "2026-04-24",
+   "trades": 2456,
+   "redeems": 43,
+   "windows": 45,
+   "markets": 45,
+   "actions_per_window_median": 46,
+   "actions_per_window_p90": 103,
+   "contracts": 47804.2,
+   "turnover_usdc": 22058.51,
+   "buy_usdc": 22058.51,
+   "redeem_usdc": 22184.75,
+   "net_trading_cash_usdc": 126.24,
+   "cum_trading_cash_usdc": 873.73,
+   "incentives_usdc": 106.89,
+   "cum_incentives_usdc": 357.75,
+   "median_size_contracts": 19.1613,
+   "p90_size_contracts": 40.0,
+   "median_action_usdc": 5.4,
+   "p90_action_usdc": 22.5,
+   "median_price": 0.44,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 2456
+   },
+   "relation_counts": {
+    "open": 45,
+    "extend": 2367,
+    "complete": 44
+   },
+   "complete_rate": 0.9778,
+   "median_matched_units": 413.9197,
+   "median_residual_units": 88.3909,
+   "p90_residual_units": 229.844,
+   "max_residual_units": 378.92,
+   "maker_taker": {
+    "unknown": 2456
+   }
+  },
+  {
+   "day": "2026-04-25",
+   "trades": 1988,
+   "redeems": 28,
+   "windows": 27,
+   "markets": 27,
+   "actions_per_window_median": 68,
+   "actions_per_window_p90": 127,
+   "contracts": 36972.6,
+   "turnover_usdc": 17631.55,
+   "buy_usdc": 17631.55,
+   "redeem_usdc": 18520.4,
+   "net_trading_cash_usdc": 888.85,
+   "cum_trading_cash_usdc": 1762.58,
+   "incentives_usdc": 79.68,
+   "cum_incentives_usdc": 437.42,
+   "median_size_contracts": 15.0,
+   "p90_size_contracts": 40.0,
+   "median_action_usdc": 5.8437,
+   "p90_action_usdc": 22.0,
+   "median_price": 0.47,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 1988
+   },
+   "relation_counts": {
+    "open": 27,
+    "complete": 27,
+    "extend": 1934
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 612.1447,
+   "median_residual_units": 89.9083,
+   "p90_residual_units": 251.2233,
+   "max_residual_units": 328.75,
+   "maker_taker": {
+    "unknown": 1988
+   }
+  },
+  {
+   "day": "2026-04-26",
+   "trades": 1535,
+   "redeems": 19,
+   "windows": 19,
+   "markets": 19,
+   "actions_per_window_median": 82,
+   "actions_per_window_p90": 122,
+   "contracts": 28058.3,
+   "turnover_usdc": 12977.1,
+   "buy_usdc": 12977.1,
+   "redeem_usdc": 13179.82,
+   "net_trading_cash_usdc": 202.71,
+   "cum_trading_cash_usdc": 1965.3,
+   "incentives_usdc": 69.01,
+   "cum_incentives_usdc": 506.43,
+   "median_size_contracts": 16.44,
+   "p90_size_contracts": 40.0,
+   "median_action_usdc": 5.7,
+   "p90_action_usdc": 20.01,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 1535
+   },
+   "relation_counts": {
+    "open": 19,
+    "complete": 19,
+    "extend": 1497
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 706.0238,
+   "median_residual_units": 48.4033,
+   "p90_residual_units": 273.1685,
+   "max_residual_units": 336.55,
+   "maker_taker": {
+    "unknown": 1535
+   }
+  },
+  {
+   "day": "2026-04-27",
+   "trades": 4668,
+   "redeems": 55,
+   "windows": 57,
+   "markets": 57,
+   "actions_per_window_median": 73,
+   "actions_per_window_p90": 133,
+   "contracts": 120538.2,
+   "turnover_usdc": 56081.04,
+   "buy_usdc": 56081.04,
+   "redeem_usdc": 53994.13,
+   "net_trading_cash_usdc": -2086.9,
+   "cum_trading_cash_usdc": -121.61,
+   "incentives_usdc": 55.4,
+   "cum_incentives_usdc": 561.83,
+   "median_size_contracts": 18.4074,
+   "p90_size_contracts": 78.77,
+   "median_action_usdc": 6.1597,
+   "p90_action_usdc": 30.74,
+   "median_price": 0.46,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 4668
+   },
+   "relation_counts": {
+    "open": 57,
+    "extend": 4554,
+    "complete": 57
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 872.2823,
+   "median_residual_units": 119.0197,
+   "p90_residual_units": 496.3799,
+   "max_residual_units": 670.2,
+   "maker_taker": {
+    "unknown": 4668
+   }
+  },
+  {
+   "day": "2026-04-28",
+   "trades": 2554,
+   "redeems": 43,
+   "windows": 39,
+   "markets": 39,
+   "actions_per_window_median": 56,
+   "actions_per_window_p90": 111,
+   "contracts": 50695.1,
+   "turnover_usdc": 23213.31,
+   "buy_usdc": 23213.31,
+   "redeem_usdc": 26025.67,
+   "net_trading_cash_usdc": 2812.36,
+   "cum_trading_cash_usdc": 2690.75,
+   "incentives_usdc": 196.73,
+   "cum_incentives_usdc": 758.56,
+   "median_size_contracts": 15.81,
+   "p90_size_contracts": 50.0,
+   "median_action_usdc": 5.6185,
+   "p90_action_usdc": 22.5,
+   "median_price": 0.45,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 2554
+   },
+   "relation_counts": {
+    "open": 39,
+    "extend": 2476,
+    "complete": 39
+   },
+   "complete_rate": 1.0,
+   "median_matched_units": 479.2546,
+   "median_residual_units": 147.1891,
+   "p90_residual_units": 481.4529,
+   "max_residual_units": 683.17,
+   "maker_taker": {
+    "unknown": 2554
+   }
+  },
+  {
+   "day": "2026-04-29",
+   "trades": 4313,
+   "redeems": 53,
+   "windows": 53,
+   "markets": 53,
+   "actions_per_window_median": 68,
+   "actions_per_window_p90": 162,
+   "contracts": 90336.4,
+   "turnover_usdc": 39935.28,
+   "buy_usdc": 39935.28,
+   "redeem_usdc": 41339.69,
+   "net_trading_cash_usdc": 1404.41,
+   "cum_trading_cash_usdc": 4095.16,
+   "incentives_usdc": 38.88,
+   "cum_incentives_usdc": 797.44,
+   "median_size_contracts": 14.68,
+   "p90_size_contracts": 60.0,
+   "median_action_usdc": 4.216,
+   "p90_action_usdc": 23.688,
+   "median_price": 0.38,
+   "concurrency_max": 2,
+   "concurrency_mean_at_window_start": 1.02,
+   "top_categories": {
+    "btc-15m": 4313
+   },
+   "relation_counts": {
+    "open": 53,
+    "extend": 4208,
+    "complete": 52
+   },
+   "complete_rate": 0.9811,
+   "median_matched_units": 633.4267,
+   "median_residual_units": 232.5095,
+   "p90_residual_units": 676.9317,
+   "max_residual_units": 1010.26,
+   "maker_taker": {
+    "unknown": 4313
+   }
+  },
+  {
+   "day": "2026-04-30",
+   "trades": 5425,
+   "redeems": 54,
+   "windows": 55,
+   "markets": 55,
+   "actions_per_window_median": 90,
+   "actions_per_window_p90": 158,
+   "contracts": 107392.9,
+   "turnover_usdc": 48864.79,
+   "buy_usdc": 48864.79,
+   "redeem_usdc": 48193.42,
+   "net_trading_cash_usdc": -671.37,
+   "cum_trading_cash_usdc": 3423.8,
+   "incentives_usdc": 150.38,
+   "cum_incentives_usdc": 947.81,
+   "median_size_contracts": 15.0,
+   "p90_size_contracts": 50.0,
+   "median_action_usdc": 5.4771,
+   "p90_action_usdc": 22.5,
+   "median_price": 0.42,
+   "concurrency_max": 1,
+   "concurrency_mean_at_window_start": 1.0,
+   "top_categories": {
+    "btc-15m": 5425
+   },
+   "relation_counts": {
+    "open": 55,
+    "extend": 5316,
+    "complete": 54
+   },
+   "complete_rate": 0.9818,
+   "median_matched_units": 752.4792,
+   "median_residual_units": 279.0402,
+   "p90_residual_units": 647.2015,
+   "max_residual_units": 773.81,
+   "maker_taker": {
+    "unknown": 5425
+   }
+  }
+ ],
+ "limits": [
+  "maker/taker absent from the activity feed; every April action is unknown and is never counted as maker",
+  "no order-level record: quoting, cancels and queue position are unobservable",
+  "net_trading_cash is the day's cash from trading (redeems + sells - buys), NOT per-position realized P&L",
+  "incentives are a separate stream and are never netted into trading cash"
+ ]
+}

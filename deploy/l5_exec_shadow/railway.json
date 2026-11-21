@@ -1,0 +1,31 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_NOT_READ_BY_RAILWAY": "Config as Code (railway.json / railway.toml) is DEPRECATED and Railway now REFUSES it: setting railwayConfigFile returns 'Config as Code is deprecated. Use Infrastructure as Code (.railway/railway.ts) instead.' This file is therefore DOCUMENTATION ONLY -- it configures nothing. It was silently doing nothing when the service was created, which meant restartPolicyType ALWAYS and the promotion watchPattern were NOT in effect on the first two deployments. Both are now set through the Railway API and the API is the source of truth; verify with get-service-config, never by reading this file.",
+  "_live_config_verified_2026-09-15T15:2xZ": {
+    "restartPolicyType": "ALWAYS",
+    "watchPatterns": ["deploy/_promote/l5-exec-shadow"],
+    "dockerfilePath": "deploy/l5_exec_shadow/Dockerfile",
+    "startCommand": "python3 -m src.l5_research_supervisor --state-root /state/l5-research",
+    "volumeMount": "/state/l5-research",
+    "branch": "claude/l5-execution-instrumentation-io6nzi"
+  },
+  "_service": "l5-exec-shadow",
+  "_role": "ONE read-only research supervisor owning every L5 research stream: the dual-venue executable shadow (with prospective maker-fill evidence), the Gemini websocket/book evidence probe, and the chain-observer settled-window validator. It produces evidence and records its own downtime; it never produces an order.",
+  "_credentials": "NONE, and none may be added. No exchange key, no wallet key, no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret. Every call is an unauthenticated GET or the public Gemini market-data websocket. The image copies no signer, no executor and no credential reader; if a value ever looks necessary here, that is a signal to stop.",
+  "_zero_order_capability": "src/l5_adapters/evaluate.py is deliberately NOT in the image because it imports l5_venue_adapter, which lazily reaches pmus_q1_executor -- the order path. No src/pmus_*, src/kalshi_* or wallet module is copied. tests/test_l5_research_supervisor.py asserts the import closure in a subprocess.",
+  "_volume": "Mount a dedicated volume at /state/l5-research. Every stream writes an append-only store beneath it and RESUMES against it on restart -- nothing truncates or rotates. Do NOT reuse /state/l5-fidelity (the prediction store), /state/pmus-spring (the halted executor) or /data/l5_shadow (the older loop).",
+  "_pin": "Set RAILWAY_DOCKERFILE_PATH=/deploy/l5_exec_shadow/Dockerfile on the service (deploy/RAILWAY_ISOLATION.md pattern) so a branch push cannot cross-build it.",
+  "_promotion": "watchPatterns point ONLY at deploy/_promote/l5-exec-shadow. Editing source does not deploy this service; appending a promote line to that sentinel does.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_exec_shadow/Dockerfile",
+    "watchPatterns": ["deploy/_promote/l5-exec-shadow"]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_research_supervisor --state-root /state/l5-research",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 1000
+  },
+  "_restart_note": "ALWAYS, because this is a read-only recorder: a crash must not end the observation series, and there is no money-moving state a restart could compound. The halted PMUS executor uses the opposite policy on purpose and is not touched by this service.",
+  "_coverage_contract": "On every boot the supervisor writes a `boot` marker carrying the gap since each stream last wrote, and a `coverage_gap` marker for any gap beyond two heartbeats. A child that dies produces `stream_exit` then `stream_restart`. analysis/l5/coverage.py turns these into an uptime accounting and an observed(stream, a, b) predicate, so no reader can mistake our absence for the market's."
+}

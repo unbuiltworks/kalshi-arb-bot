@@ -194,6 +194,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    # OWNER 5556354536 extended, LIVE 2026-09-14T13:42Z. The rule is that no
+    # Railway service in this repo may fall through to the order-capable
+    # Kalshi startup. `src/__main__.py` refused that for `python -m src`, but
+    # a service created with NO config is built by Railway's auto-detection,
+    # which picks THIS file -- and it went straight to run_bot() ->
+    # KalshiClient(). It crashed only because private_key.pem happens not to
+    # exist in that image. Absence of a key is not a safety control, so the
+    # same refusal now guards this entrypoint too.
+    from src.__main__ import refuse_reason
+    why = refuse_reason()
+    if why:
+        print("KALSHI_BOT_REFUSED " + why, flush=True)
+        return                                  # exit clean, never restart-loop
     global PAPER_MODE
     args = parse_args()
     # CLI flag takes priority, then BOT_MODE env var, default to paper

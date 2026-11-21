@@ -1,0 +1,226 @@
+{
+ "aec-atp-petbru-alecan-2026-09-07": {
+  "activity_walk": {
+   "cursor_param": "cursor",
+   "ended": "older_than_since",
+   "newest_time": "2026-09-07T18:49:19.006610997Z",
+   "oldest_time": "2026-09-07T02:12:28.082889206Z",
+   "pages": 1
+  },
+  "available_position": null,
+  "breakdown": {
+   "avg_no": null,
+   "avg_yes": "0.38",
+   "bought_no": "0",
+   "bought_yes": "5.24",
+   "cost_basis_usd": "1.9912",
+   "directional_residual": "5.24",
+   "fees_usd": "venue_unreported",
+   "fills": 1,
+   "labels": "DERIVED accounting from ledger fills; realized_usd_venue is the venue's own; nothing else is realized",
+   "maker_fills": 1,
+   "matched_contribution_usd": "0",
+   "matched_pair_cost": null,
+   "matched_pairs": "0",
+   "realized_usd_venue": "-1.9912",
+   "residual_contribution_usd": "-1.9912",
+   "resolution_side": "POSITION_RESOLUTION_SIDE_SHORT",
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "taker_fills": 0
+  },
+  "kind": "settlement",
+  "ledger_qty_total": "5.24",
+  "ledger_rows_written": [
+   "settled",
+   "realized"
+  ],
+  "log_ts": "2026-09-07T18:50:09.428706074Z",
+  "position_net": "0",
+  "realized_confirmed": true,
+  "realized_source": null,
+  "realized_usd": "-1.9912",
+  "resolution": {
+   "afterNet": "0.0000",
+   "beforeNet": "5.2400",
+   "side": "POSITION_RESOLUTION_SIDE_SHORT",
+   "tradeId": "",
+   "updateTime": "2026-09-07T18:49:19.006610997Z"
+  },
+  "settled": true,
+  "settled_by": "position_resolution_activity",
+  "slug": "aec-atp-petbru-alecan-2026-09-07",
+  "status": "REALIZED",
+  "trades": {
+   "busted": false,
+   "keys": [
+    "aggressor",
+    "aggressorExecution",
+    "comboLegDetails",
+    "cost",
+    "createTime",
+    "createTradeDate",
+    "id",
+    "isAggressor",
+    "market",
+    "marketSlug",
+    "passive",
+    "passiveExecution",
+    "price",
+    "qty",
+    "qtyDecimal",
+    "reportingCounterparty",
+    "state",
+    "tradeLinkId",
+    "updateTime",
+    "updateTradeDate"
+   ],
+   "n": 1,
+   "realized_pnl_rows": 0,
+   "realized_pnl_sum": null,
+   "rows": [
+    {
+     "aggr": false,
+     "px": "0.3800",
+     "qty": "5.2400",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T17:43:08.331184484Z"
+    }
+   ],
+   "states": {
+    "TRADE_STATE_NEW": 1
+   },
+   "uncleared": false
+  },
+  "venue_qty_total": "5.2400"
+ },
+ "aec-atpcq-norgom-ollwal-2026-09-07": {
+  "activity_walk": {
+   "cursor_param": "cursor",
+   "ended": "older_than_since",
+   "newest_time": "2026-09-07T09:25:00.992208474Z",
+   "oldest_time": "2026-09-07T01:57:51.449271924Z",
+   "pages": 1
+  },
+  "available_position": null,
+  "breakdown": {
+   "avg_no": "0.51",
+   "avg_yes": "0.4891968658178256611165523996",
+   "bought_no": "10.21",
+   "bought_yes": "10.21",
+   "cost_basis_usd": "10.2018",
+   "directional_residual": "0.00",
+   "fees_usd": "venue_unreported",
+   "fills": 4,
+   "labels": "DERIVED accounting from ledger fills; realized_usd_venue is the venue's own; nothing else is realized",
+   "maker_fills": 5,
+   "matched_contribution_usd": "0.008200000000000000000000000084",
+   "matched_pair_cost": "0.9991968658178256611165523996",
+   "matched_pairs": "10.21",
+   "realized_usd_venue": null,
+   "residual_contribution_usd": null,
+   "resolution_side": null,
+   "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "taker_fills": 0
+  },
+  "kind": "settlement",
+  "ledger_qty_total": "20.42",
+  "ledger_rows_written": [
+   "settled"
+  ],
+  "log_ts": "2026-09-07T09:46:40.470725550Z",
+  "position_net": "0",
+  "realized_confirmed": false,
+  "realized_source": "unconfirmed: a trade lacks the venue's realizedPnl",
+  "realized_usd": null,
+  "resolution": {
+   "afterNet": "0",
+   "beforeNet": "0",
+   "public_settlement_px": "0.0000",
+   "public_settlement_set_time": "2026-09-07T09:46:23.973608250Z",
+   "public_state": "MARKET_STATE_EXPIRED",
+   "public_status": "MARKET_STATUS_RESOLVED",
+   "side": null,
+   "source": "public market resolution + account flat (no positions / availablePositions row, all trades CLEARED); the venue emitted no POSITION_RESOLUTION because it carried no position"
+  },
+  "settled": true,
+  "settled_by": "venue_market_resolved_account_flat",
+  "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+  "status": "SETTLED_REALIZED_UNCONFIRMED",
+  "trades": {
+   "busted": false,
+   "keys": [
+    "aggressor",
+    "aggressorExecution",
+    "comboLegDetails",
+    "cost",
+    "createTime",
+    "createTradeDate",
+    "id",
+    "isAggressor",
+    "market",
+    "marketSlug",
+    "passive",
+    "passiveExecution",
+    "price",
+    "qty",
+    "qtyDecimal",
+    "reportingCounterparty",
+    "state",
+    "tradeLinkId",
+    "updateTime",
+    "updateTradeDate"
+   ],
+   "n": 5,
+   "realized_pnl_rows": 0,
+   "realized_pnl_sum": null,
+   "rows": [
+    {
+     "aggr": false,
+     "px": "0.4900",
+     "qty": "5.0100",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T09:25:00.992208474Z"
+    },
+    {
+     "aggr": false,
+     "px": "0.5100",
+     "qty": "4.9000",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T09:15:03.261890973Z"
+    },
+    {
+     "aggr": false,
+     "px": "0.4900",
+     "qty": "0.2000",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T09:07:59.257296816Z"
+    },
+    {
+     "aggr": false,
+     "px": "0.4900",
+     "qty": "5.0000",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T09:07:50.952469309Z"
+    },
+    {
+     "aggr": false,
+     "px": "0.4700",
+     "qty": "5.3100",
+     "rpnl": null,
+     "state": "TRADE_STATE_NEW",
+     "t": "2026-09-07T09:06:30.319895185Z"
+    }
+   ],
+   "states": {
+    "TRADE_STATE_NEW": 5
+   },
+   "uncleared": false
+  },
+  "venue_qty_total": "20.4200"
+ }
+}

@@ -1,0 +1,752 @@
+{
+  "accrual": {
+    "accrued_usd": "0.08332590",
+    "drift_from_committed": null,
+    "fills": [
+      {
+        "accrued_usd": "0.00519750",
+        "cap_usd": "0.0225",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "115.50",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.45",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.45",
+        "price": "0.45",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00519750"
+      },
+      {
+        "accrued_usd": "0.00504000",
+        "cap_usd": "0.0200",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "126.00",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.40",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.40",
+        "price": "0.40",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00504000"
+      },
+      {
+        "accrued_usd": "0.00519750",
+        "cap_usd": "0.0225",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "115.50",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.45",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.45",
+        "price": "0.45",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00519750"
+      },
+      {
+        "accrued_usd": "0.00489510",
+        "cap_usd": "0.0185",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "132.30",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.37",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.37",
+        "price": "0.37",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00489510"
+      },
+      {
+        "accrued_usd": "0.00464310",
+        "cap_usd": "0.0165",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "140.70",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.33",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.33",
+        "price": "0.33",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00464310"
+      },
+      {
+        "accrued_usd": "0.00464310",
+        "cap_usd": "0.0165",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "140.70",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.33",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.33",
+        "price": "0.33",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00464310"
+      },
+      {
+        "accrued_usd": "0",
+        "computable": true,
+        "contracts": "1",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": false,
+          "price": "0.19",
+          "why": "execution price 0.19 is outside the eligible band"
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "price": "0.19",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "why": "execution price 0.19 is outside the eligible band"
+      },
+      {
+        "accrued_usd": "0.00489510",
+        "cap_usd": "0.0185",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "132.30",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.37",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.37",
+        "price": "0.37",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00489510"
+      },
+      {
+        "accrued_usd": "0.00471240",
+        "cap_usd": "0.0170",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "138.60",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.34",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.34",
+        "price": "0.34",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00471240"
+      },
+      {
+        "accrued_usd": "0.00511560",
+        "cap_usd": "0.0210",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "121.80",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.42",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.42",
+        "price": "0.42",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00511560"
+      },
+      {
+        "accrued_usd": "0.00514710",
+        "cap_usd": "0.0215",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "119.70",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.43",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.43",
+        "price": "0.43",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00514710"
+      },
+      {
+        "accrued_usd": "0.00521640",
+        "cap_usd": "0.0270",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "96.60",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.54",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.54",
+        "price": "0.54",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00521640"
+      },
+      {
+        "accrued_usd": "0.00504000",
+        "cap_usd": "0.0200",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "126.00",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.40",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.40",
+        "price": "0.40",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00504000"
+      },
+      {
+        "accrued_usd": "0.00483840",
+        "cap_usd": "0.0180",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "134.40",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.36",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.36",
+        "price": "0.36",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00483840"
+      },
+      {
+        "accrued_usd": "0.00393750",
+        "cap_usd": "0.0125",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "157.50",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.25",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.25",
+        "price": "0.25",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00393750"
+      },
+      {
+        "accrued_usd": "0.00524160",
+        "cap_usd": "0.0260",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "100.80",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.52",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.52",
+        "price": "0.52",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00524160"
+      },
+      {
+        "accrued_usd": "0.00499590",
+        "cap_usd": "0.0195",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "128.10",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.39",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.39",
+        "price": "0.39",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00499590"
+      },
+      {
+        "accrued_usd": "0.00456960",
+        "cap_usd": "0.0160",
+        "capped": false,
+        "computable": true,
+        "contracts": "1",
+        "effective_bps_of_notional": "142.80",
+        "eligibility": {
+          "band": [
+            "0.20",
+            "0.80"
+          ],
+          "eligible": true,
+          "price": "0.32",
+          "why": null
+        },
+        "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+        "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+        "notional_usd": "0.32",
+        "price": "0.32",
+        "rebate_rate": "0.30",
+        "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+        "taker_rate": "0.07",
+        "uncapped_usd": "0.00456960"
+      }
+    ],
+    "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+    "matches_committed": true,
+    "n_eligible": 17,
+    "n_fills": 18,
+    "n_outside_band": 1,
+    "pays_nothing": false,
+    "provenance": "analysis/gemini/EVIDENCE_PACKET_016_COHORT1.md, eighteen maker fills, one contract each",
+    "qualifying_volume_usd": "6.67",
+    "rounding": "rounded DOWN to the next cent, per the published rules",
+    "shortfall_to_one_cent_usd": null,
+    "would_pay_usd": "0.08"
+  },
+  "et_day": "2026-09-21",
+  "label": "GEMINI_MAKER_REBATE_RECONCILE_V1",
+  "labels": "accrued and credited are separate lines. Nothing here is trading P&L, and nothing here may enter model selection.",
+  "payout_row": {
+    "covers_et_day": "2026-09-21",
+    "created_at": "2026-09-22T21:02:54.152549Z",
+    "credited": true,
+    "id": 21320,
+    "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+    "matched_date": "2026-09-22",
+    "matched_on": "paid_at",
+    "paid_at": "2026-09-22T21:03:06.090688Z",
+    "status": "PAID",
+    "total_fill_count": 11,
+    "total_rebate_usd": "0.05",
+    "total_volume_usd": "3.95"
+  },
+  "payout_timing": "paid daily at 5pm ET; a run carries the date it ran, not the date of the fills it pays for",
+  "payout_written_on_utc_date": "2026-09-22",
+  "reconciliation": {
+    "credited": true,
+    "deltas": {
+      "fill_count": -6,
+      "rebate_usd": "-0.03",
+      "volume_usd": "-2.72"
+    },
+    "label": "GEMINI_MAKER_REBATE_API_V1",
+    "labels": "a rebate enters economics only on status PAID. An accrual that matches a PENDING row is still an accrual.",
+    "matched": false,
+    "ours": {
+      "accrued_usd": "0.08332590",
+      "eligible_fill_count": 17,
+      "qualifying_volume_usd": "6.67",
+      "would_pay_usd": "0.08"
+    },
+    "spec_source": "https://developer.gemini.com/prediction-markets-spec/rewards, read 2026-09-22",
+    "venue": {
+      "id": 21320,
+      "paid_at": "2026-09-22T21:03:06.090688Z",
+      "status": "PAID",
+      "total_fill_count": 11,
+      "total_rebate_usd": "0.05",
+      "total_volume_usd": "3.95"
+    },
+    "verdict": "DISAGREES",
+    "why": "the venue's own numbers differ from ours; the DELTAS say which of the three disagrees, and the venue is authoritative"
+  },
+  "utc": "2026-09-22T22:28:25.646156+00:00",
+  "venue_read": {
+    "corrects": "the 2026-09-19 survey concluded every prediction-market rebate path 404s. It had probed /v1/prediction-markets/rebates and missed /v1/prediction-markets/maker-rebate/... by one path segment. These paths come from the published spec.",
+    "label": "GEMINI_MAKER_REBATE_API_V1",
+    "paths": {
+      "payouts": "POST /v1/prediction-markets/maker-rebate/payouts",
+      "rates": "GET /v1/prediction-markets/maker-rebate/rates",
+      "summary": "GET /v1/prediction-markets/maker-rebate/summary/total"
+    },
+    "payouts": {
+      "credited_total_usd": "0.56",
+      "labels": "only rows whose status is PAID are credited. The uncredited total is reported so a pending payout is visible, and it is never added to economics.",
+      "n": 9,
+      "n_credited": 8,
+      "readable": true,
+      "rows": [
+        {
+          "created_at": "2026-09-22T21:02:54.152549Z",
+          "credited": true,
+          "id": 21320,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-09-22T21:03:06.090688Z",
+          "status": "PAID",
+          "total_fill_count": 11,
+          "total_rebate_usd": "0.05",
+          "total_volume_usd": "3.95"
+        },
+        {
+          "created_at": "2026-09-19T21:04:30.497097Z",
+          "credited": false,
+          "id": 20566,
+          "labels": "NOT CREDITED. A payout row exists but its status is not PAID, so no cash is established. It is never counted, and never netted against an accrual.",
+          "paid_at": null,
+          "status": "ZERO_AMOUNT",
+          "total_fill_count": 3,
+          "total_rebate_usd": "0",
+          "total_volume_usd": "0.0098"
+        },
+        {
+          "created_at": "2026-09-08T22:30:57.174152Z",
+          "credited": true,
+          "id": 17092,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-09-08T22:38:23.928883Z",
+          "status": "PAID",
+          "total_fill_count": 2,
+          "total_rebate_usd": "0.01",
+          "total_volume_usd": "1"
+        },
+        {
+          "created_at": "2026-09-08T22:23:46.984468Z",
+          "credited": true,
+          "id": 16836,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-09-08T22:27:16.501132Z",
+          "status": "PAID",
+          "total_fill_count": 3,
+          "total_rebate_usd": "0.06",
+          "total_volume_usd": "5.03"
+        },
+        {
+          "created_at": "2026-09-01T21:03:30.426168Z",
+          "credited": true,
+          "id": 16053,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-09-01T21:03:46.601816Z",
+          "status": "PAID",
+          "total_fill_count": 25,
+          "total_rebate_usd": "0.17",
+          "total_volume_usd": "16.46"
+        },
+        {
+          "created_at": "2026-08-30T21:03:27.228001Z",
+          "credited": true,
+          "id": 15907,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-08-30T21:03:41.363485Z",
+          "status": "PAID",
+          "total_fill_count": 3,
+          "total_rebate_usd": "0.14",
+          "total_volume_usd": "14.2"
+        },
+        {
+          "created_at": "2026-08-29T21:03:39.833576Z",
+          "credited": true,
+          "id": 15791,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-08-29T21:03:52.410691Z",
+          "status": "PAID",
+          "total_fill_count": 2,
+          "total_rebate_usd": "0.05",
+          "total_volume_usd": "5.25"
+        },
+        {
+          "created_at": "2026-08-28T21:03:23.994518Z",
+          "credited": true,
+          "id": 15688,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-08-28T21:03:42.862026Z",
+          "status": "PAID",
+          "total_fill_count": 15,
+          "total_rebate_usd": "0.07",
+          "total_volume_usd": "7.31"
+        },
+        {
+          "created_at": "2026-08-27T21:03:29.621039Z",
+          "credited": true,
+          "id": 15559,
+          "labels": "CREDITED: the venue's own payout record states this was PAID. It is rebate income, reported on its own line and never merged into trading P&L.",
+          "paid_at": "2026-08-27T21:03:53.854487Z",
+          "status": "PAID",
+          "total_fill_count": 3,
+          "total_rebate_usd": "0.01",
+          "total_volume_usd": "1.23"
+        }
+      ],
+      "source": "POST /v1/prediction-markets/maker-rebate/payouts",
+      "uncredited_total_usd": "0"
+    },
+    "payouts_raw_status": 200,
+    "rates": {
+      "body": {
+        "rate_rules": [
+          {
+            "category": "Sports",
+            "effective_from": "2026-06-11T04:00:00Z",
+            "effective_to": "2026-07-09T04:00:00Z",
+            "id": 12,
+            "rebate_multiplier_bps": 5000
+          },
+          {
+            "category": "Sports",
+            "effective_from": "2026-05-10T04:00:00Z",
+            "effective_to": "2026-06-11T04:00:00Z",
+            "id": 11,
+            "rebate_multiplier_bps": 5000
+          },
+          {
+            "category": "Politics",
+            "effective_from": "2026-05-10T04:00:00Z",
+            "effective_to": "2026-06-11T04:00:00Z",
+            "id": 7,
+            "rebate_multiplier_bps": 7000
+          },
+          {
+            "category": "Economics",
+            "effective_from": "2026-05-10T04:00:00Z",
+            "effective_to": "2026-06-11T04:00:00Z",
+            "id": 8,
+            "rebate_multiplier_bps": 5000
+          },
+          {
+            "category": "Crypto",
+            "effective_from": "2026-05-10T04:00:00Z",
+            "effective_to": "2026-06-11T04:00:00Z",
+            "id": 9,
+            "rebate_multiplier_bps": 7000
+          },
+          {
+            "category": "Commodities",
+            "effective_from": "2026-05-10T04:00:00Z",
+            "effective_to": "2026-06-11T04:00:00Z",
+            "id": 10,
+            "rebate_multiplier_bps": 7000
+          },
+          {
+            "category": "Crypto",
+            "effective_from": "2026-04-09T04:00:00Z",
+            "effective_to": "2026-05-10T03:59:59Z",
+            "id": 3,
+            "rebate_multiplier_bps": 7000
+          },
+          {
+            "category": "Commodities",
+            "effective_from": "2026-04-09T04:00:00Z",
+            "effective_to": "2026-05-10T03:59:59Z",
+            "id": 4,
+            "rebate_multiplier_bps": 7000
+          },
+          {
+            "category": "Sports",
+            "effective_from": "2026-04-09T04:00:00Z",
+            "effective_to": "2026-05-10T03:59:59Z",
+            "id": 5,
+            "rebate_multiplier_bps": 5000
+          },
+          {
+            "effective_from": "2026-04-09T04:00:00Z",
+            "effective_to": "2026-05-10T03:59:59Z",
+            "id": 6,
+            "rebate_multiplier_bps": 3000
+          },
+          {
+            "category": "Crypto",
+            "effective_from": "2026-03-18T05:00:00Z",
+            "id": 1,
+            "rebate_multiplier_bps": 3000
+          },
+          {
+            "effective_from": "2026-03-18T05:00:00Z",
+            "id": 2,
+            "rebate_multiplier_bps": 3000
+          }
+        ]
+      },
+      "readable": true,
+      "status": 200
+    },
+    "readable": true,
+    "spec_source": "https://developer.gemini.com/prediction-markets-spec/rewards, read 2026-09-22",
+    "summary": {
+      "body": {
+        "first_payout_date": null,
+        "last_payout_date": null,
+        "payout_count": 0,
+        "total_earned_usd": "0.00",
+        "total_fill_count": 0,
+        "total_volume_usd": "0.00"
+      },
+      "status": 200,
+      "window": {
+        "dateFrom": "2026-09-21",
+        "dateTo": "2026-09-21",
+        "timezone": "America/New_York, per the spec"
+      }
+    },
+    "summary_lifetime": {
+      "body": {
+        "first_payout_date": "2026-08-27",
+        "last_payout_date": "2026-09-22",
+        "payout_count": 8,
+        "total_earned_usd": "0.56",
+        "total_fill_count": 64,
+        "total_volume_usd": "54.43"
+      },
+      "status": 200
+    },
+    "summary_window_took_effect": true,
+    "utc": "2026-09-22T22:28:24.509920+00:00"
+  }
+}

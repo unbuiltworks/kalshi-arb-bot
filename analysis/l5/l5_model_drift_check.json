@@ -1,0 +1,397 @@
+{
+ "kind": "l5_model_drift_check",
+ "t": "2026-09-06T08:45:24.482985+00:00",
+ "frozen_model_sha": null,
+ "frozen_generated_utc": "2026-09-03T04:19:16.377699+00:00",
+ "new_period_since_utc": "2026-08-31T23:11:19+00:00",
+ "new_transitions": 79917,
+ "states_scored": 97,
+ "states_new_unseen_by_model": 0,
+ "weighted_l1": 0.0492,
+ "flagged_states": [
+  {
+   "state": "p75-90c|tte<30s|imb10-50",
+   "n_new": 32,
+   "n_frozen": 22,
+   "l1": 0.4886,
+   "new": {
+    "open": 0.0,
+    "extend": 0.5625,
+    "complete": 0.4375,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3182,
+    "complete": 0.6818,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p55-75c|tte<30s|imb>50",
+   "n_new": 85,
+   "n_frozen": 37,
+   "l1": 0.4736,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4118,
+    "complete": 0.5882,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6486,
+    "complete": 0.3514,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p10-25c|tte<30s|imb10-50",
+   "n_new": 38,
+   "n_frozen": 35,
+   "l1": 0.4632,
+   "new": {
+    "open": 0.0,
+    "extend": 0.6316,
+    "complete": 0.3684,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.4,
+    "complete": 0.6,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte<30s|imb>50",
+   "n_new": 55,
+   "n_frozen": 19,
+   "l1": 0.3656,
+   "new": {
+    "open": 0.0,
+    "extend": 0.2909,
+    "complete": 0.7091,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.4737,
+    "complete": 0.5263,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte2-5m|imb10-50",
+   "n_new": 233,
+   "n_frozen": 250,
+   "l1": 0.3408,
+   "new": {
+    "open": 0.0,
+    "extend": 0.6824,
+    "complete": 0.3176,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.512,
+    "complete": 0.488,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p<10c|tte5-10m|imb1-10",
+   "n_new": 70,
+   "n_frozen": 60,
+   "l1": 0.3238,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4714,
+    "complete": 0.5286,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6333,
+    "complete": 0.3667,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p>90c|tte2-5m|imb1-10",
+   "n_new": 60,
+   "n_frozen": 64,
+   "l1": 0.321,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4333,
+    "complete": 0.5667,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.5938,
+    "complete": 0.4062,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p10-25c|tte>10m|imb1-10",
+   "n_new": 106,
+   "n_frozen": 69,
+   "l1": 0.2942,
+   "new": {
+    "open": 0.0,
+    "extend": 0.5094,
+    "complete": 0.4906,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3623,
+    "complete": 0.6377,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p>90c|tte>10m|imb>50",
+   "n_new": 114,
+   "n_frozen": 95,
+   "l1": 0.2736,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4737,
+    "complete": 0.5263,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6105,
+    "complete": 0.3895,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte5-10m|imb1-10",
+   "n_new": 75,
+   "n_frozen": 102,
+   "l1": 0.2556,
+   "new": {
+    "open": 0.0,
+    "extend": 0.52,
+    "complete": 0.48,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3922,
+    "complete": 0.6078,
+    "sell": 0.0
+   },
+   "flag": true
+  }
+ ],
+ "top_states": [
+  {
+   "state": "p75-90c|tte<30s|imb10-50",
+   "n_new": 32,
+   "n_frozen": 22,
+   "l1": 0.4886,
+   "new": {
+    "open": 0.0,
+    "extend": 0.5625,
+    "complete": 0.4375,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3182,
+    "complete": 0.6818,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p55-75c|tte<30s|imb>50",
+   "n_new": 85,
+   "n_frozen": 37,
+   "l1": 0.4736,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4118,
+    "complete": 0.5882,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6486,
+    "complete": 0.3514,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p10-25c|tte<30s|imb10-50",
+   "n_new": 38,
+   "n_frozen": 35,
+   "l1": 0.4632,
+   "new": {
+    "open": 0.0,
+    "extend": 0.6316,
+    "complete": 0.3684,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.4,
+    "complete": 0.6,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte<30s|imb>50",
+   "n_new": 55,
+   "n_frozen": 19,
+   "l1": 0.3656,
+   "new": {
+    "open": 0.0,
+    "extend": 0.2909,
+    "complete": 0.7091,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.4737,
+    "complete": 0.5263,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte2-5m|imb10-50",
+   "n_new": 233,
+   "n_frozen": 250,
+   "l1": 0.3408,
+   "new": {
+    "open": 0.0,
+    "extend": 0.6824,
+    "complete": 0.3176,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.512,
+    "complete": 0.488,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p<10c|tte5-10m|imb1-10",
+   "n_new": 70,
+   "n_frozen": 60,
+   "l1": 0.3238,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4714,
+    "complete": 0.5286,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6333,
+    "complete": 0.3667,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p>90c|tte2-5m|imb1-10",
+   "n_new": 60,
+   "n_frozen": 64,
+   "l1": 0.321,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4333,
+    "complete": 0.5667,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.5938,
+    "complete": 0.4062,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p10-25c|tte>10m|imb1-10",
+   "n_new": 106,
+   "n_frozen": 69,
+   "l1": 0.2942,
+   "new": {
+    "open": 0.0,
+    "extend": 0.5094,
+    "complete": 0.4906,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3623,
+    "complete": 0.6377,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p>90c|tte>10m|imb>50",
+   "n_new": 114,
+   "n_frozen": 95,
+   "l1": 0.2736,
+   "new": {
+    "open": 0.0,
+    "extend": 0.4737,
+    "complete": 0.5263,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.6105,
+    "complete": 0.3895,
+    "sell": 0.0
+   },
+   "flag": true
+  },
+  {
+   "state": "p45-55c|tte5-10m|imb1-10",
+   "n_new": 75,
+   "n_frozen": 102,
+   "l1": 0.2556,
+   "new": {
+    "open": 0.0,
+    "extend": 0.52,
+    "complete": 0.48,
+    "sell": 0.0
+   },
+   "frozen": {
+    "open": 0.0,
+    "extend": 0.3922,
+    "complete": 0.6078,
+    "sell": 0.0
+   },
+   "flag": true
+  }
+ ],
+ "verdict": "NO_MATERIAL_DRIFT",
+ "rule": "the live model is never changed here; a DRIFT_CANDIDATE verdict is a proposal to refit and validate OUT OF SAMPLE before any promotion"
+}

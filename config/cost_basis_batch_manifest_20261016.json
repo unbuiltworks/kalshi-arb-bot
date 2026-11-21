@@ -1,0 +1,477 @@
+{
+ "keys": [
+  "cpc-btc-updown-15m-2026-10-14-2230z|UP",
+  "cpc-btc-updown-15m-2026-10-15-1915z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-1945z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2215z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2230z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2245z|DOWN",
+  "cpc-btc-updown-15m-2026-10-15-2330z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0000z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0100z|UP",
+  "cpc-btc-updown-15m-2026-10-16-0115z|UP",
+  "cpc-btc-updown-15m-2026-10-16-0130z|UP",
+  "cpc-btc-updown-15m-2026-10-16-0145z|UP",
+  "cpc-btc-updown-15m-2026-10-16-0200z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0215z|DOWN",
+  "cpc-btc-updown-15m-2026-10-16-0330z|UP",
+  "cpc-btc-updown-15m-2026-10-16-1230z|UP",
+  "cpceth-eth-updown-15m-2026-10-15-2230z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-15-2330z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-15-2345z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-16-0100z|UP",
+  "cpceth-eth-updown-15m-2026-10-16-0115z|UP",
+  "cpceth-eth-updown-15m-2026-10-16-0130z|UP",
+  "cpceth-eth-updown-15m-2026-10-16-0145z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-16-0200z|DOWN",
+  "cpceth-eth-updown-15m-2026-10-16-0215z|UP",
+  "cpceth-eth-updown-15m-2026-10-16-0330z|UP",
+  "cpceth-eth-updown-15m-2026-10-16-1230z|UP",
+  "cpcsol-sol-updown-15m-2026-10-15-2230z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-15-2330z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0000z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0100z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-16-0115z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0130z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0145z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0200z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-0215z|DOWN",
+  "cpcsol-sol-updown-15m-2026-10-16-0330z|UP",
+  "cpcsol-sol-updown-15m-2026-10-16-1230z|UP",
+  "cpcxrp-xrp-updown-15m-2026-10-15-2230z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-15-2330z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0100z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0115z|UP",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0130z|UP",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0145z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0200z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN",
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP"
+ ],
+ "legs": 47,
+ "per_leg": {
+  "cpc-btc-updown-15m-2026-10-14-2230z|UP": {
+   "cost_after_usd": "0.59000000",
+   "cost_before_usd": "2.90",
+   "trade_ids": [
+    "D3NHEG37RZ6Y",
+    "D3NHS0K12Z6Y",
+    "D3NJNSJ1YZ6Y",
+    "D3NMHKSACZ6Y",
+    "D3NMZPH42Z6Y"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-1915z|DOWN": {
+   "cost_after_usd": "0.88000000",
+   "cost_before_usd": "1.0000",
+   "trade_ids": [
+    "D47CGX1GCZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-1945z|DOWN": {
+   "cost_after_usd": "0.51000000",
+   "cost_before_usd": "1.0000",
+   "trade_ids": [
+    "D47QRSGGYZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2215z|DOWN": {
+   "cost_after_usd": "0.91000000",
+   "cost_before_usd": "1.0000",
+   "trade_ids": [
+    "D4A1BT20EZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_after_usd": "0.29210000",
+   "cost_before_usd": "1.2700",
+   "trade_ids": [
+    "D4A7Y49G0ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2245z|DOWN": {
+   "cost_after_usd": "0.91720000",
+   "cost_before_usd": "3.8600",
+   "trade_ids": [
+    "D4AG973G2ZRM",
+    "D4AGHN302ZRQ"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_after_usd": "0.27720000",
+   "cost_before_usd": "1.2600",
+   "trade_ids": [
+    "D4B3WRR00ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0000z|DOWN": {
+   "cost_after_usd": "30.39010000",
+   "cost_before_usd": "31.3300",
+   "trade_ids": [
+    "D4BH7870EZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0100z|UP": {
+   "cost_after_usd": "0.94770000",
+   "cost_before_usd": "3.5100",
+   "trade_ids": [
+    "D4CBXMB1TZRM"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0115z|UP": {
+   "cost_after_usd": "0.47960000",
+   "cost_before_usd": "1.0900",
+   "trade_ids": [
+    "D4CGVBZ08ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0130z|UP": {
+   "cost_after_usd": "0.97280000",
+   "cost_before_usd": "1.2800",
+   "trade_ids": [
+    "D4CSTXVG6ZRP"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0145z|UP": {
+   "cost_after_usd": "0.94920000",
+   "cost_before_usd": "3.3900",
+   "trade_ids": [
+    "D4CZRERGJZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_after_usd": "1.16600000",
+   "cost_before_usd": "2.1200",
+   "trade_ids": [
+    "D4D5HKN00ZRN"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_after_usd": "0.61920000",
+   "cost_before_usd": "2.5800",
+   "trade_ids": [
+    "D4DG428G6ZRQ"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-0330z|UP": {
+   "cost_after_usd": "0.16000000",
+   "cost_before_usd": "2.0000",
+   "trade_ids": [
+    "D4EE4KCG2ZRQ"
+   ]
+  },
+  "cpc-btc-updown-15m-2026-10-16-1230z|UP": {
+   "cost_after_usd": "0.65000000",
+   "cost_before_usd": "5.0000",
+   "trade_ids": [
+    "D4P84GQ0GZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_after_usd": "0.56610000",
+   "cost_before_usd": "1.5300",
+   "trade_ids": [
+    "D4A828DG4ZRN"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_after_usd": "0.64400000",
+   "cost_before_usd": "1.6100",
+   "trade_ids": [
+    "D4B4E2W02ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-15-2345z|DOWN": {
+   "cost_after_usd": "14.72040000",
+   "cost_before_usd": "15.6600",
+   "trade_ids": [
+    "D4B92NF04ZRN"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0100z|UP": {
+   "cost_after_usd": "0.96380000",
+   "cost_before_usd": "1.5800",
+   "trade_ids": [
+    "D4CC0BNG4ZRP"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0115z|UP": {
+   "cost_after_usd": "0.47700000",
+   "cost_before_usd": "1.5900",
+   "trade_ids": [
+    "D4CGRPX04ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0130z|UP": {
+   "cost_after_usd": "0.98790000",
+   "cost_before_usd": "1.1100",
+   "trade_ids": [
+    "D4CSQJ7GJZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0145z|DOWN": {
+   "cost_after_usd": "1.17150000",
+   "cost_before_usd": "2.1300",
+   "trade_ids": [
+    "D4CZNJE0JZRM"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_after_usd": "1.55620000",
+   "cost_before_usd": "2.5100",
+   "trade_ids": [
+    "D4D5EBC08ZRM",
+    "D4D5EBC08ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0215z|UP": {
+   "cost_after_usd": "1.94400000",
+   "cost_before_usd": "3.2400",
+   "trade_ids": [
+    "D4DG09902ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-0330z|UP": {
+   "cost_after_usd": "1.00000000",
+   "cost_before_usd": "50.0000",
+   "trade_ids": [
+    "D4EFMDHGGZRN",
+    "D4EFMNXG4ZRQ"
+   ]
+  },
+  "cpceth-eth-updown-15m-2026-10-16-1230z|UP": {
+   "cost_after_usd": "0.90000000",
+   "cost_before_usd": "5.0000",
+   "trade_ids": [
+    "D4P81FS00ZRN"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_after_usd": "0.57350000",
+   "cost_before_usd": "1.5500",
+   "trade_ids": [
+    "D4A80E3G2ZRN"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-15-2330z|UP": {
+   "cost_after_usd": "0.96720000",
+   "cost_before_usd": "1.2400",
+   "trade_ids": [
+    "D4B3YB804ZRQ"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0000z|UP": {
+   "cost_after_usd": "0.97440000",
+   "cost_before_usd": "1.6800",
+   "trade_ids": [
+    "D4BH24G14ZRP"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0100z|DOWN": {
+   "cost_after_usd": "0.76120000",
+   "cost_before_usd": "1.7300",
+   "trade_ids": [
+    "D4CC5BG0CZRP"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0115z|UP": {
+   "cost_after_usd": "0.47940000",
+   "cost_before_usd": "1.4100",
+   "trade_ids": [
+    "D4CGT6V0CZRQ"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0130z|UP": {
+   "cost_after_usd": "0.96250000",
+   "cost_before_usd": "1.7500",
+   "trade_ids": [
+    "D4CSSDZ00ZRN",
+    "D4CSSDZ02ZRM"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0145z|UP": {
+   "cost_after_usd": "0.95890000",
+   "cost_before_usd": "2.2300",
+   "trade_ids": [
+    "D4CZQCEGGZRQ"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0200z|UP": {
+   "cost_after_usd": "0.96530000",
+   "cost_before_usd": "1.9700",
+   "trade_ids": [
+    "D4D5G59G4ZRQ"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_after_usd": "0.33000000",
+   "cost_before_usd": "3.3000",
+   "trade_ids": [
+    "D4DG2CY04ZRQ",
+    "D4DG2CY06ZRP"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-0330z|UP": {
+   "cost_after_usd": "1.50000000",
+   "cost_before_usd": "50.0000",
+   "trade_ids": [
+    "D4EFB7K04ZRM",
+    "D4EFCDGG4ZRQ",
+    "D4EFCDX04ZRP",
+    "D4EFCJH00ZRN"
+   ]
+  },
+  "cpcsol-sol-updown-15m-2026-10-16-1230z|UP": {
+   "cost_after_usd": "0.40000000",
+   "cost_before_usd": "5.0000",
+   "trade_ids": [
+    "D4P905606ZRQ",
+    "D4P905AG2ZRN",
+    "D4P905E02ZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-15-2230z|DOWN": {
+   "cost_after_usd": "0.26250000",
+   "cost_before_usd": "1.2500",
+   "trade_ids": [
+    "D4A83MFG2ZRN",
+    "D4A83MFG4ZRM"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-15-2330z|DOWN": {
+   "cost_after_usd": "0.87450000",
+   "cost_before_usd": "2.8100",
+   "trade_ids": [
+    "D4B4CH7GAZRN",
+    "D4B4MZF04ZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0100z|DOWN": {
+   "cost_after_usd": "0.34320000",
+   "cost_before_usd": "1.3200",
+   "trade_ids": [
+    "D4CC1R900ZRP",
+    "D4CC1R902ZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0115z|UP": {
+   "cost_after_usd": "0.47760000",
+   "cost_before_usd": "1.9900",
+   "trade_ids": [
+    "D4CGQ9108ZRM"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0130z|UP": {
+   "cost_after_usd": "0.97820000",
+   "cost_before_usd": "1.4600",
+   "trade_ids": [
+    "D4CSP8G08ZRP"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0145z|DOWN": {
+   "cost_after_usd": "1.35360000",
+   "cost_before_usd": "2.3100",
+   "trade_ids": [
+    "D4CZM25GJZRP",
+    "D4CZM25GMZRN"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0200z|DOWN": {
+   "cost_after_usd": "1.26540000",
+   "cost_before_usd": "2.2200",
+   "trade_ids": [
+    "D4D5D7006ZRM"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN": {
+   "cost_after_usd": "0.31680000",
+   "cost_before_usd": "5.2800",
+   "trade_ids": [
+    "D4DFYRZ08ZRP"
+   ]
+  },
+  "cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP": {
+   "cost_after_usd": "1.00000000",
+   "cost_before_usd": "50.0000",
+   "trade_ids": [
+    "D4EFZNW02ZRM",
+    "D4EFZNW02ZRQ",
+    "D4EFZNW04ZRP",
+    "D4EH1QYG0ZRN",
+    "D4EH6TTG4ZRQ"
+   ]
+  }
+ },
+ "realized_delta_usd": "209.66380000",
+ "trade_ids": [
+  "D3NHEG37RZ6Y",
+  "D3NHS0K12Z6Y",
+  "D3NJNSJ1YZ6Y",
+  "D3NMHKSACZ6Y",
+  "D3NMZPH42Z6Y",
+  "D47CGX1GCZRM",
+  "D47QRSGGYZRN",
+  "D4A1BT20EZRN",
+  "D4A7Y49G0ZRN",
+  "D4A80E3G2ZRN",
+  "D4A828DG4ZRN",
+  "D4A83MFG2ZRN",
+  "D4A83MFG4ZRM",
+  "D4AG973G2ZRM",
+  "D4AGHN302ZRQ",
+  "D4B3WRR00ZRN",
+  "D4B3YB804ZRQ",
+  "D4B4CH7GAZRN",
+  "D4B4E2W02ZRQ",
+  "D4B4MZF04ZRN",
+  "D4B92NF04ZRN",
+  "D4BH24G14ZRP",
+  "D4BH7870EZRM",
+  "D4CBXMB1TZRM",
+  "D4CC0BNG4ZRP",
+  "D4CC1R900ZRP",
+  "D4CC1R902ZRN",
+  "D4CC5BG0CZRP",
+  "D4CGQ9108ZRM",
+  "D4CGRPX04ZRQ",
+  "D4CGT6V0CZRQ",
+  "D4CGVBZ08ZRN",
+  "D4CSP8G08ZRP",
+  "D4CSQJ7GJZRQ",
+  "D4CSSDZ00ZRN",
+  "D4CSSDZ02ZRM",
+  "D4CSTXVG6ZRP",
+  "D4CZM25GJZRP",
+  "D4CZM25GMZRN",
+  "D4CZNJE0JZRM",
+  "D4CZQCEGGZRQ",
+  "D4CZRERGJZRN",
+  "D4D5D7006ZRM",
+  "D4D5EBC08ZRM",
+  "D4D5EBC08ZRQ",
+  "D4D5G59G4ZRQ",
+  "D4D5HKN00ZRN",
+  "D4DFYRZ08ZRP",
+  "D4DG09902ZRQ",
+  "D4DG2CY04ZRQ",
+  "D4DG2CY06ZRP",
+  "D4DG428G6ZRQ",
+  "D4EE4KCG2ZRQ",
+  "D4EFB7K04ZRM",
+  "D4EFCDGG4ZRQ",
+  "D4EFCDX04ZRP",
+  "D4EFCJH00ZRN",
+  "D4EFMDHGGZRN",
+  "D4EFMNXG4ZRQ",
+  "D4EFZNW02ZRM",
+  "D4EFZNW02ZRQ",
+  "D4EFZNW04ZRP",
+  "D4EH1QYG0ZRN",
+  "D4EH6TTG4ZRQ",
+  "D4P81FS00ZRN",
+  "D4P84GQ0GZRQ",
+  "D4P905606ZRQ",
+  "D4P905AG2ZRN",
+  "D4P905E02ZRN"
+ ]
+}
