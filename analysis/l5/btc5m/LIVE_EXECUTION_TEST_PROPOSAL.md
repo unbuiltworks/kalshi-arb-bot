@@ -249,3 +249,46 @@ Arming each window therefore sets one more variable, re-issued each time
 with the venue results so far; disarming clears it. `expires_utc` is set
 to the armed window's end plus a few minutes. 32 tests, including through
 the real executor path and across a restart.
+
+## Step 1 and Step 2 as deployed, and what is still open (2026-11-21 01:45Z)
+
+DEPLOYED. `l5-pmus-live` at `1e75294f3` (00:46Z) and `l5-btc5m-live` at
+`be85a3b07` (01:20Z), both disarmed, no variable changed, 0 orders,
+watchdog clean, drawdown $0.0265 of $1.00.
+
+EQUITY-BASELINE REFUSAL AFTER THE PMUS RESTART: normal and identical to
+the previous deployment. The feed read (236 pages, two a tick) completed
+11.4 min after restart (11.2 min on the previous deployment, 20 Nov), no
+error on either; the periodic re-read completes about every 23 min and a
+completed read was never older than 1,343 s against a 2,100 s limit.
+Nothing reports the read's progress until it completes, which is why it
+could not be told from a stalled one; a reporting-only patch is saved
+(`patches/pmus_live_publication_visible.patch`), not deployed.
+
+LEDGER COMPLETENESS, FROM LOGS (not from the ledger file). Since its last
+accounting rebase (2026-11-16 00:58Z) the account service retired 43
+`cpc-btc-updown-5m-` markets. 37 have settlement evidence in
+`l5-btc5m-live`'s own logs. SIX DO NOT:
+`2026-11-17-0150z` and `2026-11-18-1535z, -1540z, -1545z, -1600z, -1605z`
+(attested results -0.18, -1.8585, -1.8398, -0.92, -0.32, -1.634; about
+-$6.75 together). `l5-btc5m-live` logged nothing at all in those windows,
+and the account service recorded them as "venue holds a market we never
+booked". Something else traded them on this account. If the published
+basis reconciles, the deployed ledger-completeness check will therefore
+REFUSE ARMING (`OWN_LEDGER_MISSING_SETTLED_MARKETS`). That is the check
+working as written; it cannot tell a lost ledger entry from a market a
+stranger traded.
+
+PREPARED, NOT DEPLOYED: `L5_BTC5M_NOT_THIS_LANE_MARKETS`, a variable only
+the owner sets, naming exact slugs this lane never traded. A named market
+is reported and not refused; any other still refuses; a prefix or wildcard
+is dropped. 5 tests. It needs a new BTC5m release and a redeploy.
+
+STILL NOT VERIFIED: whether the published lifetime basis is marked
+reconciled, and what the BTC5m ledger file actually contains. Neither is
+logged by a disarmed service. The owner's read-only command (in the
+session report) answers both.
+
+ALSO SEEN: `2026-11-16-0335z` is +0.34 in this lane's records (a matched
+pair) and -2.00 in the account service's (unattested, quantities differ).
+The account figure is the more pessimistic, so no limit is loosened.

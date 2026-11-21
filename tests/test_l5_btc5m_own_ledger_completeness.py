@@ -65,3 +65,59 @@ def test_an_unreconciled_basis_cannot_accuse_the_ledger():
 def test_no_basis_published_changes_nothing():
     h = hist(**{TODAY: "-0.01"})
     assert read(own(h))["ok"]
+
+
+# ------------------------------------------- markets something else traded
+
+from src import l5_btc5m_runner as RUN                    # noqa: E402
+
+STRANGER = "cpc-btc-updown-5m-2026-11-18-1540z"
+
+
+def test_a_market_the_owner_attests_is_reported_not_refused(monkeypatch):
+    monkeypatch.setenv(RUN.NOT_THIS_LANE_ENV, STRANGER)
+    h = hist(**{TODAY: "-0.01"})
+    r = read(own(h), lifetime_basis=basis({STRANGER: "-1.8398",
+                                           TODAY: "-0.01"}))
+    assert r["ok"], r["reason"]
+    b = r["btc5m_lifetime_basis"]
+    assert b["own_series_markets_not_in_own_history"] == []
+    assert b["owner_attested_not_this_lane"] == [STRANGER]
+
+
+def test_attesting_one_market_does_not_excuse_another(monkeypatch):
+    monkeypatch.setenv(RUN.NOT_THIS_LANE_ENV, STRANGER)
+    r = read(own({}), lifetime_basis=basis({STRANGER: "-1.8398",
+                                            LOST: "-0.0114"}))
+    assert r["reason"] == "OWN_LEDGER_MISSING_SETTLED_MARKETS"
+    assert r["btc5m_lifetime_basis"][
+        "own_series_markets_not_in_own_history"] == [LOST]
+
+
+def test_an_attested_market_adds_nothing_and_removes_nothing(monkeypatch):
+    h = hist(**{TODAY: "-0.01"})
+    doc = basis({STRANGER: "-1.8398", TODAY: "-0.01"})
+    monkeypatch.setenv(RUN.NOT_THIS_LANE_ENV, STRANGER)
+    with_it = read(own(h), lifetime_basis=doc)
+    assert with_it["lifetime_realized_usd"] == \
+        read(own(h), lifetime_basis=basis({TODAY: "-0.01"}))[
+            "lifetime_realized_usd"]
+
+
+def test_only_whole_exact_slugs_are_ever_exempted(monkeypatch):
+    for bad in ("cpc-btc-updown-5m-", "*", "cpc-btc-updown-5m-2026-11-18-*",
+                "CPC-BTC-UPDOWN-5M-2026-11-18-1540Z", "short", ""):
+        monkeypatch.setenv(RUN.NOT_THIS_LANE_ENV, bad)
+        assert STRANGER not in RUN.not_this_lane_markets()
+        r = read(own({}), lifetime_basis=basis({STRANGER: "-1.8398"}))
+        assert r["reason"] == "OWN_LEDGER_MISSING_SETTLED_MARKETS", bad
+    monkeypatch.setenv(RUN.NOT_THIS_LANE_ENV,
+                       " %s , cpc-btc-updown-5m-2026-11-17-0150z " % STRANGER)
+    assert RUN.not_this_lane_markets() == (
+        "cpc-btc-updown-5m-2026-11-17-0150z", STRANGER)
+
+
+def test_unset_changes_nothing(monkeypatch):
+    monkeypatch.delenv(RUN.NOT_THIS_LANE_ENV, raising=False)
+    r = read(own({}), lifetime_basis=basis({STRANGER: "-1.8398"}))
+    assert r["reason"] == "OWN_LEDGER_MISSING_SETTLED_MARKETS"

@@ -536,6 +536,24 @@ def _own_not_in_account_ledger(own: Any, risk: Mapping[str, Any]
     return add, full, gaps
 
 
+NOT_THIS_LANE_ENV = "L5_BTC5M_NOT_THIS_LANE_MARKETS"
+_SLUG_OK = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def not_this_lane_markets() -> Tuple[str, ...]:
+    """Exact market slugs the owner attests this lane never traded.
+    Comma-separated. A token that is not a plain slug is dropped, so a
+    wildcard or a prefix can never be smuggled in: only whole, exact names
+    are ever exempted."""
+    raw = os.environ.get(NOT_THIS_LANE_ENV) or ""
+    out = []
+    for tok in raw.split(","):
+        t = tok.strip()
+        if 12 <= len(t) <= 120 and set(t) <= _SLUG_OK:
+            out.append(t)
+    return tuple(sorted(set(out)))
+
+
 def _own_not_in_lifetime(own: Any, risk: Mapping[str, Any],
                           life: Decimal) -> Optional[Dict[str, Any]]:
     """What to add to the account's LIFETIME figure for this lane's whole
@@ -634,10 +652,25 @@ def _own_not_in_lifetime(own: Any, risk: Mapping[str, Any],
         prefix = str(X.ORIGIN.STRATEGY_SERIES[X.STRATEGY])
         missing = sorted(str(m) for m in booked
                          if str(m).startswith(prefix) and m not in hist)
+    #: MARKETS OF THIS SERIES THAT SOMETHING ELSE TRADED. The account is
+    #: shared: on 2026-11-17 and 11-18 six BTC5m windows were traded on it
+    #: by something other than this lane (the account service's own alert
+    #: reads "venue holds a market we never booked"; this lane logged
+    #: nothing in those windows). They are in the account's ledger and its
+    #: loss limits already count them, but they will never be in this
+    #: lane's, and a hole and a stranger look the same from here. The
+    #: OWNER names such markets, exactly, in a variable only the owner
+    #: sets; a named market is reported and not refused. Anything not
+    #: named still refuses, so a market lost from the ledger tomorrow is
+    #: caught exactly as before.
+    foreign = set(not_this_lane_markets())
+    attested = [m for m in missing if m in foreign]
+    missing = [m for m in missing if m not in foreign]
     return {"add": add, "basis_used": why is None, "basis_refusal": why,
             "basis_complete": (None if why is not None
                                else basis.get("complete") is True),
-            "markets": n, "own_series_markets_not_in_own_history": missing}
+            "markets": n, "own_series_markets_not_in_own_history": missing,
+            "owner_attested_not_this_lane": attested}
 
 
 def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
