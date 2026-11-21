@@ -194,6 +194,10 @@ COPY src/l5_venue_cost_diagnostic.py src/l5_venue_cost_diagnostic.py
 COPY src/l5_equity_baseline.py src/l5_equity_baseline.py
 COPY src/l5_equity_feed.py src/l5_equity_feed.py
 COPY src/l5_venue_superset_correction.py src/l5_venue_superset_correction.py
+# Lazily imported by Runner.maybe_report_venue_basis / venue_basis_lines
+# (guarded). Report only; OFF unless L5_VENUE_BASIS=REPORT.
+COPY src/l5_venue_basis.py src/l5_venue_basis.py
+COPY src/l5_venue_basis_report.py src/l5_venue_basis_report.py
 COPY config/venue_superset_manifest_20261120.json config/venue_superset_manifest_20261120.json
 # The blocked-arm switch gate, called from the HEARTBEAT when
 # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY

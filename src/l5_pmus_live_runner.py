@@ -3072,6 +3072,41 @@ class Runner:
             except BaseException:                              # noqa: BLE001
                 pass
 
+    def maybe_report_venue_basis(self, now: float) -> None:
+        """REPORT-ONLY: the venue's executions beside this ledger's booked
+        results, including markets the ledger never saw.
+
+        OFF unless `L5_VENUE_BASIS` is exactly `REPORT`. It calls no store
+        method, writes nothing and changes no gate; its only transport call
+        is the activity feed's GET at the attestation's pace. ANY failure
+        is swallowed -- this can never stop a tick. See
+        `l5_venue_basis_report`.
+        """
+        try:
+            from src import l5_venue_basis_report as VBR
+            if VBR.mode() != VBR.MODE_REPORT:
+                return
+            job = getattr(self, "_venue_basis_pass", None)
+            if job is None:
+                job = VBR.Pass()
+                self._venue_basis_pass = job
+            out = job.step(self.store, self.transport, float(now))
+            if out.get("report") is not None:
+                emit("L5_VENUE_BASIS", out["report"])
+                for rec in out.get("details") or ():
+                    emit("L5_VENUE_BASIS_DETAIL", rec)
+            elif out.get("walk_failed"):
+                emit("L5_VENUE_BASIS", {"walk_failed": out["walk_failed"],
+                                        "applied": False})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["venue_basis_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
     def venue_cost_attestation_lines(self) -> Dict[str, Any]:
         """The heartbeat block for `maybe_attest_venue_costs`. Never raises."""
         try:
@@ -6713,6 +6748,9 @@ class Runner:
             # the venue-equity controls a second strategy must also honour.
             # Added keys only: every figure above is computed as before.
             **self.equity_risk_lines(),
+            # the venue's executions beside the booked results. Added key
+            # only, report only: no figure above reads it.
+            "venue_basis": venue_basis_lines(self),
             "labels": ("the account-wide figures the 15-minute service's own "
                        "gates read, published so a second strategy cannot "
                        "hold a looser copy. Read-only."),
@@ -7129,6 +7167,10 @@ class Runner:
             # not open: attested, still at the $1 bound (with reasons), and
             # the corrections applied with their delta. Reporting only.
             "venue_cost_attestation": self.venue_cost_attestation_lines(),
+            # VENUE EXECUTIONS BESIDE THE BOOKED RESULTS. Report only: state,
+            # counts and totals, never the rows. OFF unless L5_VENUE_BASIS
+            # is exactly REPORT. No gate reads it.
+            "venue_basis": venue_basis_lines(self),
             "l5_baseline": self.store.l5_baseline_lines(),
             # ACCOUNT-WIDE EXPOSURE, reported independently of the decision
             # path. The aggregation itself runs inside the gate, which the
@@ -11714,6 +11756,7 @@ class Runner:
         self.maybe_diagnose_venue_costs(now)
         self.maybe_watch_equity_transfers(now)
         self.maybe_correct_venue_supersets(now)
+        self.maybe_report_venue_basis(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)
@@ -12902,6 +12945,26 @@ class TimedCounter(collections.Counter):
         """Seconds since each key last advanced. A frozen counter says so."""
         t = self._clock() if now is None else now
         return {k: round(t - v, 1) for k, v in self.last_t.items()}
+
+
+def venue_basis_lines(runner: Any) -> Dict[str, Any]:
+    """The small `venue_basis` block: state, counts and totals. Never the
+    rows, never raises, and nothing reads it to decide anything.
+
+    A module function, NOT a Runner method: `account_risk_line` and
+    `heartbeat` are grafted onto stubs in several suites, and a new
+    instance attribute there is a duck-typing hazard (see
+    `unresolved_discrepancies`).
+    """
+    try:
+        from src import l5_venue_basis_report as VBR
+        job = getattr(runner, "_venue_basis_pass", None) or VBR.Pass()
+        return job.lines()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"state": "UNAVAILABLE", "error": type(exc).__name__,
+                "applied": False}
 
 
 def unresolved_accounting() -> List[Dict[str, Any]]:
