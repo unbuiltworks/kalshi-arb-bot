@@ -7,13 +7,13 @@ Prepared 2026-11-21 by the sports production coordinator session. Nothing here i
 | Item | Value |
 |---|---|
 | Service | `pmus-spring-l5-probe` (d84d9a68-2e5b-4f74-9694-5f422417c74f) |
-| Branch / commit | `feat/pmus-rn1-replica-20261121` @ `0a93bc12e` (parent: live `62a96c5be`) |
-| Code changes | RN1 replica mode (default OFF); pending-cancel fill fix; per-side last-fill time |
-| Tests | 18 new; sports suite: same failure set as the parent |
+| Branch / commit | `feat/pmus-rn1-replica-20261121` @ `ca8b878bb` (parent: live `62a96c5be`) |
+| Code changes | RN1 replica mode (default OFF); international fair-value guard on RN1 openings; pending-cancel fill fix; per-side last-fill time |
+| Tests | 19 new; sports suite: same failure set as the parent |
 
 ## Two steps, each needs your explicit approval
 
-**Step A — disarmed release (no orders possible).** Deploy `0a93bc12e` with the RN1 settings below and
+**Step A — disarmed release (no orders possible).** Deploy `ca8b878bb` with the RN1 settings below and
 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` kept. The bot runs the replica's decisions and logs every one
 (`RN1_QUOTE`); every order is refused by the lock (`place_refused_submission_lock`). Combo maker stays
 `shadow`. Purpose: confirm on live books that the decisions are the intended ones before money moves.
@@ -48,7 +48,7 @@ Changed existing settings:
 
 Unchanged (existing capital and loss limits): `PMUS_TWO_SIDED_DAILY_LOSS_USD=5`, `PMUS_TWO_SIDED_TOTAL_USD=60`,
 `PMUS_TWO_SIDED_OPEN_EV_GATE=1`, taker off, `PMUS_TWO_SIDED_ACCOUNT_RISK=observe`, `L5_ACCOUNT_MAX_EXPOSURE_USD=20`,
-`PMUS_COMBO_MAKER=shadow`, watchdog as deployed.
+`PMUS_COMBO_MAKER=shadow`, `PMUS_TWO_SIDED_INTL_GUARD=1` (now also guards RN1 openings), watchdog as deployed.
 
 ## Worst case, by construction
 
