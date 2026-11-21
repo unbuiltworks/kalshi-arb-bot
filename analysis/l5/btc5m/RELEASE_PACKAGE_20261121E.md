@@ -85,3 +85,19 @@ registry OK with 0 open orders. Fail-closed tests of the reconciliation rule: 51
 - A window in which one of the campaign's own waits refused is sat out to its end (`CAMPAIGN_WINDOW_SAT_OUT`); it is
   never joined part-way. The next window starts clean. Without this, d81792cec could begin trading mid-window the
   moment the previous window reconciled.
+
+## 2026-11-21 16:14Z — 2fe56d9bf deployed DISARMED (owner-approved) — acceptance and preflight PASS
+- Deployment 39fe8fc6, commit exactly 2fe56d9bf184e09e0156657031d8e63f4005b3d1. `armed:false`, `can_submit:false`, MONITOR,
+  not latched, serving its registry. No probe or campaign document; loss halt NOT_SET. Clip 0.05, side 0.30,
+  unmatched 0.10, window loss 0.20, taker completion off. Open budget 90 (unchanged). No orders, no errors.
+- Watchdog: three sweeps at least 20 s after the new process start (16:14:52, 16:15:12, 16:15:32) — lane registry OK,
+  0 open orders, no read error, cancel enabled.
+- Account service 62b54e14a: disarmed, 0 live orders, nothing pending or quarantined, no uncertain markets,
+  lifetime -39.5158 (reconciled, complete), day -0.0213, equity 321.4304, drawdown 0.0478, room 0.9522, exposure 0,
+  no tracebacks. Publishes both of today's lane markets (corrected figures), which is what the new rule compares.
+- Behaviour pinned at this commit by tests (run at 2fe56d9bf): no grace on a pending reconciliation; an unsettled
+  earlier window refuses; a window that waited on settlement or on reconciliation is sat out to its end; an
+  unreadable pending set sits the window out; other account-risk refusals (the portfolio-value one) resume as before;
+  nothing changes without a campaign document.
+- Not verifiable while disarmed: the campaign document parser and the waits running in production. First exercised
+  at arming.
