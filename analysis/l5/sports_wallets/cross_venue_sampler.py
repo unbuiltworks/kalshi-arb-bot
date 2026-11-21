@@ -14,14 +14,18 @@ def sample(g):
     row = {"slug": g["slug"]}
     try:
         t = time.time(); b = get("https://clob.polymarket.com/book?token_id=" + g["tok"])
-        bids = [float(x["price"]) for x in b.get("bids", [])]; asks = [float(x["price"]) for x in b.get("asks", [])]
-        row.update(ti=round(t, 2), ib=max(bids) if bids else None, ia=min(asks) if asks else None)
+        bids = sorted(((float(x["price"]), float(x["size"])) for x in b.get("bids", [])), reverse=True)
+        asks = sorted((float(x["price"]), float(x["size"])) for x in b.get("asks", []))
+        row.update(ti=round(t, 2), ib=bids[0][0] if bids else None, ia=asks[0][0] if asks else None,
+                   ibq=bids[0][1] if bids else 0, iaq=asks[0][1] if asks else 0)
     except Exception as e: row["ie"] = type(e).__name__
     try:
-        t = time.time(); d = get("https://gateway.polymarket.us/v1/markets/aec-%s/bbo" % g["slug"])["marketData"]
-        row.update(tu=round(t, 2), ub=float(d["bestBid"]["value"]) if d.get("bestBid") else None,
-                   ua=float(d["bestAsk"]["value"]) if d.get("bestAsk") else None, us=d.get("state"),
-                   ubd=d.get("bidDepth"), uad=d.get("askDepth"), ush=d.get("sharesTraded"))
+        t = time.time(); d = get("https://gateway.polymarket.us/v1/markets/aec-%s/book" % g["slug"])["marketData"]
+        ub = sorted(((float(x["px"]["value"]), float(x["qty"])) for x in d.get("bids") or []), reverse=True)
+        ua = sorted((float(x["px"]["value"]), float(x["qty"])) for x in d.get("offers") or [])
+        row.update(tu=round(t, 2), ub=ub[0][0] if ub else None, ua=ua[0][0] if ua else None, us=d.get("state"),
+                   ubq=ub[0][1] if ub else 0, uaq=ua[0][1] if ua else 0, ub3=ub[:3], ua3=ua[:3],
+                   ush=(d.get("stats") or {}).get("sharesTraded"))
     except Exception as e: row["ue"] = type(e).__name__
     return row
 if __name__ == "__main__":

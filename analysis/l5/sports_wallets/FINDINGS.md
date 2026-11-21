@@ -52,3 +52,17 @@ of the platform's own figure (daily correlation 0.996). About 1.2 standard error
 - ALL of the profit is in fills over $500 (+1.04%). Fills under $500 are flat to negative, and markets where he spent
   under $100 in total lost 10.8%. We would trade small: this is the most important caution for transfer.
 - 93.5% of dollars are bought after the game starts.
+
+## Addendum — does the international market lead Polymarket US? (`CROSS_VENUE_20261121_RESULT.txt`)
+Recording 20:27–22:17 UTC 21 Nov, 32 live/near-live games (CFB, NBA, NHL), both venues every 3 s, public quotes only.
+Data: `cross_venue_20261121_2027_2217.jsonl.gz`. Label: MODELLED marks on quotes — not fills, not P&L. One evening.
+- International leads: US mid changes follow international changes with correlation 0.21–0.31 at +3 to +30 s, ~0 the other way.
+- Before 91% of US mid drops of >=1c (259 events) the international mid was already >=0.5c lower. Mirror case: 34%.
+- US ask at least 0.5c BELOW the international bid: 273 signals over 12 games. Buying that ask, marked at the US mid
+  60 s later, net of the promo taker fee: mean +2.1c, median +1.7c, 71% positive. At >=1c: mean +3.3c, 85% positive (178 signals).
+- Merely touching (gap 0) is not a signal: median −0.8c, 33% positive.
+- A resting US bid more than 1c below the international mid sits 1.4c under the US mid a minute later; a bid at or above
+  the international mid only 0.2c — i.e. bids above the international mid are the ones about to be run over.
+Not yet known: size available at the US ask during a cross (second recording running with sizes), our own order latency,
+whether the effect persists on other days, and whether a MAKER version (bid only at/below international, pull on its move)
+captures it — taker trading is not authorized and the promo fee ends 31 Dec.

@@ -53,17 +53,22 @@ for s, x in g.items():
 print("3. US mid drops >=1c: %d events; international mid was already >=0.5c below the US mid one sample earlier in %.0f%%" % (tot, 100 * warn / max(tot, 1)))
 print("   (mirror) intl mid drops >=1c: %d events; US mid already >=0.5c below in %.0f%%" % (tot2, 100 * lead_us / max(tot2, 1)))
 print("4. take US ask when it is at or below the intl bid minus x; value at US mid later, net of taker fee")
+print("   (one signal per game per 30 s; mean / median / share positive / equal-weight-by-game mean / games)")
 for xgap in (0.0, 0.005, 0.01):
     for H in (60, 300, 900):
-        pnl = cnt = 0.0; last = {}
+        per = collections.defaultdict(list); last = {}
         for s, x in g.items():
             t, mi, mu = series(x)
             for v in x:
                 if v[4] <= v[1] - xgap + 1e-9 and v[0] - last.get(s, 0) > 30:
                     m = at(t, mu, v[0] + H)
                     if m is None or v[0] + H > t[-1]: continue
-                    last[s] = v[0]; pnl += m - v[4] - FEE * v[4] * (1 - v[4]); cnt += 1
-        print("   gap>=%.3f  +%4ds: %+.4f a share  (signals %d)" % (xgap, H, pnl / cnt if cnt else 0, cnt))
+                    last[s] = v[0]; per[s].append(m - v[4] - FEE * v[4] * (1 - v[4]))
+        allp = sorted(p for v in per.values() for p in v); k = len(allp)
+        if not k: continue
+        print("   gap>=%.3f +%4ds: mean %+.4f  median %+.4f  positive %2.0f%%  by-game %+.4f  (signals %d, games %d)" % (
+            xgap, H, sum(allp) / k, allp[k // 2], 100 * sum(p > 0 for p in allp) / k,
+            sum(sum(v) / len(v) for v in per.values()) / len(per), k, len(per)))
 print("5. resting US bid vs intl mid: next move of the US mid, by where the US best bid sits relative to the intl mid")
 for H in (60, 300):
     b = collections.defaultdict(lambda: [0.0, 0])
