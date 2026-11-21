@@ -43,3 +43,14 @@ Label: LIVE PROBE, SETTLED. Source: l5-btc5m-live deployment 27500aa2 (commit ac
    watchdog from 06:25:33Z until the 12:27Z redeploy.
 5. Post-only flag and venue fill timestamps are not in the lane logs; price 5/15/30 s after each fill not yet computed.
 6. other_position_contracts 0.05 shown on two steps (06:23:17, 06:23:22), back to 0 at 06:23:29; unexplained.
+
+## Findings after the pause (2026-11-21, no deployment made)
+
+| Open item | Cause | Status |
+|---|---|---|
+| 1. Account ledger $0.0195 off | l5-pmus-live adopts ONE net snapshot of the lane's position (DOWN 0.10 at the $1 bound) and retires it; it never reads the 17 fills. The existing post-settlement attestation refuses `VENUE_QTY_NE_LEDGER_QTY` because neither gross nor net equals what it held. | Fix written: `patches/pmus_live_sibling_ledger_attestation.patch` (pmus commit 7c044c6da). OFF by default. Test reproduces this window: 0.00 -> +0.0195. |
+| 2. Portfolio value unavailable 06:22:40-50 | Same root: when pmus first sees the lane's position it marks the account's order state uncertain until its next reconcile (~15 s); the published portfolio value is withheld while uncertain, and the lane refuses. Fail-closed, as designed. Inferred from code + timing; no log line links them. | Not changed. Costs ~15 s of quoting and one cancelled order per window. |
+| 3. 13 cancels without a log line | Not established. No path in the lane cancels without listing the order in the step line, so these ended at the venue without a cancel of ours being logged (candidate: the venue ending a resting order when the opposite-side order arrives). The lane's ledger on the volume holds `cancel_requested` per order. | New: per-order table in the session report and printed at boot for the last traded window (commit beb4a3ee4). Deploying it disarmed prints window 1's 37 rows. |
+| 4. Watchdog blind for six hours | The lane returns 0 at NOT_AFTER and the fleet stops; restart policy is NEVER. | Fixed in beb4a3ee4: stays resident and DISARMED, keeps settling, never calls a window. |
+| 5. Post-only / fill times | Every intent is built with `post_only: True` and refused otherwise; the venue's own row was not kept. | beb4a3ee4 keeps the venue row's descriptive fields per order. Not available for window 1 except through item 3's boot table (state only). |
+| 6. other_position 0.05 | The lane read whole-number `qtyBought`/`qtySold` (0 and 1) instead of the decimal fields: 1 - 0.95 = 0.05. Inferred from arithmetic; the raw row was not logged. Same defect would read a foreign 0.40 position as 0. | Fixed in beb4a3ee4 (decimal fields first). |
