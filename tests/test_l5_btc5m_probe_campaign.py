@@ -346,16 +346,22 @@ class _Ex:
         return list(self._pending)
 
 
-def _gates(ex, market=M2, risk_ok=True):
+def _session(ex, market=M2, risk=None):
     s = RUN.Session.__new__(RUN.Session)
     s.ex, s.market = ex, market
     s.halt_fn = lambda: {"ok": True}
     s._own_unaccounted = lambda: RUN.OwnSettled.of({}, {})
     s._now = lambda: NOW
-    s.risk_fn = lambda now, own: {"ok": risk_ok, "reason": None,
-                                  "loss_room_usd": "0.95"}
+    box = {"risk": risk or {"ok": True, "reason": None,
+                            "loss_room_usd": "0.95"}}
+    s.risk_fn = lambda now, own: dict(box["risk"])
     s.exposure_ceiling = lambda: D("0.60")
-    return s.gates()
+    s.box = box
+    return s
+
+
+def _gates(ex, market=M2):
+    return _session(ex, market).gates()
 
 
 def test_under_a_campaign_an_unsettled_earlier_window_refuses(monkeypatch):
@@ -381,3 +387,63 @@ def test_without_a_campaign_document_the_gate_is_as_before(monkeypatch):
     monkeypatch.delenv(P.CAMPAIGN_DOC_ENV, raising=False)
     assert _gates(_Ex([M1]))["ok"] is True
     assert _gates(_Ex(raises=True))["ok"] is True
+
+
+# ------------------------- a window that waited is not joined part-way
+
+GOOD = {"ok": True, "reason": None, "loss_room_usd": "0.95"}
+
+
+def test_a_window_that_waited_on_settlement_is_sat_out_to_its_end(
+        monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    ex = _Ex([M1])
+    s = _session(ex)
+    assert s.gates()["reason"] == "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED"
+    ex._pending = []                       # it settles mid-window
+    g = s.gates()
+    assert g == {"ok": False, "reason": "CAMPAIGN_WINDOW_SAT_OUT",
+                 "first_refusal": "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED"}
+    assert s.gates()["ok"] is False        # and stays out
+    #: the NEXT window is a new session and starts clean
+    assert _session(ex, market=M3).gates()["ok"] is True
+
+
+def test_a_window_that_waited_on_reconciliation_is_sat_out(monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    s = _session(_Ex([]), risk={"ok": False,
+                                "reason": "CAMPAIGN_LEDGER_NOT_RECONCILED"})
+    assert s.gates()["reason"] \
+        == "ACCOUNT_RISK:CAMPAIGN_LEDGER_NOT_RECONCILED"
+    s.box["risk"] = GOOD                   # reconciled a moment later
+    assert s.gates()["reason"] == "CAMPAIGN_WINDOW_SAT_OUT"
+
+
+def test_other_account_risk_refusals_do_not_sit_the_window_out(monkeypatch):
+    """The brief portfolio-value refusal a window already rides through is
+    unchanged: it resumes when the reading is fresh again."""
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    s = _session(_Ex([]), risk={
+        "ok": False,
+        "reason": "ACCOUNT_DRAWDOWN:PORTFOLIO_VALUE_UNAVAILABLE"})
+    assert s.gates()["ok"] is False
+    s.box["risk"] = GOOD
+    assert s.gates()["ok"] is True
+
+
+def test_an_unreadable_pending_set_sits_the_window_out(monkeypatch):
+    monkeypatch.setenv(P.CAMPAIGN_DOC_ENV, "{}")
+    ex = _Ex(raises=True)
+    s = _session(ex)
+    assert s.gates()["ok"] is False
+    ex._raises = False
+    assert s.gates()["reason"] == "CAMPAIGN_WINDOW_SAT_OUT"
+
+
+def test_without_a_campaign_document_nothing_is_ever_sat_out(monkeypatch):
+    monkeypatch.delenv(P.CAMPAIGN_DOC_ENV, raising=False)
+    s = _session(_Ex([M1]), risk={
+        "ok": False, "reason": "CAMPAIGN_LEDGER_NOT_RECONCILED"})
+    assert s.gates()["ok"] is False
+    s.box["risk"] = GOOD
+    assert s.gates()["ok"] is True

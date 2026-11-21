@@ -2069,21 +2069,42 @@ class Session:
         #: UNDER A CAMPAIGN DOCUMENT, AN EARLIER WINDOW STILL AWAITING THE
         #: VENUE'S SETTLEMENT STOPS NEW EXPOSURE. Its result is not known,
         #: so it cannot have been reconciled. See CAMPAIGN_RECON_GRACE_S.
+        #:
+        #: AND A WINDOW THAT WAITED IS NOT JOINED PART-WAY (owner decision
+        #: 2026-11-21). Starting a window at, say, 150 s is a different
+        #: exposure and a different execution problem from starting it at
+        #: the open, and it has never been tested. So once one of the
+        #: campaign's own waits has refused in THIS window, the window is
+        #: sat out to its end, even if the wait clears a moment later. The
+        #: flag lives on this session object, which exists for one window.
+        #: Only the campaign's waits set it: the brief account-risk
+        #: refusals a window already rides through are unchanged.
         if PROBE.campaign_configured():
+            _sat = getattr(self, "_campaign_sat_out", None)
+            if _sat:
+                return {"ok": False, "reason": "CAMPAIGN_WINDOW_SAT_OUT",
+                        "first_refusal": _sat}
             try:
                 _pend = sorted(m for m in self.ex.pending_settlement()
                                if m != self.market)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
+                self._campaign_sat_out = \
+                    "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"
                 return {"ok": False,
                         "reason": "CAMPAIGN_PENDING_SETTLEMENT_UNREADABLE"}
             if _pend:
+                self._campaign_sat_out = \
+                    "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED"
                 return {"ok": False,
                         "reason": "CAMPAIGN_PREVIOUS_WINDOW_NOT_SETTLED",
                         "pending": _pend}
         r = self.risk_fn(self._now(), own)
         if not r.get("ok"):
+            if r.get("reason") == "CAMPAIGN_LEDGER_NOT_RECONCILED" \
+                    and PROBE.campaign_configured():
+                self._campaign_sat_out = "CAMPAIGN_LEDGER_NOT_RECONCILED"
             return {"ok": False, "reason": "ACCOUNT_RISK:%s" % r.get("reason"),
                     "risk": dict(r)}
         # THE WORST CASE MUST FIT INSIDE WHAT THE ACCOUNT MAY STILL LOSE.
