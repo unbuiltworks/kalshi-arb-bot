@@ -57,6 +57,10 @@ def _straddle(monkeypatch, clean_env):   # noqa: F811  (ordering: after clean_en
     monkeypatch.setenv(X.STRADDLE_P_PAIR_NATURAL_ENV, "0.070")
     monkeypatch.setenv(X.STRADDLE_P_COMPLETE_ENV, "0.131")
     monkeypatch.setenv(X.STRADDLE_P_LONE_WIN_ENV, "0.0981")
+    #: the rates above are usable only when attested as measured
+    #: conditional on a fill (required since eed10118c). Without this line
+    #: every decision held and these tests placed, and verified, nothing.
+    monkeypatch.setenv(X.STRADDLE_P_BASIS_ENV, X.P_BASIS_CONDITIONAL)
 
 
 #: UP collapsed to 0.08 and partly recovered: DOWN offers 0.85, inside

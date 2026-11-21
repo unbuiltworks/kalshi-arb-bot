@@ -304,6 +304,9 @@ class TestThroughTheRunner:
         monkeypatch.setenv(X.STRADDLE_P_PAIR_NATURAL_ENV, "0.070")
         monkeypatch.setenv(X.STRADDLE_P_COMPLETE_ENV, "0.131")
         monkeypatch.setenv(X.STRADDLE_P_LONE_WIN_ENV, "0.0981")
+        #: attested as measured conditional on a fill (required since
+        #: eed10118c); without it every decision held and nothing was placed
+        monkeypatch.setenv(X.STRADDLE_P_BASIS_ENV, X.P_BASIS_CONDITIONAL)
 
     def _leg(self, rig_, side):
         for oid, i in rig_.venue.by_oid.items():
