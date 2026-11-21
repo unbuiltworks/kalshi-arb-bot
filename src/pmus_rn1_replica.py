@@ -79,6 +79,10 @@ PER_MARKET_USD = _d("PMUS_RN1_PER_MARKET_USD", "8")
 EXTEND_MAX_UP = _d("PMUS_RN1_EXTEND_MAX_UP", "0.02")
 REFILL_COOLDOWN_S = _f("PMUS_RN1_REFILL_COOLDOWN_S", "60")
 REPRICE_TICKS = _i("PMUS_RN1_REPRICE_TICKS", "1")
+# Maker fee per contract = rate * p * (1 - p). PMUS order previews show
+# makerCommissionsBasisPoints=0 (2026-11-21), so the default is 0; a nonzero
+# schedule is charged against PAIR_CAP for openings AND completions.
+MAKER_FEE_RATE = _d("PMUS_RN1_MAKER_FEE_RATE", "0")
 
 
 def cfg() -> Dict[str, Any]:
@@ -89,11 +93,17 @@ def cfg() -> Dict[str, Any]:
             "per_market_usd": str(PER_MARKET_USD),
             "extend_max_up": str(EXTEND_MAX_UP),
             "refill_cooldown_s": REFILL_COOLDOWN_S,
-            "reprice_ticks": REPRICE_TICKS}
+            "reprice_ticks": REPRICE_TICKS,
+            "maker_fee_rate": str(MAKER_FEE_RATE)}
 
 
 def _floor(x: D, tick: D) -> D:
     return (x / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+
+
+def fee(px: D, rate: D) -> D:
+    """Maker fee per contract at price px."""
+    return rate * px * (ONE - px)
 
 
 def side_bid(side: str, yes_bid: D, yes_ask: D) -> D:
@@ -119,6 +129,7 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
     mcap = D(str(k.get("per_market_usd", PER_MARKET_USD)))
     up = D(str(k.get("extend_max_up", EXTEND_MAX_UP)))
     cool = float(k.get("refill_cooldown_s", REFILL_COOLDOWN_S))
+    frate = D(str(k.get("maker_fee_rate", MAKER_FEE_RATE)))
     t = D(str(tick))
     yb, ya = D(str(yes_bid)), D(str(yes_ask))
     mq = D(str(min_qty))
@@ -139,6 +150,9 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             avg_o = cs[o] / p[o]
             need = p[o] - p[s]
             ceiling = _floor(pcap - avg_o, t)
+            while ceiling > ZERO and ceiling + fee(ceiling, frate) + avg_o \
+                    > pcap:
+                ceiling -= t                    # fee-inclusive pair cap
             if px > ceiling:
                 px = ceiling                    # rest where it WOULD pay
             qty = min(qty0, need)
@@ -174,6 +188,24 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             out["why_" + s] = "per_market_cap"
             continue
         out[s] = {"px": px, "qty": qty, "role": role, "why": why}
+    # SIMULTANEOUS QUOTES (owner 2026-11-21): when neither side is a
+    # completion, both resting bids can fill together, so their pair --
+    # fees included -- must also fit PAIR_CAP. Step the dearer side down a
+    # tick at a time; a side pushed out of the band is dropped (the other
+    # still rests alone, as RN1 often does).
+    y, n = out["YES"], out["NO"]
+    if y and n and y["role"] != "complete" and n["role"] != "complete":
+        def pair_cost():
+            return (y["px"] + fee(y["px"], frate) +
+                    n["px"] + fee(n["px"], frate))
+        while out["YES"] and out["NO"] and pair_cost() > pcap:
+            dear = y if y["px"] >= n["px"] else n
+            dear["px"] = dear["px"] - t
+            dear["why"] = "pair_cap_repriced"
+            if dear["px"] < pmin:
+                side = "YES" if dear is y else "NO"
+                out[side] = None
+                out["why_" + side] = "pair_cap"
     return out
 
 

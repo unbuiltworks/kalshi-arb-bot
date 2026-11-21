@@ -257,3 +257,45 @@ def test_an_account_wide_block_keeps_the_slot(rn1, monkeypatch):
     clock["t"] += 500
     e.step_market("aec-x")
     assert not e.b.m("aec-x").get("done")
+
+
+def test_simultaneous_opening_bids_respect_the_pair_cap():
+    """LIVE 2026-11-21 Step A: LSU/Tenn wanted YES 0.390 + NO 0.595 = 0.985;
+    if both rest and both fill, the pair costs more than PAIR_CAP."""
+    q = R.quotes(yes_bid=D("0.395"), yes_ask=D("0.400"), tick=D("0.005"),
+                 pos=FLAT, cost=FLAT, c=dict(CFG, depth_ticks=1))
+    assert q["YES"]["px"] + q["NO"]["px"] <= D("0.97")
+    assert q["NO"]["why"] == "pair_cap_repriced"     # the dearer side moved
+
+
+def test_pair_cap_counts_maker_fees_on_both_legs():
+    q = R.quotes(yes_bid=D("0.48"), yes_ask=D("0.50"), tick=T, pos=FLAT,
+                 cost=FLAT, c=dict(CFG, maker_fee_rate="0.02"))
+    y, n = q["YES"]["px"], q["NO"]["px"]
+    assert y + R.fee(y, D("0.02")) + n + R.fee(n, D("0.02")) <= D("0.97")
+    # completion ceiling is fee-inclusive too
+    q = R.quotes(yes_bid=D("0.60"), yes_ask=D("0.62"), tick=T,
+                 pos={"YES": "5", "NO": "0"}, cost={"YES": "3.00", "NO": "0"},
+                 c=dict(CFG, maker_fee_rate="0.02"))
+    px = q["NO"]["px"]
+    assert D("0.60") + px + R.fee(px, D("0.02")) <= D("0.97")
+
+
+def test_pair_cap_drops_a_side_that_cannot_fit_the_band():
+    # a pair cap of 0.35 cannot be met with both legs >= PX_MIN 0.20
+    q = R.quotes(yes_bid=D("0.50"), yes_ask=D("0.505"), tick=D("0.005"),
+                 pos=FLAT, cost=FLAT, c=dict(CFG, residual_cap_usd="10",
+                                             pair_cap="0.35"))
+    live = [s for s in ("YES", "NO") if q[s]]
+    assert len(live) == 1                              # one side rests alone
+    dropped = "NO" if live == ["YES"] else "YES"
+    assert q["why_" + dropped] == "pair_cap"
+    assert q[live[0]]["px"] >= D("0.20")
+
+
+def test_pair_cap_repricing_keeps_both_when_they_fit():
+    q = R.quotes(yes_bid=D("0.21"), yes_ask=D("0.215"), tick=D("0.005"),
+                 pos=FLAT, cost=FLAT, c=dict(CFG, residual_cap_usd="10",
+                                             pair_cap="0.80"))
+    assert q["YES"]["px"] + q["NO"]["px"] <= D("0.80")
+    assert q["NO"]["why"] == "pair_cap_repriced"
