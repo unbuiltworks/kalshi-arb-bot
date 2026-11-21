@@ -43,5 +43,5 @@ Label: LIVE PROBE, SETTLED. Lane commit 5424a3244 (deployment 388ec3f4), account
 | Fractional position | other_position_contracts 0 on every step. |
 | Pre-settlement check (first production run) | 14:26:35 refused `FILLS_DO_NOT_ACCOUNT_FOR_THE_POSITION`; settlement unchanged. |
 | Limits | UP side $0.2594 <= 0.30; DOWN $0.1514; total $0.4108 <= 0.60; window loss $0.0408 <= 0.20. |
-| Account ledger | Booked -0.0200 at settlement (net 0.02 DOWN at the $1 bound). Correction to -0.0408 PENDING as of 14:34Z. |
+| Account ledger | Booked -0.0200 at settlement (net 0.02 DOWN at the $1 bound). CORRECTED 14:36:48Z: -0.0200 -> -0.0408 (delta -0.0208). Lifetime realized -39.5158, UTC day -0.0213, uncertain markets empty, 1420z gone from unknown-basis keys. Lane, ledger and cash all -0.0408: difference 0.0000. The four pre-rebase 5m markets used their third and last sibling attempt (refused, unchanged). |
 | Disarm variables | Applied ~14:33Z (worker restart); approvals had expired 14:25-14:26Z; lane already MONITOR. |
