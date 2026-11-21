@@ -734,13 +734,38 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
     #: with no history supplied the lifetime figure gets today's addition,
     #: as it always did
     life_add = add if _lt is None else _lt["add"]
-    day_all, life_all = day + add, life + life_add
+    #: LOSSES THE VENUE'S EXECUTION HISTORY SHOWS AND THE ACCOUNT LEDGER
+    #: LACKS. The account service builds its ledger from net-position
+    #: snapshots and can miss trades entirely (2026-11-16: ten matched
+    #: pairs, one booked wrongly and nine not at all). When it publishes a
+    #: venue-basis report, the total by which the venue's fills are WORSE
+    #: than the booked results is added to the lifetime figure here, so the
+    #: cumulative ceiling binds on it. Only a negative figure is read: an
+    #: upward difference is never applied by anyone without the owner, and
+    #: an absent or unreadable report adds nothing and is said so -- the
+    #: venue-equity drawdown below, measured on the venue's own balance,
+    #: is the control that does not depend on any ledger.
+    vb_add, vb_state = D(0), "NOT_PUBLISHED"
+    _vb = risk.get("venue_basis")
+    if isinstance(_vb, Mapping):
+        vb_state = str(_vb.get("state"))[:24]
+        _sm = _vb.get("summary")
+        if vb_state == "REPORT":
+            _adj = _dec(_sm.get("downward_adjustment_usd")) \
+                if isinstance(_sm, Mapping) else None
+            if _adj is None:
+                vb_state = "REPORT_NO_READABLE_FIGURE"
+            else:
+                vb_add = min(D(0), _adj)
+    day_all, life_all = day + add, life + life_add + vb_add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
            "lifetime_realized_usd": str(life_all),
            "cumulative_loss_ceiling_usd": str(cum),
            "btc5m_losses_not_yet_in_account_ledger_usd": str(add),
            "btc5m_lifetime_losses_added_usd": str(life_add),
+           "venue_basis_state": vb_state,
+           "venue_basis_losses_added_usd": str(vb_add),
            "btc5m_lifetime_basis": (None if _lt is None else
                                     {k: v for k, v in _lt.items()
                                      if k != "add"}),
