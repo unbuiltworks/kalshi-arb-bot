@@ -235,7 +235,9 @@ CAMPAIGN_ACKNOWLEDGEMENT = (
     "max_window_loss_usd EACH AND max_campaign_loss_usd IN TOTAL.")
 MAX_CAMPAIGN_WINDOWS = 24
 MAX_CAMPAIGN_SPAN_S = 2 * 3600
-MAX_CAMPAIGN_LOSS_USD = D("0.60")
+#: owner decision 2026-11-21: raised from 0.60 so a 24-window campaign is not
+#: stopped by its own ceiling part-way (observed loss 0.02-0.03 a window)
+MAX_CAMPAIGN_LOSS_USD = D("1.50")
 #: named here because this module may not import the executor; a test holds
 #: it equal to `l5_btc5m_execution.CAMPAIGN_LOSS_HALT_ENV`.
 LOSS_HALT_ENV = "L5_BTC5M_CAMPAIGN_LOSS_HALT"

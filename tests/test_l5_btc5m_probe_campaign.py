@@ -107,7 +107,7 @@ def test_a_listed_window_is_covered_only_inside_its_own_five_minutes():
     ({"max_window_loss_usd": "0.50"},
      "PROBE_LOSS_CEILING_ABOVE_CODE_MAXIMUM"),
     ({"max_window_loss_usd": "0"}, "PROBE_LOSS_CEILING_UNREADABLE"),
-    ({"max_campaign_loss_usd": "0.61"},
+    ({"max_campaign_loss_usd": "1.51"},
      "PROBE_CAMPAIGN_LOSS_CEILING_ABOVE_CODE_MAXIMUM"),
     ({"max_campaign_loss_usd": None},
      "PROBE_CAMPAIGN_LOSS_CEILING_UNREADABLE"),
@@ -161,6 +161,7 @@ def test_it_cannot_be_issued_after_its_first_window():
     (None, "PROBE_CAMPAIGN_NEEDS_THE_LOSS_HALT"),
     ("0", "PROBE_CAMPAIGN_NEEDS_THE_LOSS_HALT"),
     ("0.61", "PROBE_CAMPAIGN_LOSS_HALT_LOOSER_THAN_APPROVED"),
+    ("1.51", "PROBE_CAMPAIGN_LOSS_HALT_LOOSER_THAN_APPROVED"),
 ])
 def test_the_code_enforced_loss_halt_is_required_and_no_looser(halt, reason):
     assert read(slug(T0), at(0), env(halt=halt))["reason"] == reason

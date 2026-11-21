@@ -30,7 +30,10 @@ from src import l5_persistent_mode as PMODE          # noqa: E402
 
 SERIES = "cpc-btc-updown-5m-"
 DEPLOYMENT = "btc5m-campaign-20261121"
-ENVELOPE_USD, WINDOW_LOSS, CAMPAIGN_LOSS = "0.60", "0.20", "0.60"
+ENVELOPE_USD, WINDOW_LOSS = "0.60", "0.20"
+#: owner-approved 2026-11-21 for the two-hour test: the campaign stops at
+#: 1.50 lost; the lane's daily loss allowance is 2.00. Exposure is unchanged.
+CAMPAIGN_LOSS, DAILY_LOSS = "1.50", "2.00"
 
 
 def iso(t):
@@ -52,7 +55,7 @@ def main():
         "approved": True, "mode": "PERSISTENT", "deployment": DEPLOYMENT,
         "strategies": ["STRADDLE"], "series": [SERIES],
         "taker_allowed": False, "max_aggregate_usd": ENVELOPE_USD,
-        "max_per_market_usd": ENVELOPE_USD, "max_daily_loss_usd": ENVELOPE_USD,
+        "max_per_market_usd": ENVELOPE_USD, "max_daily_loss_usd": DAILY_LOSS,
         "expires_utc": iso(end + dt.timedelta(minutes=1)),
         "nonce": "env-" + secrets.token_hex(8)}
     campaign = {
@@ -60,7 +63,7 @@ def main():
         "series": SERIES, "issued_utc": iso(now),
         "expires_utc": iso(end + dt.timedelta(minutes=5)), "max_windows": n,
         "max_total_exposure_usd": ENVELOPE_USD,
-        "max_daily_loss_usd": ENVELOPE_USD,
+        "max_daily_loss_usd": DAILY_LOSS,
         "window_starts": [iso(t) for t in starts]}
     probe = {
         "class": PROBE.CAMPAIGN_CLASS,
