@@ -71,3 +71,17 @@ they are covered by tests and by `arm_campaign.py`'s local validation with the s
   refused and the lane stops adding (fails closed).
 - Unchanged: $0.20 window loss, $0.60 campaign loss, account drawdown limit (binds at about $0.35 further down),
   maker-only, clip/side/unmatched limits, watchdog.
+
+## 2026-11-21 16:06Z — d81792cec deployed DISARMED (owner-approved) — acceptance PASS
+Deployment 64ebfbba, commit exactly d81792cece059d8e4de1ec5df3f9cdec0817858e. `armed:false`, `can_submit:false`,
+MONITOR, not latched, serving its registry. No probe document, no campaign document, loss halt NOT_SET. Limits as
+before. No orders, no errors. Watchdog: two sweeps after the new container's start (16:06:48, 16:07:09) read the lane
+registry OK with 0 open orders. Fail-closed tests of the reconciliation rule: 51 in the campaign file, all pass.
+
+## Further release for review — NOT deployed
+- Branch `release/l5-btc5m-campaign-20261121g`, commit `2fe56d9bf184e09e0156657031d8e63f4005b3d1`
+  (d81792cec + one change to `src/l5_btc5m_runner.py`; 56 tests in the campaign file; 4,233 lane/probe/safety tests
+  pass, the same two lineage tests fail with and without it).
+- A window in which one of the campaign's own waits refused is sat out to its end (`CAMPAIGN_WINDOW_SAT_OUT`); it is
+  never joined part-way. The next window starts clean. Without this, d81792cec could begin trading mid-window the
+  moment the previous window reconciled.
