@@ -185,10 +185,45 @@ class PaperBook:
         return s
 
 
+def _norm(x: Any) -> str:
+    return " ".join(str(x or "").lower().replace(".", " ").split())
+
+
+def yes_names(pm_market: Mapping[str, Any]) -> List[str]:
+    """Every name PMUS gives the YES (long) side: the outcome label plus the
+    long side's team name / safeName / alias / abbreviation. LIVE 2026-11-21:
+    PMUS labels CFB outcomes by nickname ("Tigers") while intl uses the team
+    ("LSU"), so an exact first-outcome match refused every CFB market."""
+    names: List[str] = []
+    po = pm_market.get("outcomes")
+    if isinstance(po, str):
+        try:
+            po = json.loads(po)
+        except ValueError:
+            po = None
+    if po:
+        names.append(str(po[0]))
+    for sd in pm_market.get("marketSides") or []:
+        if not isinstance(sd, Mapping) or not sd.get("long"):
+            continue
+        names.append(str(sd.get("description") or ""))
+        tm = sd.get("team") or {}
+        for k in ("name", "safeName", "alias", "abbreviation",
+                  "displayAbbreviation"):
+            if tm.get(k):
+                names.append(str(tm[k]))
+    return [n for n in names if n]
+
+
 def resolve_token(gamma_get: Callable[[str], Any], slug: str,
-                  pm_outcomes: Optional[list]) -> Optional[str]:
+                  pm_outcomes: Optional[list],
+                  yes_aliases: Optional[Iterable[str]] = None
+                  ) -> Optional[str]:
     """PMUS 'aec-X' <-> intl 'X'; the intl token for PMUS YES (outcome[0]),
-    refused unless both venues name the same first outcome."""
+    refused unless intl's first outcome names the same YES side: the PMUS
+    first outcome itself or one of the YES team's published identities
+    (yes_aliases). Intl's SECOND outcome matching a YES alias is a
+    reversed market and is refused."""
     if not slug.startswith("aec-"):
         return None
     base = slug[4:]
@@ -206,8 +241,13 @@ def resolve_token(gamma_get: Callable[[str], Any], slug: str,
         toks = json.loads(m.get("clobTokenIds") or "[]")
     except (TypeError, ValueError):
         return None
-    if not io or not toks or not pm_outcomes or io[0] != pm_outcomes[0]:
+    if not io or not toks or not pm_outcomes:
         return None
+    if io[0] != pm_outcomes[0]:
+        al = {_norm(a) for a in (yes_aliases or []) if _norm(a)}
+        if _norm(io[0]) not in al or \
+                (len(io) > 1 and _norm(io[1]) in al):
+            return None
     if m.get("closed"):
         return None
     return str(toks[0])
@@ -548,7 +588,9 @@ class IntlGuard(_IntlSocket):
             po = m.get("outcomes") if isinstance(m, Mapping) else None
             if isinstance(po, str):
                 po = json.loads(po)
-            tok = resolve_token(self.gamma_get, slug, po)
+            tok = resolve_token(self.gamma_get, slug, po,
+                                yes_names(m) if isinstance(m, Mapping)
+                                else None)
         except Exception:                                 # noqa: BLE001
             tok = None
         self.resolved[slug] = tok

@@ -104,6 +104,35 @@ def test_token_resolution_requires_same_first_outcome():
     assert X.resolve_token(g, "aec-nba-a-b", ["Knicks", "Raptors"]) is None
 
 
+def test_token_resolution_matches_the_yes_team_identity_not_its_label():
+    """LIVE 2026-11-21: PMUS 'Tigers'/'Volunteers' vs intl 'LSU'/'Tennessee'
+    left every CFB market unmatched."""
+    mk = {"slug": "cfb-lsu-tenn-2026-11-21",
+          "outcomes": json.dumps(["LSU", "Tennessee"]),
+          "clobTokenIds": json.dumps(["T1", "T2"]), "closed": False}
+
+    def g(path):
+        return [mk] if path.startswith("/markets") else []
+    pm = {"outcomes": json.dumps(["Tigers", "Volunteers"]), "marketSides": [
+        {"long": True, "description": "Tigers",
+         "team": {"name": "LSU", "safeName": "LSU", "alias": "Tigers",
+                  "abbreviation": "lsu"}},
+        {"long": False, "description": "Volunteers",
+         "team": {"name": "Tennessee", "alias": "Volunteers"}}]}
+    names = X.yes_names(pm)
+    assert "LSU" in names and "Tigers" in names and "Tennessee" not in names
+    slug = "aec-cfb-lsu-tenn-2026-11-21"
+    assert X.resolve_token(g, slug, ["Tigers", "Volunteers"], names) == "T1"
+    # without the aliases the old exact rule still refuses
+    assert X.resolve_token(g, slug, ["Tigers", "Volunteers"]) is None
+    # a REVERSED intl market (YES team second) is refused
+    mk["outcomes"] = json.dumps(["Tennessee", "LSU"])
+    assert X.resolve_token(g, slug, ["Tigers", "Volunteers"], names) is None
+    # an intl first outcome naming neither identity is refused
+    mk["outcomes"] = json.dumps(["Alabama", "Tennessee"])
+    assert X.resolve_token(g, slug, ["Tigers", "Volunteers"], names) is None
+
+
 def test_step_enters_on_fresh_intl_and_logs_paper_only():
     logs = []
     xv = X.XvPaper(lambda: [], lambda p: {"marketData": {
