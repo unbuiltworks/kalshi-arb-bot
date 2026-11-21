@@ -485,3 +485,39 @@ Read by release `ac3c7f9e7` and later only. Exact names; anything not
 named still refuses. No loss leaves account-wide accounting: all six are
 booked by the account service and stay in the daily, cumulative and
 equity figures.
+
+## Accounting acceptance for `03b771571`: PASS (read 2026-11-21 04:44Z)
+
+Deployment `7b79c14d`, SUCCESS at `03b77157115ae80e088aa01c0dba06f3a71fffb4`
+(04:21Z); previous removed. 0 orders, no exposure, halt latch clear, no
+error/alarm/traceback line, 0 rate-limit responses. Equity baseline
+cleared at 04:35Z (13.5 min). Drawdown $0.0265, room $0.9735, cash
+$321.4517. Lifetime basis reconciled, complete, 95 rows, -39.4945 =
+all-time. Watchdog clean (04:40Z). `l5-btc5m-live` unchanged, disarmed.
+
+REPORT (feed to eof, 236 pages): 182 markets; 88 agree, 49 unbooked, 4
+booked too optimistically, 41 without a venue figure. Totals as in the
+previous pass: venue -34.3601 vs booked -33.0445 on 141 markets; upward
+pending +6.75; LOSSES THE LEDGER LACKS -8.0656.
+
+WHY 41 HAVE NO FIGURE (no market unexplained):
+- SETTLEMENT_VALUE_UNKNOWN 38: markets the ledger never booked, held on
+  one side only, so the ledger has no settlement value for them (examples:
+  cpc-btc-updown-5m-2026-11-16-0115z, -0140z, -0150z, -0155z; one sports
+  market). Their results are UNKNOWN to this report in either direction.
+- FILL_ACTION_UNREADABLE / SIDE_UNREADABLE 4 (the same four markets:
+  aec-testcr-afg-zim-2026-11-13, aec-utr-gaskan-hanbra-2026-11-17,
+  aec-valorant-xjg-ur-2026-11-18, cpc-btc-updown-5m-2026-11-16-1145z).
+So -8.0656 is a FLOOR on the losses the ledger lacks, not the whole of it.
+
+VERDICTS FOR THE SEVEN NAMED MARKETS:
+- 11-16-0335z: AGREES at +0.34. The ledger's row was already restated
+  from -2.00 to +0.34 by the owner-approved venue cost correction of
+  2026-11-20; the -2.00 is the 11-16 booking, no longer the current
+  figure. The row still records UP 2 / DOWN 0 against the venue's UP 2 /
+  DOWN 2 (flagged as a snapshot taken for the position).
+- 11-17-0150z AGREES -0.18; 11-18-1600z AGREES -0.32.
+- 11-18-1535z, -1540z, -1545z, -1605z: booked too optimistically by the
+  fees (-0.14, -0.16, -0.08, -0.14): the ledger's attested cost omits
+  taker fees. No existing correction path applies.
+Order rows unchanged: 0335z two AUTOMATIC; the other eight MANUAL.
