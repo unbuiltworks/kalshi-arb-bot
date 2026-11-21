@@ -1,0 +1,197 @@
+diff --git a/src/l5_equity_feed.py b/src/l5_equity_feed.py
+index 378fd862c..1e612a56f 100644
+--- a/src/l5_equity_feed.py
++++ b/src/l5_equity_feed.py
+@@ -122,6 +122,22 @@ class TransferWatch:
+         self.last_error = None
+         self.reads += 1
+ 
++    def progress(self, now: float) -> Dict[str, Any]:
++        """WHERE THE READ IS, for an operator. Reporting only: nothing
++        reads this to decide anything, and `view` is unchanged.
++
++        Until a read finishes `view` says NOT_READ_YET with no page count,
++        which from outside is indistinguishable from a read that never
++        started or has stalled -- seen on 2026-11-21, when a restart's
++        eleven-minute read looked for all of it exactly like a hung one.
++        """
++        w = self._walk
++        return {"walking": w is not None,
++                "pages_this_walk": None if w is None else int(w["pages"]),
++                "reads_completed": int(self.reads),
++                "backing_off_s": round(max(0.0, self.next_allowed - now), 1),
++                "last_error": self.last_error}
++
+     def view(self, since: dt.datetime, now: float) -> Dict[str, Any]:
+         """What `net_transfers` reads. Never raises; stale or absent is a
+         result with `complete_back_to` None, which refuses."""
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index fc3a936ec..f0ec92dc2 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -2975,6 +2975,14 @@ class Runner:
+                                  {k: seen.get(k) for k in
+                                   ("by", "pages", "age_s", "last_error",
+                                    "complete_back_to")})
++                #: reporting only; `net_usd` and `why` above decide
++                try:
++                    moved["progress"] = (None if watch is None
++                                         else watch.progress(t))
++                except BaseException as exc:                   # noqa: BLE001
++                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                        raise
++                    moved["progress"] = None
+                 period = EB.period_realized(
+                     self.store.state.get("retired_markets") or {},
+                     doc["at_utc"])
+@@ -6710,6 +6718,45 @@ class Runner:
+                        "hold a looser copy. Read-only."),
+         }
+ 
++    def _publication_summary(self) -> Dict[str, Any]:
++        """WHAT THE REGISTRY IS PUBLISHING for a second strategy, in a few
++        fields an operator can read on the heartbeat.
++
++        The account-risk record is served only on the internal registry
++        endpoint, so whether its lifetime basis reconciles could not be
++        seen from outside without deploying the service that reads it.
++        This calls the SAME two methods that record is built from and
++        reports their verdicts, never their rows. Reporting only; never
++        raises; a field it cannot establish is None.
++        """
++        out: Dict[str, Any] = {"lifetime_basis": None,
++                               "retired_results_utc_day": None}
++        try:
++            b = self._lifetime_basis_line()
++            if isinstance(b, Mapping):
++                out["lifetime_basis"] = {
++                    k: b.get(k) for k in (
++                        "reconciled", "complete", "rows", "rebased_at_utc",
++                        "cash_read_utc", "lifetime_realized_usd")}
++            day = None
++            try:
++                day = (self.day_realized_line() or {}).get("utc_day")
++            except BaseException as exc:                       # noqa: BLE001
++                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                    raise
++            r = self._retired_results_line(day)
++            if isinstance(r, Mapping):
++                res = r.get("results")
++                out["retired_results_utc_day"] = {
++                    "utc_day": r.get("utc_day"),
++                    "markets": (len(res) if isinstance(res, Mapping)
++                                else None)}
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            out["error"] = type(exc).__name__
++        return out
++
+     def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
+         """Today's retired markets with the result each was booked at.
+         Never raises: unreadable is None, which a reader treats as absent."""
+@@ -7053,6 +7100,7 @@ class Runner:
+             "portfolio_drawdown": self.portfolio_drawdown_report(),
+             "equity_baseline": self.equity_risk_lines(self.now_t).get(
+                 "equity_baseline"),
++            "account_risk_publication": self._publication_summary(),
+             "risk_gate": {
+                 "measures": "worst-case loss over both settlements",
+                 "max_usd_per_market": str(self.limits.max_usd_per_market),
+diff --git a/tests/test_l5_publication_visible.py b/tests/test_l5_publication_visible.py
+new file mode 100644
+index 000000000..957da3eba
+--- /dev/null
++++ b/tests/test_l5_publication_visible.py
+@@ -0,0 +1,91 @@
++"""What the registry publishes for a second strategy, and where the
++transfers read is, must be readable on the heartbeat. Reporting only."""
++import datetime as dt
++
++from src import l5_equity_baseline as EB
++from src import l5_equity_feed as EF
++from src import l5_pmus_live_runner as R
++from tests.test_l5_equity_feed import SINCE, old_page, run, verdict
++from tests.test_l5_venue_cost_attestation import Feed
++
++
++def runner(basis, results, day="2026-11-20"):
++    class Rn:
++        _publication_summary = R.Runner._publication_summary
++
++        def _lifetime_basis_line(self):
++            if isinstance(basis, BaseException):
++                raise basis
++            return basis
++
++        def _retired_results_line(self, d):
++            return None if results is None else {"utc_day": d,
++                                                 "results": results}
++
++        def day_realized_line(self):
++            return {"utc_day": day}
++    return Rn()
++
++
++BASIS = {"cash_read_utc": "2026-11-16T00:11:52+00:00",
++         "rebased_at_utc": "2026-11-16T00:20:00+00:00",
++         "results_since_rebase": {"m1": "-0.0114", "m2": "-0.0151"},
++         "rows": 2, "complete": True, "reconciled": True,
++         "lifetime_realized_usd": "-39.4945", "labels": "x"}
++
++
++def test_it_reports_the_verdicts_and_never_the_rows():
++    got = runner(BASIS, {"m1": "-0.0114"})._publication_summary()
++    assert got["lifetime_basis"] == {
++        "reconciled": True, "complete": True, "rows": 2,
++        "rebased_at_utc": "2026-11-16T00:20:00+00:00",
++        "cash_read_utc": "2026-11-16T00:11:52+00:00",
++        "lifetime_realized_usd": "-39.4945"}
++    assert got["retired_results_utc_day"] == {"utc_day": "2026-11-20",
++                                              "markets": 1}
++    assert "results_since_rebase" not in str(got)
++
++
++def test_an_unreconciled_basis_is_shown_as_unreconciled():
++    got = runner(dict(BASIS, reconciled=False), {})._publication_summary()
++    assert got["lifetime_basis"]["reconciled"] is False
++
++
++def test_an_unknown_basis_is_none_not_a_pass():
++    got = runner(None, None)._publication_summary()
++    assert got == {"lifetime_basis": None, "retired_results_utc_day": None}
++
++
++def test_it_never_raises():
++    got = runner(RuntimeError("x"), {})._publication_summary()
++    assert got["lifetime_basis"] is None and got["error"] == "RuntimeError"
++
++
++def test_the_real_runner_carries_it_on_the_heartbeat_source():
++    src = open(R.__file__).read()
++    assert '"account_risk_publication": self._publication_summary()' in src
++
++
++# ------------------------------------------------- the transfers read
++
++def test_progress_before_during_and_after_a_read():
++    w = EF.TransferWatch()
++    assert w.progress(0.0) == {"walking": False, "pages_this_walk": None,
++                               "reads_completed": 0, "backing_off_s": 0.0,
++                               "last_error": None}
++    feed = Feed([old_page(h) for h in range(1, 9)])
++    w, now = run(feed, steps=1, w=w)                # two pages a step
++    p = w.progress(now)
++    assert p["walking"] is True and p["pages_this_walk"] == 2
++    assert verdict(w, now)["net_usd"] is None        # still refuses
++    w, now = run(feed, steps=20, w=w)
++    p = w.progress(now)
++    assert p["walking"] is False and p["reads_completed"] == 1
++
++
++def test_progress_does_not_change_the_verdict():
++    feed = Feed([old_page(h) for h in range(1, 5)])
++    a, now = run(feed, steps=20)
++    before = verdict(a, now)
++    a.progress(now)
++    assert verdict(a, now) == before
