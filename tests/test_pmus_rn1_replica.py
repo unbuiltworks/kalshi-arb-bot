@@ -229,3 +229,31 @@ def test_intl_guard_withholds_openings_but_never_a_profitable_completion(rn1):
     e.step_market("aec-x")
     assert live(v) == {"NO": (D("0.49"), D("5"))}           # completion goes
     assert e.guard.stats["blocked"] >= 2
+
+
+def test_a_gated_flat_market_frees_its_slot(rn1, monkeypatch):
+    """LIVE 2026-11-21 Step A: three flat Valorant markets carried over from
+    the rewards test were refused by the open-EV gate and held all 3 slots,
+    so no allowed sport could ever be selected."""
+    e, v = rn1
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(e, "open_gate", lambda s: {"allow": False})
+    clock = {"t": 1_000_000.0}
+    monkeypatch.setattr(M.time, "time", lambda: clock["t"])
+    e.step_market("aec-x")
+    assert not e.b.m("aec-x").get("done")
+    clock["t"] += 121
+    e.step_market("aec-x")
+    assert e.b.m("aec-x").get("done") is True
+    assert v.orders == {}
+
+
+def test_an_account_wide_block_keeps_the_slot(rn1, monkeypatch):
+    e, v = rn1
+    monkeypatch.setattr(e, "daily_stopped", lambda: True)
+    clock = {"t": 1_000_000.0}
+    monkeypatch.setattr(M.time, "time", lambda: clock["t"])
+    e.step_market("aec-x")
+    clock["t"] += 500
+    e.step_market("aec-x")
+    assert not e.b.m("aec-x").get("done")

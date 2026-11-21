@@ -2433,6 +2433,10 @@ class Engine:
             new_block = "shared_halt"
         elif self.account_risk_blocks() is not None:
             new_block = "account_risk"
+        # account-wide blocks hold the slot (they lift); a block about THIS
+        # market (late, excluded, open-EV gate) frees a flat market's slot,
+        # exactly as the two-sided path releases a gated flat market
+        account_block = new_block
         late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
             if LATE_CUTOFF else None
         if excluded(slug):
@@ -2505,7 +2509,7 @@ class Engine:
                     any(o.get("open") for _oid, o in stale):
                 return       # a fill raced the cancel, or still pending
         flat = y == 0 and n == 0
-        if flat and not any(want.values()) and not new_block:
+        if flat and not any(want.values()) and not account_block:
             idle = mk.setdefault("idle_since", now)
             if now - float(idle) > 120 and \
                     not any(o.get("open") for o in mk["orders"].values()):
