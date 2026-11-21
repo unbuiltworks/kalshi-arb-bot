@@ -173,3 +173,56 @@ def test_pending_market_is_held_unpriceable_market_is_released(tmp_path):
     mk["idle_since"] = time.time() - 999
     e.step_market("aec-x")
     assert mk.get("done")                          # slot freed
+
+
+# ------------------------------------------------- RN1 replica path (real guard)
+def _rn1(tmp_path, monkeypatch, g):
+    from src import pmus_rn1_replica as R
+    monkeypatch.setattr(R, "ON", True)
+    monkeypatch.setattr(R, "RESIDUAL_CAP_USD", D("10"))
+    monkeypatch.setattr(R, "PER_MARKET_USD", D("20"))
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    e, v = eng(tmp_path, g)
+    v.bid, v.ask = D("0.48"), D("0.50")
+    e.b.m("aec-x")
+    return e, v
+
+
+def _live(v):
+    return {o["side"]: o["px"] for o in v.orders.values() if o["open"]}
+
+
+def test_rn1_opening_needs_intl_to_confirm(tmp_path, monkeypatch):
+    e, v = _rn1(tmp_path, monkeypatch, guard(0.485))
+    e.step_market("aec-x")
+    assert _live(v) == {"YES": D("0.47"), "NO": D("0.49")}
+
+
+def test_rn1_unfavourable_intl_blocks_that_opening(tmp_path, monkeypatch):
+    # intl already at 0.44: our YES 0.47 is not cheap; NO 0.49 still is
+    e, v = _rn1(tmp_path, monkeypatch, guard(0.44))
+    e.step_market("aec-x")
+    assert _live(v) == {"NO": D("0.49")}
+
+
+def test_rn1_stale_intl_blocks_openings(tmp_path, monkeypatch):
+    e, v = _rn1(tmp_path, monkeypatch, guard(0.485, age=60))
+    e.step_market("aec-x")
+    assert v.orders == {}
+
+
+def test_rn1_unmatched_market_blocks_openings(tmp_path, monkeypatch):
+    g = guard(0.485)
+    g.resolved["aec-x"] = None                       # no intl listing
+    e, v = _rn1(tmp_path, monkeypatch, g)
+    e.step_market("aec-x")
+    assert v.orders == {}
+
+
+def test_rn1_profitable_completion_ignores_the_guard(tmp_path, monkeypatch):
+    e, v = _rn1(tmp_path, monkeypatch, guard(None))   # no intl at all
+    mk = e.b.m("aec-x")
+    mk["pos"], mk["cost"] = {"YES": "5", "NO": "0"}, {"YES": "2.35", "NO": "0"}
+    mk["last_fill_t"] = {"YES": 9e12}                # extension cooling down
+    e.step_market("aec-x")
+    assert _live(v) == {"NO": D("0.49")}             # 0.47 + 0.49 <= 0.97
