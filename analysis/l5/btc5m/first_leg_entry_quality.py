@@ -145,6 +145,22 @@ def run_window(job):
                     blocked.add(s)
             rest = [o for o in rest if not (
                 o["side"] in blocked and o["reason"] == "STRADDLE_LEG")]
+        if rule is not None and rule[0] == "COMPLETE":
+            #: WHICH COMPLETING BIDS ARE ALLOWED (the lighter side only).
+            #:   NEVER    none: unmatched inventory is held to settlement
+            #:   CHEAP    only when the completing side's bid <= rule[2]
+            #:   DEAR     only when the completing side's bid >= rule[2]
+            for s_ in C.SIDES:
+                o_ = C.DOWN if s_ == C.UP else C.UP
+                if inv[s_][0] >= inv[o_][0]:
+                    continue                      # not the lighter side
+                px_ = side_bid(i, s_)
+                ok_ = (rule[1] == "CHEAP" and px_ <= rule[2] + 1e-9) or (
+                    rule[1] == "DEAR" and px_ >= rule[2] - 1e-9)
+                if not ok_:
+                    blocked.add(s_)
+            rest = [o for o in rest if not (
+                o["side"] in blocked and o["reason"] == "STRADDLE_LEG")]
         if rule is not None and rule[0] == "PULL":
             #: the side's bid now stands below where it stood when this
             #: bid was placed: pull it, and do not re-bid that side now

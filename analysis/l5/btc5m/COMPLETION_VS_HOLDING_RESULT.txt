@@ -1,0 +1,21 @@
+== 11-17/18  windows 576 ==
+   AS LIVE      net $ -24.91 [-28.92,-20.97]  shares   649  per share -0.0384 | first legs $-20.25, completing $-4.67 on 283 sh | worst window $-0.168 | PAIRED $+0.00 [+0.00,+0.00]
+   NEVER        net $  -7.48 [-12.49,-2.45]  shares   174  per share -0.0430 | first legs $-7.26, completing $-0.22 on 10 sh | worst window $-0.100 | PAIRED $+17.44 [+12.86,+22.09]
+   CHEAP<=0.30  net $ -14.66 [-19.38,-9.78]  shares   314  per share -0.0467 | first legs $-10.24, completing $-4.41 on 78 sh | worst window $-0.114 | PAIRED $+10.26 [+7.12,+13.50]
+   CHEAP<=0.50  net $ -19.31 [-23.43,-15.11]  shares   429  per share -0.0450 | first legs $-13.25, completing $-6.06 on 147 sh | worst window $-0.120 | PAIRED $+5.61 [+2.77,+8.62]
+   DEAR>=0.50   net $ -18.05 [-22.20,-13.89]  shares   497  per share -0.0363 | first legs $-13.24, completing $-4.81 on 195 sh | worst window $-0.186 | PAIRED $+6.86 [+2.86,+11.02]
+   DEAR>=0.70   net $ -13.41 [-18.05,-8.66]  shares   374  per share -0.0359 | first legs $-10.00, completing $-3.41 on 112 sh | worst window $-0.184 | PAIRED $+11.50 [+6.68,+16.39]
+== 11-19/20  windows 515 ==
+   AS LIVE      net $ -17.89 [-22.32,-13.19]  shares   581  per share -0.0308 | first legs $-11.15, completing $-6.74 on 249 sh | worst window $-0.165 | PAIRED $+0.00 [+0.00,+0.00]
+   NEVER        net $  -5.52 [-10.65,-0.30]  shares   158  per share -0.0350 | first legs $-5.07, completing $-0.45 on 9 sh | worst window $-0.109 | PAIRED $+12.36 [+7.78,+17.18]
+   CHEAP<=0.30  net $  -8.55 [-13.74,-3.00]  shares   293  per share -0.0292 | first legs $-6.81, completing $-1.74 on 75 sh | worst window $-0.106 | PAIRED $+9.33 [+6.07,+12.52]
+   CHEAP<=0.50  net $ -11.43 [-16.28,-6.52]  shares   387  per share -0.0295 | first legs $-6.66, completing $-4.77 on 132 sh | worst window $-0.118 | PAIRED $+6.46 [+3.55,+9.43]
+   DEAR>=0.50   net $ -12.31 [-16.40,-8.00]  shares   437  per share -0.0281 | first legs $-8.84, completing $-3.47 on 171 sh | worst window $-0.154 | PAIRED $+5.58 [+1.14,+9.82]
+   DEAR>=0.70   net $  -9.40 [-14.05,-4.64]  shares   332  per share -0.0283 | first legs $-8.42, completing $-0.98 on 101 sh | worst window $-0.155 | PAIRED $+8.49 [+3.50,+13.37]
+== 11-11..16 (10 s quotes)  windows 1468 ==
+   AS LIVE      net $ -79.08 [-83.53,-74.52]  shares  1123  per share -0.0704 | first legs $-42.97, completing $-36.11 on 467 sh | worst window $-0.154 | PAIRED $+0.00 [+0.00,+0.00]
+   NEVER        net $ -25.46 [-32.62,-18.11]  shares   369  per share -0.0690 | first legs $-25.46, completing $+0.00 on 0 sh | worst window $-0.100 | PAIRED $+53.62 [+47.06,+60.27]
+   CHEAP<=0.30  net $ -33.20 [-40.41,-25.98]  shares   549  per share -0.0605 | first legs $-28.77, completing $-4.43 on 107 sh | worst window $-0.112 | PAIRED $+45.88 [+40.24,+51.49]
+   CHEAP<=0.50  net $ -46.04 [-52.79,-39.30]  shares   698  per share -0.0659 | first legs $-36.13, completing $-9.91 on 179 sh | worst window $-0.111 | PAIRED $+33.04 [+28.27,+37.60]
+   DEAR>=0.50   net $ -59.10 [-64.37,-53.63]  shares   818  per share -0.0723 | first legs $-37.36, completing $-21.74 on 288 sh | worst window $-0.165 | PAIRED $+19.98 [+15.45,+24.61]
+   DEAR>=0.70   net $ -44.30 [-50.47,-37.93]  shares   596  per share -0.0744 | first legs $-32.59, completing $-11.71 on 144 sh | worst window $-0.164 | PAIRED $+34.78 [+28.96,+40.48]
