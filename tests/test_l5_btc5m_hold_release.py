@@ -16,6 +16,7 @@ FOUR INVARIANTS, each pinned below:
 from __future__ import annotations
 
 import inspect
+import datetime as dt
 import json
 from decimal import Decimal as D
 
@@ -72,6 +73,15 @@ def live(monkeypatch, tmp_path, armed):
         "series": [MARKET.rsplit("-", 4)[0] + "-"], "taker_allowed": False,
         "max_aggregate_usd": str(CAP), "max_per_market_usd": str(CAP),
         "max_daily_loss_usd": str(CAP), "nonce": "hold-release-0001"}))
+    #: a persistent envelope now also needs the owner's campaign loss
+    #: halt; one sized to the envelope leaves these tests' bounds as they
+    #: were
+    monkeypatch.setenv(X.CAMPAIGN_LOSS_HALT_ENV, json.dumps({
+        "campaign_id": "hold-release-test",
+        "started_utc": (T0 - dt.timedelta(minutes=5)).isoformat(),
+        "issued_utc": (T0 - dt.timedelta(minutes=5)).isoformat(),
+        "expires_utc": (T0 + dt.timedelta(hours=6)).isoformat(),
+        "max_loss_usd": str(CAP), "venue_results": {}}))
     monkeypatch.setenv(P.STATE_PATH_ENV, str(tmp_path / "state.json"))
     P.write_state(P.ARMED, why="test", now=T0)
     return tmp_path

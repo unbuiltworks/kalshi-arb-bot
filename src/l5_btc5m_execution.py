@@ -801,6 +801,121 @@ HEAVY_UNDERDOG_TOKEN = "STOP_ADDING"
 STRADDLE_HEAVY_UNDERDOG_MARGIN_ENV = "L5_BTC5M_STRADDLE_HEAVY_UNDERDOG_MARGIN"
 
 
+#: =========================================================================
+#: THE CAMPAIGN LOSS HALT. One loss budget for a multi-window test, held in
+#: code rather than in the operator's arithmetic.
+#:
+#: The envelope's daily-loss room is this lane's own figure, net of the
+#: day's gains, and starts again at 00:00 UTC. A test armed one window at a
+#: time needs a bound that does none of those things. The owner states the
+#: campaign once per arm in `L5_BTC5M_CAMPAIGN_LOSS_HALT`:
+#:   {"campaign_id", "started_utc", "issued_utc", "expires_utc",
+#:    "max_loss_usd", "venue_results": {market: settled result read from the
+#:    VENUE'S position row}}
+#: and every submission under a persistent envelope is then held to
+#:   max_loss_usd - SUM over campaign markets of the LOSS in each,
+#: a market's loss being the worse of this lane's own ledger and the
+#: venue's row; a winning market offsets nothing. The remaining room also
+#: caps the reservation, so open exposure counts against it.
+#:
+#: IT FAILS CLOSED. Refused when the document is absent, unreadable,
+#: expired or not yet valid; when the lane's settled history cannot be
+#: read; when a market the venue is said to have settled is missing from
+#: the lane's ledger; when the two results for a market differ by more
+#: than half a cent; and when a market settled inside the campaign before
+#: this document was issued is not in `venue_results` -- so a window cannot
+#: be armed on top of one that was never reconciled.
+CAMPAIGN_LOSS_HALT_ENV = "L5_BTC5M_CAMPAIGN_LOSS_HALT"
+CAMPAIGN_LOSS_MAX_USD = D("5.00")
+CAMPAIGN_RESULT_TOLERANCE_USD = D("0.005")
+CAMPAIGN_MAX_LIFE_S = 36 * 3600.0
+
+
+def campaign_loss_halt_doc() -> Any:
+    """The owner's campaign document: a mapping, None when unset, or the
+    string "UNREADABLE" when set but not a JSON object."""
+    raw = os.environ.get(CAMPAIGN_LOSS_HALT_ENV)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        doc = json.loads(raw)
+    except (TypeError, ValueError):
+        return "UNREADABLE"
+    return doc if isinstance(doc, dict) else "UNREADABLE"
+
+
+def campaign_loss_verdict(doc: Any, history: Any, now: Any) -> Dict[str, Any]:
+    """May anything be submitted under this campaign, and how much may
+    still be lost? Pure: `history` is `Btc5mExecutor.settled_history()`.
+    See CAMPAIGN_LOSS_HALT_ENV."""
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, ok=False, reason=reason)
+
+    if doc is None:
+        return no("CAMPAIGN_LOSS_HALT_NOT_SET")
+    if not isinstance(doc, Mapping):
+        return no("CAMPAIGN_LOSS_HALT_UNREADABLE")
+    cid = doc.get("campaign_id")
+    start, issued, exp = (_parse_utc(doc.get(k)) for k in
+                          ("started_utc", "issued_utc", "expires_utc"))
+    cap = _dec(doc.get("max_loss_usd"))
+    venue = doc.get("venue_results")
+    at = _utc(now)
+    if not isinstance(cid, str) or not cid.strip() or None in (
+            start, issued, exp, cap, at) or not isinstance(venue, Mapping):
+        return no("CAMPAIGN_LOSS_HALT_UNREADABLE")
+    if not (ZERO < cap <= CAMPAIGN_LOSS_MAX_USD):
+        return no("CAMPAIGN_LOSS_HALT_LIMIT_OUT_OF_RANGE")
+    if not (start <= issued <= exp) \
+            or (exp - start).total_seconds() > CAMPAIGN_MAX_LIFE_S:
+        return no("CAMPAIGN_LOSS_HALT_DATES_INCOHERENT")
+    out = {"campaign_id": cid, "max_loss_usd": _s(cap)}
+    if at < issued:
+        return no("CAMPAIGN_LOSS_HALT_NOT_YET_VALID", **out)
+    if at >= exp:
+        return no("CAMPAIGN_LOSS_HALT_EXPIRED", **out)
+    if not isinstance(history, Mapping):
+        return no("CAMPAIGN_HISTORY_UNREADABLE", **out)
+    lost = ZERO
+    counted: Dict[str, str] = {}
+    for market in sorted(venue):
+        v = _dec(venue[market])
+        if v is None:
+            return no("CAMPAIGN_VENUE_RESULT_UNREADABLE", market=str(market),
+                      **out)
+        own = history.get(market)
+        if not isinstance(own, Mapping) or own.get("pnl") is None:
+            return no("CAMPAIGN_HISTORY_MISSING", market=str(market), **out)
+        o = _dec(own["pnl"])
+        if o is None or abs(o - v) > CAMPAIGN_RESULT_TOLERANCE_USD:
+            return no("CAMPAIGN_RESULT_DISAGREES", market=str(market),
+                      own=None if o is None else _s(o), venue=_s(v), **out)
+        loss = min(ZERO, o, v)
+        lost -= loss
+        counted[str(market)] = _s(loss)
+    for market, row in sorted(history.items()):
+        if market in venue or not isinstance(row, Mapping):
+            continue
+        when, o = row.get("at"), _dec(row.get("pnl"))
+        if when is None or o is None:
+            return no("CAMPAIGN_HISTORY_UNREADABLE", **out)
+        if when < start:
+            continue
+        if when <= issued:
+            #: settled in this campaign before the owner wrote this
+            #: document, and not reconciled in it
+            return no("CAMPAIGN_RESULT_NOT_RECONCILED", market=str(market),
+                      **out)
+        loss = min(ZERO, o)
+        lost -= loss
+        counted[str(market)] = _s(loss)
+    room = cap - lost
+    out.update(lost_usd=_s(lost), room_usd=_s(room), markets=counted)
+    if room <= ZERO:
+        return no("CAMPAIGN_LOSS_EXHAUSTED", **out)
+    return dict(out, ok=True, reason=None)
+
+
 STRADDLE_PACE_SIDE_CAP_ENV = "L5_BTC5M_STRADDLE_SIDE_CAP_PACING"
 PACE_SIDE_CAP_TOKEN = "LINEAR_TO_ENTRY_CUTOFF"
 
@@ -2568,6 +2683,18 @@ class Btc5mExecutor:
                               client_order_id=coid,
                               detail={"realized_today_usd": _s(_day),
                                       "halt_usd": _s(_scope["max_daily_loss_usd"])})
+            #: THE CAMPAIGN LOSS HALT, required under a persistent envelope.
+            #: It can only lower the cap the reservation enforces.
+            _cl = campaign_loss_verdict(campaign_loss_halt_doc(),
+                                        self.settled_history(), now)
+            report["exposure"]["campaign_loss_halt"] = {
+                k: v for k, v in _cl.items() if k != "markets"}
+            if not _cl.get("ok"):
+                return refuse("CAMPAIGN_LOSS_HALT:%s" % _cl.get("reason"),
+                              client_order_id=coid,
+                              detail={k: v for k, v in _cl.items()
+                                      if k not in ("ok", "markets")})
+            _cap = min(_cap, D(_cl["room_usd"]))
         resv = RESV.reserve(lane=STRATEGY, key=coid, usd=notional,
                             now=now, cap_usd=_cap)
         report["exposure"]["reservation"] = {

@@ -2512,6 +2512,12 @@ def main() -> int:            # pragma: no cover - the service entrypoint
                 None if _ep.straddle_fill_edge_per_share is None
                 else str(_ep.straddle_fill_edge_per_share)),
             "straddle_pace_side_cap": bool(_ep.straddle_pace_side_cap),
+            #: whether the owner's campaign loss halt is SET and readable,
+            #: never its contents; the verdict is in every step report
+            "campaign_loss_halt": (
+                "NOT_SET" if X.campaign_loss_halt_doc() is None else
+                "UNREADABLE" if not isinstance(X.campaign_loss_halt_doc(),
+                                               dict) else "SET"),
             "straddle_stop_adding_heavy_underdog":
                 bool(_ep.straddle_stop_adding_heavy_underdog),
             "straddle_heavy_underdog_margin":

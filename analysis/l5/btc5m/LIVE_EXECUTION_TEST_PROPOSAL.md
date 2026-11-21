@@ -221,3 +221,31 @@ The frozen BTC5m SHA is the commit that adds this section (reported with
 it); `release/l5-btc5m-inventory-20261121` is moved forward to it.
 Safety suites at that commit: 2,344 passed, 0 failed.
 Step 1 (`l5-pmus-live` -> `1e75294f3`) is unchanged.
+
+## Campaign loss halt, enforced in code (2026-11-21, supersedes the manual procedure above)
+
+The $0.60 cumulative stop is no longer the operator's arithmetic. Under a
+persistent envelope every submission now requires the owner's document in
+`L5_BTC5M_CAMPAIGN_LOSS_HALT`:
+
+    {"campaign_id": "four-windows-20261121", "started_utc": ...,
+     "issued_utc": ..., "expires_utc": ..., "max_loss_usd": "0.60",
+     "venue_results": {<settled market>: <result on the venue's row>, ...}}
+
+and holds it to `max_loss_usd` minus the SUM OF LOSSES over the campaign's
+settled markets (worse of our ledger and the venue's row per market; a
+winning window offsets nothing; no reset at midnight). The remaining room
+also caps the reservation, so open exposure counts against it. The figure
+is rebuilt from the durable ledger after a restart.
+
+It refuses when the document is absent, unreadable, expired or not yet
+valid; when the ledger's history cannot be read; when a market in
+`venue_results` is missing from the ledger; when ledger and venue differ
+by more than $0.005; and when a market settled in the campaign before the
+document was issued is not listed -- so the next window cannot be armed
+until the previous one has been reconciled against the venue.
+
+Arming each window therefore sets one more variable, re-issued each time
+with the venue results so far; disarming clears it. `expires_utc` is set
+to the armed window's end plus a few minutes. 32 tests, including through
+the real executor path and across a restart.
