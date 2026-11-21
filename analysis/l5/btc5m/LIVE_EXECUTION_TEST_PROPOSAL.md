@@ -292,3 +292,45 @@ session report) answers both.
 ALSO SEEN: `2026-11-16-0335z` is +0.34 in this lane's records (a matched
 pair) and -2.00 in the account service's (unattested, quantities differ).
 The account figure is the more pessimistic, so no limit is loosened.
+
+## The six BTC5m markets not in this lane's ledger: ownership trace (2026-11-21, from Railway logs)
+
+VERDICT: not `l5-btc5m-live`, and not any service in this Railway project.
+Direct proof of who placed them (venue order ids, client order ids, the
+manual indicator) is in no log; only the venue's order records can settle
+manual versus automatic.
+
+- `l5-btc5m-live` was NOT RUNNING in either window: its process had exited
+  disarmed (restart policy NONE) at 2026-11-16T22:38:20Z and at
+  2026-11-17T23:05:19Z and logged nothing until the next deploy. These are
+  not missing ledger records.
+- The account service submitted nothing in any of the six
+  (`submitted 0, acknowledged 0`); it adopted each from a venue net read:
+  11-17-0150z DOWN 2 (cost $0.18); 11-18-1535z UP 8.85 ($1.8585);
+  -1540z UP 28.62 ($1.8398); -1545z UP 9.20 ($0.92); -1600z UP 1 ($0.32);
+  -1605z DOWN 5.04 ($1.634). All six lost.
+- The watchdog never saw a BTC 5m order resting in either window, so the
+  orders filled at once. On 11-18 the only open orders were two manual NBA
+  orders (one, `DT0VA9S013YY`, placed about 15:57Z, latched the halt at
+  16:02Z): the owner's manual session was active in the same minutes.
+- The fractional share counts with outlays near $1.85, $1.84, $0.92 and
+  $1.63 look like cash-sized buys of the cheap side; no executor here
+  sizes that way.
+- No other service placed BTC 5m orders: the spring probe quoted sports
+  only; the straddle "shadow" services place nothing; q1-executor, habitat,
+  ops-research-live and the e1 monitor logged nothing.
+- 11-17-0150z has no manual-session marker; it is the least certain.
+- Open inconsistency: for 11-18-1605z a shadow service logged DOWN as the
+  winner while the account service settled it with DOWN losing.
+
+## 2026-11-16-0335z: +0.34 (executor) against -2.00 (account service)
+
+The executor's figure is the one the fills support: UP 2 @ 0.08 and
+DOWN 2 @ 0.75 (venue fees 0.0000 on all three orders), cost 1.66, DOWN
+won, payout 2.00, +0.34. The account service read the venue's NET
+position at 03:37:53Z, between the two fills, adopted UP 2 at the $1
+bound, kept it when net read 0 at 03:38:07Z, and booked -2.00. Its
+attestation refused (venue quantity 4 against ledger 2) and went final.
+Nine other matched pairs that day filled between two reads and were never
+booked at all (+3.06 by the executor's arithmetic). Whether the venue
+credited the redemption cash is not in any log.
