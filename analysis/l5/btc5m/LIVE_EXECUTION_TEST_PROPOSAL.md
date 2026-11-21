@@ -471,3 +471,17 @@ VENUE_INCOMPLETE markets; seven detail lines each with a `verdict`;
 drawdown unchanged; watchdog clean; `l5-btc5m-live` untouched.
 Rollback: point the service back at
 `release/l5-pmus-live-venue-basis-20261121` (`77e5631cd`).
+
+## Six-market exclusion, prepared for the owner to set (2026-11-21; NOT set)
+
+Basis: the venue's own order rows carry `MANUAL_ORDER_INDICATOR_MANUAL`
+for every order in all six markets (order ids DS04XZ5014F0; DT0HYFT013YB;
+DT0MAEF014ET, DT0M5D6013YB; DT0PXTT014F1; DT0WT2X014F0; DT0ZDN2014F0,
+DT0Z7BKG13YB), and `l5-btc5m-live` was not running in either window.
+
+    L5_BTC5M_NOT_THIS_LANE_MARKETS=cpc-btc-updown-5m-2026-11-17-0150z,cpc-btc-updown-5m-2026-11-18-1535z,cpc-btc-updown-5m-2026-11-18-1540z,cpc-btc-updown-5m-2026-11-18-1545z,cpc-btc-updown-5m-2026-11-18-1600z,cpc-btc-updown-5m-2026-11-18-1605z
+
+Read by release `ac3c7f9e7` and later only. Exact names; anything not
+named still refuses. No loss leaves account-wide accounting: all six are
+booked by the account service and stay in the daily, cumulative and
+equity figures.
