@@ -12,6 +12,13 @@ chosen by the owner in this session's approval dialogs (about 19:58Z and
 At 20:12Z the owner wrote "I approved starting asap". The window's start
 was moved to 20:16 UTC (end unchanged, 23:05 UTC); nothing else changed.
 
+At 20:32Z the start was put back to 21:35 UTC. Reason: the bot's campaign
+marker had stayed at 21:35, so the campaign spend cap, unmatched cap and
+loss stop would not have counted anything traded before then. In the 16
+minutes it was open the bot sent one order (Baltimore–Carolina YES 0.37,
+2 contracts, post-only), which the venue rejected; there were no fills.
+The defect is fixed on the dev branch (`47099e532`), not deployed.
+
 ## 2. Tonight, second window — conditional
 
 "Add Sunday night, if clean": if the 21:35–23:05 window ends with no stop
