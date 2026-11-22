@@ -85,13 +85,17 @@ mismatch, a latch, a watchdog halt, or an unpaired leg above its cap.
 4. The live window: lock variable set to the window; allowlist set to
    `nfl`. Final pre-arm check first; relock without waiting if it fails.
 
-## 7. One existing limit that would end it early
+## 7. One existing account limit to know about
 
-The account ledger also enforces an equity drawdown limit: at 18:42Z it
-read 2.2144 used of 3.00, room $0.79. A sports loss of more than $0.79
-would reach it before the sports bot's own $4 campaign stop. It is an
-account protection and is not proposed to change; the owner should know
-it is the binding limit.
+The account ledger reports an equity drawdown figure: at 18:42Z it read
+2.2144 used of 3.00, room $0.79. A sports loss of more than $0.79 would
+reach it before the sports bot's own $4 campaign stop.
+
+What happens then is not yet traced. The ledger service itself is
+shadow-locked. The sports bot can refuse new openings when the ledger's
+published risk line is not OK, depending on a production setting whose
+value has not been read. To be confirmed in the pre-arm check. It is an
+account protection and is not proposed to change.
 
 Not in this validation: order expiry (unproven at the venue; proposed for
 the one-order watchdog test), the one-order stall test, any size increase.
