@@ -57,6 +57,14 @@ def structure(slug: str) -> str:
     return STRUCTURES.get(str(slug).split("-", 1)[0], "other")
 
 
+def priceable(slug: str) -> bool:
+    """A structure the guard can price: a two-outcome match winner, or one
+    outcome of a soccer match in a league mapped on both venues."""
+    st = structure(slug)
+    return st == "match_winner" or (
+        st == "three_way" and sport_of(slug) in XV.THREE_WAY_LEAGUES)
+
+
 def sport_of(slug: str) -> str:
     return M.sport_of(slug)
 
@@ -74,7 +82,7 @@ def classify(mk: Mapping[str, Any], allow: Iterable[str]) -> Dict[str, Any]:
     typ = str(st.get("type") or "").lower()
     if M.is_cricket(slug) or typ == "cricket":
         why.append("cricket_excluded")
-    if structure(slug) != "match_winner":
+    if not priceable(slug):
         why.append("incompatible_market_structure")
     tick = D(str(mk.get("tick") or "0.01"))
     bid, ask = mk.get("bid"), mk.get("ask")
@@ -169,7 +177,7 @@ def summarise(rows: List[Mapping[str, Any]], allow: Iterable[str]
     for c in rows:
         prim[c["primary"] or "eligible"] = prim.get(
             c["primary"] or "eligible", 0) + 1
-        if c["structure"] != "match_winner":
+        if not priceable(c["slug"]):
             continue
         s = sports.setdefault(c["sport"], {
             "markets": 0, "type": c.get("type"), "intl_matched": 0,
@@ -231,7 +239,7 @@ def _levels(rows: Any) -> list:
 def snapshot_market(pm_get: Callable, gamma_get: Callable, clob_get: Callable,
                     slug: str, state: Mapping[str, Any]) -> Dict[str, Any]:
     mk: Dict[str, Any] = {"slug": slug, "state": dict(state or {})}
-    if structure(slug) != "match_winner":
+    if not priceable(slug):
         return mk
     try:
         md = (pm_get(f"/v1/markets/{slug}/book") or {}).get("marketData") or {}
@@ -243,11 +251,8 @@ def snapshot_market(pm_get: Callable, gamma_get: Callable, clob_get: Callable,
     try:
         m = (pm_get(f"/v1/market/slug/{slug}") or {}).get("market") or {}
         mk["tick"] = str(m.get("orderPriceMinTickSize") or "0.01")
-        po = m.get("outcomes")
-        if isinstance(po, str):
-            po = json.loads(po)
-        mk["outcomes"] = po
-        tok = XV.resolve_token(gamma_get, slug, po, XV.yes_names(m))
+        mk["outcomes"] = m.get("outcomes")
+        tok = XV.resolve_market(gamma_get, slug, m)
         mk["intl_token"] = bool(tok)
         if tok:
             bk = clob_get(f"/book?token_id={tok}") or {}

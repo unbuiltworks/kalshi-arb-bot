@@ -51,6 +51,15 @@ class FakeVenue:
     def spec(self, slug):
         return {"tick": T, "min_qty": D("1")}
 
+    #: contracts resting at the best bid / best ask (minimum-liquidity gate)
+    depth = (D("1000"), D("1000"))
+
+    def top_depth(self, slug):
+        if self.depth is None:
+            return None
+        return {"bid": self.bid, "bid_qty": self.depth[0],
+                "ask": self.ask, "ask_qty": self.depth[1]}
+
     def account(self):
         return self.acct
 

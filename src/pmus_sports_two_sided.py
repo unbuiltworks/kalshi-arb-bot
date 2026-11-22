@@ -363,6 +363,18 @@ SHARP_SPORTS = tuple(s.strip() for s in os.getenv(
 SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 
 
+# OWNER 2026-11-22 minimum-liquidity gate for NEW exposure (openings and
+# extensions; completions are never refused by it). A bid is priced off its
+# own side's touch -- YES off the best YES bid, NO off the best NO bid (the
+# YES ask) -- so that touch must show at least MIN_TOUCH_QTY contracts that
+# are not ours. Live 2026-11-22: Serie A outcome books showed 38,389 x 0.52
+# and 41,386 x 0.67 contracts: a one-contract touch is not a price, and a
+# bid one tick behind it sits above the real market. Unknown depth blocks
+# (fail closed). This is a liquidity floor only; it says nothing about
+# whether a market is profitable. 0 disables.
+MIN_TOUCH_QTY = _env_d("PMUS_TWO_SIDED_MIN_TOUCH_QTY", "10")
+DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
+
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
 # OWNER 2026-11-22: "any future unlock must be restricted to the exact
 # approved time window, with automatic relocking at the end." The lock
@@ -492,6 +504,19 @@ DRIFT_MAX_EXTRA_TICKS = int(os.getenv("PMUS_TWO_SIDED_DRIFT_MAX_EXTRA_TICKS",
 def sport_of(slug: str) -> str:
     parts = str(slug).split("-")
     return parts[1] if len(parts) > 1 else "?"
+
+
+def event_key(slug: str) -> str:
+    """The game a market belongs to: league-teams-date, whatever the market
+    structure. A soccer match's three outcome markets (atc-...-juv, -draw,
+    -ven) and a game's winner/spread/total markets share one key."""
+    parts = str(slug).split("-")
+    for i in range(1, len(parts) - 2):
+        y, mo, d = parts[i:i + 3]
+        if len(y) == 4 and y.isdigit() and len(mo) == 2 and mo.isdigit() \
+                and len(d) == 2 and d.isdigit():
+            return "-".join(parts[1:i + 3])
+    return "-".join(parts[1:]) or str(slug)
 
 
 def record_drift(d: Dict[str, Any], slug: str, drift: D) -> None:
@@ -887,6 +912,46 @@ def _minute(v: Any) -> Optional[int]:
         return None
 
 
+def esports_late(state: Mapping[str, Any]) -> Optional[str]:
+    """OWNER 2026-11-22 (CS2 was on the allowlist with NO late rule: it would
+    have been quoted to the last round). Conservative and FAIL CLOSED: a new
+    pair may open only while the match format and the map score are both
+    known and no team is one map from winning. The venue's esports state
+    carries a map score ("1-0") and a period ("Live", "Map 2") but, as seen
+    live, no best-of -- so until a format is published this returns a block
+    for every esports match, which is the intended state.
+
+      format unknown / unreadable            -> esports_format_unknown
+      map score unreadable                   -> esports_score_unknown
+      a team one map from the match, or the
+      deciding map (incl. every best-of-1)   -> esports_deciding_map"""
+    bo = None
+    for src in (state, state.get("esportsState") or {}):
+        for k in ("bestOf", "best_of", "seriesLength", "numberOfMaps"):
+            v = src.get(k) if isinstance(src, Mapping) else None
+            if v not in (None, ""):
+                bo = v
+                break
+        if bo is not None:
+            break
+    try:
+        bo = int(bo)
+    except (TypeError, ValueError):
+        return "esports_format_unknown"
+    if bo < 1 or bo > 7 or bo % 2 == 0:
+        return "esports_format_unknown"
+    try:
+        a, b = (int(x) for x in str(state.get("score") or "").split("-"))
+    except ValueError:
+        return "esports_score_unknown"
+    need = bo // 2 + 1
+    if a < 0 or b < 0 or max(a, b) >= need:
+        return "esports_score_unknown"
+    if max(a, b) >= need - 1 or a + b >= bo - 1:
+        return "esports_deciding_map"
+    return None
+
+
 def is_late(state: Optional[Mapping[str, Any]]) -> Optional[str]:
     """Reason string if the game is in its deciding stretch, else None.
     Unknown sports/shapes -> None (the price band still applies)."""
@@ -921,8 +986,14 @@ def is_late(state: Optional[Mapping[str, Any]]) -> Optional[str]:
         return "P3"
     if typ == "soccer" and per == "2H":
         m = _minute(state.get("elapsed"))
-        if m is not None and m >= 70:
+        if m is None:
+            # owner 2026-11-22: fail closed. A second half whose minute
+            # cannot be read may be its last one.
+            return "2H_minute_unknown"
+        if m >= 70:
             return "2H_70+"
+    if typ == "esports":
+        return esports_late(state)
     if typ == "tennis" and per.startswith("S"):
         try:
             if int(per[1:]) >= 3:
@@ -1183,6 +1254,37 @@ class Venue:
         if b is None or a is None:
             return None
         return {"bid": b, "ask": a}
+
+    def top_depth(self, slug: str) -> Optional[Dict[str, D]]:
+        """{'bid','bid_qty','ask','ask_qty'} from the public book (keyless
+        GET), cached DEPTH_TTL_S; None when it cannot be read."""
+        cache = self.__dict__.setdefault("_depth", {})
+        hit = cache.get(slug)
+        if hit and time.monotonic() - hit[0] < DEPTH_TTL_S:
+            return hit[1]
+        out = None
+        try:
+            md = (self.gget(f"/v1/markets/{slug}/book") or {}
+                  ).get("marketData") or {}
+
+            def top(rows, best):
+                lv = []
+                for r in rows or []:
+                    px, q = self.q1._d(r.get("px")), self.q1._d(r.get("qty"))
+                    if px is not None and q is not None:
+                        lv.append((px, q))
+                if not lv:
+                    return None
+                px = best(p for p, _ in lv)
+                return px, sum((q for p, q in lv if p == px), D(0))
+            b, a = top(md.get("bids"), max), top(md.get("offers"), min)
+            if b and a:
+                out = {"bid": b[0], "bid_qty": b[1],
+                       "ask": a[0], "ask_qty": a[1]}
+        except Exception:                                 # noqa: BLE001
+            out = None
+        cache[slug] = (time.monotonic(), out)
+        return out
 
     def spec(self, slug: str) -> Optional[Dict[str, Any]]:
         hit = self._spec.get(slug)
@@ -2670,6 +2772,33 @@ class Engine:
             return "exceeds_venue_imbalance"
         return None
 
+    def depth_block(self, slug: str, side: str) -> Optional[str]:
+        """Why a NEW bid on `side` fails the minimum-liquidity gate, else
+        None. Our own resting contracts at that touch do not count."""
+        if MIN_TOUCH_QTY <= 0:
+            return None
+        fn = getattr(self.v, "top_depth", None)
+        d = None
+        if fn is not None:
+            try:
+                d = fn(slug)
+            except Exception:                             # noqa: BLE001
+                d = None
+        if not d:
+            return "depth_unknown"
+        if side == "YES":
+            touch, have = d["bid"], d["bid_qty"]
+        else:
+            touch, have = ONE - d["ask"], d["ask_qty"]
+        mk = self.b.d["markets"].get(slug) or {}
+        own = sum((D(str(o["qty"])) - D(str(o.get("filled") or "0"))
+                   for o in (mk.get("orders") or {}).values()
+                   if o.get("open") and o.get("side") == side
+                   and D(str(o["px"])) == touch), D(0))
+        if have - own < MIN_TOUCH_QTY:
+            return "thin_touch:%s<%s" % (have - own, MIN_TOUCH_QTY)
+        return None
+
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
         if self.stop:
@@ -2703,6 +2832,15 @@ class Engine:
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
                 qty=qty, stage=stage, why=lock_state()["why"])
             return
+        if not is_completion_stage(stage):
+            # universal backstop for every opening path (RN1 withholds the
+            # side earlier, so this normally never fires there)
+            why = self.depth_block(slug, side)
+            if why:
+                log("place_refused_depth", slug=slug, side=side, px=px,
+                    qty=qty, stage=stage, reason=why,
+                    min_touch_qty=str(MIN_TOUCH_QTY))
+                return
         if self.shared_halt() == "HALT":
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
@@ -2850,6 +2988,11 @@ class Engine:
             tg = q.get(side)
             if tg and tg["role"] != "complete" and new_block:
                 tg = None
+            if tg and tg["role"] != "complete":
+                dwhy = self.depth_block(slug, side)
+                if dwhy:
+                    q["why_" + side] = "depth:" + dwhy
+                    tg = None
             if tg and tg["role"] != "complete" and self.guard is not None:
                 # 2026-11-21 two-venue recording: international leads PMUS by
                 # 3-30 s and 91% of PMUS mid drops >= 1c were preceded by a
@@ -3460,6 +3603,13 @@ class Engine:
                     est: Optional[Mapping[str, Any]] = None) -> bool:
         if self.foreign_exposure(slug, acct):
             log("skip_foreign_exposure", slug=slug)
+            return False
+        # OWNER 2026-11-22: each soccer outcome is traded as its own market,
+        # with no cross-outcome hedging -- so never hold two markets of the
+        # SAME game at once: their results are tied together and would put
+        # both slots, and both per-market caps, on one match.
+        ek = event_key(slug)
+        if any(s_ != slug and event_key(s_) == ek for s_ in self.active()):
             return False
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug) if spec else None
