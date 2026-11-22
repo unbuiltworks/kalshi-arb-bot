@@ -424,6 +424,18 @@ RN1_REWARD_CREDIT_TICKS = int(os.getenv("PMUS_RN1_REWARD_CREDIT_TICKS", "1"))
 #: (after a start, a feed gap, a newly selected market) there is no fair
 #: value and so no bid.
 RN1_FAIR_STABLE_S = float(os.getenv("PMUS_RN1_FAIR_STABLE_S", "10"))
+#: ...AND THE FAIR VALUE HAS TO BE CALM. LIVE 2026-11-22 21:36:21Z,
+#: Detroit-Atlanta, the first fill of the profit-first build: the
+#: international mid had gone 0.555 -> 0.615 -> 0.585 inside 45 seconds and
+#: was still falling. YES at 0.57 passed (lowest mid of the last 10 s was
+#: 0.585), the bid was filled 1.8 s later, and the mid was 0.50 fifteen
+#: seconds after that: -3.5c at 5 s and at 30 s by the bot's own markout.
+#: The lowest-recent-value rule cannot see that a price is in motion. So
+#: while the international mid has moved more than RN1_FAIR_MAX_RANGE_USD
+#: within the stability period there is NO fair value, for either side:
+#: nothing new is bid and resting bids come off. A resting maker bid is
+#: only worth having while the price is quiet.
+RN1_FAIR_MAX_RANGE_USD = _env_d("PMUS_RN1_FAIR_MAX_RANGE_USD", "0.01")
 RN1_REWARD_MIN_DAY_USD = float(os.getenv("PMUS_RN1_REWARD_MIN_DAY_USD", "1"))
 RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
 
@@ -1256,7 +1268,9 @@ def safeguards_cfg() -> Dict[str, Any]:
                               "reward_min_day_usd": RN1_REWARD_MIN_DAY_USD,
                               "reward_project_h": RN1_REWARD_PROJECT_H,
                               "no_fair_means": "no_bid",
-                              "fair_stable_s": RN1_FAIR_STABLE_S},
+                              "fair_stable_s": RN1_FAIR_STABLE_S,
+                              "fair_max_range_usd":
+                                  str(RN1_FAIR_MAX_RANGE_USD)},
             "markout_horizons_s": [5, 30, 120, 300],
             "stall_drill": stall_drill(),
             "order_ttl_s": (ORDER_TTL_S if order_good_till() else 0),
@@ -3563,8 +3577,11 @@ class Engine:
             h.pop(0)
         span = now - h[0][0]
         vals = [m for _t, m in h]
-        return {"mid": mid, "lo": min(vals), "hi": max(vals),
-                "settled": span >= w, "span_s": round(span, 1)}
+        lo, hi = min(vals), max(vals)
+        calm = (hi - lo) <= RN1_FAIR_MAX_RANGE_USD
+        return {"mid": mid, "lo": lo, "hi": hi,
+                "settled": span >= w and calm, "calm": calm,
+                "range": hi - lo, "span_s": round(span, 1)}
 
     def campaign_marker_mismatch(self) -> bool:
         """True when a trading window is configured and the campaign marker
@@ -3671,7 +3688,7 @@ class Engine:
         band = self.intl_fair_band(slug)
         self._rn1_fair = getattr(self, "_rn1_fair", {})
         self._rn1_fair[slug] = {k: (None if v is None else str(v))
-                                if k in ("mid", "lo", "hi") else v
+                                if k in ("mid", "lo", "hi", "range") else v
                                 for k, v in band.items()}
         return {"edge_gate": True,
                 "fair_yes": band["mid"] if band["settled"] else None,

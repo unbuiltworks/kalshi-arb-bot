@@ -822,14 +822,15 @@ def test_a_favourable_move_counts_once_it_has_lasted(eng, monkeypatch):
 def test_a_move_against_a_resting_bid_counts_at_once(eng, monkeypatch):
     e, v = eng
     clock = clocked(e, monkeypatch)
-    e.guard = Guard(0.49)
+    e.guard = Guard(0.48)              # YES at 0.47 has exactly no edge left
     e.b.m("aec-x")
     settle(e, v, clock)
     assert len(resting(v)) == 2
-    e.guard.mid = 0.43                                # falls 6c
+    e.guard.mid = 0.475                               # half a cent lower
     clock["t"] += 1
     e.step_market("aec-x")
     assert resting(v) == [("NO", "0.49")]             # YES bid cancelled
+    assert e.intl_fair_band("aec-x")["calm"] is True  # a small move: calm
 
 
 @pytest.mark.rn1_edge_gate
@@ -889,3 +890,63 @@ def test_no_new_exposure_when_the_marker_is_later_than_the_window(
     assert e.campaign_marker_mismatch() is True
     monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")    # no window: no rule
     assert e.campaign_marker_mismatch() is False
+
+
+# ------------------------------------------ the fair value has to be calm
+@pytest.mark.rn1_edge_gate
+def test_no_bid_while_the_fair_value_is_moving(eng, monkeypatch):
+    """22 Nov 21:36:21Z, Detroit-Atlanta. The mid went 0.555 -> 0.615 ->
+    0.585 in 45 s and was still falling when YES 0.57 was bid; it filled
+    1.8 s later and the mid was 0.50 fifteen seconds on."""
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    v.bid, v.ask = D("0.58"), D("0.59")
+    e.guard = Guard(0.555)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert [s_ for s_, _p in resting(v)] == ["NO"]   # calm: NO is cheap
+    for mid in (0.565, 0.585, 0.615, 0.615, 0.595, 0.585):   # every 3 s
+        e.guard.mid = mid
+        clock["t"] += 3
+        e.step_market("aec-x")
+        assert all(s_ != "YES" for s_, _p in resting(v)), mid
+        if mid != 0.565:                             # more than 1c in 10 s
+            assert resting(v) == [], mid             # nothing rests in it
+    band = e.intl_fair_band("aec-x")
+    assert band["calm"] is False and band["settled"] is False
+    assert band["range"] > M.RN1_FAIR_MAX_RANGE_USD
+    e.guard.mid = 0.585                              # ...then it goes quiet
+    settle(e, v, clock)
+    assert e.intl_fair_band("aec-x")["calm"] is True
+    assert ("YES", "0.57") in resting(v)
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_one_cent_wobble_is_still_calm(eng, monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert len(resting(v)) == 2
+    for mid in (0.495, 0.49, 0.485, 0.49):           # within one cent
+        e.guard.mid = mid
+        clock["t"] += 3
+        e.step_market("aec-x")
+    assert e.intl_fair_band("aec-x")["calm"] is True
+    assert [s_ for s_, _p in resting(v)] != []
+
+
+@pytest.mark.rn1_edge_gate
+def test_resting_bids_come_off_when_the_price_starts_to_move(eng,
+                                                             monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert len(resting(v)) == 2
+    e.guard.mid = 0.515                              # +2.5c in 3 s
+    clock["t"] += 3
+    e.step_market("aec-x")
+    assert resting(v) == []                          # both sides pulled
