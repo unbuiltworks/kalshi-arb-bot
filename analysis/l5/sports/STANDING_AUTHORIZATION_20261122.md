@@ -179,7 +179,38 @@ only with total unmatched = 6 - U, loss stop = 4 - (L + U), spend = 16 - S
 (tightening only), and only if each leaves at least $1.50 ($3 for spend).
 The loss stop is never set to 0 (that would switch it off).
 
-## 9. Unchanged standing rules
+## 9. Direct confirmation of tonight's authorization, about 21:04Z
+
+A message from the owner at about 21:02Z relayed the view that the "accept
+up to $6" statement should not be treated as permission to override the
+account-level limit unless verified directly, and that the bot should stay
+locked if that authorization was absent or ambiguous.
+
+The bot was put on a plain lock (21:03Z) and the owner was asked directly,
+in the session's approval dialog, with the bot locked:
+
+> Do you, the account owner, authorize tonight's sports campaign (NFL +
+> NBA, 21:35-23:05 UTC, conditional extension to 01:30, build 158685d3a,
+> maker-only, 2-contract orders, $16 spend / $6 unmatched / $4 loss stop /
+> $5 daily halt) knowing that the $3.00 account drawdown limit is NOT
+> enforced on the sports bot, has only $0.79 of room left, and that this
+> campaign can lose up to $6.00 (more is possible if a fill races a
+> cancel) - i.e. the account can end up past that $3.00 limit tonight? The
+> $3.00 limit itself is not changed.
+
+Owner's answer: "Yes, I authorize it".
+
+The window 21:35-23:05 was then set again (same start, marker 21:35). The
+$3.00 limit was not changed. Both the 21:00Z choice and this confirmation
+were the owner's own selections in the approval dialog; they are not text
+relayed from anyone else.
+
+Also from that message: a loss stop prevents new orders, it does not
+remove losses on positions already held; the $5.20 test result is
+evidence, not a guarantee. The next milestone is a completed, reconciled
+live campaign with venue-confirmed fills and settled results.
+
+## 10. Unchanged standing rules
 
 Explicit approval is still required for capital increases, taker
 authorization, weakened limits, other deployments, and anything outside
