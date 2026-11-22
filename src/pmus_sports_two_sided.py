@@ -2784,6 +2784,15 @@ class Engine:
         from src import pmus_fill_markout as MK
         rows = [r for mk in (self.b.d.get("markets") or {}).values()
                 for r in (mk.get("markouts") or ())]
+        # the book history of a market the bot no longer works is dropped
+        # once none of its fills is waiting on a horizon (bounded memory)
+        live = set(self.active())
+        for slug in list(self._mids()._t):
+            if slug in live:
+                continue
+            mk = (self.b.d.get("markets") or {}).get(slug) or {}
+            if all(MK.complete(r) for r in (mk.get("markouts") or ())):
+                self._mids().drop(slug)
         return MK.summary(rows)
 
     def account_fresh(self) -> bool:

@@ -729,3 +729,20 @@ def test_a_preview_that_contradicts_the_expiry_sends_nothing(monkeypatch):
         MX.place_limit_buy(T_(), "aec-x", "YES", D("0.47"), D("2"), "rn1_open",
                            good_till="2026-11-23T01:30:00Z")
     assert calls == ["/v1/order/preview"]             # no order was posted
+
+
+def test_book_history_of_a_finished_market_is_dropped(eng):
+    e, v = eng
+    mk = e.b.m("aec-x")
+    e._markout_step("aec-x", mk, {"bid": D("0.48"), "ask": D("0.50")})
+    assert "aec-x" in e._mids()._t
+    e.markout_summary()
+    assert "aec-x" in e._mids()._t            # still being worked
+    mk["done"] = True
+    mk["markouts"] = [{"qty": "2", "h": {}}]  # a fill still waiting
+    e.markout_summary()
+    assert "aec-x" in e._mids()._t
+    mk["markouts"] = [{"qty": "2", "h": {str(h): {"missed": True}
+                                         for h in MK.HORIZONS_S}}]
+    e.markout_summary()
+    assert "aec-x" not in e._mids()._t
