@@ -66,3 +66,20 @@ Data: `cross_venue_20261121_2027_2217.jsonl.gz`. Label: MODELLED marks on quotes
 Not yet known: size available at the US ask during a cross (second recording running with sizes), our own order latency,
 whether the effect persists on other days, and whether a MAKER version (bid only at/below international, pull on its move)
 captures it — taker trading is not authorized and the promo fee ends 31 Dec.
+
+## Addendum — second two-venue recording, with sizes (`CROSS_VENUE_20261121B_RESULT.txt`)
+22:18–00:15 UTC, 41 usable games (CFB, NHL, NBA), 3 s. Data: `cross_venue_20261121_2218_0015_sizes.jsonl.gz`.
+Replicates the first recording on a different set of games:
+- 93% of US mid drops >=1c (357) were preceded by a lower international mid (mirror: 31%).
+- US ask >=1c below the international bid: 231 signals in 20 games (119 an hour); +2.8c a share at 60 s net of the promo
+  taker fee, median +2.2c, 80% positive. At >=0.5c: 357 signals, +1.7c, 69% positive. A touch is still not a signal.
+- Size at the US ask at the signal: median ~3,500 contracts (p25 57, p10 1). International bid: median ~580.
+- The gap stays open a median 9 s (p25 3 s).
+- MODELLED, quotes not fills: a buyer capped at 50 contracts a signal marks +$276 over 116 min on $4,458 bought;
+  capped at 200, +$1,040 on $16,611.
+- A resting US bid at or above the international mid +0.5c ends up ABOVE the US mid a minute later (−0.2c): those are
+  the bids that get run over. Bids >1c below sit 2.0c under.
+Not established: that the lagging ask can actually be hit before it is pulled (no venue in-play delay is documented, but
+none was tested); our order latency (the lane takes three round trips an order); persistence across days; the edge after
+31 Dec when the 70% taker-fee rebate ends (at the 0.0695 fee unrebated, the >=1c edge is about +1.0c at p=0.5).
+The decisive next evidence is fills, not more recordings: a bounded live taker probe needs explicit owner authorization.
