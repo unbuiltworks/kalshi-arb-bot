@@ -59,3 +59,33 @@ Crypto envelope set by owner: $300 maximum test allocation, NOT armed.
 A credit needs >= $1/day in one market. If the $150 is split evenly, that is
 >= 2% of one market's score all day: roughly 25-50 contracts a side on ONE
 market (about $25-50 resting), not $300. Split is not published per market.
+
+## Addendum - checked against the running release `3e2cc9002`
+6. **RN1 mode takes over every market.** With `PMUS_TWO_SIDED_RN1=1`
+   (`step_market`, "if RN1.ON: self._rn1_step(...); return") the reward-quote
+   decisions are replaced for ALL selected markets. A crypto prefix set on this
+   release would be traded as 2-contract RN1 accumulation inside the RN1
+   campaign caps ($16 spend / $6 unmatched), not quoted for rewards.
+   Crypto needs its own branch in `step_market`.
+7. **Reward quotes rest 2c behind the best price by default**
+   (`PMUS_TWO_SIDED_REWARD_MIN_DEPTH_PX=0.02`, added after 15 Nov pick-offs).
+   With the programme's discount factor 0.3 an order two ticks back scores 9%
+   of its size. This, plus 5-contract size, is why the 17 Nov trial could not
+   have been paid.
+8. **Reward-first only counts `live` periods by default**
+   (`PMUS_TWO_SIDED_REWARD_FIRST_PERIODS`); the crypto programme's period is
+   `daily_event`. (`period_pacing` itself handles `daily_event` as 24 h.)
+9. **After a crypto fill the sports completion logic applies**, including the
+   legacy take-the-ask exit after `EXIT_S` when not in RN1 mode. Taker
+   execution is not authorized; a crypto path must be maker-only explicitly.
+
+## Modelled share by size and distance (recording 22 Nov 00:04-02:01Z)
+$ per day per market IF the $150 is split evenly ($50 each) and the two-hour
+book held all day. Modelled, not earned. Venue pays nothing under $1/day.
+
+| contracts/side | at best price (ETH / SOL / XRP) | 1 tick back | 2 ticks back |
+|---|---|---|---|
+| 25  | 1.51 / 4.38 / 1.57 | 0.47 / 1.77 / 0.49 | 0.14 / 0.61 / 0.15 |
+| 50  | 2.89 / 6.80 / 2.98 | 0.92 / 3.05 / 0.96 | 0.28 / 1.14 / 0.30 |
+| 100 | 5.36 / 10.03 / 5.45 | 1.79 / 4.95 / 1.87 | 0.56 / 2.05 / 0.59 |
+| 150 | 7.53 / 12.36 / 7.55 | 2.62 / 6.38 / 2.71 | 0.83 / 2.81 / 0.87 |
