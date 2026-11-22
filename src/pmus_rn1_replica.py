@@ -83,6 +83,28 @@ REPRICE_TICKS = _i("PMUS_RN1_REPRICE_TICKS", "1")
 # only implied by MAX_MARKETS x per-market caps, but lone-leg markets can
 # exceed MAX_MARKETS). Committed = filled cost + resting orders + the cost
 # reserved to complete every unpaired leg at PAIR_CAP.
+#: OWNER 2026-11-22: reward-aware inventory accumulation; "the next contract
+#: should have a better risk-adjusted expected return, accounting for
+#: inventory concentration, reward eligibility, and current market
+#: information" -- not a fixed lower-price rule. An ADD to a side that is
+#: already unpaired must clear a marginal-edge test against the
+#: international fair value:
+#:
+#:   fair(side) - bid  >=  tick * (EXTEND_EDGE_TICKS
+#:                                 + EXTEND_STEP_TICKS * clips already unpaired
+#:                                 + extra ticks from the engine)
+#:
+#: where the engine's extra ticks add the market's jump risk (a goal moves a
+#: soccer price 20 ticks at once; Serie A 22 Nov: a resting add was filled
+#: 21.5c under water) and subtract a credit when the market carries a
+#: verified paying liquidity programme. No fresh fair value -> no add. The
+#: bid is never rested deeper to pass the test: a bid far behind the touch
+#: fills only on the jump it is meant to avoid. Opening bids from flat and
+#: completions are unchanged. All tick values are ESTIMATED settings, to be
+#: calibrated from settled fills, not measured constants.
+EXTEND_EV = os.getenv("PMUS_RN1_EXTEND_EV", "1").strip() != "0"
+EXTEND_EDGE_TICKS = _i("PMUS_RN1_EXTEND_EDGE_TICKS", "1")
+EXTEND_STEP_TICKS = _i("PMUS_RN1_EXTEND_STEP_TICKS", "1")
 TOTAL_SPEND_USD = _d("PMUS_RN1_TOTAL_SPEND_USD", "16")
 TOTAL_UNMATCHED_USD = _d("PMUS_RN1_TOTAL_UNMATCHED_USD", "6")
 # Maker fee per contract = rate * p * (1 - p). PMUS order previews show
@@ -180,6 +202,28 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                 avg_s = cs[s] / p[s]
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up
+            unpaired = p[s] - p[o]
+            if unpaired > ZERO and k.get("extend_ev"):
+                # marginal economics of adding to an already unpaired side
+                fy = k.get("fair_yes")
+                if fy is None:
+                    out["why_" + s] = "extend_no_fair"
+                    continue
+                fair_s = D(str(fy)) if s == "YES" else ONE - D(str(fy))
+                clips = int((unpaired / qty0).to_integral_value(
+                    rounding="ROUND_CEILING")) if qty0 > 0 else 1
+                ticks = int(k.get("extend_edge_ticks", EXTEND_EDGE_TICKS)) \
+                    + int(k.get("extend_step_ticks",
+                                EXTEND_STEP_TICKS)) * clips \
+                    + int(k.get("extend_extra_ticks", 0))
+                need = t * max(1, ticks)
+                if fair_s - px < need:
+                    out["why_" + s] = "extend_marginal_edge"
+                    out.setdefault("extend_ev", {})[s] = {
+                        "fair": str(fair_s), "px": str(px),
+                        "edge": str(fair_s - px), "need": str(need),
+                        "unpaired_clips": clips}
+                    continue
             # unpaired cost if this fills: excess shares at the new average
             new_avg = (cs[s] + px * qty) / (p[s] + qty)
             unm_after = max(ZERO, p[s] + qty - p[o]) * new_avg

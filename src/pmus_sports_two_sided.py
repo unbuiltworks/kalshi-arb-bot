@@ -375,6 +375,28 @@ SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 MIN_TOUCH_QTY = _env_d("PMUS_TWO_SIDED_MIN_TOUCH_QTY", "10")
 DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
 
+# OWNER 2026-11-22 reward-aware selection. Evidence (14-18 Nov, every fill
+# reconciled): the 74 markets that earned a liquidity reward netted +$0.63
+# (rewards +15.63, trading -15.00); the 167 that earned none netted -$25.71.
+# In RN1 mode candidates carrying a paying liquidity programme are selected
+# first, richest pool rate first; PMUS_RN1_REWARD_ONLY=1 selects nothing
+# else. The programme read is the public incentives endpoint the bot already
+# uses, cached REWARD_REFRESH_S. A programme is a published pool, not a
+# payment: whether we were paid is known only days later, from the venue's
+# earnings record.
+RN1_REWARD_RANK = os.getenv("PMUS_RN1_REWARD_RANK", "1").strip() != "0"
+RN1_REWARD_ONLY = os.getenv("PMUS_RN1_REWARD_ONLY", "0").strip() == "1"
+#: extra edge (ticks) an add to an unpaired side needs, by the event's type:
+#: how far one scoring event moves the price. ESTIMATED priors.
+RN1_JUMP_TICKS = {
+    k.strip().lower(): int(v) for k, v in (
+        tok.split(":") for tok in os.getenv(
+            "PMUS_RN1_JUMP_TICKS",
+            "soccer:3,hockey:2,football:1,tennis:1,table-tennis:1"
+        ).split(",") if ":" in tok)}
+#: credit (ticks) for a market with a paying liquidity programme
+RN1_REWARD_CREDIT_TICKS = int(os.getenv("PMUS_RN1_REWARD_CREDIT_TICKS", "1"))
+
 # OWNER 2026-11-22 "The bot must reliably stop and cancel orders without
 # depending on Claude's session." LIVE that morning: a reconciliation
 # mismatch at 14:28:33Z was a stop condition, and the relock issued from a
@@ -1067,6 +1089,14 @@ def safeguards_cfg() -> Dict[str, Any]:
             "intl_three_way": list(XV.THREE_WAY_LEAGUES),
             "one_market_per_game": True,
             "loop_stall_s": LOOP_STALL_S,
+            "rn1_reward_rank": RN1_REWARD_RANK,
+            "rn1_reward_only": RN1_REWARD_ONLY,
+            "rn1_extend_ev": {"on": RN1.EXTEND_EV,
+                              "edge_ticks": RN1.EXTEND_EDGE_TICKS,
+                              "step_ticks": RN1.EXTEND_STEP_TICKS,
+                              "jump_ticks": RN1_JUMP_TICKS,
+                              "reward_credit_ticks":
+                                  RN1_REWARD_CREDIT_TICKS},
             "safety_latch": {"on": SAFETY_LATCH_ON,
                              "mismatch_grace_s": MISMATCH_GRACE_S,
                              "loop_error_n": LOOP_ERROR_LATCH_N}}
@@ -3222,6 +3252,46 @@ class Engine:
             want[drop] = None
             q["why_" + drop] = over
 
+    def intl_fair(self, slug: str) -> Optional[D]:
+        """International mid for the market's YES side, or None when the
+        guard has no fresh two-sided quote for it."""
+        g = self.guard
+        if g is None:
+            return None
+        try:
+            tok = g.token(slug)
+            it = g.intl.fresh(tok, g.max_age) if tok else None
+            if not it or it.get("bid") is None or it.get("ask") is None \
+                    or it["ask"] <= it["bid"]:
+                return None
+            return (D(str(it["bid"])) + D(str(it["ask"]))) / 2
+        except Exception:                                 # noqa: BLE001
+            return None            # unreadable fair value = no fair value
+
+    def rn1_reward(self, slug: str) -> Optional[Dict[str, Any]]:
+        """The paying liquidity period for this market from the cached
+        programme read (no request here), or None."""
+        prog = (self._prog.get(slug) or (0, None))[1]
+        if not prog:
+            return None
+        try:
+            from src import pmus_sports_rewards as R
+            return R.paying_period(prog, time.time(), event_live=True)
+        except Exception:                                 # noqa: BLE001
+            return None
+
+    def rn1_extend_cfg(self, slug: str) -> Dict[str, Any]:
+        """Inputs to the marginal test for adding to an unpaired side."""
+        if not RN1.EXTEND_EV or self.guard is None:
+            return {}
+        typ = str(((getattr(self.v, "states", {}) or {}).get(slug) or {}
+                   ).get("type") or "").lower()
+        extra = RN1_JUMP_TICKS.get(typ, 0)
+        if self.rn1_reward(slug):
+            extra -= RN1_REWARD_CREDIT_TICKS
+        return {"extend_ev": True, "fair_yes": self.intl_fair(slug),
+                "extend_extra_ticks": extra}
+
     def _rn1_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                   bbo: Mapping, tick: D) -> None:
         """One RN1-replica pass for one market: compute RN1's resting maker
@@ -3279,7 +3349,7 @@ class Engine:
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
-                       min_qty=spec["min_qty"])
+                       min_qty=spec["min_qty"], c=self.rn1_extend_cfg(slug))
         want: Dict[str, Any] = {}
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -3318,6 +3388,8 @@ class Engine:
                           {"px": str(t["px"]), "qty": str(t["qty"]),
                            "role": t["role"]}) for s, t in want.items()},
                 why={s: q.get("why_" + s) for s in ("YES", "NO")},
+                extend_ev=q.get("extend_ev"),
+                reward=bool(self.rn1_reward(slug)),
                 label="RN1 replica decision; orders only if every gate "
                       "and the submission lock allow")
         # reconcile: keep a resting bid within REPRICE_TICKS of target with
@@ -3853,6 +3925,32 @@ class Engine:
                 # open only where intl can price the market (resolved in the
                 # guard's background thread; unresolved -> next round)
                 scored = [r for r in scored if self.guard.token(r[2])]
+        if RN1.ON and RN1_REWARD_RANK and scored:
+            rn1_rw: Dict[str, Any] = {}
+            try:
+                rn1_rw = self.reward_programs([s for *_x, s in scored])
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_discovery_error", err=str(exc)[:160])
+            scored.sort(key=lambda r: (
+                0 if r[2] in rn1_rw else 1,
+                -rn1_rw[r[2]]["pool_rate_usd_s"] if r[2] in rn1_rw else 0,
+                r))
+            n_all = len(scored)
+            if RN1_REWARD_ONLY:
+                scored = [r for r in scored if r[2] in rn1_rw]
+            key = (n_all, len(rn1_rw), RN1_REWARD_ONLY,
+                   scored[0][2] if scored else None)
+            if key != getattr(self, "_rn1_rank_logged", None):
+                self._rn1_rank_logged = key
+                log("RN1_REWARD_RANK", candidates=n_all,
+                    with_paying_programme=len(rn1_rw),
+                    reward_only=RN1_REWARD_ONLY,
+                    first=[{"slug": r[2],
+                            "pool_rate_usd_s": (rn1_rw.get(r[2]) or {}).get(
+                                "pool_rate_usd_s"),
+                            "period": (rn1_rw.get(r[2]) or {}).get("period")}
+                           for r in scored[:4]],
+                    label="published programme, not a payment")
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
