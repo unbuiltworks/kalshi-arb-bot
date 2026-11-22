@@ -378,3 +378,79 @@ def test_a_second_outcome_of_the_same_match_is_never_selected(eng):
                          None) is False
     assert "atc-sea-juv-ven-2026-11-22-draw" not in e.b.d["markets"]
     assert e._try_select("aec-x", v.account(), None) is True
+
+
+# ------------------------- 1b. esports is decided by the LEAGUE, not the state
+def test_cs2_with_no_match_state_at_all_is_blocked():
+    """Live 2026-11-22: CS2 events on the slate carried {"type": null}. A
+    rule keyed on state.type alone let those through."""
+    for st in (None, {}, {"type": None, "score": None, "period": None},
+               {"type": "", "period": "Live"}):
+        assert M.late_for("aec-cs2-mira-urn-2026-11-22", st) == \
+            "esports_format_unknown"
+    for lg in ("cs2", "lol", "val", "valorant", "dota2", "ow"):
+        assert M.late_for(f"aec-{lg}-a-b-2026-11-22", None) == \
+            "esports_format_unknown"
+
+
+def test_esports_block_does_not_depend_on_the_late_cutoff_switch(monkeypatch):
+    monkeypatch.setattr(M, "LATE_CUTOFF", False)
+    assert M.late_for("aec-cs2-a-b-2026-11-22", None) == \
+        "esports_format_unknown"
+    assert M.late_for("aec-newgame-a-b-2026-11-22",
+                      {"type": "esports", "score": "1-0"}) == \
+        "esports_format_unknown"               # unknown league, esports state
+    # other sports keep the switch's meaning
+    assert M.late_for("aec-nba-a-b-2026-11-22",
+                      {"type": "basketball", "period": "Q4"}) is None
+    monkeypatch.setattr(M, "LATE_CUTOFF", True)
+    assert M.late_for("aec-nba-a-b-2026-11-22",
+                      {"type": "basketball", "period": "Q4"}) == "Q4"
+    assert M.late_for("aec-nba-a-b-2026-11-22", None) is None
+
+
+def test_esports_with_a_published_format_follows_the_map_rule():
+    st = {"type": "esports", "score": "0-0", "bestOf": 3}
+    assert M.late_for("aec-cs2-a-b-2026-11-22", st) is None
+    assert M.late_for("aec-cs2-a-b-2026-11-22",
+                      dict(st, score="1-0")) == "esports_deciding_map"
+    assert M.late_for("aec-cs2-a-b-2026-11-22",
+                      dict(st, ended=True)) == "ended"
+
+
+def test_engine_never_opens_or_selects_cs2_without_a_format(eng, capsys):
+    e, v = eng
+    slug = "aec-cs2-mira-urn-2026-11-22"
+    v.states = {}                                   # the venue sent no state
+    v.targets = [{"slug": slug, "market_meta": {"bestBidQuote": "0.48",
+                                                "bestAskQuote": "0.50"}}]
+    e.select(v.account())
+    assert slug not in e.b.d["markets"]             # not even selected
+    e.b.m(slug)                                     # already tracked somehow
+    e.step_market(slug)
+    assert v.orders == {}
+    assert "esports_format_unknown" in capsys.readouterr().out
+    v.states = {slug: {"type": "esports", "score": "1-0", "period": "Map 2"}}
+    e.step_market(slug)
+    assert v.orders == {}
+
+
+def test_cs2_completion_of_a_held_leg_still_works(eng):
+    e, v = eng
+    slug = "aec-cs2-mira-urn-2026-11-22"
+    v.states = {}
+    mk = e.b.m(slug)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.88")
+    e.step_market(slug)
+    assert [(o["side"], o["qty"]) for o in v.orders.values()
+            if o["open"]] == [("NO", D("2"))]
+
+
+def test_boot_reports_the_safeguards_as_they_run():
+    c = M.safeguards_cfg()
+    assert c["min_touch_qty"] == "10" and c["late_cutoff"] is True
+    assert c["esports_rule"] == "fail_closed_without_format"
+    assert "cs2" in c["esports_leagues"]
+    assert c["intl_three_way"] == ["sea"]
+    assert c["intl_name_match"] == ["atp", "wta"]
+    json.dumps(c)                                   # loggable

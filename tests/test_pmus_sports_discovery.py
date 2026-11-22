@@ -149,3 +149,13 @@ def test_discover_is_read_only_and_uses_the_guards_resolver(monkeypatch):
     src = open(DV.__file__).read()
     for word in (".place(", ".cancel", '"POST"', ".request(", "Transport"):
         assert word not in src                        # no order path at all
+
+
+def test_esports_is_blocked_by_league_even_without_a_state():
+    for st in ({}, {"type": None}, {"type": "esports", "score": "1-0"}):
+        c = DV.classify({"slug": "aec-cs2-a-b-2026-11-22", "tick": "0.01",
+                         "bid": ("0.50", "500"), "ask": ("0.51", "400"),
+                         "state": st, "intl_token": True,
+                         "ibid": ("0.50", "9"), "iask": ("0.51", "9")}, ALLOW)
+        assert c["reasons"] == ["final_phase"]
+        assert c["late"] == "esports_format_unknown" and not c["eligible"]

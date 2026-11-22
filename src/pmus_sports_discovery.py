@@ -103,13 +103,13 @@ def classify(mk: Mapping[str, Any], allow: Iterable[str]) -> Dict[str, Any]:
         if min(D(str(bid[1])), D(str(ask[1]))) < MIN_TOP_QTY:
             why.append("insufficient_depth")
     try:
-        late = M.is_late(st)
+        late = M.late_for(slug, st)
     except Exception:                                     # noqa: BLE001
         late = "unreadable_state"
     if late:
         why.append("final_phase")
         out["late"] = late
-    if typ not in PHASE_RULE_TYPES:
+    if typ not in PHASE_RULE_TYPES and not M.is_esports(slug, st):
         why.append("no_phase_rule")
     ib, ia = mk.get("ibid"), mk.get("iask")
     if not mk.get("intl_token"):

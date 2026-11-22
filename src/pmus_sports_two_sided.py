@@ -952,6 +952,50 @@ def esports_late(state: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+#: Leagues that are esports whatever the venue says about the match. LIVE
+#: 2026-11-22: CS2 events reach the slate with NO eventState at all
+#: ({"type": null}); a rule keyed only on state.type would have let those
+#: open. The league code decides, the state can only add to it.
+ESPORTS_LEAGUES = frozenset(
+    x.strip().lower() for x in os.getenv(
+        "PMUS_TWO_SIDED_ESPORTS_LEAGUES",
+        "cs2,cs,csgo,lol,val,valorant,dota2,dota,ow,cod,r6,rl,sc2,mlbb,"
+        "kog,hok,apex,pubg,ff,esports").split(",") if x.strip())
+
+
+def safeguards_cfg() -> Dict[str, Any]:
+    """The opening safeguards as this process actually runs them (boot log,
+    so a deployment can be verified from its own output)."""
+    from src import pmus_sports_xv as XV
+    return {"min_touch_qty": str(MIN_TOUCH_QTY),
+            "depth_ttl_s": DEPTH_TTL_S,
+            "late_cutoff": LATE_CUTOFF,
+            "esports_rule": "fail_closed_without_format",
+            "esports_leagues": sorted(ESPORTS_LEAGUES),
+            "intl_name_match": list(XV.NAME_MATCH_LEAGUES),
+            "intl_three_way": list(XV.THREE_WAY_LEAGUES),
+            "one_market_per_game": True}
+
+
+def is_esports(slug: str, state: Optional[Mapping[str, Any]] = None) -> bool:
+    return sport_of(slug) in ESPORTS_LEAGUES or \
+        str((state or {}).get("type") or "").lower() == "esports"
+
+
+def late_for(slug: str, state: Optional[Mapping[str, Any]]
+             ) -> Optional[str]:
+    """Why NEW exposure is refused in this market for phase reasons, else
+    None. The one entry every opening path uses. Esports is judged ALWAYS
+    -- with the late cutoff switched off, and with no match state at all
+    (a missing state is an unknown format: blocked) -- because its rule is
+    a safety floor, not a tuning choice."""
+    if is_esports(slug, state):
+        why = esports_late(state or {})
+        if why:
+            return why
+    return is_late(state) if LATE_CUTOFF else None
+
+
 def is_late(state: Optional[Mapping[str, Any]]) -> Optional[str]:
     """Reason string if the game is in its deciding stretch, else None.
     Unknown sports/shapes -> None (the price band still applies)."""
@@ -2173,8 +2217,8 @@ class Engine:
                 self.shared_halt() is not None or \
                 self.account_risk_blocks() is not None:
             return {"px": None, "why": "blocked"}
-        late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
-            if LATE_CUTOFF else None
+        late = late_for(
+            slug, (getattr(self.v, "states", {}) or {}).get(slug))
         if late or excluded(slug):
             return {"px": None, "why": f"late:{late or 'excluded'}"}
         lead_bid = side_bid(lead, bbo["bid"], bbo["ask"])
@@ -2966,8 +3010,8 @@ class Engine:
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
         account_block = new_block
-        late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
-            if LATE_CUTOFF else None
+        late = late_for(
+            slug, (getattr(self.v, "states", {}) or {}).get(slug))
         if excluded(slug):
             late = "excluded"
         if not new_block and late:
@@ -3208,8 +3252,8 @@ class Engine:
                        self.daily_stopped() or self.halt_new_exposure() or
                        self.shared_halt() is not None or
                        self.account_risk_blocks() is not None)
-            late = is_late((getattr(self.v, "states", {}) or {}).get(slug)) \
-                if LATE_CUTOFF else None
+            late = late_for(
+                slug, (getattr(self.v, "states", {}) or {}).get(slug))
             if excluded(slug):
                 late = "excluded"
             elif PREGAME:
@@ -3539,8 +3583,8 @@ class Engine:
             a = self.v.gw._qnum(meta.get("bestAskQuote"))
             if b is None or a is None:
                 continue
-            if excluded(slug) or (LATE_CUTOFF and is_late(
-                    (getattr(self.v, "states", {}) or {}).get(slug))):
+            if excluded(slug) or late_for(
+                    slug, (getattr(self.v, "states", {}) or {}).get(slug)):
                 continue
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
@@ -4046,6 +4090,7 @@ class Engine:
             log("drift_seed", **seed, label="measured completion drift "
                 "preloaded for sports with no live history")
         log("boot", rn1=({"on": True, **RN1.cfg()} if RN1.ON else {"on": False}),
+            safeguards=safeguards_cfg(),
             recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
                               "shared_policy": completion_policy_live(),
                               "sports_cap": COMPLETION_SPORTS_CAP,
