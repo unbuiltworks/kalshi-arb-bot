@@ -40,7 +40,8 @@ class DryVenue(M.Venue):
         return oid
     def status(self, oid): return {"qty": D(0), "px": None, "open": self.orders[oid]["open"], "state": ""}
     def cancel(self, oid): self.orders[oid]["open"] = False; return True
-    cancel_fast = lambda self, oid, slug: self.cancel(oid)
+    def cancel_fast(self, oid, slug):
+        self.cancel(oid); return self.status(oid)
 logs = []
 M.log = lambda kind, **kw: logs.append((kind, kw))
 v = DryVenue()
@@ -79,5 +80,7 @@ print("log kinds:", kinds)
 for k, kw in logs:
     if k == "RN1_QUOTE":
         print("    RN1_QUOTE", kw.get("slug"), "bid/ask", kw.get("bid"), kw.get("ask"), "block", kw.get("block"), "want", kw.get("want"), "why", kw.get("why"))
+        for sd, ev in (kw.get("edge") or {}).items():
+            print("        edge", sd, {x: ev.get(x) for x in ("role","fair","px","adverse","trade_edge","risk","net_edge","why")})
     if k.startswith("place_refused") or k in ("select", "selected", "open_gate_block", "late_cutoff", "skip_foreign_exposure", "market_error"):
         print("   ", k, {a: str(b)[:90] for a, b in kw.items() if a in ("slug", "reason", "why", "side", "stage", "err")})
