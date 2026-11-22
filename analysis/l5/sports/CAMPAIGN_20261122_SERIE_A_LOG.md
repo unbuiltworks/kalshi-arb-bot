@@ -51,3 +51,22 @@ Watchdog: one sweep at 13:25:01Z saw the registry unreachable during the contain
   2 markets, one per match, no watchdog halt (4 open orders, all owned), nothing unconfirmed.
 - Recorders started 14:07:35Z (the queued ones had not started); orders before that have no
   book comparison.
+
+## Slice 2 (14:09:07-14:19:09Z)
+- 25 ORDER (all 2 contracts, post-only; stages rn1_open, rn1_extend, two_sided_complete), 3 FILL.
+- Fills (venue-reported):
+  14:09:27.98 Bologna win NO 0.47 x2 (intl mid 0.515 -> fair for NO 0.485, +1.5c at fill)
+  14:12:31.21 Genoa win NO 0.66 x2 (intl mid 0.325 -> fair 0.675, +1.5c; +3.5c two minutes later)
+  14:14:33.45 Bologna win YES 0.49 x2 (intl mid 0.505, +1.5c at fill; -1.5c 30 s later)
+- PAIR_LOCKED 14:14:39: Bologna win, 2 pairs at 0.96, +$0.08.
+- Positions 14:19Z: Bologna win 2 YES / 2 NO (paired); Genoa win 0 YES / 2 NO (unpaired, cost $1.32).
+  Unmatched $1.32 (caps $3 per market, $6 campaign).
+- Venue cash (l5-pmus-live) 320.4238 at 14:18:47Z = 321.6638 + 0.08 (pair) - 1.32 (unpaired leg). Exact.
+- Pulls: 7 reactive (3 no_closer_than_1t, 2 guard, 1 jump, 1 yes_closer), 2 guard pulls;
+  8 jump pauses. Withheld: refill cooldown 12, depth gate 4, guard 3.
+- 13 market_error, all request-budget deferrals. No rejects, no loop errors, no new 429s.
+- Watchdog 14:18:48Z: 3 open orders, all owned, no halt. BTC ledger: utc_day_realized -5.00
+  (unchanged), would_halt false.
+- Safety check: all clear.
+- Recorder note: the two per-match recorders stopped at 14:16:01Z (killed, no error); one combined
+  recorder restarted 14:20:24Z as a tracked background task. Gap 14:16-14:20Z.
