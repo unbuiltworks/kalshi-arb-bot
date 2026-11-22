@@ -397,6 +397,42 @@ DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
 #   market_cap_breached     campaign / per-market caps (the caps are applied
 #                           before placing, so this means they failed)
 #   loop_errors             LOOP_ERROR_LATCH_N consecutive failed loop passes
+# OWNER 2026-11-22: "a bot that detects its own failure and stops is safer,
+# yet that alone does not prove the independent watchdog can shut it down if
+# the bot itself stalls." It could not. The watchdog exempts this lane's
+# resting orders from its order-age latch while this lane's registry
+# document says `manages_own_resting` with an `as_of_utc` under 60 s old --
+# and that stamp was the time of the HTTP REQUEST, written by the registry
+# thread. A trading loop wedged on a socket or a lock kept answering "fresh,
+# managing" for ever, so its resting orders stayed exempt for ever (the
+# watchdog's own notes call this the WEDGED executor case).
+#
+# The stamp is now the trading loop's own progress. The loop thread beats at
+# the top of every pass, after every market step, around every sleep and
+# after every venue request it makes. While the last beat is at most
+# LOOP_STALL_S old the document is stamped now, exactly as before; past that
+# the stamp FREEZES at the last beat, the watchdog reads the document as
+# STALE, stops exempting the orders and applies its own age latch and cancel.
+# Nothing in this process has to work for that to happen. Other threads
+# cannot beat for the loop.
+LOOP_STALL_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_STALL_S", "120"))
+_LOOP: Dict[str, Any] = {"beat": None, "thread": None}
+
+
+def loop_beat() -> None:
+    """Progress of the trading loop. Only the loop's own thread counts once
+    the loop has started."""
+    if _LOOP["thread"] in (None, threading.get_ident()):
+        _LOOP["beat"] = time.time()
+
+
+def loop_idle_s(now: Optional[float] = None) -> Optional[float]:
+    b = _LOOP["beat"]
+    if b is None:
+        return None
+    return max(0.0, (time.time() if now is None else now) - float(b))
+
+
 SAFETY_LATCH_ON = os.getenv("PMUS_TWO_SIDED_SAFETY_LATCH",
                             "1").strip() != "0"
 SAFETY_LATCH_ACK_ENV = "PMUS_TWO_SIDED_SAFETY_LATCH_ACK"
@@ -444,6 +480,11 @@ def _iso(ts: float) -> str:
     from datetime import datetime, timezone
     return datetime.fromtimestamp(ts, timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ")
+
+
+def _iso_precise(ts: float) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(float(ts), timezone.utc).isoformat()
 
 
 def lock_window(raw: Optional[str] = None) -> Optional[tuple]:
@@ -1025,6 +1066,7 @@ def safeguards_cfg() -> Dict[str, Any]:
             "intl_name_match": list(XV.NAME_MATCH_LEAGUES),
             "intl_three_way": list(XV.THREE_WAY_LEAGUES),
             "one_market_per_game": True,
+            "loop_stall_s": LOOP_STALL_S,
             "safety_latch": {"on": SAFETY_LATCH_ON,
                              "mismatch_grace_s": MISMATCH_GRACE_S,
                              "loop_error_n": LOOP_ERROR_LATCH_N}}
@@ -4292,7 +4334,31 @@ class Engine:
             reward_first=reward_first_on(),
             reward_label="program rewards THEORETICAL; not in P&L")
 
+    def _hook_loop_beat(self) -> None:
+        """Every venue request the loop completes is progress (the hourly
+        audit is one long pass of them). Other threads' requests do not
+        count: loop_beat() checks the thread."""
+        t = getattr(self.v, "t", None)
+        if t is None or getattr(t, "_loop_beat_hooked", False) or \
+                not hasattr(t, "request"):
+            return
+        orig = t.request
+
+        def request(*a: Any, **k: Any) -> Any:
+            try:
+                return orig(*a, **k)
+            finally:
+                loop_beat()
+        try:
+            t.request = request
+            t._loop_beat_hooked = True
+        except Exception:                                 # noqa: BLE001
+            pass
+
     def run(self) -> int:
+        _LOOP["thread"] = threading.get_ident()
+        loop_beat()
+        self._hook_loop_beat()
         signal.signal(signal.SIGTERM, lambda *_: self.on_sigterm())
         self.require_fresh_account = True     # no new exposure on stale state
         self.mark_recovery_start()
@@ -4340,6 +4406,7 @@ class Engine:
         last_hb = 0.0
         last_acc = time.monotonic()
         while not self.stop:
+            loop_beat()
             try:
                 if os.getenv(ENABLED_ENV, "").upper() != "YES":
                     self.cancel_all_own("disabled")
@@ -4382,6 +4449,7 @@ class Engine:
                     except Exception as exc:          # noqa: BLE001
                         log("market_error", slug=slug,
                             err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                    loop_beat()
                 if REWARD_CHECK_S > 0 and \
                         time.monotonic() - self._last_reward > REWARD_CHECK_S:
                     self._last_reward = time.monotonic()
@@ -4427,6 +4495,7 @@ class Engine:
                 self.drain_ws_events()
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
+            loop_beat()
             self._sleep(LOOP_S)
         self.cancel_all_own("sigterm")
         return 0
@@ -4475,6 +4544,8 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             _REGISTRY_SEEN.pop(oid, None)
             continue
         rows.append({**row, "closing": True})
+    _idle = loop_idle_s(now)
+    _stalled = _idle is not None and _idle > LOOP_STALL_S
     return {"readable": True, "lane": LANE, "manages_own_resting": True,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
             # True ONLY under the lane's own independent lock (above); the
@@ -4483,7 +4554,11 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             "submission_disabled": fully_locked() or bool(
                 book.d.get("safety_latch")),
             "safety_latch": book.d.get("safety_latch") or None,
-            "orders": rows, "as_of_utc": now_iso(),
+            "loop_idle_s": (None if _idle is None else round(_idle, 1)),
+            "loop_stalled": _stalled,
+            "orders": rows,
+            "as_of_utc": (_iso_precise(_LOOP["beat"]) if _stalled
+                          else now_iso()),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "
                        "requote, disable and SIGTERM")}
