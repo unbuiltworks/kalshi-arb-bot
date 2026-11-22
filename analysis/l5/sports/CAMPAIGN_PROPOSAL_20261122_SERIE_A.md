@@ -52,3 +52,23 @@ Prepared 12:45Z. Production: `08b1a7c9356ad6e090eb74dbff31542ea13f91bb`, locked.
    on the order path. All are tested; none has traded.
 4. The bot's own history shows negative value per opened market in every sport it has
    traded (-$0.10 to -$0.33), from before the price guard. Expect a small loss as the base case.
+
+## Pre-arm check 12:42Z and the account-ledger -5.00 (read-only)
+Sports bot: commit 08b1a7c93, locked, 0 orders, 0 inventory, reconciled, no loss stop latched,
+realized +0.35, cash 321.6638. Watchdog healthy. BTC services disarmed. No foreign orders.
+
+l5-pmus-live's account ledger shows utc_day_realized -5.00 (lifetime -44.5815) since 04:31Z.
+Cause, from its own logs:
+- 01:28:34Z, mid-pilot: the venue briefly showed net -5 (the NO leg only) in each of the two
+  sports markets. That service adopted both as positions "we never booked", at the $1-per-share
+  upper bound (risk floor $5.00 each). It never saw the YES legs that paired them.
+- NBA settled 03:28Z in favour of the adopted side: booked 0. CFB settled 04:31Z against it:
+  booked -5.00. Its own read-only diagnostic sees the real fills (+0.20 and +0.15) and marks the
+  booking "neither a confirmed loss nor a confirmed profit", attested false, applied false.
+- Venue cash never moved. The sports bot's meter (+0.35, venue positions and cash checked) is right.
+- Effect today: none on the sports bot (its stops read its own book; account-risk is observe
+  only). l5-pmus-live would_halt false, room 45 of 50, halt latch clear.
+- It will not self-correct, and it will RECUR: every unpaired sports leg that service sees is
+  adopted at $1 a share and, if the game goes the other way before it sees the pair, booked as a
+  loss in that service's ledger. This is the shared-account ownership gap whose BTC-side fix
+  was deferred. Not corrected here: the owner's rule is no silent rebasing of lifetime P&L.
