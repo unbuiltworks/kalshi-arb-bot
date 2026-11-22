@@ -41,6 +41,9 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 ONE = D("1")
 
 from src import pmus_rn1_replica as RN1  # noqa: E402  (default OFF)
+# daily-crypto reward lane (default OFF and disarmed): its own decisions,
+# limits and accounting; a crypto market never reaches RN1 or the sports path
+from src import pmus_crypto_rewards as CR  # noqa: E402
 
 
 def _env_d(name: str, default: str) -> D:
@@ -344,7 +347,7 @@ ACCOUNT_RISK_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S", "10"))
 #: it) and are never refused by the account-wide limits. Everything else --
 #: two_sided_open, two_sided_open_rewarded, two_sided_extend -- adds risk.
 COMPLETION_STAGES = ("two_sided_complete", "two_sided_complete_taker",
-                     "two_sided_exit")
+                     "two_sided_exit", CR.STAGE_COMPLETE)
 
 
 def is_completion_stage(stage: str) -> bool:
@@ -964,6 +967,14 @@ class Book:
         longer at risk. Counting closed markets (LIVE 2026-11-15: 20+ settled
         legs) pinned the cap at 11.999/12 and stopped all new pairs."""
         return sum((self.unmatched_cost(s) for s, mk in
+                    self.d["markets"].items() if not mk.get("done")
+                    and not CR.is_crypto_market(s, mk)), D(0))
+
+    def total_unmatched_all(self) -> D:
+        """Every lane's open lone-leg cost (account-level exposure): the
+        sports figure above plus the crypto lane's. Sports caps read
+        total_unmatched() so neither lane can spend the other's room."""
+        return sum((self.unmatched_cost(s) for s, mk in
                     self.d["markets"].items() if not mk.get("done")), D(0))
 
     def resting_pair_exposure(self, slug: str) -> D:
@@ -972,7 +983,7 @@ class Book:
         When unbalanced the open order is the completion, which only
         reduces unmatched cost -> 0."""
         mk = self.d["markets"].get(slug)
-        if not mk or mk.get("done"):
+        if not mk or mk.get("done") or CR.is_crypto_market(slug, mk):
             return D(0)
         if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
             return D(0)
@@ -1008,9 +1019,13 @@ class Venue:
     states: Dict[str, Any] = {}
 
     def crypto_targets(self) -> list:
-        """OWNER 2026-11-15 SOL/ETH 1d reward trial: explicit prefixes only
-        (never cpc-btc-: the BTC5m/BTC15m lanes)."""
-        if not CRYPTO_PREFIXES:
+        """Daily ETH/SOL/XRP up/down markets for the crypto reward lane
+        (src/pmus_crypto_rewards.py); [] unless that lane is on. Never BTC.
+        These targets go ONLY to Engine.select_crypto -- they are no longer
+        mixed into the sports selection, where RN1 mode would have traded
+        them as accumulation (audit 2026-11-22, finding 6). The older
+        PMUS_TWO_SIDED_CRYPTO_PREFIXES is no longer read for selection."""
+        if not CR.ON:
             return []
         d = self.gget("/v1/events?active=true&closed=false&limit=200"
                       "&categories=crypto") or {}
@@ -1019,27 +1034,24 @@ class Venue:
         for ev in evs:
             for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
                 slug = str((m or {}).get("slug") or "")
-                if not slug.startswith(CRYPTO_PREFIXES) or \
-                        slug.startswith("cpc-btc-"):
+                if not CR.tradable(slug):
                     continue
-                self.states[slug] = {"type": "crypto-1d",
-                                     "endDate": m.get("endDate")
-                                     or ev.get("endDate")}
-                out.append({"slug": slug, "league": "crypto",
-                            "why": "crypto_reward_trial",
-                            "event_state": self.states[slug],
-                            "market_meta": {k: m.get(k) for k in
-                                            ("bestBidQuote", "bestAskQuote")
-                                            if m.get(k) is not None}})
+                end = m.get("endDate") or ev.get("endDate")
+                self.states[slug] = {"type": "crypto-1d", "endDate": end}
+                out.append({"slug": slug, "league": "crypto", "end": end,
+                            "why": "crypto_reward_lane",
+                            "event_state": self.states[slug]})
         return out
 
     def live_sports(self) -> list:
-        crypto = []
-        try:
-            crypto = self.crypto_targets()
-        except Exception as exc:                          # noqa: BLE001
-            log("crypto_discovery_error", err=str(exc)[:160])
-        return self._live_sports() + crypto
+        if CRYPTO_PREFIXES and not getattr(self, "_legacy_crypto_logged",
+                                           False):
+            self._legacy_crypto_logged = True
+            log("legacy_crypto_prefixes_ignored", prefixes=CRYPTO_PREFIXES,
+                label="crypto is quoted only by the crypto reward lane "
+                      "(PMUS_CRYPTO_REWARDS); it is never selected into "
+                      "the sports / RN1 path")
+        return self._live_sports()
 
     def _live_sports(self) -> list:
         events, _ = self.gw.fetch_live_events(self.gget)
@@ -1278,7 +1290,7 @@ class Engine:
 
     def _intl_check(self, slug: str, t0: float) -> None:
         mk = self.b.d["markets"].get(slug)
-        if not mk or mk.get("done"):
+        if not mk or mk.get("done") or CR.is_crypto_market(slug, mk):
             return
         if D(mk["pos"]["YES"]) != D(mk["pos"]["NO"]):
             # unbalanced: completions are never guarded; an EXTEND is
@@ -1332,6 +1344,8 @@ class Engine:
         mk = self.b.d["markets"].get(slug)
         if not mk or mk.get("done"):
             return
+        if CR.is_crypto_market(slug, mk):
+            return          # the crypto lane re-prices in its own step
         spec = self.v.spec(slug) or {}
         tick = spec.get("tick") or D("0.01")
         t0 = moves[0][2]
@@ -1472,7 +1486,7 @@ class Engine:
     def refresh_active_rewards(self) -> None:
         """Keep each active market's paying period current (a period that
         stops paying drops the market back to normal quoting)."""
-        act = self.active()
+        act = self.sports_active()
         if not act:
             return
         try:
@@ -1482,6 +1496,8 @@ class Engine:
             return
         for s in act:
             mk = self.b.m(s)
+            if CR.is_crypto_market(s, mk):
+                continue             # the crypto lane keeps its own programme
             new = pp.get(s)
             if reward_first_on():
                 # only markets selected INTO a reward slot carry a program
@@ -1799,7 +1815,9 @@ class Engine:
     def day_change(self) -> D:
         today = self._today()
         out = D(0)
-        for mk in self.b.d["markets"].values():
+        for s_, mk in self.b.d["markets"].items():
+            if CR.is_crypto_market(s_, mk):
+                continue             # crypto has its own latched loss stop
             base = mk.get("mark0") or {}
             if base.get("date") == today and mk.get("mark") is not None:
                 out += D(mk["mark"]) - D(base["value"])
@@ -2161,6 +2179,12 @@ class Engine:
     def active(self) -> list:
         return [s for s, mk in self.b.d["markets"].items() if not mk["done"]]
 
+    def sports_active(self) -> list:
+        """Active markets of the sports lane (slots, caps, guard, rewards);
+        crypto-lane markets are stepped but hold no sports slot."""
+        return [s for s in self.active()
+                if not CR.is_crypto_market(s, self.b.d["markets"][s])]
+
     def slots_used(self) -> int:
         """Markets holding an OPENING slot. LIVE 2026-11-15: four lone-leg
         markets waiting to complete (one for 6h) plus cap-blocked rewarded
@@ -2168,11 +2192,12 @@ class Engine:
         be selected. A market with an unmatched leg keeps completing but no
         longer holds a slot; its exposure is still bounded by TOTAL_CAP and
         the whole book by MAX_TRACKED."""
-        return sum(1 for s in self.active() if self.b.unmatched_cost(s) == 0)
+        return sum(1 for s in self.sports_active()
+                   if self.b.unmatched_cost(s) == 0)
 
     def full(self) -> bool:
         return self.slots_used() >= MAX_MARKETS or \
-            len(self.active()) >= MAX_TRACKED
+            len(self.sports_active()) >= MAX_TRACKED
 
     def _record_fill(self, slug: str, side: str, oid: str, st: Dict) -> None:
         mk = self.b.m(slug)
@@ -2183,6 +2208,9 @@ class Engine:
             mk["cost"][side] = str(D(mk["cost"][side]) + new * st["px"])
             o["filled"] = str(st["qty"])
             mk.setdefault("last_fill_t", {})[side] = time.time()
+            if CR.is_crypto_market(slug, mk):
+                CR.record_fill(mk, side, st["px"], new, mk.get("crypto_mid"),
+                               time.time())
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
                 order_id=oid, pos=mk["pos"],
                 label="venue-reported fill; not realized until settlement")
@@ -2402,7 +2430,7 @@ class Engine:
     def own_exposure_usd(self) -> D:
         """This lane's at-risk dollars: unpaired filled cost plus the
         notional of every resting order it believes live."""
-        out = D(self.b.total_unmatched())
+        out = D(self.b.total_unmatched_all())
         for mk in (self.b.d.get("markets") or {}).values():
             for o in (mk.get("orders") or {}).values():
                 if o.get("open"):
@@ -2564,11 +2592,26 @@ class Engine:
                       "management continues; completions need venue "
                       "confirmation")
             return
+        if CR.is_crypto_market(slug, self.b.d["markets"].get(slug)) or \
+                stage in CR.STAGES:
+            why = self.crypto_place_block(slug, side, px, qty, stage,
+                                          post_only)
+            if why:
+                log("place_refused_crypto", slug=slug, side=side, px=px,
+                    qty=qty, stage=stage, post_only=post_only, reason=why)
+                return
         if not is_completion_stage(stage):
             why = self.account_risk_blocks(px, qty)
             if why:
                 log("place_refused_account_risk", slug=slug, side=side,
                     px=px, qty=qty, stage=stage, reason=why)
+                return
+            why = self.combined_block(px, qty)
+            if why:
+                log("place_refused_combined_exposure", slug=slug, side=side,
+                    px=px, qty=qty, stage=stage, reason=why,
+                    **{k: str(v) for k, v in
+                       self.combined_exposure().items()})
                 return
         if submission_locked():
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
@@ -2585,9 +2628,550 @@ class Engine:
                              "filled": "0", "open": True, "stage": stage,
                              "placed_at": time.time()}
         self.b.d["own_order_ids"].append(oid)
+        if stage == CR.STAGE_OPEN:
+            mk["lane"] = CR.LANE
+            days = self._crypto_state()["days"]
+            if CR.day_key(slug) not in days:
+                days.append(CR.day_key(slug))
         self.b.save()
         log("ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage,
             order_id=oid)
+
+    # ------------------------------------------------ crypto reward lane
+    # Decisions, limits and accounting: src/pmus_crypto_rewards.py (pure).
+    # Everything below is the engine's side of that lane. DEFAULT OFF.
+    def _crypto_state(self) -> Dict[str, Any]:
+        st = self.b.d.setdefault("crypto", {})
+        st.setdefault("loss_stop", None)
+        st.setdefault("days", [])
+        return st
+
+    def combined_exposure(self) -> Dict[str, D]:
+        """At-risk dollars of BOTH lanes in this account book: sports =
+        unpaired filled cost + resting bids; crypto = deployed capital of
+        every unsettled crypto market + resting bids."""
+        markets = self.b.d.get("markets") or {}
+        sports = D(self.b.total_unmatched())
+        for s_, mk in markets.items():
+            if CR.is_crypto_market(s_, mk):
+                continue
+            for o in (mk.get("orders") or {}).values():
+                if o.get("open"):
+                    sports += max(D(0), D(str(o["qty"])) - D(str(
+                        o.get("filled") or "0"))) * D(str(o["px"]))
+        crypto = CR.exposure(markets)["capital"]
+        return {"sports_usd": sports, "crypto_usd": crypto,
+                "total_usd": sports + crypto}
+
+    def combined_block(self, px: Any, qty: Any) -> Optional[str]:
+        """Why a NEW opening/extension of EITHER lane would break the
+        explicit combined ceiling (PMUS_COMBINED_MAX_EXPOSURE_USD), or None.
+        Unset: sports is as it was (the crypto lane itself refuses without
+        it). Set but unreadable, or exposure unreadable: refuse."""
+        raw = (os.getenv(CR.COMBINED_CAP_ENV) or "").strip()
+        if not raw:
+            return None
+        cap = CR.combined_cap()
+        if cap is None:
+            return "COMBINED_CAP_UNREADABLE"
+        try:
+            if self.combined_exposure()["total_usd"] + \
+                    D(str(px)) * D(str(qty)) > cap:
+                return "COMBINED_EXPOSURE_CAP"
+        except Exception:                                # noqa: BLE001
+            return "COMBINED_EXPOSURE_UNREADABLE"
+        return None
+
+    def crypto_loss_stopped(self) -> bool:
+        """Latched crypto loss stop. Trips when EITHER the bot's own mark of
+        the lane (every loop) or the venue-reconciled settled net (hourly)
+        is at or below -LOSS_STOP_USD. Every open crypto order is cancelled
+        and none is placed again until the owner clears crypto.loss_stop in
+        the book. It bounds NEW risk only: a leg already held can still
+        lose more than the stop by settlement."""
+        st = self._crypto_state()
+        if st.get("loss_stop"):
+            return True
+        if CR.LOSS_STOP_USD <= 0:
+            return False                  # crypto_block refuses without one
+        markets = self.b.d.get("markets") or {}
+        est = CR.book_pnl(markets)["usd"]
+        r = getattr(self, "_crypto_meter", None)
+        venue = D(str(r["settled_net_usd"])) if r else None
+        if est > -CR.LOSS_STOP_USD and (
+                venue is None or venue > -CR.LOSS_STOP_USD):
+            return False
+        st["loss_stop"] = {"t": now_iso(), "book_estimate_usd": str(est),
+                           "venue_settled_net_usd":
+                               None if venue is None else str(venue),
+                           "limit_usd": str(CR.LOSS_STOP_USD)}
+        self.b.save()
+        log("CRYPTO_LOSS_STOP", **st["loss_stop"],
+            effect="every crypto order cancelled; none placed until the "
+                   "owner clears crypto.loss_stop",
+            label="bounds new risk; held legs can still lose more")
+        for s_, mk in markets.items():
+            if not CR.is_crypto_market(s_, mk):
+                continue
+            legs = [(oid, o) for oid, o in (mk.get("orders") or {}).items()
+                    if o.get("open")]
+            try:
+                self._cancel_legs(s_, legs)
+            except Exception as exc:                     # noqa: BLE001
+                log("cancel_error", slug=s_, at="crypto_loss_stop",
+                    err=str(exc)[:160])       # stays open: next step retries
+        return True
+
+    def crypto_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
+        """Venue-reconciled result of the crypto markets (same meter as the
+        RN1 pilot, src/pmus_pilot_pnl.py) from this audit's venue rows."""
+        if not (CR.ON or CR.lane_markets(markets)):
+            return
+        try:
+            from src import pmus_pilot_pnl as PP
+            r = PP.meter(CR.lane_markets(markets), rows,
+                         stages=(CR.STAGE_OPEN,))
+        except Exception as exc:                          # noqa: BLE001
+            self._crypto_meter = None
+            log("CRYPTO_PNL", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return
+        self._crypto_meter = r
+        self._crypto_meter_at = time.monotonic()
+        self.crypto_loss_stopped()
+        self.crypto_report()
+
+    def crypto_meter_block(self) -> Optional[str]:
+        """Fail closed: no current venue-reconciled result, or fills the
+        venue's trade rows do not confirm, stop NEW crypto quotes."""
+        r = getattr(self, "_crypto_meter", None)
+        at = getattr(self, "_crypto_meter_at", None)
+        if r is None or at is None or \
+                time.monotonic() - at > CR.METER_MAX_AGE_S:
+            return "crypto_meter_unavailable"
+        if r.get("unconfirmed"):
+            return "crypto_fills_unconfirmed"
+        return None
+
+    def crypto_reward_credits(self, e: Mapping[str, Any]) -> None:
+        """Reward rows the venue lists for a crypto market, credited vs
+        pending. Kept apart from the modelled accrual and from P&L."""
+        if not (CR.ON or CR.lane_markets(self.b.d.get("markets") or {})):
+            return
+        if not e.get("ok"):
+            self._crypto_rewards = None
+            return
+        try:
+            from src import l5_realized_bridge as bridge
+            self._crypto_rewards = CR.venue_rewards(
+                e.get("rows_all") or e.get("rows_detail") or [],
+                bridge.CREDITED_REWARD_STATUSES)
+            self._crypto_rewards["rows_seen"] = e.get("rows")
+        except Exception as exc:                          # noqa: BLE001
+            self._crypto_rewards = None
+            log("CRYPTO_REWARD_CREDITS", ok=False,
+                err=f"{type(exc).__name__}:{str(exc)[:160]}")
+            return
+        log("CRYPTO_REWARD_CREDITS", ok=True, **self._crypto_rewards)
+
+    def crypto_modelled_usd(self) -> D:
+        return sum((D(str((mk.get("crypto_model") or {}).get("usd") or 0))
+                    for mk in CR.lane_markets(
+                        self.b.d.get("markets") or {}).values()), D(0))
+
+    def crypto_report(self) -> Dict[str, Any]:
+        markets = self.b.d.get("markets") or {}
+        rep = CR.net_report(getattr(self, "_crypto_meter", None),
+                            getattr(self, "_crypto_rewards", None),
+                            self.crypto_modelled_usd(),
+                            CR.book_pnl(markets),
+                            CR.markout_summary(markets))
+        r = getattr(self, "_crypto_meter", None) or {}
+        log("CRYPTO_PNL", ok=True, loss_stop=self._crypto_state()["loss_stop"],
+            loss_stop_usd=str(CR.LOSS_STOP_USD), **rep,
+            by_market=r.get("by_market"),
+            modelled_by_market={s: mk.get("crypto_model") for s, mk in
+                                CR.lane_markets(markets).items()
+                                if mk.get("crypto_model")})
+        return rep
+
+    def crypto_status(self) -> Dict[str, Any]:
+        """Heartbeat block: lane state at a glance."""
+        if not CR.ON:
+            return {"on": False}
+        markets = self.b.d.get("markets") or {}
+        ex = CR.exposure(markets)
+        st = self._crypto_state()
+        return {"on": True, "arm": CR.arm_state(time.time()),
+                "active": [s for s in self.active()
+                           if CR.is_crypto_market(s, markets[s])],
+                "capital_usd": str(ex["capital"]),
+                "unpaired_usd": str(ex["unpaired"]),
+                "resting_usd": str(ex["resting"]),
+                "open_orders": str(ex["open_orders"]),
+                "caps": {"total": str(CR.TOTAL_USD),
+                         "unpaired": str(CR.MAX_UNPAIRED_USD),
+                         "open_orders": CR.MAX_OPEN_ORDERS,
+                         "combined": CR.combined_cap()},
+                "combined": {k: str(v) for k, v in
+                             self.combined_exposure().items()},
+                "book_estimate_usd": str(CR.book_pnl(markets)["usd"]),
+                "loss_stop": st["loss_stop"], "market_days": st["days"],
+                "modelled_reward_usd": str(self.crypto_modelled_usd()),
+                "label": "modelled reward is not money; see CRYPTO_PNL"}
+
+    def crypto_block(self, slug: str, mk: Mapping[str, Any],
+                     now: float) -> Optional[str]:
+        """Why this crypto market may not open NEW quotes, or None. Every
+        missing input refuses."""
+        if not CR.ON:
+            return "crypto_off"
+        if os.getenv(ENABLED_ENV, "").upper() != "YES":
+            return "not_enabled"
+        if not CR.tradable(slug):
+            return "not_a_pilot_market"
+        if CR.LOSS_STOP_USD <= 0:
+            return "crypto_loss_stop_unset"
+        if self.crypto_loss_stopped():
+            return "crypto_loss_stop"
+        if self.shared_halt() is not None:
+            return "shared_halt"
+        if not ACCOUNT_RISK_ON:
+            return "account_risk_not_enforced"
+        why = self.account_risk_blocks()
+        if why is not None:
+            return "account_risk:" + str(why)
+        if CR.combined_cap() is None:
+            return "combined_cap_unset"
+        why = self.crypto_meter_block()
+        if why:
+            return why
+        days = self._crypto_state()["days"]
+        if CR.day_key(slug) not in days and len(days) >= CR.MARKET_DAYS:
+            return "pilot_market_days_used"
+        why = CR.late(mk.get("end"), now)
+        if why:
+            return "late:" + why
+        if not mk.get("reward"):
+            return "no_paying_program"
+        return None
+
+    def crypto_place_block(self, slug: str, side: str, px: D, qty: D,
+                           stage: str, post_only: bool) -> Optional[str]:
+        """The crypto lane's last check, at the single placement choke
+        point: nothing but this lane's own maker stages reaches a crypto
+        market, and only while the pilot is armed and inside its limits."""
+        mk = self.b.d["markets"].get(slug) or {}
+        if stage not in CR.STAGES:
+            return "other_lane_stage_on_crypto_market"
+        if not CR.tradable(slug):
+            return "not_a_pilot_market"
+        if not post_only:
+            return "taker_not_authorized"
+        arm = CR.arm_state(time.time())
+        if not arm["armed"]:
+            return "disarmed:" + str(arm["why"])
+        if self._crypto_state().get("loss_stop"):
+            return "crypto_loss_stop"
+        y = D(str((mk.get("pos") or {}).get("YES") or 0))
+        n = D(str((mk.get("pos") or {}).get("NO") or 0))
+        if stage == CR.STAGE_COMPLETE:
+            need = (n - y) if side == "YES" else (y - n)
+            resting = sum((D(o["qty"]) - D(o.get("filled") or "0")
+                           for o in (mk.get("orders") or {}).values()
+                           if o.get("open") and o.get("side") == side), D(0))
+            if need <= 0 or resting + D(str(qty)) > need + D("0.01"):
+                return "completion_would_not_reduce"
+            return None
+        if y != n:
+            return "opening_while_unpaired"
+        if D(str(qty)) > CR.QTY:
+            return "qty_over_cap"
+        why = self.crypto_block(slug, mk, time.time())
+        if why:
+            return why
+        ex = CR.exposure(self.b.d.get("markets") or {})
+        if ex["capital"] + D(str(px)) * D(str(qty)) > CR.TOTAL_USD:
+            return "crypto_total_cap"
+        if ex["open_orders"] + 1 > CR.MAX_OPEN_ORDERS:
+            return "crypto_open_order_cap"
+        return None
+
+    def crypto_programs(self, slugs: list) -> Dict[str, Any]:
+        """{slug: paying daily period} from the venue's live programme rows
+        (cached REWARD_REFRESH_S). The pool is shared by the programme's
+        markets; M_program is at least the number of pilot assets, so the
+        modelled figure is an even-split scenario."""
+        from src import pmus_sports_rewards as R
+        now = time.monotonic()
+        cache = getattr(self, "_cprog", None)
+        key = tuple(sorted(slugs))
+        if cache and cache[0] == key and now - cache[1] < REWARD_REFRESH_S:
+            return cache[2]
+        found, diag = R.fetch_programs(self._reward_get(), list(key))
+        if diag["errors"]:
+            raise RuntimeError(str(diag["errors"][:1]))
+        out: Dict[str, Any] = {}
+        for s, prog in R.build_program_map(found).items():
+            per = R.paying_period(prog, time.time(), event_live=True)
+            if per and per.get("period") in ("daily_event", "daily"):
+                per["M_program"] = max(int(per.get("M_program") or 1),
+                                       len(CR.ASSETS))
+                out[s] = per
+        self._cprog = (key, now, out)
+        return out
+
+    def select_crypto(self, acct: Mapping[str, Any]) -> None:
+        """Bring the current daily market of each pilot asset into the book
+        under lane=crypto. Selecting places nothing; with the lane on but
+        not armed the market is priced and modelled in SHADOW."""
+        if not CR.ON or os.getenv(ENABLED_ENV, "").upper() != "YES":
+            return
+        try:
+            targets = CR.pick_targets(self.v.crypto_targets(), time.time())
+            progs = self.crypto_programs(
+                sorted({t["slug"] for t in targets} |
+                       {s for s in self.active() if CR.tradable(s)}))
+        except Exception as exc:                          # noqa: BLE001
+            log("crypto_discovery_error", err=str(exc)[:160])
+            return
+        markets = self.b.d["markets"]
+        for s in self.active():
+            if CR.is_crypto_market(s, markets[s]) and \
+                    (markets[s].get("reward") or None) != progs.get(s):
+                markets[s]["reward"] = progs.get(s)
+        days = self._crypto_state()["days"]
+        for tg in targets:
+            slug = tg["slug"]
+            if slug in markets:
+                continue
+            n_act = sum(1 for s in self.active()
+                        if CR.is_crypto_market(s, markets[s]))
+            why = None
+            if n_act >= CR.MAX_MARKETS:
+                why = "crypto_max_markets"
+            elif CR.day_key(slug) not in days and \
+                    len(days) >= CR.MARKET_DAYS:
+                why = "pilot_market_days_used"
+            elif self.foreign_exposure(slug, acct):
+                why = "foreign_exposure"
+            elif not progs.get(slug):
+                why = "no_paying_program"
+            if why:
+                seen = self.__dict__.setdefault("_crypto_skip", {})
+                if seen.get(slug) != why:
+                    seen[slug] = why
+                    log("crypto_skip", slug=slug, reason=why)
+                continue
+            mk = self.b.m(slug)
+            mk["lane"] = CR.LANE
+            mk["reward"] = progs[slug]
+            mk["end"] = tg.get("end")
+            log("CRYPTO_SELECTED", slug=slug, end=mk["end"],
+                program=progs[slug], arm=CR.arm_state(time.time()),
+                label="selected into the crypto lane; orders only if armed "
+                      "and every gate allows")
+        self.b.save()
+
+    def _crypto_book(self, slug: str, bbo: Optional[Mapping] = None
+                     ) -> tuple:
+        """(public depth, age seconds): re-read every CR.BOOK_S, and at once
+        when the live top of book no longer matches the depth held (the
+        market moved). A failed read keeps the last one and lets its age
+        grow."""
+        cache = self.__dict__.setdefault("_cbook", {})
+        hit = cache.get(slug)
+        now = time.monotonic()
+        moved = False
+        if hit is not None and bbo is not None:
+            bids, asks = CR.book_levels(hit[1], 0.0001)
+            top = (max(bids, default=None), min(asks, default=None))
+            moved = top != (int(round(float(bbo["bid"]) / 0.0001)),
+                            int(round(float(bbo["ask"]) / 0.0001)))
+        if hit is None or moved or now - hit[0] >= CR.BOOK_S:
+            try:
+                md = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                      ).get("marketData")
+                if isinstance(md, Mapping):
+                    hit = cache[slug] = (now, md)
+            except Exception as exc:                      # noqa: BLE001
+                log("crypto_book_error", slug=slug, err=str(exc)[:120])
+        if hit is None:
+            return None, float("inf")
+        return hit[1], now - hit[0]
+
+    def _crypto_accrue(self, mk: Dict[str, Any], now: float) -> None:
+        """MODELLED reward for the interval just ended, at the rate of the
+        orders that rested through it. Gaps over two minutes accrue
+        nothing. Never money."""
+        cm = mk.setdefault("crypto_model", {"usd": "0", "rate_usd_s": 0.0,
+                                            "t": now, "resting_s": 0.0})
+        gap = now - float(cm.get("t") or now)
+        rate = float(cm.get("rate_usd_s") or 0.0)
+        if 0 < gap <= 120 and rate > 0:
+            cm["usd"] = str(D(str(cm["usd"])) + D(str(rate * gap)))
+            cm["resting_s"] = float(cm.get("resting_s") or 0.0) + gap
+        cm["t"] = now
+
+    def _crypto_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
+                     bbo: Mapping, tick: D) -> None:
+        """One pass of the crypto reward lane for one market: price both
+        sides from the venue's own scoring rule, reconcile our resting
+        post-only bids to that, and keep the lane's accounts. Post-only BUYs
+        only; nothing here sells, takes or extends a held side."""
+        now = time.time()
+        mk.setdefault("lane", CR.LANE)
+        if mk.get("end") is None:
+            mk["end"] = ((getattr(self.v, "states", {}) or {}).get(slug)
+                         or {}).get("endDate")
+        y, n = D(mk["pos"]["YES"]), D(mk["pos"]["NO"])
+        if y == n and y > 0 and mk.get("pair_logged_at") != str(y):
+            cpair = (D(mk["cost"]["YES"]) + D(mk["cost"]["NO"])) / y
+            self.b.d["pairs"].append({"slug": slug, "qty": str(y),
+                                      "pair_cost": str(cpair),
+                                      "t": now_iso()})
+            mk["pair_logged_at"] = str(y)
+            log("PAIR_LOCKED", slug=slug, pairs=y, avg_pair_cost=cpair,
+                locked_edge_per_pair=ONE - cpair, mode="crypto",
+                label="locked pair economics; realized at settlement")
+        mid = (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2
+        mk["crypto_mid"] = str(mid)
+        CR.update_markouts(mk, mid, now)
+        self._crypto_accrue(mk, now)
+        cm = mk["crypto_model"]
+        cm["rate_usd_s"] = 0.0          # set again below if quotes rest
+        arm = CR.arm_state(now)
+        stop = self.crypto_loss_stopped()
+        block = self.crypto_block(slug, mk, now)
+        open_orders = {oid: o for oid, o in mk["orders"].items()
+                       if o.get("open")}
+        book, age = self._crypto_book(slug, bbo)
+        if book is None or age > CR.BOOK_MAX_AGE_S:
+            # no current depth: nothing can be priced or shown to score.
+            # Opening quotes are pulled; a resting completion is left as is.
+            stale = [(oid, o) for oid, o in open_orders.items()
+                     if o.get("stage") != CR.STAGE_COMPLETE or stop
+                     or not CR.ON]
+            if mk.get("crypto_logged") != "book_stale":
+                mk["crypto_logged"] = "book_stale"
+                log("CRYPTO_QUOTE", slug=slug, block="book_stale",
+                    age_s=None if book is None else round(age, 1),
+                    pulled=len(stale))
+            self._cancel_legs(slug, stale)
+            self.b.save()
+            return
+        resting = [(o["side"], D(o["px"]),
+                    D(o["qty"]) - D(o.get("filled") or "0"))
+                   for o in open_orders.values()]
+        q = CR.quotes(book_md=book, program=mk.get("reward"), tick=tick,
+                      pos=mk["pos"], cost=mk["cost"], resting=resting,
+                      min_qty=spec["min_qty"],
+                      capital_used=CR.market_capital(
+                          {**mk, "orders": {}})["filled"])
+        want: Dict[str, Any] = {}
+        why: Dict[str, Any] = {}
+        for side in ("YES", "NO"):
+            tg = q.get(side)
+            why[side] = q.get("why_" + side) or q.get("why")
+            if tg and (stop or not CR.ON):
+                tg, why[side] = None, ("crypto_loss_stop" if stop
+                                       else "crypto_off")
+            if tg and tg["role"] == "open" and block:
+                tg, why[side] = None, block
+            want[side] = tg
+        CR.fit_caps(self.b.d["markets"], slug, want, why)
+        opens = [s_ for s_ in ("YES", "NO")
+                 if want[s_] and want[s_]["role"] == "open"]
+        if opens:
+            # the combined sports + crypto ceiling, on what these quotes
+            # ADD to this market's resting openings (place() checks again)
+            add = sum((want[s_]["px"] * want[s_]["qty"] for s_ in opens),
+                      D(0)) - sum((r_[1] * r_[2] for r_, o in zip(
+                          resting, open_orders.values())
+                          if o.get("stage") == CR.STAGE_OPEN), D(0))
+            cw = self.combined_block(ONE, max(D(0), add))
+            if cw:
+                for s_ in opens:
+                    want[s_], why[s_] = None, cw
+        if CR.REQUIRE_BOTH and sum(1 for t_ in want.values() if t_ and
+                                   t_["role"] == "open") == 1:
+            for side in ("YES", "NO"):
+                if want[side] and want[side]["role"] == "open":
+                    want[side] = None
+        model = q.get("model") or {}
+        key = json.dumps({"want": {s: (None if t_ is None else
+                                       [str(t_["px"]), str(t_["qty"]),
+                                        t_["role"]])
+                                   for s, t_ in want.items()},
+                          "why": why, "armed": arm["armed"]}, sort_keys=True)
+        if mk.get("crypto_logged") != key:
+            mk["crypto_logged"] = key
+            log("CRYPTO_QUOTE", slug=slug, pos=mk["pos"], cost=mk["cost"],
+                best=q.get("best"), block=block, armed=arm["armed"],
+                arm_why=arm.get("why"),
+                want={s: (None if t_ is None else
+                          {"px": str(t_["px"]), "qty": str(t_["qty"]),
+                           "role": t_["role"]}) for s, t_ in want.items()},
+                why=why,
+                eligibility={k: model.get(k) for k in (
+                    "pays", "why_not", "yes_inside", "no_inside",
+                    "yes_ticks_from_best", "no_ticks_from_best",
+                    "bid_adj_px", "ask_adj_px", "bid_raw", "ask_raw")},
+                modelled={"share": model.get("share"),
+                          "usd_day": model.get("usd_day"),
+                          "markets_sharing_pool":
+                              model.get("markets_sharing_pool")},
+                label="crypto reward lane decision; orders only if armed "
+                      "and every gate allows. Modelled figures are not "
+                      "money")
+        stale, keep = [], {}
+        for oid, o in open_orders.items():
+            tg = want.get(o["side"])
+            left = D(o["qty"]) - D(o.get("filled") or "0")
+            role = "complete" if o.get("stage") == CR.STAGE_COMPLETE \
+                else "open"
+            if tg is not None and o["side"] not in keep and \
+                    arm["armed"] and role == tg["role"] and \
+                    D(o["px"]) == tg["px"] and left <= tg["qty"]:
+                keep[o["side"]] = oid
+            else:
+                stale.append((oid, o))
+        if stale:
+            before = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"]))
+            self._cancel_legs(slug, stale)
+            self.b.save()
+            if (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before or \
+                    any(o.get("open") for _oid, o in stale):
+                return       # a fill raced the cancel, or still pending
+        if y == 0 and n == 0 and not keep and \
+                str(block or "").startswith("late:"):
+            mk["done"] = True
+            self.b.save()
+            log("released_flat_market", slug=slug, pos=mk["pos"],
+                mode="crypto", reason=block)
+            return
+        if arm["armed"]:
+            for side in ("YES", "NO"):
+                tg = want.get(side)
+                if tg is None or side in keep:
+                    continue
+                self.place(slug, side, tg["px"], tg["qty"],
+                           CR.STAGE_COMPLETE if tg["role"] == "complete"
+                           else CR.STAGE_OPEN)
+        live = [(o["side"], D(o["px"]),
+                 D(o["qty"]) - D(o.get("filled") or "0"))
+                for o in mk["orders"].values() if o.get("open")]
+        if live and mk.get("reward"):
+            was = [(o["side"], D(o["px"]),
+                    D(o["qty"]) - D(o.get("filled") or "0"))
+                   for oid, o in open_orders.items() if o.get("open")]
+            try:
+                cm["rate_usd_s"] = CR.assess(book, mk["reward"], tick, live,
+                                             was)["rate_usd_s"]
+            except Exception as exc:                      # noqa: BLE001
+                log("crypto_model_error", slug=slug, err=str(exc)[:120])
+        self.b.save()
+
 
     # ------------------------------------------------ RN1 replica (default off)
     def rn1_campaign_exposure(self, exclude: Optional[str] = None
@@ -2629,6 +3213,7 @@ class Engine:
         only complete until they drain. Completions are never blocked."""
         others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
                      if s_ != slug and not m_.get("done") and
+                     not CR.is_crypto_market(s_, m_) and
                      self._rn1_exposed(m_))
         return others >= MAX_MARKETS
 
@@ -2858,7 +3443,8 @@ class Engine:
             return
         tick = spec["tick"]
         self._mark(slug, mk, bbo)
-        if reward_first_on() and mk.get("reward"):
+        if reward_first_on() and mk.get("reward") and \
+                not CR.is_crypto_market(slug, mk):
             # THEORETICAL accrual for the interval just ended (legs that
             # rested), then refresh the share estimate for the next one
             self._accrue(slug, mk)
@@ -2866,6 +3452,13 @@ class Engine:
                 self._reward_estimate(slug, mk, tick)
             except Exception as exc:                  # noqa: BLE001
                 log("reward_estimate_error", slug=slug, err=str(exc)[:120])
+        if CR.is_crypto_market(slug, mk):
+            # crypto reward lane: its own decisions and limits. Checked
+            # BEFORE RN1 and the two-sided path and it always returns, so a
+            # crypto market can never be accumulated, extended or taker-
+            # exited by them -- with the lane off its orders are cancelled.
+            self._crypto_step(slug, mk, spec, bbo, tick)
+            return
         if RN1.ON:
             # OWNER 2026-11-21: scaled-down RN1 behavioural replica. Replaces
             # the two-sided open/complete/recovery decisions for this market;
@@ -3322,7 +3915,8 @@ class Engine:
             self._try_select(slug, acct, rewarded.get(slug))
 
     def rewarded_active(self) -> int:
-        return sum(1 for s in self.active() if self.b.m(s).get("reward"))
+        return sum(1 for s in self.sports_active()
+                   if self.b.m(s).get("reward"))
 
     def _try_select(self, slug: str, acct: Mapping[str, Any],
                     rp: Optional[Mapping[str, Any]],
@@ -3498,6 +4092,7 @@ class Engine:
             self.b.save()
         bs = PNL.book_settled(mk_all)
         self.pilot_meter(mine, mk_all)
+        self.crypto_meter(mine, mk_all)
         since = self.b.d.get("recovery_since")
         bs_new = PNL.book_settled(mk_all, since=since) if since else None
         settled_margin = D(PNL.book_economics(
@@ -3660,11 +4255,12 @@ class Engine:
                 (e.get("rows_detail") or [])[:50]],
             error=e.get("error"),
             label="venue /v1/incentives/earnings; ONLY credited_usd is money")
+        self.crypto_reward_credits(e)
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
         if self.guard is not None:
-            self.guard.track(self.active())
+            self.guard.track(self.sports_active())
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
             "orphan_stale_snapshot": self.orphan_stale,
@@ -3692,8 +4288,8 @@ class Engine:
             caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                   "markets": MAX_MARKETS, "pair_cap": PAIR_CAP, "qty": QTY},
             rewards_enabled=rewards_on(),
-            rewarded_active=sum(1 for s in self.active()
-                                if self.b.m(s).get("reward")),
+            rewarded_active=self.rewarded_active(),
+            crypto=self.crypto_status(),
             reward_caps={"qty": REWARD_QTY,
                          "per_market_lone_leg": REWARD_PER_MARKET_CAP},
             reward_first=reward_first_on(),
@@ -3709,6 +4305,9 @@ class Engine:
             log("drift_seed", **seed, label="measured completion drift "
                 "preloaded for sports with no live history")
         log("boot", rn1=({"on": True, **RN1.cfg()} if RN1.ON else {"on": False}),
+            crypto=({"on": True, **CR.cfg(), "arm": CR.arm_state(time.time()),
+                     "combined_max_exposure_usd": CR.combined_cap()}
+                    if CR.ON else {"on": False}),
             recovery={"on": RECOVERY_ON, "taker": RECOVERY_TAKER, "lean": RECOVERY_LEAN,
                               "shared_policy": completion_policy_live(),
                               "sports_cap": COMPLETION_SPORTS_CAP,
@@ -3760,11 +4359,12 @@ class Engine:
                     acc = self.read_account()
                     if acc is not None:
                         self.select(acc)
+                        self.select_crypto(acc)
                         last_sel = time.monotonic()
                     else:                          # retry sooner, not every pass
                         last_sel = time.monotonic() - 20 + ACCOUNT_RETRY_S
                     if self.guard is not None:
-                        self.guard.track(self.active())
+                        self.guard.track(self.sports_active())
                     if rewards_on() and acc is not None:
                         self.refresh_active_rewards()
                 for slug in self.active():

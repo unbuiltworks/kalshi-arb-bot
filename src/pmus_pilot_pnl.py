@@ -169,8 +169,9 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
 
 def meter(markets: Mapping[str, Mapping[str, Any]],
           rows: Iterable[Mapping[str, Any]],
-          since: Optional[float] = None) -> Dict[str, Any]:
-    slugs = pilot_slugs(markets, since)
+          since: Optional[float] = None,
+          stages: Sequence[str] = PILOT_STAGES) -> Dict[str, Any]:
+    slugs = pilot_slugs(markets, since, stages)
     vs = venue_side(rows, slugs)
     per = {s: market_result(markets[s], vs.get(s)) for s in slugs}
     tot = {k: D(0) for k in ("net", "gross", "pair_edge", "residual",

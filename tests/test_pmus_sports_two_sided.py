@@ -1155,18 +1155,28 @@ def test_crypto_late_rule_uses_end_date():
     assert M.is_late({"type": "crypto-1d", "endDate": "x"}) == "crypto_end_unknown"
 
 
-def test_crypto_targets_only_explicit_prefixes_never_btc(monkeypatch):
+def test_crypto_targets_only_the_reward_lane_never_btc_never_sports(monkeypatch):
+    """2026-11-22: daily crypto belongs to the crypto reward lane
+    (src/pmus_crypto_rewards.py). The legacy prefix variable selects nothing,
+    and live_sports() never returns a crypto market (RN1 would trade it)."""
+    from src import pmus_crypto_rewards as CR
     monkeypatch.setattr(M, "CRYPTO_PREFIXES", ("cpcsol-sol-updown-1d-", "cpc-btc-"))
     v = M.Venue.__new__(M.Venue)
     v.states = {}
+    v._live_sports = lambda: []
     v.gget = lambda path: {"events": [{"markets": [
         {"slug": "cpcsol-sol-updown-1d-2026-11-15-2200z", "endDate": "2026-11-16T22:00:00Z",
          "bestBidQuote": "0.48", "bestAskQuote": "0.50"},
         {"slug": "cpc-btc-updown-1d-2026-11-15-2200z"},
         {"slug": "cpceth-eth-updown-1d-2026-11-15-2200z"}]}]}
+    assert v.crypto_targets() == [] and v.live_sports() == []     # lane off
+    monkeypatch.setattr(CR, "ON", True)
     out = v.crypto_targets()
-    assert [t["slug"] for t in out] == ["cpcsol-sol-updown-1d-2026-11-15-2200z"]
+    assert sorted(t["slug"] for t in out) == [
+        "cpceth-eth-updown-1d-2026-11-15-2200z",
+        "cpcsol-sol-updown-1d-2026-11-15-2200z"]
     assert v.states["cpcsol-sol-updown-1d-2026-11-15-2200z"]["type"] == "crypto-1d"
+    assert v.live_sports() == []
 
 
 def test_closed_markets_do_not_count_toward_the_cap(eng):

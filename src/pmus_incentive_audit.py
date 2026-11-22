@@ -151,6 +151,9 @@ def earnings(t: q1.Transport) -> dict:
                         status_split["accrued_but_not_credited_usd"],
                     "by_status": status_split["by_status"],
                     "rows_detail": [dict(r) for r in rows[:50]],
+                    # every row, for per-market attribution (the crypto
+                    # lane counts a reward only when a row names its market)
+                    "rows_all": [dict(r) for r in rows],
                     "total_usd": str(total) if n_amount else None,
                     "by_program": dict(by_prog),
                     "sample": json.loads(json.dumps(rows[0], default=str)) if rows else None,

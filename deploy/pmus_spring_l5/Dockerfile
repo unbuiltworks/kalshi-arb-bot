@@ -124,6 +124,9 @@ COPY src/l5_account_risk.py src/l5_account_risk.py
 COPY src/pmus_sports_sharp.py src/pmus_sports_sharp.py
 COPY src/pmus_combo_maker.py src/pmus_combo_maker.py
 COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
+# daily-crypto reward lane (2026-11-22): imported at module scope by
+# pmus_sports_two_sided, so the image must carry it. Default OFF, disarmed.
+COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py
