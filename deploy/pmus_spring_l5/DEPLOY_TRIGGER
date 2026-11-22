@@ -287,3 +287,4 @@
 2026-11-22T15:40Z in-bot safety latch (position mismatch, cap breach, oversize order, loop errors); campaign marker kept across relock.
 2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
 2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-22T19:10Z read-only fills feed (l5/sports_fills.json) for the account-wide ledger; per-order fill cost recorded.
