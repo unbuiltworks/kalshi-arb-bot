@@ -1,8 +1,8 @@
 # Daily-crypto reward lane — disarmed release candidate (22 Nov 2026)
 
 For the sports service owner (`pmus-spring-l5-probe`). Nothing here is deployed, armed or
-authorized. Base: `dev/pmus-rn1-replica` @ `5e4f153c2` (two commits after the running
-release `3e2cc9002`). Research: `analysis/l5/rewards/` on
+authorized. Base: `dev/pmus-rn1-replica` @ `ae5adbe16` (merged in; the sports release
+authorized for deployment is exactly `ae5adbe16` and contains none of this). Research: `analysis/l5/rewards/` on
 `claude/runner-executor-verification-utzgrh` (audit, proposal, depth recording).
 
 ## What it is
@@ -76,8 +76,11 @@ rewards remain $0.
 
 New quotes also require: `PMUS_TWO_SIDED_ENABLED=YES`, submission lock off, no shared halt,
 `PMUS_TWO_SIDED_ACCOUNT_RISK=1` with a readable account-risk record inside its limits,
-`PMUS_COMBINED_MAX_EXPOSURE_USD` set, a venue-reconciled meter under ~2 h old with all
-fills confirmed, a paying programme, fresh depth, and a fresh account read.
+`PMUS_COMBINED_MAX_EXPOSURE_USD` set, a venue-reconciled cash meter under ~2 h old built
+on a complete positions walk with all fills and positions confirmed, a paying programme,
+fresh depth, and a fresh account read that shows — for every open crypto market — exactly
+the book's net position, no unknown resting order and no untracked crypto position.
+Any one of these missing stops the whole lane (`crypto_block` reason in `CRYPTO_QUOTE`).
 
 ## Limits (code, `PMUS_CRYPTO_*`)
 
@@ -101,11 +104,19 @@ lose ~$50–70 by settlement**. With it ON the sizes themselves keep the worst c
 
 - `modelled_reward_usd` — share of the displayed book × pool ÷ 3. Not money.
 - `venue_pending_reward_usd` / `venue_credited_reward_usd` — reward rows naming a crypto market.
-- `settled_trading_net_usd` — venue trade rows = book fills, venue resolution, final price,
-  maker fees charged; with pairs, pair cost, residual and worst open case.
+- `realized_trading_net_usd` — the sports meter's cash basis (`ae5adbe16`): completed pairs
+  are cash at pairing, residual legs at settlement, maker fees charged; with outstanding
+  contracts/cost and the residual worst case reported beside it.
 - `adverse_selection` — mid-based markouts 60 s / 300 s / 1800 s after each fill.
-- `realized_net_usd` = settled trading net + credited rewards. `verdict` is PASS only when
-  every market is settled and confirmed, a credit row exists, and that sum is positive.
+- `realized_net_usd` = realized trading net + credited rewards. `verdict` is PASS only when
+  nothing is outstanding or unconfirmed, a credit row exists, and that sum is positive.
+
+## Replay (modelled, read-only)
+
+`analysis/l5/rewards/CRYPTO_POLICY_REPLAY_20261122_RESULT.txt`. Two samples of 22 Nov model
+100 a side, one tick back, at $6.62/day and $14.42/day — the gap is larger than either
+number. Under the hard $30 budget only one market can quote (~41 contracts), modelling at
+roughly $0.3–4.5/day. No fills or credits are venue-confirmed.
 
 ## Suggested order
 
@@ -117,7 +128,9 @@ lose ~$50–70 by settlement**. With it ON the sizes themselves keep the worst c
 
 - Whether the venue credits crypto at all, and how the pool is split.
 - Whether earnings rows page (`rows_all` is one response; 131 of 183 rows were recovered before).
-- Whether a YES+NO pair nets to cash before settlement (assumed not: capital stays counted).
+- Pair netting: sports `ae5adbe16` observed the venue paying a completed pair at once.
+  `PMUS_CRYPTO_COUNT_PAIRED` still defaults to 1 (paired cost keeps counting against the
+  $100 market cap), which limits re-quoting after a pair; 0 is an owner decision.
 - The halt watchdog's treatment of 100-contract orders resting for hours (they are in the registry).
 - Depth is polled (≤10 s, immediately on a top-of-book change); a fast move can fill a quote first.
 - Daily pools run midnight–midnight ET; the 2 h cutoff is measured from market end only.
