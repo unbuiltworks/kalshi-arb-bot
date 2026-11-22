@@ -2085,9 +2085,15 @@ def test_submission_lock_off_by_default_and_published(eng, monkeypatch):
     monkeypatch.delenv(M.SUBMISSION_LOCK_ENV, raising=False)
     e, v = eng
     assert M.registry_doc(e.b)["submission_disabled"] is False
-    for val in ("true", "yes", "on", "0", " 2 "):
+    for val in ("", "0", " 0 "):
         monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, val)
-        assert M.submission_locked() is False          # only exactly "1"
+        assert M.submission_locked() is False          # legacy unlocked
+    # owner 2026-11-22: a typo never unlocks -- anything that is not exactly
+    # unset/"0" or a valid window is LOCKED (these used to read as unlocked)
+    for val in ("true", "yes", "on", " 2 ", "unlock"):
+        monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, val)
+        assert M.submission_locked() is True
+        assert M.registry_doc(e.b)["submission_disabled"] is True
     monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
     assert M.registry_doc(e.b)["submission_disabled"] is True
 

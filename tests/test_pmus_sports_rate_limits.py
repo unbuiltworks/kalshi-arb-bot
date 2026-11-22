@@ -118,7 +118,7 @@ def test_stale_completion_still_obeys_lock_and_halt(eng, monkeypatch):
     e.require_fresh_account = True
     e._acct_ok_at = None
     _held_yes(e, v)
-    monkeypatch.setattr(M, "submission_locked", lambda: True)
+    monkeypatch.setattr(M, "submission_locked", lambda *a, **k: True)
     e.place("aec-x", "NO", D("0.55"), D("5"), "two_sided_complete")
     assert v.orders == {}
 

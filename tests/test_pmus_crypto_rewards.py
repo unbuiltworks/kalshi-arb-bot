@@ -728,6 +728,13 @@ def test_completion_continues_under_a_new_exposure_block(lane):
     (lambda e, mp: mp.setattr(CR, "LOSS_STOP_USD", D("0")),
      "crypto_loss_stop_unset"),
     (lambda e, mp: mp.setenv(M.ENABLED_ENV, "NO"), "not_enabled"),
+    (lambda e, mp: mp.setenv(M.SUBMISSION_LOCK_ENV, "1"), "submission_lock"),
+    (lambda e, mp: mp.setenv(M.SUBMISSION_LOCK_ENV, "true"),
+     "submission_lock"),
+    (lambda e, mp: mp.setenv(
+        M.SUBMISSION_LOCK_ENV,
+        "window:2026-01-01T00:00:00Z/2026-01-01T02:00:00Z"),
+     "submission_lock"),
     (lambda e, mp: e.b.m(ETH).update(reward=None), "no_paying_program"),
     (lambda e, mp: e.b.m(ETH).update(end=iso(3600)),
      "late:crypto_last_7200s"),
@@ -1650,3 +1657,22 @@ def test_crypto_discovery_is_throttled_and_the_step_is_timed(observe):
     st = e.crypto_status()
     assert st["step_ms"]["n"] == 1 and st["step_ms"]["max"] >= 0
     assert st["tape"]["bound_bytes"] == 60_000_000
+
+
+def test_the_sports_submission_lock_withdraws_and_refuses_crypto(lane,
+                                                                 monkeypatch):
+    """Sports a9987a12f: the lock is fail-closed and acts on resting
+    orders. It binds the crypto lane too -- openings and completions."""
+    e, v = lane
+    select(e, v)
+    e.step_market(SOL)
+    lone_yes(e, v)
+    assert len(v.live()) == 3
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    e.enforce_lock()
+    assert not v.live()
+    n = len(v.orders)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    e.place(ETH, "NO", D("0.49"), D("100"), "crypto_complete")
+    assert len(v.orders) == n

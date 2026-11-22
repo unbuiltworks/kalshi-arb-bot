@@ -191,7 +191,14 @@ def test_engine_submission_lock_refuses_every_rn1_order(rn1, monkeypatch,
     e, v = rn1
     e.step_market("aec-x")
     assert v.orders == {}
-    assert "place_refused_submission_lock" in capsys.readouterr().out
+    # the lock is now a new-exposure block in the decision itself (so that
+    # resting openings are withdrawn when a window ends) ...
+    assert '"block":"submission_lock:locked"' in capsys.readouterr().out
+    # ... and place() still refuses anything that reaches it
+    e.place("aec-x", "YES", D("0.40"), D("2"), "rn1_open")
+    e.place("aec-x", "NO", D("0.40"), D("2"), "two_sided_complete")
+    assert v.orders == {}
+    assert capsys.readouterr().out.count("place_refused_submission_lock") == 2
 
 
 def test_engine_new_exposure_gate_blocks_openings_not_completions(rn1,

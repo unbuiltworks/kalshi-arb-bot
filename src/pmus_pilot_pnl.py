@@ -253,6 +253,26 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]],
     return out
 
 
+def book_worst_case(markets: Mapping[str, Mapping[str, Any]],
+                    since: Optional[float] = None) -> D:
+    """The campaign's worst outcome from the BOT'S OWN BOOK, right now:
+    settled markets at their result, every other market with its unpaired
+    contracts worthless. No venue rows needed, so the engine can check it
+    every step instead of waiting for the hourly audit. A floor for the
+    loss stop, never a P&L figure."""
+    tot = D(0)
+    for s_ in pilot_slugs(markets, since):
+        mk = markets[s_]
+        y, n = D(str(mk["pos"]["YES"])), D(str(mk["pos"]["NO"]))
+        c = D(str(mk["cost"]["YES"])) + D(str(mk["cost"]["NO"]))
+        px = mk.get("settle_px")
+        if px is not None:
+            tot += y * D(str(px)) + n * (1 - D(str(px))) - c
+        else:
+            tot += min(y, n) - c
+    return tot
+
+
 UNCONFIRMED = ("fills_unconfirmed", "position_unconfirmed")
 
 
