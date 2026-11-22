@@ -126,6 +126,10 @@ def open_sides(e):
 
 def test_no_order_before_the_window_then_orders_inside_it(eng, monkeypatch):
     setlock(monkeypatch, WIN)
+    # as a process started with this window does (the window start is the
+    # campaign marker; a marker later than the start blocks new exposure)
+    eng.since = M.adopt_campaign_marker(eng.b)
+    assert eng.since == START
     at(monkeypatch, START - 5)
     eng.b.m("aec-x")
     eng.step_market("aec-x")
@@ -138,6 +142,10 @@ def test_no_order_before_the_window_then_orders_inside_it(eng, monkeypatch):
 def test_at_the_deadline_resting_orders_are_cancelled_and_none_placed(
         eng, monkeypatch):
     setlock(monkeypatch, WIN)
+    # as a process started with this window does (the window start is the
+    # campaign marker; a marker later than the start blocks new exposure)
+    eng.since = M.adopt_campaign_marker(eng.b)
+    assert eng.since == START
     at(monkeypatch, START + 5)
     eng.b.m("aec-x")
     eng.step_market("aec-x")

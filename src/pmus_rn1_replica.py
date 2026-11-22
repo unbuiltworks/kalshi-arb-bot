@@ -357,7 +357,16 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             adv = k.get("adverse_ticks")
             if isinstance(adv, Mapping):
                 adv = adv.get(role, adv.get("default"))
-            ev = edge(side=s, px=px, tick=t, fair_yes=k.get("fair_yes"),
+            # THE FAIR VALUE EACH SIDE IS JUDGED AGAINST is the one LEAST
+            # favourable to it over the engine's stability period: a YES
+            # bid against the lowest recent fair, a NO bid against the
+            # highest (see the engine's intl_fair_band). A caller that
+            # passes only `fair_yes` gets that single value for both.
+            _fy = k.get("fair_yes")
+            if _fy is not None:
+                _fy = k.get("fair_yes_lo" if s == "YES" else "fair_yes_hi",
+                            _fy)
+            ev = edge(side=s, px=px, tick=t, fair_yes=_fy,
                       adds_exposure=adds, unpaired_clips=clips,
                       fee_rate=frate, adverse_ticks=adv,
                       risk_step_ticks=k.get("risk_step_ticks"),

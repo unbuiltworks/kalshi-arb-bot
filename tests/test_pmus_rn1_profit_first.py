@@ -260,6 +260,8 @@ def eng(tmp_path, monkeypatch):
     monkeypatch.setitem(M._LOOP, "beat", None)
     monkeypatch.setitem(M._LOOP, "thread", None)
     monkeypatch.setitem(M._LOOP, "max_gap", 0.0)
+    # the fair-value stability period has its own tests below
+    monkeypatch.setattr(M, "RN1_FAIR_STABLE_S", 0.0)
     v = FakeVenue()
     v.states = {}
     v.bid, v.ask = D("0.48"), D("0.50")
@@ -746,3 +748,144 @@ def test_book_history_of_a_finished_market_is_dropped(eng):
                                          for h in MK.HORIZONS_S}}]
     e.markout_summary()
     assert "aec-x" not in e._mids()._t
+
+
+# ------------------------------------ a favourable fair value has to last
+def clocked(e, monkeypatch, stable_s=10.0):
+    clock = {"t": 4_000_000.0}
+    monkeypatch.setattr(M.time, "time", lambda: clock["t"])
+    monkeypatch.setattr(M, "RN1_FAIR_STABLE_S", stable_s)
+    return clock
+
+
+def settle(e, v, clock, slug="aec-x", secs=15, step=3):
+    for _ in range(0, secs, step):
+        clock["t"] += step
+        e.step_market(slug)
+
+
+@pytest.mark.rn1_edge_gate
+def test_no_bid_until_the_fair_value_has_a_history(eng, monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    e.step_market("aec-x")
+    assert resting(v) == []                           # first reading
+    clock["t"] += 6
+    e.step_market("aec-x")
+    assert resting(v) == []                           # 6 s of history
+    clock["t"] += 5
+    e.step_market("aec-x")
+    assert resting(v) == [("NO", "0.49"), ("YES", "0.47")]
+    band = e.intl_fair_band("aec-x")
+    assert band["settled"] is True and band["lo"] == band["hi"] == D("0.49")
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_three_second_spike_in_the_fair_value_is_not_chased(eng,
+                                                              monkeypatch):
+    """22 Nov 20:18:11Z, Baltimore-Carolina: the international mid jumped
+    3c for about three seconds and came back; an order went out on it."""
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.47)              # YES at 0.47 is NOT cheap: no YES bid
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert [s for s, _p in resting(v)] == ["NO"]
+    e.guard.mid = 0.52                 # the spike: YES "worth" 0.52
+    clock["t"] += 2
+    e.step_market("aec-x")
+    assert all(s != "YES" for s, _p in resting(v))    # not chased
+    assert resting(v) == []            # and NO, now dear, is pulled at once
+    e.guard.mid = 0.47                 # ...and it is gone again
+    clock["t"] += 2
+    e.step_market("aec-x")
+    assert all(s != "YES" for s, _p in resting(v))
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_favourable_move_counts_once_it_has_lasted(eng, monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.47)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    e.guard.mid = 0.52
+    settle(e, v, clock, secs=9)                       # 9 s: not yet
+    assert all(s != "YES" for s, _p in resting(v))
+    settle(e, v, clock, secs=6)                       # past 10 s: it held
+    assert ("YES", "0.47") in resting(v)
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_move_against_a_resting_bid_counts_at_once(eng, monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert len(resting(v)) == 2
+    e.guard.mid = 0.43                                # falls 6c
+    clock["t"] += 1
+    e.step_market("aec-x")
+    assert resting(v) == [("NO", "0.49")]             # YES bid cancelled
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_gap_in_the_fair_value_restarts_the_clock(eng, monkeypatch):
+    e, v = eng
+    clock = clocked(e, monkeypatch)
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    settle(e, v, clock)
+    assert len(resting(v)) == 2
+    e.guard.mid = None                                # feed gap
+    clock["t"] += 3
+    e.step_market("aec-x")
+    assert resting(v) == []
+    e.guard.mid = 0.49                                # back, but unproven
+    clock["t"] += 3
+    e.step_market("aec-x")
+    assert resting(v) == []
+    assert e.intl_fair_band("aec-x")["settled"] is False
+    settle(e, v, clock)
+    assert len(resting(v)) == 2
+
+
+def test_each_side_is_judged_against_the_fair_least_favourable_to_it():
+    a = q(*FLAT, "0.48", "0.50", fair_yes="0.50", fair_yes_lo="0.47",
+          fair_yes_hi="0.53")
+    assert a["YES"] is None and a["NO"] is None
+    assert D(a["edge"]["YES"]["fair"]) == D("0.47")   # lowest for YES
+    assert D(a["edge"]["NO"]["fair"]) == D("0.47")    # 1 - highest for NO
+    b = q(*FLAT, "0.48", "0.50", fair_yes="0.49")     # no band: one value
+    assert b["YES"] and b["NO"]
+
+
+# --------------------------- campaign marker must cover the whole window
+@pytest.mark.rn1_edge_gate
+def test_no_new_exposure_when_the_marker_is_later_than_the_window(
+        eng, monkeypatch, capsys):
+    """Fail closed. With a window configured and the campaign marker after
+    its start, orders in between would count toward no campaign cap."""
+    e, v = eng
+    now = time.time()
+    fmt = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "window:%s/%s" % (
+        fmt(now - 600), fmt(now + 3600)))
+    e.guard = Guard(0.49)
+    e.b.m("aec-x")
+    e.since = now + 1800                              # marker in the future
+    assert e.campaign_marker_mismatch() is True
+    e.step_market("aec-x")
+    assert v.orders == {}
+    assert '"campaign_marker_mismatch"' in capsys.readouterr().out
+    e.since = now - 600 - 30                          # at/before the start
+    assert e.campaign_marker_mismatch() is False
+    e.step_market("aec-x")
+    assert len(resting(v)) == 2
+    e.since = None
+    assert e.campaign_marker_mismatch() is True
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")    # no window: no rule
+    assert e.campaign_marker_mismatch() is False

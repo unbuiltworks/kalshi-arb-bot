@@ -406,6 +406,24 @@ RN1_REWARD_CREDIT_TICKS = int(os.getenv("PMUS_RN1_REWARD_CREDIT_TICKS", "1"))
 #: active markets, reaches RN1_REWARD_MIN_DAY_USD. It is still an estimate
 #: of a payment nobody has made; it only ever offsets the inventory-risk
 #: allowance of the marginal test, never the trading edge itself.
+#: A FAVOURABLE FAIR VALUE HAS TO LAST. LIVE 2026-11-22 20:18:11Z,
+#: Baltimore-Carolina: the international mid spiked from 0.365 to about
+#: 0.395 for some three seconds and came back. In that moment YES "worth
+#: 0.395" at 0.37 passed the marginal test, an order went out, and by the
+#: time it reached the venue the market was back at 0.3625 / 0.365 -- the
+#: post-only bid would have crossed and the venue rejected it. A minute
+#: later the price was 3c lower. A jump in the fair value is exactly when
+#: the fair value is least reliable.
+#:
+#: So each side is judged against the fair value LEAST favourable to it
+#: over the last RN1_FAIR_STABLE_S seconds: a YES bid against the lowest
+#: international mid in that period, a NO bid against the highest. A move
+#: against a resting bid counts at once (it is cancelled on the next pass);
+#: a move in its favour counts only after it has lasted the whole period.
+#: Until the bot has that many seconds of unbroken fair value for a market
+#: (after a start, a feed gap, a newly selected market) there is no fair
+#: value and so no bid.
+RN1_FAIR_STABLE_S = float(os.getenv("PMUS_RN1_FAIR_STABLE_S", "10"))
 RN1_REWARD_MIN_DAY_USD = float(os.getenv("PMUS_RN1_REWARD_MIN_DAY_USD", "1"))
 RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
 
@@ -1237,7 +1255,8 @@ def safeguards_cfg() -> Dict[str, Any]:
                               "reward_credit_ticks": RN1_REWARD_CREDIT_TICKS,
                               "reward_min_day_usd": RN1_REWARD_MIN_DAY_USD,
                               "reward_project_h": RN1_REWARD_PROJECT_H,
-                              "no_fair_means": "no_bid"},
+                              "no_fair_means": "no_bid",
+                              "fair_stable_s": RN1_FAIR_STABLE_S},
             "markout_horizons_s": [5, 30, 120, 300],
             "stall_drill": stall_drill(),
             "order_ttl_s": (ORDER_TTL_S if order_good_till() else 0),
@@ -3520,6 +3539,44 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return None            # unreadable fair value = no fair value
 
+    def intl_fair_band(self, slug: str) -> Dict[str, Any]:
+        """{"mid", "lo", "hi", "settled", "span_s"}: the international mid
+        now and its lowest and highest value over the last
+        RN1_FAIR_STABLE_S seconds. `settled` is False (and nothing may be
+        bid) when there is no fresh fair value now, or the unbroken history
+        does not yet cover the period. A missing fair value clears the
+        history: stability is counted from the next good reading."""
+        hist = getattr(self, "_fair_hist", None)
+        if hist is None:
+            hist = self._fair_hist = {}
+        h = hist.setdefault(slug, [])
+        now = time.time()
+        mid = self.intl_fair(slug)
+        if mid is None:
+            h.clear()
+            return {"mid": None, "lo": None, "hi": None, "settled": False,
+                    "span_s": 0.0}
+        h.append((now, mid))
+        w = max(0.0, RN1_FAIR_STABLE_S)
+        # keep one reading older than the period, so its start is covered
+        while len(h) > 1 and now - h[1][0] >= w:
+            h.pop(0)
+        span = now - h[0][0]
+        vals = [m for _t, m in h]
+        return {"mid": mid, "lo": min(vals), "hi": max(vals),
+                "settled": span >= w, "span_s": round(span, 1)}
+
+    def campaign_marker_mismatch(self) -> bool:
+        """True when a trading window is configured and the campaign marker
+        is not at (or before) its start: orders placed from the window's
+        start up to the marker would count toward no campaign cap and no
+        campaign loss stop (LIVE 2026-11-22 20:16Z). Fail closed: no new
+        exposure while it holds."""
+        w = lock_window()
+        if w is None:
+            return False
+        return self.since is None or float(self.since) > float(w[0]) + 1e-6
+
     def rn1_reward(self, slug: str) -> Optional[Dict[str, Any]]:
         """The paying liquidity period for this market from the cached
         programme read (no request here), or None."""
@@ -3611,7 +3668,14 @@ class Engine:
         inc = self.rn1_incentive(slug, mk, tick)
         self._rn1_inc = getattr(self, "_rn1_inc", {})
         self._rn1_inc[slug] = inc
-        return {"edge_gate": True, "fair_yes": self.intl_fair(slug),
+        band = self.intl_fair_band(slug)
+        self._rn1_fair = getattr(self, "_rn1_fair", {})
+        self._rn1_fair[slug] = {k: (None if v is None else str(v))
+                                if k in ("mid", "lo", "hi") else v
+                                for k, v in band.items()}
+        return {"edge_gate": True,
+                "fair_yes": band["mid"] if band["settled"] else None,
+                "fair_yes_lo": band["lo"], "fair_yes_hi": band["hi"],
                 "adverse_ticks": {"open": base, "complete": base,
                                   "extend": base + RN1_JUMP_TICKS.get(typ, 0),
                                   "default": base},
@@ -3667,6 +3731,8 @@ class Engine:
             new_block = "account_risk"
         elif self.pilot_block():
             new_block = self.pilot_block()
+        elif self.campaign_marker_mismatch():
+            new_block = "campaign_marker_mismatch"
         # account-wide blocks hold the slot (they lift); a block about THIS
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
@@ -3729,6 +3795,7 @@ class Engine:
                 why={s: q.get("why_" + s) for s in ("YES", "NO")},
                 extend_ev=q.get("extend_ev"),
                 edge=q.get("edge"),
+                fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
                 incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
                 reward=bool(self.rn1_reward(slug)),
                 label="RN1 replica decision; orders only if every gate "
