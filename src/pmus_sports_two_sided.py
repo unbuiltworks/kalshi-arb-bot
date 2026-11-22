@@ -2810,7 +2810,8 @@ class Engine:
                 "resting_usd": str(ex["resting"]),
                 "open_orders": str(ex["open_orders"]),
                 "caps": {"total": str(CR.TOTAL_USD),
-                         "unpaired": str(CR.MAX_UNPAIRED_USD),
+                         "unpaired": str(CR.unpaired_cap(markets)),
+                         "hard_loss_budget": CR.HARD_LOSS_BUDGET,
                          "open_orders": CR.MAX_OPEN_ORDERS,
                          "combined": CR.combined_cap()},
                 "combined": {k: str(v) for k, v in
@@ -3067,7 +3068,8 @@ class Engine:
                       pos=mk["pos"], cost=mk["cost"], resting=resting,
                       min_qty=spec["min_qty"],
                       capital_used=CR.market_capital(
-                          {**mk, "orders": {}})["filled"])
+                          {**mk, "orders": {}})["filled"],
+                      max_leg_usd=CR.leg_budget(self.b.d["markets"], slug))
         want: Dict[str, Any] = {}
         why: Dict[str, Any] = {}
         for side in ("YES", "NO"):

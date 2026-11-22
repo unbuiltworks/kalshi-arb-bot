@@ -133,6 +133,17 @@ METER_MAX_AGE_S = _f("PMUS_CRYPTO_METER_MAX_AGE_S", str(2 * 3600 + 600))
 #: paired YES+NO inventory keeps counting as deployed capital until the
 #: market settles. 0 only once the venue is confirmed to net pairs to cash.
 COUNT_PAIRED = os.getenv("PMUS_CRYPTO_COUNT_PAIRED", "1").strip() != "0"
+#: HARD LOSS BUDGET (owner 2026-11-22: "losses that can exceed the proposed
+#: $30 stop" is an unresolved risk). ON (default): quotes are SIZED so that
+#: the worst settlement of everything the lane holds or could be left
+#: holding -- every unpaired leg lost in full, plus the dearest leg each
+#: market's resting quotes could strand -- together with losses already
+#: closed, cannot exceed LOSS_STOP_USD. The budget is split evenly over
+#: MAX_MARKETS. The stop then is a bound, not only a trigger (maker fees,
+#: previewed at 0, are outside it). OFF: sizes follow QTY and a held leg can
+#: lose more than the stop; the approval must say so explicitly.
+HARD_LOSS_BUDGET = os.getenv("PMUS_CRYPTO_HARD_LOSS_BUDGET",
+                             "1").strip() != "0"
 MARKOUT_S = (60, 300, 1800)
 PAYOUT_FLOOR_USD = D("1.00")
 
@@ -145,7 +156,9 @@ def cfg() -> Dict[str, Any]:
             "total_usd": str(TOTAL_USD), "hard_total_usd": str(HARD_TOTAL_USD),
             "max_unpaired_usd": str(MAX_UNPAIRED_USD),
             "max_open_orders": MAX_OPEN_ORDERS, "max_markets": MAX_MARKETS,
-            "loss_stop_usd": str(LOSS_STOP_USD), "pair_cap": str(PAIR_CAP),
+            "loss_stop_usd": str(LOSS_STOP_USD),
+            "hard_loss_budget": HARD_LOSS_BUDGET,
+            "pair_cap": str(PAIR_CAP),
             "complete_max_pair": str(COMPLETE_MAX_PAIR),
             "px_min": str(PX_MIN), "px_max": str(PX_MAX),
             "maker_fee_rate": str(MAKER_FEE_RATE), "cutoff_s": CUTOFF_S,
@@ -456,6 +469,7 @@ def quotes(*, book_md: Optional[Mapping[str, Any]],
            pos: Mapping[str, Any], cost: Mapping[str, Any],
            resting: Iterable[Tuple[str, Any, Any]] = (),
            min_qty: Any = "0.01", capital_used: Any = 0,
+           max_leg_usd: Any = None,
            c: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Resting maker bids for one crypto market:
     {"YES": {...}|None, "NO": {...}|None, "why_YES", "why_NO", "model"}.
@@ -555,10 +569,18 @@ def quotes(*, book_md: Optional[Mapping[str, Any]],
         room = mcap - D(str(capital_used or 0))
         q = min(qty0, _floor(room / per_contract, D("1"))) \
             if per_contract > 0 else ZERO
+        short = "per_market_cap"
+        if max_leg_usd is not None:
+            # hard loss budget: the dearest leg, filled alone and lost in
+            # full, must fit what is left of the budget for this market
+            dear = max(out[s]["px"] for s in live)
+            ql = _floor(max(ZERO, D(str(max_leg_usd))) / dear, D("1"))
+            if ql < q:
+                q, short = ql, "loss_budget"
         if q < max(qmin, D(str(min_qty))):
             for s in live:
                 out[s] = None
-                out["why_" + s] = "per_market_cap"
+                out["why_" + s] = short
         else:
             for s in live:
                 out[s]["qty"] = q
@@ -591,14 +613,47 @@ def fit_caps(markets: Mapping[str, Mapping[str, Any]], slug: str,
     if other["capital"] + held["filled"] + new_rest > TOTAL_USD:
         over = "crypto_total_cap"
     elif other["unpaired"] + other_worst + held["unpaired"] + worst_leg \
-            > MAX_UNPAIRED_USD:
-        over = "crypto_unpaired_cap"
+            > unpaired_cap(markets):
+        over = "crypto_loss_budget" if HARD_LOSS_BUDGET \
+            else "crypto_unpaired_cap"
     elif other["open_orders"] + n_orders > MAX_OPEN_ORDERS:
         over = "crypto_open_order_cap"
     if over:
         for s in opens:
             want[s] = None
             why[s] = over
+
+
+def closed_pnl(markets: Mapping[str, Mapping[str, Any]]) -> D:
+    """Book result of crypto markets that have closed (settled at the
+    venue's price; closed but unread = unpaired leg at zero)."""
+    per = book_pnl({s: mk for s, mk in lane_markets(markets).items()
+                    if mk.get("done") or mk.get("settle_px") is not None})
+    return per["usd"]
+
+
+def unpaired_cap(markets: Mapping[str, Mapping[str, Any]]) -> D:
+    """Most the lane may have unpaired or strandable at once. With the hard
+    loss budget: what is left of LOSS_STOP_USD after losses already closed
+    (gains do not enlarge it)."""
+    if not HARD_LOSS_BUDGET:
+        return MAX_UNPAIRED_USD
+    return max(ZERO, min(MAX_UNPAIRED_USD,
+                         LOSS_STOP_USD + min(ZERO, closed_pnl(markets))))
+
+
+def leg_budget(markets: Mapping[str, Mapping[str, Any]], slug: str
+               ) -> Optional[D]:
+    """Dollars the dearest opening leg of `slug` may cost, or None when the
+    hard loss budget is off: an even share of the lane's budget, never more
+    than what the other markets leave."""
+    if not HARD_LOSS_BUDGET:
+        return None
+    cap = unpaired_cap(markets)
+    other = exposure(markets, exclude=slug)
+    used = other["unpaired"] + sum((_worst_new_leg(markets[s_])
+                                    for s_ in other["by_market"]), ZERO)
+    return max(ZERO, min(cap / D(max(1, MAX_MARKETS)), cap - used))
 
 
 def _worst_new_leg(mk: Mapping[str, Any]) -> D:
@@ -612,7 +667,7 @@ def _worst_new_leg(mk: Mapping[str, Any]) -> D:
 # ------------------------------------------------------------- arming
 
 APPROVAL_FIELDS = ("qty", "per_market_usd", "total_usd", "loss_stop_usd",
-                   "market_days", "depth_ticks")
+                   "market_days", "depth_ticks", "max_markets")
 
 
 def approval_template(sha: str = "<release sha>") -> Dict[str, Any]:
@@ -623,6 +678,8 @@ def approval_template(sha: str = "<release sha>") -> Dict[str, Any]:
             "total_usd": str(TOTAL_USD),
             "loss_stop_usd": str(LOSS_STOP_USD),
             "market_days": MARKET_DAYS, "depth_ticks": DEPTH_TICKS,
+            "max_markets": MAX_MARKETS,
+            "hard_loss_budget": HARD_LOSS_BUDGET,
             "combined_max_exposure_usd": "", "taker": False}
 
 
@@ -688,6 +745,8 @@ def arm_state(now: float, env: Optional[Mapping[str, str]] = None
                 return no("approval_mismatch:" + f)
         except Exception:                                # noqa: BLE001
             return no("approval_mismatch:" + f)
+    if a.get("hard_loss_budget") is not HARD_LOSS_BUDGET:
+        return no("approval_mismatch:hard_loss_budget")
     cap = combined_cap(env)
     try:
         if cap is None or D(str(a.get("combined_max_exposure_usd"))) != cap:

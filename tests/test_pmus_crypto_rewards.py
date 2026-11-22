@@ -284,12 +284,15 @@ def test_a_complete_matching_approval_arms(monkeypatch):
     ({"total_usd": "600"}, "approval_mismatch:total_usd"),
     ({"loss_stop_usd": "100"}, "approval_mismatch:loss_stop_usd"),
     ({"market_days": 5}, "approval_mismatch:market_days"),
+    ({"max_markets": 6}, "approval_mismatch:max_markets"),
+    ({"hard_loss_budget": False}, "approval_mismatch:hard_loss_budget"),
+    ({"hard_loss_budget": "true"}, "approval_mismatch:hard_loss_budget"),
     ({"assets": ["eth", "sol", "xrp", "btc"]}, "approval_mismatch:assets"),
     ({"combined_max_exposure_usd": "999"},
      "approval_mismatch:combined_max_exposure_usd"),
     ({"not_after": "soon"}, "approval_window_unreadable"),
     ({"not_after": iso(-3600)}, "approval_window_unreadable"),
-    ({"not_after": iso(-1)}, "approval_expired"),
+    ({"not_before": iso(-7200), "not_after": iso(-1)}, "approval_expired"),
     ({"not_before": iso(3600)}, "approval_not_started"),
     ({"not_before": iso(-10 * 86400), "not_after": iso(86400)},
      "approval_window_too_long"),
@@ -398,7 +401,8 @@ def test_lane_exposure_counts_unsettled_markets_and_resting_bids():
     assert set(ex["by_market"]) == {ETH, SOL}
 
 
-def test_lane_caps_drop_openings_never_completions():
+def test_lane_caps_drop_openings_never_completions(monkeypatch):
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", False)
     held = {s: mkt("100", "100", "47", "49") for s in (ETH, SOL)}   # $192
     full = {"YES": {"px": D("0.47"), "qty": D("100"), "role": "open"},
             "NO": {"px": D("0.49"), "qty": D("100"), "role": "open"}}
@@ -416,7 +420,8 @@ def test_lane_caps_drop_openings_never_completions():
     assert want == comp
 
 
-def test_unpaired_bound_counts_what_resting_bids_could_strand():
+def test_unpaired_bound_counts_what_resting_bids_could_strand(monkeypatch):
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", False)
     o = {"a": {"side": "NO", "px": "0.66", "qty": "100", "filled": "0",
                "open": True, "stage": "crypto_open"},
          "b": {"side": "YES", "px": "0.29", "qty": "100", "filled": "0",
@@ -482,7 +487,10 @@ def fresh_meter(e):
 
 @pytest.fixture
 def lane(tmp_path, monkeypatch):
-    """Lane on, armed with a matching approval, shared gates readable."""
+    """Lane on, armed with a matching approval, shared gates readable.
+    The proposal's 100-a-side sizing (hard loss budget off); the hard
+    budget has its own tests below."""
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", False)
     arm_env(monkeypatch)
     monkeypatch.setattr(M, "ACCOUNT_RISK_ON", True)
     monkeypatch.setattr(RN1, "ON", True)       # production runs RN1 mode
@@ -1110,3 +1118,86 @@ def test_the_probe_image_carries_the_lane():
         (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
     assert '"src/pmus_crypto_rewards.py"' in \
         (root / "deploy/pmus_spring_l5/railway.json").read_text()
+
+
+# ------------------------------------------------------- hard loss budget
+
+def test_hard_loss_budget_is_the_default():
+    assert CR.HARD_LOSS_BUDGET is True
+    assert CR.approval_template()["hard_loss_budget"] is True
+
+
+def test_quotes_are_sized_to_the_leg_budget():
+    """$30 for one market: the dearer leg (NO 0.49) x 61 = $29.89."""
+    q = Q(max_leg_usd=D("30"))
+    assert q["YES"]["qty"] == q["NO"]["qty"] == D("61")
+    small = Q(max_leg_usd=D("10"))                 # 20 contracts < MIN_QTY
+    assert small["YES"] is None and small["why_YES"] == "loss_budget"
+
+
+def test_the_budget_is_split_over_the_markets_and_shrinks_with_losses(
+        monkeypatch):
+    markets = {ETH: mkt(), SOL: mkt(), XRP: mkt()}
+    assert CR.leg_budget(markets, ETH) == D("10")
+    monkeypatch.setattr(CR, "MAX_MARKETS", 1)
+    assert CR.leg_budget(markets, ETH) == D("30")
+    lost = {**markets, XRP: mkt("20", "0", "9", "0", done=True,
+                                settle_px="0")}                  # -$9
+    assert CR.unpaired_cap(lost) == D("21")
+    won = {**markets, XRP: mkt("20", "0", "9", "0", done=True,
+                               settle_px="1")}                   # +$11
+    assert CR.unpaired_cap(won) == D("30")          # gains do not enlarge it
+    held = {**markets, SOL: mkt("40", "0", "19", "0")}
+    assert CR.leg_budget(held, ETH) == D("11")
+
+
+@pytest.fixture
+def hard(lane, monkeypatch):
+    """One market, hard $30 budget, approval matching that configuration."""
+    e, v = lane
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", True)
+    monkeypatch.setattr(CR, "MAX_MARKETS", 1)
+    monkeypatch.setattr(CR, "ASSETS", ("eth",))
+    monkeypatch.setenv(CR.APPROVAL_ENV, json.dumps(approval()))
+    return e, v
+
+
+def test_hard_budget_worst_case_never_exceeds_the_stop(hard):
+    """Fill the dear side alone and settle it worthless: the loss is the
+    leg's cost, which was sized inside $30. Nothing reopens afterwards."""
+    e, v = hard
+    assert select(e, v) == [ETH]
+    e.step_market(ETH)
+    legs = {o["side"]: o for o in v.live(ETH).values()}
+    assert legs["YES"]["qty"] == legs["NO"]["qty"] == D("61")
+    assert max(o["px"] * o["qty"] for o in legs.values()) <= D("30")
+    no = next(k for k, o in v.live(ETH).items() if o["side"] == "NO")
+    v.fill(no)
+    e.step_market(ETH)
+    live = list(v.live(ETH).values())
+    assert [(o["side"], o["qty"]) for o in live] == [("YES", D("61"))]
+    mk = e.b.m(ETH)
+    for k in list(v.live(ETH)):
+        v.cancel(k)
+    mk.update(done=True, settle_px="1")              # NO expires worthless
+    assert CR.book_pnl(e.b.d["markets"])["usd"] == D("-29.89")
+    assert CR.book_pnl(e.b.d["markets"])["usd"] >= -CR.LOSS_STOP_USD
+    assert CR.unpaired_cap(e.b.d["markets"]) == D("0.11")
+    nxt = ETH.replace("11-21", "11-22")
+    v.crypto = [nxt]
+    e.select_crypto(v.account())
+    e.step_market(nxt)
+    assert not v.live()                              # budget is spent
+
+
+def test_hard_budget_refuses_the_proposal_size_across_three_markets(
+        lane, monkeypatch):
+    """100 a side on three markets cannot fit a $30 worst case: $10 a
+    market is 20 contracts, under the 25 minimum -- nothing is quoted."""
+    e, v = lane
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", True)
+    monkeypatch.setenv(CR.APPROVAL_ENV, json.dumps(approval()))
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    assert not v.orders

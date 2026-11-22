@@ -16,6 +16,12 @@ same watchdog — no new bot, no new service.
 - After a fill: the other side becomes an exact-size completion bid, never above a $1.00
   pair; the filled side gets no new order until paired or settled. No taker path exists.
 - No new quotes in the last 2 h; a flat market is released, a held one rides to settlement.
+- **Hard loss budget (default ON, added after `7d7b7c764`).** Quotes are sized so that every
+  unpaired leg lost in full, plus the dearest leg each market's resting quotes could strand,
+  plus losses already closed, cannot exceed the loss stop. The budget is split evenly over
+  `PMUS_CRYPTO_MAX_MARKETS`. With it on, the proposal's 100 a side on three markets quotes
+  **nothing** ($10 a market is ~20 contracts, under the 25 minimum); one market gets ~44–61
+  contracts. Turning it off restores 100 a side and the approval must say `false`.
 
 ## What changes for sports with the lane OFF (the default)
 
@@ -64,6 +70,7 @@ rewards remain $0.
  "not_before": "<ISO>", "not_after": "<ISO, at most 4 days later>",
  "assets": ["eth", "sol", "xrp"], "qty": "100", "per_market_usd": "100",
  "total_usd": "300", "loss_stop_usd": "30", "market_days": 3, "depth_ticks": 1,
+ "max_markets": 3, "hard_loss_budget": true,
  "combined_max_exposure_usd": "<= PMUS_COMBINED_MAX_EXPOSURE_USD>", "taker": false}
 ```
 
@@ -78,7 +85,8 @@ fills confirmed, a paying programme, fresh depth, and a fresh account read.
 |---|---|---|
 | Crypto capital (`TOTAL_USD`) | 300 | constant ceiling 300; config can only lower it |
 | Per market | 100 | paired inventory keeps counting until settlement (`COUNT_PAIRED=1`) |
-| Unpaired (`MAX_UNPAIRED_USD`) | 150 | held lone legs + the dearest leg resting quotes could strand |
+| Unpaired (`MAX_UNPAIRED_USD`) | 150 | held lone legs + the dearest leg resting quotes could strand. With the hard loss budget this is instead the loss stop minus closed losses |
+| Hard loss budget (`HARD_LOSS_BUDGET`) | on | sizes quotes so the worst settlement stays inside the loss stop (maker fees, previewed at 0, are outside it) |
 | Open orders | 6 | |
 | Loss stop | 30 | latched in the book; cancels every crypto order; owner clears `crypto.loss_stop` |
 | Market days | 3 | counted when a day's first opening is placed |
@@ -86,7 +94,8 @@ fills confirmed, a paying programme, fresh depth, and a fresh account read.
 | Account lane cap | `L5_ACCOUNT_MAX_EXPOSURE_USD` | existing; counts both lanes. If below what the pilot needs, crypto is refused — raising it is an owner decision |
 
 The loss stop trips on the bot's own mark (every loop) or the venue-settled net (hourly).
-It stops new risk; **a 100-contract leg already held can lose ~$50–70 by settlement**.
+With the hard loss budget OFF it only stops new risk: **a 100-contract leg already held can
+lose ~$50–70 by settlement**. With it ON the sizes themselves keep the worst case inside it.
 
 ## Accounting (`CRYPTO_PNL`, `CRYPTO_REWARD_CREDITS`, heartbeat `crypto`)
 
