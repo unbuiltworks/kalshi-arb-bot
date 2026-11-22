@@ -86,3 +86,46 @@ Watchdog: one sweep at 13:25:01Z saw the registry unreachable during the contain
   $2.00 each), as expected; utc_day_realized still -5.00; would_halt false. It still shows
   Bologna NO 2 that the venue has netted away.
 - Safety check: all clear.
+
+## Slice 4 (14:25:33-14:32:49Z) - Genoa goal; bot stopped new exposure itself
+- Genoa win jumped 0.27/0.28 -> 0.53/0.54 (21 ticks), logged 14:28:34Z.
+- Fills: 14:28:39 Bologna win YES 0.43 x2 (extension); 14:28:43 Genoa win NO 0.68 x2 - the
+  same-side extension that had rested since 14:20:57, filled INTO the goal (NO was worth 0.465:
+  -21.5c per contract at the fill). The venue had both fills by ~14:28:07; the bot logged them
+  ~30 s later.
+- 14:28:33Z PILOT_PNL / INVENTORY_RECONCILE ran inside that lag: venue net 4 / -4 against book
+  2 / -2 -> both markets position_unconfirmed, new_openings_block pilot_fills_unconfirmed.
+- From 14:29:43Z RN1_QUOTE block = pilot_loss_at_risk_book (campaign worst case -4.36 <= -4):
+  no new openings or extensions for the rest of the window; completion bids only.
+- Positions 14:32Z: Bologna win YES 6 / NO 2; Genoa win NO 4 (cost 2.68). Unmatched 4.51 (cap 6).
+  Spent 6.36 (cap 16). Cash 317.3038 = 321.6638 - 6.36 + 2.00. Exact.
+
+## Supervision failure (this session)
+A reconciliation mismatch was a stop condition. The relock (lock=1) was issued by this session at
+~14:35Z but the session stalled and Railway received it at 15:20:45Z. The bot ran the full
+approved window under its own controls; it was not relocked early and was not monitored
+14:33-15:20Z. Nothing exceeded the window, markets or limits.
+
+## 14:32:49-14:50:00Z (from logs, read 15:26Z)
+- 14:40:52 FILL Bologna win NO 0.51 x2 (completion; YES was 0.42/0.43, so NO fair 0.575: +6.5c)
+- 14:40:53 ORDER Bologna win NO 0.51 x2 (completion)
+- 14:44:08 FILL Bologna win NO 0.51 x2 (completion; +8.5c) -> Bologna win YES 6 / NO 6, flat.
+- ~14:44:30 Bologna scored (0.41 -> 0.69). The market was already flat.
+- Genoa completion bid YES 0.30 x2 never filled (YES 0.54 -> 0.83).
+- 14:50:00Z window ended: cancelled_all_own why submission_lock:window_ended, still_open empty;
+  every later placement refused (window_ended). No ORDER after 14:44:08Z.
+
+## Campaign totals (venue-reported fills; settlement pending)
+- 65 orders, 8 fills, 16 contracts, $8.40 spent (cap $16). Two markets, one per match.
+  All 2 contracts, post-only, maker. No taker order.
+- Bologna win: 6 YES (2.74) + 6 NO (2.98) = 6 pairs at 0.9533 -> +$0.28, venue-netted, in cash.
+- Genoa win: 4 NO, cost $2.68, UNPAIRED. Genoa win trades 0.91 at 15:27Z. Settles +$1.32 if
+  Genoa do not win, -$2.68 if they do.
+- Venue cash 319.2638 at 15:25Z = 321.6638 - 8.40 + 6.00. Exact. Reconciled, 0 open orders.
+- BTC-service ledger (separate, not rebased): utc_day_realized -5.00 unchanged; it holds
+  Bologna UP 4 (stale - venue is flat) and Genoa DOWN 4 at its $1 bound; would_halt false.
+
+## 15:20:45Z relock (late) - verified 15:26Z
+Deployment 57b21885, commit 08b1a7c93, lock "locked", 0 ORDER / 0 FILL, watchdog open_orders 0.
+With the window gone the campaign marker reverted to the stale 01:15Z value, so the bot's meter
+now shows both campaigns together (realized 0.63 = 0.35 last night + 0.28 today; 12 fills).
