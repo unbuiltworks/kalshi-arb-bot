@@ -6691,9 +6691,21 @@ class Runner:
         the BTC5m ledger's published fills, each confirmed by OUR OWN read
         of the venue's order row. See `InventoryStore.attest_other_strategy_
         cost` for the checks. Never raises into the settlement sweep."""
-        url = str(os.getenv(BTC5M_FILLS_URL_ENV, "")).strip()
-        if not url or LX.ORIGIN.strategy_of_market(market) != \
-                LX.ORIGIN.BTC5M:
+        # WHICH strategy's feed: the registry's answer for this market's
+        # series. The 5-minute lane is exactly as before. A strategy with
+        # an owner-named floor (the sports controller) is read only when
+        # its feed is configured and that floor day has been reached.
+        owner = LX.ORIGIN.ledger_owner_of_market(market)
+        if owner in (None, LX.OWN_STRATEGY):
+            return None
+        from src import l5_venue_cost_attestation as _VCA
+        _env = (BTC5M_FILLS_URL_ENV if owner == LX.ORIGIN.BTC5M
+                else _VCA.SIBLING_FEED_ENVS.get(owner))
+        url = str(os.getenv(_env, "")).strip() if _env else ""
+        if not url:
+            return None
+        if owner != LX.ORIGIN.BTC5M and not _VCA.sibling_in_scope(
+                market, dt.datetime.now(dt.timezone.utc).isoformat()):
             return None
         if not any(str(k).rsplit("|", 1)[0] == market for k in
                    (self.store.state.get("leg_cost_basis_unknown") or [])):
@@ -6704,6 +6716,9 @@ class Runner:
                 doc = json.loads(r.read().decode("utf-8"))
             if not isinstance(doc, Mapping) or not doc.get("readable"):
                 raise ValueError("feed not readable")
+            if owner != LX.ORIGIN.BTC5M and \
+                    str(doc.get("strategy") or "") != str(owner):
+                raise ValueError("feed is another strategy's")
             fills = [o for o in (doc.get("orders") or ())
                      if isinstance(o, Mapping) and o.get("market") == market]
             rows = {}
@@ -6713,7 +6728,8 @@ class Runner:
                     rows[vid] = t.order(vid)
             out = self.store.attest_other_strategy_cost(
                 market, fills, rows,
-                source="BTC5M_LEDGER_FILLS_CONFIRMED_BY_VENUE_ORDER_READS")
+                source="%s_LEDGER_FILLS_CONFIRMED_BY_VENUE_ORDER_READS"
+                       % owner)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

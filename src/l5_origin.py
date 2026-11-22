@@ -20,9 +20,19 @@ account-wide totals are computed where they always were and are returned
 here untouched beside the per-origin breakdown, so a label can never make a
 loss leave the account-wide figure.
 
-THE FOUR LABELS, AND WHAT EACH REQUIRES
+THE LABELS, AND WHAT EACH REQUIRES
   BTC15M   created by the 15-minute executor's own orders (`l5f-` ids)
   BTC5M    created by the 5-minute adapter's own orders (`b5m-` ids)
+  SPORTS   the sports controller's (owner 2026-11-22: "The BTC service must
+           not adopt or settle positions belonging to the sports
+           controller. Every fill and position needs durable ownership
+           attribution, with ambiguous positions handled conservatively
+           rather than silently assigned."). Its orders carry NO client-id
+           prefix, so nothing is ever labelled SPORTS from an id or from a
+           market's name: the label is written only on a settled market
+           whose every venue fill is an order in the sports controller's
+           own durable ledger, order by order (the sibling-ledger form).
+           Until then a sports position is UNKNOWN, at the $1 bound
   MANUAL   the OWNER has attested this market was traded by hand. An
            attestation is a label; it is not a cost basis
   UNKNOWN  everything else. Never guessed into one of the other three
@@ -39,12 +49,26 @@ from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 BTC15M, BTC5M, MANUAL, UNKNOWN = "BTC15M", "BTC5M", "MANUAL", "UNKNOWN"
-ORIGINS = (BTC15M, BTC5M, MANUAL, UNKNOWN)
+SPORTS = "SPORTS"
+ORIGINS = (BTC15M, BTC5M, SPORTS, MANUAL, UNKNOWN)
 
 #: the client-order-id prefix each automated strategy writes. THE registry.
 STRATEGY_COID_PREFIX = {BTC15M: "l5f-", BTC5M: "b5m-"}
 #: the market series each automated strategy trades
 STRATEGY_SERIES = {BTC15M: "cpc-btc-updown-15m-", BTC5M: "cpc-btc-updown-5m-"}
+#: A SEPARATE, NARROWER REGISTRY: other controllers on this account whose
+#: settled markets may be restated from THEIR OWN order ledger. It is not
+#: `STRATEGY_SERIES` on purpose. That registry is the approval layer's, and
+#: it also decides which markets' uncertainty may be treated as "only
+#: another strategy's" and which orders are foreign by name -- none of which
+#: this changes for a sports market. The families are the venue's two
+#: sports ones: `aec-` two-outcome events, `atc-` one outcome of a
+#: three-outcome event. A family is where that controller trades; it is not
+#: proof of who holds a position there, and nothing is restated on it alone.
+LEDGER_OWNER_SERIES = {SPORTS: ("aec-", "atc-")}
+#: evidence written on a settled row whose fills another strategy's own
+#: ledger accounts for, order by order
+EVIDENCE_SIBLING_LEDGER = "EVERY_VENUE_FILL_IS_AN_ORDER_IN_THAT_STRATEGYS_LEDGER"
 
 #: cost-basis kinds, strongest first. Only the first is a measured cost.
 BASIS_AUTHENTICATED = "AUTHENTICATED_FILLS"
@@ -79,6 +103,20 @@ def strategy_of_market(market: Any) -> Optional[str]:
     m = str(market or "")
     for origin, series in STRATEGY_SERIES.items():
         if m.startswith(series):
+            return origin
+    return None
+
+
+def ledger_owner_of_market(market: Any) -> Optional[str]:
+    """Whose ORDER LEDGER could account for fills in this market: the
+    registered strategy whose series it is in, else the controller whose
+    family it is in, else None. Used only by the cost attestations."""
+    got = strategy_of_market(market)
+    if got is not None:
+        return got
+    m = str(market or "")
+    for origin, families in LEDGER_OWNER_SERIES.items():
+        if m.startswith(tuple(families)):
             return origin
     return None
 

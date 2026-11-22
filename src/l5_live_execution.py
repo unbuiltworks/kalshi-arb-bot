@@ -4062,6 +4062,15 @@ class InventoryStore:
         row["pnl_provenance"] = self.VENUE_ATTESTED_COST
         row["cost_provenance"] = self.VENUE_ATTESTED_COST
         row["origin_cost_basis"] = ORIGIN.BASIS_AUTHENTICATED
+        if form == self.SIBLING_LEDGER_FORM:
+            # DURABLE OWNERSHIP, from the only evidence that establishes it:
+            # every venue fill of this market is an order in that
+            # strategy's own ledger, same side, quantity and cost. The
+            # result stays in the account-wide totals; only its column in
+            # the per-origin report changes. The label it replaces is in
+            # `cost_superseded` above.
+            row["origin"] = str(sibling.get("strategy"))
+            row["origin_evidence"] = ORIGIN.EVIDENCE_SIBLING_LEDGER
         row["cost_corrected_at"] = now_iso
         row["cost_correction_id"] = correction_id
         row["venue_cost_attested"] = {
@@ -4171,7 +4180,7 @@ class InventoryStore:
             return "NO_SIBLING_EVIDENCE"
         if not isinstance(sibling, Mapping):
             return "SIBLING_UNREADABLE"
-        owner = ORIGIN.strategy_of_market(market)
+        owner = ORIGIN.ledger_owner_of_market(market)
         if owner is None or owner == OWN_STRATEGY:
             return "NOT_ANOTHER_STRATEGYS_MARKET"
         if str(sibling.get("strategy") or "") != str(owner):
@@ -5649,7 +5658,7 @@ class InventoryStore:
             market = canonical_market(market, doing="attesting a cost")
         except UnknownMarket:
             return no("MARKET_UNREADABLE")
-        owner = ORIGIN.strategy_of_market(market)
+        owner = ORIGIN.ledger_owner_of_market(market)
         if owner is None or owner == OWN_STRATEGY:
             return no("NOT_ANOTHER_STRATEGYS_MARKET")
         if not str(source).strip():

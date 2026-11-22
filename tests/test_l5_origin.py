@@ -65,6 +65,31 @@ def test_the_registry_names_two_strategies_with_distinct_prefixes_and_series():
     assert OG.strategy_of_market(None) is None
 
 
+def test_the_sports_controller_is_a_ledger_owner_and_not_a_strategy_series():
+    """Owner 2026-11-22. Its markets may be restated from its own order
+    ledger; nothing else about a sports market changes: it is in no
+    strategy's series (so its uncertainty is never "only another
+    strategy's") and it has no client-id prefix (so no order or position is
+    ever labelled SPORTS by name)."""
+    assert OG.SPORTS in OG.ORIGINS
+    assert OG.SPORTS not in OG.STRATEGY_SERIES
+    assert OG.SPORTS not in OG.STRATEGY_COID_PREFIX
+    assert OG.strategy_of_market(OTHER) is None
+    assert OG.ledger_owner_of_market(OTHER) == OG.SPORTS
+    assert OG.ledger_owner_of_market(
+        "atc-sea-bol-udi-2026-11-22-bol") == OG.SPORTS
+    assert OG.ledger_owner_of_market(M15) == OG.BTC15M
+    assert OG.ledger_owner_of_market(M5) == OG.BTC5M
+    for other in ("cpc-eth-updown-1d-2026-11-22", "xaec-nba", "", None):
+        assert OG.ledger_owner_of_market(other) is None
+    for seen in (None, "BTC5M", "SPORTS"):
+        got = OG.origin_of_position(OTHER, own=OG.BTC15M,
+                                    booked_by_own_fills=False,
+                                    other_strategy_order_seen=seen)
+        assert got["origin"] == OG.UNKNOWN
+        assert got["cost_basis"] == OG.BASIS_UPPER_BOUND
+
+
 def test_the_registry_agrees_with_the_approval_layer():
     from src import l5_campaign_approval as CA
     assert OG.STRATEGY_SERIES[OG.BTC15M] == CA.BTC15M_SERIES
@@ -220,7 +245,7 @@ def test_the_split_always_adds_up_and_never_touches_the_totals(
     assert before == (D("-7.141"), D("-7.141"))
     rep = store.realized_by_origin()
     by = {k: D(v["settled_usd"]) for k, v in rep["by_origin"].items()}
-    assert by == {"BTC15M": D("-0.141"), "BTC5M": D("0"),
+    assert by == {"BTC15M": D("-0.141"), "BTC5M": D("0"), "SPORTS": D("0"),
                   "MANUAL": D("0"), "UNKNOWN": D("-7")}
     assert sum(by.values()) == D(rep["sum_of_rows_usd"]) == D("-7.141")
     assert rep["rows"] == 4 and rep["complete"] is True

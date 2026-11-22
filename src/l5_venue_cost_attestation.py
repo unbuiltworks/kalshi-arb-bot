@@ -91,7 +91,17 @@ RETRY_S = 600.0
 SIBLING_ENV = "L5_SIBLING_LEDGER_ATTESTATION"
 SIBLING_TOKEN = "VENUE_FILLS_AND_SIBLING_LEDGER"
 #: where each other strategy publishes its order ledger (read-only GET)
-SIBLING_FEED_ENVS = {"BTC5M": "L5_BTC5M_FILLS_URL"}
+SIBLING_FEED_ENVS = {"BTC5M": "L5_BTC5M_FILLS_URL",
+                     "SPORTS": "L5_SPORTS_FILLS_URL"}
+#: THE SPORTS CONTROLLER'S MARKETS ARE IN SCOPE ONLY FROM A DAY THE OWNER
+#: NAMES. Owner 2026-11-22: "never simply subtract $10.95 from a safety
+#: ledger". Registering the sports series must not, by being deployed,
+#: restate rows that are already booked. So for a strategy listed here the
+#: sibling form is OFF unless its feed is configured AND this variable holds
+#: a UTC day, and it then applies only to markets this ledger settled on or
+#: after that day. Unset or malformed: off, and nothing about a sports row
+#: changes (it keeps the exact forms and the $1 bound it has today).
+SIBLING_FLOOR_ENVS = {"SPORTS": "L5_SPORTS_ATTEST_FLOOR_UTC_DAY"}
 SIBLING_TIMEOUT_S = 3.0
 #: a market already exhausted under the exact forms gets this many tries
 #: under the sibling form, recorded durably, then is left alone again
@@ -106,12 +116,36 @@ def sibling_enabled() -> bool:
 def _strategy_of(market: str) -> Optional[str]:
     try:
         from src import l5_live_execution as LX
-        owner = LX.ORIGIN.strategy_of_market(market)
+        owner = LX.ORIGIN.ledger_owner_of_market(market)
         return None if owner in (None, LX.OWN_STRATEGY) else str(owner)
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
         return None
+
+
+def sibling_in_scope(market: str, settled_t: Any) -> bool:
+    """May the sibling form be used for this market, settled at this time?
+
+    A strategy with no entry in `SIBLING_FLOOR_ENVS` (the 5-minute lane) is
+    exactly as before: in scope whenever the form is on. One with an entry
+    needs its feed configured and an owner-named floor day, and the row's
+    own settlement day must not be before it.
+    """
+    owner = _strategy_of(market)
+    if owner is None:
+        return False
+    env = SIBLING_FLOOR_ENVS.get(owner)
+    if env is None:
+        return True
+    feed = SIBLING_FEED_ENVS.get(owner)
+    if not feed or not (os.environ.get(feed) or "").strip():
+        return False
+    floor = (os.environ.get(env) or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", floor):
+        return False
+    day = str(settled_t or "")[:10]
+    return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)) and day >= floor
 
 
 def sibling_evidence(market: str, *, fetch: Any = None) -> Dict[str, Any]:
@@ -262,7 +296,7 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
         if rec.get("status") == "CORRECTED":
             continue
         if rec.get("status") == "UPPER_BOUND_KEPT" and not sibling_retry(
-                m, rec):
+                m, rec, settled_t=t):
             continue
         rt = parse_time(t)
         if rt is not None and (now - rt).total_seconds() < SETTLE_AGE_S:
@@ -275,7 +309,8 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
     return out
 
 
-def sibling_retry(market: str, rec: Mapping[str, Any]) -> bool:
+def sibling_retry(market: str, rec: Mapping[str, Any], *,
+                  settled_t: Any = None) -> bool:
     """May an EXHAUSTED market be read again under the sibling form?
 
     Only with the switch on, only for another strategy's market, only when
@@ -283,6 +318,8 @@ def sibling_retry(market: str, rec: Mapping[str, Any]) -> bool:
     addresses), and only `MAX_SIBLING_ATTEMPTS` times, counted durably.
     """
     if not sibling_enabled() or _strategy_of(market) is None:
+        return False
+    if not sibling_in_scope(market, settled_t):
         return False
     if not str(rec.get("last_reason") or "").startswith(QTY_REASON) \
             and not int(rec.get("sibling_attempts") or 0):
@@ -520,7 +557,8 @@ class Attestor:
                         "new_pnl": out.get("new_pnl"),
                         "delta": out.get("delta")}
             if str(out.get("reason")) == QTY_REASON and sibling_enabled() \
-                    and _strategy_of(market) is not None:
+                    and _strategy_of(market) is not None \
+                    and sibling_in_scope(market, row.get("t")):
                 return self._evaluate_sibling(store, w, market, got)
             return self._refuse(store, market, str(out.get("reason")))
         except BaseException as exc:                           # noqa: BLE001
