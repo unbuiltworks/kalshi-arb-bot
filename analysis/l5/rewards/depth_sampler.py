@@ -53,7 +53,8 @@ def measure(slug, prog):
     md = get("/v1/markets/%s/book" % slug)["marketData"]
     bids = sorted(levels(md.get("bids")), key=lambda x: -x[0])
     asks = sorted(levels(md.get("offers")), key=lambda x: x[0])
-    df, tgt, ms = prog["discountFactor"], prog["targetSize"], prog.get("maxSpread")
+    df, tgt, ms = float(prog["discountFactor"]), float(prog["targetSize"]), prog.get("maxSpread")
+    ms = float(ms) if ms is not None else None
     bq, bpx, bs, braw = walk(bids, tgt, df)
     aq, apx, as_, araw = walk(asks, tgt, df)
     pays_bid, pays_ask = bq, aq
@@ -61,7 +62,14 @@ def measure(slug, prog):
         ok = bq and aq and (apx - bpx) <= 2 * ms + 1e-9
         pays_bid = pays_ask = ok
     st = md.get("stats") or {}
+    # contracts already resting within Max Spread of the simple mid: what the book lacks to pay
+    band_bid = band_ask = None
+    if ms is not None and bids and asks:
+        mid = (bids[0][0] + asks[0][0]) / 2
+        band_bid = sum(q for px, q in bids if px >= mid - ms - 1e-9)
+        band_ask = sum(q for px, q in asks if px <= mid + ms + 1e-9)
     return {
+        "band_bid_raw": band_bid, "band_ask_raw": band_ask,
         "t": time.time(), "slug": slug, "program": prog["programId"], "state": md.get("state"),
         "best_bid": bids[0][0] if bids else None, "best_ask": asks[0][0] if asks else None,
         "bid_top_qty": bids[0][1] if bids else 0, "ask_top_qty": asks[0][1] if asks else 0,
