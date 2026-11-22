@@ -1,0 +1,32 @@
+Daily crypto up/down reward recording - 22 Nov 2026 00:04-02:01 UTC
+Read-only. Public book snapshots every ~10 s, 678 per market, 0 errors.
+Rule applied: docs.polymarket.us/incentives/liquidity (analysis/l5/rewards/depth_sampler.py).
+Shares are MODELLED against the displayed book. Not earnings, not fills.
+Data: depth_daily_crypto_20261122_0004_0201.jsonl.gz
+
+BTC up/down 1D  ($400/day, one market, target 10,000/side, max spread 3c)
+  seconds in which the pool paid anyone:      0%
+  contracts within 3c of mid, bid  median 1,383 (p10 680, p90 1,991)
+  contracts within 3c of mid, ask  median 1,189 (p10 487, p90 1,335)
+  size-adjusted bid/ask gap        median 18c (limit 6c)
+  top of book 475 x 350, spread 1c, mid 0.395-0.47
+  traded in window                 $302 / 713 contracts
+  => pool is forfeited. Book lacks ~8,600 bid and ~8,800 ask contracts
+     inside the band. Whoever supplies them makes the pool pay and would
+     hold roughly 85-90% of the score while nobody else follows.
+     Capital: ~8,700 x (p + 1-p) ~ $8,700 resting, both sides.
+
+ETH / SOL / XRP up/down 1D  ($150/day shared, target 2,000/side, max spread 5c)
+                 paying   score bid/ask   in-band bid/ask   traded    share at best for
+                                                                      500    1000   2500
+  ETH            100%     1,040 / 880     3,183 / 2,591     $46       36%    52%    72%
+  SOL             99%     1,118 / 793     3,809 / 2,376     $4        43%    55%    72%
+  XRP             99%     2,080 / 705     2,204 / 2,206     $58       34%    49%    68%
+  => 1,000 contracts/side on each (about $3,000 resting) models at ~52% of the
+     alt pool. If $150 is split evenly and the 2-hour picture held all day:
+     ~$78/day. Split between the three markets is NOT confirmed.
+
+Not measured: fills against our orders, loss when filled (these are daily
+directional markets; a resting quote is hit when the coin moves), how other
+makers respond to added size, the other 22 hours of the day, whether payouts
+are actually credited at this share. Payouts under $1 are not paid.
