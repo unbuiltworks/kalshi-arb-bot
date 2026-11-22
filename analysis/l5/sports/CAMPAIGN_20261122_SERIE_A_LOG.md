@@ -129,3 +129,12 @@ approved window under its own controls; it was not relocked early and was not mo
 Deployment 57b21885, commit 08b1a7c93, lock "locked", 0 ORDER / 0 FILL, watchdog open_orders 0.
 With the window gone the campaign marker reverted to the stale 01:15Z value, so the bot's meter
 now shows both campaigns together (realized 0.63 = 0.35 last night + 0.28 today; 12 fills).
+
+## Settlement (public venue data, 16:01Z)
+- Sassuolo 0-2 Genoa (FT). atc-sea-sas-gen-2026-11-22-gen: MARKET_STATE_EXPIRED,
+  settlementPx 1.0000. The 4 NO contracts (cost $2.68) pay $0.
+- Bologna 1-1 Udinese (FT). atc-sea-bol-udi-2026-11-22-bol: settlementPx 0.0000. Position was
+  flat (6 pairs, already paid at pairing).
+- Campaign result: +0.28 (pairs, in cash) - 2.68 (unpaired leg) = -$2.40. Fees $0, rebates $0.
+  Venue cash stays 319.2638 (the $2.68 left the account when the leg was bought).
+  Campaign-attributable liquidity rewards: none credited (venue pays days later, if at all).
