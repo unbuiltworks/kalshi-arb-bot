@@ -234,7 +234,7 @@ def resolve_token(gamma_get: Callable[[str], Any], slug: str,
         rows = [x for e in (evs if isinstance(evs, list) else [])
                 for x in (e.get("markets") or []) if x.get("slug") == base]
     if not rows:
-        return None
+        return resolve_by_names(gamma_get, slug, pm_outcomes)
     m = rows[0]
     try:
         io = json.loads(m.get("outcomes") or "[]")
@@ -251,6 +251,83 @@ def resolve_token(gamma_get: Callable[[str], Any], slug: str,
     if m.get("closed"):
         return None
     return str(toks[0])
+
+
+#: Leagues whose international slug is NOT 'aec-' stripped. LIVE 2026-11-22
+#: 04:16Z: 7 ATP matches were live on PMUS and all 7 read "no international
+#: market" -- intl lists them under surname slugs (PMUS
+#: aec-atp-yukmoc-kosogu-2026-11-21 = intl atp-mochiz-ogura-2026-11-21), so
+#: the exact-slug lookup found nothing and the guard excluded all tennis.
+NAME_MATCH_LEAGUES = tuple(
+    x.strip().lower() for x in os.getenv(
+        "PMUS_TWO_SIDED_INTL_NAME_MATCH", "atp,wta").split(",") if x.strip())
+
+
+def _slug_date(slug: str):
+    from datetime import date
+    try:
+        y, mo, d = slug.rsplit("-", 3)[-3:]
+        return date(int(y), int(mo), int(d))
+    except (ValueError, TypeError):
+        return None
+
+
+def resolve_by_names(gamma_get: Callable[[str], Any], slug: str,
+                     pm_outcomes: Optional[list]) -> Optional[str]:
+    """The intl token for PMUS YES when the two venues name the event
+    differently (tennis). Deliberately narrow -- a wrong match would anchor
+    our bids to another match's price -- so EVERY one of these must hold, and
+    exactly one market must satisfy them, or the answer is None (the guard
+    then fails closed for that market, as before):
+
+      * league in NAME_MATCH_LEAGUES, and the intl event slug is that
+        league's singles slug (never '<league>-doubles-...');
+      * both players' full names equal, IN THE SAME ORDER, after _norm;
+      * slug dates within one day of each other;
+      * the intl market is the event's own slug and its type is 'moneyline'
+        (the same event also lists set winners and handicaps with the same
+        two outcome names);
+      * event and market are open, with exactly two tokens."""
+    parts = slug.split("-")
+    if len(parts) < 7 or parts[0] != "aec" or \
+            parts[1] not in NAME_MATCH_LEAGUES:
+        return None
+    league, when = parts[1], _slug_date(slug)
+    if when is None or not pm_outcomes or len(pm_outcomes) != 2:
+        return None
+    want = [_norm(pm_outcomes[0]), _norm(pm_outcomes[1])]
+    if not want[0] or not want[1] or want[0] == want[1] or \
+            len(want[0].split()) < 2:
+        return None
+    import urllib.parse
+    q = urllib.parse.urlencode({"q": want[0].split()[-1],
+                                "limit_per_type": 30})
+    res = gamma_get("/public-search?" + q) or {}
+    hits = set()
+    for ev in (res.get("events") or []) if isinstance(res, Mapping) else []:
+        if not isinstance(ev, Mapping) or ev.get("closed"):
+            continue
+        es = str(ev.get("slug") or "")
+        if not es.startswith(league + "-") or \
+                es.startswith(league + "-doubles-"):
+            continue
+        d = _slug_date(es)
+        if d is None or abs((d - when).days) > 1:
+            continue
+        for x in ev.get("markets") or []:
+            if not isinstance(x, Mapping) or x.get("slug") != es or \
+                    x.get("closed") or \
+                    str(x.get("sportsMarketType") or "") != "moneyline":
+                continue
+            try:
+                io = json.loads(x.get("outcomes") or "[]")
+                toks = json.loads(x.get("clobTokenIds") or "[]")
+            except (TypeError, ValueError):
+                continue
+            if len(io) == 2 and len(toks) == 2 and \
+                    [_norm(io[0]), _norm(io[1])] == want:
+                hits.add(str(toks[0]))
+    return hits.pop() if len(hits) == 1 else None
 
 
 class _IntlSocket:
