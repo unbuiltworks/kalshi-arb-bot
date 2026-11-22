@@ -164,3 +164,53 @@ analysis/l5/btc5m/unmatched_exit_value.py         exit-policy comparison
 Each has a committed `*_RESULT.txt` beside it with the numbers and the
 regeneration command. Quote/BRTI inputs are rebuilt from service logs and the
 public gateway — see the header of each result file.
+
+---
+
+## 11. Production coordination — owner decision, 2026-11-22
+
+Two Claude sessions changing the same production service caused a day of
+confusion. The owner's split, which supersedes any earlier assumption that
+one session owns everything:
+
+| service | coordinator | responsibility |
+|---|---|---|
+| RN1 sports (`pmus-spring-l5-probe`) | the sports session | own the release, finish stability verification, present the live-pilot authorization |
+| BTC5m (`l5-btc5m-live`) | **this lineage** | **PARKED.** Leave the deployment alone unless an escalation condition below occurs. No parallel implementations, no unnecessary changes |
+| shared account / watchdog | — | monitor exposure, enforce account-wide limits |
+
+**Rule that would have prevented it:** one writer per tracked branch, plus a
+`commitSha` pin so what ships is what was reviewed. Both services now satisfy
+this — sports on `release/pmus-sports-rn1-055f0275f`, BTC5m pinned at
+`82fef206adf6f488d144fa7a979b76b06fb8136c` on
+`release/l5-btc5m-campaign-20261121j`.
+
+### Escalation conditions — the ONLY reasons to reopen BTC5m
+
+1. `can_submit: true` or `stored_state: ARMED` without the owner saying they
+   authorized it
+2. BTC5m places an order, or `BTC5M.settled_usd` moves off 0
+3. Shared account-wide limits breached, or the watchdog stops reading a lane's
+   registry
+4. Anything on BTC5m touches the sports service or the shared reservation file
+5. **Any unexpected change to BTC5m's authorization or safety limits, even
+   before an order is placed** (owner addition)
+
+Short of these: stay quiet. The next meaningful result is live execution
+evidence from RN1, not another branch.
+
+### State at park, verified 2026-11-22T00:12:34Z
+
+`L5_BTC5M_RESIDENT_DISARMED {"can_submit": false, "latched": false,`
+`"reason": "ENVELOPE_EXPIRED", "stored_state": "MONITOR",`
+`"serving_registry": true, "would_refuse_arming": false}`
+
+Deployment `cb16350c` SUCCESS since 2026-11-21T19:53:40Z. Never traded:
+`BTC5M.settled_usd = 0`, 0 markets. `would_refuse_arming: false` means the
+lane is ELIGIBLE for arming given a valid authorization — it is not a
+weakened control, and no authorization exists.
+
+### Not authorized by any conversation in this lineage
+
+BTC5m arming, live orders, taker execution, capital increase, or any change
+to a safety limit.
