@@ -330,6 +330,133 @@ def resolve_by_names(gamma_get: Callable[[str], Any], slug: str,
     return hits.pop() if len(hits) == 1 else None
 
 
+#: Soccer leagues whose three-outcome markets may be priced internationally.
+#: OWNER 2026-11-22: "Start with Serie A and build an exact three-outcome
+#: market resolver ... matching home win, draw, and away win individually
+#: across venues ... fail closed on ambiguous or missing mappings." Only
+#: leagues that use the SAME league code on both venues belong here (Serie A
+#: is `sea` on both; thai1/tha1, tff1/tur2, serca/serc differ and are not
+#: mapped).
+THREE_WAY_LEAGUES = tuple(
+    x.strip().lower() for x in os.getenv(
+        "PMUS_TWO_SIDED_INTL_THREE_WAY", "sea").split(",") if x.strip())
+PM_THREE_WAY_TYPE = "soccer_team_full_time_winner"
+
+
+def _words(x: Any) -> str:
+    """Lower-case words only: punctuation never joins or hides a word
+    ("draw?" is the word "draw"; "vs." is "vs")."""
+    return " ".join("".join(ch if ch.isalnum() else " "
+                            for ch in str(x or "").lower()).split())
+
+
+def _has_name(text: Any, name: Any) -> bool:
+    """`name` appears in `text` as whole words."""
+    t, n = " %s " % _words(text), _words(name)
+    return bool(n) and (" %s " % n) in t
+
+
+def _json_list(v: Any) -> Optional[list]:
+    if isinstance(v, list):
+        return v
+    try:
+        out = json.loads(v or "[]")
+    except (TypeError, ValueError):
+        return None
+    return out if isinstance(out, list) else None
+
+
+def resolve_three_way(gamma_get: Callable[[str], Any], slug: str,
+                      pm_market: Optional[Mapping[str, Any]]
+                      ) -> Optional[str]:
+    """The intl "Yes" token for ONE outcome of a soccer match:
+    PMUS atc-<lg>-<home>-<away>-<y>-<m>-<d>-<home|draw|away>  <->
+    intl      <lg>-<home>-<away>-<y>-<m>-<d>-<home|draw|away>.
+
+    Each outcome is its own Yes/No market on both venues; this maps one of
+    them and never combines outcomes. Returns None (the guard then fails
+    closed) unless EVERY check holds:
+
+      PMUS  league in THREE_WAY_LEAGUES; slug has the 8-part shape and its
+            outcome suffix is the home code, the away code or 'draw';
+            outcomes are exactly ["Yes","No"]; type is the full-time winner.
+      intl  the event <lg>-<home>-<away>-<date> exists, is open, and its
+            moneyline markets are EXACTLY the three outcomes (home, draw,
+            away) -- no more, no fewer; the wanted one is open, has
+            outcomes exactly ["Yes","No"] and two tokens.
+      same outcome, by name (not only by slug):
+            team market: PMUS's long-side team name is one of the two
+              teams in the intl event title, the intl question names that
+              team and does not say 'draw', and the OTHER team's intl
+              market does not name it;
+            draw market: both intl team names appear in the PMUS question,
+              which says 'draw', and the intl question says 'draw'."""
+    parts = str(slug).split("-")
+    if len(parts) != 8 or parts[0] != "atc" or \
+            parts[1] not in THREE_WAY_LEAGUES or not pm_market:
+        return None
+    league, home, away, suffix = parts[1], parts[2], parts[3], parts[7]
+    if _slug_date("-".join(parts[:7])) is None or home == away or \
+            suffix not in (home, away, "draw") or "draw" in (home, away):
+        return None
+    if _json_list(pm_market.get("outcomes")) != ["Yes", "No"] or \
+            str(pm_market.get("sportsMarketType") or "") != PM_THREE_WAY_TYPE:
+        return None
+    ev_slug = "-".join(parts[1:7])
+    evs = gamma_get(f"/events?slug={ev_slug}") or []
+    if not isinstance(evs, list) or len(evs) != 1 or \
+            not isinstance(evs[0], Mapping):
+        return None
+    ev = evs[0]
+    if ev.get("slug") != ev_slug or ev.get("closed"):
+        return None
+    ml = [x for x in ev.get("markets") or [] if isinstance(x, Mapping)
+          and str(x.get("sportsMarketType") or "") == "moneyline"]
+    by = {str(x.get("slug")): x for x in ml}
+    want3 = {f"{ev_slug}-{home}", f"{ev_slug}-draw", f"{ev_slug}-{away}"}
+    if len(ml) != 3 or set(by) != want3:
+        return None
+    teams = [t.strip() for t in
+             str(ev.get("title") or "").replace(" vs. ", " vs ").split(" vs ")]
+    if len(teams) != 2 or not all(_norm(t) for t in teams) or \
+            _norm(teams[0]) == _norm(teams[1]):
+        return None
+    m = by[f"{ev_slug}-{suffix}"]
+    toks = _json_list(m.get("clobTokenIds"))
+    if m.get("closed") or _json_list(m.get("outcomes")) != ["Yes", "No"] or \
+            not toks or len(toks) != 2:
+        return None
+    iq, pq = m.get("question"), pm_market.get("question")
+    if suffix == "draw":
+        if not (_has_name(pq, "draw") and _has_name(iq, "draw") and
+                all(_has_name(pq, t) for t in teams)):
+            return None
+        return str(toks[0])
+    long_team = None
+    for sd in pm_market.get("marketSides") or []:
+        if isinstance(sd, Mapping) and sd.get("long"):
+            long_team = (sd.get("team") or {}).get("name")
+    if not long_team or _norm(long_team) not in {_norm(t) for t in teams}:
+        return None
+    other = by[f"{ev_slug}-{away if suffix == home else home}"]
+    if not _has_name(iq, long_team) or _has_name(iq, "draw") or \
+            _has_name(other.get("question"), long_team):
+        return None
+    return str(toks[0])
+
+
+def resolve_market(gamma_get: Callable[[str], Any], slug: str,
+                   pm_market: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """One entry for every structure the guard can price: two-outcome match
+    winners (aec-) and, for mapped leagues, single soccer outcomes (atc-)."""
+    if not isinstance(pm_market, Mapping):
+        return None
+    if str(slug).startswith("atc-"):
+        return resolve_three_way(gamma_get, slug, pm_market)
+    po = _json_list(pm_market.get("outcomes"))
+    return resolve_token(gamma_get, slug, po, yes_names(pm_market))
+
+
 class _IntlSocket:
     """Shared: the intl public market socket feeding an IntlBook for the
     assets in self.tokens (slug -> token). Subclasses set tokens/_lock."""
@@ -662,12 +789,7 @@ class IntlGuard(_IntlSocket):
             md = self.pm_get(f"/v1/market/slug/{slug}") or {}
             m = md.get("market") if isinstance(md, Mapping) and \
                 "market" in md else md
-            po = m.get("outcomes") if isinstance(m, Mapping) else None
-            if isinstance(po, str):
-                po = json.loads(po)
-            tok = resolve_token(self.gamma_get, slug, po,
-                                yes_names(m) if isinstance(m, Mapping)
-                                else None)
+            tok = resolve_market(self.gamma_get, slug, m)
         except Exception:                                 # noqa: BLE001
             tok = None
         self.resolved[slug] = tok

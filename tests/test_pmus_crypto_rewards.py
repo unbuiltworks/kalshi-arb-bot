@@ -462,9 +462,20 @@ class CV(FakeVenue):
         self.cancelled = []
         self.closed = set()
         self.gateway_threads = set()
+        self.top_depth_calls = []
 
     def spec(self, slug):
         return None if slug in self.closed else super().spec(slug)
+
+    def top_depth(self, slug):
+        """The sports liquidity gate's gateway read. The real one is a
+        request on the engine loop, so for a crypto market it must never
+        be called at all."""
+        self.top_depth_calls.append(slug)
+        if CR.is_crypto(slug):
+            pytest.fail("gateway depth request for a crypto market on the "
+                        "engine loop: " + slug)
+        return super().top_depth(slug)
 
     def gget(self, path):
         import threading
@@ -2064,3 +2075,116 @@ def test_missing_discovery_or_programmes_select_and_quote_nothing(lane):
     e._cfeed._progs = (e._cfeed._clock(), {})    # programmes: none paying
     e.select_crypto(v.account())
     assert not [s for s in e.active() if CR.is_crypto(s)] and not v.orders
+
+
+# --------------------- minimum-liquidity gate: crypto reads the cache only
+
+def thin(bid_qty, ask_qty, bid=0.48, ask=0.50):
+    """Depth that still scores (target reached behind the touch) but shows
+    only bid_qty / ask_qty contracts at the best prices."""
+    b, a = round(bid * 100), round(ask * 100)
+    return book([(b / 100, bid_qty), ((b - 1) / 100, 900),
+                 ((b - 2) / 100, 1500)],
+                [(a / 100, ask_qty), ((a + 1) / 100, 900),
+                 ((a + 2) / 100, 1500)])
+
+
+def test_crypto_openings_never_call_the_gateway_for_depth(lane):
+    """Sports 08b1a7c93 put depth_block -> Venue.top_depth (a gateway GET)
+    in Engine.place for every opening. CV.top_depth fails the test if it is
+    called for a crypto slug; a sports opening still uses it."""
+    e, v = lane
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    assert len(crypto_live(v)) == 6
+    assert v.top_depth_calls == []
+    assert e.depth_block(ETH, "YES") is None and v.top_depth_calls == []
+    e.place("aec-x", "YES", D("0.45"), D("2"), "rn1_open")
+    assert v.top_depth_calls == ["aec-x"]            # sports gate unchanged
+
+
+def test_real_venue_depth_read_is_not_reached_for_crypto(lane, monkeypatch):
+    """Against the REAL Venue.top_depth: any gateway call fails the test."""
+    e, v = lane
+    select(e, v)
+    e.feed_sync()
+    real = M.Venue.__new__(M.Venue)
+    real.q1 = v.q1
+    real.gget = lambda path: pytest.fail("gateway read: " + path)
+    v.top_depth = real.top_depth
+    assert e.depth_block(ETH, "YES") is None
+    assert e.depth_block(ETH, "NO") is None
+    e.step_market(ETH)
+    assert len(v.live(ETH)) == 2
+    with pytest.raises(BaseException, match="gateway read"):
+        v.top_depth(ETH)                             # the path being avoided
+
+
+@pytest.mark.parametrize("gap", [
+    lambda f: f._book.clear(),
+    lambda f: f._spec.clear(),
+    lambda f: f._book.update({ETH: (f._clock() - 3600, DEEP)}),
+    lambda f: f._book.update({ETH: (f._clock(), {"bids": [], "offers": []})}),
+    lambda f: f._book.update({ETH: (f._clock(), book([(0.48, 300)], []))}),
+    lambda f: f._book.update({ETH: (f._clock(), book([(0.50, 300)],
+                                                     [(0.48, 300)]))}),
+    lambda f: f._book.update({ETH: (f._clock(), {"bids": [
+        {"px": {"value": "n/a"}, "qty": "x"}], "offers": "garbage"})}),
+    lambda f: f._book.update({ETH: (f._clock(), "not a book")}),
+    lambda f: f._spec.update({ETH: (f._clock(), None)}),
+])
+def test_missing_stale_or_invalid_cached_depth_fails_closed(lane, gap):
+    e, v = lane
+    select(e, v)
+    e.feed_sync()
+    assert e.depth_block(ETH, "YES") is None
+    gap(e._cfeed)
+    for side in ("YES", "NO"):
+        assert e.depth_block(ETH, side) == "depth_unknown"
+    assert v.top_depth_calls == []                   # and still no request
+
+
+def test_liquidity_floor_applies_to_crypto_from_the_cache(lane):
+    """Fewer than 10 contracts that are not ours at a side's touch: no new
+    bid on that side -- and with both sides required, no quote at all."""
+    e, v = lane
+    select(e, v)
+    v.books[ETH] = thin(4, 300)
+    e.feed_sync()
+    assert e.depth_block(ETH, "YES") == "thin_touch:4.0<10"
+    assert e.depth_block(ETH, "NO") is None
+    e.step_market(ETH)
+    e.step_market(ETH)
+    assert not v.live(ETH)
+    v.books[ETH] = thin(300, 9.5)
+    e.feed_sync()
+    assert e.depth_block(ETH, "NO") == "thin_touch:9.5<10"
+    v.books[ETH] = thin(10, 10)
+    e.step_market(ETH)
+    assert len(v.live(ETH)) == 2 and v.top_depth_calls == []
+
+
+def test_liquidity_gate_never_blocks_a_crypto_completion(lane):
+    e, v = lane
+    select(e, v)
+    lone_yes(e, v)
+    v.books[ETH] = thin(1, 1)
+    for k in list(v.live(ETH)):
+        v.cancel(k)
+    e.step_market(ETH)
+    assert [(o["side"], o["qty"]) for o in v.live(ETH).values()] == \
+        [("NO", D("100"))]
+
+
+def test_own_resting_size_at_the_touch_does_not_count(lane, monkeypatch):
+    """Joining the best price (explicit setting): our own 100 there is not
+    liquidity. 105 shown - 100 ours = 5 < 10."""
+    e, v = lane
+    select(e, v)
+    e.feed_sync()
+    mk = e.b.m(ETH)
+    mk["orders"]["x"] = {"side": "YES", "px": "0.48", "qty": "100",
+                         "filled": "0", "open": True, "stage": "crypto_open"}
+    e._cfeed._book[ETH] = (e._cfeed._clock(), thin(105, 300))
+    assert e.depth_block(ETH, "YES") == "thin_touch:5.0<10"

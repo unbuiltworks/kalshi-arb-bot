@@ -282,3 +282,5 @@
 2026-11-15T21:20Z pre-game quoting mode (default off): select unstarted games, pull openings 5 min before start.
 2026-11-22T04:15Z submission window lock (window:<start>/<end>, auto-relock, fail-closed), window start = campaign marker, every-step book loss check.
 2026-11-22T04:25Z intl guard: name-based resolver for tennis (atp, wta); exact-slug leagues unchanged.
+2026-11-22T12:30Z esports fail-closed late rule; soccer 2H fail-closed; min 10-contract touch gate for new exposure; Serie A three-outcome resolver; one market per game.
+2026-11-22T12:20Z esports block keyed on the league code as well as match state (CS2 events arrive with no state).

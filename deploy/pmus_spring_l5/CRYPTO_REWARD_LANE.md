@@ -1,7 +1,7 @@
 # Daily-crypto reward lane — disarmed release candidate (22 Nov 2026)
 
 For the sports service owner (`pmus-spring-l5-probe`). Nothing here is deployed, armed or
-authorized. Base: `dev/pmus-rn1-replica` @ `413f73087` (merged in). No sports release
+authorized. Base: `dev/pmus-rn1-replica` @ `08b1a7c93` (merged in). No sports release
 ref (`release/pmus-sports-rn1-*`) contains any of this; the sports deployment authorized
 on 22 Nov is exactly `ae5adbe16`. The sports submission lock (`a9987a12f`) binds this lane
 too: locked, every crypto order is cancelled and none is placed. Research: `analysis/l5/rewards/` on
@@ -109,6 +109,10 @@ Set **only** `PMUS_CRYPTO_REWARDS=1`. Do not set `PMUS_CRYPTO_ARM`,
   with a gateway that never answers). Crypto markets are also no longer subscribed on the
   sports socket. Heartbeat: `crypto.feed` (thread alive, ages, errors), `crypto.step_ms`
   (time the lane takes from the loop), `crypto.tape`.
+- **Minimum-liquidity gate (sports `d76224fa5`).** For a crypto market the gate reads the
+  touch size from the feed's cached depth, never `Venue.top_depth` (a gateway request).
+  Missing, stale or invalid cached depth is `depth_unknown` and refuses the opening. The
+  10-contract floor applies to crypto; a thin side withholds both quotes.
 - What still shares the loop **when armed** (not in observation): the signed order-status,
   cancel and place calls for crypto orders, through the same request budget as sports.
 - Each row holds the depth, the venue's traded count, what the rule alone would quote at
