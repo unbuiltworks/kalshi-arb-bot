@@ -42,6 +42,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 ONE = D("1")
 
 from src import pmus_rn1_replica as RN1  # noqa: E402  (default OFF)
+from src import pmus_sports_phase as PH  # noqa: E402  (pure)
 
 
 def _env_d(name: str, default: str) -> D:
@@ -871,6 +872,81 @@ PREGAME_MAX_LEAD_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_MAX_LEAD_S",
                                      "21600"))
 PREGAME_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CUTOFF_S", "300"))
 PREGAME_CACHE_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CACHE_S", "120"))
+# OWNER 2026-11-22: "I want BOTH pregame and in-game liquidity provision ...
+# one continuous, reward-aware, inventory-aware sports controller ... At
+# kickoff, revalidate or cancel stale orders before continuing. Pause during
+# unsafe price moves, then resume when conditions permit."
+# SLATE says which games the one controller may pick up: "live" (as before),
+# "pregame" (what PREGAME=1 selects) or "both". On the RN1 path a market
+# with a known start time goes pregame -> kickoff -> live
+# (src/pmus_sports_phase): from KICKOFF_PULL_S before the start every
+# resting order in it is cancelled and nothing is placed until the venue
+# lists the game as live, KICKOFF_RESUME_MIN_S have passed since the start,
+# the book reads and (when the marginal test is on) the fair value has
+# settled. A re-check that has not passed KICKOFF_MAX_HOLD_S after the start
+# leaves the market with no new exposure (completions continue).
+SLATE = (os.getenv("PMUS_TWO_SIDED_SLATE") or "").strip().lower()
+
+
+def slate() -> str:
+    """live | pregame | both. Unset (or an unknown value) follows the older
+    PREGAME switch, so yesterday's configuration selects what it did."""
+    if SLATE in ("live", "pregame", "both"):
+        return SLATE
+    return "pregame" if PREGAME else "live"
+
+
+KICKOFF_PULL_S = float(os.getenv("PMUS_TWO_SIDED_KICKOFF_PULL_S",
+                                 str(PREGAME_CUTOFF_S)))
+KICKOFF_RESUME_MIN_S = float(os.getenv(
+    "PMUS_TWO_SIDED_KICKOFF_RESUME_MIN_S", "120"))
+KICKOFF_MAX_HOLD_S = float(os.getenv(
+    "PMUS_TWO_SIDED_KICKOFF_MAX_HOLD_S", "1800"))
+# Order size by phase (RN1 path). Unset = RN1.QTY in both phases, as before.
+# The in-game size is halved while the venue's own mid has ranged
+# VOL_SHRINK_USD or more inside VOL_WINDOW_S; a range of VOL_PAUSE_USD or
+# more pulls opening and extension bids for VOL_CALM_S (completions, which
+# only lock a pair inside the pair cap, keep resting). 0 = that rule off.
+RN1_PREGAME_QTY = (_env_d("PMUS_RN1_PREGAME_QTY", "0")
+                   if (os.getenv("PMUS_RN1_PREGAME_QTY") or "").strip()
+                   else None)
+RN1_LIVE_QTY = (_env_d("PMUS_RN1_LIVE_QTY", "0")
+                if (os.getenv("PMUS_RN1_LIVE_QTY") or "").strip() else None)
+VOL_WINDOW_S = float(os.getenv("PMUS_TWO_SIDED_VOL_WINDOW_S", "30"))
+VOL_PAUSE_USD = _env_d("PMUS_TWO_SIDED_VOL_PAUSE_USD", "0")
+VOL_SHRINK_USD = _env_d("PMUS_TWO_SIDED_VOL_SHRINK_USD", "0")
+VOL_CALM_S = float(os.getenv("PMUS_TWO_SIDED_VOL_CALM_S", "60"))
+# OWNER 2026-11-22: "a cap on the total value of outstanding orders, not
+# just filled inventory, so simultaneous fills cannot bypass the intended
+# exposure limit". One number for the whole bot: unpaired filled cost plus
+# the value of EVERY resting order (own_exposure_usd) plus the order being
+# placed must stay within it. Enforced in Engine.place, the one gate every
+# order passes. 0 = not configured (the other caps still apply).
+AT_RISK_BUDGET_USD = _env_d("PMUS_TWO_SIDED_AT_RISK_BUDGET_USD", "0")
+# Selection order on the RN1 path: expected trading result of a first bid
+# plus the theoretical reward per contract over RANK_HORIZON_H, cut by
+# RANK_REWARD_HAIRCUT and counted only when the projected day total clears
+# the minimum payout. A market with no fair value gets no ranking number.
+# At most RANK_NEW_PER_ROUND candidates are priced per selection round and
+# a ranking number is reused for RANK_TTL_S (one public book read each).
+RN1_RANK_NET = os.getenv("PMUS_RN1_RANK_NET", "0").strip() == "1"
+RANK_HORIZON_H = float(os.getenv("PMUS_RN1_RANK_HORIZON_H", "1"))
+RANK_REWARD_HAIRCUT = float(os.getenv("PMUS_RN1_RANK_REWARD_HAIRCUT", "0.5"))
+RANK_TTL_S = float(os.getenv("PMUS_RN1_RANK_TTL_S", "300"))
+RANK_NEW_PER_ROUND = int(os.getenv("PMUS_RN1_RANK_NEW_PER_ROUND", "3"))
+
+
+def rn1_pregame_qty() -> D:
+    return D(str(RN1.QTY)) if RN1_PREGAME_QTY is None else RN1_PREGAME_QTY
+
+
+def rn1_live_qty() -> D:
+    return D(str(RN1.QTY)) if RN1_LIVE_QTY is None else RN1_LIVE_QTY
+
+
+def rn1_max_clip() -> D:
+    """Largest order size any phase may send (the clip the latch checks)."""
+    return max(D(str(RN1.QTY)), rn1_pregame_qty(), rn1_live_qty())
 
 
 def parse_start(v: Any) -> Optional[float]:
@@ -2019,10 +2095,28 @@ class Engine:
             prog = (self._prog.get(s) or (0, None))[1]
             if not prog or not reward_allowed(s):
                 continue
-            per = R.paying_period(prog, time.time(), event_live=True)
+            per = R.paying_period(prog, time.time(),
+                                  event_live=self.event_live(s))
             if per:
                 out[s] = per
         return out
+
+    def event_live(self, slug: str) -> bool:
+        """Is this market's game on? Decides which reward period can be
+        paying. A market with no start time on record came from the live
+        slate. One with a start time is live once the venue lists it as
+        live or the start has passed. PMUS_TWO_SIDED_SLATE=live keeps the
+        earlier answer (every market on the slate is live)."""
+        if slate() == "live":
+            return True
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        if gs is None:
+            return True
+        if slug in (getattr(self.v, "states", {}) or {}):
+            return True
+        return time.time() >= float(gs)
 
     def refresh_active_rewards(self) -> None:
         """Keep each active market's paying period current (a period that
@@ -2993,7 +3087,7 @@ class Engine:
                                   unmatched=unm)
             for slug, mk in markets.items():
                 for oid, o in (mk.get("orders") or {}).items():
-                    if o.get("open") and D(str(o["qty"])) > RN1.QTY:
+                    if o.get("open") and D(str(o["qty"])) > rn1_max_clip():
                         return self.latch("order_qty_exceeds_clip",
                                           slug=slug, order_id=oid,
                                           qty=o["qty"])
@@ -3440,6 +3534,20 @@ class Engine:
                 log("place_refused_account_risk", slug=slug, side=side,
                     px=px, qty=qty, stage=stage, reason=why)
                 return
+            cur = self.own_exposure_usd()
+            if not PH.at_risk_allows(cur, D(str(px)) * D(str(qty)),
+                                     AT_RISK_BUDGET_USD):
+                key = "%s:%s:%s" % (side, px, qty)
+                mk_ = self.b.m(slug)
+                if mk_.get("at_risk_logged") != key:
+                    mk_["at_risk_logged"] = key
+                    log("place_refused_at_risk_budget", slug=slug, side=side,
+                        px=px, qty=qty, stage=stage, at_risk_usd=cur,
+                        budget_usd=AT_RISK_BUDGET_USD,
+                        label="unpaired filled cost plus every resting "
+                              "order plus this one would exceed the "
+                              "portfolio budget")
+                return
         if submission_locked(stage, post_only):
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
                 qty=qty, stage=stage, why=lock_state()["why"])
@@ -3602,9 +3710,84 @@ class Engine:
             return None
         try:
             from src import pmus_sports_rewards as R
-            return R.paying_period(prog, time.time(), event_live=True)
+            return R.paying_period(prog, time.time(),
+                                   event_live=self.event_live(slug))
         except Exception:                                 # noqa: BLE001
             return None
+
+    # ------------------------------------------------ one controller, phases
+    def _vol(self, slug: str, bbo: Optional[Mapping], now: float) -> D:
+        """Record the venue's mid just read and return its range over
+        VOL_WINDOW_S. No book = no reading (the range is over what was
+        seen)."""
+        hist = getattr(self, "_vol_hist", None)
+        if hist is None:
+            hist = self._vol_hist = {}
+        h = hist.setdefault(slug, [])
+        try:
+            if bbo and bbo.get("bid") is not None and \
+                    bbo.get("ask") is not None:
+                h.append((now, (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2))
+            PH.prune(h, now, max(VOL_WINDOW_S, 1.0))
+            return PH.price_range(h, now, VOL_WINDOW_S)
+        except Exception:                                 # noqa: BLE001
+            return D("0")
+
+    def market_phase(self, slug: str, mk: Dict[str, Any], bbo: Optional[
+            Mapping], now: float) -> Dict[str, Any]:
+        """pregame / kickoff / live for this market (src/pmus_sports_phase),
+        storing the kickoff re-check once it passes."""
+        gs = mk.get("game_start")
+        ko = mk.get("kickoff") or {}
+        fair_ok = True
+        if gs is not None and not ko.get("resumed_at") and RN1.EDGE_GATE \
+                and now >= float(gs):
+            fair_ok = bool(self.intl_fair_band(slug).get("settled"))
+        ph = PH.phase(
+            now=now, game_start=gs, pull_s=KICKOFF_PULL_S,
+            resume_min_s=KICKOFF_RESUME_MIN_S, max_hold_s=KICKOFF_MAX_HOLD_S,
+            resumed=bool(ko.get("resumed_at")),
+            confirmed_live=slug in (getattr(self.v, "states", {}) or {}),
+            fair_ok=fair_ok,
+            book_ok=bool(bbo and bbo.get("bid") is not None
+                         and bbo.get("ask") is not None))
+        if ph["resume"]:
+            mk["kickoff"] = dict(ko, resumed_at=now)
+            self.b.save()
+            log("KICKOFF_RESUME", slug=slug, game_start=gs,
+                held_s=round(now - float(ko.get("hold_since") or now), 1),
+                pos=mk["pos"], label="re-checked as live: quoting continues "
+                                     "with the in-game size")
+        return ph
+
+    def _kickoff_hold(self, slug: str, mk: Dict[str, Any],
+                      ph: Mapping[str, Any], now: float) -> None:
+        """Cancel EVERY resting order in this market (completions too: a
+        price from before the start is stale) and place nothing."""
+        ko = mk.get("kickoff") or {}
+        if not ko.get("hold_since"):
+            ko = dict(ko, hold_since=now)
+            mk["kickoff"] = ko
+        if now - float(getattr(self, "_ko_slate_at", 0.0)) >= 30.0:
+            # the re-check needs the venue's live list; selection may not be
+            # running (slots full, a cap reached), so read it here too
+            self._ko_slate_at = now
+            try:
+                self.v.live_sports()
+            except Exception as exc:                      # noqa: BLE001
+                log("discovery_error", err=str(exc)[:160], at="kickoff_hold")
+        live = [(oid, o) for oid, o in mk["orders"].items() if o.get("open")]
+        if live:
+            self._cancel_legs(slug, live)
+        if ko.get("logged") != ph["why"] or live:
+            ko["logged"] = ph["why"]
+            log("KICKOFF_HOLD", slug=slug, why=ph["why"],
+                game_start=mk.get("game_start"), cancelled=len(live),
+                still_open=sum(1 for o in mk["orders"].values()
+                               if o.get("open")),
+                pos=mk["pos"], label="no order rests through the start; "
+                                     "quoting resumes after the re-check")
+        self.b.save()
 
     def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
                              per: Mapping[str, Any], tick: D) -> None:
@@ -3731,6 +3914,11 @@ class Engine:
             log("PAIR_LOCKED", slug=slug, pairs=y, avg_pair_cost=cpair,
                 locked_edge_per_pair=ONE - cpair, mode="rn1",
                 label="locked pair economics; realized at settlement")
+        rng = self._vol(slug, bbo, now)
+        ph = self.market_phase(slug, mk, bbo, now)
+        if ph["phase"] == PH.KICKOFF:
+            self._kickoff_hold(slug, mk, ph, now)
+            return
         new_block = None
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             new_block = "not_enabled"
@@ -3765,13 +3953,33 @@ class Engine:
         if not new_block and self.ws is not None and \
                 now < float(mk.get("jump_pause_until") or 0):
             new_block = "jump_pause"
+        if not new_block and ph["expired"]:
+            new_block = "kickoff_unconfirmed"
+        vp = PH.pause_until(self._vol_hist.get(slug) or (), now,
+                            window_s=VOL_WINDOW_S, move_usd=VOL_PAUSE_USD,
+                            calm_s=VOL_CALM_S,
+                            prev_until=float(mk.get("vol_pause_until") or 0))
+        if vp != float(mk.get("vol_pause_until") or 0):
+            mk["vol_pause_until"] = vp
+            log("VOL_PAUSE", slug=slug, range=rng, window_s=VOL_WINDOW_S,
+                threshold=VOL_PAUSE_USD, calm_s=VOL_CALM_S, phase=ph["phase"],
+                label="price moving fast: opening and extension bids "
+                      "pulled until it is calm")
+        if not new_block and now < vp:
+            new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
+        qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
+        pq = PH.qty_for(ph["phase"], pregame_qty=rn1_pregame_qty(),
+                        live_qty_now=PH.live_qty(rn1_live_qty(),
+                                                 spec["min_qty"], rng,
+                                                 VOL_SHRINK_USD))
+        if pq != D(str(RN1.QTY)):
+            qcfg["qty"] = pq
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
-                       min_qty=spec["min_qty"],
-                       c=self.rn1_quote_cfg(slug, mk, tick))
+                       min_qty=spec["min_qty"], c=qcfg)
         want: Dict[str, Any] = {}
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -3799,13 +4007,14 @@ class Engine:
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
-                         {"block": new_block,
+                         {"block": new_block, "phase": ph["phase"],
                           "why": {s: q.get("why_" + s) for s in ("YES", "NO")}},
                          sort_keys=True)
         if mk.get("rn1_logged") != key:
             mk["rn1_logged"] = key
             log("RN1_QUOTE", slug=slug, pos=mk["pos"], cost=mk["cost"],
                 bid=bbo["bid"], ask=bbo["ask"], block=new_block,
+                phase=ph["phase"], range=rng,
                 want={s: (None if t is None else
                           {"px": str(t["px"]), "qty": str(t["qty"]),
                            "role": t["role"]}) for s, t in want.items()},
@@ -4308,6 +4517,99 @@ class Engine:
         log(kind, slug=slug, **kw,
             label="no taker exit; maker completion keeps resting/stepping")
 
+    def slate_targets(self) -> list:
+        """Candidates for the one controller: games in progress, games not
+        yet started, or both (PMUS_TWO_SIDED_SLATE). With both, a game in
+        progress comes first and a market is listed once."""
+        sl = slate()
+        if sl == "pregame":
+            return self.v.pregame_sports()
+        live = self.v.live_sports()
+        if sl == "live":
+            return live
+        seen = {t["slug"] for t in live}
+        return live + [t for t in self.v.pregame_sports()
+                       if t["slug"] not in seen]
+
+    def rank_net(self, scored: list) -> list:
+        """Reorder selection candidates by src/pmus_sports_phase.opportunity:
+        the marginal test's net for a first bid on the better side, plus the
+        theoretical reward per contract (haircut, and only when the day's
+        projection clears the minimum payout). Ranking only: every bid still
+        has to pass the marginal test and every cap when it is quoted."""
+        from src import pmus_sports_rewards as R
+        cache = getattr(self, "_rank_cache", None)
+        if cache is None:
+            cache = self._rank_cache = {}
+        nowm = time.monotonic()
+        fresh = 0
+        rows = []
+        for r in scored:
+            slug = r[2]
+            hit = cache.get(slug)
+            if hit and nowm - hit[0] <= RANK_TTL_S:
+                rows.append((slug, hit[1]))
+                continue
+            if fresh >= max(0, RANK_NEW_PER_ROUND):
+                rows.append((slug, {"net": None, "why": "not_priced_yet"}))
+                continue
+            fresh += 1
+            try:
+                opp = self._opportunity(slug, R)
+            except Exception as exc:                  # noqa: BLE001
+                opp = {"net": None, "why": "rank_error:%s"
+                       % type(exc).__name__}
+            cache[slug] = (nowm, opp)
+            rows.append((slug, opp))
+        order = [s for s, _o in PH.rank(rows)]
+        by = {r[2]: r for r in scored}
+        top = [(s, dict(rows)[s]) for s in order[:4]]
+        key = json.dumps([(s, str(o.get("net"))) for s, o in top])
+        if key != getattr(self, "_rank_logged", None):
+            self._rank_logged = key
+            log("RN1_NET_RANK", candidates=len(scored),
+                first=[{"slug": s, "net": o.get("net"),
+                        "trade": o.get("trade"), "reward": o.get("reward"),
+                        "why": o.get("why")} for s, o in top],
+                label="expected trading result plus haircut theoretical "
+                      "reward, per contract; an estimate, not a payment")
+        return [by[s] for s in order]
+
+    def _opportunity(self, slug: str, R: Any) -> Dict[str, Any]:
+        spec = self.v.spec(slug)
+        bbo = self.v.bbo(slug) if spec else None
+        fair = self.intl_fair(slug)
+        if not spec or not bbo or fair is None:
+            return PH.opportunity(edge_yes=None, edge_no=None)
+        tick = D(str(spec["tick"]))
+        live = self.event_live(slug)
+        qty = max(rn1_live_qty() if live else rn1_pregame_qty(),
+                  D(str(spec["min_qty"])))
+        ybid, nbid = D(str(bbo["bid"])), D("1") - D(str(bbo["ask"]))
+        e = {s: RN1.edge(side=s, px=p, tick=tick, fair_yes=fair,
+                         adds_exposure=True).get("net_edge")
+             for s, p in (("YES", ybid), ("NO", nbid))}
+        per_h, pays = 0.0, False
+        prog = (self._prog.get(slug) or (0, None))[1]
+        per = R.paying_period(prog, time.time(), event_live=live) \
+            if prog and reward_allowed(slug) else None
+        if per:
+            book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+            est = R.quote_estimate(book, per, float(ybid), float(nbid),
+                                   float(qty), float(tick))
+            usd_h = float(est.get("est_usd_per_hour") or 0.0)
+            per_h = usd_h / float(qty)
+            active = sum(float((self.b.m(s).get("rn1_reward_est") or {}
+                                ).get("est_usd_per_hour") or 0.0)
+                         for s in self.active())
+            pays = (active + usd_h) * RN1_REWARD_PROJECT_H + 1e-9 >= \
+                RN1_REWARD_MIN_DAY_USD
+        return PH.opportunity(
+            edge_yes=e["YES"], edge_no=e["NO"],
+            reward_usd_per_contract_hour=per_h, horizon_h=RANK_HORIZON_H,
+            reward_haircut=RANK_REWARD_HAIRCUT, reward_pays=pays)
+
     def select(self, acct: Mapping[str, Any]) -> None:
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             return
@@ -4316,12 +4618,11 @@ class Engine:
         if self.full():
             return
         try:
-            targets = (self.v.pregame_sports() if PREGAME
-                       else self.v.live_sports())
+            targets = self.slate_targets()
         except Exception as exc:                      # noqa: BLE001
             log("discovery_error", err=str(exc)[:160])
             return
-        if PREGAME:
+        if slate() != "live":
             self._game_start.update({t["slug"]: t["game_start"]
                                      for t in targets if "game_start" in t})
         scored = []
@@ -4377,6 +4678,8 @@ class Engine:
                             "period": (rn1_rw.get(r[2]) or {}).get("period")}
                            for r in scored[:4]],
                     label="published programme, not a payment")
+        if RN1.ON and RN1_RANK_NET and scored:
+            scored = self.rank_net(scored)
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
@@ -4920,7 +5223,20 @@ class Engine:
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
                                   SHARED_HALT_URL_ENV) or "").strip())},
-            daily_loss_usd=DAILY_LOSS_USD, pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
+            daily_loss_usd=DAILY_LOSS_USD,
+            controller={"slate": slate(), "kickoff_pull_s": KICKOFF_PULL_S,
+                        "kickoff_resume_min_s": KICKOFF_RESUME_MIN_S,
+                        "kickoff_max_hold_s": KICKOFF_MAX_HOLD_S,
+                        "pregame_qty": rn1_pregame_qty(),
+                        "live_qty": rn1_live_qty(),
+                        "vol": {"window_s": VOL_WINDOW_S,
+                                "pause_usd": VOL_PAUSE_USD,
+                                "shrink_usd": VOL_SHRINK_USD,
+                                "calm_s": VOL_CALM_S},
+                        "at_risk_budget_usd": AT_RISK_BUDGET_USD,
+                        "at_risk_usd": self.own_exposure_usd(),
+                        "rank_net": RN1_RANK_NET},
+            pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
                      "max_lead_s": PREGAME_MAX_LEAD_S,
                      "cutoff_s": PREGAME_CUTOFF_S}, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
