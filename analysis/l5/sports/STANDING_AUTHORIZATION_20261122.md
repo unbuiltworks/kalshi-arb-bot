@@ -9,6 +9,9 @@ chosen by the owner in this session's approval dialogs (about 19:58Z and
 "Arm, NFL + NBA": 21:35–23:05 UTC, sports bot `pmus-spring-l5-probe` on
 `158685d3ab0b446ac31387bf3ba32bb7bc5659fd`, allow list `nfl,nba`.
 
+At 20:12Z the owner wrote "I approved starting asap". The window's start
+was moved to 20:16 UTC (end unchanged, 23:05 UTC); nothing else changed.
+
 ## 2. Tonight, second window — conditional
 
 "Add Sunday night, if clean": if the 21:35–23:05 window ends with no stop
