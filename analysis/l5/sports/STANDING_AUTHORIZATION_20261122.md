@@ -210,7 +210,29 @@ remove losses on positions already held; the $5.20 test result is
 evidence, not a guarantee. The next milestone is a completed, reconciled
 live campaign with venue-confirmed fills and settled results.
 
-## 10. Unchanged standing rules
+## 10. Stop at 22:10Z; relock effective 22:41Z; nothing further armed
+
+- 22:10:20Z: the bot's first reconciliation of the window did not match
+  the venue (venue net -2 against the book's 0 in Detroit-Atlanta). Cause:
+  a fill (NO 0.23, 2 contracts) that the bot learned of 89 seconds late.
+  Its own meter then blocked all new exposure (`pilot_fills_unconfirmed`)
+  for the rest of the window.
+- A reconciliation mismatch is a stop condition. The relock
+  (`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`) was issued at about 22:19Z and
+  reached Railway at 22:41:19Z: a session stall of about 22 minutes, the
+  same failure as the 14:35Z relock this morning. In that gap the bot
+  placed no order; one resting completion bid (YES 0.61) filled at
+  22:26:39Z.
+- State after the relock (22:43Z): locked, zero resting orders, position
+  YES 8 / NO 8 in Detroit-Atlanta (eight pairs, cost $7.46), venue cash
+  $319.8038 against $319.2638 before the campaign.
+- The window was not clean under section 4. The continuation to 01:30Z and
+  the Sunday night window were NOT armed and their scheduled steps were
+  cancelled. The standing authorization for later slates is treated as
+  suspended until the owner decides: its condition ("only if the previous
+  window ended with no stop condition") is not met.
+
+## 11. Unchanged standing rules
 
 Explicit approval is still required for capital increases, taker
 authorization, weakened limits, other deployments, and anything outside
