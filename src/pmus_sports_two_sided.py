@@ -2865,6 +2865,10 @@ class Engine:
                 "book_estimate_usd": str(CR.book_pnl(markets)["usd"]),
                 "loss_stop": st["loss_stop"], "market_days": st["days"],
                 "modelled_reward_usd": str(self.crypto_modelled_usd()),
+                "step_ms": {k: round(v_, 1) for k, v_ in
+                            self.__dict__.pop("_crypto_ms", {}).items()},
+                "tape": (self._crypto_tape().stats()
+                         if self._crypto_tape() is not None else None),
                 "label": "modelled reward is not money; see CRYPTO_PNL"}
 
     def crypto_block(self, slug: str, mk: Mapping[str, Any],
@@ -2980,6 +2984,10 @@ class Engine:
         not armed the market is priced and modelled in SHADOW."""
         if not CR.ON or os.getenv(ENABLED_ENV, "").upper() != "YES":
             return
+        last = self.__dict__.get("_crypto_disc_at")
+        if last is not None and time.monotonic() - last < CR.DISCOVER_S:
+            return
+        self._crypto_disc_at = time.monotonic()
         try:
             targets = CR.pick_targets(self.v.crypto_targets(), time.time())
             progs = self.crypto_programs(
@@ -3066,6 +3074,60 @@ class Engine:
             cm["resting_s"] = float(cm.get("resting_s") or 0.0) + gap
         cm["t"] = now
 
+    def _crypto_tape(self):
+        """The lane's bounded observation tape (src/pmus_crypto_tape.py),
+        beside the book on the existing state volume; None when off."""
+        if "_ctape" not in self.__dict__:
+            self._ctape = None
+            try:
+                from src import pmus_crypto_tape as CT
+                if CR.ON and CT.ON:
+                    self._ctape = CT.CryptoTape(
+                        self.b.path.parent / "crypto_tape")
+                    log("crypto_tape_enabled", **self._ctape.stats())
+            except Exception as exc:                      # noqa: BLE001
+                log("crypto_tape_error",
+                    err=f"{type(exc).__name__}:{str(exc)[:120]}")
+        return self._ctape
+
+    def _crypto_observe(self, slug: str, mk: Mapping, book: Mapping,
+                        tick: D, resting: list, sized: Mapping,
+                        block: Optional[str], armed: bool) -> None:
+        """Record the depth and what the venue rule ALONE would quote on a
+        flat market at the configured size -- before gates, the loss budget
+        and the caps -- plus what the lane actually decided (`sized`).
+        Writes a file only; never raises; places and cancels nothing."""
+        tape = self._crypto_tape()
+        if tape is None or not tape.due(slug):
+            return
+        try:
+            q = CR.quotes(book_md=book, program=mk.get("reward"), tick=tick,
+                          pos={"YES": 0, "NO": 0}, cost={"YES": 0, "NO": 0},
+                          resting=resting)
+            m = q.get("model") or {}
+            obs = {"best": q.get("best"), "block": block, "armed": armed,
+                   "quote": {s_: (None if q.get(s_) is None else
+                                  [str(q[s_]["px"]), str(q[s_]["qty"]),
+                                   q[s_]["role"]]) for s_ in ("YES", "NO")},
+                   "why": {s_: q.get("why_" + s_) or q.get("why")
+                           for s_ in ("YES", "NO")},
+                   "elig": {k: m.get(k) for k in (
+                       "pays", "why_not", "yes_inside", "no_inside",
+                       "bid_adj_px", "ask_adj_px", "bid_raw", "ask_raw",
+                       "share", "usd_day")},
+                   "sized": {s_: (None if sized.get(s_) is None else
+                                  [str(sized[s_]["px"]),
+                                   str(sized[s_]["qty"]), sized[s_]["role"]])
+                             for s_ in ("YES", "NO")},
+                   "sized_why": {s_: sized.get("why_" + s_)
+                                 for s_ in ("YES", "NO")},
+                   "pos": dict(mk.get("pos") or {}),
+                   "label": "MODELLED observation; not a fill, not a "
+                            "reward"}
+        except Exception:                                 # noqa: BLE001
+            obs = None
+        tape.snapshot(slug, book, obs)
+
     def _crypto_fail_closed(self, slug: str, mk: Dict[str, Any],
                             exc: Exception) -> None:
         """Anything the crypto step could not read or compute (a corrupt
@@ -3143,6 +3205,8 @@ class Engine:
                       capital_used=CR.market_capital(
                           {**mk, "orders": {}})["filled"],
                       max_leg_usd=leg)
+        self._crypto_observe(slug, mk, book, tick, resting, q, block,
+                             arm["armed"])
         want: Dict[str, Any] = {}
         why: Dict[str, Any] = {}
         for side in ("YES", "NO"):
@@ -3538,10 +3602,18 @@ class Engine:
             # BEFORE RN1 and the two-sided path and it always returns, so a
             # crypto market can never be accumulated, extended or taker-
             # exited by them -- with the lane off its orders are cancelled.
+            t0 = time.monotonic()
             try:
                 self._crypto_step(slug, mk, spec, bbo, tick)
             except Exception as exc:                      # noqa: BLE001
                 self._crypto_fail_closed(slug, mk, exc)
+            # time this lane takes from the shared loop (heartbeat: crypto)
+            tm = self.__dict__.setdefault("_crypto_ms", {"n": 0, "sum": 0.0,
+                                                         "max": 0.0})
+            ms = (time.monotonic() - t0) * 1000
+            tm["n"] += 1
+            tm["sum"] += ms
+            tm["max"] = max(tm["max"], ms)
             return
         if RN1.ON:
             # OWNER 2026-11-21: scaled-down RN1 behavioural replica. Replaces

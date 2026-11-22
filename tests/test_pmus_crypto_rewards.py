@@ -529,6 +529,7 @@ def lane(tmp_path, monkeypatch):
 
 
 def select(e, v):
+    e._crypto_disc_at = None                 # discovery is throttled
     e.select_crypto(v.account())
     return [s for s in e.active() if CR.is_crypto(s)]
 
@@ -963,6 +964,7 @@ def test_three_market_days_then_no_new_day(lane):
     assert len(v.live(SOL)) == 2
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
+    e._crypto_disc_at = None
     e.select_crypto(v.account())
     assert nxt not in e.b.d["markets"]
     mk = e.b.m(nxt)
@@ -1188,8 +1190,11 @@ def test_earnings_audit_hands_over_every_row():
 
 def test_the_probe_image_carries_the_lane():
     root = Path(__file__).resolve().parents[1]
+    docker = (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
     assert "COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py" in \
-        (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
+        docker
+    assert "COPY src/pmus_crypto_tape.py src/pmus_crypto_tape.py" in docker
+    assert "COPY src/pmus_sports_tape.py src/pmus_sports_tape.py" in docker
     assert '"src/pmus_crypto_rewards.py"' in \
         (root / "deploy/pmus_spring_l5/railway.json").read_text()
 
@@ -1259,6 +1264,7 @@ def test_hard_budget_worst_case_never_exceeds_the_stop(hard):
     assert CR.unpaired_cap(e.b.d["markets"]) == D("0.11")
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
+    e._crypto_disc_at = None
     e.select_crypto(v.account())
     e.step_market(nxt)
     assert not v.live()                              # budget is spent
@@ -1360,6 +1366,7 @@ def test_existing_inventory_and_resting_orders_shrink_the_next_quote(hard3):
     # the smaller budget is shared again: resting quotes are re-sized
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
+    e._crypto_disc_at = None
     e.select_crypto(v.account())
     e.step_market(nxt)
     assert {o["qty"] for s_ in (SOL, XRP, nxt)
@@ -1448,3 +1455,198 @@ def test_an_unreadable_book_entry_fails_closed(hard3):
     assert not v.live()
     assert e.crypto_place_block(XRP, "YES", D("0.47"), D("10"),
                                 "crypto_open", True) is not None
+
+
+# ------------------------------------------- disarmed observation mode
+
+@pytest.fixture
+def observe(tmp_path, monkeypatch):
+    """What a disarmed observation release runs: lane on, NOTHING else set.
+    No arm key, no approval, no combined ceiling, account-risk gate as
+    deployed, no venue meter. Any attempt to send an order fails the test."""
+    monkeypatch.setattr(CR, "ON", True)
+    for k in (CR.ARM_ENV, CR.APPROVAL_ENV, CR.COMBINED_CAP_ENV, CR.SHA_ENV):
+        monkeypatch.delenv(k, raising=False)
+    v = CV()
+    e = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e._rget = v.gget
+    return e, v
+
+
+def tape_rows(e):
+    out = []
+    for f in sorted((e.b.path.parent / "crypto_tape").glob("tape_*.jsonl")):
+        out += [json.loads(ln) for ln in f.read_text().splitlines()]
+    return out
+
+
+def test_observation_mode_records_and_never_submits(observe, monkeypatch):
+    e, v = observe
+    monkeypatch.setattr(v, "place",
+                        lambda *a, **k: pytest.fail("order submitted"))
+    assert sorted(select(e, v)) == [ETH, SOL, XRP]
+    v.books[SOL] = SOL_LIVE
+    for _ in range(3):
+        for s in (ETH, SOL, XRP):
+            e.step_market(s)
+    rows = tape_rows(e)
+    assert sorted(r["slug"] for r in rows) == [ETH, SOL, XRP]   # 30 s gap
+    eth = next(r for r in rows if r["slug"] == ETH)
+    assert eth["b"][0] == [0.48, 300.0] and eth["a"][0] == [0.5, 300.0]
+    assert eth["obs"]["armed"] is False
+    assert eth["obs"]["quote"]["YES"] == ["0.47", "100", "open"]  # the rule
+    assert eth["obs"]["sized"]["YES"] is None            # $30 over 3 markets
+    assert eth["obs"]["sized_why"]["YES"] == "loss_budget"
+    assert eth["obs"]["elig"]["pays"] and eth["obs"]["elig"]["yes_inside"]
+    sol = next(r for r in rows if r["slug"] == SOL)
+    assert sol["obs"]["quote"] == {"YES": None, "NO": None}
+    assert sol["obs"]["why"]["YES"] == "outside_scoring_walk"
+    assert not v.orders and not v.cancelled
+    assert e.b.d["crypto"]["days"] == [] and e.b.d["own_order_ids"] == []
+
+
+@pytest.mark.parametrize("env", [
+    {},
+    {CR.ARM_ENV: "YES"},
+    {CR.ARM_ENV: "YES", CR.APPROVAL_ENV: "{}"},
+    {CR.ARM_ENV: "yes", CR.APPROVAL_ENV: json.dumps({"approved_by": "x"})},
+    {CR.APPROVAL_ENV: "SEE_OWNER"},
+])
+def test_no_partial_key_set_can_submit(observe, monkeypatch, env):
+    """Every stage and side, straight at the placement choke point."""
+    e, v = observe
+    for k, val in env.items():
+        monkeypatch.setenv(k, val)
+    monkeypatch.setattr(v, "place",
+                        lambda *a, **k: pytest.fail("order submitted"))
+    select(e, v)
+    assert CR.arm_state(time.time())["armed"] is False
+    for stage in ("crypto_open", "crypto_complete", "rn1_open",
+                  "two_sided_open", "two_sided_complete_taker"):
+        for side in ("YES", "NO"):
+            for post_only in (True, False):
+                e.place(ETH, side, D("0.47"), D("10"), stage,
+                        post_only=post_only)
+    e.step_market(ETH)
+
+
+def test_crypto_step_has_no_route_to_the_venue_but_the_choke_point():
+    """Structural: the lane's engine code never calls the venue's place
+    itself, and has no sell or taker call at all."""
+    import inspect
+    for name in ("_crypto_step", "_crypto_observe", "_crypto_fail_closed",
+                 "select_crypto", "crypto_loss_stopped", "_crypto_book",
+                 "crypto_meter", "crypto_reward_credits"):
+        src = inspect.getsource(getattr(M.Engine, name))
+        assert "self.v.place" not in src and "post_only=False" not in src
+        assert "place_limit" not in src and ".t.request(" not in src
+    assert inspect.getsource(M.Engine._crypto_step).count("self.place(") == 1
+    for mod in (CR, importlib.import_module("src.pmus_crypto_tape")):
+        src = inspect.getsource(mod)
+        assert "urllib" not in src and "request(" not in src
+        assert "import socket" not in src and "http" not in src.lower()
+
+
+def test_observation_leaves_sports_orders_and_the_registry_alone(observe):
+    """The watchdog's ownership list still names every live order, and
+    observing crypto adds none and removes none."""
+    e, v = observe
+    e.place("aec-x", "YES", D("0.45"), D("2"), "rn1_open")
+    e.place("aec-y", "NO", D("0.52"), D("2"), "rn1_open")
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    listed = {o["venue_order_id"] for o in M.registry_doc(e.b)["orders"]
+              if not o.get("closing")}
+    assert listed == set(v.live()) and len(listed) == 2
+    assert not v.cancelled
+
+
+def test_registry_names_every_live_order_of_both_lanes(lane):
+    """Armed (test only): sports and crypto orders are all in the list the
+    watchdog reads; a cancelled one stays listed as closing for the grace."""
+    e, v = lane
+    e.place("aec-x", "YES", D("0.45"), D("2"), "rn1_open")
+    select(e, v)
+    for s in (ETH, SOL):
+        e.step_market(s)
+    doc = M.registry_doc(e.b)
+    live = {o["venue_order_id"] for o in doc["orders"] if not o.get("closing")}
+    assert live == set(v.live()) and len(live) == 5
+    assert doc["manages_own_resting"] and doc["lane"] == M.LANE
+    e._crypto_meter = None                           # crypto quotes pulled
+    e.step_market(ETH)
+    doc = M.registry_doc(e.b)
+    live = {o["venue_order_id"] for o in doc["orders"] if not o.get("closing")}
+    closing = {o["venue_order_id"] for o in doc["orders"] if o.get("closing")}
+    assert live == set(v.live()) and len(live) == 3 and len(closing) >= 2
+
+
+def test_tape_storage_is_bounded(tmp_path):
+    from src import pmus_crypto_tape as CT
+    clock = [1_795_000_000.0]
+    t = CT.CryptoTape(tmp_path / "ct", max_bytes_per_day=20_000,
+                      keep_days=3, min_gap_s=30, clock=lambda: clock[0])
+    big = book([(round(0.50 - i / 100, 2), 1000 + i) for i in range(45)],
+               [(round(0.51 + i / 100, 2), 1000 + i) for i in range(45)])
+    for day in range(10):
+        for i in range(400):
+            clock[0] = 1_795_000_000.0 + day * 86400 + i * 30
+            t.snapshot(ETH, big, {"label": "x"})
+            t.snapshot(ETH, big, {"label": "x"})     # inside the gap: skipped
+    files = sorted((tmp_path / "ct").glob("*"))
+    assert len(files) == 3                           # keep_days
+    assert all(f.stat().st_size <= 20_000 for f in files)
+    assert sum(f.stat().st_size for f in files) <= t.bound_bytes() == 60_000
+    assert t.dropped > 0 and t.errors == 0           # full: dropped, counted
+    row = json.loads(files[-1].read_text().splitlines()[0])
+    assert len(row["b"]) == CT.MAX_LEVELS == 30      # depth is truncated
+    assert CT.MAX_BYTES_PER_DAY * CT.KEEP_DAYS == 60_000_000   # default bound
+
+
+def test_tape_failure_never_reaches_the_engine(observe, monkeypatch):
+    e, v = observe
+    (e.b.path.parent / "crypto_tape").write_text("a file, not a directory")
+    select(e, v)
+    e.step_market(ETH)
+    assert e._crypto_tape().errors >= 1 and not v.orders
+
+
+def test_tape_is_off_with_the_lane_and_can_be_switched_off(tmp_path,
+                                                           monkeypatch):
+    from src import pmus_crypto_tape as CT
+    e = M.Engine(CV(), M.Book(tmp_path / "s.json"))
+    assert e._crypto_tape() is None                  # lane off
+    monkeypatch.setattr(CR, "ON", True)
+    monkeypatch.setattr(CT, "ON", False)
+    e = M.Engine(CV(), M.Book(tmp_path / "s.json"))
+    assert e._crypto_tape() is None
+    assert not (tmp_path / "crypto_tape").exists()
+
+
+def test_replay_tool_reads_the_service_tape(observe, capsys):
+    e, v = observe
+    select(e, v)
+    e.step_market(ETH)
+    root = Path(__file__).resolve().parents[1]
+    import runpy
+    mod = runpy.run_path(str(root / "analysis/l5/rewards/"
+                             "crypto_policy_replay.py"), run_name="replay")
+    f = next((e.b.path.parent / "crypto_tape").glob("tape_*.jsonl"))
+    mod["replay"](str(f))
+    out = capsys.readouterr().out
+    assert ETH in out and "1 tick back" in out and "quotable" in out
+
+
+def test_crypto_discovery_is_throttled_and_the_step_is_timed(observe):
+    e, v = observe
+    calls = []
+    real = v.crypto_targets
+    v.crypto_targets = lambda: calls.append(1) or real()
+    for _ in range(5):
+        e.select_crypto(v.account())
+    assert len(calls) == 1
+    e.step_market(ETH)
+    st = e.crypto_status()
+    assert st["step_ms"]["n"] == 1 and st["step_ms"]["max"] >= 0
+    assert st["tape"]["bound_bytes"] == 60_000_000

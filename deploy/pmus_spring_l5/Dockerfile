@@ -127,6 +127,7 @@ COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
 # daily-crypto reward lane (2026-11-22): imported at module scope by
 # pmus_sports_two_sided, so the image must carry it. Default OFF, disarmed.
 COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py
+COPY src/pmus_crypto_tape.py src/pmus_crypto_tape.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py

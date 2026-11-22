@@ -82,6 +82,30 @@ fresh depth, and a fresh account read that shows — for every open crypto marke
 the book's net position, no unknown resting order and no untracked crypto position.
 Any one of these missing stops the whole lane (`crypto_block` reason in `CRYPTO_QUOTE`).
 
+## Disarmed observation mode (the 24-hour recording)
+
+Set **only** `PMUS_CRYPTO_REWARDS=1`. Do not set `PMUS_CRYPTO_ARM`,
+`PMUS_CRYPTO_PILOT_APPROVAL` or `PMUS_COMBINED_MAX_EXPOSURE_USD`.
+
+- **Cannot submit.** Without the arm key and a matching signed approval `Engine.place`
+  refuses every order for a crypto market (`place_refused_crypto`, `disarmed:not_armed`),
+  and the crypto step does not call it. The lane's code has no other route to the venue,
+  no sell and no taker call (tested, including every partial key combination). It makes
+  no signed request of its own: public gateway reads only.
+- **Bounded storage.** `src/pmus_crypto_tape.py` writes `crypto_tape/tape_YYYYMMDD.jsonl`
+  beside the book on the existing volume: one row per market every 30 s, 30 levels a side,
+  at most 15 MB per day and 4 days — **60 MB ceiling**, separate from the sports tape's
+  budget. A full file drops rows and counts them. `PMUS_CRYPTO_TAPE=0` turns it off.
+  Expected use is about 5 MB/day.
+- **Watchdog.** The registry document is unchanged and still lists every live order of the
+  process; observation adds none and cancels none (tested with sports orders resting).
+- **Loop cost.** Crypto discovery runs every 5 min; the heartbeat's `crypto.step_ms`
+  shows what the lane takes from the shared loop, `crypto.tape` the recorder's counters.
+- Each row holds the depth, the venue's traded count, what the rule alone would quote at
+  the configured size, why not, and what the loss budget would actually allow.
+  Replay: `python3 analysis/l5/rewards/crypto_policy_replay.py replay <tape file>`.
+- It is MODELLED observation. It is not evidence of an earned reward.
+
 ## Limits (code, `PMUS_CRYPTO_*`)
 
 | Limit | Default | Note |

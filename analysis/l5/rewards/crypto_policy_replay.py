@@ -20,7 +20,8 @@ snapshot, for several sizes and depths, and reports per market:
              dearest bid it rested, filled alone in full and settled at zero
 
 Everything is MODELLED against displayed books. Nothing here is earned.
-Accepts full-book rows ({"t","slug","book"}) and the 22 Nov summary rows
+Accepts full-book rows ({"t","slug","book"}), the service's observation
+tape (src/pmus_crypto_tape.py; plain or .gz) and the 22 Nov summary rows
 (depth_sampler.py), which are rebuilt into a three-level book that keeps
 each side's best price, top size, raw size, walk end and score.
 """
@@ -111,6 +112,8 @@ def book_of(row):
     def rows(lv):
         return [{"px": {"value": str(p)}, "qty": str(q)} for p, q in lv
                 if q > 0]
+    if "b" in row:                 # the service's observation tape
+        return {"bids": rows(row["b"]), "offers": rows(row["a"])}
     return {"bids": rows(_synth_side(row["best_bid"], row["bid_top_qty"],
                                      row["bid_raw"], row["bid_adj_px"],
                                      row["bid_score"], -1)),
@@ -121,9 +124,10 @@ def book_of(row):
 
 def replay(path):
     by = {}
-    for ln in gzip.open(path, "rt"):
+    opener = gzip.open if str(path).endswith(".gz") else open
+    for ln in opener(path, "rt"):
         r = json.loads(ln)
-        if CR.tradable(r["slug"]):
+        if CR.tradable(r.get("slug") or ""):
             by.setdefault(r["slug"], []).append(r)
     print("file:", path)
     for slug, rows in sorted(by.items()):

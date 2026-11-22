@@ -127,6 +127,9 @@ PX_MAX = _d("PMUS_CRYPTO_PX_MAX", "0.95")
 MAKER_FEE_RATE = _d("PMUS_CRYPTO_MAKER_FEE_RATE", "0")
 CUTOFF_S = _f("PMUS_CRYPTO_CUTOFF_S", "7200")      # no new quotes this late
 BOOK_S = _f("PMUS_CRYPTO_BOOK_S", "10")            # depth re-read interval
+#: the crypto event list is re-read at most this often (the sports loop
+#: selects every 20 s; a daily market does not need that)
+DISCOVER_S = _f("PMUS_CRYPTO_DISCOVER_S", "300")
 BOOK_MAX_AGE_S = _f("PMUS_CRYPTO_BOOK_MAX_AGE_S", "30")
 MARKET_DAYS = min(_i("PMUS_CRYPTO_MARKET_DAYS", "3"), HARD_MARKET_DAYS)
 #: the venue-reconciled result must be this fresh or new quotes stop
