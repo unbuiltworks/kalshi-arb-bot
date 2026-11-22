@@ -52,9 +52,21 @@ def test_fresh_while_the_loop_progresses(eng):
         assert watchdog_exempts(doc, real.time())
 
 
-def test_a_stalled_loop_goes_stale_and_loses_the_exemption(eng):
-    """The wedged-executor case: the registry thread still answers, but the
-    stamp is frozen at the loop's last progress."""
+def watchdog_can_cancel(doc, now):
+    """The watchdog's ownership rule for its cancel path (OwnershipOracle on
+    its branch): a readable document with a fresh stamp names the ids."""
+    if doc.get("readable") is not True:
+        return set()
+    age = now - dt.datetime.fromisoformat(str(doc["as_of_utc"])).timestamp()
+    if not (-5.0 <= age <= WATCHDOG_MAX_AGE_S):
+        return set()
+    return {r["venue_order_id"] for r in doc["orders"]}
+
+
+def test_a_stalled_loop_loses_the_exemption_but_keeps_its_ownership_claim(eng):
+    """The wedged-executor case. The registry thread still answers; it now
+    says the loop is NOT managing these orders, while still naming them, so
+    the watchdog may both latch on their age and cancel them."""
     e, v = eng
     e.b.m("aec-x")
     e.step_market("aec-x")
@@ -62,16 +74,19 @@ def test_a_stalled_loop_goes_stale_and_loses_the_exemption(eng):
     last = real.time() - (M.LOOP_STALL_S + 1)
     M._LOOP["beat"] = last
     doc = M.registry_doc(e.b)
-    assert doc["loop_stalled"] is True
+    assert doc["loop_stalled"] is True and doc["manages_own_resting"] is False
     assert doc["loop_idle_s"] == pytest.approx(M.LOOP_STALL_S + 1, abs=1)
-    assert dt.datetime.fromisoformat(doc["as_of_utc"]).timestamp() == \
-        pytest.approx(last, abs=0.01)
-    assert not watchdog_exempts(doc, real.time())   # watchdog: STALE
-    assert len(doc["orders"]) == 2                  # still listed, not hidden
+    assert dt.datetime.fromisoformat(
+        doc["loop_last_progress_utc"]).timestamp() == pytest.approx(last,
+                                                                    abs=0.01)
+    assert not watchdog_exempts(doc, real.time())   # exemption gone
+    assert watchdog_can_cancel(doc, real.time()) == {"o1", "o2"}
     M._LOOP["beat"] = real.time() - 7200            # wedged for two hours
-    assert not watchdog_exempts(M.registry_doc(e.b), real.time())
+    doc = M.registry_doc(e.b)
+    assert not watchdog_exempts(doc, real.time())
+    assert watchdog_can_cancel(doc, real.time()) == {"o1", "o2"}
     json.dumps(doc, default=str)
-    # the loop comes back: fresh again at once
+    # the loop comes back: exempt again at once
     M.loop_beat()
     assert watchdog_exempts(M.registry_doc(e.b), real.time())
 
