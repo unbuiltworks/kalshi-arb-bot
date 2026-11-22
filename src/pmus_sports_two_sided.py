@@ -3368,12 +3368,16 @@ class Engine:
     AUDIT_SINCE = os.getenv("PMUS_TWO_SIDED_AUDIT_SINCE",
                             "2026-11-14T15:30:00Z")
 
-    def pilot_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
-        """RN1 pilot settled net P&L (src/pmus_pilot_pnl.py) from this
-        audit's venue rows; feeds the campaign loss stop."""
+    def pilot_meter(self, rows: list, markets: Mapping[str, Any],
+                    venue_net: Optional[Mapping[str, Any]] = None) -> None:
+        """RN1 pilot net P&L on a CASH basis (src/pmus_pilot_pnl.py) from
+        this audit's venue rows; feeds the campaign loss stop. `venue_net`
+        is the complete positions walk of the same audit (None = no walk:
+        the position check is skipped and reported as such)."""
         try:
             from src import pmus_pilot_pnl as PP
-            r = PP.meter(markets, rows, since=PILOT_SINCE)
+            r = PP.meter(markets, rows, since=PILOT_SINCE,
+                         venue_net=venue_net)
         except Exception as exc:                          # noqa: BLE001
             self._pilot = None                    # -> pilot_meter_unavailable
             log("PILOT_PNL", ok=False,
@@ -3383,7 +3387,32 @@ class Engine:
         self._pilot_at = time.monotonic()
         log("PILOT_PNL", ok=True, since=PILOT_SINCE,
             loss_stop_usd=str(PILOT_LOSS_USD),
-            new_openings_block=self.pilot_block(), **r)
+            new_openings_block=self.pilot_block(),
+            cash=self.pilot_cash(r), **r)
+
+    def pilot_cash(self, r: Mapping[str, Any]) -> Dict[str, Any]:
+        """Venue account cash next to what the campaign explains. READ-ONLY
+        GET, report only (shared account). The baseline is taken once per
+        PILOT_SINCE, together with the campaign's expected cash at that
+        moment, so a restart mid-campaign does not move it."""
+        from src import pmus_pilot_pnl as PP
+        try:
+            cash = PP.cash_usd(self.v.t.request("GET",
+                                                "/v1/account/balances"))
+        except Exception as exc:                          # noqa: BLE001
+            return {"ok": False,
+                    "why": f"{type(exc).__name__}:{str(exc)[:120]}"}
+        exp = D(r["expected_cash_change_usd"])
+        base = self.b.d.get("pilot_cash_base")
+        key = str(PILOT_SINCE)
+        if cash is not None and (not base or base.get("since") != key) \
+                and not r.get("unconfirmed"):
+            base = {"since": key, "cash": str(cash), "expected": str(exp),
+                    "t": now_iso()}
+            self.b.d["pilot_cash_base"] = base
+            self.b.save()
+        return PP.cash_check(cash, exp, base if base and
+                             base.get("since") == key else None)
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -3402,26 +3431,29 @@ class Engine:
             return "pilot_meter_unavailable"
         if r.get("unconfirmed"):
             return "pilot_fills_unconfirmed"
-        if D(r["settled_net_usd"]) + D(r.get("open_worst_case_usd") or 0) \
+        # realized cash (completed pairs - fees + settled residuals) plus
+        # every outstanding unpaired contract settling worthless
+        if D(r["realized_net_usd"]) + D(r["open_residual_worst_usd"]) \
                 <= -PILOT_LOSS_USD:
             return "pilot_loss_at_risk"
         return None
 
     def pilot_loss_stopped(self) -> bool:
-        """Campaign stop: venue-settled pilot net <= -PILOT_LOSS_USD blocks
-        NEW RN1 openings/extensions (completions continue). Latched in the
-        book: a restart or a later recovery does not lift it -- the owner
-        clears `pilot_loss_stop` explicitly."""
+        """Campaign stop: REALIZED pilot net (completed-pair cash - fees +
+        settled residual results) <= -PILOT_LOSS_USD blocks NEW RN1
+        openings/extensions (completions continue). Latched in the book: a
+        restart or a later recovery does not lift it -- the owner clears
+        `pilot_loss_stop` explicitly."""
         if PILOT_LOSS_USD <= 0:
             return False
         if self.b.d.get("pilot_loss_stop"):
             return True
         r = getattr(self, "_pilot", None)
-        if r and D(r["settled_net_usd"]) <= -PILOT_LOSS_USD:
+        if r and D(r["realized_net_usd"]) <= -PILOT_LOSS_USD:
             self.b.d["pilot_loss_stop"] = {"t": now_iso(),
-                                           "net": r["settled_net_usd"]}
+                                           "net": r["realized_net_usd"]}
             self.b.save()
-            log("PILOT_LOSS_STOP", net=r["settled_net_usd"],
+            log("PILOT_LOSS_STOP", net=r["realized_net_usd"],
                 limit=str(PILOT_LOSS_USD),
                 effect="no new RN1 openings/extensions until the owner "
                        "clears pilot_loss_stop")
@@ -3497,7 +3529,8 @@ class Engine:
         if looked:
             self.b.save()
         bs = PNL.book_settled(mk_all)
-        self.pilot_meter(mine, mk_all)
+        self.pilot_meter(mine, mk_all,
+                         venue_net=getattr(self, "_venue_net", None))
         since = self.b.d.get("recovery_since")
         bs_new = PNL.book_settled(mk_all, since=since) if since else None
         settled_margin = D(PNL.book_economics(
@@ -3563,9 +3596,21 @@ class Engine:
         try:
             snap = self.v.positions_snapshot()
         except Exception as exc:                          # noqa: BLE001
+            self._venue_net = None       # no walk: position check skipped
             log("INVENTORY_RECONCILE", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return None
+        # signed venue position per market for the pilot meter's netting
+        # check; only a COMPLETE walk can prove a market is flat. Expired
+        # rows are kept: a closed game's unpaired leg is still held until
+        # the venue resolves it, and must not read as "position missing".
+        self._venue_net = None
+        if snap.get("complete"):
+            self._venue_net = {}
+            for row_ in snap["rows"]:
+                pr_ = INV.parse_row(row_)
+                if pr_["slug"]:
+                    self._venue_net[pr_["slug"]] = str(pr_["net"] or 0)
         rep = INV.reconcile(snap["rows"], snap["open_orders"],
                             self.b.d.get("markets") or {},
                             self.own(), walk_complete=snap["complete"])
