@@ -369,3 +369,66 @@ def test_no_window_ever_means_no_stored_marker(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "PILOT_SINCE", None)
     e = M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
     assert e.b.d.get("campaign_since") is None and e.since is None
+
+
+def _boot(tmp_path, monkeypatch, win):
+    """A process start with this window configured (PILOT_SINCE is set from
+    the window at import)."""
+    w0 = M.datetime.fromisoformat(
+        win[len("window:"):].split("/")[0].replace("Z", "+00:00")).timestamp()
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, win)
+    monkeypatch.setattr(M, "PILOT_SINCE", w0)
+    return M.Engine(FakeVenue(), M.Book(tmp_path / "s.json")), w0
+
+
+def test_a_window_moved_earlier_moves_the_campaign_marker_earlier(
+        tmp_path, monkeypatch):
+    """LIVE 2026-11-22: armed for 21:35Z, then moved to start at 20:16Z.
+    The marker stayed at 21:35Z, so an order placed at 20:18Z belonged to
+    no campaign: no campaign spend cap, no unmatched cap, no loss stop."""
+    from src import pmus_pilot_pnl as PP
+    e, late = _boot(tmp_path, monkeypatch,
+                    "window:2026-11-22T21:35:00Z/2026-11-22T23:05:00Z")
+    assert e.since == late == 1795383300.0
+    e, early = _boot(tmp_path, monkeypatch,
+                     "window:2026-11-22T20:16:00Z/2026-11-22T23:05:00Z")
+    assert early == 1795378560.0
+    assert e.since == early and e.b.d["campaign_since"] == early
+    assert e.b.d["campaign_window"] == [early, 1795388700.0]
+    # an order placed two minutes into the earlier window is in the campaign
+    markets = {"aec-nfl-bal-car-2026-11-22": {"orders": {"o1": {
+        "stage": "rn1_open", "placed_at": early + 132}}}}
+    assert PP.pilot_slugs(markets, e.since) == ["aec-nfl-bal-car-2026-11-22"]
+    assert PP.pilot_slugs(markets, late) == []          # what happened live
+
+
+def test_the_same_window_after_a_restart_keeps_its_marker(tmp_path,
+                                                          monkeypatch):
+    win = "window:2026-11-22T21:35:00Z/2026-11-22T23:05:00Z"
+    e, start = _boot(tmp_path, monkeypatch, win)
+    e2, _ = _boot(tmp_path, monkeypatch, win)
+    assert e2.since == start and e2.b.d["campaign_window"] == [
+        start, 1795388700.0]
+    # ...and through a plain relock afterwards
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    monkeypatch.setattr(M, "PILOT_SINCE", 1795310100.0)     # stale variable
+    assert M.Engine(FakeVenue(), M.Book(tmp_path / "s.json")).since == start
+
+
+def test_a_later_window_is_a_new_campaign(tmp_path, monkeypatch):
+    e, first = _boot(tmp_path, monkeypatch,
+                     "window:2026-11-22T21:35:00Z/2026-11-22T23:05:00Z")
+    e, second = _boot(tmp_path, monkeypatch,
+                      "window:2026-11-23T01:30:00Z/2026-11-23T04:30:00Z")
+    assert second > first and e.since == second
+
+
+def test_a_book_from_before_this_fix_adopts_the_configured_window(
+        tmp_path, monkeypatch):
+    """Production's book holds a marker and no window record."""
+    b = M.Book(tmp_path / "s.json")
+    b.d["campaign_since"] = 1795383300.0                 # 21:35Z, stored
+    b.save()
+    e, early = _boot(tmp_path, monkeypatch,
+                     "window:2026-11-22T20:16:00Z/2026-11-22T23:05:00Z")
+    assert e.since == early

@@ -678,9 +678,21 @@ def adopt_campaign_marker(book: Any) -> Optional[float]:
     marker in force for this book."""
     w = lock_window()
     stored = book.d.get("campaign_since")
-    if w is not None and (stored is None or float(stored) < w[0]):
-        book.d["campaign_since"] = stored = w[0]
-        book.save()
+    # LIVE 2026-11-22 20:16Z: a window armed for 21:35 was moved to start at
+    # 20:16. The stored marker only ever moved LATER, so it stayed at 21:35:
+    # orders placed before then would not have counted toward the campaign
+    # spend cap, the unmatched cap or the campaign loss stop (the window was
+    # put back before anything filled). A configured window IS the campaign:
+    # whenever the window differs from the one this book last ran under, its
+    # start becomes the marker -- earlier or later. The same window after a
+    # restart keeps its marker; no window (a plain lock) keeps the last one.
+    if w is not None:
+        cur = [float(w[0]), float(w[1])]
+        if book.d.get("campaign_window") != cur or stored is None \
+                or float(stored) < w[0]:
+            book.d["campaign_window"] = cur
+            book.d["campaign_since"] = stored = w[0]
+            book.save()
     if stored is not None and (PILOT_SINCE is None or
                                PILOT_SINCE < float(stored)):
         return float(stored)
