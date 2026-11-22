@@ -111,6 +111,10 @@ def _pilot_since(raw: str) -> Optional[float]:
 #: venue-settled net loss. Default 0 = no stop (the lock is the control).
 PILOT_SINCE = _pilot_since(os.getenv("PMUS_RN1_PILOT_SINCE", ""))
 PILOT_LOSS_USD = _env_d("PMUS_RN1_PILOT_LOSS_USD", "0")
+#: with the stop on, a meter result older than this blocks new openings
+#: (the audit that feeds it runs every REWARD_CHECK_S, default 1 h)
+PILOT_METER_MAX_AGE_S = float(os.getenv("PMUS_RN1_PILOT_METER_MAX_AGE_S",
+                                        str(2 * 3600 + 600)))
 # SIGTERM / disable: per-order cancel attempts and the total time budget
 # (Railway drains for 30 s).
 CANCEL_ATTEMPTS = int(os.getenv("PMUS_TWO_SIDED_CANCEL_ATTEMPTS", "4"))
@@ -2581,8 +2585,8 @@ class Engine:
             new_block = "shared_halt"
         elif self.account_risk_blocks() is not None:
             new_block = "account_risk"
-        elif self.pilot_loss_stopped():
-            new_block = "pilot_loss_stop"
+        elif self.pilot_block():
+            new_block = self.pilot_block()
         # account-wide blocks hold the slot (they lift); a block about THIS
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
@@ -3262,14 +3266,37 @@ class Engine:
             from src import pmus_pilot_pnl as PP
             r = PP.meter(markets, rows, since=PILOT_SINCE)
         except Exception as exc:                          # noqa: BLE001
-            self._pilot = None
+            self._pilot = None                    # -> pilot_meter_unavailable
             log("PILOT_PNL", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return
         self._pilot = r
+        self._pilot_at = time.monotonic()
         log("PILOT_PNL", ok=True, since=PILOT_SINCE,
             loss_stop_usd=str(PILOT_LOSS_USD),
-            loss_stopped=self.pilot_loss_stopped(), **r)
+            new_openings_block=self.pilot_block(), **r)
+
+    def pilot_block(self) -> Optional[str]:
+        """Why the pilot's accounting forbids NEW RN1 exposure, or None.
+        Owner 2026-11-21: the meter must fail CLOSED -- missing or
+        unreconciled venue fills, or no current meter result, stop new
+        openings rather than drop out of the loss total. Only the realized
+        stop latches; the others lift when the meter is clean again."""
+        if PILOT_LOSS_USD <= 0:
+            return None
+        if self.pilot_loss_stopped():
+            return "pilot_loss_stop"
+        r = getattr(self, "_pilot", None)
+        at = getattr(self, "_pilot_at", None)
+        if r is None or at is None or \
+                time.monotonic() - at > PILOT_METER_MAX_AGE_S:
+            return "pilot_meter_unavailable"
+        if r.get("unconfirmed"):
+            return "pilot_fills_unconfirmed"
+        if D(r["settled_net_usd"]) + D(r.get("open_worst_case_usd") or 0) \
+                <= -PILOT_LOSS_USD:
+            return "pilot_loss_at_risk"
+        return None
 
     def pilot_loss_stopped(self) -> bool:
         """Campaign stop: venue-settled pilot net <= -PILOT_LOSS_USD blocks

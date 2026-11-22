@@ -27,6 +27,11 @@ Per settled market (YES pays px, NO pays 1 - px):
   residual  = gross - pair_edge          (the unpaired leg's outcome)
   net       = gross - fees charged
 
+Unsettled pilot markets with reconciled fills contribute their WORST
+settled outcome (`open_worst_case_usd`), so the engine's campaign stop can
+count losses before they are realized. Unreconciled fills are listed in
+`unconfirmed`; the engine fails closed on them.
+
 Labels: only `settled` markets are realized. Nothing here places, cancels
 or reads the venue itself.
 """
@@ -130,11 +135,12 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
         out["status"] = "no_fills"
         return out
     px = mk.get("settle_px")
-    if not v["resolved"]:
-        out["status"] = "open"
-        return out
-    if px is None:
-        out["status"] = "awaiting_settle_px"
+    if not v["resolved"] or px is None:
+        # not realized yet: its WORST settled outcome counts toward the
+        # campaign stop (owner 2026-11-21: never underestimate losses)
+        worst = min(y - cy - cn, n - cy - cn) - v["charged"]
+        out.update(status="open" if not v["resolved"]
+                   else "awaiting_settle_px", worst_case_net=str(worst))
         return out
     px = D(str(px))
     gross = y * px + n * (1 - px) - cy - cn
@@ -157,8 +163,11 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
                              "fees_charged", "rebates_credited")}
     status: Dict[str, int] = {}
     worst = None
+    open_worst = D(0)
     for s, r in per.items():
         status[r["status"]] = status.get(r["status"], 0) + 1
+        if "worst_case_net" in r:
+            open_worst += D(r["worst_case_net"])
         if r["status"] != "settled":
             continue
         for k in tot:
@@ -168,6 +177,7 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
     return {"pilot_markets": len(slugs), "status": status,
             "settled_markets": status.get("settled", 0),
             **{f"settled_{k}_usd": str(v) for k, v in tot.items()},
+            "open_worst_case_usd": str(open_worst),
             "worst_market": ({"slug": worst, "net": per[worst]["net"]}
                              if worst else None),
             "unconfirmed": sorted(s for s, r in per.items()

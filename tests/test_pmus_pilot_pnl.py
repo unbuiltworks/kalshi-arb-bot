@@ -122,3 +122,73 @@ def test_loss_stop_off_by_default(tmp_path):
     from tests.test_pmus_sports_two_sided import FakeVenue
     e = M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
     assert M.PILOT_LOSS_USD == 0 and not e.pilot_loss_stopped()
+
+
+# ------------------------------------- fail closed (owner 2026-11-21)
+def _engine(tmp_path, monkeypatch, limit="4"):
+    from src import pmus_sports_two_sided as M
+    from tests.test_pmus_sports_two_sided import FakeVenue
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D(limit))
+    return M, M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
+
+
+def test_no_meter_result_yet_blocks_new_openings(tmp_path, monkeypatch):
+    M, e = _engine(tmp_path, monkeypatch)
+    assert e.pilot_block() == "pilot_meter_unavailable"
+
+
+def test_meter_error_blocks(tmp_path, monkeypatch):
+    M, e = _engine(tmp_path, monkeypatch)
+    e.pilot_meter(None, {"aec-z": {"bad": 1}})           # raises inside
+    assert e.pilot_block() == "pilot_meter_unavailable"
+
+
+def test_stale_meter_blocks(tmp_path, monkeypatch):
+    M, e = _engine(tmp_path, monkeypatch)
+    e.pilot_meter([], {})
+    assert e.pilot_block() is None
+    e._pilot_at -= M.PILOT_METER_MAX_AGE_S + 1
+    assert e.pilot_block() == "pilot_meter_unavailable"
+
+
+def test_unreconciled_fills_block_instead_of_dropping_out(tmp_path,
+                                                           monkeypatch):
+    M, e = _engine(tmp_path, monkeypatch)
+    m = {"aec-g": mk(5, 0, "1.55", "0", px="1")}
+    e.pilot_meter([trade("aec-g", 5), trade("aec-g", 5), res("aec-g")], m)
+    assert e.pilot_block() == "pilot_fills_unconfirmed"
+    assert not e.b.d.get("pilot_loss_stop")             # lifts once clean
+    e.pilot_meter([trade("aec-g", 5), res("aec-g")], m)
+    assert e.pilot_block() is None
+
+
+def test_open_markets_count_at_their_worst_outcome(tmp_path, monkeypatch):
+    """Unsettled lone legs: 5 YES @0.85 can lose 4.25 -> already at risk."""
+    M, e = _engine(tmp_path, monkeypatch)
+    m = {"aec-w": mk(5, 0, "4.25", "0")}
+    r = PP.meter(m, [trade("aec-w", 5)])
+    assert D(r["open_worst_case_usd"]) == D("-4.25")
+    e.pilot_meter([trade("aec-w", 5)], m)
+    assert e.pilot_block() == "pilot_loss_at_risk"
+    assert not e.b.d.get("pilot_loss_stop")             # not realized: no latch
+
+
+def test_completed_open_pair_has_no_downside(tmp_path, monkeypatch):
+    m = {"aec-p": mk(5, 5, "2.00", "2.75")}
+    r = PP.meter(m, [trade("aec-p", 5), trade("aec-p", 5)])
+    assert D(r["open_worst_case_usd"]) == D("0.25")
+
+
+def test_blocked_openings_still_allow_completions(tmp_path, monkeypatch):
+    from src import pmus_rn1_replica as R
+    M, e = _engine(tmp_path, monkeypatch)
+    monkeypatch.setattr(R, "ON", True)
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    monkeypatch.setenv(M.ENABLED_ENV, "YES")
+    e.v.bid, e.v.ask = D("0.48"), D("0.50")
+    mkt = e.b.m("aec-x")
+    mkt["pos"]["YES"], mkt["cost"]["YES"] = D("5"), D("2.20")  # lone 0.44
+    assert e.pilot_block() == "pilot_meter_unavailable"
+    e.step_market("aec-x")
+    sides = {o["side"] for o in e.v.orders.values() if o["open"]}
+    assert sides == {"NO"}                              # only the completion
