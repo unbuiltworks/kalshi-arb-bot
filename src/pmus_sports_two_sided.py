@@ -2611,6 +2611,27 @@ class Engine:
             tot["unmatched"] += c["unmatched"]
         return tot
 
+    @staticmethod
+    def _rn1_exposed(mk: Mapping[str, Any]) -> bool:
+        """A market holding new-exposure risk: an unpaired leg or a resting
+        opening/extension bid."""
+        if D(str(mk["pos"]["YES"])) != D(str(mk["pos"]["NO"])):
+            return True
+        return any(o.get("open") and not is_completion_stage(o.get("stage"))
+                   for o in (mk.get("orders") or {}).values())
+
+    def rn1_market_slots_full(self, slug: str, mk: Mapping[str, Any]) -> bool:
+        """Owner 2026-11-22: two markets maximum. MAX_MARKETS bounded only
+        the SELECTION of new markets; already-tracked markets kept opening
+        (live, locked: three markets quoted at once). A market may add new
+        exposure only while fewer than MAX_MARKETS OTHER markets hold some
+        -- if more than MAX_MARKETS ever do (e.g. after a restart), each can
+        only complete until they drain. Completions are never blocked."""
+        others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
+                     if s_ != slug and not m_.get("done") and
+                     self._rn1_exposed(m_))
+        return others >= MAX_MARKETS
+
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
                           want: Dict[str, Any], q: Dict[str, Any]) -> None:
         """Owner 2026-11-22: $16 total spend and $6 unmatched across the
@@ -2687,6 +2708,8 @@ class Engine:
         if not new_block and self.ws is not None and \
                 now < float(mk.get("jump_pause_until") or 0):
             new_block = "jump_pause"
+        if not new_block and self.rn1_market_slots_full(slug, mk):
+            new_block = "max_markets"
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,

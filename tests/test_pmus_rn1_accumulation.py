@@ -201,3 +201,23 @@ def test_campaign_caps_hold_across_four_markets_resting_and_filled(
     held = sum(D(e.b.m(s)["pos"]["YES"]) + D(e.b.m(s)["pos"]["NO"])
                for s in slugs)
     assert held > 0                     # it did trade, inside the caps
+
+
+def test_new_exposure_in_at_most_max_markets(eng, monkeypatch):
+    """Live (locked) 2026-11-22 01:59Z: three markets bid openings at once
+    with MAX_MARKETS=2. Now a third market waits; completions never do."""
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 2)
+    for s in ("aec-a", "aec-b", "aec-c"):
+        e.b.m(s)
+    e.step_market("aec-a")
+    e.step_market("aec-b")
+    e.step_market("aec-c")
+    bidding = {o["slug"] for o in v.orders.values() if o["open"]}
+    assert bidding == {"aec-a", "aec-b"}
+    # a lone leg in the third market still gets its completion bid
+    mk = e.b.m("aec-c")
+    mk["pos"]["YES"], mk["cost"]["YES"] = "2", "0.90"
+    e.step_market("aec-c")
+    c = [o for o in v.orders.values() if o["open"] and o["slug"] == "aec-c"]
+    assert c and all(o["side"] == "NO" for o in c)
