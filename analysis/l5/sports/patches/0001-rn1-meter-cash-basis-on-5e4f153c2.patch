@@ -1,0 +1,593 @@
+From a46d59c74befe29517617851f8ca2ac460b90ea0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 22 Nov 2026 03:09:31 +0000
+Subject: [PATCH] RN1 pilot meter: completed pairs are realized cash at pairing
+
+The venue nets a YES+NO pair when the second leg fills and pays its $1 at
+once (first pilot: venue cash 321.3138 -> 321.6638, no resolution row).
+The meter no longer waits for a settlement event that never comes.
+
+- realized_net_usd: completed-pair cash - fees + settled residual results
+- outstanding contracts/cost, residual worst case, fees, rebates reported
+  separately; unrealized pair edge is zero by construction
+- netting is checked, not assumed: an unresolved market whose venue
+  position is not |YES - NO| is position_unconfirmed and fails closed
+- campaign loss stop latches on realized net; at-risk total is unchanged
+- venue account cash logged with PILOT_PNL against a stored baseline
+  (report only: shared account)
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/pmus_pilot_pnl.py        | 166 +++++++++++++++++++++++++++-----
+ src/pmus_sports_two_sided.py |  71 +++++++++++---
+ tests/test_pmus_pilot_pnl.py | 181 ++++++++++++++++++++++++++++++++++-
+ 3 files changed, 379 insertions(+), 39 deletions(-)
+
+diff --git a/src/pmus_pilot_pnl.py b/src/pmus_pilot_pnl.py
+index 25a5ff515..d69da56ae 100644
+--- a/src/pmus_pilot_pnl.py
++++ b/src/pmus_pilot_pnl.py
+@@ -32,8 +32,29 @@ settled outcome (`open_worst_case_usd`), so the engine's campaign stop can
+ count losses before they are realized. Unreconciled fills are listed in
+ `unconfirmed`; the engine fails closed on them.
+ 
+-Labels: only `settled` markets are realized. Nothing here places, cancels
+-or reads the venue itself.
++CASH BASIS (owner 2026-11-22, venue cash 321.3138 -> 321.6638 on the first
++pilot): the venue nets a YES+NO pair when the second leg fills and pays its
++$1 at once. A completed pair is therefore REALIZED CASH at pairing; it does
++not wait for a resolution row (none follows for a flat market). Reported
++separately, never mixed:
++
++  realized_net_usd        pair edge of every reconciled completed pair
++                          - fees charged, + the residual leg's result once
++                          its market has settled
++  outstanding_*           the unpaired contracts still held and what was
++                          paid for them (cash out, not yet a result)
++  open_residual_worst_usd those contracts settling worthless
++  unrealized_pair_edge_usd always 0 for completed pairs (they are cash);
++                          kept so a reader never has to infer it
++  fees / rebates          ours only; rebates never netted into P&L
++
++`venue_net` (slug -> signed venue position) makes the netting a checked
++fact rather than an assumption: an unresolved market whose venue position
++is not |YES - NO| is `position_unconfirmed` and fails closed like
++unreconciled fills.
++
++Labels: realized = paired cash + settled residuals. Nothing here places,
++cancels or reads the venue itself.
+ """
+ from __future__ import annotations
+ 
+@@ -55,6 +76,52 @@ def _d(v: Any) -> Optional[D]:
+         return None
+ 
+ 
++def cash_usd(balances: Any) -> Optional[D]:
++    """Account cash from the venue's /v1/account/balances answer (a list of
++    entries carrying buyingPower; mapping and top-level shapes accepted)."""
++    entries: list = []
++    raw = balances.get("balances") if isinstance(balances, Mapping) else None
++    if isinstance(raw, list):
++        entries.extend(raw)
++    elif isinstance(raw, Mapping):
++        entries.append(raw)
++    if isinstance(balances, Mapping):
++        entries.append(balances)
++    for e in entries:
++        if not isinstance(e, Mapping):
++            continue
++        for k in ("buyingPower", "availableBalance", "cashBalance"):
++            v = e.get(k)
++            if isinstance(v, Mapping):
++                v = v.get("value") if v.get("value") is not None \
++                    else v.get("amount")
++            d = _d(v)
++            if d is not None:
++                return d
++    return None
++
++
++def cash_check(cash: Optional[D], expected: D,
++               base: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
++    """Account-wide venue cash against what the campaign's reconciled trading
++    explains, both measured from a stored baseline {cash, expected}.
++    REPORT ONLY: the account is shared, so other strategies' trades, reward
++    credits and transfers appear in `unexplained_usd`; it is evidence for a
++    human, not a gate."""
++    if cash is None:
++        return {"ok": False, "why": "cash_unreadable"}
++    if not base:
++        return {"ok": True, "cash_usd": str(cash), "baseline": None}
++    d_cash = cash - D(str(base["cash"]))
++    d_exp = expected - D(str(base["expected"]))
++    return {"ok": True, "cash_usd": str(cash),
++            "baseline": {"cash": str(base["cash"]), "t": base.get("t")},
++            "cash_change_usd": str(d_cash),
++            "explained_by_campaign_usd": str(d_exp),
++            "unexplained_usd": str(d_cash - d_exp),
++            "label": "account-wide cash; shared account, report only"}
++
++
+ def pilot_slugs(markets: Mapping[str, Mapping[str, Any]],
+                 since: Optional[float] = None,
+                 stages: Sequence[str] = PILOT_STAGES) -> list:
+@@ -115,8 +182,9 @@ def venue_side(rows: Iterable[Mapping[str, Any]], slugs) -> Dict[str, Any]:
+     return per
+ 
+ 
+-def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
+-                  ) -> Dict[str, Any]:
++def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]],
++                  venue_net: Optional[D] = None,
++                  check_position: bool = False) -> Dict[str, Any]:
+     y, n = D(str(mk["pos"]["YES"])), D(str(mk["pos"]["NO"]))
+     cy, cn = D(str(mk["cost"]["YES"])), D(str(mk["cost"]["NO"]))
+     book_qty = sum((D(str(o.get("filled") or "0"))
+@@ -150,29 +218,57 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
+         out["status"] = "no_fills"
+         return out
+     px = mk.get("settle_px")
++    pair_edge = matched * (1 - cy / y - cn / n) if matched > 0 else D(0)
++    # cash basis: completed pairs are paid by the venue at pairing
++    paired_cash = pair_edge - v["charged"]
++    out.update(matched=str(matched), pair_edge=str(pair_edge),
++               realized_pair_cash=str(paired_cash))
++    if not v["resolved"] and check_position and \
++            abs(abs(venue_net or D(0)) - res_q) > _TOL:
++        # the venue does not hold what the book says is unpaired: the
++        # netting (and so the realized cash) is not proven for this market
++        out.update(status="position_unconfirmed",
++                   venue_net=str(venue_net or D(0)))
++        return out
+     if not v["resolved"] or px is None:
+-        # not realized yet: its WORST settled outcome counts toward the
+-        # campaign stop (owner 2026-11-21: never underestimate losses)
++        # the unpaired leg is not realized yet: its WORST settled outcome
++        # counts toward the campaign stop (owner 2026-11-21: never
++        # underestimate losses). worst_case_net = paired cash - residual cost
+         worst = min(y - cy - cn, n - cy - cn) - v["charged"]
+-        out.update(status="open" if not v["resolved"]
+-                   else "awaiting_settle_px", worst_case_net=str(worst))
++        flat = res_q == 0 and matched > 0
++        out.update(status="paired_flat" if flat and not v["resolved"]
++                   else "open" if not v["resolved"]
++                   else "awaiting_settle_px", worst_case_net=str(worst),
++                   realized_net=str(paired_cash),
++                   outstanding_qty=str(res_q),
++                   outstanding_cost=str(res_cost))
+         return out
+     px = D(str(px))
+     gross = y * px + n * (1 - px) - cy - cn
+-    pair_edge = matched * (1 - cy / y - cn / n) if matched > 0 else D(0)
+-    out.update(status="settled", settle_px=str(px),
+-               matched=str(matched), gross=str(gross),
+-               pair_edge=str(pair_edge), residual=str(gross - pair_edge),
+-               net=str(gross - v["charged"]))
++    out.update(status="settled", settle_px=str(px), gross=str(gross),
++               residual=str(gross - pair_edge),
++               net=str(gross - v["charged"]),
++               realized_net=str(gross - v["charged"]),
++               outstanding_qty="0", outstanding_cost="0")
+     return out
+ 
+ 
++UNCONFIRMED = ("fills_unconfirmed", "position_unconfirmed")
++
++
+ def meter(markets: Mapping[str, Mapping[str, Any]],
+           rows: Iterable[Mapping[str, Any]],
+-          since: Optional[float] = None) -> Dict[str, Any]:
++          since: Optional[float] = None,
++          venue_net: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
++    """`venue_net`: {slug: signed venue position} from a COMPLETE positions
++    walk, or None when no such walk is available (position check skipped,
++    reported as `positions_checked: False`)."""
+     slugs = pilot_slugs(markets, since)
+     vs = venue_side(rows, slugs)
+-    per = {s: market_result(markets[s], vs.get(s)) for s in slugs}
++    chk = venue_net is not None
++    per = {s: market_result(markets[s], vs.get(s),
++                            _d((venue_net or {}).get(s)), chk)
++           for s in slugs}
+     tot = {k: D(0) for k in ("net", "gross", "pair_edge", "residual",
+                              "fees_charged", "rebates_credited")}
+     status: Dict[str, int] = {}
+@@ -180,8 +276,19 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
+     open_worst = D(0)
+     ex = {"fills": 0, "contracts": D(0), "spent": D(0), "pairs": D(0),
+           "pair_cost_sum": D(0), "residual_qty": D(0), "residual_cost": D(0)}
++    realized = D(0)
++    out_qty = out_cost = fees_all = rebates_all = D(0)
++    for r in per.values():
++        if r["status"] in UNCONFIRMED:
++            continue
++        fees_all += D(r["fees_charged"])
++        rebates_all += D(r["rebates_credited"])
++        if "realized_net" in r:
++            realized += D(r["realized_net"])
++            out_qty += D(r["outstanding_qty"])
++            out_cost += D(r["outstanding_cost"])
+     for r in per.values():
+-        if r["status"] == "fills_unconfirmed":
++        if r["status"] in UNCONFIRMED:
+             continue
+         ex["fills"] += int(r["fills"])
+         ex["contracts"] += D(r["yes"]) + D(r["no"])
+@@ -202,6 +309,18 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
+         if worst is None or D(r["net"]) < D(per[worst]["net"]):
+             worst = s
+     return {"pilot_markets": len(slugs), "status": status,
++            # ---- cash basis: what the venue has actually paid or charged
++            "realized_net_usd": str(realized),
++            "outstanding_contracts": str(out_qty),
++            "outstanding_cost_usd": str(out_cost),
++            "open_residual_worst_usd": str(-out_cost),
++            "unrealized_pair_edge_usd": "0",
++            "fees_charged_usd": str(fees_all),
++            "rebates_credited_usd": str(rebates_all),
++            # cash this campaign's reconciled trading explains, account-wide
++            # cross-check only: realized + rebates - cash tied in residuals
++            "expected_cash_change_usd": str(realized + rebates_all - out_cost),
++            "positions_checked": chk,
+             "settled_markets": status.get("settled", 0),
+             **{f"settled_{k}_usd": str(v) for k, v in tot.items()},
+             "open_worst_case_usd": str(open_worst),
+@@ -214,13 +333,16 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
+                 "locked_pair_edge_usd": str(ex["pairs"] - ex["pair_cost_sum"]),
+                 "residual_contracts": str(ex["residual_qty"]),
+                 "residual_cost_usd": str(ex["residual_cost"]),
+-                "label": "venue-reconciled fills only; locked edge is NOT "
+-                         "realized until settlement"},
++                "label": "venue-reconciled fills only; a completed pair's "
++                         "edge is realized cash at pairing (venue nets and "
++                         "pays $1); residual legs realize at settlement"},
+             "worst_market": ({"slug": worst, "net": per[worst]["net"]}
+                              if worst else None),
+             "unconfirmed": sorted(s for s, r in per.items()
+-                                  if r["status"] == "fills_unconfirmed"),
++                                  if r["status"] in UNCONFIRMED),
+             "by_market": per,
+-            "label": "REALIZED only for status=settled (venue fills "
+-                     "reconciled + venue resolution + final price); net = "
+-                     "gross - fees charged; rebates separate, never netted"}
++            "label": "realized_net_usd = completed-pair cash (venue fills "
++                     "reconciled, position netted) - fees charged + settled "
++                     "residual results; settled_* = markets with a venue "
++                     "resolution and final price only; rebates and rewards "
++                     "separate, never netted"}
+diff --git a/src/pmus_sports_two_sided.py b/src/pmus_sports_two_sided.py
+index 3ae339c37..621bc1d06 100644
+--- a/src/pmus_sports_two_sided.py
++++ b/src/pmus_sports_two_sided.py
+@@ -3368,12 +3368,16 @@ class Engine:
+     AUDIT_SINCE = os.getenv("PMUS_TWO_SIDED_AUDIT_SINCE",
+                             "2026-11-14T15:30:00Z")
+ 
+-    def pilot_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
+-        """RN1 pilot settled net P&L (src/pmus_pilot_pnl.py) from this
+-        audit's venue rows; feeds the campaign loss stop."""
++    def pilot_meter(self, rows: list, markets: Mapping[str, Any],
++                    venue_net: Optional[Mapping[str, Any]] = None) -> None:
++        """RN1 pilot net P&L on a CASH basis (src/pmus_pilot_pnl.py) from
++        this audit's venue rows; feeds the campaign loss stop. `venue_net`
++        is the complete positions walk of the same audit (None = no walk:
++        the position check is skipped and reported as such)."""
+         try:
+             from src import pmus_pilot_pnl as PP
+-            r = PP.meter(markets, rows, since=PILOT_SINCE)
++            r = PP.meter(markets, rows, since=PILOT_SINCE,
++                         venue_net=venue_net)
+         except Exception as exc:                          # noqa: BLE001
+             self._pilot = None                    # -> pilot_meter_unavailable
+             log("PILOT_PNL", ok=False,
+@@ -3383,7 +3387,32 @@ class Engine:
+         self._pilot_at = time.monotonic()
+         log("PILOT_PNL", ok=True, since=PILOT_SINCE,
+             loss_stop_usd=str(PILOT_LOSS_USD),
+-            new_openings_block=self.pilot_block(), **r)
++            new_openings_block=self.pilot_block(),
++            cash=self.pilot_cash(r), **r)
++
++    def pilot_cash(self, r: Mapping[str, Any]) -> Dict[str, Any]:
++        """Venue account cash next to what the campaign explains. READ-ONLY
++        GET, report only (shared account). The baseline is taken once per
++        PILOT_SINCE, together with the campaign's expected cash at that
++        moment, so a restart mid-campaign does not move it."""
++        from src import pmus_pilot_pnl as PP
++        try:
++            cash = PP.cash_usd(self.v.t.request("GET",
++                                                "/v1/account/balances"))
++        except Exception as exc:                          # noqa: BLE001
++            return {"ok": False,
++                    "why": f"{type(exc).__name__}:{str(exc)[:120]}"}
++        exp = D(r["expected_cash_change_usd"])
++        base = self.b.d.get("pilot_cash_base")
++        key = str(PILOT_SINCE)
++        if cash is not None and (not base or base.get("since") != key) \
++                and not r.get("unconfirmed"):
++            base = {"since": key, "cash": str(cash), "expected": str(exp),
++                    "t": now_iso()}
++            self.b.d["pilot_cash_base"] = base
++            self.b.save()
++        return PP.cash_check(cash, exp, base if base and
++                             base.get("since") == key else None)
+ 
+     def pilot_block(self) -> Optional[str]:
+         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
+@@ -3402,26 +3431,29 @@ class Engine:
+             return "pilot_meter_unavailable"
+         if r.get("unconfirmed"):
+             return "pilot_fills_unconfirmed"
+-        if D(r["settled_net_usd"]) + D(r.get("open_worst_case_usd") or 0) \
++        # realized cash (completed pairs - fees + settled residuals) plus
++        # every outstanding unpaired contract settling worthless
++        if D(r["realized_net_usd"]) + D(r["open_residual_worst_usd"]) \
+                 <= -PILOT_LOSS_USD:
+             return "pilot_loss_at_risk"
+         return None
+ 
+     def pilot_loss_stopped(self) -> bool:
+-        """Campaign stop: venue-settled pilot net <= -PILOT_LOSS_USD blocks
+-        NEW RN1 openings/extensions (completions continue). Latched in the
+-        book: a restart or a later recovery does not lift it -- the owner
+-        clears `pilot_loss_stop` explicitly."""
++        """Campaign stop: REALIZED pilot net (completed-pair cash - fees +
++        settled residual results) <= -PILOT_LOSS_USD blocks NEW RN1
++        openings/extensions (completions continue). Latched in the book: a
++        restart or a later recovery does not lift it -- the owner clears
++        `pilot_loss_stop` explicitly."""
+         if PILOT_LOSS_USD <= 0:
+             return False
+         if self.b.d.get("pilot_loss_stop"):
+             return True
+         r = getattr(self, "_pilot", None)
+-        if r and D(r["settled_net_usd"]) <= -PILOT_LOSS_USD:
++        if r and D(r["realized_net_usd"]) <= -PILOT_LOSS_USD:
+             self.b.d["pilot_loss_stop"] = {"t": now_iso(),
+-                                           "net": r["settled_net_usd"]}
++                                           "net": r["realized_net_usd"]}
+             self.b.save()
+-            log("PILOT_LOSS_STOP", net=r["settled_net_usd"],
++            log("PILOT_LOSS_STOP", net=r["realized_net_usd"],
+                 limit=str(PILOT_LOSS_USD),
+                 effect="no new RN1 openings/extensions until the owner "
+                        "clears pilot_loss_stop")
+@@ -3497,7 +3529,8 @@ class Engine:
+         if looked:
+             self.b.save()
+         bs = PNL.book_settled(mk_all)
+-        self.pilot_meter(mine, mk_all)
++        self.pilot_meter(mine, mk_all,
++                         venue_net=getattr(self, "_venue_net", None))
+         since = self.b.d.get("recovery_since")
+         bs_new = PNL.book_settled(mk_all, since=since) if since else None
+         settled_margin = D(PNL.book_economics(
+@@ -3563,9 +3596,19 @@ class Engine:
+         try:
+             snap = self.v.positions_snapshot()
+         except Exception as exc:                          # noqa: BLE001
++            self._venue_net = None       # no walk: position check skipped
+             log("INVENTORY_RECONCILE", ok=False,
+                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
+             return None
++        # signed venue position per market for the pilot meter's netting
++        # check; only a COMPLETE walk can prove a market is flat
++        self._venue_net = None
++        if snap.get("complete"):
++            self._venue_net = {}
++            for row_ in snap["rows"]:
++                pr_ = INV.parse_row(row_)
++                if pr_["slug"] and not pr_["expired"]:
++                    self._venue_net[pr_["slug"]] = str(pr_["net"] or 0)
+         rep = INV.reconcile(snap["rows"], snap["open_orders"],
+                             self.b.d.get("markets") or {},
+                             self.own(), walk_complete=snap["complete"])
+diff --git a/tests/test_pmus_pilot_pnl.py b/tests/test_pmus_pilot_pnl.py
+index 1484bccc0..af9f393e5 100644
+--- a/tests/test_pmus_pilot_pnl.py
++++ b/tests/test_pmus_pilot_pnl.py
+@@ -79,9 +79,10 @@ def test_unresolved_or_unpriced_markets_are_not_realized():
+     rows = [trade("aec-o", 5), trade("aec-o", 5),
+             trade("aec-p", 5), trade("aec-p", 5), res("aec-p")]
+     r = PP.meter(m, rows)
+-    assert r["by_market"]["aec-o"]["status"] == "open"
++    # a flat completed pair is venue-paid at pairing: cash, though unsettled
++    assert r["by_market"]["aec-o"]["status"] == "paired_flat"
+     assert r["by_market"]["aec-p"]["status"] == "awaiting_settle_px"
+-    assert r["settled_markets"] == 0
++    assert r["settled_markets"] == 0 and D(r["settled_net_usd"]) == 0
+ 
+ 
+ def test_only_pilot_markets_since_the_start_are_counted():
+@@ -209,7 +210,7 @@ def test_execution_economics_report_tonights_two_pairs():
+     assert D(ex["residual_cost_usd"]) == 0
+     a = r["by_market"]["aec-cfb-utsa-uab"]
+     assert D(a["avg_no"]) == D("0.35") and D(a["avg_yes"]) == D("0.62")
+-    assert a["status"] == "open"                 # not realized yet
++    assert a["status"] == "paired_flat"          # venue-paid at pairing
+ 
+ 
+ def test_execution_economics_report_a_residual_leg():
+@@ -219,3 +220,177 @@ def test_execution_economics_report_a_residual_leg():
+     assert a["residual_side"] == "YES" and D(a["residual_qty"]) == 5
+     assert D(a["residual_cost"]) == D("2.25")
+     assert D(r["execution"]["residual_cost_usd"]) == D("2.25")
++
++
++# ------------------------------- cash basis (owner 2026-11-22, venue cash)
++PILOT = {"aec-cfb-utsa-uab": (5, 5, "3.10", "1.75"),
++         "aec-nba-lac-dal": (5, 5, "1.95", "2.85")}
++
++
++def _pilot():
++    m = {s: mk(*a) for s, a in PILOT.items()}
++    return m, [trade(s, 5) for s in m for _ in (0, 1)]
++
++
++def test_first_pilot_is_realized_cash_without_any_settlement_row():
++    """321.3138 -> 321.6638 at the venue: +0.35, no resolution row ever."""
++    m, rows = _pilot()
++    r = PP.meter(m, rows, venue_net={})           # complete walk, both flat
++    assert D(r["realized_net_usd"]) == D("0.35")
++    assert D(r["outstanding_contracts"]) == 0
++    assert D(r["outstanding_cost_usd"]) == 0
++    assert D(r["unrealized_pair_edge_usd"]) == 0
++    assert D(r["expected_cash_change_usd"]) == D("0.35")
++    assert r["settled_markets"] == 0 and D(r["settled_net_usd"]) == 0
++    assert r["status"] == {"paired_flat": 2} and r["positions_checked"]
++    assert r["unconfirmed"] == []
++
++
++def test_realized_outstanding_fees_and_rebates_are_separate():
++    # 7 YES @0.45, 2 NO @0.50: 2 pairs realized, 5 YES outstanding
++    m = {"aec-r": mk(7, 2, "3.15", "1.00")}
++    rows = [trade("aec-r", 7, fee="0.03", aggressor=True),
++            trade("aec-r", 2, fee="-0.01")]
++    r = PP.meter(m, rows, venue_net={"aec-r": "5"})
++    assert D(r["realized_net_usd"]) == D("0.10") - D("0.03")   # 2*(1-.95)-fee
++    assert D(r["outstanding_contracts"]) == 5
++    assert D(r["outstanding_cost_usd"]) == D("2.25")
++    assert D(r["open_residual_worst_usd"]) == D("-2.25")
++    assert D(r["fees_charged_usd"]) == D("0.03")
++    assert D(r["rebates_credited_usd"]) == D("0.01")
++    # cash: +0.07 realized, +0.01 rebate, -2.25 tied up in the lone leg
++    assert D(r["expected_cash_change_usd"]) == D("-2.17")
++    assert r["by_market"]["aec-r"]["status"] == "open"
++
++
++def test_cash_basis_never_changes_the_loss_at_risk_total():
++    """realized + residual-worthless equals the old worst-case sum, market
++    by market: open with residual, flat pair, settled win, settled loss."""
++    m = {"aec-a": mk(7, 2, "3.15", "1.00"), "aec-b": mk(5, 5, "2", "2.75"),
++         "aec-c": mk(5, 3, "2.00", "1.65", px="0"),
++         "aec-d": mk(4, 0, "1.00", "0", px="1")}
++    rows = [trade("aec-a", 7), trade("aec-a", 2), trade("aec-b", 5),
++            trade("aec-b", 5), trade("aec-c", 5, fee="0.02", aggressor=True),
++            trade("aec-c", 3), res("aec-c"), trade("aec-d", 4), res("aec-d")]
++    r = PP.meter(m, rows)
++    assert D(r["realized_net_usd"]) + D(r["open_residual_worst_usd"]) == \
++        D(r["settled_net_usd"]) + D(r["open_worst_case_usd"])
++    # settled residual results are in realized: -0.67 and +3.00
++    assert D(r["realized_net_usd"]) == D("0.10") + D("0.25") + D("-0.67") + 3
++
++
++def test_venue_still_holding_a_paired_market_is_not_counted_as_cash():
++    m, rows = _pilot()
++    r = PP.meter(m, rows, venue_net={"aec-nba-lac-dal": "5"})
++    assert r["by_market"]["aec-nba-lac-dal"]["status"] == \
++        "position_unconfirmed"
++    assert r["unconfirmed"] == ["aec-nba-lac-dal"]
++    assert D(r["realized_net_usd"]) == D("0.15")     # the proven pair only
++
++
++def test_residual_must_match_the_venue_position_either_sign():
++    m = {"aec-r": mk(2, 7, "1.00", "3.15")}          # 5 NO outstanding
++    rows = [trade("aec-r", 2), trade("aec-r", 7)]
++    assert PP.meter(m, rows, venue_net={"aec-r": "-5"})["unconfirmed"] == []
++    assert PP.meter(m, rows, venue_net={"aec-r": "-3"})["unconfirmed"] == \
++        ["aec-r"]
++    assert PP.meter(m, rows, venue_net={})["unconfirmed"] == ["aec-r"]
++
++
++def test_no_positions_walk_skips_the_check_and_says_so():
++    m, rows = _pilot()
++    r = PP.meter(m, rows)
++    assert r["positions_checked"] is False and r["unconfirmed"] == []
++
++
++def test_resolved_market_is_not_position_checked():
++    m = {"aec-s": mk(5, 0, "2.00", "0", px="0")}
++    r = PP.meter(m, [trade("aec-s", 5), res("aec-s")], venue_net={})
++    assert r["by_market"]["aec-s"]["status"] == "settled"
++    assert D(r["realized_net_usd"]) == D("-2.00")
++
++
++def test_cash_parsing_and_cross_check():
++    assert PP.cash_usd({"balances": [{"buyingPower": "321.6638"}]}) == \
++        D("321.6638")
++    assert PP.cash_usd({"buyingPower": {"value": "5"}}) == D("5")
++    assert PP.cash_usd({"balances": []}) is None
++    base = {"cash": "321.3138", "expected": "0", "t": "t0"}
++    c = PP.cash_check(D("321.6638"), D("0.35"), base)
++    assert D(c["cash_change_usd"]) == D("0.35")
++    assert D(c["unexplained_usd"]) == 0
++    c = PP.cash_check(D("322.6638"), D("0.35"), base)   # a reward credit
++    assert D(c["unexplained_usd"]) == D("1")
++    assert PP.cash_check(None, D(0), base)["ok"] is False
++
++
++# ---------------------------------------------------- engine: cash basis
++def test_engine_realized_pair_loss_counts_before_settlement(tmp_path,
++                                                            monkeypatch):
++    """Pairs completed above $1 are a realized loss at pairing: the stop
++    latches without waiting for any resolution row."""
++    M, e = _engine(tmp_path, monkeypatch, limit="0.50")
++    m = {"aec-x": mk(10, 10, "5.60", "5.00")}        # pair cost 1.06
++    e.pilot_meter([trade("aec-x", 10), trade("aec-x", 10)], m, venue_net={})
++    assert D(e._pilot["realized_net_usd"]) == D("-0.60")
++    assert e.pilot_loss_stopped()
++    assert D(e.b.d["pilot_loss_stop"]["net"]) == D("-0.60")
++
++
++def test_engine_unproven_netting_blocks_new_openings(tmp_path, monkeypatch):
++    M, e = _engine(tmp_path, monkeypatch)
++    m, rows = _pilot()
++    e.pilot_meter(rows, m, venue_net={"aec-nba-lac-dal": "5"})
++    assert e.pilot_block() == "pilot_fills_unconfirmed"
++    e.pilot_meter(rows, m, venue_net={})
++    assert e.pilot_block() is None
++
++
++def test_engine_cash_baseline_is_taken_once_and_reported(tmp_path,
++                                                         monkeypatch):
++    M, e = _engine(tmp_path, monkeypatch)
++
++    class T:
++        cash = "321.3138"
++
++        def request(self, method, path, body=None):
++            assert (method, path) == ("GET", "/v1/account/balances")
++            return {"balances": [{"buyingPower": self.cash}]}
++    e.v.t = T()
++    e.pilot_meter([], {})                            # before any fill
++    assert e.b.d["pilot_cash_base"]["cash"] == "321.3138"
++    m, rows = _pilot()
++    e.v.t.cash = "321.6638"
++    c = e.pilot_cash(PP.meter(m, rows, venue_net={}))
++    assert D(c["cash_change_usd"]) == D("0.35")
++    assert D(c["unexplained_usd"]) == 0
++    assert e.b.d["pilot_cash_base"]["cash"] == "321.3138"   # not re-based
++
++
++def test_engine_cash_read_failure_never_breaks_the_meter(tmp_path,
++                                                         monkeypatch):
++    M, e = _engine(tmp_path, monkeypatch)
++
++    class T:
++        def request(self, *a, **k):
++            raise RuntimeError("boom")
++    e.v.t = T()
++    e.pilot_meter([], {})
++    assert e._pilot is not None and e.pilot_block() is None
++
++
++def test_inventory_walk_feeds_signed_positions_only_when_complete(tmp_path,
++                                                                  monkeypatch):
++    M, e = _engine(tmp_path, monkeypatch)
++    rows = [{"marketSlug": "aec-a", "qtyBoughtDecimal": "7",
++             "qtySoldDecimal": "2"},
++            {"marketSlug": "aec-old", "netPositionDecimal": "4",
++             "expired": True}]
++    e.v.positions_snapshot = lambda: {"rows": rows, "open_orders": [],
++                                      "pages": 1, "complete": True}
++    e.inventory_reconcile()
++    assert e._venue_net == {"aec-a": "5"}
++    e.v.positions_snapshot = lambda: {"rows": rows, "open_orders": [],
++                                      "pages": 20, "complete": False}
++    e.inventory_reconcile()
++    assert e._venue_net is None
+-- 
+2.43.0
+
