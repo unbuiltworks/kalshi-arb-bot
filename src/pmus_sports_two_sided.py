@@ -2556,6 +2556,13 @@ class Engine:
         if new > 0 and st["px"] is not None:
             mk["pos"][side] = str(D(mk["pos"][side]) + new)
             mk["cost"][side] = str(D(mk["cost"][side]) + new * st["px"])
+            # PER-ORDER COST, for the ownership feed (`fills_doc`). An order
+            # that already held fills from before this field existed starts
+            # from its limit price for that earlier quantity.
+            _had = D(o.get("filled", "0"))
+            _base = (D(str(o["fill_cost"])) if o.get("fill_cost") is not None
+                     else _had * D(str(o["px"])))
+            o["fill_cost"] = str(_base + new * st["px"])
             o["filled"] = str(st["qty"])
             mk.setdefault("last_fill_t", {})[side] = time.time()
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
@@ -4671,6 +4678,66 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
                        "requote, disable and SIGTERM")}
 
 
+# ------------------------------------------------- the ownership (fills) feed
+# OWNER 2026-11-22: "The BTC service must not adopt or settle positions
+# belonging to the sports controller. Every fill and position needs durable
+# ownership attribution." The account-wide ledger (l5-pmus-live) holds a
+# position it did not open at $1 a contract and books its settlement at that
+# bound; on 2026-11-22 that read -13.00 for a day whose cash moved -2.05.
+# It already restates another strategy's market when that strategy's own
+# order ledger and the venue's fills agree ORDER BY ORDER. This is the
+# sports ledger in the shape it reads (the BTC5m feed's shape): every order
+# of this bot that ever filled, by venue order id, from the durable book.
+# READ-ONLY. No credential, no account id, nothing but this bot's own orders.
+FILLS_KEY = "l5/sports_fills.json"
+FILLS_STRATEGY = "SPORTS"
+
+
+def fills_doc(book: "Book") -> Dict[str, Any]:
+    """{"readable", "strategy", "as_of_utc", "orders": [...]}. An order is
+    listed only once it has filled; `filled_cost` is the venue-reported cost
+    where this bot recorded it and quantity x limit price for an order that
+    filled before it did (`cost_from` says which). The reader checks every
+    figure against the venue itself and refuses on any difference, so a
+    wrong figure here can only leave its own bound in place."""
+    for _attempt in range(3):
+        try:
+            orders = []
+            for slug, mk in sorted((book.d.get("markets") or {}).items()):
+                for oid, o in sorted((mk.get("orders") or {}).items()):
+                    q = D(str(o.get("filled") or "0"))
+                    if q <= 0:
+                        continue
+                    px = D(str(o["px"]))
+                    side = str(o.get("side") or "")
+                    if side not in ("YES", "NO") or not str(oid).strip():
+                        return {"readable": False, "strategy": FILLS_STRATEGY,
+                                "orders": [], "why": "order_unreadable"}
+                    rec = o.get("fill_cost")
+                    cost = D(str(rec)) if rec is not None else q * px
+                    orders.append({
+                        "venue_order_id": str(oid), "market": slug,
+                        "side": side, "price": str(cost / q),
+                        "limit_price": str(px), "filled_qty": str(q),
+                        "filled_cost": str(cost),
+                        "cost_from": ("VENUE_REPORTED" if rec is not None
+                                      else "LIMIT_PRICE"),
+                        "state": "OPEN" if o.get("open") else "CLOSED"})
+            return {"readable": True, "strategy": FILLS_STRATEGY,
+                    "lane": LANE, "as_of_utc": now_iso(), "orders": orders,
+                    "labels": ("every order this bot placed that has filled, "
+                               "with its own outcome side (YES/NO), filled "
+                               "quantity and cost in that outcome's price. "
+                               "Not a P&L and not a position: the reader "
+                               "reconciles it against the venue's fills.")}
+        except RuntimeError:               # book changed size while iterating
+            time.sleep(0.01)
+        except Exception:                                     # noqa: BLE001
+            break
+    return {"readable": False, "strategy": FILLS_STRATEGY, "orders": [],
+            "why": "book_unreadable"}
+
+
 def serve_registry(book: "Book", port: int) -> None:
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -4678,9 +4745,10 @@ def serve_registry(book: "Book", port: int) -> None:
     class H(BaseHTTPRequestHandler):
         def do_GET(self):                               # noqa: N802
             path = self.path.split("?", 1)[0].lstrip("/")
-            if path not in (REGISTRY_KEY, "health"):
+            if path not in (REGISTRY_KEY, FILLS_KEY, "health"):
                 self.send_response(404); self.end_headers(); return
             body = json.dumps(registry_doc(book) if path == REGISTRY_KEY
+                              else fills_doc(book) if path == FILLS_KEY
                               else {"ok": True}, default=str).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
