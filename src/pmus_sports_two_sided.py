@@ -407,14 +407,21 @@ DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
 # managing" for ever, so its resting orders stayed exempt for ever (the
 # watchdog's own notes call this the WEDGED executor case).
 #
-# The stamp is now the trading loop's own progress. The loop thread beats at
-# the top of every pass, after every market step, around every sleep and
-# after every venue request it makes. While the last beat is at most
-# LOOP_STALL_S old the document is stamped now, exactly as before; past that
-# the stamp FREEZES at the last beat, the watchdog reads the document as
-# STALE, stops exempting the orders and applies its own age latch and cancel.
-# Nothing in this process has to work for that to happen. Other threads
-# cannot beat for the loop.
+# The document now reports the trading loop's own progress. The loop thread
+# beats at the top of every pass, after every market step, before every
+# sleep and after every venue request it makes. While the last beat is at
+# most LOOP_STALL_S old the document is exactly as before. Past that it says
+# `manages_own_resting: false` (and `loop_stalled: true`) while staying
+# freshly stamped and still listing this bot's order ids:
+#   * the exemption ends at once (the watchdog requires manages_own_resting
+#     true), so its order-age latch applies to these orders again;
+#   * the ownership claim stays readable and fresh, which the watchdog's
+#     cancel path requires -- a frozen stamp would have latched the halt and
+#     left the orders resting ("ownership registry named no ids").
+# The ids are still truthfully ours; what stopped is the managing. Other
+# threads cannot beat for the loop. If the whole process dies the registry is
+# unreachable: the watchdog latches the halt and, having no ownership claim,
+# cancels nothing -- that case is unchanged and needs a person.
 LOOP_STALL_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_STALL_S", "120"))
 _LOOP: Dict[str, Any] = {"beat": None, "thread": None}
 
@@ -4546,7 +4553,8 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
         rows.append({**row, "closing": True})
     _idle = loop_idle_s(now)
     _stalled = _idle is not None and _idle > LOOP_STALL_S
-    return {"readable": True, "lane": LANE, "manages_own_resting": True,
+    return {"readable": True, "lane": LANE,
+            "manages_own_resting": not _stalled,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
             # True ONLY under the lane's own independent lock (above); the
             # shared halt is deliberately NOT counted, since a reset that
@@ -4557,8 +4565,9 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             "loop_idle_s": (None if _idle is None else round(_idle, 1)),
             "loop_stalled": _stalled,
             "orders": rows,
-            "as_of_utc": (_iso_precise(_LOOP["beat"]) if _stalled
-                          else now_iso()),
+            "loop_last_progress_utc": (None if _LOOP["beat"] is None
+                                       else _iso_precise(_LOOP["beat"])),
+            "as_of_utc": now_iso(),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "
                        "requote, disable and SIGTERM")}
