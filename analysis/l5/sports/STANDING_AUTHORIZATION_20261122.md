@@ -52,11 +52,26 @@ markets, a different build, or anything after 29 Nov.
 - Campaign and per-market caps were respected.
 - The campaign loss stop and the daily halt did not trip.
 - The account ledger's figures agree with venue cash for settled markets.
+- Campaign accounting is verified (owner, 22 Nov about 20:45Z: the next
+  window is conditional on "a clean close-out and verified campaign
+  accounting, rather than automatically proceeding if any safety
+  discrepancy remains"): the campaign marker equals the window's start for
+  the whole window; every order of the window is at or after it; the
+  bot's campaign spend, unmatched and market count agree with its own
+  ORDER and FILL lines; the cash change equals what the meter expects.
 
 If any one fails: do not arm the next window; stay locked; report; wait
 for the owner.
 
-## 5. Unchanged standing rules
+## 5. Owner instructions of 22 Nov, about 20:45Z
+
+- Keep the 21:35 UTC start; do not move the window again tonight.
+- Verify the marker and campaign counters before opening.
+- No new build tonight. The marker correction is to be deployed while
+  locked, after tonight's campaigns, on the owner's approval of the exact
+  release SHA.
+
+## 6. Unchanged standing rules
 
 Explicit approval is still required for capital increases, taker
 authorization, weakened limits, other deployments, and anything outside
