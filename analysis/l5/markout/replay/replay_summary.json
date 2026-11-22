@@ -1,0 +1,459 @@
+{
+ "label": "FILTER OF HISTORICAL FILLS - not a simulation of fills under the new rule; not live or realized profit of the new rule",
+ "params": {
+  "tick": 0.01,
+  "adverse_ticks": 1,
+  "max_fair_age_s": 300,
+  "pair_cap": 0.97,
+  "allowlist": [
+   "cfb",
+   "cs2",
+   "nba",
+   "nfl",
+   "sea",
+   "wta"
+  ],
+  "jump_ticks": "soccer 3, nhl 2, cfb/nfl 1, atp/wta/itf* 1, setka* 1, else 0",
+  "bootstrap": "10,000 resamples of markets, percentile 95%"
+ },
+ "v0_vs_reconciliation": {
+  "reconciliation_trading_before_fees": -40.71,
+  "replay_V0_before_fees": -40.71,
+  "reconciliation_after_fees": -45.07,
+  "replay_V0_after_reconciled_fees": -45.07,
+  "reconciliation_contracts": 1900.97,
+  "reconciliation_cost": 953.91,
+  "file_taker_fee_est_sum": 4.87,
+  "reconciled_fees": -4.36,
+  "rewards_paid_all_rows": 15.75,
+  "rewards_on_the_241_markets": 15.63
+ },
+ "variants": {
+  "V0": {
+   "markets": 173,
+   "fills": 1016,
+   "contracts": 1900.97,
+   "dollars_spent": 953.91,
+   "pairs": 913.2,
+   "pair_pnl": -4.46,
+   "residual_markets": 47,
+   "residual_qty": 74.57,
+   "residual_cost": 36.25,
+   "residual_pnl": -36.25,
+   "residual_wins": 0,
+   "trading_pnl_before_fees": -40.71,
+   "pnl_per_dollar": -0.0427,
+   "pnl_per_dollar_boot_ci95_[lo,med,hi]": [
+    -0.0673,
+    -0.043,
+    -0.0212
+   ],
+   "fees_est_market_taker_scaled": -4.36,
+   "fees_est_prorata_contracts": -4.36,
+   "trading_pnl_after_fees_est": -45.07,
+   "worst_market": [
+    "aec-cs2-brute-eid-2026-11-15",
+    -6.0
+   ],
+   "capital_hours_usd_h": 2279.0,
+   "capital_hours_cost_covered": 822.8,
+   "residual_markets_unknown_settlement": 0,
+   "rewards_paid_on_markets_with_kept_fills_UPPER_BOUND": 13.82,
+   "rewards_paid_on_eligible_markets_UPPER_BOUND": 15.63,
+   "eligible_markets": 241
+  },
+  "V1": {
+   "markets": 63,
+   "fills": 593,
+   "contracts": 787.33,
+   "dollars_spent": 389.99,
+   "pairs": 375.59,
+   "pair_pnl": 4.03,
+   "residual_markets": 23,
+   "residual_qty": 36.15,
+   "residual_cost": 18.43,
+   "residual_pnl": -18.43,
+   "residual_wins": 0,
+   "trading_pnl_before_fees": -14.4,
+   "pnl_per_dollar": -0.0369,
+   "pnl_per_dollar_boot_ci95_[lo,med,hi]": [
+    -0.0952,
+    -0.0375,
+    0.0011
+   ],
+   "fees_est_market_taker_scaled": -3.76,
+   "fees_est_prorata_contracts": -1.81,
+   "trading_pnl_after_fees_est": -18.16,
+   "worst_market": [
+    "aec-cs2-brute-eid-2026-11-15",
+    -6.0
+   ],
+   "capital_hours_usd_h": 747.7,
+   "capital_hours_cost_covered": 303.86,
+   "residual_markets_unknown_settlement": 0,
+   "rewards_paid_on_markets_with_kept_fills_UPPER_BOUND": 3.89,
+   "rewards_paid_on_eligible_markets_UPPER_BOUND": 3.93,
+   "eligible_markets": 78
+  },
+  "V2": {
+   "markets": 55,
+   "fills": 171,
+   "contracts": 198.76,
+   "dollars_spent": 94.42,
+   "pairs": 38.63,
+   "pair_pnl": 2.91,
+   "residual_markets": 54,
+   "residual_qty": 121.5,
+   "residual_cost": 58.7,
+   "residual_pnl": -23.61,
+   "residual_wins": 21,
+   "trading_pnl_before_fees": -20.7,
+   "pnl_per_dollar": -0.2192,
+   "pnl_per_dollar_boot_ci95_[lo,med,hi]": [
+    -0.4227,
+    -0.2145,
+    0.0003
+   ],
+   "fees_est_market_taker_scaled": -0.96,
+   "fees_est_prorata_contracts": -0.46,
+   "trading_pnl_after_fees_est": -21.66,
+   "worst_market": [
+    "aec-cs2-baks-ill-2026-11-14",
+    -8.6
+   ],
+   "capital_hours_usd_h": 240.8,
+   "capital_hours_cost_covered": 94.42,
+   "residual_markets_unknown_settlement": 0,
+   "rewards_paid_on_markets_with_kept_fills_UPPER_BOUND": 2.72,
+   "rewards_paid_on_eligible_markets_UPPER_BOUND": 2.76,
+   "eligible_markets": 70
+  },
+  "V3": {
+   "markets": 144,
+   "fills": 328,
+   "contracts": 619.9,
+   "dollars_spent": 279.18,
+   "pairs": 92.93,
+   "pair_pnl": 7.1,
+   "residual_markets": 133,
+   "residual_qty": 434.04,
+   "residual_cost": 193.35,
+   "residual_pnl": -46.28,
+   "residual_wins": 52,
+   "trading_pnl_before_fees": -39.18,
+   "pnl_per_dollar": -0.1403,
+   "pnl_per_dollar_boot_ci95_[lo,med,hi]": [
+    -0.2978,
+    -0.1405,
+    0.0145
+   ],
+   "fees_est_market_taker_scaled": -1.04,
+   "fees_est_prorata_contracts": -1.42,
+   "trading_pnl_after_fees_est": -40.22,
+   "worst_market": [
+    "aec-itfwo-vikmor-enakoi-2026-11-17",
+    -8.85
+   ],
+   "capital_hours_usd_h": 786.1,
+   "capital_hours_cost_covered": 279.18,
+   "residual_markets_unknown_settlement": 0,
+   "rewards_paid_on_markets_with_kept_fills_UPPER_BOUND": 12.14,
+   "rewards_paid_on_eligible_markets_UPPER_BOUND": 12.27,
+   "eligible_markets": 213
+  },
+  "V3_liq": {
+   "markets": 100,
+   "fills": 258,
+   "contracts": 430.03,
+   "dollars_spent": 202.03,
+   "pairs": 80.74,
+   "pair_pnl": 6.28,
+   "residual_markets": 92,
+   "residual_qty": 268.55,
+   "residual_cost": 127.57,
+   "residual_pnl": -32.77,
+   "residual_wins": 38,
+   "trading_pnl_before_fees": -26.49,
+   "pnl_per_dollar": -0.1311,
+   "pnl_per_dollar_boot_ci95_[lo,med,hi]": [
+    -0.306,
+    -0.1286,
+    0.0546
+   ],
+   "fees_est_market_taker_scaled": -0.97,
+   "fees_est_prorata_contracts": -0.99,
+   "trading_pnl_after_fees_est": -27.46,
+   "worst_market": [
+    "aec-itfwo-vikmor-enakoi-2026-11-17",
+    -8.85
+   ],
+   "capital_hours_usd_h": 586.7,
+   "capital_hours_cost_covered": 202.03,
+   "residual_markets_unknown_settlement": 0,
+   "rewards_paid_on_markets_with_kept_fills_UPPER_BOUND": 3.02,
+   "rewards_paid_on_eligible_markets_UPPER_BOUND": 3.12,
+   "eligible_markets": 136
+  }
+ },
+ "paired_bootstrap_differences": {
+  "V1_minus_V0": {
+   "ratio_diff_ci95": [
+    -0.0329,
+    0.0047,
+    0.0288
+   ],
+   "pnl_diff_ci95": [
+    15.0564,
+    25.951,
+    39.4494
+   ],
+   "share_boot_B_better_ratio": 0.6207,
+   "n_valid": 10000
+  },
+  "V2_minus_V1": {
+   "ratio_diff_ci95": [
+    -0.3944,
+    -0.1727,
+    0.0469
+   ],
+   "pnl_diff_ci95": [
+    -36.0413,
+    -5.7776,
+    19.7988
+   ],
+   "share_boot_B_better_ratio": 0.0622,
+   "n_valid": 10000
+  },
+  "V3_minus_V0": {
+   "ratio_diff_ci95": [
+    -0.2525,
+    -0.0967,
+    0.063
+   ],
+   "pnl_diff_ci95": [
+    -44.4351,
+    1.7684,
+    47.0259
+   ],
+   "share_boot_B_better_ratio": 0.1144,
+   "n_valid": 10000
+  },
+  "V2_minus_V0": {
+   "ratio_diff_ci95": [
+    -0.3872,
+    -0.1698,
+    0.0434
+   ],
+   "pnl_diff_ci95": [
+    -12.1951,
+    20.5304,
+    49.0597
+   ],
+   "share_boot_B_better_ratio": 0.06,
+   "n_valid": 10000
+  },
+  "V3_minus_V2": {
+   "ratio_diff_ci95": [
+    -0.1246,
+    0.0736,
+    0.2668
+   ],
+   "pnl_diff_ci95": [
+    -57.4752,
+    -18.2738,
+    19.9122
+   ],
+   "share_boot_B_better_ratio": 0.7774,
+   "n_valid": 10000
+  }
+ },
+ "coverage": {
+  "markets_total": 241,
+  "markets_with_fills": 173,
+  "markets_intl_match": 213,
+  "markets_intl_match_with_fills": 153,
+  "markets_with_price_history_points": 213,
+  "markets_with_fills_and_>=1_usable_fair": 153,
+  "markets_with_fills_all_fills_usable_fair": 147,
+  "orientation_established_markets": 213,
+  "orientation_check_vs_pmus_settlement": {
+   "checked": 38,
+   "agree": 38,
+   "disagree": 0
+  },
+  "fills_total": 1016,
+  "fills_intl_match": 939,
+  "fills_usable_fair": 933,
+  "dollars_total": 953.91,
+  "dollars_intl_match": 822.8,
+  "dollars_usable_fair": 816.32,
+  "no_fair_reasons_fills": {
+   "reject:no_intl_match": 77,
+   "reject:stale_gt_5min": 6
+  },
+  "match_method_counts": {
+   "exact": 70,
+   "names": 130,
+   "codes": 10,
+   "atc": 3
+  },
+  "reversed_order_matches": 3,
+  "intl_zero_or_unknown_volume_matched_markets": 39,
+  "by_league_matched/total": {
+   "setkameua": "35/37",
+   "cfb": "34/34",
+   "cs2": "25/32",
+   "itfwo": "30/31",
+   "itfme": "20/21",
+   "atp": "20/20",
+   "setkamemd": "10/10",
+   "dota2": "5/10",
+   "nba": "9/9",
+   "setkamecz": "6/6",
+   "nhl": "5/5",
+   "wtt": "4/4",
+   "wta": "2/3",
+   "utr": "0/3",
+   "atpdb": "2/3",
+   "cbb": "2/2",
+   "eth": "0/1",
+   "sol": "0/1",
+   "unl": "1/1",
+   "wsl": "1/1",
+   "testcr": "0/1",
+   "lal2": "1/1",
+   "ligaf": "0/1",
+   "acb": "0/1",
+   "lexp": "0/1",
+   "wtadb": "1/1",
+   "engnl": "0/1"
+  },
+  "leagues_no_intl_counterpart": [
+   "acb",
+   "engnl",
+   "eth",
+   "lexp",
+   "ligaf",
+   "sol",
+   "testcr",
+   "utr"
+  ],
+  "unmatched_markets": {
+   "cpceth-eth-updown-1d-2026-11-17-2200z": "not a sports match market (crypto)",
+   "aec-itfme-thopic-benjtor-2026-11-18": "no international event with both names/codes within +-1 day",
+   "aec-setkameua-kasart-badmak-2026-11-18": "ambiguous: 3 international candidates",
+   "aec-dota2-hul-nemiga-2026-11-18": "no international event with both names/codes within +-1 day",
+   "aec-cs2-quin-urn-2026-11-17": "no international event with both names/codes within +-1 day",
+   "aec-utr-gaskan-hanbra-2026-11-17": "no international market under the same slug; league has no mapped international series",
+   "aec-atpdb-barryingild-dominkplanin-2026-11-15": "no international event with both names/codes within +-1 day",
+   "cpcsol-sol-updown-1d-2026-11-17-2200z": "not a sports match market (crypto)",
+   "aec-cs2-arr-reda-2026-11-17": "no international event with both names/codes within +-1 day",
+   "aec-cs2-bar-eyx-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-cs2-yl-bang-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-setkameua-vasivol-serrus-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-wta-zhikul-valstr-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-dota2-fro-leg-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-cs2-mzp-aces-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-testcr-afg-zim-2026-11-13": "no international market under the same slug; league has no mapped international series",
+   "aec-dota2-hul-ch-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-dota2-1win-fro-2026-11-14": "no international event with both names/codes within +-1 day",
+   "aec-cs2-brute-eid-2026-11-15": "no international event with both names/codes within +-1 day",
+   "aec-utr-timand-binmad-2026-11-15": "no international market under the same slug; league has no mapped international series",
+   "aec-cs2-all-nvo-2026-11-14": "no international event with both names/codes within +-1 day",
+   "aec-itfwo-mariper-vallop-2026-11-15": "no international event with both names/codes within +-1 day",
+   "atc-ligaf-mad-cde-2026-11-15-cde": "no international market under the same (or aliased) slug",
+   "aec-acb-flc-man-2026-11-15": "no international market under the same slug; league has no mapped international series",
+   "aec-dota2-tsea-all-2026-11-14": "no international event with both names/codes within +-1 day",
+   "atc-lexp-clu-pir-2026-11-14-pir": "no international market under the same (or aliased) slug",
+   "aec-utr-timand-poppat-2026-11-14": "no international market under the same slug; league has no mapped international series",
+   "atc-engnl-efc-fyl-2026-11-14-fyl": "no international market under the same (or aliased) slug"
+  },
+  "fair_age_seconds_median": 34.93696188926697
+ },
+ "gate": {
+  "decisions_all_fills": {
+   "reject:no_intl_match": 77,
+   "reject:edge<0": 255,
+   "accept": 328,
+   "reject:pair>0.97": 132,
+   "reject:edge<risk": 51,
+   "reject:edge<0+pair>0.97": 167,
+   "reject:stale_gt_5min": 6
+  },
+  "accepted_by_role": {
+   "OPEN": 182,
+   "LIGHTER": 72,
+   "ADD": 74
+  },
+  "evaluated_by_role": {
+   "OPEN": 259,
+   "LIGHTER": 418,
+   "ADD": 256
+  },
+  "by_league_accepted/with_fair/fills": {
+   "acb": "0/0/3",
+   "atp": "32/105/106",
+   "atpdb": "2/2/5",
+   "cbb": "4/5/5",
+   "cfb": "120/438/440",
+   "cs2": "30/70/96",
+   "dota2": "13/27/46",
+   "engnl": "0/0/3",
+   "itfme": "22/52/54",
+   "itfwo": "31/73/74",
+   "ligaf": "0/0/1",
+   "nba": "21/45/45",
+   "nhl": "5/15/15",
+   "setkamecz": "6/15/16",
+   "setkamemd": "10/20/20",
+   "setkameua": "23/47/52",
+   "testcr": "0/0/1",
+   "utr": "0/0/5",
+   "wta": "0/2/12",
+   "wtadb": "5/8/8",
+   "wtt": "4/9/9"
+  }
+ },
+ "markout_ESTIMATED": {
+  "V3_accepted": {
+   "fills": 328,
+   "usd_edge_at_fill_fair": 36.18,
+   "usd_markout_1m": 17.86,
+   "n_markout_1m": 326,
+   "mean_ticks_markout_1m": 1.96,
+   "usd_markout_5m": 7.32,
+   "n_markout_5m": 323,
+   "mean_ticks_markout_5m": 0.03
+  },
+  "V2_accepted": {
+   "fills": 171,
+   "usd_edge_at_fill_fair": 8.64,
+   "usd_markout_1m": 2.52,
+   "n_markout_1m": 169,
+   "mean_ticks_markout_1m": 0.87,
+   "usd_markout_5m": -2.43,
+   "n_markout_5m": 169,
+   "mean_ticks_markout_5m": -1.4
+  },
+  "gate_rejected_with_fair": {
+   "fills": 605,
+   "usd_edge_at_fill_fair": -14.31,
+   "usd_markout_1m": -25.53,
+   "n_markout_1m": 603,
+   "mean_ticks_markout_1m": -1.37,
+   "usd_markout_5m": -33.37,
+   "n_markout_5m": 589,
+   "mean_ticks_markout_5m": -2.11
+  },
+  "all_fills_with_fair": {
+   "fills": 933,
+   "usd_edge_at_fill_fair": 21.87,
+   "usd_markout_1m": -7.67,
+   "n_markout_1m": 929,
+   "mean_ticks_markout_1m": -0.2,
+   "usd_markout_5m": -26.06,
+   "n_markout_5m": 912,
+   "mean_ticks_markout_5m": -1.35
+  }
+ }
+}

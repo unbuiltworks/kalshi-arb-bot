@@ -62,7 +62,39 @@ was bid only at a price that made the pair cost 0.97 or less, which is
 reached when the price has moved in our favour. Winners were paired (their
 gain capped at a few cents) and losers were kept.
 
-## 4. What this says about the controller
+## 4. The new test applied to the old fills (a filter, not a simulation)
+
+`replay/REPLAY_RESULT.md`. The marginal test was applied to the 1,016
+historical fills, using the international one-minute price at the fill.
+It can only remove fills; it cannot add the ones the new rule would have
+had. Only "actual" and "allowlist" are measured; the gated columns are
+estimates.
+
+| | Actual | Today's allowlist | Allowlist + test | Test, any priced market |
+|---|---|---|---|---|
+| Fills kept | 1,016 | 593 | 171 | 328 |
+| Dollars spent | 953.91 | 389.99 | 94.42 | 279.18 |
+| Settled trading before fees | −40.71 | −14.40 | −20.70 | −39.18 |
+| Per dollar, 95% interval | −6.7% to −2.1% | −9.5% to +0.1% | −42.3% to 0.0% | −29.8% to +1.5% |
+| Rewards paid on kept markets (upper bound) | 13.82 | 3.89 | 2.72 | 12.14 |
+
+- No difference between the columns is distinguishable from noise. The
+  gated columns lean worse, because the test rejects most of the old
+  opposite-side fills and a filter puts nothing in their place: first legs
+  stay unpaired and five days of one-sided results decide the number.
+- Short-horizon check on the same fills, against the international price:
+  fills the test accepts are about break-even five minutes later (0.0
+  ticks; −1.4 ticks on the allowlist leagues, n 171); fills it rejects
+  lose about 2 ticks. The edge it sees at the fill (+$36) is mostly gone
+  in five minutes: the one-minute price was stale at the moment of the fill.
+- The allowlist alone removed $26 of the $41 loss and $11.70 of the $15.63
+  rewards.
+
+So the historical data do not show that the test makes this trading
+profitable. They show it removes the fills that lose and keeps fills that
+are about flat before any pairing or reward.
+
+## 5. What this says about the controller
 
 - RN1's favourable post-fill movement is a small, retained share of the
   spread on liquid markets where being filled costs little. There is no
@@ -73,8 +105,12 @@ gain capped at a few cents) and losers were kept.
 - So: bid only where a fair value exists; require the fair value to cover
   the cost of being filled; do not buy the other side merely because the
   pair would pay. All three are in the marginal test now on the dev branch.
-- Not established: what our fills do with the test on. Every fill now
-  records its own markout; the first live fills will say.
+- Not established: that any of this is profitable. The replay is flat to
+  negative, and a fair value that looks favourable at the fill is partly a
+  stale price. What our fills do with the test on a 20-second-fresh price
+  can only be measured live; every fill now records its own markout.
+- The 1c adverse-selection allowance is a setting the first live fills
+  should confirm or raise.
 - Scale: RN1's edge is about 0.3c a share. At two contracts an order this
   controller cannot earn meaningful money whatever its edge. The purpose of
   a small validation is to measure the edge, not to make the target.

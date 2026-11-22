@@ -12,13 +12,14 @@ contracts an order the result is cents either way.
 
 ## 2. Build
 
-Sports release candidate `6aa8bc83921329185ae51c7d91b0697a29bfaefe`
-(`release/pmus-sports-rn1-6aa8bc839`). Over the running `7af13644a`:
+Sports release candidate `158685d3ab0b446ac31387bf3ba32bb7bc5659fd`
+(`release/pmus-sports-rn1-158685d3a`; it supersedes `6aa8bc839`, cut an
+hour earlier without the cent-based allowances and a memory bound). Over the running `7af13644a`:
 reward-aware ranking, the marginal-edge test on every bid, post-fill
 markout records, reward credit only above the venue's minimum payout,
 loop-gap heartbeat, stall-drill switch, optional order expiry (off).
 
-Regression: sports 2,031 passed / 6 failed; full 5,167 / 24; the same
+Regression: sports 2,032 passed / 6 failed; full 5,168 / 24; the same
 failing tests as before the change.
 
 ## 3. Markets and time (two options; times UTC)
@@ -33,8 +34,8 @@ Selection constraints inside either window, all existing: allowlist set to
 the touch; an international price match required; late-game rule; one
 market per game; at most two markets at once.
 
-A market outside the price band at the time is simply not traded. Three of
-seven early games today were inside it.
+A market outside the price band at the time is simply not traded. Two of
+seven early games today were inside it at 18:34Z.
 
 ## 4. Limits (all existing, unchanged)
 
@@ -73,7 +74,7 @@ mismatch, a latch, a watchdog halt, or an unpaired leg above its cap.
 
 ## 6. Steps, each needing its own approval
 
-1. Locked deploy of sports `6aa8bc839…`; verify SHA, lock, zero orders,
+1. Locked deploy of sports `158685d3a…`; verify SHA, lock, zero orders,
    watchdog.
 2. Account ledger: deploy `f5a5434d6c3530e501c76879345b5199813efa9b`
    (`release/l5-pmus-live-sports-ownership-20261122`) and set its two
@@ -83,6 +84,14 @@ mismatch, a latch, a watchdog halt, or an unpaired leg above its cap.
    managed lane" within about 140 s and returns afterwards.
 4. The live window: lock variable set to the window; allowlist set to
    `nfl`. Final pre-arm check first; relock without waiting if it fails.
+
+## 7. One existing limit that would end it early
+
+The account ledger also enforces an equity drawdown limit: at 18:42Z it
+read 2.2144 used of 3.00, room $0.79. A sports loss of more than $0.79
+would reach it before the sports bot's own $4 campaign stop. It is an
+account protection and is not proposed to change; the owner should know
+it is the binding limit.
 
 Not in this validation: order expiry (unproven at the venue; proposed for
 the one-order watchdog test), the one-order stall test, any size increase.
