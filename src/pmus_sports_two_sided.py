@@ -934,6 +934,13 @@ RANK_HORIZON_H = float(os.getenv("PMUS_RN1_RANK_HORIZON_H", "1"))
 RANK_REWARD_HAIRCUT = float(os.getenv("PMUS_RN1_RANK_REWARD_HAIRCUT", "0.5"))
 RANK_TTL_S = float(os.getenv("PMUS_RN1_RANK_TTL_S", "300"))
 RANK_NEW_PER_ROUND = int(os.getenv("PMUS_RN1_RANK_NEW_PER_ROUND", "3"))
+# A candidate can only be priced once the international feed follows it, so
+# the first RANK_WATCH_MAX candidates of the cheap screen are followed
+# alongside the active markets. A "no fair value" answer is retried after
+# RANK_NO_FAIR_TTL_S. With the marginal test on, a candidate that has no
+# ranking number yet is not selected: it could not bid anyway.
+RANK_WATCH_MAX = int(os.getenv("PMUS_RN1_RANK_WATCH_MAX", "8"))
+RANK_NO_FAIR_TTL_S = float(os.getenv("PMUS_RN1_RANK_NO_FAIR_TTL_S", "30"))
 
 
 def rn1_pregame_qty() -> D:
@@ -4544,10 +4551,13 @@ class Engine:
         nowm = time.monotonic()
         fresh = 0
         rows = []
+        self._rank_watch = [r[2] for r in scored[:max(0, RANK_WATCH_MAX)]]
         for r in scored:
             slug = r[2]
             hit = cache.get(slug)
-            if hit and nowm - hit[0] <= RANK_TTL_S:
+            if hit and nowm - hit[0] <= (
+                    RANK_TTL_S if hit[1].get("net") is not None
+                    else min(RANK_TTL_S, RANK_NO_FAIR_TTL_S)):
                 rows.append((slug, hit[1]))
                 continue
             if fresh >= max(0, RANK_NEW_PER_ROUND):
@@ -4573,7 +4583,17 @@ class Engine:
                         "why": o.get("why")} for s, o in top],
                 label="expected trading result plus haircut theoretical "
                       "reward, per contract; an estimate, not a payment")
+        if RN1.EDGE_GATE:
+            priced = {s for s, o in rows if o.get("net") is not None}
+            order = [s for s in order if s in priced]
         return [by[s] for s in order]
+
+    def guard_tracked(self) -> list:
+        """Markets the international feed should follow: the active ones,
+        plus the few candidates the ranking is trying to price."""
+        act = list(self.active())
+        return act + [s for s in getattr(self, "_rank_watch", ())
+                      if s not in act]
 
     def _opportunity(self, slug: str, R: Any) -> Dict[str, Any]:
         spec = self.v.spec(slug)
@@ -5120,7 +5140,7 @@ class Engine:
     def report(self) -> None:
         pairs = self.b.d["pairs"]
         if self.guard is not None:
-            self.guard.track(self.active())
+            self.guard.track(self.guard_tracked())
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
             "orphan_stale_snapshot": self.orphan_stale,
@@ -5281,7 +5301,7 @@ class Engine:
                     else:                          # retry sooner, not every pass
                         last_sel = time.monotonic() - 20 + ACCOUNT_RETRY_S
                     if self.guard is not None:
-                        self.guard.track(self.active())
+                        self.guard.track(self.guard_tracked())
                     if rewards_on() and acc is not None:
                         self.refresh_active_rewards()
                 if latched:

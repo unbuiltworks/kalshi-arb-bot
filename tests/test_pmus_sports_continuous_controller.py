@@ -440,3 +440,22 @@ def test_an_unset_slate_follows_the_older_pregame_switch(monkeypatch):
     assert M.slate() == "pregame"
     monkeypatch.setattr(M, "SLATE", "both")
     assert M.slate() == "both"
+
+
+@pytest.mark.rn1_edge_gate
+def test_candidates_are_followed_then_priced_then_selected(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "RANK_WATCH_MAX", 2)
+    scored = [(D("0.02"), D("0.01"), s) for s in ("aec-a", "aec-b", "aec-c")]
+    e.guard.mid = None                     # the feed has nothing yet
+    assert e.rank_net(scored) == []        # nothing can bid: nothing chosen
+    assert e.guard_tracked() == ["aec-a", "aec-b"]      # but two are followed
+    e.b.m(SLUG)
+    assert e.guard_tracked() == [SLUG, "aec-a", "aec-b"]
+    # a "no fair value" answer is retried soon, not kept for the long period
+    e.guard.mid = 0.49
+    for slug in list(e._rank_cache):
+        t, o = e._rank_cache[slug]
+        e._rank_cache[slug] = (t - M.RANK_NO_FAIR_TTL_S - 1, o)
+    got = [r[2] for r in e.rank_net(scored)]
+    assert got and set(got) <= {"aec-a", "aec-b", "aec-c"}
