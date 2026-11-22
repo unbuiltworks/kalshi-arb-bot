@@ -1220,6 +1220,7 @@ def safeguards_cfg() -> Dict[str, Any]:
             "rn1_edge_gate": {"on": RN1.EDGE_GATE,
                               "adverse_ticks": RN1.ADVERSE_TICKS,
                               "risk_step_ticks": RN1.RISK_STEP_TICKS,
+                              "allowance_step_usd": str(RN1.EDGE_UNIT_USD),
                               "add_jump_ticks": RN1_JUMP_TICKS,
                               "reward_credit_ticks": RN1_REWARD_CREDIT_TICKS,
                               "reward_min_day_usd": RN1_REWARD_MIN_DAY_USD,

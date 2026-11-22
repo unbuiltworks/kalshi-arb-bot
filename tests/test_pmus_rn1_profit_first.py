@@ -66,6 +66,28 @@ def test_the_arithmetic_of_one_bid():
     assert D(no["fair"]) == D("0.50") and D(no["risk"]) == 0
 
 
+def test_allowances_are_counted_in_cents_on_a_quarter_cent_market():
+    """NFL, live slate 22 Nov: 0.2750 / 0.2775, tick 0.0025. One step of
+    adverse selection is still a whole cent, not a quarter of one."""
+    qt = D("0.0025")
+    thin = R.edge(side="YES", px="0.2725", tick=qt, fair_yes="0.27625",
+                  adds_exposure=True, unpaired_clips=0)
+    assert D(thin["step"]) == D("0.01") and D(thin["adverse"]) == D("0.01")
+    assert thin["ok"] is False and thin["why"] == "edge_negative"
+    cheap = R.edge(side="YES", px="0.2725", tick=qt, fair_yes="0.2850",
+                   adds_exposure=True, unpaired_clips=1)
+    assert cheap["ok"] is False and cheap["why"] == "edge_below_risk"
+    assert D(cheap["risk"]) == D("0.01")
+    ok = R.edge(side="YES", px="0.2725", tick=qt, fair_yes="0.2950",
+                adds_exposure=True, unpaired_clips=1)
+    assert ok["ok"] is True and D(ok["net_edge"]) == D("0.0025")
+    a = R.quotes(yes_bid="0.2750", yes_ask="0.2775", tick=qt,
+                 pos={"YES": 0, "NO": 0}, cost={"YES": 0, "NO": 0},
+                 c={"edge_gate": True, "fair_yes": "0.2900"})
+    assert a["YES"]["px"] == D("0.2725") and a["NO"] is None
+    assert a["why_NO"] == "edge_negative"
+
+
 @pytest.mark.parametrize("fair", [None, "", "0", "1", "1.2", "-0.1"])
 def test_no_usable_fair_value_is_no_bid(fair):
     e = R.edge(side="YES", px="0.40", tick=T, fair_yes=fair or None,

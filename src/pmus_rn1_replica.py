@@ -135,12 +135,26 @@ EXTEND_STEP_TICKS = _i("PMUS_RN1_EXTEND_STEP_TICKS", "1")
 #: not remove one. With it on, a lighter-side bid is no longer quoted just
 #: because the pair would be profitable.
 #:
-#: The tick values are SETTINGS. Adverse selection is to be set from
-#: measured post-fill movement (the engine records it per fill); 1 tick is
-#: the margin the international price guard has always applied.
+#: ALLOWANCES ARE COUNTED IN STEPS OF AT LEAST ONE CENT, not in the market's
+#: tick. NFL markets tick in quarter cents (live slate, 22 Nov): "1 tick"
+#: there would be a quarter of a cent, a fraction of any measured
+#: adverse selection. One step = max(tick, EDGE_UNIT_USD).
+#:
+#: WHERE 1 STEP OF ADVERSE SELECTION COMES FROM (analysis/l5/markout, this
+#: bot's own 1,016 fills of 14-18 Nov, estimated from its own two-sided
+#: quotes): in the liquid, internationally priced sports the mid 30 s
+#: after a fill was within half a cent of where it stood when the bid was
+#: placed (college football +0.5c [+0.1,+0.9] against the fill, n 248;
+#: NBA -0.1c); in thin sports with no international price it was 2-4c
+#: worse (ITF -2.7c, table tennis -3.0c, Dota 2 -3.9c) -- and those have no
+#: fair value here, so they get no bid at all. The reference trader's
+#: resting fills lose 0.2-0.5c to later sellers and keep about 0.3c.
+#: Every fill is now measured (FILL_MARKOUT); these stay SETTINGS until
+#: the gated controller's own fills say otherwise.
 EDGE_GATE = os.getenv("PMUS_RN1_EDGE_GATE", "1").strip() != "0"
 ADVERSE_TICKS = _i("PMUS_RN1_ADVERSE_TICKS", "1")
 RISK_STEP_TICKS = _i("PMUS_RN1_RISK_STEP_TICKS", "1")
+EDGE_UNIT_USD = _d("PMUS_RN1_EDGE_UNIT_USD", "0.01")
 TOTAL_SPEND_USD = _d("PMUS_RN1_TOTAL_SPEND_USD", "16")
 TOTAL_UNMATCHED_USD = _d("PMUS_RN1_TOTAL_UNMATCHED_USD", "6")
 # Maker fee per contract = rate * p * (1 - p). PMUS order previews show
@@ -161,6 +175,7 @@ def cfg() -> Dict[str, Any]:
             "maker_fee_rate": str(MAKER_FEE_RATE),
             "edge_gate": EDGE_GATE, "adverse_ticks": ADVERSE_TICKS,
             "risk_step_ticks": RISK_STEP_TICKS,
+            "edge_unit_usd": str(EDGE_UNIT_USD),
             "extend_ev": EXTEND_EV,
             "total_spend_usd": str(TOTAL_SPEND_USD),
             "total_unmatched_usd": str(TOTAL_UNMATCHED_USD)}
@@ -191,8 +206,9 @@ def edge(*, side: str, px: Any, tick: Any, fair_yes: Any,
      "incentive", "net_edge"} -- every figure per contract, in price units,
     as strings. `incentive` is the credit actually applied (never more than
     `risk`). `ok` is False with why "no_fair" when there is no fair value.
+    The "ticks" of every allowance are steps of max(tick, EDGE_UNIT_USD).
     """
-    t = D(str(tick))
+    t = max(D(str(tick)), EDGE_UNIT_USD)       # one allowance step
     p = D(str(px))
     if fair_yes is None:
         return {"ok": False, "why": "no_fair", "px": str(p)}
@@ -220,7 +236,7 @@ def edge(*, side: str, px: Any, tick: Any, fair_yes: Any,
             "trade_edge": str(trade), "risk": str(risk),
             "incentive": str(inc), "net_edge": str(net),
             "unpaired_clips": int(unpaired_clips),
-            "adds_exposure": bool(adds_exposure)}
+            "adds_exposure": bool(adds_exposure), "step": str(t)}
 
 
 def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
