@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import queue
 import signal
 import threading
@@ -396,6 +397,17 @@ RN1_JUMP_TICKS = {
         ).split(",") if ":" in tok)}
 #: credit (ticks) for a market with a paying liquidity programme
 RN1_REWARD_CREDIT_TICKS = int(os.getenv("PMUS_RN1_REWARD_CREDIT_TICKS", "1"))
+#: A PROGRAMME EXISTING IS NOT A PAYMENT (issue #251: "A quote must not pass
+#: solely on speculative incentive payouts"). In the venue's own earnings
+#: rows (Sept and 14-18 Nov) every day whose rewards totalled under $1 was
+#: skipped entirely, while single paid rows are as small as $0.01. So the
+#: credit above is applied only while the THEORETICAL reward of what this
+#: bot is actually resting, over RN1_REWARD_PROJECT_H hours across its
+#: active markets, reaches RN1_REWARD_MIN_DAY_USD. It is still an estimate
+#: of a payment nobody has made; it only ever offsets the inventory-risk
+#: allowance of the marginal test, never the trading edge itself.
+RN1_REWARD_MIN_DAY_USD = float(os.getenv("PMUS_RN1_REWARD_MIN_DAY_USD", "1"))
+RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
 
 # OWNER 2026-11-22 "The bot must reliably stop and cancel orders without
 # depending on Claude's session." LIVE that morning: a reconciliation
@@ -450,9 +462,65 @@ _LOOP: Dict[str, Any] = {"beat": None, "thread": None}
 
 def loop_beat() -> None:
     """Progress of the trading loop. Only the loop's own thread counts once
-    the loop has started."""
+    the loop has started. The longest gap between two beats since the last
+    heartbeat is kept, so how close the loop comes to LOOP_STALL_S in
+    ordinary running can be read from the bot's own log."""
     if _LOOP["thread"] in (None, threading.get_ident()):
-        _LOOP["beat"] = time.time()
+        now = time.time()
+        last = _LOOP.get("beat")
+        if last is not None:
+            _LOOP["max_gap"] = max(float(_LOOP.get("max_gap") or 0.0),
+                                   now - float(last))
+        _LOOP["beat"] = now
+
+
+def loop_report(reset: bool = True) -> Dict[str, Any]:
+    """{"idle_s", "max_gap_s", "stall_s", "stalled"} for the heartbeat."""
+    idle = loop_idle_s()
+    gap = max(float(_LOOP.get("max_gap") or 0.0), idle or 0.0)
+    if reset:
+        _LOOP["max_gap"] = 0.0
+    return {"idle_s": None if idle is None else round(idle, 1),
+            "max_gap_s": round(gap, 1), "stall_s": LOOP_STALL_S,
+            "stalled": idle is not None and idle > LOOP_STALL_S}
+
+
+# OWNER 2026-11-22: "Verify the independent watchdog can detect a stalled
+# sports execution loop and cancel its owned resting orders." The loop
+# cannot be wedged from outside the process, so the test needs a switch:
+#
+#   PMUS_TWO_SIDED_STALL_DRILL=window:<startZ>/<endZ>
+#
+# Inside the window the trading loop does NOTHING and reports no progress --
+# no reads, no cancels, no orders -- exactly a wedged loop. The registry
+# thread keeps serving, so after LOOP_STALL_S the watchdog sees
+# `manages_own_resting: false` with the bot's order ids still claimed. At
+# the end the loop resumes and its ordinary lock handling runs. Bounded: a
+# window longer than STALL_DRILL_MAX_S, malformed, or not this exact form is
+# NO drill. It can only ever stop this bot from acting; it cannot place or
+# keep an order. SIGTERM still ends the process during a drill.
+STALL_DRILL_ENV = "PMUS_TWO_SIDED_STALL_DRILL"
+STALL_DRILL_MAX_S = 600.0
+
+
+def stall_drill(now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+    """{"start", "end", "active"} for a well-formed drill window, else None."""
+    raw = (os.getenv(STALL_DRILL_ENV) or "").strip()
+    if not raw.startswith("window:"):
+        return None
+    try:
+        a, b = raw[len("window:"):].split("/")
+        st = datetime.fromisoformat(a.strip().replace("Z", "+00:00"))
+        en = datetime.fromisoformat(b.strip().replace("Z", "+00:00"))
+        if st.tzinfo is None or en.tzinfo is None:
+            return None
+        st, en = st.timestamp(), en.timestamp()
+    except (ValueError, TypeError):
+        return None
+    if not (0 < en - st <= STALL_DRILL_MAX_S):
+        return None
+    now = time.time() if now is None else now
+    return {"start": st, "end": en, "active": st <= now < en}
 
 
 def loop_idle_s(now: Optional[float] = None) -> Optional[float]:
@@ -950,6 +1018,35 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+#: keys of a venue order row that can carry the time of its last execution
+_ORDER_TIME_KEYS = ("lastTransactTime", "transactTime", "lastUpdateTime",
+                    "updateTime", "updatedAt")
+
+
+def order_time(o: Any) -> Optional[float]:
+    """Epoch seconds of the venue's own last-update stamp on an order row,
+    or None. Used only to time a fill for the markout record; a row with no
+    readable stamp leaves the fill timed at the moment the bot saw it."""
+    if not isinstance(o, Mapping):
+        return None
+    for k in _ORDER_TIME_KEYS:
+        raw = o.get(k)
+        if raw in (None, ""):
+            continue
+        try:
+            txt = str(raw).strip().replace("Z", "+00:00")
+            m = re.match(r"^(.*T\d{2}:\d{2}:\d{2})(\.\d+)?(.*)$", txt)
+            if m:
+                txt = m.group(1) + (m.group(2) or "")[:7] + m.group(3)
+            t = datetime.fromisoformat(txt)
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            return t.timestamp()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 # OWNER 2026-11-15: record depth, quote age, movement and fills going
 # forward (src/pmus_sports_tape.py). Set in main(); None = not recording.
 TAPE = None
@@ -1098,6 +1195,16 @@ def safeguards_cfg() -> Dict[str, Any]:
             "loop_stall_s": LOOP_STALL_S,
             "rn1_reward_rank": RN1_REWARD_RANK,
             "rn1_reward_only": RN1_REWARD_ONLY,
+            "rn1_edge_gate": {"on": RN1.EDGE_GATE,
+                              "adverse_ticks": RN1.ADVERSE_TICKS,
+                              "risk_step_ticks": RN1.RISK_STEP_TICKS,
+                              "add_jump_ticks": RN1_JUMP_TICKS,
+                              "reward_credit_ticks": RN1_REWARD_CREDIT_TICKS,
+                              "reward_min_day_usd": RN1_REWARD_MIN_DAY_USD,
+                              "reward_project_h": RN1_REWARD_PROJECT_H,
+                              "no_fair_means": "no_bid"},
+            "markout_horizons_s": [5, 30, 120, 300],
+            "stall_drill": stall_drill(),
             "rn1_extend_ev": {"on": RN1.EXTEND_EV,
                               "edge_ticks": RN1.EXTEND_EDGE_TICKS,
                               "step_ticks": RN1.EXTEND_STEP_TICKS,
@@ -1552,7 +1659,7 @@ class Venue:
                           ("CANCEL", "EXPIRED", "REJECT", "FILLED")) or \
             "PARTIALLY" in state or "PENDING" in state
         return {"qty": f["qty"] if f else D(0), "px": f["price"] if f else None,
-                "open": is_open, "state": state}
+                "open": is_open, "state": state, "t": order_time(o)}
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
@@ -2564,10 +2671,92 @@ class Engine:
                      else _had * D(str(o["px"])))
             o["fill_cost"] = str(_base + new * st["px"])
             o["filled"] = str(st["qty"])
+            self._markout_open(slug, mk, side, oid, st["px"], new,
+                               st.get("t"), o.get("stage"))
             mk.setdefault("last_fill_t", {})[side] = time.time()
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
                 order_id=oid, pos=mk["pos"],
                 label="venue-reported fill; not realized until settlement")
+
+    # ------------------------------------------------ post-fill markout
+    #: fills kept per market in the durable book (newest last)
+    MARKOUT_KEEP = 60
+
+    def _mids(self):
+        from src import pmus_fill_markout as MK
+        m = getattr(self, "_mk_mids", None)
+        if m is None:
+            m = self._mk_mids = MK.Mids()
+        return m
+
+    def _markout_open(self, slug: str, mk: Dict[str, Any], side: str,
+                      oid: str, px: Any, qty: Any, t_venue: Any,
+                      stage: Any) -> None:
+        """Start a markout record for one fill. Measurement only: nothing
+        here can place, cancel or block an order, and it never raises."""
+        try:
+            from src import pmus_fill_markout as MK
+            seen = time.time()
+            # the venue's stamp is used only when it is plausible: not in
+            # the future and not older than the history we keep
+            t_fill, src = seen, "seen_by_bot"
+            if t_venue is not None and \
+                    seen - MK.KEEP_S / 2 <= float(t_venue) <= seen + 2:
+                t_fill, src = min(float(t_venue), seen), "venue_order_row"
+            other = "NO" if side == "YES" else "YES"
+            before = D(str(mk["pos"][side])) - D(str(qty)) - \
+                D(str(mk["pos"][other]))
+            role = {"two_sided_complete": "complete", "rn1_extend": "extend",
+                    "rn1_open": "open"}.get(str(stage), str(stage))
+            rec = MK.new_record(
+                slug=slug, side=side, px=px, qty=qty, order_id=oid,
+                t_fill=t_fill, t_seen=seen, t_source=src, mids=self._mids(),
+                fair_yes=self.intl_fair(slug), unpaired_before=before,
+                role=role)
+            rows = mk.setdefault("markouts", [])
+            rows.append(rec)
+            del rows[:-self.MARKOUT_KEEP]
+        except Exception as exc:                          # noqa: BLE001
+            log("markout_error", slug=slug, where="open", err=str(exc)[:120])
+
+    def _markout_step(self, slug: str, mk: Dict[str, Any],
+                      bbo: Optional[Mapping]) -> None:
+        """Feed the book just read into the rolling history and decide
+        every horizon that is due. One FILL_MARKOUT line per fill, when its
+        last horizon is decided."""
+        try:
+            from src import pmus_fill_markout as MK
+            now = time.time()
+            if bbo is not None:
+                self._mids().add(slug, now, bbo.get("bid"), bbo.get("ask"))
+            dirty = False
+            for rec in mk.get("markouts") or ():
+                if rec.get("logged"):
+                    continue
+                if MK.resolve(rec, self._mids(), now):
+                    dirty = True
+                if MK.complete(rec):
+                    rec["logged"] = True
+                    dirty = True
+                    log("FILL_MARKOUT", slug=slug, side=rec["side"],
+                        px=rec["px"], qty=rec["qty"],
+                        order_id=rec["order_id"], role=rec.get("role"),
+                        unpaired_before=rec.get("unpaired_before"),
+                        t_source=rec.get("t_source"),
+                        seen_after_s=round(rec["t_seen"] - rec["t"], 1),
+                        book_before=rec.get("book_before"),
+                        fair_before=rec.get("fair_before"),
+                        h=rec["h"], label=MK.LABEL)
+            if dirty:
+                self.b.save()
+        except Exception as exc:                          # noqa: BLE001
+            log("markout_error", slug=slug, where="step", err=str(exc)[:120])
+
+    def markout_summary(self) -> Dict[str, Any]:
+        from src import pmus_fill_markout as MK
+        rows = [r for mk in (self.b.d.get("markets") or {}).values()
+                for r in (mk.get("markouts") or ())]
+        return MK.summary(rows)
 
     def account_fresh(self) -> bool:
         """True unless run() requires freshness and the last good account
@@ -3294,6 +3483,92 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return None
 
+    def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
+                             per: Mapping[str, Any], tick: D) -> None:
+        """THEORETICAL reward rate of this market's CURRENT resting legs
+        under the venue's published scoring rule, kept in `rn1_reward_est`
+        (one public book read per REWARD_WALK_CHECK_S, or when the legs
+        change). Its own key: the reward-first path's state is untouched."""
+        legs = self._open_legs(mk)
+        key = {s: [str(p), str(q)] for s, (p, q) in sorted(legs.items())}
+        est = mk.get("rn1_reward_est")
+        if est and est.get("legs") == key and \
+                time.time() - float(est.get("t") or 0) < REWARD_WALK_CHECK_S:
+            return
+        if not legs:
+            mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
+                                    "est_usd_per_hour": 0.0}
+            return
+        from src import pmus_sports_rewards as R
+        book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                ).get("marketData") or {}
+        y, n = legs.get("YES"), legs.get("NO")
+        q = float(max(q for _p, q in legs.values()))
+        r = R.quote_estimate(book, per, float(y[0]) if y else None,
+                             float(n[0]) if n else None, q, float(tick),
+                             own_yes=float(y[1]) if y else 0.0,
+                             own_no=float(n[1]) if n else 0.0)
+        mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
+                                "share": r.get("share"),
+                                "est_usd_per_hour": r.get("est_usd_per_hour"),
+                                "max_spread_ok": r.get("max_spread_ok")}
+
+    def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,
+                      tick: Any = None) -> Dict[str, Any]:
+        """{"ticks", "why", ...}: the reward credit the marginal test may
+        apply for this market right now. Zero unless a programme is paying
+        AND the theoretical reward of what the bot is resting, projected
+        over RN1_REWARD_PROJECT_H across its active markets, reaches the
+        venue's minimum payout. Never raises; any doubt is zero."""
+        out: Dict[str, Any] = {"ticks": 0, "why": "no_paying_programme"}
+        try:
+            per = self.rn1_reward(slug)
+            if not per or RN1_REWARD_CREDIT_TICKS <= 0:
+                return out
+            mk = self.b.m(slug) if mk is None else mk
+            if tick is not None:
+                self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            total = 0.0
+            for s in self.active():
+                est = (self.b.m(s).get("rn1_reward_est") or {})
+                if time.time() - float(est.get("t") or 0) > \
+                        4 * REWARD_WALK_CHECK_S:
+                    continue                  # an old estimate is not one
+                total += float(est.get("est_usd_per_hour") or 0.0)
+            proj = total * RN1_REWARD_PROJECT_H
+            out.update(projected_usd=round(proj, 4),
+                       min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                       label="THEORETICAL reward projection; not a payment")
+            if proj + 1e-9 < RN1_REWARD_MIN_DAY_USD:
+                out["why"] = "below_minimum_payout"
+                return out
+            out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+            return out
+        except Exception as exc:                          # noqa: BLE001
+            return {"ticks": 0, "why": "reward_estimate_error:%s"
+                    % type(exc).__name__}
+
+    def rn1_quote_cfg(self, slug: str, mk: Optional[Dict[str, Any]] = None,
+                      tick: Any = None) -> Dict[str, Any]:
+        """Inputs to RN1.quotes for this market. With the marginal test on
+        (RN1.EDGE_GATE) every bid needs the international fair value; the
+        adverse-selection allowance is RN1.ADVERSE_TICKS, plus the event
+        type's jump allowance for a bid that adds to an unpaired side."""
+        if not RN1.EDGE_GATE:
+            return self.rn1_extend_cfg(slug)
+        typ = str(((getattr(self.v, "states", {}) or {}).get(slug) or {}
+                   ).get("type") or "").lower()
+        base = RN1.ADVERSE_TICKS
+        inc = self.rn1_incentive(slug, mk, tick)
+        self._rn1_inc = getattr(self, "_rn1_inc", {})
+        self._rn1_inc[slug] = inc
+        return {"edge_gate": True, "fair_yes": self.intl_fair(slug),
+                "adverse_ticks": {"open": base, "complete": base,
+                                  "extend": base + RN1_JUMP_TICKS.get(typ, 0),
+                                  "default": base},
+                "risk_step_ticks": RN1.RISK_STEP_TICKS,
+                "incentive_ticks": inc["ticks"]}
+
     def rn1_extend_cfg(self, slug: str) -> Dict[str, Any]:
         """Inputs to the marginal test for adding to an unpaired side."""
         if not RN1.EXTEND_EV or self.guard is None:
@@ -3363,7 +3638,8 @@ class Engine:
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
-                       min_qty=spec["min_qty"], c=self.rn1_extend_cfg(slug))
+                       min_qty=spec["min_qty"],
+                       c=self.rn1_quote_cfg(slug, mk, tick))
         want: Dict[str, Any] = {}
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -3403,6 +3679,8 @@ class Engine:
                            "role": t["role"]}) for s, t in want.items()},
                 why={s: q.get("why_" + s) for s in ("YES", "NO")},
                 extend_ev=q.get("extend_ev"),
+                edge=q.get("edge"),
+                incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
                 reward=bool(self.rn1_reward(slug)),
                 label="RN1 replica decision; orders only if every gate "
                       "and the submission lock allow")
@@ -3486,6 +3764,7 @@ class Engine:
             return
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug)
+        self._markout_step(slug, mk, bbo)
         if spec is None or bbo is None:
             if spec is None:
                 # LIVE 2026-11-15 20:03Z: this marked every order closed
@@ -4417,6 +4696,12 @@ class Engine:
             extra = dict(extra, venue_requests=_bud.report())
         _ls = lock_state()
         extra = dict(extra, safety_latch=self.b.d.get("safety_latch") or None)
+        extra = dict(extra, loop=loop_report())
+        if RN1.ON:
+            try:
+                extra = dict(extra, markout=self.markout_summary())
+            except Exception:                             # noqa: BLE001
+                pass
         extra = dict(extra, submission_lock={
             "new_exposure_locked": _ls["new"], "completions_locked":
             _ls["all"], "why": _ls["why"],
@@ -4609,8 +4894,28 @@ class Engine:
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
             loop_beat()
             self._sleep(LOOP_S)
+            self._stall_drill_hold()
         self.cancel_all_own("sigterm")
         return 0
+
+    def _stall_drill_hold(self) -> None:
+        """Hold the loop still for a configured drill window (see
+        STALL_DRILL_ENV). No beat, no read, no order, until the window ends
+        or the process is told to stop."""
+        d = stall_drill()
+        if not d or not d["active"]:
+            return
+        log("STALL_DRILL", phase="begin", end=_iso(d["end"]),
+            open_orders=sum(1 for mk in self.b.d["markets"].values()
+                            for o in mk["orders"].values() if o.get("open")),
+            label="deliberate drill: the loop stops acting and reporting "
+                  "progress until the window ends")
+        while not self.stop:
+            d = stall_drill()
+            if not d or not d["active"]:
+                break
+            time.sleep(1.0)
+        log("STALL_DRILL", phase="end", idle_s=loop_idle_s())
 
 
 _LAST_ACCESS_LOG = [0.0]

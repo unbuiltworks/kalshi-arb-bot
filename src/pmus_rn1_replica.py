@@ -105,6 +105,42 @@ REPRICE_TICKS = _i("PMUS_RN1_REPRICE_TICKS", "1")
 EXTEND_EV = os.getenv("PMUS_RN1_EXTEND_EV", "1").strip() != "0"
 EXTEND_EDGE_TICKS = _i("PMUS_RN1_EXTEND_EDGE_TICKS", "1")
 EXTEND_STEP_TICKS = _i("PMUS_RN1_EXTEND_STEP_TICKS", "1")
+#: OWNER 2026-11-22 (issue #251): profit first. "Trading P&L before
+#: incentives must be the primary economic objective"; pair completion is
+#: incidental; "Opposite-side orders must independently pass economic and
+#: risk checks"; "Where a reliable fair value cannot be established, fail
+#: closed on additional risk"; "Reward assumptions must not turn
+#: demonstrably negative trading economics into a falsely attractive
+#: opportunity."
+#:
+#: THE MARGINAL TEST, for EVERY bid -- opening, same-side add and
+#: opposite-side bid alike. Per contract, in price units:
+#:
+#:   trade edge = fair value of the side
+#:                - bid - maker fee at the bid
+#:                - adverse selection (what a resting bid loses, on average,
+#:                  by being the one that got filled)
+#:   risk       = RISK_STEP_TICKS x clips of this side already unpaired
+#:                (only for a bid that ADDS to the net position)
+#:   incentive  = a verified, qualifying reward/rebate credit -- capped at
+#:                the risk allowance, so it can pay for carrying inventory
+#:                but can never make a negative trade edge pass
+#:
+#:   quoted only when   trade edge >= 0   and   trade edge >= risk - incentive
+#:
+#: No fresh fair value -> no bid of any kind. A bid is never rested deeper
+#: to pass: a bid far behind the touch fills only on the move it is meant
+#: to avoid. The pair cap, price band, residual, per-market and campaign
+#: caps are limits and stay exactly as they are; this adds a test, it does
+#: not remove one. With it on, a lighter-side bid is no longer quoted just
+#: because the pair would be profitable.
+#:
+#: The tick values are SETTINGS. Adverse selection is to be set from
+#: measured post-fill movement (the engine records it per fill); 1 tick is
+#: the margin the international price guard has always applied.
+EDGE_GATE = os.getenv("PMUS_RN1_EDGE_GATE", "1").strip() != "0"
+ADVERSE_TICKS = _i("PMUS_RN1_ADVERSE_TICKS", "1")
+RISK_STEP_TICKS = _i("PMUS_RN1_RISK_STEP_TICKS", "1")
 TOTAL_SPEND_USD = _d("PMUS_RN1_TOTAL_SPEND_USD", "16")
 TOTAL_UNMATCHED_USD = _d("PMUS_RN1_TOTAL_UNMATCHED_USD", "6")
 # Maker fee per contract = rate * p * (1 - p). PMUS order previews show
@@ -123,6 +159,9 @@ def cfg() -> Dict[str, Any]:
             "refill_cooldown_s": REFILL_COOLDOWN_S,
             "reprice_ticks": REPRICE_TICKS,
             "maker_fee_rate": str(MAKER_FEE_RATE),
+            "edge_gate": EDGE_GATE, "adverse_ticks": ADVERSE_TICKS,
+            "risk_step_ticks": RISK_STEP_TICKS,
+            "extend_ev": EXTEND_EV,
             "total_spend_usd": str(TOTAL_SPEND_USD),
             "total_unmatched_usd": str(TOTAL_UNMATCHED_USD)}
 
@@ -139,6 +178,49 @@ def fee(px: D, rate: D) -> D:
 def side_bid(side: str, yes_bid: D, yes_ask: D) -> D:
     """Best bid for an outcome: YES = yes_bid, NO = 1 - yes_ask."""
     return yes_bid if side == "YES" else ONE - yes_ask
+
+
+def edge(*, side: str, px: Any, tick: Any, fair_yes: Any,
+         adds_exposure: bool, unpaired_clips: int = 0,
+         fee_rate: Any = ZERO, adverse_ticks: Any = None,
+         risk_step_ticks: Any = None, incentive_ticks: Any = 0
+         ) -> Dict[str, Any]:
+    """The marginal economics of ONE more bid at `px` on `side`. Pure.
+
+    {"ok", "why", "fair", "px", "fee", "adverse", "trade_edge", "risk",
+     "incentive", "net_edge"} -- every figure per contract, in price units,
+    as strings. `incentive` is the credit actually applied (never more than
+    `risk`). `ok` is False with why "no_fair" when there is no fair value.
+    """
+    t = D(str(tick))
+    p = D(str(px))
+    if fair_yes is None:
+        return {"ok": False, "why": "no_fair", "px": str(p)}
+    fy = D(str(fair_yes))
+    if not (ZERO < fy < ONE):
+        return {"ok": False, "why": "no_fair", "px": str(p)}
+    fair_s = fy if side == "YES" else ONE - fy
+    adv = t * D(str(ADVERSE_TICKS if adverse_ticks is None
+                    else adverse_ticks))
+    f = fee(p, D(str(fee_rate)))
+    trade = fair_s - p - f - max(ZERO, adv)
+    risk = ZERO
+    if adds_exposure:
+        risk = t * D(str(RISK_STEP_TICKS if risk_step_ticks is None
+                         else risk_step_ticks)) * max(0, int(unpaired_clips))
+    inc = min(max(ZERO, t * D(str(incentive_ticks or 0))), risk)
+    net = trade - risk + inc
+    why = None
+    if trade < ZERO:
+        why = "edge_negative"        # incentives are not consulted at all
+    elif net < ZERO:
+        why = "edge_below_risk"
+    return {"ok": why is None, "why": why, "fair": str(fair_s),
+            "px": str(p), "fee": str(f), "adverse": str(max(ZERO, adv)),
+            "trade_edge": str(trade), "risk": str(risk),
+            "incentive": str(inc), "net_edge": str(net),
+            "unpaired_clips": int(unpaired_clips),
+            "adds_exposure": bool(adds_exposure)}
 
 
 def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
@@ -203,7 +285,8 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up
             unpaired = p[s] - p[o]
-            if unpaired > ZERO and k.get("extend_ev"):
+            if unpaired > ZERO and k.get("extend_ev") \
+                    and not k.get("edge_gate"):
                 # marginal economics of adding to an already unpaired side
                 fy = k.get("fair_yes")
                 if fy is None:
@@ -246,6 +329,27 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             reserve = max(ZERO, q_after) * max(ZERO, pcap - avg_after)
             if spent + px * qty + reserve > mcap:
                 out["why_" + s] = "per_market_cap"
+                continue
+        if k.get("edge_gate"):
+            # THE MARGINAL TEST (see EDGE_GATE). A bid on the lighter side
+            # reduces the net position, so it carries no concentration
+            # charge; it still has to be worth buying on its own.
+            adds = role != "complete"
+            held = max(ZERO, p[s] - p[o])
+            clips = int((held / qty0).to_integral_value(
+                rounding="ROUND_CEILING")) if (adds and qty0 > 0) else 0
+            adv = k.get("adverse_ticks")
+            if isinstance(adv, Mapping):
+                adv = adv.get(role, adv.get("default"))
+            ev = edge(side=s, px=px, tick=t, fair_yes=k.get("fair_yes"),
+                      adds_exposure=adds, unpaired_clips=clips,
+                      fee_rate=frate, adverse_ticks=adv,
+                      risk_step_ticks=k.get("risk_step_ticks"),
+                      incentive_ticks=k.get("incentive_ticks", 0))
+            ev["role"] = role
+            out.setdefault("edge", {})[s] = ev
+            if not ev["ok"]:
+                out["why_" + s] = ev["why"]
                 continue
         out[s] = {"px": px, "qty": qty, "role": role, "why": why}
     # SIMULTANEOUS QUOTES (owner 2026-11-21): when neither side is a

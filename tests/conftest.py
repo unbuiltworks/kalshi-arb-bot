@@ -20,6 +20,33 @@ def pytest_configure(config):
         "markers",
         "real_event_progress: exercise src.pmus_event_progress itself "
         "(still offline -- the test injects its own get_json)")
+    config.addinivalue_line(
+        "markers",
+        "rn1_edge_gate: run with the RN1 marginal-edge test ON, as "
+        "production does (see _rn1_marginal_test_off_for_the_existing_suite)")
+
+
+@pytest.fixture(autouse=True)
+def _rn1_marginal_test_off_for_the_existing_suite(monkeypatch, request):
+    """OWNER 2026-11-22 (issue #251): every RN1 bid must clear a marginal
+    expected-value test against the international fair value, and with no
+    fair value there is no bid. That is production's default
+    (PMUS_RN1_EDGE_GATE, on unless "0").
+
+    Several hundred existing sports tests build an engine with a fake venue
+    and NO international price feed and then expect it to quote: they are
+    about locks, caps, the registry, reconciliation -- not about pricing.
+    Under the default every one of them would see "no_fair" and no orders,
+    and would be measuring the gate instead of what it was written to
+    check.
+
+    So the gate is OFF for the existing suite and the tests that exercise
+    it turn it on with `@pytest.mark.rn1_edge_gate`
+    (tests/test_pmus_rn1_profit_first.py), where the production default is
+    also pinned from a clean interpreter."""
+    from src import pmus_rn1_replica as RN1
+    monkeypatch.setattr(RN1, "EDGE_GATE", bool(
+        request.node.get_closest_marker("rn1_edge_gate")))
 
 
 @pytest.fixture(autouse=True)
