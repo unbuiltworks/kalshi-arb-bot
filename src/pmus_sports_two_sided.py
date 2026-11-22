@@ -2032,9 +2032,10 @@ class Engine:
     def day_change(self) -> D:
         today = self._today()
         out = D(0)
+        # every market in the book, crypto included: the daily halt covers
+        # whatever shares the account (owner 2026-11-22). The crypto lane's
+        # own latched stop is in ADDITION to it, never instead of it.
         for s_, mk in self.b.d["markets"].items():
-            if CR.is_crypto_market(s_, mk):
-                continue             # crypto has its own latched loss stop
             base = mk.get("mark0") or {}
             if base.get("date") == today and mk.get("mark") is not None:
                 out += D(mk["mark"]) - D(base["value"])
@@ -3183,6 +3184,8 @@ class Engine:
             return "crypto_loss_stop_unset"
         if self.crypto_loss_stopped():
             return "crypto_loss_stop"
+        if self.daily_stopped():
+            return "daily_loss_stop"          # the account's daily halt
         if submission_locked():
             return "submission_lock"          # the sports lane's own lock
         if self.shared_halt() is not None:

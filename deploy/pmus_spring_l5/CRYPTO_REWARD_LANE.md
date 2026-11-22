@@ -34,9 +34,12 @@ same watchdog — no new bot, no new service.
    logged once as `legacy_crypto_prefixes_ignored`. It can be deleted.
 2. Any order for a crypto market with a sports/RN1 stage, or not post-only, is refused at
    `Engine.place` (`place_refused_crypto`).
-3. Sports figures (`TOTAL_CAP`, slots, daily stop, RN1 market count, intl guard, touch
+3. Sports figures (`TOTAL_CAP`, slots, RN1 market count, intl guard, touch
    reaction) no longer include crypto markets. With no crypto market in the book they are
    unchanged. The account exposure figure (`own_exposure_usd`) counts both lanes.
+   The **daily loss halt covers both lanes** (owner 22 Nov: it must keep covering whatever
+   shares the account): crypto marks count in it, a trip stops new openings in sports and
+   crypto, and the crypto lane's own latched stop is in addition to it.
 4. Heartbeat and boot lines gain a `crypto` block (`{"on": false}`).
 5. `pmus_pilot_pnl.meter` takes an optional `stages`; `pmus_incentive_audit.earnings`
    also returns `rows_all`. Both are additive.

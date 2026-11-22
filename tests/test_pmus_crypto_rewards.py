@@ -910,8 +910,8 @@ def test_the_account_lane_cap_counts_both_lanes(lane):
 
 
 def test_a_crypto_lone_leg_does_not_spend_the_sports_caps(lane, monkeypatch):
-    """Sports TOTAL_CAP, slots and daily stop read sports only; the account
-    exposure figure reads both."""
+    """Sports TOTAL_CAP and slots read sports only; the account exposure
+    figure reads both. (The daily halt covers both: see below.)"""
     e, v = lane
     monkeypatch.setattr(M, "TOTAL_CAP", D("4.50"))
     monkeypatch.setattr(M, "DAILY_LOSS_USD", D("3"))
@@ -924,7 +924,7 @@ def test_a_crypto_lone_leg_does_not_spend_the_sports_caps(lane, monkeypatch):
     assert e.b.total_unmatched() == 0
     assert e.b.total_unmatched_all() == D("47")
     assert e.slots_used() == 0 and not e.full()
-    assert e.day_change() == 0 and not e.daily_stopped()
+    assert e.day_change() == D("-9") and e.daily_stopped()   # -9 < -3
     assert CR.book_pnl(e.b.d["markets"])["usd"] == D("-9")
     assert e.sports_active() == [] and len(e.active()) == 3
 
@@ -2188,3 +2188,62 @@ def test_own_resting_size_at_the_touch_does_not_count(lane, monkeypatch):
                          "filled": "0", "open": True, "stage": "crypto_open"}
     e._cfeed._book[ETH] = (e._cfeed._clock(), thin(105, 300))
     assert e.depth_block(ETH, "YES") == "thin_touch:5.0<10"
+
+
+# ------------------------------- the account's daily halt covers both lanes
+
+def test_a_crypto_loss_trips_the_daily_halt_for_sports_and_crypto(
+        lane, monkeypatch):
+    """Owner 2026-11-22: the $5 daily halt must keep covering whatever
+    shares the account. A crypto leg marked $9 down stops NEW openings in
+    both lanes for the UTC day; the completion keeps resting."""
+    e, v = lane
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("5"))
+    monkeypatch.setattr(RN1, "ON", False)
+    select(e, v)
+    e.step_market(SOL)
+    lone_yes(e, v)                                   # ETH YES 100 @0.47
+    assert not e.daily_stopped()
+    v.books[ETH] = around(0.38, 0.40)                # -$9 on the day
+    e.step_market(ETH)
+    assert e.day_change() == D("-9") and e.daily_stopped()
+    assert e.crypto_block(SOL, e.b.m(SOL), time.time()) == "daily_loss_stop"
+    e.step_market(SOL)
+    assert not v.live(SOL)                           # crypto openings pulled
+    assert [(o["side"], o["qty"]) for o in v.live(ETH).values()] == \
+        [("NO", D("100"))]                           # completion continues
+    assert not e.b.d["crypto"]["loss_stop"]          # its own $30 stop: no
+    e.b.m("aec-x")
+    n = len(v.orders)
+    e.step_market("aec-x")                           # sports: no new pair
+    assert len(v.orders) == n
+
+
+def test_a_sports_loss_trips_the_daily_halt_for_crypto(lane, monkeypatch):
+    e, v = lane
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("5"))
+    select(e, v)
+    e.step_market(ETH)
+    assert len(v.live(ETH)) == 2
+    mk = e.b.m("aec-x")
+    mk.update(pos={"YES": "20", "NO": "0"}, cost={"YES": "9", "NO": "0"},
+              mark0={"date": e._today(), "value": "0"}, mark="-6")
+    assert e.daily_stopped()
+    e.step_market(ETH)
+    assert not v.live(ETH)
+    assert e.crypto_place_block(ETH, "YES", D("0.47"), D("100"),
+                                "crypto_open", True) == "daily_loss_stop"
+
+
+def test_both_lanes_losses_add_up_in_the_daily_halt(lane, monkeypatch):
+    """Neither lane alone is past $5; together they are."""
+    e, v = lane
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("5"))
+    select(e, v)
+    lone_yes(e, v)
+    v.books[ETH] = around(0.44, 0.46)                # crypto -$3
+    e.step_market(ETH)
+    assert e.day_change() == D("-3") and not e.daily_stopped()
+    mk = e.b.m("aec-x")
+    mk.update(mark0={"date": e._today(), "value": "0"}, mark="-2.50")
+    assert e.day_change() == D("-5.50") and e.daily_stopped()
