@@ -60,6 +60,7 @@
       "src/pmus_rn1_replica.py",
       "src/pmus_crypto_rewards.py",
       "src/pmus_crypto_tape.py",
+      "src/pmus_crypto_feed.py",
       "src/pmus_request_budget.py",
       "src/pmus_pilot_pnl.py",
       "src/pmus_sports_completion.py",

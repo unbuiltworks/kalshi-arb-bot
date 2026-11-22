@@ -42,6 +42,13 @@ SOL_LIVE = book([(0.30, 2000), (0.28, 25), (0.27, 25.66), (0.26, 96)],
                 [(0.32, 229), (0.33, 25), (0.37, 1999.34), (0.38, 2000)])
 
 
+def around(bid, ask):
+    """A deep 2c-wide book with its best prices at bid / ask."""
+    b, a = round(bid * 100), round(ask * 100)
+    return book([(b / 100, 300), ((b - 1) / 100, 900), ((b - 2) / 100, 1500)],
+                [(a / 100, 300), ((a + 1) / 100, 900), ((a + 2) / 100, 1500)])
+
+
 def iso(seconds_from_now):
     return (datetime.now(timezone.utc) +
             timedelta(seconds=seconds_from_now)).isoformat()
@@ -453,8 +460,18 @@ class CV(FakeVenue):
         self.crypto = [ETH, SOL, XRP, BTC]
         self.states = {}
         self.cancelled = []
+        self.closed = set()
+        self.gateway_threads = set()
+
+    def spec(self, slug):
+        return None if slug in self.closed else super().spec(slug)
 
     def gget(self, path):
+        import threading
+        self.gateway_threads.add(threading.current_thread().name)
+        if path.startswith("/v1/events"):
+            return {"events": [{"markets": [
+                {"slug": s, "endDate": self.end} for s in self.crypto]}]}
         if "/book" in path:
             slug = path.split("/v1/markets/")[1].split("/book")[0]
             return {"marketData": self.books.get(slug, DEEP)}
@@ -467,10 +484,6 @@ class CV(FakeVenue):
                 "period": "daily_event", "maxSpread": 0.05}]}
                 for s in self.crypto if s in path and s != BTC]}
         raise AssertionError(path)
-
-    def crypto_targets(self):
-        return [{"slug": s, "end": self.end} for s in self.crypto
-                if CR.tradable(s)] if CR.ON else []
 
     def cancel(self, oid):
         self.cancelled.append(oid)
@@ -505,9 +518,32 @@ def fresh_meter(e):
     e._crypto_meter_at = time.monotonic()
 
 
+def wire_feed(e, v):
+    """The lane's feed, not threaded: it is polled right before each crypto
+    pass and each selection, so a test sees the venue as it is now."""
+    from src import pmus_crypto_feed as CF
+    e._cfeed = CF.CryptoFeed(v.gget, v.spec, sleep=lambda s: None)
+    real_pass, real_select = e._crypto_pass, e.select_crypto
+
+    def sync():
+        e._cfeed.watch(s for s in e.active() if CR.tradable(s))
+        e._cfeed.poll_once(force=True)
+
+    def crypto_pass(slug, mk):
+        sync()
+        return real_pass(slug, mk)
+
+    def select_crypto(acct):
+        sync()
+        return real_select(acct)
+    e._crypto_pass, e.select_crypto, e.feed_sync = \
+        crypto_pass, select_crypto, sync
+    return e
+
+
 def wire(e, v):
     """Give an engine the fake venue's reads and readable shared gates."""
-    e._rget = v.gget
+    wire_feed(e, v)
     e.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
     e.crypto_account_view = v.account
     return e
@@ -529,7 +565,6 @@ def lane(tmp_path, monkeypatch):
 
 
 def select(e, v):
-    e._crypto_disc_at = None                 # discovery is throttled
     e.select_crypto(v.account())
     return [s for s in e.active() if CR.is_crypto(s)]
 
@@ -871,7 +906,7 @@ def test_a_crypto_lone_leg_does_not_spend_the_sports_caps(lane, monkeypatch):
     e.step_market(ETH)
     yes = next(k for k, o in v.live(ETH).items() if o["side"] == "YES")
     v.fill(yes)
-    v.bid, v.ask = D("0.38"), D("0.40")                  # ETH marked -$9
+    v.books[ETH] = around(0.38, 0.40)                    # ETH marked -$9
     e.step_market(ETH)
     assert e.b.total_unmatched() == 0
     assert e.b.total_unmatched_all() == D("47")
@@ -920,13 +955,13 @@ def test_loss_stop_latches_cancels_everything_and_survives_restart(
     e.step_market(SOL)
     lone_yes(e, v)                         # YES 100 @0.47 + NO completion
     assert len(v.live()) == 3
-    v.bid, v.ask = D("0.16"), D("0.18")    # mark 16 - 47 = -31
+    v.books[ETH] = around(0.16, 0.18)      # mark 16 - 47 = -31
     e.step_market(ETH)
     assert not v.live()                    # SOL quotes and the completion
     stop = e.b.d["crypto"]["loss_stop"]
     assert D(stop["book_estimate_usd"]) == D("-31")
     assert e.crypto_block(SOL, e.b.m(SOL), time.time()) == "crypto_loss_stop"
-    v.bid, v.ask = D("0.48"), D("0.50")    # recovery does not lift it
+    v.books[ETH] = DEEP                    # recovery does not lift it
     n = len(v.orders)
     e2 = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)   # restart
     fresh_meter(e2)
@@ -971,7 +1006,6 @@ def test_three_market_days_then_no_new_day(lane):
     assert len(v.live(SOL)) == 2
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
-    e._crypto_disc_at = None
     e.select_crypto(v.account())
     assert nxt not in e.b.d["markets"]
     mk = e.b.m(nxt)
@@ -1040,7 +1074,7 @@ def test_restart_with_the_lane_switched_off_cancels(lane, tmp_path,
     e.step_market(ETH)
     monkeypatch.setattr(CR, "ON", False)
     e2 = M.Engine(v, M.Book(tmp_path / "s.json"))
-    e2._rget = v.gget
+    wire_feed(e2, v)
     e2.step_market(ETH)
     assert not v.live()
 
@@ -1198,6 +1232,7 @@ def test_earnings_audit_hands_over_every_row():
 def test_the_probe_image_carries_the_lane():
     root = Path(__file__).resolve().parents[1]
     docker = (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
+    assert "COPY src/pmus_crypto_feed.py src/pmus_crypto_feed.py" in docker
     assert "COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py" in \
         docker
     assert "COPY src/pmus_crypto_tape.py src/pmus_crypto_tape.py" in docker
@@ -1271,7 +1306,6 @@ def test_hard_budget_worst_case_never_exceeds_the_stop(hard):
     assert CR.unpaired_cap(e.b.d["markets"]) == D("0.11")
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
-    e._crypto_disc_at = None
     e.select_crypto(v.account())
     e.step_market(nxt)
     assert not v.live()                              # budget is spent
@@ -1373,7 +1407,6 @@ def test_existing_inventory_and_resting_orders_shrink_the_next_quote(hard3):
     # the smaller budget is shared again: resting quotes are re-sized
     nxt = ETH.replace("11-21", "11-22")
     v.crypto = [nxt]
-    e._crypto_disc_at = None
     e.select_crypto(v.account())
     e.step_market(nxt)
     assert {o["qty"] for s_ in (SOL, XRP, nxt)
@@ -1408,7 +1441,7 @@ def test_restart_with_unresolved_positions_keeps_the_budget(hard3, tmp_path):
     e.b.save()
     assert len(v.live(XRP)) == 2
     e2 = M.Engine(v, M.Book(tmp_path / "s.json"))     # restart: no meter,
-    e2._rget = v.gget                                 # no account read yet
+    wire_feed(e2, v)                                  # no account read yet
     e2.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
     assert e2.crypto_block(XRP, e2.b.m(XRP), time.time()) == \
         "crypto_meter_unavailable"
@@ -1476,7 +1509,7 @@ def observe(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     v = CV()
     e = M.Engine(v, M.Book(tmp_path / "s.json"))
-    e._rget = v.gget
+    wire_feed(e, v)
     return e, v
 
 
@@ -1543,10 +1576,12 @@ def test_crypto_step_has_no_route_to_the_venue_but_the_choke_point():
     import inspect
     for name in ("_crypto_step", "_crypto_observe", "_crypto_fail_closed",
                  "select_crypto", "crypto_loss_stopped", "_crypto_book",
-                 "crypto_meter", "crypto_reward_credits"):
+                 "crypto_meter", "crypto_reward_credits", "_crypto_pass",
+                 "_crypto_pass_inner", "_crypto_stale"):
         src = inspect.getsource(getattr(M.Engine, name))
         assert "self.v.place" not in src and "post_only=False" not in src
         assert "place_limit" not in src and ".t.request(" not in src
+        assert "gget" not in src and "_reward_get" not in src
     assert inspect.getsource(M.Engine._crypto_step).count("self.place(") == 1
     for mod in (CR, importlib.import_module("src.pmus_crypto_tape")):
         src = inspect.getsource(mod)
@@ -1645,18 +1680,185 @@ def test_replay_tool_reads_the_service_tape(observe, capsys):
     assert ETH in out and "1 tick back" in out and "quotable" in out
 
 
-def test_crypto_discovery_is_throttled_and_the_step_is_timed(observe):
-    e, v = observe
-    calls = []
-    real = v.crypto_targets
-    v.crypto_targets = lambda: calls.append(1) or real()
-    for _ in range(5):
+# ------------------------------- the sports loop never waits on crypto
+
+class Hung:
+    """A gateway that never answers until released."""
+
+    def __init__(self):
+        import threading
+        self.release = threading.Event()
+        self.calls = 0
+
+    def __call__(self, path):
+        self.calls += 1
+        self.release.wait(30)
+        raise TimeoutError("gateway hung")
+
+
+def test_no_crypto_gateway_read_runs_on_the_engine_loop(lane):
+    """Selection, quoting, repricing, a fill, the loss stop and the
+    heartbeat: with the feed's thread as the only reader, the engine's own
+    thread makes no gateway request for crypto at all."""
+    import threading
+    e, v = lane
+    select(e, v)
+    e.step_market(ETH)                    # feed polled, then the pass
+    v.gateway_threads.clear()
+    polled = threading.Thread(target=e.feed_sync, name="crypto-feed")
+    polled.start()
+    polled.join()
+    feed_only = set(v.gateway_threads)
+    loop_reads = []
+
+    def forbidden(path):
+        loop_reads.append(path)
+        pytest.fail("gateway read on the engine loop: " + path)
+    v.gget = v.spec = v.bbo = forbidden
+    e._crypto_feed()._get = e._crypto_feed()._spec_fn = forbidden
+    real_pass = M.Engine._crypto_pass.__get__(e)
+    real_select = M.Engine.select_crypto.__get__(e)
+    real_select(v.account())
+    for s in (ETH, SOL, XRP):
+        real_pass(s, e.b.m(s))
+    yes = next(k for k, o in v.live(ETH).items() if o["side"] == "YES")
+    v.fill(yes)
+    real_pass(ETH, e.b.m(ETH))
+    e.crypto_loss_stopped()
+    e.crypto_status()
+    assert feed_only == {"crypto-feed"} and loop_reads == []
+    assert len(v.live(ETH)) == 1 and len(v.live()) == 5   # it did real work
+
+
+def test_a_hung_gateway_cannot_delay_the_engine_loop(lane):
+    """The real feed thread is stuck inside a request that never returns.
+    Selection and a full pass over three crypto markets and a sports market
+    still finish at once; the crypto quotes are pulled as their data ages
+    out; the sports order is untouched."""
+    from src import pmus_crypto_feed as CF
+    e, v = lane
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    e.place("aec-x", "YES", D("0.45"), D("2"), "rn1_open")
+
+    def crypto_live():
+        return {k for k, o in v.live().items() if CR.is_crypto(o["slug"])}
+
+    def sports_live():
+        return {k for k, o in v.live().items() if o["slug"] == "aec-x"}
+    quotes0 = crypto_live()
+    assert len(quotes0) == 6 and len(sports_live()) == 1
+    hung = Hung()
+    clock = [time.monotonic()]
+    feed = e._cfeed
+    feed._get, feed._spec_fn = hung, hung
+    feed._clock = lambda: clock[0]
+    feed._sleep = lambda s_: None
+    real_pass = M.Engine._crypto_pass.__get__(e)
+    e._crypto_pass = real_pass                 # no test-side polling now
+    e.select_crypto = M.Engine.select_crypto.__get__(e)
+    feed._disc_at = -1e18
+    feed.start()                               # the real thread, now stuck
+    deadline = time.monotonic() + 5
+    while hung.calls == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert hung.calls >= 1 and feed.stats()["alive"]
+    try:
+        t0 = time.monotonic()
         e.select_crypto(v.account())
-    assert len(calls) == 1
+        for s in (ETH, SOL, XRP):
+            e.step_market(s)
+        e.step_market("aec-x")
+        e.report()
+        took = time.monotonic() - t0
+        assert took < 1.0, took
+        assert crypto_live() == quotes0        # data still fresh: unchanged
+        assert sports_live()                   # sports market was stepped
+        clock[0] += CR.BOOK_MAX_AGE_S + 1      # ... until it ages out
+        t0 = time.monotonic()
+        for s in (ETH, SOL, XRP):
+            e.step_market(s)
+        e.step_market("aec-x")
+        assert time.monotonic() - t0 < 1.0
+        assert not crypto_live() and sports_live()   # crypto pulled only
+        clock[0] += CR.SPEC_MAX_AGE_S + 2 * CR.DISCOVER_S + 100
+        e.select_crypto(v.account())           # stale discovery: no select
+        e.step_market(ETH)
+        assert not crypto_live() and sports_live()
+        assert hung.calls <= 2                 # one stuck request, no pile-up
+    finally:
+        feed.stop = True
+        hung.release.set()
+
+
+def test_feed_errors_age_the_data_and_never_raise(lane):
+    e, v = lane
+    select(e, v)
+    e.step_market(ETH)
+    feed = e._cfeed
+
+    def boom(path):
+        raise OSError("503")
+    feed._get = boom
+    feed.poll_once(force=True)
+    assert feed.errors >= 2 and "OSError" in feed.stats()["last_error"]
+    book, age = feed.book(ETH)
+    assert book is not None                    # last good answer is kept
+    assert feed.spec("cpcxrp-nope")[0] is __import__(
+        "src.pmus_crypto_feed", fromlist=["x"]).UNKNOWN
+
+
+def test_feed_never_holds_credentials_or_a_signed_transport():
+    import inspect
+    from src import pmus_crypto_feed as CF
+    src = inspect.getsource(CF)
+    for bad in (".t.request", "self.v", "place(", "cancel(", "PMUS_API",
+                "Transport", "os.environ", "getenv"):
+        assert bad not in src, bad
+
+
+def test_a_market_the_venue_closes_is_cancelled_and_closed_in_the_book(lane):
+    e, v = lane
+    select(e, v)
+    e.step_market(ETH)
+    v.closed.add(ETH)
+    e.step_market(ETH)
+    assert not v.live(ETH) and e.b.m(ETH)["done"]
+
+
+def test_unknown_market_spec_is_not_quoted(lane):
+    e, v = lane
+    select(e, v)
+    real_pass = M.Engine._crypto_pass.__get__(e)
+    mk = e.b.m("cpcxrp-xrp-updown-1d-2026-11-23-2200z")
+    mk.update(lane="crypto", reward=dict(PROG), end=iso(9 * 3600))
+    real_pass("cpcxrp-xrp-updown-1d-2026-11-23-2200z", mk)   # never polled
+    assert not v.orders and mk["crypto_logged"] == "feed_stale:spec"
+
+
+def test_the_sports_socket_is_not_given_crypto_markets(lane):
+    e, v = lane
+    select(e, v)
+
+    class Ws:
+        slugs = None
+        def set_slugs(self, s):
+            self.slugs = list(s)
+    e.ws = Ws()
+    e.b.m("aec-x")
+    e.drain_ws_events()
+    assert e.ws.slugs == ["aec-x"]
+
+
+def test_the_step_is_timed_and_the_feed_reported(observe):
+    e, v = observe
+    select(e, v)
     e.step_market(ETH)
     st = e.crypto_status()
     assert st["step_ms"]["n"] == 1 and st["step_ms"]["max"] >= 0
     assert st["tape"]["bound_bytes"] == 60_000_000
+    assert st["feed"]["cycles"] >= 1 and st["feed"]["errors"] == 0
 
 
 def test_the_sports_submission_lock_withdraws_and_refuses_crypto(lane,

@@ -1113,39 +1113,15 @@ class Venue:
 
     states: Dict[str, Any] = {}
 
-    def crypto_targets(self) -> list:
-        """Daily ETH/SOL/XRP up/down markets for the crypto reward lane
-        (src/pmus_crypto_rewards.py); [] unless that lane is on. Never BTC.
-        These targets go ONLY to Engine.select_crypto -- they are no longer
-        mixed into the sports selection, where RN1 mode would have traded
-        them as accumulation (audit 2026-11-22, finding 6). The older
-        PMUS_TWO_SIDED_CRYPTO_PREFIXES is no longer read for selection."""
-        if not CR.ON:
-            return []
-        d = self.gget("/v1/events?active=true&closed=false&limit=200"
-                      "&categories=crypto") or {}
-        evs = d if isinstance(d, list) else d.get("events") or []
-        out = []
-        for ev in evs:
-            for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
-                slug = str((m or {}).get("slug") or "")
-                if not CR.tradable(slug):
-                    continue
-                end = m.get("endDate") or ev.get("endDate")
-                self.states[slug] = {"type": "crypto-1d", "endDate": end}
-                out.append({"slug": slug, "league": "crypto", "end": end,
-                            "why": "crypto_reward_lane",
-                            "event_state": self.states[slug]})
-        return out
-
     def live_sports(self) -> list:
         if CRYPTO_PREFIXES and not getattr(self, "_legacy_crypto_logged",
                                            False):
             self._legacy_crypto_logged = True
             log("legacy_crypto_prefixes_ignored", prefixes=CRYPTO_PREFIXES,
-                label="crypto is quoted only by the crypto reward lane "
-                      "(PMUS_CRYPTO_REWARDS); it is never selected into "
-                      "the sports / RN1 path")
+                label="crypto is discovered and quoted only by the crypto "
+                      "reward lane (PMUS_CRYPTO_REWARDS, its own feed "
+                      "thread); it is never selected into the sports / "
+                      "RN1 path")
         return self._live_sports()
 
     def _live_sports(self) -> list:
@@ -1420,7 +1396,7 @@ class Engine:
         self.drain_intl_events()
         if self.ws is None:
             return
-        self.ws.set_slugs(self.active())
+        self.ws.set_slugs(self.sports_active())
         moves: Dict[str, list] = {}
         while True:
             try:
@@ -2996,6 +2972,7 @@ class Engine:
                 "modelled_reward_usd": str(self.crypto_modelled_usd()),
                 "step_ms": {k: round(v_, 1) for k, v_ in
                             self.__dict__.pop("_crypto_ms", {}).items()},
+                "feed": self._crypto_feed().stats(),
                 "tape": (self._crypto_tape().stats()
                          if self._crypto_tape() is not None else None),
                 "label": "modelled reward is not money; see CRYPTO_PNL"}
@@ -3085,48 +3062,39 @@ class Engine:
             return "crypto_open_order_cap"
         return None
 
-    def crypto_programs(self, slugs: list) -> Dict[str, Any]:
-        """{slug: paying daily period} from the venue's live programme rows
-        (cached REWARD_REFRESH_S). The pool is shared by the programme's
-        markets; M_program is at least the number of pilot assets, so the
-        modelled figure is an even-split scenario."""
-        from src import pmus_sports_rewards as R
-        now = time.monotonic()
-        cache = getattr(self, "_cprog", None)
-        key = tuple(sorted(slugs))
-        if cache and cache[0] == key and now - cache[1] < REWARD_REFRESH_S:
-            return cache[2]
-        found, diag = R.fetch_programs(self._reward_get(), list(key))
-        if diag["errors"]:
-            raise RuntimeError(str(diag["errors"][:1]))
-        out: Dict[str, Any] = {}
-        for s, prog in R.build_program_map(found).items():
-            per = R.paying_period(prog, time.time(), event_live=True)
-            if per and per.get("period") in ("daily_event", "daily"):
-                per["M_program"] = max(int(per.get("M_program") or 1),
-                                       len(CR.ASSETS))
-                out[s] = per
-        self._cprog = (key, now, out)
-        return out
+    def _crypto_feed(self):
+        """The lane's background market-data reader
+        (src/pmus_crypto_feed.py). Every crypto gateway read happens on its
+        thread; this loop only reads its cache."""
+        if "_cfeed" not in self.__dict__:
+            from src import pmus_crypto_feed as CF
+            self._cfeed = CF.CryptoFeed(
+                self.v.gget, getattr(self.v, "_spec_fetch", None)
+                or self.v.spec, log)
+            if CR.ON:
+                self._cfeed.start()
+        return self._cfeed
 
     def select_crypto(self, acct: Mapping[str, Any]) -> None:
         """Bring the current daily market of each pilot asset into the book
-        under lane=crypto. Selecting places nothing; with the lane on but
-        not armed the market is priced and modelled in SHADOW."""
+        under lane=crypto, from what the feed thread last read (no request
+        is made here). Selecting places nothing; with the lane on but not
+        armed the market is priced and modelled in SHADOW."""
         if not CR.ON or os.getenv(ENABLED_ENV, "").upper() != "YES":
             return
-        last = self.__dict__.get("_crypto_disc_at")
-        if last is not None and time.monotonic() - last < CR.DISCOVER_S:
+        feed = self._crypto_feed()
+        feed.watch(s for s in self.active() if CR.tradable(s))
+        found, age = feed.targets()
+        progs, page = feed.programs()
+        if max(age, page) > 2 * CR.DISCOVER_S + 60:
+            if not self.__dict__.get("_crypto_disc_stale"):
+                self._crypto_disc_stale = True
+                log("crypto_discovery_stale", feed=feed.stats(),
+                    effect="no new crypto market selected; active markets "
+                           "keep their last programme until depth goes stale")
             return
-        self._crypto_disc_at = time.monotonic()
-        try:
-            targets = CR.pick_targets(self.v.crypto_targets(), time.time())
-            progs = self.crypto_programs(
-                sorted({t["slug"] for t in targets} |
-                       {s for s in self.active() if CR.tradable(s)}))
-        except Exception as exc:                          # noqa: BLE001
-            log("crypto_discovery_error", err=str(exc)[:160])
-            return
+        self._crypto_disc_stale = False
+        targets = CR.pick_targets(found, time.time())
         markets = self.b.d["markets"]
         for s in self.active():
             if CR.is_crypto_market(s, markets[s]) and \
@@ -3163,34 +3131,95 @@ class Engine:
                 program=progs[slug], arm=CR.arm_state(time.time()),
                 label="selected into the crypto lane; orders only if armed "
                       "and every gate allows")
+        feed.watch(s for s in self.active() if CR.tradable(s))
         self.b.save()
+
+    def _crypto_stale(self, slug: str, mk: Dict[str, Any], why: str,
+                      age: Optional[float] = None, pull_all: bool = False
+                      ) -> None:
+        """No current market data: nothing can be priced or shown to score.
+        Opening quotes are pulled by exact id; a resting completion is left
+        (it only reduces what is unpaired) unless `pull_all`."""
+        stale = [(oid, o) for oid, o in mk["orders"].items()
+                 if o.get("open") and (pull_all or
+                                       o.get("stage") != CR.STAGE_COMPLETE)]
+        if mk.get("crypto_logged") != why:
+            mk["crypto_logged"] = why
+            log("CRYPTO_QUOTE", slug=slug, block=why, pulled=len(stale),
+                age_s=None if age is None or age == float("inf")
+                else round(age, 1))
+        self._cancel_legs(slug, stale)
+        self.b.save()
+
+    def _crypto_pass(self, slug: str, mk: Dict[str, Any]) -> None:
+        """Everything the loop does for one crypto market. Any error fails
+        closed; the time taken is reported in the heartbeat."""
+        t0 = time.monotonic()
+        try:
+            self._crypto_pass_inner(slug, mk)
+        except Exception as exc:                          # noqa: BLE001
+            self._crypto_fail_closed(slug, mk, exc)
+        tm = self.__dict__.setdefault("_crypto_ms", {"n": 0, "sum": 0.0,
+                                                     "max": 0.0})
+        ms = (time.monotonic() - t0) * 1000
+        tm["n"] += 1
+        tm["sum"] += ms
+        tm["max"] = max(tm["max"], ms)
+
+    def _crypto_pass_inner(self, slug: str, mk: Dict[str, Any]) -> None:
+        # own orders: venue truth by exact id (signed reads, through the
+        # shared request budget; none while the lane has no order resting)
+        for oid, o in list(mk["orders"].items()):
+            if not o.get("open"):
+                continue
+            st = self.v.status(oid)
+            self._record_fill(slug, o["side"], oid, st)
+            o["open"] = st["open"]
+            if not st["open"] and D(o.get("filled") or "0") < D(o["qty"]):
+                log("order_closed_by_venue", slug=slug, side=o["side"],
+                    px=o["px"], qty=o["qty"], filled=o.get("filled"),
+                    state=st.get("state"), stage=o.get("stage"))
+            self.b.save()
+        if not CR.ON or abandoned(slug):
+            self._crypto_stale(slug, mk, "crypto_off" if not CR.ON
+                               else "abandoned", pull_all=True)
+            if abandoned(slug) and not any(
+                    o.get("open") for o in mk["orders"].values()):
+                mk["done"] = True
+                self.b.save()
+            return
+        from src import pmus_crypto_feed as CF
+        feed = self._crypto_feed()
+        spec, sage = feed.spec(slug)
+        if spec is CF.UNKNOWN or sage > CR.SPEC_MAX_AGE_S:
+            self._crypto_stale(slug, mk, "feed_stale:spec", sage)
+            return
+        if spec is None:
+            # the venue no longer lists the market as open: cancel what
+            # rests; closed in the book only once every order is terminal
+            self._crypto_stale(slug, mk, "market_closed", pull_all=True)
+            if any(o.get("open") for o in mk["orders"].values()):
+                return
+            mk["done"] = True
+            self.b.save()
+            log("market_closed", slug=slug, pos=mk["pos"], mode="crypto",
+                unmatched_cost=self.b.unmatched_cost(slug))
+            return
+        book, age = feed.book(slug)
+        bbo = CF.top_of_book(book) if book is not None else None
+        if bbo is None or age > CR.BOOK_MAX_AGE_S:
+            self._crypto_stale(slug, mk, "feed_stale:book", age,
+                               pull_all=bool(self._crypto_state().get(
+                                   "loss_stop")))
+            return
+        self._mark(slug, mk, bbo)
+        self._crypto_step(slug, mk, spec, bbo, spec["tick"])
 
     def _crypto_book(self, slug: str, bbo: Optional[Mapping] = None
                      ) -> tuple:
-        """(public depth, age seconds): re-read every CR.BOOK_S, and at once
-        when the live top of book no longer matches the depth held (the
-        market moved). A failed read keeps the last one and lets its age
-        grow."""
-        cache = self.__dict__.setdefault("_cbook", {})
-        hit = cache.get(slug)
-        now = time.monotonic()
-        moved = False
-        if hit is not None and bbo is not None:
-            bids, asks = CR.book_levels(hit[1], 0.0001)
-            top = (max(bids, default=None), min(asks, default=None))
-            moved = top != (int(round(float(bbo["bid"]) / 0.0001)),
-                            int(round(float(bbo["ask"]) / 0.0001)))
-        if hit is None or moved or now - hit[0] >= CR.BOOK_S:
-            try:
-                md = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
-                      ).get("marketData")
-                if isinstance(md, Mapping):
-                    hit = cache[slug] = (now, md)
-            except Exception as exc:                      # noqa: BLE001
-                log("crypto_book_error", slug=slug, err=str(exc)[:120])
-        if hit is None:
-            return None, float("inf")
-        return hit[1], now - hit[0]
+        """(public depth, age seconds) as the feed thread last read it.
+        No request is made here."""
+        return self._crypto_feed().book(slug)
 
     def _crypto_accrue(self, mk: Dict[str, Any], now: float) -> None:
         """MODELLED reward for the interval just ended, at the rate of the
@@ -3308,18 +3337,8 @@ class Engine:
                        if o.get("open")}
         book, age = self._crypto_book(slug, bbo)
         if book is None or age > CR.BOOK_MAX_AGE_S:
-            # no current depth: nothing can be priced or shown to score.
-            # Opening quotes are pulled; a resting completion is left as is.
-            stale = [(oid, o) for oid, o in open_orders.items()
-                     if o.get("stage") != CR.STAGE_COMPLETE or stop
-                     or not CR.ON]
-            if mk.get("crypto_logged") != "book_stale":
-                mk["crypto_logged"] = "book_stale"
-                log("CRYPTO_QUOTE", slug=slug, block="book_stale",
-                    age_s=None if book is None else round(age, 1),
-                    pulled=len(stale))
-            self._cancel_legs(slug, stale)
-            self.b.save()
+            self._crypto_stale(slug, mk, "feed_stale:book", age,
+                               pull_all=stop or not CR.ON)
             return
         resting = [(o["side"], D(o["px"]),
                     D(o["qty"]) - D(o.get("filled") or "0"))
@@ -3655,6 +3674,13 @@ class Engine:
 
     def step_market(self, slug: str) -> None:
         mk = self.b.m(slug)
+        if CR.is_crypto_market(slug, mk):
+            # crypto reward lane: its own pass, decided BEFORE anything
+            # below runs, so a crypto market never reaches RN1 or the
+            # two-sided path and never makes a gateway read on this loop
+            # (its market data comes from the lane's feed thread).
+            self._crypto_pass(slug, mk)
+            return
         # 1. refresh own orders
         for oid, o in list(mk["orders"].items()):
             if not o.get("open"):
@@ -3721,8 +3747,7 @@ class Engine:
             return
         tick = spec["tick"]
         self._mark(slug, mk, bbo)
-        if reward_first_on() and mk.get("reward") and \
-                not CR.is_crypto_market(slug, mk):
+        if reward_first_on() and mk.get("reward"):
             # THEORETICAL accrual for the interval just ended (legs that
             # rested), then refresh the share estimate for the next one
             self._accrue(slug, mk)
@@ -3730,24 +3755,6 @@ class Engine:
                 self._reward_estimate(slug, mk, tick)
             except Exception as exc:                  # noqa: BLE001
                 log("reward_estimate_error", slug=slug, err=str(exc)[:120])
-        if CR.is_crypto_market(slug, mk):
-            # crypto reward lane: its own decisions and limits. Checked
-            # BEFORE RN1 and the two-sided path and it always returns, so a
-            # crypto market can never be accumulated, extended or taker-
-            # exited by them -- with the lane off its orders are cancelled.
-            t0 = time.monotonic()
-            try:
-                self._crypto_step(slug, mk, spec, bbo, tick)
-            except Exception as exc:                      # noqa: BLE001
-                self._crypto_fail_closed(slug, mk, exc)
-            # time this lane takes from the shared loop (heartbeat: crypto)
-            tm = self.__dict__.setdefault("_crypto_ms", {"n": 0, "sum": 0.0,
-                                                         "max": 0.0})
-            ms = (time.monotonic() - t0) * 1000
-            tm["n"] += 1
-            tm["sum"] += ms
-            tm["max"] = max(tm["max"], ms)
-            return
         if RN1.ON:
             # OWNER 2026-11-21: scaled-down RN1 behavioural replica. Replaces
             # the two-sided open/complete/recovery decisions for this market;
@@ -4900,7 +4907,8 @@ def main() -> int:
             if TAPE is not None:
                 venue.ws.tape_fn = TAPE.book
             venue.ws.set_slugs([s for s, mk in book.d["markets"].items()
-                                if not mk.get("done")])
+                                if not mk.get("done")
+                                and not CR.is_crypto_market(s, mk)])
             venue.ws.start()
             log("ws_enabled", jump_ticks=JUMP_TICKS, jump_pause_s=JUMP_PAUSE_S,
                 fresh_s=venue.ws.fresh_s)

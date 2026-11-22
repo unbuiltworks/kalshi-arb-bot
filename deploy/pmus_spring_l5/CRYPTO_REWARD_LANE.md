@@ -101,8 +101,16 @@ Set **only** `PMUS_CRYPTO_REWARDS=1`. Do not set `PMUS_CRYPTO_ARM`,
   Expected use is about 5 MB/day.
 - **Watchdog.** The registry document is unchanged and still lists every live order of the
   process; observation adds none and cancels none (tested with sports orders resting).
-- **Loop cost.** Crypto discovery runs every 5 min; the heartbeat's `crypto.step_ms`
-  shows what the lane takes from the shared loop, `crypto.tape` the recorder's counters.
+- **Cannot block the sports loop.** Every crypto gateway read (event list, programmes,
+  market spec, depth) runs on the lane's own daemon thread, `src/pmus_crypto_feed.py`.
+  The engine loop only reads that thread's cache — a lookup, never a request. A slow,
+  hung or failing gateway ages the crypto data (quotes are pulled once depth is older than
+  30 s; nothing is selected on stale discovery) and costs the sports pass nothing (tested
+  with a gateway that never answers). Crypto markets are also no longer subscribed on the
+  sports socket. Heartbeat: `crypto.feed` (thread alive, ages, errors), `crypto.step_ms`
+  (time the lane takes from the loop), `crypto.tape`.
+- What still shares the loop **when armed** (not in observation): the signed order-status,
+  cancel and place calls for crypto orders, through the same request budget as sports.
 - Each row holds the depth, the venue's traded count, what the rule alone would quote at
   the configured size, why not, and what the loss budget would actually allow.
   Replay: `python3 analysis/l5/rewards/crypto_policy_replay.py replay <tape file>`.
