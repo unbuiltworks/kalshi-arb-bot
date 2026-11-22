@@ -63,12 +63,31 @@ def test_both_resting_bids_count_against_the_market_cap_together():
     assert out["YES"] is None and out["why_YES"] == "per_market_cap"
 
 
-def test_committed_counts_fills_reserve_and_resting():
-    c = R.committed({"YES": 2, "NO": 0}, {"YES": "0.90", "NO": "0"},
+def test_committed_counts_the_reserve_of_a_resting_extension():
+    """YES 2 filled @0.44 + YES extension 2 resting @0.44: if it fills,
+    4 YES unpaired need 4 x (0.97 - 0.44) to complete -> $3.88."""
+    c = R.committed({"YES": 2, "NO": 0}, {"YES": "0.88", "NO": "0"},
                     [("YES", D("0.44"), D("2"), False)], pcap=D("0.97"))
-    # spend = 0.90 filled + 2 x (0.97-0.45) reserve + 0.88 resting extend
-    assert c["spend"] == D("0.90") + D("1.04") + D("0.88")
-    assert c["unmatched"] == D("0.90") + D("0.88")
+    assert c["spend"] == D("3.88")
+    assert c["unmatched"] == D("1.76")
+
+
+def test_committed_lighter_side_bid_is_not_double_counted():
+    """YES 2 filled @0.44 + NO 2 resting @0.52: worst case is the NO bid
+    NOT filling (reserve 2 x 0.53) or filling (paired) -- $1.94 either way."""
+    c = R.committed({"YES": 2, "NO": 0}, {"YES": "0.88", "NO": "0"},
+                    [("NO", D("0.52"), D("2"), True)], pcap=D("0.97"))
+    assert c["spend"] == D("1.94")
+    assert c["unmatched"] == D("0.88")
+
+
+def test_committed_flat_market_with_two_opening_bids():
+    c = R.committed({"YES": 0, "NO": 0}, {"YES": "0", "NO": "0"},
+                    [("YES", D("0.44"), D("2"), False),
+                     ("NO", D("0.52"), D("2"), False)], pcap=D("0.97"))
+    # worst spend: NO alone fills -> 1.04 + 2 x 0.45 = 1.94 (= both: 1.92)
+    assert c["spend"] == D("1.94")
+    assert c["unmatched"] == D("1.04")
 
 
 # ------------------------------------------------ engine: campaign caps
@@ -130,3 +149,55 @@ def test_within_caps_both_sides_quote(eng):
     sides = {o["side"] for o in v.orders.values() if o["open"]}
     assert sides == {"YES", "NO"}
     assert all(o["qty"] == D("2") for o in v.orders.values())
+
+
+# ------------- owner 2026-11-22: caps across >= 3 simultaneously tracked
+def _venue_commitments(v, e):
+    """Ground truth from the FAKE VENUE (not the book): filled cost +
+    completion reserve + every resting bid, per market, summed."""
+    tot_spend, tot_unm = D(0), D(0)
+    for slug, mk in e.b.d["markets"].items():
+        resting = [(o["side"], o["px"], o["qty"] - o["filled"],
+                    oid in {k for k, x in mk["orders"].items()
+                            if (x.get("stage") or "") == "two_sided_complete"})
+                   for oid, o in v.orders.items()
+                   if o["open"] and o["slug"] == slug]
+        c = R.committed(mk["pos"], mk["cost"], resting)
+        tot_spend += c["spend"]
+        tot_unm += c["unmatched"]
+    return tot_spend, tot_unm
+
+
+@pytest.mark.parametrize("cap_spend,cap_unm", [
+    ("16", "6"),      # the pilot's caps (uncapped this run reaches $7.68 unm)
+    ("5", "6"),       # spend binds
+    ("16", "3"),      # unmatched binds hard
+])
+def test_campaign_caps_hold_across_four_markets_resting_and_filled(
+        eng, monkeypatch, cap_spend, cap_unm):
+    e, v = eng
+    cs, cu = D(cap_spend), D(cap_unm)
+    monkeypatch.setattr(R, "TOTAL_SPEND_USD", cs)
+    monkeypatch.setattr(R, "TOTAL_UNMATCHED_USD", cu)
+    monkeypatch.setattr(M, "MAX_MARKETS", 4)
+    slugs = ["aec-a", "aec-b", "aec-c", "aec-d"]
+    for s in slugs:
+        e.b.m(s)
+    import itertools
+    for rnd in range(6):
+        # changing market order each round = market selection changing
+        order = list(itertools.permutations(slugs))[rnd * 5 % 24]
+        for s in order:
+            e.step_market(s)
+            spend, unm = _venue_commitments(v, e)
+            assert spend <= cs, (rnd, s, spend)
+            assert unm <= cu, (rnd, s, unm)
+        # fill every resting bid in two of the markets, then continue
+        for oid, o in v.orders.items():
+            if o["open"] and o["slug"] in order[:2]:
+                o.update(filled=o["qty"], open=False)
+    spend, unm = _venue_commitments(v, e)
+    assert spend <= cs and unm <= cu
+    held = sum(D(e.b.m(s)["pos"]["YES"]) + D(e.b.m(s)["pos"]["NO"])
+               for s in slugs)
+    assert held > 0                     # it did trade, inside the caps

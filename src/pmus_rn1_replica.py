@@ -239,31 +239,43 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
 
 def committed(pos: Mapping[str, Any], cost: Mapping[str, Any],
               resting: Any = (), pcap: Optional[D] = None) -> Dict[str, D]:
-    """One market's committed dollars: filled cost, the cost reserved to
-    complete its unpaired leg at PAIR_CAP, and its resting bids (each a
-    (side, px, qty_left, is_completion) tuple). `unmatched` is the unpaired
-    cost plus every resting NON-completion bid (it adds unpaired shares if it
-    fills alone)."""
+    """One market's WORST-CASE committed dollars, exactly: over every way its
+    resting bids could fill (none / YES side only / NO side only / both),
+    the cash it would have spent plus the cost reserved to complete what is
+    then unpaired at PAIR_CAP (`spend`), and the unpaired cost it would hold
+    (`unmatched`). `resting` holds (side, px, qty_left, is_completion)
+    tuples; the flag is accepted for callers but the worst case does not
+    depend on it (a resting bid fills or it does not).
+
+    LIVE-TEST 2026-11-22: the earlier formula left out the completion
+    reserve of a resting EXTENSION (YES 2 filled @0.44 + YES 2 resting @0.44:
+    true worst case $3.88, counted $2.82) and double-counted a lighter-side
+    opening bid that acts as the completion."""
     pc = PAIR_CAP if pcap is None else D(str(pcap))
-    y, n = D(str(pos.get("YES") or 0)), D(str(pos.get("NO") or 0))
-    spent = D(str(cost.get("YES") or 0)) + D(str(cost.get("NO") or 0))
-    unm = unmatched_usd(pos, cost)
-    reserve = ZERO
-    if y != n:
-        s = "YES" if y > n else "NO"
-        avg = D(str(cost.get(s) or 0)) / D(str(pos.get(s) or 1))
-        reserve = abs(y - n) * max(ZERO, pc - avg)
-    rest_spend = rest_unm = ZERO
-    for side, px, left, is_c in resting:
-        notional = D(str(px)) * D(str(left))
-        rest_spend += notional
-        if not is_c:
-            rest_unm += notional
-    # a resting completion is already inside the reserve: count the larger
-    rest_c = sum((D(str(px)) * D(str(left)) for _s, px, left, c in resting
-                  if c), ZERO)
-    return {"spend": spent + max(reserve, rest_c) + (rest_spend - rest_c),
-            "unmatched": unm + rest_unm}
+    base_q = {s: D(str(pos.get(s) or 0)) for s in ("YES", "NO")}
+    base_c = {s: D(str(cost.get(s) or 0)) for s in ("YES", "NO")}
+    add_q = {"YES": ZERO, "NO": ZERO}
+    add_c = {"YES": ZERO, "NO": ZERO}
+    for side, px, left, _is_c in resting:
+        sd = "YES" if str(side).upper() == "YES" else "NO"
+        add_q[sd] += D(str(left))
+        add_c[sd] += D(str(px)) * D(str(left))
+    worst_s = worst_u = ZERO
+    for fy in (False, True):
+        for fn in (False, True):
+            q = {"YES": base_q["YES"] + (add_q["YES"] if fy else ZERO),
+                 "NO": base_q["NO"] + (add_q["NO"] if fn else ZERO)}
+            c = {"YES": base_c["YES"] + (add_c["YES"] if fy else ZERO),
+                 "NO": base_c["NO"] + (add_c["NO"] if fn else ZERO)}
+            unm = unmatched_usd(q, c)
+            reserve = ZERO
+            if q["YES"] != q["NO"]:
+                h = "YES" if q["YES"] > q["NO"] else "NO"
+                avg = c[h] / q[h]
+                reserve = abs(q["YES"] - q["NO"]) * max(ZERO, pc - avg)
+            worst_s = max(worst_s, c["YES"] + c["NO"] + reserve)
+            worst_u = max(worst_u, unm)
+    return {"spend": worst_s, "unmatched": worst_u}
 
 
 def unmatched_usd(pos: Mapping[str, Any], cost: Mapping[str, Any]) -> D:
