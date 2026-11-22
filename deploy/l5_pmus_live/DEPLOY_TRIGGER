@@ -3707,3 +3707,7 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 # 2026-11-16T00:2xZ accounting rebase residual-zeroing-20261116
 # (owner-approved; zero the undated +19.96 residual so the daily
 # loss figure is computable). No order path/limit/halt/arming change.
+# 2026-11-22T18:26Z sports controller registered as a ledger owner for the
+# two cost attestations (issue #251). OFF until L5_SPORTS_FILLS_URL and
+# L5_SPORTS_ATTEST_FLOOR_UTC_DAY are both set by the owner; deploying this
+# changes no number. No order path/limit/halt/arming change.
