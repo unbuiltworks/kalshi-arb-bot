@@ -192,3 +192,30 @@ def test_blocked_openings_still_allow_completions(tmp_path, monkeypatch):
     e.step_market("aec-x")
     sides = {o["side"] for o in e.v.orders.values() if o["open"]}
     assert sides == {"NO"}                              # only the completion
+
+
+def test_execution_economics_report_tonights_two_pairs():
+    """The 2026-11-22 pilot, as booked: two completed pairs, no residual."""
+    m = {"aec-cfb-utsa-uab": mk(5, 5, "3.10", "1.75"),       # YES .62, NO .35
+         "aec-nba-lac-dal": mk(5, 5, "1.95", "2.85")}        # YES .39, NO .57
+    rows = [trade(s, 5) for s in m for _ in (0, 1)]
+    r = PP.meter(m, rows)
+    ex = r["execution"]
+    assert ex["fills"] == 4 and D(ex["contracts"]) == 20
+    assert D(ex["spent_usd"]) == D("9.65")
+    assert D(ex["completed_pairs"]) == 10
+    assert D(ex["avg_pair_cost"]) == D("0.965")
+    assert D(ex["locked_pair_edge_usd"]) == D("0.35")
+    assert D(ex["residual_cost_usd"]) == 0
+    a = r["by_market"]["aec-cfb-utsa-uab"]
+    assert D(a["avg_no"]) == D("0.35") and D(a["avg_yes"]) == D("0.62")
+    assert a["status"] == "open"                 # not realized yet
+
+
+def test_execution_economics_report_a_residual_leg():
+    m = {"aec-r": mk(7, 2, "3.15", "1.00")}                  # 5 YES unpaired
+    r = PP.meter(m, [trade("aec-r", 7), trade("aec-r", 2)])
+    a = r["by_market"]["aec-r"]
+    assert a["residual_side"] == "YES" and D(a["residual_qty"]) == 5
+    assert D(a["residual_cost"]) == D("2.25")
+    assert D(r["execution"]["residual_cost_usd"]) == D("2.25")

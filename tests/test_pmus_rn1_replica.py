@@ -73,8 +73,20 @@ def test_extend_accumulates_bounded_by_residual_cap():
     assert q["YES"] is None and q["why_YES"] == "residual_cap"
     # 5 YES @0.30 unpaired = $1.50: one more 5-lot fits ($2.95 < $3)
     q = qt("0.30", "0.32", pos={"YES": "5", "NO": "0"},
-           cost={"YES": "1.50", "NO": "0"}, residual_cap_usd="3")
+           cost={"YES": "1.50", "NO": "0"}, residual_cap_usd="3",
+           per_market_usd="20")          # isolate the residual-cap rule
     assert q["YES"]["role"] == "extend" and q["YES"]["px"] == D("0.29")
+
+
+def test_extend_must_leave_room_to_complete_within_the_market_cap():
+    """Owner 2026-11-22: commitments count together. 10 YES @0.295 would
+    need 10 x (0.97 - 0.295) = $6.75 to complete; with $2.95 spent that is
+    $9.70 > the $8 market cap, so the extension is refused."""
+    q = qt("0.30", "0.32", pos={"YES": "5", "NO": "0"},
+           cost={"YES": "1.50", "NO": "0"}, residual_cap_usd="3",
+           per_market_usd="8")
+    assert q["YES"] is None and q["why_YES"] == "per_market_cap"
+    assert q["NO"]["role"] == "complete"         # completion still bid
 
 
 def test_extend_does_not_chase_the_price_up():
@@ -90,7 +102,8 @@ def test_replenish_waits_for_the_cooldown_after_a_fill():
     assert q["YES"] is None and q["why_YES"] == "refill_cooldown"
     assert q["NO"] is not None                   # completion never waits
     q = qt("0.30", "0.32", pos={"YES": "5", "NO": "0"},
-           cost={"YES": "1.50", "NO": "0"}, last={"YES": 900.0}, now=1000.0)
+           cost={"YES": "1.50", "NO": "0"}, last={"YES": 900.0}, now=1000.0,
+           per_market_usd="20")
     assert q["YES"] is not None
 
 

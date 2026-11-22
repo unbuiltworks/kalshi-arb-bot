@@ -123,8 +123,23 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
                     for o in (mk.get("orders") or {}).values()), D(0))
     v = v or {"qty": D(0), "trades": 0, "qty_unreadable": 0,
               "charged": D(0), "credited": D(0), "resolved": False}
+    matched = min(y, n)
+    heavy = "YES" if y > n else "NO" if n > y else None
+    res_q = abs(y - n)
+    res_cost = (cy * res_q / y if heavy == "YES" else
+                cn * res_q / n if heavy == "NO" else D(0))
     out: Dict[str, Any] = {
         "yes": str(y), "no": str(n), "cost": str(cy + cn),
+        # execution economics (owner 2026-11-22): acquisition cost, pairs,
+        # residual -- reported whatever the settlement status
+        "avg_yes": str(cy / y) if y else None,
+        "avg_no": str(cn / n) if n else None,
+        "completed_pairs": str(matched),
+        "pair_cost": str(cy / y + cn / n) if matched > 0 else None,
+        "residual_side": heavy, "residual_qty": str(res_q),
+        "residual_cost": str(res_cost),
+        "fills": sum(1 for o in (mk.get("orders") or {}).values()
+                     if D(str(o.get("filled") or "0")) > 0),
         "book_filled": str(book_qty), "venue_traded": str(v["qty"]),
         "fees_charged": str(v["charged"]),
         "rebates_credited": str(v["credited"])}
@@ -144,7 +159,6 @@ def market_result(mk: Mapping[str, Any], v: Optional[Mapping[str, Any]]
         return out
     px = D(str(px))
     gross = y * px + n * (1 - px) - cy - cn
-    matched = min(y, n)
     pair_edge = matched * (1 - cy / y - cn / n) if matched > 0 else D(0)
     out.update(status="settled", settle_px=str(px),
                matched=str(matched), gross=str(gross),
@@ -164,6 +178,19 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
     status: Dict[str, int] = {}
     worst = None
     open_worst = D(0)
+    ex = {"fills": 0, "contracts": D(0), "spent": D(0), "pairs": D(0),
+          "pair_cost_sum": D(0), "residual_qty": D(0), "residual_cost": D(0)}
+    for r in per.values():
+        if r["status"] == "fills_unconfirmed":
+            continue
+        ex["fills"] += int(r["fills"])
+        ex["contracts"] += D(r["yes"]) + D(r["no"])
+        ex["spent"] += D(r["cost"])
+        ex["pairs"] += D(r["completed_pairs"])
+        if r["pair_cost"] is not None:
+            ex["pair_cost_sum"] += D(r["pair_cost"]) * D(r["completed_pairs"])
+        ex["residual_qty"] += D(r["residual_qty"])
+        ex["residual_cost"] += D(r["residual_cost"])
     for s, r in per.items():
         status[r["status"]] = status.get(r["status"], 0) + 1
         if "worst_case_net" in r:
@@ -178,6 +205,17 @@ def meter(markets: Mapping[str, Mapping[str, Any]],
             "settled_markets": status.get("settled", 0),
             **{f"settled_{k}_usd": str(v) for k, v in tot.items()},
             "open_worst_case_usd": str(open_worst),
+            "execution": {
+                "fills": ex["fills"], "contracts": str(ex["contracts"]),
+                "spent_usd": str(ex["spent"]),
+                "completed_pairs": str(ex["pairs"]),
+                "avg_pair_cost": (str(ex["pair_cost_sum"] / ex["pairs"])
+                                  if ex["pairs"] else None),
+                "locked_pair_edge_usd": str(ex["pairs"] - ex["pair_cost_sum"]),
+                "residual_contracts": str(ex["residual_qty"]),
+                "residual_cost_usd": str(ex["residual_cost"]),
+                "label": "venue-reconciled fills only; locked edge is NOT "
+                         "realized until settlement"},
             "worst_market": ({"slug": worst, "net": per[worst]["net"]}
                              if worst else None),
             "unconfirmed": sorted(s for s, r in per.items()

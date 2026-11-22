@@ -922,11 +922,24 @@ class Book:
             except Exception:
                 pass
 
+    _save_lock = threading.RLock()
+
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.d, default=str))
-        tmp.replace(self.path)
+        """Atomic write. Serialised: the SIGTERM cancel thread and the main
+        loop may both save; a dict mutated mid-dump is retried."""
+        with self._save_lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            for attempt in range(5):
+                try:
+                    text = json.dumps(self.d, default=str)
+                    break
+                except RuntimeError:                  # changed during dump
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.01)
+            tmp.write_text(text)
+            tmp.replace(self.path)
 
     def m(self, slug: str) -> Dict[str, Any]:
         return self.d["markets"].setdefault(slug, {"orders": {}, "pos": {
@@ -1207,6 +1220,9 @@ class Engine:
         self._acct_cache: Optional[Dict[str, Any]] = None
         self._acct_fail = 0
         self._stale_try_at = -1e9
+        self._cancel_all_lock = threading.Lock()
+        self.orphan_stale = 0
+        self._shutdown_thread: Optional[threading.Thread] = None
         self._last_reward = time.monotonic() - REWARD_CHECK_S + 120  # first ~2min after boot
         self.stop = False
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
@@ -2200,15 +2216,33 @@ class Engine:
         self._acct_cache = acc
         return acc
 
+    def on_sigterm(self) -> None:
+        """LIVE 2026-11-22T01:31Z: a SIGTERM arriving while the main loop
+        was inside a long pass (the hourly account audit) never reached
+        cancel_all_own before the 30 s drain ended, and an own completion
+        bid kept resting after the restart. Now the signal stops new
+        placements at once and cancels every own open order in its own
+        thread; the main loop's exit cancel runs again (idempotent)."""
+        self.stop = True
+        if self._shutdown_thread is None:
+            self._shutdown_thread = threading.Thread(
+                target=self.cancel_all_own, args=("sigterm_immediate",),
+                name="sigterm-cancel", daemon=True)
+            self._shutdown_thread.start()
+
     def cancel_all_own(self, why: str) -> None:
         """Cancel every own open order by exact id. Each order gets up to
         CANCEL_ATTEMPTS tries with backoff (429s at shutdown left orders
         resting until the watchdog's age limit), inside CANCEL_BUDGET_S.
         No bulk per-market cancel: it would also cancel the owner's manual
         orders in that market."""
+        with self._cancel_all_lock:
+            self._cancel_all_own(why)
+
+    def _cancel_all_own(self, why: str) -> None:
         t0 = time.monotonic()
         left = []
-        for slug, mk in self.b.d["markets"].items():
+        for slug, mk in list(self.b.d["markets"].items()):
             for oid, o in list(mk["orders"].items()):
                 if not o.get("open"):
                     continue
@@ -2509,6 +2543,10 @@ class Engine:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> None:
+        if self.stop:
+            log("place_refused_shutdown", slug=slug, side=side, px=px,
+                qty=qty, stage=stage)
+            return
         if is_completion_stage(stage) and not self.account_fresh():
             why = self.stale_completion_block(slug, side, qty)
             if why:
@@ -2552,6 +2590,53 @@ class Engine:
             order_id=oid)
 
     # ------------------------------------------------ RN1 replica (default off)
+    def rn1_campaign_exposure(self, exclude: Optional[str] = None
+                              ) -> Dict[str, D]:
+        """Committed spend / unmatched across RN1 markets not yet settled:
+        filled cost + completion reserve + resting bids (RN1.committed)."""
+        from src import pmus_pilot_pnl as PP
+        tot = {"spend": D(0), "unmatched": D(0)}
+        markets = self.b.d.get("markets") or {}
+        for s_ in PP.pilot_slugs(markets, PILOT_SINCE):
+            mk_ = markets[s_]
+            if s_ == exclude or mk_.get("settle_px") is not None:
+                continue
+            resting = [(o["side"], o["px"],
+                        D(o["qty"]) - D(o.get("filled") or "0"),
+                        is_completion_stage(o.get("stage")))
+                       for o in (mk_.get("orders") or {}).values()
+                       if o.get("open")]
+            c = RN1.committed(mk_["pos"], mk_["cost"], resting)
+            tot["spend"] += c["spend"]
+            tot["unmatched"] += c["unmatched"]
+        return tot
+
+    def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
+                          want: Dict[str, Any], q: Dict[str, Any]) -> None:
+        """Owner 2026-11-22: $16 total spend and $6 unmatched across the
+        campaign, counting filled inventory AND resting commitments. Drops
+        opening/extension targets (dearest first) until this market's plan
+        fits; completions are never dropped (they reduce unmatched and their
+        cost is already reserved)."""
+        other = self.rn1_campaign_exposure(exclude=slug)
+        while True:
+            resting = [(sd, t["px"], t["qty"], t["role"] == "complete")
+                       for sd, t in want.items() if t is not None]
+            c = RN1.committed(mk["pos"], mk["cost"], resting)
+            over = ("total_spend_cap" if other["spend"] + c["spend"] >
+                    RN1.TOTAL_SPEND_USD else
+                    "total_unmatched_cap" if other["unmatched"] +
+                    c["unmatched"] > RN1.TOTAL_UNMATCHED_USD else None)
+            if over is None:
+                return
+            opt = [sd for sd, t in want.items()
+                   if t is not None and t["role"] != "complete"]
+            if not opt:
+                return
+            drop = max(opt, key=lambda sd: want[sd]["px"] * want[sd]["qty"])
+            want[drop] = None
+            q["why_" + drop] = over
+
     def _rn1_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                   bbo: Mapping, tick: D) -> None:
         """One RN1-replica pass for one market: compute RN1's resting maker
@@ -2624,6 +2709,7 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             want[side] = tg
+        self.rn1_campaign_caps(slug, mk, want, q)
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
@@ -3370,9 +3456,9 @@ class Engine:
         # the venue's PUBLIC final settlement price per market (bounded)
         looked = 0
         from src import pmus_settlement_public_px as SP
-        for s_, mk_ in mk_all.items():
-            if looked >= SETTLE_LOOKUPS_PER_AUDIT:
-                break
+        for s_, mk_ in list(mk_all.items()):
+            if looked >= SETTLE_LOOKUPS_PER_AUDIT or self.stop:
+                break                       # shutdown: cancel first
             if mk_.get("settle_px") is not None or not mk_.get("done") or (
                     D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
                 continue
@@ -3493,6 +3579,24 @@ class Engine:
                 continue                      # a human's order: never ours
             mk = self.b.m(slug)
             rec = mk["orders"].get(oid) or {}
+            if rec:
+                # LIVE 2026-11-22T01:26-01:31Z: five "orphans" were orders
+                # the book had ALREADY closed on the venue's own exact
+                # status (cancelled or filled); the open-orders list used
+                # here can be up to 30 s old. Confirm with the exact order
+                # status before adopting: a terminal order is recorded
+                # (any fill included) and is not an orphan.
+                try:
+                    st = self.v.status(oid)
+                except Exception as exc:              # noqa: BLE001
+                    st = None
+                    log("orphan_confirm_error", slug=slug, order_id=oid,
+                        err=str(exc)[:160])
+                if st is not None and not st["open"]:
+                    self._record_fill(slug, rec.get("side") or "YES", oid, st)
+                    self.b.save()
+                    self.orphan_stale += 1
+                    continue
             side = rec.get("side") or ("NO" if "NO" in str(
                 o.get("outcomeSide") or "").upper() else "YES")
             mk["orders"][oid] = {**rec, "side": side,
@@ -3540,6 +3644,7 @@ class Engine:
             self.guard.track(self.active())
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
+            "orphan_stale_snapshot": self.orphan_stale,
             "jump_pauses": self.jump_pauses}
         if self.guard is not None:
             extra["intl_guard"] = self.guard.status()
@@ -3572,7 +3677,7 @@ class Engine:
             reward_label="program rewards THEORETICAL; not in P&L")
 
     def run(self) -> int:
-        signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
+        signal.signal(signal.SIGTERM, lambda *_: self.on_sigterm())
         self.require_fresh_account = True     # no new exposure on stale state
         self.mark_recovery_start()
         seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))

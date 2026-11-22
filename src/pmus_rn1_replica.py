@@ -69,7 +69,7 @@ def _i(name: str, default: str) -> int:
 
 
 ON = os.getenv("PMUS_TWO_SIDED_RN1", "0").strip() == "1"
-QTY = _d("PMUS_RN1_QTY", "5")
+QTY = _d("PMUS_RN1_QTY", "2")            # owner 2026-11-22: frequency before size
 DEPTH_TICKS = _i("PMUS_RN1_DEPTH_TICKS", "1")            # ESTIMATED
 PX_MIN = _d("PMUS_RN1_PX_MIN", "0.20")
 PX_MAX = _d("PMUS_RN1_PX_MAX", "0.92")
@@ -79,6 +79,12 @@ PER_MARKET_USD = _d("PMUS_RN1_PER_MARKET_USD", "8")
 EXTEND_MAX_UP = _d("PMUS_RN1_EXTEND_MAX_UP", "0.02")
 REFILL_COOLDOWN_S = _f("PMUS_RN1_REFILL_COOLDOWN_S", "60")
 REPRICE_TICKS = _i("PMUS_RN1_REPRICE_TICKS", "1")
+# CAMPAIGN-WIDE bounds across every RN1 market (owner 2026-11-22: they were
+# only implied by MAX_MARKETS x per-market caps, but lone-leg markets can
+# exceed MAX_MARKETS). Committed = filled cost + resting orders + the cost
+# reserved to complete every unpaired leg at PAIR_CAP.
+TOTAL_SPEND_USD = _d("PMUS_RN1_TOTAL_SPEND_USD", "16")
+TOTAL_UNMATCHED_USD = _d("PMUS_RN1_TOTAL_UNMATCHED_USD", "6")
 # Maker fee per contract = rate * p * (1 - p). PMUS order previews show
 # makerCommissionsBasisPoints=0 (2026-11-21), so the default is 0; a nonzero
 # schedule is charged against PAIR_CAP for openings AND completions.
@@ -94,7 +100,9 @@ def cfg() -> Dict[str, Any]:
             "extend_max_up": str(EXTEND_MAX_UP),
             "refill_cooldown_s": REFILL_COOLDOWN_S,
             "reprice_ticks": REPRICE_TICKS,
-            "maker_fee_rate": str(MAKER_FEE_RATE)}
+            "maker_fee_rate": str(MAKER_FEE_RATE),
+            "total_spend_usd": str(TOTAL_SPEND_USD),
+            "total_unmatched_usd": str(TOTAL_UNMATCHED_USD)}
 
 
 def _floor(x: D, tick: D) -> D:
@@ -184,9 +192,17 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
         if px >= touch + t:
             out["why_" + s] = "would_cross"
             continue
-        if spent + px * qty > mcap:
-            out["why_" + s] = "per_market_cap"
-            continue
+        if role != "complete":
+            # an opening/extension must leave room to COMPLETE what it
+            # adds: filled cost + this bid + the reserve to pair every
+            # unpaired share at PAIR_CAP. A completion is never refused by
+            # the market cap -- it reduces risk and its cost was reserved.
+            q_after = p[s] + qty - p[o]
+            avg_after = (cs[s] + px * qty) / (p[s] + qty)
+            reserve = max(ZERO, q_after) * max(ZERO, pcap - avg_after)
+            if spent + px * qty + reserve > mcap:
+                out["why_" + s] = "per_market_cap"
+                continue
         out[s] = {"px": px, "qty": qty, "role": role, "why": why}
     # SIMULTANEOUS QUOTES (owner 2026-11-21): when neither side is a
     # completion, both resting bids can fill together, so their pair --
@@ -206,7 +222,48 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                 side = "YES" if dear is y else "NO"
                 out[side] = None
                 out["why_" + side] = "pair_cap"
+    # PER-MARKET cap on BOTH resting bids together (owner 2026-11-22:
+    # filled inventory and resting commitments count together -- both can
+    # fill). A completion keeps priority; the other side is dropped.
+    live = [sd for sd in ("YES", "NO") if out[sd]]
+    if len(live) == 2 and spent + sum(out[sd]["px"] * out[sd]["qty"]
+                                      for sd in live) > mcap:
+        drop = next((sd for sd in live if out[sd]["role"] != "complete"),
+                    None)
+        if drop is None or all(out[sd]["role"] != "complete" for sd in live):
+            drop = max(live, key=lambda sd: out[sd]["px"])
+        out[drop] = None
+        out["why_" + drop] = "per_market_cap"
     return out
+
+
+def committed(pos: Mapping[str, Any], cost: Mapping[str, Any],
+              resting: Any = (), pcap: Optional[D] = None) -> Dict[str, D]:
+    """One market's committed dollars: filled cost, the cost reserved to
+    complete its unpaired leg at PAIR_CAP, and its resting bids (each a
+    (side, px, qty_left, is_completion) tuple). `unmatched` is the unpaired
+    cost plus every resting NON-completion bid (it adds unpaired shares if it
+    fills alone)."""
+    pc = PAIR_CAP if pcap is None else D(str(pcap))
+    y, n = D(str(pos.get("YES") or 0)), D(str(pos.get("NO") or 0))
+    spent = D(str(cost.get("YES") or 0)) + D(str(cost.get("NO") or 0))
+    unm = unmatched_usd(pos, cost)
+    reserve = ZERO
+    if y != n:
+        s = "YES" if y > n else "NO"
+        avg = D(str(cost.get(s) or 0)) / D(str(pos.get(s) or 1))
+        reserve = abs(y - n) * max(ZERO, pc - avg)
+    rest_spend = rest_unm = ZERO
+    for side, px, left, is_c in resting:
+        notional = D(str(px)) * D(str(left))
+        rest_spend += notional
+        if not is_c:
+            rest_unm += notional
+    # a resting completion is already inside the reserve: count the larger
+    rest_c = sum((D(str(px)) * D(str(left)) for _s, px, left, c in resting
+                  if c), ZERO)
+    return {"spend": spent + max(reserve, rest_c) + (rest_spend - rest_c),
+            "unmatched": unm + rest_unm}
 
 
 def unmatched_usd(pos: Mapping[str, Any], cost: Mapping[str, Any]) -> D:
