@@ -364,10 +364,105 @@ SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 
 
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
+# OWNER 2026-11-22: "any future unlock must be restricted to the exact
+# approved time window, with automatic relocking at the end." The lock
+# variable is the ONLY unlock, and in production it is never "0":
+#
+#   1                         locked (the resting state)
+#   window:<start>/<end>      ISO-8601 UTC instants. Locked before <start>,
+#                             open in [start, end), locked again from <end>
+#                             with NO restart and no human: placements are
+#                             refused and the bot's own resting orders are
+#                             cancelled by exact id.
+#   unset / 0                 legacy "unlocked" (tests, local runs)
+#   anything else             LOCKED (fail closed: a typo never unlocks)
+#
+# A window longer than WINDOW_MAX_S, reversed, or unparseable is locked.
+# WINDOW_COMPLETE_GRACE_S (default 0 = everything stops at <end>): for that
+# long after <end>, MAKER completion bids of already-held unpaired legs may
+# still rest -- they only reduce exposure; openings/extensions are refused
+# from <end> regardless. The window start is also the campaign marker: the
+# pilot meter and campaign caps never count markets opened before it, so a
+# stale PMUS_RN1_PILOT_SINCE cannot leak an old campaign into a new one.
+WINDOW_MAX_S = float(os.getenv("PMUS_TWO_SIDED_WINDOW_MAX_S", "21600"))
+WINDOW_COMPLETE_GRACE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S", "0"))
 
 
-def submission_locked() -> bool:
-    return (os.getenv(SUBMISSION_LOCK_ENV) or "").strip() == "1"
+def _utc_instant(raw: str) -> float:
+    from datetime import datetime
+    d = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    if d.tzinfo is None:
+        raise ValueError("no timezone")
+    return d.timestamp()
+
+
+def _iso(ts: float) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(ts, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+def lock_window(raw: Optional[str] = None) -> Optional[tuple]:
+    """(start, end) epoch seconds of a VALID window value, else None."""
+    raw = (os.getenv(SUBMISSION_LOCK_ENV) or "") if raw is None else raw
+    raw = raw.strip()
+    if not raw.lower().startswith("window:"):
+        return None
+    try:
+        a, b = raw[len("window:"):].split("/")
+        start, end = _utc_instant(a), _utc_instant(b)
+    except Exception:                                     # noqa: BLE001
+        return None
+    if not (0 < end - start <= WINDOW_MAX_S):
+        return None
+    return start, end
+
+
+def lock_state(now: Optional[float] = None) -> Dict[str, Any]:
+    """`new` = openings/extensions (and everything else that adds risk) are
+    refused; `all` = maker completions are refused too. `why` names it."""
+    raw = (os.getenv(SUBMISSION_LOCK_ENV) or "").strip()
+    if raw in ("", "0"):
+        return {"new": False, "all": False, "why": None}
+    if raw == "1":
+        return {"new": True, "all": True, "why": "locked"}
+    w = lock_window(raw)
+    if w is None:
+        return {"new": True, "all": True,
+                "why": "window_invalid" if raw.lower().startswith("window:")
+                else "lock_value_unrecognized"}
+    now = time.time() if now is None else now
+    start, end = w
+    win = {"start": start, "end": end}
+    if now < start:
+        return {"new": True, "all": True, "why": "window_not_started", **win}
+    if now < end:
+        return {"new": False, "all": False, "why": None, **win}
+    if now < end + max(0.0, WINDOW_COMPLETE_GRACE_S):
+        return {"new": True, "all": False,
+                "why": "window_completions_only", **win}
+    return {"new": True, "all": True, "why": "window_ended", **win}
+
+
+def submission_locked(stage: Optional[str] = None,
+                      post_only: bool = True) -> bool:
+    """True = this order may not be sent. With no stage: is NEW exposure
+    locked. A maker completion is refused only when everything is."""
+    st = lock_state()
+    if stage is not None and post_only and stage == "two_sided_complete":
+        return st["all"]
+    return st["new"]
+
+
+def fully_locked() -> bool:
+    return lock_state()["all"]
+
+
+_w = lock_window()
+if _w is not None and (PILOT_SINCE is None or PILOT_SINCE < _w[0]):
+    PILOT_SINCE = _w[0]            # the window start is the campaign marker
+del _w
 
 
 # ADVERSE-SELECTION-ADJUSTED OPENING CAP (2026-11-18, default OFF).
@@ -2230,21 +2325,55 @@ class Engine:
                 name="sigterm-cancel", daemon=True)
             self._shutdown_thread.start()
 
-    def cancel_all_own(self, why: str) -> None:
+    def cancel_all_own(self, why: str, keep_completions: bool = False
+                       ) -> None:
         """Cancel every own open order by exact id. Each order gets up to
         CANCEL_ATTEMPTS tries with backoff (429s at shutdown left orders
         resting until the watchdog's age limit), inside CANCEL_BUDGET_S.
         No bulk per-market cancel: it would also cancel the owner's manual
-        orders in that market."""
+        orders in that market. `keep_completions` leaves maker completion
+        bids resting (the window's completions-only phase)."""
         with self._cancel_all_lock:
-            self._cancel_all_own(why)
+            self._cancel_all_own(why, keep_completions)
 
-    def _cancel_all_own(self, why: str) -> None:
+    def open_own_orders(self, new_exposure_only: bool = False) -> int:
+        return sum(1 for mk in self.b.d["markets"].values()
+                   for o in (mk.get("orders") or {}).values()
+                   if o.get("open") and not (
+                       new_exposure_only and
+                       o.get("stage") == "two_sided_complete"))
+
+    def enforce_lock(self) -> Optional[str]:
+        """The lock acts on what is ALREADY resting, not only on new
+        placements: when the window ends (or the lock is on) every own
+        order the lock forbids is cancelled by exact id, each pass until
+        none is left. Logs each change of lock state once."""
+        st = lock_state()
+        if st["why"] != getattr(self, "_lock_why", "?"):
+            self._lock_why = st["why"]
+            log("SUBMISSION_LOCK_STATE", new_exposure_locked=st["new"],
+                completions_locked=st["all"], why=st["why"],
+                window=({"start": _iso(st["start"]), "end": _iso(st["end"]),
+                         "complete_grace_s": WINDOW_COMPLETE_GRACE_S}
+                        if "start" in st else None),
+                campaign_since=PILOT_SINCE)
+        if st["all"] and self.open_own_orders():
+            self.cancel_all_own("submission_lock:" + str(st["why"]))
+        elif st["new"] and self.open_own_orders(new_exposure_only=True):
+            self.cancel_all_own("submission_lock:" + str(st["why"]),
+                                keep_completions=True)
+        return st["why"]
+
+    def _cancel_all_own(self, why: str, keep_completions: bool = False
+                        ) -> None:
         t0 = time.monotonic()
         left = []
         for slug, mk in list(self.b.d["markets"].items()):
             for oid, o in list(mk["orders"].items()):
                 if not o.get("open"):
+                    continue
+                if keep_completions and \
+                        o.get("stage") == "two_sided_complete":
                     continue
                 err = None
                 for attempt in range(max(1, CANCEL_ATTEMPTS)):
@@ -2570,9 +2699,9 @@ class Engine:
                 log("place_refused_account_risk", slug=slug, side=side,
                     px=px, qty=qty, stage=stage, reason=why)
                 return
-        if submission_locked():
+        if submission_locked(stage, post_only):
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
-                qty=qty, stage=stage)
+                qty=qty, stage=stage, why=lock_state()["why"])
             return
         if self.shared_halt() == "HALT":
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
@@ -2681,6 +2810,8 @@ class Engine:
         new_block = None
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             new_block = "not_enabled"
+        elif submission_locked():
+            new_block = "submission_lock:" + str(lock_state()["why"])
         elif self.b.total_unmatched() >= TOTAL_CAP:
             new_block = "total_cap"
         elif self.daily_stopped():
@@ -3424,6 +3555,12 @@ class Engine:
             return None
         if self.pilot_loss_stopped():
             return "pilot_loss_stop"
+        # every step, from the book: the hourly audit is too slow to be the
+        # only at-risk check inside a 60-90 minute window
+        from src import pmus_pilot_pnl as PP
+        if PP.book_worst_case(self.b.d.get("markets") or {}, PILOT_SINCE) \
+                <= -PILOT_LOSS_USD:
+            return "pilot_loss_at_risk_book"
         r = getattr(self, "_pilot", None)
         at = getattr(self, "_pilot_at", None)
         if r is None or at is None or \
@@ -3719,6 +3856,11 @@ class Engine:
         _bud = getattr(getattr(self.v, "t", None), "budget", None)
         if _bud is not None:
             extra = dict(extra, venue_requests=_bud.report())
+        _ls = lock_state()
+        extra = dict(extra, submission_lock={
+            "new_exposure_locked": _ls["new"], "completions_locked":
+            _ls["all"], "why": _ls["why"],
+            "window_end": _iso(_ls["end"]) if "end" in _ls else None})
         log("heartbeat", **extra, active=self.active(),
             unmatched_cost_total=self.b.total_unmatched(),
             recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
@@ -3796,6 +3938,7 @@ class Engine:
                     self.cancel_all_own("disabled")
                     time.sleep(30)
                     continue
+                self.enforce_lock()
                 if time.monotonic() - last_sel > 20:
                     if self.full() and LATE_CUTOFF:
                         try:                       # keep game clocks fresh
@@ -3910,7 +4053,7 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             # True ONLY under the lane's own independent lock (above); the
             # shared halt is deliberately NOT counted, since a reset that
             # proved "disabled" via the very latch it clears proves nothing
-            "submission_disabled": submission_locked(),
+            "submission_disabled": fully_locked(),
             "orders": rows, "as_of_utc": now_iso(),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "

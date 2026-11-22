@@ -280,3 +280,4 @@
 2026-11-15T19:30Z market+execution tape (recording only) for out-of-sample entry testing.
 2026-11-15T20:50Z market-closed path confirms cancels before closing (live latch 20:03:39Z on DR6AT7TG14EX).
 2026-11-15T21:20Z pre-game quoting mode (default off): select unstarted games, pull openings 5 min before start.
+2026-11-22T04:15Z submission window lock (window:<start>/<end>, auto-relock, fail-closed), window start = campaign marker, every-step book loss check.
