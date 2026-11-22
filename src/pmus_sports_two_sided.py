@@ -375,6 +375,37 @@ SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 MIN_TOUCH_QTY = _env_d("PMUS_TWO_SIDED_MIN_TOUCH_QTY", "10")
 DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
 
+# OWNER 2026-11-22 "The bot must reliably stop and cancel orders without
+# depending on Claude's session." LIVE that morning: a reconciliation
+# mismatch at 14:28:33Z was a stop condition, and the relock issued from a
+# coding session reached production 45 minutes late. The SAFETY LATCH is the
+# bot stopping ITSELF: when one of the conditions below holds, it records a
+# latch in its own durable book, cancels every own order by exact id and
+# refuses every placement (completions included). The latch survives
+# restarts and variable changes. It is cleared ONLY by the owner setting
+# PMUS_TWO_SIDED_SAFETY_LATCH_ACK to that latch's id -- an acknowledgement of
+# one specific stop, which can never pre-clear a future one.
+#
+#   position_mismatch       the venue's position in a market differs from
+#                           the book for longer than MISMATCH_GRACE_S, after
+#                           the bot has re-read its own orders' fills and a
+#                           complete venue positions walk confirms it
+#   position_unverifiable   the difference persists 3x that long and no
+#                           complete walk could be made (fail closed)
+#   order_qty_exceeds_clip  an own resting order larger than the RN1 clip
+#   campaign_cap_breached   FILLED spend or FILLED unmatched cost above the
+#   market_cap_breached     campaign / per-market caps (the caps are applied
+#                           before placing, so this means they failed)
+#   loop_errors             LOOP_ERROR_LATCH_N consecutive failed loop passes
+SAFETY_LATCH_ON = os.getenv("PMUS_TWO_SIDED_SAFETY_LATCH",
+                            "1").strip() != "0"
+SAFETY_LATCH_ACK_ENV = "PMUS_TWO_SIDED_SAFETY_LATCH_ACK"
+MISMATCH_GRACE_S = float(os.getenv("PMUS_TWO_SIDED_MISMATCH_GRACE_S", "45"))
+MISMATCH_CONFIRMED_TTL_S = float(os.getenv(
+    "PMUS_TWO_SIDED_MISMATCH_CONFIRMED_TTL_S", "600"))
+LOOP_ERROR_LATCH_N = int(os.getenv("PMUS_TWO_SIDED_LOOP_ERROR_LATCH_N", "10"))
+_CAP_TOL = D("0.01")
+
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
 # OWNER 2026-11-22: "any future unlock must be restricted to the exact
 # approved time window, with automatic relocking at the end." The lock
@@ -475,6 +506,25 @@ _w = lock_window()
 if _w is not None and (PILOT_SINCE is None or PILOT_SINCE < _w[0]):
     PILOT_SINCE = _w[0]            # the window start is the campaign marker
 del _w
+
+
+def adopt_campaign_marker(book: Any) -> Optional[float]:
+    """Keep the campaign marker across a relock. LIVE 2026-11-22: after the
+    14:05Z window the lock went back to `1`, the marker fell back to the
+    stale PMUS_RN1_PILOT_SINCE (01:15Z) and the meter reported two campaigns
+    as one (+0.63 = last night's +0.35 and today's +0.28). The latest window
+    start is stored in the bot's book and stays the marker until a later
+    window (or a later PMUS_RN1_PILOT_SINCE) replaces it. Returns the
+    marker in force for this book."""
+    w = lock_window()
+    stored = book.d.get("campaign_since")
+    if w is not None and (stored is None or float(stored) < w[0]):
+        book.d["campaign_since"] = stored = w[0]
+        book.save()
+    if stored is not None and (PILOT_SINCE is None or
+                               PILOT_SINCE < float(stored)):
+        return float(stored)
+    return PILOT_SINCE
 
 
 # ADVERSE-SELECTION-ADJUSTED OPENING CAP (2026-11-18, default OFF).
@@ -974,7 +1024,10 @@ def safeguards_cfg() -> Dict[str, Any]:
             "esports_leagues": sorted(ESPORTS_LEAGUES),
             "intl_name_match": list(XV.NAME_MATCH_LEAGUES),
             "intl_three_way": list(XV.THREE_WAY_LEAGUES),
-            "one_market_per_game": True}
+            "one_market_per_game": True,
+            "safety_latch": {"on": SAFETY_LATCH_ON,
+                             "mismatch_grace_s": MISMATCH_GRACE_S,
+                             "loop_error_n": LOOP_ERROR_LATCH_N}}
 
 
 def is_esports(slug: str, state: Optional[Mapping[str, Any]] = None) -> bool:
@@ -1455,6 +1508,8 @@ class Venue:
 class Engine:
     def __init__(self, venue: Venue, book: Book):
         self.v, self.b = venue, book
+        #: campaign marker in force (window start kept across a relock)
+        self.since = adopt_campaign_marker(book)
         # account freshness (new exposure needs a fresh read; set by run())
         self.require_fresh_account = False
         self._acct_ok_at: Optional[float] = None
@@ -2489,11 +2544,162 @@ class Engine:
                        new_exposure_only and
                        o.get("stage") == "two_sided_complete"))
 
+    # ------------------------------------------------ autonomous safety latch
+    def safety_latch(self) -> Optional[Dict[str, Any]]:
+        """The active latch, or None. An acknowledgement that names THIS
+        latch's id clears it (logged); any other value is ignored."""
+        cur = self.b.d.get("safety_latch")
+        if not cur:
+            return None
+        ack = (os.getenv(SAFETY_LATCH_ACK_ENV) or "").strip()
+        if ack and ack == str(cur.get("id")):
+            self.b.d.setdefault("safety_latch_history", []).append(
+                dict(cur, cleared_at=now_iso()))
+            self.b.d["safety_latch"] = None
+            self.b.save()
+            log("SAFETY_LATCH_CLEARED", id=cur.get("id"), why=cur.get("why"),
+                label="owner acknowledged this latch by its id")
+            return None
+        return cur
+
+    def latch(self, why: str, **detail: Any) -> None:
+        """Stop this bot: durable, cancels everything, refuses everything.
+        Idempotent -- the FIRST reason is kept."""
+        if not SAFETY_LATCH_ON:
+            log("SAFETY_LATCH_DISABLED_WOULD_LATCH", why=why, **detail)
+            return
+        if self.b.d.get("safety_latch"):
+            return
+        cur = {"id": now_iso(), "why": why,
+               "detail": {k: str(v) for k, v in detail.items()}}
+        self.b.d["safety_latch"] = cur
+        self.b.save()
+        log("SAFETY_LATCH", id=cur["id"], why=why, **cur["detail"],
+            effect="every own order is cancelled and every placement "
+                   "refused until the owner sets %s to this id; held "
+                   "positions are kept and reconciled" % SAFETY_LATCH_ACK_ENV)
+
+    def refresh_fills(self, slug: str) -> None:
+        """Re-read every own open order of one market from the venue now
+        (fills are otherwise learned on the market's next step)."""
+        mk = self.b.d["markets"].get(slug) or {}
+        for oid, o in list((mk.get("orders") or {}).items()):
+            if not o.get("open"):
+                continue
+            st = self.v.status(oid)
+            self._record_fill(slug, o["side"], oid, st)
+            o["open"] = st["open"]
+
+    @staticmethod
+    def _book_net(mk: Mapping[str, Any]) -> D:
+        return abs(D(str(mk["pos"]["YES"])) - D(str(mk["pos"]["NO"])))
+
+    def _venue_net_complete(self, slug: str) -> Optional[D]:
+        """|venue position| from a COMPLETE positions walk, else None."""
+        from src import pmus_sports_inventory as INV
+        try:
+            snap = self.v.positions_snapshot()
+        except Exception:                                 # noqa: BLE001
+            return None
+        if not snap.get("complete"):
+            return None
+        for row in snap["rows"]:
+            pr = INV.parse_row(row)
+            if pr["slug"] == slug:
+                return abs(D(str(pr["net"] or 0)))
+        return D(0)
+
+    def safety_check(self, acct: Optional[Mapping[str, Any]]) -> None:
+        """Every account read (~20 s). Book-only invariants first, then the
+        venue's positions against the book. Never raises into the loop."""
+        if self.safety_latch():
+            return
+        markets = self.b.d.get("markets") or {}
+        if RN1.ON:
+            from src import pmus_pilot_pnl as PP
+            spend = unm = D(0)
+            for slug in PP.pilot_slugs(markets, self.since):
+                mk = markets[slug]
+                if mk.get("settle_px") is not None:
+                    continue
+                c = D(str(mk["cost"]["YES"])) + D(str(mk["cost"]["NO"]))
+                u = RN1.unmatched_usd(mk["pos"], mk["cost"])
+                if c > RN1.PER_MARKET_USD + _CAP_TOL or \
+                        u > RN1.RESIDUAL_CAP_USD + _CAP_TOL:
+                    return self.latch("market_cap_breached", slug=slug,
+                                      spend=c, unmatched=u)
+                spend += c
+                unm += u
+            if spend > RN1.TOTAL_SPEND_USD + _CAP_TOL or \
+                    unm > RN1.TOTAL_UNMATCHED_USD + _CAP_TOL:
+                return self.latch("campaign_cap_breached", spend=spend,
+                                  unmatched=unm)
+            for slug, mk in markets.items():
+                for oid, o in (mk.get("orders") or {}).items():
+                    if o.get("open") and D(str(o["qty"])) > RN1.QTY:
+                        return self.latch("order_qty_exceeds_clip",
+                                          slug=slug, order_id=oid,
+                                          qty=o["qty"])
+        if acct is None:
+            return
+        pos = acct.get("positions") or {}
+        now = time.time()
+        for slug, mk in list(markets.items()):
+            if mk.get("done"):
+                continue
+            book = self._book_net(mk)
+            seen = abs(D(str(pos.get(slug) or 0)))
+            ok = mk.get("venue_net_ok") or {}
+            if abs(book - seen) <= D("0.0001") or (
+                    ok.get("book") == str(book) and
+                    now - float(ok.get("t") or 0) < MISMATCH_CONFIRMED_TTL_S):
+                mk.pop("mismatch_since", None)
+                continue
+            if not mk.get("mismatch_since"):
+                # most often our own fill, not yet read: read it now
+                try:
+                    self.refresh_fills(slug)
+                except Exception:                         # noqa: BLE001
+                    pass
+                book = self._book_net(mk)
+                if abs(book - seen) <= D("0.0001"):
+                    continue
+                mk["mismatch_since"] = now
+                log("position_mismatch_suspected", slug=slug, book_net=book,
+                    venue_net_first_page=seen, grace_s=MISMATCH_GRACE_S)
+                continue
+            age = now - float(mk["mismatch_since"])
+            if age < MISMATCH_GRACE_S:
+                continue
+            try:
+                self.refresh_fills(slug)
+            except Exception:                             # noqa: BLE001
+                pass
+            book = self._book_net(mk)
+            full = self._venue_net_complete(slug)
+            if full is None:
+                if age >= 3 * MISMATCH_GRACE_S:
+                    return self.latch("position_unverifiable", slug=slug,
+                                      book_net=book, age_s=int(age))
+                continue
+            if abs(book - full) <= D("0.0001"):
+                mk.pop("mismatch_since", None)
+                mk["venue_net_ok"] = {"book": str(book), "t": now}
+                continue
+            return self.latch("position_mismatch", slug=slug, book_net=book,
+                              venue_net=full, age_s=int(age))
+
     def enforce_lock(self) -> Optional[str]:
         """The lock acts on what is ALREADY resting, not only on new
         placements: when the window ends (or the lock is on) every own
         order the lock forbids is cancelled by exact id, each pass until
-        none is left. Logs each change of lock state once."""
+        none is left. Logs each change of lock state once. The safety
+        latch comes first and overrides every lock value."""
+        lt = self.safety_latch()
+        if lt:
+            if self.open_own_orders():
+                self.cancel_all_own("safety_latch:" + str(lt.get("why")))
+            return "safety_latch:" + str(lt.get("why"))
         st = lock_state()
         if st["why"] != getattr(self, "_lock_why", "?"):
             self._lock_why = st["why"]
@@ -2502,7 +2708,7 @@ class Engine:
                 window=({"start": _iso(st["start"]), "end": _iso(st["end"]),
                          "complete_grace_s": WINDOW_COMPLETE_GRACE_S}
                         if "start" in st else None),
-                campaign_since=PILOT_SINCE)
+                campaign_since=self.since)
         if st["all"] and self.open_own_orders():
             self.cancel_all_own("submission_lock:" + str(st["why"]))
         elif st["new"] and self.open_own_orders(new_exposure_only=True):
@@ -2849,6 +3055,11 @@ class Engine:
             log("place_refused_shutdown", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
             return
+        lt = self.b.d.get("safety_latch")
+        if lt:
+            log("place_refused_safety_latch", slug=slug, side=side, px=px,
+                qty=qty, stage=stage, why=lt.get("why"), id=lt.get("id"))
+            return
         if is_completion_stage(stage) and not self.account_fresh():
             why = self.stale_completion_block(slug, side, qty)
             if why:
@@ -2908,7 +3119,7 @@ class Engine:
         from src import pmus_pilot_pnl as PP
         tot = {"spend": D(0), "unmatched": D(0)}
         markets = self.b.d.get("markets") or {}
-        for s_ in PP.pilot_slugs(markets, PILOT_SINCE):
+        for s_ in PP.pilot_slugs(markets, self.since):
             mk_ = markets[s_]
             if s_ == exclude or mk_.get("settle_px") is not None:
                 continue
@@ -3701,7 +3912,7 @@ class Engine:
         the position check is skipped and reported as such)."""
         try:
             from src import pmus_pilot_pnl as PP
-            r = PP.meter(markets, rows, since=PILOT_SINCE,
+            r = PP.meter(markets, rows, since=self.since,
                          venue_net=venue_net)
         except Exception as exc:                          # noqa: BLE001
             self._pilot = None                    # -> pilot_meter_unavailable
@@ -3710,7 +3921,7 @@ class Engine:
             return
         self._pilot = r
         self._pilot_at = time.monotonic()
-        log("PILOT_PNL", ok=True, since=PILOT_SINCE,
+        log("PILOT_PNL", ok=True, since=self.since,
             loss_stop_usd=str(PILOT_LOSS_USD),
             new_openings_block=self.pilot_block(),
             cash=self.pilot_cash(r), **r)
@@ -3718,7 +3929,7 @@ class Engine:
     def pilot_cash(self, r: Mapping[str, Any]) -> Dict[str, Any]:
         """Venue account cash next to what the campaign explains. READ-ONLY
         GET, report only (shared account). The baseline is taken once per
-        PILOT_SINCE, together with the campaign's expected cash at that
+        self.since, together with the campaign's expected cash at that
         moment, so a restart mid-campaign does not move it."""
         from src import pmus_pilot_pnl as PP
         try:
@@ -3729,7 +3940,7 @@ class Engine:
                     "why": f"{type(exc).__name__}:{str(exc)[:120]}"}
         exp = D(r["expected_cash_change_usd"])
         base = self.b.d.get("pilot_cash_base")
-        key = str(PILOT_SINCE)
+        key = str(self.since)
         if cash is not None and (not base or base.get("since") != key) \
                 and not r.get("unconfirmed"):
             base = {"since": key, "cash": str(cash), "expected": str(exp),
@@ -3752,7 +3963,7 @@ class Engine:
         # every step, from the book: the hourly audit is too slow to be the
         # only at-risk check inside a 60-90 minute window
         from src import pmus_pilot_pnl as PP
-        if PP.book_worst_case(self.b.d.get("markets") or {}, PILOT_SINCE) \
+        if PP.book_worst_case(self.b.d.get("markets") or {}, self.since) \
                 <= -PILOT_LOSS_USD:
             return "pilot_loss_at_risk_book"
         r = getattr(self, "_pilot", None)
@@ -4051,6 +4262,7 @@ class Engine:
         if _bud is not None:
             extra = dict(extra, venue_requests=_bud.report())
         _ls = lock_state()
+        extra = dict(extra, safety_latch=self.b.d.get("safety_latch") or None)
         extra = dict(extra, submission_lock={
             "new_exposure_locked": _ls["new"], "completions_locked":
             _ls["all"], "why": _ls["why"],
@@ -4133,7 +4345,8 @@ class Engine:
                     self.cancel_all_own("disabled")
                     time.sleep(30)
                     continue
-                self.enforce_lock()
+                latched = str(self.enforce_lock() or "").startswith(
+                    "safety_latch")
                 if time.monotonic() - last_sel > 20:
                     if self.full() and LATE_CUTOFF:
                         try:                       # keep game clocks fresh
@@ -4141,7 +4354,15 @@ class Engine:
                         except Exception:          # noqa: BLE001
                             pass
                     acc = self.read_account()
-                    if acc is not None:
+                    try:
+                        self.safety_check(acc)
+                    except Exception as exc:       # noqa: BLE001
+                        log("safety_check_error",
+                            err=f"{type(exc).__name__}:{str(exc)[:160]}")
+                    latched = latched or bool(self.b.d.get("safety_latch"))
+                    if acc is not None and latched:
+                        last_sel = time.monotonic()    # no new markets
+                    elif acc is not None:
                         self.select(acc)
                         last_sel = time.monotonic()
                     else:                          # retry sooner, not every pass
@@ -4150,7 +4371,9 @@ class Engine:
                         self.guard.track(self.active())
                     if rewards_on() and acc is not None:
                         self.refresh_active_rewards()
-                for slug in self.active():
+                if latched:
+                    self.enforce_lock()             # cancel what rests, now
+                for slug in ([] if latched else self.active()):
                     if self.stop:
                         break
                     self.drain_ws_events()          # no-op unless WS mode
@@ -4189,8 +4412,17 @@ class Engine:
                     last_acc = time.monotonic()
                     self.reward_accrual_report()
                     self.b.save()
+                self._loop_errors = 0
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                self._loop_errors = getattr(self, "_loop_errors", 0) + 1
+                if self._loop_errors >= LOOP_ERROR_LATCH_N:
+                    try:
+                        self.latch("loop_errors", consecutive=self._loop_errors,
+                                   last=f"{type(exc).__name__}")
+                        self.enforce_lock()
+                    except Exception:                 # noqa: BLE001
+                        pass
             try:
                 self.drain_ws_events()
             except Exception as exc:                  # noqa: BLE001
@@ -4248,7 +4480,9 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             # True ONLY under the lane's own independent lock (above); the
             # shared halt is deliberately NOT counted, since a reset that
             # proved "disabled" via the very latch it clears proves nothing
-            "submission_disabled": fully_locked(),
+            "submission_disabled": fully_locked() or bool(
+                book.d.get("safety_latch")),
+            "safety_latch": book.d.get("safety_latch") or None,
             "orders": rows, "as_of_utc": now_iso(),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "
