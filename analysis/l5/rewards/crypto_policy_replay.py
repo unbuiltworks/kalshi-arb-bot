@@ -16,6 +16,8 @@ snapshot, for several sizes and depths, and reports per market:
              to our size (the tape does not show who was hit)
   mo5m_usd   those contracts marked at the mid five minutes later, minus
              cost (the file's last mid near its end). Negative = picked off
+  worst_leg  WORST-CASE inventory loss of the policy in that market: the
+             dearest bid it rested, filled alone in full and settled at zero
 
 Everything is MODELLED against displayed books. Nothing here is earned.
 Accepts full-book rows ({"t","slug","book"}) and the 22 Nov summary rows
@@ -130,8 +132,9 @@ def replay(path):
         vol = [float(r.get("shares") or 0) for r in rows]
         print("\n%s  %d snapshots, %.2f h, traded %.0f contracts" % (
             slug, len(rows), hours, vol[-1] - vol[0]))
-        print("  %-16s %5s %9s %9s %9s %10s" % (
-            "policy", "qty", "quotable", "usd_day", "fill_qty", "mo5m_usd"))
+        print("  %-16s %5s %9s %9s %9s %10s %10s" % (
+            "policy", "qty", "quotable", "usd_day", "fill_qty", "mo5m_usd",
+            "worst_leg"))
         books = [book_of(r) for r in rows]
         tops = [CR.assess(bk, PROG, T) for bk in books]
         mids = [None if a["best_bid_ex_own"] is None or
@@ -150,7 +153,7 @@ def replay(path):
         for name, c in POLICIES:
             for qty in SIZES:
                 ok = 0
-                share = mark = fills = 0.0
+                share = mark = fills = worst = 0.0
                 prev = None
                 for i, bk in enumerate(books):
                     q = CR.quotes(book_md=bk, program=PROG, tick=T,
@@ -175,9 +178,11 @@ def replay(path):
                         ok += 1
                         share += q["model"]["share"]
                         prev = {s: float(q[s]["px"]) for s in ("YES", "NO")}
+                        worst = max(worst, max(prev.values()) * qty)
                 n = len(books)
-                print("  %-16s %5d %8.0f%% %9.2f %9.1f %10.2f" % (
-                    name, qty, 100 * ok / n, 50 * share / n, fills, mark))
+                print("  %-16s %5d %8.0f%% %9.2f %9.1f %10.2f %10.2f" % (
+                    name, qty, 100 * ok / n, 50 * share / n, fills, mark,
+                    worst))
 
 
 if __name__ == "__main__":

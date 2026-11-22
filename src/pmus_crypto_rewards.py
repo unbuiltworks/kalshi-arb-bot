@@ -44,8 +44,9 @@ LABELS. Three figures that are never added together unless stated:
   MODELLED   our share of the displayed book x the published pool. Not money.
   VENUE      reward rows the venue lists for a crypto market; only a row in a
              paid status is money (`credited`), the rest is `pending`.
-  REALIZED   venue-reconciled settled trading result of the crypto markets,
-             fees charged included, plus CREDITED rewards.
+  REALIZED   venue-reconciled cash result of the crypto markets (pairs paid
+             at pairing, settled residual legs, fees charged), plus CREDITED
+             rewards.
 """
 from __future__ import annotations
 
@@ -451,6 +452,7 @@ def exposure(markets: Mapping[str, Mapping[str, Any]],
     A closed market still counts until its settlement price is recorded."""
     tot = {"capital": ZERO, "unpaired": ZERO, "resting": ZERO,
            "open_orders": ZERO, "filled": ZERO}
+    live_unpaired = ZERO
     per: Dict[str, Any] = {}
     for s, mk in lane_markets(markets).items():
         if s == exclude or mk.get("settle_px") is not None:
@@ -461,7 +463,16 @@ def exposure(markets: Mapping[str, Mapping[str, Any]],
         per[s] = {k: str(v) for k, v in c.items()}
         for k in tot:
             tot[k] += c[k]
-    return {**tot, "by_market": per}
+        if not mk.get("done"):
+            live_unpaired += c["unpaired"]
+    # unpaired_open: legs in markets still trading. A closed market's leg
+    # is already counted lost in full by closed_pnl / unpaired_cap.
+    return {**tot, "unpaired_open": live_unpaired, "by_market": per}
+
+
+def _at_risk(ex: Mapping[str, Any]) -> D:
+    """Unpaired dollars that count against the unpaired / loss budget."""
+    return ex["unpaired_open"] if HARD_LOSS_BUDGET else ex["unpaired"]
 
 
 def quotes(*, book_md: Optional[Mapping[str, Any]],
@@ -612,7 +623,7 @@ def fit_caps(markets: Mapping[str, Mapping[str, Any]], slug: str,
     over = None
     if other["capital"] + held["filled"] + new_rest > TOTAL_USD:
         over = "crypto_total_cap"
-    elif other["unpaired"] + other_worst + held["unpaired"] + worst_leg \
+    elif _at_risk(other) + other_worst + held["unpaired"] + worst_leg \
             > unpaired_cap(markets):
         over = "crypto_loss_budget" if HARD_LOSS_BUDGET \
             else "crypto_unpaired_cap"
@@ -651,9 +662,23 @@ def leg_budget(markets: Mapping[str, Mapping[str, Any]], slug: str
         return None
     cap = unpaired_cap(markets)
     other = exposure(markets, exclude=slug)
-    used = other["unpaired"] + sum((_worst_new_leg(markets[s_])
-                                    for s_ in other["by_market"]), ZERO)
+    used = _at_risk(other) + sum((_worst_new_leg(markets[s_])
+                                  for s_ in other["by_market"]), ZERO)
     return max(ZERO, min(cap / D(max(1, MAX_MARKETS)), cap - used))
+
+
+def budget_ok(markets: Mapping[str, Mapping[str, Any]], slug: str,
+              new_leg_usd: D) -> bool:
+    """Would one more opening leg of `new_leg_usd` in `slug` keep the lane's
+    worst case (held unpaired + the dearest strandable leg per market)
+    inside the cap? The placement choke point's own check."""
+    other = exposure(markets, exclude=slug)
+    used = _at_risk(other) + sum((_worst_new_leg(markets[s_])
+                                  for s_ in other["by_market"]), ZERO)
+    mk = markets.get(slug)
+    held = market_capital(mk)["unpaired"] if mk else ZERO
+    mine = max(D(str(new_leg_usd)), _worst_new_leg(mk) if mk else ZERO)
+    return used + held + mine <= unpaired_cap(markets)
 
 
 def _worst_new_leg(mk: Mapping[str, Any]) -> D:
@@ -898,29 +923,35 @@ def net_report(meter: Optional[Mapping[str, Any]],
     passes only on venue figures: a credit row naming a crypto market AND
     settled trading net + credited rewards > 0 (proposal 2026-11-22)."""
     ex = (meter or {}).get("execution") or {}
-    settled = None if meter is None else D(str(meter["settled_net_usd"]))
+    m = meter or {}
+    trading = None if meter is None else D(str(m["realized_net_usd"]))
     credited = None if rewards is None else D(str(rewards["credited_usd"]))
-    realized = None if settled is None or credited is None \
-        else settled + credited
-    unsettled = None if meter is None else sum(
-        v for k, v in (meter.get("status") or {}).items() if k != "settled")
+    realized = None if trading is None or credited is None \
+        else trading + credited
+    outstanding = None if meter is None else \
+        D(str(m.get("outstanding_contracts") or 0))
+    traded = D(str(ex.get("contracts") or 0)) > 0
     verdict = "INCOMPLETE"
-    if realized is not None and not (meter or {}).get("unconfirmed") \
-            and unsettled == 0 and (meter or {}).get("settled_markets"):
+    if realized is not None and not m.get("unconfirmed") and traded \
+            and m.get("positions_checked") and outstanding == 0:
         verdict = "PASS" if (credited > 0 and realized > 0) else \
             "FAIL_OR_AWAITING_CREDIT"
+    settled = trading
     return {
         "modelled_reward_usd": str(modelled_usd),
         "venue_pending_reward_usd": None if rewards is None
         else rewards["pending_usd"],
         "venue_credited_reward_usd": None if credited is None
         else str(credited),
-        "settled_trading_net_usd": None if settled is None else str(settled),
-        "settled_pair_edge_usd": (meter or {}).get("settled_pair_edge_usd"),
-        "settled_residual_usd": (meter or {}).get("settled_residual_usd"),
-        "maker_fees_charged_usd": (meter or {}).get(
-            "settled_fees_charged_usd"),
-        "open_worst_case_usd": (meter or {}).get("open_worst_case_usd"),
+        "realized_trading_net_usd": None if settled is None
+        else str(settled),
+        "locked_pair_edge_usd": ex.get("locked_pair_edge_usd"),
+        "settled_residual_usd": m.get("settled_residual_usd"),
+        "maker_fees_charged_usd": m.get("fees_charged_usd"),
+        "outstanding_contracts": m.get("outstanding_contracts"),
+        "outstanding_cost_usd": m.get("outstanding_cost_usd"),
+        "open_residual_worst_usd": m.get("open_residual_worst_usd"),
+        "positions_checked": m.get("positions_checked"),
         "completed_pairs": ex.get("completed_pairs"),
         "avg_pair_cost": ex.get("avg_pair_cost"),
         "residual_contracts": ex.get("residual_contracts"),
@@ -934,9 +965,11 @@ def net_report(meter: Optional[Mapping[str, Any]],
             "modelled_reward_usd": "MODELLED, never money",
             "venue_pending_reward_usd": "venue-listed, NOT paid",
             "venue_credited_reward_usd": "venue-paid",
-            "settled_trading_net_usd": "venue-reconciled fills + venue "
-                                       "resolution + final price, fees "
-                                       "charged included",
-            "realized_net_usd": "settled_trading_net + venue_credited "
+            "realized_trading_net_usd": "cash basis: completed pairs "
+                                        "(venue nets and pays $1 at "
+                                        "pairing) - fees charged + settled "
+                                        "residual legs; venue-reconciled "
+                                        "fills and positions only",
+            "realized_net_usd": "realized_trading_net + venue_credited "
                                 "reward; nothing modelled or pending",
             "book_estimate_usd": "bot's own mark; drives the loss stop"}}

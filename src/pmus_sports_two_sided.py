@@ -2697,12 +2697,12 @@ class Engine:
         markets = self.b.d.get("markets") or {}
         est = CR.book_pnl(markets)["usd"]
         r = getattr(self, "_crypto_meter", None)
-        venue = D(str(r["settled_net_usd"])) if r else None
+        venue = D(str(r["realized_net_usd"])) if r else None
         if est > -CR.LOSS_STOP_USD and (
                 venue is None or venue > -CR.LOSS_STOP_USD):
             return False
         st["loss_stop"] = {"t": now_iso(), "book_estimate_usd": str(est),
-                           "venue_settled_net_usd":
+                           "venue_realized_net_usd":
                                None if venue is None else str(venue),
                            "limit_usd": str(CR.LOSS_STOP_USD)}
         self.b.save()
@@ -2722,15 +2722,18 @@ class Engine:
                     err=str(exc)[:160])       # stays open: next step retries
         return True
 
-    def crypto_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
-        """Venue-reconciled result of the crypto markets (same meter as the
-        RN1 pilot, src/pmus_pilot_pnl.py) from this audit's venue rows."""
+    def crypto_meter(self, rows: list, markets: Mapping[str, Any],
+                     venue_net: Optional[Mapping[str, Any]] = None) -> None:
+        """Venue-reconciled CASH result of the crypto markets (same meter
+        as the RN1 pilot, src/pmus_pilot_pnl.py) from this audit's venue
+        rows and its complete positions walk (`venue_net`; None = no walk,
+        which blocks new crypto quotes)."""
         if not (CR.ON or CR.lane_markets(markets)):
             return
         try:
             from src import pmus_pilot_pnl as PP
             r = PP.meter(CR.lane_markets(markets), rows,
-                         stages=(CR.STAGE_OPEN,))
+                         venue_net=venue_net, stages=(CR.STAGE_OPEN,))
         except Exception as exc:                          # noqa: BLE001
             self._crypto_meter = None
             log("CRYPTO_PNL", ok=False,
@@ -2742,15 +2745,58 @@ class Engine:
         self.crypto_report()
 
     def crypto_meter_block(self) -> Optional[str]:
-        """Fail closed: no current venue-reconciled result, or fills the
-        venue's trade rows do not confirm, stop NEW crypto quotes."""
+        """Fail closed: no current venue-reconciled result, no complete
+        venue positions walk behind it, or fills / positions the venue does
+        not confirm, stop NEW crypto quotes."""
         r = getattr(self, "_crypto_meter", None)
         at = getattr(self, "_crypto_meter_at", None)
         if r is None or at is None or \
                 time.monotonic() - at > CR.METER_MAX_AGE_S:
             return "crypto_meter_unavailable"
+        if not r.get("positions_checked"):
+            return "crypto_positions_unchecked"
         if r.get("unconfirmed"):
             return "crypto_fills_unconfirmed"
+        return None
+
+    def crypto_account_view(self) -> Optional[Mapping[str, Any]]:
+        """The last account read if it is fresh enough to size risk on."""
+        if self._acct_cache is None or self._acct_ok_at is None or \
+                time.monotonic() - self._acct_ok_at > ACCOUNT_FRESH_S:
+            return None
+        return self._acct_cache
+
+    def crypto_account_block(self) -> Optional[str]:
+        """The loss budget is computed from the book, so the book must be
+        the whole truth. Refuse NEW crypto quotes (lane-wide) unless a fresh
+        account read shows, for every open crypto market, exactly the
+        book's net position and no resting order the book does not know.
+        A closed market is not compared: its leg is already counted lost
+        in full until the venue's settlement price is read."""
+        acc = self.crypto_account_view()
+        if acc is None:
+            return "account_state_unavailable"
+        markets = self.b.d.get("markets") or {}
+        try:
+            known = {oid for mk in markets.values()
+                     for oid in (mk.get("orders") or {})}
+            for o in acc.get("open_orders") or []:
+                s_ = str(o.get("marketSlug") or "")
+                if CR.is_crypto(s_) and CR.tradable(s_) and \
+                        str(o.get("id")) not in known:
+                    return "venue_order_unknown:" + s_
+            pos = acc.get("positions") or {}
+            for s_, mk in CR.lane_markets(markets).items():
+                if mk.get("done") or mk.get("settle_px") is not None:
+                    continue
+                net = D(str(mk["pos"]["YES"])) - D(str(mk["pos"]["NO"]))
+                if D(str(pos.get(s_) or 0)) != net:
+                    return "venue_inventory_mismatch:" + s_
+            for s_ in pos:
+                if CR.tradable(s_) and s_ not in markets:
+                    return "venue_inventory_unknown:" + s_
+        except Exception as exc:                          # noqa: BLE001
+            return "account_state_unreadable:" + type(exc).__name__
         return None
 
     def crypto_reward_credits(self, e: Mapping[str, Any]) -> None:
@@ -2844,7 +2890,7 @@ class Engine:
             return "account_risk:" + str(why)
         if CR.combined_cap() is None:
             return "combined_cap_unset"
-        why = self.crypto_meter_block()
+        why = self.crypto_meter_block() or self.crypto_account_block()
         if why:
             return why
         days = self._crypto_state()["days"]
@@ -2888,10 +2934,16 @@ class Engine:
             return "opening_while_unpaired"
         if D(str(qty)) > CR.QTY:
             return "qty_over_cap"
-        why = self.crypto_block(slug, mk, time.time())
-        if why:
-            return why
-        ex = CR.exposure(self.b.d.get("markets") or {})
+        try:
+            why = self.crypto_block(slug, mk, time.time())
+            if why:
+                return why
+            if not CR.budget_ok(self.b.d.get("markets") or {}, slug,
+                                D(str(px)) * D(str(qty))):
+                return "crypto_loss_budget"
+            ex = CR.exposure(self.b.d.get("markets") or {})
+        except Exception as exc:                          # noqa: BLE001
+            return "crypto_state_unreadable:" + type(exc).__name__
         if ex["capital"] + D(str(px)) * D(str(qty)) > CR.TOTAL_USD:
             return "crypto_total_cap"
         if ex["open_orders"] + 1 > CR.MAX_OPEN_ORDERS:
@@ -3014,6 +3066,21 @@ class Engine:
             cm["resting_s"] = float(cm.get("resting_s") or 0.0) + gap
         cm["t"] = now
 
+    def _crypto_fail_closed(self, slug: str, mk: Dict[str, Any],
+                            exc: Exception) -> None:
+        """Anything the crypto step could not read or compute (a corrupt
+        book entry, an unreadable limit): pull this market's opening quotes
+        by exact id and place nothing. A resting completion is left: it
+        only reduces what is unpaired. The cancel's own failure propagates
+        to the loop's market_error and is retried next pass."""
+        log("CRYPTO_STEP_ERROR", slug=slug,
+            err=f"{type(exc).__name__}:{str(exc)[:200]}",
+            effect="opening quotes pulled; nothing placed")
+        legs = [(oid, o) for oid, o in (mk.get("orders") or {}).items()
+                if o.get("open") and o.get("stage") != CR.STAGE_COMPLETE]
+        self._cancel_legs(slug, legs)
+        self.b.save()
+
     def _crypto_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                      bbo: Mapping, tick: D) -> None:
         """One pass of the crypto reward lane for one market: price both
@@ -3064,12 +3131,18 @@ class Engine:
         resting = [(o["side"], D(o["px"]),
                     D(o["qty"]) - D(o.get("filled") or "0"))
                    for o in open_orders.values()]
+        try:
+            leg = CR.leg_budget(self.b.d["markets"], slug)
+        except Exception as exc:                          # noqa: BLE001
+            # the budget cannot be computed from the book: no new risk
+            leg, block = D(0), block or (
+                "crypto_loss_budget_unreadable:" + type(exc).__name__)
         q = CR.quotes(book_md=book, program=mk.get("reward"), tick=tick,
                       pos=mk["pos"], cost=mk["cost"], resting=resting,
                       min_qty=spec["min_qty"],
                       capital_used=CR.market_capital(
                           {**mk, "orders": {}})["filled"],
-                      max_leg_usd=CR.leg_budget(self.b.d["markets"], slug))
+                      max_leg_usd=leg)
         want: Dict[str, Any] = {}
         why: Dict[str, Any] = {}
         for side in ("YES", "NO"):
@@ -3081,7 +3154,13 @@ class Engine:
             if tg and tg["role"] == "open" and block:
                 tg, why[side] = None, block
             want[side] = tg
-        CR.fit_caps(self.b.d["markets"], slug, want, why)
+        try:
+            CR.fit_caps(self.b.d["markets"], slug, want, why)
+        except Exception as exc:                          # noqa: BLE001
+            for s_ in ("YES", "NO"):
+                if want[s_] and want[s_]["role"] == "open":
+                    want[s_] = None
+                    why[s_] = "crypto_caps_unreadable:" + type(exc).__name__
         opens = [s_ for s_ in ("YES", "NO")
                  if want[s_] and want[s_]["role"] == "open"]
         if opens:
@@ -3459,7 +3538,10 @@ class Engine:
             # BEFORE RN1 and the two-sided path and it always returns, so a
             # crypto market can never be accumulated, extended or taker-
             # exited by them -- with the lane off its orders are cancelled.
-            self._crypto_step(slug, mk, spec, bbo, tick)
+            try:
+                self._crypto_step(slug, mk, spec, bbo, tick)
+            except Exception as exc:                      # noqa: BLE001
+                self._crypto_fail_closed(slug, mk, exc)
             return
         if RN1.ON:
             # OWNER 2026-11-21: scaled-down RN1 behavioural replica. Replaces
@@ -3964,12 +4046,16 @@ class Engine:
     AUDIT_SINCE = os.getenv("PMUS_TWO_SIDED_AUDIT_SINCE",
                             "2026-11-14T15:30:00Z")
 
-    def pilot_meter(self, rows: list, markets: Mapping[str, Any]) -> None:
-        """RN1 pilot settled net P&L (src/pmus_pilot_pnl.py) from this
-        audit's venue rows; feeds the campaign loss stop."""
+    def pilot_meter(self, rows: list, markets: Mapping[str, Any],
+                    venue_net: Optional[Mapping[str, Any]] = None) -> None:
+        """RN1 pilot net P&L on a CASH basis (src/pmus_pilot_pnl.py) from
+        this audit's venue rows; feeds the campaign loss stop. `venue_net`
+        is the complete positions walk of the same audit (None = no walk:
+        the position check is skipped and reported as such)."""
         try:
             from src import pmus_pilot_pnl as PP
-            r = PP.meter(markets, rows, since=PILOT_SINCE)
+            r = PP.meter(markets, rows, since=PILOT_SINCE,
+                         venue_net=venue_net)
         except Exception as exc:                          # noqa: BLE001
             self._pilot = None                    # -> pilot_meter_unavailable
             log("PILOT_PNL", ok=False,
@@ -3979,7 +4065,32 @@ class Engine:
         self._pilot_at = time.monotonic()
         log("PILOT_PNL", ok=True, since=PILOT_SINCE,
             loss_stop_usd=str(PILOT_LOSS_USD),
-            new_openings_block=self.pilot_block(), **r)
+            new_openings_block=self.pilot_block(),
+            cash=self.pilot_cash(r), **r)
+
+    def pilot_cash(self, r: Mapping[str, Any]) -> Dict[str, Any]:
+        """Venue account cash next to what the campaign explains. READ-ONLY
+        GET, report only (shared account). The baseline is taken once per
+        PILOT_SINCE, together with the campaign's expected cash at that
+        moment, so a restart mid-campaign does not move it."""
+        from src import pmus_pilot_pnl as PP
+        try:
+            cash = PP.cash_usd(self.v.t.request("GET",
+                                                "/v1/account/balances"))
+        except Exception as exc:                          # noqa: BLE001
+            return {"ok": False,
+                    "why": f"{type(exc).__name__}:{str(exc)[:120]}"}
+        exp = D(r["expected_cash_change_usd"])
+        base = self.b.d.get("pilot_cash_base")
+        key = str(PILOT_SINCE)
+        if cash is not None and (not base or base.get("since") != key) \
+                and not r.get("unconfirmed"):
+            base = {"since": key, "cash": str(cash), "expected": str(exp),
+                    "t": now_iso()}
+            self.b.d["pilot_cash_base"] = base
+            self.b.save()
+        return PP.cash_check(cash, exp, base if base and
+                             base.get("since") == key else None)
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -3998,26 +4109,29 @@ class Engine:
             return "pilot_meter_unavailable"
         if r.get("unconfirmed"):
             return "pilot_fills_unconfirmed"
-        if D(r["settled_net_usd"]) + D(r.get("open_worst_case_usd") or 0) \
+        # realized cash (completed pairs - fees + settled residuals) plus
+        # every outstanding unpaired contract settling worthless
+        if D(r["realized_net_usd"]) + D(r["open_residual_worst_usd"]) \
                 <= -PILOT_LOSS_USD:
             return "pilot_loss_at_risk"
         return None
 
     def pilot_loss_stopped(self) -> bool:
-        """Campaign stop: venue-settled pilot net <= -PILOT_LOSS_USD blocks
-        NEW RN1 openings/extensions (completions continue). Latched in the
-        book: a restart or a later recovery does not lift it -- the owner
-        clears `pilot_loss_stop` explicitly."""
+        """Campaign stop: REALIZED pilot net (completed-pair cash - fees +
+        settled residual results) <= -PILOT_LOSS_USD blocks NEW RN1
+        openings/extensions (completions continue). Latched in the book: a
+        restart or a later recovery does not lift it -- the owner clears
+        `pilot_loss_stop` explicitly."""
         if PILOT_LOSS_USD <= 0:
             return False
         if self.b.d.get("pilot_loss_stop"):
             return True
         r = getattr(self, "_pilot", None)
-        if r and D(r["settled_net_usd"]) <= -PILOT_LOSS_USD:
+        if r and D(r["realized_net_usd"]) <= -PILOT_LOSS_USD:
             self.b.d["pilot_loss_stop"] = {"t": now_iso(),
-                                           "net": r["settled_net_usd"]}
+                                           "net": r["realized_net_usd"]}
             self.b.save()
-            log("PILOT_LOSS_STOP", net=r["settled_net_usd"],
+            log("PILOT_LOSS_STOP", net=r["realized_net_usd"],
                 limit=str(PILOT_LOSS_USD),
                 effect="no new RN1 openings/extensions until the owner "
                        "clears pilot_loss_stop")
@@ -4093,8 +4207,10 @@ class Engine:
         if looked:
             self.b.save()
         bs = PNL.book_settled(mk_all)
-        self.pilot_meter(mine, mk_all)
-        self.crypto_meter(mine, mk_all)
+        self.pilot_meter(mine, mk_all,
+                         venue_net=getattr(self, "_venue_net", None))
+        self.crypto_meter(mine, mk_all,
+                          venue_net=getattr(self, "_venue_net", None))
         since = self.b.d.get("recovery_since")
         bs_new = PNL.book_settled(mk_all, since=since) if since else None
         settled_margin = D(PNL.book_economics(
@@ -4160,9 +4276,21 @@ class Engine:
         try:
             snap = self.v.positions_snapshot()
         except Exception as exc:                          # noqa: BLE001
+            self._venue_net = None       # no walk: position check skipped
             log("INVENTORY_RECONCILE", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return None
+        # signed venue position per market for the pilot meter's netting
+        # check; only a COMPLETE walk can prove a market is flat. Expired
+        # rows are kept: a closed game's unpaired leg is still held until
+        # the venue resolves it, and must not read as "position missing".
+        self._venue_net = None
+        if snap.get("complete"):
+            self._venue_net = {}
+            for row_ in snap["rows"]:
+                pr_ = INV.parse_row(row_)
+                if pr_["slug"]:
+                    self._venue_net[pr_["slug"]] = str(pr_["net"] or 0)
         rep = INV.reconcile(snap["rows"], snap["open_orders"],
                             self.b.d.get("markets") or {},
                             self.own(), walk_complete=snap["complete"])

@@ -345,10 +345,11 @@ def test_venue_rewards_only_a_paid_row_naming_a_crypto_market_is_money():
     assert r["by_market"][SOL]["credited_usd"] == "0"
 
 
-def meter(net="0", settled=1, status=None, unconfirmed=()):
-    return {"settled_net_usd": net, "settled_markets": settled,
-            "status": status or {"settled": settled},
-            "unconfirmed": list(unconfirmed), "execution": {},
+def meter(net="0", outstanding="0", unconfirmed=(), checked=True,
+          contracts="200"):
+    return {"realized_net_usd": net, "outstanding_contracts": outstanding,
+            "unconfirmed": list(unconfirmed), "positions_checked": checked,
+            "execution": {"contracts": contracts},
             "open_worst_case_usd": "0"}
 
 
@@ -370,10 +371,15 @@ def test_no_verdict_while_anything_is_unsettled_unconfirmed_or_unread():
     rw = {"credited_usd": "5", "pending_usd": "0"}
     assert CR.net_report(None, rw, 0)["verdict"] == "INCOMPLETE"
     assert CR.net_report(meter("3"), None, 0)["realized_net_usd"] is None
-    assert CR.net_report(meter("3", status={"settled": 1, "open": 1}), rw,
-                         0)["verdict"] == "INCOMPLETE"
+    assert CR.net_report(meter("3", outstanding="40"), rw,
+                         0)["verdict"] == "INCOMPLETE"       # a leg is open
     assert CR.net_report(meter("3", unconfirmed=[ETH]), rw,
                          0)["verdict"] == "INCOMPLETE"
+    assert CR.net_report(meter("3", checked=False), rw,
+                         0)["verdict"] == "INCOMPLETE"       # no venue walk
+    assert CR.net_report(meter("0", contracts="0"), rw,
+                         0)["verdict"] == "INCOMPLETE"       # never traded
+    assert CR.net_report(meter("3"), rw, 0)["verdict"] == "PASS"
 
 
 def test_markouts_measure_the_move_after_each_fill():
@@ -470,6 +476,19 @@ class CV(FakeVenue):
         self.cancelled.append(oid)
         return super().cancel(oid)
 
+    def account(self):
+        """Venue truth: net position per market from the fills, and every
+        resting order with its id."""
+        pos = dict(self.acct["positions"])
+        for o in self.orders.values():
+            if o["filled"]:
+                sign = 1 if o["side"] == "YES" else -1
+                pos[o["slug"]] = pos.get(o["slug"], D(0)) + sign * o["filled"]
+        return {"positions": {s: q for s, q in pos.items() if q},
+                "open_orders": [{"id": k, "marketSlug": o["slug"]}
+                                for k, o in self.orders.items() if o["open"]]
+                + list(self.acct["open_orders"])}
+
     def live(self, slug=None):
         return {k: o for k, o in self.orders.items() if o["open"] and
                 (slug is None or o["slug"] == slug)}
@@ -481,8 +500,17 @@ class CV(FakeVenue):
 
 
 def fresh_meter(e):
-    e._crypto_meter = {"settled_net_usd": "0", "unconfirmed": []}
+    e._crypto_meter = {"realized_net_usd": "0", "unconfirmed": [],
+                       "positions_checked": True}
     e._crypto_meter_at = time.monotonic()
+
+
+def wire(e, v):
+    """Give an engine the fake venue's reads and readable shared gates."""
+    e._rget = v.gget
+    e.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e.crypto_account_view = v.account
+    return e
 
 
 @pytest.fixture
@@ -495,9 +523,7 @@ def lane(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "ACCOUNT_RISK_ON", True)
     monkeypatch.setattr(RN1, "ON", True)       # production runs RN1 mode
     v = CV()
-    e = M.Engine(v, M.Book(tmp_path / "s.json"))
-    e._rget = v.gget
-    e.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)
     fresh_meter(e)
     return e, v
 
@@ -669,6 +695,24 @@ def test_completion_continues_under_a_new_exposure_block(lane):
      "crypto_meter_unavailable"),
     (lambda e, mp: e._crypto_meter.update(unconfirmed=[ETH]),
      "crypto_fills_unconfirmed"),
+    (lambda e, mp: e._crypto_meter.update(positions_checked=False),
+     "crypto_positions_unchecked"),
+    (lambda e, mp: setattr(e, "crypto_account_view", lambda: None),
+     "account_state_unavailable"),
+    (lambda e, mp: setattr(e, "crypto_account_view", lambda: {
+        "positions": {SOL: D("25")}, "open_orders": []}),
+     "venue_inventory_mismatch:" + SOL),
+    (lambda e, mp: setattr(e, "crypto_account_view", lambda: {
+        "positions": {ETH.replace("11-21", "11-20"): D("-7")},
+        "open_orders": []}),
+     "venue_inventory_unknown:" + ETH.replace("11-21", "11-20")),
+    (lambda e, mp: setattr(e, "crypto_account_view", lambda: {
+        "positions": {}, "open_orders": [{"id": "manual1",
+                                          "marketSlug": XRP}]}),
+     "venue_order_unknown:" + XRP),
+    (lambda e, mp: setattr(e, "crypto_account_view", lambda: {
+        "positions": {ETH: "n/a"}, "open_orders": []}),
+     "account_state_unreadable:InvalidOperation"),
     (lambda e, mp: mp.setattr(M, "ACCOUNT_RISK_ON", False),
      "account_risk_not_enforced"),
     (lambda e, mp: setattr(e, "account_risk", lambda: {
@@ -876,9 +920,7 @@ def test_loss_stop_latches_cancels_everything_and_survives_restart(
     assert e.crypto_block(SOL, e.b.m(SOL), time.time()) == "crypto_loss_stop"
     v.bid, v.ask = D("0.48"), D("0.50")    # recovery does not lift it
     n = len(v.orders)
-    e2 = M.Engine(v, M.Book(tmp_path / "s.json"))        # restart
-    e2._rget = v.gget
-    e2.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e2 = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)   # restart
     fresh_meter(e2)
     for s in (ETH, SOL, XRP):
         e2.step_market(s)
@@ -888,14 +930,14 @@ def test_loss_stop_latches_cancels_everything_and_survives_restart(
         "crypto_loss_stop"
 
 
-def test_venue_settled_loss_trips_the_same_stop(lane):
+def test_venue_realized_loss_trips_the_same_stop(lane):
     e, v = lane
     select(e, v)
     e.step_market(ETH)
-    e._crypto_meter["settled_net_usd"] = "-30"
+    e._crypto_meter["realized_net_usd"] = "-30"
     assert e.crypto_loss_stopped()
     assert not v.live()
-    assert e.b.d["crypto"]["loss_stop"]["venue_settled_net_usd"] == "-30"
+    assert e.b.d["crypto"]["loss_stop"]["venue_realized_net_usd"] == "-30"
 
 
 def test_a_closed_unpaired_market_counts_as_a_full_loss_until_settled(lane):
@@ -972,9 +1014,7 @@ def test_restart_adopts_resting_orders_and_manages_them(lane, tmp_path):
     select(e, v)
     e.step_market(ETH)
     old = set(v.live(ETH))
-    e2 = M.Engine(v, M.Book(tmp_path / "s.json"))
-    e2._rget = v.gget
-    e2.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e2 = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)
     assert set(o["venue_order_id"] for o in
                M.registry_doc(e2.b)["orders"]) >= old
     e2.step_market(ETH)
@@ -1041,47 +1081,81 @@ def trade(slug, qty, fee="0"):
         "passiveExecution": {"commissionNotionalCollected": {"value": fee}}}}
 
 
+def pnl_line(capsys):
+    return json.loads([ln for ln in capsys.readouterr().out.splitlines()
+                       if '"CRYPTO_PNL"' in ln][-1].split(" ", 1)[1])
+
+
 def test_venue_reconciled_result_fees_rewards_and_modelled_stay_apart(
         lane, capsys):
+    """Cash basis (sports ae5adbe16): the venue nets a completed pair and
+    pays its $1 at pairing, so 100 pairs at 0.96 are $4.00 of realized
+    cash -- less the fee the venue charged -- with nothing left open."""
     e, v = lane
     select(e, v)
     e.step_market(ETH)
     for k in list(v.live(ETH)):
         v.fill(k)
     e.step_market(ETH)                                # pair locked at 0.96
-    mk = e.b.m(ETH)
-    mk.update(done=True, settle_px="1")
-    mk["crypto_model"] = {"usd": "4.25", "rate_usd_s": 0, "t": 0}
-    rows = [trade(ETH, 100, "0.10"), trade(ETH, 100),
-            {"positionResolution": {"marketSlug": ETH}}]
+    e.b.m(ETH)["crypto_model"] = {"usd": "4.25", "rate_usd_s": 0, "t": 0}
+    rows = [trade(ETH, 100, "0.10"), trade(ETH, 100)]
     e.crypto_reward_credits({"ok": True, "rows": 2, "rows_all": [
         {"marketSlug": ETH, "status": "PENDING", "reward": "1.79"},
         {"marketSlug": "aec-x", "status": "PAID", "reward": "5"}]})
     capsys.readouterr()
-    e.crypto_meter(rows, e.b.d["markets"])
-    d = json.loads(next(ln for ln in capsys.readouterr().out.splitlines()
-                        if '"CRYPTO_PNL"' in ln).split(" ", 1)[1])
-    assert D(d["settled_trading_net_usd"]) == D("3.90")    # 4.00 - 0.10 fee
+    e.crypto_meter(rows, e.b.d["markets"], venue_net={})
+    d = pnl_line(capsys)
+    assert D(d["realized_trading_net_usd"]) == D("3.90")   # 4.00 - 0.10 fee
     assert D(d["maker_fees_charged_usd"]) == D("0.10")
+    assert d["outstanding_contracts"] == "0" and d["positions_checked"]
     assert d["modelled_reward_usd"] == "4.25"
     assert d["venue_pending_reward_usd"] == "1.79"
     assert d["venue_credited_reward_usd"] == "0"
     assert D(d["realized_net_usd"]) == D("3.90")           # no modelled, no pending
     assert d["verdict"] == "FAIL_OR_AWAITING_CREDIT"       # no credit row yet
     assert d["completed_pairs"] == "100"
+    e.crypto_reward_credits({"ok": True, "rows": 1, "rows_all": [
+        {"marketSlug": ETH, "status": "PAID", "reward": "1.79"}]})
+    e.crypto_meter(rows, e.b.d["markets"], venue_net={})
+    d = pnl_line(capsys)
+    assert D(d["realized_net_usd"]) == D("5.69") and d["verdict"] == "PASS"
 
 
-def test_unconfirmed_venue_fills_block_new_quotes(lane):
+def test_an_unpaired_leg_is_outstanding_not_realized(lane, capsys):
+    e, v = lane
+    select(e, v)
+    lone_yes(e, v)                                   # YES 100 @0.47, lone
+    capsys.readouterr()
+    e.crypto_meter([trade(ETH, 100)], e.b.d["markets"],
+                   venue_net={ETH: "100"})
+    d = pnl_line(capsys)
+    assert D(d["realized_trading_net_usd"]) == 0
+    assert d["outstanding_contracts"] == "100"
+    assert D(d["outstanding_cost_usd"]) == D("47")
+    assert D(d["open_residual_worst_usd"]) == D("-47")
+    assert d["verdict"] == "INCOMPLETE"
+    assert e.crypto_meter_block() is None
+
+
+def test_unconfirmed_venue_fills_or_positions_block_new_quotes(lane):
     e, v = lane
     select(e, v)
     e.step_market(ETH)
     for k in list(v.live(ETH)):
         v.fill(k)
     e.step_market(ETH)
-    e.crypto_meter([trade(ETH, 100)], e.b.d["markets"])     # venue saw 100/200
+    e.crypto_meter([trade(ETH, 100)], e.b.d["markets"],
+                   venue_net={})                     # venue saw 100 of 200
     assert e.crypto_meter_block() == "crypto_fills_unconfirmed"
     assert e.crypto_block(SOL, e.b.m(SOL), time.time()) == \
         "crypto_fills_unconfirmed"
+    both = [trade(ETH, 100), trade(ETH, 100)]
+    e.crypto_meter(both, e.b.d["markets"], venue_net={ETH: "30"})
+    assert e.crypto_meter_block() == "crypto_fills_unconfirmed"  # not netted
+    e.crypto_meter(both, e.b.d["markets"])           # no positions walk
+    assert e.crypto_meter_block() == "crypto_positions_unchecked"
+    e.crypto_meter(both, e.b.d["markets"], venue_net={})
+    assert e.crypto_meter_block() is None
 
 
 def test_modelled_reward_accrues_only_while_quotes_rest(lane):
@@ -1201,3 +1275,176 @@ def test_hard_budget_refuses_the_proposal_size_across_three_markets(
     for s in (ETH, SOL, XRP):
         e.step_market(s)
     assert not v.orders
+
+
+# ------------------------- hard budget: three markets, inventory, restart
+
+@pytest.fixture
+def hard3(lane, monkeypatch):
+    """Hard $30 budget across ETH + SOL + XRP ($10 a market; the minimum
+    size is lowered so $10 can quote at all)."""
+    e, v = lane
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", True)
+    monkeypatch.setattr(CR, "MIN_QTY", D("10"))
+    monkeypatch.setenv(CR.APPROVAL_ENV, json.dumps(approval()))
+    return e, v
+
+
+def worst_case(e):
+    """Every unpaired leg lost, every market's dearest resting opening leg
+    filled alone and lost, plus what is already closed."""
+    m = e.b.d["markets"]
+    ex = CR.exposure(m)
+    return ex["unpaired_open"] + sum((CR._worst_new_leg(m[s]) for s in
+                                      ex["by_market"]), D(0)) - \
+        min(D(0), CR.closed_pnl(m))
+
+
+def test_three_markets_resting_at_once_stay_inside_the_budget(hard3):
+    e, v = hard3
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    assert len(v.live()) == 6
+    assert {o["qty"] for o in v.live().values()} == {D("20")}  # 10 / 0.49
+    assert worst_case(e) == D("29.40") <= CR.LOSS_STOP_USD
+
+
+def test_every_dear_leg_filled_and_lost_is_still_inside_the_budget(hard3):
+    """All three NO legs fill alone and all three settle worthless."""
+    e, v = hard3
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    for k, o in list(v.live().items()):
+        if o["side"] == "NO":
+            v.fill(k)
+    for _ in range(2):
+        for s in (ETH, SOL, XRP):
+            e.step_market(s)
+    live = list(v.live().values())
+    assert sorted(o["side"] for o in live) == ["YES"] * 3      # completions
+    assert {e.b.m(s)["orders"][k]["stage"] for s in (ETH, SOL, XRP)
+            for k in e.b.m(s)["orders"] if e.b.m(s)["orders"][k]["open"]} \
+        == {"crypto_complete"}
+    assert worst_case(e) == D("29.40")
+    for k in list(v.live()):
+        v.cancel(k)
+    for s in (ETH, SOL, XRP):
+        e.b.m(s).update(done=True, settle_px="1")
+    assert CR.book_pnl(e.b.d["markets"])["usd"] == D("-29.40")
+    assert CR.unpaired_cap(e.b.d["markets"]) == D("0.60")
+
+
+def test_existing_inventory_and_resting_orders_shrink_the_next_quote(hard3):
+    """ETH holds a lone leg ($9.80), SOL has quotes resting ($9.80
+    strandable): XRP may only add what is left, and the choke point refuses
+    anything larger."""
+    e, v = hard3
+    select(e, v)
+    lone_yes_side(e, v, ETH, "NO")
+    e.step_market(SOL)
+    assert CR.leg_budget(e.b.d["markets"], XRP) == D("10")
+    assert e.crypto_place_block(XRP, "NO", D("0.49"), D("22"),
+                                "crypto_open", True) == "crypto_loss_budget"
+    assert e.crypto_place_block(XRP, "NO", D("0.49"), D("20"),
+                                "crypto_open", True) is None
+    e.step_market(XRP)
+    assert worst_case(e) == D("29.40")
+    e.b.m(ETH).update(done=True, settle_px="1")      # ETH NO leg lost: -9.80
+    for _ in range(2):
+        for s in (SOL, XRP):
+            e.step_market(s)
+    assert CR.unpaired_cap(e.b.d["markets"]) == D("20.20")
+    assert worst_case(e) <= CR.LOSS_STOP_USD
+    # the smaller budget is shared again: resting quotes are re-sized
+    nxt = ETH.replace("11-21", "11-22")
+    v.crypto = [nxt]
+    e.select_crypto(v.account())
+    e.step_market(nxt)
+    assert {o["qty"] for s_ in (SOL, XRP, nxt)
+            for o in v.live(s_).values()} == {D("13")}           # 6.73/0.49
+    assert all(len(v.live(s_)) == 2 for s_ in (SOL, XRP, nxt))
+    assert worst_case(e) == D("9.80") + 3 * D("6.37")
+    assert worst_case(e) <= CR.LOSS_STOP_USD
+
+
+def lone_yes_side(e, v, slug, side):
+    e.step_market(slug)
+    k = next(k for k, o in v.live(slug).items() if o["side"] == side)
+    v.fill(k)
+    e.step_market(slug)
+
+
+def test_restart_with_unresolved_positions_keeps_the_budget(hard3, tmp_path):
+    """Crash while ETH holds a lone NO leg, SOL has closed unpaired with no
+    settlement price yet, and XRP quotes rest. The new process: pulls the
+    resting quotes until the venue-reconciled meter and a fresh account
+    read exist, keeps the ETH completion, and then sizes XRP to what the
+    unresolved positions leave -- counting the unread SOL leg as lost."""
+    e, v = hard3
+    select(e, v)
+    lone_yes_side(e, v, ETH, "NO")                    # NO 20 @0.49 = 9.80
+    lone_yes_side(e, v, SOL, "YES")                   # YES 20 @0.47 = 9.40
+    for k in list(v.live(SOL)):
+        v.cancel(k)
+    e.step_market(SOL)
+    e.b.m(SOL)["done"] = True                         # closed, px unread
+    e.step_market(XRP)
+    e.b.save()
+    assert len(v.live(XRP)) == 2
+    e2 = M.Engine(v, M.Book(tmp_path / "s.json"))     # restart: no meter,
+    e2._rget = v.gget                                 # no account read yet
+    e2.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    assert e2.crypto_block(XRP, e2.b.m(XRP), time.time()) == \
+        "crypto_meter_unavailable"
+    for s in (ETH, XRP):
+        e2.step_market(s)
+    assert not v.live(XRP)                            # openings pulled
+    assert [(o["side"], o["qty"]) for o in v.live(ETH).values()] == \
+        [("YES", D("20"))]                            # completion kept
+    fresh_meter(e2)
+    assert e2.crypto_block(XRP, e2.b.m(XRP), time.time()) == \
+        "account_state_unavailable"
+    e2.step_market(XRP)
+    assert not v.live(XRP)
+    e2.crypto_account_view = v.account
+    assert CR.unpaired_cap(e2.b.d["markets"]) == D("20.60")   # 30 - 9.40
+    e2.step_market(XRP)
+    legs = list(v.live(XRP).values())
+    assert len(legs) == 2 and {o["qty"] for o in legs} == {D("14")}
+    assert worst_case(e2) <= CR.LOSS_STOP_USD
+    assert worst_case(e2) == D("9.40") + D("9.80") + D("6.86")
+
+
+def test_venue_inventory_the_book_does_not_know_stops_the_lane(hard3):
+    """A position at the venue that the book lacks could already have used
+    the budget: no market may open until the two agree."""
+    e, v = hard3
+    select(e, v)
+    e.step_market(ETH)
+    v.acct["positions"] = {SOL: D("40")}              # unknown to the book
+    e.step_market(ETH)
+    e.step_market(XRP)
+    assert not v.live()
+    assert e.crypto_block(XRP, e.b.m(XRP), time.time()) == \
+        "venue_inventory_mismatch:" + SOL
+    v.acct["positions"] = {}
+    e.step_market(XRP)
+    assert len(v.live(XRP)) == 2
+
+
+def test_an_unreadable_book_entry_fails_closed(hard3):
+    """Corrupt inventory in one crypto market: the budget cannot be
+    computed, so resting quotes everywhere are pulled and none is placed."""
+    e, v = hard3
+    select(e, v)
+    e.step_market(ETH)
+    e.b.m(SOL)["cost"]["YES"] = "garbage"
+    e.b.m(SOL)["pos"]["YES"] = "5"
+    e.crypto_account_view = lambda: {"positions": {SOL: D("5")},
+                                     "open_orders": []}
+    e.step_market(ETH)
+    assert not v.live()
+    assert e.crypto_place_block(XRP, "YES", D("0.47"), D("10"),
+                                "crypto_open", True) is not None
