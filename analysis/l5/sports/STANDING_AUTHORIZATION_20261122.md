@@ -135,7 +135,51 @@ every other check passes at 23:05.
 Open item for a later build, on the owner's approval: enforce an
 account-level limit on the sports bot, with an allowance the owner sets.
 
-## 8. Unchanged standing rules
+## 8. Owner's second message on the drawdown limit, about 20:57Z, and the decision at 21:00Z
+
+Owner: "I do not want the account-level drawdown protection silently
+bypassed. Before enabling any further live trading, establish whether the
+existing sports campaign loss stops and portfolio exposure limits provide
+equivalent protection, and identify the maximum additional account loss
+possible. Do not increase or disable the $3 account-level drawdown limit
+without my explicit approval." Also: "At 23:05, verify venue orders, fills,
+residual inventory, campaign counters, and watchdog status before
+extending. At 01:30, carry existing portfolio exposure into the next
+campaign's risk assessment." And: prepare tomorrow's release to enforce
+account-level drawdown protection across sports and crypto, with
+independent watchdog coverage and regression tests.
+
+What was established (`maxloss_sim_158685d3a.py`, the running build's code
+against an adversarial market: every position-increasing bid fills, no
+opposite-side bid does):
+
+| Limits | Largest unpaired cost reached | Hard ceiling |
+|---|---|---|
+| Tonight's (2 contracts, $3 per market, $6 campaign, $4 loss check) | $5.20 | $6.00 |
+| Tightened to fit ($0.75 caps, 1 contract) | $0.75 | $0.75 |
+
+- The account limit has $0.79 of room. Tonight's sports limits allow about
+  $5.20 (ceiling $6.00) of additional account loss in one campaign. Not
+  equivalent.
+- The bot was put on a plain lock at 20:59Z while the owner decided.
+
+Owner's decision (21:00Z), "Accept up to $6 tonight": keep the original
+sports limits; the owner explicitly accepts that the account can go up to
+$6.00 beyond today's level tonight, exceeding the $3 drawdown limit, which
+stays unchanged and unenforced on sports tonight. The Sunday night window
+carries over what is still held and lost, so the whole night stays within
+one $6 unpaired / $4 loss budget.
+
+Done at 21:00Z: window `21:35-23:05` set again (same start; the stored
+campaign marker is 21:35). The $3 limit was not touched.
+
+Rule for 01:30 (in the scheduled handoff): with U = unpaired cost still
+held, L = realized loss so far, S = spend: arm the Sunday night campaign
+only with total unmatched = 6 - U, loss stop = 4 - (L + U), spend = 16 - S
+(tightening only), and only if each leaves at least $1.50 ($3 for spend).
+The loss stop is never set to 0 (that would switch it off).
+
+## 9. Unchanged standing rules
 
 Explicit approval is still required for capital increases, taker
 authorization, weakened limits, other deployments, and anything outside
