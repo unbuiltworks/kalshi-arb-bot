@@ -33,3 +33,21 @@ PILOT_PNL 13:28:32Z: ok, new_openings_block null, loss stop 4, campaign markets 
 realized 0, cash baseline 321.6638.
 Watchdog: one sweep at 13:25:01Z saw the registry unreachable during the container swap
 (no halt); OK since; open_orders 0. One HTTP 429 account read at 13:29:39Z.
+
+## 14:05:00Z window opened; slice 1 (14:04:00-14:09:07Z)
+- SUBMISSION_LOCK_STATE 14:05:00.170Z: open (why null). Shared halt PERMITTED. Guard and venue
+  websockets connected; guard matched 2 markets.
+- Markets: atc-sea-bol-udi-2026-11-22-bol and atc-sea-sas-gen-2026-11-22-gen (one per match).
+- 20 ORDER (all 2 contracts, rn1_open, post-only), 0 FILL, 9 reactive pulls, 3 guard pulls,
+  1 venue-rejected order (no fill), 1 local POST_ONLY_STALE_REFUSE (not sent).
+- Pair sums quoted: 0.97 (0.52+0.45, 0.33+0.64, 0.51+0.46).
+- Why sides were withheld: depth gate (touch 0.70, 5.70, 0.71, 0.10 contracts), international
+  guard "not cheap", jump pauses after price moves.
+- Pulls: 6 of 9 were "closer than 1 tick / near cross" - the market came to our bid and the
+  bot cancelled rather than be the best bid. That is the mechanism by which it gets no fills.
+- 7 market_error: 6 request-budget deferrals on reactive repricing, 1 stale post-only refuse.
+  One reactive pull took 5.2 s (4.3 s queued behind the request budget).
+- Safety check: no order outside the two matches, none above 2 contracts, no taker stage,
+  2 markets, one per match, no watchdog halt (4 open orders, all owned), nothing unconfirmed.
+- Recorders started 14:07:35Z (the queued ones had not started); orders before that have no
+  book comparison.
