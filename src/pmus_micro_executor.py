@@ -306,7 +306,7 @@ def outcome_price(order: Mapping[str, Any], venue_px: D) -> D:
 
 
 def _body(slug: str, outcome_side: str, price: D, qty: D,
-          post_only: bool) -> dict[str, Any]:
+          post_only: bool, good_till: Any = None) -> dict[str, Any]:
     """The proven order body. DELEGATES to src.l5_order_body, which holds the
     single implementation so the L5 transport can share it without importing
     an executor into the GET-only observer image. Behaviour is unchanged:
@@ -314,8 +314,11 @@ def _body(slug: str, outcome_side: str, price: D, qty: D,
     from src import l5_order_body as OB
     if D(str(qty)) <= 0:                 # preserved: this exact Halt code
         raise Halt("MICRO_NONPOSITIVE_QTY")
+    if good_till is None:
+        return OB.build(slug=slug, side=outcome_side, price=price, qty=qty,
+                        post_only=post_only)
     return OB.build(slug=slug, side=outcome_side, price=price, qty=qty,
-                    post_only=post_only)
+                    post_only=post_only, good_till=good_till)
 
 
 def authoritative_fill(order: Mapping[str, Any], requested_qty: D,
@@ -349,15 +352,22 @@ def authoritative_fill(order: Mapping[str, Any], requested_qty: D,
 
 def place_limit_buy(t: Transport, slug: str, outcome_side: str,
                     price: D, qty: D, stage: str,
-                    *, post_only: bool = True) -> str:
+                    *, post_only: bool = True,
+                    good_till: Any = None) -> str:
+    """`good_till` (default None: exactly as before) asks the venue to
+    cancel the order itself at that time. The venue's own preview must not
+    contradict it: a preview that echoes a different time-in-force means
+    the expiry was not understood, and nothing is sent."""
     price = D(str(price)); qty = D(str(qty))
-    body = _body(slug, outcome_side, price, qty, post_only)
+    body = _body(slug, outcome_side, price, qty, post_only, good_till)
     preview = t.request("POST", "/v1/order/preview", {"request": body})
     po = preview.get("order") if isinstance(preview, Mapping) else None
     if not isinstance(po, Mapping):
         raise Halt(f"PREVIEW_REJECTED:{stage}")
     if po.get("marketSlug") not in (None, slug):
         raise Halt(f"PREVIEW_MARKET_MISMATCH:{stage}")
+    if good_till is not None and po.get("tif") not in (None, body["tif"]):
+        raise Halt(f"PREVIEW_EXPIRY_NOT_HONOURED:{stage}:tif={po.get('tif')}")
     # Evidence line (no secrets: an order preview carries prices, sizes and
     # the venue's own derived numbers). NO-side opens are venue-REJECTED
     # with no reason field; the venue's reading of our price/qty in its

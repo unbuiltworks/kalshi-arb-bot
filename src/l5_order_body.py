@@ -29,7 +29,7 @@ The two hard-won conventions it encodes
 from __future__ import annotations
 
 from decimal import Decimal as D
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Optional
 
 ONE = D("1")
 
@@ -108,17 +108,50 @@ def venue_price(outcome_side_str: str, price: D) -> D:
     return ONE - px if str(outcome_side_str).upper().endswith("NO") else px
 
 
+#: The venue documents an order that expires by itself
+#: (docs.polymarket.us/api-reference/orders/create-order, read 2026-11-22):
+#: `tif: TIME_IN_FORCE_GOOD_TILL_DATE` with `goodTillTime` ("Expiration time
+#: for orders with TIME_IN_FORCE_GOOD_TILL_DATE"). NOT YET PROVEN LIVE: the
+#: page gives no format for the time and does not say whether it combines
+#: with participateDontInitiate. It is therefore never sent unless a caller
+#: asks for it, and every body built without `good_till` is byte-for-byte
+#: what it was.
+TIF_GTC = "TIME_IN_FORCE_GOOD_TILL_CANCEL"
+TIF_GTD = "TIME_IN_FORCE_GOOD_TILL_DATE"
+
+
 def build(*, slug: str, side: str, price: Any, qty: Any,
-          post_only: bool) -> Dict[str, Any]:
+          post_only: bool, good_till: Optional[str] = None
+          ) -> Dict[str, Any]:
     """The venue-accepted order body. Proven representation, verbatim.
 
     Callers supply WHAT to trade -- market, outcome, price in that outcome's
     own terms, quantity, maker/taker. This decides HOW to say it.
+
+    `good_till` (default None: the proven body, unchanged) is an RFC 3339
+    UTC time after which the VENUE cancels the order itself.
     """
     q = D(str(qty))
     if q <= 0:
         raise ValueError("non-positive quantity %r" % (qty,))
     os_ = outcome_side(side)
+    if good_till is not None:
+        gt = str(good_till).strip()
+        if not gt:
+            raise ValueError("empty good_till")
+        return {
+            "marketSlug": slug,
+            "type": "ORDER_TYPE_LIMIT",
+            "price": {"value": str(venue_price(os_, price)),
+                      "currency": "USD"},
+            "quantity": float(q),
+            "tif": TIF_GTD,
+            "goodTillTime": gt,
+            "participateDontInitiate": bool(post_only),
+            "outcomeSide": os_,
+            "action": "ORDER_ACTION_BUY",
+            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+        }
     return {
         "marketSlug": slug,
         "type": "ORDER_TYPE_LIMIT",

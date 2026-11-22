@@ -639,3 +639,71 @@ def test_the_boot_log_states_the_gate_and_the_drill():
     assert cfg["rn1_edge_gate"]["reward_min_day_usd"] == 1.0
     assert cfg["markout_horizons_s"] == [5, 30, 120, 300]
     assert cfg["stall_drill"] is None
+
+
+# ------------------------------------------------- self-expiring orders
+def test_the_proven_order_body_is_unchanged_without_an_expiry():
+    from src import l5_order_body as OB
+    body = OB.build(slug="aec-x", side="NO", price="0.47", qty="2",
+                    post_only=True)
+    assert body == {
+        "marketSlug": "aec-x", "type": "ORDER_TYPE_LIMIT",
+        "price": {"value": "0.53", "currency": "USD"}, "quantity": 2.0,
+        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
+        "participateDontInitiate": True, "outcomeSide": "OUTCOME_SIDE_NO",
+        "action": "ORDER_ACTION_BUY",
+        "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"}
+    assert "goodTillTime" not in body
+
+
+def test_an_expiry_is_sent_as_the_venues_good_till_date():
+    from src import l5_order_body as OB
+    body = OB.build(slug="aec-x", side="YES", price="0.47", qty="2",
+                    post_only=True, good_till="2026-11-23T01:30:00Z")
+    assert body["tif"] == "TIME_IN_FORCE_GOOD_TILL_DATE"
+    assert body["goodTillTime"] == "2026-11-23T01:30:00Z"
+    assert body["participateDontInitiate"] is True
+    with pytest.raises(ValueError):
+        OB.build(slug="aec-x", side="YES", price="0.47", qty="2",
+                 post_only=True, good_till=" ")
+
+
+@pytest.mark.parametrize("ttl,want", [(0, None), (30, None), (7200, None),
+                                      (600, "2026-11-23T01:10:00Z")])
+def test_the_order_lifetime_is_off_by_default_and_bounded(monkeypatch, ttl,
+                                                          want):
+    monkeypatch.setattr(M, "ORDER_TTL_S", float(ttl))
+    assert M.order_good_till(now=1795395600.0) == want     # 01:00:00Z
+
+
+def test_orders_carry_the_expiry_only_when_it_is_switched_on(monkeypatch):
+    sent = []
+
+    class Micro:
+        def place_limit_buy(self, t, slug, side, px, qty, stage, **kw):
+            sent.append(kw)
+            return "oid"
+    v = M.Venue.__new__(M.Venue)
+    v.micro, v.t = Micro(), None
+    monkeypatch.setattr(M, "ORDER_TTL_S", 0.0)
+    v.place("aec-x", "YES", D("0.47"), D("2"), "rn1_open")
+    assert sent[-1] == {"post_only": True}
+    monkeypatch.setattr(M, "ORDER_TTL_S", 300.0)
+    v.place("aec-x", "YES", D("0.47"), D("2"), "rn1_open")
+    assert sent[-1]["post_only"] is True
+    assert sent[-1]["good_till"].endswith("Z")
+
+
+def test_a_preview_that_contradicts_the_expiry_sends_nothing(monkeypatch):
+    from src import pmus_micro_executor as MX
+    calls = []
+
+    class T_:
+        def request(self, method, path, body=None):
+            calls.append(path)
+            return {"order": {"marketSlug": "aec-x",
+                              "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL"}}
+    with pytest.raises(MX.Halt, match="PREVIEW_EXPIRY_NOT_HONOURED"):
+        MX.place_limit_buy(T_(), "aec-x", "YES", D("0.47"), D("2"), "rn1_open",
+                           good_till="2026-11-23T01:30:00Z")
+    assert calls == ["/v1/order/preview"]             # no order was posted

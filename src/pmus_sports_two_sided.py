@@ -499,6 +499,28 @@ def loop_report(reset: bool = True) -> Dict[str, Any]:
 # window longer than STALL_DRILL_MAX_S, malformed, or not this exact form is
 # NO drill. It can only ever stop this bot from acting; it cannot place or
 # keep an order. SIGTERM still ends the process during a drill.
+# SELF-EXPIRING ORDERS (the case nothing else covers). If the whole bot
+# process is gone its registry is unreachable, and the watchdog -- which
+# cancels only what an owner claims -- latches the halt and cancels nothing.
+# The venue documents an order that expires by itself (see l5_order_body).
+# With PMUS_TWO_SIDED_ORDER_TTL_S > 0 every order this bot places carries
+# an expiry that many seconds ahead; an expired order is seen as closed by
+# the venue and simply re-quoted on the next pass, so a live bot keeps
+# quoting and a dead one stops being exposed within the TTL. OFF (0) by
+# default: the venue's handling has not been observed yet, and turning it
+# on is a production setting for the owner. Bounded 60 s .. 1 h.
+ORDER_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ORDER_TTL_S", "0") or 0)
+
+
+def order_good_till(now: Optional[float] = None) -> Optional[str]:
+    """RFC 3339 UTC expiry for an order placed now, or None when off."""
+    if not (60.0 <= ORDER_TTL_S <= 3600.0):
+        return None
+    t = (time.time() if now is None else now) + ORDER_TTL_S
+    return datetime.fromtimestamp(int(t), timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
 STALL_DRILL_ENV = "PMUS_TWO_SIDED_STALL_DRILL"
 STALL_DRILL_MAX_S = 600.0
 
@@ -1205,6 +1227,7 @@ def safeguards_cfg() -> Dict[str, Any]:
                               "no_fair_means": "no_bid"},
             "markout_horizons_s": [5, 30, 120, 300],
             "stall_drill": stall_drill(),
+            "order_ttl_s": (ORDER_TTL_S if order_good_till() else 0),
             "rn1_extend_ev": {"on": RN1.EXTEND_EV,
                               "edge_ticks": RN1.EXTEND_EDGE_TICKS,
                               "step_ticks": RN1.EXTEND_STEP_TICKS,
@@ -1663,8 +1686,12 @@ class Venue:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
+        gt = order_good_till()
+        if gt is None:
+            return self.micro.place_limit_buy(self.t, slug, side, px, qty,
+                                              stage, post_only=post_only)
         return self.micro.place_limit_buy(self.t, slug, side, px, qty, stage,
-                                          post_only=post_only)
+                                          post_only=post_only, good_till=gt)
 
     def cancel(self, oid: str) -> bool:
         return self.q1.cancel_exact(self.t, oid)
