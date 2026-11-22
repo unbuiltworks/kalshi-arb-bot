@@ -70,3 +70,19 @@ Watchdog: one sweep at 13:25:01Z saw the registry unreachable during the contain
 - Safety check: all clear.
 - Recorder note: the two per-match recorders stopped at 14:16:01Z (killed, no error); one combined
   recorder restarted 14:20:24Z as a tracked background task. Gap 14:16-14:20Z.
+
+## Slice 3 (14:19:09-14:25:33Z)
+- 15 ORDER (2 contracts, post-only; rn1_extend 8, two_sided_complete 7), 1 FILL.
+- Fill 14:24:26.53 Bologna win YES 0.45 x2 -> Bologna win now YES 4 / NO 2
+  (one pair at 0.96 done; 2 YES unpaired). Completion bid resting: NO 0.50 x2 (pair would be 0.95).
+- Genoa win unchanged: NO 2 unpaired (cost 1.32). Completion bid YES 0.26-0.28; a same-side
+  extension NO 0.68 x2 has rested since 14:20:57 (a fill would take Genoa unpaired to 2.68).
+- Unmatched total 2.26 (bot's figure: Genoa 1.32, Bologna 0.94). Caps 3 / 6. No cap block.
+- Venue cash 319.5238 at 14:25:00Z = 320.4238 - 0.90. Exact.
+- Pulls: 4 reactive (2 jump, 2 yes_closer_than_1t); 9 jump pauses, all Bologna (0.52 -> 0.44).
+- 8 market_error (7 budget deferrals, 1 stale post-only refuse, resubmitted). No rejects, no 429s.
+- Watchdog 14:25:26Z: 3 open orders, all owned, no halt.
+- BTC ledger: at 14:13:39Z l5-pmus-live adopted NO 2 in each market at the $1 bound (risk floor
+  $2.00 each), as expected; utc_day_realized still -5.00; would_halt false. It still shows
+  Bologna NO 2 that the venue has netted away.
+- Safety check: all clear.
