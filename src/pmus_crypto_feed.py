@@ -55,6 +55,7 @@ class CryptoFeed:
         self.cycles = 0
         self.last_cycle_s = 0.0
         self.last_error: Optional[str] = None
+        self.restarts = 0
         self._disc_at = -1e18
 
     # ------------------------------------------------ engine side (no I/O)
@@ -98,6 +99,7 @@ class CryptoFeed:
             disc = None if self._targets is None else \
                 round(self._age(self._targets[0]), 1)
         return {"alive": bool(self._thread and self._thread.is_alive()),
+                "restarts": self.restarts,
                 "cycles": self.cycles, "requests": self.requests,
                 "errors": self.errors, "last_error": self.last_error,
                 "last_cycle_s": round(self.last_cycle_s, 2),
@@ -204,13 +206,35 @@ class CryptoFeed:
                 self._fail("cycle", exc)
             self._sleep(1.0)
 
+    def fresh(self, slug: str) -> Optional[str]:
+        """Why this market's data cannot support an order, or None: an
+        open-market spec and two-sided depth, both recent. No I/O."""
+        spec, sage = self.spec(slug)
+        if spec is UNKNOWN or sage > CR.SPEC_MAX_AGE_S:
+            return "feed_stale:spec"
+        if spec is None:
+            return "market_closed"
+        book, age = self.book(slug)
+        if book is None or age > CR.BOOK_MAX_AGE_S or \
+                top_of_book(book) is None:
+            return "feed_stale:book"
+        return None
+
     def start(self) -> None:
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._run, daemon=True,
-                                            name="crypto-feed")
-            self._thread.start()
-            self._log("crypto_feed_started", book_s=CR.BOOK_S,
-                      discover_s=CR.DISCOVER_S, spec_s=SPEC_S)
+        """Start the reader, or start it AGAIN if its thread has died. The
+        cache is kept: entries simply carry their age across the gap."""
+        if self.stop or (self._thread is not None
+                         and self._thread.is_alive()):
+            return
+        again = self._thread is not None
+        self.restarts += 1 if again else 0
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name="crypto-feed")
+        self._thread.start()
+        self._log("crypto_feed_restarted" if again
+                  else "crypto_feed_started", book_s=CR.BOOK_S,
+                  discover_s=CR.DISCOVER_S, spec_s=SPEC_S,
+                  restarts=self.restarts)
 
 
 def top_of_book(md: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:

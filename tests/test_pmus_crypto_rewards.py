@@ -522,6 +522,7 @@ def wire_feed(e, v):
     """The lane's feed, not threaded: it is polled right before each crypto
     pass and each selection, so a test sees the venue as it is now."""
     from src import pmus_crypto_feed as CF
+    e._cfeed_autostart = False               # tests poll it themselves
     e._cfeed = CF.CryptoFeed(v.gget, v.spec, sleep=lambda s: None)
     real_pass, real_select = e._crypto_pass, e.select_crypto
 
@@ -667,6 +668,7 @@ def test_disarmed_placement_is_refused_at_the_choke_point(lane, monkeypatch):
 def test_oversize_opening_is_refused(lane):
     e, v = lane
     select(e, v)
+    e.feed_sync()
     assert e.crypto_place_block(ETH, "YES", D("0.47"), D("101"),
                                 "crypto_open", True) == "qty_over_cap"
 
@@ -1878,3 +1880,187 @@ def test_the_sports_submission_lock_withdraws_and_refuses_crypto(lane,
         e.step_market(s)
     e.place(ETH, "NO", D("0.49"), D("100"), "crypto_complete")
     assert len(v.orders) == n
+
+
+# ----------------------------- feed restart / recovery; empty cache = no order
+
+def raw(e):
+    """The engine's own pass and selection, without test-side polling."""
+    e._crypto_pass = M.Engine._crypto_pass.__get__(e)
+    e.select_crypto = M.Engine.select_crypto.__get__(e)
+    return e
+
+
+def crypto_live(v):
+    return {k for k, o in v.live().items() if CR.is_crypto(o["slug"])}
+
+
+def test_process_restart_with_an_empty_cache_places_nothing(lane, tmp_path):
+    """New process, armed, book holding a lone leg and resting quotes, and
+    the feed has read NOTHING yet (its first request is still in flight).
+    Not one order is placed -- not an opening, not a completion -- and the
+    quotes left resting by the old process are pulled."""
+    e, v = lane
+    select(e, v)
+    e.step_market(SOL)
+    lone_yes(e, v)                               # ETH: lone YES + completion
+    before = len(v.orders)
+    assert len(crypto_live(v)) == 3
+    hung = Hung()
+    e2 = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)
+    fresh_meter(e2)
+    raw(e2)
+    e2._cfeed._get = e2._cfeed._spec_fn = hung
+    e2._cfeed_autostart = True
+    t0 = time.monotonic()
+    try:
+        e2.select_crypto(v.account())            # starts the (stuck) thread
+        for s in (ETH, SOL, XRP):
+            e2.step_market(s)
+        e2.place(ETH, "NO", D("0.49"), D("100"), "crypto_complete")
+        e2.place(XRP, "YES", D("0.47"), D("100"), "crypto_open")
+        assert time.monotonic() - t0 < 1.0
+        assert len(v.orders) == before           # nothing placed
+        assert e2.crypto_place_block(ETH, "NO", D("0.49"), D("100"),
+                                     "crypto_complete", True) == \
+            "feed_stale:spec"
+        live = [o for o in v.live().values()]
+        assert [(o["slug"], o["side"]) for o in live] == [(ETH, "NO")]
+        assert e2.b.m(ETH)["orders"][next(iter(v.live()))]["stage"] == \
+            "crypto_complete"                    # only the old completion
+        assert e2.crypto_status()["feed"]["alive"]
+    finally:
+        e2._cfeed.stop = True
+        hung.release.set()
+
+
+def test_the_feed_recovers_after_a_hang_and_quoting_resumes(lane):
+    """Stuck -> quotes pulled as data ages -> the gateway answers again ->
+    the same thread refreshes the cache -> quotes rest again. The engine
+    loop never waited at any point."""
+    e, v = lane
+    select(e, v)
+    e.step_market(ETH)
+    assert len(crypto_live(v)) == 2
+    good_get, good_spec = v.gget, v.spec
+    hung = Hung()
+    feed = e._cfeed
+    clock = [time.monotonic()]
+    feed._clock = lambda: clock[0]
+    feed._get = feed._spec_fn = hung
+    feed._disc_at = -1e18
+    raw(e)
+    e._cfeed_autostart = True
+    try:
+        feed.start()
+        deadline = time.monotonic() + 5
+        while hung.calls == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        clock[0] += CR.BOOK_MAX_AGE_S + 1
+        t0 = time.monotonic()
+        e.step_market(ETH)
+        assert time.monotonic() - t0 < 1.0 and not crypto_live(v)
+        n = len(v.orders)
+        e.step_market(ETH)
+        assert len(v.orders) == n                # stale: still nothing
+        feed._get, feed._spec_fn = good_get, good_spec    # gateway is back
+        hung.release.set()
+        deadline = time.monotonic() + 10
+        while feed.fresh(ETH) is not None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert feed.fresh(ETH) is None           # recovered on its own
+        e.step_market(ETH)
+        assert len(crypto_live(v)) == 2 and feed.errors >= 1
+    finally:
+        feed.stop = True
+        hung.release.set()
+
+
+def test_a_dead_feed_thread_is_revived_and_never_permits_an_order(lane):
+    """The reader thread dies outright. Its cache ages, so quotes are
+    pulled and nothing is placed; the next pass starts it again."""
+    e, v = lane
+    select(e, v)
+    e.step_market(ETH)
+    feed = e._cfeed
+    clock = [time.monotonic()]
+    feed._clock = lambda: clock[0]
+
+    def die():
+        raise SystemExit                         # not caught by the loop
+    feed._run = die
+    raw(e)
+    e._cfeed_autostart = True
+    import threading
+    hook, threading.excepthook = threading.excepthook, lambda a: None
+    try:
+        feed.start()
+        feed._thread.join(5)
+        assert not feed._thread.is_alive()
+        clock[0] += CR.BOOK_MAX_AGE_S + 1
+        del feed._run                            # the real loop again
+        feed._sleep = lambda s_: time.sleep(0.01)
+        n = len(v.orders)
+        e.step_market(ETH)                       # stale -> pulled; revived
+        assert not crypto_live(v) and len(v.orders) == n
+        assert feed.restarts == 1
+        deadline = time.monotonic() + 10
+        while feed.fresh(ETH) is not None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        e.step_market(ETH)
+        assert len(crypto_live(v)) == 2
+    finally:
+        feed.stop = True
+        threading.excepthook = hook
+
+
+@pytest.mark.parametrize("gap,why", [
+    (lambda f: f._spec.clear(), "feed_stale:spec"),
+    (lambda f: f._book.clear(), "feed_stale:book"),
+    (lambda f: f._book.update({ETH: (f._clock(), {"bids": [], "offers": []})}),
+     "feed_stale:book"),
+    (lambda f: f._book.update({ETH: (f._clock(), book([(0.48, 300)], []))}),
+     "feed_stale:book"),
+    (lambda f: f._book.update({ETH: (f._clock(), book([(0.50, 300)],
+                                                      [(0.48, 300)]))}),
+     "feed_stale:book"),
+    (lambda f: f._book.update({ETH: (f._clock() - 3600, DEEP)}),
+     "feed_stale:book"),
+    (lambda f: f._spec.update({ETH: (f._clock() - 3600,
+                                     {"tick": T, "min_qty": D("1")})}),
+     "feed_stale:spec"),
+    (lambda f: f._spec.update({ETH: (f._clock(), None)}), "market_closed"),
+])
+def test_any_gap_in_the_cache_refuses_every_crypto_order(lane, gap, why):
+    """Missing, empty, one-sided, crossed, old or closed: the pass places
+    nothing and the choke point refuses openings AND completions."""
+    e, v = lane
+    select(e, v)
+    lone_yes(e, v)                               # a completion is wanted
+    for k in list(v.live()):
+        v.cancel(k)
+    e.step_market(ETH)
+    for k in list(v.live()):
+        v.cancel(k)
+    raw(e)
+    gap(e._cfeed)
+    n = len(v.orders)
+    e.step_market(ETH)
+    e.step_market(ETH)
+    assert len(v.orders) == n and not v.live()
+    for side, stage in (("NO", "crypto_complete"), ("YES", "crypto_open")):
+        assert e.crypto_place_block(ETH, side, D("0.49"), D("100"), stage,
+                                    True) == why
+        e.place(ETH, side, D("0.49"), D("100"), stage)
+    assert len(v.orders) == n
+
+
+def test_missing_discovery_or_programmes_select_and_quote_nothing(lane):
+    e, v = lane
+    raw(e)
+    e.select_crypto(v.account())                 # nothing read yet
+    assert not [s for s in e.active() if CR.is_crypto(s)]
+    e.feed_sync()
+    e._cfeed._progs = (e._cfeed._clock(), {})    # programmes: none paying
+    e.select_crypto(v.account())
+    assert not [s for s in e.active() if CR.is_crypto(s)] and not v.orders

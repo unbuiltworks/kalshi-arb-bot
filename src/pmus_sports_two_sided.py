@@ -3032,6 +3032,13 @@ class Engine:
             return "disarmed:" + str(arm["why"])
         if self._crypto_state().get("loss_stop"):
             return "crypto_loss_stop"
+        try:
+            # no order of any kind on data the feed does not currently hold
+            why = self._crypto_feed().fresh(slug)
+        except Exception as exc:                          # noqa: BLE001
+            why = "feed_unreadable:" + type(exc).__name__
+        if why:
+            return why
         y = D(str((mk.get("pos") or {}).get("YES") or 0))
         n = D(str((mk.get("pos") or {}).get("NO") or 0))
         if stage == CR.STAGE_COMPLETE:
@@ -3071,8 +3078,8 @@ class Engine:
             self._cfeed = CF.CryptoFeed(
                 self.v.gget, getattr(self.v, "_spec_fetch", None)
                 or self.v.spec, log)
-            if CR.ON:
-                self._cfeed.start()
+        if CR.ON and self.__dict__.get("_cfeed_autostart", True):
+            self._cfeed.start()        # no-op while alive; revives a dead one
         return self._cfeed
 
     def select_crypto(self, acct: Mapping[str, Any]) -> None:

@@ -1,7 +1,7 @@
 # Daily-crypto reward lane — disarmed release candidate (22 Nov 2026)
 
 For the sports service owner (`pmus-spring-l5-probe`). Nothing here is deployed, armed or
-authorized. Base: `dev/pmus-rn1-replica` @ `a9987a12f` (merged in). No sports release
+authorized. Base: `dev/pmus-rn1-replica` @ `413f73087` (merged in). No sports release
 ref (`release/pmus-sports-rn1-*`) contains any of this; the sports deployment authorized
 on 22 Nov is exactly `ae5adbe16`. The sports submission lock (`a9987a12f`) binds this lane
 too: locked, every crypto order is cancelled and none is placed. Research: `analysis/l5/rewards/` on
