@@ -454,3 +454,63 @@ def test_boot_reports_the_safeguards_as_they_run():
     assert c["intl_three_way"] == ["sea"]
     assert c["intl_name_match"] == ["atp", "wta"]
     json.dumps(c)                                   # loggable
+
+
+# ---- a league with a different code on each venue (Liga MX: lmx / mex)
+def _mx_event():
+    ev = "mex-que-nec-2026-11-22"
+
+    def mk(sfx, q, toks):
+        return {"slug": f"{ev}-{sfx}", "question": q, "closed": False,
+                "outcomes": json.dumps(["Yes", "No"]),
+                "clobTokenIds": json.dumps(list(toks)),
+                "sportsMarketType": "moneyline"}
+    return {"slug": ev, "title": "Querétaro FC vs. Club Necaxa",
+            "closed": False,
+            "markets": [mk("que", "Will Querétaro FC win on 2026-11-22?",
+                           ("Q1", "Q2")),
+                        mk("draw", "Will Querétaro FC vs. Club Necaxa end "
+                                   "in a draw?", ("D1", "D2")),
+                        mk("nec", "Will Club Necaxa win on 2026-11-22?",
+                           ("N1", "N2"))]}
+
+
+def _mx_pm(suffix, team=None):
+    q = ("Will Querétaro FC vs Club Necaxa end in a draw?"
+         if suffix == "draw" else f"Will {team} win?")
+    return {"slug": f"atc-lmx-que-nec-2026-11-22-{suffix}",
+            "outcomes": '["Yes","No"]',
+            "sportsMarketType": "soccer_team_full_time_winner",
+            "question": q,
+            "marketSides": [{"long": True, "team": {"name": team}
+                             if team else None}]}
+
+
+def _mx(suffix, team=None):
+    ev = _mx_event()
+    return XV.resolve_three_way(
+        lambda p: [ev] if p == "/events?slug=mex-que-nec-2026-11-22" else [],
+        f"atc-lmx-que-nec-2026-11-22-{suffix}", _mx_pm(suffix, team))
+
+
+def test_a_league_with_two_codes_is_unmapped_until_the_owner_maps_it(
+        monkeypatch):
+    assert _mx("que", "Querétaro FC") is None             # default: nothing
+    monkeypatch.setattr(XV, "THREE_WAY_LEAGUES", ("sea", "lmx"))
+    assert _mx("que", "Querétaro FC") is None             # listed, no alias
+    monkeypatch.setattr(XV, "THREE_WAY_ALIASES", {"lmx": "mex"})
+    assert _mx("que", "Querétaro FC") == "Q1"
+    assert _mx("draw") == "D1"
+    assert _mx("nec", "Club Necaxa") == "N1"
+    # the name checks still decide: the wrong team resolves nothing
+    assert _mx("que", "Club Necaxa") is None
+    # an alias alone does not map a league the owner has not listed
+    monkeypatch.setattr(XV, "THREE_WAY_LEAGUES", ("sea",))
+    assert _mx("que", "Querétaro FC") is None
+
+
+def test_alias_setting_is_parsed_strictly():
+    assert XV._aliases("lmx=mex, THAI1=tha1") == {"lmx": "mex",
+                                                  "thai1": "tha1"}
+    assert XV._aliases("") == {} and XV._aliases("lmx") == {}
+    assert XV._aliases("a=b=c,=x,y=") == {}
