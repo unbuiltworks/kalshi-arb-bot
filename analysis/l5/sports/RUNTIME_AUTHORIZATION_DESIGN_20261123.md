@@ -155,3 +155,67 @@ not clamp: an out-of-bounds file is refused, named in the log).
 3. Should completions continue after expiry for a bounded time, or stop
    as today? (Completion-only mode is still unverified and stays off
    until it is.)
+
+---
+
+## Built — 23 Nov 2026, 23:15 UTC (development only; not deployed)
+
+Owner's decisions applied: a separate signing secret for campaign files;
+the proposed ceilings; all placements stop at expiry; **no grace**; and
+restart-safe recovery. Where the text above differs, this section is what
+exists.
+
+| | |
+|---|---|
+| Code | `f94a0513e` on `dev/pmus-rn1-replica` |
+| Release candidate | `release/pmus-sports-rn1-5b1571a0b` (`5b1571a0b28ee4fbcaa77b98634a5cfd1eb20dc1`), **not approved, not deployed** |
+| Tests | full suite 5,468 passed, 24 failed (the same 24 as the running build); 117 new tests for this feature |
+| Inactive unless | the lock value is `runtime`, or `PMUS_CAMPAIGN_AUTH_REPORT=1` (report only) |
+
+**Differences from the design above**
+- **No grace.** A refresh that fails locks at once and the bot cancels its
+  own orders. An outage does not end the campaign: when the same file can
+  be read again it continues with its original window. It can never extend
+  it.
+- **Not permitted always means fully locked**, completions included
+  (completion-only mode is still unverified and is not used anywhere).
+- **Restart-safe.** The campaign in force is stored in the bot's book by
+  name and by the fingerprint of its exact contents, with its start and
+  expiry. The same file resumes; spend, inventory and losses carry on
+  because they are counted from the original start. Different contents
+  under the same name stop the campaign. A name that has ended (expired,
+  revoked, halted, replaced) is never accepted again, across restarts.
+- **Halt.** A latched emergency halt ends the campaign in force for good,
+  and also any campaign published while the halt is latched. After the
+  owner's reset, only a new campaign name can trade. An unreadable halt
+  state blocks without ending the campaign.
+- **A loop that stops evaluating stops permitting**: the lock opens only
+  on a decision at most 15 seconds old.
+- **Per-market spend** is also a file field (ceiling $8).
+- **Report-only mode** for a non-trading preflight: the heartbeat shows
+  what the file would decide while the lock stays at `1`.
+
+**Settings (all set by the operator on the service; none in the repository)**
+`PMUS_CAMPAIGN_AUTH_URL`, `PMUS_CAMPAIGN_AUTH_SECRET` (the campaign
+signing secret, separate from the halt marker's),
+`PMUS_CAMPAIGN_AUTH_BEARER` (read-only repository token),
+`PMUS_CAMPAIGN_AUTH_ACCEPT`, `PMUS_CAMPAIGN_AUTH_SERVICE`. The hard
+ceilings are the existing deployed settings; the 12-hour maximum needs
+`PMUS_TWO_SIDED_WINDOW_MAX_S=43200`.
+
+**Signing tool:** `scripts/pmus_campaign_auth_sign.py`, run locally by the
+operator, not in the image; refuses values above the ceilings and never
+prints the secret.
+
+**Each safeguard was switched off in turn and tests failed each time:**
+halt precedence, decision freshness, expiry of the active campaign, file
+removal, the reader dropping its bytes on failure, ended names, ceilings,
+changed contents, strict scope.
+
+**Not covered by tests:** the real fetch from the repository host from
+inside the service (first seen in a report-only deployment), and behaviour
+under live quote traffic.
+
+**Next steps, each needing approval:** deploy `5b1571a0b` locked with
+report-only on and the operator's three values set; check the heartbeat
+verdict against a test file; then the first runtime-authorized campaign.
