@@ -1245,6 +1245,24 @@ def parse_pin(raw: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
 def rn1_pin() -> Optional[Dict[str, Optional[str]]]:
     return parse_pin(os.getenv("PMUS_RN1_PIN"))
 RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
+# HOLD THROUGH A SHORT FAIR-VALUE GAP. LIVE 2026-11-23: the same prices were
+# cancelled and re-posted every 30-90 s because the international fair value
+# dropped out for a pass ("no_fair": 444 of 1,111 side decisions). Six of
+# eight exposure-adding fills had rested under 15 s, and only 13% of
+# pre-game resting time counted for rewards. Every re-post goes to the back
+# of its price level and restarts the reward clock.
+# With RN1_GAP_HOLD_S > 0 an opening/extension bid ALREADY RESTING is left
+# where it is when the ONLY reason to pull it is that the fair value is
+# missing this pass, and ALL of:
+#   * the same bid at the same price passed the full marginal test no more
+#     than RN1_GAP_HOLD_S ago (a hold never renews itself);
+#   * the venue's own best bid and ask have not changed since that pass;
+#   * the international price is not known to be moving (a fair value
+#     that is unsettled BECAUSE it moved pulls the bid, as now);
+#   * the depth rule still passes, and nothing blocks new exposure (any
+#     block, pause, lock or halt pulls it, as now).
+# It never places a new bid and never moves one. 0 = off (today).
+RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
 # DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
 # (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
 # LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
@@ -4659,6 +4677,60 @@ class Engine:
         return {"extend_ev": True, "fair_yes": self.intl_fair(slug),
                 "extend_extra_ticks": extra}
 
+    def _gap_hold(self, slug: str, mk: Dict[str, Any], q: Dict[str, Any],
+                  want: Dict[str, Any], bbo: Mapping,
+                  new_block: Optional[str], now: float) -> None:
+        """See RN1_GAP_HOLD_S. Records each exposure-adding bid that passed
+        the full test, and puts back a RESTING one whose only failure this
+        pass is a missing fair value."""
+        lp = mk.setdefault("last_pass", {})
+        for side in ("YES", "NO"):
+            tg = want.get(side)
+            if tg is not None:
+                if tg["role"] != "complete":
+                    lp[side] = {"t": now, "px": str(tg["px"]),
+                                "role": tg["role"], "bid": str(bbo["bid"]),
+                                "ask": str(bbo["ask"])}
+                else:
+                    lp.pop(side, None)
+                continue
+            rec = lp.get(side)
+            if RN1_GAP_HOLD_S <= 0 or new_block or rec is None or \
+                    q.get("why_" + side) != "no_fair":
+                lp.pop(side, None)       # any other failure ends the claim
+                continue
+            if now - float(rec["t"]) > RN1_GAP_HOLD_S:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:hold_expired"
+                continue
+            if str(bbo["bid"]) != rec["bid"] or str(bbo["ask"]) != rec["ask"]:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:venue_price_moved"
+                continue
+            band = (getattr(self, "_rn1_fair", {}) or {}).get(slug) or {}
+            if band.get("calm") is False:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:intl_price_moving"
+                continue
+            rest = [o for o in mk["orders"].values()
+                    if o.get("open") and o.get("side") == side
+                    and not is_completion_stage(o.get("stage"))
+                    and D(str(o["px"])) == D(rec["px"])]
+            if len(rest) != 1:
+                lp.pop(side, None)
+                continue
+            if self.depth_block(slug, side):
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:depth"
+                continue
+            o = rest[0]
+            want[side] = {"px": D(rec["px"]),
+                          "qty": D(str(o["qty"])) - D(str(o.get("filled")
+                                                          or "0")),
+                          "role": rec["role"], "held": True}
+            q["why_" + side] = "held_fair_gap"
+            self._gap_holds = int(getattr(self, "_gap_holds", 0)) + 1
+
     def _rn1_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                   bbo: Mapping, tick: D) -> None:
         """One RN1-replica pass for one market: compute RN1's resting maker
@@ -4794,6 +4866,7 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             want[side] = tg
+        self._gap_hold(slug, mk, q, want, bbo, new_block, now)
         self.rn1_campaign_caps(slug, mk, want, q)
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
