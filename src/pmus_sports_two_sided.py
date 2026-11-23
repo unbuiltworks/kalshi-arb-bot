@@ -1069,6 +1069,42 @@ RN1_RANK_NET = os.getenv("PMUS_RN1_RANK_NET", "0").strip() == "1"
 # RN1_KEEP_MAX_S in a row; then it is pulled like any failing bid. 0 = off
 # (every failing bid is pulled at once, as before).
 RN1_KEEP_TOL_USD = _env_d("PMUS_RN1_KEEP_TOL_USD", "0")
+# EXACT MARKETS AND SIDES (owner 2026-11-23: "Prepare Option B using a
+# minimal market-and-side pinning setting, default off, with regression
+# tests"). PMUS_RN1_PIN="<slug>:YES,<slug>:NO,<slug>" names the ONLY markets
+# the RN1 path may open in and, where a side is given, the only side it may
+# bid there. Unset = no pin (every market and side as before). With a pin:
+#   - selection considers pinned markets only;
+#   - in a pinned market an opening or extension bid on the other side is
+#     dropped ("pinned_other_side");
+#   - a market that is not pinned gets no new exposure ("not_pinned").
+# A completion is never dropped by the pin: it only pairs what is held. Every
+# other gate still applies; a pin can only narrow what the bot may do. A
+# malformed entry pins nothing AND opens nothing (fail closed).
+
+
+def parse_pin(raw: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
+    """None = no pin configured. {} = a pin that allows nothing (malformed
+    input). Otherwise {slug: "YES" | "NO" | None (both sides)}."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    out: Dict[str, Optional[str]] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        slug, sep, side = part.partition(":")
+        slug, side = slug.strip(), side.strip().upper()
+        if not slug.startswith(SPORTS_PREFIXES) or \
+                (sep and side not in ("YES", "NO")) or slug in out:
+            return {}
+        out[slug] = side if sep else None
+    return out
+
+
+def rn1_pin() -> Optional[Dict[str, Optional[str]]]:
+    return parse_pin(os.getenv("PMUS_RN1_PIN"))
 RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
 # DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
 # (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
@@ -4258,6 +4294,9 @@ class Engine:
             new_block = "jump_pause"
         if not new_block and ph["expired"]:
             new_block = "kickoff_unconfirmed"
+        pin = rn1_pin()
+        if not new_block and pin is not None and slug not in pin:
+            new_block = "not_pinned"
         vp = PH.pause_until(self._vol_hist.get(slug) or (), now,
                             window_s=VOL_WINDOW_S, move_usd=VOL_PAUSE_USD,
                             calm_s=VOL_CALM_S,
@@ -4300,6 +4339,10 @@ class Engine:
             else:
                 ks.pop(side, None)
             if tg and tg["role"] != "complete" and new_block:
+                tg = None
+            if tg and tg["role"] != "complete" and pin is not None and \
+                    pin.get(slug) not in (None, side):
+                q["why_" + side] = "pinned_other_side"
                 tg = None
             if tg and tg["role"] != "complete":
                 dwhy = self.depth_block(slug, side)
@@ -4974,6 +5017,9 @@ class Engine:
                     not self.open_gate(slug)["allow"]:
                 continue         # would be gated at open: don't take a slot
             scored.append((a - b, abs(b - D("0.5")), slug))
+        if RN1.ON and rn1_pin() is not None:
+            _pin = rn1_pin()
+            scored = [r for r in scored if r[2] in _pin]
         scored.sort()
         if self.guard is not None:
             self.guard.prefetch([s for *_x, s in scored])
@@ -5647,7 +5693,8 @@ class Engine:
                                 "calm_s": VOL_CALM_S},
                         "at_risk_budget_usd": AT_RISK_BUDGET_USD,
                         "at_risk_usd": self.own_exposure_usd(),
-                        "rank_net": RN1_RANK_NET},
+                        "rank_net": RN1_RANK_NET,
+                        "pin": rn1_pin()},
             pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
                      "max_lead_s": PREGAME_MAX_LEAD_S,
                      "cutoff_s": PREGAME_CUTOFF_S}, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,

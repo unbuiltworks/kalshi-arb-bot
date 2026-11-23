@@ -645,3 +645,90 @@ def test_a_long_gap_is_not_counted_as_resting_time(eng):
     mk["phase_t"] = time.time() - 600                # the bot was not watching
     e.step_market(SLUG)
     assert "resting_contract_s" not in mk["phase_stats"]["live"]
+
+
+# ------------------------------------------- exact markets and sides (pin)
+def test_no_pin_by_default(monkeypatch):
+    monkeypatch.delenv("PMUS_RN1_PIN", raising=False)
+    assert M.rn1_pin() is None
+
+
+@pytest.mark.parametrize("raw, want", [
+    ("aec-x:YES", {"aec-x": "YES"}),
+    (" aec-x:no , atc-y-draw ", {"aec-x": "NO", "atc-y-draw": None}),
+    ("aec-x:MAYBE", {}), ("aec-x:", {}), ("btc-x:YES", {}),
+    ("aec-x:YES,aec-x:NO", {}),
+])
+def test_pin_parsing_fails_closed(raw, want):
+    assert M.parse_pin(raw) == want
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_pinned_side_is_the_only_side_bid(eng, monkeypatch, capsys):
+    e, v = eng
+    monkeypatch.setenv("PMUS_RN1_PIN", SLUG + ":YES")
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert [(s, p) for s, p, _q in resting(v)] == [("YES", "0.47")]
+    q = logged(capsys, "RN1_QUOTE")[-1]
+    assert q["why"]["NO"] == "pinned_other_side"
+    monkeypatch.setenv("PMUS_RN1_PIN", SLUG + ":NO")
+    e.step_market(SLUG)
+    assert [(s, p) for s, p, _q in resting(v)] == [("NO", "0.49")]
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_pin_without_a_side_allows_both_sides_of_that_market(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setenv("PMUS_RN1_PIN", SLUG)
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert len(resting(v)) == 2
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_market_that_is_not_pinned_gets_no_new_exposure(
+        eng, monkeypatch, capsys):
+    e, v = eng
+    monkeypatch.setenv("PMUS_RN1_PIN", "aec-other:YES")
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert resting(v) == []
+    assert logged(capsys, "RN1_QUOTE")[-1]["block"] == "not_pinned"
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_malformed_pin_opens_nothing(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setenv("PMUS_RN1_PIN", SLUG + ":BOTH")
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert resting(v) == []
+
+
+@pytest.mark.rn1_edge_gate
+def test_the_pin_never_drops_a_completion(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setenv("PMUS_RN1_PIN", SLUG + ":YES")
+    mk = e.b.m(SLUG)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("4"), D("1.60")   # YES held
+    e.step_market(SLUG)
+    stages = {o["side"]: mk["orders"][k]["stage"]
+              for k, o in v.orders.items() if o["open"]}
+    assert stages.get("NO") == "two_sided_complete"
+
+
+def test_selection_considers_only_pinned_markets(eng, monkeypatch):
+    e, v = eng
+    e.guard = None
+    monkeypatch.setattr(R, "EDGE_GATE", False)
+    monkeypatch.setattr(M, "SLATE", "live")
+    monkeypatch.setenv("PMUS_RN1_PIN", "aec-owner:YES")
+    e.select(v.account())
+    assert list(e.active()) == ["aec-owner"]
+    monkeypatch.setenv("PMUS_RN1_PIN", "aec-nowhere:YES")
+    for s in list(e.b.d["markets"]):
+        e.b.d["markets"][s]["done"] = True
+    e.select(v.account())
+    assert list(e.active()) == []
