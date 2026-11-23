@@ -979,10 +979,10 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
         if vb_state == "REPORT":
             _adj = _dec(_sm.get("downward_adjustment_usd")) \
                 if isinstance(_sm, Mapping) else None
-            if _adj is None:
-                vb_state = "REPORT_NO_READABLE_FIGURE"
-            else:
-                vb_add = min(D(0), _adj)
+            if _adj is None or not _adj.is_finite():
+                return no("ACCOUNT_VENUE_BASIS_REPORT_UNREADABLE",
+                          venue_basis_state="REPORT_NO_READABLE_FIGURE")
+            vb_add = min(D(0), _adj)
     day_all, life_all = day + add, life + life_add + vb_add
     room = min(halt + day_all, cum + life_all)
     out = {"utc_day_realized_usd": str(day_all), "daily_halt_usd": str(halt),
