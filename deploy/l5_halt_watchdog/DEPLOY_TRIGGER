@@ -7,3 +7,5 @@
 2026-11-18T01:5xZ promote 98caa3073 (reset reads comma-separated registries like the sweep; every registry must attest). Owner-approved watchdog-only deploy; no halt change, no reset.
 
 2026-11-23T02:5xZ CANDIDATE 0a4c1fa1a (a gone executor's last claim is remembered for a bounded time and its orders are cancelled after a short grace; both settings unset = deployed behaviour exactly). NOT approved, NOT deployed: prepared for the owner's decision. No halt change, no reset.
+
+2026-11-23T23:0xZ CANDIDATE ef478c0df on top of 36238dd10: the emergency-halt marker may be fetched with an optional read-only bearer credential (L5_EMERGENCY_HALT_BEARER, L5_EMERGENCY_HALT_ACCEPT), so the signed marker can live in the private repository. Off unless set; the HMAC still decides. NOT approved, NOT deployed.
